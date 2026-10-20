@@ -245,6 +245,9 @@ function createProjectArchiveService({
       if (input.checkHeadroom === true && !existingState.metadata.deletion && typeof assertArchiveHeadroom === "function") {
         await assertArchiveHeadroom({ archiveRoot, projectContextRoot, projectRuntimeRoot, slug });
       }
+      // The owner's own step before removal, under the lock after every
+      // refusal, so a refused archive changes nothing.
+      if (typeof input.beforeRemove === "function") await input.beforeRemove({ slug });
       const metadata = existingState.metadata;
       const started = await projectContext.beginWorkspaceProjectDeletion({
         startedAt: metadata.deletion?.startedAt || clock().toISOString(),
@@ -472,6 +475,7 @@ function createProjectArchiveService({
     return withProjectDeletionLock(`${systemRoot}\0${slug}`, async () => {
       const checked = await removalPreflight({ slug });
       if (checked.removed === false) return { ok: true, slug, removed: false };
+      if (typeof input.beforeRemove === "function") await input.beforeRemove({ slug });
       const { namespace, existingState, projectRuntimeRoot } = checked;
       const metadata = existingState.metadata;
       const started = await projectContext.beginWorkspaceProjectDeletion({

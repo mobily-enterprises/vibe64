@@ -70,7 +70,10 @@ project.** Open that session, choose **Unpin session**, then delete again.
 When a lesson finishes, its **Lesson finished** screen offers the same one-click
 **Delete practice project**, or **Keep practice project** to keep it here. If
 deletion stops part-way, the row stays: press the trash button again; it
-continues from the step that failed. A practice project whose files are damaged
+continues from the step that failed. Until then that project cannot be opened
+again, and **Continue lesson** prepares a fresh practice project instead. A
+refused deletion (for example a pinned session) changes nothing: the lesson in
+progress keeps going. A practice project whose files are damaged
 or whose ownership can no longer be confirmed also stays listed, and the rest
 of the page still loads; deleting it then shows the reason it was refused, so
 ask the person who runs this Vibe64 to inspect it. Ordinary projects never appear under

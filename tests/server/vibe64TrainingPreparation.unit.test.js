@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -23,6 +24,8 @@ async function fixture(t, { enabled = true, courseStatus = "released", phase = "
   let session = null;
   let revision = 1;
   let failure = null;
+  let practiceRecord = null;
+  const scopes = [];
   const attempt = { attemptId, pin, projectSlug: "training-aaaaaaaaaaaa4aaa8aaaaaaaaaaaaaaa", preparation: { phase,
     ...(phase === "reserved" ? {} : { initialSessionId: `training-${attemptId}` }) } };
   const state = () => structuredClone({ revision, attempt, active: { learnerId: "123" } });
@@ -30,9 +33,12 @@ async function fixture(t, { enabled = true, courseStatus = "released", phase = "
     async reserveAttempt(input) { calls.push(["reserve", input]); return state(); },
     async runPreparationExclusive(input, operation) { calls.push(["lock", input]); return operation(); },
     async resumeAttempt() { return state(); },
-    async beginPreparation() {
-      calls.push(["begin"]);
-      if (attempt.preparation.phase === "reserved") { attempt.preparation = { phase: "preparing", initialSessionId: `training-${attemptId}` }; revision++; }
+    async beginPreparation(input) {
+      calls.push(["begin", input.initialSessionId]);
+      if (attempt.preparation.phase === "reserved") {
+        attempt.preparation = { phase: "preparing", initialSessionId: input.initialSessionId ?? `training-${attempt.practiceId ?? attemptId}` };
+        revision++;
+      }
       return state();
     },
     async recordPreparationReady() { calls.push(["ready"]); attempt.preparation.phase = "ready"; revision++; return state(); },
@@ -45,7 +51,11 @@ async function fixture(t, { enabled = true, courseStatus = "released", phase = "
       async readExercise(input) { calls.push(["exercise", input]); return { sourcePath: "training/exercises/orientation-app", files }; }
     },
     learners,
-    projectContext: { async readWorkspaceProjectState() { return { projectContextRoot: projectRoot, metadata }; } },
+    projectContext: {
+      async readWorkspaceProjectState() { return { projectContextRoot: projectRoot, metadata }; },
+      async runWithPracticeProjectScope(input, operation) { scopes.push(input); return operation(); },
+      async readLearningSpaceProject() { return practiceRecord; }
+    },
     projectRepositoryService: {
       async verifyTrainingProjectSource(input, options) { calls.push(["source-proof", input, options]); return { commit: "d".repeat(40), branch: "main" }; },
       async createManagedGitProject(input, options) {
@@ -65,7 +75,8 @@ async function fixture(t, { enabled = true, courseStatus = "released", phase = "
     terminals: { async workspaceSetupIsPrepared(id) { calls.push(["setup-check", id]); return true; } },
     sessions: { async createSession(input, options) { calls.push(["session-create", input, options]); session = { sessionId: options.sessionId, status: "open", workspaceSetup: { status: setup } }; return session; } }
   };
-  return { root, sourceRoot, projectRoot, owners, calls, attempt, state, get failure() { return failure; },
+  return { root, sourceRoot, projectRoot, owners, calls, attempt, state, scopes, get failure() { return failure; },
+    setPracticeRecord(value) { practiceRecord = value; },
     setMetadata(value) { metadata = value; }, setSession(value) { session = value; }, service: createTrainingService(owners) };
 }
 
@@ -270,7 +281,7 @@ test("saved setup success cannot admit a changed current recipe", async t => {
 
 test("ending learning excludes preparation and old end replay cannot acquire a successor lock", async t => {
   const f = await fixture(t);
-  const input = { actor, attemptId, requestId: "end-one", expectedRevision: 1, reason: "restart" };
+  const input = { actor, attemptId, requestId: "end-one", expectedRevision: 1, reason: "finished" };
   f.owners.learners.readState = async ({ actor: user, includeCompletion }) => {
     assert.equal(user, actor);
     assert.equal(includeCompletion, true);
@@ -279,7 +290,7 @@ test("ending learning excludes preparation and old end replay cannot acquire a s
   f.owners.learners.endAttempt = async value => {
     assert.deepEqual(value, input);
     f.calls.push(["end", value]);
-    f.attempt.ended = { requestId: "end-one", revision: 2, reason: "restart" };
+    f.attempt.ended = { requestId: "end-one", revision: 2, reason: "finished" };
     return { revision: 2, attempt: f.attempt, active: null, replayed: false };
   };
   const service = createTrainingService(f.owners);
@@ -299,9 +310,9 @@ test("ending learning excludes preparation and old end replay cannot acquire a s
 
 test("an ended reservation replay is returned without preparing or reactivating its project", async t => {
   const f = await fixture(t);
-  f.attempt.ended = { requestId: "end-one", revision: 2, reason: "restart" };
+  f.attempt.ended = { requestId: "end-one", revision: 2, reason: "finished" };
   const result = await f.service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, requestId: "original-start", expectedRevision: 0 });
-  assert.equal(result.attempt.ended.reason, "restart");
+  assert.equal(result.attempt.ended.reason, "finished");
   assert.equal(result.previewReady, false);
   assert.deepEqual(f.calls.map(([name]) => name), ["reserve"]);
 });
@@ -330,7 +341,7 @@ test("explicit continuation derives a disabled release pin from ended learner hi
 
 test("continuation rejects foreign, unended and unrelated active targets before reservation or preparation", async t => {
   const f = await fixture(t, { enabled: false });
-  const old = { ...structuredClone(f.attempt), ended: { requestId: "ended", revision: 2, reason: "restart" } };
+  const old = { ...structuredClone(f.attempt), ended: { requestId: "ended", revision: 2, reason: "finished" } };
   for (const saved of [
     { active: null, progress: { attempts: [] } },
     { active: f.attempt, progress: { attempts: [f.attempt] } },
@@ -346,9 +357,9 @@ test("continuation rejects foreign, unended and unrelated active targets before 
 test("exact continuation replay returns its ended target without locking an independent successor", async t => {
   const f = await fixture(t);
   const continuedId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-  const previous = { ...structuredClone(f.attempt), ended: { requestId: "end-old", revision: 2, reason: "restart" } };
+  const previous = { ...structuredClone(f.attempt), ended: { requestId: "end-old", revision: 2, reason: "finished" } };
   const continued = { ...structuredClone(f.attempt), attemptId: continuedId,
-    requestIds: [`continue_${attemptId}_retry-one`], ended: { requestId: "end-continued", revision: 4, reason: "restart" } };
+    requestIds: [`continue_${attemptId}_retry-one`], ended: { requestId: "end-continued", revision: 4, reason: "finished" } };
   const successor = { ...structuredClone(f.attempt), attemptId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", requestIds: ["independent-start"] };
   f.owners.learners.readState = async () => ({ active: successor, progress: { attempts: [previous, continued, successor] } });
   f.owners.learners.reserveAttempt = async input => {
@@ -366,7 +377,7 @@ test("exact continuation replay returns its ended target without locking an inde
 
 test("continuation preserves the original admission revision and bounds its actor-scoped request", async t => {
   const f = await fixture(t);
-  const previous = { ...structuredClone(f.attempt), ended: { requestId: "end-old", revision: 2, reason: "restart" } };
+  const previous = { ...structuredClone(f.attempt), ended: { requestId: "end-old", revision: 2, reason: "finished" } };
   f.owners.learners.readState = async () => ({ revision: 99, active: null, progress: { attempts: [previous] } });
   f.owners.learners.reserveAttempt = () => assert.fail("A stale or future admitted revision must refuse before reservation.");
   for (const expectedRevision of [2, 100]) {
@@ -465,7 +476,7 @@ test("local preparation admits the original exercise effects under its existing 
   assert.equal(core.currentPracticeProjectScope(), null);
   assert.equal(core.targetRoot, working);
   await core.runWithPracticeProjectScope({ actor, training: {
-    schemaVersion: 1, learnerKey: Buffer.from("123").toString("base64url"), attemptId, pin,
+    schemaVersion: 2, learnerKey: Buffer.from("123").toString("base64url"), practiceId: attemptId, pin,
     exercise: { kind: "bundled", sourcePath: "training/exercises/orientation-app" }
   } }, async () => {
     const prepared = await core.readWorkspaceProjectState({ slug: f.attempt.projectSlug });
@@ -498,8 +509,6 @@ test("practice preparation creates an ordinary initial session under exactly its
   // Actual Runtime/Store/Git binding is proved in the original learner owner file.
   f.owners.project = { ...actualProject, createRuntime: originalRuntime };
   f.owners.projectContext = core;
-  const training = { schemaVersion: 1, learnerKey: Buffer.from("123").toString("base64url"), attemptId, pin,
-    exercise: { kind: "bundled", sourcePath: "training/exercises/orientation-app" } };
   let held = false;
   let entries = 0;
   const originalBarrier = f.owners.learners.runPreparationExclusive;
@@ -539,29 +548,107 @@ test("practice preparation creates an ordinary initial session under exactly its
   assert.equal(core.targetRoot, working);
 });
 
-test("hosted practice preparation creates its ordinary initial session inside the saved-training create scope", async t => {
-  const f = await fixture(t);
-  const { currentProjectRequestContext } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
-  const scopes = [];
-  let inside = false;
-  f.owners.projectContext.projectCatalogEnabled = true;
-  f.owners.projectContext.runWithHostedTrainingProjectScope = async (input, operation) => {
-    scopes.push(input);
-    inside = true;
-    try { return await operation(); } finally { inside = false; }
+// Rev 3 R3: Continue lesson picks the lesson up in the same practice project.
+async function continuationFixture(t, { session = true, project = true } = {}) {
+  const f = await fixture(t, { setup: "succeeded" });
+  const practiceId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+  const previous = { ...structuredClone(f.attempt), attemptId: practiceId, projectSlug: "training-bbbbbbbbbbbb4bbb8bbbbbbbbbbbbbbb",
+    ended: { requestId: "leave-old", revision: 4, reason: "left" } };
+  const training = { schemaVersion: 2, learnerKey: Buffer.from("123").toString("base64url"), practiceId, pin,
+    exercise: { kind: "bundled", sourcePath: "training/exercises/orientation-app" } };
+  f.owners.learners.readState = async () => ({ revision: 4, active: null, progress: { attempts: [previous] } });
+  const originalReserve = f.owners.learners.reserveAttempt;
+  f.owners.learners.reserveAttempt = async input => {
+    if (input.practiceId) Object.assign(f.attempt, { practiceId: input.practiceId, projectSlug: previous.projectSlug });
+    return originalReserve(input);
   };
-  const originalCreate = f.owners.sessions.createSession;
-  f.owners.sessions.createSession = (input, options) => {
-    assert.equal(inside, true, "the session is created inside the hosted saved-training scope");
-    assert.equal(currentProjectRequestContext()?.learningScope, undefined, "an ordinary session has no learning binding");
-    return originalCreate(input, options);
-  };
-  const result = await createTrainingService(f.owners).startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code,
-    expectedRevision: 0, requestId: "hosted-start" });
-  assert.equal(result.attempt.preparation.phase, "preparing");
-  assert.equal(scopes.length, 1);
-  assert.equal(scopes[0].actor, actor);
-  assert.equal(scopes[0].access, "create");
-  assert.equal(scopes[0].training.attemptId, attemptId);
-  assert.equal(f.calls.filter(([name]) => name === "session-create").length, 1);
+  if (project) {
+    f.setPracticeRecord({ slug: previous.projectSlug, learnerKey: training.learnerKey, practiceId, training });
+    await mkdir(f.projectRoot);
+    f.setMetadata({ training, repository: { mode: "managed_git" } });
+  }
+  if (session) f.setSession({ sessionId: `training-${practiceId}`, status: "open", workspaceSetup: { status: "succeeded" } });
+  return { ...f, practiceId, previous, training, service: createTrainingService(f.owners) };
+}
+
+test("Continue lesson reuses the previous practice project and its session", async t => {
+  const f = await continuationFixture(t);
+  const result = await f.service.continueLesson({ actor, attemptId: f.practiceId, requestId: "next", expectedRevision: 4 });
+  assert.deepEqual(f.calls[0], ["reserve", { actor, pin, requestId: `continue_${f.practiceId}_next`, expectedRevision: 4, practiceId: f.practiceId }]);
+  assert.deepEqual(f.calls.find(([name]) => name === "begin"), ["begin", `training-${f.practiceId}`]);
+  assert.equal(result.attempt.preparation.phase, "ready");
+  assert.deepEqual(f.calls.filter(([name]) => ["project", "source-proof", "session-create"].includes(name)), [],
+    "no new project, exercise proof or session");
+  assert.equal(f.scopes.every(scope => scope.training.practiceId === f.practiceId), true, "every effect runs in that practice project's scope");
+});
+
+test("Continue lesson without the old session starts a new one at the project's current code, without exercise proof", async t => {
+  const f = await continuationFixture(t, { session: false });
+  const result = await f.service.continueLesson({ actor, attemptId: f.practiceId, requestId: "next", expectedRevision: 4 });
+  assert.deepEqual(f.calls.find(([name]) => name === "begin"), ["begin", `training-${attemptId}`]);
+  assert.equal(result.attempt.preparation.initialSessionId, `training-${attemptId}`);
+  assert.deepEqual(f.calls.filter(([name]) => ["project", "source-proof"].includes(name)), [], "the learner's edits are kept, not re-proved");
+  const creation = f.calls.find(([name]) => name === "session-create");
+  assert.deepEqual(creation[2], { sessionId: `training-${attemptId}` }, "the new session starts at HEAD");
+});
+
+test("Continue lesson whose practice project is gone prepares a fresh one as a first start does", async t => {
+  const f = await continuationFixture(t, { session: false, project: false });
+  await f.service.continueLesson({ actor, attemptId: f.practiceId, requestId: "next", expectedRevision: 4 });
+  assert.equal(Object.hasOwn(f.calls[0][1], "practiceId"), false);
+  assert.equal(f.calls.find(([name]) => name === "project")[1].training.practiceId, attemptId);
+  assert.equal(f.calls.filter(([name]) => name === "source-proof").length, 1);
+});
+
+test("opening a practice project ends another lesson in progress (left) and continues its lesson there", async t => {
+  const f = await continuationFixture(t);
+  const other = { ...structuredClone(f.attempt), attemptId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc" };
+  let ended = null;
+  f.owners.learners.readState = async () => ended
+    ? { revision: 6, active: null, progress: { attempts: [f.previous, other], activeAttemptId: null } }
+    : { revision: 5, active: other, progress: { attempts: [f.previous, other], activeAttemptId: other.attemptId } };
+  f.owners.learners.endAttempt = async input => { ended = input; return { revision: 6, attempt: { ...other, ended: input } }; };
+  const service = createTrainingService(f.owners);
+  await assert.rejects(service.openPractice({ actor, practiceId: f.practiceId, requestId: "open-1", expectedRevision: 4 }),
+    { code: "VIBE64_TRAINING_STATE_REVISION_CONFLICT" });
+  assert.equal(ended, null);
+  await service.openPractice({ actor, practiceId: f.practiceId, requestId: "open-1", expectedRevision: 5 });
+  assert.deepEqual({ ...ended, actor: undefined }, { actor: undefined, attemptId: other.attemptId, requestId: `leave-${other.attemptId}`,
+    expectedRevision: 5, reason: "left" });
+  // Scoped and bounded, so it never collides with a lesson.start id or another open.
+  const scoped = `open_${f.practiceId.replaceAll("-", "")}_${createHash("sha256").update("open-1").digest("hex").slice(0, 26)}`;
+  assert.equal(scoped.length, 64);
+  assert.deepEqual(f.calls.find(([name]) => name === "reserve")[1], { actor, requestId: scoped, expectedRevision: 6, pin, practiceId: f.practiceId });
+  await assert.rejects(service.startLesson({ actor, courseId: "intro", release: "0.1.0", lessonCode: "X", requestId: scoped, expectedRevision: 6 }),
+    { code: "VIBE64_TRAINING_REQUEST_INVALID" }, "the open namespace is host-owned");
+  f.setPracticeRecord(null);
+  await assert.rejects(service.openPractice({ actor, practiceId: f.practiceId, requestId: "open-2", expectedRevision: 6 }),
+    { code: "VIBE64_TRAINING_PRACTICE_MISSING" });
+});
+
+test("opening refuses a practice project being deleted or a lesson that cannot be prepared before ending another lesson", async t => {
+  const f = await continuationFixture(t);
+  const other = { ...structuredClone(f.attempt), attemptId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc" };
+  let ended = null;
+  f.owners.learners.readState = async () => ({ revision: 5, active: other, progress: { attempts: [f.previous, other], activeAttemptId: other.attemptId } });
+  f.owners.learners.endAttempt = async input => { ended = input; return { revision: 6, attempt: { ...other, ended: input } }; };
+  const service = createTrainingService(f.owners);
+  f.setPracticeRecord({ slug: f.previous.projectSlug, learnerKey: f.training.learnerKey, practiceId: f.practiceId, training: f.training, deleting: true });
+  await assert.rejects(service.openPractice({ actor, practiceId: f.practiceId, requestId: "open-1", expectedRevision: 5 }),
+    { code: "VIBE64_TRAINING_PRACTICE_MISSING", message: /Nothing was changed/u });
+  f.setPracticeRecord({ slug: f.previous.projectSlug, learnerKey: f.training.learnerKey, practiceId: f.practiceId, training: f.training });
+  const unreadable = Object.assign(new Error("The installed lesson content is missing."), { code: "VIBE64_TRAINING_CONTENT_MISSING" });
+  f.owners.content.readExercise = async () => { throw unreadable; };
+  await assert.rejects(service.openPractice({ actor, practiceId: f.practiceId, requestId: "open-1", expectedRevision: 5 }), unreadable);
+  assert.equal(ended, null, "the other lesson keeps going");
+  assert.deepEqual(f.calls.filter(([name]) => name === "reserve"), []);
+});
+
+test("Continue lesson whose practice project is being deleted prepares a fresh one", async t => {
+  // Only the learning-space record (with its deletion marker) remains to be seen.
+  const f = await continuationFixture(t, { session: false, project: false });
+  f.setPracticeRecord({ slug: f.previous.projectSlug, learnerKey: f.training.learnerKey, practiceId: f.practiceId, training: f.training, deleting: true });
+  await f.service.continueLesson({ actor, attemptId: f.practiceId, requestId: "next", expectedRevision: 4 });
+  assert.equal(Object.hasOwn(f.calls[0][1], "practiceId"), false);
+  assert.equal(f.calls.find(([name]) => name === "project")[1].training.practiceId, attemptId);
 });

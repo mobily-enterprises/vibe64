@@ -1799,7 +1799,7 @@ test("a practice runtime root survives the catalogue sweep and bad learning-spac
     await access(context.projectRuntimeRootForSlug(misleading));
     assert.deepEqual(await readFile(practice.projectRecordPath), recordBefore);
     assert.equal(await readFile(retainedSession, "utf8"), "retained practice session\n");
-    const expected = [{ slug, learnerKey: "NDI", practiceId: training.practiceId, training }];
+    const expected = [{ slug, learnerKey: "NDI", practiceId: training.practiceId, training, deleting: false }];
     assert.deepEqual(await context.listLearningSpaceProjects(), expected);
     assert.deepEqual(await context.listLearningSpaceProjects({ learnerKey: "NDI" }), expected);
     assert.deepEqual(await context.listLearningSpaceProjects({ learnerKey: "NDM" }), []);

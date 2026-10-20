@@ -375,7 +375,8 @@ test("a pinned source blocks deletion before deletion state or resources change"
         remove: async () => { throw new Error("must not remove"); }
       }
     });
-    await assert.rejects(service.archiveProject({ slug: "pinned-project" }), { code: "vibe64_project_pinned" });
+    await assert.rejects(service.archiveProject({ slug: "pinned-project",
+      beforeRemove: async () => { throw new Error("the owner's step must not run after a refusal"); } }), { code: "vibe64_project_pinned" });
     assert.deepEqual((await projectContext.readWorkspaceProjectState({ slug: "pinned-project" })).metadata, before.metadata);
   });
 });
@@ -397,7 +398,10 @@ test("light practice deletion resumes after namespace removal failure", async ()
         }
         return rm(targetPath, options);
       } });
-    await assert.rejects(inScope(() => service.removeProject({ slug })), { code: "namespace_busy" });
+    // The owner's step runs under the lock before the deletion marker, and again on a resume.
+    const steps = [];
+    const beforeRemove = async () => { steps.push(Boolean((await projectContext.readWorkspaceProjectState({ slug })).metadata.deletion)); };
+    await assert.rejects(inScope(() => service.removeProject({ slug, beforeRemove })), { code: "namespace_busy" });
     const interrupted = await inScope(() => projectContext.readWorkspaceProjectState({ slug }));
     assert.ok(interrupted.metadata.deletion.steps["runtime-closed"]);
     assert.ok(interrupted.metadata.deletion.steps["resources-removed"]);
@@ -407,7 +411,8 @@ test("light practice deletion resumes after namespace removal failure", async ()
     await assert.rejects(() => projectContext.runWithPracticeProjectScope({ actor, training, requireProject: true }, () => assert.fail()),
       { code: "vibe64_practice_project_deleted", statusCode: 404 });
     assert.equal(await inScope(() => service.projectExists({ slug })), true, "an interrupted removal stays listed for the retry");
-    assert.equal((await inScope(() => service.removeProject({ slug }))).removed, true);
+    assert.equal((await inScope(() => service.removeProject({ slug, beforeRemove }))).removed, true);
+    assert.deepEqual(steps, [false, true]);
     assert.equal(closeAttempts, 1);
     assert.equal(resourceRemovalAttempts, 1);
     assert.equal(namespaceRemovalAttempts, 2);
@@ -415,8 +420,9 @@ test("light practice deletion resumes after namespace removal failure", async ()
     await assert.rejects(() => access(path.dirname(projectContextRoot)), { code: "ENOENT" },
       "the empty practice directory goes with its namespace");
     assert.equal(await inScope(() => service.projectExists({ slug })), false);
-    assert.deepEqual(await inScope(() => service.removeProject({ slug })), { ok: true, slug, removed: false },
+    assert.deepEqual(await inScope(() => service.removeProject({ slug, beforeRemove })), { ok: true, slug, removed: false },
       "a completed removal replays without effects");
+    assert.deepEqual(steps, [false, true]);
   });
 });
 
@@ -432,7 +438,8 @@ test("a pinned session blocks light practice deletion before deletion state chan
         archive: async () => { throw new Error("must not archive"); },
         remove: async () => { throw new Error("must not remove"); }
       } });
-    await assert.rejects(inScope(() => service.removeProject({ slug })),
+    await assert.rejects(inScope(() => service.removeProject({ slug,
+      beforeRemove: async () => { throw new Error("the owner's step must not run after a refusal"); } })),
       { code: "vibe64_project_pinned", statusCode: 409, message: "Unpin session main-session before deleting this practice project." });
     assert.deepEqual((await inScope(() => projectContext.readWorkspaceProjectState({ slug }))).metadata, before.metadata);
     assert.deepEqual(await inScope(() => service.canRemoveProject({ slug })),

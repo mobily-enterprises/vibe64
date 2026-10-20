@@ -732,6 +732,7 @@ function createStudioProjectContext({
   // The learning-space project a practice slug names: its marker is valid,
   // names that practice, and its namespace is a real directory. Null when the
   // space has no such project; an unsafe or invalid one is skipped with a warning.
+  // `deleting` reports a deletion marker (a removal that stopped part-way).
   async function readLearningSpaceProject(slug) {
     const practiceId = practiceIdFromSlug(slug);
     if (!practiceId) return null;
@@ -758,7 +759,7 @@ function createStudioProjectContext({
       if (error.code === "vibe64_practice_path_unsafe") return skipLearningSpaceEntry(slug, error.message);
       throw error;
     }
-    return Object.freeze({ slug, learnerKey: training.learnerKey, practiceId, training });
+    return Object.freeze({ slug, learnerKey: training.learnerKey, practiceId, training, deleting: Boolean(metadata.deletion) });
   }
 
   async function readDirectoryEntries(directory) {

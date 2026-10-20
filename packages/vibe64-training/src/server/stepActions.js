@@ -2,14 +2,15 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { trainingStepObservationSchema } from "../shared/practicalSchemas.js";
 import { lessonSteps } from "./learnerState.js";
-import { attemptId, attemptSummary, id, operationError, pick as pickPresent, practiceSlug, requestId, text } from "./actions.js";
+import { attemptId, attemptSummary, id, operationError, pick as pickPresent, practiceSlug, requestId, revision, text } from "./actions.js";
 
-// Learning v2 (contract C3): the lesson reader, step results, reader position
-// and practice deletion. Admission is the existing action context; decisions
-// stay with their owners: the step owner (stepChecks.js) decides what may
-// pass, the learner store saves, and the host facility practiceProjects.remove
-// deletes. "Browser" actions run only on the learner's own api channel and are
-// excluded from Colleague's tools.
+// Learning v2 (contract C3, Rev 3 R6): the lesson reader, step results, reader
+// position and the learner's practice projects. Admission is the existing
+// action context; decisions stay with their owners: the step owner
+// (stepChecks.js) decides what may pass, the learner store saves, and the
+// learning space (learningSpace.js) lists, archives and removes. "Browser"
+// actions run only on the learner's own api channel and are excluded from
+// Colleague's tools.
 const MAX_RESULT_BYTES = 128 * 1024;
 const MAX_PAGE_BODY_BYTES = 64 * 1024;
 const opaque = { type: "object", additionalProperties: true, required: false };
@@ -36,11 +37,17 @@ const lessonOutput = {
     page: { ...opaque }, error: { ...text, required: false, maxLength: 512 }
   })
 };
+// A practice project is named by the UUID of the attempt that created it.
+const practiceId = attemptId;
 const practiceOutput = {
   mode: "replace",
   schema: createSchema({
     ok: { type: "boolean", required: true }, available: { type: "boolean", required: true },
-    attemptId: { ...attemptId, required: false }, slug: { ...text, required: false, maxLength: 128 },
+    projects: { type: "array", required: false, maxLength: 256, items: opaque },
+    archived: { type: "array", required: false, maxLength: 64, items: opaque },
+    revision: { ...revision, required: false }, attempt: { ...opaque, nullable: true },
+    practiceId: { ...practiceId, required: false }, slug: { ...text, required: false, maxLength: 128 },
+    archiveId: { ...text, required: false, maxLength: 128 },
     removed: { type: "boolean", required: false }, ended: { type: "boolean", required: false },
     error: { ...text, required: false, maxLength: 512 }
   })
@@ -149,7 +156,7 @@ const definition = (name, fields, { description = "", browser = false, kind = "c
 }, { projectScoped: false });
 
 function createTrainingStepActions({ learners, attemptLearners = learners, content, steps, exercises = null,
-  practiceProjects = null, publishLearnerChanged = null } = {}) {
+  learningSpace = null, publishLearnerChanged = null } = {}) {
   if (typeof learners?.readState !== "function" || typeof attemptLearners?.readState !== "function" ||
       typeof content?.readLesson !== "function" || typeof steps?.read !== "function") {
     throw new TypeError("Step actions require the original learner, installed content and step owners.");
@@ -185,7 +192,7 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
     if (input.attemptId) attempt = (await readAttempt(actor, input.attemptId)).attempt;
     else attempt = (await learners.readState({ actor })).active;
     if (!attempt) return { ok: true, available: true, attempt: null, lesson: null };
-    const slug = await practiceSlug({ attempt, actor, practiceProjects });
+    const slug = await practiceSlug({ attempt, actor, learningSpace });
     const lesson = await content.readLesson({ ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
     const summary = attemptSummary(attempt, slug);
     if (!lessonSteps(lesson)) {
@@ -220,6 +227,38 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
     return pick(result, ["ok", "stepId", "outcome", "recorded", "replayed", "alreadyPassed", "reason", "diagnostic"]);
   };
 
+  const unavailablePractice = operation => ({ ok: false, available: false,
+    error: `${operation} practice projects is unavailable in this installation. Nothing was changed.` });
+
+  // A learning-space change the learner asked for. Colleague needs the
+  // person's confirmation; the learner's own one-click browser action does
+  // not. A refusal (pinned session, archive limit, storage, not this
+  // learner's) is reported with nothing changed. A failure after the lesson in
+  // progress ended still publishes the change and reports ended: true.
+  const practiceCommand = (name, fields, description, run) => definition(name, { ...fields,
+    confirmed: { type: "boolean", required: false } }, { output: practiceOutput, description },
+  async (input, actor, context) => {
+    if (context.channel !== "api" && input.confirmed !== true) {
+      throw failure("Ask the person to confirm this practice project change, then repeat with confirmed: true.",
+        "VIBE64_TRAINING_PRACTICE_UNCONFIRMED");
+    }
+    if (!learningSpace) return unavailablePractice("Changing");
+    let result;
+    try { result = await run(input, actor); }
+    catch (cause) {
+      const refusal = cause.statusCode < 500 && /^(VIBE64_TRAINING_PRACTICE_|vibe64_project_pinned)/u.test(cause.code || "");
+      if (cause.ended === true) {
+        await notify(actor, "", "practice");
+        return { ok: false, available: true, practiceId: input.practiceId, ended: true,
+          error: `${refusal ? `${refusalText(cause.message, "The change stopped.").slice(0, 400)} ` : "The change stopped part-way. "}The lesson in progress has ended (its results are kept); retry to finish.` };
+      }
+      if (!refusal) throw cause;
+      return { ok: false, available: true, practiceId: input.practiceId, error: refusalText(cause.message, "Nothing was changed.") };
+    }
+    await notify(actor, "", "practice");
+    return { ok: true, available: true, ...pick(result, ["practiceId", "slug", "archiveId", "removed", "ended"]) };
+  });
+
   return Object.freeze([
     lessonRead,
     definition("step.observe", { attemptId, stepId: id,
@@ -253,58 +292,26 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
       return { ok: true, reader: pick(reader, ["attemptId", "stepId", "scroll"]),
         ...(baseline ? { baseline: pick(baseline, ["recorded", "code", "reason"]) } : {}) };
     }),
-    definition("practice.delete", { attemptId, confirmed: { type: "boolean", required: false } }, { output: practiceOutput,
-      description: "Delete the practice project of one of the learner's own lesson attempts, only after the person asked for it and then confirmed this exact deletion in the conversation; pass confirmed: true only then. Name the lesson and say the project's files, sessions and Preview go away for good, with no archive. Saved lesson progress and results are kept. A pinned session refuses the delete until it is unpinned; that refusal changes nothing. Otherwise an active attempt is ended (reason discard) first, and continuing the lesson later prepares a fresh project. If the host still fails to delete after ending, the result says ended true and removed false: report both, the attempt stays ended and the project remains until a retry. Another learner's practice project is not reachable here." },
-    async (input, actor, context) => {
-      if (context.channel !== "api" && input.confirmed !== true) {
-        throw failure("Ask the person to confirm deleting this practice project, then repeat with confirmed: true.",
-          "VIBE64_TRAINING_PRACTICE_DELETE_UNCONFIRMED");
-      }
-      if (typeof practiceProjects?.remove !== "function") {
-        return { ok: false, available: false, error: "Deleting practice projects is unavailable in this installation. Nothing was deleted." };
-      }
-      const { state, attempt } = await readAttempt(actor, input.attemptId);
-      const slug = await practiceSlug({ attempt, actor, practiceProjects });
-      if (!slug) throw failure("This lesson attempt has no practice project.", "VIBE64_TRAINING_PRACTICE_MISSING", 404);
-      // The host's preflight refusal (a pinned session) comes before ending, so a
-      // refused delete has no side effect.
-      if (typeof practiceProjects.canRemove === "function") {
-        const allowed = await practiceProjects.canRemove({ slug, actor });
-        if (allowed?.ok !== true) {
-          return { ok: false, available: true, attemptId: attempt.attemptId, slug, removed: false, ended: false,
-            error: refusalText(allowed?.reason, "The practice project cannot be deleted now. Nothing was changed.") };
-        }
-      }
-      let ended = false;
-      if (!attempt.ended) {
-        // Ending first stops the attempt's agent work before its files go.
-        if (typeof exercises?.endLesson !== "function") {
-          return { ok: false, available: false, error: "Ending the lesson is unavailable in this installation. Nothing was deleted." };
-        }
-        const result = await exercises.endLesson({ actor, attemptId: attempt.attemptId, reason: "discard",
-          requestId: `practice-delete-${attempt.attemptId.replaceAll("-", "")}`, expectedRevision: state.revision });
-        if (!result?.attempt?.ended) throw failure("The lesson attempt was not ended; nothing was deleted.", "VIBE64_TRAINING_ATTEMPT_END_FAILED");
-        ended = true;
-      }
-      let removed;
-      try {
-        removed = await practiceProjects.remove({ slug, actor });
-      } catch (cause) {
-        // Ending cannot be undone; report the actual state instead of a bare error.
-        if (!ended) throw cause;
-        removed = { ok: false, removed: false, reason: cause.statusCode && cause.statusCode < 500 ? cause.message : "" };
-      }
-      if (removed?.ok === false) {
-        if (ended) await notify(actor, attempt.attemptId, "practice");
-        const reason = refusalText(removed.reason || removed.error, "");
-        return { ok: false, available: true, attemptId: attempt.attemptId, slug, removed: false, ended,
-          error: ended
-            ? `The lesson was ended, but its practice project was not deleted${reason ? `: ${reason.replace(/[.!]?$/u, ".")}` : "."} Retry the delete.`.slice(0, 512)
-            : reason || "The practice project was not deleted. Nothing was changed." };
-      }
-      await notify(actor, attempt.attemptId, "practice");
-      return { ok: true, available: true, attemptId: attempt.attemptId, slug, removed: removed?.removed !== false, ended };
-    })
+    definition("practice.list", {}, { kind: "query", idempotency: "none", output: practiceOutput,
+      description: "List the learner's practice projects in the learning space: each with its lesson (code, title), status (in-progress, finished, not-finished, or deleting when a delete stopped part-way) and practiceId; and archived practice projects with their lesson and archive date. Practice projects never appear among the person's normal projects. This is read-only." },
+    async (_input, actor) => {
+      if (typeof learningSpace?.list !== "function") return unavailablePractice("Listing");
+      return { ok: true, available: true, ...await learningSpace.list(actor) };
+    }),
+    definition("practice.open", { practiceId, requestId, expectedRevision: revision }, { output: practiceOutput,
+      description: "Open one of the learner's practice projects with its lesson, only after the person's direct request or accepted offer. Read practice.list and learning.read for the practiceId and current revision. When it is already the lesson in progress it is returned unchanged. Another lesson in progress is ended first (as Leave lesson: results and its practice project kept). Then the lesson continues in this practice project as a new attempt at the first step that has not passed, and learning mode turns on. Keep the same requestId on an uncertain retry." },
+    async (input, actor) => {
+      if (typeof exercises?.openPractice !== "function") return unavailablePractice("Opening");
+      const result = await exercises.openPractice({ actor, ...pick(input, ["practiceId", "requestId", "expectedRevision"]) });
+      await notify(actor, result.attempt?.attemptId || "", "learning-mode");
+      return { ok: true, available: true, revision: result.revision, attempt: attemptSummary(result.attempt, result.attempt.projectSlug) };
+    }),
+    practiceCommand("practice.archive", { practiceId }, "Archive one of the learner's practice projects, only after the person asked for it and then confirmed it in the conversation; pass confirmed: true only then. Its lesson in progress, if any, ends first (results kept). The project's code and sessions are packed into an archive bundle (rebuildable dependencies such as node_modules are left out) and the project leaves the learning space; practice.list then shows it under archived. A pinned session refuses the archive until it is unpinned, and a learner keeps at most 20 archives; those refusals change nothing.",
+      (input, actor) => learningSpace.archive({ actor, practiceId: input.practiceId })),
+    practiceCommand("practice.delete", { practiceId }, "Delete one of the learner's practice projects, only after the person asked for it and then confirmed this exact deletion in the conversation; pass confirmed: true only then. Name the lesson and say the project's files, sessions and Preview go away for good, with no archive (practice.archive keeps one). Its lesson in progress, if any, ends first; step results are kept. A pinned session refuses the delete until it is unpinned; that refusal changes nothing. A delete that stopped part-way (status deleting) resumes. Another learner's practice project is not reachable here.",
+      (input, actor) => learningSpace.remove({ actor, practiceId: input.practiceId })),
+    practiceCommand("practice.archived.delete", { practiceId, archiveId: { ...text, maxLength: 128 } }, "Delete one archived practice project of the learner for good, only after the person asked for it and then confirmed it in the conversation; pass confirmed: true only then. Use the practiceId and archiveId from practice.list archived.",
+      (input, actor) => learningSpace.deleteArchive({ actor, ...pick(input, ["practiceId", "archiveId"]) }))
   ]);
 }
 
