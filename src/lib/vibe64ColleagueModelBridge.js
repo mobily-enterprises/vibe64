@@ -8,6 +8,8 @@ import { computed, shallowRef } from "vue";
 //     -> { ok: true, selection, engineLabel, modelLabel } | { ok: false, error }
 // selectForWorkflow uses the workflow's routed Senior, and fails when that
 // Senior uses a provider other than modelProviderId (when given).
+//   sayHello(message) -> { ok: true, reply } | { ok: false, error }
+// sayHello sends one ordinary Colleague message and resolves with its reply.
 const registrations = shallowRef([]);
 const available = computed(() => registrations.value.length > 0);
 const NOT_OPEN = "Colleague is not open in this browser view.";
@@ -23,7 +25,8 @@ function useVibe64ColleagueModel() {
     // A computed ref: true while a Colleague is mounted.
     available,
     current: async () => (await latest()?.current()) || null,
-    selectForWorkflow: async (target) => (await latest()?.selectForWorkflow(target)) || { ok: false, error: NOT_OPEN }
+    selectForWorkflow: async (target) => (await latest()?.selectForWorkflow(target)) || { ok: false, error: NOT_OPEN },
+    sayHello: async (message) => (await latest()?.sayHello(message)) || { ok: false, error: NOT_OPEN }
   };
 }
 

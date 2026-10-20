@@ -1108,9 +1108,11 @@ AI onboarding makes connecting a frontier model the first thing a new person
 does. It is one shared full-screen flow, used unchanged by the local and hosted
 editors: a short "why intelligence matters" screen, then Claude (crowned,
 recommended), Codex, DeepSeek and GLM, ranked with honest bullets and a
-recommended monthly spend, then the existing AI Accounts setup for the chosen
-provider and its routing review, then a success screen once Colleague has a
-Senior model. Prices, plan names and sign-up links live in one small data module
+suggested budget beside each plan's official price, then the existing AI
+Accounts setup for the chosen provider and, when needed, one plain "make it
+your main AI?" decision, then a success screen once Colleague has a Senior
+model, where Colleague says hello as proof it answers. Until AI is set up, a
+gold Set up AI button in the top bar reopens it. Prices, plan names and sign-up links live in one small data module
 so they are easy to correct. The flow opens by itself only for someone who can
 connect AI (the local user, or a hosted workspace owner), only after AI status
 has loaded without error, and only while no AI of their own is connected;

@@ -1,5 +1,6 @@
 <template>
   <div ref="root" class="vibe64-auth-settings">
+    <AiOnboardingSetUpPill />
     <v-menu location="bottom end">
       <template #activator="{ props: menuProps }">
         <v-btn
@@ -188,6 +189,7 @@ import {
   accountRowsForStatus,
   ProviderAccountsSetup,
   AiConnectionsSettings,
+  AiOnboardingSetUpPill,
   aiOnboardingAvailable,
   aiOnboardingBlocked,
   onVibe64AiOnboardingRequested,
@@ -405,6 +407,12 @@ watch(
   overflow: visible;
   position: relative;
   width: 2.75rem;
+}
+
+/* overflow: visible lets the pulse ring out, so the state layers need the circle too. */
+.vibe64-auth-settings__button :deep(.v-btn__overlay),
+.vibe64-auth-settings__button :deep(.v-btn__underlay) {
+  border-radius: 50%;
 }
 
 .vibe64-auth-settings__button--needs-attention {

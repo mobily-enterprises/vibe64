@@ -8,9 +8,11 @@ import ModelRoutingForm from "./ModelRoutingForm.vue";
 const props = defineProps({
   actionsEnabled: { type: Boolean, default: true },
   adding: Boolean,
-  // Inside onboarding: no model chips, orchestrator note or Disconnect; the
-  // host reviews routing, so a successful save closes unless routing failed.
+  // Inside onboarding: only the key form under `title`, without the engine
+  // header, model chips, check note, key link or Disconnect; the host reviews
+  // routing, so a successful save closes unless routing failed.
   embedded: Boolean,
+  title: { type: String, default: "" },
   engineId: { type: String, default: "codex" },
   selectProvider: { type: Boolean, default: true },
   showBack: Boolean,
@@ -83,14 +85,15 @@ async function save({ remove = false, useSavedKey = false } = {}) {
         />
       </div>
       <template v-if="provider">
-        <div class="d-flex align-center flex-wrap ga-2 mb-2">
+        <h2 v-if="embedded" class="text-title-large mt-0 mb-3">{{ title }}</h2>
+        <div v-else class="d-flex align-center flex-wrap ga-2 mb-2">
           <h2 class="text-title-large">{{ engineLabel }} - {{ provider.label }}</h2>
           <v-chip v-if="connected" color="success" size="small" :prepend-icon="mdiCheckCircleOutline">Connected</v-chip>
           <v-spacer />
           <v-btn v-if="showBack" :icon="mdiArrowLeft" aria-label="Back to providers" variant="text" :disabled="busy" @click="emit('back')" />
           <v-btn v-if="showClose" :icon="mdiClose" :aria-label="`Close ${engineLabel} setup`" variant="text" :disabled="busy" @click="emit('close')" />
         </div>
-        <p class="text-body-medium mb-3">{{ provider.description }}.</p>
+        <p v-if="!embedded" class="text-body-medium mb-3">{{ provider.description }}.</p>
         <p v-if="provider.setupNote" class="text-body-small mb-3">{{ provider.setupNote }}</p>
         <p v-if="connectionStatus === 'connected' && !embedded" class="text-body-small mb-3">
           Saved for {{ engineLabel }} only. Each orchestrator has its own connection.
@@ -110,8 +113,8 @@ async function save({ remove = false, useSavedKey = false } = {}) {
             variant="outlined" hint="Stored privately outside your projects. Existing keys are never shown." persistent-hint
             @click:append-inner="visible = !visible"
           />
-          <p class="text-body-small my-3">Checks {{ engineLabel }} only. This small request uses API credit or plan quota.</p>
-          <div class="d-flex flex-wrap ga-2 align-center">
+          <p v-if="!embedded" class="text-body-small my-3">Checks {{ engineLabel }} only. This small request uses API credit or plan quota.</p>
+          <div class="d-flex flex-wrap ga-2 align-center" :class="{ 'mt-4': embedded }">
             <v-btn
               type="submit" color="primary" variant="flat"
               :disabled="!actionsEnabled || (!useExistingKey && !apiKey.trim()) || busy"
@@ -119,7 +122,7 @@ async function save({ remove = false, useSavedKey = false } = {}) {
               {{ busy ? 'Checking…' : useExistingKey || connectionStatus !== 'connected' ? 'Check and connect' : 'Check and replace key' }}
             </v-btn>
             <v-btn v-if="!adding && connectionStatus === 'connected'" variant="outlined" :disabled="busy || !actionsEnabled" @click="save({ useSavedKey: true })">Check saved key</v-btn>
-            <v-btn :href="provider.keyUrl" target="_blank" rel="noopener noreferrer" variant="text" :append-icon="mdiOpenInNew">Get API key</v-btn>
+            <v-btn v-if="!embedded" :href="provider.keyUrl" target="_blank" rel="noopener noreferrer" variant="text" :append-icon="mdiOpenInNew">Get API key</v-btn>
             <v-btn
               v-if="!adding && !embedded && connectionStatus !== 'not_connected'" variant="text"
               :disabled="!actionsEnabled || busy" @click="confirmRemove = true"

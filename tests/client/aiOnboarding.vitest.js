@@ -76,7 +76,8 @@ beforeEach(() => {
       if (mocks.colleague.seniorProviders[engineId] !== modelProviderId) return { ok: false, error: "Its Senior uses another provider." };
       selection.value = { engineId, modelProviderId, modelId: `${engineId}-model` };
       return { ok: true, ...labelled() };
-    }) };
+    }),
+    sayHello: vi.fn(async () => ({ ok: true, reply: "Hello there!" })) };
   unregisterColleague = registerVibe64ColleagueModel(mocks.colleague);
 });
 afterEach(() => {
@@ -97,13 +98,16 @@ describe("provider data", () => {
     }
   });
 
-  it("keeps the recommended spend text and names the plan beside it", () => {
-    expect(claude).toMatchObject({ crown: true, plan: { name: "Claude Pro", headline: "Recommended: $30/month" } });
-    expect(AI_ONBOARDING_PROVIDERS.find(({ id }) => id === "glm")).toMatchObject({
-      plan: { name: "GLM Coding Plan", headline: "Recommended: $30/month plan" },
-      note: "There's no point in getting it if you can get Claude for the same price."
-    });
+  it("keeps the spending advice as a budget beside each plan's official price", () => {
+    expect(claude).toMatchObject({ crown: true, plan: { budget: "$30/month", detail: "Claude Pro ($20/month) · basic coding" } });
+    expect(glm).toMatchObject({ plan: { budget: "$30/month" },
+      note: "There's no point in getting it if you can get Claude for the same price." });
     expect(AI_ONBOARDING_PROVIDERS.filter(({ crown }) => crown)).toHaveLength(1);
+    // "Recommended" belongs to Claude's pill alone, and only Claude rates 3 on quota.
+    expect(JSON.stringify(AI_ONBOARDING_PROVIDERS)).not.toMatch(/Recommended:/u);
+    expect(AI_ONBOARDING_PROVIDERS.filter(({ bullets }) => bullets.some(([aspect, rating]) => aspect === "quota" && rating === 3))
+      .map(({ id }) => id)).toEqual(["claude"]);
+    expect(deepseek.haveTitle).toBe("Already have credit");
   });
 });
 
@@ -298,8 +302,19 @@ describe("flow", () => {
     expect(state.screen).toBe("success");
     expect(mocks.colleague.selectForWorkflow).toHaveBeenCalledExactlyOnceWith({ engineId: "claude", modelProviderId: "anthropic" });
     expect(state.outcome).toMatchObject({ routed: true, error: "",
-      colleague: { engineId: "claude", modelProviderId: "anthropic", label: "Claude Code (claude-model)" } });
-    expect(state.colleagueUsesChosen).toBe(true);
+      colleague: { engineId: "claude", modelProviderId: "anthropic", label: "claude-model" } });
+    expect(state.colleagueNote).toBe("uses");
+    await vi.waitFor(() => expect(state.hello).toEqual({ state: "replied", reply: "Hello there!" }));
+  });
+
+  it("without a Colleague here, success only points to its model menu", async () => {
+    unregisterColleague();
+    const onboarding = effectScope().run(() => useAiOnboarding({ enabled: true }));
+    const state = mount(AiOnboarding, { open: true, start: "choose", onboarding, canConfigure: true });
+    state.connect(claude, "have");
+    connectClaude();
+    await state.finish();
+    expect([state.screen, state.colleagueNote]).toEqual(["success", "menu"]);
   });
 
   it("does not mark the sign-up step done for someone who already has a plan", async () => {
@@ -315,7 +330,7 @@ describe("flow", () => {
     await state.finish();
     expect(state.screen).toBe("success");
     expect(state.outcome).toMatchObject({ colleague: null, error: "Its Senior uses another provider." });
-    expect(state.colleagueUsesChosen).toBe(false);
+    expect(state.colleagueNote).toBe("switch");
   });
 
   it("stays in Connect until the provider is connected and has a Senior model", async () => {
@@ -370,11 +385,30 @@ describe("flow", () => {
     await vi.waitFor(() => expect(state.screen).toBe("success"));
     expect(state.outcome.routed).toBe(false);
     expect(mocks.colleague.selectForWorkflow).not.toHaveBeenCalled();
-    expect(state.colleagueUsesChosen).toBe(false);
+    expect(state.colleagueNote).toBe("switch");
     mocks.colleague.seniorProviders.codex = "deepseek";
     await state.switchColleague();
     expect(mocks.colleague.selectForWorkflow).toHaveBeenCalledExactlyOnceWith({ engineId: "codex", modelProviderId: "deepseek" });
-    expect(state.colleagueUsesChosen).toBe(true);
+    expect(state.colleagueNote).toBe("uses");
+  });
+
+  it("Yes on the plain routing question applies the suggestions and moves Colleague", async () => {
+    onCodexOpenAi();
+    const { state } = await flow({ setUp: true, start: "choose" });
+    routeDeepSeek({ assignment: { engineId: "codex", modelProviderId: "openai", modelId: "gpt" },
+      recommendation: { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } });
+    state.connect(state.cards.find(({ id }) => id === "deepseek"));
+    await state.finish();
+    expect(state.screen).toBe("routing");
+    mocks.colleague.seniorProviders.codex = "deepseek";
+    state.routingForm = { applySuggested: vi.fn(async () => {
+      mocks.routing.configuration.engines.value = [{ engineId: "codex", roles: {
+        senior: { assignment: { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } } } }];
+      await state.routingDone();
+    }) };
+    await state.useAsMain();
+    expect([state.screen, state.routingDetails]).toEqual(["success", false]);
+    expect(mocks.colleague.selectForWorkflow).toHaveBeenCalledExactlyOnceWith({ engineId: "codex", modelProviderId: "deepseek" });
   });
 
   it("a redo opened before connections load never moves Colleague unasked", async () => {

@@ -240,6 +240,22 @@ async function save() {
   catch { /* Shared command feedback reports errors; keep this draft and its field errors. */ }
   finally { saving.value = false; }
 }
+function until(ready) {
+  return new Promise((resolve) => {
+    const stop = watch(ready, (value) => { if (value) { queueMicrotask(() => stop()); resolve(); } }, { immediate: true });
+  });
+}
+// Onboarding's plain "Yes": every suggestion for this connection, saved as usual.
+async function applySuggested() {
+  await until(() => loadError.value || baseRevision.value !== null && !refreshingConnection.value);
+  if (loadError.value) return;
+  proposals.value = suggestedChanges.value.map(({ id }) => id);
+  if (!proposals.value.length) return emit("saved");
+  await nextTick();
+  await until(() => !previewPending.value);
+  await save();
+}
+defineExpose({ applySuggested });
 async function reload() {
   refreshError.value = "";
   try { await resource.reload(); if (!resourceError.value) hydrate(resource.data.value); }
@@ -263,7 +279,7 @@ async function reload() {
           <p class="text-title-medium mt-4">{{ engineLabel }}</p>
           <template v-if="suggestedChanges.length">
             <p v-if="!suggestedChanges.some(change => change.role === 'senior')" class="text-body-small">Senior stays {{ selectionLabel(engine.roles.senior.assignment) }}.</p>
-            <v-checkbox v-for="proposal in suggestedChanges" :key="proposal.id" v-model="proposals" :value="proposal.id" :disabled="saving || !canEdit" hide-details>
+            <v-checkbox v-for="proposal in suggestedChanges" :key="proposal.id" v-model="proposals" :value="proposal.id" :disabled="saving || !canEdit" hide-details class="model-routing__proposal">
               <template #label><span class="text-body-medium"><strong>{{ proposal.label }}</strong><br>Current: {{ selectionLabel(proposal.previous) }}<br>Suggested: {{ selectionLabel(proposal.proposed) }} · {{ choiceFor(proposal.proposed, proposal.role)?.accessLabel }}<br><span v-if="proposal.previous?.selectionSource === 'explicit'" class="text-body-small">You chose the current model. Select this change to replace it.</span></span></template>
             </v-checkbox>
           </template>
@@ -351,6 +367,8 @@ async function reload() {
 .model-routing__role { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, .4fr); gap: 12px; align-items: start; }
 .model-routing__role--compact { grid-template-columns: minmax(0, 1fr); }
 .model-routing__changes { overflow-wrap: anywhere; }
+.model-routing__proposal { margin-block: 6px; }
+.model-routing__proposal :deep(.v-selection-control) { align-items: flex-start; }
 .model-routing__group { font-weight: 600; color: rgb(var(--v-theme-on-surface)); background: rgba(var(--v-theme-on-surface), .04); }
 .model-routing__option--model { padding-inline-start: 32px; }
 .model-routing__option-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; white-space: normal; }

@@ -39,9 +39,8 @@ function usesProvider(selection, { connect }) {
   return selection?.engineId === connect.engineId && selection?.modelProviderId === connect.modelProviderId;
 }
 
-const colleagueChoice = (result) => result?.selection
-  ? { ...result.selection, label: `${result.engineLabel} (${result.modelLabel})` }
-  : null;
+const colleagueChoice = (result) => result?.selection ? { ...result.selection, label: result.modelLabel } : null;
+const HELLO = "Say hello to me in one short, friendly sentence. No questions.";
 
 // Orchestrator labels through which a card's provider is connected.
 function aiOnboardingConnections({ matches }, { accounts, curated, openCode }) {
@@ -97,6 +96,11 @@ function useAiOnboarding({ endpoint = "", enabled = true } = {}) {
     return { selection: colleagueCurrent.value };
   }
 
+  // Proof that Colleague answers: one ordinary message, with a reply or an error.
+  function sayHello() {
+    return colleague.sayHello(HELLO).catch((error) => ({ ok: false, error: error?.message || "No reply." }));
+  }
+
   // Re-reads the chosen provider's connection, then its orchestrator's routing.
   async function verify(provider) {
     const { connect } = provider;
@@ -120,7 +124,7 @@ function useAiOnboarding({ endpoint = "", enabled = true } = {}) {
   }
 
   return { cards, colleague: colleagueCurrent, colleagueAvailable: colleague.available, refreshColleague,
-    isSetUp, loadError, loaded, reload, selectForColleague, verify };
+    isSetUp, loadError, loaded, reload, sayHello, selectForColleague, verify };
 }
 
 export { aiIsSetUp, usesProvider, aiOnboardingConnections, aiOnboardingSnoozed, snoozeAiOnboarding, useAiOnboarding };

@@ -74,6 +74,8 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-accounts/src/client/onboarding/useAiOnboarding.js`
 - `packages/vibe64-accounts/src/client/onboarding/AiOnboarding.vue`
 - `packages/vibe64-accounts/src/client/onboarding/AiOnboardingHost.vue`
+- `packages/vibe64-accounts/src/client/onboarding/AiOnboardingMark.vue`
+- `packages/vibe64-accounts/src/client/onboarding/AiOnboardingSetUpPill.vue`
 - `packages/vibe64-accounts/src/client/studio/AIAccountsSetup.vue`
 - `src/App.vue`
 
@@ -366,7 +368,8 @@ Removal confirms the exact owning orchestrator/provider.
 AI onboarding is owned by the client `onboarding/` module of
 `packages/vibe64-accounts` and composes these same setup components in their
 embedded mode; it has no connection implementation of its own.
-`aiOnboardingProviders.js` is the only place for provider ranks, copy, prices,
+`aiOnboardingProviders.js` is the only place for provider ranks, copy, the
+suggested budget (the product's advice) beside each plan's official price,
 plan names, sign-up URLs, the orchestrator and provider id each card connects
 through, and which saved connections count as that provider. DeepSeek and GLM
 connect as curated Codex providers (`deepseek`, `zai-coding-plan`).
@@ -394,8 +397,15 @@ provider connected and its orchestrator's workflow available. The Colleague
 model bridge, registered by the mounted Colleague, reads and switches
 Colleague's selection through the existing model selection; the exported
 `AiOnboardingNudge` in the Colleague panel and Colleague's no-usable-model
-warning dispatch the same request while setup is needed. Redo never removes a
-connection and changes routing only through `ModelRoutingForm`.
+warning dispatch the same request while setup is needed, as does the exported
+`AiOnboardingSetUpPill` that account menus place in the top bar. On success the
+bridge's `sayHello` sends one ordinary Colleague message and returns its reply
+as proof that Colleague answers. Embedded, `NativeProviderConnections` shows
+only the titled key form and `ProviderAccountsSetup` turns raw sign-in tool
+output into product copy with a Details disclosure. Redo never removes a
+connection and changes routing only through `ModelRoutingForm`; the plain
+"Make [provider] your main AI?" decision calls its exposed `applySuggested`,
+which saves every suggestion for that connection through the normal save.
 
 OpenCode connections retain the existing versioned file at
 `<systemRoot>/ai-connections/connections.json`. Native Codex and Claude login

@@ -42,7 +42,7 @@
   --v64-state-dragged: 0.16;
 
   /* Type scale (the app font: Vuetify's body font, Roboto) */
-  --v64-font-family: var(--v-font-body, "Roboto", system-ui, sans-serif);
+  --v64-font-family: var(--v-font-body, "Roboto", sans-serif);
   --v64-type-display-sm: 600 2.25rem/2.75rem var(--v64-font-family);
   --v64-type-headline-md: 600 1.75rem/2.25rem var(--v64-font-family);
   --v64-type-headline-sm: 600 1.5rem/2rem var(--v64-font-family);
