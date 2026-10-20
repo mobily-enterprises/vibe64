@@ -19,6 +19,8 @@ const props = defineProps({
   // Test seam for the visual resource read.
   readVisual: { type: Function, default: null }
 });
+// "ended": lesson.end succeeded, so the host rereads the saved lessons it shows.
+const emit = defineEmits(["ended"]);
 const router = useRouter();
 const lesson = computed(() => props.learning.lesson.value);
 const steps = computed(() => lesson.value?.steps || []);
@@ -163,8 +165,16 @@ function openPractice() {
   props.learning.minimise();
   void router?.push(projectAppPath(practiceSlug.value));
 }
-function endLesson() {
-  return props.learning.endLesson({ expectedRevision: props.learningRevision });
+async function endLesson() {
+  const result = await props.learning.endLesson({ expectedRevision: props.learningRevision });
+  if (result) emit("ended");
+  return result;
+}
+// A complete lesson can be finished here, so the next one can start without
+// asking Colleague (Lesson 0 runs before any AI is connected). Ending keeps
+// every result; Courses then offers the next lesson.
+async function finishLesson() {
+  if (await endLesson()) await props.learning.show({ surface: "courses" });
 }
 </script>
 
@@ -207,6 +217,8 @@ function endLesson() {
           </li>
         </ol>
         <p v-if="requiredDone" class="vibe64-learning-reader__complete" role="status">Every required step is passed. This lesson is complete.</p>
+        <v-btn v-if="requiredDone && !ended" color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-finish"
+          :disabled="Boolean(busy) || learningRevision === null" :loading="busy === 'end'" @click="finishLesson">Finish lesson</v-btn>
         <v-btn v-if="practiceSlug" variant="text" rounded="pill" min-height="48" @click="openPractice">Open practice project</v-btn>
       </nav>
 
@@ -232,7 +244,9 @@ function endLesson() {
 
         <section v-if="!ended && kind === 'choice'" class="vibe64-learning-reader__check" aria-label="Question">
           <h3>{{ step.check.question }}</h3>
-          <p class="vibe64-learning-reader__hint">Select every correct option, then choose Check answer.</p>
+          <!-- A passed question keeps its pass and is not compared again, so a later answer gets no verdict. -->
+          <p v-if="statusOf(step.id) === 'passed'" class="vibe64-learning-reader__hint" data-test="learning-answer-kept">You already passed this question, so answers are not checked again.</p>
+          <p v-else class="vibe64-learning-reader__hint">Select every correct option, then choose Check answer.</p>
           <v-checkbox
             v-for="(option, optionIndex) in step.check.options"
             :key="optionIndex"
@@ -243,7 +257,7 @@ function endLesson() {
             @update:model-value="toggleOption(optionIndex)"
           />
           <v-btn color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-answer"
-            :disabled="!selected.length || Boolean(busy)" :loading="busy === `answer:${step.id}`"
+            :disabled="!selected.length || Boolean(busy) || statusOf(step.id) === 'passed'" :loading="busy === `answer:${step.id}`"
             @click="learning.answer(step.id, selected)">Check answer</v-btn>
         </section>
         <section v-else-if="!ended && kind === 'auto'" class="vibe64-learning-reader__check" aria-label="Automatic check">

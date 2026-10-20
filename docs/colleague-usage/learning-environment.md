@@ -32,8 +32,9 @@ tab named after your open lesson, **Minimise** and a close button (✕, label
   Colleague are visible. Press **L** to come back.
 - **Close Learning** returns to the page you were on. Your place is kept too:
   reopening L shows the same tab, lesson, step and scroll position.
-- Your place is also saved for your account, so another browser or a reload
-  opens the lesson at the step you last read.
+- Your place is also saved for your account. A reload in the same tab reopens
+  L where it was; in another browser L opens on **Courses**, and **Resume saved
+  lesson** opens the lesson at the step you last read.
 
 On a phone Learning is a full-screen sheet. The lesson's steps become a row of
 numbered circles at the top (a tick for a passed step); the step text scrolls
@@ -86,7 +87,12 @@ title and **Passed**, **Not yet passed**, **Not checked yet** or **Optional**.
 Select a step to read it. A step you passed in an earlier attempt of the same
 lesson (for example before you started it again) shows **Passed** and still
 counts. When every required step has passed the list says
-**Every required step is passed. This lesson is complete.**
+**Every required step is passed. This lesson is complete.** with a **Finish
+lesson** button. **Finish lesson** ends the lesson (its results are kept, as
+with any ended lesson) and returns to **Courses**, where the next lesson can be
+started. You don't need Colleague for this, so it also works before an AI is
+connected. If finishing is not confirmed, the error appears at the top of the
+lesson; press **Finish lesson** again.
 
 A step shows **Step N of M**, its title and its text. Depending on the step it
 also has:
@@ -96,7 +102,9 @@ also has:
   **Reload diagram** on it.
 - **Question**: tick every correct option, then **Check answer**. The answer
   is compared on the server; the result appears as the step's status. You can
-  try again.
+  try again until it passes. Once passed, the question says **You already passed
+  this question, so answers are not checked again.** and **Check answer** stays
+  disabled; the pass is kept.
 - **Automatic check**: the step is checked when you do the task in your practice
   project, for example by pressing a button in its Preview. For a button step,
   open the step in Learning, then minimise Learning (**Show me** does this and
@@ -121,12 +129,17 @@ also has:
   If Colleague is not connected yet, an error says so; press **Teach me** again.
 - **Lesson notes** (when the lesson has them) and **Previous step** /
   **Next step**.
+- Links in a step or its notes that go to another website (for example Z.AI's
+  key page) open in a new browser tab, so Vibe64 and your lesson stay open.
 - **Open practice project** (when the lesson has one) minimises Learning and
   opens that project.
 
 Statuses come only from automatic checks, the answer comparison and your own
 **Done**. Colleague never decides a step's status and does not know the
 correct answers of a question.
+
+On a phone, **Open lesson** on the step card in Colleague's full-screen chat
+minimises that chat and shows the lesson at that step.
 
 An ended lesson stays readable with the note **This lesson has ended.** A lesson
 started in the earlier teacher format shows **This lesson was started with the

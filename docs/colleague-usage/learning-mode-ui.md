@@ -30,13 +30,15 @@ and a status of **Completed** (green tick), **In progress** (yellow; an open att
 lesson** (with the next lesson named beside it), and each available lesson has a **Start lesson** button
 if you want a different one. **Back to courses** returns to
 the list. While you have a saved active lesson, Start buttons stay disabled:
-continue it, or end it first. There is no End button; ask Colleague to end the
-lesson (see [Lesson history and resume](learning-history.md)). On a phone the cards stack in one column and the
+continue it, or end it first. When every required step of it has passed, its
+reader shows **Finish lesson**, which ends it and returns here; otherwise ask
+Colleague to end the lesson (see [Lesson history and resume](learning-history.md)). On a phone the cards stack in one column and the
 course page scrolls in the same pane.
 
 Choose **Resume saved lesson** on the saved lesson card (above the course cards,
 headed "Saved lesson · code" with the lesson title and, once reported, a ring of
-required assessments passed) for the exact saved attempt. Disabled,
+required checks passed, with "N of M required checks passed. This lesson is
+complete." once they all have) for the exact saved attempt. Disabled,
 unavailable, loading and error states are shown on the same page. **Refresh
 courses** rereads installed courses, progress and the course catalogue.
 

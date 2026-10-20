@@ -94,7 +94,8 @@ Both acknowledge truthfully with the guide receipt `{shown, step?, reason?}`.
 On a phone the dialog minimises itself before opening L or ringing a control.
 The pinned current-step card (lesson title, Step N of M, step title, Passed,
 **Open lesson**) is rendered from the L controller in the drawer, the phone
-dialog and the voice panel; it has no server coupling. The protocol text makes
+dialog and the voice panel; it has no server coupling. On a phone **Open lesson**
+minimises the dialog before showing L, since the dialog would cover it. The protocol text makes
 Colleague read the lesson with `lesson.read`, read and rewrite the learner's
 private notes (`learner-notes.read`/`learner-notes.update`), report
 `step.check.run` results as diagnostics, never claim a pass and never reveal a

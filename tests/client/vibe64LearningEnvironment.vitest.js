@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as LearningLib from "../../src/lib/vibe64Learning.js";
 import { watchColleagueLearningRequests } from "../../packages/vibe64-colleague/src/client/colleagueLearningRequests.js";
 
-const { VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_TEACH_MESSAGE, createVibe64Learning, showMeCommand } = LearningLib;
+const { VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_TEACH_MESSAGE, createVibe64Learning, openLessonLink, showMeCommand } = LearningLib;
 
 // Learning v2 environment (C6): the shared controller and the lesson reader.
 // HTTP is a stub of the C3 actions; verdicts always come from those actions.
@@ -374,7 +374,7 @@ const nodes = root => [root, ...root.children.flatMap(nodes)];
 const byTest = (root, id) => nodes(root).find(node => node.props?.["data-test"] === id);
 const textOf = node => [node.text || "", ...node.children.map(textOf)].join("");
 
-async function mountReader(learning) {
+async function mountReader(learning, extraProps = {}) {
   const players = [];
   const player = Vue.defineComponent({ props: ["resource", "attemptId"], setup(props, { expose }) {
     const instance = { restores: [], commands: [] };
@@ -393,7 +393,7 @@ async function mountReader(learning) {
     "./Vibe64LearningMarkdown.vue": { default: { props: ["text"], setup: props => () => Vue.h("section", { "data-markdown": props.text }) } }
   });
   const root = { children: [] };
-  const app = uiRenderer().createApp({ render: () => Vue.h(reader, { learning, learningRevision: 3, readVisual }) });
+  const app = uiRenderer().createApp({ render: () => Vue.h(reader, { learning, learningRevision: 3, readVisual, ...extraProps }) });
   for (const tag of ["v-btn", "v-alert", "v-skeleton-loader", "v-checkbox"]) app.component(tag, widget);
   app.mount(root);
   await flush();
@@ -484,6 +484,52 @@ describe("Learning reader", () => {
     } finally { view.app.unmount(); }
   });
 
+  it("does not compare a passed question again and says so instead of showing a verdict", async () => {
+    const { learning } = controller({ reads: () => lessonResult({ results: [{ stepId: "quiz", outcome: "passed" }] }) });
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT, stepId: "quiz" });
+    const view = await mountReader(learning);
+    try {
+      expect(textOf(byTest(view.root, "learning-answer-kept"))).toContain("You already passed this question");
+      const options = nodes(view.root).filter(node => node.tag === "div" && node.props?.label);
+      options[0].props["onUpdate:modelValue"](true);
+      await flush();
+      expect(byTest(view.root, "learning-answer").props.disabled).toBe(true);
+      expect(textOf(byTest(view.root, "learning-step-status"))).toContain("Passed");
+    } finally { view.app.unmount(); }
+  });
+
+  it("finishes a complete lesson through lesson.end and returns to Courses for the next one", async () => {
+    let ended = false;
+    const passed = ["quiz", "preview", "tick"].map(stepId => ({ stepId, outcome: "passed" }));
+    const { learning, calls } = controller({
+      reads: () => lessonResult({ results: passed, attempt: { attemptId: ATTEMPT, ended, practiceSlug: "practice-one" } }),
+      posts: url => { ended = url === VIBE64_LEARNING_ROUTES.lessonEnd(ATTEMPT); return { ok: true, available: true }; } });
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT, stepId: "read" });
+    const onEnded = vi.fn();
+    const view = await mountReader(learning, { onEnded });
+    try {
+      expect(textOf(view.root)).toContain("This lesson is complete.");
+      await byTest(view.root, "learning-finish").props.onClick();
+      await flush();
+      expect(calls.filter(call => call.method === "POST")).toEqual([expect.objectContaining({ url: VIBE64_LEARNING_ROUTES.lessonEnd(ATTEMPT),
+        body: { expectedRevision: 3, requestId: expect.any(String), reason: "restart" } })]);
+      expect(onEnded, "the host rereads its saved lessons").toHaveBeenCalledOnce();
+      expect(learning.surface).toBe("courses");
+      expect(learning.open).toBe(true);
+      expect(byTest(view.root, "learning-finish")).toBeUndefined();
+    } finally { view.app.unmount(); }
+  });
+
+  it("offers no Finish lesson before every required step has passed", async () => {
+    const { learning } = controller({ reads: () => lessonResult({ results: [{ stepId: "quiz", outcome: "passed" }] }) });
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT, stepId: "read" });
+    const view = await mountReader(learning);
+    try { expect(byTest(view.root, "learning-finish")).toBeUndefined(); } finally { view.app.unmount(); }
+  });
+
   it("keeps an earlier-format attempt readable and only offers to end it", async () => {
     const { learning, calls } = controller({ reads: () => ({ ok: true, available: true,
       attempt: { attemptId: ATTEMPT, ended: false }, lesson: { schemaVersion: 1, code: "V64-START-01", title: "Old" } }),
@@ -498,7 +544,7 @@ describe("Learning reader", () => {
       end.props.onClick();
       await flush();
       expect(calls.find(call => call.method === "POST")).toMatchObject({ url: VIBE64_LEARNING_ROUTES.lessonEnd(ATTEMPT),
-        body: { expectedRevision: 3, requestId: expect.any(String) } });
+        body: { expectedRevision: 3, requestId: expect.any(String), reason: "restart" } });
     } finally { view.app.unmount(); }
   });
 });
@@ -663,5 +709,28 @@ describe("What my teacher knows about me", () => {
       expect(calls.at(-1)).toMatchObject({ url: VIBE64_LEARNING_ROUTES.notesClear, method: "POST", body: { expectedRevision: 3 } });
       expect(byTest(root, "teacher-notes-empty")).toBeTruthy();
     } finally { app.unmount(); }
+  });
+});
+
+describe("Lesson text links", () => {
+  const browser = { location: { href: "https://vibe64.example/app/project/demo", origin: "https://vibe64.example" }, open: vi.fn() };
+  const click = (href, extra = {}) => ({ button: 0, defaultPrevented: false, preventDefault: vi.fn(), ...extra,
+    target: { closest: selector => (selector === "a[href]" && href !== null ? { getAttribute: () => href } : null) } });
+  beforeEach(() => browser.open.mockClear());
+
+  it("opens a link to another site in a new tab so the lesson stays open", () => {
+    const event = click("https://z.ai/manage-apikey/apikey-list");
+    expect(openLessonLink(event, browser)).toBe(true);
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    expect(browser.open).toHaveBeenCalledExactlyOnceWith("https://z.ai/manage-apikey/apikey-list", "_blank", "noopener,noreferrer");
+  });
+
+  it("keeps the default for Vibe64 links, other schemes, modified clicks and text", () => {
+    for (const event of [click("/app/project/other"), click("mailto:help@example.com"), click("https://z.ai/", { ctrlKey: true }),
+      click("https://z.ai/", { button: 1 }), click(null)]) {
+      expect(openLessonLink(event, browser)).toBe(false);
+      expect(event.preventDefault).not.toHaveBeenCalled();
+    }
+    expect(browser.open).not.toHaveBeenCalled();
   });
 });

@@ -62,7 +62,10 @@ function openLearningStep() {
   const step = learningStep.value;
   const controller = learningController.value;
   if (!step || typeof controller?.show !== "function") return;
-  Promise.resolve(controller.show({ attemptId: step.attemptId, stepId: step.stepId })).catch(reportFailure);
+  const reopen = () => controller.show({ attemptId: step.attemptId, stepId: step.stepId });
+  // A phone shows one surface: minimise the dialog so Learning is visible.
+  if (xs.value && shown.value) toggleConversation().then(reopen).catch(reportFailure);
+  else Promise.resolve(reopen()).catch(reportFailure);
 }
 const { holding: holdingAvatar, pointerDown: startAvatarPress, pointerUp: endAvatarPress,
   cancel: cancelAvatarPress, click: avatarClick } = useVoiceLauncher({

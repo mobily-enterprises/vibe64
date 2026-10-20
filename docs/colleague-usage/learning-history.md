@@ -3,8 +3,10 @@
 After an interruption, choose **Resume saved lesson** (or **Continue** on its
 course) in Learning → **Courses**, or ask Colleague to resume the exact saved
 lesson; see [Choosing lessons and courses](learning-mode-ui.md).
-Ending or restarting learning requires your request to Colleague; it retains earlier progress and does
-not delete the practice project. These rules apply to desktop and phone.
+Ending or restarting learning requires your request to Colleague, except that a
+lesson whose required steps have all passed can be ended with **Finish lesson**
+in its reader; either way earlier progress is kept and the practice project is
+not deleted. These rules apply to desktop and phone.
 
 Explicit lesson retirement preserves the original pinned step, quiz and
 practical results; ending a lesson stops no agent work. Separate lesson
