@@ -428,6 +428,14 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     };
   }
 
+  // The workflows the person can use now. Like the session workflow picker,
+  // a connected workflow whose roles were never saved counts: its recommended
+  // routing is previewed here and saved when Colleague first chooses a model.
+  async function availableWorkflows(user) {
+    const choices = requireResult(await accounts.readModelRoutingWorkflows({ vibe64User: user }));
+    return (choices.workflows || []).filter(choice => choice.available);
+  }
+
   async function chooseSelection(context, selection) {
     const user = authenticatedVibe64User(context);
     if (selection) {
@@ -435,23 +443,25 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       await terminals.requireAssistantSelectionAccess(resolved, { vibe64User: user });
       return resolved;
     }
-    const choices = requireResult(await accounts.readModelRoutingWorkflows({ vibe64User: user }));
-    for (const choice of choices.workflows || []) {
-      if (!choice.available) continue;
+    for (const choice of await availableWorkflows(user)) {
+      // Session creation saves a workflow's recommended routing before
+      // resolving it. Colleague does the same, so an AI connected outside the
+      // in-app sign-in (an existing login) is usable without a manual Save.
+      // A failed setup leaves the saved routing to decide below.
+      await accounts.initializeModelRouting?.({ engineIds: [choice.engineId], vibe64User: user });
       const decision = await terminals.resolveAssistantPurpose({ purpose: "senior", workflowEngineId: choice.engineId }, { vibe64User: user });
       if (decision.available) return decision.effectiveSelection;
     }
     throw failure(COLLEAGUE_MODEL_UNAVAILABLE, "vibe64_colleague_model_unavailable");
   }
 
-  // Only the definite "no usable model" answer counts; any other failure is
-  // left to the send, which reports it.
+  // Read-only: says whether a send could choose a model now. Only a definite
+  // "no available workflow" counts; any other failure is left to the send.
   async function selectionAvailable(context) {
     try {
-      await chooseSelection(context);
+      return (await availableWorkflows(authenticatedVibe64User(context))).length > 0;
+    } catch {
       return true;
-    } catch (error) {
-      return error?.code !== "vibe64_colleague_model_unavailable";
     }
   }
 
@@ -1165,13 +1175,20 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       state.requestContext = context;
       scheduleWatches(state);
       wakeForObservations(state);
-      const result = await snapshot(state, input.clientId);
-      // Before the first send commits a model, a read already says when none is
-      // usable, so Teach me and the composer can say so without sending.
-      if (!result.modelSetupRequired && !state.record.assistantSelection && !await selectionAvailable(context)) {
-        return { ...result, modelSetupRequired: true };
+      // Until a send commits a model, every read re-checks current
+      // availability, so Teach me and the composer say "no usable model"
+      // without sending, and an earlier failure stops blocking them as soon
+      // as an AI becomes usable.
+      if (!state.record.assistantSelection) {
+        const available = await selectionAvailable(context);
+        if (available && state.record.error === COLLEAGUE_MODEL_UNAVAILABLE) {
+          state.record.error = "";
+          if (state.record.status === "failed") state.record.status = "ready";
+        }
+        const result = await snapshot(state, input.clientId);
+        return available ? result : { ...result, modelSetupRequired: true };
       }
-      return result;
+      return snapshot(state, input.clientId);
     },
     async startFresh(input, context) {
       const state = await stateFor(context);

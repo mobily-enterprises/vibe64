@@ -158,6 +158,15 @@ Changing routing applies to future work, not a running agent or Colleague's own
 model. Select Colleague's model through its own composer model picker; active work
 can prevent changing it until its turn stops.
 
+Colleague needs no Model routing step of its own. If an AI shows **Connected**
+but its roles were never saved (for example a Codex login that existed before
+Vibe64 was installed), Colleague's first message or **Teach me** saves that
+workflow's recommended routing, as starting a session does, and uses its
+Senior model. Saved choices are never replaced. Colleague says it has **no usable
+AI model** only when no connected workflow can supply a Senior model; connect an
+AI, or open **Configure routing** and choose an available Senior, then press
+Send or **Teach me** again. That message clears by itself once an AI is usable.
+
 If the form says routing changed elsewhere, use **Reload current choices** and
 review your retained draft before saving. If no permitted model is usable, finish
 the real account/access setup before promising an AI answer. An included model

@@ -165,7 +165,9 @@ also has:
   If no AI is connected yet (for example during Lesson 0), nothing is sent:
   Colleague opens and says **Colleague cannot teach this step yet: it has no
   usable AI model, so nothing was sent.** with **Open AI Accounts**. Connect an
-  AI there, then press **Teach me** again.
+  AI there, then press **Teach me** again; no Model routing step is needed,
+  because Colleague saves the recommended routing for a connected AI itself.
+  The message disappears as soon as an AI is usable.
 - **Lesson notes** (when the lesson has them) and **Previous step** /
   **Next step**.
 - Links in a step or its notes that go to another website (for example Z.AI's

@@ -224,8 +224,13 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
   const events = createEventRuntime();
   observations.realtime = [];
   events.register({ id: "test.colleague-replies", matches: event => event.entity === "colleague", handle: event => { observations.realtime.push(event); } });
-  const service = createColleagueService({ actions, terminals, events, watchPollMs, watchDebounceMs: 1, systemRoot: root,
-    accounts: { async readModelRoutingWorkflows() { return { ok: true, workflows: [{ available: true, engineId: "codex" }] }; } } });
+  observations.routingInitialized = [];
+  const accounts = {
+    workflows: [{ available: true, engineId: "codex" }],
+    async readModelRoutingWorkflows() { return { ok: true, workflows: structuredClone(accounts.workflows) }; },
+    async initializeModelRouting(input) { observations.routingInitialized.push(input.engineIds); return { ok: true, initialized: [] }; }
+  };
+  const service = createColleagueService({ actions, terminals, events, watchPollMs, watchDebounceMs: 1, systemRoot: root, accounts });
   const operation = withVibe64ActionContext({
     id: "vibe64.test.operate", kind: "command", idempotency: "none",
     input: { schema: createSchema({ value: { type: "string", required: true } }), mode: "create" },
@@ -251,7 +256,7 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
     clientId: "browser-1", message, messageId, ...extra
   }, context });
   resources.services.push(service);
-  return { service, actions, events, root, observations, context, send, terminals, native: nativeCommands };
+  return { service, actions, accounts, events, root, observations, context, send, terminals, native: nativeCommands };
 }
 
 const watchInput = { watchId: "watch-1", projectSlug: "alpha", sessionId: "session-1", conversationId: "temporary-1", condition: "reply", question: "Tell me when the agent answers." };
@@ -2451,19 +2456,55 @@ test("first Colleague setup rejects without admission and retries the same autho
 
 test("a Colleague read reports no usable model before anything is sent, and stops once one is usable", async t => {
   const f = await fixture(t, []);
-  let configured = false;
-  const resolvePurpose = f.terminals.resolveAssistantPurpose;
-  t.mock.method(f.terminals, "resolveAssistantPurpose", async function (...args) {
-    return configured ? resolvePurpose.apply(this, args) : { available: false };
-  });
+  f.accounts.workflows = [{ available: false, engineId: "codex" }];
   const before = await f.service.read({}, f.context);
   assert.equal(before.modelSetupRequired, true);
   assert.equal(before.status, "ready", "a read records no failure");
   assert.deepEqual(before.messages, []);
   assert.equal(f.observations.creates, 0);
-  configured = true;
+  assert.deepEqual(f.observations.routingInitialized, [], "a read saves no routing");
+  f.accounts.workflows = [{ available: true, engineId: "codex" }];
   const after = await f.service.read({}, f.context);
   assert.notEqual(after.modelSetupRequired, true);
+  await f.service.close();
+});
+
+test("an earlier no-model failure stops blocking Colleague as soon as an AI is usable", async t => {
+  const f = await fixture(t, [reply("Now I can teach.")]);
+  f.accounts.workflows = [{ available: false, engineId: "codex" }];
+  const rejected = await f.send("Teach me this step.", "before-ai");
+  assert.equal(rejected.ok, false);
+  const failed = await f.service.wait(f.context);
+  assert.equal(failed.status, "failed");
+  assert.equal(failed.modelSetupRequired, true);
+  assert.equal((await f.service.read({}, f.context)).modelSetupRequired, true, "still no usable AI");
+  f.accounts.workflows = [{ available: true, engineId: "codex" }];
+  const current = await f.service.read({}, f.context);
+  assert.notEqual(current.modelSetupRequired, true, "the stored failure does not outlive the missing AI");
+  assert.equal(current.error, "");
+  assert.equal(current.status, "ready");
+  assert.equal((await f.send("Teach me this step.", "after-ai")).ok, true);
+  const finished = await f.service.wait(f.context);
+  assert.equal(finished.status, "ready", finished.error);
+  assert.equal(f.observations.starts.length, 1);
+  await f.service.close();
+});
+
+test("Colleague saves a connected workflow's recommended routing before choosing its first model", async t => {
+  const f = await fixture(t, [reply("Routing was ready.")]);
+  const resolvePurpose = f.terminals.resolveAssistantPurpose;
+  t.mock.method(f.terminals, "resolveAssistantPurpose", async function (...args) {
+    // Like an existing Codex login: the workflow is available, but its roles
+    // are usable only after the recommended routing has been saved.
+    return f.observations.routingInitialized.length ? resolvePurpose.apply(this, args) : { available: false };
+  });
+  assert.notEqual((await f.service.read({}, f.context)).modelSetupRequired, true);
+  assert.deepEqual(f.observations.routingInitialized, []);
+  assert.equal((await f.send("Hello", "first-message")).ok, true);
+  const finished = await f.service.wait(f.context);
+  assert.equal(finished.status, "ready", finished.error);
+  assert.deepEqual(f.observations.routingInitialized, [["codex"]]);
+  assert.equal(f.observations.starts.length, 1);
   await f.service.close();
 });
 
