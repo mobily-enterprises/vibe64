@@ -61,9 +61,6 @@ function registerRoutes(http, {
   routeSurface = "",
   routeRelativePath = ""
 } = {}) {
-  // Reuse every original HTTP validator/input builder. The canonical action
-  // metadata is the single allowlist: source/setup/Git operations stay on the
-  // project routes and cannot gain authority from a lesson URL.
   const routes = createVibe64FeatureRoutes(http, {
     localRequestMessage: "Vibe64 session routes only accept loopback Studio requests.",
     projectContext,

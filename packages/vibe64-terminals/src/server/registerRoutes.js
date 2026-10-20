@@ -660,7 +660,6 @@ function registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, { pro
       return service.writeOutputTargetTerminal(sessionId, terminalSessionId, data);
     }
   });
-
 }
 
 export { registerRoutes };
