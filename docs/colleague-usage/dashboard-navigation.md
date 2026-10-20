@@ -50,11 +50,11 @@ has no separate lesson Dashboard. See
 Colleague can open supported views in your initiating browser and wait for the
 actual selection before reporting success. Ask “Show me Database for this session”
 or “Open Project settings”. It can explain visible controls using its guides.
-During an active lesson, ask it to show that lesson project's normal **Preview**
-or **Database → ERD** without leaving Learning; that project tab becomes selected.
+During a lesson, it opens the practice project's ordinary **Preview** or
+**Database → ERD** like any project's, minimising Learning if it is open.
 By default Colleague points at the real tab or Dashboard section (Database, Files,
 Current changes, Git log, Session info, Architecture) with a short ring and
-caption so you click it yourself. A changed project, session, attempt or browser is
+caption so you click it yourself. A changed project, session or browser is
 refused instead of being silently retargeted. Agent navigation is a demonstration,
 not proof that the learner used the control.
 Colleague no longer starts a Learning watch for “Watch me while I do this”; your

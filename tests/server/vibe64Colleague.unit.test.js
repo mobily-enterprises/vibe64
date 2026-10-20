@@ -1719,6 +1719,18 @@ test("new steering captures its own focus without navigation silently retargetin
   await assert.rejects(f.send("Bad focus", "invalid", { focus: { previewScreen: "invented-screen" } }), { code: "ACTION_VALIDATION_FAILED" });
 });
 
+test("focus from a tab loaded before Learning mode was retired is accepted without its retired keys", async (t) => {
+  const f = await fixture(t, [reply("Still on alpha.")]);
+  const retired = { projectSlug: "alpha", pane: "preview", previewScreen: "lesson-presentation", learningMode: false,
+    learningView: "workspace", learningContent: "picker", lessonAttemptId: "a", lessonPlayerPhase: "ready" };
+  const updated = await f.actions.execute({ actionId: "vibe64.colleague.focus.update", context: f.context,
+    input: { clientId: "browser-1", focus: retired } });
+  assert.deepEqual(updated.focus, { projectSlug: "alpha", pane: "preview" });
+  await f.send("Where am I?", "retired-focus", { focus: retired });
+  await f.service.wait(f.context);
+  assert.deepEqual(f.observations.starts[0].data.focus, { projectSlug: "alpha", pane: "preview" });
+});
+
 test("steering received during a model response takes precedence before any tool dispatch", async (t) => {
   let finish;
   let started;

@@ -80,7 +80,10 @@ lesson Dashboard, Training's learner-gesture, presentation-cue,
 workspace-observation, preview-registration and Main presentation client
 modules and their package exports. Training navigation moved to Colleague as
 `createColleagueNavigation`; Colleague's `navigation.open` refuses the retired
-`learningMode`/`learningView` inputs by schema. An old `?mode=learning` address
+`learningMode`/`learningView` inputs by schema. Incoming browser focus (focus
+updates, messages, navigation acknowledgements and start-fresh evidence) still
+accepts the retired focus keys from tabs loaded before this release and drops
+them before use, so an open tab keeps working until it reloads. An old `?mode=learning` address
 renders the ordinary project page. Session realtime matchers still ignore events
 that carry a `learningAttemptId`, because the server can still emit them without
 a project.

@@ -596,17 +596,9 @@ file covers this public factory and Codex reader, ordinary missing-root refusal,
 foreign actors/attempts/pins and inconsistent source-bearing private contexts.
 
 `@local/vibe64-sessions/server/routes` exposes the original route registrar for
-host composition. Since Learning v2 it serves only the source-less teacher;
-practice sessions are ordinary project sessions. Its explicit `learningScoped:true` option reuses the original
-HTTP validators, limits, input builders and responses under
-`/api/learning/:learningAttemptId/vibe64`. The canonical Session action metadata
-supplies the only allowlist. The transport binds the URL attempt, strips browser
-user fields and retains the original local/hosted request gate. Source/setup/Git,
-renewal and other project-only actions are not registered in this namespace.
-The normal project route registration remains unchanged. Learning model catalogue
-reads use fresh attempt observation authority and the same Session capability
-reader; they do not grant access to another person's connections. Actual host
-registration and installed/browser acceptance are separate requirements.
+host composition with the ordinary project registration only. Its learning-scoped
+Session routes under `/api/learning` were retired in Learning v2 (F2) and their
+client callers removed (F3); practice sessions are ordinary project sessions.
 
 The original Store's `paths()` supplies its existing current-session alias owner
 with `<private-learning-runtime>/sessions/selected` only for an admitted immutable

@@ -28,7 +28,7 @@ const guideRequest = { type: "object", required: false, schema: createSchema({
   filePath: { ...text, noTrim: true, minLength: 1, maxLength: 512 },
   caption: { ...text, minLength: 1, maxLength: TRAINING_GUIDE_CAPTION_LIMIT }
 }) };
-const focusSchema = createSchema({
+const focusFields = {
   ...Object.fromEntries(["projectSlug", "sessionId", "conversationId", "pane", "route"].map((key) => [key, text])),
   integrationId,
   databaseView,
@@ -42,8 +42,39 @@ const focusSchema = createSchema({
   learningOpen: { type: "boolean", required: false },
   learningSurface: { type: "string", required: false, enum: ["courses", "lesson"] },
   learningStepId
-});
+};
+const focusSchema = createSchema(focusFields);
 const focusField = { type: "object", schema: focusSchema, required: false };
+// Browser tabs loaded before Learning mode was retired, and their retained
+// uncertain deliveries, still report these focus keys. Incoming focus accepts
+// them for compatibility and the actions drop them before use.
+const retiredFocusFields = {
+  learningMode: { type: "boolean", required: false },
+  learningView: { type: "string", required: false },
+  learningContent: { type: "string", required: false },
+  lessonAttemptId: { ...text, maxLength: 36 }, lessonVisualId: { ...text, maxLength: 64 },
+  lessonPlayerPhase: { ...text, maxLength: 64 }, lessonVisualState: { ...text, maxLength: 64 },
+  lessonCuePhase: { ...text, maxLength: 64 }
+};
+const incomingFocusField = { type: "object", required: false, schema: createSchema({
+  ...focusFields,
+  previewScreen: { ...focusFields.previewScreen, enum: [...focusFields.previewScreen.enum, "lesson-presentation"] },
+  ...retiredFocusFields
+}) };
+function currentFocus(focus) {
+  if (!focus || typeof focus !== "object") return focus;
+  const current = Object.fromEntries(Object.entries(focus).filter(([key]) => !Object.hasOwn(retiredFocusFields, key)));
+  if (current.previewScreen === "lesson-presentation") delete current.previewScreen;
+  return current;
+}
+function withCurrentFocus(input) {
+  if (!input || typeof input !== "object") return input;
+  return { ...input,
+    ...(Object.hasOwn(input, "focus") ? { focus: currentFocus(input.focus) } : {}),
+    ...(Array.isArray(input.unconfirmedMessages) ? { unconfirmedMessages: input.unconfirmedMessages.map(message =>
+      message && Object.hasOwn(message, "focus") ? { ...message, focus: currentFocus(message.focus) } : message) } : {})
+  };
+}
 const navigationOutput = {
   mode: "replace",
   schema: createSchema({
@@ -94,7 +125,7 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
     input: { schema: createSchema(fields), mode: "create" },
     output: null, idempotency: ["message.send", "conversation.start-fresh"].includes(name) ? "domain_native" : "none",
     ...(assistant ? { extensions: { assistant } } : {}),
-    execute
+    execute: (input, ...rest) => execute(withCurrentFocus(input), ...rest)
   }, { projectScoped });
   return [
     definition("usage.topics.read", {
@@ -121,7 +152,7 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
       operationId: clientId, expectedConversationId: clientId,
       unconfirmedMessages: { type: "array", required: false, description: "At most eight exact client-reported unconfirmed submissions; these are retained as annotations, never executed.", items: createSchema({
         messageId: clientId, clientId, text: { type: "string", noTrim: true, minLength: 1, maxLength: 24000, required: true },
-        focus: focusField
+        focus: incomingFocusField
       }) }
     }, (input, context) => colleague.startFresh(input, context)),
     definition("conversation.history.read", {
@@ -131,10 +162,10 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
       conversationId: clientId, beforeTurnId: { ...clientId, required: false },
       limit: { type: "integer", min: 1, max: 100, required: false }
     }, (input, context) => colleague.readHistoryPage(input, context)),
-    definition("focus.update", { clientId, focus: { ...focusField, required: true } },
+    definition("focus.update", { clientId, focus: { ...incomingFocusField, required: true } },
       (input, context, deps) => colleague.focus(input, context, deps)),
     definition("message.send", {
-      clientId, focus: focusField, expectedConversationId: { ...clientId, required: false },
+      clientId, focus: incomingFocusField, expectedConversationId: { ...clientId, required: false },
       messageId: clientId,
       message: { type: "string", noTrim: false, minLength: 1, maxLength: 24000, required: true },
       assistantSelection: { type: "object", additionalProperties: true, required: false }
@@ -213,7 +244,7 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
     }),
     definition("navigation.acknowledge", {
       clientId, commandId: clientId, ok: { type: "boolean", required: true },
-      error: { ...text, maxLength: 2000 }, focus: focusField, guide: guideReceipt
+      error: { ...text, maxLength: 2000 }, focus: incomingFocusField, guide: guideReceipt
     }, (input, context) => colleague.acknowledgeNavigation(input, context)),
     definition("navigation.open", { projectSlug: text, sessionId: text, conversationId: text, integrationId, integrationEnvironment, databaseView, databaseTable, planView,
       guide: guideRequest,
@@ -240,7 +271,7 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
   ];
 }
 
-const colleagueConversationDataSchema = createSchema({ clientId, focus: focusField });
+const colleagueConversationDataSchema = createSchema({ clientId, focus: incomingFocusField });
 const colleagueConversationSelectionSchema = createSchema(modelSelectionFields);
 
 export { createColleagueActions, colleagueConversationDataSchema, colleagueConversationSelectionSchema };
