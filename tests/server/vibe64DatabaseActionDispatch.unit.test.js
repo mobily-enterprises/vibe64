@@ -91,33 +91,3 @@ test("all ordinary database HTTP operations execute their authorized action and 
   }));
 });
 
-test("lesson database routes register the editable Database operations and dispatch the saved attempt", async () => {
-  await withLocalRequestBypass(async () => {
-    const app = testRouteApp();
-    registerRoutes(app.http, { learningScoped: true, routeSurface: "app" });
-    const base = "/api/learning/:learningAttemptId/vibe64/database/sessions/:sessionId";
-    assert.deepEqual(app.registeredRoutes.map(({ method, path }) => `${method} ${path.slice(base.length)}`).sort(), [
-      "DELETE /snippets/:snippetId", "GET ", "PATCH /cells", "POST /lookups/search", "POST /queries",
-      "POST /queries/:queryId/cancel", "POST /rows", "POST /rows/delete", "POST /schema/refresh", "PUT /layout",
-      "PUT /overview", "PUT /snippets"
-    ]);
-    const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-    let dispatched;
-    const route = findRegisteredRoute(app, { method: "POST", path: `${base}/queries` });
-    await route.handler({ params: { learningAttemptId: attemptId, sessionId: `training-${attemptId}` },
-      input: { body: { queryId: "query-1", sql: "select 1" } },
-      executeAction: ({ actionId, input }) => { dispatched = { actionId, input }; return { ok: true }; } }, testReply());
-    assert.deepEqual(dispatched, { actionId: "vibe64.database.query.run",
-      input: { queryId: "query-1", sql: "select 1", sessionId: `training-${attemptId}`, learningAttemptId: attemptId } });
-    const definitions = createDatabaseActions({ databaseTools: {} });
-    assert.deepEqual(Object.fromEntries(definitions.filter(action => action.extensions.vibe64.learningAccess)
-      .map(action => [action.id, action.extensions.vibe64.learningAccess])), {
-      "vibe64.database.state.read": "observe", "vibe64.database.schema.refresh": "control",
-      "vibe64.database.query.run": "control", "vibe64.database.query.cancel": "control",
-      "vibe64.database.lookup.search": "observe", "vibe64.database.cell.update": "write",
-      "vibe64.database.row.insert": "write", "vibe64.database.row.delete": "write",
-      "vibe64.database.layout.save": "write", "vibe64.database.overview.save": "write",
-      "vibe64.database.snippet.save": "write", "vibe64.database.snippet.delete": "write"
-    });
-  });
-});

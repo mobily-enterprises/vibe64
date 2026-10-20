@@ -179,4 +179,21 @@ async function withRemovalLock(key, operation) {
   }
 }
 
-export { createLocalPracticeProjects, endPracticeAttempt };
+// Ordinary local Project pages open only this person's own saved lesson
+// Project; the slug is derived from the attempt and rechecked against it.
+// Moved from learningSessions.js: core grants the admitted scope full write
+// (the learner's own practice project is an ordinary project to them).
+async function admitLocalPracticeProject({ learners, actor, slug }) {
+  const attemptId = practiceProjectAttemptId(slug);
+  if (!attemptId) return null;
+  let saved;
+  try { saved = await learners.readExerciseProjectScope({ actor, attemptId, access: "control" }); }
+  catch (error) {
+    if (["VIBE64_TRAINING_ATTEMPT_MISSING", "VIBE64_TRAINING_EXERCISE_MISSING"].includes(error.code) ||
+        error.message === "Use the exact saved exercise attempt ID.") return null;
+    throw error;
+  }
+  return saved.projectSlug === slug ? { actor, training: saved.training } : null;
+}
+
+export { admitLocalPracticeProject, createLocalPracticeProjects, endPracticeAttempt };

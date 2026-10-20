@@ -28,6 +28,7 @@
     "./server/preparation": "./src/server/preparation.js",
     "./server/practice-projects": "./src/server/practiceProjects.js",
     "./server/practiceHistoryUpgrade": "./src/server/practiceHistoryUpgrade.js",
+    "./server/practiceSessionsOrdinaryUpgrade": "./src/server/practiceSessionsOrdinaryUpgrade.js",
     "./server/installed-catalogue": "./src/server/installedCatalogue.js",
     "./server/routes": "./src/server/registerRoutes.js",
     "./server/conversation-assessment": "./src/server/conversationAssessment.js",

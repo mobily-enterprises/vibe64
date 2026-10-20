@@ -1970,7 +1970,10 @@ test("original nested practice Project resolver retains immutable Learning facts
   });
 });
 
-test("local mode opens only the admitted learner practice Project through a control-only grant", async () => {
+// Learning v2 (F1): the learner's own practice project is an ordinary
+// project to them, so local admission grants full write (it was control-only
+// while practice work re-entered the learning-scoped lesson admission).
+test("local mode opens only the admitted learner practice Project with full write", async () => {
   const owner = Object.freeze({});
   const actor = Object.freeze({ uid: 1000, username: "learner" });
   const training = Object.freeze({ attemptId: "9490f94a-c614-4581-9111-0debb2339ca8" });
@@ -1990,13 +1993,13 @@ test("local mode opens only the admitted learner practice Project through a cont
   registerLocalPracticeAdmission(async request => request.slug === slug ? { actor, training } : null);
   try {
     const context = await resolveProjectRequestContext({ projectContext, request: { params: { slug } } });
-    assert.deepEqual(calls, [{ actor, training, access: "control" }]);
+    assert.deepEqual(calls, [{ actor, training, access: "write" }]);
     assert.equal(context.slug, slug);
     assert.equal(context.targetRoot, "/practice/root");
     assert.equal(context.learningScope, undefined);
     await runWithProjectRequestContext(context, async () => {
-      assert.equal(currentPracticeProjectScope(owner).access, "control");
-      assert.throws(() => assertProjectEffectAdmission(), { code: "vibe64_practice_effect_admission_required" });
+      assert.equal(currentPracticeProjectScope(owner).access, "write");
+      assert.doesNotThrow(() => assertProjectEffectAdmission());
     });
     await assert.rejects(() => resolveProjectRequestContext({ projectContext,
       request: { params: { slug: "training-00000000000040008000000000000000" } } }), { code: "vibe64_project_route_unavailable" });

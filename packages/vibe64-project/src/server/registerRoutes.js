@@ -14,8 +14,7 @@ import {
   ACTION_SAVE_ENGINEERING_PROFILE,
   ACTION_SAVE_PROJECT_PROMPT_HINTS,
   ACTION_SAVE_PREVIEW_APPLICATION_IDENTITIES,
-  ACTION_SELECT_PROJECT,
-  createProjectActions
+  ACTION_SELECT_PROJECT
 } from "./actions.js";
 import {
   projectRemoteInputValidator,
@@ -43,15 +42,13 @@ import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRout
 function registerRoutes(http, {
   projectContext = null,
   routeSurface = "",
-  routeRelativePath = "",
-  learningScoped = false
+  routeRelativePath = ""
 } = {}) {
   const routes = createVibe64FeatureRoutes(http, {
     localRequestMessage: "Vibe64 project routes only accept loopback Studio requests.",
     projectContext,
     routeRelativePath,
     routeSurface,
-    learningActions: learningScoped ? createProjectActions({ project: {} }) : null,
     tags: ["studio", "vibe64-project"]
   });
   routes.actionRoute("GET", "/repository/remote", {

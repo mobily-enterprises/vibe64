@@ -77,12 +77,13 @@ async function resolveProjectRequestContext({
     });
   }
   if (resolvedProjectContext?.projectCatalogEnabled === false) {
-    // A local learner's own lesson Project opens through the original practice
-    // grant as a control-only projection; fresh effects re-enter lesson admission.
+    // A local learner's own practice Project is an ordinary project to them
+    // (Learning v2): it opens through the original practice grant with full
+    // write. Admission re-reads the saved attempt on every request.
     const admitted = localPracticeAdmission ? await localPracticeAdmission({ slug }) : null;
     if (admitted) {
-      return resolvedProjectContext.runWithPracticeProjectScope({ ...admitted, access: "control" },
-        async () => captureProjectRequestContext());
+      return resolvedProjectContext.runWithPracticeProjectScope({ ...admitted, access: "write" },
+        async () => retainPracticeContext("write"));
     }
     const error = new Error("Local editor mode only serves the selected project.");
     error.code = "vibe64_project_route_unavailable";
@@ -196,11 +197,22 @@ async function runWithPracticeProjectContext(owner, scope, operation) {
 
 // Existing accepted-work owners retain only this exact observation/control
 // projection. Fresh effects must re-enter the saved-attempt request admission.
+// A local practice Project admitted as an ordinary project (below) keeps its
+// write: that admission depends only on the learner's ownership, not on lesson
+// activity, so later work (agent turns, helpers) behaves as in any project.
 function captureProjectRequestContext() {
+  const grant = currentProjectRequestContext()?.[practiceScopeKey];
+  return retainPracticeContext(grant?.ordinary === true ? "write" : "control");
+}
+
+// The retained projection outlives the owning callback. Only core's local
+// practice admission retains write; every other caller retains control.
+function retainPracticeContext(access) {
   const context = currentProjectRequestContext();
   const grant = context?.[practiceScopeKey];
   if (!grant) return context;
-  const scope = Object.freeze({ ...grant.scope, access: "control",
+  const ordinary = access === "write";
+  const scope = Object.freeze({ ...grant.scope, access,
     vibe64User: Object.freeze({ ...grant.scope.vibe64User }) });
   return Object.freeze({ ...scope,
     ...(context.learningScope ? {
@@ -208,7 +220,7 @@ function captureProjectRequestContext() {
       learningInstructions: context.learningInstructions,
       learningTeaching: context.learningTeaching
     } : {}),
-    [practiceScopeKey]: Object.freeze({ owner: grant.owner, scope, active: () => true })
+    [practiceScopeKey]: Object.freeze({ owner: grant.owner, scope, active: () => true, ...(ordinary ? { ordinary: true } : {}) })
   });
 }
 

@@ -776,6 +776,8 @@ and the previous registry refuses its newer completed ledger. Existing Working
 and no-exercise Learning bindings, metadata and progress are unchanged. There is
 no historical adoption, inference or lazy repair. Full practice preparation,
 teacher transport and installed learner acceptance require their own proofs.
+Learning v2 retires this binding for practice sessions: see
+`20261021-practice-sessions-ordinary`.
 
 
 ## Historical preparation-owned practice binding
@@ -1293,6 +1295,40 @@ ledger entry, so retry after owner inspection is safe. An older registry refuses
 the newer ledger, which is the downgrade protection: never remove the entry to
 start an older release. Focused evidence: `stateUpgrades.unit.test.js`,
 `vibe64TrainingStepProgress.unit.test.js` and the original learner-state tests.
+
+## Ordinary practice sessions (Learning v2)
+
+`20261021-practice-sessions-ordinary` follows the step-progress boundary. A
+lesson's practice project is now an ordinary project of its learner, and its
+sessions are ordinary project sessions. The candidate CLI supplies two owners,
+each with its own backed-up publisher under this upgrade's backup root
+(`training/` and `colleague/`); Core keeps the registry, lock and ledger.
+
+- Training (`upgradeLearningPracticeSessionsOrdinary`): in every practice
+  project runtime (`projects/training-*`), the Runtime offline owner stages
+  removal of each `training-<attemptId>` session's `learning_session` file, in
+  active, closing and archived sessions, plus the archive index entry. Only a
+  saved practice binding (`noExercise:false`, matching session and attempt) is
+  accepted; any other binding, or retained renewal state, refuses the upgrade
+  for inspection. Sessions without a binding (including those the 20261008
+  history upgrade never adopted) are unchanged. Source, Git, transcripts,
+  native identities, progress and archive history are kept. Then each
+  source-less teacher store `training/users/<key>/learning-sessions/<attemptId>`
+  (normal and author-preview) is moved whole into
+  `backups/20261021-practice-sessions-ordinary/training/retired/`; nothing is
+  deleted. An existing retired copy refuses the move instead of overwriting.
+- Colleague (`retireColleagueLearningWatches`): every `learning-task` watch and
+  its queued observations are removed from `colleague/<owner>/conversation.json`;
+  conversation history and every other watch are kept.
+
+Check is read-only and reports what would change. Apply backs up before and
+after copies of every changed file through the existing manifest and resumes the
+same frozen bytes on retry. Keep every writer stopped; never edit the ledger or
+start an older release against partial state. The published
+`20261008-learning-practice-*` upgrades and their readers stay unchanged; the
+older registry refuses this newer ledger. Focused evidence:
+`stateUpgrades.unit.test.js`, `colleagueConversationUpgrade.unit.test.js` and
+the historical practice cases in `vibe64TrainingLearnerState.unit.test.js`.
 
 ## Training learner notes (no upgrade)
 

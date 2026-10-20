@@ -22,24 +22,20 @@ Working project cannot replace this saved attempt's practice project.
 
 Colleague can explain the error and use supported lesson controls when asked.
 
-In a practice lesson, **Preview** shows the practice app as soon as it
-reports ready, including after the app starts while you are on the **Learning**
-pane. **Stop preview** stops the practice app cleanly and keeps it stopped, even
-after a reload, until you choose **Restart preview**. Switching between
-**Preview**, **Dashboard** and the graduation-cap **Learning** option keeps the same running app without reloading it.
-Standalone exercise conversations in Learning, their Preview and practical
-assessment are still being integrated; prepared source alone does not make that
-complete flow available.
+A practice project is an ordinary project of yours, and the session that
+lesson preparation creates in it is an ordinary session of that project. Open
+it with **Open practice project** in Learning or from **Practice** in the
+project list. Its chat, **Preview**, **Dashboard** and session list work exactly
+as in any of your projects, with full access, and they stay that way after the
+lesson ends, until you delete the practice project. Ending a lesson does not
+stop or close the project or its session.
 
 A local installation normally serves only the project you selected. It also
-opens your own active lesson's practice project by its address (for example
-when Colleague navigates there or you open **Account settings** from it): the
-page, **Preview** and **Dashboard** load the same way as on a hosted workspace.
-That address gives viewing and Preview control only; start new coding work from
-the lesson in **Learning**. The lesson's own conversation stays in **Learning**:
-the project's ordinary (Working) session list and settings do not show it. Another person's practice project, or a practice
-address with no saved lesson behind it, still reports "Local editor mode only
-serves the selected project."
+opens your own practice projects by their address (for example when Colleague
+navigates there or you open **Account settings** from it), with the same full
+access as on a hosted workspace, including after the lesson has ended. Another
+person's practice project, or a practice address with no saved lesson behind it,
+still reports "Local editor mode only serves the selected project."
 
 ## Practice list and deleting a practice project
 
@@ -63,38 +59,22 @@ never deleted this way.
 Colleague can explain these steps. It deletes a practice project only when you
 ask it to and then confirm the exact project; an offer is not a request.
 
-## Instructing your teacher-agent
+## Working in the practice project
 
-In a lesson with a practice project, the teacher in the lesson's conversation is
-also your Vibe64 agent for that project, as in normal Vibe64. Ask it to make a
-change and it does the work in the practice project. It also teaches you to
-instruct it well: say the goal, where the change belongs, and how you will check
-it. Then check the result yourself in the real interface: **Preview**, and in the
-lesson **Dashboard** the **Files**, **Current changes**, **Git log**,
-**Architecture**, **Env** and **Database** → **ERD** views. These are the ordinary
-Dashboard sections, limited to this practice project and lesson session; see
-[Choosing lessons and Learning conversations](learning-mode-ui.md) for which
-sections a lesson shows.
+The practice project's session has an ordinary Vibe64 agent, without lesson
+instructions. Ask it to make a change and it works in the practice project, as
+in any project; Colleague teaches you to instruct it well (say the goal, where
+the change belongs and how you will check it). Then check the result yourself in
+**Preview** and the **Dashboard** sections.
 
-Work the teacher does for you is a demonstration. It never counts as your
-practical evidence, and the teacher does not do a graded task for you before you
-try it. When a lesson is about instructing the agent, your own explanation or
-instruction is what is assessed.
+Work an agent does for you never counts as your practical evidence. While a code
+question or code step is open, make the edits to its files yourself in
+**Dashboard → Files**: your saves there are recorded for the lesson, and any
+other writer's edit in those files means **Check my code** asks for an
+independent attempt (see [Answering a code question in a lesson](learning-code-questions.md)).
+On a hosted workspace, **Files** saves are not yet recorded for lessons.
 
-While a code question is open, the teacher will not edit that question's files,
-even if you ask; any agent edit there voids the attempt and **Check my code**
-then reports that an independent attempt is needed. Make those edits yourself in
-the lesson Dashboard's **Files** tool. The teacher also never deploys, publishes,
-pushes to real remotes, changes Git remotes, or touches other projects or folders
-outside this practice project. Lesson 0 and other lessons without a practice
-project keep a conversation-only teacher that does no project work.
-
-A lesson you started before Learning moved onto the real Vibe64 app picks up
-the current teacher instructions with your next message. Its earlier replies may
-still say **Workspace** or **Code tab**; those are the old names for the header's
-**Preview** | **Dashboard** options and the Dashboard's **Files** section.
-
-Opening supported practice teaching retains the reserved initial conversation,
-source and history. An ownership or lesson-binding error needs owner inspection;
-do not create a replacement or switch it to an unrelated Working project. An
-older prepared conversation is not silently converted by resuming the lesson.
+Lessons started before this change keep their practice conversation: the
+installation's update turns it into an ordinary session of the practice
+project with its history, and retires the old lesson-only conversations of
+lessons without a practice project.

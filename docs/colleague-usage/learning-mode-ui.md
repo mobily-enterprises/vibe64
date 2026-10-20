@@ -78,13 +78,11 @@ try it; it becomes startable when released** and no start button, and the server
 refuses their start. Drafts and disabled courses stay unavailable to everyone.
 Once released, everyone gets **Start**.
 
-Practice commands and their Git operations stay with the saved lesson until they
-finish. If a command is still finishing, wait before ending the lesson. Ending a
-lesson stops its lesson conversation's running work, as **Stop** does, and keeps
-the conversation, practice project and history; it does not archive or delete
-anything. After cancellation or an end, an old command cannot restart work. An
-ended lesson cannot be resumed; ask Colleague to continue it in a fresh exercise
-(see [Lesson history and resume](learning-history.md)).
+Ending a lesson stops its lesson conversation's running work, as **Stop** does,
+and keeps the conversation and history; it does not archive or delete anything.
+It does not stop or close the practice project: that project and its session
+are ordinary and stay yours. An ended lesson cannot be resumed; ask Colleague to
+continue it in a fresh exercise (see [Lesson history and resume](learning-history.md)).
 
 When Learning first creates its teacher session, it uses the first available AI
 workflow shown by the normal session picker, then checks your current Junior
@@ -94,9 +92,9 @@ workflow is available, connect/configure one in **AI Accounts → Model routing*
 then resume the same saved lesson or author trial; do not start a replacement.
 
 The Main teacher uses the saved lesson's exact instructions with Codex, Claude
-or OpenCode. In a practice project those instructions accompany the project's
-normal development guidance; switching AI does not turn the lesson into an
-ordinary coding task. The teacher should give the declared learner task and wait
+or OpenCode; switching AI does not turn the lesson into an ordinary coding task.
+A practice project's own session carries no lesson instructions: it is an
+ordinary coding session. The teacher should give the declared learner task and wait
 for your own answer or action. It must not ask you to reconstruct the installed
 lesson, invent an observation or count its own demonstration as your pass.
 
@@ -112,43 +110,19 @@ Dashboard shows the Learning panes (**Courses**, **Check my code**, the lesson
 and its history); Preview and Dashboard then appear unselected, exactly as one
 option of three. Selecting **Preview** or **Dashboard** deselects the cap. The
 collapse-chat arrow hides or shows the teacher chat exactly as it hides or shows
-the Working chat. In a practice lesson, **Dashboard** is the ordinary Dashboard for the
-lesson's practice project and lesson session, showing every section that works
-inside a lesson:
-
-- Project sections: **Git log**, **Env**, **Session History** and **Health**.
-- Session tools: **Session info**, **Current changes**, **Files**, **Database**
-  and **Architecture**.
-
-Each one reads and changes only this lesson's practice project and session,
-never your Working project. **Database** shows the practice app's ERD, tables
-and data, editable like any project's database (see
-[Browse a project's Database](database.md)). An app without a database shows
-"The session Stack does not declare a supported database." **Files** is the
-source editor for the practice project; see
-[Answering a code question in a lesson](learning-code-questions.md).
-**Env** shows and edits this lesson session's user values; **Reveal** for a
-secret is not offered. **Git log** and **Current changes** are read-only: their
-**Check for updates**, update and **Review changes** (save) buttons are not
-shown, because a lesson is never saved, updated or published. **Session
-History** lists only this lesson's archived lesson sessions. **Architecture**
-can analyse the practice project; its **Ask** assistant is off (ask your lesson
-teacher instead). The **Database** Copilot is off too.
-
-A lesson's Dashboard does not show **Project settings**, **Integrations**,
-**App access**, **Incoming changes**, **Issues/PR** or **AI Terminal**. These
-change or reach outside the practice project, and the AI Terminal would type
-straight into the teacher's agent. Opening one of their addresses directly in a
-lesson shows **Env** instead. Moving between Dashboard sections keeps Learning
+the Working chat. A practice lesson's project is an ordinary project of yours
+and its session is an ordinary session of that project: open it with **Open
+practice project** in Learning (or from **Practice** in the project list). Its
+chat, **Preview** and every **Dashboard** section (including **Files**, **Env**,
+**Database**, **Architecture**, **Current changes** and **Git log**) are the
+ordinary ones, with full access, during and after the lesson; see
+[Practice projects in standalone lessons](learning-practice-projects.md). Moving between Dashboard sections keeps Learning
 on. Switching between Preview, Dashboard and Learning keeps Learning mode on and
 retains the same selected teacher session; it does not switch to your last
 Working session. The graduation-cap **Learning** option shows the **Courses** | **Presentation**
 switch. Returning to it keeps the selected Courses or
 Presentation content visible without requiring another click. A supervised
-project opens on its Preview by default. On reopening, the practice project waits for the
-assistant's initial connection check to settle before opening the saved practice
-runtime. It still opens if that check reports an unavailable or failed AI;
-repairing the AI connection is separate from using the practice Preview.
+project opens on its Preview by default.
 A source-less lesson disables **Preview** and **Dashboard** (their tooltip says
 the lesson has no project workspace) and keeps the graduation cap selected,
 instead of showing a remembered Working project. On phones and tablets Learning
@@ -202,16 +176,10 @@ Private provider key entry remains a human-only step. A diagram belongs to its
 original signed-in learner and Main conversation; changing accounts retires its
 display and pending reads rather than transferring it to the next person.
 
-An exercise's Main coding assistant can perform an explicitly requested setup
-repair in that same practice session. Its commands recheck the saved lesson each
-time, including after the opening request has finished. If the assistant starts a
-command before **Send** finishes saving its receipt, that command waits for the
-same send to finish, then checks the lesson again. **Stop** cancels a waiting
-command. A failed send does not allow its waiting command to proceed. Ending the lesson prevents
-new commands; retained status remains readable. If Workspace setup failed, inspect
-the concrete diagnostic before **Retry**; a repair or successful setup is not a
-learner answer or passed assessment. Colleague can explain and coordinate this
-recovery but has no source-editing or shell access.
+In a practice project, setup repair is ordinary project work in its session:
+ask that session's agent, or use the ordinary Workspace setup recovery. A repair
+or successful setup is not a learner answer or passed assessment. Colleague can
+explain and coordinate this recovery but has no source-editing or shell access.
 
 After Main finishes a Learning turn, **Courses** refreshes the saved progress
 for that same lesson. An owner’s author trial remains separate from ordinary

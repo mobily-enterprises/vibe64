@@ -99,7 +99,7 @@ function createVibe64TerminalsFeature({
         uploads
       });
       registerRoutes(http, {
-        fastify, actions: actionCatalogue, learningScoped: true,
+        fastify, learningScoped: true,
         routeSurface: "app", terminals
       });
       fastify.addHook("onReady", async () => {

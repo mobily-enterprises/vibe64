@@ -52,13 +52,13 @@ does not authorize installing arbitrary content. Starting or resuming a lesson
 uses the same saved attempt and revision rules as hosted Vibe64. Retrying an
 uncertain start keeps its request and content choice; it does not reset progress.
 
-A practice lesson keeps its own reserved workspace and initial conversation.
-Reopening uses that saved conversation; it does not create an alternative source
-or bypass Workspace setup. If preparation is unavailable, keep the attempt and
-ask the installation owner for support. If an older prepared conversation cannot
-confirm its lesson binding, keep its source and history intact and ask the owner
-to restore supported access. Resuming does not silently convert old work or reset
-progress. Ending the attempt requires an explicit request and retains history.
+A practice lesson's reserved project and initial session are an ordinary
+project and session of yours: open them with **Open practice project** (see
+[Practice projects in standalone lessons](learning-practice-projects.md)).
+Resuming the lesson does not create an alternative source or bypass Workspace
+setup. If preparation is unavailable, keep the attempt and ask the installation
+owner for support. Ending the attempt requires an explicit request, retains
+history and leaves the practice project and its session yours.
 
 ## Saved conversations
 

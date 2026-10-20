@@ -1,4 +1,3 @@
-import { isDeepStrictEqual } from "node:util";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import {
   currentProjectRequestContext,
@@ -101,22 +100,6 @@ function withVibe64ActionContext(definition, { projectScoped = true, ownerRequir
         // session. Re-entering practice admission would reacquire its barrier
         // inside those checks; retain the original omitted-ID execution path.
         if (!projectScoped && context.trainingMain) return execute(trustedInput, context, deps);
-        if (learning.learningScope.noExercise === false) {
-          if (definition.kind === "query" && (learningAccess === "write" ||
-              definition.id === "vibe64.sessions.conversation.context.read" &&
-              context.channel === "internal" && learningAccess === "observe")) {
-            // These identity grants return the contributor's fresh admission,
-            // not data or effects. Keep its captured CONTROL identity without
-            // entering the practice operation a second time.
-            return runWithProjectRequestContext({ ...learning, vibe64User: user }, () => execute(trustedInput, context, deps));
-          }
-          if (definition.id === "vibe64.sessions.create" && learningAccess === "create") {
-            // The exact saved-session opener already owns the non-reentrant
-            // preparation barrier; it admits no alternative source or ID.
-            return execute(trustedInput, context, deps);
-          }
-          return learning.runLearningOperation(() => execute(trustedInput, context, deps));
-        }
         return runWithProjectRequestContext({ ...learning, vibe64User: user }, () => execute(trustedInput, context, deps));
       }
       if (!projectScoped) return execute(trustedInput, context, deps);
@@ -192,7 +175,7 @@ function registerVibe64ActionContext(actions, { projectContext, resolveUser, aut
             : resolveLearningContext({ actor: user, attemptId: learningAttemptId,
               sessionId: input.sessionId, access: scope.learningAccess,
               ...(diagnostic ? { onContextTiming(phase, durationMs) {
-                if (["scope-selection", "exercise-validation", "practice-capture"].includes(phase) &&
+                if (phase === "scope-selection" &&
                     Number.isFinite(durationMs) && durationMs >= 0) {
                   const key = `saved-attempt.${phase}`;
                   timings[key] = (timings[key] || 0) + durationMs;
@@ -202,27 +185,10 @@ function registerVibe64ActionContext(actions, { projectContext, resolveUser, aut
               learning.learningScope.learnerId !== String(user.uid ?? user.username)) {
             throw actionContextError("vibe64_learning_scope_mismatch", "The authorized learning context does not match this person and attempt.");
           }
-          if (learning.learningScope.noExercise === false) {
-            if (!learning.slug || !learning.targetRoot || !learning.projectRuntimeRoot || !learning.projectSessionSourceRoot ||
-                learning.sourceRoot || typeof learning.runLearningOperation !== "function" ||
-                scope.learningAccess === "create" && typeof learning.createLearningSession !== "function") {
-              throw actionContextError("vibe64_learning_scope_mismatch", "The authorized practice context does not match its actual Project owner.");
-            }
-            const practice = await measure("practice-scope", () => runWithProjectRequestContext(learning, () => projectContext?.currentPracticeProjectScope?.()));
-            if (!practice || practice.access !== "control" || practice.slug !== learning.slug ||
-                practice.training.attemptId !== learningAttemptId || !isDeepStrictEqual(practice.training.pin, learning.learningScope.pin) ||
-                practice.training.learnerKey !== Buffer.from(String(user.uid ?? user.username)).toString("base64url") ||
-                ["targetRoot", "projectRuntimeRoot", "projectSessionSourceRoot", "projectRecordPath", "systemRoot", "projectsRoot"]
-                  .some(name => practice[name] !== learning[name])) {
-              throw actionContextError("vibe64_learning_scope_mismatch", "Practice admission requires its original captured Project control identity.");
-            }
-            // Hosted projects retain their original fresh access gate. Standalone
-            // Learning is admitted by its original closed saved-practice owner;
-            // it still cannot authorize ordinary Working projects.
-            if (projectContext?.projectCatalogEnabled) {
-              await measure("project-access", () => authorizeProject({ slug: learning.slug, user, definition, input, context }));
-            }
-          } else if (learning.slug || learning.targetRoot || learning.sourceRoot || learning.projectSessionSourceRoot) {
+          // Only a source-less lesson has a learning context; a practice
+          // project's sessions are ordinary project sessions (Learning v2).
+          if (learning.learningScope.noExercise !== true || learning.slug || learning.targetRoot || learning.sourceRoot ||
+              learning.projectSessionSourceRoot) {
             throw actionContextError("vibe64_learning_scope_mismatch", "The authorized learning context does not match this person and attempt.");
           }
         } else if (scope.projectScoped) {

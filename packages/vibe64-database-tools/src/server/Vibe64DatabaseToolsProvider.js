@@ -42,7 +42,6 @@ const Vibe64DatabaseToolsProvider = defineFeature({
       routeRelativePath: "vibe64",
       routeSurface: "app"
     });
-    registerRoutes(http, { learningScoped: true, routeSurface: "app" });
     terminals.setDatabaseToolsProvider(databaseTools);
     return { databaseTools };
   },

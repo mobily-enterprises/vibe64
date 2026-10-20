@@ -143,13 +143,9 @@ test("project and sessions register routes and captured actions during setup", a
     ...["list", "read", "ready", "update-branch", "merge"].map((operation) => `vibe64.project.pull-requests.${operation}`)
   ].sort());
   assert.equal(projectRoutes.filter(([, route]) => !route.startsWith("/api/learning/")).length, projectActions[0].actions.length);
-  // A practice lesson's Dashboard reads onboarding and Env and saves user Env
-  // values; settings, remotes, issues, pull requests and projects stay off lessons.
-  assert.deepEqual(projectRoutes.filter(([, route]) => route.startsWith("/api/learning/")).map(([method, route]) => [method, route]).sort(), [
-    ["GET", "/api/learning/:learningAttemptId/vibe64/env"],
-    ["GET", "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/onboarding"],
-    ["PUT", "/api/learning/:learningAttemptId/vibe64/env/user-values"]
-  ]);
+  // Learning v2: a practice project's Dashboard is an ordinary project's; the
+  // project registers no lesson URLs.
+  assert.deepEqual(projectRoutes.filter(([, route]) => route.startsWith("/api/learning/")), []);
   assert.equal(
     projectRoutes.some(([method, path]) => method === "POST" && path.endsWith("/env/reveal")),
     true,

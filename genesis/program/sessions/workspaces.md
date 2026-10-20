@@ -628,7 +628,8 @@ file covers this public factory and Codex reader, ordinary missing-root refusal,
 foreign actors/attempts/pins and inconsistent source-bearing private contexts.
 
 `@local/vibe64-sessions/server/routes` exposes the original route registrar for
-host composition. Its explicit `learningScoped:true` option reuses the original
+host composition. Since Learning v2 it serves only the source-less teacher;
+practice sessions are ordinary project sessions. Its explicit `learningScoped:true` option reuses the original
 HTTP validators, limits, input builders and responses under
 `/api/learning/:learningAttemptId/vibe64`. The canonical Session action metadata
 supplies the only allowlist. The transport binds the URL attempt, strips browser

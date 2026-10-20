@@ -1,7 +1,6 @@
 import { VIBE64_UPLOAD_MAX_BYTES, VIBE64_UPLOAD_BODY_LIMIT_BYTES } from "@local/vibe64-core/shared";
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 import { sendVibe64EventStream } from "@local/vibe64-core/server/eventStream";
-import { createSourceEditorActions } from "./actions.js";
 import {
   VIBE64_SOURCE_EDITOR_SYNC_ERROR_EVENT
 } from "@local/vibe64-core/server/sourceEditorRealtimeEvents";
@@ -100,17 +99,14 @@ function sourceInput(request, input = {}) {
 }
 
 function registerRoutes(http, {
-  projectContext = null, routeSurface = "", routeRelativePath = "", sourceEditor, learningScoped = false
+  projectContext = null, routeSurface = "", routeRelativePath = "", sourceEditor
 } = {}) {
-  if (!learningScoped && (!sourceEditor || typeof sourceEditor.readTree !== "function")) {
+  if (!sourceEditor || typeof sourceEditor.readTree !== "function") {
     throw new TypeError("registerRoutes requires the Vibe64 Source Editor API.");
   }
-  // A lesson's Files editor uses the declared reads, download, file create and
-  // stars through its saved attempt. Saving is Training's ledgered save.
   const routes = createVibe64FeatureRoutes(http, {
     localRequestMessage: "Vibe64 source editor routes only accept loopback Studio requests.",
-    projectContext, routeRelativePath, routeSurface, tags: ["studio", "vibe64-source-editor"],
-    learningActions: learningScoped ? createSourceEditorActions({ sourceEditor: {} }) : null
+    projectContext, routeRelativePath, routeSurface, tags: ["studio", "vibe64-source-editor"]
   });
   const route = (method, suffix, operation, options = {}, buildInput = (request) => sourceInput(request)) => routes.actionRoute(
     method, `/sessions/:sessionId${suffix}`, { ...options, actionId: `vibe64.source-editor.${operation}`, buildInput }
@@ -173,7 +169,7 @@ function registerRoutes(http, {
   route("GET", "/source-editor/files", "files.find", { summary: "Find editable source files." }, searched);
   route("GET", "/source-editor/search", "search", { summary: "Search editable source files." }, searched);
   routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/download", {
-    learning: true, summary: "Download an original source file."
+    summary: "Download an original source file."
   }, async (request, reply) => sendFileDownload(reply, await request.executeAction({
     actionId: "vibe64.source-editor.file.download", input: routes.actionInput(request, query(request)) })));
   route("GET", "/source-editor/stars", "stars.read", { summary: "Read this account's starred files." });

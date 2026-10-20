@@ -6,14 +6,11 @@ This is part of [Choosing lessons and Learning conversations](learning-mode-ui.m
 Some practice lessons ask you to change code, for example "make `notes.mjs`
 refuse an empty title". To answer:
 
-1. Choose **Dashboard**, then **Files** in the session tools. It is
-   the ordinary source editor for this lesson's practice project: the file list,
-   **New file at source root**, **Download file**, **Star file** and a file's
-   **⋮** actions menu (**Star file**, **Download file**, **New file here**,
-   **Copy path**) work as in any project. Files open as code; the **Interface**
-   view is not available in a lesson. **Explain** is shown but disabled; its
-   tooltip says to ask your lesson teacher in Learning. On a phone, use the files
-   button to show or hide the file list.
+1. Open the practice project (**Open practice project** in Learning, or
+   **Practice** in the project list) and choose **Dashboard**, then **Files** in
+   the session tools. It is the ordinary source editor of that project: every
+   control works as in any of your projects. On a phone, use the files button to
+   show or hide the file list.
 2. Open the file the teacher named and edit it. Your changes save automatically
    a moment after you stop typing; the editor shows when a save has finished.
 3. Choose the graduation-cap option beside **Preview** and **Dashboard** (on a
@@ -32,8 +29,10 @@ refuse an empty title". To answer:
    check for grading. A pass is saved only when the check passed **and** the
    explanation meets the lesson's rubric.
 
-What counts: only edits you saved yourself in the **Dashboard → Files** editor since the
-teacher asked the question. If anything else changed a named file in the
+What counts: only edits you saved yourself in your practice project's
+**Dashboard → Files** editor since the teacher asked the question, while the
+lesson is active. On a hosted workspace these saves are not yet recorded for
+lessons. If anything else changed a named file in the
 meantime—the teacher or another assistant, a terminal command, Git, or another
 editor—the check does not run and reports "needs an independent attempt: other
 edits detected in `<file>`". That question cannot pass; ask the teacher for a new

@@ -17,10 +17,8 @@ import { v2Content } from "./vibe64TrainingV2LessonStub.js";
 import { createTrainingTeachingOwner } from "../../packages/vibe64-training/src/server/teaching.js";
 import { createTrainingPracticalObservations } from "../../packages/vibe64-training/src/server/practicalObservations.js";
 import { createTrainingAssessmentGrader } from "../../packages/vibe64-training/src/server/assessmentGrader.js";
-import { createTrainingCodeEditorActions, registerTrainingCodeEditorRoutes } from "../../packages/vibe64-training/src/server/codeEditorActions.js";
-import { createSourceEditorActions } from "../../packages/vibe64-source-editor/src/server/actions.js";
-import { registerRoutes as registerSourceEditorRoutes } from "../../packages/vibe64-source-editor/src/server/registerRoutes.js";
-import { withLocalRequestBypass } from "./vibe64RouteTestHelpers.js";
+import { createTrainingCodeSaveOwner } from "../../packages/vibe64-training/src/server/codeEditorActions.js";
+import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import * as vue from "vue";
 import { useTrainingLearnerGestures } from "../../packages/vibe64-training/src/client/useTrainingLearnerGestures.js";
 
@@ -99,7 +97,7 @@ async function fixture(t, { check, timeoutSeconds, lessonVersion = 1, steps = [c
   }
   const input = { actor, attemptId, sessionId, observationId: randomUUID() };
   return { root, systemRoot, paths, actor, attemptId, sessionId, learners, content, checks, calls, authorship, teaching,
-    asked, learnerFile, learnerSave, input, project };
+    asked, learnerFile, learnerSave, input, project, projectSlug: reserved.attempt.projectSlug };
 }
 
 test("a code question records its starting files and only the learner's own chained saves verify", async t => {
@@ -280,41 +278,35 @@ test("bundling validates code questions, their files, check kind and timeout", a
   }
 });
 
-test("the lesson Files editor mounts reads, downloads, new files, stars and a ledgered save; agent-starting editor actions are refused", async () => {
-  const registered = [];
-  const http = { router: { register(method, route, options, handler) { registered.push({ method, route, handler }); } } };
-  registerSourceEditorRoutes(http, { learningScoped: true, routeSurface: "app" });
-  registerTrainingCodeEditorRoutes(http);
-  const base = "/api/learning/:learningAttemptId/vibe64/sessions/:sessionId/source-editor";
-  assert.deepEqual(registered.map(value => `${value.method} ${value.route}`).sort(), [
-    `GET ${base}/download`, `GET ${base}/file`, `GET ${base}/files`, `GET ${base}/search`, `GET ${base}/stars`,
-    `GET ${base}/tree`, `POST ${base}/file`, `POST ${base}/resolve-path`, `POST ${base}/stars`, `PUT ${base}/file`].sort());
-  const editor = Object.fromEntries(createSourceEditorActions({ sourceEditor: {} }).map(value => [value.id, value]));
-  for (const id of ["tree.read", "file.read", "files.find", "search", "path.resolve", "file.download", "stars.read"]) {
-    assert.equal(editor[`vibe64.source-editor.${id}`].extensions.vibe64.learningAccess, "observe", id);
-  }
-  for (const id of ["file.create", "star.set"]) {
-    assert.equal(editor[`vibe64.source-editor.${id}`].extensions.vibe64.learningAccess, "write", id);
-  }
-  const refused = Object.keys(editor).filter(id => !editor[id].extensions.vibe64.learningAccess);
-  for (const id of ["file.save", "explanation.create", "explanation.followup", "file-area.upload", "file-area.save",
-    "integrations.setup"]) assert.equal(refused.includes(`vibe64.source-editor.${id}`), true, id);
-  const learningAttemptId = randomUUID();
-  const context = { vibe64Action: { user: { uid: 42, username: "alice" }, project: null,
-    learning: { learningScope: { attemptId: learningAttemptId, noExercise: false } } } };
-  await assert.rejects(editor["vibe64.source-editor.explanation.create"].execute({ sessionId: "training-x", path: "notes.mjs",
-    startLine: 1, endLine: 1, learningAttemptId }, context), { code: "vibe64_learning_authority_required" });
-  const [save] = createTrainingCodeEditorActions({ sourceEditor: { async saveFile() { throw new Error("unused"); } },
-    authorship: { async saveLearnerFile() { throw new Error("unused"); } } });
-  assert.equal(save.extensions.vibe64.learningAccess, "control");
-  assert.equal(save.extensions.assistant.exclude, true, "agents cannot call the learner's save");
-  const put = registered.find(value => value.method === "PUT");
-  let executed;
-  await withLocalRequestBypass(() => put.handler({ params: { learningAttemptId, sessionId: "training-x" },
-    body: { path: "notes.mjs", baseHash: "a".repeat(64), text: "x", projectSlug: "other", vibe64User: { uid: 1 } },
-    executeAction(value) { executed = value; return { ok: true }; } }, { code() { return { send() {} }; } }));
-  assert.deepEqual(executed, { actionId: "vibe64.training.code.file.save", input: { path: "notes.mjs", baseHash: "a".repeat(64),
-    text: "x", sessionId: "training-x", learningAttemptId } }, "the page project and actor never come from the body");
+test("the ordinary Files editor save in the learner's own active practice project is ledgered; every other save is plain", async t => {
+  const f = await fixture(t);
+  const owner = createTrainingCodeSaveOwner({ authorship: f.authorship, learners: f.learners });
+  let plainSaves = 0;
+  const save = async text => {
+    const current = sha256(await readFile(f.learnerFile));
+    const input = { sessionId: f.sessionId, path: "notes.mjs", baseHash: current, text };
+    return owner({ input, async save() {
+      plainSaves++;
+      await writeFile(f.learnerFile, text);
+      return { ok: true, file: { path: "notes.mjs", hash: sha256(await readFile(f.learnerFile)) } };
+    } });
+  };
+  const entries = async () => (await f.learners.readCodeLedger({ actor: f.actor, attemptId: f.attemptId })).entries.length;
+  const inProject = (slug, actor, operation) => runWithProjectRequestContext({ slug, vibe64User: actor }, operation);
+  await inProject("alpha", f.actor, () => save("// another project\n"));
+  await inProject(f.projectSlug, { uid: 43, username: "bob" }, () => save("// another person\n"));
+  await save("// no project\n");
+  assert.equal(plainSaves, 3);
+  assert.equal(await entries(), 0, "saves outside the learner's own practice project are not lesson code");
+  await inProject(f.projectSlug, f.actor, () => save(solved));
+  assert.equal(plainSaves, 4, "the ledgered save still performs the editor's exact save");
+  assert.equal(await entries(), 1, "the learner's own practice save records authorship");
+  const current = await f.learners.resumeAttempt({ actor: f.actor, attemptId: f.attemptId });
+  await f.learners.endAttempt({ actor: f.actor, attemptId: f.attemptId, expectedRevision: current.revision,
+    requestId: "end-code-lesson", reason: "restart" });
+  await inProject(f.projectSlug, f.actor, () => save("// after the lesson\n"));
+  assert.equal(plainSaves, 5, "the ended lesson's project keeps ordinary saves");
+  assert.throws(() => createTrainingCodeSaveOwner({ authorship: {}, learners: f.learners }), TypeError);
 });
 
 test("Check my code sends one genuine code-submit press for the current delivered question", async t => {

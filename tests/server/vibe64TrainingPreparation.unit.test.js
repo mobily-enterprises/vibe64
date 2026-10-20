@@ -508,13 +508,15 @@ test("local preparation admits the original exercise effects under its existing 
   assert.equal(f.calls.some(([name]) => name === "ready"), false);
 });
 
-test("configured practice session context wraps the original preparation session block under exactly its already-held barrier", async t => {
+// Learning v2 (F1): the initial practice session is an ordinary project
+// session. The same preparation barrier and create scope admit its creation,
+// but no learning binding is put in its Project context.
+test("practice preparation creates an ordinary initial session under exactly its already-held barrier and create scope", async t => {
   const f = await fixture(t);
-  const [{ createStudioProjectContext }, { createService: createProject }, { createTrainingLearningSessions },
+  const [{ createStudioProjectContext }, { createService: createProject },
     { captureProjectRequestContext, currentProjectRequestContext, runWithProjectRequestContext, assertProjectEffectAdmission }] = await Promise.all([
     import("../../packages/vibe64-core/src/server/studioProjectContext.js"),
     import("../../packages/vibe64-project/src/server/service.js"),
-    import("../../packages/vibe64-training/src/server/learningSessions.js"),
     import("../../packages/vibe64-core/src/server/projectRequestContext.js")
   ]);
   const working = path.join(f.root, "working");
@@ -529,16 +531,6 @@ test("configured practice session context wraps the original preparation session
   f.owners.projectContext = core;
   const training = { schemaVersion: 1, learnerKey: Buffer.from("123").toString("base64url"), attemptId, pin,
     exercise: { kind: "bundled", sourcePath: "training/exercises/orientation-app" } };
-  const scope = { learnerId: "123", attemptId, pin, noExercise: false };
-  f.owners.learners.readLearningSessionScope = async () => {
-    throw Object.assign(new Error("This original fixture has an exercise"), { code: "VIBE64_TRAINING_EXERCISE_REQUIRED" });
-  };
-  f.owners.learners.readExerciseProjectScope = async input => {
-    assert.equal(input.actor, actor);
-    assert.equal(input.attemptId, attemptId);
-    return { scope, systemRoot: core.systemRoot, training, projectSlug: f.attempt.projectSlug,
-      initialSessionId: f.attempt.preparation.initialSessionId, active: true, activeSummaryCurrent: true };
-  };
   let held = false;
   let entries = 0;
   const originalBarrier = f.owners.learners.runPreparationExclusive;
@@ -554,16 +546,13 @@ test("configured practice session context wraps the original preparation session
   const originalCreate = f.owners.sessions.createSession;
   f.owners.sessions.createSession = (input, options) => {
     assert.equal(held, true);
-    assert.deepEqual(currentProjectRequestContext().learningScope, scope);
+    assert.equal(currentProjectRequestContext().learningScope, undefined, "an ordinary session has no learning binding");
     assert.equal(currentProjectRequestContext().slug, f.attempt.projectSlug);
     assert.equal(core.currentPracticeProjectScope().access, "create");
     captured = captureProjectRequestContext();
     return originalCreate(input, options);
   };
-  f.owners.learningSessions = createTrainingLearningSessions({ learners: f.owners.learners,
-    teachingBrief: { readBrief: async () => ({ attemptId, activeSummaryCurrent: true, pin, lesson: { exerciseRequired: true } }) },
-    project: f.owners.project, sessions: { ...f.owners.sessions, inspectSession: async () => assert.fail("preparation does not reopen an alternative") },
-    projectContext: core, practiceSessions: true });
+  f.owners.learningSessions = { stopAttemptSessions: async () => assert.fail("preparation does not end a lesson") };
   const service = createTrainingService(f.owners);
   const result = await service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "bound-practice-start" });
   assert.equal(entries, 1);
@@ -575,9 +564,36 @@ test("configured practice session context wraps the original preparation session
   assert.deepEqual(creation[2], { sessionId: `training-${attemptId}`, expectedCommit: "d".repeat(40) });
   await runWithProjectRequestContext(captured, async () => {
     assert.equal(core.currentPracticeProjectScope().access, "control");
-    assert.deepEqual(currentProjectRequestContext().learningScope, scope);
+    assert.equal(currentProjectRequestContext().learningScope, undefined);
     assert.throws(assertProjectEffectAdmission, { code: "vibe64_practice_effect_admission_required" });
     assert.equal((await actualProject.readCurrentProject()).slug, f.attempt.projectSlug);
   });
   assert.equal(core.targetRoot, working);
+});
+
+test("hosted practice preparation creates its ordinary initial session inside the saved-training create scope", async t => {
+  const f = await fixture(t);
+  const { currentProjectRequestContext } = await import("../../packages/vibe64-core/src/server/projectRequestContext.js");
+  const scopes = [];
+  let inside = false;
+  f.owners.projectContext.projectCatalogEnabled = true;
+  f.owners.projectContext.runWithHostedTrainingProjectScope = async (input, operation) => {
+    scopes.push(input);
+    inside = true;
+    try { return await operation(); } finally { inside = false; }
+  };
+  const originalCreate = f.owners.sessions.createSession;
+  f.owners.sessions.createSession = (input, options) => {
+    assert.equal(inside, true, "the session is created inside the hosted saved-training scope");
+    assert.equal(currentProjectRequestContext()?.learningScope, undefined, "an ordinary session has no learning binding");
+    return originalCreate(input, options);
+  };
+  const result = await createTrainingService(f.owners).startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code,
+    expectedRevision: 0, requestId: "hosted-start" });
+  assert.equal(result.attempt.preparation.phase, "preparing");
+  assert.equal(scopes.length, 1);
+  assert.equal(scopes[0].actor, actor);
+  assert.equal(scopes[0].access, "create");
+  assert.equal(scopes[0].training.attemptId, attemptId);
+  assert.equal(f.calls.filter(([name]) => name === "session-create").length, 1);
 });

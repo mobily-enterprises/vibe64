@@ -14,8 +14,7 @@ import {
   ACTION_DATABASE_OVERVIEW_SAVE,
   ACTION_DATABASE_SNIPPET_SAVE,
   ACTION_DATABASE_SNIPPET_DELETE,
-  ACTION_DATABASE_ASSISTANT_ASK,
-  createDatabaseActions
+  ACTION_DATABASE_ASSISTANT_ASK
 } from "./actions.js";
 import { ERD_LAYOUT_MAX_BYTES } from "../shared/erdModel.js";
 
@@ -56,17 +55,13 @@ function databaseStatusCode(response = {}) {
 function registerRoutes(http, {
   projectContext = null,
   routeRelativePath = "",
-  routeSurface = "",
-  learningScoped = false
+  routeSurface = ""
 } = {}) {
   const routes = createVibe64FeatureRoutes(http, {
     localRequestMessage: "Vibe64 database routes only accept loopback Studio requests.",
     projectContext,
     routeRelativePath,
     routeSurface,
-    // A saved lesson edits its practice database like any project's Database;
-    // only the database assistant (undeclared) stays with Working sessions.
-    learningActions: learningScoped ? createDatabaseActions({ databaseTools: {} }) : null,
     tags: ["studio", "vibe64-database-tools"]
   });
   const sessionRoute = "/database/sessions/:sessionId";

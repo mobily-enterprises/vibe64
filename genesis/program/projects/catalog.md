@@ -55,6 +55,10 @@ Database adds MySQL migrations without login, while Accounts adds authentication
 and account-persistence tests. Import and Workspace setup remain separate.
 The task guide is `docs/colleague-usage/starter-apps.md`.
 
+Learning v2: a practice project is an ordinary project of its learner and its
+sessions are ordinary sessions; the learning-bound practice context described
+below is retired (see the Training Program).
+
 Standalone lesson practice admission uses the same Project context, record
 creation, rollback and request-context storage. Training reads the actual actor's
 saved attempt and verifies its installed pin and bundled exercise before entering

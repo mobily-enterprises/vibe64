@@ -192,7 +192,6 @@ function registerRoutes(
   {
     fastify,
     projectContext = null,
-    actions = null,
     learningScoped = false,
     routeSurface = "",
     routeRelativePath = "",
@@ -268,7 +267,6 @@ function registerRoutes(
   });
 
   routes.serviceRoute("GET", "/sessions/:sessionId/output-results/:resultId", {
-    learning: true,
     summary: "Download one immutable Vibe64 output result."
   }, async (request, reply) => {
     const opened = await request.executeAction({
@@ -507,9 +505,9 @@ function registerRoutes(
     closeSummary: "Close a global Vibe64 Codex terminal."
   });
 
-  registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, {
-    projectContext, actions, learningScoped
-  });
+  // Lesson-scoped routes have no sockets: a practice project's output opens
+  // through its ordinary project routes (Learning v2).
+  if (!learningScoped) registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, { projectContext });
 }
 
 function bodyWithSessionId(routes) {
@@ -615,25 +613,7 @@ function registerTerminalSnapshotRoutes(routes, {
   }
 }
 
-function registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, {
-  projectContext = null, actions = null, learningScoped = false
-} = {}) {
-  if (learningScoped && typeof actions?.execute !== "function") {
-    throw new TypeError("Practice output sockets require the original action authority owner.");
-  }
-  async function learningOutputOperation(request, { sessionId, learningAttemptId }, operation) {
-    const grant = await actions.execute({ actionId: "vibe64.sessions.conversation.context.read",
-      input: { sessionId, learningAttemptId },
-      context: { channel: "internal", surface: "app", requestMeta: { request } } });
-    if (grant.project?.learningScope?.noExercise !== false ||
-        typeof grant.project.runLearningOperation !== "function") {
-      throw Object.assign(new Error("Open the output of this lesson’s exact prepared practice workspace."), {
-        code: "vibe64_learning_source_required", statusCode: 409
-      });
-    }
-    return grant.project.runLearningOperation(operation);
-  }
-  if (!learningScoped) {
+function registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, { projectContext = null } = {}) {
   registerTerminalWebSocketRoute(fastify, {
     projectContext,
     routePath: `${routes.routeBase}/codex-terminal/:terminalSessionId/ws`,
@@ -673,26 +653,18 @@ function registerVibe64TerminalWebSocketRoutes(fastify, routes, terminals, {
     }
   });
 
-  }
   registerTerminalWebSocketRoute(fastify, {
     projectContext,
-    projectScoped: !learningScoped,
     routePath: `${routes.routeBase}/sessions/:sessionId/output-runs/:terminalSessionId/terminal/ws`,
     service: terminals,
     serviceUnavailableMessage: VIBE64_TERMINALS_UNAVAILABLE,
-    subscribe(service, { request, sessionId, learningAttemptId, subscriber, terminalSessionId, isClosed }) {
-      const subscribe = () => isClosed?.() ? { ok: true } :
-        service.subscribeOutputTargetTerminal(sessionId, terminalSessionId, subscriber);
-      return learningScoped ? learningOutputOperation(request, { sessionId, learningAttemptId }, subscribe) : subscribe();
+    subscribe(service, { sessionId, subscriber, terminalSessionId, isClosed }) {
+      return isClosed?.() ? { ok: true } : service.subscribeOutputTargetTerminal(sessionId, terminalSessionId, subscriber);
     },
-    resize(service, { request, cols, rows, sessionId, learningAttemptId, terminalSessionId, isClosed }) {
-      const resize = () => isClosed?.() ? { ok: true } : service.resizeOutputTargetTerminal(sessionId, terminalSessionId, { cols, rows });
-      return learningScoped ? learningOutputOperation(request, { sessionId, learningAttemptId }, resize) : resize();
+    resize(service, { cols, rows, sessionId, terminalSessionId, isClosed }) {
+      return isClosed?.() ? { ok: true } : service.resizeOutputTargetTerminal(sessionId, terminalSessionId, { cols, rows });
     },
     write(service, { data, sessionId, terminalSessionId }) {
-      if (learningScoped) throw Object.assign(new Error("Use Run and Stop; this Learning output is a read-only console."), {
-        code: "vibe64_learning_output_input_unavailable", statusCode: 403
-      });
       return service.writeOutputTargetTerminal(sessionId, terminalSessionId, data);
     }
   });

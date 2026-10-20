@@ -757,6 +757,7 @@ function createService({
     snapshotPath: (context) => path.join(sourceEditorIndexDirectory(context), "filenames.json")
   });
   const searchIndex = createSourceEditorSearchIndex();
+  let fileSaveOwner = null;
 
   async function sourceEditorContext(sessionId = "", {
     agentOperation = false,
@@ -1435,7 +1436,7 @@ function createService({
     },
 
     async saveFile(input = {}) {
-      return runSourceEditorOperation(async () => {
+      const save = () => runSourceEditorOperation(async () => {
         return runSourceEditorWriteExclusive(input, async (context) => {
           const file = await saveSourceEditorFile(context, input);
           searchIndex.invalidate(context.sourceRoot);
@@ -1446,6 +1447,14 @@ function createService({
           };
         });
       });
+      // A host save owner (Training's code-authorship ledger) may wrap this
+      // exact save; it never replaces it or selects a different file.
+      return fileSaveOwner ? runSourceEditorOperation(() => fileSaveOwner({ input, save })) : save();
+    },
+
+    setFileSaveOwner(owner = null) {
+      if (owner !== null && typeof owner !== "function") throw new TypeError("A source file save owner must be a function.");
+      fileSaveOwner = owner;
     },
 
     async createFile(input = {}) {

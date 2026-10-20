@@ -34,7 +34,6 @@ const Vibe64SourceEditorProvider = defineFeature({
       routeSurface: "app",
       sourceEditor
     });
-    registerRoutes(http, { learningScoped: true, routeSurface: "app" });
     terminals.setSourceEditorProvider(sourceEditor);
     return { sourceEditor };
   },

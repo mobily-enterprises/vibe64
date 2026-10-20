@@ -1,7 +1,7 @@
 import { createTrainingDeclaredCheckOwner } from "./declaredCheck.js";
 import { createTrainingCodeAuthorship } from "./codeAuthorship.js";
 import { createTrainingStepChecks } from "./stepChecks.js";
-import { createTrainingCodeEditorActions, registerTrainingCodeEditorRoutes } from "./codeEditorActions.js";
+import { createTrainingCodeSaveOwner } from "./codeEditorActions.js";
 import { createTrainingPracticalActions } from "./practicalActions.js";
 import { createTrainingMainPracticalActions } from "./mainPracticalActions.js";
 import { defineFeature } from "@jskit-ai/kernel/server/features";
@@ -22,8 +22,8 @@ import { createTrainingLearnerState } from "./learnerState.js";
 import { createTrainingTeachingBrief } from "./teachingBrief.js";
 import { createTrainingService } from "./preparation.js";
 import { createManagedProjectRepositoryService } from "@local/vibe64-project/server/managedRepository";
-import { admitLocalPracticeProject, createTrainingLearningSessions } from "./learningSessions.js";
-import { createLocalPracticeProjects } from "./practiceProjects.js";
+import { createTrainingLearningSessions } from "./learningSessions.js";
+import { admitLocalPracticeProject, createLocalPracticeProjects } from "./practiceProjects.js";
 import { createTrainingTeachingOwner } from "./teaching.js";
 import { createTrainingAnswerAssessment } from "./answerAssessment.js";
 import { createTrainingPresentationActions } from "./presentationActions.js";
@@ -66,8 +66,8 @@ const Vibe64TrainingProvider = defineFeature({
     const mainTeaching = createTrainingMainTeaching({ teaching, assessment, checks });
     // Version 2 step results; the action layer supplies the action executor.
     const steps = createTrainingStepChecks({ learners, content, checks, authorship: codeAuthorship, actions: actionCatalogue });
-    const learningSessions = createTrainingLearningSessions({ learners, teachingBrief: brief, project, sessions, terminals, projectContext,
-      learningTeaching: mainTeaching, practiceSessions: true });
+    const learningSessions = createTrainingLearningSessions({ learners, teachingBrief: brief, project, sessions, terminals,
+      learningTeaching: mainTeaching });
     const exercises = createTrainingService({ catalogue, content, learners, projectContext, projectRepositoryService, project, sessions, terminals,
       learningSessions });
     registerVibe64ActionContext(actionCatalogue, {
@@ -92,11 +92,13 @@ const Vibe64TrainingProvider = defineFeature({
     // Host facility practiceProjects.remove; Online supplies its own through trainingHost.
     const practiceProjects = createLocalPracticeProjects({ learners, projectContext, project, terminals });
     registerLearningSessionRoutes(http, { learningScoped: true, routeSurface: "app" });
-    if (sourceEditor) registerTrainingCodeEditorRoutes(http);
+    // The learner's ordinary Files editor saves in a practice project record
+    // code authorship through the original ledger owner.
+    sourceEditor?.setFileSaveOwner(createTrainingCodeSaveOwner({ authorship: codeAuthorship, learners }));
     return { training: Object.freeze({ catalogue, courseInstaller, content, learners, brief, exercises, learningSessions, teaching, assessment, checks, mainTeaching,
       codeAuthorship, steps, practiceProjects, publishLearnerChanged: createTrainingLearnerChangedPublisher(events) }) };
   },
-  actions({ training, trainingHost, project, sourceEditor }, { actionCatalogue }) {
+  actions({ training, trainingHost, project }, { actionCatalogue }) {
     if (trainingHost) return [];
     return [...createTrainingActions({ catalogue: training.catalogue, learners: training.learners,
       teachingBrief: training.brief, exercises: training.exercises, learningSessions: training.learningSessions,
@@ -110,7 +112,6 @@ const Vibe64TrainingProvider = defineFeature({
     ...createTrainingMainPracticalActions({ project, actions: actionCatalogue }),
     ...createTrainingPracticalActions(),
     ...createTrainingAssessmentActions(),
-    ...createTrainingCodeEditorActions({ authorship: training.codeAuthorship, sourceEditor }),
     ...createTrainingVisualResourceActions({ learners: training.learners, content: training.content,
       teaching: training.teaching, actions: actionCatalogue })];
   }

@@ -93,3 +93,6 @@ Only a saved assessment outcome supports completion; a recent observation or a
 delivered-help receipt does not. Colleague cannot observe arbitrary activity
 inside the supervised application unless that interaction is one of the named
 Vibe64 controls or the declared exercise-response bridge.
+
+Watches started before the Learning v2 update are retired by that update; start
+a new watch if you still want one. The conversation history is kept.

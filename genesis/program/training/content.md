@@ -41,6 +41,7 @@ the module alone does not provide infrastructure or prove a delivered lesson.
 - `packages/vibe64-core/src/server/stateUpgrades/20261006-training-preparation.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261006-training-assessments.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261007-training-attempt-history.js`
+- `packages/vibe64-core/src/server/stateUpgrades/20261021-practice-sessions-ordinary.js`
 - `packages/vibe64-project/src/server/managedProject.js`
 - `bin/run.js`
 - `docs/training-content.md`

@@ -13,7 +13,8 @@ New Learning conversations start in **Junior** mode, using that workflow's
 configured Junior model. You can choose **Senior**, **Junior** or **Custom**
 through the existing **Chat mode** controls; **Custom** lets you choose an
 available orchestrator, model and thinking level. Resume keeps your saved choice.
-This applies to lessons with or without a practice exercise. Working conversations
+This applies to lessons without a practice project (a practice project's session
+is an ordinary session). Working conversations
 keep their existing starting mode, and a missing Junior connection must be
 configured through the normal AI Accounts and Model routing controls.
 
@@ -107,88 +108,22 @@ to bypass the mismatch. An unconfirmed Helper cleanup must be resolved before
 another evaluation. Colleague can explain recovery and offer supported actions;
 private connection-key entry remains a human-only step.
 
-Practice lessons require their real prepared workspace and retain the ordinary
-source-availability checks and Git recovery checkpoints. A checkpoint failure
-is a workspace recovery problem; it does not prove a lesson pass or authorize
-another teaching request. Source-less lessons retain their no-Git result.
-Practice teaching-tool availability remains subject to the limits above.
-OpenCode uses the same lesson teaching controls for a prepared practice lesson
-as for a lesson without an exercise. Having practice source does not grant Main
-ordinary coding or shell tools. If a teaching tool reports no authorization,
-keep the saved attempt, source and history, and report the exact error to the
-installation owner before continuing.
-Sending in a prepared practice conversation checks fresh teaching access without
-starting setup again. Its installed lesson and exercise are checked together
-for that access read; this does not retain permission for a later request. A changed
-lesson pin or installed exercise remains an error, and historical reading does
-not permit new practice work. A confirmed preparation refusal before admission keeps the
-message failed; after preparation is ready, use its **Retry** once to send the same
-saved request. If delivery is unconfirmed, use **Retry**; an unknown result
-is not permission to resend. The lesson normally becomes ready by itself when
-setup finishes. If setup has finished but the lesson still shows preparing, use
-**Resume saved lesson** (or **Continue** on its course) to confirm its
-preparation; do not start a replacement or change its pin.
-If preparation reports
-missing source, retain the attempt and resolve that failure before continuing;
-a conversation alone cannot replace the workspace. Existing conversations and
-progress remain unchanged.
+## A lesson with a practice project
 
+A practice project is an ordinary project of yours (Learning v2), and its
+session is an ordinary Vibe64 session: there is no lesson teacher in it and no
+lesson-only App, Run or setup view. Open it with **Open practice project** in
+Learning, then use its chat, **Preview**, **Dashboard** and Workspace setup
+recovery exactly as in any project, during and after the lesson; see
+[Practice projects in standalone lessons](learning-practice-projects.md). A
+visible app or successful Run does not by itself pass a step; the lesson's own
+checks do. The Learning conversation described above applies to lessons without
+a practice project.
 
-If an older prepared practice lesson reports that its Learning binding does not
-match the saved attempt, keep its original session, workspace and progress. Ask
-the installation owner to finish the candidate's stopped-service practice-history
-upgrade, then Resume the same saved lesson. This is an operator step; Colleague
-can explain the error but cannot run a state upgrade. The upgrade retains the
-original conversation and source and changes only the preparation-owned initial
-session's Learning association. Other Working sessions are left alone.
-
-A missing prepared session, conflicting ownership or unfinished archive/renewal
-requires the owner's specific recovery before upgrading. Do not create a
-replacement, delete history or change the lesson pin to bypass it. Finishing
-the upgrade does not complete Workspace setup or prove a lesson pass. If native
-tool compatibility is then refused, retain the same history and use the
-installation's supported connection/replacement recovery.
-
-
-## A prepared practice lesson
-
-Start or resume the saved lesson in **Courses**. Its Learning conversation opens
-by itself once the request is confirmed; otherwise select it in the same session
-list. Ask Main to teach that lesson. The
-conversation belongs to the lesson’s prepared workspace; changing the visible
-Working project does not move it. Keep the existing attempt and history if its
-source is unavailable, and ask the owner to restore that saved workspace.
-
-Main can use a declared lesson diagram in **Presentation** when the installation
-supports it. **Courses** returns to the Courses pane; **Presentation** returns to the same
-diagram. A confirmed diagram state is retained separately from an assessment pass.
-On a phone, use the existing conversation and Preview view controls to switch
-between the teacher and diagram.
-
-Choose **App** in Preview to open this lesson's saved practice runtime before
-its controls appear. This keeps its existing conversation and source; it does
-not send a teacher message or start an output. If opening is refused, keep the
-lesson and choose **App** again after resolving the reported error. **Run** starts its
-declared output; **Restart preview** or **Restart** restarts that same output when
-shown. **Show run output** opens its log. Stop in that log stops the app without
-stopping Main or deleting the log; closing the log only hides it. The practice
-console is read-only. On a phone, closing its full-screen log returns to the
-underlying view.
-
-The App remains attached to this lesson's saved workspace when you select another
-Working project. **Courses** returns to the Courses pane and **Presentation** returns
-to the lesson diagram. A visible app or successful Run does not by itself confirm
-a practical or pass an assessment; follow Main's actual practical instructions.
-
-If setup, source, account access or resource admission refuses the run, retain the
-lesson and workspace and read the exact error. Use **Recheck setup** for a setup
-read failure; ask the installation owner to restore missing source, configuration
-or resources. This Learning view does not expose Env changes, starter replacement,
-Save, manual command terminals or Workspace setup retry. Do not substitute a
-Working conversation to bypass the refusal. Colleague can explain the controls
-and help you recover; Main remains the lesson teacher.
-
-The App setup view retains the same lesson presentation handle and saved lesson identity. Switching between App, Courses and Presentation does not switch to a working project. A changed account or saved lesson target retires that view; open the current Learning session again.
+An older lesson's practice conversation becomes an ordinary session of its
+practice project when the installation owner applies the candidate's
+stopped-service upgrades; its source and history are kept. Colleague can
+explain this but cannot run a state upgrade.
 
 An accepted Claude teacher request keeps its own saved lesson, conversation and
 account while its answer continues, including after the Send request returns.

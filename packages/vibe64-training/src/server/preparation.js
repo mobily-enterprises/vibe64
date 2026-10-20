@@ -18,8 +18,8 @@ function requireSuccess(result) {
 // initializers, session identities or shell commands here.
 function createTrainingService({ catalogue, content, learners, projectContext, projectRepositoryService, project, sessions, terminals,
   learningSessions = null } = {}) {
-  if (learningSessions !== null && typeof learningSessions.runPreparationSessionContext !== "function") {
-    throw new TypeError("Practice preparation requires the existing Learning session context owner.");
+  if (learningSessions !== null && typeof learningSessions.stopAttemptSessions !== "function") {
+    throw new TypeError("Lesson ending requires the existing Learning session stop owner.");
   }
   async function startLesson({ actor, courseId, release, lessonCode, requestId, expectedRevision } = {}) {
     // This native namespace belongs only to retained-pin continuation.
@@ -186,8 +186,12 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
               setupRun = current.workspaceSetup?.status === "succeeded" ? null : terminals.waitForWorkspaceSetup?.(initialSessionId) || null;
               return current;
             };
-            return learningSessions
-              ? learningSessions.runPreparationSessionContext({ actor, attemptId, sessionId: initialSessionId }, prepareSession)
+            // The initial practice session is an ordinary project session: no
+            // learning_session binding. A hosted catalogue project keeps the
+            // original saved-training Project scope for this creation; locally
+            // prepareExercise already runs inside the learner's own practice scope.
+            return projectContext.projectCatalogEnabled === true
+              ? projectContext.runWithHostedTrainingProjectScope({ actor, training, access: "create" }, prepareSession)
               : prepareSession();
           });
           stage = "setup";

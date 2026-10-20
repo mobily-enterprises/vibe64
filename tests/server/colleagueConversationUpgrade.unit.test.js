@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { upgradeColleagueConversations, upgradeColleagueConversationHistory } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
+import { upgradeColleagueConversations, upgradeColleagueConversationHistory, retireColleagueLearningWatches } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "colleague-upgrade-"));
@@ -165,4 +165,40 @@ test("fresh-conversation preflight accepts pending earlier conversion and refuse
   await writeFile(backup, JSON.stringify(valid));
   await run(true);
   assert.equal(JSON.parse(await readFile(file, "utf8")).runtimeId, "owner");
+});
+
+test("learning-task watch retirement keeps history and other watches with read-only check, backup and retry", async t => {
+  const f = await fixture(t);
+  const backupRoot = path.join(f.systemRoot, "upgrades/backups/20261021-practice-sessions-ordinary/colleague");
+  const run = apply => retireColleagueLearningWatches({ systemRoot: f.systemRoot, backupRoot, apply,
+    report: (level, message) => f.reports.push({ level, message }) });
+  await run(true);
+  await assert.rejects(stat(f.systemRoot), { code: "ENOENT" }, "a new installation has nothing to retire");
+  const record = { schemaVersion: 3, scopeId: "colleague_42", runtimeId: "42", previousConversations: [],
+    conversationLog: [{ turnId: "turn-1", messages: [{ role: "user", text: "Keep this history." }] }],
+    watches: [{ watchId: "learning-1", source: "learning-task", status: "active", learningTask: { attemptId: "attempt-1" } },
+      { watchId: "workspace-1", source: "workspace-repair", status: "paused" }],
+    observations: [{ id: "observation-1", watchId: "learning-1" }, { id: "observation-2", watchId: "workspace-1" }] };
+  const file = await f.write("42", record);
+  const untouched = await f.write("43", { ...record, scopeId: "colleague_43", runtimeId: "43", watches: [record.watches[1]],
+    observations: [record.observations[1]] });
+  const before = await readFile(file, "utf8");
+  const other = await readFile(untouched, "utf8");
+  await run(false);
+  assert.equal(await readFile(file, "utf8"), before, "check writes nothing");
+  await assert.rejects(stat(backupRoot), { code: "ENOENT" });
+  await run(true);
+  const upgraded = JSON.parse(await readFile(file, "utf8"));
+  assert.deepEqual(upgraded.watches, [record.watches[1]]);
+  assert.deepEqual(upgraded.observations, [record.observations[1]]);
+  assert.deepEqual(upgraded.conversationLog, record.conversationLog);
+  assert.equal(await readFile(untouched, "utf8"), other);
+  assert.equal(await readFile(path.join(backupRoot, "before/colleague/42/conversation.json"), "utf8"), before);
+  const manifest = await readFile(path.join(backupRoot, "manifest.json"), "utf8");
+  await run(true);
+  assert.equal(await readFile(path.join(backupRoot, "manifest.json"), "utf8"), manifest, "retry resumes the same backup");
+  assert.deepEqual(JSON.parse(await readFile(file, "utf8")), upgraded);
+  await f.write("44", "{not json");
+  await assert.rejects(retireColleagueLearningWatches({ systemRoot: f.systemRoot, apply: false, report() {},
+    backupRoot: path.join(f.systemRoot, "upgrades/backups/other") }), /Colleague conversation state is invalid/u);
 });

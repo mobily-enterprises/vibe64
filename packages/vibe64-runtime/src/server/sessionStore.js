@@ -5565,6 +5565,45 @@ function createVibe64SessionStore({
     return { found, files, updates };
   }
 
+  // Learning v2 (20261021): practice sessions are ordinary project sessions.
+  // Stage removal of each saved practice binding, active, closing or archived
+  // (file and archive index). This never publishes files; the upgrade owner
+  // publishes through its backed-up manifest.
+  async function prepareLearningSessionUnbindingUpgrade({ temporaryRoot } = {}) {
+    if (admittedLearningScope) throw new Error("Offline practice unbinding requires the ordinary project session store.");
+    const sessionIds = [];
+    const requirePracticeBinding = (value, id) => {
+      let binding = null;
+      try { binding = JSON.parse(normalizeText(value)); } catch { /* Refused below without echoing saved content. */ }
+      if (!isPlainObject(binding) || binding.schemaVersion !== 1 || binding.noExercise !== false ||
+          binding.conversationId !== id || id !== `training-${binding.attemptId}`) {
+        throw new Error(`Session ${id} has a learning binding that is not a saved practice binding. Inspect it before upgrading.`);
+      }
+    };
+    const updates = await prepareSessionStateUpgrade({ temporaryRoot,
+      async inspectSession(sessionPaths, { checkedPath, readRegularText, archiveRecord }) {
+        const id = sessionPaths.sessionId;
+        const filePath = metadataFilePath(sessionPaths, LEARNING_SESSION_METADATA);
+        if (!await checkedPath(filePath)) return [];
+        const original = await readRegularText(filePath);
+        requirePracticeBinding(original, id);
+        if (!archiveRecord && await checkedPath(renewalStatePath(id))) {
+          throw new Error(`Practice session ${id} retains renewal state. Finish or inspect its original transaction before upgrading.`);
+        }
+        sessionIds.push(id);
+        return [{ filePath, original, contents: null }];
+      },
+      transformArchiveRecord({ record, sessionPaths }) {
+        const indexed = record.index?.metadata?.[LEARNING_SESSION_METADATA];
+        if (indexed === undefined) return null;
+        requirePracticeBinding(indexed, sessionPaths.sessionId);
+        const { [LEARNING_SESSION_METADATA]: _binding, ...metadata } = record.index.metadata;
+        return { ...record, index: { ...record.index, metadata } };
+      }
+    });
+    return { sessionIds, updates };
+  }
+
   // Offline message-data repair uses the same active/closing/archive inventory.
   // The feature owner supplies proven data only; content and receipts stay here.
   async function prepareConversationMessageDataUpgrade({ temporaryRoot, transform }) {
@@ -5687,6 +5726,7 @@ function createVibe64SessionStore({
     prepareConversationStorageUpgrade,
     prepareConversationMessageDataUpgrade,
     prepareLearningSessionBindingUpgrade,
+    prepareLearningSessionUnbindingUpgrade,
     conversationMessageIdExists,
     ...(findSubmittedConversationTurn ? { findSubmittedConversationTurn } : {}),
     readConversationLogTurn,

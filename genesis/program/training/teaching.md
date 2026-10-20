@@ -43,6 +43,7 @@
 - `tests/fixtures/training/orientation-response.mjs`
 - `packages/vibe64-training/src/server/codeAuthorship.js`
 - `packages/vibe64-training/src/server/codeEditorActions.js`
+- `packages/vibe64-training/src/server/practiceSessionsOrdinaryUpgrade.js`
 - `tests/server/vibe64TrainingCodePracticals.unit.test.js`
 - `tests/fixtures/training/code-practical/lesson.json`
 - `packages/vibe64-training/src/shared/presentationSchemas.js`
@@ -697,7 +698,10 @@ keyed by question ID, assessment and issued revision. A replay keeps the origina
 baseline; without the facility a code question is refused. The ledger is separate
 from progress so autosaves never advance the learning revision.
 
-The lesson Files tab saves through `vibe64.training.code.file.save`. It calls the
+The practice project's ordinary Files editor saves through
+`vibe64.source-editor.file.save`; Training's save owner
+(`createTrainingCodeSaveOwner`, installed with `setFileSaveOwner`) routes it,
+in the actor's own practice project with an active attempt, to the
 generic source-editor save under the ledger lock and appends
 `{path, baseHash, intendedHash, savedHash, actorId, at}`; consecutive clean saves
 of one file collapse into one link. A save whose read-back bytes differ from the
@@ -1052,6 +1056,11 @@ separate required work; this extraction does not fabricate those fields.
 
 ### Explicitly composed source-bearing Main sessions
 
+Retired by Learning v2 (F1): practice sessions are ordinary project sessions;
+`practiceSessions`, `resolvePracticeContext` and the practice branches of
+`learningSessions.js` are removed. The history below explains the published
+20261008 upgrades whose readers remain.
+
 Actual standalone and hosted composers opt into `practiceSessions:true`; its
 closed constructor default remains false so original exercise exclusion and
 ordinary `resolvePracticeContext` Runtime:null policy stay unchanged. Both modes
@@ -1170,7 +1179,26 @@ Sources: `packages/vibe64-training/src/server/practiceHistoryUpgrade.js`,
 original `vibe64TrainingLearnerState.unit.test.js` and `stateUpgrades.unit.test.js`.
 
 
+### Ordinary practice sessions upgrade
+
+`20261021-practice-sessions-ordinary` (Core registry, candidate CLI only) calls
+two owners. Training `practiceSessionsOrdinaryUpgrade.js`
+`upgradeLearningPracticeSessionsOrdinary` uses the Runtime offline owner
+`prepareLearningSessionUnbindingUpgrade` in each practice project runtime to
+remove the saved practice `learning_session` file and archive index entry
+through the backed-up publisher (renewal state refuses), then renames each
+source-less store `training/users/<key>/learning-sessions/<attempt>` (normal and
+author-preview) into `backups/<id>/training/retired/`. Colleague
+`learningWatchUpgrade.js` `retireColleagueLearningWatches` removes
+`learning-task` watches and their observations. It lives in Colleague because
+Colleague depends on Training. Check mode writes nothing; retry resumes the
+frozen manifest. Sources: `packages/vibe64-core/src/server/stateUpgrades/20261021-practice-sessions-ordinary.js`;
+evidence: `stateUpgrades`, `colleagueConversationUpgrade` and
+`vibe64TrainingLearnerState` unit tests.
+
 ### Practice Main teacher and one visual Preview
+
+Retired for practice projects by Learning v2 (F1); kept as history.
 
 The same `mainTeaching.js` binding accepts a constructor-authorized false
 Learning scope. Every fresh Main grant retains the original learner/attempt/pin

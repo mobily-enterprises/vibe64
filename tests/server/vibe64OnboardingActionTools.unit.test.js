@@ -116,32 +116,3 @@ test("onboarding tools share action authority and return bounded setup choices w
   });
 });
 
-test("Learning onboarding reuses only the original read with URL-bound identity", async () => {
-  const { registerRoutes: registerProjectRoutes } = await import("../../packages/vibe64-project/src/server/registerRoutes.js");
-  const { createProjectActions } = await import("../../packages/vibe64-project/src/server/actions.js");
-  const { testRouteApp, testReply, withLocalRequestBypass } = await import("./vibe64RouteTestHelpers.js");
-  const app = testRouteApp();
-  registerProjectRoutes(app.http, { learningScoped: true, routeSurface: "app" });
-  // Onboarding and the lesson Dashboard's Env read/save are the project's only lesson routes.
-  assert.deepEqual(app.registeredRoutes.map(value => `${value.method} ${value.path}`).sort(), [
-    "GET /api/learning/:learningAttemptId/vibe64/env",
-    "GET /api/learning/:learningAttemptId/vibe64/sessions/:sessionId/onboarding",
-    "PUT /api/learning/:learningAttemptId/vibe64/env/user-values"
-  ]);
-  const route = app.registeredRoutes.find(value => value.path.endsWith("/onboarding"));
-  assert.equal(route.options.query, undefined, "URL session identity is validated by the original action, not a required query session");
-  const attemptId = "12345678-1234-4234-8234-123456789abc";
-  const calls = [];
-  await withLocalRequestBypass(async () => {
-    const request = { params: { learningAttemptId: attemptId, sessionId: "saved-initial" },
-      input: { query: { sessionId: "wrong-query", vibe64User: { username: "invented" } } },
-      executeAction(action) { calls.push(action); return { ok: true }; } };
-    await route.handler(request, testReply());
-    assert.deepEqual(calls, [{ actionId: "vibe64.project.onboarding.read", input: { sessionId: "saved-initial", learningAttemptId: attemptId } }]);
-  });
-  const read = createProjectActions({ project: {} }).find(action => action.id === "vibe64.project.onboarding.read");
-  assert.equal(read.extensions.vibe64.learningAccess, "observe");
-  await assert.rejects(read.execute({ sessionId: "saved-initial", learningAttemptId: attemptId }, {
-    vibe64Action: { learning: { learningScope: { attemptId, noExercise: true } } }
-  }), { code: "vibe64_learning_source_required", statusCode: 409 });
-});
