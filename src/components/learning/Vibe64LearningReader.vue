@@ -5,7 +5,7 @@ import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import TrainingVisualPlayer from "@local/vibe64-training/client/visual-player";
 import { resolveStudioRequestUrl } from "@/lib/studioUrls.js";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
-import { VIBE64_LEARNING_ROUTES } from "@/lib/vibe64Learning.js";
+import { VIBE64_LEARNING_ROUTES, revealCurrentStep } from "@/lib/vibe64Learning.js";
 import Vibe64LearningMarkdown from "./Vibe64LearningMarkdown.vue";
 
 // The lesson reader: steps with readable text and diagrams, and the step's
@@ -66,6 +66,14 @@ function onScroll() {
   scrollTimer = setTimeout(() => props.learning.setScroll(top), 200);
 }
 onBeforeUnmount(() => clearTimeout(scrollTimer));
+
+// The phone step row follows the current step (Next, Previous, a restored place).
+const stepList = ref(null);
+watch([() => step.value?.id, () => props.learning.state.open], async ([, open]) => {
+  if (!open) return;
+  await nextTick();
+  revealCurrentStep(stepList.value);
+}, { immediate: true });
 
 // Diagrams: read the step's declared visual for this attempt; Play restores the
 // declared initial state, then sends its commands in order with fresh IDs. The
@@ -216,7 +224,7 @@ async function finishLesson() {
           <span class="vibe64-learning-reader__code">{{ lesson.code }}</span>
           <strong>{{ lesson.title }}</strong>
         </p>
-        <ol>
+        <ol ref="stepList">
           <li v-for="(value, position) in steps" :key="value.id">
             <button
               type="button"

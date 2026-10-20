@@ -564,4 +564,18 @@ function openLessonLink(event, browser = globalThis) {
   return true;
 }
 
-export { VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_TEACH_MESSAGE, createVibe64Learning, normalizeLesson, openLessonLink, showMeCommand, stepStatus };
+// On a phone the step list is one horizontal row; the current step is scrolled
+// into that row so Next and Previous never leave it hidden off-screen. Only
+// the row moves: the page and the reader body keep their scroll.
+function revealCurrentStep(list) {
+  const current = list?.querySelector?.('[aria-current="step"]');
+  if (!current || !(list.scrollWidth > list.clientWidth)) return false;
+  const row = list.getBoundingClientRect();
+  const item = current.getBoundingClientRect();
+  if (item.left < row.left) list.scrollLeft -= row.left - item.left;
+  else if (item.right > row.right) list.scrollLeft += item.right - row.right;
+  else return false;
+  return true;
+}
+
+export { VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_TEACH_MESSAGE, createVibe64Learning, normalizeLesson, openLessonLink, revealCurrentStep, showMeCommand, stepStatus };

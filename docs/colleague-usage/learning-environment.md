@@ -38,7 +38,9 @@ tab named after your open lesson, **Minimise** and a close button (✕, label
 
 On a phone Learning is a full-screen sheet. The lesson's steps become a row of
 numbered circles at the top (a tick for a passed step); the step text scrolls
-below them.
+below them. When there are more circles than fit, the row scrolls sideways and
+follows the current step as you press **Next step** or **Previous step**, or
+reopen the lesson, so the step you are reading always stays in view.
 
 ## Courses
 
