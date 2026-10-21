@@ -38,31 +38,39 @@ mount `Vibe64LearningOverlay` once, and the **L** button
 `StudioAppShellLayout` and the management `ShellLayout` headers. Stacking is
 guide overlay 3000 above L 2400 above Colleague.
 
-- State: `open`, `minimised`, `surface` (`courses` or `lesson`), `attemptId`,
-  `stepId`, `scroll`, the read `lesson`, its `steps`, `results` and
-  `passedStepIds` (passes kept from any attempt of the same lesson content),
-  `stepStatus(stepId)` (passed when either shows a pass) and `focus` (`learningOpen`, `learningSurface`,
-  `learningAttemptId`, `learningStepId`) which both hosts send as Colleague
-  focus. `setViewer` binds the signed-in person; a change of person closes L, drops
-  the previous person's lesson, notes and pending requests, and restores only
-  the new person's own saved place.
-- Place: `show({surface?, attemptId?, stepId?})`, `minimise(by?)` (state kept,
-  app and Colleague visible), `toggle()` (L is the one open/hide control: open
-  L shows, hiding is `minimise("learner")`; there is no separate close); the
-  overlay covers the app bar, so its header L plate is the same toggle button,
-  and Escape also calls `minimise("learner")`. `inLesson` is true while the
-  server-backed learning mode (below) is on; the overlay then sets
-  `body.vibe64-in-lesson`, which `vibe64-m3.css` uses to give every
-  `.shell-layout__app-bar` (Studio and management shells, hosted included) the
-  `--v64-learning-app-bar` wash and an amber edge, and above phone width the L
-  button is followed by the lesson's name (fallback **In a lesson**) and
-  **Leave lesson**. `hiddenBy` is
-  `"learner"` only when the learner's own L or Escape hid it (Colleague
-  then returns a phone learner to its dialog), and `""` for Show me, Teach me,
-  Open practice project and app navigation, `selectStep`, `setScroll`. The
-  place is kept per tab in `sessionStorage` and saved for the account through
-  `reader.save` (debounced, flushed on minimise), so a reload or another
-  browser reopens the same step and scroll.
+- Mode: `mode` (`{on, currentAttemptId, lessonCode, lessonTitle,
+  practiceSlug}`), `learnMode`, `lessonTitle`, `readLearningMode()`,
+  `setMode(on)` and `toggleMode()`. **L** toggles the mode; it opens no
+  overlay. In Learn mode the overlay sets `body.vibe64-learn-mode`, which
+  `vibe64-m3.css` uses to give every `.shell-layout__app-bar` (Studio and
+  management shells) the `--v64-learning-app-bar` wash, and the L plate is
+  solid with the current lesson's title beside it. Each side keeps its own
+  place in `localStorage` (`vibe64:mode-place:v1:<actor>:<develop|learn>`, the
+  full route): `toggleMode` saves the current route to this side, switches
+  through `learning-mode.set`, then opens the other side's saved place (Learn
+  defaults to the practice project or `/app/learning`, Develop to `/app`).
+  `modeRedirect({mode, slug})` sends a Learn tab off a normal project and a
+  Develop tab off a practice project.
+- Courses overlay: `coursesOpen`, `openCourses()`, `closeCourses()`, `surface`
+  (`courses`, `progress`, `archived` or `lesson`), `attemptId`, `stepId`,
+  `scroll`, the read `lesson`, its `steps`, `results`, `stepStatus(stepId)` and
+  `focus` (`learningOpen` is the overlay being open, `learningSurface`,
+  `learningAttemptId`, `learningStepId`), which both hosts send as Colleague
+  focus. **Courses** sits beside L in Learn mode only. `setViewer` binds the
+  signed-in person; a change of person closes the overlay, drops the previous
+  person's lesson, notes and pending requests, and restores only the new
+  person's own saved place. The reader place is kept per tab in
+  `sessionStorage` and saved for the account through `reader.save`, so a
+  reload or another browser reopens the same step and scroll.
+- Lesson operations: `startLesson(pin)` (a 409
+  `VIBE64_TRAINING_LESSON_IN_PROGRESS` sets `confirmArchive {current, next}`;
+  `confirmArchiveAndStart()` repeats with `archiveCurrent: true`,
+  `cancelArchive()` keeps the lesson in progress), `openCurrent()`,
+  `restart()`, `finish()`, `deleteAttempt()`, `practice` (from
+  `practice.list`, refreshed by `readPractice()`) and
+  `deleteArchived(attemptId)`. The collapsible lesson step bar
+  (`stepBarCollapsed`, `toggleStepBar()`) shows the current lesson at the top
+  of its project.
 - Learn mode (server): Vibe64 has two modes, Develop and Learn, with the same
   screens. Learn mode is a saved per-learner flag
   (`<sys>/training/users/<key>/learning-mode.json`, `{on}`), separate from any
