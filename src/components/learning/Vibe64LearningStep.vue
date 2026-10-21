@@ -226,7 +226,7 @@ const go = offset => {
       <p v-if="checkReason" class="vibe64-learning-step__hint" role="status" data-test="learning-check-reason">{{ checkReason }}</p>
     </section>
     <section v-else-if="!ended && kind === 'self'" class="vibe64-learning-step__check" aria-label="Self check">
-      <!-- The step text says when to press Done; a pass kept from an earlier attempt is said here, as for questions. -->
+      <!-- The step text says when to press Done; a step already passed is said here, as for questions. -->
       <p v-if="statusOf(step.id) === 'passed'" class="vibe64-learning-step__hint" data-test="learning-done-kept">You already passed this step, so it does not need to be marked done again.</p>
       <v-btn color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-done"
         :disabled="Boolean(busy) || statusOf(step.id) === 'passed'" :loading="busy === `done:${step.id}`"

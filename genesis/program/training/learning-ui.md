@@ -125,7 +125,8 @@ the practice project when there is one; in Develop the current practice project
 and `/app/learning` go to `/app` (the project with
 `VIBE64_DEVELOP_MODE_NOTE`). Other training projects are left to the server's
 refusal. The overlay applies it on every route and mode change, showing the
-note only when the learner opened the address, and sets body class
+note only when the learner opened the address. It waits while `state.modeBusy`
+is set, so it never cancels `setMode`'s own move to the saved place. It sets body class
 `vibe64-learn-mode` (the yellow app bar) in Learn. `Vibe64LearningRouteHold.vue`
 wraps each host's routed pages (public `App.vue`, hosted AuthGate's prepared
 content; locally also the AI onboarding host) and renders them only once the

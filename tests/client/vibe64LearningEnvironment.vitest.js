@@ -899,7 +899,8 @@ describe("Learning reader", () => {
 describe("Courses overlay", () => {
   it("binds the signed-in viewer, keeps each address in its mode, opens Courses, In progress, Archived and the reader, and confirms an archiving start", async () => {
     let mode = { ...LEARN, practiceSlug: "training-1111" };
-    const { learning } = controller({ mode: () => mode });
+    const router = { currentRoute: { get value() { return route; } }, push: vi.fn(async () => {}) };
+    const { learning } = controller({ mode: () => mode, router });
     const route = Vue.reactive({ path: "/app/project/my-shop/dashboard", fullPath: "/app/project/my-shop/dashboard", params: { slug: "my-shop" } });
     const replace = vi.fn(async path => { Object.assign(route, { path, fullPath: path, params: { slug: path.split("/")[3] || "" } }); });
     const realtime = [];
@@ -1008,6 +1009,25 @@ describe("Courses overlay", () => {
       Object.assign(route, { path: "/app/project/my-shop", fullPath: "/app/project/my-shop", params: { slug: "my-shop" } });
       await flush();
       expect(replace).toHaveBeenCalledTimes(moves);
+
+      // L waits for its own move to Learn's saved place; the address check does not cancel it.
+      const learnPlace = "/app/project/training-1111/dashboard/files";
+      vi.stubGlobal("window", { sessionStorage: { getItem: () => null, setItem() {} },
+        localStorage: { getItem: key => key.endsWith("member:learn") ? JSON.stringify({ path: learnPlace }) : null, setItem() {} } });
+      let arrive;
+      router.push = vi.fn(target => new Promise(resolve => { arrive = () => {
+        Object.assign(route, { path: target, fullPath: target, params: { slug: target.split("/")[3] || "" } });
+        resolve();
+      }; }));
+      mode = { ...mode, on: true };
+      const switching = learning.toggleMode();
+      await flush();
+      expect(router.push).toHaveBeenCalledWith(learnPlace);
+      expect(replace, "no redirect while the switch moves").toHaveBeenCalledTimes(moves);
+      arrive();
+      await switching;
+      await flush();
+      expect([route.fullPath, replace.mock.calls.length]).toEqual([learnPlace, moves]);
       viewer.value = { actorKey: "someone-else" };
       await flush();
       expect(learning.state.actorKey).toBe("someone-else");
