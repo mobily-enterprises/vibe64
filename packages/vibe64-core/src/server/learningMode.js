@@ -28,9 +28,11 @@ function registerLearningModeReader(reader, { onReadFailure = null } = {}) {
 }
 
 // The learner's mode: { on, currentAttemptId, lessonCode, practiceSlug }, or
-// null when no reader is registered. A request object (HTTP or WebSocket)
-// caches the one read for its lifetime.
-async function readLearningModeFor(actor = null, { request = null } = {}) {
+// null when no reader is registered. A Colleague turn passes its `thread`
+// ("learn" or "develop"): the turn keeps that thread's mode after a switch
+// with L, so the switch never interrupts it. A request object (HTTP or
+// WebSocket) caches the one result for its lifetime.
+async function readLearningModeFor(actor = null, { request = null, thread = "" } = {}) {
   if (!learningModeReader) return null;
   if (request && typeof request === "object" && requestModes.has(request)) return requestModes.get(request);
   let mode = DEVELOP_MODE;
@@ -45,6 +47,7 @@ async function readLearningModeFor(actor = null, { request = null } = {}) {
   } catch (error) {
     learningModeReadFailure?.(error);
   }
+  if (thread === "learn" || thread === "develop") mode = Object.freeze({ ...mode, on: thread === "learn" });
   if (request && typeof request === "object") requestModes.set(request, mode);
   return mode;
 }
@@ -80,8 +83,8 @@ function learningModeProjectError(mode = null) {
   return Object.assign(new Error(message), fields);
 }
 
-async function assertLearningModeAllowsProject({ actor = null, slug = "", request = null, practice } = {}) {
-  const mode = await readLearningModeFor(actor, { request });
+async function assertLearningModeAllowsProject({ actor = null, slug = "", request = null, thread = "", practice } = {}) {
+  const mode = await readLearningModeFor(actor, { request, thread });
   if (!learningModeAllowsProject(mode, slug, { practice })) throw learningModeProjectError(mode);
 }
 

@@ -1,6 +1,5 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
-import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
-import { assertLearningModeAllowsProject } from "@local/vibe64-core/server/learningMode";
+import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { createColleagueUsageKnowledge, maxGuideCharacters } from "./usageKnowledge.js";
 import { guideReceipt, presentationClientId } from "@local/vibe64-training/shared/presentation-schemas";
 import { TRAINING_GUIDE_CAPTION_LIMIT, TRAINING_GUIDE_TARGETS } from "@local/vibe64-training/shared/guide-targets";
@@ -91,21 +90,6 @@ const assignmentSchema = createSchema({
 const assignmentOutput = { mode: "replace", schema: createSchema({ ok: { type: "boolean", required: true },
   assignment: { type: "object", schema: assignmentSchema, required: false },
   assignments: { type: "array", items: assignmentSchema, required: false } }) };
-
-// Learn opens only the person's practice project and Develop never opens it.
-// Check before resolving the project so Colleague receives the exact reason
-// to relay instead of a generic refusal.
-function withLearningModeProjectCheck(action) {
-  return Object.freeze({
-    ...action,
-    async execute(input = {}, context = {}, deps) {
-      // Read the mode per call: a Colleague turn's request outlives a switch.
-      const slug = context.requestMeta?.request?.params?.slug || input.projectSlug || context.projectSlug;
-      if (slug) await assertLearningModeAllowsProject({ actor: authenticatedVibe64User(context), slug });
-      return action.execute(input, context, deps);
-    }
-  });
-}
 
 function createColleagueActions(colleague, usage = createColleagueUsageKnowledge()) {
   const definition = (name, fields, execute, assistant, projectScoped = false) => withVibe64ActionContext({
@@ -235,13 +219,13 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
       clientId, commandId: clientId, ok: { type: "boolean", required: true },
       error: { ...text, maxLength: 2000 }, focus: focusField, guide: guideReceipt
     }, (input, context) => colleague.acknowledgeNavigation(input, context)),
-    withLearningModeProjectCheck(definition("navigation.open", { projectSlug: text, sessionId: text, conversationId: text, integrationId, integrationEnvironment, databaseView, databaseTable, planView,
+    definition("navigation.open", { projectSlug: text, sessionId: text, conversationId: text, integrationId, integrationEnvironment, databaseView, databaseTable, planView,
       guide: guideRequest,
       pane: { type: "string", required: false, enum: ["preview", "settings", "repository-settings", "env", "integrations", "access", "resources", "deploy", "history", "health", "session", "changes", "repository", "files", "database", "system", "ai-terminal", "issues", "pull-requests"] }
     }, (input, context) => colleague.navigate(input, context), {
       description: "Open a project, session, saved temporary conversation or project view in the user's active browser. Provide exact IDs. Without pane or sessionId, opens Preview. With sessionId and no pane, reveals the selected coding chat; an explicit pane reveals that project view, including on compact screens. settings means Project settings, repository-settings means hosted repository settings, access means App access, history means Session History, system means Subsystems. Session views (session, changes, repository, files, database, system, ai-terminal) require sessionId. guide={target, navigate:true, filePath?, caption?} is 'show me' for one real Vibe64 place in the exact project: preview, database-erd, database-data, files (filePath opens one relative project file), changes, git-log, session-info or architecture. Supply projectSlug, plus sessionId for every place except preview, and no other field; Vibe64 opens the place, closes Courses if it is open, and rings the control it opened. To point without opening, or for Courses itself, use navigation.open-learning. The receipt's guide.shown is true only when the highlight was actually drawn and names its step; shown=false names a reason, so describe the path in words instead and never claim a highlight you did not receive. Opening a place is not learner evidence and never passes a lesson step. To open the native Plan and history dialog, supply planView=default and exact projectSlug/sessionId, with no pane or conversationId. This reveals Main chat and uses the button default: Current plan when one exists, otherwise History. planView=current or history selects that tab explicitly. Wait for planView in the browser acknowledgement; missing plans/history or failed loading return an error. Opening never creates, approves, archives or executes a plan. For Database, supply databaseView=overview, erd or data with pane=database and sessionId to select its real view; acknowledgement waits for that workspace to load. Overview is the default when no view is specified. Data can perform its normal initial table read, and retains existing SQL drafts; this does not run authored SQL or expose schema/rows to you. To open one exact table in Data, also supply databaseTable with its fully qualified name and databaseView=data. The workspace performs its normal read only on a first visit, preserves mounted per-table drafts and results, and rejects missing tables or a busy query. The acknowledgement proves table selection, not successful query execution. Table selection lasts in the mounted workspace; reload uses the ordinary initial table. Delegate table identification or SQL/schema investigation to a coding agent when the exact name is unknown. A temporary conversation also requires sessionId. For Integrations, supply pane=integrations and integrationEnvironment=development or production; development requires sessionId, while production uses the published application without a development session. Add integrationId to select one exact slot. An integrationId without integrationEnvironment retains development selection. Wait for the actual loaded panel. Missing slots fail. Provider consent remains the person's action there; opening a slot does not complete consent or prove a connection. Omitting conversationId selects Main when sessionId is supplied; include the current conversationId to keep a temporary chat selected. This opens existing UI and does not grant you repository or screen tools. Wait for the returned browser acknowledgement before claiming the view opened. In Learn mode only the person's practice project opens, and in Develop it never does; either refusal has code vibe64_learning_mode_project, so relay its message plainly.",
       output: navigationOutput
-    }, true)),
+    }, true),
     definition("navigation.open-learning", { learning: learningPanel, guide: guideRequest }, (input, context) => colleague.navigate(input, context), {
       description: "Teach with Courses and real Vibe64 controls in the person's active browser in Learn mode, on any page and without a project. Courses opens above the app beside L. learning={open:true} opens it where the person left it; add attemptId (and optionally stepId) from lesson.read or learning.read to show that lesson step. learning={open:false} closes it with its state kept so the app is visible; it never ends a lesson. guide={target, highlight?, caption?} points at one real place without opening it (the default): preview, dashboard, database-erd, database-data, files (optional filePath, relative), changes, git-log, session-info, architecture, or learning (the Courses button). Vibe64 rings the next control the person must click, with your caption or the path such as 'Dashboard → Database → ERD', so they learn where it is. guide={target:'learning', navigate:true} opens Courses and rings its button. Supply either learning or guide, not both. To open a project place use navigation.open with guide and navigate=true. Wait for the acknowledgement: focus.learningOpen, learningSurface, learningAttemptId and learningStepId report the actual Courses state; guide.shown is true only when a highlight was actually drawn and names its step, otherwise its reason (target-hidden, highlight-off, overlay-unavailable) means nothing was highlighted, so describe the path in words. This never starts, ends, checks or passes a lesson step and is not learner evidence.",
       output: navigationOutput

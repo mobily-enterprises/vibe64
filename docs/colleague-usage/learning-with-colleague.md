@@ -19,7 +19,8 @@ each, and the one you see always follows the mode:
   that same conversation. Learn mode with no lesson in progress has one
   conversation of its own. Restarting a lesson starts a fresh teacher.
 - Switching never interrupts Colleague: a reply it is writing finishes in its
-  own conversation, which you see again when you switch back. Watched agents
+  own conversation, still on the projects of the mode it started in, which you
+  see again when you switch back. Watched agents
   keep being followed while you are in Learn; their updates wait in Develop's
   conversation until you return. **Start fresh** and **Previous conversations**
   work within the conversation you are in.

@@ -99,8 +99,9 @@ only when Develop is visible again. Training closes an attempt, once it has
 ended, through core `releaseLearnThread` (`learnThreads.js`): Colleague stops that thread (aborting
 and cancelling a running turn without awaiting it, since the turn may be the
 very `lesson.finish` call), flushes its saves, never writes its file again,
-disposes the handle once the turn settles and removes its runtime work;
-Training then moves or removes the file. Training never imports Colleague.
+disposes the handle once the turn settles and removes its runtime work, and
+never reopens that attempt's thread (until the attempt ends, Learn shows the
+lobby); Training then moves or removes the file. Training never imports Colleague.
 
 Learn threads use `learnInstructions` (teaching, notes, lesson lifecycle and the
 Learn refusal); Develop uses `instructions`, which only points to **L**. The
@@ -163,13 +164,16 @@ and conversation; `lesson.restart`, `lesson.delete` and
 accepts only the current field names; a retired focus field (such as the Rev 3
 `practice` surface) is refused rather than translated.
 
-The project assertion follows the mode (core `learningMode.js`): Learn opens
-only the person's practice project ("You're in Learn mode. Press L to go back
-to your projects."), Develop refuses it ("This is a practice project. Press L
-to switch to Learn."), both with code `vibe64_learning_mode_project`.
-`navigation.open` and the core action context check it before resolving the
-project (one mode read per call, so a switch applies at once); switching is
-`learning-mode.set`, only on the person's direct request or accepted offer.
+The project assertion follows the turn's thread (core `learningMode.js`,
+`readLearningModeFor(actor, { thread })`): a Learn thread opens only the
+person's practice project ("You're in Learn mode. Press L to go back to your
+projects."), a Develop thread refuses it ("This is a practice project. Press L
+to switch to Learn."), both with code `vibe64_learning_mode_project`. The core
+action context (and a host's `authorizeProject`) checks it before resolving
+the project, from `context.colleague.thread`, so a turn running when the
+person presses L finishes in its own thread's mode; the next request uses the
+new thread. Switching is `learning-mode.set`, only on the person's direct
+request or accepted offer.
 
 
 Colleague uses JSKIT's `createConversationRuntime` for model turns, application

@@ -11,7 +11,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createEventRuntime } from "@jskit-ai/kernel/server/runtime";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { registerVibe64ActionContext, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
-import { LEARNING_MODE_PROJECT_CODE, LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE, registerLearningModeReader } from "@local/vibe64-core/server/learningMode";
+import { LEARNING_MODE_PROJECT_CODE, LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE, assertLearningModeAllowsProject, registerLearningModeReader } from "@local/vibe64-core/server/learningMode";
 import { releaseLearnThread } from "@local/vibe64-core/server/learnThreads";
 import { createColleagueService } from "../../packages/vibe64-colleague/src/server/service.js";
 import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/actions.js";
@@ -96,10 +96,12 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
   registerVibe64ActionContext(actions, {
     projectContext: { projectsRoot: root, async readWorkspaceProject({ slug }) { return { project: { path: path.join(root, slug) } }; } },
     resolveUser: async ({ request }) => observations.allow ? request?.vibe64User : null,
-    authorizeProject({ slug }) {
+    async authorizeProject({ slug, user, context }) {
       observations.projectChecks.push(slug);
       if (!watching) throw new Error("Colleague must not need a project.");
       if (!observations.projectAllowed || observations.deniedProjects.has(slug)) throw Object.assign(new Error("Project access denied."), { statusCode: 403 });
+      // A host applies core's Learn/Develop rule to Colleague by the turn's thread.
+      if (context.colleague) await assertLearningModeAllowsProject({ actor: user, slug, thread: context.colleague.thread });
     }
   });
   const terminals = {
@@ -1890,6 +1892,12 @@ test("Colleague opens only the projects of the person's mode and relays the exac
   await assert.rejects(execute({ projectSlug: practiceSlug }),
     { code: LEARNING_MODE_PROJECT_CODE, statusCode: 403, message: PRACTICE_PROJECT_MODE_MESSAGE });
   await opens("beta");
+  // A running turn keeps its thread's mode after a switch with L.
+  const inThread = (thread, projectSlug) => f.actions.execute({ actionId: "vibe64.colleague.navigation.open",
+    input: { projectSlug }, context: { ...context, colleague: { ...context.colleague, thread } } });
+  await assert.rejects(inThread("learn", "beta"), { code: LEARNING_MODE_PROJECT_CODE, message: LEARNING_MODE_PROJECT_MESSAGE });
+  mode = { ...mode, on: true };
+  await assert.rejects(inThread("develop", practiceSlug), { code: LEARNING_MODE_PROJECT_CODE, message: PRACTICE_PROJECT_MODE_MESSAGE });
 });
 
 test("Colleague's Develop and Learn protocols: only Learn teaches, and each relays its mode's reason", () => {
@@ -5475,6 +5483,9 @@ test("Training's release ends an attempt's thread, even mid-turn, and leaves its
   assert.equal(JSON.parse(await readFile(archived, "utf8")).scopeId, taught.conversationId);
   await assert.rejects(f.service.wait({ ...f.context, colleague: { threadKey: `NDI:learn:${LESSON_ATTEMPT}` } }),
     { code: "conversation_forbidden" }, "the ended attempt's operations are refused");
+  // Until Training ends the attempt, the person sees the lobby, never a new thread for it.
+  assert.deepEqual((await f.service.read({}, f.context)).thread, { kind: "learn" });
+  assert.equal(await exists(file), false, "a released attempt's thread is never recreated");
   learning.learn("");
   const lobby = await f.service.read({}, f.context);
   assert.deepEqual(lobby.thread, { kind: "learn" });

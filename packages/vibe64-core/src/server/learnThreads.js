@@ -50,4 +50,4 @@ async function releaseLearnThread({ learnerKey, attemptId } = {}) {
   if (learnThreadReleaser) await learnThreadReleaser({ learnerKey, attemptId });
 }
 
-export { learnThreadFile, learnThreadLearnerKey, learnThreadName, registerLearnThreadReleaser, releaseLearnThread };
+export { learnThreadFile, learnThreadLearnerKey, registerLearnThreadReleaser, releaseLearnThread };

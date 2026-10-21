@@ -417,4 +417,12 @@ test("Colleague acting for a learner opens only the projects of their mode and r
     details: { practiceSlug } });
   // Learn lets the practice project through to admission (here: no such project).
   await assert.rejects(open(practiceSlug), { code: "vibe64_practice_project_deleted" });
+  // A turn keeps its thread's mode after a switch with L, so the switch never interrupts it.
+  const inThread = (thread, projectSlug) => definition.execute({ projectSlug },
+    { colleague: { thread }, requestMeta: { request: { vibe64User: user } } });
+  await assert.rejects(inThread("develop", practiceSlug), { message: PRACTICE_PROJECT_MODE_MESSAGE });
+  await assert.rejects(inThread("develop", "alpha"), error => error.code !== "vibe64_learning_mode_project");
+  mode = { ...mode, on: false };
+  await assert.rejects(inThread("learn", "alpha"), { message: LEARNING_MODE_PROJECT_MESSAGE });
+  await assert.rejects(inThread("learn", practiceSlug), { code: "vibe64_practice_project_deleted" });
 });

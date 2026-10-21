@@ -69,21 +69,24 @@ function withVibe64ActionContext(definition, { projectScoped = true, ownerRequir
       const slug = actionProjectSlug(input, context);
       if (forwardsProjectSlug) trustedInput.projectSlug = slug;
       const resolved = context.vibe64Action?.project;
-      // Colleague acting for a learner opens only the projects of their mode
-      // (Learn: their practice project; Develop: never it), so it can relay
-      // the exact reason. A host contributor that resolved the project
-      // already applied this through its authorizeProject.
-      if (context.colleague && !resolved) await assertLearningModeAllowsProject({ actor: user, slug });
       if (resolved && resolved.slug !== slug) {
         throw actionContextError("vibe64_action_project_mismatch", "The authorized project does not match this operation.");
       }
-      const current = currentProjectRequestContext();
       // An action from a person's request stays that person's request (its
       // headers, through the prototype), so practice admission compares the
       // learner; only requestless internal work runs as the marker's learner.
-      const project = resolved || (current?.slug === slug ? current : await resolveProjectRequestContext({
-        request: Object.assign(request ? Object.create(request) : {}, { params: { slug }, vibe64User: user, allowDeleting })
-      }));
+      const projectRequest = Object.assign(request ? Object.create(request) : {}, { params: { slug }, vibe64User: user, allowDeleting });
+      // Colleague opens only the projects of its turn's thread (Learn: the
+      // practice project; Develop: never it), checked before resolving so it
+      // can relay the exact reason. The request keeps that thread's mode for
+      // the resolution below. A host contributor that resolved the project
+      // already applied this through its authorizeProject.
+      if (context.colleague && !resolved) {
+        await assertLearningModeAllowsProject({ actor: user, slug, request: projectRequest, thread: context.colleague.thread });
+      }
+      const current = currentProjectRequestContext();
+      const project = resolved || (current?.slug === slug ? current
+        : await resolveProjectRequestContext({ request: projectRequest }));
       return runWithProjectRequestContext({ ...project, vibe64User: user }, () => execute(trustedInput, context, deps), {
         requestMeta: context.requestMeta
       });
