@@ -93,7 +93,6 @@ export {
   LEARNING_MODE_PROJECT_MESSAGE,
   PRACTICE_PROJECT_MODE_MESSAGE,
   assertLearningModeAllowsProject,
-  learningModeAllowsProject,
   learningModeProjectBlock,
   learningModeProjectError,
   readLearningModeFor,

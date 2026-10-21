@@ -153,6 +153,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   const users = new Map();
   const browsers = new Map();
   const visible = new Map();
+  // Released attempt threads never reopen: their file belongs to Training.
+  const releasedThreads = new Set();
   const toolPolicy = ({ actionId, kind, context }) => actionId !== "vibe64.terminals.main-goal.pause" &&
     (context.colleague.thread === "learn" ? !DEVELOP_ONLY_ACTIONS.has(actionId) : !LEARN_ONLY_ACTION.test(actionId)) &&
     (!context.colleague.autonomous || kind === "query" ||
@@ -239,8 +241,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     return { kind: "learn", learnerKey, ...(attemptId ? { attemptId } : {}) };
   }
   const learnThreadKey = ({ learnerKey, attemptId }) => `${learnerKey}:learn${attemptId ? `:${attemptId}` : ""}`;
-  // Released attempt threads never reopen: their file belongs to Training.
-  const releasedThreads = new Set();
 
   async function stateFor(context) {
     const owner = userKey(context);

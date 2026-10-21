@@ -48,7 +48,7 @@ const companionView = inject(VIBE64_COLLEAGUE_VIEW_KEY, null);
 // The shared Learning controller (L and Courses), when this host provides one.
 const learningOwner = inject(VIBE64_LEARNING_KEY, null);
 const learningController = computed(() => unref(learningOwner) || null);
-// The header's current-step button reads only the L controller's client state;
+// The header's current-step button reads only the Learning controller's client state;
 // it opens just that step in a dialog above Colleague (Vibe64LearningStepDialog).
 const learningStep = computed(() => {
   const controller = learningController.value;
@@ -99,9 +99,9 @@ function openLearningStep() {
   if (xs.value && shown.value) leaveForLearning().then(reopen).catch(reportFailure);
   else Promise.resolve(reopen()).catch(reportFailure);
 }
-// A phone shows one surface. When Colleague's dialog gave way to Learning and
-// the learner then hides L themselves (L or Escape), the dialog comes back
-// (not the app behind it). Show me, Teach me and app navigation hide L to show
+// A phone shows one surface. When Colleague's dialog gave way to Courses and
+// the learner then closes Courses themselves, the dialog comes back (not the
+// app behind it). Show me, Teach me and app navigation close Courses to show
 // something else, so they never bring the dialog back.
 let returnFromLearning = false;
 function leaveForLearning() {
@@ -114,9 +114,9 @@ function reopenConversation() {
   else open.value = true;
 }
 watch(() => unref(learningController.value?.coursesOpen) === true, (learningOpen, wasOpen) => {
-  // L opening (Open in Learning, a finished lesson's screen) covers the step
-  // dialog; on a phone Colleague's dialog gives way too and comes back when
-  // the learner hides L.
+  // Courses opening (Open in Learning, a finished lesson's screen) covers the
+  // step dialog; on a phone Colleague's dialog gives way too and comes back
+  // when the learner closes Courses.
   if (learningOpen && !wasOpen && stepDialog.value) {
     stepDialog.value = false;
     if (xs.value && shown.value) leaveForLearning().catch(reportFailure);
@@ -653,8 +653,8 @@ async function sendMessage(message, options = {}, target = conversation.runtime.
   if (!target?.available.value) return false;
   return target.send({ message, data: { clientId, focus: options.focus } }, { messageId: options.messageId });
 }
-// Teach me in L: reveal this conversation (voice stays as it is) and send L's
-// fixed message through the ordinary send with the current browser focus.
+// Teach me on a step: reveal this conversation (voice stays as it is) and send
+// the step's fixed message through the ordinary send with the current browser focus.
 function waitForConversation(timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     let stop = null;
