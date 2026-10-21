@@ -138,8 +138,8 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
           requestId: `close-${attemptId}`, expectedRevision: state.revision, reason }));
         return;
       } catch (error) {
-        // A concurrent learning write moved the revision.
-        if (error.code !== "VIBE64_TRAINING_STATE_REVISION_CONFLICT" || tries >= 2) throw error;
+        // A concurrent learning write moved the revision or ended the attempt.
+        if (!["VIBE64_TRAINING_STATE_REVISION_CONFLICT", "VIBE64_TRAINING_ATTEMPT_MISSING"].includes(error.code) || tries >= 2) throw error;
       }
     }
   }
@@ -162,7 +162,8 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     }
     if (attempt.ended) return { ok: true, attemptId, closed: false };
     const directory = bundleRoot(actor, attemptId);
-    if (archive && !await readBundle(directory, attemptId) && await archiveCount(actor) >= MAX_ARCHIVES) {
+    // A resumed archive already holds its (partial) bundle and its slot.
+    if (archive && !await isDirectory(directory) && await archiveCount(actor) >= MAX_ARCHIVES) {
       throw Object.assign(new Error(`You have ${MAX_ARCHIVES} archived lessons. Delete one in Courses → Archived first. Nothing was changed.`), {
         code: "VIBE64_TRAINING_PRACTICE_ARCHIVE_LIMIT", statusCode: 409 });
     }
@@ -187,10 +188,7 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
   async function deleteArchive({ actor, attemptId } = {}) {
     const state = await learners.readState({ actor });
     const archived = UUID_PATTERN.test(String(attemptId || "")) && attemptId !== state.progress.activeAttemptId &&
-      await lstat(bundleRoot(actor, attemptId)).then(info => info.isDirectory(), error => {
-        if (error.code === "ENOENT") return false;
-        throw error;
-      });
+      await isDirectory(bundleRoot(actor, attemptId));
     if (!archived) {
       throw Object.assign(new Error("This archived lesson is not in your archive."), {
         code: "VIBE64_TRAINING_PRACTICE_ARCHIVE_MISSING", statusCode: 404 });
@@ -200,6 +198,13 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
   }
 
   return Object.freeze({ list, exists, closeAttempt, deleteArchive });
+}
+
+async function isDirectory(directory) {
+  return lstat(directory).then(info => info.isDirectory(), error => {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  });
 }
 
 function missingAsEmpty(error) {
