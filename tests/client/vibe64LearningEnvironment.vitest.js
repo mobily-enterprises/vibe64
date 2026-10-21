@@ -990,7 +990,8 @@ describe("Courses overlay", () => {
       await learning.startLesson({ lessonCode: "V64-START-02" }, start);
       await flush();
       expect(textOf(byTest(root, "learning-archive-confirm"))).toContain("Orientation");
-      expect(byTest(root, "learning-archive-confirm").parent.props["z-index"], "the confirmation opens above Courses (2400)").toBeGreaterThan(2400);
+      expect(byTest(root, "learning-archive-confirm").parent.props.style, "the confirmation opens above Courses (2400) even over a toast")
+        .toEqual({ "z-index": "2410" });
       byTest(root, "learning-archive-cancel").props.onClick();
       await flush();
       expect(byTest(root, "learning-archive-confirm")).toBeUndefined();

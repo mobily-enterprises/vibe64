@@ -149,11 +149,13 @@ function keydown(event) {
       <Vibe64LearningReader v-else :learning="learning" />
     </div>
   </div>
+  <!-- Above Courses (2400) by style: Vuetify stacks a dialog 10 above the topmost
+       open overlay, such as the start refusal's toast (2000), ignoring z-index. -->
   <v-dialog
     v-if="learning && actorKey"
     :model-value="Boolean(confirm)"
     max-width="28rem"
-    :z-index="2410"
+    style="z-index: 2410"
     @update:model-value="value => value || learning.cancelArchive()"
   >
     <v-card v-if="confirm" rounded="xl" data-test="learning-archive-confirm">
