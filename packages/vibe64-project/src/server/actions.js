@@ -261,8 +261,9 @@ function createProjectActions({ project } = {}) {
       input: projectCreateInputValidator,
       events: [projectChangedEvent({ operation: "created" })],
       async execute(input, context) {
-        // In learning mode only the lesson's practice projects exist for the learner.
-        if (await readLearningModeFor(authenticatedVibe64User(context))) throw learningModeProjectError();
+        // Learn mode has only the learner's practice projects; new projects belong to Develop.
+        const mode = await readLearningModeFor(authenticatedVibe64User(context));
+        if (mode?.on) throw learningModeProjectError(mode);
         return project.createProject(input);
       }
     }),

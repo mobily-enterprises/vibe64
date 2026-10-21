@@ -8,13 +8,19 @@ import { createConversationRuntime, createConversationTranscript, createConversa
 import { codexAppServerTurnStateFromAgentRun } from "@jskit-ai/assistant-core/server/codex-turn";
 import { createServiceToolCatalog, runBoundedAssistantToolLoop, readAssistantResponseEnvelope, readPartialAssistantReply } from "@jskit-ai/assistant-core/server";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
-import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions, nativeInstructions } from "./protocol.js";
+import { readLearningModeFor } from "@local/vibe64-core/server/learningMode";
+import { learnThreadFile, learnThreadLearnerKey, registerLearnThreadReleaser } from "@local/vibe64-core/server/learnThreads";
+import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions, learnInstructions, nativeInstructions, nativeLearnInstructions } from "./protocol.js";
 import { conversationObservation, readWatchedConversation, watchUpdate } from "./attention.js";
 import { createConversationSummary } from "./conversationSummary.js";
 import { assignmentCommands, assignmentSummary, createAssignmentOperations } from "./assignments.js";
 import { validateColleagueConversationRecord } from "./conversationRecord.js";
 
 const COLLEAGUE_MODEL_UNAVAILABLE = "Connect an AI and configure an available Senior model in AI Accounts before using Colleague.";
+// Learn threads teach; only Develop delegates work or watches agents. Develop
+// can still read and switch the mode for the person.
+const LEARN_ONLY_ACTION = /^vibe64\.training\.(?!learning-mode\.(?:read|set)$)|^vibe64\.colleague\.navigation\.open-learning$/u;
+const DEVELOP_ONLY_ACTIONS = new Set(["vibe64.colleague.assignment.create", "vibe64.colleague.watch.create"]);
 
 function failure(message, code = "vibe64_colleague_failed", statusCode = 409) {
   return Object.assign(new Error(message), { code, statusCode });
@@ -141,8 +147,14 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   const assignments = createAssignmentOperations({ actions, persist, transcript });
   const summaries = createConversationSummary({ actions, terminals, persist,
     workflowEngineId: async (state, context) => state.record.assistantSelection?.engineId || (await chooseSelection(context)).engineId });
+  // One state per conversation thread (Develop, or a Learn thread), keyed by
+  // its owner key. A person's browsers are shared by their threads, and only
+  // the visible thread has a live runtime.
   const users = new Map();
+  const browsers = new Map();
+  const visible = new Map();
   const toolPolicy = ({ actionId, kind, context }) => actionId !== "vibe64.terminals.main-goal.pause" &&
+    (context.colleague.thread === "learn" ? !DEVELOP_ONLY_ACTIONS.has(actionId) : !LEARN_ONLY_ACTION.test(actionId)) &&
     (!context.colleague.autonomous || kind === "query" ||
       !context.colleague.readOnly && assignmentCommands.has(actionId));
   const catalog = createServiceToolCatalog(actions, { ...toolLimits, isActionAvailable: toolPolicy });
@@ -214,21 +226,106 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     const user = authenticatedVibe64User(context);
     return Buffer.from(String(user?.uid ?? user?.username ?? "local")).toString("base64url");
   }
+  // The thread is decided on the server only: Develop's one conversation, or
+  // in Learn mode the current attempt's teacher thread (the lobby without one).
+  async function threadFor(context) {
+    const user = authenticatedVibe64User(context);
+    const mode = await readLearningModeFor(user);
+    if (!mode?.on) return { kind: "develop" };
+    return { kind: "learn", learnerKey: learnThreadLearnerKey(user),
+      ...(mode.currentAttemptId ? { attemptId: mode.currentAttemptId } : {}) };
+  }
+  const learnThreadKey = ({ learnerKey, attemptId }) => `${learnerKey}:learn${attemptId ? `:${attemptId}` : ""}`;
+
   async function stateFor(context) {
-    const key = userKey(context);
-    if (!users.has(key)) users.set(key, loadState(key));
+    const owner = userKey(context);
+    // A turn's own operations stay with its thread, whatever the mode is now.
+    const pinned = context.colleague?.threadKey;
+    if (pinned) {
+      const state = await users.get(pinned);
+      if (!state || state.userKey !== owner || state.released) {
+        throw failure("This Colleague conversation has ended.", "conversation_forbidden", 403);
+      }
+      return state;
+    }
+    const thread = await threadFor(context);
+    const key = thread.kind === "develop" ? owner : learnThreadKey(thread);
+    if (!users.has(key)) users.set(key, loadState(key, owner, thread));
     const loading = users.get(key);
-    try { return await loading; }
+    let state;
+    try { state = await loading; }
     catch (error) {
       if (users.get(key) === loading) users.delete(key);
       throw error;
     }
+    showThread(state);
+    return state;
   }
 
-  async function loadState(key) {
-    const root = path.join(systemRoot, "colleague", key);
+  // The thread a person's request resolves to becomes the visible one. The
+  // thread it replaces keeps its running turn; its live handle is released
+  // only after that turn settles, and its watch observations wait.
+  function showThread(state) {
+    const previous = visible.get(state.userKey);
+    if (previous === state) return;
+    visible.set(state.userKey, state);
+    if (previous) void hideThread(previous).catch(() => {});
+  }
+  async function hideThread(state) {
+    await state.admission;
+    while (state.running || state.transfer) await (state.running || state.transfer);
+    if (closed || state.released || state.opening || visible.get(state.userKey) === state) return;
+    for (const observer of state.browserObservers) observer.release?.();
+    state.browserObservers.clear();
+    const conversation = state.conversation;
+    if (!conversation) return;
+    requireResult(await conversation.dispose());
+    if (state.conversation !== conversation) return;
+    state.conversation = null;
+    state.runtimeOwner = null;
+    state.host = null;
+  }
+
+  // Training closes a lesson attempt: stop using its thread (a running turn
+  // is stopped, not awaited, since it may be the very call closing the
+  // attempt), then Training moves or removes the thread file.
+  async function releaseLearnThread({ learnerKey, attemptId }) {
+    const file = learnThreadFile({ systemRoot, learnerKey, attemptId });
+    const key = learnThreadKey({ learnerKey, attemptId });
+    const state = await users.get(key)?.catch(() => null);
+    users.delete(key);
+    if (!state) return rm(file.slice(0, -".json".length), { recursive: true, force: true });
+    state.released = true;
+    state.generation += 1;
+    state.workerAbort?.abort();
+    void Promise.resolve(state.conversation?.cancel()).catch(() => {});
+    state.pendingMessages = [];
+    clearTimeout(state.watchTimer);
+    clearTimeout(state.replyTimer);
+    if (visible.get(state.userKey) === state) visible.delete(state.userKey);
+    for (const observer of state.browserObservers) observer.release?.();
+    state.browserObservers.clear();
+    await state.saving;
+    void (async () => {
+      await state.running;
+      try { if (state.conversation) await state.conversation.dispose(); }
+      finally {
+        state.conversation = null;
+        for (const chat of [state.record, ...state.record.previousConversations]) conversationOwners.delete(chat.runtimeId);
+        await rm(state.root, { recursive: true, force: true });
+      }
+    })().catch(() => {});
+  }
+  const unregisterReleaser = registerLearnThreadReleaser(releaseLearnThread);
+
+  async function loadState(key, owner, thread) {
+    const develop = thread.kind === "develop";
+    const file = develop ? path.join(systemRoot, "colleague", owner, "conversation.json")
+      : learnThreadFile({ systemRoot, learnerKey: thread.learnerKey, attemptId: thread.attemptId });
+    // A Learn thread keeps its runtime work beside its file, released with it.
+    const root = develop ? path.dirname(file) : file.slice(0, -".json".length);
     let saved;
-    try { saved = JSON.parse(await readFile(path.join(root, "conversation.json"), "utf8")); }
+    try { saved = JSON.parse(await readFile(file, "utf8")); }
     catch (error) {
       if (error.code === "ENOENT") saved = undefined;
       else if (error instanceof SyntaxError) throw failure("Colleague's saved history is invalid. The file was left unchanged; restore or repair it, then retry.", "colleague_history_invalid", 503);
@@ -245,11 +342,13 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     }
     record.watches ||= [];
     record.observations ||= [];
+    if (!browsers.has(owner)) browsers.set(owner, new Map());
     const state = {
-      key, root, record,
+      key, userKey: owner, thread: develop ? { kind: "develop" } : { kind: "learn", ...(thread.attemptId ? { attemptId: thread.attemptId } : {}) },
+      file, root, record, connections: browsers.get(owner),
       saving: Promise.resolve(), admission: Promise.resolve(), running: null,
       streamEpoch: randomUUID(), streamRevision: 0,
-      generation: 0, connections: new Map(), requestContext: null, streamingReply: null,
+      generation: 0, requestContext: null, streamingReply: null,
       operationContext: null, operationRunId: "",
       interimReply: null, projectReply: null,
       stopping: false, rotating: false, opening: 0, conversation: null, host: null, selecting: null, observationIds: [],
@@ -282,13 +381,16 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
 
   async function persist(state, conversation = null, expectedRuntimeId = null) {
     const operation = state.saving.then(async () => {
+      // A released Learn thread's file belongs to Training now.
+      if (state.released) return;
       if (expectedRuntimeId && state.record.runtimeId !== expectedRuntimeId) throw failure("Previous Colleague conversations are read-only.", "conversation_forbidden", 403);
       assignments.suspendDependencies(state);
-      await mkdir(state.root, { recursive: true, mode: 0o700 });
-      const temporary = path.join(state.root, `conversation.${randomUUID()}.tmp`);
+      const directory = path.dirname(state.file);
+      await mkdir(directory, { recursive: true, mode: 0o700 });
+      const temporary = path.join(directory, `${path.basename(state.file, ".json")}.${randomUUID()}.tmp`);
       try {
         await writeFile(temporary, JSON.stringify({ ...state.record, ...conversation }), { mode: 0o600 });
-        await rename(temporary, path.join(state.root, "conversation.json"));
+        await rename(temporary, state.file);
         if (conversation) {
           Object.assign(state.record, conversation);
           if (conversation.runtimeId) conversationOwners.set(conversation.runtimeId, state);
@@ -403,7 +505,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     return {
       surface: "app", channel: "automation", requestMeta: state.requestContext.requestMeta,
       projectSlug: connection.focus?.projectSlug || "",
-      colleague: { userKey: state.key, conversationId: state.record.scopeId, clientId: connection.clientId, focus: connection.focus }
+      colleague: { userKey: state.userKey, threadKey: state.key, thread: state.thread.kind,
+        conversationId: state.record.scopeId, clientId: connection.clientId, focus: connection.focus }
     };
   }
 
@@ -413,7 +516,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     const operations = record.conversationLog.flatMap(turn => turn.metadata?.applicationTools || [])
       .map(call => publicOperation(call, state.running ? state.operationRunId : "")).filter(Boolean).slice(-8).reverse();
     return {
-      ok: true, conversationId: record.scopeId, status: record.status, error: record.error,
+      ok: true, conversationId: record.scopeId, thread: { ...state.thread }, status: record.status, error: record.error,
       ...(!record.assistantSelection && record.error === COLLEAGUE_MODEL_UNAVAILABLE ? { modelSetupRequired: true } : {}),
       assistantSelection: record.assistantSelection, operation: operations[0] || null, operations,
       messages: page.conversationLog.flatMap((turn) => colleagueHistoryMessages(turn).map((message) => ({
@@ -531,7 +634,9 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     }
   }
 
-  async function prepare(state, context, selection, systemPrompt = instructions) {
+  const promptFor = state => state.thread.kind === "learn" ? learnInstructions : instructions;
+
+  async function prepare(state, context, selection, systemPrompt = promptFor(state)) {
     if (!state.record.assistantSelection) state.record.assistantSelection = await chooseSelection(context, selection);
     context.assistantSelection = state.record.assistantSelection;
     const settings = await terminals.resolveConversationConfiguration(context.assistantSelection, systemPrompt,
@@ -802,7 +907,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
             toolReadOnly = currentContext.readOnly;
           }
           const tools = toolSet.tools.map(catalog.toOpenAiToolSchema);
-          const systemPrompt = `${nativeInstructions}\n\nAvailable application tools:\n${JSON.stringify(tools)}`;
+          const native = state.thread.kind === "learn" ? nativeLearnInstructions : nativeInstructions;
+          const systemPrompt = `${native}\n\nAvailable application tools:\n${JSON.stringify(tools)}`;
           const conversation = await prepare(state, currentContext.context, connection.assistantSelection, systemPrompt);
           await conversation.configure({ outputSchema });
           controller.signal.throwIfAborted();
@@ -914,7 +1020,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       if (native === null) {
         const context = actionContext(state, connection);
         const selected = state.record.assistantSelection || await chooseSelection(context, connection.assistantSelection);
-        const settings = await terminals.resolveConversationConfiguration(selected, instructions,
+        const settings = await terminals.resolveConversationConfiguration(selected, promptFor(state),
           { vibe64User: authenticatedVibe64User(context) });
         native = settings.engine !== "api";
       }
@@ -954,7 +1060,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   }
 
   function wakeForObservations(state) {
-    if (closed || state.stopping || state.rotating || state.running || !state.requestContext || !state.record.observations.length || state.record.status !== "ready") return;
+    if (closed || state.stopping || state.rotating || state.running || !state.requestContext || !state.record.observations.length ||
+        state.record.status !== "ready" || visible.get(state.userKey) !== state) return;
     const observation = state.record.observations[0];
     // Reserve the worker synchronously; its preparation resolves the actual
     // backend before the first wake, without an untracked parallel preparation.
@@ -1407,7 +1514,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         if (!input.assistantSelection && !input.workflowEngineId) throw failure("Choose a model for Colleague.");
         const selected = await chooseSelection(context, input.assistantSelection, input.assistantSelection ? null
           : { engineId: input.workflowEngineId, modelProviderId: input.modelProviderId || "" });
-        const settings = await terminals.resolveConversationConfiguration(selected, instructions, { vibe64User: authenticatedVibe64User(context) });
+        const settings = await terminals.resolveConversationConfiguration(selected, promptFor(state), { vibe64User: authenticatedVibe64User(context) });
         const changed = ["engineId", "modelProviderId", "modelId", "agentId", "variantId"]
           .some(key => (state.record.assistantSelection?.[key] || "") !== (selected[key] || ""));
         const pendingRequest = state.record.conversationMetadata?.runtime?.replacement?.request;
@@ -1465,7 +1572,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     async context(_input, context = {}) {
       const state = await stateFor(context);
       assertCurrentConversation(state, context.colleague?.conversationId);
-      if (context.colleague?.userKey && context.colleague.userKey !== state.key) {
+      if (context.colleague?.userKey && context.colleague.userKey !== state.userKey) {
         throw failure("This Colleague conversation is unavailable.", "conversation_forbidden", 403);
       }
       if (context.requestMeta?.request) state.requestContext = context;
@@ -1658,6 +1765,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     },
     async close() {
       closed = true;
+      unregisterReleaser();
       for (const pending of users.values()) {
         const state = await pending;
         clearTimeout(state.watchTimer);
@@ -1666,7 +1774,9 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         state.browserObservers.clear();
         await state.watchAdmission;
         await state.polling;
-        if (state.running || state.summaryRunning || state.record.summaryHelper) await this.stop({}, state.requestContext);
+        // Stop this thread, not whichever one the person's mode shows now.
+        if (state.running || state.summaryRunning || state.record.summaryHelper) await this.stop({}, { ...state.requestContext,
+          colleague: { ...state.requestContext?.colleague, threadKey: state.key } });
         await state.running;
         await state.saving;
       }

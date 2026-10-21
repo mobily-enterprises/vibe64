@@ -93,6 +93,11 @@ For **Retry**, **Start fresh**, **Previous conversations** and retained
 drafts, see [Colleague delivery and recovery](colleague-recovery.md). Recovery
 never automatically resends an unconfirmed message.
 
+Colleague's conversation follows your mode: Develop has your one conversation,
+and in Learn mode each lesson has its own teacher conversation (see
+[Lessons: Colleague teaches](learning-with-colleague.md)). Pressing **L** shows
+the other mode's conversation; nothing is lost or interrupted.
+
 Colleague prepares its selected native assistant and checks its connected account
 without requiring an open project. A host execution error during preparation
 does not by itself mean that account is disconnected. Ask the workspace operator

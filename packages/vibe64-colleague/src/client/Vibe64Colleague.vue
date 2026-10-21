@@ -5,7 +5,8 @@ import { ConversationDialog, VoiceConversationControls, VoiceConversationSetting
 import { useDisplay } from "vuetify";
 import { VNavigationDrawer } from "vuetify/components";
 import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, unref, watch } from "vue";
-import { useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
+import { useRealtimeEvent, useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
+import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
 import { mdiArrowTopRight, mdiCheck, mdiClose, mdiEyeOutline, mdiHeadset, mdiHistory, mdiMicrophone, mdiMinus, mdiSchoolOutline, mdiSend, mdiStop, mdiTuneVariant, mdiVolumeHigh } from "@mdi/js";
 import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_LEARNING_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { AssistantConversationElement, AssistantConversationStatus, AssistantPromptInput, AssistantTranscript } from "@jskit-ai/assistant-core/client/conversation";
@@ -22,6 +23,7 @@ import { selectionLabels } from "./colleagueSelectionLabels.js";
 import { createColleagueFocusBinding } from "./colleagueFocusBinding.js";
 import { createColleagueNavigation } from "./colleagueNavigation.js";
 import { watchColleagueLearningRequests } from "./colleagueLearningRequests.js";
+import { applyLearningNavigation } from "../shared/learningFocus.js";
 
 const props = defineProps({
   name: { type: String, default: "Colleague" },
@@ -43,14 +45,16 @@ const listeningVoice = computed(() => Boolean(minimizedVoice.value && voice.cont
 const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
 const voiceTranscript = ref(null);
 const companionView = inject(VIBE64_COLLEAGUE_VIEW_KEY, null);
-// The shared Learning environment (L) controller, when this host provides one.
+// The shared Learning controller (L and Courses), when this host provides one.
 const learningOwner = inject(VIBE64_LEARNING_KEY, null);
 const learningController = computed(() => unref(learningOwner) || null);
 // The header's current-step button reads only the L controller's client state;
 // it opens just that step in a dialog above Colleague (Vibe64LearningStepDialog).
 const learningStep = computed(() => {
   const controller = learningController.value;
-  const attemptId = unref(controller?.attemptId);
+  // Only Learn mode teaches; Develop's Colleague shows no lesson step.
+  const mode = unref(controller?.mode);
+  const attemptId = mode?.on === true ? mode.currentAttemptId : "";
   const stepId = unref(controller?.stepId);
   const lesson = unref(controller?.lesson);
   const steps = Array.isArray(lesson?.steps) ? lesson.steps : [];
@@ -84,14 +88,14 @@ function returnToStep() {
   if (xs.value) reopenConversation();
   stepDialog.value = true;
 }
-// Open in Learning: L at exactly this step, like Colleague's Learning command.
+// Open in Courses: exactly this step, like Colleague's Courses command.
 function openLearningStep() {
   const step = learningStep.value;
   const controller = learningController.value;
   stepDialog.value = false;
-  if (!step || typeof controller?.show !== "function") return;
-  const reopen = () => controller.show({ attemptId: step.attemptId, stepId: step.stepId });
-  // A phone shows one surface: minimise the dialog so Learning is visible.
+  if (!step || typeof controller?.openCourses !== "function") return;
+  const reopen = () => applyLearningNavigation(controller, { open: true, attemptId: step.attemptId, stepId: step.stepId });
+  // A phone shows one surface: minimise the dialog so Courses is visible.
   if (xs.value && shown.value) leaveForLearning().then(reopen).catch(reportFailure);
   else Promise.resolve(reopen()).catch(reportFailure);
 }
@@ -109,7 +113,7 @@ function reopenConversation() {
   if (voice?.controller.state.session && !inlineVoice.value) voice.controller.reveal();
   else open.value = true;
 }
-watch(() => unref(learningController.value?.open) === true, (learningOpen, wasOpen) => {
+watch(() => unref(learningController.value?.coursesOpen) === true, (learningOpen, wasOpen) => {
   // L opening (Open in Learning, a finished lesson's screen) covers the step
   // dialog; on a phone Colleague's dialog gives way too and comes back when
   // the learner hides L.
@@ -234,7 +238,12 @@ function apply(result, expectedRevision, expectedActor, allowRetarget = false) {
   const runtime = conversation.runtime.value;
   const changingConversation = Boolean(product.value.conversationId && result.conversationId &&
     product.value.conversationId !== result.conversationId);
-  if (changingConversation && runtime?.current.value && runtime.identity.actorKey === expectedActor) {
+  // Switching between Develop and a Learn thread (L, or another lesson) is
+  // the person's own choice, never another tab's change: each thread keeps
+  // its own draft and nothing needs resolving.
+  const changingThread = Boolean(product.value.thread && result.thread &&
+    (product.value.thread.kind !== result.thread.kind || product.value.thread.attemptId !== result.thread.attemptId));
+  if (changingConversation && !changingThread && runtime?.current.value && runtime.identity.actorKey === expectedActor) {
     if (voiceSession.value?.hasUnsentSpeech.value || pointerNotice.value && !allowRetarget) {
       pointerNotice.value = "Colleague changed in another tab. Resolve the old speech first: pause the microphone and discard newer words, or explicitly Stop voice chat. Then choose Refresh conversation. Your typed draft stays unsent.";
       return false;
@@ -242,23 +251,23 @@ function apply(result, expectedRevision, expectedActor, allowRetarget = false) {
   }
   // The original runtime owns drafts. Preserve the same person's CURRENT draft
   // before its binding changes; actor changes never enter this copy path.
-  const savedDraft = changingConversation && runtime?.current.value && runtime.identity.actorKey === expectedActor
+  const savedDraft = changingConversation && !changingThread && runtime?.current.value && runtime.identity.actorKey === expectedActor
     ? runtime.draft.value : null;
-  const { conversationId, assistantSelection, watches, assignments, navigation, operation, operations, modelSetupRequired, error } = result;
-  product.value = { conversationId, assistantSelection, watches, assignments, navigation, operation, operations, modelSetupRequired, error };
+  const { conversationId, thread, assistantSelection, watches, assignments, navigation, operation, operations, modelSetupRequired, error } = result;
+  product.value = { conversationId, thread, assistantSelection, watches, assignments, navigation, operation, operations, modelSetupRequired, error };
   if (savedDraft !== null && actorKey.value === expectedActor) conversation.adapter.value.actions.setDraft(savedDraft);
   pointerNotice.value = "";
   void handleNavigation(navigation);
   return true;
 }
 // Both hosts' navigators run through this wrapper: opening an app place shows
-// the app (Learning minimises with its state kept), and a guide rings the real
+// the app (Courses closes with its state kept), and a guide rings the real
 // control after any "show me" navigation, reporting only what it drew.
 async function navigateBrowser(command) {
   const controller = learningController.value;
   const appPlace = command.projectSlug || command.managementView || (command.guide && command.guide.target !== "learning");
-  if (appPlace && !command.learning && unref(controller?.open) && typeof controller.minimise === "function") {
-    await controller.minimise();
+  if (appPlace && !command.learning && unref(controller?.coursesOpen) && typeof controller.closeCourses === "function") {
+    await applyLearningNavigation(controller, { open: false });
   }
   if (!command.guide) return props.navigate(command);
   return runTrainingGuideCommand(command, { navigateBrowser: props.navigate, view: { openFile(path) {
@@ -271,7 +280,7 @@ const colleagueNavigation = createColleagueNavigation({
   scope: () => ({ mounted, actorKey: actorKey.value, clientId }),
   navigate: () => props.navigate ? navigateBrowser : null,
   beforeNavigate(command) {
-    // A phone shows one surface: reveal the app, Learning or the guide ring.
+    // A phone shows one surface: reveal the app, Courses or the guide ring.
     if (xs.value && shown.value && command.learning) return leaveForLearning();
     if (xs.value && shown.value && command.guide) return toggleConversation();
   },
@@ -317,7 +326,9 @@ const conversation = useAssistantConversation({
   presentation: () => ({
     assistantLabel: props.name, systemLabel: "Vibe64", variant: "task", visible: open.value,
     userMessageFormat: "plain", progressPreviewLimit: 0,
-    welcomeMessage: "Let's think it through. I can discuss an idea, check on your agents, or help you operate Vibe64.",
+    welcomeMessage: product.value.thread?.kind === "learn"
+      ? "I'm your teacher here. Ask me about a lesson, or press Teach me on a step."
+      : "Let's think it through. I can discuss an idea, check on your agents, or help you operate Vibe64.",
     previewMessage: voicePreview.value,
     ariaLabel: `Message ${props.name}`, placeholder: `Talk it through with ${props.name}…`, rows: 1, layout: "compact",
     submitAriaLabel: conversation.runtime.value?.steerable.value ? `Steer ${props.name}` : `Send to ${props.name}`,
@@ -618,6 +629,12 @@ async function readHistoryPage(conversationId, { more = false, complete } = {}) 
   }
 }
 realtimeSocket.on("connect", refresh);
+// The server picks the thread from the mode and the current lesson.
+useRealtimeEvent({
+  event: VIBE64_TRAINING_LEARNER_CHANGED_EVENT,
+  matches: ({ payload } = {}) => ["learning-mode", "lesson"].includes(payload?.reason),
+  onEvent: () => { void refresh(); }
+});
 async function refresh(options = {}) {
   // A lost fresh response must be retried by its original operation, not
   // silently retargeted by a background product read.

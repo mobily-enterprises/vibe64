@@ -22,6 +22,7 @@
     "./server/osUserIdentity": "./src/server/osUserIdentity.js",
     "./server/learningSpace": "./src/server/learningSpace.js",
     "./server/learningMode": "./src/server/learningMode.js",
+    "./server/learnThreads": "./src/server/learnThreads.js",
     "./server/personalAiProfile": "./src/server/personalAiProfile.js",
     "./server/projectServiceSelection": "./src/server/projectServiceSelection.js",
     "./server/serverResponses": "./src/server/serverResponses.js",

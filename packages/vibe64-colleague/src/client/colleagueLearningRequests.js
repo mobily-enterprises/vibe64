@@ -1,9 +1,10 @@
 import { watch } from "vue";
 
-// Teach me in the Learning environment (L) asks this host's one Colleague to
-// open and send L's fixed message. L only records the request; Colleague owns
-// revealing its conversation and the ordinary send. A request for another
-// signed-in person is never sent by this Colleague.
+// Teach me on a lesson step asks this host's one Colleague to open and send
+// the step's fixed message. Learning only records the request; Colleague owns
+// revealing its conversation (refreshed first, so it is the lesson's Learn
+// thread) and the ordinary send. A request for another signed-in person is
+// never sent by this Colleague.
 function watchColleagueLearningRequests({ learning, actorKey, reveal, send, report }) {
   if (!learning?.colleagueRequest || typeof learning.consumeColleagueRequest !== "function") return () => {};
   let running = "";

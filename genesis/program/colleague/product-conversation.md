@@ -52,6 +52,10 @@ registers current focus only, without replaying stale focus or resuming watches.
 - `docs/colleague-usage/lesson-authoring.md`
 - `docs/colleague-usage/learning-with-colleague.md`
 - `packages/vibe64-core/src/server/actionContext.js`
+- `packages/vibe64-core/src/server/learningMode.js`
+- `packages/vibe64-core/src/server/learnThreads.js`
+- `packages/vibe64-colleague/src/server/conversationRecord.js`
+- `packages/vibe64-colleague/src/shared/learningFocus.js`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
 - `packages/vibe64-colleague/src/client/colleagueNavigation.js`
 - `packages/vibe64-colleague/src/client/colleagueLearningRequests.js`
@@ -71,64 +75,97 @@ registers current focus only, without replaying stale focus or resuming watches.
 
 ## Public contract
 
-Colleague is the lesson teacher and authoring coordinator. It teaches from a
-lesson's steps through Training's lesson read, step and lifecycle operations,
-its own acknowledged navigation and guides, and the learner's private notes; it
-never decides, changes or proves a step result. There is no teacher-role
-exclusion in the common catalogue policy. The same common catalogue
-predicate governs direct schemas, search, contracts and execution, retaining the
-original assignment-only background mutation rule. No saved history is rewritten.
+Colleague has one conversation thread per mode. **Develop** keeps the person's
+one conversation (`<sys>/colleague/<key>/conversation.json`, owner key `<key>`)
+with its previous conversations, watches and assignments unchanged. **Learn**
+has a teacher thread per lesson attempt (`colleague/<learnerKey>/learn/<attemptId>.json`,
+owner key `<learnerKey>:learn:<attemptId>`) and one learner-level lobby thread
+(`learn/lobby.json`, `<learnerKey>:learn`) for Learn mode without a lesson. The
+thread is chosen on the server only, from core `readLearningModeFor` (never from
+client input); Learn threads use the same schema 3 record, validation, start
+fresh and history, and keep their runtime work in `learn/<attemptId>/` beside
+the file. The learner key is Training's (`learnThreadLearnerKey`: the signed-in
+actor, or the local editor's OS user). `state.read` returns
+`thread: {kind, attemptId?}`; the client rereads on
+`vibe64.training.learner.changed` with reason `learning-mode` or `lesson`, and a
+thread change never raises the other-tab notice or carries the draft across.
+
+Only the visible thread keeps a live runtime: when a person's request resolves
+to another thread, the previous one is released after its running turn settles
+(the turn is never interrupted). A turn's own operations carry its server-built
+`threadKey`, so they stay with their thread whatever the mode is now. Watch
+polling continues for a hidden Develop thread; its observations wait and wake
+only when Develop is visible again. Training closes an attempt through core
+`releaseLearnThread` (`learnThreads.js`): Colleague stops that thread (aborting
+and cancelling a running turn without awaiting it, since the turn may be the
+very `lesson.finish` call), flushes its saves, never writes its file again,
+disposes the handle once the turn settles and removes its runtime work;
+Training then moves or removes the file. Training never imports Colleague.
+
+Learn threads use `learnInstructions` (teaching, notes, lesson lifecycle and the
+Learn refusal); Develop uses `instructions`, which only points to **L**. The
+common catalogue predicate hides `vibe64.training.*` (except
+`learning-mode.read`/`learning-mode.set`) and `navigation.open-learning` in
+Develop, and `assignment.create`/`watch.create` in Learn; it governs direct
+schemas, search, contracts and execution, retaining the original
+assignment-only background mutation rule. No saved history is rewritten.
 
 Teaching uses only client state and existing operations. Both hosts report
-`learningOpen`, `learningSurface` (`courses`, `practice` or `lesson`), `learningAttemptId`
-and `learningStepId` in focus from the shared L controller, so Colleague knows
-the current step even while L is minimised. Both derive those fields, apply a
-command's `learning` part and confirm it with the one shared rule in
-`shared/learningFocus.js` (`learningPanelFocus`, `applyLearningNavigation`,
-`learningPanelMatches`). **Teach me** records one request on
-that controller; `colleagueLearningRequests.js` consumes it once for the same
-signed-in person, reveals Colleague, rereads its state and sends the fixed text
-"Teach me this step." through the ordinary send. When that read reports
-`modelSetupRequired`, nothing is sent: the setup warning says Colleague cannot
-teach the step yet and offers **Open AI Accounts**. `navigation.open-learning` (no project) opens
-L at an attempt/step, minimises it, or points at a real place or the L button;
-`navigation.open` with `guide.navigate=true` is the project-scoped "show me".
-Both acknowledge truthfully with the guide receipt `{shown, step?, reason?}`.
-On a phone the dialog minimises itself before opening L or ringing a control;
-after it gave way to L (a Learning command or **Open in Learning**), the learner's
-own L or Escape hiding L (controller `hiddenBy === "learner"`) reopens the
-dialog, while Show me and other app navigation leave the app visible.
-While an attempt is not ended, Colleague's header row (drawer, phone dialog,
-voice inside the same panel; not when minimised) shows a compact **Step N/M**
-button (school icon, check once passed; name "Current lesson step: <title>")
-read from the L controller only. It opens `Vibe64LearningStepDialog`: only the
-current step through the shared `Vibe64LearningStep` (the reader's step body),
-**Previous step**/**Next step** (Next enabled once passed or not required; on
-the last step of a complete lesson **Finish lesson** opens L's Lesson finished
-screen instead) and **Open in Learning**; a full-screen dialog over Colleague's on a phone. Show me
-and Teach me close it first; a place that cannot be shown reopens it with the
-reason. Every action is an L controller call, so L, focus and tabs stay in step;
-it has no server coupling. On a phone **Open in Learning** minimises Colleague's
-dialog before showing L, since the dialog would cover it. The protocol text makes
-Colleague read the lesson with `lesson.read`, read and rewrite the learner's
-private notes (`learner-notes.read`/`learner-notes.update`), report
-`step.check.run` results as diagnostics, never claim a pass and never reveal a
-choice answer, and tell the person what a guide actually showed (or why not) in
-plain words rather than quoting receipt fields or IDs, say plainly when a step's
-guide could not be opened, and never ask the person to repeat a step that
-`lesson.read` already shows passed. Practice projects are listed and opened with
-`practice.list`/`practice.open`; `practice.archive`, `practice.delete` and
+`learningOpen` (Courses is open), `learningSurface` (`courses`, `progress`,
+`archived` or `lesson`), `learningAttemptId` (the mode's `currentAttemptId`) and
+`learningStepId` in focus from the shared Learning controller, so Colleague
+knows the current step even while Courses is closed. Both derive those fields,
+apply a command's `learning` part (`openCourses`/`closeCourses`) and confirm it
+with the one shared rule in `shared/learningFocus.js` (`learningPanelFocus`,
+`applyLearningNavigation`, `learningPanelMatches`). **Teach me** records one
+request on that controller; `colleagueLearningRequests.js` consumes it once for
+the same signed-in person, reveals Colleague, rereads its state (so the send
+goes to the lesson's Learn thread) and sends the fixed text "Teach me this
+step." through the ordinary send. When that read reports `modelSetupRequired`,
+nothing is sent: the setup warning says Colleague cannot teach the step yet and
+offers **Open AI Accounts**. `navigation.open-learning` (no project) opens
+Courses at an attempt/step, closes it, or points at a real place or the Courses
+button; `navigation.open` with `guide.navigate=true` is the project-scoped
+"show me". Both acknowledge truthfully with the guide receipt
+`{shown, step?, reason?}`. On a phone the dialog minimises itself before
+opening Courses or ringing a control; after it gave way to Courses (a Courses
+command or **Open in Learning**), the learner's own hiding of Courses
+(controller `hiddenBy === "learner"`) reopens the dialog, while Show me and
+other app navigation leave the app visible.
+In Learn mode, while an attempt is not ended, Colleague's header row (drawer,
+phone dialog, voice inside the same panel; not when minimised) shows a compact
+**Step N/M** button (school icon, check once passed; name "Current lesson step:
+<title>") read from the Learning controller only; Develop shows none. It opens
+`Vibe64LearningStepDialog`: only the current step through the shared
+`Vibe64LearningStep` (the reader's step body), **Previous step**/**Next step**
+(Next enabled once passed or not required; on the last step of a complete
+lesson **Finish lesson** opens the Lesson finished screen instead) and **Open
+in Learning**; a full-screen dialog over Colleague's on a phone. Show me and
+Teach me close it first; a place that cannot be shown reopens it with the
+reason. Every action is a Learning controller call, so Courses, focus and tabs
+stay in step; it has no server coupling. The Learn protocol makes Colleague
+read the lesson with `lesson.read`, read and rewrite the learner's private notes
+(`learner-notes.read`/`learner-notes.update`), report `step.check.run` results
+as diagnostics, never claim a pass and never reveal a choice answer, tell the
+person what a guide actually showed (or why not) in plain words rather than
+quoting receipt fields or IDs, say plainly when a step's guide could not be
+opened, and never ask the person to repeat a step that `lesson.read` already
+shows passed. One lesson is in progress at a time: `practice.list` reads it and
+the archived lessons; starting another passes `archiveCurrent` only after the
+person agreed; `lesson.finish` archives a completed attempt with its project
+and conversation; `lesson.restart`, `lesson.delete` and
 `practice.archived.delete` run only on the person's request and require
-`confirmed` after Colleague named that exact project and what is kept. Focus
-accepts only the current field names; a retired focus field is refused rather
-than translated. In learning mode (a lesson in progress) the protocol has
-Colleague check `learning-mode.read` before opening projects, never open or work
-on another project, relay "You're in a lesson. Leave lesson to get back to your
-projects." and run `learning-mode.leave` (which ends the attempt, keeping its
-results and practice project) only on the person's direct request or accepted
-offer; there is no enter or paused state, and `lesson.continue` starts a left
-lesson again in the same practice project; `navigation.open` refuses a non-lesson project with that reason before
-resolving the project (one mode read per call, so a leave applies at once).
+`confirmed` after Colleague named that exact lesson and what is kept. Focus
+accepts only the current field names; a retired focus field (such as the Rev 3
+`practice` surface) is refused rather than translated.
+
+The project assertion follows the mode (core `learningMode.js`): Learn opens
+only the person's practice project ("You're in Learn mode. Press L to go back
+to your projects."), Develop refuses it ("This is a practice project. Press L
+to switch to Learn."), both with code `vibe64_learning_mode_project`.
+`navigation.open` and the core action context check it before resolving the
+project (one mode read per call, so a switch applies at once); switching is
+`learning-mode.set`, only on the person's direct request or accepted offer.
 
 
 Colleague uses JSKIT's `createConversationRuntime` for model turns, application

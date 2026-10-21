@@ -1,18 +1,21 @@
-// Learning mode. While a learner has a lesson in progress, they are in the
-// learning space only: the lesson's practice project (none for a lesson
-// without one) is the one project they open, and opening any other project
-// page or session is refused with a short reason. Nothing inside the lesson's
-// practice project is limited, and non-project pages (Learning, Account
-// settings, AI Accounts) are never affected, so leaving is always one click.
+// Learn and Develop. Every learner is in one of two modes: Learn shows only
+// their practice projects, Develop only their own projects. The mode is a
+// saved per-learner flag, separate from any lesson; switching ends nothing.
+// Opening a project of the other mode is refused with a short reason. Nothing
+// inside an allowed project is limited, and non-project pages (Account
+// settings, AI Accounts) are never affected, so switching is always one press
+// of L.
 //
-// Training owns the saved mode; each host registers one reader of it. Learning
-// mode keeps a learner focused; it is not an access grant or a security
-// boundary (ordinary project access still applies first), so a reader that
-// fails is reported and treated as "not in learning mode" instead of locking
-// the learner out of their own projects.
+// Training owns the saved mode; each host registers one reader of it. The mode
+// keeps a learner focused; it is not an access grant or a security boundary
+// (ordinary project access and practice admission still apply first), so a
+// reader that fails is reported and counts as Develop. Without a registered
+// reader (no Learning on this host) there is no mode and nothing is limited.
 
 const LEARNING_MODE_PROJECT_CODE = "vibe64_learning_mode_project";
-const LEARNING_MODE_PROJECT_MESSAGE = "You're in a lesson. Leave lesson to get back to your projects.";
+const LEARNING_MODE_PROJECT_MESSAGE = "You're in Learn mode. Press L to go back to your projects.";
+const PRACTICE_PROJECT_MODE_MESSAGE = "This is a practice project. Press L to switch to Learn.";
+const DEVELOP_MODE = Object.freeze({ on: false, currentAttemptId: "", lessonCode: "", practiceSlug: "" });
 
 let learningModeReader = null;
 let learningModeReadFailure = null;
@@ -24,43 +27,52 @@ function registerLearningModeReader(reader, { onReadFailure = null } = {}) {
   learningModeReadFailure = typeof onReadFailure === "function" ? onReadFailure : null;
 }
 
-// The learner's current mode, or null when they are not in learning mode. A
-// request object (HTTP or WebSocket) caches the one read for its lifetime.
+// The learner's mode: { on, currentAttemptId, lessonCode, practiceSlug }, or
+// null when no reader is registered. A request object (HTTP or WebSocket)
+// caches the one read for its lifetime.
 async function readLearningModeFor(actor = null, { request = null } = {}) {
   if (!learningModeReader) return null;
   if (request && typeof request === "object" && requestModes.has(request)) return requestModes.get(request);
-  let mode = null;
+  let mode = DEVELOP_MODE;
   try {
     const value = await learningModeReader({ actor });
-    mode = value?.on === true ? Object.freeze({
-      attemptId: String(value.attemptId || ""),
-      lessonCode: String(value.lessonCode || ""),
-      practiceSlug: String(value.practiceSlug || "")
-    }) : null;
+    mode = Object.freeze({
+      on: value?.on === true,
+      currentAttemptId: String(value?.currentAttemptId || ""),
+      lessonCode: String(value?.lessonCode || ""),
+      practiceSlug: String(value?.practiceSlug || "")
+    });
   } catch (error) {
     learningModeReadFailure?.(error);
-    mode = null;
   }
   if (request && typeof request === "object") requestModes.set(request, mode);
   return mode;
 }
 
-function learningModeAllowsProject(mode = null, slug = "") {
-  return !mode || (Boolean(mode.practiceSlug) && mode.practiceSlug === String(slug || ""));
+// Learn allows only practice projects; Develop refuses them. `practice` is
+// whether practice admission found a learning-space project for `slug`; a
+// caller without admission leaves it out, and then only the learner's current
+// practice project counts (with one lesson in progress, it is their only one).
+function learningModeAllowsProject(mode = null, slug = "", { practice } = {}) {
+  if (!mode) return true;
+  const isPractice = typeof practice === "boolean" ? practice
+    : Boolean(mode.practiceSlug) && mode.practiceSlug === String(slug || "");
+  return mode.on === true ? isPractice : !isPractice;
 }
 
 function refusal(mode = null) {
+  const learn = mode?.on === true;
   return {
     code: LEARNING_MODE_PROJECT_CODE,
-    message: LEARNING_MODE_PROJECT_MESSAGE,
+    message: learn ? LEARNING_MODE_PROJECT_MESSAGE : PRACTICE_PROJECT_MODE_MESSAGE,
     statusCode: 403,
-    ...(mode?.practiceSlug ? { details: { practiceSlug: mode.practiceSlug } } : {})
+    ...(learn && mode.practiceSlug ? { details: { practiceSlug: mode.practiceSlug } } : {})
   };
 }
 
-// The refusal for opening `slug` while in learning mode, or null.
-function learningModeProjectBlock(mode = null, slug = "") {
-  return learningModeAllowsProject(mode, slug) ? null : refusal(mode);
+// The refusal for opening `slug` in this mode, or null.
+function learningModeProjectBlock(mode = null, slug = "", options = {}) {
+  return learningModeAllowsProject(mode, slug, options) ? null : refusal(mode);
 }
 
 function learningModeProjectError(mode = null) {
@@ -68,14 +80,15 @@ function learningModeProjectError(mode = null) {
   return Object.assign(new Error(message), fields);
 }
 
-async function assertLearningModeAllowsProject({ actor = null, slug = "", request = null } = {}) {
+async function assertLearningModeAllowsProject({ actor = null, slug = "", request = null, practice } = {}) {
   const mode = await readLearningModeFor(actor, { request });
-  if (!learningModeAllowsProject(mode, slug)) throw learningModeProjectError(mode);
+  if (!learningModeAllowsProject(mode, slug, { practice })) throw learningModeProjectError(mode);
 }
 
 export {
   LEARNING_MODE_PROJECT_CODE,
   LEARNING_MODE_PROJECT_MESSAGE,
+  PRACTICE_PROJECT_MODE_MESSAGE,
   assertLearningModeAllowsProject,
   learningModeAllowsProject,
   learningModeProjectBlock,
