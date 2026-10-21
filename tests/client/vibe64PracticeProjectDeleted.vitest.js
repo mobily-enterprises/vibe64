@@ -148,27 +148,27 @@ describe("project page deleted notice", () => {
     recovering: false, selectingSlug: "", $props: {}, $slots: {}, ...extra });
   const texts = (nodes) => nodes.filter((node) => typeof node.children === "string").map((node) => node.children.trim());
 
-  it("shows that the practice project was deleted with a button back to Learning, not an error", async () => {
-    const openLearning = vi.fn();
-    const nodes = nodesOf(baseContext({ practiceDeleted: true, learning: { show: vi.fn() }, openLearning }));
+  it("shows that the practice project was deleted with a button to Courses, not an error", async () => {
+    const openCourses = vi.fn();
+    const nodes = nodesOf(baseContext({ practiceDeleted: true, learning: { openCourses: vi.fn() }, openCourses }));
     expect(texts(nodes)).toContain("This practice project is gone");
     expect(nodes.some((node) => node.props?.title === "Project could not load")).toBe(false);
     const button = nodes.find((node) => String(node.props?.class || "").includes("project-selection-gate__deleted-learning"));
     expect(button).toBeTruthy();
     await button.props.onClick();
-    expect(openLearning).toHaveBeenCalledTimes(1);
-    // The button opens L on its course list, where the lesson remains.
-    expect(script.content).toMatch(/learning\?\.show\(\{ surface: "courses" \}\)/u);
+    expect(openCourses).toHaveBeenCalledTimes(1);
+    expect(texts(nodes).join(" ")).toContain("Courses → Archived");
+    expect(script.content).toMatch(/learning\?\.openCourses\(\)/u);
   });
 
   it("leaves other load errors on the ordinary error notice", () => {
-    const nodes = nodesOf(baseContext({ practiceDeleted: false, learning: null, openLearning: vi.fn() }));
+    const nodes = nodesOf(baseContext({ practiceDeleted: false, learning: null, openCourses: vi.fn() }));
     expect(texts(nodes)).not.toContain("This practice project is gone");
     expect(nodes.some((node) => node.props?.title === "Project could not load")).toBe(true);
   });
 });
 
-describe("the project picker in learning mode", () => {
+describe("the project picker in Learn mode", () => {
   afterEach(() => { mocks.resources.length = 0; });
 
   async function openInLearningMode(learning, options = {}) {
@@ -182,33 +182,33 @@ describe("the project picker in learning mode", () => {
     return { gate, emitted, scope, selection: mocks.resources[0] };
   }
 
-  it("shows the server's listing as is, says when a lesson is in progress and leaves it on request", async () => {
-    const learning = Vue.reactive({ learningMode: { on: true, practiceSlug: "training-abc", projectSlugs: ["training-abc"] },
-      leaveLesson: vi.fn(async () => ({ ok: true })) });
+  it("shows the server's listing as is, says when Learn mode is on and switches to Develop on request", async () => {
+    const learning = Vue.reactive({ learnMode: true, toggleMode: vi.fn(async () => ({ on: false })) });
     const { gate, scope, selection } = await openInLearningMode(learning);
-    // The server lists no project during a lesson; practice projects are never listed.
+    // The server lists no project of yours in Learn mode; practice projects are never listed.
     selection.data.value = { hasSelection: false, projects: [] };
     await Vue.nextTick();
-    expect(gate.learningModeOn.value).toBe(true);
+    expect(gate.learnMode.value).toBe(true);
     expect(gate.projects.value).toEqual([]);
     expect(Object.hasOwn(gate, "practiceProjects")).toBe(false);
-    await gate.leaveLesson();
-    expect(learning.leaveLesson).toHaveBeenCalledTimes(1);
-    learning.learningMode = { on: false, practiceSlug: "", projectSlugs: [] };
+    await gate.toggleMode();
+    expect(learning.toggleMode).toHaveBeenCalledTimes(1);
+    learning.learnMode = false;
     selection.data.value = { hasSelection: false, projects: [{ slug: "my-shop", path: "/p/my-shop" }] };
     await Vue.nextTick();
-    expect(gate.learningModeOn.value).toBe(false);
+    expect(gate.learnMode.value).toBe(false);
     expect(gate.projects.value.map(project => project.slug)).toEqual(["my-shop"]);
     scope.stop();
   });
 
-  it("shows no load error when the server refuses a project outside the lesson", async () => {
-    const learning = Vue.reactive({ learningMode: { on: true, practiceSlug: "", projectSlugs: [] }, leaveLesson: vi.fn() });
+  it("shows the server's reason, not a load error, when the mode refuses a project", async () => {
+    const learning = Vue.reactive({ learnMode: true, toggleMode: vi.fn() });
     const { gate, emitted, scope, selection } = await openInLearningMode(learning, { scopeSelectionToCurrentProject: true });
-    selection.query.error.value = Object.assign(new Error("You're in a lesson. Leave lesson to get back to your projects."),
+    selection.query.error.value = Object.assign(new Error("You're in Learn mode. Press L to go back to your projects."),
       { status: 403, code: "vibe64_learning_mode_project" });
     await Vue.nextTick();
     expect(gate.learningModeBlocked.value).toBe(true);
+    expect(gate.learningModeMessage.value).toBe("You're in Learn mode. Press L to go back to your projects.");
     expect(gate.errorMessage.value).toBe("");
     expect(emitted.some(([name]) => name === "error")).toBe(false);
     scope.stop();

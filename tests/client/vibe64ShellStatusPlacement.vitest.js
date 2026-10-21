@@ -169,7 +169,7 @@ import { reactive } from "vue";
 import { createVuetify } from "vuetify";
 import { VIBE64_LEARNING_KEY } from "../../src/lib/vibe64AssistantHost.js";
 
-async function renderLearningShell(environment = { actorKey: "local", open: false, minimised: false }) {
+async function renderLearningShell(environment = { actorKey: "local" }, learnMode = false) {
   const app = createSSRApp({
     render() {
       return h(StudioAppShellLayout, null, {
@@ -180,69 +180,63 @@ async function renderLearningShell(environment = { actorKey: "local", open: fals
     }
   });
   app.use(createVuetify());
-  if (environment) app.provide(VIBE64_LEARNING_KEY, { state: reactive(environment), toggle() {} });
+  if (environment) app.provide(VIBE64_LEARNING_KEY, reactive({ state: environment, learnMode, lessonTitle: "", toggleMode() {}, openCourses() {} }));
   return renderToString(app);
 }
 
-// Learning v2: the L button opens the Learning environment above the page. It
-// keeps the plate's footprint and position in the app bar.
+// Learning v2 Rev 4: the L plate switches between Develop and Learn. It keeps
+// the plate's footprint and position in the app bar.
 describe("controlled Learning shell", () => {
   it.each([
-    [false, "false", "Open Learning"],
-    [true, "true", "Hide Learning"]
-  ])("renders the actual L button with truthful state (open %s)", async (open, pressed, title) => {
-    const html = await renderLearningShell({ actorKey: "local", open, minimised: false });
-    expect(html.match(/aria-label="Learning"/gu)).toHaveLength(1);
+    [false, "false", "Switch to Learn"],
+    [true, "true", "Back to Develop (your projects)"]
+  ])("renders the actual L button with truthful mode (Learn %s)", async (learn, pressed, title) => {
+    const html = await renderLearningShell({ actorKey: "local" }, learn);
+    expect(html.match(/aria-label="Learn mode"/gu)).toHaveLength(1);
     expect(html).toContain(`aria-pressed="${pressed}"`);
     expect(html).toContain(`title="${title}"`);
     expect(html).toContain('data-vibe64-guide="learning"');
     expect(html).toMatch(/<span aria-hidden="true"[^>]*>L<\/span>/u);
-    // Neighbouring header icon-button size; full yellow only while active.
+    // Neighbouring header icon-button size; full yellow only in Learn mode.
     const plateClass = html.match(/class="([^"]*studio-app-shell-layout__learning-plate[^"]*)"/u)[1].split(" ");
     expect(plateClass).toEqual(expect.arrayContaining(["vibe64-learning-button", "v-btn--icon", "v-btn--size-small", "v-btn--density-comfortable"]));
     expect(plateClass).toContain(pressed === "true" ? "v-btn--variant-flat" : "v-btn--variant-outlined");
     expect(plateClass.includes("vibe64-learning-button--active")).toBe(pressed === "true");
+    expect(html.includes('data-test="learning-courses"'), "Courses only in Learn mode").toBe(learn);
     expect(html).toContain('data-test="retained-workspace"');
     expect(html).toContain('data-test="unchanged-main-controls"');
     expect(html).toContain('data-test="unchanged-project-identity"');
     expect(html.match(/data-shell-outlet="shell-layout:top-right"/gu)).toHaveLength(1);
   });
 
-  it("marks a minimised lesson on the closed L button", async () => {
-    const html = await renderLearningShell({ actorKey: "local", open: false, minimised: true });
-    expect(html).toContain('title="Return to your lesson"');
-    expect(html).toContain("vibe64-learning-button--minimised");
-  });
-
-  it("names the lesson and offers Leave lesson in the bar only while in learning mode", async () => {
+  it("names the current lesson and offers Courses in the bar only in Learn mode, with no Leave lesson", async () => {
     const app = createSSRApp({ render: () => h(StudioAppShellLayout, null, {}) });
     app.use(createVuetify());
-    app.provide(VIBE64_LEARNING_KEY, { state: reactive({ actorKey: "local", open: false, minimised: true }), inLesson: true,
-      lessonTitle: "Orientation", toggle() {}, leaveLesson() {} });
+    app.provide(VIBE64_LEARNING_KEY, reactive({ state: { actorKey: "local" }, learnMode: true, lessonTitle: "Orientation",
+      toggleMode() {}, openCourses() {} }));
     const html = await renderToString(app);
-    expect(html).toContain('data-test="learning-in-lesson"');
-    expect(html).toMatch(/data-test="learning-in-lesson"[^>]*>Orientation<\/span>/u);
-    expect(html).toMatch(/data-test="learning-leave-lesson"[^>]*>\s*Leave lesson\s*<\/button>/u);
-    expect(html.indexOf('aria-label="Learning"')).toBeLessThan(html.indexOf('data-test="learning-in-lesson"'));
-    expect(html.indexOf('data-test="learning-in-lesson"')).toBeLessThan(html.indexOf('data-test="learning-leave-lesson"'));
+    expect(html).toMatch(/data-test="learning-lesson-title"[^>]*>Orientation<\/span>/u);
+    expect(html.indexOf('aria-label="Learn mode"')).toBeLessThan(html.indexOf('data-test="learning-courses"'));
+    expect(html.indexOf('data-test="learning-courses"')).toBeLessThan(html.indexOf('data-test="learning-lesson-title"'));
+    expect(html).not.toContain("learning-leave-lesson");
     expect(html).toContain("studio-app-shell-layout__learning-plate");
-    const outside = await renderLearningShell({ actorKey: "local", open: false, minimised: true });
-    expect(outside).not.toContain("learning-in-lesson");
-    expect(outside).not.toContain("learning-leave-lesson");
+    const develop = await renderLearningShell({ actorKey: "local" }, false);
+    expect(develop).not.toContain("learning-lesson-title");
+    expect(develop).not.toContain("learning-courses");
   });
 
   it("does not expose L without a signed-in Learning environment", async () => {
-    expect(await renderLearningShell(null)).not.toContain('aria-label="Learning"');
-    expect(await renderLearningShell({ actorKey: "", open: false, minimised: false })).not.toContain('aria-label="Learning"');
+    expect(await renderLearningShell(null)).not.toContain('aria-label="Learn mode"');
+    expect(await renderLearningShell({ actorKey: "" })).not.toContain('aria-label="Learn mode"');
   });
 
   it("leads management page headers with the same L button", async () => {
     const app = createSSRApp({ render: () => h(ShellLayout, null, { "top-left": () => h("span", { "data-test": "page-title" }) }) });
     app.use(createVuetify());
-    app.provide(VIBE64_LEARNING_KEY, { state: reactive({ actorKey: "member", open: false, minimised: false }), toggle() {} });
+    app.provide(VIBE64_LEARNING_KEY, reactive({ state: { actorKey: "member" }, learnMode: false, toggleMode() {}, openCourses() {} }));
     const html = await renderToString(app);
-    expect(html.match(/aria-label="Learning"/gu)).toHaveLength(1);
-    expect(html.indexOf('aria-label="Learning"')).toBeLessThan(html.indexOf('data-test="page-title"'));
+    expect(html.match(/aria-label="Learn mode"/gu)).toHaveLength(1);
+    expect(html.indexOf('aria-label="Learn mode"')).toBeLessThan(html.indexOf('data-test="page-title"'));
     expect(html.match(/data-shell-outlet="shell-layout:top-right"/gu)).toHaveLength(1);
   });
 });

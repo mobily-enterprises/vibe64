@@ -1,7 +1,5 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
-import { useRouter } from "vue-router";
-import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
 import { revealCurrentStep } from "@/lib/vibe64Learning.js";
 import Vibe64LearningMarkdown from "./Vibe64LearningMarkdown.vue";
 import Vibe64LearningStep from "./Vibe64LearningStep.vue";
@@ -15,7 +13,6 @@ const props = defineProps({
   // Test seam for the step's visual resource read.
   readVisual: { type: Function, default: null }
 });
-const router = useRouter();
 const lesson = computed(() => props.learning.lesson.value);
 const steps = computed(() => lesson.value?.steps || []);
 const step = computed(() => props.learning.currentStep.value);
@@ -57,10 +54,7 @@ watch([() => step.value?.id, () => props.learning.state.open], async ([, open]) 
 }, { immediate: true });
 
 const practiceSlug = computed(() => lesson.value?.practiceProjectSlug || "");
-function openPractice() {
-  props.learning.minimise();
-  void router?.push(projectAppPath(practiceSlug.value));
-}
+const openPractice = () => props.learning.openCurrent();
 </script>
 
 <template>

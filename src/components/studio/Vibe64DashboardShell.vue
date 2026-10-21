@@ -18,8 +18,16 @@ const props = defineProps({
   dashboardContext: {
     default: () => ({}),
     type: Object
+  },
+  // No project selected (Learn mode without a practice project): the section
+  // list is shown without routing; `section` is the selected section's id.
+  noProject: Boolean,
+  section: {
+    default: "",
+    type: String
   }
 });
+const emit = defineEmits(["select"]);
 
 const route = useRoute();
 const incomingPath = computed(() => scopedDevelopmentApiUrl("/api/vibe64/incoming", projectSlugFromRoute(route)));
@@ -41,7 +49,7 @@ const activeSessionNav = computed(() => {
   const nav = props.dashboardContext?.activeSessionNav || null;
   return nav && typeof nav === "object" ? nav : null;
 });
-const mobileDashboardSectionLinks = computed(() => [
+const mobileDashboardSectionLinks = computed(() => props.noProject ? [] : [
   ...dashboardSectionLinks.value.map(link => link.id === "vibe64.incoming.link" && incomingCount.value > 0
     ? { ...link, label: `${link.label} (${incomingCount.value})` } : link),
   ...activeSessionMobileSectionLinks(activeSessionNav.value)
@@ -58,8 +66,20 @@ provide(VIBE64_ACTIVE_SESSION_NAV_KEY, activeSessionNav);
   >
     <template #tabs>
       <span v-if="dashboardSectionLinks.length" class="vibe64-dashboard-nav-group-label">Project</span>
-      <ShellOutlet target="app-dashboard:primary-menu" :context="dashboardContext" />
+      <template v-if="noProject">
+        <v-list-item
+          v-for="(link, index) in dashboardSectionLinks"
+          :key="link.id"
+          :active="link.id === section || (!section && index === 0)"
+          :prepend-icon="link.icon || undefined"
+          :title="link.label"
+          :data-dashboard-section="link.id"
+          @click="emit('select', link.id)"
+        />
+      </template>
+      <ShellOutlet v-else target="app-dashboard:primary-menu" :context="dashboardContext" />
       <ShellOutlet
+        v-if="!noProject"
         target="app-dashboard:active-session-menu"
         :context="{ activeSessionNav: activeSessionNav || {} }"
       />

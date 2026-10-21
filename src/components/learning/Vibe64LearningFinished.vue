@@ -2,63 +2,43 @@
 import { computed, ref, toValue, watch } from "vue";
 import { mdiCheckCircle } from "@mdi/js";
 import { courseProgress } from "@local/vibe64-training/client/course-progress";
-import { useVibe64PracticeProjects } from "@/composables/useVibe64PracticeProjects.js";
 
-// L's "Lesson finished" screen (lesson surface): shown when the learner's own
+// The "Lesson finished" screen (lesson surface): shown when the learner's own
 // step result completes the lesson, and again from the reader of a complete
-// lesson. It ends the attempt (lesson.end, reason finished, every result kept),
-// which also ends learning mode; then it offers to archive, delete or keep the
-// practice project (one click each), the next lesson of the same course and
-// Courses.
+// lesson. It finishes the attempt once (lesson.finish archives its record,
+// practice project and conversation; Learn mode stays on), then offers the
+// next lesson of the same course and Back to courses.
 const props = defineProps({
   learning: { type: Object, required: true },
-  // L's courses adapter (useVibe64LearningCourses): courses, saved lessons, start.
-  courses: { type: Object, required: true },
-  // The saved learning revision, required by lesson.end.
-  learningRevision: { type: Number, default: null }
+  // The Courses adapter (useVibe64LearningCourses): courses, saved lessons, start.
+  courses: { type: Object, required: true }
 });
-// "ended": lesson.end succeeded, so the host rereads the saved lessons it shows.
-const emit = defineEmits(["ended"]);
 const lesson = computed(() => props.learning.lesson.value);
-const attempt = computed(() => lesson.value?.attempt || null);
-const ended = computed(() => Boolean(attempt.value?.ended));
 const steps = computed(() => lesson.value?.steps || []);
 const passedCount = computed(() => steps.value.filter(step => props.learning.stepStatus(step.id) === "passed").length);
 const busy = computed(() => props.learning.state.busy);
 
-// Finish: end the attempt once, as soon as the saved revision is known.
-const endError = ref("");
-let endingFor = "";
+// Finish: once per attempt shown here.
+const finished = ref(false);
+const finishError = ref("");
+let finishingFor = "";
 async function finish() {
-  if (ended.value || busy.value || props.learningRevision === null) return;
-  endError.value = "";
-  const result = await props.learning.finishLesson({ expectedRevision: props.learningRevision });
-  if (result) emit("ended");
-  else endError.value = props.learning.state.error || "Finishing the lesson was not confirmed. Try again.";
+  if (finished.value || busy.value) return;
+  finishError.value = "";
+  if (await props.learning.finish()) {
+    finished.value = true;
+    void props.courses.learningResource.reload();
+  } else finishError.value = props.learning.state.error || "Finishing the lesson was not confirmed. Try again.";
 }
-watch([() => props.learning.state.attemptId, () => props.learningRevision, ended], ([attemptId, revision, done]) => {
-  if (done || revision === null || !attemptId || endingFor === attemptId) return;
-  endingFor = attemptId;
+watch(() => props.learning.finished && props.learning.state.attemptId, attemptId => {
+  if (!attemptId || finishingFor === attemptId) return;
+  finishingFor = attemptId;
+  finished.value = false;
   void finish();
 }, { immediate: true });
 
-// The practice project: archived or deleted with one click, or kept (it stays
-// in L's Practice tab). Its Practice row is found by slug: a continued lesson
-// has a new attempt, while the project keeps the identity of the attempt that
-// created it.
-const practice = useVibe64PracticeProjects({ enabled: computed(() => Boolean(props.learning.state.open)) });
-const practiceSlug = computed(() => lesson.value?.practiceProjectSlug || "");
-const practiceRow = computed(() => practice.projects.value.find(project => project.slug === practiceSlug.value) || null);
-const practiceBusy = computed(() => practice.busy.value);
-const practiceChoice = ref("");
-watch(() => props.learning.state.attemptId, () => { practiceChoice.value = ""; });
-async function changePractice(action, outcome) {
-  const row = practiceRow.value;
-  if (row && await practice[action]({ practiceId: row.practiceId })) practiceChoice.value = outcome;
-}
-
 // The next lesson: the first lesson of this course not completed yet that can be started.
-const pin = computed(() => attempt.value?.pin || null);
+const pin = computed(() => lesson.value?.attempt?.pin || null);
 const saved = computed(() => {
   const value = toValue(props.courses.learningResource.data);
   return value?.ok === true && value.available === true ? value : null;
@@ -68,30 +48,23 @@ const nextLesson = computed(() => {
   const course = catalogue?.ok === true && Array.isArray(catalogue.courses) ? catalogue.courses.find(value =>
     value?.courseId === pin.value?.course?.courseId && value.release === pin.value?.course?.release) : null;
   if (!course || !saved.value) return null;
-  const progress = courseProgress(course, saved.value.lessonProgress || [], saved.value.active || null, saved.value.history || [],
-    { canTryPreviews: catalogue.canTryPreviews === true });
-  const next = progress.next;
-  return next && next.code !== pin.value?.lesson?.code ? { course, lesson: next, continueFrom: progress.continueFrom } : null;
+  const next = courseProgress(course, saved.value.lessonProgress || [], saved.value.active || null, saved.value.history || [],
+    { canTryPreviews: catalogue.canTryPreviews === true }).next;
+  return next && next.code !== pin.value?.lesson?.code ? { course, lesson: next } : null;
 });
 const startError = ref("");
-const canStart = computed(() => Boolean(ended.value && nextLesson.value && saved.value && !saved.value.active &&
-  !toValue(props.courses.busy)));
+const canStart = computed(() => Boolean(finished.value && nextLesson.value && saved.value && !toValue(props.courses.busy)));
 async function startNext() {
   if (!canStart.value) return;
-  const { course, lesson: next, continueFrom } = nextLesson.value;
-  const expectedRevision = saved.value.revision;
+  const { course, lesson: next } = nextLesson.value;
   startError.value = "";
   try {
-    // A next lesson left earlier continues in its own practice project.
-    const outcome = continueFrom
-      ? await props.courses.continueLesson({ attemptId: continueFrom.attemptId, expectedRevision })
-      : await props.courses.startLesson({ courseId: course.courseId, release: course.release, lessonCode: next.code, expectedRevision });
-    if (outcome?.attemptId && outcome.current !== false) await props.learning.show({ surface: "lesson", attemptId: outcome.attemptId });
+    await props.learning.startLesson({ courseId: course.courseId, release: course.release, lessonCode: next.code,
+      expectedRevision: saved.value.revision }, props.courses.startLesson);
   } catch (cause) {
     startError.value = String(cause?.message || "The next lesson did not start. Try again from Courses.");
   }
 }
-const backToCourses = () => props.learning.show({ surface: "courses" });
 </script>
 
 <template>
@@ -99,39 +72,22 @@ const backToCourses = () => props.learning.show({ surface: "courses" });
     <v-icon :icon="mdiCheckCircle" size="56" class="vibe64-learning-finished__mark" aria-hidden="true" />
     <p class="vibe64-learning-finished__eyebrow">Lesson finished</p>
     <h2 id="vibe64-learning-finished-title">{{ lesson?.title || lesson?.code }}</h2>
-    <p>You completed every required step: {{ passedCount }} of {{ steps.length }} steps passed. Your results are kept.</p>
-    <p v-if="!ended && !endError" class="vibe64-learning-finished__hint" role="status">
+    <p>You completed every required step: {{ passedCount }} of {{ steps.length }} steps passed.</p>
+    <p v-if="finished">It is archived with its practice project and conversation, under Courses → Archived.</p>
+    <p v-else-if="!finishError" class="vibe64-learning-finished__hint" role="status">
       <v-progress-circular indeterminate size="16" width="2" class="me-2" />Finishing the lesson…
     </p>
-    <v-alert v-if="endError" type="error" variant="tonal" rounded="lg" role="alert">
-      {{ endError }}
+    <v-alert v-if="finishError" type="error" variant="tonal" rounded="lg" role="alert">
+      {{ finishError }}
       <template #append><v-btn variant="text" min-height="48" :disabled="Boolean(busy)" data-test="learning-finished-retry" @click="finish">Finish lesson</v-btn></template>
     </v-alert>
-
-    <div v-if="practiceSlug && ended" class="vibe64-learning-finished__card" data-test="learning-finished-practice">
-      <h3>Practice project</h3>
-      <p v-if="practiceChoice === 'archived'">The practice project is archived. It is listed under Practice → Archived.</p>
-      <p v-else-if="practiceChoice === 'deleted' || (practice.loaded.value && !practiceRow && !practiceBusy && !practiceChoice)">The practice project is deleted.</p>
-      <p v-else-if="practiceChoice === 'kept'">The practice project is kept. You can open, archive or delete it later from Learning → Practice.</p>
-      <template v-else>
-        <p>Archive it (a copy is kept, without rebuildable dependencies), delete it for good, or keep it to work on later.</p>
-        <p v-if="practice.error.value" class="vibe64-learning-finished__error" role="alert">{{ practice.error.value }}</p>
-        <div class="vibe64-learning-finished__actions">
-          <v-btn variant="tonal" rounded="pill" min-height="48" :loading="practiceBusy.startsWith('archive:')" :disabled="Boolean(practiceBusy) || !practiceRow"
-            data-test="learning-finished-archive" @click="changePractice('archive', 'archived')">Archive practice project</v-btn>
-          <v-btn variant="tonal" rounded="pill" min-height="48" :loading="practiceBusy.startsWith('delete:')" :disabled="Boolean(practiceBusy) || !practiceRow"
-            data-test="learning-finished-delete" @click="changePractice('remove', 'deleted')">Delete practice project</v-btn>
-          <v-btn variant="text" rounded="pill" min-height="48" :disabled="Boolean(practiceBusy)" data-test="learning-finished-keep" @click="practiceChoice = 'kept'">Keep</v-btn>
-        </div>
-      </template>
-    </div>
 
     <p v-if="startError" class="vibe64-learning-finished__error" role="alert">{{ startError }}</p>
     <div class="vibe64-learning-finished__actions">
       <v-btn v-if="nextLesson" color="primary" variant="flat" rounded="pill" min-height="48" :disabled="!canStart"
         :loading="Boolean(toValue(courses.starting))" data-test="learning-finished-next" @click="startNext">Next lesson: {{ nextLesson.lesson.title }}</v-btn>
-      <v-btn variant="tonal" rounded="pill" min-height="48" data-test="learning-finished-courses" @click="backToCourses">Back to courses</v-btn>
-      <v-btn variant="text" rounded="pill" min-height="48" data-test="learning-finished-read" @click="learning.closeFinished()">Read the lesson again</v-btn>
+      <v-btn variant="tonal" rounded="pill" min-height="48" data-test="learning-finished-courses"
+        @click="learning.show({ surface: 'courses' })">Back to courses</v-btn>
     </div>
   </section>
 </template>
@@ -143,9 +99,6 @@ const backToCourses = () => props.learning.show({ surface: "courses" });
 .vibe64-learning-finished__eyebrow { font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif); letter-spacing: 0.06em; text-transform: uppercase; color: var(--v64-on-surface-variant, inherit); }
 .vibe64-learning-finished h2 { font: var(--v64-type-headline-sm, 600 1.5rem/2rem system-ui, sans-serif); overflow-wrap: anywhere; }
 .vibe64-learning-finished__hint { display: flex; align-items: center; color: var(--v64-on-surface-variant, inherit); }
-.vibe64-learning-finished__card { display: grid; gap: var(--v64-space-2, 8px); justify-self: stretch; padding: var(--v64-space-4, 16px); border-radius: var(--v64-shape-lg, 16px); background: var(--v64-surface-container-low, rgba(0, 0, 0, 0.03)); }
-.vibe64-learning-finished__card > * { margin: 0; }
-.vibe64-learning-finished__card h3 { font: var(--v64-type-title-md, 600 1.125rem/1.5rem system-ui, sans-serif); }
 .vibe64-learning-finished__actions { display: flex; flex-wrap: wrap; gap: var(--v64-space-2, 8px); }
 .vibe64-learning-finished__error { color: rgb(var(--v-theme-error)); }
 .vibe64-learning-finished .v-btn { letter-spacing: 0; text-transform: none; }

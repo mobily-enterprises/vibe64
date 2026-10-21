@@ -116,13 +116,16 @@ function useProjectSelectionGate(emit, {
     writeMethod: "POST"
   });
 
-  // Learning mode (server-backed): the server lists no project during a
-  // lesson; the picker says why and offers no project creation.
+  // Learn mode (server-backed): the server lists no project of yours; the
+  // picker says why and offers no project creation.
   const learning = hasInjectionContext() ? useVibe64Learning() : null;
-  const learningModeOn = computed(() => learning?.learningMode?.on === true);
-  // A project outside the lesson was refused: L's guard redirects; no error.
+  const learnMode = computed(() => learning?.learnMode === true);
+  // A project the current mode does not allow was refused (the server's
+  // message says which way to switch); the overlay's guard usually moves away first.
   const learningModeBlocked = computed(() =>
     selectionResource.query?.error?.value?.code === VIBE64_LEARNING_MODE_PROJECT_CODE);
+  const learningModeMessage = computed(() => learningModeBlocked.value
+    ? String(selectionResource.query.error.value.message || "") : "");
 
   const cachedProjectSelection = computed(() => cachedProjectSelections.get(projectSlug.value) || null);
   const projectSelection = computed(() => projectSelectionView.record || cachedProjectSelection.value || {});
@@ -181,9 +184,10 @@ function useProjectSelectionGate(emit, {
     creating,
     errorMessage,
     hasSelection,
+    learnMode,
     learningModeBlocked,
-    learningModeOn,
-    leaveLesson: () => learning?.leaveLesson(),
+    learningModeMessage,
+    toggleMode: () => learning?.toggleMode(),
     loadProjectSelection,
     newProjectName,
     practiceDeleted,

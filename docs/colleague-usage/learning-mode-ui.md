@@ -1,8 +1,10 @@
 # Choosing lessons and courses
 
-The **L** button opens the Learning environment above the current page; see
-[The Learning environment (L)](learning-environment.md). This guide describes
-its **Courses** page. Its **Practice** tab is described in
+The **L** button switches between **Develop** (your own projects) and
+**Learn** (lessons); see [The Learning environment (L)](learning-environment.md).
+In Learn mode the app bar turns yellow and shows a **Courses** button, which
+opens the Courses overlay. This guide describes its **Courses** tab. Its **In
+progress** and **Archived** tabs are described in
 [Practice projects](learning-practice-projects.md).
 
 ## Course cards
@@ -22,20 +24,17 @@ already saved; opening a course grades nothing. A lesson passed in one course
 counts in every course that contains the same lesson.
 
 On a card, **Continue lesson** reopens your lesson in progress when it belongs
-to that course. Otherwise, when the course's next lesson is one you left
-earlier, **Continue lesson** starts it again in the same practice project, at
-the first required step you have not passed. Otherwise **Start** starts the
-course's first published lesson that is not yet complete. **View course** opens
-the course page: a header with the cover and a ring of lessons complete, an
-**Up next** card, then its topics in order, each with its lessons, their title
-and code and a status of **Completed** (green tick), **In progress** (yellow; an
-open attempt or some passes) or **Not started** (numbered). **Up next** has one
-main action, **Continue lesson** or **Start next lesson** (with the next lesson
-named beside it). Each available lesson has a **Start lesson** button, or
-**Continue lesson** when you left that lesson earlier: it starts the lesson
-again in its own practice project rather than making a second one. **Back to
-courses** returns to the list. On a phone the cards stack in one column and the
-course page scrolls in the same pane.
+to that course. Otherwise **Start** starts the course's first published lesson
+that is not yet complete. **View course** opens the course page: a header with
+the cover and a ring of lessons complete, an **Up next** card, then its topics
+in order, each with its lessons, their title and code and a status of
+**Completed** (green tick), **In progress** (yellow; an open attempt or some
+passes) or **Not started** (numbered). **Up next** has one main action,
+**Continue lesson** or **Start next lesson** (with the next lesson named beside
+it). Every available lesson except the one in progress has a **Start lesson**
+button; an archived lesson starts again as a new attempt with a fresh practice
+project. **Back to courses** returns to the list. On a phone the cards stack in
+one column and the course page scrolls in the same pane.
 
 The lesson card above the course cards is headed "Lesson in progress · code"
 with the lesson title and, once reported, a ring of required steps passed with
@@ -53,45 +52,44 @@ with a newer release shows **Update available** and **Update** (see
 [Installing and updating Learning courses](learning-course-catalogue.md)).
 
 A lesson without a practice project, such as a course's first setup lesson
-(Lesson 0), opens on the Learning page (`/app/learning`): the usual project
-page with **No project open**, its **Preview** and **Dashboard** switches and
-empty panes, and no sessions. Your own projects stay closed until you leave the
-lesson. Its steps say which real screens it uses, for example **Account
-settings → AI Accounts** to connect an AI.
+(Lesson 0), opens with **No project selected**: the usual project page (at
+`/app/learning`) with the chat column, the **Preview** and **Dashboard**
+switches and empty panes each saying **No project selected**, and no sessions.
+The Dashboard still lists its sections. Your own projects stay hidden until you
+press **L** to go back to Develop. Its steps say which real screens it uses, for
+example **Account settings → AI Accounts** to connect an AI.
 
-## Starting, continuing, leaving and finishing
+## Starting, continuing, archiving and finishing
 
 While a start is in progress, Courses says **Starting the selected lesson and
 preparing its practice project. The lesson opens when this finishes.** Every
 start button stays disabled until the request settles; the lesson then opens by
-itself. A practice project's Workspace setup can continue afterwards and the
-lesson becomes ready when setup succeeds, so you do not need **Continue lesson**
-after a normal start (see [Practice projects](learning-practice-projects.md)).
-**Starting lessons is unavailable in this installation** appears only when the
-installation cannot start lessons. This looks the same on desktop and phone.
+itself, at its practice project. A practice project's Workspace setup can
+continue afterwards and the lesson becomes ready when setup succeeds (see
+[Practice projects](learning-practice-projects.md)). **Starting lessons is
+unavailable in this installation** appears only when the installation cannot
+start lessons. This looks the same on desktop and phone.
 
 If a start is unconfirmed, Courses says **The last lesson start was not
 confirmed** and shows **Retry lesson start**, which repeats the same request,
 lesson and revision; do not substitute a different lesson. The retry is lost if
-the page unloads, so read saved progress before making another request. If
-Continue lesson reports that the saved exercise is busy preparing or finishing a
-command, wait for it to settle and retry the same attempt.
+the page unloads, so read saved progress before making another request.
 
-A lesson is either in progress or not. While one is in progress, start buttons
-stay disabled: continue it, or press **Leave lesson** first. Leaving ends the
-lesson; its results and practice project are kept, and **Continue lesson**
-starts it again later in the same practice project. When every required step
-has passed, Learning shows the **Lesson finished** screen, which finishes it
-(see [The Learning environment (L)](learning-environment.md)). Leaving or
-finishing never stops, closes, archives or deletes the practice project; do
-that from Learning → **Practice** or the **Lesson finished** screen.
+You have at most one lesson in progress. Starting a different lesson while one
+is in progress asks **Archive your lesson in progress?**, naming it. **Archive
+and start** archives it, with its practice project and conversation, under
+**Archived**, then starts the new lesson; **Keep it** cancels and nothing
+changes. Pressing **L** to go back to Develop only pauses the lesson: it stays
+in progress, and **L** returns to it. When every required step has passed, the
+**Lesson finished** screen finishes the lesson, which archives it the same way
+(see [The Learning environment (L)](learning-environment.md)).
 
-A practice lesson's project opens with **Open practice project** in the lesson
-or **Open** in Learning → **Practice**. Setup repair there is ordinary project
-work (ask that session's agent or use Workspace setup recovery); it is not a
-learner answer or a passed step.
+The lesson's practice project opens with **Open practice project** in the lesson
+or **Open** under **In progress**. Setup repair there is ordinary project work
+(ask that session's agent or use Workspace setup recovery); it is not a learner
+answer or a passed step.
 
-Opening L again rereads saved lessons and any admitted author trial, without
+Opening Courses again rereads saved lessons and any admitted author trial, without
 reloading the page. An account change immediately hides the previous person's
 progress and diagrams; a late result of a request made before the change cannot
 open the lesson in the new view, but admitted lesson work is not undone.
@@ -131,5 +129,6 @@ Colleague can explain this page and offer its actions; a how-to question alone
 does not authorize them. Private provider key entry remains a human-only step.
 Colleague can explain setup recovery but has no source-editing or shell access.
 
-Related topics: [Answering a code question in a lesson](learning-code-questions.md)
+Related topics: [Practice projects](learning-practice-projects.md),
+[Answering a code question in a lesson](learning-code-questions.md)
 and [The Learning environment (L)](learning-environment.md).
