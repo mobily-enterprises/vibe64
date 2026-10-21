@@ -264,7 +264,9 @@ reach it like any managed source. On a host that shares project files through
 one group, the managed-source contract (group, default ACL and umask) applies;
 on a person's own computer practice folders keep the person's private modes.
 Practice directories get no explicit mode, except the runtime root under the
-daemon-private system root. The default managed source root is the
+daemon-private system root. The local CLI (`bin/server.js`
+`prepareLocalSystemRoot`) creates the default system root (mode 0700) before
+starting; an explicit `VIBE64_SYSTEM_ROOT` must already exist. The default managed source root is the
 real `~/Vibe64` folder in the person's home, so in a Node test
 process (`NODE_TEST_CONTEXT`) a context with neither `explicitManagedSourceRoot`
 nor `learningSpace.root` refuses to read or create practice storage instead of
@@ -317,7 +319,7 @@ slug, which stays the address. The client `vibe64PracticeProjectName.js`
 (`projectDisplayName`, `practiceProjectName`) is the one naming rule for both
 hosts: **Practice:** plus the lesson title where the client knows it (the open
 lesson's own practice project in `useVibe64AppPage`'s `projectTitle`; each
-`practice.list` row's lesson in `useVibe64PracticeProjects`), else that row's
+`practice.list` row's lesson as the Learning controller's `readPractice` normalizes it), else that row's
 lesson code, else "Practice project" for a bare practice slug; no catalogue
 marker is read. Headers, the project
 switcher, both Practice lists and a host's management pages use it; Colleague's

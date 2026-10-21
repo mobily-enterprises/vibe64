@@ -36,6 +36,8 @@ the next time it runs a command.
 | Projects Vibe64 creates for you | `~/Vibe64` | `~/Vibe64` |
 | Vibe64's own data (sessions, settings, history) | `~/.local/state/vibe64` (or `$XDG_STATE_HOME/vibe64`) | `~/Library/Application Support/Vibe64` |
 
+Vibe64 creates its data folder (private to you) when it starts, unless you
+set `VIBE64_SYSTEM_ROOT` to a folder of your own, which must already exist.
 A folder you open with `npx vibe64` stays where it is; Vibe64 does not move it.
 
 ### Moving data from an earlier version on macOS

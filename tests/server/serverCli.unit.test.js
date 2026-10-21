@@ -9,6 +9,7 @@ import {
 import {
   projectSlugFromName
 } from "@local/vibe64-core/server/studioProjectContext";
+import { resolveDefaultLocalEditorSystemRoot } from "@local/vibe64-core/server/studioRoots";
 import {
   browserUrlForListenAddress,
   browserUrlForPublicOrigin,
@@ -19,6 +20,7 @@ import {
   applyLocalCliRuntimeNamespace,
   isDirectServerExecution,
   parseStartupArgs,
+  prepareLocalSystemRoot,
   serverStartOptions,
   shouldOpenBrowser
 } from "../../bin/server.js";
@@ -255,4 +257,15 @@ test("server CLI detects direct execution without starting when imported", () =>
     entrypointPath,
     realpath
   }), false);
+});
+
+test("server CLI creates the default local state folder before starting, and only that one", async () => {
+  const made = [];
+  const makeDirectory = async (root, options) => { made.push([root, options]); };
+  const root = resolveDefaultLocalEditorSystemRoot("/home/person", "linux");
+  assert.equal(await prepareLocalSystemRoot({ env: {}, home: "/home/person", platform: "linux", makeDirectory }), root);
+  assert.deepEqual(made, [[root, { recursive: true, mode: 0o700 }]]);
+  assert.equal(await prepareLocalSystemRoot({ env: { VIBE64_SYSTEM_ROOT: "/srv/state" }, home: "/home/person", makeDirectory }), "");
+  assert.equal(await prepareLocalSystemRoot({ env: {}, runtimeMode: "hosted", home: "/home/person", makeDirectory }), "");
+  assert.equal(made.length, 1);
 });

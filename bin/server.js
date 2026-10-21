@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, realpathSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import open, { apps } from "open";
@@ -232,6 +233,24 @@ function macosDataMoveMessage({
   ].join("\n");
 }
 
+// The local CLI owns the person's default state folder, so it exists before
+// the first write there (pressing L, installing a course). An explicitly
+// configured root is left to whoever provisioned it.
+async function prepareLocalSystemRoot({
+  env = process.env,
+  home = os.homedir(),
+  makeDirectory = mkdir,
+  platform = process.platform,
+  runtimeMode = VIBE64_RUNTIME_MODE_LOCAL
+} = {}) {
+  if (runtimeMode !== VIBE64_RUNTIME_MODE_LOCAL || String(env[VIBE64_SYSTEM_ROOT_ENV] || "").trim()) {
+    return "";
+  }
+  const root = resolveDefaultLocalEditorSystemRoot(home, platform);
+  await makeDirectory(root, { recursive: true, mode: 0o700 });
+  return root;
+}
+
 async function main() {
   const dataMoveMessage = macosDataMoveMessage();
   if (dataMoveMessage) {
@@ -248,6 +267,7 @@ async function main() {
   applyLocalCliRuntimeNamespace({
     runtimeMode
   });
+  await prepareLocalSystemRoot({ runtimeMode });
   const app = await startServer(serverStartOptions({
     openOnStart,
     runtimeMode,
@@ -282,6 +302,7 @@ export {
   isDirectServerExecution,
   macosDataMoveMessage,
   parseStartupArgs,
+  prepareLocalSystemRoot,
   serverStartOptions,
   shouldOpenBrowser
 };
