@@ -729,10 +729,15 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     return lesson;
   }
 
+  // Each distinct pinned lesson is verified once per read, however many
+  // attempts (every leave and continue adds one) share it.
   async function verifyProgressLessons(progress) {
     const lessons = new Map();
+    const verified = new Map();
     for (const attempt of progress.attempts) {
-      const lesson = await verifyInstalled(attempt.pin);
+      const key = canonicalJson([attempt.pin.topic, attempt.pin.lesson]);
+      if (!verified.has(key)) verified.set(key, await verifyInstalled(attempt.pin));
+      const lesson = verified.get(key);
       validateLessonPractice(attempt, lesson);
       validateLessonLearning(attempt, lesson);
       lessons.set(attempt.attemptId, lesson);

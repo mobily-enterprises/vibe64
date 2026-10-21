@@ -2231,3 +2231,27 @@ test("exercise scope preserves no-exercise pin inactive and unavailable-reader r
 
 
 
+
+test("reading progress verifies each pinned lesson once, not once per past attempt", async t => {
+  const f = await fixture(t, { noExercise: true });
+  const installed = createInstalledTrainingContent({ systemRoot: f.systemRoot });
+  let reads = 0;
+  const state = createTrainingLearnerState({ systemRoot: f.systemRoot,
+    content: { ...installed, readLesson: input => { reads++; return installed.readLesson(input); } } });
+  const readsFor = async operation => { reads = 0; await operation(); return reads; };
+  let revision = 0;
+  const counts = [];
+  for (let index = 1; index <= 6; index++) {
+    const { attempt } = await state.reserveAttempt({ actor: f.actor, requestId: `start-${index}`, expectedRevision: revision, pin: f.pin });
+    const ended = await state.endAttempt({ actor: f.actor, attemptId: attempt.attemptId, requestId: `leave-${index}`,
+      expectedRevision: revision + 1, reason: "left" });
+    revision = ended.revision;
+    counts.push(await readsFor(() => state.readState({ actor: f.actor, includeCompletion: true })));
+  }
+  assert.equal((await state.readState({ actor: f.actor })).progress.attempts.length, 6);
+  assert.deepEqual(counts, [1, 1, 1, 1, 1, 1]);
+  // The one verification still reads the installed bytes: a changed file fails.
+  const filesRoot = path.join(f.systemRoot, "training/content", f.pin.topic.topicId, f.pin.topic.commit, "files");
+  await fs.appendFile(path.join(filesRoot, "training/outline.md"), "Changed.\n");
+  await assert.rejects(() => state.readState({ actor: f.actor, includeCompletion: true }), /invalid|changed/u);
+});
