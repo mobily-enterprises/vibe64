@@ -205,6 +205,11 @@ test("agent Env status reports both scopes without exposing values", async () =>
   assert.doesNotMatch(result.stdout, /development\.example\.test/u);
   assert.doesNotMatch(result.stdout, /\*\*\*\*\*\*\*\*/u);
   assert.deepEqual(project.state.contexts, ["demo"]);
+
+  const help = await command.run({ args: ["--help"], sessionId: "status-session" });
+  assert.match(help.stdout, /--secret marks the value as a secret/u);
+  assert.match(help.stdout, /keys\nwhose names look secret .* become secrets automatically/u);
+  assert.match(help.stdout, /pipe\nit to env set <scope> <KEY> --secret\. Never write it into the generated \.env/u);
 });
 
 test("agent Env persists and reports empty development and production values", async () => {

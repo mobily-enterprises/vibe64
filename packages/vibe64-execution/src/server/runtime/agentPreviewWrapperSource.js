@@ -1,3 +1,43 @@
+// The wrapper owns the preview CLI surface, so help works without the
+// control socket; the session command service reuses this text.
+const AGENT_PREVIEW_USAGE = [
+  "Usage:",
+  "  vibe64-helper preview ensure [--target <target-id>] [--wait] [--json] [--timeout-ms <ms>]",
+  "  vibe64-helper preview targets [--json]",
+  "  vibe64-helper preview status [--json]",
+  "  vibe64-helper preview stop [--json]",
+  "  vibe64-helper preview inspect-url",
+  "  vibe64-helper preview screenshot [--output <path>]",
+  "  vibe64-helper preview browser ensure",
+  "  vibe64-helper preview browser eval < playwright-code.js",
+  "  vibe64-helper preview browser identity <default|guest|configured-name>",
+  "  vibe64-helper preview browser storage-state <default|guest|configured-name> --output <new-path>",
+  "  vibe64-helper preview browser screenshot [--output <path>]",
+  "  vibe64-helper preview browser status",
+  "  vibe64-helper preview browser reset",
+  "  vibe64-helper preview browser close",
+  "  vibe64-helper preview logs [--lines <count>] [--json]",
+  "  vibe64-helper preview restart [--wait] [--json] [--timeout-ms <ms>]",
+  "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] test [playwright test arguments]",
+  "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] npm-run <package-script> [-- script arguments]",
+  "",
+  "JSON output:",
+  "  status/ensure/restart/stop --json: ready, stoppedIntent, stale, outputTargetId, endpoints.browser {url, hostname, port}, currentPage {url, route, title, observedAt}, terminal {id, status, running, exitCode, command, createdAt}, defaultIdentity, identities [{name, type}], identityTypes, diagnostics {latest, log, directApplicationEndpoint}.",
+  "  screenshot: outputPath, byteLength, sha256, capturedAt, url, title, width, height, luminance, darkPixelPercentage, domTextLength, domTextSummary.",
+  "  browser eval: result (the code's JSON-safe return value), logs [{level, values}] from console, url (the page afterwards).",
+  "  browser storage-state: writes the identity's Playwright storage state to a new file at --output; the interactive browser keeps its identity.",
+  "",
+  "Screenshot commands emit JSON metadata for a uniquely named, immutable PNG.",
+  "For browser navigation, use preview inspect-url or the status Browser URL; these use the managed Preview proxy.",
+  "Inside browser eval, navigate with await page.goto(new URL('/your-path', preview.url).href).",
+  "The direct application endpoint in diagnostics bypasses Preview identity; do not use it for interactive browsing.",
+  "Managed Playwright suites and live preview browser actions are sequential. Wait on the suite through cleanup and restoration before browser actions or Preview ensure/restart/target changes; confirm playwright status has no active run and preview status is ready. Read-only status and logs are safe during a suite.",
+  "For background commands, wait on the existing execution/session with about a 30-second window where supported: set yield_time_ms: 30000 for an empty command poll. Reserve shorter waits for interactive input or a specific immediate check; do not repeatedly reread empty or unchanged logs between brief waits.",
+  "This is the canonical preview server for the configured primary application.",
+  "Do not start a duplicate copy of that application on another port.",
+  "A distinct secondary application explicitly requested by the user, such as a reference app, may run separately without replacing this preview."
+].join("\n") + "\n";
+
 function agentPreviewWrapperSource({
   browserSocketPath = "",
   contractVersion = "1",
@@ -19,6 +59,7 @@ const controlSocketPath = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_SOCKET
 const controlToken = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_TOKEN || "").trim();
 const controlGeneration = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_GENERATION || "").trim();
 const sessionId = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID || "").trim();
+const usage = ${JSON.stringify(AGENT_PREVIEW_USAGE)};
 const browserEvalUsage = "Usage: vibe64-helper preview browser eval < playwright-code.js\\nNavigate through Preview: await page.goto(new URL('/your-path', preview.url).href);\\npreview.url is the managed proxy; direct application ports bypass Preview identity.";
 const workerToken = crypto.createHash("sha256")
   .update(["vibe64-preview-browser", sessionId, controlGeneration, controlToken].join("\\n"))
@@ -405,11 +446,20 @@ function printJson(value) {
 if (commandName !== "vibe64-preview") {
   fail("Vibe64 preview command wrapper was invoked with an unsupported command.", 64);
 }
+const args = process.argv.slice(2);
+const isHelp = (value) => ["help", "--help", "-h"].includes(String(value || ""));
+if (!args.length || isHelp(args[0]) || (args[0] === "browser" && isHelp(args[1]))) {
+  process.stdout.write(usage);
+  process.exit(0);
+}
+if (args[0] === "browser" && !String(args[1] || "").trim()) {
+  process.stderr.write("A managed preview browser command is required.\\n" + usage);
+  process.exit(64);
+}
 if (!controlSocketPath || !controlToken || !controlGeneration || !sessionId || !path.isAbsolute(managedNodePath) || !path.isAbsolute(workerScriptPath)) {
   fail("vibe64_agent_control_unavailable: Managed preview control identity is unavailable. Reconnect the assistant.", 64);
 }
 
-const args = process.argv.slice(2);
 try {
   if (args[0] === "playwright-status" || args[0] === "playwright-cancel") {
     const payload = await controlRequest("/agent-preview-command/" + args[0], { runId: args[1] || "" });
@@ -509,7 +559,7 @@ try {
       printJson(await interactiveCommand("screenshot", { outputPath }));
       process.exit(0);
     }
-    fail("Unknown managed preview browser command: " + (browserCommand || "(missing)"), 64);
+    fail("Unknown managed preview browser command: " + browserCommand + "\\n" + usage, 64);
   }
   if (args[0] === "screenshot") {
     const outputPath = screenshotOutputPath(args.slice(1));
@@ -526,5 +576,6 @@ try {
 }
 
 export {
+  AGENT_PREVIEW_USAGE,
   agentPreviewWrapperSource
 };

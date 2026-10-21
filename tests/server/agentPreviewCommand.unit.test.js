@@ -418,6 +418,46 @@ test("agent preview help distinguishes duplicate previews from explicit referenc
   assert.doesNotMatch(result.stdout, /any other development server/u);
 });
 
+test("agent preview help works without the control socket and documents every browser command", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-offline-help-"));
+  const wrapperPath = path.join(root, "vibe64-preview");
+  const env = Object.fromEntries(Object.entries(process.env).filter(([name]) => !name.startsWith("VIBE64_")));
+  try {
+    await writeFile(wrapperPath, agentPreviewWrapperSource({}));
+    for (const args of [[], ["--help"], ["help"], ["-h"], ["browser", "--help"], ["browser", "-h"]]) {
+      const help = await execFileAsync(process.execPath, [wrapperPath, ...args], { env });
+      assert.match(help.stdout, /vibe64-helper preview browser storage-state <default\|guest\|configured-name> --output <new-path>/u);
+      assert.match(help.stdout, /screenshot: outputPath, byteLength, sha256/u);
+      assert.match(help.stdout, /browser eval: result .*logs \[\{level, values\}\]/u);
+    }
+    await assert.rejects(
+      execFileAsync(process.execPath, [wrapperPath, "browser"], { env }),
+      (error) => error.code === 64 &&
+        /A managed preview browser command is required\.\nUsage:/u.test(error.stderr) &&
+        !/Unknown managed preview browser command/u.test(error.stderr)
+    );
+    await assert.rejects(
+      execFileAsync(process.execPath, [wrapperPath, "status"], { env }),
+      /Managed preview control identity is unavailable/u
+    );
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+
+  const command = createAgentPreviewCommandService({
+    launchTarget: {
+      async launchStatus() {
+        return {};
+      }
+    }
+  });
+  const status = await command.run({ args: ["status"], sessionId: "preview-help-session" });
+  assert.match(
+    status.stdout,
+    /Managed app identities: none configured - the person configures them in Dashboard > App access \(or asks Colleague\); see vibe64-helper spec preview-identities/u
+  );
+});
+
 test("agent preview stop uses the session lifecycle and reports saved intent", async () => {
   let stopped = false;
   const command = createAgentPreviewCommandService({

@@ -2,7 +2,7 @@
 // Playwright is the way to run browser tests.
 const LOCAL_PLAYWRIGHT_MESSAGE =
   "This computer has no managed browser runtime for vibe64-playwright. Run the project's own Playwright instead: " +
-  "npx playwright test (install a browser once with npx playwright install chromium).";
+  "npx playwright test. If its browser is missing, report that and ask the person before running npx playwright install chromium.";
 
 function agentPlaywrightCommandSource({
   managedNodePath = "",

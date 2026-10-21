@@ -12,7 +12,10 @@ import {
   createAgentPreviewCommandService,
   prepareAgentPreviewCommand
 } from "../../packages/vibe64-terminals/src/server/agentPreviewCommand.js";
-import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/index.js";
+import {
+  agentPlaywrightCommandSource,
+  configureVibe64Host
+} from "../../packages/vibe64-execution/src/server/index.js";
 
 const execFileAsync = promisify(execFile);
 test.afterEach(() => configureVibe64Host(null));
@@ -889,6 +892,28 @@ test("managed Playwright help works without matching runtimes or an installed pr
     assert.equal(fixture.managedCommands.length, 0);
   } finally {
     await fixture?.commandService.closeAllForSession("playwright-1.62.0");
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("without a managed runtime the project's own Playwright runs and browser install waits for the person", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-playwright-local-"));
+  try {
+    const commandPath = path.join(root, "vibe64-playwright");
+    await writeFile(commandPath, agentPlaywrightCommandSource({}));
+    await writeFile(path.join(root, "package.json"), JSON.stringify({ devDependencies: { "@playwright/test": "1.50.1" } }));
+    await mkdir(path.join(root, "node_modules/@playwright/test"), { recursive: true });
+    await writeFile(path.join(root, "node_modules/@playwright/test/package.json"), '{"version":"1.50.1"}');
+    await writeFile(path.join(root, "node_modules/@playwright/test/cli.js"), "");
+    const readiness = JSON.parse((await execFileAsync(process.execPath, [commandPath, "readiness"], { cwd: root })).stdout);
+    assert.equal(readiness.status, "unsupported-runtime");
+    assert.match(readiness.recovery, /Run the project's own Playwright instead: npx playwright test\./u);
+    assert.match(readiness.recovery, /ask the person before running npx playwright install chromium/u);
+    await assert.rejects(
+      execFileAsync(process.execPath, [commandPath, "test"], { cwd: root }),
+      /If its browser is missing, report that and ask the person/u
+    );
+  } finally {
     await rm(root, { force: true, recursive: true });
   }
 });

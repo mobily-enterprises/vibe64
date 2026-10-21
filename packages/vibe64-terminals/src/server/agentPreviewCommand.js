@@ -22,6 +22,7 @@ import {
   readSessionUiSyncStateForSession
 } from "@local/vibe64-core/server/sessionUiSyncState";
 import {
+  AGENT_PREVIEW_USAGE,
   LOCAL_PLAYWRIGHT_MESSAGE,
   agentPlaywrightCommandSource,
   agentPreviewBrowserWorkerSource,
@@ -60,7 +61,8 @@ import {
 const AGENT_PREVIEW_COMMAND_NAME = "vibe64-preview";
 const AGENT_PLAYWRIGHT_COMMAND_NAME = "vibe64-playwright";
 const PROJECT_PLAYWRIGHT_MISSING_MESSAGE =
-  "Browser checks need Playwright in this project. Run npm install -D playwright and npx playwright install chromium, then try again.";
+  "Browser checks need Playwright in this project, and it does not declare it. Report this and ask the person before " +
+  "adding it (npm install -D playwright) or installing its browser (npx playwright install chromium).";
 const AGENT_PREVIEW_BROWSER_WORKER_NAME = "vibe64-preview-browser-worker";
 const AGENT_PREVIEW_BROWSER_SOCKET_NAME = "preview-browser.sock";
 const AGENT_PREVIEW_BROWSER_METADATA_NAME = "preview-browser.json";
@@ -175,39 +177,6 @@ function responseError(message = "", code = "vibe64_agent_preview_command_failed
     error: message,
     ok: false
   };
-}
-
-function usageText() {
-  return [
-    "Usage:",
-    "  vibe64-helper preview ensure [--target <target-id>] [--wait] [--json] [--timeout-ms <ms>]",
-    "  vibe64-helper preview targets [--json]",
-    "  vibe64-helper preview status [--json]",
-    "  vibe64-helper preview stop [--json]",
-    "  vibe64-helper preview inspect-url",
-    "  vibe64-helper preview screenshot [--output <path>]",
-    "  vibe64-helper preview browser ensure",
-    "  vibe64-helper preview browser eval < playwright-code.js",
-    "  vibe64-helper preview browser identity <default|guest|configured-name>",
-    "  vibe64-helper preview browser screenshot [--output <path>]",
-    "  vibe64-helper preview browser status",
-    "  vibe64-helper preview browser reset",
-    "  vibe64-helper preview browser close",
-    "  vibe64-helper preview logs [--lines <count>] [--json]",
-    "  vibe64-helper preview restart [--wait] [--json] [--timeout-ms <ms>]",
-    "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] test [playwright test arguments]",
-    "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] npm-run <package-script> [-- script arguments]",
-    "",
-    "Screenshot commands emit JSON metadata for a uniquely named, immutable PNG.",
-    "For browser navigation, use preview inspect-url or the status Browser URL; these use the managed Preview proxy.",
-    "Inside browser eval, navigate with await page.goto(new URL('/your-path', preview.url).href).",
-    "The direct application endpoint in diagnostics bypasses Preview identity; do not use it for interactive browsing.",
-    "Managed Playwright suites and live preview browser actions are sequential. Wait on the suite through cleanup and restoration before browser actions or Preview ensure/restart/target changes; confirm playwright status has no active run and preview status is ready. Read-only status and logs are safe during a suite.",
-    "For background commands, wait on the existing execution/session with about a 30-second window where supported: set yield_time_ms: 30000 for an empty command poll. Reserve shorter waits for interactive input or a specific immediate check; do not repeatedly reread empty or unchanged logs between brief waits.",
-    "This is the canonical preview server for the configured primary application.",
-    "Do not start a duplicate copy of that application on another port.",
-    "A distinct secondary application explicitly requested by the user, such as a reference app, may run separately without replacing this preview."
-  ].join("\n") + "\n";
 }
 
 function hasFlag(args = [], flag = "") {
@@ -430,7 +399,7 @@ function previewSummaryLines(summary = {}) {
     summary.terminal?.id ? `Terminal: ${summary.terminal.id} (${summary.terminal.status || "unknown"})` : "",
     summary.identities?.length
       ? `Managed app identities: ${summary.identities.map((identity) => identity.name).join(", ")}`
-      : "Managed app identities: none configured",
+      : "Managed app identities: none configured - the person configures them in Dashboard > App access (or asks Colleague); see vibe64-helper spec preview-identities",
     `Stale: ${summary.stale ? "yes" : "no"}`
   ].filter(Boolean);
 }
@@ -906,7 +875,7 @@ function createAgentPreviewCommandService({
       return finish({
         exitCode: 0,
         ok: true,
-        stdout: usageText()
+        stdout: AGENT_PREVIEW_USAGE
       });
     }
     if (["status", "targets"].includes(parsed.command)) {
@@ -1008,7 +977,7 @@ function createAgentPreviewCommandService({
     if (!["ensure", "restart"].includes(parsed.command)) {
       return finish(responseError(`Unknown Vibe64 preview command: ${parsed.command}`, "vibe64_agent_preview_command_unknown", {
         exitCode: 2,
-        stderr: usageText()
+        stderr: AGENT_PREVIEW_USAGE
       }));
     }
     const ensuring = parsed.command === "ensure";

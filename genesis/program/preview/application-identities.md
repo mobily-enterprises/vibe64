@@ -12,6 +12,7 @@ users without turning that convenience into a production sign-in mechanism.
 - `tests/server/vibe64SettingsActionTools.unit.test.js`
 - `packages/vibe64-terminals/src/server/previewIdentityCommand.js`
 - `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
+- `packages/vibe64-execution/src/server/runtime/agentPreviewWrapperSource.js`
 - `packages/vibe64-execution/src/server/runtime/agentPlaywrightCommandSource.js`
 - `packages/vibe64-execution/src/server/runtime/agentPreviewBrowserWorkerSource.js`
 - `packages/vibe64-genesis/src/server/outputs.js`
@@ -66,7 +67,10 @@ diagnostics for machine probes and the existing native application test runner.
 `inspect-url` fails when the proxy is unavailable; it never substitutes the raw
 application address. Browser eval exposes the canonical proxy as `preview.url`,
 even after code has navigated the page elsewhere. Command help and session
-guidance show route navigation relative to that URL.
+guidance show route navigation relative to that URL. The preview wrapper owns
+its help text and prints it without the control socket; the session command
+service reuses that one text. When no identity is configured, status names the
+configuration route: the person in App access or Colleague's save action.
 
 After a service restart, stale browser metadata may no longer match the current
 control token. Browser recovery uses the execution manager's durable ownership

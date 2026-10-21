@@ -193,6 +193,7 @@ export {
   agentPreviewBrowserWorkerSource
 } from "./runtime/agentPreviewBrowserWorkerSource.js";
 export {
+  AGENT_PREVIEW_USAGE,
   agentPreviewWrapperSource
 } from "./runtime/agentPreviewWrapperSource.js";
 export {

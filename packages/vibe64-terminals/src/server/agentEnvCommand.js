@@ -78,7 +78,11 @@ function usageText() {
     "",
     "Values are accepted only on stdin and are never printed by this command.",
     "Zero-length stdin stores an empty value; whitespace is preserved as an exact value.",
-    "Development and production are separate scopes; this command never copies values between them."
+    "Development and production are separate scopes; this command never copies values between them.",
+    "--secret marks the value as a secret, which Env keeps hidden. A key that is already secret stays secret, and keys",
+    "whose names look secret (KEY, SECRET, TOKEN, PASSWORD, ...) become secrets automatically.",
+    "Generated secrets (for example an application key): produce the value with the framework's own generator and pipe",
+    "it to env set <scope> <KEY> --secret. Never write it into the generated .env; Vibe64 regenerates that file from Env."
   ].join("\n") + "\n";
 }
 

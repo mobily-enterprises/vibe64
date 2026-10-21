@@ -39,11 +39,19 @@ Other tool dependencies still need their own declared runtime support. A fixture
 setup failure does not count as a failed application assertion or a passing check.
 
 The coding agent can read `vibe64-helper playwright --help` before a project has
-browser tests or a matching test runtime. Help starts neither Preview nor a browser.
+browser tests or a matching test runtime. `vibe64-helper preview --help` (also
+`preview browser --help`) works even while the assistant's Preview control is
+disconnected; it lists every browser command, including `browser storage-state`,
+and the fields of the status, screenshot and eval JSON. Help starts neither
+Preview nor a browser.
 An actual suite still requires the project's installed Playwright version and a
 matching managed runtime. A version error is a test-runtime blocker; interactive
 checks can use the existing managed Preview browser. Report the exact required
 version to the platform operator instead of installing a separate browser.
+On a computer without managed browser runtimes, the agent runs the project's own
+Playwright (`npx playwright test`). If that browser is missing, the agent reports
+it and asks you before running `npx playwright install chromium`; installing it
+is your decision.
 
 Before a suite, the coding agent can run `vibe64-helper playwright readiness`.
 It distinguishes absent tests, uninstalled dependencies, an unsupported exact
