@@ -37,7 +37,8 @@ const learning = useVibe64Learning();
   display: grid;
   gap: var(--v64-space-3);
   justify-items: center;
-  max-width: 24rem;
+  max-width: min(24rem, 100%);
+  min-width: 0;
   text-align: center;
 }
 

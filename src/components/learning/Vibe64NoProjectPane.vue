@@ -100,6 +100,7 @@ const noLesson = computed(() => Boolean(learning?.mode) && !learning.mode.curren
   display: grid;
   justify-items: center;
   min-height: 0;
+  min-width: 0;
   overflow-y: auto;
   padding: var(--v64-space-4) var(--v64-space-2);
 }
