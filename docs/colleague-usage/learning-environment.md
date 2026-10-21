@@ -68,9 +68,11 @@ sessions. It is used in two cases:
 
 - **No lesson in progress.** Pressing **L** to switch to Learn opens Courses on
   its **Courses** tab, so you can pick a lesson straight away. If you close it,
-  the chat column (what a phone shows first), Preview and the Dashboard each
-  say **No lesson in progress** with a **Choose a lesson** button that opens
-  Courses again.
+  Preview shows a welcome, **Ready to learn something new?**, with a yellow
+  **Choose a lesson** button that opens Courses again. On a phone the welcome
+  is in the chat column, which a phone shows first; on a desktop the chat
+  column says your teacher will chat there once a lesson starts. The
+  Dashboard says **No lesson in progress** with the same button.
 - **A lesson without a practice project** (such as Lesson 0). The chat column
   and each pane say **No project selected**, and **L** only switches mode.
 

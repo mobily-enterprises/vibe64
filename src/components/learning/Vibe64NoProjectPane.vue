@@ -4,14 +4,15 @@ import { mdiSchoolOutline } from "@mdi/js";
 import Vibe64DashboardShell from "@/components/studio/Vibe64DashboardShell.vue";
 import Vibe64EmptySessionLayout from "@/components/studio/Vibe64EmptySessionLayout.vue";
 import Vibe64SessionFrame from "@/components/studio/Vibe64SessionFrame.vue";
+import Vibe64LearnWelcome from "@/components/learning/Vibe64LearnWelcome.vue";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 
 // No project selected: Learn mode without a practice project (/app/learning):
 // no lesson in progress, or a lesson without one (Lesson 0). The session area
-// a project shows with no session open. With no lesson, the chat column (what
-// a phone shows first), Preview and the Dashboard each say so and offer
-// Choose a lesson, which opens Courses. The Dashboard keeps its section menu.
-// Both hosts' project pages render it.
+// a project shows with no session open. With no lesson, Preview shows Learn's
+// welcome (on a phone the chat column shows it, since a phone opens there),
+// the desktop chat column says where the teacher will talk, and the Dashboard
+// offers Choose a lesson beside its section menu. Both hosts render it.
 defineProps({
   chatCollapsed: { type: Boolean, default: false },
   projectPane: { type: String, default: "preview" },
@@ -21,8 +22,6 @@ defineEmits(["select"]);
 
 const learning = useVibe64Learning();
 const noLesson = computed(() => Boolean(learning?.mode) && !learning.mode.currentAttemptId);
-const message = computed(() => noLesson.value ? "No lesson in progress" : "No project selected");
-const chooseLesson = () => learning?.openCourses("courses");
 </script>
 
 <template>
@@ -34,32 +33,19 @@ const chooseLesson = () => learning?.openCourses("courses");
     <Vibe64EmptySessionLayout
       :chat-collapsed="chatCollapsed"
       :dashboard="projectPane === 'dashboard'"
-      :hint="message"
-      :preview-title="message"
-      :preview-detail="noLesson ? 'Choose a lesson to get its practice project.' : ''"
+      :hint="noLesson ? '' : 'No project selected'"
+      :preview-title="noLesson ? '' : 'No project selected'"
     >
-      <template v-if="noLesson" #hint>
-        <v-btn
-          class="studio-screen__choose-lesson studio-screen__choose-lesson--hint"
-          data-test="choose-lesson"
-          :prepend-icon="mdiSchoolOutline"
-          size="small"
-          variant="tonal"
-          @click="chooseLesson"
-        >
-          Choose a lesson
-        </v-btn>
+      <template v-if="noLesson" #chat>
+        <div class="studio-screen__no-lesson-chat">
+          <p class="studio-screen__no-lesson-note">
+            Your teacher chats with you here once a lesson starts.
+          </p>
+          <Vibe64LearnWelcome class="studio-screen__no-lesson-welcome" />
+        </div>
       </template>
       <template v-if="noLesson" #preview>
-        <v-btn
-          class="studio-screen__choose-lesson"
-          data-test="choose-lesson"
-          :prepend-icon="mdiSchoolOutline"
-          variant="tonal"
-          @click="chooseLesson"
-        >
-          Choose a lesson
-        </v-btn>
+        <Vibe64LearnWelcome />
       </template>
       <template #dashboard>
         <Vibe64DashboardShell
@@ -68,14 +54,14 @@ const chooseLesson = () => learning?.openCourses("courses");
           @select="$emit('select', $event)"
         >
           <div class="studio-screen__no-project-text">
-            <p>{{ message }}</p>
+            <p>{{ noLesson ? "No lesson in progress" : "No project selected" }}</p>
             <v-btn
               v-if="noLesson"
               class="studio-screen__choose-lesson"
               data-test="choose-lesson"
               :prepend-icon="mdiSchoolOutline"
               variant="tonal"
-              @click="chooseLesson"
+              @click="learning.openCourses('courses')"
             >
               Choose a lesson
             </v-btn>
@@ -108,8 +94,36 @@ const chooseLesson = () => learning?.openCourses("courses");
   text-transform: none;
 }
 
-.studio-screen__choose-lesson--hint {
-  display: flex;
-  margin-top: var(--v64-space-2);
+/* The chat column's place for a session's messages. */
+.studio-screen__no-lesson-chat {
+  align-items: center;
+  display: grid;
+  justify-items: center;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--v64-space-4) var(--v64-space-2);
+}
+
+.studio-screen__no-lesson-note {
+  color: var(--v64-on-surface-variant);
+  font: var(--v64-type-body-md, 400 0.875rem/1.25rem system-ui, sans-serif);
+  margin: 0;
+  max-width: 18rem;
+  text-align: center;
+}
+
+.studio-screen__no-lesson-welcome {
+  display: none;
+}
+
+/* A phone opens on the chat column: the welcome is there. */
+@media (max-width: 980px) {
+  .studio-screen__no-lesson-note {
+    display: none;
+  }
+
+  .studio-screen__no-lesson-welcome {
+    display: grid;
+  }
 }
 </style>

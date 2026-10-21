@@ -1,8 +1,9 @@
 <script setup>
 // The session area with no session open: the chat column (its header, a
-// hint with optional actions, the empty composer rows) and the project pane (Preview's message or
+// hint, the empty composer rows) and the project pane (Preview's message or
 // the Dashboard). The session panel fills it with its session controls; Learn
-// without a practice project fills it with "No project selected".
+// without a practice project fills it with its welcome or "No project
+// selected".
 defineProps({
   chatCollapsed: Boolean,
   dashboard: Boolean,
@@ -44,7 +45,6 @@ defineProps({
           role="status"
         >
           {{ hint }}
-          <slot name="hint" />
         </div>
       </div>
       <div
@@ -74,7 +74,7 @@ defineProps({
         data-vibe64-guide-pane="preview"
       >
         <div class="studio-ai-sessions__preview-empty-content">
-          <p class="studio-ai-sessions__preview-empty-title">
+          <p v-if="previewTitle" class="studio-ai-sessions__preview-empty-title">
             {{ previewTitle }}
           </p>
           <p
