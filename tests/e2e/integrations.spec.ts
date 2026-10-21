@@ -298,7 +298,7 @@ for (const { viewport, providerBatch } of [
     : providerBatch === "wiz"
       ? `Wiz form preserves scanner credentials, endpoints and policy filters (${viewport.name})`
     : providerBatch === "ai"
-      ? `AI form defaults to free access and preserves model and credential ownership (${viewport.name})`
+      ? `AI form preselects no model and preserves model and credential ownership (${viewport.name})`
     : providerBatch === "gemini-enterprise"
       ? `Gemini Enterprise form preserves project, region, engine and OAuth references (${viewport.name})`
     : providerBatch === "wix"
@@ -1904,13 +1904,13 @@ for (const { viewport, providerBatch } of [
         const model = panel.getByRole("combobox", { name: "AI model", exact: true });
         const key = panel.getByRole("textbox", { name: "API key reference", exact: true });
         const save = panel.getByRole("button", { name: "Save configuration", exact: true });
-        await expect(model).toHaveValue(/Big Pickle/);
-        await expect(key).toHaveCount(0);
+        await expect(model).toHaveValue("");
+        await expect(key).toBeVisible();
         await expect(panel.getByRole("textbox", { name: "Client ID", exact: true })).toHaveCount(0);
-        await save.click(); await expect(save).toBeDisabled();
+        await save.click(); await expect(panel.locator(".v-input--error")).not.toHaveCount(0);
         const read = async () => JSON.parse(await readFile(filePath, "utf8"));
-        expect((await read()).integrations.ai).toMatchObject({ settings: { model: "opencode/big-pickle" }, authentication: { method: "none" } });
-        expect((await read()).registrations.ai).toBeUndefined();
+        await model.fill("Big Pickle"); await expect(page.getByRole("option")).toHaveCount(0);
+        await model.press("Escape");
         const chooseModel = async (search: string, name: RegExp) => {
           await model.fill(search);
           await page.getByRole("option", { name }).click();

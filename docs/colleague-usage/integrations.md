@@ -10,7 +10,9 @@ detail to its configuration and **Application connection** controls.
    development session; its configuration is read-only.
 2. Select a configured integration, or use **Search integrations** and **Add**
    under an available service in Development. Fill its provider-specific fields
-   and scopes, then save configuration before checking or connecting.
+   and scopes, then save configuration before checking or connecting. The **AI**
+   integration preselects no model: choose one in **AI model**, then enter its
+   key reference (for example `env:APP_AI_API_KEY`) before **Save configuration**.
 3. Enter credentials through the indicated Env flow. Use the exact variable names
    shown by that provider; do not put secrets into a conversation.
 4. Use **Check connection** or the displayed connect action. If consent is pending,

@@ -1037,10 +1037,9 @@ it; showing a suggestion does not replace existing Env values.
 Source-scanning integrations also keep their service credentials and policy
 choices in that file. Saving a scanner configuration does not start a scan or
 grant access to other projects in the workspace.
-Application AI configuration starts with Big Pickle's free public access and
-offers searchable models from a bundled, dated catalogue. People can instead
-choose an administrator's Env key or individual accounts owned by their app's
-users. Changing providers clears the previous key reference. The application's
+Application AI configuration preselects no model: people choose a provider
+and model from a bundled, dated catalogue, then an administrator's Env key or
+individual accounts owned by their app's users. Changing providers clears the previous key reference. The application's
 chosen framework owns inference and personal account screens; this setup is
 separate from the editor's coding-assistant accounts.
 For integrations with assistant controls, people can disable assistant access,

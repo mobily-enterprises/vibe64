@@ -213,9 +213,9 @@ the existing source path policy and agent-write lock, validates before writing,
 requires the previously read file hash for replacement, and creates a missing
 file exclusively. Creates and saves publish the ordinary source-file event.
 The AI form uses JSKIT's static model catalogue and settings-dependent
-authentication metadata. It defaults to public Big Pickle, saves administrator
-keys as existing Env references, and supports app-owned individual-key
-references. Selecting another provider clears the old credential reference.
+authentication metadata. It preselects no model, so a provider and model must be
+chosen before saving. It saves administrator keys as existing Env references and
+supports app-owned individual-key references. Selecting another provider clears the old credential reference.
 Saving creates no AI request, OpenCode process, OAuth app or inference gateway.
 The generated application's framework owns AI execution and private user-account
 management; non-JavaScript apps need not install JSKIT to consume the text file.
