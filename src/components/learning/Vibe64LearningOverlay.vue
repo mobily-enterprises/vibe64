@@ -53,6 +53,10 @@ watch(() => [learning?.mode, route?.fullPath, learning?.state.modeBusy], (_value
   if (target.note && !modeChanged) learning.showNotice(target.note);
   void router.replace(target.path);
 }, { immediate: true });
+// A mode's note goes when L switches to the other mode.
+watch(() => learning?.mode?.on, (_on, wasOn) => {
+  if (typeof wasOn === "boolean") learning.clearNotice();
+});
 function noticeShown(value) {
   if (!value) learning.clearNotice();
 }

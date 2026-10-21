@@ -53,7 +53,7 @@ describe("useVibe64ChatColumnResize", () => {
   });
 
   it("keeps the active separator style scoped away from the page body", () => {
-    const filename = "src/components/studio/Vibe64SessionPanel.vue";
+    const filename = "src/components/studio/Vibe64SessionFrame.vue";
     const descriptor = parse(readFileSync(filename, "utf8"), { filename }).descriptor;
     const style = descriptor.styles[0];
     const result = compileStyle({

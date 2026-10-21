@@ -78,7 +78,7 @@ describe("guide pane anchors", () => {
     const backButtons = source.match(/<Vibe64DashboardBackButton[^>]*>/gu);
     expect(backButtons).toHaveLength(4);
     for (const button of backButtons) expect(button).toContain('data-vibe64-guide-pane="dashboard"');
-    expect(readFileSync("src/components/studio/Vibe64SessionPanel.vue", "utf8"))
+    expect(readFileSync("src/components/studio/Vibe64EmptySessionLayout.vue", "utf8"))
       .toMatch(/class="studio-ai-sessions__preview-empty-pane"\n\s+data-vibe64-guide-pane="preview"/u);
     expect(readFileSync("src/components/studio/Vibe64DashboardShell.vue", "utf8")).toContain('navigation-guide-pane="dashboard"');
   });
