@@ -1320,8 +1320,9 @@ without it the local managed source root is resolved as runtime resolves it.
   lesson in progress.
   A v1 practice project archived as an ordinary project stays in
   `project-archives/<slug>/`; check lists those names. Practice archives are
-  listed only from the learning space's own archive root by their schema 2
-  `practice.json`, so these bundles are never listed or opened as practice.
+  listed only from the learning space's own
+  `training/practice-archives/<learnerKey>/<attemptId>/` by their
+  `attempt.json`, so these bundles are never listed or opened as practice.
 - Colleague (`retireColleagueLearningWatches`) removes every `learning-task`
   watch and its queued observations from `colleague/<owner>/conversation.json`
   through the backed-up publisher; history and other watches are kept. That
@@ -1412,8 +1413,9 @@ oversized or another learner's record without repair. Focused evidence:
 ## Training learning mode (no upgrade)
 
 Learn/Develop mode is one optional file per learner under
-`training/users/<key>/`: `learning-mode.json` (schema version 1:
-`{schemaVersion, learnerId, on}`, 1 KiB bound). Only an explicit
+`training/users/<key>/`: `learning-mode.json` (schema version 2:
+`{schemaVersion, learnerId, on}`, 1 KiB bound; version 1 was an earlier,
+different shape and is refused). Only an explicit
 `learning-mode.set` (the L button) writes it, last write wins; starting a
 lesson also turns it on. The current lesson is not stored there: it is the one
 attempt in progress in `progress.json`. A missing file means Develop, so no

@@ -439,7 +439,7 @@ ledgered only while that attempt is in progress in its practice project
 (`saveLearnerFile({actor,attemptId,input,save})`); otherwise they are the
 editor's plain save. Ending an attempt removes its step results and ledger.
 
-Learn mode is the separate `learning-mode.json` `{schemaVersion:1,learnerId,on}`
+Learn mode is the separate `learning-mode.json` `{schemaVersion:2,learnerId,on}`
 (absent means off), written by `setLearningMode({actor,on})`, which never ends
 or changes the lesson. `readLearningMode` returns
 `{on,currentAttemptId,lessonCode,lessonTitle,practiceSlug}` with the attempt in

@@ -197,8 +197,9 @@ async function selectMoves({ systemRoot, projectsRoot, managedSourceRoot, planne
     }
   }
   // v1 practice bundles archived as ordinary projects stay where they are:
-  // practice archives are listed only from the learning space's own archive
-  // root by their schema-2 practice.json, so these are never listed or opened.
+  // practice archives are listed only from the learning space's own
+  // practice-archives/<learnerKey>/<attemptId>/attempt.json, so these are
+  // never listed or opened.
   const archives = (await names(path.join(systemRoot, "project-archives"))).filter(name => SLUG_PATTERN.test(name));
   if (archives.length) {
     report("info", `${archives.length} archived project bundle(s) named like v1 practice projects stay in project-archives and are not part of Learning: ${archives.join(", ")}.`);

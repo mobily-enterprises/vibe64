@@ -89,8 +89,9 @@ const emptyActiveSchema = createSchema({
   schemaVersion: version, learnerId: { ...text, maxLength: 128 }, progressRevision: revision,
   attemptId: { ...text, nullable: true, maxLength: 36 }
 });
+// Version 2: an earlier release wrote a different version 1 shape here.
 const modeSchema = createSchema({
-  schemaVersion: version, learnerId: { ...text, maxLength: 128 }, on: { type: "boolean", required: true }
+  schemaVersion: { type: "integer", required: true, enum: [2] }, learnerId: { ...text, maxLength: 128 }, on: { type: "boolean", required: true }
 });
 
 const MAX_CODE_LEDGER_ENTRIES = 256;
@@ -1277,7 +1278,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     const paths = userPaths(actor);
     if (typeof on !== "boolean") throw failure("VIBE64_TRAINING_MODE_INVALID", "Set Learn mode on or off.", 400);
     await createNamespace(paths);
-    await writeJsonFileAtomic(paths.mode, { schemaVersion: 1, learnerId: paths.learner.id, on }, { directoryMode: 0o700, fileMode: 0o600 });
+    await writeJsonFileAtomic(paths.mode, { schemaVersion: 2, learnerId: paths.learner.id, on }, { directoryMode: 0o700, fileMode: 0o600 });
     return learningModeView(paths, { includeTitle: true });
   }
 

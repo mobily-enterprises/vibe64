@@ -580,7 +580,7 @@ deletion of its project and conversation is the lifecycle owner's job.
 when it owns that practice project, or null.
 
 Learn mode is a separate per-learner flag, `learning-mode.json`
-`{schemaVersion:1,learnerId,on}` (absent means off). `setLearningMode({actor,on})`
+`{schemaVersion:2,learnerId,on}` (absent means off). `setLearningMode({actor,on})`
 saves it and never ends or changes the lesson in progress.
 `readLearningMode({actor,includeTitle?})` returns
 `{on,currentAttemptId,lessonCode,lessonTitle,practiceSlug}`: the current attempt

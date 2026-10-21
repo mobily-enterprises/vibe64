@@ -1600,7 +1600,7 @@ test("Learn mode is a saved per-learner flag and switching it never ends or chan
   assert.deepEqual(await f.state.readLearningMode({ actor: f.actor }), develop, "absent means Develop");
   await assert.rejects(() => fs.lstat(f.paths.root), { code: "ENOENT" }, "reading creates nothing");
   assert.deepEqual(await f.state.setLearningMode({ actor: f.actor, on: true }), { ...develop, on: true }, "Learn mode with no lesson is normal");
-  assert.deepEqual(JSON.parse(await fs.readFile(f.paths.mode, "utf8")), { schemaVersion: 1, learnerId: "42", on: true });
+  assert.deepEqual(JSON.parse(await fs.readFile(f.paths.mode, "utf8")), { schemaVersion: 2, learnerId: "42", on: true });
   assert.equal((await fs.lstat(f.paths.mode)).mode & 0o777, 0o600);
   const first = await f.reserve();
   const attemptId = first.attempt.attemptId;
@@ -1619,8 +1619,8 @@ test("Learn mode is a saved per-learner flag and switching it never ends or chan
   for (const on of [undefined, "true", 1]) {
     await assert.rejects(() => f.state.setLearningMode({ actor: f.actor, on }), { code: "VIBE64_TRAINING_MODE_INVALID", statusCode: 400 });
   }
-  for (const invalid of [{ schemaVersion: 1, learnerId: "43", on: true }, { schemaVersion: 1, learnerId: "42", on: "yes" },
-    { schemaVersion: 1, learnerId: "42", on: true, currentAttemptId: attemptId }]) {
+  for (const invalid of [{ schemaVersion: 2, learnerId: "43", on: true }, { schemaVersion: 2, learnerId: "42", on: "yes" },
+    { schemaVersion: 2, learnerId: "42", on: true, currentAttemptId: attemptId }, { schemaVersion: 1, learnerId: "42", on: true }]) {
     await f.write("learning-mode.json", invalid, f.paths.root);
     await assert.rejects(() => f.state.readLearningMode({ actor: f.actor }), { code: "VIBE64_TRAINING_STATE_INVALID" });
   }
