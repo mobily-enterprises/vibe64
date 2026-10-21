@@ -141,7 +141,12 @@ check appears only after a reply or **Continue anyway**. Below it **Main AI:
 Accounts** (hosted: **your account menu**). Otherwise the screen shows
 **Colleague: still using [model]** with **Use [provider] for Colleague**.
 Choose **Start building** (the bottom bar on a phone) to close; Colleague opens
-with its message box ready so you can ask it to build your first page. In a hosted workspace, a personal subscription (Claude, Codex, GLM)
+with its message box ready so you can ask it to build your first page.
+
+In Learn mode Colleague's conversation is your teacher's, so setup sends no
+hello there: the card says **Your teacher uses [provider] from your next
+message**, the check appears at once, and the close button reads **Back to the
+lesson** (or **Back to Learn** with no lesson in progress). In a hosted workspace, a personal subscription (Claude, Codex, GLM)
 serves only the owner; members need a Workspace-use connection such as
 DeepSeek.
 

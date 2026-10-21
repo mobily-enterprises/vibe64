@@ -20,6 +20,7 @@ vi.mock("../../packages/vibe64-accounts/src/client/studio/ModelRoutingForm.vue",
 vi.mock("../../packages/vibe64-accounts/src/client/studio/NativeProviderConnections.vue", () => ({ default: {} }));
 
 import { registerVibe64ColleagueModel } from "../../src/lib/vibe64ColleagueModelBridge.js";
+import { VIBE64_LEARNING_KEY } from "../../src/lib/vibe64AssistantHost.js";
 import { AI_ONBOARDING_PROVIDERS } from "../../packages/vibe64-accounts/src/client/onboarding/aiOnboardingProviders.js";
 import { aiOnboardingAvailable, aiOnboardingBlocked, aiOnboardingNeeded, onVibe64AiOnboardingRequested, requestVibe64AiOnboarding }
   from "../../packages/vibe64-accounts/src/client/onboarding/aiOnboardingEvents.js";
@@ -39,10 +40,11 @@ let unregisterColleague = () => null;
 
 let app;
 let storage;
-function mount(component, props) {
+function mount(component, props, provides = []) {
   const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
   app = renderer.createApp({ ...component, render: () => null }, props);
   app.provide(ssrContextKey, { modules: new Set() });
+  for (const [key, value] of provides) app.provide(key, value);
   app.mount({});
   return app._instance.setupState;
 }
@@ -274,10 +276,11 @@ describe("embedded setup", () => {
 });
 
 describe("flow", () => {
-  async function flow({ setUp = false, start = "why", redo = setUp } = {}) {
+  async function flow({ setUp = false, start = "why", redo = setUp, learnMode = false } = {}) {
     if (setUp) mocks.accounts.status.value.accounts[2].connected = true;
     const onboarding = effectScope().run(() => useAiOnboarding({ enabled: true }));
-    const state = mount(AiOnboarding, { open: true, start, redo, onboarding, canConfigure: true });
+    const state = mount(AiOnboarding, { open: true, start, redo, onboarding, canConfigure: true },
+      [[VIBE64_LEARNING_KEY, { learnMode }]]);
     await vi.waitFor(() => expect(mocks.colleague.current).toHaveBeenCalled());
     await Promise.resolve();
     return { state, onboarding };
@@ -311,6 +314,22 @@ describe("flow", () => {
     expect(state.colleagueNote).toBe("uses");
     await vi.waitFor(() => expect(state.hello).toEqual({ state: "replied", reply: "Hello there!", error: "" }));
     expect(state.proven).toBe(true);
+  });
+
+  it("in Learn mode sends no hello into the lesson's teacher thread", async () => {
+    const { state } = await flow({ learnMode: true });
+    state.connect(claude, "have");
+    connectClaude();
+    await state.finish();
+    expect([state.screen, state.colleagueNote, state.proven]).toEqual(["success", "uses", true]);
+    await Promise.resolve();
+    expect(mocks.colleague.sayHello).not.toHaveBeenCalled();
+    expect([state.hello.state, state.doneLabel]).toEqual(["", "Back to Learn"]);
+  });
+
+  it("names the way back by mode: Start building in Develop", async () => {
+    const { state } = await flow();
+    expect(state.doneLabel).toBe("Start building");
   });
 
   it("shows Colleague's failed hello without the check until a retry succeeds", async () => {

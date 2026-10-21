@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, inject, nextTick, ref, unref, watch } from "vue";
 import { useDisplay } from "vuetify";
 import {
   mdiAlertCircleOutline, mdiArrowDown, mdiArrowLeft, mdiArrowRight, mdiBugCheckOutline, mdiCheck, mdiCheckCircle, mdiChevronDown,
@@ -12,6 +12,7 @@ import NativeProviderConnections from "../studio/NativeProviderConnections.vue";
 import AiOnboardingKeyConnect from "./AiOnboardingKeyConnect.vue";
 import AiOnboardingMark from "./AiOnboardingMark.vue";
 import { usesProvider } from "./useAiOnboarding.js";
+import { VIBE64_LEARNING_KEY } from "/src/lib/vibe64AssistantHost.js";
 
 const props = defineProps({
   open: Boolean,
@@ -100,8 +101,15 @@ const dock = computed(() => xs.value && (screen.value === "success" || screen.va
 // Success says one thing about Colleague: it uses the choice, can switch to it, or isn't open here.
 const colleagueNote = computed(() => usesProvider(outcome.value.colleague, chosen.value) ? "uses"
   : props.onboarding.colleagueAvailable.value ? "switch" : "menu");
+// In Learn mode Colleague's conversation is the teacher's: no hello goes into
+// it, and the teacher uses the choice from the next message. Develop is as ever.
+const learning = inject(VIBE64_LEARNING_KEY, null);
+const learn = computed(() => Boolean(unref(learning)?.learnMode));
+const inLesson = computed(() => learn.value && Boolean(unref(learning)?.mode?.currentAttemptId));
+const doneLabel = computed(() => inLesson.value ? "Back to the lesson" : learn.value ? "Back to Learn" : "Start building");
 // The check waits for Colleague's hello when there is one to wait for.
-const proven = computed(() => colleagueNote.value !== "uses" || ["replied", "dismissed"].includes(hello.value.state));
+const proven = computed(() => colleagueNote.value !== "uses" || learn.value ||
+  ["replied", "dismissed"].includes(hello.value.state));
 
 function readSetup() {
   const { isSetUp, loaded: known } = props.onboarding;
@@ -130,7 +138,7 @@ watch(() => props.onboarding.loaded.value, (known) => {
 
 // Success proves Colleague answers when it runs on the chosen provider.
 watch(() => screen.value === "success" && colleagueNote.value === "uses", (proving) => {
-  if (proving && !hello.value.state) sayHello();
+  if (proving && !learn.value && !hello.value.state) sayHello();
 });
 
 // With no Senior model in use there is nothing to keep: the suggestions apply unasked.
@@ -614,7 +622,7 @@ function expanded(card) {
               {{ hello.state === "failed" ? "Almost there" : hello.state === "waiting" ? `${chosen.name} is connected` : `${chosen.name} is ready` }}
             </h1>
             <p v-if="colleagueNote !== 'menu' && hello.state !== 'failed'" class="ai-onboarding__lede">
-              Next: Colleague opens so you can ask it to build your first page.
+              {{ learn ? `Next: ${inLesson ? "back to your lesson" : "choose a lesson"}.` : "Next: Colleague opens so you can ask it to build your first page." }}
             </p>
             <div
               v-if="colleagueNote === 'uses'" class="aio-proof" :class="{ 'aio-proof--failed': hello.state === 'failed' }"
@@ -639,7 +647,9 @@ function expanded(card) {
                     <span class="d-sr-only">Colleague is replying…</span><i /><i /><i />
                   </span>
                   <p v-else-if="hello.state === 'replied'" class="aio-proof__reply">{{ hello.reply }}</p>
-                  <p v-else class="aio-proof__reply aio-proof__reply--quiet">Ready when you are. Say hi in the Colleague panel.</p>
+                  <p v-else class="aio-proof__reply aio-proof__reply--quiet">
+                    {{ learn ? `Your teacher uses ${chosen.name} from your next message.` : "Ready when you are. Say hi in the Colleague panel." }}
+                  </p>
                 </template>
               </div>
             </div>
@@ -662,7 +672,7 @@ function expanded(card) {
             <p v-if="workspace && chosen.connect.access === 'personal'" class="ai-onboarding__note">
               This subscription serves only you. Workspace members need a Workspace-use connection, such as DeepSeek or an OpenAI API key.
             </p>
-            <v-btn v-if="!xs" color="primary" variant="flat" size="large" :append-icon="mdiArrowRight" @click="close('done')">Start building</v-btn>
+            <v-btn v-if="!xs" color="primary" variant="flat" size="large" :append-icon="mdiArrowRight" @click="close('done')">{{ doneLabel }}</v-btn>
           </section>
 
           <section v-else key="owner" class="ai-onboarding__success">
@@ -680,7 +690,7 @@ function expanded(card) {
           <v-btn block variant="text" @click="close('later')">Set up later</v-btn>
           <p class="ai-onboarding__dock-note">You can change this any time in {{ changeWhere }}.</p>
         </template>
-        <v-btn v-else block color="primary" variant="flat" size="large" :append-icon="mdiArrowRight" @click="close('done')">Start building</v-btn>
+        <v-btn v-else block color="primary" variant="flat" size="large" :append-icon="mdiArrowRight" @click="close('done')">{{ doneLabel }}</v-btn>
       </footer>
     </div>
   </v-dialog>
