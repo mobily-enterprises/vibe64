@@ -58,7 +58,9 @@ forwarded headers. An application configured to trust its local proxy then
 builds absolute links, asset URLs and callbacks on the Preview address. If pages
 load without styles or links point to `127.0.0.1`, the application does not
 trust the proxy yet; ask the agent to configure trusted proxies for its
-framework.
+framework. Form posts and realtime connections from the Preview page reach the
+application on its local address, so its allowed hosts must include that local
+address as well as the Preview address.
 In the local editor, Preview keeps the editor's loopback hostname through login
 and page navigation, so opening the editor on `localhost` also works. If a tab
 shows an expired Preview access error after a restart, use **Reload preview**

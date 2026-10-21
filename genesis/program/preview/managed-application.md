@@ -410,14 +410,17 @@ points to Run for terminal or downloadable outputs. No declared outputs remains
 a normal idle state that does not demand a web server.
 
 Preview rewrites Host to the loopback target. On every HTTP and WebSocket
-request it drops any inbound `Forwarded`, `X-Forwarded-Host`, `X-Forwarded-Proto`
-and `X-Forwarded-Port` and sets the last three from its own browser-facing
-origin, never from client or edge headers. Applications that trust the loopback
-proxy therefore build absolute URLs on the Preview address and retain Secure
-cookies on HTTPS previews. Preview also translates the browser's exact own Origin
-to the loopback target host while retaining the browser-facing scheme. A
-framework that trusts the forwarded host and also compares Origin with it may
-reject such same-origin writes. Redirects from the target's ordinary origin or
+request it drops any inbound `Forwarded` and `X-Forwarded-*` header except
+`X-Forwarded-For`, and sets `X-Forwarded-Host`, `X-Forwarded-Proto` and
+`X-Forwarded-Port` from its own browser-facing origin, never from client or edge
+headers. Applications that trust the loopback proxy therefore build absolute
+URLs on the Preview address and retain Secure cookies on HTTPS previews. A
+request carrying the browser's exact own Origin is presented on the loopback
+target instead: Origin becomes the loopback host with the browser-facing scheme,
+and the forwarded host and port are dropped, so a framework comparing Origin
+with its own (possibly forwarded) host sees one consistent origin and accepts
+same-origin writes. Such an application must also accept the loopback host.
+Redirects from the target's ordinary origin or
 its forwarded-scheme origin stay on the preview origin. Foreign,
 opaque and absent origins are preserved so application origin checks still apply.
 The preview proxy's own bearer cookie uses `SameSite=None; Secure` on hosted

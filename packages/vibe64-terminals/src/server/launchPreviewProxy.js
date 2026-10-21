@@ -143,10 +143,12 @@ function proxyUpgradeHeaders(headers = {}, targetUrl, {
 function forwardedHeaders(headers, browserOrigin) {
   // Host addresses the loopback app. Proxy-aware apps build absolute URLs and
   // secure cookies from these, so only the proxy's own origin supplies them.
-  delete headers.forwarded;
-  delete headers["x-forwarded-host"];
-  delete headers["x-forwarded-proto"];
-  delete headers["x-forwarded-port"];
+  // X-Forwarded-For keeps the edge's client address.
+  for (const name of Object.keys(headers)) {
+    if (name === "forwarded" || (name.startsWith("x-forwarded-") && name !== "x-forwarded-for")) {
+      delete headers[name];
+    }
+  }
   if (!browserOrigin) {
     return;
   }
@@ -159,9 +161,13 @@ function forwardedHeaders(headers, browserOrigin) {
 function remapPreviewOrigin(headers, proxyOrigin) {
   // Host addresses the loopback app. Translate only this preview's own browser
   // origin to match it; foreign and opaque origins must still fail app checks.
+  // The forwarded host and port go too, so an app that trusts them compares
+  // the same loopback origin; only the browser-facing scheme is kept.
   if (proxyOrigin && headers.origin === proxyOrigin) {
     const protocol = new URL(proxyOrigin).protocol;
     headers.origin = new URL(`${protocol}//${headers.host}`).origin;
+    delete headers["x-forwarded-host"];
+    delete headers["x-forwarded-port"];
   }
 }
 
