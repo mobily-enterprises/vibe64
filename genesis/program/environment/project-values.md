@@ -42,6 +42,9 @@ overrides them, and deleting that override reveals the current declaration.
 A platform-managed value for the same key remains protected. The view masks
 secrets, supports explicit add, replace, and confirmed removal,
 and applies values to session preparation, checks, launches, and agent work.
+Agents store an application secret they generate (such as an application key)
+by piping it to `vibe64-helper env set <scope> <KEY> --secret`, never by editing a
+generated environment file, which Vibe64 rewrites from Env.
 Codex, Claude, and OpenCode session commands receive the resolved development
 environment. The authenticated shell broker reads current project Env for every
 command using its bound project and exact session source, then supplies it through

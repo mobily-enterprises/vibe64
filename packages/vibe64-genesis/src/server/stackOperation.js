@@ -10,8 +10,32 @@ class Vibe64StackOperationError extends Error {
   }
 }
 
+// Every Vibe64 section error names the agent-readable spec of that section.
+const SPEC_BY_ERROR_CODE = Object.freeze({
+  VIBE64_WORKSPACE_SETUP_INVALID: "workspace-setup",
+  VIBE64_OUTPUTS_INVALID: "outputs",
+  VIBE64_DEPLOYMENT_INVALID: "deployment",
+  VIBE64_RESOURCE_ESTIMATES_INVALID: "resource-estimates",
+  VIBE64_CONNECTED_DEVELOPMENT_INVALID: "connected-development",
+  VIBE64_PROJECT_SERVICES_INVALID: "project-services",
+  VIBE64_INTEGRATION_SETUP_INVALID: "integration-setup",
+  VIBE64_ARCHITECTURE_INSPECTION_INVALID: "architecture-inspection",
+  VIBE64_ARCHITECTURE_LAYOUT_INVALID: "architecture-layout"
+});
+const SPEC_POINTER = / Exact grammar: vibe64-helper spec [a-z-]+\.$/u;
+
+function stackOperationSpecMessage(code, message) {
+  const name = SPEC_BY_ERROR_CODE[code];
+  const base = String(message).replace(SPEC_POINTER, "");
+  return name ? `${base} Exact grammar: vibe64-helper spec ${name}.` : base;
+}
+
+function unknownEntryMessage(label, source, forms) {
+  return `Unknown ${label}: ${source}. Use one of: ${forms.join("; ")}.`;
+}
+
 function invalidStackOperation(code, operationPath, message, line, details = {}) {
-  throw new Vibe64StackOperationError(code, message, {
+  throw new Vibe64StackOperationError(code, stackOperationSpecMessage(code, message), {
     path: operationPath,
     ...(line === undefined ? {} : { line }),
     ...details
@@ -175,6 +199,7 @@ function isExplicitlyEmptyStackSection(lines = []) {
 }
 
 export {
+  SPEC_BY_ERROR_CODE,
   Vibe64StackOperationError,
   assertMatchingStackInspections,
   backtickedArguments,
@@ -187,5 +212,6 @@ export {
   runtimeArguments,
   stackOperationHash,
   uniqueSorted,
+  unknownEntryMessage,
   urlPath
 };

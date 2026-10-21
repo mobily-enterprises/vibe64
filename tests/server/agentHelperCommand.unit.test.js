@@ -60,6 +60,22 @@ test("helper help lists its fixed groups and invalid groups cannot select anothe
   assert.match(missing.stderr, /env is unavailable in this session/u);
 });
 
+test("helper spec prints Vibe64 contracts and training help points to its content format", async (t) => {
+  const { root, helper } = await fixture(t);
+  const listed = await run(helper, ["spec"]);
+  assert.equal(listed.code, 0, listed.stderr);
+  assert.match(listed.stdout.toString(), / {2}preview-identity-command +/u);
+  const outputs = await run(helper, ["spec", "outputs"]);
+  assert.equal(outputs.code, 0, outputs.stderr);
+  assert.match(outputs.stdout.toString(), /^# Outputs/u);
+  const unknown = await run(helper, ["spec", "missing"]);
+  assert.equal(unknown.code, 2);
+  assert.match(unknown.stderr, /Unknown Vibe64 spec: missing/u);
+  assert.match((await run(helper, ["--help"])).stdout.toString(), / {2}spec +Exact Vibe64 contracts/u);
+  const training = await run(path.join(root, "vibe64"), ["training", "--help"]);
+  assert.match(training.stdout.toString(), /Content format: vibe64-helper spec training-content/u);
+});
+
 test("every helper group preserves arguments, stdin bytes, environment, cwd and exit status through its existing executable", async (t) => {
   const { root } = await fixture(t);
   const wrapper = `#!/usr/bin/env node

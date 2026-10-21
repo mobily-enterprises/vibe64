@@ -8,12 +8,14 @@ import { sessionConnectedContribution, sessionConnectedSources } from "@local/vi
 import { writeJsonFileAtomic } from "@local/vibe64-core/server/projectRecordMetadata";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
-import { connectedPackageTypeUsesScript, isConnectedPackageType } from "@local/vibe64-genesis/shared/connectedPackageTypes";
+import {
+  CONNECTED_SOURCES_CONTRACT,
+  connectedPackageTypeUsesScript,
+  isConnectedPackageType
+} from "@local/vibe64-genesis/shared/connectedPackageTypes";
 import { readConnectedProjects } from "./connectedProjects.js";
 import { assertProjectionPath, writeManagedGitExcludes } from "./projectEnvironmentFiles.js";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
-
-const CONNECTED_SOURCES_CONTRACT = "vibe64.connected-sources.v1";
 
 function connectedDevelopmentHash(value) {
   return `sha256:${createHash("sha256").update(JSON.stringify(value)).digest("hex")}`;

@@ -48,6 +48,20 @@ running; it does not mean your submitted work stopped. Inspect the retained repl
 before resending. The same recovery applies on desktop and phone; Colleague can
 explain it, while the browser reconnection requires your interaction.
 
+## Exact Vibe64 contracts for coding agents
+
+When a coding agent writes or repairs a Vibe64-owned project declaration, such as
+the `## Workspace setup` or `## Outputs` section of `genesis/stack.md`, a Preview
+identity adapter or an integration setup command, it reads the exact contract
+with `vibe64-helper spec <name>`. `vibe64-helper spec` lists every contract.
+These specs are part of the installed Vibe64 release, so the agent does not need
+Vibe64's source. A Stack error ends with the spec to read, for example
+`Exact grammar: vibe64-helper spec outputs.`
+
+Colleague does not run this command. To get a contract applied, ask the coding
+agent in Main chat; Colleague can explain which contract applies and offer to
+send that request. Desktop and mobile behave the same.
+
 ## Send, steer and stop
 
 While **Send** is pending, Vibe64 prepares the selected assistant and waits for

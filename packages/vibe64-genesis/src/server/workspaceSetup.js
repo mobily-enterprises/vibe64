@@ -15,6 +15,7 @@ import {
 const VIBE64_WORKSPACE_SETUP_CONTRACT = "vibe64.workspace-setup.v1";
 const VIBE64_WORKSPACE_SETUP_SECTION = "Workspace setup";
 const ERROR_CODE = "VIBE64_WORKSPACE_SETUP_INVALID";
+const WORKSPACE_SETUP_ENTRY_FORM = "- Prepare `label` with `runtime` [in `workdir`] [when|if `path` exists]: `command` `argument`...";
 const PREPARE_LINE = /^- Prepare `([^`\r\n]+)` with (.+?):[ \t]+(.+)$/u;
 const WAIT_SUFFIX = /^(.*?)[ \t]+when `([^`\r\n]+)` exists$/u;
 const SKIP_SUFFIX = /^(.*?)[ \t]+if `([^`\r\n]+)` exists$/u;
@@ -41,7 +42,7 @@ function parseVibe64WorkspaceSetupLines(lines, {
     if (!entry) {
       invalid(
         setupPath,
-        "Every Workspace setup entry must use: - Prepare `label` with `runtime` [in `workdir`] [when|if `path` exists]: `command` `argument`...",
+        `Every Workspace setup entry must use: ${WORKSPACE_SETUP_ENTRY_FORM}`,
         line,
         { observed: source }
       );
@@ -146,6 +147,7 @@ async function vibe64WorkspaceSetupInspection({ projectRoot, section = {} } = {}
 }
 
 export {
+  WORKSPACE_SETUP_ENTRY_FORM,
   VIBE64_WORKSPACE_SETUP_CONTRACT,
   VIBE64_WORKSPACE_SETUP_SECTION,
   parseVibe64WorkspaceSetupLines,

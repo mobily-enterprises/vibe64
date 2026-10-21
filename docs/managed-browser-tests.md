@@ -99,35 +99,16 @@ the operation. A generic timeout without resource evidence remains undiagnosed.
 
 ## Application setup
 
-Keep the normal target as the default. Add another web target to the existing
-`## Outputs` section in `genesis/stack.md`, using scripts that actually exist:
-
-```markdown
-### Target `test-app`: Test Preview
-
-- Mode: `interactive`
-- Data: `test`
-- Runtimes: `nodejs`
-- Run `Start test application`: `node` `tests/support/start-test-app.mjs`
-
-#### Presentation
-
-- Kind: `web`
-- URL path: `/`
-- Ready when: `GET` `/api/health` returns `200`
-```
-
-The command above is an example of a portable application-owned launcher, not
-a command provided by Vibe64. Adapt the runtime, path and readiness endpoint to
-the project. Use the host's supplied `HOST` and `PORT`, or the Outputs contract's
-`{host}` and `{port}` arguments, rather than starting another fixed-port server.
-
-The optional `- Data: \`test\`` declaration belongs to Vibe64's Outputs grammar.
-It identifies a target that enforces isolated test data and enables the persistent
-Test Preview banner; target and database names are not used as heuristics.
-`development` is the other accepted value. Omitting Data retains existing target
-behavior and does not assert isolation. Managed test phases remain visible during
-startup, execution, restoration and recovery even for targets without Data.
+Keep the normal target as the default. Add another web target with
+``- Data: `test` `` to the existing `## Outputs` section in `genesis/stack.md`,
+using scripts that actually exist. `vibe64-helper spec outputs` (`npx vibe64 spec
+outputs` outside a session) prints the exact grammar and a test-target example.
+The launcher is application-owned, not a command provided by Vibe64. Use the
+Outputs contract's `{host}` and `{port}` arguments rather than starting another
+fixed-port server. A Data `test` target enforces isolated test data and enables
+the persistent Test Preview banner; target and database names are not used as
+heuristics. Managed test phases remain visible during startup, execution,
+restoration and recovery even for targets without Data.
 
 The application launcher must:
 

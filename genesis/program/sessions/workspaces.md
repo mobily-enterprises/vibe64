@@ -27,6 +27,12 @@ that turn without dropping either half. No saved history is rewritten.
 - `tests/server/assistantRoutingStateInventory.unit.test.js`
 - `tests/server/vibe64SessionStorageLifecycle.unit.test.js`
 - `packages/vibe64-terminals/src/server/sessionNaming.js`
+- `packages/vibe64-terminals/src/server/agentHelperCommand.js`
+- `server/lib/agentSpecCli.js`
+- `packages/vibe64-genesis/src/server/agentSpecs.js`
+- `packages/vibe64-terminals/src/server/agentSpecs.js`
+- `packages/vibe64-source-editor/src/server/agentSpecs.js`
+- `tests/server/vibe64AgentSpecs.unit.test.js`
 - `packages/vibe64-terminals/src/server/sessionNamingHelper.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
 - `tests/server/sessionNaming.unit.test.js`
@@ -469,6 +475,16 @@ execution. Manual names may contain spaces and have a 120-character limit;
 automatic names contain one word of up to 40 characters. The store checks for
 an existing label under its mutation lock before applying an automatic name,
 so a manual rename wins. IDs, directories, source branches and URLs never move.
+
+`vibe64-helper spec [<name>]` prints the exact contracts a coding agent
+implements: every Stack section Vibe64 interprets, the Preview identity command
+protocol, the managed app identity list, the integration setup command and the
+teaching content format. It runs the release's `vibe64 spec` command, which
+`bin/run.js` routes to `server/lib/agentSpecCli.js`. That root module only joins
+the specs owned by vibe64-genesis, vibe64-terminals and vibe64-source-editor; it
+reads no session state and needs no control socket. Without a name it lists the
+contracts; an unknown name prints the list and exits 2. Field lists come from the
+parsers' own tables, and a focused test parses every printed example.
 
 Each tab shows a basic-info tooltip after one second of hover or keyboard focus,
 including its full name, status, assistant and model when available, save state, identifier,

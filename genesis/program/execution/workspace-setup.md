@@ -14,6 +14,8 @@ contract transported by the project's Stack.
 - `packages/vibe64-genesis/src/server/index.js`
 - `packages/vibe64-genesis/src/server/workspaceSetup.js`
 - `packages/vibe64-genesis/src/server/connectedDevelopment.js`
+- `packages/vibe64-genesis/src/server/stackOperation.js`
+- `packages/vibe64-genesis/src/server/agentSpecs.js`
 - `src/components/studio/Vibe64TemporaryActionTerminal.vue`
 - `src/components/studio/Vibe64TerminalSurface.vue`
 - `src/components/studio/Vibe64TemporaryAiFixAction.vue`
@@ -23,6 +25,12 @@ contract transported by the project's Stack.
 - `src/composables/useVibe64TemporaryAi.js`
 
 ## Public contract
+
+Agents read the exact Workspace setup, Outputs, Connected development and other
+section grammars with `vibe64-helper spec <name>`. Every Vibe64 section parser
+error ends with `Exact grammar: vibe64-helper spec <name>.`, added from one map
+in `stackOperation.js`; an unknown entry also lists the valid entry forms from the
+same tables the spec prints.
 
 The Genesis boundary also inspects `## Connected development` as
 `vibe64.connected-development.v1`. This is a separate development recipe, not

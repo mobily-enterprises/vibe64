@@ -1,6 +1,17 @@
 import { backtickedArguments, invalidStackOperation, isExplicitlyEmptyStackSection, processArguments, projectPath, runtimeArguments, stackOperationHash } from "./stackOperation.js";
 const SECTION = "Architecture inspection";
 const CODE = "VIBE64_ARCHITECTURE_INSPECTION_INVALID";
+// Entry label -> [inspector field, value form]; shared by the parser, its errors and the agent spec.
+export const ARCHITECTURE_INSPECTOR_FIELDS = Object.freeze({
+  Runtime: ["runtimeRequirements", "`runtime`..."],
+  Directory: ["workdir", "`path`"],
+  Command: ["argv", "`command` `argument`..."],
+  "Timeout seconds": ["timeout", "`1` through `60`"],
+  "Max output bytes": ["maxBuffer", `\`1\` through \`${4 * 1024 * 1024}\``],
+  "Entry files": ["entryFiles", "`path`... (optional)"],
+  "Required files": ["requiredFiles", "`path`... (optional)"]
+});
+const FIELD_LINE = new RegExp(`^- (${Object.keys(ARCHITECTURE_INSPECTOR_FIELDS).join("|")}): (.+)$`, "u");
 
 export function parseVibe64ArchitectureInspectionLines(lines, { path = "genesis/stack.md#Architecture inspection" } = {}) {
   if (!Array.isArray(lines)) invalidStackOperation(CODE, path, "Architecture inspection requires exact Stack section lines.");
@@ -16,9 +27,9 @@ export function parseVibe64ArchitectureInspectionLines(lines, { path = "genesis/
     const heading = line.match(/^### Inspector `([a-z0-9]+(?:-[a-z0-9]+)*)`: (.+)$/u);
     if (heading) { finish(); if (ids.has(heading[1])) invalidStackOperation(CODE, path, "Duplicate inspector id.", index + 1); ids.add(heading[1]); current = { id: heading[1], title: heading[2] }; continue; }
     if (!current) invalidStackOperation(CODE, path, "Expected an Inspector heading.", index + 1);
-    const field = line.match(/^- (Runtime|Directory|Command|Timeout seconds|Max output bytes|Entry files|Required files): (.+)$/u);
-    if (!field) invalidStackOperation(CODE, path, "Unknown architecture inspector field.", index + 1);
-    const key = { Runtime: "runtimeRequirements", Directory: "workdir", Command: "argv", "Timeout seconds": "timeout", "Max output bytes": "maxBuffer", "Entry files": "entryFiles", "Required files": "requiredFiles" }[field[1]];
+    const field = line.match(FIELD_LINE);
+    if (!field) invalidStackOperation(CODE, path, `Unknown architecture inspector field. Use one of: ${Object.entries(ARCHITECTURE_INSPECTOR_FIELDS).map(([label, [, value]]) => `- ${label}: ${value}`).join("; ")}.`, index + 1);
+    const [key] = ARCHITECTURE_INSPECTOR_FIELDS[field[1]];
     if (current[key] !== undefined) invalidStackOperation(CODE, path, `Duplicate ${field[1]}.`, index + 1);
     if (key === "runtimeRequirements") current[key] = runtimeArguments(field[2], CODE, path, "Inspector runtime", index + 1);
     else if (key === "argv") current[key] = processArguments(field[2], CODE, path, "Inspector command", index + 1);

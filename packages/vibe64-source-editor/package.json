@@ -7,6 +7,7 @@
   "exports": {
     "./server/registerRoutes": "./src/server/registerRoutes.js",
     "./server/service": "./src/server/service.js",
+    "./server/agentSpecs": "./src/server/agentSpecs.js",
     "./server/integrationAssistantContracts": "./src/server/integrationAssistantContracts.js",
     "./server/integrationSetupInput": "./src/server/integrationSetupInput.js",
     "./docs/application-integration-setup.md": "./docs/application-integration-setup.md",

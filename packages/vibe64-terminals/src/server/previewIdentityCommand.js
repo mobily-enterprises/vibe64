@@ -237,6 +237,11 @@ function createPreviewIdentityCommandRunner({
 }
 
 export {
+  COOKIE_NAME_PATTERN as PREVIEW_IDENTITY_COMMAND_COOKIE_NAME_PATTERN,
+  PREVIEW_IDENTITY_COMMAND_MAX_COOKIE_BYTES,
+  PREVIEW_IDENTITY_COMMAND_MAX_COOKIES,
+  PREVIEW_IDENTITY_COMMAND_MAX_OUTPUT_BYTES,
+  PREVIEW_TOKEN_COOKIE_PREFIX,
   createPreviewIdentityCommandRunner,
   normalizePreviewIdentityCommandResponse,
   parsePreviewIdentityCommandResponse,

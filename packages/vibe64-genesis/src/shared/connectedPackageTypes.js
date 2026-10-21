@@ -5,6 +5,7 @@
 // development Prepare/Verify commands give the source that ecosystem's native
 // treatment. Only `custom` selects a per-connection project script.
 const CONNECTED_CUSTOM_PACKAGE_TYPE = "custom";
+const CONNECTED_SOURCES_CONTRACT = "vibe64.connected-sources.v1";
 
 const CONNECTED_PACKAGE_TYPES = Object.freeze([
   Object.freeze({ value: "npm", label: "npm (Node.js)" }),
@@ -18,6 +19,9 @@ const CONNECTED_PACKAGE_TYPES = Object.freeze([
   Object.freeze({ value: "nuget", label: "NuGet (.NET)" }),
   Object.freeze({ value: CONNECTED_CUSTOM_PACKAGE_TYPE, label: "custom" })
 ]);
+
+// How a declared Custom runner receives each custom connection; read by Colleague and the agent spec.
+const CONNECTED_CUSTOM_RUNNER_CONTRACT = "Vibe64's preparer appends the absolute script path and --phase prepare|verify, --source-root <receiving source>, --project-root <consuming project>, --sources-file <absolute Sources file> and --repository <GitHub URL> arguments to the Stack's Custom runner command, once per phase; execution checks the script remains inside the consuming project.";
 
 const CONNECTED_PACKAGE_TYPE_VALUES = Object.freeze(CONNECTED_PACKAGE_TYPES.map(type => type.value));
 
@@ -42,8 +46,10 @@ function connectedPackageTypeListText(conjunction = "or") {
 
 export {
   CONNECTED_CUSTOM_PACKAGE_TYPE,
+  CONNECTED_CUSTOM_RUNNER_CONTRACT,
   CONNECTED_PACKAGE_TYPES,
   CONNECTED_PACKAGE_TYPE_VALUES,
+  CONNECTED_SOURCES_CONTRACT,
   connectedPackageTypeLabel,
   connectedPackageTypeListText,
   connectedPackageTypeUsesScript,

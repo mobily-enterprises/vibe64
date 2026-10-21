@@ -16,6 +16,11 @@ You need access to the project and an available coding assistant for delegated w
 4. When output controls replace setup, select the intended output and use its
    normal Run control. A successful setup request alone does not mean it is running.
 
+The agent writes the setup and output declarations in the project's
+`genesis/stack.md`. Their exact grammar comes from Vibe64 itself: the agent reads
+it with `vibe64-helper spec workspace-setup` and `vibe64-helper spec outputs`
+(see [coding agents](coding-agents.md)). A setup error names the spec to read.
+
 The existing source and Git history are retained. If preparation fails, read the
 reported step and use the offered retry after addressing its cause. Do not apply
 a starter over an existing repository to repair it.

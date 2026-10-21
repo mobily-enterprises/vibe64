@@ -9,7 +9,8 @@ import {
   projectPath,
   runtimeArguments,
   stackOperationHash,
-  uniqueSorted
+  uniqueSorted,
+  unknownEntryMessage
 } from "./stackOperation.js";
 
 const VIBE64_APPLICATION_DEPLOYMENT_CONTRACT = "vibe64.application-deployment.v1";
@@ -23,6 +24,15 @@ const STEP_ROLE_ORDER = Object.freeze({
   migrate: 2,
   serve: 3
 });
+
+const DEPLOYMENT_STEP_ROLES = Object.keys(STEP_ROLE_ORDER).map((role) => role[0].toUpperCase() + role.slice(1));
+const DEPLOYMENT_ENTRY_FORMS = Object.freeze([
+  "- Workdir: `path`",
+  "- Runtimes: `runtime`...",
+  `${RESTORE_PATHS_PREFIX}\`glob\`...`,
+  "- Ready when: `GET` `/path` returns `200`",
+  `- ${DEPLOYMENT_STEP_ROLES.join("|")} \`label\`: \`command\` \`argument\`...`
+]);
 
 function invalid(deploymentPath, message, line, details = {}) {
   invalidStackOperation(ERROR_CODE, deploymentPath, message, line, details);
@@ -145,7 +155,7 @@ function parseVibe64DeploymentLines(lines, {
       result.steps.push(deploymentStep(step, deploymentPath, line));
       continue;
     }
-    invalid(deploymentPath, `Unknown Deployment entry: ${source}.`, line);
+    invalid(deploymentPath, unknownEntryMessage("Deployment entry", source, DEPLOYMENT_ENTRY_FORMS), line);
   }
   if (result.steps.length === 0) {
     invalid(deploymentPath, "## Deployment needs at least one command or exactly `- Nothing.`.");
@@ -156,7 +166,7 @@ function parseVibe64DeploymentLines(lines, {
   }
   for (let index = 1; index < result.steps.length; index += 1) {
     if (STEP_ROLE_ORDER[result.steps[index].role] < STEP_ROLE_ORDER[result.steps[index - 1].role]) {
-      invalid(deploymentPath, "Deployment steps must be ordered Prepare, Build, Migrate, then Serve.");
+      invalid(deploymentPath, `Deployment steps must be ordered ${DEPLOYMENT_STEP_ROLES.slice(0, -1).join(", ")}, then ${DEPLOYMENT_STEP_ROLES.at(-1)}.`);
     }
   }
   if (!result.readiness) invalid(deploymentPath, "Deployment needs one Ready when entry.");
@@ -203,6 +213,8 @@ function vibe64DeploymentInspection({ environment = {}, section = {} } = {}) {
 }
 
 export {
+  DEPLOYMENT_ENTRY_FORMS,
+  DEPLOYMENT_STEP_ROLES,
   VIBE64_APPLICATION_DEPLOYMENT_CONTRACT,
   VIBE64_APPLICATION_DEPLOYMENT_SECTION,
   parseVibe64DeploymentLines,

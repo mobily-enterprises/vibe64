@@ -1,6 +1,7 @@
 import { backtickedArguments, invalidStackOperation, isExplicitlyEmptyStackSection, projectPath } from './stackOperation.js';
 
 export const VIBE64_ARCHITECTURE_LAYOUT_SECTION = 'Architecture layout';
+export const ARCHITECTURE_LAYOUT_KINDS = Object.freeze(['layer', 'libraries', 'support']);
 
 // Vibe64 owns this presentation grammar. Genesis transports the exact section;
 // declarations neither discover subsystems nor change their source ownership.
@@ -32,7 +33,7 @@ export function parseVibe64ArchitectureLayoutLines(lines, { path = 'genesis/stac
     } else {
       const key = field[1].toLowerCase();
       if (current[key] !== undefined) invalidStackOperation(code, path, `Duplicate ${field[1]}.`, index + 1);
-      if (key === 'kind' && !['layer', 'libraries', 'support'].includes(values[0])) invalidStackOperation(code, path, 'Kind must be layer, libraries or support.', index + 1);
+      if (key === 'kind' && !ARCHITECTURE_LAYOUT_KINDS.includes(values[0])) invalidStackOperation(code, path, `Kind must be ${ARCHITECTURE_LAYOUT_KINDS.slice(0, -1).join(', ')} or ${ARCHITECTURE_LAYOUT_KINDS.at(-1)}.`, index + 1);
       current[key] = values[0];
     }
   }

@@ -7,6 +7,7 @@ const VIBE64_PROJECT_SERVICES_SECTION = "Project services";
 const VIBE64_PROJECT_SERVICES_CONTRACT = "vibe64.project-services.v1";
 const CODE = "VIBE64_PROJECT_SERVICES_INVALID";
 const LOCATION = "genesis/stack.md#Project services";
+const PROJECT_SERVICE_ENTRY_FORM = "- Start `service-id` [per session] with `runtime` [in `workdir`]: `command` `argument`...";
 
 function parseVibe64ProjectServicesLines(lines) {
   if (!Array.isArray(lines)) invalidStackOperation(CODE, LOCATION, "Expected exact Project services section lines.");
@@ -17,8 +18,7 @@ function parseVibe64ProjectServicesLines(lines) {
     if (!source) continue;
     const line = index + 1;
     const match = source.match(/^- Start `([a-z][a-z0-9-]{0,63})`( per session)? with (.+?): (.+)$/u);
-    if (!match) invalidStackOperation(CODE, LOCATION,
-      "Use: - Start `service-id` [per session] with `runtime` [in `workdir`]: `command` `argument`...", line);
+    if (!match) invalidStackOperation(CODE, LOCATION, `Use: ${PROJECT_SERVICE_ENTRY_FORM}`, line);
     if (services.some(({ id }) => id === match[1])) invalidStackOperation(CODE, LOCATION, "Duplicate project service id.", line);
     const workdir = match[3].match(/^(.*?) in `([^`\r\n]+)`$/u);
     services.push({
@@ -44,5 +44,5 @@ function vibe64ProjectServicesInspection(section = {}) {
   };
 }
 
-export { VIBE64_PROJECT_SERVICES_SECTION, VIBE64_PROJECT_SERVICES_CONTRACT,
+export { PROJECT_SERVICE_ENTRY_FORM, VIBE64_PROJECT_SERVICES_SECTION, VIBE64_PROJECT_SERVICES_CONTRACT,
   parseVibe64ProjectServicesLines, vibe64ProjectServicesInspection };

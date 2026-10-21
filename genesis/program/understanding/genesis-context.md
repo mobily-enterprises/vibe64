@@ -137,6 +137,11 @@ Vibe64's numbered-question presentation and managed-session operating rules live
 that stable contribution rather than being appended to each user message. Each
 question’s answer list immediately follows that question, with one distinct answer
 per bullet; a shared trailing list and slash-combined alternatives are forbidden. The
+contribution points agents to `vibe64-helper spec` for exact Vibe64-owned
+contracts instead of restating their grammar. Framework conventions, such as
+JSKIT's test-database names, belong to the Stack piece that owns them; Vibe64
+keeps only host rules, such as the `PLAYWRIGHT_BASE_URL` its managed Playwright
+supplies. The
 Vibe64 driver has no turn form and Vibe64 adds nothing to ordinary user turns.
 Genesis still offers a generic bounded turn-context capability, but Vibe64 does
 not use it. Genesis supports the one host driver and process bridge, not a

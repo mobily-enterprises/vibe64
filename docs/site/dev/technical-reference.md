@@ -216,20 +216,14 @@ that exact recipe. Merely reading output status never starts setup or a
 process. Outputs remain pending until the current setup recipe has succeeded;
 a Stack with no setup recipe is simply unconfigured rather than failed.
 Component conflicts are reported instead of interleaving competing commands.
+The exact grammars, limits and examples of every Vibe64-owned Stack section are
+printed by `npx vibe64 spec <name>` (`vibe64-helper spec <name>` in a session);
+`npx vibe64 spec` lists them.
 
-Projects may also declare foreground services shared by their sessions, or one instance per session:
-
-```markdown
-## Project services
-
-- Start `worker` with `nodejs` in `tools`: `npm` `run` `worker`
-- Start `reference` per session with `nodejs`: `npm` `run` `reference:service`
-```
-
-The optional section accepts unique lowercase service IDs, one or more runtimes,
-an optional project-relative workdir (default `.`), and exact argv. Use
-`- Nothing.` for an explicitly empty section. Commands run through the ordinary
-execution gateway before an output starts, under the project's saved development
+Projects may also declare foreground services shared by their sessions, or one
+instance per session, in `## Project services` (`npx vibe64 spec project-services`).
+Commands run through the ordinary execution gateway before an output starts,
+under the project's saved development
 environment. They remain separate from an individual output's process tree and
 resource allowance. The service must stay in the foreground and handle SIGTERM
 by releasing its owned resources; spawning untracked background work is not a
@@ -260,36 +254,9 @@ Development Env is project-wide, not a per-session port assignment. Foreground
 service commands must retain and clean their own children on SIGTERM.
 
 
-An output target can declare named text parameters. Its executable remains fixed;
-`{parameter:id}` can appear in Prepare, Build, or Run arguments. For example:
-
-```markdown
-### Target `app`: Run editor
-
-- Default.
-- Mode: `interactive`
-- Runtimes: `nodejs`
-- Run `Start`: `node` `server.js` `--project` `{parameter:project-directory}` `--host` `{host}` `--port` `{port}`
-
-#### Parameter `project-directory`: Project directory
-
-- Default: `examples/hello-node`
-- Description: `Directory opened by the editor.`
-- Required.
-
-#### Presentation
-
-- Kind: `web`
-- URL path: `/`
-- Ready when: `GET` `/api/health` returns `200`
-```
-
-A target may declare up to 16 unique parameters. Default, Description, and Required
-are optional; an omitted default is empty text. Each parameter must occur in a
-step argument. Values are single-line text of at most 4096 characters; required
-values cannot be blank. Unknown fields or references are rejected. Vibe64 inserts
-each value once and quotes the completed argument, preserving spaces and shell
-punctuation. `{host}` and `{port}` remain restricted to a web target's Run step.
+An output target can declare named text parameters used as `{parameter:id}` in
+its step arguments (`npx vibe64 spec outputs`). Vibe64 inserts each value once and
+quotes the completed argument, preserving spaces and shell punctuation.
 
 The Preview options cog appears for a target with parameters. Run and Save and
 restart apply the form explicitly. Remember for this project saves values in the
@@ -326,7 +293,9 @@ committed, application-owned project-relative executable such as
 `vibe64.preview-identity.command.v1` protocol, and lists the application
 identifier types it accepts: email, login, or user ID. It may also declare
 app-specific enable and secret environment variable names, command runtime
-requirements, and a timeout.
+requirements, and a timeout. The declaration grammar is
+`npx vibe64 spec outputs`; the command's stdin/stdout protocol is
+`npx vibe64 spec preview-identity-command`.
 
 Genesis transports the Outputs section without parsing it. Vibe64 validates the
 declaration, maps its runtime requirements to pinned runtime packs, verifies the

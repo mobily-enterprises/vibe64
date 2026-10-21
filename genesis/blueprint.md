@@ -1393,6 +1393,9 @@ each managed shell command reads current project Env even when the conversation
 started before those values were added. Tool help remains available before browser
 test dependencies or their matching runtime are prepared, without launching a browser.
 Credentials need not be copied into chat or source to inspect an authorized site.
+Agents read the exact contracts Vibe64 owns, such as its Stack sections and the
+Preview identity protocol, with `vibe64-helper spec`, so they never reconstruct
+them from Vibe64's own source.
 Agents have a single known session-summary command for current resource readiness,
 setup commands and managed tool entry points without secret values. Browser-suite
 readiness distinguishes dependency preparation from exact runtime support before

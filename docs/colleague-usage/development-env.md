@@ -22,6 +22,12 @@ agent which variable names contain its URL and credentials. Values need not be
 pasted into chat or copied into source. Presence in Env confirms configuration,
 not a successful login.
 
+When the application needs a generated secret, such as an application key, the
+coding agent generates it with the framework's own command and stores it as a
+**Secret** Development value through `vibe64-helper env set`. It never writes the
+value into a generated `.env` file: Vibe64 rewrites that file from Env, so an
+edit there would be lost. The key then appears in **Env** with its value hidden.
+
 Each managed shell command reads current Development Env, so the coding agent's
 next command receives added or changed values without restarting its conversation.
 The agent can use ordinary application commands; it does not need to copy managed

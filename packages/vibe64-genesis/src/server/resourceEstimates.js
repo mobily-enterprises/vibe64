@@ -100,7 +100,7 @@ function parseVibe64ResourceEstimatesLines(lines, {
     const field = source.match(/^- ([A-Za-z ]+): `([1-9][0-9]*)`$/u);
     const name = field && FIELDS.get(field[1]);
     if (!current || !name) {
-      invalid(resourcePath, "Expected an Output or Workspace setup heading followed by positive integer MiB estimates.", line);
+      invalid(resourcePath, `Expected an Output or Workspace setup heading followed by positive integer MiB estimates: ${[...FIELDS.keys()].map((name) => `- ${name}: \`number\``).join("; ")}.`, line);
     }
     if (current.fields.has(name)) invalid(resourcePath, `Duplicate resource field: ${field[1]}.`, line);
     const mib = Number(field[2]);
@@ -160,6 +160,8 @@ function vibe64ResourceEstimatesInspection({
 }
 
 export {
+  FIELDS as VIBE64_RESOURCE_ESTIMATE_FIELDS,
+  MAX_ESTIMATE_MIB as VIBE64_RESOURCE_ESTIMATE_MAX_MIB,
   VIBE64_RESOURCE_ESTIMATES_CONTRACT,
   VIBE64_RESOURCE_ESTIMATES_SECTION,
   parseVibe64ResourceEstimatesLines,

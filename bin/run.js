@@ -384,9 +384,11 @@ async function runLauncher({
 }
 
 if (isDirectCliExecution()) {
-  const command = process.argv[2] === "training"
-    ? import("@local/vibe64-training/server/cli").then(({ runTrainingCli }) => runTrainingCli(process.argv.slice(3)))
-    : runLauncher();
+  const subcommands = {
+    spec: () => import("../server/lib/agentSpecCli.js").then(({ runAgentSpecCli }) => runAgentSpecCli(process.argv.slice(3))),
+    training: () => import("@local/vibe64-training/server/cli").then(({ runTrainingCli }) => runTrainingCli(process.argv.slice(3)))
+  };
+  const command = Object.hasOwn(subcommands, process.argv[2]) ? subcommands[process.argv[2]]() : runLauncher();
   command.then((exitCode) => {
     process.exitCode = exitCode;
   }).catch((error) => {

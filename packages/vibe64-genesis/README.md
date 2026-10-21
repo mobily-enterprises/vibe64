@@ -24,30 +24,8 @@ Workspace setup inspections include the same normalized `resourceEstimates`
 value. These are initial planning estimates, not observed usage, reservations,
 minimum requirements or granted memory limits. Execution hosts own those choices.
 
-An interactive output declares separate startup and running typical/high pairs:
-
-```markdown
-## Resource estimates
-
-### Output `app`
-
-- Startup typical MiB: `1024`
-- Startup high MiB: `1536`
-- Running typical MiB: `768`
-- Running high MiB: `1536`
-
-### Workspace setup
-
-- Typical MiB: `1024`
-- High MiB: `1536`
-```
-
-Output ids must already exist in Outputs. Finite outputs use only `Typical MiB`
-and `High MiB`, just like Workspace setup. Setup estimates require declared
-preparation steps. Each phase requires both values; typical cannot exceed high.
-Values are integer MiB from 1 through 1048576, normalized to bytes. Duplicate
-operations/fields, unknown fields and executable entries are rejected. The section
-is bounded to 64 KiB and 2048 lines. `- Nothing.` explicitly declares no estimates.
+The section grammar, limits and a worked example are the agent spec printed by
+`vibe64 spec resource-estimates` (`src/server/agentSpecs.js`).
 
 The result contains `ready`, `unconfigured` or `invalid` status, exact Stack and
 section identities, a normalized `estimatesHash`, project provenance, output and
@@ -58,17 +36,12 @@ only estimates does not change the preparation recipe identity. Mixed Stack
 identities throw `VIBE64_STACK_CHANGED` so callers re-inspect instead of using
 hints for a different source snapshot. Inspection never rewrites project source.
 
-## Architecture inspector prerequisites
+## Agent specs
 
-Vibe64 owns the `Architecture inspection` Stack grammar. An inspector can
-optionally declare `- Required files: ` followed by one or more backticked
-project-relative file paths, for example:
-
-```markdown
-- Required files: `tools/inspect.py` `config/routes.json`
-```
-
-Paths use the same canonical validation as Entry files. The System Graph consumer
-checks that each resolves to a regular file inside the admitted project before
-scanning source. This is an explicit prerequisite, not a guess based on a language
-or command name. Genesis composes the section as opaque consumer-owned text.
+`./server/agentSpecs` holds the agent-readable spec of every Vibe64 Stack
+section this package parses. Entry forms and limits come from the parsers' own
+tables, and parser errors end with `Exact grammar: vibe64-helper spec <name>.`
+Sessions read them with `vibe64-helper spec [<name>]`; outside a session use
+`vibe64 spec [<name>]`. The Architecture inspection grammar, including the
+optional Required files prerequisite that the System Graph consumer checks before
+scanning source, is `vibe64 spec architecture-inspection`.

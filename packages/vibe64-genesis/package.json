@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     "./server": "./src/server/index.js",
+    "./server/agentSpecs": "./src/server/agentSpecs.js",
     "./server/promptContext": "./src/server/promptContext.js",
     "./shared/connectedPackageTypes": "./src/shared/connectedPackageTypes.js"
   },
@@ -29,6 +30,10 @@
           {
             "subpath": "./server",
             "summary": "Uses Genesis transport while Vibe64 owns workspace setup, Outputs, preview identity, and application deployment contracts."
+          },
+          {
+            "subpath": "./server/agentSpecs",
+            "summary": "Owns the agent-readable specs of every Vibe64 Stack section, generated from the parsers' entry tables."
           },
           {
             "subpath": "./shared/connectedPackageTypes",

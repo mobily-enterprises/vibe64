@@ -10,6 +10,7 @@ import {
 const VIBE64_INTEGRATION_SETUP_CONTRACT = "vibe64.integration-setup.v1";
 const VIBE64_INTEGRATION_SETUP_SECTION = "Integration setup";
 const ERROR_CODE = "VIBE64_INTEGRATION_SETUP_INVALID";
+const INTEGRATION_SETUP_ENTRY_FORM = "- Command with `runtime` in `workdir`: `command` `argument`...";
 
 function parseVibe64IntegrationSetupLines(lines, {
   path: setupPath = "genesis/stack.md#Integration setup"
@@ -22,7 +23,7 @@ function parseVibe64IntegrationSetupLines(lines, {
   const entry = entries.length === 1 && entries[0].match(/^- Command with (.+?) in `([^`\r\n]+)`: (.+)$/u);
   if (!entry) {
     invalidStackOperation(ERROR_CODE, setupPath,
-      "Integration setup requires exactly one entry: - Command with `runtime` in `workdir`: `command` `argument`...; or - Nothing.");
+      `Integration setup requires exactly one entry: ${INTEGRATION_SETUP_ENTRY_FORM}; or - Nothing.`);
   }
   return {
     argv: processArguments(entry[3], ERROR_CODE, setupPath, "Integration setup command"),
@@ -48,6 +49,7 @@ function vibe64IntegrationSetupInspection({ section = {} } = {}) {
 }
 
 export {
+  INTEGRATION_SETUP_ENTRY_FORM,
   VIBE64_INTEGRATION_SETUP_CONTRACT,
   VIBE64_INTEGRATION_SETUP_SECTION,
   parseVibe64IntegrationSetupLines,

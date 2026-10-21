@@ -9,6 +9,7 @@ import {
   projectPath,
   runtimeArguments,
   uniqueSorted,
+  unknownEntryMessage,
   urlPath
 } from "./stackOperation.js";
 
@@ -33,16 +34,49 @@ const RESERVED_ENVIRONMENT_NAMES = new Set([
 ]);
 const IDENTITY_TYPES = new Set(["email", "login", "user-id"]);
 const MODES = new Set(["finite", "interactive"]);
+const DATA_MODES = new Set(["development", "test"]);
 const PRESENTATION_KINDS = new Set(["terminal", "web"]);
+const MAX_PARAMETERS = 16;
+const PREVIEW_TIMEOUT_DEFAULT_MS = 10_000;
+const PREVIEW_TIMEOUT_MAX_MS = 30_000;
+const choices = (values) => [...values].map((value) => `\`${value}\``).join(" or ");
+// [entry prefix, draft field, label, value form shown in errors and the spec]
 const PREVIEW_FIELDS = [
-  ["- Command: ", "command", "Command"],
-  ["- Protocol: ", "protocol", "Protocol"],
-  ["- Identity types: ", "identityTypes", "Identity types"],
-  ["- Enabled environment: ", "enabledEnvironment", "Enabled environment"],
-  ["- Secret environment: ", "secretEnvironment", "Secret environment"],
-  ["- Runtimes: ", "runtimes", "Runtimes"],
-  ["- Timeout ms: ", "timeoutMs", "Timeout ms"]
+  ["- Command: ", "command", "Command", "`tools/preview-identity` `argument`..."],
+  ["- Protocol: ", "protocol", "Protocol", `\`${VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL}\``],
+  ["- Identity types: ", "identityTypes", "Identity types", `one or more of ${[...IDENTITY_TYPES].map((type) => `\`${type}\``).join(" ")}`],
+  ["- Enabled environment: ", "enabledEnvironment", "Enabled environment", "`ENV_NAME`"],
+  ["- Secret environment: ", "secretEnvironment", "Secret environment", "`ENV_NAME`"],
+  ["- Runtimes: ", "runtimes", "Runtimes", "`runtime`..."],
+  ["- Timeout ms: ", "timeoutMs", "Timeout ms", `\`1\` through \`${PREVIEW_TIMEOUT_MAX_MS}\` (default ${PREVIEW_TIMEOUT_DEFAULT_MS})`]
 ];
+// The heading and entry forms of every Outputs block, shared by errors and the agent spec.
+const OUTPUTS_HEADING_FORMS = Object.freeze([
+  "### Target `id`: Label",
+  "#### Parameter `id`: Label",
+  "#### Presentation",
+  "#### Preview identity",
+  "#### Download `id`"
+]);
+const OUTPUTS_ENTRY_FORMS = Object.freeze({
+  target: [
+    "- Default.",
+    `- Mode: ${choices(MODES)}`,
+    `- Data: ${choices(DATA_MODES)}`,
+    "- Workdir: `path`",
+    "- Runtimes: `runtime`...",
+    "- Prepare|Build|Run `label`: `command` `argument`..."
+  ],
+  parameter: ["- Default: `text`", "- Description: `text`", "- Required."],
+  presentation: [
+    `- Kind: ${choices(PRESENTATION_KINDS)}`,
+    "- Preferred port: `1024` through `65535`",
+    "- URL path: `/path`",
+    "- Ready when: `GET` `/path` returns `200`"
+  ],
+  previewIdentity: PREVIEW_FIELDS.map(([prefix, , , value]) => `${prefix}${value}`),
+  download: ["- Path: `path`", "- Name: `file-name`", "- Media type: `type/subtype`"]
+});
 
 function invalid(outputsPath, message, line, details = {}) {
   invalidStackOperation(ERROR_CODE, outputsPath, message, line, details);
@@ -123,7 +157,7 @@ function parseParameterLine(draft, source, outputsPath, line) {
       return;
     }
   }
-  invalid(outputsPath, `Unknown Outputs parameter entry: ${source}.`, line);
+  invalid(outputsPath, unknownEntryMessage("Outputs parameter entry", source, OUTPUTS_ENTRY_FORMS.parameter), line);
 }
 
 function resolveVibe64OutputParameters(target, supplied = {}) {
@@ -182,8 +216,8 @@ function preferredPort(value, outputsPath, line) {
 function parseTargetLine(draft, source, outputsPath, line) {
   if (source.startsWith("- Data: ")) {
     const dataMode = oneToken(source, "- Data: ", outputsPath, "Output target Data", line);
-    if (!["development", "test"].includes(dataMode)) {
-      invalid(outputsPath, "Output target Data must be `development` or `test`.", line);
+    if (!DATA_MODES.has(dataMode)) {
+      invalid(outputsPath, `Output target Data must be ${choices(DATA_MODES)}.`, line);
     }
     setOnce(draft, "dataMode", dataMode, outputsPath, line, "output target Data entry");
     return;
@@ -248,7 +282,11 @@ function parseTargetLine(draft, source, outputsPath, line) {
     });
     return;
   }
-  invalid(outputsPath, `Unknown Outputs target entry: ${source}.`, line);
+  invalid(outputsPath, unknownEntryMessage(
+    "Outputs target entry",
+    source,
+    [...OUTPUTS_ENTRY_FORMS.target, ...OUTPUTS_HEADING_FORMS.slice(1)]
+  ), line);
 }
 
 function parsePresentationLine(draft, source, outputsPath, line) {
@@ -303,7 +341,7 @@ function parsePresentationLine(draft, source, outputsPath, line) {
     );
     return;
   }
-  invalid(outputsPath, `Unknown Presentation entry: ${source}.`, line);
+  invalid(outputsPath, unknownEntryMessage("Presentation entry", source, OUTPUTS_ENTRY_FORMS.presentation), line);
 }
 
 function safeDownloadName(value, outputsPath, line) {
@@ -372,7 +410,7 @@ function parseDownloadLine(draft, source, outputsPath, line) {
     );
     return;
   }
-  invalid(outputsPath, `Unknown Download entry: ${source}.`, line);
+  invalid(outputsPath, unknownEntryMessage("Download entry", source, OUTPUTS_ENTRY_FORMS.download), line);
 }
 
 function normalizeDownload(draft, outputsPath, targetId) {
@@ -412,7 +450,9 @@ function previewDraft(line) {
 
 function parsePreviewLine(draft, source, outputsPath, line) {
   const field = PREVIEW_FIELDS.find(([prefix]) => source.startsWith(prefix));
-  if (!field) invalid(outputsPath, `Unknown Preview identity entry: ${source}.`, line);
+  if (!field) {
+    invalid(outputsPath, unknownEntryMessage("Preview identity entry", source, OUTPUTS_ENTRY_FORMS.previewIdentity), line);
+  }
   const [prefix, key, label] = field;
   const values = tokenValues(source, prefix, outputsPath, `Preview identity ${label}`, line);
   if (!["command", "identityTypes", "runtimes"].includes(key) && values.length !== 1) {
@@ -475,15 +515,15 @@ function normalizePreviewIdentity(draft, outputsPath, targetId) {
   if (environment.enabled && environment.enabled === environment.secret) {
     invalid(outputsPath, "Preview identity enabled and secret environment names must differ.", draft.line);
   }
-  let timeoutMs = 10_000;
+  let timeoutMs = PREVIEW_TIMEOUT_DEFAULT_MS;
   if (draft.timeoutMs) {
     const value = draft.timeoutMs[0];
     if (!/^[0-9]+$/u.test(value)) {
-      invalid(outputsPath, "Preview identity Timeout ms must be from 1 through 30000.", draft.line);
+      invalid(outputsPath, `Preview identity Timeout ms must be from 1 through ${PREVIEW_TIMEOUT_MAX_MS}.`, draft.line);
     }
     timeoutMs = Number(value);
-    if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30_000) {
-      invalid(outputsPath, "Preview identity Timeout ms must be from 1 through 30000.", draft.line);
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > PREVIEW_TIMEOUT_MAX_MS) {
+      invalid(outputsPath, `Preview identity Timeout ms must be from 1 through ${PREVIEW_TIMEOUT_MAX_MS}.`, draft.line);
     }
   }
   return {
@@ -566,8 +606,8 @@ function normalizeTarget(draft, outputsPath) {
   }
   const parameters = draft.parameters.map(({ seen: _seen, ...parameter }) => parameter);
   const parameterIds = new Set(parameters.map(({ id }) => id));
-  if (parameters.length > 16 || parameterIds.size !== parameters.length) {
-    invalid(outputsPath, `Output target ${draft.id} may declare at most 16 parameters with unique ids.`, draft.line);
+  if (parameters.length > MAX_PARAMETERS || parameterIds.size !== parameters.length) {
+    invalid(outputsPath, `Output target ${draft.id} may declare at most ${MAX_PARAMETERS} parameters with unique ids.`, draft.line);
   }
   for (const reference of placeholders.filter((value) => value.startsWith("parameter:"))) {
     const id = reference.slice("parameter:".length);
@@ -726,6 +766,10 @@ function vibe64OutputsInspection({ environment = {}, section = {} } = {}) {
 }
 
 export {
+  MAX_PARAMETERS as VIBE64_OUTPUT_MAX_PARAMETERS,
+  OUTPUTS_ENTRY_FORMS,
+  OUTPUTS_HEADING_FORMS,
+  RESERVED_ENVIRONMENT_NAMES as VIBE64_PREVIEW_IDENTITY_RESERVED_ENVIRONMENT_NAMES,
   VIBE64_OUTPUTS_CONTRACT,
   VIBE64_OUTPUTS_SECTION,
   VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL,
