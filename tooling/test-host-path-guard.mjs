@@ -1,6 +1,10 @@
 // Loaded into every test process (node --import, vitest setupFiles). Tests run
 // on a person's own computer and must never read or write a hosting
 // environment's system directories; any such access throws instead.
+// Child Node processes inherit it through NODE_OPTIONS. A child started with
+// an environment rebuilt from scratch (NODE_OPTIONS removed) and Playwright
+// browser tests run without it; the command that starts such a child is
+// still checked here.
 import childProcess from "node:child_process";
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
@@ -73,9 +77,11 @@ function checkChildProcessArguments(args, operation) {
   const [command, second, third] = args;
   const argv = Array.isArray(second) ? second : [];
   const options = Array.isArray(second) ? third : second;
-  const words = operation === "exec" || operation === "execSync"
-    ? String(command || "").split(/[\s"'=;|&()]+/u)
-    : [command, ...argv];
+  // Shell programs (exec, `sh -c ...`, `bash -lc ...`) carry paths inside
+  // one argument, so every argument is split into words.
+  const words = [command, ...argv].flatMap((value) => typeof value === "string"
+    ? value.split(/[\s"'=;|&()<>`]+/u)
+    : [value]);
   for (const word of words) {
     const hostPath = hostPathOf(word, { resolveRelative: false });
     if (hostPath) refuse(hostPath, operation);

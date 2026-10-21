@@ -321,7 +321,7 @@ test("agent Env creates development values through the project service and never
   }]);
 });
 
-test("agent Env production writes use only the Online production provider", async () => {
+test("agent Env production writes use only the host production provider", async () => {
   const project = createProjectService();
   const production = createProductionProvider();
   const command = createAgentEnvCommandService({

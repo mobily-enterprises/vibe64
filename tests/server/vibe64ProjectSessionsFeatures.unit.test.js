@@ -352,7 +352,7 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
   assert.equal(
     resumeCalls,
     1,
-    "hosted boot recovery is owned by the catalog-aware Online boundary"
+    "hosted boot recovery is owned by the catalog-aware host boundary"
   );
 
   Vibe64SessionsProvider.boot({

@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
-import { runCaptureCommand } from "@local/vibe64-execution/server";
+import { configureVibe64Host, runCaptureCommand } from "@local/vibe64-execution/server";
 import {
   inspectIncomingContributionsDirect,
   changeIncomingContributionDirect,
@@ -96,6 +96,7 @@ function errorResponse(error) {
 
 try {
   const payload = await readInput();
+  configureVibe64Host(payload?.hostProfile || null);
   const implementation = OPERATION_IMPLEMENTATIONS[String(payload?.operation || "")];
   if (!implementation) {
     const error = new Error("Unsupported session repository operation.");

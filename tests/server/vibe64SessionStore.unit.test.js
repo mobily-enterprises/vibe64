@@ -139,7 +139,7 @@ async function commitPreparedRenewal(store, fixture, {
 
 test("session state requires an explicit runtime root", () => {
   assert.throws(
-    () => createVibe64SessionStore({ projectContextRoot: "/var/lib/vibe64/merc/projects/example" }),
+    () => createVibe64SessionStore({ projectContextRoot: "/srv/host-data/merc/projects/example" }),
     (error) => error?.code === "vibe64_project_runtime_root_required"
   );
 });

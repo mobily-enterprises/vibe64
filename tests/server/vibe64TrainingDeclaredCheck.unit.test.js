@@ -15,7 +15,7 @@ import { v2Content } from "./vibe64TrainingV2LessonStub.js";
 
 // Preserved topic check, run as a lesson step's response check through the
 // actual standalone finite gateway.
-// Project/output transport seams below are explicit fixtures, not fleet proof.
+// Project/output transport seams below are explicit fixtures, not host proof.
 const originalCheck = await readFile(new URL("../fixtures/training/orientation-response.mjs", import.meta.url));
 
 const v2Steps = [

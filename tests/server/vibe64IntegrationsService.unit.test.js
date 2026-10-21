@@ -772,7 +772,7 @@ test("payment management binds saved merchant configuration and refuses non-owne
   for (const selection of [
     {},
     { operation: "payments-readiness" },
-    { operation: "payments-history", subjectId: "tenant-a", collection: "transactions" },
+    { operation: "payments-history", subjectId: "customer-a", collection: "transactions" },
     { operation: "payments-publish", reviewId: "a".repeat(64) },
     { operation: "payments-recover", reviewId: "a".repeat(64), providerId: "price_recovered" }
   ]) {

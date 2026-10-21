@@ -58,7 +58,7 @@ test("all assistant controls connect with long workspace paths and stay isolated
   };
   try {
     for (const workspace of ["mercmobily", "workspace-with-a-much-longer-name"]) {
-      const attachmentRoot = path.join(root, "home", `v64d_${workspace}`, ".local/state/vibe64/attachments");
+      const attachmentRoot = path.join(root, "home", `daemon-${workspace}`, ".local/state/vibe64/attachments");
       const git = await prepareCodexGitCommand({
         commandService,
         env: { ...process.env, VIBE64_CODEX_ATTACHMENTS_ROOT: attachmentRoot },

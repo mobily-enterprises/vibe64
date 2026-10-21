@@ -2257,7 +2257,7 @@ for (const width of [320, 390, 820, 1280, 2048]) {
 }
 
 hintTest("@mobile-preview-resources hides meters only in mobile Preview", async ({ page }, info) => {
-  test.skip(process.env.VIBE64_E2E_COLLEAGUE_HOST !== "1", "Requires the composed Online project shell.");
+  test.skip(process.env.VIBE64_E2E_COLLEAGUE_HOST !== "1", "Requires the composed host project shell.");
   await page.setViewportSize({ width: 390, height: 720 });
   await mockDirectChat(page);
   await page.route("**/api/vibe64/colleague**", route => fulfillJson(route, { ok: true, messages: [], status: "ready" }));

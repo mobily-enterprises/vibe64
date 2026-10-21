@@ -24,26 +24,31 @@ const HOST_TERMS = [
   /\b[Tt]enants?\b/u,
   /\b[Ff]leet\b/u
 ];
-// The privileged helper and its release packaging still describe the host
-// they run on; both leave this repository in a later extraction. The test
-// path guard names the directories it refuses.
+// Known blocker: the privileged helper, its two test files and its release
+// packaging still describe the host they run on. They leave this repository
+// together in the helper extraction; until then they are the only exceptions.
+// The test path guard and this test name the terms they refuse.
 const ALLOWED_FILES = new Set([
   "packages/vibe64-execution/src/host/execHelper.js",
+  "tests/server/executionBoundarySecurity.unit.test.js",
+  "tests/server/vibe64ManagedWorkflow.unit.test.js",
   "tooling/release/runtime-package.mjs",
-  "tooling/test-host-path-guard.mjs"
+  "tooling/test-host-path-guard.mjs",
+  "tests/server/hostNeutrality.unit.test.js"
 ]);
-// Integration guides keep their provider's own "tenant" vocabulary
-// (Microsoft directory IDs, Workday and Xero tenants, multi-tenant apps).
+// Integrations keep their provider's own "tenant" vocabulary (Microsoft
+// directory IDs, Workday and Xero tenants, multi-tenant apps), as does the
+// voice access token API.
 const PROVIDER_VOCABULARY = {
   term: /\b[Tt]enants?\b/u,
-  files: /^(?:genesis\/program\/source\/edit-and-review\.md|packages\/vibe64-source-editor\/docs\/)/u
+  files: /^(?:genesis\/program\/source\/edit-and-review\.md|packages\/vibe64-source-editor\/docs\/|tests\/e2e\/integrations\.spec\.ts$|tests\/server\/vibe64Voice\.unit\.test\.js$)/u
 };
 
 function trackedFiles() {
   return execFileSync("git", ["ls-files", "-z"], { cwd: REPO_ROOT, encoding: "utf8" })
     .split("\0")
     // Genesis cities are generated from the sources scanned here.
-    .filter((file) => file && !file.startsWith("tests/") && !file.startsWith(".genesis/") && file !== "package-lock.json")
+    .filter((file) => file && !file.startsWith(".genesis/") && file !== "package-lock.json")
     .filter((file) => existsSync(path.join(REPO_ROOT, file)) && lstatSync(path.join(REPO_ROOT, file)).isFile());
 }
 
@@ -158,12 +163,27 @@ function reachableModules(entry) {
   return files;
 }
 
+// True when the offset sits inside a template literal or a one-line string,
+// such as a generated wrapper script or a `node -e` program.
+function insideLiteral(text, offset) {
+  const before = text.slice(0, offset);
+  const backticks = before.match(/(?<!\\)`/gu)?.length || 0;
+  if (backticks % 2) return true;
+  const line = before.slice(before.lastIndexOf("\n") + 1);
+  return ["\"", "'"].some((quote) => (line.split(quote).length - 1) % 2 === 1);
+}
+
+function readsOwnArguments(text) {
+  return [...text.matchAll(/process\.argv\[1\]|process\.argv\.slice\(2\)/gu)]
+    .some((match) => !insideLiteral(text, match.index));
+}
+
 function childEntryPoints() {
   const sources = trackedFiles().filter((file) => file.startsWith("packages/"));
   const entries = new Set(sources.filter((file) => /^packages\/[^/]+\/bin\//u.test(file)));
   for (const file of sources.filter((entry) => /\.m?js$/u.test(entry))) {
     const text = readText(file);
-    if (/process\.argv\[1\]|process\.argv\.slice\(2\)/u.test(text)) entries.add(file);
+    if (readsOwnArguments(text)) entries.add(file);
     for (const match of text.matchAll(/new URL\(\s*["'](\.\.?\/[^"']+\.m?js)["']\s*,\s*import\.meta\.url\s*\)/gu)) {
       const target = resolveSpecifier(file, match[1]);
       if (target) entries.add(target);
@@ -179,8 +199,12 @@ test("processes started from a file never read the in-process host profile", () 
   const entries = childEntryPoints();
   assert.ok(entries.includes("packages/vibe64-execution/src/server/engines/stdioBridge.js"));
   assert.ok(entries.includes("packages/vibe64-runtime/src/server/codexAppServerProcess.js"));
+  assert.ok(entries.includes("packages/vibe64-terminals/src/server/sessionWorkOperationCommand.js"));
+  assert.ok(!entries.includes("packages/studio-terminal-core/src/server/launchTargetTerminal.js"));
+  // An entry that reads the profile must receive it from its parent first.
   const offenders = entries
     .filter((entry) => reachableModules(entry).has(HOST_PROFILE_FILE))
+    .filter((entry) => !/configureVibe64Host\(/u.test(readText(entry)))
     .filter((entry) => !ALLOWED_FILES.has(entry));
   assert.deepEqual(offenders, []);
 });

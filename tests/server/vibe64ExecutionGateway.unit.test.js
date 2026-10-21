@@ -494,11 +494,11 @@ test("execution gateway permits same-user direct execution only outside managed 
     }
   }), true);
   assert.equal(isManagedWorkspaceRuntime({
-    VIBE64_WORKSPACE_DAEMON_USER: "v64d_sas"
+    VIBE64_WORKSPACE_DAEMON_USER: "sas-daemon"
   }), true);
   assert.equal(realUserActorRequiresInstalledHelper(actor, {
     env: {
-      VIBE64_WORKSPACE_DAEMON_USER: "v64d_sas"
+      VIBE64_WORKSPACE_DAEMON_USER: "sas-daemon"
     }
   }), true);
 });
@@ -1409,8 +1409,8 @@ test("execution gateway owns GitHub transport and safe-directory env", async () 
       "console.log(JSON.stringify(process.env))"
     ],
     gitSafeDirectories: [
-      "/var/lib/vibe64/sas/projects/compas-next",
-      "/var/lib/vibe64/sas/projects/compas-next/sessions/active/one/source"
+      "/srv/host-data/sas/projects/compas-next",
+      "/srv/host-data/sas/projects/compas-next/sessions/active/one/source"
     ],
     gitTransport: "github-https",
     purpose: "github",
@@ -1430,8 +1430,8 @@ test("execution gateway owns GitHub transport and safe-directory env", async () 
   assert.equal(env.GIT_TERMINAL_PROMPT, "0");
   assert.ok(entries.some((entry) => entry.key === "url.https://github.com/.insteadOf" && entry.value === "git@github.com:"));
   assert.ok(entries.some((entry) => entry.key === "credential.https://github.com.helper" && entry.value === "!/usr/bin/env gh auth git-credential"));
-  assert.ok(entries.some((entry) => entry.key === "safe.directory" && entry.value === "/var/lib/vibe64/sas/projects/compas-next"));
-  assert.ok(entries.some((entry) => entry.key === "safe.directory" && entry.value === "/var/lib/vibe64/sas/projects/compas-next/sessions/active/one/source"));
+  assert.ok(entries.some((entry) => entry.key === "safe.directory" && entry.value === "/srv/host-data/sas/projects/compas-next"));
+  assert.ok(entries.some((entry) => entry.key === "safe.directory" && entry.value === "/srv/host-data/sas/projects/compas-next/sessions/active/one/source"));
 });
 
 test("execution gateway owns token-backed GitHub git transport without gh helper", async () => {
@@ -1443,7 +1443,7 @@ test("execution gateway owns token-backed GitHub git transport without gh helper
     ],
     gitAuthToken: "github-token",
     gitSafeDirectories: [
-      "/var/lib/vibe64/sas/projects/compas-next"
+      "/srv/host-data/sas/projects/compas-next"
     ],
     gitTransport: "github-token",
     purpose: "deployment",
@@ -1464,7 +1464,7 @@ test("execution gateway owns token-backed GitHub git transport without gh helper
   assert.ok(entries.some((entry) => entry.key === "url.https://github.com/.insteadOf" && entry.value === "git@github.com:"));
   assert.ok(entries.some((entry) => entry.key === "credential.https://github.com.helper" && entry.value.includes("VIBE64_GIT_AUTH_TOKEN")));
   assert.equal(entries.some((entry) => String(entry.value || "").includes("gh auth git-credential")), false);
-  assert.ok(entries.some((entry) => entry.key === "safe.directory" && entry.value === "/var/lib/vibe64/sas/projects/compas-next"));
+  assert.ok(entries.some((entry) => entry.key === "safe.directory" && entry.value === "/srv/host-data/sas/projects/compas-next"));
 });
 
 test("GitHub auth shell preserves an injected token without requiring askpass", async () => {
@@ -1718,7 +1718,7 @@ test("capture preserves stdout and stderr whitespace on success and failure", as
 test("execution gateway rejects an actor HOME mismatch", () => {
   assert.throws(() => assertActorHomeEnv({
     user: {
-      home: "/home/v64d_sas"
+      home: "/home/sas-daemon"
     }
   }, {
     HOME: "/home/merc"
@@ -1838,7 +1838,7 @@ test("execution helper client sends normalized payloads through sudo helper", as
     },
     args: ["status", "--short"],
     command: "git",
-    cwd: "/var/lib/vibe64/sas/projects/app",
+    cwd: "/srv/host-data/sas/projects/app",
     env: {
       GIT_AUTHOR_NAME: "merc via Vibe64"
     },
@@ -1899,7 +1899,7 @@ test("execution helper client preserves captured stdout and stderr", async () =>
     },
     args: ["status"],
     command: "git",
-    cwd: "/var/lib/vibe64/sas/projects/app",
+    cwd: "/srv/host-data/sas/projects/app",
     operation: "github-workflow-command"
   });
   const result = await runHelperCommand(payload, {

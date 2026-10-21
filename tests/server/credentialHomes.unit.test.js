@@ -67,7 +67,7 @@ test("Codex runtime context keeps home, provider env, tool home, and system root
       DB_CLIENT: "mysql2",
       DB_HOST: "127.0.0.1",
       DB_NAME: "tenant_app",
-      DB_PASSWORD: "tenant-password",
+      DB_PASSWORD: "workspace-password",
       DB_PORT: "3307",
       DB_USER: "vibe64_dev_app"
     },
@@ -86,7 +86,7 @@ test("Codex runtime context keeps home, provider env, tool home, and system root
   assert.equal(context.env[PLAYWRIGHT_BROWSERS_PATH_ENV], browsers);
   assert.equal(context.terminalEnv.DB_HOST, "127.0.0.1");
   assert.equal(context.terminalProcessEnv.DB_NAME, "tenant_app");
-  assert.equal(context.terminalProcessEnv.DB_PASSWORD, "tenant-password");
+  assert.equal(context.terminalProcessEnv.DB_PASSWORD, "workspace-password");
   assert.equal(context.terminalProcessEnv.DB_PORT, "3307");
   assert.equal(context.terminalProcessEnv.DB_USER, "vibe64_dev_app");
   assert.equal(context.terminalEnv.MYSQL_HOST, undefined);

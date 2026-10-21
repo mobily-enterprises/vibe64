@@ -741,7 +741,7 @@ test("codex provider runtime base uses host XDG runtime when provider env is cur
       hostEnv: {
         XDG_RUNTIME_DIR: "/run/user/1000"
       },
-      targetRoot: "/var/lib/vibe64/merc/projects/ddd"
+      targetRoot: "/srv/host-data/merc/projects/ddd"
     }),
     "/run/user/1000/vibe64/agent-providers"
   );
@@ -1094,8 +1094,7 @@ test("codex provider replaces a live runtime when the terminal environment chang
 test("codex provider replaces a live runtime when the execution context changes", async () => {
   await withTemporaryDirectory(async (runtimeDir) => {
     const oldProject = {
-      tenant: "old-tenant",
-      workspace: "old-tenant"
+      workspace: "old-workspace"
     };
     const oldSession = {
       metadata: {
@@ -1104,7 +1103,6 @@ test("codex provider replaces a live runtime when the execution context changes"
       sessionId: "old-session"
     };
     const newProject = {
-      tenant: "sas",
       workspace: "sas"
     };
     const newSession = {
@@ -1229,7 +1227,6 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     const workdir = path.join(targetRoot, ".vibe64", "sessions", "active", "session-1", "source");
     const gitCommandWrapperHostDir = path.join(CODEX_ATTACHMENT_HOST_ROOT, "codex-git-command", "test-runtime");
     const project = {
-      tenant: "sas",
       workspace: "sas"
     };
     const session = {

@@ -22,6 +22,7 @@ import {
   createGitTurnCheckpoint,
   githubMirrorRefreshInvocation,
   runVibe64Command,
+  vibe64Host,
   writeGitWorktreeTree
 } from "@local/vibe64-execution/server";
 import {
@@ -295,6 +296,8 @@ async function runSessionWorkOperation({
         ]
       },
       input: JSON.stringify({
+        // The child process starts without this process's host profile.
+        hostProfile: vibe64Host(),
         input: {
           ...input,
           operationId,

@@ -1749,7 +1749,7 @@ for (const { viewport, providerBatch } of [
           if (spec.id === "miro") await expect(panel.getByText(/LIMITATIONS: connecting does not attach Miro tools/)).toBeVisible();
           if (spec.id === "figma") {
             await expect(panel.getByText(/Figma currently requires approval/)).toBeVisible();
-            await expect(panel.getByText(/a VPS localhost address points to the VPS/)).toBeVisible();
+            await expect(panel.getByText(/Desktop MCP must run beside the consuming desktop client/)).toBeVisible();
             await expect(panel.getByText(/Vibe64 coding-assistant attachment is deferred/)).toBeVisible();
           }
           if (spec.id === "miro") {

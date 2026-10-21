@@ -14,7 +14,7 @@ function context(conversationKind) {
 test("installed host guidance reaches native instructions and stays absent on other hosts", async (t) => {
   const registry = await createVibe64HostContextRegistry();
   t.after(() => registry.close());
-  const guidance = "This VPS supports vibe64-local update; restore returns to Metal's deployed default.";
+  const guidance = "This host supports vibe64-local update; restore returns to the host's default version.";
   const hosted = { ...context("main"), hostGuidance: guidance };
   await registry.register("hosted", hosted);
   const resolved = await vibe64DriverInputFromRegistry({ data: { registryPath: registry.registryPath }, providerSessionId: "hosted", scope: "session" });

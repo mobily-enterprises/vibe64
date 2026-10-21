@@ -19,7 +19,7 @@ describe("Env panel", () => {
     expect(source).toMatch(/\[record\.key\]:\s*\{\s*remove:\s*true/u);
   });
 
-  it("keeps Online database lifetime separate from application Env", () => {
+  it("keeps hosted database lifetime separate from application Env", () => {
     const envSource = componentSource("src/components/studio/EnvPanel.vue");
     const settingsSource = componentSource("src/components/studio/ProjectSettingsPanel.vue");
 

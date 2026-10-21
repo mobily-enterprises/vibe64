@@ -94,8 +94,6 @@ test("the Practice list shows only the learner's own practice projects with less
   assert.equal((await f.active(ALICE)).activeAttemptId, lesson.attemptId, "a refused delete ends nothing");
 });
 
-// Moved from Online projectArchiveService.unit ("the Online practice facility
-// ends the learner's own attempt and tolerates a project with no saved attempt").
 test("delete ends the learner's own attempt, forgets its ledger and tolerates a project with no saved attempt", async t => {
   const f = await fixture(t);
   const lesson = await f.start(ALICE);

@@ -33,6 +33,7 @@ import {
   canonicalRepositoryInitializeScript,
   canonicalRepositoryInstallRefScript
 } from "../../packages/vibe64-execution/src/server/repositoryStorage.js";
+import { vibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -232,6 +233,8 @@ test("Save uses two foreground managed jobs and defers disposable cache maintena
       "save",
       "save-maintenance"
     ]);
+    // Each child process receives this process's host profile.
+    assert.ok(payloads.every((payload) => JSON.stringify(payload.hostProfile) === JSON.stringify(vibe64Host())));
     assert.deepEqual(progressStages, ["publishing"]);
     assert.deepEqual(saveMessageInput.changes.files.map((file) => file.path), ["saved.txt"]);
   } finally {

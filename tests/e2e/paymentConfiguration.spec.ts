@@ -68,7 +68,7 @@ test('payment configuration persists and catalogue publication requires review',
           if (body.operation === 'payments-history') {
             historyRequests.push(body);
             if (historyFails) { await route.fulfill({ status: 502, contentType: 'application/json', body: JSON.stringify({ ok: false, error: 'History unavailable.' }) }); return; }
-            expect(body.subjectId).toBe('tenant-a');
+            expect(body.subjectId).toBe('customer-a');
             expect(body.collection).toBe('transactions');
             await fulfillJson(route, { ok: true, status: 'payments-history', paymentEnvironment: 'sandbox', providerAccountId: 'paddle_fixture',
               subjectId: body.subjectId, collection: body.collection,
@@ -260,13 +260,13 @@ test('payment configuration persists and catalogue publication requires review',
       await composer.fill('');
       expect(publications).toBe(1);
       const billingHistory = payment.getByRole('region', { name: 'Billing history', exact: true });
-      await billingHistory.getByRole('textbox', { name: 'Application billing account ID', exact: true }).fill('tenant-a');
+      await billingHistory.getByRole('textbox', { name: 'Application billing account ID', exact: true }).fill('customer-a');
       await billingHistory.getByRole('button', { name: 'View sandbox billing history', exact: true }).click();
       await expect(billingHistory).toContainText('txn_1');
       await expect(billingHistory).toContainText('Paid: Unknown');
-      await billingHistory.getByRole('textbox', { name: 'Application billing account ID', exact: true }).fill('tenant-b');
+      await billingHistory.getByRole('textbox', { name: 'Application billing account ID', exact: true }).fill('customer-b');
       await expect(billingHistory).not.toContainText('txn_1');
-      await billingHistory.getByRole('textbox', { name: 'Application billing account ID', exact: true }).fill('tenant-a');
+      await billingHistory.getByRole('textbox', { name: 'Application billing account ID', exact: true }).fill('customer-a');
       await billingHistory.getByRole('button', { name: 'Next billing page', exact: true }).click();
       await expect(billingHistory).toContainText('No billing records found');
       expect(historyRequests).toHaveLength(2);
@@ -285,7 +285,7 @@ test('payment configuration persists and catalogue publication requires review',
         await page.setViewportSize({width,height});
         const projectHidden = await showProject.isVisible();
         if (projectHidden) await showProject.click();
-        await expect(billingHistory.getByRole('textbox', { name: 'Application billing account ID', exact: true })).toHaveValue('tenant-a');
+        await expect(billingHistory.getByRole('textbox', { name: 'Application billing account ID', exact: true })).toHaveValue('customer-a');
         await expect(billingHistory).toContainText('txn_1');
         if (!projectHidden) await expect(billingHistory.getByRole('textbox', { name: 'Application billing account ID', exact: true })).toBeFocused();
         await payment.getByRole('textbox',{name:'Provider account identity',exact:true}).scrollIntoViewIfNeeded();

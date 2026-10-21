@@ -1284,7 +1284,7 @@ test("Env is user-owned and reaches Genesis sessions without an adapter", async 
 
 test("Genesis Stack defaults remain editable fallbacks for project Env values", async () => {
   await withTemporaryRoot(async (targetRoot) => {
-    let fallback = ".vibe64-online/public-source";
+    let fallback = ".host-config/public-source";
     const service = projectService(targetRoot, {
       inspectEnvironment() {
         return {
@@ -1310,7 +1310,7 @@ test("Genesis Stack defaults remain editable fallbacks for project Env values", 
       scope: "dev",
       secret: false,
       source: "genesis-stack:default",
-      value: ".vibe64-online/public-source",
+      value: ".host-config/public-source",
       valuePresent: true
     });
 
@@ -1330,7 +1330,7 @@ test("Genesis Stack defaults remain editable fallbacks for project Env values", 
       VIBE64_PUBLIC_SOURCE_ROOT: "/srv/vibe64/sessions/selected/source"
     });
 
-    fallback = ".vibe64-online/current-public-source";
+    fallback = ".host-config/current-public-source";
     const removed = await service.saveEnvUserValues({
       environment: "dev",
       values: {
@@ -2190,7 +2190,8 @@ test("managed app identities are stored in the repository source", async () => {
       identities: saved.identities,
       version: 1
     });
-    assert.equal((await stat(storedPath)).mode & 0o777, 0o660);
+    // Private on a person's own computer; a group-sharing host passes 0o660.
+    assert.equal((await stat(storedPath)).mode & 0o777, 0o600);
     await assert.rejects(() => readFile(path.join(
       service.currentProjectRuntimeRoot(),
       "preview",

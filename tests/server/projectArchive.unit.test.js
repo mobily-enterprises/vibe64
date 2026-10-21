@@ -20,9 +20,8 @@ import { createProjectArchiveService } from "../../packages/vibe64-project/src/s
 import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import { runVibe64Command } from "../../packages/vibe64-execution/src/server/index.js";
 
-// Moved from Vibe64 Online tests/server/projectArchiveService.unit.test.js with
-// the lifecycle (see genesis/program/projects/project-archives.md). Online keeps
-// the tests of its managed databases and resource profiles.
+// The project lifecycle (see genesis/program/projects/project-archives.md).
+// A host that adds managed databases or resource profiles tests them itself.
 
 const execFileAsync = promisify(execFile);
 

@@ -258,9 +258,11 @@ accepted), the layout and `PRACTICE_PROJECT_DELETED_CODE`.
 | Runtime root | `<systemRoot>/projects/<slug>` (the shared runtime inventory) |
 
 The space sits inside the managed source tree, so agents, Preview and Files
-reach it through the managed-source permission contract (group, default ACL and
-umask); practice directories get no explicit mode, except the runtime root
-under the daemon-private system root. The default managed source root is the
+reach it like any managed source. On a host that shares project files through
+one group, the managed-source contract (group, default ACL and umask) applies;
+on a person's own computer practice folders keep the person's private modes.
+Practice directories get no explicit mode, except the runtime root under the
+daemon-private system root. The default managed source root is the
 real `~/Vibe64` folder in the person's home, so in a Node test
 process (`NODE_TEST_CONTEXT`) a context with neither `explicitManagedSourceRoot`
 nor `learningSpace.root` refuses to read or create practice storage instead of

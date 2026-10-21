@@ -23,13 +23,13 @@ function successfulCommandResult(command = "", args = []) {
   if (script.includes("Playwright runtime ready:")) {
     return {
       ok: true,
-      output: "Playwright runtime ready: Version 1.61.1; manifest /opt/vibe64/playwright/runtime.env"
+      output: "Playwright runtime ready: Version 1.61.1; manifest /srv/host-tools/playwright/runtime.env"
     };
   }
   if (script.includes("Playwright browser launched:")) {
     return {
       ok: true,
-      output: "Playwright browser launched: /opt/vibe64/playwright/browsers/chromium-123/chrome"
+      output: "Playwright browser launched: /srv/host-tools/playwright/browsers/chromium-123/chrome"
     };
   }
   const outputByCommand = {
@@ -189,13 +189,13 @@ test("the browser health probe launches pinned headless Chromium within the heal
   assert.ok(script.indexOf('headless_shell_version=') < script.indexOf('browser="$headless_shell"'));
   assert.ok(script.indexOf('could not launch (exit') < script.indexOf('tail -n 3'));
   assert.equal(isValidPlaywrightBrowserLaunchOutput(
-    "Playwright browser launched: /opt/vibe64/playwright/browsers/chromium_headless_shell-1228/chrome-linux/headless_shell"
+    "Playwright browser launched: /srv/host-tools/playwright/browsers/chromium_headless_shell-1228/chrome-linux/headless_shell"
   ), true);
   assert.equal(isValidPlaywrightBrowserLaunchOutput(
-    "Playwright browser launched: /opt/vibe64/playwright/browsers/chromium_headless_shell-1228/chrome-linux/chrome-headless-shell"
+    "Playwright browser launched: /srv/host-tools/playwright/browsers/chromium_headless_shell-1228/chrome-linux/chrome-headless-shell"
   ), true);
   assert.equal(isValidPlaywrightBrowserLaunchOutput(
-    "Playwright browser launched: /opt/vibe64/playwright/browsers/chrome-linux/unrelated"
+    "Playwright browser launched: /srv/host-tools/playwright/browsers/chrome-linux/unrelated"
   ), false);
 });
 

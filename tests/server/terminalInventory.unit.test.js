@@ -228,7 +228,7 @@ function inventoryFailureMessage({ added, missing }) {
     "If this is an intentional terminal, follow the owning package's existing",
     "route, authorization, and lifecycle patterns, then update this inventory.",
     "",
-    "Deployment publish lives in vibe64-online and is covered by the deployment migration slice."
+    "A host may add its own terminals in its own inventory."
   ].join("\n");
 }
 

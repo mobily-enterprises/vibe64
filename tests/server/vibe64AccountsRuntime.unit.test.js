@@ -1654,12 +1654,12 @@ test("proven invalid Codex auth stays reconnect-required until a login session f
 
 test("accounts runtime resolves Codex credentials from explicit daemon OS identity", async () => {
   await withTempDir(async (root) => {
-    const daemonHome = path.join(root, "homes", "v64d_workspace");
+    const daemonHome = path.join(root, "homes", "workspace-daemon");
     const runtime = createAccountsRuntime({
       daemonGid: 2002,
       daemonHome,
       daemonUid: 2001,
-      daemonUsername: "v64d_workspace",
+      daemonUsername: "workspace-daemon",
       requireExplicitRoots: true,
       systemRoot: path.join(root, "system")
     });
@@ -1671,8 +1671,8 @@ test("accounts runtime resolves Codex credentials from explicit daemon OS identi
     assert.equal(context.scope, "app");
     assert.equal(context.toolHomeSource, daemonHome);
     assert.equal(context.uid, 2001);
-    assert.equal(context.username, "v64d_workspace");
-    assert.equal(context.userKey, "v64d_workspace");
+    assert.equal(context.username, "workspace-daemon");
+    assert.equal(context.userKey, "workspace-daemon");
     assert.equal(context.systemRoot, path.join(root, "system"));
     assert.equal(context.env.HOME, daemonHome);
     assert.equal(context.providerOptions.systemRoot, path.join(root, "system"));

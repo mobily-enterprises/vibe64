@@ -1638,7 +1638,7 @@ async function localPracticeContext(root) {
     explicitManagedSourceRoot: path.join(root, "managed-source"), home: root, runtimeProfile: { local: true } });
 }
 
-// Online's configuration: the space lives inside the managed projects root.
+// A host configuration: the space lives inside the managed projects root.
 function hostedPracticeContext(root) {
   const projectsRoot = path.join(root, "projects");
   return createStudioProjectContext({ explicitProjectsRoot: projectsRoot, explicitSystemRoot: path.join(root, "system"),

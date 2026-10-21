@@ -224,15 +224,15 @@ test('catalogue recovery binds the reviewed operation and excludes private pendi
 });
 
 test("payment history binds a bounded display page to the requested subject and environment", () => {
-  const input = { operation: "payments-history", integrationId: "stripe", paymentEnvironment: "sandbox", subjectId: "tenant-a", collection: "transactions" };
+  const input = { operation: "payments-history", integrationId: "stripe", paymentEnvironment: "sandbox", subjectId: "customer-a", collection: "transactions" };
   const selected = createIntegrationSetupRequest(input);
   assert.equal(selected.after, null);
   const result = { protocol: selected.protocol, requestId: selected.requestId, status: "payments-history",
-    paymentEnvironment: "sandbox", providerAccountId: "acct_fixture", subjectId: "tenant-a", collection: "transactions",
+    paymentEnvironment: "sandbox", providerAccountId: "acct_fixture", subjectId: "customer-a", collection: "transactions",
     items: [{ id: "inv_1", kind: "invoice", status: "open", createdAt: "2026-09-12T00:00:00.000Z",
       currency: "USD", totalMinor: "9007199254740993", paidMinor: "0" }], nextCursor: "inv_1" };
   assert.deepEqual(parseIntegrationSetupResponse(JSON.stringify(result), selected), result);
-  for (const change of [ { subjectId: "tenant-b" }, { paymentEnvironment: "live" }, { collection: "subscriptions" },
+  for (const change of [ { subjectId: "customer-b" }, { paymentEnvironment: "live" }, { collection: "subscriptions" },
     { accessToken: "secret" }, { nextCursor: "bad cursor" }, { items: Array(21).fill(result.items[0]) },
     { items: [{ ...result.items[0], metadata: { private: true } }] },
     { items: [{ ...result.items[0], totalMinor: Number.MAX_SAFE_INTEGER + 1 }] } ]) {

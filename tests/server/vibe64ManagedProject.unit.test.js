@@ -451,7 +451,7 @@ test("shared managed repository owner provisions and clones a real private pract
       assert.equal(state.projectContextRoot, path.join(core.managedSourceRoot, ".learning", "NDI", training.practiceId, slug));
       assert.equal(state.projectRuntimeRoot, path.join(core.systemRoot, "projects", slug));
       assert.deepEqual(state.metadata.training, training);
-      assert.equal(state.metadata.developmentDatabaseName, undefined, "Standalone composition does not invent Online database defaults.");
+      assert.equal(state.metadata.developmentDatabaseName, undefined, "Standalone composition does not invent hosted database defaults.");
       const proof = await repository.verifyTrainingProjectSource({ slug, training }, { files });
       assert.match(proof.commit, /^[0-9a-f]{40}$/u);
       assert.equal(proof.branch, "main");

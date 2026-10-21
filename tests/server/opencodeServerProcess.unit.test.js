@@ -236,12 +236,12 @@ test("OpenCode process environment is minimal and keeps managed Helper tools beh
     hostContextResolver: "/managed/vibe64-genesis-host-context",
     managedEnv: {
       PATH: "/must/not/replace/path",
-      VIBE64_AGENT_ENV_SOCKET: "/run/vibe64/agent.sock",
-      VIBE64_GIT_COMMAND_SOCKET: "/run/vibe64/git.sock"
+      VIBE64_AGENT_ENV_SOCKET: "/run/user/1000/vibe64/agent.sock",
+      VIBE64_GIT_COMMAND_SOCKET: "/run/user/1000/vibe64/git.sock"
     },
     password: "loopback-password",
     privateRoot: "/private/session",
-    sessionEnvironmentRegistry: "/run/vibe64/opencode-sessions.json",
+    sessionEnvironmentRegistry: "/run/user/1000/vibe64/opencode-sessions.json",
     shimDirs: ["relative-shim", "/managed/shims"]
   });
 
@@ -258,8 +258,8 @@ test("OpenCode process environment is minimal and keeps managed Helper tools beh
   assert.equal(env.XDG_CONFIG_HOME, "/private/session/config");
   assert.equal(env.XDG_DATA_HOME, "/private/session/data");
   assert.equal(env.PATH, "/managed/shims:/usr/bin");
-  assert.equal(env.VIBE64_AGENT_ENV_SOCKET, "/run/vibe64/agent.sock");
-  assert.equal(env.VIBE64_GIT_COMMAND_SOCKET, "/run/vibe64/git.sock");
+  assert.equal(env.VIBE64_AGENT_ENV_SOCKET, "/run/user/1000/vibe64/agent.sock");
+  assert.equal(env.VIBE64_GIT_COMMAND_SOCKET, "/run/user/1000/vibe64/git.sock");
   assert.equal(env.OPENCODE_DB, "/state/opencode.sqlite");
   assert.equal(env.OPENCODE_SERVER_PASSWORD, "loopback-password");
   assert.equal(env.OPENCODE_DISABLE_PROJECT_CONFIG, undefined);
@@ -267,7 +267,7 @@ test("OpenCode process environment is minimal and keeps managed Helper tools beh
   assert.equal(env.OPENCODE_PURE, undefined);
   assert.equal(
     env.VIBE64_OPENCODE_SESSION_ENV_REGISTRY,
-    "/run/vibe64/opencode-sessions.json"
+    "/run/user/1000/vibe64/opencode-sessions.json"
   );
 
   const config = JSON.parse(env.OPENCODE_CONFIG_CONTENT);
