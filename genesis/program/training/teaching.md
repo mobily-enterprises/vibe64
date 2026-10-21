@@ -48,7 +48,8 @@ starts the same pinned lesson afresh; `lesson.finish` (refused until every
 required step passed) archives it as finished; `lesson.delete` removes its
 practice project and teacher conversation with no archive. All three close
 through `learningSpace.closeAttempt`, keyed by attemptId, so a stopped close
-resumes. Switching Learn/Develop (`learning-mode.set`) never ends a lesson.
+resumes. Every lesson action tells the learner's tabs to reread
+(`learner.changed`), also when it fails part-way. Switching Learn/Develop (`learning-mode.set`) never ends a lesson.
 The host derives the exact pin from that actor's verified history; the model
 cannot supply a pin or source. Missing host/content or capacity refusal retains
 history.
@@ -72,8 +73,9 @@ picks the thread on the server from the learner's mode (core
 `readLearningModeFor`: Develop, or Learn with `currentAttemptId`), so leaving
 and coming back to an attempt resumes its conversation. Only Learn threads
 carry the teaching guidance and Training's lesson tools; Develop can read and
-set the mode only. Closing an attempt calls core `releaseLearnThread` (Colleague
-stops the thread) and then moves the file into the attempt's archive bundle or
+set the mode only. Closing an attempt ends it first, so Colleague no longer
+resolves its thread, then calls core `releaseLearnThread` (Colleague stops the
+thread) and moves the file into the attempt's archive bundle or
 removes it; Training never imports Colleague. See
 `genesis/program/colleague/product-conversation.md`.
 

@@ -499,11 +499,13 @@ test("restart archives the attempt, then prepares a new attempt of the same less
   assert.equal(f.calls.find(([name]) => name === "session-create")[2].sessionId, `training-${attemptId}`);
   assert.equal(f.calls.filter(([name]) => name === "source-proof").length, 1, "the fresh project is proved like any first start");
 
-  // A retry after the archive finishes the restart through the replayed reservation.
+  // A retry after the archive finishes the stopped close (its thread step)
+  // and the restart through the replayed reservation.
   f.setProgress({ revision: 9, progress: { activeAttemptId: null, attempts: [{ ...old, ended: { reason: "archived" } }] } });
   f.calls.length = 0;
   await service.restartLesson({ actor, attemptId: otherId, requestId: "restart-1", expectedRevision: 5 });
-  assert.deepEqual(f.calls[0], ["reserve", { actor, requestId: "restart-1", expectedRevision: 9, pin }]);
+  assert.deepEqual(f.calls.slice(0, 2), [["close", { actor, attemptId: otherId, archive: true, reason: "archived" }],
+    ["reserve", { actor, requestId: "restart-1", expectedRevision: 9, pin }]]);
   f.setProgress({ revision: 9, progress: { activeAttemptId: null, attempts: [{ ...old, ended: { reason: "deleted" } }] } });
   await assert.rejects(service.restartLesson({ actor, attemptId: otherId, requestId: "restart-2", expectedRevision: 9 }),
     { code: "VIBE64_TRAINING_ATTEMPT_MISSING" }, "a deleted lesson is not restarted");

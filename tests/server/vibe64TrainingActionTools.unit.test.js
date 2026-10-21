@@ -191,7 +191,7 @@ test("all training actions reject spoofed actor/paths and re-resolve login for r
   const inputs = { "courses.list": {}, "learning.read": {},
     "lesson.start": f.input, "lesson.resume": { attemptId: reserved.attempt.attemptId },
     "lesson.restart": { attemptId: reserved.attempt.attemptId, requestId: "restart-one", expectedRevision: reserved.revision },
-    "lesson.finish": { attemptId: reserved.attempt.attemptId, requestId: "finish-one", expectedRevision: reserved.revision } };
+    "lesson.finish": { attemptId: reserved.attempt.attemptId, expectedRevision: reserved.revision } };
   for (const [name, input] of Object.entries(inputs)) {
     for (const extra of [{ vibe64User: { role: "owner" } }, { actor: { uid: 42 } }, { userId: 42 }, { path: "/tmp/source" }, { projectSlug: "arbitrary" }, { command: "node" }]) {
       await assert.rejects(() => c.execute(name, { ...input, ...extra }), { code: "ACTION_VALIDATION_FAILED" });
@@ -274,7 +274,7 @@ test("finish and ended-start replay expose the original target and actual active
   const f = await fixture(t);
   const c = f.register(f.exercises);
   const first = await c.execute("lesson.start", f.input);
-  const input = { attemptId: first.active.attemptId, requestId: "finish-first", expectedRevision: first.revision };
+  const input = { attemptId: first.active.attemptId, expectedRevision: first.revision };
   assert.deepEqual(await c.execute("lesson.finish", input), { ok: true, available: true, changed: true });
   assert.deepEqual(f.calls.at(-1), { operation: "finish", value: { actor: f.auth.user, attemptId: input.attemptId, expectedRevision: input.expectedRevision } });
   assert.equal(f.calls.at(-1).value.actor, f.auth.user);
@@ -303,10 +303,11 @@ test("restart and finish are unavailable without their host and reject malformed
   const f = await fixture(t);
   const saved = await f.reserve();
   const input = { attemptId: saved.attempt.attemptId, requestId: "close-one", expectedRevision: saved.revision };
+  const inputs = { "lesson.restart": input, "lesson.finish": { attemptId: input.attemptId, expectedRevision: input.expectedRevision } };
   const absent = f.register();
   const before = await inventory(f.systemRoot);
   for (const name of ["lesson.restart", "lesson.finish"]) {
-    const unavailable = await absent.tool(name, input);
+    const unavailable = await absent.tool(name, inputs[name]);
     assert.equal(unavailable.ok, true);
     assert.deepEqual([unavailable.result.ok, unavailable.result.available], [false, false]);
     assert.match(unavailable.result.error, /unavailable in this installation/u);
@@ -315,12 +316,12 @@ test("restart and finish are unavailable without their host and reject malformed
   const c = f.register(f.exercises);
   for (const name of ["lesson.restart", "lesson.finish"]) {
     for (const change of [{ attemptId: "../attempt" }, { requestId: " " }, { expectedRevision: -1 }, { reason: "deleted" }, { archive: true }]) {
-      await assert.rejects(() => c.execute(name, { ...input, ...change }), { code: "ACTION_VALIDATION_FAILED" });
+      await assert.rejects(() => c.execute(name, { ...inputs[name], ...change }), { code: "ACTION_VALIDATION_FAILED" });
     }
   }
   assert.equal(f.calls.length, 0);
   f.auth.user = null;
-  assert.equal((await c.tool("lesson.finish", input)).ok, false);
+  assert.equal((await c.tool("lesson.finish", inputs["lesson.finish"])).ok, false);
   assert.equal(f.calls.length, 0);
   f.auth.user = { uid: 42, username: "member", role: "member" };
   const failed = f.register({ async restartLesson() {
@@ -333,9 +334,25 @@ test("restart and finish are unavailable without their host and reject malformed
   assert.doesNotMatch(JSON.stringify(result), excluded);
   await assert.rejects(() => failed.execute("lesson.restart", input), error => error.code === "VIBE64_TRAINING_PROGRESS_SAVE_UNCONFIRMED" &&
     error.statusCode === 409 && /same request\/attempt/u.test(error.message));
-  await assert.rejects(() => failed.execute("lesson.finish", input), { code: "VIBE64_TRAINING_LESSON_INCOMPLETE",
+  await assert.rejects(() => failed.execute("lesson.finish", inputs["lesson.finish"]), { code: "VIBE64_TRAINING_LESSON_INCOMPLETE",
     message: "Pass every required step before finishing this lesson. Nothing was changed." }, "a lesson refusal keeps its own message");
   assert.equal((await f.learners.readState({ actor: f.auth.user })).active.attemptId, input.attemptId);
+});
+
+test("a lesson action that fails still tells every tab to reread, since it may already have changed the lesson", async t => {
+  const f = await fixture(t);
+  const published = [];
+  const failing = { async startLesson() {
+    throw Object.assign(new Error("setup failed"), { code: "VIBE64_TRAINING_PREPARATION_FAILED", statusCode: 409 });
+  }, async restartLesson() {
+    throw Object.assign(new Error("busy"), { code: "VIBE64_TRAINING_PREPARATION_BUSY", statusCode: 409 });
+  } };
+  const c = f.register(failing, { async publishLearnerChanged(event) { published.push(event); } });
+  const attemptId = "11111111-1111-4111-8111-111111111111";
+  await assert.rejects(() => c.execute("lesson.start", f.input), { code: "VIBE64_TRAINING_PREPARATION_FAILED" });
+  await assert.rejects(() => c.execute("lesson.restart", { attemptId, requestId: "restart-one", expectedRevision: 0 }),
+    { code: "VIBE64_TRAINING_PREPARATION_BUSY" });
+  assert.deepEqual(published.map(event => [event.attemptId, event.reason]), [["", "lesson"], [attemptId, "lesson"]]);
 });
 
 test("history tool projections preserve original provenance without leaking identities or executable sources", async t => {
@@ -508,7 +525,7 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   assert.equal(develop.statusCode, 200, develop.body);
   assert.deepEqual([develop.json().learningMode.on, develop.json().learningMode.currentAttemptId], [false, id], "the lesson stays in progress");
   const finished = await server.inject({ method: "POST", url: `/api/vibe64/training/attempts/${id}/finish`, payload: {
-    requestId: "local-finish", expectedRevision: (await training.learners.readState({ actor: osActor })).revision
+    expectedRevision: (await training.learners.readState({ actor: osActor })).revision
   } });
   assert.equal(finished.statusCode, 409, finished.body);
   assert.equal(finished.json().code, "VIBE64_TRAINING_LESSON_INCOMPLETE");

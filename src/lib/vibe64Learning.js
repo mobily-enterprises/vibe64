@@ -750,13 +750,9 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   function finish() {
     const attemptId = state.attemptId;
     if (!attemptId) return Promise.resolve(null);
-    const key = JSON.stringify([attemptId, "finish"]);
+    // A retry of the same attempt resumes its close; no request identity.
     return attemptAction("finish", VIBE64_LEARNING_ROUTES.lessonFinish(attemptId),
-      async () => ({ requestId: pendingRequestId(key), expectedRevision: await readRevision() }),
-      "Finishing the lesson was not confirmed. Try again.").then(result => {
-      if (result) pending.delete(key);
-      return result;
-    });
+      async () => ({ expectedRevision: await readRevision() }), "Finishing the lesson was not confirmed. Try again.");
   }
 
   // Restart: archive the lesson in progress and start it again (a fresh

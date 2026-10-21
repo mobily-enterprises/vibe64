@@ -80,13 +80,13 @@ function createTrainingService({ catalogue, content, learners, learningSpace = n
     const saved = await learners.readState({ actor });
     const attempt = saved.progress.attempts.find(value => value.attemptId === attemptId);
     if (!attempt) throw missingAttempt();
-    if (!attempt.ended) {
-      if (expectedRevision !== saved.revision) throw revisionConflict();
-      await requireCloser().closeAttempt({ actor, attemptId, archive: true, reason: "archived" });
-    } else if (attempt.ended.reason !== "archived" || saved.progress.activeAttemptId &&
-        !saved.progress.attempts.some(value => value.attemptId === saved.progress.activeAttemptId && value.requestIds?.includes(requestId))) {
+    if (!attempt.ended && expectedRevision !== saved.revision) throw revisionConflict();
+    if (attempt.ended && (attempt.ended.reason !== "archived" || saved.progress.activeAttemptId &&
+        !saved.progress.attempts.some(value => value.attemptId === saved.progress.activeAttemptId && value.requestIds?.includes(requestId)))) {
       throw missingAttempt();
     }
+    // For an attempt already archived this finishes a close that stopped part-way.
+    await requireCloser().closeAttempt({ actor, attemptId, archive: true, reason: "archived" });
     return reserveAndPrepare({ actor, requestId, expectedRevision: (await learners.readState({ actor })).revision, pin: attempt.pin });
   }
 

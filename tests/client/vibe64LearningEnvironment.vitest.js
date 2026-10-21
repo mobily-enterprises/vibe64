@@ -1336,7 +1336,7 @@ describe("Lesson finished screen", () => {
     const view = await mountFinished(learning, courses);
     try {
       const finishes = calls.filter(call => call.method === "POST" && call.url === VIBE64_LEARNING_ROUTES.lessonFinish(ATTEMPT));
-      expect(finishes).toEqual([expect.objectContaining({ body: { expectedRevision: 3, requestId: expect.any(String) } })]);
+      expect(finishes).toEqual([expect.objectContaining({ body: { expectedRevision: 3 } })]);
       expect(courses.learningResource.reload).toHaveBeenCalledOnce();
       expect(learning.mode.currentAttemptId, "Learn mode stays on with no lesson").toBe("");
       expect(learning.state.attemptId, "the screen keeps its lesson").toBe(ATTEMPT);

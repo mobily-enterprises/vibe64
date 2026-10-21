@@ -42,11 +42,11 @@ async function installTopic(root, systemRoot) {
   return { practice: pin("STEPS-ONE"), zero: pin("STEPS-ZERO") };
 }
 
-async function fixture(t, { headroom = async () => {} } = {}) {
+async function fixture(t, { headroom = async () => {}, release = async () => {} } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-learning-space-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const released = [];
-  registerLearnThreadReleaser(async input => { released.push(input); });
+  registerLearnThreadReleaser(async input => { await release(input); released.push(input); });
   t.after(() => registerLearnThreadReleaser(null));
   const systemRoot = path.join(root, "system");
   const pins = await installTopic(root, systemRoot);
@@ -58,8 +58,10 @@ async function fixture(t, { headroom = async () => {} } = {}) {
     explicitManagedSourceRoot: path.join(root, "managed-source"), home: root, runtimeProfile: { local: true } });
   const closed = [];
   const failClose = { next: false };
+  const duringClose = { next: null };
   const projectArchive = createProjectArchiveService({ projectContext, assertArchiveHeadroom: headroom,
     async closeProjectRuntime({ slug }) {
+      if (duringClose.next) { const check = duringClose.next; duringClose.next = null; await check(); }
       if (failClose.next) { failClose.next = false; return { ok: false }; }
       closed.push(slug);
       return { ok: true };
@@ -100,7 +102,7 @@ async function fixture(t, { headroom = async () => {} } = {}) {
 
   const progress = async actor => (await store.readState({ actor })).progress;
   const bundle = (actor, attemptId) => path.join(systemRoot, "training/practice-archives", key(actor), attemptId);
-  return { root, systemRoot, pins, store, space, projectContext, start, progress, bundle, released, closed, failClose,
+  return { root, systemRoot, pins, store, space, projectContext, start, progress, bundle, released, closed, failClose, duringClose,
     title: code => content.readLesson({ ...pins.practice.topic, lessonCode: code,
       lessonHash: (code === "STEPS-ZERO" ? pins.zero : pins.practice).lesson.hash }).then(value => value.lesson.title) };
 }
@@ -128,7 +130,7 @@ test("archiving keeps one bundle per attempt: its record, its teacher conversati
   const progress = await f.progress(ALICE);
   assert.equal(progress.activeAttemptId, null);
   assert.equal(progress.attempts[0].ended.reason, "archived");
-  assert.deepEqual(f.released, [{ learnerKey: key(ALICE), attemptId: lesson.attemptId }], "Colleague released the thread first");
+  assert.deepEqual(f.released, [{ learnerKey: key(ALICE), attemptId: lesson.attemptId }], "Colleague released the thread");
   assert.deepEqual(f.closed, [lesson.slug]);
   assert.equal(await f.space.exists({ actor: ALICE, attemptId: lesson.attemptId }), false, "the project left the learning space");
 
@@ -242,6 +244,32 @@ test("a close that stops part-way keeps the lesson in progress and resumes, by a
   assert.equal((await f.space.closeAttempt({ actor: ALICE, attemptId: second.attemptId, archive: false, reason: "deleted" })).closed, true);
   await assert.rejects(stat(f.bundle(ALICE, second.attemptId)), { code: "ENOENT" });
   assert.deepEqual((await f.space.list(ALICE)).archived.map(value => value.attemptId), [lesson.attemptId]);
+});
+
+test("the close holds the preparation barrier and releases the thread only once the attempt has ended", async t => {
+  const failRelease = { next: true };
+  let f;
+  f = await fixture(t, { async release() {
+    assert.equal((await f.progress(ALICE)).activeAttemptId, null, "Colleague can no longer resolve the attempt's thread");
+    if (failRelease.next) { failRelease.next = false; throw new Error("Stopped before the thread moved."); }
+  } });
+  const lesson = await f.start(ALICE);
+  let preparation;
+  f.duringClose.next = async () => {
+    preparation = await f.store.runPreparationExclusive({ actor: ALICE, attemptId: lesson.attemptId }, async () => "prepared")
+      .catch(error => error.code);
+  };
+  await assert.rejects(f.space.closeAttempt({ actor: ALICE, attemptId: lesson.attemptId, archive: true, reason: "archived" }),
+    /Stopped before the thread moved/u);
+  assert.equal(preparation, "VIBE64_TRAINING_PREPARATION_BUSY", "no preparation runs while the project is archived");
+  assert.equal((await f.progress(ALICE)).attempts[0].ended.reason, "archived");
+  assert.equal((await stat(lesson.thread)).isFile(), true);
+  // Repeating the close for the ended attempt finishes its thread step.
+  assert.deepEqual(await f.space.closeAttempt({ actor: ALICE, attemptId: lesson.attemptId, archive: true, reason: "archived" }),
+    { ok: true, attemptId: lesson.attemptId, closed: false });
+  await assert.rejects(stat(lesson.thread), { code: "ENOENT" });
+  assert.deepEqual(JSON.parse(await readFile(path.join(f.bundle(ALICE, lesson.attemptId), "conversation.json"), "utf8")),
+    { conversation: lesson.attemptId });
 });
 
 test("a damaged attempt.json leaves that archive out, never the whole list", async t => {

@@ -193,9 +193,17 @@ function createTrainingActions({ catalogue, learners, exercises = null, courseIn
   const notifyLearner = async (actor, attemptId, reason = "lesson") => {
     if (typeof publishLearnerChanged === "function") await publishLearnerChanged({ actor, attemptId, reason });
   };
-  // Starting, restarting or resuming a lesson changes the current lesson.
-  const announced = async (result, actor) => {
-    await notifyLearner(actor, result?.active?.attemptId || result?.attempt?.attemptId || "");
+  // Starting, restarting, resuming or finishing a lesson changes the current
+  // lesson. A failure may already have changed it (the mode set, the old
+  // attempt archived), so every tab rereads either way.
+  const announced = async (actor, operation, attemptId = "") => {
+    let result;
+    try { result = await operation(); }
+    catch (error) {
+      await notifyLearner(actor, attemptId).catch(() => {});
+      throw error;
+    }
+    await notifyLearner(actor, result?.active?.attemptId || result?.attempt?.attemptId || attemptId);
     return result;
   };
 
@@ -290,20 +298,22 @@ function createTrainingActions({ catalogue, learners, exercises = null, courseIn
       archiveCurrent: { type: "boolean", required: false }
     }, "Start a lesson only after the person's direct request or accepted offer. First read courses.list for an enabled exact release/lesson and learning.read for the current revision; do not use a course result from an earlier turn. Keep the same request ID on an uncertain retry, without changing its selected release. Only one lesson can be in progress: when another lesson is in progress the start is refused with VIBE64_TRAINING_LESSON_IN_PROGRESS and that lesson's title; tell the person, and only after they confirm archiving it repeat with archiveCurrent: true (its project and conversation are archived, its results kept). Starting the lesson already in progress returns it. A start switches the person to Learn mode. The host reserves the exact actor-owned attempt and prepares a practice project only when the lesson declares an exercise; preparation does not mean Preview is running or that any step passed. If the saved preparation is preparing, the host records ready by itself when that Workspace setup run succeeds; use same-attempt lesson.resume to recheck it. After success, read lesson.read for the returned attempt. An ended request replay returns its original retained attempt without preparing or reactivating it. An unavailable host is not a successful start.", async (input, actor) => {
       if (typeof exercises?.startLesson !== "function") return unavailable();
-      return announced(prepared(await exercises.startLesson({ actor, ...pick(input, ["courseId", "release", "lessonCode", "requestId", "expectedRevision", "archiveCurrent"]) })), actor);
+      return announced(actor, async () => prepared(await exercises.startLesson({ actor,
+        ...pick(input, ["courseId", "release", "lessonCode", "requestId", "expectedRevision", "archiveCurrent"]) })));
     }),
     definition("lesson.resume", { attemptId }, "Resume an attempt's practice preparation only after the person's direct request or accepted offer. Use this learner's exact saved attempt ID; the original preparation lock and fixed project/session identities preserve it. Use this also when Workspace setup has since finished but the saved checkpoint remains preparing. For an exercise lesson the host freshly reloads this exact reserved session, verifies its setup, and records ready only when proven. A lesson without an exercise has no practice project, session or preparation phase. For actual reported setup status use sessions.inspect for the saved project/session and its workspaceSetupStatus, not repeated learning.read. A pending or failed setup must be reported as observed; do not infer still running or nothing broken from the checkpoint. Do not create another exercise after failure. After success, read lesson.read for this same attempt and continue from its first step that has not passed. Preparation is not current Preview readiness or evidence of a pass.", async (input, actor) => {
       if (typeof exercises?.prepareLesson !== "function") return unavailable();
-      return announced(prepared(await exercises.prepareLesson({ actor, attemptId: input.attemptId })), actor);
+      return announced(actor, async () => prepared(await exercises.prepareLesson({ actor, attemptId: input.attemptId })), input.attemptId);
     }),
     definition("lesson.restart", { attemptId, requestId, expectedRevision: revision }, "Restart the lesson in progress only after the person asked for it and confirmed it. Use its exact attemptId and the current revision from learning.read. The attempt is archived (its practice project, step results and teacher conversation are kept in Courses, Archived) and a new attempt of the same lesson starts with a fresh practice project, a fresh teacher conversation and no results. Keep the same request ID on an uncertain retry; it finishes a restart that stopped part-way. A pinned session or a full archive (20 lessons) refuses the restart and changes nothing.", async (input, actor) => {
       if (typeof exercises?.restartLesson !== "function") return unavailable("close");
-      return announced(prepared(await exercises.restartLesson({ actor, ...pick(input, ["attemptId", "requestId", "expectedRevision"]) })), actor);
+      return announced(actor, async () => prepared(await exercises.restartLesson({ actor,
+        ...pick(input, ["attemptId", "requestId", "expectedRevision"]) })), input.attemptId);
     }),
-    definition("lesson.finish", { attemptId, requestId, expectedRevision: revision }, "Finish the lesson in progress only after the person asked for it, and only once every required step has passed (lesson.read completion); otherwise it is refused and nothing changes. Use its exact attemptId and the current revision from learning.read; keep the same request on a retry. The lesson counts as completed for good, and the attempt is archived as one bundle: its record, its practice project (if the lesson has one) and its teacher conversation. A pinned session or a full archive (20 lessons) refuses and changes nothing.", async (input, actor) => {
+    definition("lesson.finish", { attemptId, expectedRevision: revision }, "Finish the lesson in progress only after the person asked for it, and only once every required step has passed (lesson.read completion); otherwise it is refused and nothing changes. Use its exact attemptId and the current revision from learning.read; a retry of the same attempt resumes it. The lesson counts as completed for good, and the attempt is archived as one bundle: its record, its practice project (if the lesson has one) and its teacher conversation. A pinned session or a full archive (20 lessons) refuses and changes nothing.", async (input, actor) => {
       if (typeof exercises?.finishLesson !== "function") return unavailable("close");
-      const result = await exercises.finishLesson({ actor, ...pick(input, ["attemptId", "expectedRevision"]) });
-      await notifyLearner(actor, input.attemptId);
+      const result = await announced(actor, () => exercises.finishLesson({ actor, ...pick(input, ["attemptId", "expectedRevision"]) }),
+        input.attemptId);
       return { ok: true, available: true, changed: result.closed === true };
     })
   ]);

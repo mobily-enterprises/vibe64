@@ -114,74 +114,89 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     }, PRIVATE);
   }
 
-  // Step 2: Colleague releases the thread's live runtime, then its file moves
+  // Step 2: the learner store ends the attempt (forgetting its code ledger,
+  // C1), inside the close's preparation barrier. The stable request replays.
+  async function endAttempt(actor, attemptId, reason) {
+    for (let tries = 1; ; tries++) {
+      const state = await learners.readState({ actor });
+      try {
+        await learners.endAttempt({ actor, attemptId, requestId: `close-${attemptId}`, expectedRevision: state.revision, reason });
+        return;
+      } catch (error) {
+        // A concurrent learning write (a step result) moved the revision.
+        if (error.code !== "VIBE64_TRAINING_STATE_REVISION_CONFLICT" || tries >= 2) throw error;
+      }
+    }
+  }
+
+  // Step 3, once the attempt has ended, so Colleague no longer resolves its
+  // thread: Colleague releases the thread's live runtime, then its file moves
   // into the bundle (archive) or goes (delete). A thread already moved is done.
   async function closeThread(actor, attemptId, archive) {
     const learnerKey = learnerIdentity(actor).key;
     await releaseLearnThread({ learnerKey, attemptId });
     const file = learnThreadFile({ systemRoot, learnerKey, attemptId });
     if (!archive) return removePath(file, { force: true });
+    if (!await lstat(file).then(() => true, missingAsFalse)) return;
     const destination = path.join(bundleRoot(actor, attemptId), "conversation.json");
     await mkdir(path.dirname(destination), { recursive: true, mode: PRIVATE.directoryMode });
-    await rename(file, destination).catch(error => { if (error.code !== "ENOENT") throw error; });
-  }
-
-  // Step 3: the learner store ends the attempt under the preparation barrier,
-  // which also forgets its code ledger (C1). The stable request replays.
-  async function endAttempt(actor, attemptId, reason) {
-    for (let tries = 1; ; tries++) {
-      const state = await learners.readState({ actor });
-      const attempt = state.progress.attempts.find(value => value.attemptId === attemptId);
-      if (!attempt || attempt.ended) return;
-      try {
-        await learners.runPreparationExclusive({ actor, attemptId }, () => learners.endAttempt({ actor, attemptId,
-          requestId: `close-${attemptId}`, expectedRevision: state.revision, reason }));
-        return;
-      } catch (error) {
-        // A concurrent learning write moved the revision or ended the attempt.
-        if (!["VIBE64_TRAINING_STATE_REVISION_CONFLICT", "VIBE64_TRAINING_ATTEMPT_MISSING"].includes(error.code) || tries >= 2) throw error;
-      }
-    }
+    await rename(file, destination);
   }
 
   // Finish (reason finished), restart and start-with-archive (archived) keep a
-  // bundle; delete (deleted) keeps nothing. The project goes first, through
-  // the archiver, so its refusals (a pinned session, storage) change nothing,
-  // and a removal that stops leaves the attempt in progress with its project
-  // marked deleting. Repeating the close resumes it, keyed by attemptId; an
-  // attempt that has already ended is done.
+  // bundle; delete (deleted) keeps nothing. The whole close until the attempt
+  // ends holds the preparation barrier, so no preparation can recreate the
+  // practice project meanwhile. The project goes first, through the archiver,
+  // so its refusals (a pinned session, storage) change nothing, and a removal
+  // that stops leaves the attempt in progress with its project marked
+  // deleting. Repeating the close resumes it, keyed by attemptId; for an
+  // attempt that has already ended it only finishes the thread step.
   async function closeAttempt({ actor, attemptId, archive, reason } = {}) {
     if (archive ? !ARCHIVE_REASONS.includes(reason) : reason !== "deleted") {
       throw new TypeError("Close an attempt as finished or archived with an archive, or as deleted without one.");
     }
-    const state = await learners.readState({ actor });
-    const attempt = state.progress.attempts.find(value => value.attemptId === attemptId);
+    const attempt = await readAttempt(actor, attemptId);
     if (!attempt) {
       throw Object.assign(new Error("This is not one of your lessons. Nothing was changed."), {
         code: "VIBE64_TRAINING_ATTEMPT_MISSING", statusCode: 404 });
     }
-    if (attempt.ended) return { ok: true, attemptId, closed: false };
-    const directory = bundleRoot(actor, attemptId);
-    // A resumed archive already holds its (partial) bundle and its slot.
-    if (archive && !await isDirectory(directory) && await archiveCount(actor) >= MAX_ARCHIVES) {
-      throw Object.assign(new Error(`You have ${MAX_ARCHIVES} archived lessons. Delete one in Courses → Archived first. Nothing was changed.`), {
-        code: "VIBE64_TRAINING_PRACTICE_ARCHIVE_LIMIT", statusCode: 409 });
+    let closed = false;
+    if (!attempt.ended) {
+      const directory = bundleRoot(actor, attemptId);
+      // A resumed archive already holds its (partial) bundle and its slot.
+      if (archive && !await isDirectory(directory) && await archiveCount(actor) >= MAX_ARCHIVES) {
+        throw Object.assign(new Error(`You have ${MAX_ARCHIVES} archived lessons. Delete one in Courses → Archived first. Nothing was changed.`), {
+          code: "VIBE64_TRAINING_PRACTICE_ARCHIVE_LIMIT", statusCode: 409 });
+      }
+      try {
+        await learners.runPreparationExclusive({ actor, attemptId }, async () => {
+          const record = attempt.projectSlug ? await findRecord(actor, attemptId) : null;
+          if (record) {
+            await projectContext.runWithPracticeProjectScope({ actor, training: record.training, access: "write", allowDeleting: true },
+              () => archive
+                ? projectArchive.archiveProject({ slug: record.slug, archiveRoot: path.join(directory, "project"), checkHeadroom: true,
+                  beforeRemove: () => writeAttemptRecord(actor, attemptId, reason) })
+                : projectArchive.removeProject({ slug: record.slug }));
+          } else if (archive) {
+            await writeAttemptRecord(actor, attemptId, reason);
+          }
+          // A delete also takes the partial bundle of an archive that stopped part-way.
+          if (!archive) await removePath(directory, { recursive: true, force: true });
+          await endAttempt(actor, attemptId, reason);
+        });
+        closed = true;
+      } catch (error) {
+        // A concurrent close of the same attempt ended it first.
+        if (error.code !== "VIBE64_TRAINING_ATTEMPT_MISSING" || !(await readAttempt(actor, attemptId))?.ended) throw error;
+      }
     }
-    const record = attempt.projectSlug ? await findRecord(actor, attemptId) : null;
-    if (record) {
-      await projectContext.runWithPracticeProjectScope({ actor, training: record.training, access: "write", allowDeleting: true },
-        () => archive
-          ? projectArchive.archiveProject({ slug: record.slug, archiveRoot: path.join(directory, "project"), checkHeadroom: true,
-            beforeRemove: () => writeAttemptRecord(actor, attemptId, reason) })
-          : projectArchive.removeProject({ slug: record.slug }));
-    } else if (archive) {
-      await writeAttemptRecord(actor, attemptId, reason);
-    }
-    // A delete also takes the partial bundle of an archive that stopped part-way.
-    if (!archive) await removePath(directory, { recursive: true, force: true });
-    await closeThread(actor, attemptId, archive);
-    await endAttempt(actor, attemptId, reason);
-    return { ok: true, attemptId, closed: true };
+    const { ended } = await readAttempt(actor, attemptId);
+    await closeThread(actor, attemptId, ended.reason !== "deleted");
+    return { ok: true, attemptId, closed };
+  }
+
+  async function readAttempt(actor, attemptId) {
+    return (await learners.readState({ actor })).progress.attempts.find(value => value.attemptId === attemptId) || null;
   }
 
   // Removes one archived attempt bundle of this learner.
@@ -201,10 +216,12 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
 }
 
 async function isDirectory(directory) {
-  return lstat(directory).then(info => info.isDirectory(), error => {
-    if (error.code === "ENOENT") return false;
-    throw error;
-  });
+  return lstat(directory).then(info => info.isDirectory(), missingAsFalse);
+}
+
+function missingAsFalse(error) {
+  if (error.code === "ENOENT") return false;
+  throw error;
 }
 
 function missingAsEmpty(error) {

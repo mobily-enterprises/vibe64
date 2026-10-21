@@ -399,7 +399,7 @@ test("a v2 lesson passes start, resume, learning.read, completion, finish and de
   assert.deepEqual(read.lessonProgress, [{ ...progress, open: true }]);
   assert.equal(read.attempts[0].practiceSlug, started.active.projectSlug);
 
-  await assert.rejects(run("lesson.finish", { attemptId, requestId: "finish-v2", expectedRevision: read.revision }),
+  await assert.rejects(run("lesson.finish", { attemptId, expectedRevision: read.revision }),
     { code: "VIBE64_TRAINING_LESSON_INCOMPLETE" }, "an unfinished lesson cannot be finished");
   const deleted = await run("lesson.delete", { attemptId });
   assert.equal(deleted.ok, true);

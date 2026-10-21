@@ -101,28 +101,32 @@ guide overlay 3000 above L 2400 above Colleague.
   expectedRevision}` archives the attempt and reserves a new attempt with the
   same pin and request (a retry finishes a stopped restart through the
   replayed reservation); preparation then creates a fresh project and session
-  `training-<attemptId>` with exercise-source proof. `lesson.finish` is refused
+  `training-<attemptId>` with exercise-source proof. `lesson.finish {attemptId,
+  expectedRevision}` is refused
   (`VIBE64_TRAINING_LESSON_INCOMPLETE`) until every required step passed, then
   archives with reason `finished` (the learner store records the completion).
   `lesson.delete {attemptId, confirmed?}` removes the project and conversation
   with no archive (reason `deleted`).
 - Close (`learningSpace.closeAttempt({actor, attemptId, archive, reason})`) is
   the one implementation behind finish, restart, start-with-archive and delete.
-  An archive at the cap of 20 per learner refuses first. Then, inside the
-  learner's practice scope, the shared project archive service (a host's
+  An archive at the cap of 20 per learner refuses first. Then, holding the
+  learner's preparation barrier until the attempt has ended (so no preparation
+  recreates the project meanwhile) and inside the learner's practice scope,
+  the shared project archive service (a host's
   `trainingHost.projectArchive`, a standalone `createProjectArchiveService`
   locally) archives or removes the project; for an archive its `beforeRemove`
   step, under the per-slug lock after every refusal (pinned session, storage
   headroom), writes `attempt.json` from `learners.readAttemptRecord`, so a
   refusal changes nothing. A lesson without a project writes `attempt.json`
-  directly. A delete then removes any partial bundle. Next core
-  `releaseLearnThread` lets Colleague release the attempt's thread, and the
-  thread file (`learnThreadFile`) moves into the bundle as
-  `conversation.json` (archive) or is removed (delete). Last, the learner store
-  ends the attempt under the preparation barrier (request `close-<attemptId>`),
-  which also forgets its code ledger. A close that stops part-way leaves the
-  attempt in progress (its project `deleting`); repeating it resumes, and a
-  close of an ended attempt is a no-op. Bundles:
+  directly. A delete then removes any partial bundle. Next the learner store
+  ends the attempt (request `close-<attemptId>`), which also forgets its code
+  ledger. Last, with the attempt ended so Colleague no longer resolves its
+  thread, core `releaseLearnThread` lets Colleague release it, and the thread
+  file (`learnThreadFile`) moves into the bundle as `conversation.json`
+  (archive) or is removed (delete). A close that stops before the end leaves
+  the attempt in progress (its project `deleting`); repeating it resumes, and
+  a close of an ended attempt only finishes the thread step (restart and
+  finish retries do this too). Bundles:
   `<systemRoot>/training/practice-archives/<learnerKey>/<attemptId>/` with
   `attempt.json` (`{schemaVersion: 1, attemptId, learnerKey, pin, lessonTitle,
   reason: finished|archived, createdAt, archivedAt, stepProgress}`),

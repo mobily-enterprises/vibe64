@@ -95,8 +95,8 @@ to another thread, the previous one is released after its running turn settles
 (the turn is never interrupted). A turn's own operations carry its server-built
 `threadKey`, so they stay with their thread whatever the mode is now. Watch
 polling continues for a hidden Develop thread; its observations wait and wake
-only when Develop is visible again. Training closes an attempt through core
-`releaseLearnThread` (`learnThreads.js`): Colleague stops that thread (aborting
+only when Develop is visible again. Training closes an attempt, once it has
+ended, through core `releaseLearnThread` (`learnThreads.js`): Colleague stops that thread (aborting
 and cancelling a running turn without awaiting it, since the turn may be the
 very `lesson.finish` call), flushes its saves, never writes its file again,
 disposes the handle once the turn settles and removes its runtime work;
