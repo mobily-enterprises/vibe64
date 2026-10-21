@@ -110,7 +110,7 @@ function leaveForLearning() {
 }
 function reopenConversation() {
   if (shown.value) return;
-  if (voice?.controller.state.session && !inlineVoice.value) voice.controller.reveal();
+  if (voice?.controller.state.session && !inlineVoice.value && !staleVoice.value) voice.controller.reveal();
   else open.value = true;
 }
 watch(() => unref(learningController.value?.coursesOpen) === true, (learningOpen, wasOpen) => {
@@ -136,7 +136,7 @@ async function toggleConversation() {
     voice?.controller.minimize();
     open.value = false;
     launcher.value?.$el?.focus();
-  } else if (voice?.controller.state.session && !inlineVoice.value) voice.controller.reveal();
+  } else if (voice?.controller.state.session && !inlineVoice.value && !staleVoice.value) voice.controller.reveal();
   else if (voice) {
     open.value = true;
     await openVoice();
@@ -342,6 +342,14 @@ const voiceSession = computed(() => {
     state.binding.conversationId === identity?.conversationId &&
     state.binding.id === JSON.stringify(["colleague", identity?.actorKey]) ? state.session : null;
 });
+// Colleague's voice controls belong to one conversation. After a thread switch
+// (L, another lesson) they still hold the previous thread's conversation.
+const staleVoice = computed(() => voice?.controller.state.binding?.socketUrl === "/api/vibe64/colleague/voice/ws" && !voiceSession.value);
+// A shown Colleague stays shown and its voice controls follow to the new thread.
+watch(() => conversation.runtime.value?.identity.conversationId, (id, previous) => {
+  if (!id || !previous || !staleVoice.value || !voice.controller.state.visible) return;
+  waitForConversation().then(() => staleVoice.value && openVoice()).catch(reportFailure);
+});
 
 function voicePreviewActionsAllowed(messageId) {
   const transcript = voiceTranscript.value;
@@ -417,7 +425,7 @@ const voicePreviews = computed(() => {
 });
 const voicePreview = computed(() => voicePreviews.value.find(preview => preview.id === voiceTranscript.value?.id)
   || voicePreviews.value[0] || null);
-const bodyVisible = computed(() => open.value || Boolean(voiceSession.value && voice.controller.state.visible));
+const bodyVisible = computed(() => open.value || Boolean((voiceSession.value || staleVoice.value) && voice.controller.state.visible));
 
 const adapter = computed(() => {
   const supplied = conversation.adapter.value;

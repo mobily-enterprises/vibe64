@@ -40,7 +40,9 @@ space only (see [Practice projects](learning-practice-projects.md)):
 
 Press **L** to go back to Develop: your projects come back, at the page you
 left. The lesson is only paused: it stays in progress, with its practice
-project and conversation, and **L** brings you back to it. In Develop the
+project and conversation, and **L** brings you back to it. Colleague keeps a
+separate conversation for Develop and for Learn: if Colleague is open when you
+press **L**, it stays open and shows the other mode's conversation. In Develop the
 lesson's practice project is not shown; opening its address takes you to your
 projects with the note "This is a practice project. Press L to switch to
 Learn." The workspace owner works the same way.

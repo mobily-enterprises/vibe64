@@ -1538,6 +1538,39 @@ test("switching between Develop and a Learn thread follows the learner's mode wi
   assert.equal(view.state.pointerNotice.value, "");
 });
 
+// A shown Colleague follows L to the other thread; its voice controls never
+// keep the hidden previous thread's conversation.
+test("a shown Colleague stays shown on the new thread after L and a minimised one reopens there", async t => {
+  let product = { conversationId: "develop", thread: { kind: "develop" } };
+  const view = mount(t, async url => {
+    if (url.startsWith("/api/vibe64/colleague?")) return { ok: true, ...product, messages: [], status: "ready" };
+    return conversationSnapshot({ conversationId: product.conversationId });
+  });
+  await flush();
+  await view.state.toggleConversation();
+  await flush();
+  const state = view.state.voice.controller.state;
+  assert.equal(state.binding.conversationId, "develop");
+  assert.equal(view.state.bodyVisible.value, true);
+  product = { conversationId: "teacher", thread: { kind: "learn", attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } };
+  view.dispatch("vibe64.training.learner.changed", { learnerId: "local", reason: "learning-mode" });
+  await flush();
+  assert.equal(state.binding.conversationId, "teacher", "the voice controls follow the Learn thread");
+  assert.equal(view.state.bodyVisible.value, true, "Colleague stays shown");
+  assert.equal(view.state.shown.value, true);
+  await view.state.toggleConversation();
+  assert.equal(view.state.shown.value, false);
+  product = { conversationId: "develop", thread: { kind: "develop" } };
+  view.dispatch("vibe64.training.learner.changed", { learnerId: "local", reason: "learning-mode" });
+  await flush();
+  assert.equal(state.binding.conversationId, "teacher", "a minimised Colleague changes nothing until it opens");
+  assert.equal(view.state.shown.value, false);
+  await view.state.toggleConversation();
+  await flush();
+  assert.equal(state.binding.conversationId, "develop", "opening shows the current thread, not the old one");
+  assert.equal(view.state.bodyVisible.value, true);
+});
+
 test("explicit external retarget retains the original uncertain UUID/payload in the original tab draft owner", async t => {
   const records = new Map();
   const storage = { getItem: key => records.get(key) ?? null, setItem: (key, value) => records.set(key, value), removeItem: key => records.delete(key) };

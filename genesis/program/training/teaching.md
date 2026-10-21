@@ -73,7 +73,9 @@ picks the thread on the server from the learner's mode (core
 `readLearningModeFor`: Develop, or Learn with `currentAttemptId`), so leaving
 and coming back to an attempt resumes its conversation. Only Learn threads
 carry the teaching guidance and Training's lesson tools; Develop can read and
-set the mode only. Closing an attempt ends it first, so Colleague no longer
+set the mode only. In the browser an open Colleague stays open across the
+switch and its voice controls rebind to the new thread's conversation
+(`Vibe64Colleague.vue`); a minimised one opens on the current thread. Closing an attempt ends it first, so Colleague no longer
 resolves its thread, then calls core `releaseLearnThread` (Colleague stops the
 thread) and moves the file into the attempt's archive bundle or
 removes it; Training never imports Colleague. See
