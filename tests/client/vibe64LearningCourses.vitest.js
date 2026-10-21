@@ -99,7 +99,7 @@ it("retains exact start identity and inputs across an uncertain result without a
   expect(courses.startRetry.value).toEqual(selection);
   await expect(courses.startLesson({ ...selection, lessonCode: "V64-START-01" })).rejects.toThrow("Retry that same lesson");
   expect(harness.command).toHaveBeenCalledTimes(1);
-  await courses.retryStart();
+  await courses.startLesson(courses.startRetry.value);
   expect(harness.command.mock.calls[1][1]).toEqual(first);
   expect(courses.startRetry.value).toBeNull();
 });
@@ -138,19 +138,15 @@ it("resumes only the exact requested attempt", async () => {
   expect(harness.command).toHaveBeenCalledTimes(2);
 });
 
-it("continues a left lesson as a new attempt, reusing its continuation request ID on retry", async () => {
-  harness.command.mockRejectedValueOnce(new Error("ack lost"));
-  await expect(courses.continueLesson({ attemptId: A, expectedRevision: 4 })).rejects.toThrow("ack lost");
-  const [path, first] = harness.command.mock.calls[0];
-  expect(path).toBe(`/api/vibe64/training/attempts/${A}/continue`);
-  expect(first).toEqual({ requestId: expect.stringMatching(/^[a-f0-9]{18}$/u), expectedRevision: 4 });
-  expect(courses.starting.value).toBe(false);
-  harness.command.mockResolvedValueOnce({ ok: true, available: true, active: { attemptId: B } });
-  const outcome = await courses.continueLesson({ attemptId: A, expectedRevision: 4 });
-  expect(harness.command.mock.calls[1][1], "the retry repeats the same continuation").toEqual(first);
-  expect(outcome).toMatchObject({ attemptId: B, current: true });
-  await courses.continueLesson({ attemptId: A, expectedRevision: 5 });
-  expect(harness.command.mock.calls[2][1].requestId, "a confirmed continuation is not reused").not.toBe(first.requestId);
+it("clears the retry when a different lesson in progress refuses the start, then starts again with archiveCurrent", async () => {
+  harness.command.mockRejectedValueOnce(Object.assign(new Error("Another lesson is in progress."), { code: "VIBE64_TRAINING_LESSON_IN_PROGRESS" }));
+  await expect(courses.startLesson(selection)).rejects.toMatchObject({ code: "VIBE64_TRAINING_LESSON_IN_PROGRESS" });
+  expect(courses.startRetry.value, "a definite refusal leaves nothing to retry").toBeNull();
+  const outcome = await courses.startLesson({ ...selection, archiveCurrent: true });
+  const [, body] = harness.command.mock.calls[1];
+  expect(body).toEqual({ ...selection, archiveCurrent: true, requestId: outcome.requestId });
+  expect(body.requestId, "a new start, not a replay").not.toBe(harness.command.mock.calls[0][1].requestId);
+  expect(courses.continueLesson, "Continue lesson is gone").toBeUndefined();
 });
 
 it("never overlaps another UI operation and retains the exact start retry", async () => {
@@ -161,7 +157,7 @@ it("never overlaps another UI operation and retains the exact start retry", asyn
   admitted.reject(new Error("acknowledgement lost"));
   await expect(pending).rejects.toThrow("acknowledgement lost");
   expect(courses.startRetry.value).toEqual(selection);
-  await courses.retryStart();
+  await courses.startLesson(courses.startRetry.value);
   expect(harness.command.mock.calls[1][1]).toEqual(harness.command.mock.calls[0][1]);
 });
 
@@ -174,7 +170,7 @@ it("reports a start in flight as starting, offering its exact retry only after i
   await expect(pending).rejects.toThrow("ack lost");
   expect(courses.starting.value).toBe(false);
   expect(courses.startRetry.value).toEqual(selection);
-  await courses.retryStart();
+  await courses.startLesson(courses.startRetry.value);
   expect(courses.startRetry.value).toBeNull();
 });
 
@@ -188,7 +184,7 @@ it("reports an admitted start as not current after the fresh progress read revok
 it("fences requests while Learning is closed and makes them again once it opens", async () => {
   open.value = false; await flush();
   expect(courses.active.value).toBe(false);
-  await expect(courses.startLesson(selection)).rejects.toThrow("Open Learning");
+  await expect(courses.startLesson(selection)).rejects.toThrow("Open Courses");
   expect(harness.command).not.toHaveBeenCalled();
   open.value = true; await flush();
   const outcome = await courses.startLesson(selection);

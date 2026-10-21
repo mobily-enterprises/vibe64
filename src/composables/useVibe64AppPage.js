@@ -131,13 +131,13 @@ function useVibe64AppPage() {
   const projects = projectSelection.projects;
   const selfTargetAutoSelectProjectRepro = projectSelection.selfTargetAutoSelectProjectRepro;
   const learning = useVibe64Learning();
-  // A practice project is named by its lesson (the lesson in progress or the
-  // open lesson when it owns this project), never by its training-<id> slug.
+  // A practice project is named by its lesson (the current lesson, or the
+  // read lesson when it owns this project), never by its training-<id> slug.
   const projectTitle = computed(() => {
     const slug = projectSlug.value;
-    // No slug: the shell of a lesson without a practice project (the Learning page).
-    if (!slug) return "No project open";
-    const mode = learning?.learningMode;
+    // No slug: Learn mode without a practice project (/app/learning).
+    if (!slug) return "No project selected";
+    const mode = learning?.mode;
     const lesson = learning?.lesson?.value;
     return projectDisplayName({ slug }, {
       lessonTitle: mode?.practiceSlug === slug ? mode.lessonTitle : lesson?.practiceProjectSlug === slug ? lesson.title : ""
@@ -146,8 +146,10 @@ function useVibe64AppPage() {
   const developmentBasePath = computed(() => projectAppPath(projectSlug.value));
   const dashboardBasePath = computed(() => `${developmentBasePath.value}/dashboard`);
   const dashboardRouteActive = computed(() => normalizedPath(route.path).startsWith(`${dashboardBasePath.value}/`));
-  // Without a project the panes are empty and switch in place.
-  const emptyPane = ref("preview");
+  // Without a project the panes are empty and switch in place; the pane and
+  // the dashboard section live in the address, so Learn mode's place keeps them.
+  const emptyPane = computed(() => route.query?.pane === "dashboard" ? "dashboard" : "preview");
+  const emptySection = computed(() => typeof route.query?.section === "string" ? route.query.section : "");
   const projectPane = computed(() => !projectSlug.value ? emptyPane.value
     : dashboardRouteActive.value ? "dashboard" : "preview");
   const sortedProjects = computed(() => [...projects.value].sort((left, right) => left.slug.localeCompare(right.slug)));
@@ -184,10 +186,9 @@ function useVibe64AppPage() {
     projectSlug: projectSlug.value,
     readyProjectSlug: projectPaneNavigationReadySlug.value
   }));
-  // Without a project there is no chat column, so the pane action is always shown.
   const mobileProjectActionVisible = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value &&
-    (chatCollapsed.value || !projectSlug.value));
-  const mobilePaneSwipeEnabled = computed(() => Boolean(projectSlug.value) && projectPaneNavigationVisible.value && mobilePaneLayout.value);
+    chatCollapsed.value);
+  const mobilePaneSwipeEnabled = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value);
   const colleagueLayout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
   const layoutOwner = {
     get projectSlug() { return projectSlug.value; },
@@ -371,6 +372,8 @@ function useVibe64AppPage() {
     previewToolbarTeleportTarget,
     projectLoadError,
     projectPane,
+    emptySection,
+    selectEmptySection: section => void router.replace({ query: { ...route.query, pane: "dashboard", section } }),
     projectPaneNavigationVisible,
     projectRuntimeError,
     projectRuntimeReady,
@@ -401,7 +404,7 @@ function useVibe64AppPage() {
 
   function selectProjectPane(pane = "") {
     if (!projectSlug.value) {
-      emptyPane.value = pane === "dashboard" ? "dashboard" : "preview";
+      void router.replace({ query: { ...route.query, pane: pane === "dashboard" ? "dashboard" : "preview" } });
       return;
     }
     if (mobilePaneLayout.value) {

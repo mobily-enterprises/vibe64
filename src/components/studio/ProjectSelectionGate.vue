@@ -8,16 +8,16 @@
       role="status"
     >
       <h2 class="project-selection-gate__title">This practice project is gone</h2>
-      <p class="project-selection-gate__deleted-text">It was archived or deleted. Its lesson is still in Learning: Continue lesson there gets a new practice project.</p>
+      <p class="project-selection-gate__deleted-text">It was archived or deleted. Its lesson is under Courses → Archived; start it again from Courses.</p>
       <v-btn
         v-if="learning"
         class="project-selection-gate__deleted-learning"
         color="primary"
         variant="flat"
         min-height="48"
-        @click="openLearning"
+        @click="openCourses"
       >
-        Open Learning
+        Open Courses
       </v-btn>
     </v-sheet>
 
@@ -29,15 +29,15 @@
       role="status"
       data-test="learning-mode-project-note"
     >
-      <p class="project-selection-gate__deleted-text">{{ learningModeNote }}</p>
+      <p class="project-selection-gate__deleted-text">{{ learningModeMessage }}</p>
       <v-btn
         color="primary"
         variant="flat"
         min-height="48"
-        data-test="learning-mode-project-leave"
-        @click="leaveLesson"
+        data-test="learning-mode-project-switch"
+        @click="toggleMode"
       >
-        Leave lesson
+        {{ learnMode ? "Switch to Develop" : "Switch to Learn" }}
       </v-btn>
     </v-sheet>
 
@@ -88,7 +88,7 @@
       </div>
 
       <div
-        v-if="learningModeOn"
+        v-if="learnMode"
         class="project-selection-gate__learning-note"
         role="status"
         data-test="learning-mode-picker-note"
@@ -97,10 +97,10 @@
         <v-btn
           variant="tonal"
           min-height="40"
-          data-test="learning-mode-picker-leave"
-          @click="leaveLesson"
+          data-test="learning-mode-picker-switch"
+          @click="toggleMode"
         >
-          Leave lesson
+          Switch to Develop
         </v-btn>
       </div>
 
@@ -123,7 +123,7 @@
       </div>
 
       <v-form
-        v-if="!learningModeOn"
+        v-if="!learnMode"
         class="project-selection-gate__create"
         @submit.prevent="handleCreateProject"
       >
@@ -189,7 +189,7 @@ const props = defineProps({
 
 const emit = defineEmits(["missing", "ready", "error", "deleted", "retry-runtime"]);
 const router = useRouter();
-// L, where the deleted practice project's lesson remains (null without a host shell).
+// Learn/Develop and Courses, where the deleted practice project's lesson remains (null without a host shell).
 const learning = useVibe64Learning();
 const recovering = ref(false);
 const recoveryError = ref("");
@@ -204,9 +204,10 @@ const {
   creating,
   errorMessage,
   hasSelection,
+  learnMode,
   learningModeBlocked,
-  learningModeOn,
-  leaveLesson,
+  learningModeMessage,
+  toggleMode,
   loadProjectSelection,
   newProjectName,
   practiceDeleted,
@@ -226,8 +227,8 @@ const displayError = computed(() => recoveryError.value || errorMessage.value ||
 const selectedSlotVisible = computed(() => hasSelection.value && !props.forcePicker && !practiceDeleted.value);
 const pickerVisible = computed(() => !practiceDeleted.value && !learningModeBlocked.value && selectionReady.value && (props.forcePicker || !hasSelection.value));
 
-function openLearning() {
-  return learning?.show({ surface: "courses" });
+function openCourses() {
+  return learning?.openCourses();
 }
 
 async function retryProject() {

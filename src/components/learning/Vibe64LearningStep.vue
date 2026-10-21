@@ -180,7 +180,7 @@ const go = offset => {
     <p class="vibe64-learning-step__eyebrow">Step {{ index + 1 }} of {{ steps.length }}<template v-if="!step.required"> · optional</template></p>
     <h2 :id="headingId || undefined">{{ step.title }}</h2>
     <p v-if="ended" class="vibe64-learning-step__note" role="status">
-      This lesson has ended. You can read it; its results are kept. To carry on, use Continue lesson in Courses.
+      This lesson has ended. You can read it; it is kept under Archived. To do it again, start it from Courses.
       <v-btn variant="text" min-height="48" data-test="learning-ended-courses" @click="learning.show({ surface: 'courses' })">Go to Courses</v-btn>
     </p>
     <Vibe64LearningMarkdown :text="step.bodyText || ''" />

@@ -1,21 +1,20 @@
 <script setup>
 import { computed } from "vue";
+import { mdiSchoolOutline } from "@mdi/js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 
 defineOptions({ inheritAttrs: false });
 
-// The L plate: opens and hides the Learning environment above the current page. It is
-// shown only where a host has a signed-in Learning overlay bound to it. In
-// learning mode the lesson's name and a one-click "Leave lesson" follow it (not
-// on a phone, where the yellow app bar and the amber dot say it).
+// The L plate: switches between Develop and Learn. It is shown only where a
+// host has a signed-in Learning overlay bound to it. In Learn mode the plate
+// is solid, the current lesson's title follows it (not on a phone) and a
+// Courses button (an icon on a phone) opens the Courses overlay.
 const learning = useVibe64Learning();
 const available = computed(() => Boolean(learning?.state.actorKey));
-const active = computed(() => Boolean(learning?.state.open));
-const minimised = computed(() => Boolean(learning?.state.minimised));
-const inLesson = computed(() => Boolean(learning?.inLesson));
-const lessonTitle = computed(() => String(learning?.lessonTitle || "") || "In a lesson");
-const leaving = computed(() => learning?.state.modeBusy === "leave");
-const title = computed(() => active.value ? "Hide Learning" : minimised.value ? "Return to your lesson" : "Open Learning");
+const learn = computed(() => Boolean(learning?.learnMode));
+const switching = computed(() => learning?.state.modeBusy === "set");
+const lessonTitle = computed(() => String(learning?.lessonTitle || ""));
+const title = computed(() => learn.value ? "Back to Develop (your projects)" : "Switch to Learn");
 </script>
 
 <template>
@@ -23,36 +22,35 @@ const title = computed(() => active.value ? "Hide Learning" : minimised.value ? 
     v-if="available"
     v-bind="$attrs"
     class="vibe64-learning-button"
-    :class="{ 'vibe64-learning-button--active': active, 'vibe64-learning-button--minimised': minimised && !active }"
-    aria-label="Learning"
-    :aria-pressed="active"
-    :aria-expanded="active"
-    aria-haspopup="dialog"
+    :class="{ 'vibe64-learning-button--active': learn }"
+    aria-label="Learn mode"
+    :aria-pressed="learn"
     :title="title"
     data-vibe64-guide="learning"
     density="comfortable"
     icon
     size="small"
-    :variant="active ? 'flat' : 'outlined'"
-    @click="learning.toggle()"
+    :disabled="switching"
+    :variant="learn ? 'flat' : 'outlined'"
+    @click="learning.toggleMode()"
   >
     <span aria-hidden="true">L</span>
   </v-btn>
-  <template v-if="available && inLesson">
-    <span class="vibe64-learning-button__lesson" :title="lessonTitle" data-test="learning-in-lesson">{{ lessonTitle }}</span>
+  <template v-if="available && learn">
     <button
-      type="button" class="vibe64-learning-button__leave" :disabled="leaving"
-      title="End this lesson (results and practice project kept) and get back to your projects" data-test="learning-leave-lesson"
-      @click="learning.leaveLesson()"
+      type="button" class="vibe64-learning-button__courses" title="Courses" aria-label="Courses"
+      data-test="learning-courses" @click="learning.openCourses()"
     >
-      Leave lesson
+      <v-icon :icon="mdiSchoolOutline" size="18" aria-hidden="true" />
+      <span class="vibe64-learning-button__courses-label">Courses</span>
     </button>
+    <span v-if="lessonTitle" class="vibe64-learning-button__lesson" :title="lessonTitle" data-test="learning-lesson-title">{{ lessonTitle }}</span>
   </template>
 </template>
 
 <style scoped>
-/* The L plate: a quiet outlined plate that warms up on hover; open, it is a
-   solid yellow learner plate with a crisp ink edge, a soft glow and a small
+/* The L plate: a quiet outlined plate that warms up on hover; in Learn mode it
+   is a solid yellow learner plate with a crisp ink edge, a soft glow and a small
    pop. Same footprint as the neighbouring header icon buttons. */
 .vibe64-learning-button {
   --v64-plate-ink: #1d1600;
@@ -96,19 +94,6 @@ const title = computed(() => active.value ? "Hide Learning" : minimised.value ? 
   color: var(--v64-plate-ink) !important;
 }
 
-/* Minimised: the lesson is kept; a small amber dot says L will return to it. */
-.vibe64-learning-button--minimised::after {
-  background: var(--v64-learning-strong);
-  border: 2px solid var(--v64-surface);
-  border-radius: 50%;
-  content: "";
-  height: 10px;
-  position: absolute;
-  right: -4px;
-  top: -4px;
-  width: 10px;
-}
-
 .vibe64-learning-button:focus-visible {
   outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
   outline-offset: 3px;
@@ -132,27 +117,25 @@ const title = computed(() => active.value ? "Hide Learning" : minimised.value ? 
   white-space: nowrap;
 }
 
-.vibe64-learning-button__leave {
+.vibe64-learning-button__courses {
+  align-items: center;
   background: transparent;
   border: 1px solid var(--v64-learning-strong);
   border-radius: 999px;
   color: inherit;
   cursor: pointer;
+  display: inline-flex;
   flex: 0 0 auto;
   font: var(--v64-type-label-md, 600 0.75rem/1rem system-ui, sans-serif);
   font-weight: 700;
+  gap: 4px;
   margin-left: var(--v64-space-2);
   min-height: 28px;
   padding: 2px var(--v64-space-3);
   white-space: nowrap;
 }
 
-.vibe64-learning-button__leave:disabled {
-  cursor: progress;
-  opacity: 0.6;
-}
-
-.vibe64-learning-button__leave:focus-visible {
+.vibe64-learning-button__courses:focus-visible {
   outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
   outline-offset: 2px;
 }
@@ -180,8 +163,17 @@ const title = computed(() => active.value ? "Hide Learning" : minimised.value ? 
   }
 
   .vibe64-learning-button__lesson,
-  .vibe64-learning-button__leave {
+  .vibe64-learning-button__courses-label {
     display: none;
+  }
+
+  /* Courses is an icon with a 40px touch target. */
+  .vibe64-learning-button__courses {
+    height: 2.5rem;
+    justify-content: center;
+    margin-left: var(--v64-space-1);
+    padding: 0;
+    width: 2.5rem;
   }
 }
 </style>

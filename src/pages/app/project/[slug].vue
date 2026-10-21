@@ -15,6 +15,8 @@ import ProjectSelectionGate from "@/components/studio/ProjectSelectionGate.vue";
 import Vibe64AuthSettingsButton from "@/components/studio/Vibe64AuthSettingsButton.vue";
 import Vibe64LocalRemoteControls from "@/components/studio/repository/Vibe64LocalRemoteControls.vue";
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
+import Vibe64DashboardShell from "@/components/studio/Vibe64DashboardShell.vue";
+import Vibe64LearningStepBar from "@/components/learning/Vibe64LearningStepBar.vue";
 import { useVibe64AppPage } from "@/composables/useVibe64AppPage.js";
 import { projectDisplayName } from "@/lib/vibe64PracticeProjectName.js";
 
@@ -27,6 +29,7 @@ const {
   chatToggleTitle,
   dashboardRouteActive,
   emitPageTitle,
+  emptySection,
   handleProjectSelectionDeleted,
   handleProjectSelectionError,
   handleProjectSelectionMissing,
@@ -49,6 +52,7 @@ const {
   projectSlug,
   projectTabs,
   retryProjectRuntime,
+  selectEmptySection,
   selectProjectPane,
   setChatCollapsed,
   showProjectPane,
@@ -130,7 +134,6 @@ const {
 
         <div class="studio-home-shell-project-controls">
           <v-btn
-            v-if="projectSlug"
             class="studio-home-shell-chat-toggle"
             data-vibe64-guide="pane-switch"
             density="comfortable"
@@ -198,10 +201,30 @@ const {
         {{ pageError }}
       </v-alert>
 
-      <!-- No slug: a lesson without a practice project (the Learning page). -->
-      <p v-if="!projectSlug" class="studio-screen__no-project" data-test="no-project-pane">
-        {{ projectPane === "dashboard" ? "No dashboard" : "Nothing to preview" }}: a lesson is in progress, and it has no practice project.
-      </p>
+      <!-- The current lesson's steps, in Learn mode. -->
+      <Vibe64LearningStepBar />
+      <!-- No slug: Learn mode without a practice project (/app/learning). -->
+      <div
+        v-if="!projectSlug"
+        class="studio-screen__no-project"
+        :class="{ 'studio-screen__no-project--chat-collapsed': chatCollapsed }"
+        data-test="no-project-pane"
+      >
+        <section class="studio-screen__no-project-chat" aria-label="Session chat">
+          <p class="studio-screen__no-project-text">No project selected</p>
+        </section>
+        <section class="studio-screen__no-project-panel" aria-label="Project">
+          <Vibe64DashboardShell
+            v-if="projectPane === 'dashboard'"
+            no-project
+            :section="emptySection"
+            @select="selectEmptySection"
+          >
+            <p class="studio-screen__no-project-text">No project selected</p>
+          </Vibe64DashboardShell>
+          <p v-else class="studio-screen__no-project-text" data-vibe64-guide-pane="preview">No project selected</p>
+        </section>
+      </div>
       <div v-else class="studio-screen__gate-scroll">
         <ProjectSelectionGate
           :runtime-ready="projectRuntimeReady"
@@ -283,10 +306,54 @@ const {
   padding: var(--generated-ui-screen-panel-padding);
 }
 
+/* No project selected: the same chat column and project pane, empty. */
 .studio-screen__no-project {
+  display: grid;
+  flex: 1 1 auto;
+  gap: var(--studio-home-project-gap);
+  grid-template-columns: var(--studio-home-chat-column-width) minmax(0, 1fr);
+  min-height: 0;
+}
+
+.studio-screen__no-project--chat-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.studio-screen__no-project--chat-collapsed .studio-screen__no-project-chat {
+  display: none;
+}
+
+.studio-screen__no-project-chat,
+.studio-screen__no-project-panel {
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-theme-outline), 0.14);
+  border-radius: 14px;
+  display: grid;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.studio-screen__no-project-panel > .studio-screen__no-project-text,
+.studio-screen__no-project-chat > .studio-screen__no-project-text {
+  align-self: center;
+  justify-self: center;
+}
+
+.studio-screen__no-project-text {
   color: var(--v64-on-surface-variant);
   margin: 0;
-  padding: clamp(1rem, 3vw, 2rem);
+  padding: var(--v64-space-4);
+}
+
+@media (max-width: 980px) {
+  .studio-screen__no-project {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .studio-screen__no-project:not(.studio-screen__no-project--chat-collapsed) .studio-screen__no-project-panel {
+    display: none;
+  }
 }
 
 .studio-screen__gate-scroll {

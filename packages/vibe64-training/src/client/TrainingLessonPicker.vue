@@ -28,7 +28,7 @@ const props = defineProps({
   availableError: { type: String, default: "" },
   installState: { type: Object, default: null }
 });
-const emit = defineEmits(["refresh", "start", "resume", "continue", "install"]);
+const emit = defineEmits(["refresh", "start", "resume", "install"]);
 const selectionId = ref("");
 const text = value => typeof value === "string" && value.length > 0;
 const revision = value => Number.isSafeInteger(value) && value >= 0;
@@ -91,8 +91,10 @@ const savedAttempt = computed(() => !learningInvalid.value && props.learningResu
 const history = computed(() => !learningInvalid.value && props.learningResult?.ok === true &&
   props.learningResult.available === true ? props.learningResult.history : []);
 const completion = computed(() => savedAttempt.value ? props.learningResult.completion : null);
+// A different lesson may be started while one is in progress: the server
+// refuses it once and the host asks to archive the current one first.
 const startPossible = computed(() => Boolean(props.canStart && !props.starting && !props.startUnconfirmed && !props.busy &&
-  !props.catalogueLoading && !props.catalogueError && learningReady.value && !savedAttempt.value));
+  !props.catalogueLoading && !props.catalogueError && learningReady.value));
 // Display only: the server admits preview lessons for the workspace owner alone.
 const canTryPreviews = computed(() => !catalogueInvalid.value && props.catalogueResult?.ok === true &&
   props.catalogueResult.canTryPreviews === true);
@@ -108,10 +110,6 @@ function requestStart() {
 }
 function requestResume() {
   if (resumeEnabled.value) emit("resume", { attemptId: savedAttempt.value.attemptId });
-}
-// Continue lesson for a left lesson: a new attempt of its latest ended attempt.
-function requestContinue(attempt) {
-  if (startPossible.value && attempt?.attemptId) emit("continue", { attemptId: attempt.attemptId, expectedRevision: props.learningResult.revision });
 }
 // Course Start selects one exact displayed lesson for the same original start.
 function startLesson(course, lesson) {
@@ -285,7 +283,6 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
       @back="openCourseKey = ''"
       @start="startLesson(openCourse.course, $event)"
       @resume="requestResume"
-      @continue="requestContinue"
     />
     <template v-else>
       <div v-if="courses.length" class="tlp-grid training-lesson-picker__courses">
@@ -321,8 +318,6 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
           <div class="tlp-card__actions">
             <v-btn v-if="progress.activeHere" color="primary" variant="flat" rounded="pill" min-height="48" :prepend-icon="icons.play"
               :disabled="!resumeEnabled" @click="requestResume">Continue lesson</v-btn>
-            <v-btn v-else-if="progress.continueFrom" color="primary" variant="flat" rounded="pill" min-height="48" :prepend-icon="icons.play"
-              :disabled="!startPossible" @click="requestContinue(progress.continueFrom)">Continue lesson</v-btn>
             <v-btn v-else-if="progress.next" color="primary" variant="flat" rounded="pill" min-height="48" :prepend-icon="icons.play"
               :disabled="!startPossible" @click="startLesson(course, progress.next)">{{ previewCourse(course) ? 'Try preview' : 'Start' }}</v-btn>
             <v-btn v-if="updateFor(course)" variant="tonal" rounded="pill" min-height="48" :prepend-icon="icons.update"
@@ -344,7 +339,7 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
         @install="requestInstall" @view="viewInstalled" @refresh="emit('refresh')" />
     </template>
     <div v-if="courses.length && (savedAttempt || starting || startUnconfirmed || !canStart)" class="training-lesson-picker__start">
-      <p v-if="savedAttempt" class="tlp-note"><v-icon :icon="icons.info" size="20" /><span>A lesson is in progress. Continue it, or use Leave lesson before starting a different one; its results are kept.</span></p>
+      <p v-if="savedAttempt" class="tlp-note"><v-icon :icon="icons.info" size="20" /><span>A lesson is in progress. Starting a different one first asks to archive it.</span></p>
       <p v-else-if="starting" class="tlp-note tlp-note--progress" role="status"><v-progress-circular indeterminate size="20" width="2" color="primary" /><span>Starting the selected lesson and preparing its practice project. The lesson opens when this finishes.</span></p>
       <p v-else-if="startUnconfirmed" class="tlp-note tlp-note--warn"><v-icon :icon="icons.info" size="20" /><span>The last lesson start was not confirmed. Use Retry lesson start to repeat that same request.</span></p>
       <p v-else-if="!canStart" class="tlp-note"><v-icon :icon="icons.info" size="20" /><span>Starting lessons is unavailable in this installation.</span></p>

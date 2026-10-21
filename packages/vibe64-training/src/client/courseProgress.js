@@ -30,23 +30,16 @@ function earlierCompletion(lesson, lessonProgress, attempts) {
   return { release: releases.at(-1) || "" };
 }
 
-// A lesson left before (not completed): Continue lesson starts a new attempt of
-// its latest ended attempt, in the same practice project, instead of Start.
-function leftAttempt(lesson, history) {
-  return history.findLast(attempt => attempt?.ended && attempt.pin?.lesson?.code === lesson.code &&
-    attempt.pin.lesson.hash === lesson.hash) || null;
-}
-
 function courseProgress(course, lessonProgress = [], active = null, history = [], { canTryPreviews = false } = {}) {
   const attempts = [...history, ...(active ? [active] : [])];
   const lessons = course.lessons.map(lesson => {
     const status = lessonStatus(lesson, lessonProgress);
     const earlier = status === "completed" ? null : earlierCompletion(lesson, lessonProgress, attempts);
-    const continueFrom = status === "completed" ? null : leftAttempt(lesson, history);
-    return { lesson, status, ...(earlier ? { earlier } : {}), ...(continueFrom ? { continueFrom } : {}) };
+    // The lesson in progress (open) is resumed, not started; any other lesson starts as a new attempt.
+    const current = Boolean(lessonProgress.find(value => value.lessonCode === lesson.code && value.lessonHash === lesson.hash)?.open);
+    return { lesson, status, current, ...(earlier ? { earlier } : {}) };
   });
-  const nextEntry = lessons.find(value => value.status !== "completed" && offered(course, value.lesson, canTryPreviews)) || null;
-  const next = nextEntry?.lesson || null;
+  const next = lessons.find(value => value.status !== "completed" && offered(course, value.lesson, canTryPreviews))?.lesson || null;
   const counted = lessons.some(value => value.lesson.required) ? lessons.filter(value => value.lesson.required) : lessons;
   const topics = course.topics.map(topic => ({ ...topic,
     lessons: lessons.filter(value => value.lesson.topicId === topic.topicId && value.lesson.topicRelease === topic.release) }));
@@ -55,9 +48,7 @@ function courseProgress(course, lessonProgress = [], active = null, history = []
     completed: counted.filter(value => value.status === "completed").length,
     total: counted.length,
     activeHere: Boolean(active && active.pin.course.courseId === course.courseId && active.pin.course.release === course.release),
-    next,
-    // The next lesson was left before: the course's main button continues it.
-    continueFrom: nextEntry?.continueFrom || null
+    next
   };
 }
 

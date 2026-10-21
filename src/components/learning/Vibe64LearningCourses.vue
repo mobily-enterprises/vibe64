@@ -2,17 +2,18 @@
 import { computed, ref, toValue, watch } from "vue";
 import { useRoute } from "vue-router";
 import TrainingLessonPicker from "@local/vibe64-training/client/lesson-picker";
+import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 
-// L's Courses surface: a confirmed start or Continue lesson opens the lesson reader.
+// The Courses surface. `learning` is the Courses adapter
+// (useVibe64LearningCourses); a confirmed start or Continue lesson opens the
+// lesson through the shared controller, which also asks once before a start
+// archives a different lesson in progress.
 const props = defineProps({
   learning: { type: Object, required: true }
 });
-const emit = defineEmits(["opened"]);
-async function opened(operation) {
-  const outcome = await request(operation);
-  if (outcome?.attemptId && outcome.current !== false) emit("opened", outcome);
-  return outcome;
-}
+const controller = useVibe64Learning();
+const opened = operation => request(async owner => controller.opened(await operation(owner)));
+const start = selection => request(owner => controller.startLesson(selection, owner.startLesson));
 const route = useRoute();
 const error = ref("");
 const errorLearner = ref("");
@@ -57,7 +58,7 @@ async function request(operation) {
     <v-alert v-if="error && errorVisible" type="error" variant="tonal" class="vibe64-learning-launcher__error">
       {{ error }}
     </v-alert>
-    <v-btn v-if="retry" class="vibe64-learning-launcher__retry" variant="tonal" rounded="pill" min-height="48" :disabled="busy || !canRequest" @click="opened(owner => owner.retryStart())">
+    <v-btn v-if="retry" class="vibe64-learning-launcher__retry" variant="tonal" rounded="pill" min-height="48" :disabled="busy || !canRequest" @click="start(toValue(learning.startRetry))">
       Retry lesson start
     </v-btn>
     <section v-if="trialEnabled && trialResource" class="vibe64-learning-launcher__trial" aria-label="Saved author trial" :aria-busy="toValue(trialResource.isLoading)">
@@ -101,9 +102,8 @@ async function request(operation) {
       :starting="starting"
       :start-unconfirmed="Boolean(retry)"
       @refresh="request(owner => owner.refresh())"
-      @start="opened(owner => owner.startLesson($event))"
+      @start="start"
       @resume="opened(owner => owner.resumeLesson($event.attemptId))"
-      @continue="opened(owner => owner.continueLesson($event))"
       @install="request(owner => owner.installCourse($event))"
     />
   </div>

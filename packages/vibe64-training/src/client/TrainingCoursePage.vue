@@ -4,8 +4,8 @@ import { courseStatusLabel, earlierCompletionLabel, offered, previewCourse, prev
 import TrainingCourseArt from "./TrainingCourseArt.vue";
 import TrainingProgressRing from "./TrainingProgressRing.vue";
 
-// Presentational course page. The parent picker owns every start/continue gate
-// and emits only the original start, resume and continue intents. Every mastery state,
+// Presentational course page. The parent picker owns every start/resume gate
+// and emits only the original start and resume intents. Every mastery state,
 // count and ring below is drawn from the supplied saved progress only.
 const props = defineProps({
   course: { type: Object, required: true },
@@ -15,7 +15,7 @@ const props = defineProps({
   canTryPreviews: Boolean,
   resumeAllowed: Boolean
 });
-const emit = defineEmits(["back", "start", "resume", "continue"]);
+const emit = defineEmits(["back", "start", "resume"]);
 
 const complete = computed(() => Boolean(props.progress.total && props.progress.completed === props.progress.total));
 const availability = computed(() => courseStatusLabel(props.course));
@@ -76,8 +76,7 @@ const path = computed(() => {
           <p class="training-course-page__next-label">Up next</p>
           <p class="training-course-page__next-title">{{ progress.next.title }} · {{ progress.next.code }}</p>
         </div>
-        <v-btn v-if="progress.continueFrom" color="primary" variant="flat" min-height="48" rounded="pill" :disabled="!startAllowed" @click="emit('continue', progress.continueFrom)">Continue lesson</v-btn>
-        <v-btn v-else color="primary" variant="flat" min-height="48" rounded="pill" :disabled="!startAllowed" @click="emit('start', progress.next)">{{ preview ? 'Try preview' : 'Start next lesson' }}</v-btn>
+        <v-btn color="primary" variant="flat" min-height="48" rounded="pill" :disabled="!startAllowed" @click="emit('start', progress.next)">{{ preview ? 'Try preview' : 'Start next lesson' }}</v-btn>
       </template>
       <div v-else-if="complete" class="training-course-page__next-text">
         <p class="training-course-page__next-label">All lessons done</p>
@@ -100,7 +99,7 @@ const path = computed(() => {
         <p v-if="!lessons.length" class="training-course-page__empty">This topic has no displayed lesson choices.</p>
         <ol class="training-course-page__path">
           <li
-            v-for="{ lesson, status, step, next, earlier, continueFrom } in lessons" :key="JSON.stringify([lesson.code, lesson.hash])"
+            v-for="{ lesson, status, current, step, next, earlier } in lessons" :key="JSON.stringify([lesson.code, lesson.hash])"
             class="training-course-page__lesson" :class="[`is-${status}`, { 'is-next': next && !progress.activeHere }]"
           >
             <span class="training-course-page__node" aria-hidden="true">
@@ -121,12 +120,7 @@ const path = computed(() => {
                 <details class="training-course-page__identity"><summary>Lesson identity</summary><code>{{ lesson.hash }}</code></details>
               </div>
               <v-btn
-                v-if="continueFrom && offered(course, lesson, canTryPreviews) && !progress.activeHere"
-                :variant="next ? 'tonal' : 'text'" color="primary" min-height="48" rounded="pill"
-                class="training-course-page__start" :disabled="!startAllowed" @click="emit('continue', continueFrom)"
-              >Continue lesson</v-btn>
-              <v-btn
-                v-else-if="offered(course, lesson, canTryPreviews) && !progress.activeHere"
+                v-if="offered(course, lesson, canTryPreviews) && !current"
                 :variant="next ? 'tonal' : 'text'" color="primary" min-height="48" rounded="pill"
                 class="training-course-page__start" :disabled="!startAllowed" @click="emit('start', lesson)"
               >{{ preview ? 'Try preview' : 'Start lesson' }}</v-btn>

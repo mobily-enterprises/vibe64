@@ -400,7 +400,7 @@ describe("Training courses", () => {
     expect(await renderCoursePage(undefined, { lessonProgress: learning.lessonProgress })).toContain("Completed");
   });
 
-  it("continues only the saved attempt of the same course and refuses a parallel start", async () => {
+  it("continues the lesson in progress, and still lets another lesson start (the server asks before archiving it)", async () => {
     const start = vi.fn();
     const resume = vi.fn();
     const state = mountPicker({ learningResult: pickerLearning(releasedAttempt()), onStart: start, onResume: resume });
@@ -408,11 +408,11 @@ describe("Training courses", () => {
     state.requestResume();
     expect(resume).toHaveBeenCalledExactlyOnceWith({ attemptId: savedId });
     state.startLesson(state.summaries[0].course, state.summaries[0].course.lessons[1]);
-    expect(start).not.toHaveBeenCalled();
+    expect(start).toHaveBeenCalledOnce();
     expect(await renderPicker({ catalogueResult: pickerCatalogue(), learningResult: pickerLearning(releasedAttempt()), canStart: true, canResume: true })).toContain(">Continue lesson<");
     const other = mountPicker({ learningResult: pickerLearning(pickerAttempt()) });
     expect(other.summaries[0].progress.activeHere).toBe(false);
-    expect(other.startPossible).toBe(false);
+    expect(other.startPossible).toBe(true);
   });
 
   it("opens one course page, returns to the list and refuses malformed saved progress", async () => {

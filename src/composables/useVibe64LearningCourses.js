@@ -4,14 +4,15 @@ import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
+import { VIBE64_LESSON_IN_PROGRESS_CODE } from "@/lib/vibe64Learning.js";
 
 const TRAINING_PATH = "/api/vibe64/training";
 
-// The Learning environment's (L) Courses adapter. It owns neither admission nor
-// progress: original Training actions reauthorize every captured attempt before
-// changing anything. `active` (a ref or getter) is L's open state; requests are
-// made only while L is open, and L stays above the app, so app navigation
-// behind it does not retire them.
+// The Courses overlay's adapter. It owns neither admission nor progress:
+// original Training actions reauthorize every captured attempt before changing
+// anything. `active` (a ref or getter) is the overlay's open state; requests
+// are made only while it is open, and it stays above the app, so app
+// navigation behind it does not retire them.
 export function useVibe64LearningCourses({ authorPreview = false, active } = {}) {
   const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
   const actorKey = computed(() => String(toValue(viewer)?.actorKey || ""));
@@ -88,7 +89,7 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
 
   function capture() {
     if (disposed || !actorKey.value || !open.value || !learnerId.value) {
-      throw new Error("Open Learning and read your saved lessons before making a lesson request.");
+      throw new Error("Open Courses and read your saved lessons before making a lesson request.");
     }
     return Object.freeze({ actor: actorKey.value, learnerId: learnerId.value, generation });
   }
@@ -122,14 +123,18 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
       ended: Boolean(admitted.ended), current: current(scope) };
   }
 
+  // archiveCurrent: the learner confirmed archiving a different lesson in
+  // progress, which refused the first start (VIBE64_TRAINING_LESSON_IN_PROGRESS).
   async function startLesson(selection) {
     if (busy.value) return null;
     const scope = capture();
     const input = Object.freeze({ courseId: selection.courseId, release: selection.release,
-      lessonCode: selection.lessonCode, expectedRevision: selection.expectedRevision });
+      lessonCode: selection.lessonCode, expectedRevision: selection.expectedRevision,
+      ...(selection.archiveCurrent === true ? { archiveCurrent: true } : {}) });
     let request = pendingStart.value;
     if (request?.actor === scope.actor) {
-      const same = Object.keys(input).every(key => input[key] === request.input[key]);
+      const same = Object.keys(input).every(key => input[key] === request.input[key]) &&
+        Object.keys(request.input).length === Object.keys(input).length;
       if (!same) throw new Error("A previous start was not confirmed. Retry that same lesson request first.");
     } else {
       request = Object.freeze({ actor: scope.actor, input, requestId: globalThis.crypto.randomUUID() });
@@ -142,12 +147,11 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
         { ...request.input, requestId: request.requestId }, scope);
       if (pendingStart.value === request) pendingStart.value = null;
       return { ...outcome, requestId: request.requestId };
+    } catch (cause) {
+      // A definite refusal (another lesson in progress) leaves nothing to retry.
+      if (cause?.code === VIBE64_LESSON_IN_PROGRESS_CODE && pendingStart.value === request) pendingStart.value = null;
+      throw cause;
     } finally { busy.value = false; starting.value = false; }
-  }
-
-  function retryStart() {
-    if (!startRetry.value) throw new Error("There is no unconfirmed lesson start for this account.");
-    return startLesson(startRetry.value);
   }
 
   async function resumeLesson(attemptId) {
@@ -157,25 +161,6 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
     try {
       return await prepare(`${TRAINING_PATH}/attempts/${encodeURIComponent(attemptId)}/resume`, {}, scope, { attemptId });
     } finally { busy.value = false; }
-  }
-
-  // Continue lesson: a new attempt of a left lesson (lesson.continue), in the
-  // same practice project when it still exists. A retry of the same ended
-  // attempt reuses its continuation request ID (at most 18 characters).
-  const continueIds = new Map();
-  async function continueLesson({ attemptId, expectedRevision } = {}) {
-    if (busy.value) return null;
-    const scope = capture();
-    const requestId = continueIds.get(attemptId) || globalThis.crypto.randomUUID().replaceAll("-", "").slice(0, 18);
-    continueIds.set(attemptId, requestId);
-    busy.value = true;
-    starting.value = true;
-    try {
-      const outcome = await prepare(`${TRAINING_PATH}/attempts/${encodeURIComponent(attemptId)}/continue`,
-        { requestId, expectedRevision }, scope);
-      continueIds.delete(attemptId);
-      return outcome;
-    } finally { busy.value = false; starting.value = false; }
   }
 
   // Owner-only custom course through the original catalogue action; it admits
@@ -238,5 +223,5 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
 
   return Object.freeze({ active: open,
     coursesResource, learningResource, availableResource, installState, installCourse, learnerId, busy, starting, startRetry,
-    refresh, startLesson, retryStart, resumeLesson, continueLesson, createCourse, authorPreviewEnabled, authorPreviewResource, savedAuthorPreview, resumeAuthorPreview });
+    refresh, startLesson, resumeLesson, createCourse, authorPreviewEnabled, authorPreviewResource, savedAuthorPreview, resumeAuthorPreview });
 }

@@ -1,24 +1,25 @@
 <script setup>
 import { computed, inject, nextTick, onBeforeUnmount, ref, toValue, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { mdiClose } from "@mdi/js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import TrainingGuideOverlay from "@local/vibe64-training/client/guide-overlay";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { projectSlugFromRoute } from "@/lib/vibe64ProjectScope.js";
-import { isPracticeProjectSlug } from "@/lib/vibe64PracticeProjectName.js";
-import { VIBE64_LEARNING_MODE_NOTE, VIBE64_LEARNING_PAGE_PATH, learningModeRedirect } from "@/lib/vibe64Learning.js";
+import { modeRedirect } from "@/lib/vibe64Learning.js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { useVibe64LearningCourses } from "@/composables/useVibe64LearningCourses.js";
+import Vibe64LearningAttempts from "./Vibe64LearningAttempts.vue";
 import Vibe64LearningCourses from "./Vibe64LearningCourses.vue";
 import Vibe64LearningFinished from "./Vibe64LearningFinished.vue";
-import Vibe64LearningPractice from "./Vibe64LearningPractice.vue";
 import Vibe64LearningReader from "./Vibe64LearningReader.vue";
 import Vibe64LearningTeacherNotes from "./Vibe64LearningTeacherNotes.vue";
 
-// The Learning environment (L), mounted once per host for the signed-in
-// viewer: public App.vue and hosted AuthGate's authenticated content. It also
-// mounts the one global teacher guide overlay of that host.
+// The Courses overlay (Learn mode's Courses button), mounted once per host for
+// the signed-in viewer: public App.vue and hosted AuthGate's authenticated
+// content. It also keeps each address in its mode, colours the app bar in
+// Learn mode, and mounts the one global teacher guide overlay of that host.
 const props = defineProps({
   // Owner-only author trial of draft lessons (hosted owner).
   authorPreview: { type: [Boolean, Object], default: false }
@@ -29,47 +30,26 @@ const actorKey = computed(() => String(toValue(viewer)?.actorKey || ""));
 watch(actorKey, value => learning?.setViewer(value), { immediate: true });
 onBeforeUnmount(() => learning?.setViewer(""));
 
-// While learning mode is on (server-backed: a lesson in progress, not left or
-// finished), every app bar of this host stays Learning yellow, with L open
-// or hidden (vibe64-m3.css styles body.vibe64-in-lesson).
-const IN_LESSON_CLASS = "vibe64-in-lesson";
-watch(() => Boolean(learning?.inLesson), value => globalThis.document?.body?.classList.toggle(IN_LESSON_CLASS, value),
+// In Learn mode every app bar of this host is Learning yellow
+// (vibe64-m3.css styles body.vibe64-learn-mode).
+const LEARN_MODE_CLASS = "vibe64-learn-mode";
+watch(() => Boolean(learning?.learnMode), value => globalThis.document?.body?.classList.toggle(LEARN_MODE_CLASS, value),
   { immediate: true });
-onBeforeUnmount(() => globalThis.document?.body?.classList.remove(IN_LESSON_CLASS));
+onBeforeUnmount(() => globalThis.document?.body?.classList.remove(LEARN_MODE_CLASS));
 
-// Learning mode keeps the learner in the learning space: any other project URL
-// goes to the lesson's practice project (or the Learning page without one),
-// with a short note. The server refuses those projects' requests anyway. A
-// lesson the learner just started or opened is where they asked to go, so that
-// move has no note.
+// Each address stays in its mode: Learn shows only the current lesson's
+// practice project (or no project selected); Develop never shows it. An
+// address the learner opened gets a short note; a move after a mode or
+// lesson change does not.
 const route = useRoute();
 const router = useRouter();
-watch(() => [learning?.learningMode, route?.fullPath], (_value, previous) => {
+watch(() => [learning?.mode, route?.fullPath], (_value, previous) => {
   if (!route || !router || !learning) return;
-  const target = learningModeRedirect({ mode: learning.learningMode, slug: projectSlugFromRoute(route) });
+  const target = modeRedirect({ mode: learning.mode, slug: projectSlugFromRoute(route), path: route.path });
   if (!target || target.path === route.path) return;
-  if (previous?.[0]?.on !== false) learning.showNotice(VIBE64_LEARNING_MODE_NOTE);
+  if (target.note && previous && previous[0] === learning.mode) learning.showNotice(target.note);
   void router.replace(target.path);
 }, { immediate: true });
-
-const leaving = computed(() => learning?.state.modeBusy === "leave");
-// When the lesson ends (left or finished, here or elsewhere) the projects come
-// back: the lesson's place (its practice project, or the Learning page for a
-// lesson without one) returns to /app. While L is open (the Lesson finished
-// screen) that waits until L is hidden, so the choices stay over the lesson.
-const atLessonPlace = () => isPracticeProjectSlug(projectSlugFromRoute(route)) || route?.path === VIBE64_LEARNING_PAGE_PATH;
-const returnPending = ref(false);
-watch(() => Boolean(learning?.inLesson), (value, previous) => {
-  returnPending.value = Boolean(previous && !value && router && atLessonPlace());
-});
-watch(() => returnPending.value && !learning?.state.open, ready => {
-  if (!ready) return;
-  returnPending.value = false;
-  if (!learning.inLesson && atLessonPlace()) void router.replace("/app");
-}, { flush: "post" });
-async function leaveLesson() {
-  if (await learning.leaveLesson()) learning.minimise();
-}
 function noticeShown(value) {
   if (!value) learning.clearNotice();
 }
@@ -79,7 +59,7 @@ const open = computed(() => Boolean(learning?.state.open));
 const built = ref(false);
 watch(open, value => { if (value) built.value = true; }, { immediate: true });
 watch(actorKey, () => { built.value = open.value; });
-// Keyboard focus moves into L when it opens (Escape then hides it, like L).
+// Keyboard focus moves into the overlay when it opens (Escape then hides it).
 const layer = ref(null);
 watch(open, async value => {
   if (!value) return;
@@ -89,12 +69,14 @@ watch(open, async value => {
 });
 
 const courses = useVibe64LearningCourses({ authorPreview: computed(() => toValue(props.authorPreview) === true), active: open });
-const learningRevision = computed(() => {
-  const value = courses.learningResource.data.value;
-  return value?.ok === true && Number.isSafeInteger(value.revision) ? value.revision : null;
-});
 const surface = computed(() => learning?.state.surface || "courses");
 const lessonTitle = computed(() => learning?.lesson.value?.title || learning?.lesson.value?.code || "Lesson");
+const tabs = computed(() => [
+  { id: "courses", label: "Courses" },
+  { id: "progress", label: "In progress" },
+  { id: "archived", label: "Archived" },
+  ...(learning?.state.attemptId ? [{ id: "lesson", label: lessonTitle.value }] : [])
+]);
 
 useRealtimeEvent({
   event: VIBE64_TRAINING_LEARNER_CHANGED_EVENT,
@@ -106,18 +88,16 @@ useRealtimeEvent({
   }
 });
 
-function lessonOpened(outcome) {
-  void learning.show({ surface: "lesson", attemptId: outcome.attemptId });
-  // Starting or continuing a lesson turns learning mode on.
-  void learning.readLearningMode();
-}
-function selectSurface(value) {
-  void learning.show({ surface: value });
+// One confirmation before a start archives a different lesson in progress.
+const confirm = computed(() => learning?.confirmArchive || null);
+async function archiveAndStart() {
+  try { await learning.confirmArchiveAndStart(); }
+  catch (cause) { learning.showNotice(String(cause?.message || "The lesson did not start. Try again from Courses.")); }
 }
 function keydown(event) {
-  if (event.key === "Escape" && !event.defaultPrevented) {
+  if (event.key === "Escape" && !event.defaultPrevented && !confirm.value) {
     event.stopPropagation();
-    learning.minimise("learner");
+    learning.closeCourses();
   }
 }
 </script>
@@ -130,66 +110,64 @@ function keydown(event) {
     class="vibe64-learning"
     role="dialog"
     aria-modal="true"
-    aria-label="Learning"
+    aria-label="Courses"
     data-pane-swipe-ignore
     tabindex="-1"
     ref="layer"
     @keydown="keydown"
   >
     <header class="vibe64-learning__bar">
-      <!-- L covers the app bar, so its own L (same plate, same place) hides it. -->
-      <button
-        type="button" class="vibe64-learning__mark" aria-label="Hide Learning" title="Hide Learning (your place is kept)"
-        data-test="learning-hide" @click="learning.toggle()"
-      >
-        <span class="vibe64-learning__plate" aria-hidden="true">L</span>
-      </button>
-      <nav class="vibe64-learning__tabs" aria-label="Learning">
+      <nav class="vibe64-learning__tabs" aria-label="Courses">
         <button
-          type="button" class="vibe64-learning__tab vibe64-learning__tab--courses" :aria-current="surface === 'courses' ? 'page' : undefined"
-          data-test="learning-courses-tab" @click="selectSurface('courses')"
+          v-for="tab in tabs" :key="tab.id" type="button" class="vibe64-learning__tab"
+          :class="{ 'vibe64-learning__tab--lesson': tab.id === 'lesson' }"
+          :aria-current="surface === tab.id ? 'page' : undefined" :data-test="`learning-${tab.id}-tab`"
+          @click="learning.show({ surface: tab.id })"
         >
-          Courses
-        </button>
-        <button
-          type="button" class="vibe64-learning__tab vibe64-learning__tab--practice" :aria-current="surface === 'practice' ? 'page' : undefined"
-          data-test="learning-practice-tab" @click="selectSurface('practice')"
-        >
-          Practice
-        </button>
-        <button
-          v-if="learning.state.attemptId" type="button" class="vibe64-learning__tab"
-          :aria-current="surface === 'lesson' ? 'page' : undefined" data-test="learning-lesson-tab"
-          @click="selectSurface('lesson')"
-        >
-          {{ lessonTitle }}
+          {{ tab.label }}
         </button>
       </nav>
-      <button
-        v-if="learning.inLesson" type="button" class="vibe64-learning__leave" :disabled="leaving"
-        title="End this lesson (results and practice project kept) and get back to your projects" data-test="learning-header-leave"
-        @click="leaveLesson"
-      >
-        Leave lesson
-      </button>
+      <v-btn
+        :icon="mdiClose" variant="text" min-width="48" min-height="48" aria-label="Close Courses"
+        title="Close Courses (your place is kept)" data-test="learning-hide" @click="learning.closeCourses()"
+      />
     </header>
     <div class="vibe64-learning__content">
-      <div v-if="surface === 'courses'" class="vibe64-learning__courses">
-        <Vibe64LearningCourses :learning="courses" @opened="lessonOpened" />
+      <div v-if="surface === 'courses'" class="vibe64-learning__scroll">
+        <Vibe64LearningCourses :learning="courses" />
         <!-- The learner's own teacher notes (C7), below the courses. -->
         <Vibe64LearningTeacherNotes :learning="learning" />
       </div>
-      <!-- The learner's practice projects in the learning space. -->
-      <div v-else-if="surface === 'practice'" class="vibe64-learning__courses">
-        <Vibe64LearningPractice :learning="learning" :learning-revision="learningRevision" />
+      <div v-else-if="surface === 'progress' || surface === 'archived'" class="vibe64-learning__scroll">
+        <Vibe64LearningAttempts :learning="learning" :archived="surface === 'archived'" />
       </div>
-      <!-- A completed lesson's "Lesson finished" screen (it ends the attempt). -->
-      <div v-else-if="learning.state.finished && learning.lesson.value" class="vibe64-learning__courses">
-        <Vibe64LearningFinished :learning="learning" :courses="courses" :learning-revision="learningRevision" @ended="courses.learningResource.reload()" />
+      <!-- A completed lesson's "Lesson finished" screen (it finishes the attempt). -->
+      <div v-else-if="learning.state.finished && learning.lesson.value" class="vibe64-learning__scroll">
+        <Vibe64LearningFinished :learning="learning" :courses="courses" />
       </div>
       <Vibe64LearningReader v-else :learning="learning" />
     </div>
   </div>
+  <v-dialog
+    v-if="learning && actorKey"
+    :model-value="Boolean(confirm)"
+    max-width="28rem"
+    @update:model-value="value => value || learning.cancelArchive()"
+  >
+    <v-card v-if="confirm" rounded="xl" data-test="learning-archive-confirm">
+      <v-card-title class="text-wrap">Archive your lesson in progress?</v-card-title>
+      <v-card-text>
+        You can have one lesson in progress. Starting this one archives
+        <strong>{{ confirm.current.lessonTitle || "the lesson in progress" }}</strong>
+        with its practice project and conversation; it stays under Archived.
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer />
+        <v-btn variant="text" min-height="48" data-test="learning-archive-cancel" @click="learning.cancelArchive()">Keep it</v-btn>
+        <v-btn color="primary" variant="flat" min-height="48" data-test="learning-archive-start" @click="archiveAndStart">Archive and start</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
   <v-snackbar
     v-if="learning && actorKey"
     :model-value="Boolean(learning.notice)"
@@ -199,19 +177,11 @@ function keydown(event) {
     @update:model-value="noticeShown"
   >
     {{ learning.notice }}
-    <template #actions>
-      <v-btn
-        v-if="learning.inLesson" variant="text" :loading="leaving" data-test="learning-notice-leave"
-        @click="leaveLesson"
-      >
-        Leave lesson
-      </v-btn>
-    </template>
   </v-snackbar>
 </template>
 
 <style scoped>
-/* Stacking: guide overlay 3000 > L 2400 > Colleague drawer and launcher. */
+/* Stacking: guide overlay 3000 > Courses 2400 > Colleague drawer and launcher. */
 .vibe64-learning {
   background: rgb(var(--v-theme-background));
   color: rgb(var(--v-theme-on-background));
@@ -229,44 +199,7 @@ function keydown(event) {
   flex: 0 0 auto;
   gap: var(--v64-space-2, 8px);
   min-height: 56px;
-  padding: env(safe-area-inset-top, 0px) var(--v64-space-3, 12px) 0;
-}
-/* The open app-bar L plate, in the same place: L is one button that opens and
-   hides Learning. A 48px target around the plate, which stays where the app
-   bar's plate is. */
-.vibe64-learning__mark {
-  --v64-plate-size: 28px;
-  align-items: center;
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  display: inline-flex;
-  flex: 0 0 auto;
-  height: 48px;
-  justify-content: center;
-  margin-inline: calc((var(--v64-plate-size) - 48px) / 2);
-  padding: 0;
-  width: 48px;
-}
-.vibe64-learning__plate {
-  align-items: center;
-  background: linear-gradient(150deg, #ffe680 0%, var(--v64-learning, #f5c518) 55%, #f0b400 100%);
-  border: 1.5px solid #1d1600;
-  border-radius: var(--v64-shape-sm, 8px);
-  box-shadow: 0 0 0 3px var(--v64-learning-glow, rgba(245, 197, 24, 0.35));
-  color: #1d1600;
-  display: inline-flex;
-  font: 850 1.05rem/1 system-ui, sans-serif;
-  height: var(--v64-plate-size);
-  justify-content: center;
-  transition: transform var(--v64-duration-short, 100ms) var(--v64-ease-standard, ease);
-  width: var(--v64-plate-size);
-}
-.vibe64-learning__mark:active .vibe64-learning__plate { transform: scale(0.94); }
-.vibe64-learning__mark:focus-visible { outline: none; }
-.vibe64-learning__mark:focus-visible .vibe64-learning__plate {
-  outline: var(--v64-focus-ring-width, 2px) solid var(--v64-focus-ring-color, rgb(var(--v-theme-primary)));
-  outline-offset: 3px;
+  padding: env(safe-area-inset-top, 0px) var(--v64-space-2, 8px) 0 var(--v64-space-3, 12px);
 }
 .vibe64-learning__tabs { display: flex; flex: 1 1 auto; gap: 4px; min-width: 0; overflow-x: auto; }
 .vibe64-learning__tab {
@@ -275,42 +208,24 @@ function keydown(event) {
   border-radius: 999px;
   color: inherit;
   cursor: pointer;
-  font: var(--v64-type-label-lg, 500 0.875rem/1.25rem system-ui, sans-serif);
-  max-width: 22rem;
-  min-height: 40px;
-  overflow: hidden;
-  padding: 0 var(--v64-space-4, 16px);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* "Courses" and "Practice" never shrink; a long lesson title takes the remaining width. */
-.vibe64-learning__tab--courses, .vibe64-learning__tab--practice { flex: 0 0 auto; }
-.vibe64-learning__tab[aria-current="page"] { background: var(--v64-learning-container, rgba(245, 197, 24, 0.24)); color: var(--v64-on-learning-container, inherit); font-weight: 700; }
-.vibe64-learning__tab:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
-.vibe64-learning__leave {
-  background: transparent;
-  border: 1px solid var(--v64-learning-strong, #b88a00);
-  border-radius: 999px;
-  color: inherit;
-  cursor: pointer;
   flex: 0 0 auto;
   font: var(--v64-type-label-lg, 500 0.875rem/1.25rem system-ui, sans-serif);
   min-height: 40px;
   padding: 0 var(--v64-space-4, 16px);
   white-space: nowrap;
 }
-.vibe64-learning__leave:disabled { cursor: progress; opacity: 0.6; }
-.vibe64-learning__leave:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
+/* A long lesson title takes the remaining width. */
+.vibe64-learning__tab--lesson { flex: 0 1 auto; max-width: 22rem; overflow: hidden; text-overflow: ellipsis; }
+.vibe64-learning__tab[aria-current="page"] { background: var(--v64-learning-container, rgba(245, 197, 24, 0.24)); color: var(--v64-on-learning-container, inherit); font-weight: 700; }
+.vibe64-learning__tab:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
 .vibe64-learning:focus { outline: none; }
 .vibe64-learning__content { flex: 1 1 auto; min-height: 0; overflow: hidden; padding-bottom: env(safe-area-inset-bottom, 0px); }
-.vibe64-learning__courses { height: 100%; overflow-y: auto; }
+.vibe64-learning__scroll { height: 100%; overflow-y: auto; }
 
-/* Phone: a full-screen sheet; the plate matches the phone app-bar L (40px). */
+/* Phone: a full-screen sheet. */
 @media (max-width: 600px) {
-  .vibe64-learning { border-radius: 0; }
-  .vibe64-learning__bar { gap: 4px; padding-inline: var(--v64-space-2, 8px); }
-  .vibe64-learning__mark { --v64-plate-size: 2.5rem; }
-  .vibe64-learning__tab { max-width: 9rem; padding: 0 var(--v64-space-3, 12px); }
-  .vibe64-learning__leave { padding: 0 var(--v64-space-3, 12px); }
+  .vibe64-learning__bar { gap: 4px; padding-inline: var(--v64-space-2, 8px) 0; }
+  .vibe64-learning__tab { padding: 0 var(--v64-space-3, 12px); }
+  .vibe64-learning__tab--lesson { max-width: 9rem; }
 }
 </style>
