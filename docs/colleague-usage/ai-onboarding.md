@@ -44,7 +44,8 @@ the step (1 of 3).
 ## Screen 2: choose your AI
 
 **Pick the AI behind Vibe64** ranks the providers by how good Vibe64 feels
-(**Our honest advice: Claude.**). Every card shows three facts with a
+(**Our honest advice: Claude.**). The cards are stacked in one column, Claude
+first with a wide gold crown on its tile. Every card shows three facts with a
 five-segment meter (low ratings in a warning tone; hover a meter for its
 rating), then the plan: its official name and price first, our budget advice
 beneath:
@@ -63,7 +64,7 @@ beneath:
 4. **GLM** (Z.ai): a budget subscription. **GLM Coding Plan, from $18/month**;
    budget about $30/month for daily coding. It works, but there is no point in
    getting it if you can get Claude for the same price. Below the plan the card
-   shows **Free option: GLM-4.7 with a free Z.AI account**: Z.AI's regular API
+   shows **Free option: GLM-4.7 Flash with a free Z.AI account**: Z.AI's regular API
    serves GLM-4.7 Flash free of charge (no plan or credit). It is good for
    trying Vibe64; expect slower, simpler work than the paid plans.
 
@@ -185,9 +186,10 @@ save runs, closing and **Back** wait for it to finish.
 
 ## Desktop and phone
 
-On a desktop Claude spans the top of the choice screen with the others in a row
-below, their plans and buttons lined up. On a phone everything is one column:
-Claude is expanded, the other cards are compact rows you tap to expand, the top
+On a desktop the choice screen is one column: Claude's card on top, its plan and
+buttons beside its facts, then Codex, DeepSeek and GLM as full-width rows (facts,
+plan, buttons), with the GLM free option across the bottom of its row. On a phone
+everything is one column too: Claude is expanded, the other cards are compact rows you tap to expand, the top
 bar holds only the back arrow or wordmark, the step dots and close, and
 **Choose my AI**, **Set up later** and the "change it any time" note sit in a
 bar at the bottom of the first screen. Motion (the crown's glint, the card

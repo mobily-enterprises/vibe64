@@ -68,7 +68,7 @@ const AI_ONBOARDING_PROVIDERS = Object.freeze([
     connect: { engineId: "codex", modelProviderId: "zai-coding-plan", access: "personal" },
     matches: { native: [], curated: ["zai-coding-plan"], opencode: ["zai-coding-plan"] },
     free: Object.freeze({
-      id: "glm-free", name: "GLM-4.7 Flash", label: "Free option: GLM-4.7 with a free Z.AI account",
+      id: "glm-free", name: "GLM-4.7 Flash", label: "Free option: GLM-4.7 Flash with a free Z.AI account",
       detail: "GLM-4.7 Flash is free on Z.AI's regular API. Good for trying Vibe64; expect slower, simpler work.",
       plan: { name: "Free Z.AI account", price: "Free", budget: "No plan or credit needed.", more: "" },
       signUp: { label: "Open z.ai API keys", url: "https://z.ai/manage-apikey/apikey-list",

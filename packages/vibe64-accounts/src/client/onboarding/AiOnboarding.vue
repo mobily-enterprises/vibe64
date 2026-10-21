@@ -361,7 +361,6 @@ function expanded(card) {
 
           <section v-else-if="screen === 'choose'" key="choose" class="ai-onboarding__choose">
             <header class="ai-onboarding__intro">
-              <p class="ai-onboarding__eyebrow">{{ wasSetUp ? "YOUR AI" : "CHOOSE YOUR AI" }}</p>
               <h1 id="ai-onboarding-title" tabindex="-1" class="ai-onboarding__headline">{{ wasSetUp ? "Your AI setup" : "Pick the AI behind Vibe64" }}</h1>
               <p class="ai-onboarding__lede">
                 {{ wasSetUp ? "Keep what you have, switch your main AI, or add another. Nothing is removed."
@@ -693,7 +692,7 @@ function expanded(card) {
   --aio-crown-ink: #2b2100;
   --aio-crown-strong: #8a6a00;
   --aio-type-body-sm: 400 0.8125rem/1.125rem var(--v64-font-family);
-  --aio-stage-top: clamp(48px, 10vh, 120px);
+  --aio-stage-top: clamp(24px, 6vh, 72px);
   --v64-on-success-container: color-mix(in srgb, var(--v64-success) 55%, #000);
   background:
     radial-gradient(1100px 640px at 85% -10%, var(--v64-primary-container), transparent 75%),
@@ -769,7 +768,7 @@ function expanded(card) {
   padding: 0 var(--v64-space-5) var(--v64-space-7);
 }
 .ai-onboarding__main > section { margin-inline: auto; max-width: 1040px; padding-top: var(--aio-stage-top); width: 100%; }
-.ai-onboarding__main > .ai-onboarding__choose { padding-top: var(--v64-space-6); }
+.ai-onboarding__main > .ai-onboarding__choose { padding-top: var(--v64-space-3); }
 .ai-onboarding--phone .ai-onboarding__main { padding: 0 var(--v64-space-4) var(--v64-space-6); }
 .ai-onboarding--phone .ai-onboarding__main > section { padding-top: var(--v64-space-4); }
 .ai-onboarding__eyebrow {
@@ -795,6 +794,11 @@ function expanded(card) {
 }
 .ai-onboarding__footnote { color: var(--v64-on-surface-variant); font: var(--v64-type-body-md); margin: var(--v64-space-6) 0 0; }
 .ai-onboarding__intro { margin-bottom: var(--v64-space-6); }
+/* Choose: a compact header, so the cards start near the top. */
+.ai-onboarding__choose .ai-onboarding__intro { margin-bottom: var(--v64-space-5); }
+.ai-onboarding__choose .ai-onboarding__headline { font: var(--v64-type-headline-md); margin-bottom: var(--v64-space-1); }
+.ai-onboarding__choose .ai-onboarding__lede { margin: 0; }
+.ai-onboarding__choose .ai-onboarding__footnote { margin-top: var(--v64-space-4); }
 .ai-onboarding__actions { align-items: center; display: flex; flex-wrap: wrap; gap: var(--v64-space-3); }
 .aio-back { margin: 0 0 var(--v64-space-4) calc(var(--v64-space-4) * -1); }
 
@@ -848,7 +852,7 @@ function expanded(card) {
   box-shadow: 0 28px 56px -26px color-mix(in srgb, var(--aio-crown-strong) 75%, transparent), var(--v64-elevation-2);
   height: 104px;
   left: -2%;
-  padding: 0 var(--v64-space-5);
+  padding: 0 var(--v64-space-5) 0 var(--v64-space-6);
   top: calc(var(--aio-hero-start) - 24px);
   transform: rotate(-2deg) translateY(-4px);
   width: 104%;
@@ -882,25 +886,21 @@ function expanded(card) {
 .aio-current__value { font: var(--v64-type-title-md); }
 .aio-current__hint { align-items: center; color: var(--v64-primary); display: inline-flex; font: var(--v64-type-label-lg); gap: var(--v64-space-1); }
 
-/* Provider cards: Claude spans the row; the other three share rows (head, facts, note, offer). */
-.ai-onboarding__cards {
-  display: grid;
-  gap: var(--v64-space-5) var(--v64-space-4);
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
+/* Provider cards: one column, Claude first. On desktop each card is one row:
+   Claude's offer sits beside its facts; the others run head, facts, plan, actions. */
+.ai-onboarding__cards { display: grid; gap: var(--v64-space-4); }
 .aio-card {
   animation: aio-rise var(--v64-duration-medium) var(--v64-ease-emphasized-decelerate) both;
   animation-delay: calc(var(--aio-index) * 40ms);
   background: var(--v64-surface-container-low);
   border: 1px solid var(--v64-outline-variant);
   border-radius: var(--v64-shape-lg);
-  display: grid;
-  grid-row: span 4;
-  grid-template-rows: subgrid;
+  display: flex;
+  flex-direction: column;
+  gap: var(--v64-space-3);
   min-width: 0;
-  padding: var(--v64-space-5);
+  padding: var(--v64-space-4) var(--v64-space-5);
   position: relative;
-  row-gap: var(--v64-space-4);
   transition: border-color var(--v64-duration-short) var(--v64-ease-standard), box-shadow var(--v64-duration-short) var(--v64-ease-standard);
 }
 @media (hover: hover) {
@@ -910,14 +910,7 @@ function expanded(card) {
   background: linear-gradient(160deg, color-mix(in srgb, var(--aio-crown) 10%, var(--v64-surface)), var(--v64-surface) 55%);
   border-radius: var(--v64-shape-xl);
   box-shadow: 0 24px 48px -30px color-mix(in srgb, var(--aio-crown-strong) 60%, transparent), var(--v64-elevation-1);
-  column-gap: var(--v64-space-7);
-  grid-column: 1 / -1;
-  grid-row: auto;
-  grid-template-areas: "head offer" "facts offer" "note offer";
-  grid-template-columns: minmax(0, 1fr) minmax(0, 26rem);
-  grid-template-rows: auto auto 1fr;
-  margin-top: var(--v64-space-2);
-  padding: var(--v64-space-6);
+  padding: var(--v64-space-5) var(--v64-space-6) var(--v64-space-4);
 }
 @media (hover: hover) {
   .ai-onboarding--pointer .aio-card--featured:hover { box-shadow: 0 28px 56px -30px color-mix(in srgb, var(--aio-crown-strong) 70%, transparent), var(--v64-elevation-2); }
@@ -926,12 +919,33 @@ function expanded(card) {
   background: linear-gradient(160deg, color-mix(in srgb, var(--aio-crown) 14%, var(--v64-surface)), var(--v64-surface) 60%);
   border-color: color-mix(in srgb, var(--aio-crown) 35%, var(--v64-outline-variant));
 }
-.aio-card--featured .aio-card__head { grid-area: head; }
-.aio-card--featured .aio-card__facts { grid-area: facts; padding-left: calc(64px + var(--v64-space-4)); }
-.aio-card--featured .aio-card__note-row { grid-area: note; }
-.aio-card--featured .aio-card__offer { align-self: center; grid-area: offer; }
-.aio-card--connected { border: 2px solid var(--v64-success); }
-/* Badges straddle the top border, so they never compete with the name for width. */
+@media (min-width: 960px) {
+  .aio-card { column-gap: var(--v64-space-5); display: grid; row-gap: var(--v64-space-2); }
+  .aio-card__head { align-self: start; grid-area: head; }
+  .aio-card__facts { grid-area: facts; }
+  .aio-card__note-row { grid-area: note; }
+  .aio-card--featured {
+    column-gap: var(--v64-space-7);
+    grid-template-areas: "head offer" "facts offer" "note offer";
+    grid-template-columns: minmax(0, 1fr) minmax(0, 25rem);
+    grid-template-rows: auto auto 1fr;
+    row-gap: var(--v64-space-3);
+  }
+  .aio-card--featured .aio-card__facts { padding-left: calc(64px + var(--v64-space-6)); }
+  .aio-card--featured .aio-card__offer { align-self: center; grid-area: offer; }
+  .aio-card--featured .aio-card__ctas { align-items: center; grid-template-columns: auto auto; justify-content: start; }
+  .aio-card--featured .aio-card__ctas .v-btn:first-child { min-width: 12rem; }
+  .aio-card:not(.aio-card--featured) {
+    grid-template-areas: "head facts plan ctas" "head note plan ctas" "free free free free";
+    grid-template-columns: minmax(0, 15rem) minmax(0, 1fr) minmax(0, 12rem) minmax(0, 12rem);
+    grid-template-rows: auto 1fr auto;
+  }
+  .aio-card:not(.aio-card--featured) .aio-card__offer { display: contents; }
+  .aio-card:not(.aio-card--featured) .aio-plan { background: none; grid-area: plan; padding: 0; }
+  .aio-card:not(.aio-card--featured) .aio-plan__more { border: 0; margin: 0; padding: 0; }
+  .aio-card:not(.aio-card--featured) .aio-card__ctas { align-content: start; grid-area: ctas; }
+  .aio-card:not(.aio-card--featured) .aio-card__free { grid-area: free; margin-top: var(--v64-space-1); }
+}
 .aio-card__ribbon,
 .aio-card__connected {
   align-items: center;
@@ -959,7 +973,7 @@ function expanded(card) {
   text-align: left;
   width: 100%;
 }
-.aio-card--featured .aio-card__head { gap: var(--v64-space-4); padding-top: var(--v64-space-2); }
+.aio-card--featured .aio-card__head { gap: var(--v64-space-4); padding: var(--v64-space-4) 0 0 var(--v64-space-2); }
 .aio-card__rank {
   align-items: center;
   background: var(--v64-surface-container-highest);
@@ -978,19 +992,19 @@ function expanded(card) {
 .aio-card__tagline { color: var(--v64-on-surface-variant); font: var(--v64-type-body-md); }
 .aio-card__chevron { transition: transform var(--v64-duration-short) var(--v64-ease-standard); }
 .aio-card__head[aria-expanded="true"] .aio-card__chevron { transform: rotate(180deg); }
-.aio-card__facts { align-content: start; display: grid; gap: var(--v64-space-4); }
-.aio-card__bullets { display: grid; gap: var(--v64-space-3); list-style: none; margin: 0; padding: 0; }
+.aio-card__facts { align-content: start; display: grid; gap: var(--v64-space-3); }
+.aio-card__bullets { display: grid; gap: var(--v64-space-2); list-style: none; margin: 0; padding: 0; }
 .aio-card__bullets li { align-items: center; display: flex; font: var(--v64-type-body-md); gap: var(--v64-space-3); }
 .aio-card--featured .aio-card__bullets li { font: var(--v64-type-body-lg); }
-.aio-card__why { font: var(--v64-type-body-lg); margin: 0; max-width: 28rem; }
+.aio-card__why { font: var(--v64-type-body-lg); margin: 0; }
 .aio-card__free { align-items: center; border-top: 1px solid var(--v64-outline-variant); display: flex; flex-wrap: wrap;
   gap: var(--v64-space-2); margin-top: var(--v64-space-3); padding-top: var(--v64-space-3); }
 .aio-card__free-label { display: grid; flex: 1 1 16rem; font: var(--v64-type-body-md); gap: 2px; margin: 0; }
 .aio-card__free-label span { color: var(--v64-on-surface-variant); }
 .aio-card__note { color: var(--v64-on-surface-variant); display: flex; font: var(--v64-type-body-md); gap: var(--v64-space-2); margin: 0; }
 .aio-card__note .v-icon { flex: none; margin-top: 1px; }
-.aio-card__offer { display: grid; gap: var(--v64-space-3); grid-template-rows: 1fr auto; }
-.aio-card__offer > :only-child { grid-row: 2; }
+.aio-card__offer { display: grid; gap: var(--v64-space-3); }
+.aio-card__note-row:empty { display: none; }
 
 /* The plan: official name and price first, the budget advice beneath. */
 .aio-plan {
@@ -1001,7 +1015,7 @@ function expanded(card) {
   gap: 2px;
   padding: var(--v64-space-3) var(--v64-space-4);
 }
-.aio-card--featured .aio-plan { border-left: 3px solid var(--aio-crown); padding: var(--v64-space-4) var(--v64-space-5); }
+.aio-card--featured .aio-plan { border-left: 3px solid var(--aio-crown); padding: var(--v64-space-3) var(--v64-space-5); }
 .aio-plan__name { font: var(--v64-type-label-lg); }
 .aio-plan__price { font: var(--v64-type-title-lg); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .aio-card--featured .aio-plan__price { font: 600 2rem/2.5rem var(--v64-font-family); letter-spacing: -0.02em; }
@@ -1014,7 +1028,7 @@ function expanded(card) {
 /* Connect and routing: one centred column. */
 .ai-onboarding__main > .ai-onboarding__connect,
 .ai-onboarding__main > .ai-onboarding__routing { max-width: 560px; }
-.aio-chosen { align-items: center; animation: aio-lift var(--v64-duration-long) var(--v64-ease-emphasized-decelerate) both; display: flex; gap: var(--v64-space-4); margin-bottom: var(--v64-space-6); }
+.aio-chosen { align-items: center; margin-top: var(--v64-space-6); padding-inline-start: var(--v64-space-5); animation: aio-lift var(--v64-duration-long) var(--v64-ease-emphasized-decelerate) both; display: flex; gap: var(--v64-space-4); margin-bottom: var(--v64-space-6); }
 .aio-chosen__text { flex: 1; min-width: 0; }
 .aio-chosen__title { font: var(--v64-type-headline-md); letter-spacing: -0.015em; margin: 0; outline: none; }
 .aio-chosen__plan { color: var(--v64-on-surface-variant); font: var(--v64-type-body-lg); margin: 2px 0 0; }
@@ -1211,10 +1225,6 @@ function expanded(card) {
   .ai-onboarding__main > .ai-onboarding__why { grid-template-columns: minmax(0, 1fr); }
   .ai-onboarding__why-copy { grid-row: 2; }
   .aio-hero { --aio-hero-start: 40px; --aio-hero-step: 56px; grid-column: 1; height: 290px; margin-bottom: var(--v64-space-5); }
-  .ai-onboarding__cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ai-onboarding__cards .aio-card:last-child { grid-column: 1 / -1; }
-  .aio-card--featured { grid-template-areas: "head" "facts" "note" "offer"; grid-template-columns: minmax(0, 1fr); padding: var(--v64-space-5); }
-  .aio-card--featured .aio-card__facts { padding-left: 0; }
 }
 
 /* Phone */
@@ -1235,11 +1245,8 @@ function expanded(card) {
   .ai-onboarding__differences li { font: var(--v64-type-body-md); }
   .ai-onboarding__difference-icon { height: 32px; width: 32px; }
   .ai-onboarding__difference-icon .v-icon { --v-icon-size-multiplier: 0.8; }
-  .ai-onboarding__cards { gap: var(--v64-space-4); grid-template-columns: minmax(0, 1fr); }
-  .aio-card { display: flex; flex-direction: column; gap: var(--v64-space-4); padding: var(--v64-space-4); }
-  .aio-card--featured { display: flex; padding: var(--v64-space-4); }
+  .aio-card, .aio-card--featured { padding: var(--v64-space-4); }
   .aio-card--collapsed { gap: 0; justify-content: center; min-height: 72px; }
-  .aio-card__note-row:empty { display: none; }
   .aio-card__head[type="button"] { cursor: pointer; min-height: 48px; }
   .aio-card__ribbon { right: var(--v64-space-4); }
   .aio-card__connected { left: var(--v64-space-4); }

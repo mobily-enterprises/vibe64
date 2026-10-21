@@ -112,7 +112,7 @@ describe("provider data", () => {
     expect(deepseek.haveTitle).toBe("Already have credit");
     // The one free option: GLM with a free Z.AI account, connected through OpenCode.
     expect(AI_ONBOARDING_PROVIDERS.filter(({ free }) => free).map(({ id }) => id)).toEqual(["glm"]);
-    expect(glm.free).toMatchObject({ label: "Free option: GLM-4.7 with a free Z.AI account",
+    expect(glm.free).toMatchObject({ label: "Free option: GLM-4.7 Flash with a free Z.AI account",
       connect: { engineId: "opencode", modelProviderId: "zai", access: "workspace" }, matches: { opencode: ["zai"] } });
   });
 });

@@ -1108,7 +1108,7 @@ maintain a separate provider setup implementation.
 AI onboarding makes connecting a frontier model the first thing a new person
 does. It is one shared full-screen flow, used unchanged by the local and hosted
 editors: a short "why intelligence matters" screen, then Claude (crowned,
-recommended), Codex, DeepSeek and GLM, ranked with honest bullets, each
+recommended), Codex, DeepSeek and GLM, stacked in one ranked column with honest bullets, each
 plan's official name and price first and the suggested budget beneath, with
 the GLM card marking the free option (GLM-4.7 Flash with a free Z.AI account), then
 the existing AI Accounts setup for the chosen provider and, when an existing

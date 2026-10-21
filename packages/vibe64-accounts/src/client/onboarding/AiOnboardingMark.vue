@@ -1,15 +1,16 @@
 <script setup>
-import { mdiCrown } from "@mdi/js";
-
-// A provider's monogram tile, one shape per provider; Claude's is gold, with a
-// tilted crown above it that scales with the tile and glints once.
+// A provider's monogram tile, one shape per provider; Claude's is gold, wearing
+// a wide, low crown that scales with the tile and glints once.
 defineProps({
   provider: { type: Object, required: true },
   size: { type: Number, default: 48 },
   // Plays the crown's settle and glint once, after this delay in milliseconds.
   settleDelay: { type: Number, default: -1 }
 });
-const CROWN_MASK = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="${mdiCrown}"/></svg>`)}")`;
+// Five points on a band, with a jewel on the outer and centre points.
+const CROWN = "M10 22 4 9 26 16 48 4 70 16 92 9 86 22ZM10 23.5h76V27H10Z" +
+  "M1 8a3 3 0 1 0 6 0a3 3 0 1 0-6 0M44.7 3.5a3.3 3.3 0 1 0 6.6 0a3.3 3.3 0 1 0-6.6 0M89 8a3 3 0 1 0 6 0a3 3 0 1 0-6 0";
+const CROWN_MASK = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 28"><path d="${CROWN}"/></svg>`)}")`;
 </script>
 
 <template>
@@ -60,18 +61,19 @@ const CROWN_MASK = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="ht
 .v-theme--dark .aio-mark--tertiary { --aio-tone-bg: color-mix(in srgb, #efb8c8 20%, var(--v64-surface)); --aio-tone-fg: #efb8c8; }
 .aio-mark--neutral { --aio-tone-bg: var(--v64-surface-container-highest); --aio-tone-fg: var(--v64-on-surface); }
 
-/* The crown sits above the tile's corner, tilted, sized with the tile. */
+/* The crown sits on the tile's top edge: much wider than the tile, under half as tall. */
 .aio-mark__crown {
   filter: drop-shadow(0 1px 1px rgb(120 80 0 / 45%));
-  height: calc(var(--aio-s) * 0.42);
-  left: calc(var(--aio-s) * -0.1);
+  height: calc(var(--aio-s) * 0.51);
+  left: calc(var(--aio-s) * -0.375);
   position: absolute;
-  top: calc(var(--aio-s) * -0.28);
-  transform: rotate(-12deg);
-  width: calc(var(--aio-s) * 0.42);
+  top: calc(var(--aio-s) * -0.44);
+  width: calc(var(--aio-s) * 1.75);
 }
 .aio-mark__crown i {
-  background: linear-gradient(105deg, #d89a00 0 38%, #fff3b8 48%, #f5c518 56%, #d89a00 70% 100%) 100% 0 / 320% 100%;
+  background:
+    linear-gradient(105deg, transparent 38%, rgb(255 248 210 / 90%) 48%, transparent 58%) 100% 0 / 320% 100%,
+    linear-gradient(180deg, #ffe48a, #f2bd1d 50%, #c48a00);
   display: block;
   height: 100%;
   -webkit-mask: var(--aio-crown-mask) center / contain no-repeat;
@@ -81,10 +83,10 @@ const CROWN_MASK = `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="ht
 .aio-mark__crown--settle { animation: aio-crown-settle var(--v64-duration-long) var(--v64-ease-emphasized-decelerate) var(--aio-settle-delay) both; }
 .aio-mark__crown--settle i { animation: aio-crown-glint 1100ms var(--v64-ease-standard) calc(var(--aio-settle-delay) + 350ms) both; }
 @keyframes aio-crown-settle {
-  from { opacity: 0; transform: translateY(-40%) rotate(-24deg) scale(0.6); }
-  60% { opacity: 1; transform: translateY(4%) rotate(-10deg) scale(1.06); }
+  from { opacity: 0; transform: translateY(-60%) scale(0.7); }
+  60% { opacity: 1; transform: translateY(6%) scale(1.04); }
 }
-@keyframes aio-crown-glint { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@keyframes aio-crown-glint { from { background-position: 100% 0, 0 0; } to { background-position: 0 0, 0 0; } }
 @media (prefers-reduced-motion: reduce) {
   .aio-mark__crown--settle, .aio-mark__crown--settle i { animation: none; }
 }
