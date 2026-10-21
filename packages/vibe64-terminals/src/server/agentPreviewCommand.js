@@ -852,7 +852,9 @@ function createAgentPreviewCommandService({
         try {
           const value = JSON.parse(String(stdin || ""));
           identities = Array.isArray(value) ? value : value?.identities;
-        } catch {}
+        } catch {
+          // Invalid JSON is reported with the usage error below.
+        }
         if (!Array.isArray(identities)) {
           return responseError("Provide the complete ordered identity list as a JSON array on stdin.", "vibe64_agent_preview_identities_input_invalid", { exitCode: 64 });
         }
