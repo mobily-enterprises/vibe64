@@ -4,7 +4,7 @@ Vibe64 validates local topic repositories and produces reproducible lesson bundl
 This authoring facility does not execute exercises or teach a learner. Server-only
 facilities install exact verified snapshots from admitted owner-selected local
 sources and check pinned reads. Private server-only state retains one exact lesson
-active reservation per learner, with bounded immutable ended-attempt history. An internal installed catalogue validates approved whole
+lesson in progress per learner, its Learn mode flag, completed lessons and bounded immutable ended-attempt history. An internal installed catalogue validates approved whole
 course locks and toggles enablement without changing their pinned release identity.
 An official catalogue installer lets any signed-in person browse the configured
 GitHub catalogue and install or update an exact hash-pinned course release through
@@ -33,6 +33,7 @@ infrastructure or prove a delivered lesson.
 - `packages/vibe64-training/src/server/installedContent.js`
 - `packages/vibe64-training/src/server/contentInstaller.js`
 - `packages/vibe64-training/src/server/learnerState.js`
+- `packages/vibe64-training/src/server/practiceHistoryReader.js`
 - `packages/vibe64-training/src/server/learnerNotesActions.js`
 - `src/components/learning/Vibe64LearningTeacherNotes.vue`
 - `packages/vibe64-training/src/server/preparation.js`
@@ -57,6 +58,8 @@ infrastructure or prove a delivered lesson.
 - `tests/server/vibe64TrainingCourseInstaller.unit.test.js`
 - `tests/client/trainingCourseCatalogue.vitest.js`
 - `tests/server/vibe64TrainingLearnerState.unit.test.js`
+- `tests/server/vibe64TrainingPracticeHistoryReader.unit.test.js`
+- `tests/server/vibe64TrainingStepProgress.unit.test.js`
 - `tests/server/vibe64TrainingLearnerNotes.unit.test.js`
 - `tests/server/vibe64TrainingPreparation.unit.test.js`
 - `tests/server/studioProjectContext.unit.test.js`
@@ -155,11 +158,9 @@ exercise-relative `path` and verified Buffer `bytes`. It reuses the same file re
 without scanning for new inputs. Manifest records contain no file modes, so this
 read promises no mode preservation. A missing exercise retains its original error
 message with the typed `VIBE64_TRAINING_EXERCISE_MISSING` refusal.
-An admitted `readPracticeProjectScope` (keyed on the practice project; the
-in-progress attempt there, otherwise its latest retained attempt, with the
-version 2 marker) or `readExerciseProjectScope` (frozen for the published
-20261008 practice-history upgrade: one attempt's own project, version 1 marker)
-uses this existing read once, including
+The frozen `readExerciseProjectScope` of `practiceHistoryReader.js` (for the
+published 20261008 practice-history upgrade: one attempt's own project, version 1
+marker) uses this existing read once, including
 its topic/lesson validation, and checks the returned exact pin/code/hash. Each
 new scope still reads saved learner state and validates installed content; no
 result or authorization is cached. An inactive write/create or unavailable
@@ -267,18 +268,20 @@ paths. It verifies the exact installed published topic/lesson pin and uses the
 existing identity key convention without a local fallback. Private state outside
 projects owns one active attempt, revision, stable request receipts and server
 UUID. An attempt for a lesson that declares an exercise also owns its practice
-project slug and preparation, initially `reserved`; any other attempt names no
-practice project, and continuing a practice project or beginning preparation for
-it refuses (`VIBE64_TRAINING_EXERCISE_MISSING`). Validation against the installed
-lesson enforces both ways; the reserved slug that vibe64 0.1.35 saved for every
-lesson stays readable for the published practice-history upgrade.
+project slug `training-<attemptId hex>` and preparation, initially `reserved`;
+any other attempt names no practice project, and beginning preparation for it
+refuses (`VIBE64_TRAINING_EXERCISE_MISSING`). Validation against the installed
+lesson enforces both ways.
 Project/session effects and assessment evidence remain separate future operation
 responsibilities.
 
 `progress.json` is authoritative and is saved before its derived
 `active-lesson.json`. Duplicate request IDs are resolved before stale revision
 checks and cannot change their full pin. New IDs reuse the same active pin rather
-than creating another exercise; conflicting pins require explicit recovery. The
+than creating another exercise. One lesson is in progress at a time: another pin
+is refused (409 `VIBE64_TRAINING_LESSON_IN_PROGRESS`, details
+`{attemptId,lessonCode,lessonTitle}`) before the revision check, and the
+lifecycle owner archives the current attempt first. The
 existing Kernel persistent file lock serializes cooperating user-state writers.
 Read-only projection never creates or repairs records. Explicit reserve/resume
 reconciles only missing or semantically identical stale valid summaries; corrupt
@@ -412,42 +415,36 @@ provisioning, hosted native execution or browser acceptance.
 ## Retired format-1 learning records
 
 Lesson format 1 (assessments and a teaching document) is retired. Its write
-paths (`saveLessonResume`, `recordAssessment`, question admission) are deleted;
-the content CLI's `validate` and `publish-manifest` refuse a v1 lesson, while
-`bundle` and the installed reader still verify one so installed history stays
-readable. Saved `learning` fields of earlier attempts keep their schema-version-1
-read validation: receipts, rubrics, practical producers and resume facts are
-checked against the exact installed pin on content-aware reads, and
-`readState({actor,includeCompletion:true})` still derives v1 completion from
-passed required assessments of the identical lesson code/hash. Reads never
-convert or repair these records. Reservation still accepts an installed v1 pin
-because the published upgrades and author-preview tooling reach it; nothing can
-record new v1 learning.
+paths are deleted; the content CLI's `validate` and `publish-manifest` refuse a
+v1 lesson, while `bundle` and the installed reader still verify one so
+installed history stays readable. Reservation refuses an installed v1 pin
+(`VIBE64_TRAINING_LESSON_VERSION`). Version 1 progress (vibe64 0.1.35 to Rev 3,
+with `practiceId`, `learning` fields and `left`/`discard`/`restart` ends) is read
+only by `practiceHistoryReader.js`, moved unchanged from the earlier learner
+state for the published `20261008-learning-practice-history` upgrade, which
+runs before the 20261022 reset. Its tests write that format by hand.
 
-## Step results, practice identity and learning mode
+## Step results, code ledgers and Learn mode
 
-`step-progress.json` (schema version 2) keeps step results per lesson content
-`{code,hash}` rather than per attempt (`lessonStepEntry`), so they survive
-leaving, continuing and pruning. Completion of a v2 lesson means every required
-step has passed for that lesson content. Code authorship ledgers belong to the
-practice project: `code-ledgers/<practiceId>.json` under one shared
-`code-ledger.lock`. Saves are ledgered only while that practice project's attempt
-is in progress (`saveLearnerFile({actor,practiceId,input,save})`); otherwise they
-are the editor's plain save. `forgetPracticeLedger` removes a ledger when the
-learning-space owner deletes or archives the practice project; pruning removes
-one only with the last attempt of a practice project the host reports gone. Every
-attempt of one lesson content shares its 64 step results; the record keeps at
-most 128 lesson contents, and past that bound a write drops the oldest results of
-lesson content no retained attempt pins.
+`step-progress.json` (schema version 3) keeps the step results of the attempt in
+progress, `{learnerId,revision,attemptId,lesson,results,receipts}`, at most 64.
+A new attempt starts fresh; a record naming another attempt is replaced on the
+next write. Completion of a lesson means every required step has passed in that
+attempt (`readState` `completion`), and `finished` adds `{code,hash,completedAt}`
+to `progress.completedLessons` (at most 256), which pruning never touches;
+`lessonCompletions` reports those lessons as completed and the open lesson with
+its real counts. Code authorship ledgers belong to the attempt:
+`code-ledgers/<attemptId>.json` under one shared `code-ledger.lock`. Saves are
+ledgered only while that attempt is in progress in its practice project
+(`saveLearnerFile({actor,attemptId,input,save})`); otherwise they are the
+editor's plain save. Ending an attempt removes its step results and ledger.
 
-An attempt may record `practiceId` (stored only when it differs from its own ID)
-when Continue reuses an existing practice project. Its project slug is
-`training-<practiceId ?? attemptId hex>` and its initial session is
-`training-<practiceId ?? attemptId>` or `training-<attemptId>`. Reservation with
-a `practiceId` refuses another lesson pin for that practice or another practice
-in progress. `readLearningMode` derives learning mode from
-`progress.activeAttemptId` alone: there is no separate learning-mode record or
-pause.
+Learn mode is the separate `learning-mode.json` `{schemaVersion:1,learnerId,on}`
+(absent means off), written by `setLearningMode({actor,on})`, which never ends
+or changes the lesson. `readLearningMode` returns
+`{on,currentAttemptId,lessonCode,lessonTitle,practiceSlug}` with the attempt in
+progress as the current one. `activeAttemptForProject({actor,attemptId})`
+resolves a practice project's attempt while it is in progress.
 
 ## Learner teacher notes
 
@@ -472,8 +469,8 @@ additive and needs no numbered upgrade (`docs/state-upgrades.md`).
 ## Explicit attempt retirement and history
 
 The internal `endAttempt({actor,attemptId,requestId,expectedRevision,reason})`
-accepts `reason: "left" | "finished" | "discard"` (saved `restart` ends stay
-readable). It returns
+accepts `reason: "finished" | "archived" | "deleted"`; `finished` is refused
+(`VIBE64_TRAINING_LESSON_INCOMPLETE`) unless the attempt is complete. It returns
 `{revision,attempt,active,replayed}` and adds immutable
 `ended:{requestId,revision,reason}` to that exact retained attempt. This records a
 learning retirement decision, not a Stop, archive, deletion or disposal receipt.
@@ -488,31 +485,17 @@ They return the retained attempt and actual current active summary, never reacti
 an ended attempt or end its successor. Preparation and resume remain
 active-only. A host must not provision an ended reservation replay. A new start
 is separately admitted against the enabled course, uses a new request ID and
-allocates a new UUID; it reuses a practice project slug only when continuing
-that project with its `practiceId`.
+allocates a new UUID and practice project slug.
 Every existing write updates only the matching attempt rather than replacing history.
 
 At most 32 attempts are retained, in reservation order. Ended revisions and
 request identities are validated, and only the final unended attempt can be
-active. A new reservation at the cap removes the oldest ended attempt no
-practice project still needs (no exercise, an own attempt still reserved,
-superseded by a later attempt in the same practice project, or a practice
-project missing from the host's `livePracticeIds`) and its reader position; the
-latest attempt of a live practice project is never pruned, and with none to
-prune the reservation is refused (`VIBE64_TRAINING_ATTEMPTS_FULL`). Step results
-stay with their lesson content and ledgers with their practice project. Saved
-`restart` ends stay readable because the published 20261008 practice-history
-upgrade reads vibe64 0.1.35 progress before the 20261022 reset. The serialized progress record stays limited to 64 KiB
-and an end that would exceed it is refused. For a v1 lesson, completion unions
-passed assessment IDs for the identical lesson code/hash across validated topic
-and course pins for that learner. Topic-only changes do not invalidate an unchanged
-lesson. Different lesson content keeps historical evidence but contributes no pass
-to the current lesson. This read projection never rewrites pins or copies receipts
-into a new attempt; existing exact installed-pin validation remains authoritative.
-Saved history keeps historical passes with their original attempt/submission IDs
-and native provenance, separately from current submissions. `learning.read`
-includes ended history; `lesson.end` uses the supplied original host retirement
-owner, stops no agent work and does not dispose of the exercise (see `teaching.md`).
+active. A new reservation drops the oldest ended attempts (and the reader
+position of a dropped attempt) until the record fits 32 attempts and 128 KiB;
+it is never refused for space. Completion lives in `completedLessons`, so
+pruning loses none. This read projection never rewrites pins or copies results
+into a new attempt; existing exact installed-pin validation remains
+authoritative.
 
 With no active attempt, `active-lesson.json` stores the strict versioned object
 `{schemaVersion:1,learnerId,progressRevision,attemptId:null}`. The API still returns
@@ -522,11 +505,9 @@ name an actual retained end revision. Reads never reconcile summaries; only an
 explicit locked operation does. Saved-end versus unconfirmed-progress errors
 remain distinct, and neither asserts project disposal.
 
-Existing single-reservation schema-1 records remain valid unchanged. Before
-activation, apply the appended `20261007-training-attempt-history` no-op boundary
-with all writers stopped. It changes only the original compatibility ledger,
-requires no historical repair or application-data backup, and starts no lifecycle
-action. Normal reads/startup add no absent end fields or history.
+The live store reads only schema-2 progress; the 20261022 reset writes it.
+The published `20261007-training-attempt-history` no-op boundary changes only
+the original compatibility ledger.
 
 ## Local operator CLI provisioning
 

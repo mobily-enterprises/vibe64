@@ -172,7 +172,7 @@ test("a real check response cannot verify a restarted App or an ended attempt", 
   await assert.rejects(f.owner(async command => {
     const result = await runVibe64Command(command);
     await f.learners.endAttempt({ actor: f.input.actor, attemptId: f.input.attemptId,
-      expectedRevision: 3, requestId: "end", reason: "discard" }); return result;
+      expectedRevision: 3, requestId: "end", reason: "archived" }); return result;
   }).runOrientationCheck(f.input), { code: "VIBE64_TRAINING_CHECK_ATTEMPT_STALE" });
   assert.deepEqual(await readdir(f.paths.artifactsRoot), []);
 });
@@ -233,8 +233,6 @@ test("a step's declared response check runs through the bounded gateway only for
   assert.deepEqual(await readdir(f.paths.artifactsRoot), []);
 });
 
-test("a v1 lesson refuses a step-scoped check", async t => {
-  const f = await fixture(t, { lessonVersion: 1 });
-  await assert.rejects(f.owner().runOrientationCheck(f.input), { code: "VIBE64_TRAINING_CHECK_UNDECLARED" });
-  assert.equal(f.calls.length, 0);
+test("a v1 lesson never reaches a step-scoped check: it cannot be started", async t => {
+  await assert.rejects(fixture(t, { lessonVersion: 1 }), { code: "VIBE64_TRAINING_LESSON_VERSION" });
 });

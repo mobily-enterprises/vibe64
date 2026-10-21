@@ -5,14 +5,14 @@ import { practiceIdFromSlug } from "@local/vibe64-core/server/learningSpace";
 // their code in the ordinary Files editor through the project-scoped
 // vibe64.source-editor.file.save. This owner, installed on the source editor,
 // records that save in the learner's code-authorship ledger, which the
-// authorship owner does only while a lesson attempt of that practice project
-// is in progress (learners.activeAttemptForPractice). Every other save
-// (another project, another person, no attempt in progress there) is the
-// editor's plain save.
+// authorship owner does only while the attempt that owns the practice project
+// (training-<attemptId>) is in progress (learners.activeAttemptForProject).
+// Every other save (another project, another person, no attempt in progress
+// there) is the editor's plain save.
 //
 // A host with several learner stores (for example normal and author-preview)
-// passes `selectOwners({ actor, practiceId })`, which returns the store's
-// { authorship } holding that practice project's attempt, or null.
+// passes `selectOwners({ actor, attemptId })`, which returns the store's
+// { authorship } holding that attempt, or null.
 function validOwners(owners) {
   if (typeof owners?.authorship?.saveLearnerFile !== "function") {
     throw new TypeError("Lesson code saves require the original authorship owner.");
@@ -27,12 +27,13 @@ function createTrainingCodeSaveOwner({ authorship, selectOwners } = {}) {
   return async function saveCodeFile({ input, save } = {}) {
     if (typeof save !== "function") throw new TypeError("A learner code save requires the original editor save.");
     const context = currentProjectRequestContext();
-    const practiceId = practiceIdFromSlug(context?.slug);
+    // The practice project's slug names its attempt (marker field practiceId).
+    const attemptId = practiceIdFromSlug(context?.slug);
     const actor = context?.vibe64User;
-    if (!practiceId || !actor) return save();
-    const selected = await select({ actor, practiceId });
+    if (!attemptId || !actor) return save();
+    const selected = await select({ actor, attemptId });
     if (!selected) return save();
-    return validOwners(selected).authorship.saveLearnerFile({ actor, practiceId, input, save });
+    return validOwners(selected).authorship.saveLearnerFile({ actor, attemptId, input, save });
   };
 }
 

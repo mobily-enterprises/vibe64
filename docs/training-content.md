@@ -191,9 +191,8 @@ records the SHA-256 of each declared file in the live practice project as that
 step's starting point. Each save from the practice project's **Dashboard →
 Files** editor while a lesson is in progress in that project is recorded
 server-side with its base hash, intended hash and saved hash. The ledger belongs
-to the practice project (`training/users/<user-key>/code-ledgers/<practiceId>.json`),
-so code written before **Leave lesson** still counts after **Continue lesson** in
-the same project. Removing the practice project removes its ledger. At **Check now** the chain from the starting point through those
+to the attempt (`training/users/<user-key>/code-ledgers/<attemptId>.json`), so
+code from an earlier attempt never counts, and ending the attempt removes it. At **Check now** the chain from the starting point through those
 saves must reach the current bytes exactly; otherwise the check is not run and
 reports "needs an independent attempt: other edits detected in `<file>`". There
 is no technical write-deny for agents: an agent edit in a declared file voids
@@ -551,53 +550,52 @@ topic metadata. Resume uses the stored pin, without selecting a newer release.
 
 The actor's nonempty `uid ?? username` uses the existing base64url key convention,
 without a local fallback. State lives outside projects under
-`training/users/<user-key>/`: `progress.json` is the schema-version-1 authority for
-revision and one active reservation; `active-lesson.json` is its derived summary.
+`training/users/<user-key>/`: `progress.json` (schema version 2) is the authority
+for revision, the one attempt in progress (`activeAttemptId`), the completed
+lessons and the retained attempts; `active-lesson.json` is its derived summary.
 The reservation contains a server UUID, exact pin, creation time, retry IDs,
-server-derived project slug and `reserved` phase. No project/session readiness,
+server-derived project slug `training-<attemptId hex>` (only for a lesson that
+declares an exercise) and `reserved` phase. No project/session readiness,
 assessment outcome or grading evidence is fabricated. New directories use 0700,
-records 0600. Files are bounded to 64 KiB and an attempt retains at most 64
-distinct reservation request IDs; it never silently drops retry history. A
-learner keeps at most 32 attempts: a new reservation at that cap removes the
-oldest ended attempt that no practice project still needs (with its reader
-position): one whose lesson has no exercise, an own attempt still `reserved`,
-one a later attempt in the same practice project supersedes (including the
-attempt being continued), or one whose practice project the host's optional
-`livePracticeIds` leaves out. The latest attempt of every practice project still
-in the learning space is kept; when no attempt qualifies the reservation is
-refused with `VIBE64_TRAINING_ATTEMPTS_FULL` and writes nothing. A pruned
-attempt's code ledger is forgotten only when the host reports its practice
-project gone and no retained attempt names it. Step results are never pruned
-with attempts.
+records 0600. Files are bounded to 128 KiB and an attempt retains at most 64
+distinct reservation request IDs; it never silently drops retry history.
 
-An attempt is in progress exactly while `progress.activeAttemptId` names it.
-`readLearningMode({actor,includeTitle?})` derives `{on:false}` or
-`{on:true,attemptId,lessonCode,practiceSlug,projectSlugs,lessonTitle?}` from that
-attempt alone; `practiceSlug` is empty until preparation begins. `endAttempt`
-takes reason `left`, `finished` or `discard`; saved `restart` ends stay readable.
+One lesson is in progress at a time. Reserving the same pin again returns the
+attempt in progress (adding the request ID); a different pin is refused with
+409 `VIBE64_TRAINING_LESSON_IN_PROGRESS` and `details:{attemptId,lessonCode,lessonTitle}`
+before any revision check, so the caller can archive it first. A lesson in the
+retired format 1 is refused (`VIBE64_TRAINING_LESSON_VERSION`). A learner keeps
+at most 32 attempts: a new reservation drops the oldest ended attempts (with
+their reader position) until the count and byte bounds fit, and is never
+refused for space. `completedLessons` (at most 256 `{code,hash,completedAt}`)
+records every finished lesson content and is never pruned, so the course list
+keeps a lesson completed after its attempts are gone.
 
-`reserveAttempt` accepts an optional `practiceId` to continue an existing
-practice project: the new attempt stores it (only when it differs from its own
-ID), its `projectSlug` is `training-<practiceId hex>`, and
-`beginPreparation({...,initialSessionId?})` may name the existing
-`training-<practiceId>` session instead of `training-<attemptId>`. A practice
-project belongs to one lesson pin, and another in-progress practice refuses.
-`activeAttemptForPractice({actor,practiceId})` returns the in-progress attempt
-of that practice project, or null.
-`readPracticeProjectScope({actor,practiceId,access})` returns the practice
-project's saved exercise identity (the version 2 `training` marker
-`{schemaVersion:2,learnerKey,practiceId,pin,exercise}`, project slug, initial
-session and `active`) from the in-progress attempt working in it, otherwise its
-latest retained attempt; `write` and `create` require that attempt to be in
-progress. `readExerciseProjectScope({actor,attemptId,access})` is frozen for the
-published `20261008-learning-practice-history` upgrade: one attempt's own
-project with the version 1 marker, refusing a continued attempt.
+`endAttempt` takes reason `finished` (refused with
+`VIBE64_TRAINING_LESSON_INCOMPLETE` unless every required step has passed; adds
+the lesson to `completedLessons`), `archived` or `deleted`. After the end is
+saved it removes that attempt's step results and code ledger. The archive or
+deletion of its project and conversation is the lifecycle owner's job.
+`activeAttemptForProject({actor,attemptId})` returns the attempt in progress
+when it owns that practice project, or null.
 
-Step results (`step-progress.json`, schema version 2) are stored per lesson
-content `{code,hash}`, not per attempt, and survive pruning. Every attempt of
-the same lesson content shares that content's 64 results. The record keeps at
-most 128 lesson contents (and 1 MiB); past either bound a write drops the
-oldest-written results of lesson content no retained attempt pins.
+Learn mode is a separate per-learner flag, `learning-mode.json`
+`{schemaVersion:1,learnerId,on}` (absent means off). `setLearningMode({actor,on})`
+saves it and never ends or changes the lesson in progress.
+`readLearningMode({actor,includeTitle?})` returns
+`{on,currentAttemptId,lessonCode,lessonTitle,practiceSlug}`: the current attempt
+is the one in progress, `lessonTitle` is filled only with `includeTitle`, and
+`practiceSlug` is empty until preparation begins.
+
+Step results (`step-progress.json`, schema version 3) belong to the attempt in
+progress: `{learnerId,revision,attemptId,lesson,results,receipts}`, at most 64
+results. A new attempt starts with none. `readStepProgress({actor,attemptId?})`
+and `readAttemptRecord({actor,attemptId})` read them.
+
+The published `20261008-learning-practice-history` upgrade reads vibe64 0.1.35
+version 1 progress through the frozen `practiceHistoryReader.js`
+(`readState`, `readExerciseProjectScope`), moved unchanged from the earlier
+learner state; the live store no longer reads that format.
 
 The same internal store adds `beginPreparation({actor,attemptId,expectedRevision})`,
 `recordPreparationReady({actor,attemptId,initialSessionId,expectedRevision})` and
