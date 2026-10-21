@@ -210,6 +210,29 @@ describe("useVibe64Learning controller", () => {
     expect(again.learning.state.modeBusy).toBe("");
   });
 
+  it("opens Courses on its lesson picker when L switches to Learn with no lesson in progress", async () => {
+    const route = { fullPath: "/app/project/my-shop" };
+    const router = { currentRoute: { value: route }, push: vi.fn(async path => { route.fullPath = path; }) };
+    let current = "";
+    let on = false;
+    const { learning } = controller({ router, mode: (_url, method, body) => {
+      if (method === "POST") on = body.on;
+      return { ...LEARN, on, currentAttemptId: current, practiceSlug: "" };
+    } });
+    learning.setViewer("member");
+    await flush();
+    await learning.toggleMode();
+    await flush();
+    expect([learning.learnMode, learning.state.open, learning.state.surface]).toEqual([true, true, "courses"]);
+    learning.minimise();
+    await learning.toggleMode();
+    // Lesson 0 has no practice project but is a lesson: L only switches.
+    current = ATTEMPT;
+    await learning.toggleMode();
+    await flush();
+    expect([learning.learnMode, learning.state.open]).toEqual([true, false]);
+  });
+
   it("keeps each address in its mode", () => {
     const { modeRedirect, VIBE64_LEARNING_PAGE_PATH, VIBE64_LEARNING_MODE_NOTE, VIBE64_DEVELOP_MODE_NOTE } = LearningLib;
     const learn = { ...LEARN, practiceSlug: "training-abc" };

@@ -62,10 +62,17 @@ name is hidden.
 
 `/app/learning` is Learn mode's page with no project selected: the usual
 project page with the chat column, the **Preview** and **Dashboard** switches
-(on a phone, the single switch button) and **Account settings**. The chat
-column and each pane say **No project selected**; the Dashboard still lists its
-sections, without opening them, and there is no **+** for sessions. It is used
-for a lesson without a practice project and when no lesson is in progress.
+(on a phone, the single switch button) and **Account settings**. The Dashboard
+still lists its sections, without opening them, and there is no **+** for
+sessions. It is used in two cases:
+
+- **No lesson in progress.** Pressing **L** to switch to Learn opens Courses on
+  its **Courses** tab, so you can pick a lesson straight away. If you close it,
+  the chat column (what a phone shows first), Preview and the Dashboard each
+  say **No lesson in progress** with a **Choose a lesson** button that opens
+  Courses again.
+- **A lesson without a practice project** (such as Lesson 0). The chat column
+  and each pane say **No project selected**, and **L** only switches mode.
 
 A local Vibe64 has no Projects page. Its `/` and `/app` addresses open Develop's
 place, the project Vibe64 was started in, or in Learn mode Learn's place (the

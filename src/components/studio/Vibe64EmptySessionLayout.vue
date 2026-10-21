@@ -1,6 +1,6 @@
 <script setup>
 // The session area with no session open: the chat column (its header, a
-// hint, the empty composer rows) and the project pane (Preview's message or
+// hint with optional actions, the empty composer rows) and the project pane (Preview's message or
 // the Dashboard). The session panel fills it with its session controls; Learn
 // without a practice project fills it with "No project selected".
 defineProps({
@@ -44,6 +44,7 @@ defineProps({
           role="status"
         >
           {{ hint }}
+          <slot name="hint" />
         </div>
       </div>
       <div

@@ -342,6 +342,8 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
       if (!value.on) minimise();
       const target = modePlace(value);
       if (router && target !== path) await router.push(target);
+      // Learn with no lesson in progress starts at the lesson picker.
+      if (value.on && !value.currentAttemptId) void openCourses("courses");
       return value;
     } catch (cause) {
       if (expected === viewer) state.error = String(cause?.message || "The switch was not confirmed. Press L again.");
