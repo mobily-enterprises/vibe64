@@ -6,6 +6,7 @@ import NativeProviderConnections from "./NativeProviderConnections.vue";
 import ModelRoutingForm from "./ModelRoutingForm.vue";
 import { useModelRouting } from "../composables/useModelRouting.js";
 import ProviderAccountsSetup from "./ProviderAccountsSetup.vue";
+import CliInstallNotice, { cliProblem } from "./CliInstallNotice.vue";
 import { useCodexProviderConnections } from "../composables/useCodexProviderConnections.js";
 import { useVibe64Accounts } from "../composables/useVibe64Accounts.js";
 import {
@@ -180,13 +181,31 @@ const nativeChoices = computed(() => [
   ]
 })).filter((engine) => engine.providers.length));
 const nativeAvailableProviders = computed(() => nativeChoices.value.find((engine) => engine.id === nativeSetupProviderId.value)?.providers || []);
+// A missing or broken CLI keeps the tool's own name and the server's plain explanation.
+const nativeSetupToolProblem = computed(() => cliProblem(nativeSetupAccount.value) ? nativeSetupAccount.value.status : "");
 const nativeSetupRows = computed(() => [{
   ...(nativeSetupAccount.value || { connected: false, id: nativeSetupProviderId.value, status: "missing" }),
   ...nativeSetupDetails.value,
-  label: nativeSetupAccount.value?.username || `${nativeSetupDetails.value.label} account`,
+  label: nativeSetupToolProblem.value ? nativeSetupDetails.value.label
+    : nativeSetupAccount.value?.username || `${nativeSetupDetails.value.label} account`,
   username: "",
-  message: nativeSetupConnected.value ? "Connected" : nativeSetupDetails.value.message
+  message: nativeSetupConnected.value ? "Connected"
+    : nativeSetupToolProblem.value ? nativeSetupAccount.value.message : nativeSetupDetails.value.message
 }]);
+// AI tools this computer lacks, so Add connection can say so before anyone starts.
+function missingTool(id = "") {
+  return nativeAccounts.status.value?.missingTools?.find((tool) => tool.id === id) || null;
+}
+const checkingOpenCode = ref(false);
+async function checkOpenCodeAgain() {
+  checkingOpenCode.value = true;
+  try {
+    await nativeAccounts.refresh();
+  } finally {
+    checkingOpenCode.value = false;
+  }
+  if (!missingTool("opencode")) await openProviderPicker();
+}
 const configuredAiRows = computed(() => [
   ...(nativeAccountConfigured(codexAccount.value) ? [{
     accessLabel: codexAccount.value?.ownerOnly === true ? "Personal use" : codexAccount.value?.ownerOnly === false ? "Workspace use" : "",
@@ -1104,7 +1123,7 @@ defineExpose({ openProvider });
                     </v-avatar>
                   </template>
                   <v-card-title>{{ choice.label }}</v-card-title>
-                  <v-card-subtitle>Choose a provider</v-card-subtitle>
+                  <v-card-subtitle>{{ missingTool(choice.id) ? "Not installed on this computer" : "Choose a provider" }}</v-card-subtitle>
                 </v-card-item>
                 <v-card-text class="vibe64-add-ai__choice-copy text-body-medium">
                   {{ choice.providers.map(provider => provider.label).join(', ') }}
@@ -1126,7 +1145,7 @@ defineExpose({ openProvider });
                     </v-avatar>
                   </template>
                   <v-card-title>OpenCode</v-card-title>
-                  <v-card-subtitle>Connect a provider API key</v-card-subtitle>
+                  <v-card-subtitle>{{ missingTool("opencode") ? "Not installed on this computer" : "Connect a provider API key" }}</v-card-subtitle>
                 </v-card-item>
                 <v-card-text class="vibe64-add-ai__choice-copy text-body-medium">
                   Choose from OpenCode’s provider catalog. Add as many providers as you need; each key stays an independent connection.
@@ -1183,7 +1202,12 @@ defineExpose({ openProvider });
           />
         </v-card-title>
         <v-card-text class="vibe64-provider-picker__body">
+          <CliInstallNotice
+            v-if="missingTool('opencode')" :account="missingTool('opencode')" :checking="checkingOpenCode"
+            @check="checkOpenCodeAgain"
+          />
           <v-text-field
+            v-else
             v-model="providerSearch"
             autofocus
             clearable
@@ -1195,8 +1219,9 @@ defineExpose({ openProvider });
             variant="outlined"
           />
 
+          <template v-if="missingTool('opencode')" />
           <div
-            v-if="providerPickerLoading"
+            v-else-if="providerPickerLoading"
             aria-busy="true"
             aria-label="Loading OpenCode providers"
             class="vibe64-provider-picker__list"
@@ -1297,7 +1322,8 @@ defineExpose({ openProvider });
             actions-disabled-message="Only the Vibe64 owner can manage this connection."
             :account-rows="nativeSetupRows"
             :back-label="nativeSetupOrigin === 'add' ? 'Back' : ''"
-            needed-label="Not connected"
+            :needed-label="nativeSetupToolProblem === 'not_installed' ? 'Not installed'
+              : nativeSetupToolProblem ? `Didn't start` : 'Not connected'"
             ready-label="Connected"
             :show-continue="false"
             :status-loaded="aiStatusLoaded"

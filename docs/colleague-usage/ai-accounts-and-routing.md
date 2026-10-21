@@ -52,7 +52,10 @@ opencode is different: Vibe64 runs your installed opencode program but signs it 
 the keys you add in AI Accounts, not with opencode's own login.
 
 When a program is missing, AI Accounts (and the matching step of AI onboarding) shows
-a warning instead of the sign-in button:
+a warning instead of the sign-in button. In **Add connection**, an orchestrator whose
+program is missing says **Not installed on this computer** under its name; choosing it
+(or **Choose provider** for OpenCode) opens the same warning, and the setup dialog's
+status chip reads **Not installed** or **Didn't start** instead of **Not connected**:
 
 - **Claude Code isn't installed on this computer** (or Codex, or opencode). The warning
   shows the official one-line install command with a **Copy** button and a link to
@@ -69,7 +72,9 @@ a warning instead of the sign-in button:
   with its login files shows the usual sign-in button and its message, so you can
   sign in again.
 
-Vibe64 looks for these programs on your `PATH` and in the official installers' folders
+Vibe64 looks for a program again every time it starts one, so a program installed
+while Vibe64 is running is used as soon as you choose **Check again**; no restart is
+needed. It looks on your `PATH` and in the official installers' folders
 (`~/.local/bin`, `~/.claude/local`, `~/.opencode/bin`, `/opt/homebrew/bin` and
 `/usr/local/bin`), so it finds them even when it was started outside a terminal. A
 program installed somewhere else must be on the `PATH` of the terminal that starts

@@ -181,6 +181,32 @@ test("without runtime packs Health checks the person's own tools and names missi
   }
 });
 
+test("without runtime packs a failed tool check shows the tool's words, not its command line", async () => {
+  const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-plain-"));
+  await writeFile(path.join(studioRoot, "package.json"), JSON.stringify({ engines: { node: "26.x" } }), "utf8");
+  const missing = "Playwright is not installed on this computer. See https://playwright.dev/docs/intro to install it.";
+  const service = createService({
+    connectionsService: { getStatus: async () => ({ ok: true, connections: [] }) },
+    env: { HOME: path.join(studioRoot, "home"), PATH: path.join(studioRoot, "empty") },
+    projectService: { listProjects: async () => ({ ok: true, projects: [] }) },
+    async runCommand({ args, command }) {
+      return args.join(" ").includes("playwright_command")
+        ? { ok: false, error: `Command failed with exit code 1: bash -c 'set -euo pipefail ...'`, output: missing }
+        : successfulCommandResult(command, args);
+    },
+    studioRoot
+  });
+
+  const { checks } = await service.inspect();
+  const byId = Object.fromEntries(checks.map((check) => [check.id, check]));
+  for (const id of ["playwright", "playwright-browser"]) {
+    assert.equal(byId[id].status, "fail");
+    assert.equal(byId[id].observed, missing);
+  }
+  assert.equal(byId["playwright-browser"].label, "Playwright browser");
+  assert.doesNotMatch(byId["github-cli"].explanation, /pinned/u);
+});
+
 test("the browser health probe launches pinned headless Chromium within the health deadline", (t) => {
   withRuntimePacks(t, os.tmpdir());
   const script = playwrightBrowserLaunchCheckScript();

@@ -61,6 +61,7 @@ async function commandCheck({
   id,
   isValid = (output) => Boolean(compactOutput(output)),
   label,
+  plainExit = false,
   runCommand,
   runtimes = [],
   summarize = compactOutput,
@@ -76,9 +77,12 @@ async function commandCheck({
     runtimes,
     timeout: COMMAND_TIMEOUT_MS
   });
+  // For the person's own tools, a plain non-zero exit shows the tool's own words,
+  // not the command line that produced them.
+  const plainFailure = plainExit && result?.output && /^Command failed with exit code \d+:/u.test(String(result?.error || ""));
   const observed = result?.ok
     ? result.output || ""
-    : [result?.error, result?.output].filter(Boolean).join("\n");
+    : plainFailure ? result.output : [result?.error, result?.output].filter(Boolean).join("\n");
   const check = {
     id,
     label,
@@ -134,6 +138,7 @@ async function operatorCliCheck(tool, { env, runCommand, studioRoot }) {
   }
   return commandCheck({
     ...check,
+    plainExit: true,
     command: cli.command,
     args: ["--version"],
     runtimes: ["operator-clis", "node26"],
@@ -212,8 +217,9 @@ function createService({
     async inspect(input = {}) {
       const packs = Boolean(runtimePackRoot());
       const nodeMajor = packs ? "26" : await requiredNodeMajor(studioRoot);
+      const check = (definition) => commandCheck({ plainExit: !packs, ...definition });
       const commandChecks = [
-        commandCheck({
+        check({
           id: "node",
           label: "Node.js",
           command: "node",
@@ -225,7 +231,7 @@ function createService({
           isValid: (output) => new RegExp(`^v${nodeMajor || "\\d+"}\\.`, "u").test(compactOutput(output)),
           explanation: packs ? "Vibe64 itself runs on its pinned Node.js runtime." : "Vibe64 and your projects use the Node.js installed on this computer."
         }),
-        commandCheck({
+        check({
           id: "git",
           label: "Git",
           command: "git",
@@ -237,7 +243,7 @@ function createService({
           isValid: (output) => /^git version\s+/u.test(compactOutput(output)),
           explanation: "Vibe64 owns Git credentials and repository operations."
         }),
-        commandCheck({
+        check({
           id: "github-cli",
           label: "GitHub CLI",
           command: "gh",
@@ -247,9 +253,10 @@ function createService({
           studioRoot,
           expected: packs ? "The managed GitHub CLI runtime pack is available." : "The GitHub CLI is installed.",
           isValid: (output) => /^gh version\s+/u.test(compactOutput(output)),
-          explanation: "Vibe64 uses its pinned GitHub CLI for authenticated GitHub operations."
+          explanation: packs ? "Vibe64 uses its pinned GitHub CLI for authenticated GitHub operations."
+            : "Vibe64 uses the GitHub CLI installed on this computer for GitHub operations."
         }),
-        commandCheck({
+        check({
           id: "ripgrep",
           label: "ripgrep",
           command: "rg",
@@ -262,7 +269,7 @@ function createService({
           explanation: "Codex uses ripgrep for fast local source discovery."
         }),
         ...(packs
-          ? [commandCheck({
+          ? [check({
               id: "codex",
               label: "Codex CLI",
               command: "codex",
@@ -275,7 +282,7 @@ function createService({
               explanation: "Direct chat delegates project work to the pinned Codex command."
             })]
           : Object.keys(OPERATOR_CLIS).map((tool) => operatorCliCheck(tool, { env, runCommand, studioRoot }))),
-        commandCheck({
+        check({
           id: "genesis",
           label: "Genesis",
           group: "Runtime",
@@ -288,7 +295,7 @@ function createService({
           explanation: "Genesis supplies project context, prompts, Stack guidance, Program descriptions, and Cities.",
           isValid: (output) => compactOutput(output).startsWith("Usage:")
         }),
-        commandCheck({
+        check({
           id: "playwright",
           label: "Playwright runtime",
           group: "Browser",
@@ -297,22 +304,25 @@ function createService({
           runtimes: ["node26", "playwright"],
           runCommand,
           studioRoot,
-          expected: "The managed Playwright CLI matches the active pinned runtime.",
-          explanation: "Vibe64 owns browser automation versions instead of allowing project installs to download Chrome.",
+          expected: packs ? "The managed Playwright CLI matches the active pinned runtime." : "Playwright is installed on this computer.",
+          explanation: packs ? "Vibe64 owns browser automation versions instead of allowing project installs to download Chrome."
+            : "Browser checks of your app use the Playwright installed on this computer.",
           isValid: isValidPlaywrightRuntimeOutput,
           summarize: summarizePlaywrightRuntimeOutput
         }),
-        commandCheck({
+        check({
           id: "playwright-browser",
-          label: "Pinned browser",
+          label: packs ? "Pinned browser" : "Playwright browser",
           group: "Browser",
           command: playwrightBrowserLaunchCommandArgs()[0],
           args: playwrightBrowserLaunchCommandArgs().slice(1),
           runtimes: ["node26", "playwright"],
           runCommand,
           studioRoot,
-          expected: "The managed Chromium paths exist and its headless shell launches.",
-          explanation: "Browser verification launches Vibe64's pinned Chromium headless shell without downloading a project-local browser.",
+          expected: packs ? "The managed Chromium paths exist and its headless shell launches."
+            : "Playwright's Chromium is installed and its headless shell launches.",
+          explanation: packs ? "Browser verification launches Vibe64's pinned Chromium headless shell without downloading a project-local browser."
+            : "Browser checks launch the Chromium headless shell that Playwright installed on this computer.",
           isValid: isValidPlaywrightBrowserLaunchOutput,
           summarize: summarizePlaywrightBrowserLaunchOutput
         })

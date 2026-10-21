@@ -579,7 +579,16 @@ version output and make installed runtimes appear unavailable.
 The browser check validates the pinned Chromium installation and launches its
 headless shell within the bounded health job, rather than starting desktop
 browser services. Execution failure reasons take precedence over incidental
-browser log messages in the short Health summary.
+browser log messages in the short Health summary. Without runtime packs, Health
+checks the person's own tools: a plain non-zero exit shows the tool's own output
+rather than the command line, and the browser checks are named for the installed
+Playwright instead of pinned versions.
+
+Each Claude Code, Codex or opencode process resolves its program when it starts,
+so a program installed after Vibe64 started is used after **Check again** without
+a restart. AI Accounts reads the status's `missingTools` list to mark a missing
+orchestrator in Add connection and to show the install warning before the
+OpenCode provider catalog would try to start a missing program.
 
 Account sign-in completion arrives through actor-scoped realtime refresh hints
 when available. The hint contains only the session identity and status version;

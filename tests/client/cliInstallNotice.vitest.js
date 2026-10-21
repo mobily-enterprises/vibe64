@@ -18,6 +18,8 @@ it("says plainly that the CLI is not installed and offers its install command", 
     message: "Claude Code isn't installed on this computer. Vibe64 uses it to work with Claude. Install it, then choose Check again."
   });
   expect(html).toContain("Claude Code isn&#39;t installed on this computer");
+  expect(html.split("isn&#39;t installed on this computer")).toHaveLength(2);
+  expect(html).toContain("Vibe64 uses it to work with Claude. Install it, then choose Check again.");
   expect(html).toContain(install.command);
   expect(html).toContain("Copy the Claude Code install command");
   expect(html).toContain(install.guideUrl);
