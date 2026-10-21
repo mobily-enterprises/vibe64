@@ -153,6 +153,7 @@ function keydown(event) {
     v-if="learning && actorKey"
     :model-value="Boolean(confirm)"
     max-width="28rem"
+    :z-index="2410"
     @update:model-value="value => value || learning.cancelArchive()"
   >
     <v-card v-if="confirm" rounded="xl" data-test="learning-archive-confirm">
@@ -182,7 +183,7 @@ function keydown(event) {
 </template>
 
 <style scoped>
-/* Stacking: guide overlay 3000 > Courses 2400 > Colleague drawer and launcher. */
+/* Stacking: guide overlay 3000 > archive confirmation 2410 > Courses 2400 > Colleague drawer and launcher. */
 .vibe64-learning {
   background: rgb(var(--v-theme-background));
   color: rgb(var(--v-theme-on-background));
