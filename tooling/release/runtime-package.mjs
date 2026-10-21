@@ -14,6 +14,7 @@ const RUNTIME_ENTRIES = [
   "node_modules/@local/vibe64-source-editor/src/server/searchIndexWorker.js",
   "node_modules/@local/vibe64-genesis/src/server/index.js",
   "node_modules/@local/vibe64-genesis/src/server/promptContext.js",
+  "node_modules/@local/vibe64-genesis/src/server/agentSpecs.js",
   "node_modules/@local/vibe64-genesis/bin/genesis",
   "node_modules/@local/vibe64-genesis/bin/vibe64-genesis-host-context",
   "node_modules/@local/vibe64-runtime/src/server/agentSessionCommandHook.js",
