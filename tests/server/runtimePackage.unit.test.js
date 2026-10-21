@@ -69,6 +69,15 @@ test("bundled Genesis ownership hook defers the compiler until instructions are 
   assert.equal(await run(input, true), `instructions:${JSON.stringify(input)}`);
 });
 
+test("every Genesis server export ships as a runtime entry", async () => {
+  const { exports } = JSON.parse(await readFile(path.join(sourceRoot, "packages/vibe64-genesis/package.json"), "utf8"));
+  const server = Object.entries(exports).filter(([subpath]) => subpath === "./server" || subpath.startsWith("./server/"));
+  assert.ok(server.length >= 3);
+  for (const [, target] of server) {
+    assert.ok(RUNTIME_ENTRIES.includes(`node_modules/@local/vibe64-genesis/${target.slice(2)}`), target);
+  }
+});
+
 test("bundled source search helper builds and searches a persistent index", async (t) => {
   const entry = "node_modules/@local/vibe64-source-editor/src/server/searchIndexWorker.js";
   assert.ok(RUNTIME_ENTRIES.includes(entry));

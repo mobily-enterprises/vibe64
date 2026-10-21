@@ -1,9 +1,16 @@
+import { readFileSync } from "node:fs";
 import { builtinModules, createRequire } from "node:module";
 import { chmod, cp, lstat, mkdir, readFile, readdir, realpath, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { ASSISTANT_SQL_RUNTIME_ENTRIES, buildNodeBundle, buildServerBundle, SERVER_BUNDLE_EXTERNALS } from "./server-build.mjs";
 
 const GENESIS_BOUNDARY = "@local/vibe64-genesis/server";
+// The boundary keeps every Genesis server export out of the server bundle, so
+// each one ships as its own runtime entry; a new export cannot be left behind.
+const GENESIS_SERVER_ENTRIES = Object.entries(JSON.parse(readFileSync(
+  new URL("../../packages/vibe64-genesis/package.json", import.meta.url), "utf8")).exports)
+  .filter(([subpath]) => subpath === "./server" || subpath.startsWith("./server/"))
+  .map(([, target]) => `node_modules/@local/vibe64-genesis/${target.replace(/^\.\//u, "")}`);
 const RELEASE_DOCS = ["docs/colleague-usage", "docs/training-content.md", "docs/templates/learn-topic"];
 const RUNTIME_ENTRIES = [
   "bin/run.js",
@@ -12,9 +19,7 @@ const RUNTIME_ENTRIES = [
   "node_modules/@local/vibe64-execution/src/host/execHelper.js",
   "node_modules/@local/vibe64-database-tools/src/server/sqliteWorker.js",
   "node_modules/@local/vibe64-source-editor/src/server/searchIndexWorker.js",
-  "node_modules/@local/vibe64-genesis/src/server/index.js",
-  "node_modules/@local/vibe64-genesis/src/server/promptContext.js",
-  "node_modules/@local/vibe64-genesis/src/server/agentSpecs.js",
+  ...GENESIS_SERVER_ENTRIES,
   "node_modules/@local/vibe64-genesis/bin/genesis",
   "node_modules/@local/vibe64-genesis/bin/vibe64-genesis-host-context",
   "node_modules/@local/vibe64-runtime/src/server/agentSessionCommandHook.js",
