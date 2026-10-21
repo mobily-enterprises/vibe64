@@ -11,8 +11,13 @@ use the developer's installed tools through its ordinary PATH and does not
 require a hosted Nix installation. Kotlin includes the Java toolchain on managed
 hosts; Rust includes the native linker tools. Projects needing native
 extensions or Go C integration also declare their required build toolchain.
-JSKIT, Vue and Laravel use the tools specified by their project commands rather
-than a separate framework runtime.
+JSKIT, Vue, Laravel, Django, Rails, Spring Boot, Express and Next.js use the
+tools specified by their project commands rather than a separate framework
+runtime: Django uses `python`, Rails uses `ruby` with `cpp` for native gems (and
+`nodejs` when the app has a `package.json`), Spring Boot uses `java` through the
+project's Maven wrapper, and Express and Next.js use `nodejs`. New-project
+onboarding does not offer PostgreSQL variants yet (for example
+`django-postgresql`); it offers the MySQL or SQLite variant instead.
 
 If **Preparing workspace** fails, expand its output, correct the reported cause
 and choose **Retry**. If Preview cannot start, use **Show run output**. On mobile,

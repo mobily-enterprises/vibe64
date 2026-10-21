@@ -723,8 +723,9 @@ test("a blank initialized project stays in Genesis onboarding before ordinary wo
     assert.match(rendered.prompt, /"id": "jskit"/u);
     assert.match(rendered.prompt, /"id": "jskit-mysql"/u);
     assert.doesNotMatch(rendered.prompt, /"id": "vue"/u);
-    assert.doesNotMatch(rendered.prompt, /"id": "jskit-postgresql"/u);
-    assert.doesNotMatch(rendered.prompt, /"id": "postgresql"/u);
+    for (const id of ["django-postgresql", "jskit-postgresql", "postgresql", "rails-postgresql", "spring-boot-postgresql"]) {
+      assert.doesNotMatch(rendered.prompt, new RegExp(`"id": "${id}"`, "u"), id);
+    }
     assert.match(
       rendered.prompt,
       /being built, who or what will use or invoke it, and the first observable\s+useful outcome/u

@@ -120,7 +120,13 @@ const GENESIS_BLUEPRINT_PATH = "genesis/blueprint.md";
 const VIBE64_POSTGRESQL_NEW_PROJECT_AVAILABLE = false;
 const VIBE64_HIDDEN_ONBOARDING_STACK_PIECES = Object.freeze([
   "vue",
-  ...(VIBE64_POSTGRESQL_NEW_PROJECT_AVAILABLE ? [] : ["jskit-postgresql", "postgresql"])
+  ...(VIBE64_POSTGRESQL_NEW_PROJECT_AVAILABLE ? [] : [
+    "django-postgresql",
+    "jskit-postgresql",
+    "postgresql",
+    "rails-postgresql",
+    "spring-boot-postgresql"
+  ])
 ]);
 const VIBE64_STACK_PACKAGES = Object.freeze(["genesis-stack"]);
 const GENESIS_PROMPT_TASKS = new Set([
