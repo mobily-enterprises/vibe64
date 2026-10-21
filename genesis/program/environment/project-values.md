@@ -96,7 +96,9 @@ panes, scrolling within the table rather than collapsing a revealed value or
 widening the page.
 
 Execution startup explicitly prepares resources and environment files under the
-session source lock. Preview startup may reuse preparation after a read-only
+session source lock, waiting up to ten seconds for a brief holder: background
+workspace setup can reach this step while the request that started it is still
+releasing the lock. Preview startup may reuse preparation after a read-only
 check confirms that the host reports its exact resources prepared and the
 declared dotenv files and local Git excludes match current values. Otherwise it
 resolves the declarations again under the lock before provisioning or writing.

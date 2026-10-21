@@ -296,6 +296,17 @@ test("Claude main and temporary chats receive project values with their managed 
   assert.equal(f.processes.length, 2);
 });
 
+test("Claude conversations run the Claude Code found when each process starts", async (t) => {
+  const f = await fixture(t);
+  const env = { ...f.providerOptions.env, VIBE64_CLAUDE_COMMAND: "/before/claude" };
+  const provider = createClaudeSessionAgentProvider({ ...f.providerOptions, env });
+  // Installing Claude Code after Vibe64 started must not need a restart.
+  env.VIBE64_CLAUDE_COMMAND = "/installed-later/claude";
+  await provider.sendMessage(f.context, { message: "First", messageId: "late-install" });
+  assert.equal(f.processes.length, 1);
+  assert.equal(f.processes[0].options.command, "/installed-later/claude");
+});
+
 test("Claude main and temporary chats install composed system guidance and yield their Genesis hooks", async (t) => {
   const f = await fixture(t);
   await f.provider.sendMessage(f.context, { message: "First", messageId: "main-guidance" });

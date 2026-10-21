@@ -208,6 +208,40 @@ test("starter selection waits for brief assistant preparation under the existing
   });
 });
 
+test("environment preparation waits for a brief holder of the source lock", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const release = Promise.withResolvers();
+    const entered = Promise.withResolvers();
+    const events = [];
+    const { service, store } = await fixture(targetRoot, {
+      logger: {
+        warn(event) {
+          if (event.operation === "prepare-project-environment") {
+            events.push(event);
+            release.resolve();
+          }
+        }
+      }
+    });
+    // Workspace setup prepares its environment in the background while the
+    // request that started it may still be releasing the same lock.
+    const holding = store.runSessionExclusive(sessionId, "agent-write-mode", async () => {
+      entered.resolve();
+      await release.promise;
+    }, { operation: "prepare-workspace" });
+    await entered.promise;
+    try {
+      const environment = await service.projectExecutionEnvironment({ sessionId, target: "workspace-setup" });
+      assert.equal(typeof environment, "object");
+      assert.equal(events[0].event, "vibe64.session_lock.contended");
+      assert.equal(events[0].owner.operation, "prepare-workspace");
+    } finally {
+      release.resolve();
+      await holding;
+    }
+  });
+});
+
 test("project environment setup does not require outputs and clears after Env is saved", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const { root, service } = await fixture(targetRoot, {

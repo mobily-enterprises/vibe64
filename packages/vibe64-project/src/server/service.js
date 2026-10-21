@@ -1370,7 +1370,9 @@ function createService({
           sourceRoot: resolved.source.sourceRoot
         });
         return projectEnvironmentResult(resolved, input, records);
-      }, "prepare-project-environment");
+        // Background workspace setup can arrive while the request that started it
+        // is still releasing this lock; wait for it instead of failing setup.
+      }, "prepare-project-environment", { waitMs: 10_000 });
     },
 
     async projectInspectionEnvironment(input = {}) {

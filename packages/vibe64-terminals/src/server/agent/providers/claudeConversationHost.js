@@ -38,7 +38,8 @@ function createClaudeConversationHost({
   env = process.env, projectService, logger, publishSessionChanged: publishApplicationSessionChanged = async () => {},
   publishConversation,
   runNativeDetachedConversation,
-  command = operatorCliCommand("claude", { env }),
+  // Found again at each start, so a Claude Code installed after Vibe64 started is used.
+  command = () => operatorCliCommand("claude", { env }),
   credentialHome = appCredentialContext(), createProcess = createClaudeCodeProcess,
   commandRunner = runVibe64Command, stopExecution = stopVibe64Execution,
   connectionStatus = async () => false,

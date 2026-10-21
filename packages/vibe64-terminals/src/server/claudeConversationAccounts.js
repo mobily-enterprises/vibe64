@@ -37,12 +37,17 @@ function claudeCapabilities(initialization, connected, connections = []) {
   };
 }
 
+// A command given as a function is looked up at each use.
+function claudeCommand(command) {
+  return typeof command === "function" ? command() : command;
+}
+
 // Account visibility, identity and Helper policy; native queries use the existing owner.
 function createClaudeConversationAccounts({ owner, configRoot, providerConnections, accountStatus, connectionStatus,
   createProcess, command, commandRunner, stopExecution, credentialHome, env }) {
   const accountQueries = owner.createAccountQueries({
     accountIdentity,
-    createProcess: ({ signal, purpose }) => createProcess({ command, commandRunner, stopExecution, credentialHome, env, signal,
+    createProcess: ({ signal, purpose }) => createProcess({ command: claudeCommand(command), commandRunner, stopExecution, credentialHome, env, signal,
       accountQuery: purpose,
       workdir: credentialHome.home, toolFree: true, onEvent: async () => {} })
   });
