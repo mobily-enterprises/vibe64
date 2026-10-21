@@ -39,7 +39,7 @@ In learning mode you are in your learning space only (see
 - Opening any other project (for example from a saved address) is refused with
   that note and you are taken to the practice project.
 - Lesson 0 and other lessons without a practice project open no project; they
-  use the Learning page (below).
+  use the Learning page (below), and your own projects stay closed.
 - Nothing inside the lesson's practice project is limited: Preview, Files,
   Database, coding chats and Colleague all work. Account settings and AI
   Accounts stay available, so you can connect an AI during a lesson.
@@ -59,17 +59,19 @@ mode. There is no paused lesson. The workspace owner works the same way.
 ## The Learning page and `/app`
 
 The Learning page (`/app/learning`) is the place for a lesson without a
-practice project, such as Lesson 0. It has the normal header with **L**, the
-yellow bar and **Leave lesson** during a lesson, and **Account settings** at the
-right, and it opens **L** on the lesson. Hide **L** and the page shows the
-lesson's name with **Open Learning** and **Leave lesson**. Outside a lesson it
-opens **L** on **Courses**, with **Back to your projects**.
+practice project, such as Lesson 0. During such a lesson it is the usual project
+page with no project open: the header shows **No project open**, the yellow bar
+with **Leave lesson**, the **Preview** and **Dashboard** switches (on a phone,
+the single switch button) and **Account settings**; there is no **+** for
+sessions, and each pane says it is empty because the lesson has no practice
+project. It opens **L** on the lesson. Outside a lesson the page opens **L** on
+**Courses**, with **Open Learning** and **Back to your projects**.
 
-A local Vibe64 has no Projects page. Its `/app` address opens the lesson's
-practice project during a lesson, the Learning page during a lesson without one,
-and otherwise the project Vibe64 was started in, without reloading the page
-(**L** stays as it was). If no project was started, it says so with **Try
-again**. On hosted Vibe64 `/app` is the Projects page.
+A local Vibe64 has no Projects page. Its `/` and `/app` addresses open the
+project Vibe64 was started in (during a lesson you are then taken to the
+lesson's place, as from any project address); `/app` does this without
+reloading the page, so **L** stays as it was. If no project was started, it says
+so with **Try again**. On hosted Vibe64 `/app` is the Projects page.
 
 An old `?mode=learning` address from the retired Learning mode opens the ordinary
 project page.
@@ -272,7 +274,8 @@ minimises and shows the lesson at that step; hiding Learning with **L** (or
 Escape) returns you to Colleague's chat, not the page behind it. **Show me** and
 **Open practice project** still show the app.
 
-An ended lesson stays readable with the note **This lesson has ended.**
+An ended lesson stays readable with the note **This lesson has ended.** and a
+**Go to Courses** button, where **Continue lesson** starts it again.
 
 ## Problems
 

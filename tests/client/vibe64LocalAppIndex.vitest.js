@@ -162,53 +162,36 @@ it("shared original shell refs are per mount and only local composition supplies
   } finally { local.app.unmount(); hosted.app.unmount(); }
 });
 
-// Local /app resolves to a place and never shows a Projects page (absent locally).
+// Local /app resolves to the started project and never shows a Projects page
+// (absent locally). During a lesson the Learning overlay moves that project
+// address on, as for any project address, so /app never waits for Learning.
 describe("local /app resolver", () => {
   // The server redirects a request for /app to the started project; `startedUrl`
   // is where that redirect ends (still /app when no project was started).
-  async function resolveApp({ mode = { on: false }, startedUrl = "http://127.0.0.1:4531/app/project/my-app", actorKey = "local" } = {}) {
+  async function resolveApp({ startedUrl = "http://127.0.0.1:4531/app/project/my-app" } = {}) {
     const replace = vi.fn(async () => {});
     const fetch = vi.fn(async () => ({ ok: true, url: startedUrl }));
     vi.stubGlobal("fetch", fetch);
-    const learning = Vue.reactive({ state: { actorKey }, readLearningMode: vi.fn(async () => LearningEnvironment.normalizeLearningMode(
-      { ok: true, available: true, learningMode: mode })) });
     const stub = name => ({ props: ["title", "error"], setup: (props, { slots }) => () => Vue.h("div", { "data-stub": name, ...props },
       [slots.default?.(), slots["top-right"]?.(), slots.actions?.()]) });
     const page = compiledUi(path.resolve("src/pages/app/index.vue"), {
       vue: Vue, "vue-router": { useRouter: () => ({ replace }) },
       "@/components/StudioAppShellLayout.vue": { default: stub("shell") },
       "@/components/studio/StudioErrorNotice.vue": { default: stub("error") },
-      "@/components/studio/Vibe64AuthSettingsButton.vue": { default: stub("account-settings") },
-      "@/lib/vibe64Learning.js": LearningEnvironment,
-      "@/composables/useVibe64Learning.js": { useVibe64Learning: () => learning }
+      "@/components/studio/Vibe64AuthSettingsButton.vue": { default: stub("account-settings") }
     });
     const root = { children: [] };
     const app = uiRenderer().createApp({ render: () => Vue.h(page) });
     for (const tag of ["v-btn", "v-skeleton-loader"]) app.component(tag, uiWidget);
     app.mount(root);
     for (let index = 0; index < 4; index += 1) { await Promise.resolve(); await Vue.nextTick(); }
-    return { app, root, replace, fetch, learning };
+    return { app, root, replace, fetch };
   }
 
-  it("opens the lesson's practice project during a lesson, without reading the started project", async () => {
-    const view = await resolveApp({ mode: { on: true, attemptId: "a", practiceSlug: "training-abc", projectSlugs: ["training-abc"] } });
+  it("opens the started project by following the server's /app redirect, with no Learning read to wait for", async () => {
+    // Regression: after Leave lesson, /app stayed on its loading skeleton.
+    const view = await resolveApp();
     try {
-      expect(view.replace).toHaveBeenCalledWith("/app/project/training-abc");
-      expect(view.fetch).not.toHaveBeenCalled();
-    } finally { view.app.unmount(); vi.unstubAllGlobals(); }
-  });
-
-  it("opens the Learning page for a lesson without a practice project", async () => {
-    const view = await resolveApp({ mode: { on: true, attemptId: "a", practiceSlug: "", projectSlugs: [] } });
-    try { expect(view.replace).toHaveBeenCalledWith("/app/learning"); } finally { view.app.unmount(); vi.unstubAllGlobals(); }
-  });
-
-  it("opens the started project outside a lesson by following the server's /app redirect, once the overlay binds the viewer", async () => {
-    const view = await resolveApp({ actorKey: "" });
-    try {
-      expect(view.learning.readLearningMode, "the mode read waits for the signed-in viewer").not.toHaveBeenCalled();
-      view.learning.state.actorKey = "local";
-      for (let index = 0; index < 4; index += 1) { await Promise.resolve(); await Vue.nextTick(); }
       expect(view.fetch).toHaveBeenCalledWith("/app", { method: "HEAD", credentials: "same-origin" });
       expect(view.replace).toHaveBeenCalledWith("/app/project/my-app");
     } finally { view.app.unmount(); vi.unstubAllGlobals(); }
@@ -226,7 +209,8 @@ describe("local /app resolver", () => {
   });
 });
 
-// /app/learning: the shell for a lesson without a practice project, and L outside a project.
+// /app/learning: the project page with no project open for a lesson without a
+// practice project, and L outside a project.
 describe("Learning page", () => {
   async function openPage(mode) {
     const learning = Vue.reactive({ state: { actorKey: "local", modeBusy: "" }, inLesson: mode.on === true, lessonTitle: mode.lessonTitle || "",
@@ -239,7 +223,8 @@ describe("Learning page", () => {
       "@/components/StudioAppShellLayout.vue": { default: stub("shell") },
       "@/components/studio/Vibe64AuthSettingsButton.vue": { default: stub("account-settings") },
       "@/composables/useVibe64Learning.js": { useVibe64Learning: () => learning },
-      "@/lib/vibe64Learning.js": LearningEnvironment
+      "@/lib/vibe64Learning.js": LearningEnvironment,
+      "./project/[slug].vue": { default: stub("project-page") }
     });
     const root = { children: [] };
     const app = uiRenderer().createApp({ render: () => Vue.h(page) });
@@ -250,10 +235,19 @@ describe("Learning page", () => {
   }
   const byTest = (root, id) => nodes(root).find(node => node.props?.["data-test"] === id);
 
-  it("opens L on the lesson in progress, with Leave lesson and Account settings", async () => {
+  it("shows the project page with no project open for a lesson without a practice project, and opens L on it", async () => {
     const view = await openPage({ on: true, attemptId: "a", lessonTitle: "Set yourself up", practiceSlug: "", projectSlugs: [] });
     try {
       expect(view.learning.show).toHaveBeenCalledWith({ surface: "lesson", attemptId: "a" });
+      expect(nodes(view.root).some(node => node.props?.["data-stub"] === "project-page")).toBe(true);
+      expect(byTest(view.root, "learning-page")).toBeUndefined();
+    } finally { view.app.unmount(); }
+  });
+
+  it("keeps Leave lesson and Account settings for a lesson whose practice project is not ready yet", async () => {
+    const view = await openPage({ on: true, attemptId: "a", lessonTitle: "First steps", practiceSlug: "training-abc", projectSlugs: ["training-abc"] });
+    try {
+      expect(nodes(view.root).some(node => node.props?.["data-stub"] === "project-page")).toBe(false);
       expect(nodes(view.root).some(node => node.props?.["data-stub"] === "account-settings")).toBe(true);
       byTest(view.root, "learning-page-leave").props.onClick();
       expect(view.learning.leaveLesson).toHaveBeenCalledOnce();

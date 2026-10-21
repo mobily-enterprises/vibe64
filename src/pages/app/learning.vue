@@ -14,13 +14,15 @@ import StudioAppShellLayout from "@/components/StudioAppShellLayout.vue";
 import Vibe64AuthSettingsButton from "@/components/studio/Vibe64AuthSettingsButton.vue";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { lessonPath } from "@/lib/vibe64Learning.js";
+import ProjectPage from "./project/[slug].vue";
 
 // The Learning page (/app/learning, both hosts): the app shell with L, the
 // yellow bar and Leave lesson during a lesson, and Account settings. A lesson
-// without a practice project (Lesson 0) lives here. L opens on the lesson in
-// progress, otherwise on the courses.
+// without a practice project (Lesson 0) lives here, in the project page with
+// no project open. L opens on the lesson in progress, otherwise on the courses.
 const learning = useVibe64Learning();
 const inLesson = computed(() => Boolean(learning?.inLesson));
+const noProject = computed(() => inLesson.value && !learning.learningMode.practiceSlug);
 const practicePath = computed(() => inLesson.value && learning.learningMode.practiceSlug ? lessonPath(learning.learningMode) : "");
 const leaving = computed(() => learning?.state.modeBusy === "leave");
 
@@ -38,7 +40,8 @@ watch(() => Boolean(learning?.state.actorKey), ready => {
 </script>
 
 <template>
-  <StudioAppShellLayout>
+  <ProjectPage v-if="noProject" />
+  <StudioAppShellLayout v-else>
     <template #top-left>
       <div class="vibe64-learning-page__top">Learning</div>
     </template>
@@ -49,7 +52,6 @@ watch(() => Boolean(learning?.state.actorKey), ready => {
       <template v-if="inLesson">
         <p class="vibe64-learning-page__eyebrow">Lesson in progress</p>
         <h1 class="vibe64-learning-page__title">{{ learning.lessonTitle }}</h1>
-        <p v-if="!practicePath">This lesson has no practice project. Learning holds its steps.</p>
       </template>
       <template v-else>
         <h1 class="vibe64-learning-page__title">Learning</h1>

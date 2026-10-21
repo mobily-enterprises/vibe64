@@ -608,6 +608,8 @@ async function createServer(options = {}) {
       }),
       302
     );
+    // A local Vibe64 has no Projects page: "/" and /app open the started project.
+    app.get("/", redirectLocalStartup);
     app.get("/app", redirectLocalStartup);
     app.get("/app/", redirectLocalStartup);
   }

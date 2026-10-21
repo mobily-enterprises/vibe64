@@ -53,9 +53,11 @@ with a newer release shows **Update available** and **Update** (see
 [Installing and updating Learning courses](learning-course-catalogue.md)).
 
 A lesson without a practice project, such as a course's first setup lesson
-(Lesson 0), opens only the lesson, on the Learning page (`/app/learning`), with
-no project or conversation. Its steps say which real screens it uses, for
-example **Account settings → AI Accounts** to connect an AI.
+(Lesson 0), opens on the Learning page (`/app/learning`): the usual project
+page with **No project open**, its **Preview** and **Dashboard** switches and
+empty panes, and no sessions. Your own projects stay closed until you leave the
+lesson. Its steps say which real screens it uses, for example **Account
+settings → AI Accounts** to connect an AI.
 
 ## Starting, continuing, leaving and finishing
 

@@ -134,15 +134,21 @@ Delete or Keep for its `practiceId`. The project picker
 (`ProjectSelectionGate`) never lists practice projects; the server listing is
 the learning space boundary.
 
-Local `/app` (`src/pages/app/index.vue`) has no Projects page: once the viewer
-is bound it resolves to `lessonPath` during a lesson, else to the started
-project, with an error notice and **Try again**. Local project reads are
-project-scoped, so the started project is found by following the server's
-`/app` redirect with a `HEAD` fetch; the page is not reloaded, so L (and a
-Lesson finished screen) keeps its place. `/app/learning` is the app shell with L, the lesson bar and Account
-settings; it opens L on the lesson in progress (else Courses) and offers Open
-Learning, Open practice project and Leave lesson. A host routes these
-addresses itself.
+Local `/app` (`src/pages/app/index.vue`) has no Projects page: it resolves to
+the started project, with an error notice and **Try again**, and never waits for
+Learning; during a lesson the overlay's learning mode redirect then moves that
+project address to the lesson's place. Local project reads are project-scoped,
+so the started project is found by following the server's `/app` redirect with
+a `HEAD` fetch; the page is not reloaded, so L (and a Lesson finished screen)
+keeps its place. The local server redirects `/` there too. `/app/learning`
+opens L on the lesson in progress (else Courses). During a lesson without a
+practice project it renders the project page (`project/[slug].vue`) with no
+slug: **No project open**, Preview/Dashboard switching in place
+(`useVibe64AppPage`'s empty pane), an empty-pane line, no project read, no
+sessions and no chat column. Otherwise it is the app shell with L, the lesson
+bar and Account settings, offering Open Learning, Open practice project and
+Leave lesson. A host routes these addresses itself. An ended lesson's step
+offers **Go to Courses**, where Continue lesson starts it again.
 
 ## Local practice-project address
 

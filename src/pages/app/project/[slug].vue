@@ -75,6 +75,7 @@ const {
               <template #activator="{ props: menuProps }">
                 <v-btn
                   class="studio-home-shell-project-selector"
+                  :disabled="!projectSlug"
                   variant="text"
                   v-bind="menuProps"
                   :title="projectSlug && projectTitle !== projectSlug ? `${projectTitle} (${projectSlug})` : projectTitle"
@@ -129,6 +130,7 @@ const {
 
         <div class="studio-home-shell-project-controls">
           <v-btn
+            v-if="projectSlug"
             class="studio-home-shell-chat-toggle"
             data-vibe64-guide="pane-switch"
             density="comfortable"
@@ -196,7 +198,11 @@ const {
         {{ pageError }}
       </v-alert>
 
-      <div class="studio-screen__gate-scroll">
+      <!-- No slug: a lesson without a practice project (the Learning page). -->
+      <p v-if="!projectSlug" class="studio-screen__no-project" data-test="no-project-pane">
+        {{ projectPane === "dashboard" ? "No dashboard" : "Nothing to preview" }}: a lesson is in progress, and it has no practice project.
+      </p>
+      <div v-else class="studio-screen__gate-scroll">
         <ProjectSelectionGate
           :runtime-ready="projectRuntimeReady"
           :runtime-error="projectRuntimeError"
@@ -275,6 +281,12 @@ const {
 
 .studio-screen__panel {
   padding: var(--generated-ui-screen-panel-padding);
+}
+
+.studio-screen__no-project {
+  color: var(--v64-on-surface-variant);
+  margin: 0;
+  padding: clamp(1rem, 3vw, 2rem);
 }
 
 .studio-screen__gate-scroll {

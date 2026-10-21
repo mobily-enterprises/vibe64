@@ -121,7 +121,7 @@ test("GET /api/health returns built-in health response", async () => {
   await app.close();
 });
 
-test("local single-folder server redirects /app to the startup project route", async () => {
+test("local single-folder server redirects / and /app to the startup project route", async () => {
   const targetRoot = await mkdtemp(path.join(tmpdir(), "vibe64-local-target-"));
   const systemRoot = await mkdtemp(path.join(tmpdir(), "vibe64-local-system-"));
   const app = await createServer({
@@ -139,6 +139,9 @@ test("local single-folder server redirects /app to the startup project route", a
 
     assert.equal(response.statusCode, 302);
     assert.equal(response.headers.location, "/app/project/local-target?from=test");
+    const root = await app.inject({ method: "GET", url: "/" });
+    assert.equal(root.statusCode, 302);
+    assert.equal(root.headers.location, "/app/project/local-target");
   } finally {
     await app.close();
     await rm(targetRoot, {

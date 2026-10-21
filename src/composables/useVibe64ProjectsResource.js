@@ -21,6 +21,7 @@ import {
 } from "@/lib/vibe64ApiResponses.js";
 
 function useVibe64ProjectsResource({
+  enabled = true,
   projectSlug = "",
   fallbackLoadError = "Projects could not load.",
   requestRecoveryLabel = "Projects"
@@ -32,6 +33,7 @@ function useVibe64ProjectsResource({
       })
     : PROJECT_SELECTION_ENDPOINT);
   const resource = useEndpointResource({
+    enabled,
     fallbackLoadError,
     path: selectionPath,
     queryKey: computed(() => projectSelectionGateQueryKey({

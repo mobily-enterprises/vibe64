@@ -79,6 +79,8 @@ function useVibe64AppPage() {
     ? projectOpenFailure.value.message : "");
   let attemptedProjectOpenKey = "";
   const projectSelection = useVibe64ProjectsResource({
+    // No project open (a lesson without a practice project): nothing to read.
+    enabled: computed(() => Boolean(projectSlug.value)),
     fallbackLoadError: "Project selection could not load.",
     projectSlug,
     requestRecoveryLabel: "Project selection"
@@ -128,13 +130,13 @@ function useVibe64AppPage() {
   const projectLoadError = projectSelection.loadError;
   const projects = projectSelection.projects;
   const selfTargetAutoSelectProjectRepro = projectSelection.selfTargetAutoSelectProjectRepro;
-  const targetRoot = computed(() => String(projectSelection.targetRoot.value || "").trim());
   const learning = useVibe64Learning();
   // A practice project is named by its lesson (the lesson in progress or the
   // open lesson when it owns this project), never by its training-<id> slug.
   const projectTitle = computed(() => {
     const slug = projectSlug.value;
-    if (!slug) return finalPathSegment(targetRoot.value);
+    // No slug: the shell of a lesson without a practice project (the Learning page).
+    if (!slug) return "No project open";
     const mode = learning?.learningMode;
     const lesson = learning?.lesson?.value;
     return projectDisplayName({ slug }, {
@@ -144,7 +146,10 @@ function useVibe64AppPage() {
   const developmentBasePath = computed(() => projectAppPath(projectSlug.value));
   const dashboardBasePath = computed(() => `${developmentBasePath.value}/dashboard`);
   const dashboardRouteActive = computed(() => normalizedPath(route.path).startsWith(`${dashboardBasePath.value}/`));
-  const projectPane = computed(() => dashboardRouteActive.value ? "dashboard" : "preview");
+  // Without a project the panes are empty and switch in place.
+  const emptyPane = ref("preview");
+  const projectPane = computed(() => !projectSlug.value ? emptyPane.value
+    : dashboardRouteActive.value ? "dashboard" : "preview");
   const sortedProjects = computed(() => [...projects.value].sort((left, right) => left.slug.localeCompare(right.slug)));
   const switcherProjects = computed(() => openProjectSwitcherProjects(projects.value));
   const chatToggleIcon = computed(() => {
@@ -174,13 +179,15 @@ function useVibe64AppPage() {
           pane: "dashboard"
         }
   ));
-  const projectPaneNavigationVisible = computed(() => projectPaneNavigationReady({
+  const projectPaneNavigationVisible = computed(() => !projectSlug.value || projectPaneNavigationReady({
     selectionReady: projectSelectionReady.value,
     projectSlug: projectSlug.value,
     readyProjectSlug: projectPaneNavigationReadySlug.value
   }));
-  const mobileProjectActionVisible = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value && chatCollapsed.value);
-  const mobilePaneSwipeEnabled = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value);
+  // Without a project there is no chat column, so the pane action is always shown.
+  const mobileProjectActionVisible = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value &&
+    (chatCollapsed.value || !projectSlug.value));
+  const mobilePaneSwipeEnabled = computed(() => Boolean(projectSlug.value) && projectPaneNavigationVisible.value && mobilePaneLayout.value);
   const colleagueLayout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
   const layoutOwner = {
     get projectSlug() { return projectSlug.value; },
@@ -393,6 +400,10 @@ function useVibe64AppPage() {
   }
 
   function selectProjectPane(pane = "") {
+    if (!projectSlug.value) {
+      emptyPane.value = pane === "dashboard" ? "dashboard" : "preview";
+      return;
+    }
     if (mobilePaneLayout.value) {
       setChatCollapsed(true);
     }
@@ -676,14 +687,6 @@ function selectedProjectSlug(selection = {}) {
     selection?.slug ||
     ""
   ).trim();
-}
-
-function finalPathSegment(pathValue = "") {
-  const normalizedPath = String(pathValue || "").trim().replace(/[\\/]+$/u, "");
-  if (!normalizedPath) {
-    return "";
-  }
-  return normalizedPath.split(/[\\/]+/u).filter(Boolean).at(-1) || "";
 }
 
 function normalizedPath(pathValue = "") {
