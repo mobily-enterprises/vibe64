@@ -1,6 +1,6 @@
 <template>
-  <v-alert v-if="problem" type="warning" variant="tonal" :title="heading" class="cli-install-notice">
-    <p v-if="body" class="ma-0">{{ body }}</p>
+  <v-alert v-if="problem" type="warning" variant="tonal" :title="account.title" class="cli-install-notice">
+    <p v-if="account.detail" class="ma-0">{{ account.detail }}</p>
     <template v-if="account.install">
       <p class="mt-3 mb-2">
         Open a terminal on this computer, paste this command and press Enter. When it finishes, choose
@@ -43,7 +43,7 @@ import { computed, ref, watch } from "vue";
 import { mdiCheck, mdiContentCopy, mdiRefresh } from "@mdi/js";
 
 const props = defineProps({
-  // An account or connection status: { label, status, message, install?, observed? }.
+  // An account or connection status: { label, status, title, detail, install?, observed? }.
   account: { type: Object, default: () => ({}) },
   checking: Boolean
 });
@@ -51,14 +51,6 @@ const emit = defineEmits(["check"]);
 
 const problem = computed(() => cliProblem(props.account));
 const name = computed(() => props.account?.label || "This AI tool");
-const heading = computed(() => props.account?.status === "not_installed"
-  ? `${name.value} isn't installed on this computer`
-  : `${name.value} didn't start`);
-// The heading already says what is wrong, so the message does not repeat it.
-const body = computed(() => {
-  const message = String(props.account?.message || "");
-  return message.startsWith(heading.value) ? message.slice(heading.value.length).replace(/^[.\s]+/u, "") : message;
-});
 const copied = ref(false);
 watch(() => props.account?.install?.command, () => { copied.value = false; });
 

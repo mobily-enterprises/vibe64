@@ -642,7 +642,7 @@ async function readCodexLocalStatus({
     return accountConnected({
       id: "codex",
       label: "Codex",
-      message: "Codex is authenticated for the shared Vibe64 app account.",
+      message: "Codex is signed in.",
       observed: "Local Codex authentication marker is present.",
       ownerOnly: (await readCodexSelectedAccountAccess(codexContext).catch(() => null))?.ownerOnly,
       scope: APP_CREDENTIAL_SCOPE,
@@ -653,7 +653,7 @@ async function readCodexLocalStatus({
   return accountDisconnected({
     id: "codex",
     label: "Codex",
-    message: "Codex is not authenticated for the shared Vibe64 app account.",
+    message: "Codex is not signed in.",
     observed: "Local Codex authentication marker is missing.",
     scope: APP_CREDENTIAL_SCOPE
   });
@@ -1099,9 +1099,9 @@ function rememberedGithubIdentity(value = {}) {
 
 // A CLI that is missing or did not start is not a signed-out account.
 function operatorCliAccount(id, { installed = false, observed = "" } = {}) {
-  const { install, ...problem } = operatorCliProblem(id, { installed });
+  const { install, title, detail, ...problem } = operatorCliProblem(id, { installed });
   return { ...accountDisconnected({ ...ACCOUNT_DEFINITIONS[id], ...problem, observed }),
-    required: ACCOUNT_DEFINITIONS[id].required, install };
+    required: ACCOUNT_DEFINITIONS[id].required, title, detail, install };
 }
 
 async function readCodexStatus({
@@ -1128,7 +1128,7 @@ async function readCodexStatus({
       label: "Codex",
       message: reconnectRequired
         ? CODEX_RECONNECT_REQUIRED_MESSAGE
-        : "Codex is not authenticated for the shared Vibe64 app account.",
+        : "Codex is not signed in.",
       observed: result.output,
       scope: APP_CREDENTIAL_SCOPE,
       status: reconnectRequired ? "reconnect_required" : undefined
@@ -1138,7 +1138,7 @@ async function readCodexStatus({
   return accountConnected({
     id: "codex",
     label: "Codex",
-    message: "Codex is authenticated for the shared Vibe64 app account.",
+    message: "Codex is signed in.",
     observed: result.output,
     scope: APP_CREDENTIAL_SCOPE,
     ownerOnly: (await readCodexSelectedAccountAccess(codexContext).catch(() => null))?.ownerOnly,

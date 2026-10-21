@@ -77,14 +77,14 @@ function operatorCliCommand(tool = "", options = {}) {
  */
 function operatorCliProblem(tool = "", { installed = false } = {}) {
   const { name, provider, install, guideUrl } = OPERATOR_CLIS[tool];
-  return {
-    code: installed ? "vibe64_cli_unavailable" : "vibe64_cli_not_installed",
-    status: installed ? "unavailable" : "not_installed",
-    message: installed
-      ? `${name} is installed but didn't start. Choose Check again; if it keeps failing, reinstall it.`
-      : `${name} isn't installed on this computer. Vibe64 uses it to work with ${provider}. Install it, then choose Check again.`,
-    install: { command: install, guideUrl }
-  };
+  const problem = installed
+    ? { code: "vibe64_cli_unavailable", status: "unavailable", title: `${name} didn't start`,
+        detail: `${name} is installed but didn't start. Choose Check again; if it keeps failing, reinstall it.` }
+    : { code: "vibe64_cli_not_installed", status: "not_installed", title: `${name} isn't installed on this computer`,
+        detail: `Vibe64 uses it to work with ${provider}. Install it, then choose Check again.` };
+  // `message` reads on its own; the install notice shows `title` above `detail`.
+  return { ...problem, message: installed ? problem.detail : `${problem.title}. ${problem.detail}`,
+    install: { command: install, guideUrl } };
 }
 
 export {

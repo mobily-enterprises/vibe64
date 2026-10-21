@@ -1206,85 +1206,85 @@ defineExpose({ openProvider });
             v-if="missingTool('opencode')" :account="missingTool('opencode')" :checking="checkingOpenCode"
             @check="checkOpenCodeAgain"
           />
-          <v-text-field
-            v-else
-            v-model="providerSearch"
-            autofocus
-            clearable
-            :disabled="providerPickerLoading"
-            hide-details
-            :prepend-inner-icon="mdiMagnify"
-            label="Search OpenCode providers"
-            placeholder="Try OpenAI, Anthropic, GLM…"
-            variant="outlined"
-          />
-
-          <template v-if="missingTool('opencode')" />
-          <div
-            v-else-if="providerPickerLoading"
-            aria-busy="true"
-            aria-label="Loading OpenCode providers"
-            class="vibe64-provider-picker__list"
-          >
-            <v-skeleton-loader v-for="index in 6" :key="index" type="list-item-avatar-two-line" />
-          </div>
-
-          <div v-else-if="registryLoadError" class="vibe64-provider-picker__recovery">
-            <v-alert
-              :text="registryLoadError"
-              title="OpenCode providers could not load"
-              type="error"
-              variant="tonal"
+          <template v-else>
+            <v-text-field
+              v-model="providerSearch"
+              autofocus
+              clearable
+              :disabled="providerPickerLoading"
+              hide-details
+              :prepend-inner-icon="mdiMagnify"
+              label="Search OpenCode providers"
+              placeholder="Try OpenAI, Anthropic, GLM…"
+              variant="outlined"
             />
-            <v-btn color="primary" type="button" variant="tonal" @click="openProviderPicker">Try again</v-btn>
-          </div>
 
-          <v-sheet
-            v-else-if="filteredProviders.length"
-            border
-            class="vibe64-provider-picker__list"
-            rounded="xl"
-          >
-            <v-list lines="two">
-              <v-list-item
-                v-for="provider in filteredProviders"
-                :key="provider.id"
-                class="vibe64-provider-picker__item"
-                :disabled="Boolean(providerUnavailableReason(provider))"
-                :subtitle="providerUnavailableReason(provider)
-                  ? `${provider.id} · ${providerUnavailableReason(provider)}`
-                  : `${provider.id} · ${provider.description}`"
-                :title="provider.label"
-                @click="chooseProvider(provider, { origin: 'provider-picker' })"
-              >
-                <template #prepend>
-                  <v-avatar color="primary" size="44" variant="tonal">
-                    <v-icon :icon="mdiRobotOutline" size="22" />
-                  </v-avatar>
-                </template>
-                <template #append>
-                  <span v-if="providerUnavailableReason(provider)" class="text-label-medium text-medium-emphasis">
-                    More setup needed
-                  </span>
-                  <span v-else class="text-label-large text-primary">Connect</span>
-                </template>
-              </v-list-item>
-            </v-list>
-          </v-sheet>
+            <div
+              v-if="providerPickerLoading"
+              aria-busy="true"
+              aria-label="Loading OpenCode providers"
+              class="vibe64-provider-picker__list"
+            >
+              <v-skeleton-loader v-for="index in 6" :key="index" type="list-item-avatar-two-line" />
+            </div>
 
-          <v-sheet v-else class="vibe64-provider-picker__empty" color="surface-container-low" rounded="xl">
-            <v-icon :icon="mdiRobotOutline" color="primary" size="36" />
-            <strong>
-              {{ providerSearch.trim()
-                ? `No providers match “${providerSearch.trim()}”`
-                : "Every OpenCode provider is already connected" }}
-            </strong>
-            <span class="text-body-medium text-medium-emphasis">
-              {{ providerSearch.trim()
-                ? "Try a provider name or its OpenCode ID."
-                : "Manage an existing connection, or remove one before adding it again." }}
-            </span>
-          </v-sheet>
+            <div v-else-if="registryLoadError" class="vibe64-provider-picker__recovery">
+              <v-alert
+                :text="registryLoadError"
+                title="OpenCode providers could not load"
+                type="error"
+                variant="tonal"
+              />
+              <v-btn color="primary" type="button" variant="tonal" @click="openProviderPicker">Try again</v-btn>
+            </div>
+
+            <v-sheet
+              v-else-if="filteredProviders.length"
+              border
+              class="vibe64-provider-picker__list"
+              rounded="xl"
+            >
+              <v-list lines="two">
+                <v-list-item
+                  v-for="provider in filteredProviders"
+                  :key="provider.id"
+                  class="vibe64-provider-picker__item"
+                  :disabled="Boolean(providerUnavailableReason(provider))"
+                  :subtitle="providerUnavailableReason(provider)
+                    ? `${provider.id} · ${providerUnavailableReason(provider)}`
+                    : `${provider.id} · ${provider.description}`"
+                  :title="provider.label"
+                  @click="chooseProvider(provider, { origin: 'provider-picker' })"
+                >
+                  <template #prepend>
+                    <v-avatar color="primary" size="44" variant="tonal">
+                      <v-icon :icon="mdiRobotOutline" size="22" />
+                    </v-avatar>
+                  </template>
+                  <template #append>
+                    <span v-if="providerUnavailableReason(provider)" class="text-label-medium text-medium-emphasis">
+                      More setup needed
+                    </span>
+                    <span v-else class="text-label-large text-primary">Connect</span>
+                  </template>
+                </v-list-item>
+              </v-list>
+            </v-sheet>
+
+            <v-sheet v-else class="vibe64-provider-picker__empty" color="surface-container-low" rounded="xl">
+              <v-icon :icon="mdiRobotOutline" color="primary" size="36" />
+              <strong>
+                {{ providerSearch.trim()
+                  ? `No providers match “${providerSearch.trim()}”`
+                  : "Every OpenCode provider is already connected" }}
+              </strong>
+              <span class="text-body-medium text-medium-emphasis">
+                {{ providerSearch.trim()
+                  ? "Try a provider name or its OpenCode ID."
+                  : "Manage an existing connection, or remove one before adding it again." }}
+              </span>
+            </v-sheet>
+          </template>
         </v-card-text>
       </v-card>
     </v-dialog>

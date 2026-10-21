@@ -171,16 +171,14 @@ function useVibe64TemporaryAi({
           }
           // Only the server's turn report can show the assistant as working;
           // local Send state and request fences never do. A deferred read
-          // reports the saved record, which every status change writes before
-          // announcing it, so it is as authoritative as a reconciled read.
+          // reports the saved record, so it counts as much as a reconciled one.
           if (!observed.readError) {
             update.nativeWorking = temporaryAiTurnIsActive(temporaryAiText(observed.status));
           }
           const route = JSON.parse(observed.routingMetadata?.assistant_routing_request || "null");
-          // The old poll's captured turn/send fence remains product policy. A
-          // pre-Send read cannot finish a newer request while preparation runs.
-          // A request followed by a later one in the saved transcript is no
-          // longer current, whichever view sent the later one.
+          // A pre-Send read cannot finish a newer request while preparation runs,
+          // but a request the saved transcript has followed with a later one
+          // (from any view) is no longer current.
           const requests = (snapshot.conversationLog || []).map(turn => turn.user?.messageId).filter(Boolean);
           const superseded = requests.includes(task.messageId) && requests.at(-1) !== task.messageId;
           const sameRequest = !task.messageId || superseded || observed.messageId === task.messageId || route?.messageId === task.messageId;
@@ -942,14 +940,13 @@ function useVibe64TemporaryAi({
       else if (payload.reason === "temporary-conversation-renamed") void restoreTasks();
       else if (task && payload.assistantRoutingRequest) {
         const route = payload.assistantRoutingRequest;
-        // A routed request that is still being delivered or run becomes this
-        // view's current request. Any other notice only asks for the saved state.
-        // Only a Send this view is still delivering keeps its own id; a failed
-        // or another view's pending id never fences the routed request.
+        // A request still being delivered or run becomes this view's current one;
+        // any other notice only asks for the saved state. A Send this view is
+        // still delivering keeps its own id.
         const current = route.status === "working" || assistantRoutingStatusIsPending(route);
         const sending = task.pendingMessageId && task.delivery?.find(task.pendingMessageId)?.status === "pending";
         updateTask(task.id, { routingMetadata: { ...task.routingMetadata, assistant_routing_request: JSON.stringify(route) },
-          ...(current ? { busy: true, messageId: (sending && task.pendingMessageId) || route.messageId || task.messageId } : {}) });
+          ...(current ? { busy: true, messageId: sending ? task.pendingMessageId : route.messageId || task.messageId } : {}) });
         void task.binding.runtime.value.reload();
       }
     }

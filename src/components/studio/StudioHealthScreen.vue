@@ -1,7 +1,7 @@
 <template>
   <section class="studio-health">
     <Vibe64DashboardPageHeader
-      description="Read-only checks for the editor, credentials, Genesis, and pinned runtimes."
+      description="Read-only checks for the editor, credentials, Genesis, and tools."
       :icon="mdiHeartPulse"
       title="Studio Health"
     >

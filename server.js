@@ -35,7 +35,6 @@ import {
 import {
   GITHUB_ACCOUNT_MODE_LOCAL,
   VIBE64_GITHUB_ACCOUNT_MODE_ENV,
-  configureVibe64Host,
   normalizeGithubAccountMode,
   vibe64SharedModes
 } from "@local/vibe64-execution/server";
@@ -426,16 +425,7 @@ function targetRootForRuntimeProfile(options = {}, runtimeProfile = {}) {
   return runtimeProfile.local === true ? process.cwd() : "";
 }
 
-// A host that provisions its own machines passes `hostProfile`; without it,
-// Vibe64 uses the person's own tools and folders.
-function configureHost(options = {}) {
-  if (options?.hostProfile) {
-    configureVibe64Host(options.hostProfile);
-  }
-}
-
 async function createServer(options = {}) {
-  configureHost(options);
   const runtimeEnv = resolveRuntimeEnv();
   const loggerOptions = createVibe64FastifyLoggerOptions({
     env: process.env,
@@ -692,7 +682,6 @@ async function createServer(options = {}) {
 }
 
 async function startServer(options = {}) {
-  configureHost(options);
   const runtimeEnv = resolveRuntimeEnv();
   const runtimeProfile = resolveServerRuntimeProfile(options);
   const requestedTargetRoot = targetRootForRuntimeProfile(options, runtimeProfile);

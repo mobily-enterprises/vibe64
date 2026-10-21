@@ -606,9 +606,6 @@ const setupRows = computed(() => accountRows.value.map((account) => {
 </script>
 
 <style scoped>
-.accounts-setup__details { color: rgba(var(--v-theme-on-surface), 0.72); font-size: 0.8125rem; margin-top: 0.5rem; }
-.accounts-setup__details summary { cursor: pointer; }
-.accounts-setup__details pre { font-size: 0.75rem; margin-top: 0.25rem; overflow-wrap: anywhere; white-space: pre-wrap; }
 .accounts-setup {
   display: grid;
   gap: 1.5rem;

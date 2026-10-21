@@ -48,8 +48,6 @@ function createClaudeConversationEnvironment({
   providerConnections, prepareCommandEnvironment, codexGitCommand, agentDatabaseCommand,
   agentEnvCommand, agentPreviewCommand, agentSessionCommand
 }) {
-  // A command given as a function is looked up at each use.
-  const claudeCommand = () => typeof command === "function" ? command() : command;
   function sessionGuidance(entry) {
     return {
       scope: "session",
@@ -138,7 +136,7 @@ function createClaudeConversationEnvironment({
 
   async function configureProcess(entry, { instructionArguments, model, profile, external, outputSchema, selection, applicationTools }, { context: ctx, prepared }) {
     const guidanceEnvironment = !profile && !ctx.assistantScope ? await sessionGuidanceEnvironment(entry) : {};
-    return { command: claudeCommand(), commandRunner, stopExecution, credentialHome,
+    return { command: command(), commandRunner, stopExecution, credentialHome,
       env: { ...env, ...prepared.env, ...guidanceEnvironment },
       shimDirs: !profile && !ctx.assistantScope && ctx.runtime?.learningScope?.noExercise !== true ? withGenesisCommandShim(prepared.shimDirs) : prepared.shimDirs,
       model: external ? "" : model,
@@ -181,7 +179,7 @@ function createClaudeConversationEnvironment({
         if (actor?.ok === false) throw error(actor.error, actor.code);
         const terminal = await conversations.prepareTerminal(entry, ctx);
         await markClaudeTerminalReady(env, credentialHome, ctx.workdir);
-        return commandRunner({ actor: "app", command: claudeCommand(),
+        return commandRunner({ actor: "app", command: command(),
           args: terminal.args,
           baseEnv: { ...env, ...prepared.env, ...terminal.env }, credentialHome, inheritProcessEnv: false, cwd: ctx.workdir,
           allowedRoots: [ctx.workdir], envPolicy: "auth", purpose: "assistant", mode: "pty",

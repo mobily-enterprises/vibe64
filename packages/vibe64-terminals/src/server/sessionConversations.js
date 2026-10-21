@@ -895,9 +895,8 @@ function createSessionConversations({
     },
 
     async afterTemporaryTurn(sessionId, payload, options = {}) {
-      // The idle completion is the last server work for a finished turn; no
-      // browser event follows it. A busy lease therefore retries both steps
-      // instead of leaving the saved turn in progress, and finally fails loudly.
+      // No browser event follows this idle completion, so a busy lease is
+      // retried instead of leaving the saved turn in progress; the last try throws.
       for (let attempt = 1; ; attempt += 1) {
         try {
           const record = await write(sessionId, options, async (ctx) => {

@@ -192,19 +192,19 @@ function runtimePackRoot({ root = "" } = {}) {
   return normalizeAbsolutePath(root || vibe64Host().runtimePackRoot);
 }
 
-function runtimePackBinPaths(runtime = "", options = {}) {
-  const root = runtimePackRoot(options);
+function runtimePackBinPaths(runtime = "") {
+  const root = runtimePackRoot();
   const entries = root ? RUNTIME_PACKS[normalizeText(runtime)]?.binDirs || [] : [];
   return entries.map((entry) => path.join(root, entry));
 }
 
-function runtimePackGuardBinPaths(options = {}) {
-  const root = runtimePackRoot(options);
+function runtimePackGuardBinPaths() {
+  const root = runtimePackRoot();
   return root ? [path.join(root, "guard-bin")] : [];
 }
 
-function runtimePackPolicyBinPaths(options = {}) {
-  const root = runtimePackRoot(options);
+function runtimePackPolicyBinPaths() {
+  const root = runtimePackRoot();
   return root ? [path.join(root, "policy-bin")] : [];
 }
 

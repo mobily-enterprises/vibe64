@@ -234,8 +234,8 @@ test("started server defaults to Unix socket when PORT is not set", async (t) =>
   }
 
   // A host whose OS users share files through a group keeps its group-readable socket.
+  configureVibe64Host({ sharedGroupAccess: true });
   const sharedApp = await startServer({
-    hostProfile: { sharedGroupAccess: true },
     listenSocket: socketPath,
     publicOrigin: "https://tonymobily.vibe64.dev",
     startupSlug: "beepollen"

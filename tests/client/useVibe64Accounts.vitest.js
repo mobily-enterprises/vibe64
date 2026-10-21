@@ -16,7 +16,7 @@ describe("useVibe64Accounts account status cache", () => {
           connected: true,
           id: "codex",
           label: "Codex",
-          message: "Codex is authenticated for the shared Vibe64 app account.",
+          message: "Codex is signed in.",
           required: true,
           scope: "app",
           status: "connected"

@@ -49,6 +49,8 @@ function createClaudeConversationHost({
   recordGitActor = recordSessionGitCommandActor,
   codexGitCommand, agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand
 } = {}) {
+  // A fixed command, or one looked up at each use.
+  const claudeCommand = typeof command === "function" ? command : () => command;
   const publishSessionChanged = publishMainConversationEvent.bind(
     null, claudeTerminalNamespace, publishApplicationSessionChanged, publishConversation
   );
@@ -68,7 +70,7 @@ function createClaudeConversationHost({
       }
     } });
   const { prepareConfiguration, prepareProcess, configureProcess, configureTerminal, createTerminalAccess } =
-    createClaudeConversationEnvironment({ env, projectService, command, credentialHome, commandRunner, stopExecution,
+    createClaudeConversationEnvironment({ env, projectService, command: claudeCommand, credentialHome, commandRunner, stopExecution,
       providerConnections, prepareCommandEnvironment, codexGitCommand, agentDatabaseCommand, agentEnvCommand,
       agentPreviewCommand, agentSessionCommand });
   const conversations = createClaudeConversationOwner({ configRoot, createError: error,
@@ -105,7 +107,7 @@ function createClaudeConversationHost({
   });
   const accounts = createClaudeConversationAccounts({ owner: conversations, configRoot, providerConnections,
     accountStatus, connectionStatus, createProcess: options => createProcess({ ...options, logger }),
-    command, commandRunner, stopExecution, credentialHome, env });
+    command: claudeCommand, commandRunner, stopExecution, credentialHome, env });
   const { queries: accountQueries, queryFailure: accountQueryFailure } = accounts;
   const publishTurnEvent = createClaudeConversationEvents({ projectService, storage: conversationStorage,
     messagePolicy, owner: conversations, accountQueries, publishSessionChanged, logger });

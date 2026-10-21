@@ -14,8 +14,8 @@ const install = { command: "curl -fsSL https://claude.ai/install.sh | bash", gui
 
 it("says plainly that the CLI is not installed and offers its install command", async () => {
   const html = await render({
-    label: "Claude Code", status: "not_installed", install,
-    message: "Claude Code isn't installed on this computer. Vibe64 uses it to work with Claude. Install it, then choose Check again."
+    label: "Claude Code", status: "not_installed", install, title: "Claude Code isn't installed on this computer",
+    detail: "Vibe64 uses it to work with Claude. Install it, then choose Check again."
   });
   expect(html).toContain("Claude Code isn&#39;t installed on this computer");
   expect(html.split("isn&#39;t installed on this computer")).toHaveLength(2);
@@ -29,8 +29,8 @@ it("says plainly that the CLI is not installed and offers its install command", 
 
 it("keeps raw start-up output inside a collapsed Details", async () => {
   const html = await render({
-    label: "Codex", status: "unavailable", observed: "spawn /home/me/.local/bin/codex EACCES",
-    message: "Codex is installed but didn't start. Choose Check again; if it keeps failing, reinstall it."
+    label: "Codex", status: "unavailable", observed: "spawn /home/me/.local/bin/codex EACCES", title: "Codex didn't start",
+    detail: "Codex is installed but didn't start. Choose Check again; if it keeps failing, reinstall it."
   });
   expect(html).toContain("Codex didn&#39;t start");
   expect(html).toMatch(/<details[^>]*><summary[^>]*>Details<\/summary><pre[^>]*>spawn \/home\/me\/\.local\/bin\/codex EACCES<\/pre>/u);

@@ -107,6 +107,8 @@ test("a missing or failing CLI is described plainly, with its official installer
   assert.deepEqual(operatorCliProblem("claude"), {
     code: "vibe64_cli_not_installed",
     status: "not_installed",
+    title: "Claude Code isn't installed on this computer",
+    detail: "Vibe64 uses it to work with Claude. Install it, then choose Check again.",
     message: "Claude Code isn't installed on this computer. Vibe64 uses it to work with Claude. Install it, then choose Check again.",
     install: { command: "curl -fsSL https://claude.ai/install.sh | bash", guideUrl: "https://code.claude.com/docs/en/setup" }
   });
@@ -115,6 +117,7 @@ test("a missing or failing CLI is described plainly, with its official installer
   const failed = operatorCliProblem("codex", { installed: true });
   assert.equal(failed.code, "vibe64_cli_unavailable");
   assert.equal(failed.status, "unavailable");
+  assert.equal(failed.title, "Codex didn't start");
   assert.equal(failed.message, "Codex is installed but didn't start. Choose Check again; if it keeps failing, reinstall it.");
   assert.throws(() => resolveOperatorCli("gemini"), TypeError);
 });
