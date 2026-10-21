@@ -134,7 +134,8 @@ resolving the project (one mode read per call, so a leave applies at once).
 Colleague uses JSKIT's `createConversationRuntime` for model turns, application
 tools, native history, admission, cancellation and model replacement. Its service
 owns product instructions, focused targets, watches, assignments and authorization.
-When initial Senior selection has no available route, the service records the
+Initial Senior selection tries Claude Code, then Codex, then the other available
+workflows. When it has no available route, the service records the
 existing setup failure without admitting a model request and projects a bounded
 `modelSetupRequired` presentation fact. Before a selection is committed, a read
 also projects it when ordinary selection finds no usable Senior route (no

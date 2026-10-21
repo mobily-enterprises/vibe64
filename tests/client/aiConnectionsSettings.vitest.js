@@ -33,6 +33,7 @@ function mount() {
   app.mount({});
   return app._instance.setupState;
 }
+const engineGroup = (state, id) => state.configuredAiGroups.find(group => group.id === id);
 beforeEach(() => {
   vi.stubGlobal("document", { activeElement: {} });
   mocks.requestOnboarding = vi.fn();
@@ -64,8 +65,8 @@ afterEach(() => {
 it("groups configured pairs by orchestrator and retains the included default", () => {
   const state = mount();
   expect(state.configuredAiGroups.map(group => [group.label, group.accounts.map(account => account.id)])).toEqual([
-    ["Codex", ["codex", "deepseek", "zai-coding-plan", "zai"]],
     ["Claude Code", ["claude", "deepseek", "zai-coding-plan", "zai"]],
+    ["Codex", ["codex", "deepseek", "zai-coding-plan", "zai"]],
     ["OpenCode", ["opencode"]]
   ]);
   expect(state.configuredAiGroups[2].accounts[0]).toMatchObject({ builtIn: true, preferred: true, removable: false });
@@ -117,7 +118,7 @@ it("keeps native login reconnection under Manage instead of offering it as new",
   mocks.accounts.status.value.accounts[0] = { id: "codex", connected: false, status: "reconnect_required" };
   const state = mount();
   expect(state.nativeChoices).toEqual([]);
-  const account = state.configuredAiGroups[0].accounts[0];
+  const account = engineGroup(state, "codex").accounts[0];
   expect(account).toMatchObject({ id: "codex", keyHint: "Reconnect required", connected: false });
   state.manageConfiguredAi(account);
   expect(state.nativeSetupOrigin).toBe("manage");
@@ -158,11 +159,11 @@ it("does not turn a stale Add choice into replacement of an existing OpenCode co
 
 it("shows GPT's actual access scope and does not guess when it is unavailable", () => {
   const state = mount();
-  expect(state.configuredAiGroups[0].accounts[0].accessLabel).toBe("Personal use");
+  expect(engineGroup(state, "codex").accounts[0].accessLabel).toBe("Personal use");
   mocks.accounts.status.value.accounts[0].ownerOnly = false;
-  expect(state.configuredAiGroups[0].accounts[0].accessLabel).toBe("Workspace use");
+  expect(engineGroup(state, "codex").accounts[0].accessLabel).toBe("Workspace use");
   delete mocks.accounts.status.value.accounts[0].ownerOnly;
-  expect(state.configuredAiGroups[0].accounts[0].accessLabel).toBe("");
+  expect(engineGroup(state, "codex").accounts[0].accessLabel).toBe("");
 });
 
 it("shows a Claude-only provider without creating an empty Codex group", () => {
@@ -179,8 +180,8 @@ it("shows a Claude-only provider without creating an empty Codex group", () => {
 it("keeps unavailable configured pairs in their own groups for reconnection", () => {
   mocks.providers.connections.value = [{ id: "deepseek", status: "reconnect_required", connected: false, claudeReady: false, configuredEngines: ["claude"] }];
   const state = mount();
-  expect(state.configuredAiGroups[0].accounts.map(account => account.id)).toEqual(["codex"]);
-  const account = state.configuredAiGroups[1].accounts.find(account => account.id === "deepseek");
+  expect(engineGroup(state, "codex").accounts.map(account => account.id)).toEqual(["codex"]);
+  const account = engineGroup(state, "claude").accounts.find(account => account.id === "deepseek");
   expect(account).toMatchObject({ connected: false, keyHint: "Reconnect required" });
   state.manageConfiguredAi(account);
   expect(state.nativeSetupProviderId).toBe("claude");
@@ -188,7 +189,7 @@ it("keeps unavailable configured pairs in their own groups for reconnection", ()
 
 it("removes only the selected orchestrator key through its existing owner", async () => {
   const state = mount();
-  const account = state.configuredAiGroups[1].accounts.find(account => account.id === "deepseek");
+  const account = engineGroup(state, "claude").accounts.find(account => account.id === "deepseek");
   state.requestRemove(account);
   await state.confirmRemove();
   expect(mocks.providers.change).toHaveBeenCalledExactlyOnceWith({ engineId: "claude", modelProviderId: "deepseek", remove: true });

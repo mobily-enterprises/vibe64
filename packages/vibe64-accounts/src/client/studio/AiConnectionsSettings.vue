@@ -169,8 +169,8 @@ const nativeSetupDetails = computed(() => nativeSetupProviderId.value === "claud
   message: "Choose ChatGPT login or an OpenAI API key."
 });
 const nativeChoices = computed(() => [
-  { id: "codex", label: "Codex", account: codexAccount.value, provider: { id: "openai", label: "GPT", description: "ChatGPT login or OpenAI API key" } },
-  { id: "claude", label: "Claude Code", account: claudeAccount.value, provider: { id: "anthropic", label: "Claude", description: "Claude subscription" } }
+  { id: "claude", label: "Claude Code", account: claudeAccount.value, provider: { id: "anthropic", label: "Claude", description: "Claude subscription" } },
+  { id: "codex", label: "Codex", account: codexAccount.value, provider: { id: "openai", label: "GPT", description: "ChatGPT login or OpenAI API key" } }
 ].map(({ account, provider, ...engine }) => ({
   ...engine,
   providers: [
@@ -258,8 +258,8 @@ const configuredAiRows = computed(() => [
   }))
 ]);
 const configuredAiGroups = computed(() => [
-  { id: "codex", label: "Codex" },
   { id: "claude", label: "Claude Code" },
+  { id: "codex", label: "Codex" },
   { id: "opencode", label: "OpenCode" }
 ].map((engine) => ({ ...engine, accounts: configuredAiRows.value.filter((account) => account.engineId === engine.id) }))
   .filter((engine) => engine.accounts.length));

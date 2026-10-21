@@ -278,7 +278,10 @@ paths, metadata or logs. An accepted preparation retry does not mean it finished
 Retry consults the existing preparation owner's current readiness when the stored
 attempt succeeded, allowing changed recipes or resources through the same admission
 guard. A still-current or unconfirmed success cannot be rerun through that path.
-The workflow picker previews the submitting user's Senior and Junior destinations;
+The workflow picker lists Claude Code, Codex, then OpenCode (the terminals
+provider registration order) and preselects the first available workflow; creation
+without an explicit workflow uses the same first available choice.
+It previews the submitting user's Senior and Junior destinations;
 it reads saved assignments and connection access without live model discovery.
 Uninitialized workflows use connected defaults to establish availability and say
 “Recommended on creation”; creation discovers and saves the exact recommendations.

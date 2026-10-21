@@ -90,8 +90,8 @@ authorization code. You perform provider consent and secret entry. Wait for the
 saved connected state, and use **Refresh** or **Check saved key** when offered.
 Do not reconnect or resend a key solely because a status request was interrupted.
 DeepSeek, regular GLM API and GLM Coding Plan connections belong to the
-orchestrator shown in that row. Use **Add connection**, choose **Codex**,
-**Claude Code** or **OpenCode**, then its provider. Enter a key and complete
+orchestrator shown in that row. Use **Add connection**, choose **Claude Code**,
+**Codex** or **OpenCode**, then its provider. Enter a key and complete
 that row's verification. Each orchestrator can save a different key, or you can
 enter the same key independently for several orchestrators. Connecting or
 checking one row does not connect, check or copy a key to another. Regular GLM
@@ -216,7 +216,8 @@ Colleague needs no Model routing step of its own. If an AI shows **Connected**
 but its roles were never saved (for example a Codex login that existed before
 Vibe64 was installed), Colleague's first message or **Teach me** saves that
 workflow's recommended routing, as starting a session does, and uses its
-Senior model. Saved choices are never replaced. Colleague says it has **no usable
+Senior model, trying Claude Code before Codex and then the other connected
+workflows. Saved choices are never replaced. Colleague says it has **no usable
 AI model** only when no connected workflow can supply a Senior model; connect an
 AI, or open **Configure routing** and choose an available Senior, then press
 Send or **Teach me** again. That message clears by itself once an AI is usable.

@@ -9,8 +9,8 @@ vi.mock("@local/vibe64-accounts/client", () => ({
   ModelRoutingForm: { render: () => null },
   useModelRouting: () => {
     const data = ref({ workflows: [
-      { engineId: "codex", label: "Codex", connected: true, available: true },
       { engineId: "claude", label: "Claude Code", connected: true, available: true },
+      { engineId: "codex", label: "Codex", connected: true, available: true },
       { engineId: "opencode", label: "OpenCode", connected: false, available: false, error: "Connect an account first." }
     ] });
     return { engines: ref([]), loadError: ref(""), resource: { isInitialLoading: ref(false), data },
@@ -122,7 +122,7 @@ it("does not switch an unavailable workflow or silently change Custom's exact mo
   await state.save("custom", false, "claude");
   state.mode = "custom";
   expect(mocks.save).not.toHaveBeenCalled();
-  expect(state.workflowChoices.map(choice => choice.engineId)).toEqual(["codex", "claude"]);
+  expect(state.workflowChoices.map(choice => choice.engineId)).toEqual(["claude", "codex"]);
   const claude = state.workflows.data.value.workflows.find(choice => choice.engineId === "claude");
   claude.available = false;
   claude.error = "Choose a Senior model in Model routing.";

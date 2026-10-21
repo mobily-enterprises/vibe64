@@ -349,7 +349,7 @@ provider operations.
 Connection setup describes available models and directs role choices to Model
 routing. Connecting GLM or a Zen key does not promise to replace saved defaults;
 recommendations and their application belong to the shared routing flow.
-Configured connections are grouped under Codex, Claude Code and OpenCode; empty
+Configured connections are grouped under Claude Code, Codex and OpenCode; empty
 orchestrator groups are omitted. A curated key verified for both native
 orchestrators has a separate row in each group. Manage opens that exact
 orchestrator/provider pair. Configured engine membership remains visible during

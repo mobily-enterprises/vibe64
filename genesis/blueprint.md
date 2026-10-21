@@ -650,7 +650,8 @@ Helper choices must support restricted background requests; chat-only models are
 disabled for that role and an incompatible saved choice explains the problem.
 An older Helper settings conflict has a separate Confirm Helper action. It names
 the need to confirm future background tasks and is resolved when routing is saved.
-Main session creation and renewal share a workflow picker that
+Main session creation and renewal share a workflow picker that lists
+Claude Code before Codex and OpenCode and
 previews the user's effective Senior and Junior models, including Shared backup.
 It opens from saved routing and connection state without live model discovery;
 uninitialized choices say “Recommended on creation” until exact models are selected.
