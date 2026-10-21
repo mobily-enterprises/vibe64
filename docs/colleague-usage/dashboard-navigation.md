@@ -24,9 +24,14 @@ Inside an individual issue or pull request, the same control says **All issues**
 or **All pull requests** and returns to its list.
 
 **Git log** is in the project section above the active session's tools. Open it
-to review saved commits and their file differences. **Current changes** remains
-with the selected session. If Git log offers a session update or reconciliation,
-that action applies to the selected session; opening the log does not change files.
+to review saved commits and their file differences. With no session selected it
+lists the project's saved versions on its default branch, and selecting a version
+opens its files and differences; **Check for updates** stays disabled and the
+status says to select a session. With a session selected, the log is pinned to
+the version that session is based on and can offer to update it. **Current
+changes** remains with the selected session. If Git log offers a session update
+or reconciliation, that action applies to the selected session; opening the log
+does not change files.
 The same **Git log** label appears in the mobile **Dashboard section** chooser.
 
 Files provides **Repo** for source and **Session Dropzone** for exchanging files with the

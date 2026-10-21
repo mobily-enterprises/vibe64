@@ -545,7 +545,16 @@ describe("useVibe64RepositoryWorkspace", () => {
     });
   });
 
-  it("waits for the selected session before requesting repository history", async () => {
+  it("reads saved project history without a session and pins it once a session is selected", async () => {
+    const commit = "c".repeat(40);
+    mocks.historyHandler = vi.fn(async () => ({
+      historySnapshotCommit: "a".repeat(40),
+      nextCursor: "",
+      ok: true,
+      versions: [{ commit, message: "Saved work" }]
+    }));
+    mocks.versionFilesHandler = vi.fn(async () => ({ commit, files: [{ path: "a.txt" }], ok: true, truncated: false }));
+    mocks.versionDiffHandler = vi.fn(async () => ({ commit, diff: "+a", ok: true, path: "a.txt" }));
     const { useVibe64RepositoryWorkspace } = await import(
       "../../src/composables/useVibe64RepositoryWorkspace.js"
     );
@@ -553,12 +562,21 @@ describe("useVibe64RepositoryWorkspace", () => {
       sessionId: "",
       sessionsApiPath: "/api/app/sample/vibe64/sessions"
     });
-    useVibe64RepositoryWorkspace(dashboard, { view: ref("history") });
+    const workspace = useVibe64RepositoryWorkspace(dashboard, { view: ref("history") });
 
     await nextTick();
     await flushPromises();
-    expect(mocks.requestCalls).toEqual([]);
+    expect(workspace.history.versions).toEqual([{ commit, message: "Saved work" }]);
+    await workspace.selectVersion(workspace.history.versions[0]);
+    await flushPromises();
+    expect(workspace.versionDiff.payload).toMatchObject({ diff: "+a" });
+    expect(mocks.requestCalls.map(({ path }) => path)).toEqual([
+      "/api/app/sample/vibe64/repository/history",
+      `/api/app/sample/vibe64/repository/history/${commit}/files?historySnapshotCommit=${"a".repeat(40)}`,
+      `/api/app/sample/vibe64/repository/history/${commit}/diff?path=a.txt&historySnapshotCommit=${"a".repeat(40)}`
+    ]);
 
+    mocks.requestCalls.length = 0;
     dashboard.value = {
       ...dashboard.value,
       sessionId: "session-1"
@@ -570,6 +588,20 @@ describe("useVibe64RepositoryWorkspace", () => {
       "/api/app/sample/vibe64/repository/history?sessionId=session-1",
       "/api/app/sample/vibe64/sessions/session-1/updates/check"
     ]);
+  });
+
+  it("still waits for a session before reading current changes", async () => {
+    const { useVibe64RepositoryWorkspace } = await import(
+      "../../src/composables/useVibe64RepositoryWorkspace.js"
+    );
+    useVibe64RepositoryWorkspace(ref({
+      sessionId: "",
+      sessionsApiPath: "/api/app/sample/vibe64/sessions"
+    }), { view: ref("changes") });
+
+    await nextTick();
+    await flushPromises();
+    expect(mocks.requestCalls).toEqual([]);
   });
 
   it("releases previous version paging state and preserves a newer pending page", async () => {

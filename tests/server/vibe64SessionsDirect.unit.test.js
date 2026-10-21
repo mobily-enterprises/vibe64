@@ -2065,7 +2065,7 @@ test("one exact update check is shared, cached, and invalidates every sibling se
   assert.deepEqual(publications[0][1].payload.repositoryUpdateCheck, JSON.parse(metadata[1][2]));
 });
 
-test("repository history facades require a stored session from the selected project before terminal admission", async (t) => {
+test("repository history facades read project history without a session and otherwise require a stored session from the selected project", async (t) => {
   await withTemporaryRoot(async (targetRoot) => {
     const selectedRoot = `${targetRoot}/alpha`;
     const foreignRoot = `${targetRoot}/beta`;
@@ -2112,10 +2112,12 @@ test("repository history facades require a stored session from the selected proj
           }
         });
 
-        const missing = await service[operation](input);
-        assert.equal(missing.ok, false);
-        assert.equal(missing.code, "vibe64_repository_history_session_required");
-        assert.deepEqual(calls, []);
+        const projectHistory = await service[operation](input);
+        assert.equal(projectHistory.ok, true);
+        assert.deepEqual(calls, [["terminal", { ...input, session: null }]]);
+        assert.equal(projectHistory.updateCheck, undefined);
+
+        calls.length = 0;
 
         const foreign = await service[operation]({ ...input, sessionId: "history-beta" });
         assert.equal(foreign.ok, false);

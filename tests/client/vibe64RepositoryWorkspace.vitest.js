@@ -251,18 +251,26 @@ describe("Vibe64 Repository workspace", () => {
 
   it.each(repositoryRoutes.flatMap((route) => [true, false].map((hasSession) => ({ ...route, hasSession }))))(
     "keeps $label mounted when activity is absent (session: $hasSession)",
-    async ({ component, hasSession, payload, subscriptions }) => {
+    async ({ component, hasSession, label, payload, subscriptions }) => {
       const fixture = mountHistoryWorkspace({ component, context: hasSession ? {} : { sessionId: "" } });
       try {
+        // Saved project history needs no session; Current Changes does.
+        const readsWithoutSession = label === "History";
         expect(fixture.dashboardContext).not.toHaveProperty("active");
         expect(fixture.button("Check for updates")).not.toBeNull();
-        expect(fixture.requests).toHaveLength(hasSession ? 1 : 0);
+        expect(fixture.requests).toHaveLength(hasSession || readsWithoutSession ? 1 : 0);
         expect(fixture.socket.on).toHaveBeenCalledTimes(hasSession ? subscriptions : 0);
         if (hasSession) {
           await fixture.respond(0, payload);
           await fixture.respond(1, { canonicalCommit: historyCommit, ok: true });
           expect(fixture.requests).toHaveLength(2);
         } else {
+          if (readsWithoutSession) {
+            expect(fixture.requests[0].path).toBe("/api/app/sample/vibe64/repository/history");
+            await fixture.respond(0, payload);
+            expect(fixture.button(historyVersion.message)).not.toBeNull();
+            expect(fixture.requests).toHaveLength(1);
+          }
           expect(fixture.button("Check for updates").props.disabled).toBe(true);
         }
       } finally {

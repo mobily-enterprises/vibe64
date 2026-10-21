@@ -713,6 +713,9 @@ its answer remains available when they return.
 Git log appears in project-level Dashboard navigation rather than the active
 session rail or its direct tool controls. Its existing repository route and
 history reader retain selected-session context for review and update actions.
+Without a selected session, the same history, version-files and version-diff
+reads use the project's repository at its default branch; Current changes and
+update checks still require a session.
 The Current changes view presents the session's complete current changes against saved project
 work, even when those changes are already committed inside the session. It can
 open an exact changed file without exposing staging mechanics to the user.

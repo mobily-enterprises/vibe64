@@ -641,7 +641,7 @@ const repositoryHistoryInputValidator = patchSchema({
   ...optionalUser,
   cursor: { type: "string", noTrim: false, required: false },
   limit: { type: "string", noTrim: false, required: false },
-  sessionId: { type: "string", noTrim: false, required: true }
+  sessionId: { type: "string", noTrim: false, required: false }
 });
 
 const repositoryVersionFilesInputValidator = patchSchema({
@@ -650,7 +650,7 @@ const repositoryVersionFilesInputValidator = patchSchema({
   historySnapshotCommit: { type: "string", noTrim: false, required: true },
   limit: { type: "string", noTrim: false, required: false },
   offset: { type: "string", noTrim: false, required: false },
-  sessionId: { type: "string", noTrim: false, required: true }
+  sessionId: { type: "string", noTrim: false, required: false }
 });
 
 const repositoryVersionFileDiffInputValidator = patchSchema({
@@ -659,7 +659,7 @@ const repositoryVersionFileDiffInputValidator = patchSchema({
   historySnapshotCommit: { type: "string", noTrim: false, required: true },
   lineLimit: { type: "string", noTrim: false, required: false },
   path: { type: "string", noTrim: true, required: true },
-  sessionId: { type: "string", noTrim: false, required: true }
+  sessionId: { type: "string", noTrim: false, required: false }
 });
 
 const integrationSetupRequestFields = {

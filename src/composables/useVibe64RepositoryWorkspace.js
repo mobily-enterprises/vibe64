@@ -387,13 +387,6 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
   }
 
   async function loadHistory({ append = false } = {}) {
-    if (!sessionId.value) {
-      history.error = "";
-      history.payload = null;
-      history.versions = [];
-      history.nextCursor = "";
-      return;
-    }
     const request = beginRequest("history");
     history.loading = true;
     try {
@@ -615,7 +608,10 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
       updates.errorCode = "";
       updates.payload = null;
       updates.canonicalChangePending = false;
-      if (apiPath && sessionId.value) {
+      if (apiPath && activeView.value === "history" && !sessionId.value) {
+        // Saved project history needs no session; without one it is not pinned to a session base.
+        await loadHistory();
+      } else if (apiPath && sessionId.value) {
         const initialContext = requestContextKey();
         if (activeView.value === "history") {
           await loadHistory();

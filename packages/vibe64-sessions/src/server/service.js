@@ -109,14 +109,14 @@ function sessionResult(operation, fallbackMessage = "Vibe64 session request fail
   });
 }
 
-function requiredRepositorySessionId(value = "") {
+// Project history is readable without a session; a given session pins it to that session's base.
+async function optionalRepositorySession(project, value = "") {
   const sessionId = text(value);
   if (!sessionId) {
-    const error = new Error("Select a session before opening its repository history.");
-    error.code = "vibe64_repository_history_session_required";
-    throw error;
+    return null;
   }
-  return sessionId;
+  const runtime = await project.createRuntime({ inspectSource: false });
+  return runtime.getSession(sessionId, { inspectSource: false });
 }
 
 function conversationPageOptions(options = {}) {
@@ -1361,9 +1361,7 @@ function createService({
     },
     async inspectRepositoryHistory(input = {}) {
       return sessionResult(async () => {
-        const sessionId = requiredRepositorySessionId(input.sessionId);
-        const runtime = await project.createRuntime({ inspectSource: false });
-        const session = await runtime.getSession(sessionId, { inspectSource: false });
+        const session = await optionalRepositorySession(project, input.sessionId);
         const history = await terminals.inspectRepositoryHistory({ ...input, session });
         const updateCheck = cachedRepositoryUpdateCheck(session);
         return {
@@ -1375,18 +1373,14 @@ function createService({
 
     async inspectRepositoryVersionFiles(input = {}) {
       return sessionResult(async () => {
-        const sessionId = requiredRepositorySessionId(input.sessionId);
-        const runtime = await project.createRuntime({ inspectSource: false });
-        const session = await runtime.getSession(sessionId, { inspectSource: false });
+        const session = await optionalRepositorySession(project, input.sessionId);
         return terminals.inspectRepositoryVersionFiles({ ...input, session });
       }, "Vibe64 could not read this project version.");
     },
 
     async inspectRepositoryVersionFileDiff(input = {}) {
       return sessionResult(async () => {
-        const sessionId = requiredRepositorySessionId(input.sessionId);
-        const runtime = await project.createRuntime({ inspectSource: false });
-        const session = await runtime.getSession(sessionId, { inspectSource: false });
+        const session = await optionalRepositorySession(project, input.sessionId);
         return terminals.inspectRepositoryVersionFileDiff({ ...input, session });
       }, "Vibe64 could not read this version's file change.");
     },

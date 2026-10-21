@@ -232,7 +232,7 @@ function projectRepositoryMetadataError(code = "", message = "") {
 }
 
 function sessionConnectedContribution(session = {}) {
-  const serialized = session.metadata?.connected_contribution;
+  const serialized = session?.metadata?.connected_contribution;
   if (serialized === undefined) return null;
   let value;
   try { value = JSON.parse(serialized); } catch { /* Invalid authority must not fall back to main. */ }
