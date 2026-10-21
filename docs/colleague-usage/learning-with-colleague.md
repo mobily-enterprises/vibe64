@@ -29,7 +29,7 @@ each, and the one you see always follows the mode:
 
 ## Colleague as your teacher
 
-In Learn mode, **Courses** beside **L** holds courses and lessons. You can read
+In Learn mode, **Courses** in the project menu beside **L** holds courses and lessons. You can read
 lessons yourself without AI. Choose **Teach me** on a lesson step, or ask
 Colleague about your lesson, and Colleague teaches the current step:
 

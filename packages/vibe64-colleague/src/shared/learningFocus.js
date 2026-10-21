@@ -1,5 +1,5 @@
-// Courses sits above the app beside L in Learn mode. A command that opens or
-// closes it is confirmed only by the browser's reported Courses state; an
+// Courses (from the project menu beside L) opens above the app in Learn
+// mode. A command that opens or closes it is confirmed only by the browser's reported Courses state; an
 // attempt/step selection must be the one actually shown. Both hosts'
 // navigators and the server's acknowledgement check use this one rule.
 export function learningPanelMatches(command, focus) {

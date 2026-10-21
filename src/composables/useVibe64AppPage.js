@@ -153,7 +153,12 @@ function useVibe64AppPage() {
   const projectPane = computed(() => !projectSlug.value ? emptyPane.value
     : dashboardRouteActive.value ? "dashboard" : "preview");
   const sortedProjects = computed(() => [...projects.value].sort((left, right) => left.slug.localeCompare(right.slug)));
-  const switcherProjects = computed(() => openProjectSwitcherProjects(projects.value));
+  // Learn lists only the current lesson's practice project, beside Courses.
+  const learnMode = computed(() => Boolean(learning?.learnMode));
+  const switcherProjects = computed(() => {
+    const open = openProjectSwitcherProjects(projects.value);
+    return learnMode.value ? open.filter(project => project.slug === learning.mode?.practiceSlug) : open;
+  });
   const chatToggleIcon = computed(() => {
     if (mobilePaneLayout.value) {
       return chatCollapsed.value ? mdiChevronLeft : mdiChevronRight;
@@ -384,6 +389,7 @@ function useVibe64AppPage() {
     setChatCollapsed,
     showProjectPane,
     switcherProjects,
+    learnMode,
     projectTitle
   };
 

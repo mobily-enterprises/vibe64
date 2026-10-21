@@ -17,6 +17,7 @@ import Vibe64LocalRemoteControls from "@/components/studio/repository/Vibe64Loca
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
 import Vibe64LearningStepBar from "@/components/learning/Vibe64LearningStepBar.vue";
 import Vibe64NoProjectPane from "@/components/learning/Vibe64NoProjectPane.vue";
+import Vibe64LearningCoursesItem from "@/components/learning/Vibe64LearningCoursesItem.vue";
 import { useVibe64AppPage } from "@/composables/useVibe64AppPage.js";
 import { projectDisplayName } from "@/lib/vibe64PracticeProjectName.js";
 
@@ -34,6 +35,7 @@ const {
   handleProjectSelectionError,
   handleProjectSelectionMissing,
   handleProjectSelectionReady,
+  learnMode,
   mdiChevronDown,
   mdiChevronRight,
   mobilePaneSwipeEnabled,
@@ -79,7 +81,7 @@ const {
               <template #activator="{ props: menuProps }">
                 <v-btn
                   class="studio-home-shell-project-selector"
-                  :disabled="!projectSlug"
+                  :disabled="!projectSlug && !learnMode"
                   variant="text"
                   v-bind="menuProps"
                   :title="projectSlug && projectTitle !== projectSlug ? `${projectTitle} (${projectSlug})` : projectTitle"
@@ -89,6 +91,7 @@ const {
                 </v-btn>
               </template>
               <v-list density="compact" min-width="240">
+                <Vibe64LearningCoursesItem />
                 <v-list-item
                   v-for="project in switcherProjects"
                   :key="project.slug"
@@ -98,7 +101,7 @@ const {
                   @click="openProject(project)"
                 />
                 <v-list-item
-                  v-if="switcherProjects.length === 0"
+                  v-if="switcherProjects.length === 0 && !learnMode"
                   :subtitle="projectLoadError || 'No open projects found.'"
                   title="Projects"
                 />
@@ -339,6 +342,15 @@ const {
 
 .studio-home-shell-heading--chat-collapsed .studio-home-shell-title-area {
   flex-basis: auto;
+}
+
+/* Desktop: the project controls (the chat toggle, then the pane switch) start
+   where the chat column ends, whatever sits beside the project name. */
+@media (min-width: 981px) {
+  .studio-home-shell-heading:not(.studio-home-shell-heading--chat-collapsed) .studio-home-shell-title-area {
+    flex: 0 1000 auto;
+    width: calc(var(--studio-home-chat-column-edge, var(--studio-home-chat-column-width)) - var(--studio-home-project-gap) - 2.7rem);
+  }
 }
 
 .studio-home-shell-project-name {

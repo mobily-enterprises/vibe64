@@ -2,8 +2,8 @@
 
 The **L** button switches between **Develop** (your own projects) and
 **Learn** (lessons); see [The Learning environment (L)](learning-environment.md).
-In Learn mode the app bar turns yellow and shows a **Courses** button, which
-opens the Courses overlay. This guide describes its **Courses** tab. Its **In
+In Learn mode the app bar turns yellow, and **Courses** in the project menu
+(the project name beside **L**) opens the Courses overlay. This guide describes its **Courses** tab. Its **In
 progress** and **Archived** tabs are described in
 [Practice projects](learning-practice-projects.md).
 

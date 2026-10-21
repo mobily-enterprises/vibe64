@@ -61,7 +61,7 @@ creates in it is an ordinary session.
 
 ## In progress and Archived
 
-In Learn mode, **Courses** (beside **L**) has an **In progress** list and an
+In Learn mode, **Courses** (in the project menu beside **L**) has an **In progress** list and an
 **Archived** list.
 
 **In progress** shows the lesson in progress, if any: its title and its

@@ -1,19 +1,16 @@
 <script setup>
 import { computed } from "vue";
-import { mdiSchoolOutline } from "@mdi/js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 
 defineOptions({ inheritAttrs: false });
 
 // The L plate: switches between Develop and Learn. It is shown only where a
 // host has a signed-in Learning overlay bound to it. In Learn mode the plate
-// is solid, the current lesson's title follows it (not on a phone) and a
-// Courses button (an icon on a phone) opens the Courses overlay.
+// is solid; the project selector beside it names the lesson and holds Courses.
 const learning = useVibe64Learning();
 const available = computed(() => Boolean(learning?.state.actorKey));
 const learn = computed(() => Boolean(learning?.learnMode));
 const switching = computed(() => learning?.state.modeBusy === "set");
-const lessonTitle = computed(() => String(learning?.lessonTitle || ""));
 const title = computed(() => learn.value ? "Back to Develop (your projects)" : "Switch to Learn");
 </script>
 
@@ -36,16 +33,6 @@ const title = computed(() => learn.value ? "Back to Develop (your projects)" : "
   >
     <span aria-hidden="true">L</span>
   </v-btn>
-  <template v-if="available && learn">
-    <button
-      type="button" class="vibe64-learning-button__courses" title="Courses" aria-label="Courses"
-      data-test="learning-courses" @click="learning.openCourses()"
-    >
-      <v-icon :icon="mdiSchoolOutline" size="18" aria-hidden="true" />
-      <span class="vibe64-learning-button__courses-label">Courses</span>
-    </button>
-    <span v-if="lessonTitle" class="vibe64-learning-button__lesson" :title="lessonTitle" data-test="learning-lesson-title">{{ lessonTitle }}</span>
-  </template>
 </template>
 
 <style scoped>
@@ -99,47 +86,6 @@ const title = computed(() => learn.value ? "Back to Develop (your projects)" : "
   outline-offset: 3px;
 }
 
-.vibe64-learning-button__lesson {
-  background: var(--v64-learning-container);
-  border: 1px solid var(--v64-learning-strong);
-  border-radius: 999px;
-  color: var(--v64-on-learning-container);
-  /* A crowded bar (a project's Preview controls) shortens the name first. */
-  flex: 0 1 auto;
-  font: var(--v64-type-label-md, 600 0.75rem/1rem system-ui, sans-serif);
-  font-weight: 700;
-  margin-left: var(--v64-space-2);
-  max-width: 16rem;
-  min-width: 4rem;
-  overflow: hidden;
-  padding: 2px var(--v64-space-2);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.vibe64-learning-button__courses {
-  align-items: center;
-  background: transparent;
-  border: 1px solid var(--v64-learning-strong);
-  border-radius: 999px;
-  color: inherit;
-  cursor: pointer;
-  display: inline-flex;
-  flex: 0 0 auto;
-  font: var(--v64-type-label-md, 600 0.75rem/1rem system-ui, sans-serif);
-  font-weight: 700;
-  gap: 4px;
-  margin-left: var(--v64-space-2);
-  min-height: 28px;
-  padding: 2px var(--v64-space-3);
-  white-space: nowrap;
-}
-
-.vibe64-learning-button__courses:focus-visible {
-  outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
-  outline-offset: 2px;
-}
-
 @keyframes vibe64-learning-button-pop {
   0% { transform: scale(0.82) rotate(-8deg); }
   60% { transform: scale(1.08) rotate(2deg); }
@@ -159,20 +105,6 @@ const title = computed(() => learn.value ? "Back to Develop (your projects)" : "
   .vibe64-learning-button {
     height: 2.5rem;
     margin-left: var(--v64-space-1);
-    width: 2.5rem;
-  }
-
-  .vibe64-learning-button__lesson,
-  .vibe64-learning-button__courses-label {
-    display: none;
-  }
-
-  /* Courses is an icon with a 40px touch target. */
-  .vibe64-learning-button__courses {
-    height: 2.5rem;
-    justify-content: center;
-    margin-left: var(--v64-space-1);
-    padding: 0;
     width: 2.5rem;
   }
 }

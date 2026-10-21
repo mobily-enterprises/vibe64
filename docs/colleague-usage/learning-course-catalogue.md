@@ -6,8 +6,8 @@ courses.
 
 ## Where it is
 
-1. Press **L** at the left of the header to switch to Learn mode, then press
-   the **Courses** button in the yellow app bar.
+1. Press **L** at the left of the header to switch to Learn mode, then open
+   the project menu beside it and choose **Courses**.
 2. Its **Courses** tab shows your installed course cards first. Below them is
    the **Course catalogue** section, headed **Install a course**.
 3. The catalogue is grouped by **topic** (for example **Vibe64**). Under each

@@ -114,19 +114,25 @@ function useVibe64ChatColumnResize() {
     writeLocalStorageJson(VIBE64_CHAT_COLUMN_STORAGE_KEY, width.value);
   }
 
+  function heading() {
+    return typeof document === "undefined" ? null : document.querySelector(".studio-home-shell-heading");
+  }
+
   function layoutTargets() {
-    if (typeof document === "undefined") {
-      return [];
-    }
-    return [
-      splitPane(),
-      document.querySelector(".studio-home-shell-heading")
-    ].filter(Boolean);
+    return [splitPane(), heading()].filter(Boolean);
   }
 
   function applyLayoutWidth(value) {
     for (const target of layoutTargets()) {
       target.style.setProperty("--studio-home-chat-column-width", `${value}px`);
+    }
+    // Where the chat column ends, measured from the header's project heading:
+    // the heading starts its project controls there, whatever sits before it.
+    const pane = splitPane();
+    const bar = heading();
+    if (pane && bar) {
+      const edge = pane.getBoundingClientRect().left + value - bar.getBoundingClientRect().left;
+      bar.style.setProperty("--studio-home-chat-column-edge", `${Math.round(edge)}px`);
     }
     separator.value?.setAttribute?.("aria-valuenow", String(value));
   }
@@ -279,6 +285,7 @@ function useVibe64ChatColumnResize() {
     for (const target of layoutTargets()) {
       target.style.removeProperty("--studio-home-chat-column-width");
     }
+    heading()?.style.removeProperty("--studio-home-chat-column-edge");
   });
 
   return {
