@@ -941,9 +941,10 @@ describe("Courses overlay", () => {
     try {
       await flush();
       expect(learning.state.actorKey).toBe("member");
-      // Learn mode: another project's address goes to the lesson's practice project (the mode was just read: no note).
+      // Learn mode: the page's first address, another project, goes to the lesson's practice project with the note.
       expect(replace).toHaveBeenCalledWith("/app/project/training-1111");
-      expect(learning.notice).toBe("");
+      expect(learning.notice).toBe(LearningLib.VIBE64_LEARNING_MODE_NOTE);
+      learning.clearNotice();
       expect(bodyClasses.has("vibe64-learn-mode"), "Learn mode's app bar is yellow").toBe(true);
       expect(nodes(root).filter(node => node.props?.["data-guide-overlay"])).toHaveLength(1);
       expect(realtime[0].event).toBe("vibe64.training.learner.changed");
@@ -953,6 +954,16 @@ describe("Courses overlay", () => {
       expect(replace).toHaveBeenLastCalledWith("/app/project/training-1111");
       expect(learning.notice).toBe(LearningLib.VIBE64_LEARNING_MODE_NOTE);
       expect(byTest(root, "learning-mode-notice").props["model-value"]).toBe(true);
+      // A move after a mode change gets no note.
+      learning.clearNotice();
+      mode = { on: false, currentAttemptId: ATTEMPT, lessonCode: "V64-START-01", lessonTitle: "Orientation", practiceSlug: "training-1111" };
+      await learning.readLearningMode();
+      await flush();
+      expect(replace).toHaveBeenLastCalledWith("/app");
+      expect(learning.notice, "Develop after a mode change").toBe("");
+      mode = { ...LEARN, practiceSlug: "training-1111" };
+      await learning.readLearningMode();
+      await flush();
 
       expect(coursesOptions[0].active.value).toBe(false);
       await learning.openCourses();

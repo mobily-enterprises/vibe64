@@ -39,16 +39,18 @@ onBeforeUnmount(() => globalThis.document?.body?.classList.remove(LEARN_MODE_CLA
 
 // Each address stays in its mode: Learn shows only the current lesson's
 // practice project (or no project selected); Develop never shows it. An
-// address the learner opened gets a short note; a move after a mode or
-// lesson change does not. While L switches, the check waits for L's own move
-// to the mode's saved place instead of cancelling it.
+// address the learner opened, including the page's first address (a link or
+// a reload), gets a short note; a move after a mode or lesson change does not.
+// While L switches, the check waits for L's own move to the mode's saved place
+// instead of cancelling it.
 const route = useRoute();
 const router = useRouter();
 watch(() => [learning?.mode, route?.fullPath, learning?.state.modeBusy], (_value, previous) => {
   if (!route || !router || !learning || learning.state.modeBusy) return;
   const target = modeRedirect({ mode: learning.mode, slug: projectSlugFromRoute(route), path: route.path });
   if (!target || target.path === route.path) return;
-  if (target.note && previous && previous[0] === learning.mode) learning.showNotice(target.note);
+  const modeChanged = Boolean(previous?.[0]) && previous[0] !== learning.mode;
+  if (target.note && !modeChanged) learning.showNotice(target.note);
   void router.replace(target.path);
 }, { immediate: true });
 function noticeShown(value) {
