@@ -1,10 +1,12 @@
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "../shared/learnerEvents.js";
 import { learnerIdentity } from "./learnerState.js";
 
-// Publishes vibe64.training.learner.changed after a step result, reader
-// position or learning mode change, and without an attempt after a change of
-// the learner's practice projects (reason "practice") or teacher notes
-// (reason "notes"). The event goes to every connected
+// Publishes vibe64.training.learner.changed with its reason (see
+// shared/learnerEvents.js): "learning-mode" after a switch between Learn and
+// Develop, "lesson" after a lesson starts, restarts, resumes, finishes or is
+// deleted, "steps" after a step result or reader position, "practice" after
+// an archived lesson is deleted and "notes" after a teacher notes change
+// (the last two without an attempt). The event goes to every connected
 // client like the session notices; each host's realtime authorization admits
 // it only for the learner it names. A notification failure never changes or
 // repeats the saved operation.

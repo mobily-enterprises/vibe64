@@ -1,6 +1,5 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
-import { attemptPracticeId } from "./learnerState.js";
 
 const MAX_RESULT_BYTES = 128 * 1024;
 const text = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 256 };
@@ -51,29 +50,11 @@ function preparation(value) {
   };
 }
 
-function learning(value = {}) {
-  const resume = value.resume;
-  return {
-    submissions: (value.submissions || []).map(result => ({
-      ...pick(result, ["submissionId", "assessmentId", "kind", "outcome", "explanation", "assistance", "rubricRevision", "recordedAt"]),
-      evidence: pick(result.evidence, ["kind", "attemptId", "text", "messageId", "questionId", "observationId", "observedAt",
-        "projectSlug", "sessionId", "producer", "operation", "origin", "check"])
-    })),
-    resume: resume ? {
-      ...pick(resume, ["requestId", "revision", "stage", "summary"]),
-      pendingQuestion: resume.pendingQuestion ? pick(resume.pendingQuestion, ["id", "assessmentId", "text"]) : null,
-      visuals: resume.visuals.map(value => ({ visualId: value.visualId,
-        snapshot: pick(value.snapshot, ["state", "paused", "labels"]) }))
-    } : null
-  };
-}
-
 function active(value) {
   if (!value) return null;
   return {
     attemptId: value.attemptId, pin: pin(value.pin),
     ...(value.preparation ? { projectSlug: value.projectSlug, preparation: preparation(value.preparation) } : {}),
-    learning: learning(value.learning),
     ...(value.ended ? { ended: pick(value.ended, ["requestId", "revision", "reason"]) } : {})
   };
 }
@@ -130,7 +111,7 @@ async function practiceSlug({ attempt, actor, learningSpace }) {
   if (!attempt.preparation || attempt.preparation.phase === "reserved") return "";
   if (typeof learningSpace?.exists !== "function") return slug;
   try {
-    return await learningSpace.exists({ actor, practiceId: attemptPracticeId(attempt) }) ? slug : "";
+    return await learningSpace.exists({ actor, attemptId: attempt.attemptId }) ? slug : "";
   } catch {
     return slug;
   }
@@ -169,7 +150,7 @@ function createTrainingActions({ catalogue, learners, exercises = null, courseIn
     id: `vibe64.training.${name}`, version: 1,
     kind: name.endsWith("read") || name.endsWith("list") ? "query" : "command",
     input: { mode: "create", schema: createSchema(fields) }, output: null,
-    idempotency: ["lesson.start", "lesson.resume", "lesson.end", "lesson.continue", "learning-mode.leave", "course.install"].includes(name) ? "domain_native" : "none",
+    idempotency: ["lesson.start", "lesson.resume", "lesson.restart", "lesson.finish", "learning-mode.set", "course.install"].includes(name) ? "domain_native" : "none",
     extensions: { assistant: { alwaysAvailable: true, description, output: resultOutput,
       ...(name === "learning.read" ? { transformResult(result) {
         // Own identity binds the browser's lesson requests (L), never the model's tool result.
@@ -187,8 +168,11 @@ function createTrainingActions({ catalogue, learners, exercises = null, courseIn
         if (cause.code === "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE") throw cause;
         // Course creation reports the catalogue owner's own corrective message.
         if (name === "courses.create" && /^VIBE64_TRAINING_(COURSE|CATALOGUE)_/u.test(cause.code || "")) throw cause;
-        // A preview refusal reports its owner-only admission message.
-        if (name === "lesson.start" && cause.code === "VIBE64_TRAINING_COURSE_PREVIEW") throw cause;
+        // Lesson refusals (a preview course, another lesson in progress with
+        // its details, an incomplete lesson, the archive limit or a pinned
+        // session) report their own message; nothing was changed.
+        if (/^lesson\./u.test(name) && cause.statusCode < 500 &&
+            /^(VIBE64_TRAINING_(COURSE_PREVIEW|LESSON_|PRACTICE_|ATTEMPT_MISSING|STATE_REVISION)|vibe64_project_pinned)/u.test(cause.code || "")) throw cause;
         // Catalogue reads and installs report their owner's corrective message.
         if (["available.list", "course.install"].includes(name)) throw installError(cause);
         throw operationError(cause);
@@ -197,19 +181,19 @@ function createTrainingActions({ catalogue, learners, exercises = null, courseIn
   }, { projectScoped: false, ...(name === "courses.create" ? { ownerRequired: true } : {}) });
 
   const unavailable = (operation = "preparation") => ({ ok: false, available: false,
-    error: operation === "end" ? "Lesson retirement is unavailable in this installation. Reading learning state does not end an attempt or dispose of its exercise."
-      : operation === "continue" ? "Retained lesson continuation is unavailable in this installation. Keep the original progress and ask the owner to restore the exercise."
+    error: operation === "close" ? "Finishing or restarting lessons is unavailable in this installation. Nothing was changed."
       : "Lesson exercise preparation is unavailable in this installation. Reading learning state and teaching content does not prepare an exercise." });
 
-  // Learning mode (Rev 3 R3): a lesson is in progress or not. The shell and
+  // Learn mode (Rev 4 H1): a saved per-learner flag, separate from any
+  // lesson; the current lesson is the one in progress. The shell and
   // Colleague read it; every tab of this learner rereads it on
   // vibe64.training.learner.changed.
   const modeAvailable = typeof learners.readLearningMode === "function";
-  const learningModeView = mode => mode ? pick(mode, ["on", "attemptId", "lessonCode", "lessonTitle", "practiceSlug", "projectSlugs"]) : { on: false };
-  const notifyLearner = async (actor, attemptId) => {
-    if (typeof publishLearnerChanged === "function") await publishLearnerChanged({ actor, attemptId, reason: "learning-mode" });
+  const learningModeView = mode => mode ? pick(mode, ["on", "currentAttemptId", "lessonCode", "lessonTitle", "practiceSlug"]) : { on: false };
+  const notifyLearner = async (actor, attemptId, reason = "lesson") => {
+    if (typeof publishLearnerChanged === "function") await publishLearnerChanged({ actor, attemptId, reason });
   };
-  // Starting, continuing or resuming a lesson changes learning mode.
+  // Starting, restarting or resuming a lesson changes the current lesson.
   const announced = async (result, actor) => {
     await notifyLearner(actor, result?.active?.attemptId || result?.attempt?.attemptId || "");
     return result;
@@ -272,20 +256,18 @@ function createTrainingActions({ catalogue, learners, exercises = null, courseIn
         ...(modeAvailable ? await learners.readLearningMode({ actor, includeTitle: true })
           .then(mode => ({ learningMode: learningModeView(mode) }), () => ({})) : {}) };
     }),
-    definition("learning-mode.read", {}, "Read whether this signed-in learner is in learning mode, which is exactly while a lesson is in progress: on is true with the lesson (attemptId, lessonCode, lessonTitle), its practice project (practiceSlug, empty for a lesson without one) and projectSlugs, the only projects the person can open meanwhile. In learning mode never open, list or work on any other project for the person; explain they are in a lesson and that Leave lesson (in the yellow bar or in Learning) ends the lesson and gives their projects back. This is read-only.", async (_input, actor) => {
-      if (!modeAvailable) return { ok: false, available: false, error: "Learning mode is unavailable in this installation." };
+    definition("learning-mode.read", {}, "Read whether this signed-in person is in Learn mode or Develop mode. Vibe64 has two modes with the same screens: Develop works on the person's real projects; Learn works only on their practice projects, with Colleague as the teacher. on is true in Learn mode; currentAttemptId, lessonCode and lessonTitle name the lesson in progress (empty when there is none, which is normal in Learn mode) and practiceSlug its practice project (empty while it is being prepared or when the lesson has none). Switching mode never ends or changes a lesson. This is read-only.", async (_input, actor) => {
+      if (!modeAvailable) return { ok: false, available: false, error: "Learn mode is unavailable in this installation." };
       return { ok: true, available: true, learningMode: learningModeView(await learners.readLearningMode({ actor, includeTitle: true })) };
     }),
-    definition("learning-mode.leave", { attemptId }, "Leave the lesson in progress only after the person's direct request or accepted offer. Use the exact attemptId from learning-mode.read. This ends the lesson attempt (reason left): its step results and its practice project are kept, learning mode ends and the person's normal projects come back. Continue lesson later starts a new attempt in the same practice project at the first step that has not passed. Leaving an attempt that is no longer in progress changes nothing.", async (input, actor) => {
-      if (typeof exercises?.endLesson !== "function") return unavailable("end");
-      const state = await learners.readState({ actor });
-      if (state.progress.activeAttemptId !== input.attemptId) {
-        return { ok: true, available: true, changed: false, learningMode: learningModeView(await learners.readLearningMode({ actor, includeTitle: true })) };
+    definition("learning-mode.set", { on: { type: "boolean", required: true } }, "Switch this signed-in person between Learn mode (on: true) and Develop mode (on: false), only after the person's direct request or accepted offer; pressing L does the same. Nothing is ended or archived: the lesson in progress stays paused with its practice project and its teacher conversation, and comes back when they return to Learn. Setting the mode it already has changes nothing.", async (input, actor) => {
+      if (typeof learners.setLearningMode !== "function") return { ok: false, available: false, error: "Learn mode is unavailable in this installation." };
+      const changed = (await learners.readLearningMode({ actor })).on !== input.on;
+      if (changed) {
+        await learners.setLearningMode({ actor, on: input.on });
+        await notifyLearner(actor, "", "learning-mode");
       }
-      await exercises.endLesson({ actor, attemptId: input.attemptId, requestId: `leave-${input.attemptId}`,
-        expectedRevision: state.revision, reason: "left" });
-      await notifyLearner(actor, input.attemptId);
-      return { ok: true, available: true, changed: true, learningMode: learningModeView(await learners.readLearningMode({ actor, includeTitle: true })) };
+      return { ok: true, available: true, changed, learningMode: learningModeView(await learners.readLearningMode({ actor, includeTitle: true })) };
     }),
     definition("courses.create", {
       title: { ...text, noTrim: false, maxLength: 120 },
@@ -304,31 +286,25 @@ function createTrainingActions({ catalogue, learners, exercises = null, courseIn
     definition("lesson.start", {
       courseId: { ...id, pattern: "^[a-z][a-z0-9-]{0,63}$" },
       release: { ...text, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
-      lessonCode: id, requestId, expectedRevision: revision
-    }, "Start a lesson only after the person's direct request or accepted offer. First read courses.list for an enabled exact release/lesson and learning.read for the current revision; do not use a course result from an earlier turn. Keep the same request ID on an uncertain retry, without changing its selected release. The host reserves the exact actor-owned attempt through normal permissions and prepares a practice project only when the lesson declares an exercise; preparation does not mean Preview is running or that any step passed. If the saved preparation is preparing, the host records ready by itself when that Workspace setup run succeeds; use same-attempt lesson.resume to recheck it. After success, read lesson.read for the returned attempt and open the lesson for the person in Learning. An ended request replay returns its original retained attempt without preparing or reactivating it. An unavailable host is not a successful start.", async (input, actor) => {
+      lessonCode: id, requestId, expectedRevision: revision,
+      archiveCurrent: { type: "boolean", required: false }
+    }, "Start a lesson only after the person's direct request or accepted offer. First read courses.list for an enabled exact release/lesson and learning.read for the current revision; do not use a course result from an earlier turn. Keep the same request ID on an uncertain retry, without changing its selected release. Only one lesson can be in progress: when another lesson is in progress the start is refused with VIBE64_TRAINING_LESSON_IN_PROGRESS and that lesson's title; tell the person, and only after they confirm archiving it repeat with archiveCurrent: true (its project and conversation are archived, its results kept). Starting the lesson already in progress returns it. A start switches the person to Learn mode. The host reserves the exact actor-owned attempt and prepares a practice project only when the lesson declares an exercise; preparation does not mean Preview is running or that any step passed. If the saved preparation is preparing, the host records ready by itself when that Workspace setup run succeeds; use same-attempt lesson.resume to recheck it. After success, read lesson.read for the returned attempt. An ended request replay returns its original retained attempt without preparing or reactivating it. An unavailable host is not a successful start.", async (input, actor) => {
       if (typeof exercises?.startLesson !== "function") return unavailable();
-      return announced(prepared(await exercises.startLesson({ actor, ...pick(input, ["courseId", "release", "lessonCode", "requestId", "expectedRevision"]) })), actor);
+      return announced(prepared(await exercises.startLesson({ actor, ...pick(input, ["courseId", "release", "lessonCode", "requestId", "expectedRevision", "archiveCurrent"]) })), actor);
     }),
     definition("lesson.resume", { attemptId }, "Resume an attempt's practice preparation only after the person's direct request or accepted offer. Use this learner's exact saved attempt ID; the original preparation lock and fixed project/session identities preserve it. Use this also when Workspace setup has since finished but the saved checkpoint remains preparing. For an exercise lesson the host freshly reloads this exact reserved session, verifies its setup, and records ready only when proven. A lesson without an exercise has no practice project, session or preparation phase. For actual reported setup status use sessions.inspect for the saved project/session and its workspaceSetupStatus, not repeated learning.read. A pending or failed setup must be reported as observed; do not infer still running or nothing broken from the checkpoint. Do not create another exercise after failure. After success, read lesson.read for this same attempt and continue from its first step that has not passed. Preparation is not current Preview readiness or evidence of a pass.", async (input, actor) => {
       if (typeof exercises?.prepareLesson !== "function") return unavailable();
       return announced(prepared(await exercises.prepareLesson({ actor, attemptId: input.attemptId })), actor);
     }),
-    definition("lesson.continue", { attemptId, requestId: { ...requestId, maxLength: 18 }, expectedRevision: revision
-    }, "Continue lesson only after the person's direct request or accepted offer: it picks up an ended saved lesson. Read learning.read and use this learner's exact ended attempt ID and current revision. The host derives its original installed pin; a disabled old release may continue, but arbitrary new admission remains disabled. Use a stable continuation request ID of at most 18 characters and keep it on retries. This starts a new attempt in the same practice project when that project still exists (its session is reused when it still exists, otherwise a new session starts at the project's current code, keeping the learner's edits); otherwise a fresh practice project is prepared when the lesson declares an exercise. Steps already passed for the same lesson content still count, so the learner continues at the first step that has not passed. Another lesson in progress is not adopted or ended. An ended replay returns its retained target and actual current active state without preparing a successor. After success, read lesson.read for the returned attempt; setup is not a running Preview or a new pass. An unavailable host or uncertain save is not successful recovery.", async (input, actor) => {
-      if (typeof exercises?.continueLesson !== "function") return unavailable("continue");
-      return announced(prepared(await exercises.continueLesson({ actor, ...pick(input, ["attemptId", "requestId", "expectedRevision"]) })), actor);
+    definition("lesson.restart", { attemptId, requestId, expectedRevision: revision }, "Restart the lesson in progress only after the person asked for it and confirmed it. Use its exact attemptId and the current revision from learning.read. The attempt is archived (its practice project, step results and teacher conversation are kept in Courses, Archived) and a new attempt of the same lesson starts with a fresh practice project, a fresh teacher conversation and no results. Keep the same request ID on an uncertain retry; it finishes a restart that stopped part-way. A pinned session or a full archive (20 lessons) refuses the restart and changes nothing.", async (input, actor) => {
+      if (typeof exercises?.restartLesson !== "function") return unavailable("close");
+      return announced(prepared(await exercises.restartLesson({ actor, ...pick(input, ["attemptId", "requestId", "expectedRevision"]) })), actor);
     }),
-    definition("lesson.end", { attemptId, requestId, expectedRevision: revision,
-      reason: { ...text, enum: ["left", "finished", "discard"] }
-    }, "End only after the person's direct request or accepted offer to retire this exact learning attempt: reason finished when the learner finished the lesson, left when they leave it (learning-mode.leave does the same), discard otherwise. Use its saved attempt ID, current learning revision and a stable end request ID. Its practice project, the project's ordinary sessions, step results and history remain readable and usable; nothing is closed, archived or deleted (practice.archive and practice.delete do that only when the person asks). Learning mode ends. Retry the same end identity after an uncertain save. Replaying an old end cannot end a newer attempt; lesson.continue picks the lesson up again.", async (input, actor) => {
-      if (typeof exercises?.endLesson !== "function") return unavailable("end");
-      const result = await exercises.endLesson({ actor, ...pick(input, ["attemptId", "requestId", "expectedRevision", "reason"]) });
-      if (result?.ok === false || !result?.attempt?.ended) {
-        throw Object.assign(new Error("Lesson retirement did not return an ended saved attempt."), { code: "VIBE64_TRAINING_ATTEMPT_END_FAILED" });
-      }
-      // Ending (or finishing) the lesson ends learning mode in every tab.
+    definition("lesson.finish", { attemptId, requestId, expectedRevision: revision }, "Finish the lesson in progress only after the person asked for it, and only once every required step has passed (lesson.read completion); otherwise it is refused and nothing changes. Use its exact attemptId and the current revision from learning.read; keep the same request on a retry. The lesson counts as completed for good, and the attempt is archived as one bundle: its record, its practice project (if the lesson has one) and its teacher conversation. A pinned session or a full archive (20 lessons) refuses and changes nothing.", async (input, actor) => {
+      if (typeof exercises?.finishLesson !== "function") return unavailable("close");
+      const result = await exercises.finishLesson({ actor, ...pick(input, ["attemptId", "expectedRevision"]) });
       await notifyLearner(actor, input.attemptId);
-      return endedResult(result);
+      return { ok: true, available: true, changed: result.closed === true };
     })
   ]);
 }
@@ -366,7 +342,7 @@ function createTrainingAuthorPreviewActions({ preview } = {}) {
       projectSlug: { ...text, maxLength: 128 }, sessionId: { ...text, maxLength: 128 },
       lessonCode: id, expectedCommit: { ...text, maxLength: 40, pattern: "^[a-f0-9]{40}$" },
       requestId: { ...requestId, maxLength: 18 }, expectedRevision: revision
-    }, "Admit a lesson snapshot only after the owner's direct request or accepted offer. Use the exact authorized authoring project/session, clean committed topic root, lesson code, observed 40-character commit and author-preview.read revision. The host reads that exact session under original idle/lifecycle/source guards and installs its immutable snapshot. A local commit is not remote publication or an enabled learner course. Use the same at-most18-character request and unchanged source arguments on uncertain retry; retained reservations reuse their saved pin without reading edited source. A fresh request refuses an active author preview. To explicitly refresh, read author-preview.read, end its exact attempt through lesson.end only when requested, then use a new author-preview.start request for the new committed snapshot and returned revision. Report end confirmed/start pending separately if start fails. Never silently end, replace, retarget or merge ordinary learner progress. Return the exact preview attempt. The trial opens in Learning like any lesson: read lesson.read with its attempt ID and teach its steps. Do not claim a completed trial. A preparation error may follow successful snapshot admission and attempt reservation: reread author-preview.read before describing the outcome, and preserve/resume that exact saved attempt rather than claiming nothing changed. Preparation is not running Preview or a pass. Colleague has no source paths or shell access.", async (input, actor) =>
+    }, "Admit a lesson snapshot only after the owner's direct request or accepted offer. Use the exact authorized authoring project/session, clean committed topic root, lesson code, observed 40-character commit and author-preview.read revision. The host reads that exact session under original idle/lifecycle/source guards and installs its immutable snapshot. A local commit is not remote publication or an enabled learner course. Use the same at-most18-character request and unchanged source arguments on uncertain retry; retained reservations reuse their saved pin without reading edited source. A fresh request refuses an active author preview. To explicitly refresh, read author-preview.read, delete its exact attempt through lesson.delete only when requested, then use a new author-preview.start request for the new committed snapshot and returned revision. Report end confirmed/start pending separately if start fails. Never silently end, replace, retarget or merge ordinary learner progress. Return the exact preview attempt. The trial opens in Learning like any lesson: read lesson.read with its attempt ID and teach its steps. Do not claim a completed trial. A preparation error may follow successful snapshot admission and attempt reservation: reread author-preview.read before describing the outcome, and preserve/resume that exact saved attempt rather than claiming nothing changed. Preparation is not running Preview or a pass. Colleague has no source paths or shell access.", async (input, actor) =>
       prepared(await preview.startLesson({ actor, ...pick(input, ["projectSlug", "sessionId", "lessonCode", "expectedCommit", "requestId", "expectedRevision"]) })), true)
   ]);
 }

@@ -1,26 +1,53 @@
-# Practice projects
+# Lessons in progress, practice projects and archives
 
-Some lessons need a practice application. Starting such a lesson in Learning →
-**Courses** (**Start**, **Start next lesson** or **Start lesson**; see
-[Choosing lessons and courses](learning-mode-ui.md)) creates a practice project
-for it. If the installation reports that exercise preparation is unavailable,
-ask the owner to provide preparation support before retrying. That refusal means
-preparation did not start.
+Vibe64 has two modes: **Develop**, for your own projects, and **Learn**, for
+lessons. **L** switches between them (see
+[The Learning environment (L)](learning-environment.md)). This guide covers
+what a lesson keeps while it is in progress, and what happens when you finish,
+restart or delete it.
+
+## One lesson in progress
+
+Starting a lesson (**Courses**, then **Start**) begins one run of it, called an
+attempt. The attempt owns:
+
+- its step results,
+- its teacher conversation with Colleague,
+- its practice project, when the lesson needs a practice application.
+  Lesson 0 and other lessons without one have no project.
+
+You have at most one lesson in progress. It stays in progress until you finish,
+restart or delete it. Switching to Develop, or opening another page, only
+pauses it: its project, results and conversation are all kept, for as long as
+you like. Press **L** to come back to it.
+
+If you start a different lesson while one is in progress, Vibe64 asks once
+whether to archive the current lesson first. Confirming archives it (see
+below) and starts the new lesson. Cancelling changes nothing and keeps the
+current lesson in progress. Starting the lesson that is already in progress
+just opens it.
+
+## Practice projects
+
+Some lessons need a practice application. Starting such a lesson creates a
+practice project for it. If the installation reports that exercise preparation
+is unavailable, ask the owner to provide preparation support before retrying.
+That refusal means preparation did not start.
 
 Preparation uses the exercise bundled with the lesson. Workspace setup may
 continue after the start request finishes; when it succeeds the lesson becomes
-ready on its own. Failed setup needs its existing recovery, then **Continue
-lesson**. Setup success does not mean Preview is running or a step has passed.
-Standalone setup uses the installation's actual resources; it does not create a
-hosted development database by default.
-
-## The learning space
+ready on its own. Failed setup needs its existing recovery; then ask Colleague
+to resume the lesson's preparation. Setup success does not mean Preview is running or a step has
+passed. Standalone setup uses the installation's actual resources; it does not
+create a hosted development database by default.
 
 Practice projects live in your own learning space, apart from your projects.
-They never appear in the project lists, the project switcher or Management →
-**Projects**, and your projects never appear among them. The same is true on a
-local Vibe64 and on a hosted workspace. Only you see your practice projects;
-the workspace owner does not.
+In Develop mode they never appear in the project lists, the project switcher or
+Management → **Projects**, and opening one says
+"This is a practice project. Press L to switch to Learn." In Learn mode only
+your practice projects open; opening one of your own projects says
+"You're in Learn mode. Press L to go back to your projects." Only you see your
+practice projects; the workspace owner does not.
 
 This separation is part of Vibe64, not of the computer. Vibe64 keeps the two
 apart in where it stores them, what it lists and what it opens. It is not a
@@ -32,88 +59,79 @@ A practice project is a complete project. Its chat, **Preview**, **Dashboard**
 and sessions work as in any project. The session that lesson preparation
 creates in it is an ordinary session.
 
-## A lesson in progress
+## In progress and Archived
 
-While a lesson is in progress you are in learning mode (see
-[The Learning environment (L)](learning-environment.md)) and in the learning
-space only: the lesson's practice project is the one project you can open.
-Opening another project brings you back to the practice project with the note
-"You're in a lesson. Leave lesson to get back to your projects." Open the
-practice project with **Open practice project** in the lesson.
+In Learn mode, **Courses** (beside **L**) has an **In progress** list and an
+**Archived** list.
 
-Press **Leave lesson** (the yellow bar on a computer, Learning's header, or
-the Learning page) to end the lesson. Your step results and the practice project
-are kept, your projects come back, and a practice project page (or the
-Learning page) returns you to `/app`. Later, **Continue lesson** in Learning → **Courses**, or **Open** in
-Learning → **Practice**, starts the lesson again in the same practice project,
-at the first required step you have not passed. If that practice project was
-deleted meanwhile, the lesson gets a new one.
+**In progress** shows the lesson in progress, if any, with **Practice:** and its
+lesson title. It has three buttons:
 
-Lesson 0 and other lessons without a practice project open no project. They
-use the Learning page (`/app/learning`); see
-[The Learning environment (L)](learning-environment.md).
+- **Open** opens the lesson and its practice project (or, for a lesson
+  without one, the lesson with no project selected).
+- **Restart** archives this attempt and starts the same lesson again with a new
+  practice project, a new teacher conversation and no step results.
+- **Delete** deletes the lesson in progress for good: its practice project
+  (files, sessions and Preview) and its teacher conversation go, with no
+  archive. A lesson you completed before stays completed.
 
-## The Practice tab
+**Archived** lists your archived lessons, newest first, with the lesson title,
+whether it was finished or archived, and the date. Each row has **Delete**,
+which removes that archive for good. You can keep at most 20 archived lessons;
+finishing, restarting or archiving another lesson is refused until you delete
+one. Archived lessons cannot be reopened from Vibe64; use **Start** again to
+redo a lesson.
 
-Press **L**, then **Practice** (next to **Courses**). The tab lists your
-practice projects. Each row shows **Practice:** followed by the lesson title (the
-lesson code while the title cannot be read) and the lesson's status: **In
-progress**, **Finished** or **Not finished**. Each row has three buttons:
+An archive keeps the attempt's record and step results, its teacher
+conversation and its practice project's source, sessions and state, but leaves
+out dependencies that can be rebuilt, such as `node_modules`. Lesson 0 keeps
+only its record and conversation.
 
-- **Open** continues the project's lesson (ending another lesson in progress,
-  with its results kept), opens the practice project and minimises Learning on
-  the current step. **L** brings Learning back.
-- **Archive** (the box button, named **Archive** and the project name) archives
-  the project with one click. The archive keeps the project's source,
-  sessions and state, but leaves out dependencies that can be rebuilt, such as
-  `node_modules`. The project then moves to **Archived**.
-- **Delete** (the trash button, named **Delete** and the project name) deletes
-  the project for good with one click, with no archive.
+## Finishing a lesson
 
-There is no confirmation dialog. Archiving or deleting the project of the lesson
-in progress ends that lesson first; its results are kept.
+When every required step has passed, the lesson's **Lesson finished** screen
+finishes it: the lesson counts as completed for good, and the attempt is
+archived as one bundle (its record, practice project and conversation). The
+screen then offers **Next lesson** and **Back to courses**. **Redo** in
+**Courses** starts a new attempt with a fresh project, teacher and results; the
+course list still shows the lesson as completed.
 
-Below the list, **Archived** lists archived practice projects with the lesson
-title and the date they were archived. The trash button (**Delete archived**
-and the name) deletes one archive for good. You can keep at most 20 archives;
-delete one before archiving another. Archived practice projects cannot
-be reopened from Vibe64. Turning a practice project into one of your own
-projects is not available.
+## When something refuses or stops
 
-If a session in the project is pinned, archiving or deleting refuses with a
-message that names the session. Open it, choose **Unpin session**, and try
-again. If archiving or deleting stops part-way, the row stays (a stopped
-deletion shows **Being deleted** with only **Delete**). Press the button again;
-it continues from the step that failed. If it keeps failing, the error says
-why; ask the person who runs this Vibe64 to inspect it.
+If a session in the practice project is pinned, finishing, restarting,
+archiving or deleting refuses with a message that names the session. Nothing
+was changed. Open the session, choose **Unpin session**, and try again. A full
+archive (20 lessons) or too little storage also refuses with nothing changed.
 
-When a lesson finishes, its **Lesson finished** screen offers the same choices
-for its practice project: **Archive practice project**, **Delete practice
-project** or **Keep** (it stays in **Practice**). The practice project page
-stays behind Learning while you choose; when you hide Learning it goes to
-`/app` (on a local Vibe64, your project; on hosted Vibe64, Projects).
+If archiving or deleting stops part-way, the lesson stays in progress (a
+stopped removal shows **Being deleted**). Press the same button again; it
+continues from the step that failed. **Delete** also finishes a stopped archive.
+If it keeps failing, the error says why; ask the person who runs this Vibe64
+to inspect it.
 
-Colleague can list your practice projects and open one when you ask. It
-archives or deletes a practice project, or deletes an archive, only when you ask
-and then confirm that exact project; an offer is not a request.
+## What Colleague can do
+
+Colleague can list the lesson in progress and the archived lessons, and switch
+between Learn and Develop when you ask. It restarts or finishes a lesson only
+when you ask, and deletes the lesson in progress or an archive only when you
+ask and then confirm that exact deletion; an offer is not a request. Starting a
+different lesson while one is in progress needs your confirmation to archive
+the current one first.
 
 ## A practice project open elsewhere
 
-If an archived or deleted practice project is still open in another tab or
-window, that page switches by itself (no reload needed) to **This practice
-project is gone** instead of an error. **Open Learning** there opens Learning on
-its course list (desktop and phone alike), where **Continue lesson** starts the
-lesson again, with a new practice project if the old one was deleted. The page's requests answer not found
-with the code `vibe64_practice_project_deleted`. Colleague can explain this;
-only you press **Open Learning**.
+If a practice project that was archived or deleted is still open in another tab
+or window, that page switches by itself (no reload needed) to **This practice
+project is gone** instead of an error. The page's requests answer not found with
+the code `vibe64_practice_project_deleted`. Colleague can explain this.
 
 ## How a practice project is named
 
 A practice project keeps its address (`/app/project/training-…`), but Vibe64
-names it after its lesson: in the project header, in Learning's **Practice**
-tab and by Colleague. The name is **Practice:** followed by the lesson title,
-otherwise the lesson code, for example **Practice: V64-START-02**. Hover the
-header name on a computer to see the address too.
+names it after its lesson: in the project header, in **Courses** and by
+Colleague. The name is **Practice:** followed by the lesson title, otherwise the
+lesson code, for example **Practice: V64-START-02**. Hover the header name on a
+computer to see the address too.
 
 On a phone the header name shortens with **…** so it never covers the other
 header buttons. While Preview's controls are showing on a very narrow phone, or

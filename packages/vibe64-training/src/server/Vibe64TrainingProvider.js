@@ -49,7 +49,6 @@ const Vibe64TrainingProvider = defineFeature({
     const checks = createTrainingDeclaredCheckOwner({ learners, content, project, terminals });
     // Version 2 step results; the action layer supplies the action executor.
     const steps = createTrainingStepChecks({ learners, content, checks, authorship: codeAuthorship, actions: actionCatalogue });
-    const exercises = createTrainingService({ catalogue, content, learners, projectContext, projectRepositoryService, project, sessions, terminals });
     // A browser-supplied actor is never local authority. Retain the original
     // transport check without a host's signed-in-user alternative.
     const localActor = request => {
@@ -69,15 +68,16 @@ const Vibe64TrainingProvider = defineFeature({
     });
     // The person of a local practice project request is this computer's user.
     registerPracticeRequestActor(({ request }) => localActor(request));
-    // Learning mode: the local learner is this computer's user, whatever the request says.
+    // Learn mode: the local learner is this computer's user, whatever the request says.
     registerLearningModeReader(() => learners.readLearningMode({ actor: currentOsUser() }), {
-      onReadFailure: error => logger?.warn?.({ error: String(error?.message || error) }, "Learning mode could not be read; projects stay open.")
+      onReadFailure: error => logger?.warn?.({ error: String(error?.message || error) }, "Learn mode could not be read; Develop applies.")
     });
     // The standalone project archive service; a host supplies its own through trainingHost.
     const projectArchive = createProjectArchiveService({ projectContext,
       closeProjectRuntime: ({ slug, reason }) => project.runInProjectContext(slug, () => terminals.closeProjectRuntime({ reason }),
         { allowDeleting: true }) });
     const learningSpace = createTrainingLearningSpace({ learners, content, projectContext, projectArchive });
+    const exercises = createTrainingService({ catalogue, content, learners, learningSpace, projectContext, projectRepositoryService, project, sessions, terminals });
     // The learner's ordinary Files editor saves in a practice project record
     // code authorship through the original ledger owner.
     sourceEditor?.setFileSaveOwner(createTrainingCodeSaveOwner({ authorship: codeAuthorship }));

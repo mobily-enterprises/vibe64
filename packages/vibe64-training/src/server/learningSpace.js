@@ -1,53 +1,46 @@
-import { lstat, readdir, readFile, rm } from "node:fs/promises";
+import { lstat, mkdir, readdir, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
-import { practiceIdFromSlug, practiceSlug } from "@local/vibe64-core/server/learningSpace";
+import { practiceSlug } from "@local/vibe64-core/server/learningSpace";
+import { learnThreadFile, releaseLearnThread } from "@local/vibe64-core/server/learnThreads";
 import { writeJsonFileAtomic } from "@local/vibe64-core/server/projectRecordMetadata";
-import { attemptPracticeId, learnerIdentity } from "./learnerState.js";
+import { learnerIdentity } from "./learnerState.js";
 
 const MAX_ARCHIVES = 20;
 const AUTHOR_PREVIEW_COURSE = "author-preview";
-const ARCHIVE_ID_PATTERN = /^[0-9A-Za-z][0-9A-Za-z_.-]{0,127}$/u;
+const ARCHIVE_REASONS = Object.freeze(["finished", "archived"]);
+const PRIVATE = Object.freeze({ directoryMode: 0o700, fileMode: 0o600 });
+const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
 
-// The learner's practice projects in the learning space (Learning v2 Rev 3
-// R1, R6): listing, archive, removal and archived-bundle deletion. Admission
-// and paths are core's (runWithPracticeProjectScope); the archive lifecycle
-// and the light delete are the shared project archive service, the host's
-// (trainingHost.projectArchive) or a standalone one. This owner adds only what
-// the archiver must not know: that the project is this learner's, that its
-// in-progress attempt ends (reason `discard`) inside the archiver's lock after
-// every refusal (its `beforeRemove` step) and its code ledger goes, and the
-// learner's archive root with `practice.json` beside each bundle.
+// The attempt lifecycle in the learning space (Learning v2 Rev 4 H4/H5).
+// An attempt is the parent of its practice project (training-<attemptId>,
+// when the lesson has one), its step results and its teacher conversation.
+// closeAttempt is the one implementation behind finish, restart,
+// start-with-archive and delete. Archiving keeps one bundle per attempt:
+//   <sys>/training/practice-archives/<learnerKey>/<attemptId>/
+//     attempt.json        the attempt record with its step results
+//     conversation.json   the teacher thread, moved out of Colleague's store
+//     project/            the shared project archive (only with a project)
+// Admission and paths are core's (runWithPracticeProjectScope); the project
+// archive lifecycle is the shared archive service, the host's
+// (trainingHost.projectArchive) or a standalone one.
 function createTrainingLearningSpace({ learners, content, projectContext, projectArchive, systemRoot = projectContext?.systemRoot,
   removePath = rm } = {}) {
   if (typeof learners?.readState !== "function" || typeof learners?.endAttempt !== "function" ||
-      typeof learners?.forgetPracticeLedger !== "function" || typeof content?.readLesson !== "function" ||
-      typeof projectContext?.runWithPracticeProjectScope !== "function" ||
-      typeof projectContext?.listLearningSpaceProjects !== "function" || typeof projectContext?.readLearningSpaceProject !== "function" ||
+      typeof learners?.readAttemptRecord !== "function" || typeof learners?.runPreparationExclusive !== "function" ||
+      typeof content?.readLesson !== "function" || typeof projectContext?.runWithPracticeProjectScope !== "function" ||
+      typeof projectContext?.readLearningSpaceProject !== "function" ||
       typeof projectArchive?.archiveProject !== "function" || typeof projectArchive?.removeProject !== "function" || !systemRoot) {
     throw new TypeError("The learning space requires the learner, content, Project context and project archive owners.");
   }
   const archivesRoot = path.join(systemRoot, "training", "practice-archives");
-
   const learnerArchiveRoot = actor => path.join(archivesRoot, learnerIdentity(actor).key);
+  const bundleRoot = (actor, attemptId) => path.join(learnerArchiveRoot(actor), attemptId);
 
-  // This learner's practice project, or null (none, or another learner's).
-  async function findRecord(actor, practiceId) {
-    const record = await projectContext.readLearningSpaceProject(practiceSlug(practiceId));
+  // This learner's practice project of an attempt, or null (none, or another learner's).
+  async function findRecord(actor, attemptId) {
+    const record = await projectContext.readLearningSpaceProject(practiceSlug(attemptId));
     return record?.learnerKey === learnerIdentity(actor).key ? record : null;
   }
-
-  async function ownRecord(actor, practiceId) {
-    const record = await findRecord(actor, practiceId);
-    if (!record) {
-      throw Object.assign(new Error("This is not one of your practice projects."), { code: "VIBE64_TRAINING_PRACTICE_MISSING", statusCode: 404 });
-    }
-    return record;
-  }
-
-  // A deletion marker stays visible here so a delete can resume it.
-  // (practice.open and Continue lesson treat such a project as gone.)
-  const inScope = (actor, record, operation) => projectContext.runWithPracticeProjectScope({
-    actor, training: record.training, access: "write", allowDeleting: true }, operation);
 
   async function lessonTitle(pin) {
     try {
@@ -57,75 +50,93 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     }
   }
 
-  const lessonView = async pin => ({ code: pin.lesson.code, title: await lessonTitle(pin) });
-
-  // An archived practice project's `practice.json`, or null when it is
-  // missing or damaged (that entry is left out, never the whole list).
-  async function readPractice(directory) {
-    let practice;
-    try { practice = JSON.parse(await readFile(path.join(directory, "practice.json"), "utf8")); }
+  // An archived attempt's `attempt.json`, or null when it is missing or
+  // damaged (that entry is left out, never the whole list).
+  async function readBundle(directory, attemptId) {
+    let record;
+    try { record = JSON.parse(await readFile(path.join(directory, "attempt.json"), "utf8")); }
     catch (error) { if (error.code === "ENOENT" || error instanceof SyntaxError) return null; throw error; }
-    const { pin } = practice || {};
-    const valid = typeof practice?.practiceId === "string" && typeof practice.archivedAt === "string" &&
-      Number.isFinite(Date.parse(practice.archivedAt)) && typeof pin?.lesson?.code === "string" &&
-      typeof pin.lesson.hash === "string" && pin.topic && typeof pin.topic === "object";
-    return valid ? practice : null;
+    const valid = record?.schemaVersion === 1 && record.attemptId === attemptId && ARCHIVE_REASONS.includes(record.reason) &&
+      typeof record.archivedAt === "string" && Number.isFinite(Date.parse(record.archivedAt)) &&
+      typeof record.pin?.lesson?.code === "string" && typeof record.lessonTitle === "string";
+    return valid ? record : null;
   }
 
-  async function readArchived(actor, live) {
-    const root = learnerArchiveRoot(actor);
-    const archived = [];
-    for (const entry of await readdir(root, { withFileTypes: true }).catch(missingAsEmpty)) {
-      if (!entry.isDirectory()) continue;
-      const directory = path.join(root, entry.name);
-      const practice = await readPractice(directory);
-      // Written before archiving: while the project still exists it is not archived.
-      if (!practice || practiceSlug(practice.practiceId) !== entry.name || live.has(practice.practiceId)) continue;
-      for (const bundle of await bundlesIn(directory)) {
-        archived.push({ practiceId: practice.practiceId, archiveId: bundle, lesson: await lessonView(practice.pin),
-          archivedAt: practice.archivedAt });
-      }
-    }
-    return archived.sort((left, right) => right.archivedAt.localeCompare(left.archivedAt));
-  }
-
+  // The lesson in progress (with its practice project, if any) and the
+  // archived attempts, newest first.
   async function list(actor) {
-    const state = await learners.readState({ actor, includeCompletion: true });
+    const state = await learners.readState({ actor });
     const active = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
-    const completed = new Set((state.lessonCompletions || []).filter(value => value.completed)
-      .map(value => `${value.lessonCode}\0${value.lessonHash}`));
-    const projects = [];
-    const live = new Set();
-    for (const record of await projectContext.listLearningSpaceProjects({ learnerKey: learnerIdentity(actor).key })) {
-      live.add(record.practiceId);
-      const { pin } = record.training;
-      if (pin.course.courseId === AUTHOR_PREVIEW_COURSE) continue;
-      const status = record.deleting ? "deleting"
-        : active && attemptPracticeId(active) === record.practiceId ? "in-progress"
-          : completed.has(`${pin.lesson.code}\0${pin.lesson.hash}`) ? "finished" : "not-finished";
-      projects.push({ practiceId: record.practiceId, slug: record.slug, lesson: await lessonView(pin), status });
+    let current = null;
+    if (active && active.pin.course.courseId !== AUTHOR_PREVIEW_COURSE) {
+      const record = active.projectSlug ? await findRecord(actor, active.attemptId) : null;
+      current = { attemptId: active.attemptId, lesson: { code: active.pin.lesson.code, title: await lessonTitle(active.pin) },
+        ...(record ? { slug: record.slug } : {}), status: record?.deleting ? "deleting" : "in-progress" };
     }
-    return { projects, archived: await readArchived(actor, live) };
+    const archived = [];
+    const root = learnerArchiveRoot(actor);
+    for (const entry of await readdir(root, { withFileTypes: true }).catch(missingAsEmpty)) {
+      // A close that stopped part-way keeps its attempt in progress, not archived.
+      if (!entry.isDirectory() || entry.name === active?.attemptId) continue;
+      const record = await readBundle(path.join(root, entry.name), entry.name);
+      if (!record) continue;
+      archived.push({ attemptId: record.attemptId, lesson: { code: record.pin.lesson.code, title: record.lessonTitle },
+        reason: record.reason, archivedAt: record.archivedAt,
+        hasProject: (await readdir(path.join(root, entry.name, "project")).catch(missingAsEmpty)).length > 0 });
+    }
+    archived.sort((left, right) => right.archivedAt.localeCompare(left.archivedAt));
+    return { current, archived };
   }
 
-  async function exists({ actor, practiceId } = {}) {
-    return Boolean(await findRecord(actor, practiceId));
+  async function exists({ actor, attemptId } = {}) {
+    return Boolean(await findRecord(actor, attemptId));
   }
 
-  // Ends the learner's in-progress attempt on this practice project (reason
-  // `discard`), as lesson.end does: the preparation barrier, then the typed
-  // retirement. Idempotent: no attempt in progress there is nothing to end,
-  // and the stable request ID replays a confirmed end.
-  async function endAttemptOn(actor, practiceId) {
+  // Only a folder holding a valid attempt record is an archive.
+  async function archiveCount(actor) {
+    const root = learnerArchiveRoot(actor);
+    let count = 0;
+    for (const entry of await readdir(root, { withFileTypes: true }).catch(missingAsEmpty)) {
+      if (entry.isDirectory() && await readBundle(path.join(root, entry.name), entry.name)) count++;
+    }
+    return count;
+  }
+
+  // Step 1, under the archiver's lock after its refusals: the attempt record
+  // with its step results. A resumed close keeps the record it wrote first.
+  async function writeAttemptRecord(actor, attemptId, reason) {
+    const directory = bundleRoot(actor, attemptId);
+    if (await readBundle(directory, attemptId)) return;
+    const { attempt, stepProgress, lessonTitle: title } = await learners.readAttemptRecord({ actor, attemptId });
+    await writeJsonFileAtomic(path.join(directory, "attempt.json"), {
+      schemaVersion: 1, attemptId, learnerKey: learnerIdentity(actor).key, pin: attempt.pin, lessonTitle: title,
+      reason, createdAt: attempt.createdAt, archivedAt: new Date().toISOString(), stepProgress
+    }, PRIVATE);
+  }
+
+  // Step 2: Colleague releases the thread's live runtime, then its file moves
+  // into the bundle (archive) or goes (delete). A thread already moved is done.
+  async function closeThread(actor, attemptId, archive) {
+    const learnerKey = learnerIdentity(actor).key;
+    await releaseLearnThread({ learnerKey, attemptId });
+    const file = learnThreadFile({ systemRoot, learnerKey, attemptId });
+    if (!archive) return removePath(file, { force: true });
+    const destination = path.join(bundleRoot(actor, attemptId), "conversation.json");
+    await mkdir(path.dirname(destination), { recursive: true, mode: PRIVATE.directoryMode });
+    await rename(file, destination).catch(error => { if (error.code !== "ENOENT") throw error; });
+  }
+
+  // Step 3: the learner store ends the attempt under the preparation barrier,
+  // which also forgets its code ledger (C1). The stable request replays.
+  async function endAttempt(actor, attemptId, reason) {
     for (let tries = 1; ; tries++) {
       const state = await learners.readState({ actor });
-      const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
-      if (!attempt || attemptPracticeId(attempt) !== practiceId) return false;
-      const { attemptId } = attempt;
+      const attempt = state.progress.attempts.find(value => value.attemptId === attemptId);
+      if (!attempt || attempt.ended) return;
       try {
         await learners.runPreparationExclusive({ actor, attemptId }, () => learners.endAttempt({ actor, attemptId,
-          requestId: `practice-end-${attemptId}`, expectedRevision: state.revision, reason: "discard" }));
-        return true;
+          requestId: `close-${attemptId}`, expectedRevision: state.revision, reason }));
+        return;
       } catch (error) {
         // A concurrent learning write moved the revision or ended the attempt.
         if (!["VIBE64_TRAINING_STATE_REVISION_CONFLICT", "VIBE64_TRAINING_ATTEMPT_MISSING"].includes(error.code) || tries >= 2) throw error;
@@ -133,102 +144,72 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     }
   }
 
-  // Runs one archiver removal whose `beforeRemove` step ends the attempt: the
-  // archiver calls it under its per-slug lock after every refusal (pinned
-  // session, storage headroom), so a refused archive or delete changes
-  // nothing. A failure after the attempt ended carries `ended: true`.
-  async function removing(actor, record, run) {
-    let ended = false;
-    const endAttempt = async () => { ended = await endAttemptOn(actor, record.practiceId) || ended; };
-    try {
-      return { ...await run(endAttempt), ended };
-    } catch (error) {
-      if (ended) error.ended = true;
-      throw error;
+  // Finish (reason finished), restart and start-with-archive (archived) keep a
+  // bundle; delete (deleted) keeps nothing. The project goes first, through
+  // the archiver, so its refusals (a pinned session, storage) change nothing,
+  // and a removal that stops leaves the attempt in progress with its project
+  // marked deleting. Repeating the close resumes it, keyed by attemptId; an
+  // attempt that has already ended is done.
+  async function closeAttempt({ actor, attemptId, archive, reason } = {}) {
+    if (archive ? !ARCHIVE_REASONS.includes(reason) : reason !== "deleted") {
+      throw new TypeError("Close an attempt as finished or archived with an archive, or as deleted without one.");
     }
-  }
-
-  // Only a folder holding a bundle is an archive; a stray `practice.json`
-  // from an archive that stopped before its bundle never uses up a slot.
-  async function archiveCount(actor) {
-    let count = 0;
-    const root = learnerArchiveRoot(actor);
-    for (const entry of await readdir(root, { withFileTypes: true }).catch(missingAsEmpty)) {
-      if (entry.isDirectory() && (await bundlesIn(path.join(root, entry.name))).length) count++;
+    const state = await learners.readState({ actor });
+    const attempt = state.progress.attempts.find(value => value.attemptId === attemptId);
+    if (!attempt) {
+      throw Object.assign(new Error("This is not one of your lessons. Nothing was changed."), {
+        code: "VIBE64_TRAINING_ATTEMPT_MISSING", statusCode: 404 });
     }
-    return count;
-  }
-
-  async function archive({ actor, practiceId } = {}) {
-    const record = await ownRecord(actor, practiceId);
-    const archiveRoot = learnerArchiveRoot(actor);
-    const projectArchiveRoot = path.join(archiveRoot, record.slug);
+    if (attempt.ended) return { ok: true, attemptId, closed: false };
+    const directory = bundleRoot(actor, attemptId);
     // A resumed archive already holds its (partial) bundle and its slot.
-    const resumed = (await bundlesIn(projectArchiveRoot)).length > 0;
-    if (!resumed && await archiveCount(actor) >= MAX_ARCHIVES) {
-      throw Object.assign(new Error(`You have ${MAX_ARCHIVES} archived practice projects. Delete one in Practice → Archived first. Nothing was archived.`), {
+    if (archive && !await isDirectory(directory) && await archiveCount(actor) >= MAX_ARCHIVES) {
+      throw Object.assign(new Error(`You have ${MAX_ARCHIVES} archived lessons. Delete one in Courses → Archived first. Nothing was changed.`), {
         code: "VIBE64_TRAINING_PRACTICE_ARCHIVE_LIMIT", statusCode: 409 });
     }
-    return inScope(actor, record, () => removing(actor, record, async endAttempt => {
-      const archived = await projectArchive.archiveProject({ slug: record.slug, archiveRoot, checkHeadroom: true,
-        async beforeRemove() {
-          // Under the lock, after the refusals: a resumed archive keeps its record.
-          if (!(await bundlesIn(projectArchiveRoot)).length || !await readPractice(projectArchiveRoot)) {
-            await writeJsonFileAtomic(path.join(projectArchiveRoot, "practice.json"), {
-              practiceId, learnerKey: record.learnerKey, pin: record.training.pin, archivedAt: new Date().toISOString()
-            }, { directoryMode: 0o700, fileMode: 0o600 });
-          }
-          await endAttempt();
-        } });
-      await learners.forgetPracticeLedger({ actor, practiceId });
-      return { ok: true, practiceId, slug: record.slug, archiveId: path.basename(archived.bundlePath) };
-    }));
-  }
-
-  // The light delete also finishes an archive that stopped part-way: its
-  // partial bundle and `practice.json` go with the project.
-  async function remove({ actor, practiceId } = {}) {
-    const record = await ownRecord(actor, practiceId);
-    return inScope(actor, record, () => removing(actor, record, async endAttempt => {
-      const removed = await projectArchive.removeProject({ slug: record.slug, beforeRemove: endAttempt });
-      await removePath(path.join(learnerArchiveRoot(actor), record.slug), { recursive: true, force: true });
-      await learners.forgetPracticeLedger({ actor, practiceId });
-      return { ok: true, practiceId, slug: record.slug, removed: removed?.removed !== false };
-    }));
-  }
-
-  // Removes one archived bundle of this learner, and the project's archive
-  // directory (with its practice.json) once no bundle remains.
-  async function deleteArchive({ actor, practiceId, archiveId } = {}) {
-    const slug = practiceSlug(practiceId);
-    if (!practiceIdFromSlug(slug) || !ARCHIVE_ID_PATTERN.test(String(archiveId || ""))) throw archiveMissing();
-    const directory = path.join(learnerArchiveRoot(actor), slug);
-    const bundle = path.join(directory, archiveId);
-    const info = await lstat(bundle).catch(error => { if (error.code === "ENOENT") return null; throw error; });
-    if (!info?.isDirectory()) throw archiveMissing();
-    await removePath(bundle, { recursive: true, force: true });
-    if (!(await bundlesIn(directory)).length) {
-      await removePath(directory, { recursive: true, force: true });
+    const record = attempt.projectSlug ? await findRecord(actor, attemptId) : null;
+    if (record) {
+      await projectContext.runWithPracticeProjectScope({ actor, training: record.training, access: "write", allowDeleting: true },
+        () => archive
+          ? projectArchive.archiveProject({ slug: record.slug, archiveRoot: path.join(directory, "project"), checkHeadroom: true,
+            beforeRemove: () => writeAttemptRecord(actor, attemptId, reason) })
+          : projectArchive.removeProject({ slug: record.slug }));
+    } else if (archive) {
+      await writeAttemptRecord(actor, attemptId, reason);
     }
-    return { ok: true, practiceId, archiveId, removed: true };
+    // A delete also takes the partial bundle of an archive that stopped part-way.
+    if (!archive) await removePath(directory, { recursive: true, force: true });
+    await closeThread(actor, attemptId, archive);
+    await endAttempt(actor, attemptId, reason);
+    return { ok: true, attemptId, closed: true };
   }
 
-  return Object.freeze({ list, exists, archive, remove, deleteArchive });
+  // Removes one archived attempt bundle of this learner.
+  async function deleteArchive({ actor, attemptId } = {}) {
+    const state = await learners.readState({ actor });
+    const archived = UUID_PATTERN.test(String(attemptId || "")) && attemptId !== state.progress.activeAttemptId &&
+      await isDirectory(bundleRoot(actor, attemptId));
+    if (!archived) {
+      throw Object.assign(new Error("This archived lesson is not in your archive."), {
+        code: "VIBE64_TRAINING_PRACTICE_ARCHIVE_MISSING", statusCode: 404 });
+    }
+    await removePath(bundleRoot(actor, attemptId), { recursive: true, force: true });
+    return { ok: true, attemptId, removed: true };
+  }
+
+  return Object.freeze({ list, exists, closeAttempt, deleteArchive });
 }
 
-function archiveMissing() {
-  return Object.assign(new Error("This archived practice project is not in your archive."), {
-    code: "VIBE64_TRAINING_PRACTICE_ARCHIVE_MISSING", statusCode: 404 });
+async function isDirectory(directory) {
+  return lstat(directory).then(info => info.isDirectory(), error => {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  });
 }
 
 function missingAsEmpty(error) {
   if (error.code === "ENOENT") return [];
   throw error;
-}
-
-async function bundlesIn(directory) {
-  return (await readdir(directory, { withFileTypes: true }).catch(missingAsEmpty))
-    .filter(value => value.isDirectory()).map(value => value.name);
 }
 
 export { createTrainingLearningSpace, MAX_ARCHIVES };

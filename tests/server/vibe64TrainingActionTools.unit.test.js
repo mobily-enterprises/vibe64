@@ -29,9 +29,10 @@ async function fixture(t, { presentation = false, released = false } = {}) {
     vibe64Training: { schemaVersion: 1, topicId: "action-fixture", domainId: "vibe64", title: "Action fixture", status: released ? "released" : "preview", outline: "training/outline.md", prerequisites: [],
       lessons: [{ code: "USE-ONE", descriptor: "training/lessons/USE-ONE/lesson.json", status: "published", required: true }] } });
   await write(source, "training/outline.md", "# One lesson\nTry the application.\n");
-  await write(source, "training/lessons/USE-ONE/lesson.json", { schemaVersion: 1, code: "USE-ONE", title: "Try the application", document: "lesson.md", prerequisites: [], estimatedMinutes: 5,
-    visuals: [{ id: "request", descriptor: "../../visuals/request/visual.json" }], assessments: [{ id: "explain", kind: "answer", required: true, rubric: "lesson.md#explain" }] });
-  await write(source, "training/lessons/USE-ONE/lesson.md", '# Try the app\n<a id="explain"></a>\nExplain what you tried in your own words.\n');
+  await write(source, "training/lessons/USE-ONE/lesson.json", { schemaVersion: 2, code: "USE-ONE", title: "Try the application", prerequisites: [], estimatedMinutes: 5,
+    visuals: [{ id: "request", descriptor: "../../visuals/request/visual.json" }],
+    steps: [{ id: "explain", title: "Explain it", body: "explain.md", check: { kind: "self" }, required: true }] });
+  await write(source, "training/lessons/USE-ONE/explain.md", "Explain what you tried in your own words.\n");
   await write(source, "training/visuals/request/visual.json", { schemaVersion: 1, id: "request", title: "One request", svg: "diagram.svg", controller: "controller.js",
     initialState: "overview", states: ["overview"], description: "A display-only request.", commands: presentation
       ? [{ name: "show", description: "Show one request.", completionState: "overview", parameters: [{ name: "label", required: true, maxLength: 16 }] }] : [] });
@@ -66,12 +67,18 @@ async function fixture(t, { presentation = false, released = false } = {}) {
       calls.push({ operation: "resume", value });
       return { ...await learners.resumeAttempt(value), sourceRoot: "/PRIVATE_SOURCE", setup: { status: "pending", command: "PRIVATE_SHELL" }, previewReady: true };
     },
-    async endLesson(value) {
-      calls.push({ operation: "end", value });
-      const state = await learners.readState({ actor: value.actor, includeCompletion: true });
-      const previous = state.progress.attempts.find(attempt => attempt.attemptId === value.attemptId);
-      if (previous?.ended) return learners.endAttempt(value);
-      return learners.runPreparationExclusive(value, () => learners.endAttempt(value));
+    // Stands in for the learning space's close (an archive), which the
+    // learning space and preparation tests cover.
+    async finishLesson(value) {
+      calls.push({ operation: "finish", value });
+      const { revision } = await learners.readState({ actor: value.actor });
+      await learners.runPreparationExclusive(value, () => learners.endAttempt({ actor: value.actor, attemptId: value.attemptId,
+        requestId: `close-${value.attemptId}`, expectedRevision: revision, reason: "archived" }));
+      return { ok: true, attemptId: value.attemptId, closed: true };
+    },
+    async restartLesson(value) {
+      calls.push({ operation: "restart", value });
+      return { ...await learners.resumeAttempt(value), sourceRoot: "/PRIVATE_SOURCE", previewReady: true };
     }
   };
   function register(host = null, replacements = {}) {
@@ -114,8 +121,8 @@ const excluded = /PRIVATE_SOURCE|PRIVATE_SHELL|SVG_SOURCE_ONLY|CONTROLLER_SOURCE
 test("training queries share API/tool catalogue contracts and fresh member authority without project or writes", async t => {
   const f = await fixture(t);
   const c = f.register();
-  assert.deepEqual(c.toolSet.tools.map(value => value.actionId).sort(), ["courses.list", "courses.create", "available.list", "course.install", "learning.read", "lesson.start", "lesson.resume", "lesson.end", "lesson.continue",
-    "learning-mode.read", "learning-mode.leave"].map(value => `vibe64.training.${value}`).sort());
+  assert.deepEqual(c.toolSet.tools.map(value => value.actionId).sort(), ["courses.list", "courses.create", "available.list", "course.install", "learning.read", "lesson.start", "lesson.resume", "lesson.restart", "lesson.finish",
+    "learning-mode.read", "learning-mode.set"].map(value => `vibe64.training.${value}`).sort());
   let before = await inventory(f.systemRoot);
   for (const name of ["courses.list", "learning.read"]) {
     const { learnerId, ...api } = await c.execute(name);
@@ -164,7 +171,6 @@ test("host start and resume receive exact admitted IDs and same actor while proj
   assert.equal(api.previewReady, false);
   // The fixture lesson declares no exercise, so its attempt names no practice project.
   assert.equal(Object.hasOwn(api.active, "preparation") || Object.hasOwn(api.active, "projectSlug"), false);
-  assert.equal(api.active.learning.submissions.length, 0);
   assert.deepEqual(f.calls[0].value, { actor: f.auth.user, ...f.input });
   assert.equal(f.calls[0].value.actor, f.auth.user);
   assert.equal(f.calls[1].value.actor, f.auth.user);
@@ -184,7 +190,8 @@ test("all training actions reject spoofed actor/paths and re-resolve login for r
   const reserved = await f.reserve();
   const inputs = { "courses.list": {}, "learning.read": {},
     "lesson.start": f.input, "lesson.resume": { attemptId: reserved.attempt.attemptId },
-    "lesson.end": { attemptId: reserved.attempt.attemptId, requestId: "end-one", expectedRevision: reserved.revision, reason: "discard" } };
+    "lesson.restart": { attemptId: reserved.attempt.attemptId, requestId: "restart-one", expectedRevision: reserved.revision },
+    "lesson.finish": { attemptId: reserved.attempt.attemptId, requestId: "finish-one", expectedRevision: reserved.revision } };
   for (const [name, input] of Object.entries(inputs)) {
     for (const extra of [{ vibe64User: { role: "owner" } }, { actor: { uid: 42 } }, { userId: 42 }, { path: "/tmp/source" }, { projectSlug: "arbitrary" }, { command: "node" }]) {
       await assert.rejects(() => c.execute(name, { ...input, ...extra }), { code: "ACTION_VALIDATION_FAILED" });
@@ -263,92 +270,71 @@ test("known preparation contention retains the same attempt and gives a safe spe
   });
 });
 
-test("native lesson end and ended-start replay expose the original target and actual active state without project effects", async t => {
+test("finish and ended-start replay expose the original target and actual active state without project effects", async t => {
   const f = await fixture(t);
   const c = f.register(f.exercises);
   const first = await c.execute("lesson.start", f.input);
-  const input = { attemptId: first.active.attemptId, requestId: "end-first", expectedRevision: first.revision, reason: "finished" };
-  const api = await c.execute("lesson.end", input);
-  assert.equal(api.ok, true);
-  assert.equal(api.active, null);
-  assert.equal(api.attempt.attemptId, input.attemptId);
-  assert.deepEqual(api.attempt.ended, { requestId: input.requestId, revision: api.revision, reason: input.reason });
-  assert.equal(api.replayed, false);
-  assert.equal(api.previewReady, false);
-  assert.deepEqual(f.calls.at(-1), { operation: "end", value: { actor: f.auth.user, ...input } });
+  const input = { attemptId: first.active.attemptId, requestId: "finish-first", expectedRevision: first.revision };
+  assert.deepEqual(await c.execute("lesson.finish", input), { ok: true, available: true, changed: true });
+  assert.deepEqual(f.calls.at(-1), { operation: "finish", value: { actor: f.auth.user, attemptId: input.attemptId, expectedRevision: input.expectedRevision } });
   assert.equal(f.calls.at(-1).value.actor, f.auth.user);
-  const definition = c.definitions.find(value => value.id === "vibe64.training.lesson.end");
+  const definition = c.definitions.find(value => value.id === "vibe64.training.lesson.finish");
   assert.equal(definition.idempotency, "domain_native");
-  assert.match(definition.extensions.assistant.description, /the project's ordinary sessions, step results and history remain readable and usable/u);
-  assert.match(definition.extensions.assistant.description, /nothing is closed, archived or deleted/u);
-  const beforeReplay = await inventory(f.systemRoot);
-  const replay = await c.tool("lesson.end", input);
-  assert.equal(replay.ok, true, JSON.stringify(replay));
-  assert.deepEqual(replay.result, { ...api, replayed: true });
-  assert.deepEqual(await inventory(f.systemRoot), beforeReplay);
-  const start = await c.execute("lesson.start", { ...f.input, requestId: "start-second", expectedRevision: api.revision });
+  assert.match(definition.extensions.assistant.description, /archived as one bundle/u);
+  const { revision } = await f.learners.readState({ actor: f.auth.user });
+  const start = await c.execute("lesson.start", { ...f.input, requestId: "start-second", expectedRevision: revision });
   assert.notEqual(start.active.attemptId, input.attemptId);
   const before = await inventory(f.systemRoot);
   const oldStart = await c.tool("lesson.start", f.input);
   assert.equal(oldStart.ok, true);
   assert.equal(oldStart.result.attempt.attemptId, input.attemptId);
-  assert.equal(oldStart.result.attempt.ended.reason, "finished");
+  assert.equal(oldStart.result.attempt.ended.reason, "archived");
   assert.equal(oldStart.result.active.attemptId, start.active.attemptId);
   assert.equal(oldStart.result.completion, null);
   assert.equal(oldStart.result.previewReady, false);
   assert.equal(oldStart.result.replayed, true);
-  const oldEnd = await c.execute("lesson.end", input);
-  assert.equal(oldEnd.attempt.attemptId, input.attemptId);
-  assert.equal(oldEnd.active.attemptId, start.active.attemptId);
-  assert.equal(oldEnd.replayed, true);
-  assert.doesNotMatch(JSON.stringify([api, oldStart.result, oldEnd]), excluded);
+  assert.doesNotMatch(JSON.stringify(oldStart.result), excluded);
   assert.deepEqual(await inventory(f.systemRoot), before);
   assert.equal((await f.learners.readState({ actor: f.auth.user })).active.attemptId, start.active.attemptId);
   await assert.rejects(readFile(path.join(f.systemRoot, "projects")), { code: "ENOENT" });
 });
 
-test("end tool is unavailable without its host and rejects malformed, unauthorized or conflicting retirement before effects", async t => {
+test("restart and finish are unavailable without their host and reject malformed or unauthorized input before effects", async t => {
   const f = await fixture(t);
   const saved = await f.reserve();
-  const input = { attemptId: saved.attempt.attemptId, requestId: "end-one", expectedRevision: saved.revision, reason: "discard" };
+  const input = { attemptId: saved.attempt.attemptId, requestId: "close-one", expectedRevision: saved.revision };
   const absent = f.register();
   const before = await inventory(f.systemRoot);
-  const unavailable = await absent.tool("lesson.end", input);
-  assert.equal(unavailable.ok, true);
-  assert.equal(unavailable.result.ok, false);
-  assert.equal(unavailable.result.available, false);
-  assert.match(unavailable.result.error, /retirement is unavailable/u);
+  for (const name of ["lesson.restart", "lesson.finish"]) {
+    const unavailable = await absent.tool(name, input);
+    assert.equal(unavailable.ok, true);
+    assert.deepEqual([unavailable.result.ok, unavailable.result.available], [false, false]);
+    assert.match(unavailable.result.error, /unavailable in this installation/u);
+  }
   assert.deepEqual(await inventory(f.systemRoot), before);
   const c = f.register(f.exercises);
-  for (const change of [{ attemptId: "../attempt" }, { requestId: " " }, { expectedRevision: -1 }, { reason: "delete" }, { confirmation: true }]) {
-    await assert.rejects(() => c.execute("lesson.end", { ...input, ...change }), { code: "ACTION_VALIDATION_FAILED" });
+  for (const name of ["lesson.restart", "lesson.finish"]) {
+    for (const change of [{ attemptId: "../attempt" }, { requestId: " " }, { expectedRevision: -1 }, { reason: "deleted" }, { archive: true }]) {
+      await assert.rejects(() => c.execute(name, { ...input, ...change }), { code: "ACTION_VALIDATION_FAILED" });
+    }
   }
   assert.equal(f.calls.length, 0);
-  await assert.rejects(() => c.execute("lesson.end", { ...input, expectedRevision: 0 }), { code: "VIBE64_TRAINING_STATE_REVISION_CONFLICT" });
-  assert.equal((await f.learners.readState({ actor: f.auth.user })).active.attemptId, input.attemptId);
-  const actualBefore = await inventory(f.systemRoot);
-  f.auth.user = { uid: 43, username: "other", role: "member" };
-  assert.equal((await c.tool("lesson.end", input)).ok, false);
-  assert.equal((await c.tool("learning.read")).result.history.length, 0);
   f.auth.user = null;
-  const calls = f.calls.length;
-  assert.equal((await c.tool("lesson.end", input)).ok, false);
-  assert.equal(f.calls.length, calls);
-  // A failed other-actor admission may create its explicit state lock, but never
-  // changes the first actor's reservation or ends an exercise.
-  assert.deepEqual((await inventory(f.systemRoot)).filter(value => value.path.startsWith("training/users/NDI/")),
-    actualBefore.filter(value => value.path.startsWith("training/users/NDI/")));
+  assert.equal((await c.tool("lesson.finish", input)).ok, false);
+  assert.equal(f.calls.length, 0);
   f.auth.user = { uid: 42, username: "member", role: "member" };
-  const failed = f.register({ async endLesson() {
+  const failed = f.register({ async restartLesson() {
     throw Object.assign(new Error("Cannot write /PRIVATE_SOURCE"), { code: "VIBE64_TRAINING_PROGRESS_SAVE_UNCONFIRMED", statusCode: 409 });
+  }, async finishLesson() {
+    throw Object.assign(new Error("Pass every required step before finishing this lesson. Nothing was changed."), { code: "VIBE64_TRAINING_LESSON_INCOMPLETE", statusCode: 409 });
   } });
-  const result = await failed.tool("lesson.end", input);
+  const result = await failed.tool("lesson.restart", input);
   assert.equal(result.ok, false);
   assert.doesNotMatch(JSON.stringify(result), excluded);
-  await assert.rejects(() => failed.execute("lesson.end", input), error => error.code === "VIBE64_TRAINING_PROGRESS_SAVE_UNCONFIRMED" &&
+  await assert.rejects(() => failed.execute("lesson.restart", input), error => error.code === "VIBE64_TRAINING_PROGRESS_SAVE_UNCONFIRMED" &&
     error.statusCode === 409 && /same request\/attempt/u.test(error.message));
-  const falseResult = f.register({ async endLesson() { return { ok: false, error: "PRIVATE_SOURCE" }; } });
-  assert.equal((await falseResult.tool("lesson.end", input)).ok, false);
+  await assert.rejects(() => failed.execute("lesson.finish", input), { code: "VIBE64_TRAINING_LESSON_INCOMPLETE",
+    message: "Pass every required step before finishing this lesson. Nothing was changed." }, "a lesson refusal keeps its own message");
   assert.equal((await f.learners.readState({ actor: f.auth.user })).active.attemptId, input.attemptId);
 });
 
@@ -357,7 +343,7 @@ test("history tool projections preserve original provenance without leaking iden
   const c = f.register(f.exercises);
   const reserved = await f.reserve();
   const { attemptId } = reserved.attempt;
-  const ended = await c.execute("lesson.end", { attemptId, requestId: "retire-one", expectedRevision: reserved.revision, reason: "discard" });
+  const ended = await f.learners.endAttempt({ actor: f.auth.user, attemptId, requestId: "retire-one", expectedRevision: reserved.revision, reason: "deleted" });
   const next = await c.execute("lesson.start", { ...f.input, requestId: "start-two", expectedRevision: ended.revision });
   const before = await inventory(f.systemRoot);
   const { learnerId, ...read } = await c.execute("learning.read");
@@ -366,7 +352,7 @@ test("history tool projections preserve original provenance without leaking iden
   assert.deepEqual(toolRead.result, read);
   assert.equal(read.history.length, 1);
   assert.equal(read.history[0].attemptId, attemptId);
-  assert.equal(read.history[0].ended.reason, "discard");
+  assert.equal(read.history[0].ended.reason, "deleted");
   assert.deepEqual(read.lessonProgress.map(value => [value.lessonCode, value.open]), [["USE-ONE", true]],
     "one per-lesson summary joins the ended attempt and the open successor");
   assert.equal(read.active.attemptId, next.active.attemptId);
@@ -374,75 +360,6 @@ test("history tool projections preserve original provenance without leaking iden
   assert.deepEqual(await inventory(f.systemRoot), before);
   f.auth.user = { uid: 43, username: "other", role: "member" };
   assert.equal((await c.tool("learning.read")).result.history.length, 0);
-});
-
-test("retained continuation uses fresh member authority and bounded native input on API and tools", async t => {
-  const f = await fixture(t);
-  const saved = await f.reserve();
-  const input = { attemptId: saved.attempt.attemptId, requestId: "continue-one", expectedRevision: saved.revision };
-  const calls = [];
-  const c = f.register({ async continueLesson(value) {
-    calls.push(value);
-    return { ...saved, sourceRoot: "/PRIVATE_SOURCE", setup: { status: "pending", command: "PRIVATE_SHELL" }, previewReady: true };
-  } });
-  const before = await inventory(f.systemRoot);
-  const api = await c.execute("lesson.continue", input);
-  const tool = await c.tool("lesson.continue", input);
-  assert.equal(tool.ok, true, JSON.stringify(tool));
-  assert.deepEqual(tool.result, api);
-  assert.equal(api.active.attemptId, saved.attempt.attemptId);
-  assert.equal(api.previewReady, false);
-  assert.equal(api.setupStatus, "pending");
-  assert.doesNotMatch(JSON.stringify(api), excluded);
-  assert.deepEqual(calls, [{ actor: f.auth.user, ...input }, { actor: f.auth.user, ...input }]);
-  for (const change of [{ requestId: "x".repeat(19) }, { requestId: "bad/path" }, { requestId: "" },
-    { attemptId: "../attempt" }, { expectedRevision: -1 }, { pin: f.pin }, { actor: f.auth.user }, { path: "/PRIVATE_SOURCE" }]) {
-    await assert.rejects(c.execute("lesson.continue", { ...input, ...change }), { code: "ACTION_VALIDATION_FAILED" });
-  }
-  f.auth.user = { uid: 43, username: "another-member", role: "member" };
-  await c.tool("lesson.continue", input);
-  assert.deepEqual(calls.at(-1), { actor: f.auth.user, ...input });
-  f.auth.user = null;
-  assert.equal((await c.tool("lesson.continue", input)).ok, false);
-  assert.equal(calls.length, 3);
-  assert.deepEqual(await inventory(f.systemRoot), before);
-});
-
-test("continuation unavailability and native save failure retain state without leaking source", async t => {
-  const f = await fixture(t);
-  const saved = await f.reserve();
-  const input = { attemptId: saved.attempt.attemptId, requestId: "continue-one", expectedRevision: saved.revision };
-  const before = await inventory(f.systemRoot);
-  const unavailable = await f.register().tool("lesson.continue", input);
-  assert.equal(unavailable.ok, true);
-  assert.equal(unavailable.result.available, false);
-  assert.equal(unavailable.result.ok, false);
-  assert.match(unavailable.result.error, /original progress/u);
-  const c = f.register({ async continueLesson() {
-    throw Object.assign(new Error("Cannot rename /PRIVATE_SOURCE/progress.json"), { code: "VIBE64_TRAINING_PROGRESS_SAVE_UNCONFIRMED", statusCode: 409 });
-  } });
-  const failure = await c.tool("lesson.continue", input);
-  assert.equal(failure.ok, false);
-  assert.doesNotMatch(JSON.stringify(failure), excluded);
-  await assert.rejects(c.execute("lesson.continue", input), error => error.code === "VIBE64_TRAINING_PROGRESS_SAVE_UNCONFIRMED" && error.statusCode === 409);
-  assert.deepEqual(await inventory(f.systemRoot), before);
-});
-
-test("ended continuation replay projects its own history and actual successor without claiming preparation", async t => {
-  const f = await fixture(t);
-  const saved = await f.reserve();
-  const ended = await f.learners.endAttempt({ actor: f.auth.user, attemptId: saved.attempt.attemptId,
-    requestId: "end-one", expectedRevision: saved.revision, reason: "discard" });
-  const successor = await f.learners.reserveAttempt({ actor: f.auth.user, requestId: "start-two", expectedRevision: ended.revision, pin: f.pin });
-  const c = f.register({ async continueLesson() { return { ...ended, active: successor.attempt, replayed: true, previewReady: true }; } });
-  const result = await c.tool("lesson.continue", { attemptId: saved.attempt.attemptId, requestId: "continue-one", expectedRevision: saved.revision });
-  assert.equal(result.ok, true, JSON.stringify(result));
-  assert.equal(result.result.attempt.attemptId, ended.attempt.attemptId);
-  assert.equal(result.result.active.attemptId, successor.attempt.attemptId);
-  assert.equal(result.result.replayed, true);
-  assert.equal(result.result.previewReady, false);
-  assert.equal(result.result.completion, null);
-  assert.doesNotMatch(JSON.stringify(result), excluded);
 });
 
 
@@ -551,9 +468,10 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   assert.equal(typeof training.checks.runCodeCheck, "function");
   assert.deepEqual(Object.keys(training).filter(key => key !== "checks").sort(), ["catalogue", "codeAuthorship", "content", "courseInstaller", "exercises", "learners",
     "learningSpace", "publishLearnerChanged", "steps"]);
-  // Rev 3 R6: the standalone learning space lists, archives and removes the
-  // learner's practice projects with the shared project archive service.
-  assert.deepEqual(Object.keys(training.learningSpace).sort(), ["archive", "deleteArchive", "exists", "list", "remove"]);
+  // Rev 4 C2: the standalone learning space lists and closes attempts with
+  // the shared project archive service.
+  assert.deepEqual(Object.keys(training.learningSpace).sort(), ["closeAttempt", "deleteArchive", "exists", "list"]);
+  assert.deepEqual(Object.keys(training.exercises).sort(), ["deleteLesson", "finishLesson", "prepareLesson", "restartLesson", "startLesson"]);
   // Learning v2 phase 2 retired the source-less Main teacher and its lesson-scoped routes.
   assert.equal(registered.some(route => route.url.startsWith("/api/learning/")), false);
   assert.equal(new Set(registered.map(route => `${route.method} ${route.url}`)).size, registered.length);
@@ -585,16 +503,21 @@ test("standalone Training Feature uses actual OS-owner authority only for truste
   } });
   assert.equal(resumed.statusCode, 200, resumed.body);
   assert.equal(resumed.json().active.attemptId, id, "the saved path attempt wins over a conflicting body");
-  const ended = await server.inject({ method: "POST", url: `/api/vibe64/training/attempts/${id}/end`, payload: {
-    requestId: "local-end", expectedRevision: state.revision, reason: "finished"
+  assert.equal((await training.learners.readLearningMode({ actor: osActor })).on, true, "a start switches to Learn mode");
+  const develop = await server.inject({ method: "POST", url: "/api/vibe64/training/learning-mode", payload: { on: false } });
+  assert.equal(develop.statusCode, 200, develop.body);
+  assert.deepEqual([develop.json().learningMode.on, develop.json().learningMode.currentAttemptId], [false, id], "the lesson stays in progress");
+  const finished = await server.inject({ method: "POST", url: `/api/vibe64/training/attempts/${id}/finish`, payload: {
+    requestId: "local-finish", expectedRevision: (await training.learners.readState({ actor: osActor })).revision
   } });
-  assert.equal(ended.statusCode, 200, ended.body);
-  assert.ok(ended.json().attempt.ended);
-  const continued = await server.inject({ method: "POST", url: `/api/vibe64/training/attempts/${id}/continue`, payload: {
-    requestId: "local-next", expectedRevision: ended.json().revision
-  } });
-  assert.equal(continued.statusCode, 200, continued.body);
-  assert.notEqual(continued.json().active.attemptId, id);
+  assert.equal(finished.statusCode, 409, finished.body);
+  assert.equal(finished.json().code, "VIBE64_TRAINING_LESSON_INCOMPLETE");
+  const deleted = await server.inject({ method: "POST", url: `/api/vibe64/training/attempts/${id}/delete`, payload: {} });
+  assert.equal(deleted.statusCode, 200, deleted.body);
+  assert.deepEqual(deleted.json(), { ok: true, available: true, attemptId: id, changed: true });
+  assert.equal((await training.learners.readState({ actor: osActor })).active, null);
+  const listed = await server.inject({ method: "GET", url: "/api/vibe64/training/practice" });
+  assert.deepEqual(listed.json(), { ok: true, available: true, current: null, archived: [] }, "a delete keeps no archive");
   const inheritedRemoteRequest = Object.create({
     get ip() { return "198.51.100.7"; }, get headers() { return { host: "untrusted.example" }; },
     vibe64User: { uid: osActor.uid, username: osActor.username, role: "owner" }
@@ -630,9 +553,9 @@ test("hosted Training Feature retains exact supplied owners and registers no sec
   // Learning v2 phase 2 retired the Main teacher's presentation, practical,
   // brief, visual checkpoint and lesson-scoped visual routes.
   const originalRoutes = registered;
-  // Learning v2 adds the lesson reader, step, reader-position and practice routes,
-  // the learner's own teacher notes (contract C7) and learning mode (decision 8).
-  assert.equal(originalRoutes.length, 27);
+  // Learning v2 adds the lesson reader, step, reader-position, lesson lifecycle
+  // and archive routes, the learner's own teacher notes (contract C7) and Learn mode.
+  assert.equal(originalRoutes.length, 25);
   assert.equal(registered.every(route => route.options.surface === "app"), true);
   assert.equal(registered.some(route => route.url.startsWith("/api/learning/")), false);
   assert.equal(new Set(registered.map(route => `${route.method} ${route.url}`)).size, registered.length);
@@ -640,16 +563,14 @@ test("hosted Training Feature retains exact supplied owners and registers no sec
     ["GET", "/api/vibe64/training/courses"], ["POST", "/api/vibe64/training/courses"],
     ["GET", "/api/vibe64/training/available"], ["POST", "/api/vibe64/training/courses/install"], ["GET", "/api/vibe64/training/learning"],
     ["POST", "/api/vibe64/training/lessons/start"],
-    ["POST", "/api/vibe64/training/attempts/:attemptId/resume"], ["POST", "/api/vibe64/training/attempts/:attemptId/end"],
-    ["POST", "/api/vibe64/training/attempts/:attemptId/continue"],
+    ["POST", "/api/vibe64/training/attempts/:attemptId/resume"], ["POST", "/api/vibe64/training/attempts/:attemptId/restart"],
+    ["POST", "/api/vibe64/training/attempts/:attemptId/finish"], ["POST", "/api/vibe64/training/attempts/:attemptId/delete"],
     ["GET", "/api/vibe64/training/lesson"], ["GET", "/api/vibe64/training/attempts/:attemptId/lesson"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/steps/observe"], ["POST", "/api/vibe64/training/attempts/:attemptId/steps/check"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/steps/answer"], ["POST", "/api/vibe64/training/attempts/:attemptId/steps/done"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/reader"],
-    ["GET", "/api/vibe64/training/practice"], ["POST", "/api/vibe64/training/practice/:practiceId/open"],
-    ["POST", "/api/vibe64/training/practice/:practiceId/archive"], ["POST", "/api/vibe64/training/practice/:practiceId/delete"],
-    ["POST", "/api/vibe64/training/practice/:practiceId/archives/:archiveId/delete"],
-    ["GET", "/api/vibe64/training/learning-mode"], ["POST", "/api/vibe64/training/attempts/:attemptId/learning-mode/leave"],
+    ["GET", "/api/vibe64/training/practice"], ["POST", "/api/vibe64/training/archives/:attemptId/delete"],
+    ["GET", "/api/vibe64/training/learning-mode"], ["POST", "/api/vibe64/training/learning-mode"],
     ["GET", "/api/vibe64/training/teacher-notes"], ["POST", "/api/vibe64/training/teacher-notes"],
     ["POST", "/api/vibe64/training/teacher-notes/clear"],
     ["GET", "/api/vibe64/training/attempts/:attemptId/visuals/:visualId"]
