@@ -1,13 +1,16 @@
-import { createHash } from "node:crypto";
 import { lstat, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { practiceLearnerKey, practiceSlug } from "@local/vibe64-core/server/learningSpace";
-import { attemptPracticeId } from "./learnerState.js";
+import { practiceLearnerKey } from "@local/vibe64-core/server/learningSpace";
 
 function trainingError(code, message) {
   return Object.assign(new Error(message), { code, statusCode: 409 });
 }
+
+const revisionConflict = () => trainingError("VIBE64_TRAINING_STATE_REVISION_CONFLICT",
+  "Learning state changed. Read the current revision and retry.");
+const missingAttempt = () => Object.assign(trainingError("VIBE64_TRAINING_ATTEMPT_MISSING",
+  "This is not your lesson in progress. Nothing was changed."), { statusCode: 404 });
 
 function requireSuccess(result) {
   if (result?.ok === false) {
@@ -19,12 +22,11 @@ function requireSuccess(result) {
 // Internal orchestration, supplied with the existing owners. Authenticated
 // actions admit actors and pins; neither model input nor HTTP selects paths,
 // initializers, session identities or shell commands here.
-function createTrainingService({ catalogue, content, learners, projectContext, projectRepositoryService, project, sessions, terminals } = {}) {
-  async function startLesson({ actor, courseId, release, lessonCode, requestId, expectedRevision } = {}) {
-    // These native namespaces belong only to continuation and practice.open.
-    if (typeof requestId === "string" && /^(continue|open)_/u.test(requestId)) {
-      throw trainingError("VIBE64_TRAINING_REQUEST_INVALID", "Choose an ordinary start request; continuation request identities are host-owned.");
-    }
+function createTrainingService({ catalogue, content, learners, learningSpace = null, projectContext, projectRepositoryService, project, sessions, terminals } = {}) {
+  // Rev 4 (H4): one lesson in progress at a time. A different lesson in
+  // progress refuses once with its title (the client's one confirmation);
+  // archiveCurrent archives it first, under the same admitted revision.
+  async function startLesson({ actor, courseId, release, lessonCode, requestId, expectedRevision, archiveCurrent = false } = {}) {
     const approved = await catalogue.readCatalogue();
     const entry = approved.courses.find(value => value.course.courseId === courseId && value.course.release === release);
     if (!entry?.enabled) throw trainingError("VIBE64_TRAINING_COURSE_UNAVAILABLE", "This exact course release is not enabled. Ask the owner to enable it, or resume your saved lesson.");
@@ -37,106 +39,88 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
     const topic = entry.lock.topics.find(value => value.lessons.some(lesson => lesson.code === lessonCode && lesson.status === "published"));
     if (!topic) throw trainingError("VIBE64_TRAINING_LESSON_UNAVAILABLE", "Choose a published lesson in the approved course release.");
     const lesson = topic.lessons.find(value => value.code === lessonCode);
-    const reserved = await learners.reserveAttempt({ actor, requestId, expectedRevision, livePracticeIds: await livePracticeIds(actor), pin: {
+    const pin = {
       course: { courseId, release },
       topic: { schemaVersion: 1, topicId: topic.topicId, release: topic.release, repository: topic.repository,
         commit: topic.commit, topicHash: topic.manifestHash },
       lesson: { code: lesson.code, hash: lesson.hash }
-    } });
+    };
+    let revision = expectedRevision;
+    const saved = await learners.readState({ actor });
+    const current = saved.progress.attempts.find(value => value.attemptId === saved.progress.activeAttemptId);
+    // The same lesson in progress, or a replayed start, is the learner store's.
+    const replay = saved.progress.attempts.some(value => value.requestIds?.includes(requestId));
+    if (current && !replay && !isDeepStrictEqual(current.pin, pin)) {
+      if (archiveCurrent !== true) {
+        throw Object.assign(trainingError("VIBE64_TRAINING_LESSON_IN_PROGRESS",
+          "Another lesson is in progress. Archive it to start this one, or continue it."), {
+          details: { attemptId: current.attemptId, lessonTitle: await lessonTitle(current.pin) } });
+      }
+      if (expectedRevision !== saved.revision) throw revisionConflict();
+      await requireCloser().closeAttempt({ actor, attemptId: current.attemptId, archive: true, reason: "archived" });
+      revision = (await learners.readState({ actor })).revision;
+    }
+    return reserveAndPrepare({ actor, requestId, expectedRevision: revision, pin });
+  }
+
+  async function reserveAndPrepare({ actor, requestId, expectedRevision, pin }) {
+    const reserved = await learners.reserveAttempt({ actor, requestId, expectedRevision, pin });
     if (reserved.attempt.ended) return { ...reserved, previewReady: false };
+    await learners.setLearningMode({ actor, on: true });
     return prepareLesson({ actor, attemptId: reserved.attempt.attemptId });
   }
 
-  async function endLesson(input = {}) {
-    const { actor, attemptId } = input;
+  // Restart (H5): archive this attempt, then a new attempt of the same pinned
+  // lesson with a fresh project, teacher and results. A retry with the same
+  // request finishes a stopped restart: the close is resumable and the
+  // reservation replays.
+  async function restartLesson({ actor, attemptId, requestId, expectedRevision } = {}) {
+    const saved = await learners.readState({ actor });
+    const attempt = saved.progress.attempts.find(value => value.attemptId === attemptId);
+    if (!attempt) throw missingAttempt();
+    if (!attempt.ended) {
+      if (expectedRevision !== saved.revision) throw revisionConflict();
+      await requireCloser().closeAttempt({ actor, attemptId, archive: true, reason: "archived" });
+    } else if (attempt.ended.reason !== "archived" || saved.progress.activeAttemptId &&
+        !saved.progress.attempts.some(value => value.attemptId === saved.progress.activeAttemptId && value.requestIds?.includes(requestId))) {
+      throw missingAttempt();
+    }
+    return reserveAndPrepare({ actor, requestId, expectedRevision: (await learners.readState({ actor })).revision, pin: attempt.pin });
+  }
+
+  // Completing the lesson archives the attempt as one bundle (H5); the
+  // learner store keeps the completion. Refused unless every required step passed.
+  async function finishLesson({ actor, attemptId, expectedRevision } = {}) {
     const saved = await learners.readState({ actor, includeCompletion: true });
     const attempt = saved.progress.attempts.find(value => value.attemptId === attemptId);
-    // A confirmed end replay may belong to an earlier attempt. It cannot take
-    // the active preparation lock, reactivate old work or end its successor.
-    // A practice project's sessions are ordinary project sessions the learner
-    // keeps using, so ending the lesson stops no agent work.
-    return attempt?.ended ? learners.endAttempt(input)
-      : learners.runPreparationExclusive({ actor, attemptId }, () => learners.endAttempt(input));
+    if (!attempt) throw missingAttempt();
+    if (!attempt.ended) {
+      if (expectedRevision !== saved.revision) throw revisionConflict();
+      if (!(saved.completion && saved.completion.passed >= saved.completion.required)) {
+        throw trainingError("VIBE64_TRAINING_LESSON_INCOMPLETE", "Pass every required step before finishing this lesson. Nothing was changed.");
+      }
+    }
+    return requireCloser().closeAttempt({ actor, attemptId, archive: true, reason: "finished" });
   }
 
-  async function continueLesson({ actor, attemptId, requestId, expectedRevision } = {}) {
-    if (typeof requestId !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,17}$/u.test(requestId)) {
-      throw trainingError("VIBE64_TRAINING_REQUEST_INVALID", "Use the same bounded continuation request when retrying.");
-    }
-    const saved = await learners.readState({ actor, includeCompletion: true });
-    const previous = saved.progress.attempts.find(value => value.attemptId === attemptId);
-    if (!previous?.ended) {
-      throw trainingError("VIBE64_TRAINING_ATTEMPT_MISSING", "Continue this learner's exact ended lesson; retire its active attempt only when requested.");
-    }
-    // Keep source identity in the original request field, with no new journal.
-    const scopedRequestId = `continue_${attemptId}_${requestId}`;
-    const replay = saved.progress.attempts.find(value => value.requestIds?.includes(scopedRequestId));
-    if (!replay && saved.active) {
-      throw trainingError("VIBE64_TRAINING_ATTEMPT_CONFLICT", "Another lesson attempt is active. Resume it or explicitly end it; this continuation cannot adopt it.");
-    }
-    if (!replay && expectedRevision !== saved.revision) {
-      throw trainingError("VIBE64_TRAINING_STATE_REVISION_CONFLICT", "Learning state changed. Read the current revision and retry the same continuation.");
-    }
-    // Continue lesson reuses the previous attempt's practice project while it
-    // is still in the learning space; otherwise preparation makes a fresh one.
-    // A retry repeats the original reservation exactly, including whether it
-    // reused the project, even after that project has gone.
-    const practiceId = attemptPracticeId(previous);
-    const reuse = replay ? Boolean(replay.practiceId) : Boolean(await ownPracticeProject(actor, practiceId));
-    // Pass the admitted revision unchanged. A racing start must fail the
-    // original CAS, rather than silently join its same-pin active successor.
-    const reserved = await learners.reserveAttempt({ actor, requestId: scopedRequestId, expectedRevision, pin: previous.pin,
-      livePracticeIds: await livePracticeIds(actor), ...(reuse ? { practiceId } : {}) });
-    if (reserved.attempt.ended) return { ...reserved, previewReady: false };
-    return prepareLesson({ actor, attemptId: reserved.attempt.attemptId });
+  // Delete (H5): the project and the teacher conversation go, with no archive.
+  async function deleteLesson({ actor, attemptId } = {}) {
+    return requireCloser().closeAttempt({ actor, attemptId, archive: false, reason: "deleted" });
   }
 
-  // Every practice project still in this learner's learning space, so a new
-  // reservation at the attempt cap can drop attempts of deleted or archived ones.
-  async function livePracticeIds(actor) {
-    return (await projectContext.listLearningSpaceProjects({ learnerKey: practiceLearnerKey(actor) })).map(value => value.practiceId);
+  function requireCloser() {
+    if (typeof learningSpace?.closeAttempt !== "function") {
+      throw trainingError("VIBE64_TRAINING_PRACTICE_UNAVAILABLE", "Closing lessons is unavailable in this installation. Nothing was changed.");
+    }
+    return learningSpace;
   }
 
-  // This learner's practice project, or null. One being deleted (a removal
-  // that stopped part-way) is gone for Open and Continue lesson; only
-  // practice.delete and practice.archive resume it.
-  async function ownPracticeProject(actor, practiceId) {
-    const record = await projectContext.readLearningSpaceProject(practiceSlug(practiceId));
-    return record?.learnerKey === practiceLearnerKey(actor) && !record.deleting ? record : null;
-  }
-
-  // practice.open: the learner's practice project with its lesson. Already the
-  // lesson in progress, it is returned; another lesson in progress ends first
-  // (reason left), only once this lesson's installed content is known to be
-  // preparable; then the lesson continues in this project as a new attempt.
-  async function openPractice({ actor, practiceId, requestId, expectedRevision } = {}) {
-    if (typeof requestId !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/u.test(requestId)) {
-      throw trainingError("VIBE64_TRAINING_REQUEST_INVALID", "Use the same bounded open request when retrying.");
+  async function lessonTitle(pin) {
+    try {
+      return (await content.readLesson({ ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash })).lesson.title;
+    } catch {
+      return pin.lesson.code;
     }
-    const record = await ownPracticeProject(actor, practiceId);
-    if (!record) {
-      throw Object.assign(trainingError("VIBE64_TRAINING_PRACTICE_MISSING", "This is not one of your practice projects. Nothing was changed."), { statusCode: 404 });
-    }
-    let saved = await learners.readState({ actor });
-    const active = saved.progress.attempts.find(value => value.attemptId === saved.progress.activeAttemptId);
-    if (active && attemptPracticeId(active) === practiceId) return { revision: saved.revision, attempt: active, active: saved.active };
-    if (expectedRevision !== saved.revision) {
-      throw trainingError("VIBE64_TRAINING_STATE_REVISION_CONFLICT", "Learning state changed. Read the current revision and open the practice project again.");
-    }
-    const { pin } = record.training;
-    const lessonPin = { ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash };
-    if ((await content.readLesson(lessonPin)).lesson.exercise) await content.readExercise(lessonPin);
-    if (active) {
-      await endLesson({ actor, attemptId: active.attemptId, requestId: `leave-${active.attemptId}`, expectedRevision: saved.revision, reason: "left" });
-      saved = await learners.readState({ actor });
-    }
-    // Scoped like continuation, so an id used by lesson.start or by another
-    // open never collides; bounded to the stored request length.
-    const scopedRequestId = `open_${practiceId.replaceAll("-", "")}_${createHash("sha256").update(requestId).digest("hex").slice(0, 26)}`;
-    const reserved = await learners.reserveAttempt({ actor, requestId: scopedRequestId, expectedRevision: saved.revision, pin, practiceId,
-      livePracticeIds: await livePracticeIds(actor) });
-    if (reserved.attempt.ended) return { ...reserved, previewReady: false };
-    return prepareLesson({ actor, attemptId: reserved.attempt.attemptId });
   }
 
   // Creating the exercise session starts the original asynchronous Workspace
@@ -159,24 +143,6 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
     setupFollowUps.set(attemptId, task);
   }
 
-  // A continued attempt reuses its practice project's session when it still
-  // exists and is not archived; otherwise it gets its own new session.
-  async function continuedSessionId({ actor, attempt }) {
-    const record = await ownPracticeProject(actor, attempt.practiceId);
-    const reusedId = `training-${attempt.practiceId}`;
-    const usable = record && await projectContext.runWithPracticeProjectScope({ actor, training: record.training, access: "create" },
-      () => project.runInProjectContext(attempt.projectSlug, async () => {
-        try {
-          const session = await (await project.createRuntime({ inspectSource: false })).getSession(reusedId, { inspectSource: false });
-          return session.status !== "archived" && !session.closing;
-        } catch (error) {
-          if (error.code === "vibe64_session_not_found") return false;
-          throw error;
-        }
-      }));
-    return usable ? reusedId : `training-${attempt.attemptId}`;
-  }
-
   async function prepareLesson({ actor, attemptId } = {}) {
     let setupRun = null;
     const prepared = await learners.runPreparationExclusive({ actor, attemptId }, async () => {
@@ -188,18 +154,15 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
           typeof projectRepositoryService?.verifyTrainingProjectSource !== "function") {
         throw trainingError("VIBE64_TRAINING_EXERCISE_UNAVAILABLE", "This installation cannot prepare the lesson's practice project. Keep the saved attempt and ask the owner to provide exercise preparation.");
       }
-      // A continued attempt reuses its practice project (practiceId).
-      const reused = saved.attempt.practiceId;
-      saved = await learners.beginPreparation({ actor, attemptId, expectedRevision: saved.revision,
-        ...(reused && saved.attempt.preparation.phase === "reserved"
-          ? { initialSessionId: await continuedSessionId({ actor, attempt: saved.attempt }) } : {}) });
+      saved = await learners.beginPreparation({ actor, attemptId, expectedRevision: saved.revision });
       const { attempt } = saved;
       const initialSessionId = attempt.preparation.initialSessionId;
       let stage = "project";
       try {
         const exercise = await content.readExercise({ ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
+        // The marker keeps its field name practiceId; its value is the attemptId.
         const training = {
-          schemaVersion: 2, learnerKey: practiceLearnerKey(actor), practiceId: reused ?? attemptId,
+          schemaVersion: 2, learnerKey: practiceLearnerKey(actor), practiceId: attemptId,
           pin: attempt.pin, exercise: { kind: "bundled", sourcePath: exercise.sourcePath }
         };
         const prepareExercise = async () => {
@@ -238,13 +201,9 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
               catch (error) {
                 if (error.code !== "vibe64_session_not_found") throw error;
                 if (attempt.preparation.phase === "ready") throw trainingError("VIBE64_TRAINING_SESSION_MISSING", "Your prepared exercise session is missing. Ask the owner to restore it; this attempt cannot silently create a replacement.");
-                // Prove the original exercise only before the first session exists.
-                // A continued attempt's new session starts at the project's
-                // current code: the learner's edits there are legitimate.
-                const expectedCommit = reused ? undefined
-                  : (await projectRepositoryService.verifyTrainingProjectSource({ slug: attempt.projectSlug, training }, { files: exercise.files })).commit;
-                current = requireSuccess(await sessions.createSession({ vibe64User: actor },
-                  { sessionId: initialSessionId, ...(expectedCommit ? { expectedCommit } : {}) }));
+                // Prove the original exercise before the first session exists.
+                const expectedCommit = (await projectRepositoryService.verifyTrainingProjectSource({ slug: attempt.projectSlug, training }, { files: exercise.files })).commit;
+                current = requireSuccess(await sessions.createSession({ vibe64User: actor }, { sessionId: initialSessionId, expectedCommit }));
               }
               if (current.sessionId !== initialSessionId || current.status === "archived" || current.closing) {
                 throw trainingError("VIBE64_TRAINING_SESSION_CONFLICT", "The reserved exercise session is unavailable. Keep your progress and ask the owner to inspect it; no alternative session was selected.");
@@ -295,7 +254,7 @@ function createTrainingService({ catalogue, content, learners, projectContext, p
     return prepared;
   }
 
-  return Object.freeze({ startLesson, prepareLesson, endLesson, continueLesson, openPractice });
+  return Object.freeze({ startLesson, prepareLesson, restartLesson, finishLesson, deleteLesson });
 }
 
 export { createTrainingService };

@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -24,19 +23,22 @@ async function fixture(t, { enabled = true, courseStatus = "released", phase = "
   let session = null;
   let revision = 1;
   let failure = null;
-  let practiceRecord = null;
   const scopes = [];
   const attempt = { attemptId, pin, projectSlug: "training-aaaaaaaaaaaa4aaa8aaaaaaaaaaaaaaa", preparation: { phase,
     ...(phase === "reserved" ? {} : { initialSessionId: `training-${attemptId}` }) } };
   const state = () => structuredClone({ revision, attempt, active: { learnerId: "123" } });
+  // The learner's saved progress before a start: no lesson in progress.
+  let progress = { revision: 0, progress: { activeAttemptId: null, attempts: [] } };
   const learners = {
+    async readState() { return structuredClone(progress); },
     async reserveAttempt(input) { calls.push(["reserve", input]); return state(); },
+    async setLearningMode(input) { calls.push(["mode", input.on]); return { on: input.on }; },
     async runPreparationExclusive(input, operation) { calls.push(["lock", input]); return operation(); },
     async resumeAttempt() { return state(); },
     async beginPreparation(input) {
       calls.push(["begin", input.initialSessionId]);
       if (attempt.preparation.phase === "reserved") {
-        attempt.preparation = { phase: "preparing", initialSessionId: input.initialSessionId ?? `training-${attempt.practiceId ?? attemptId}` };
+        attempt.preparation = { phase: "preparing", initialSessionId: `training-${attempt.attemptId}` };
         revision++;
       }
       return state();
@@ -51,13 +53,10 @@ async function fixture(t, { enabled = true, courseStatus = "released", phase = "
       async readExercise(input) { calls.push(["exercise", input]); return { sourcePath: "training/exercises/orientation-app", files }; }
     },
     learners,
+    learningSpace: { async closeAttempt(input) { calls.push(["close", input]); revision++; return { ok: true, attemptId: input.attemptId, closed: true }; } },
     projectContext: {
       async readWorkspaceProjectState() { return { projectContextRoot: projectRoot, metadata }; },
-      async runWithPracticeProjectScope(input, operation) { scopes.push(input); return operation(); },
-      async readLearningSpaceProject() { return practiceRecord; },
-      async listLearningSpaceProjects({ learnerKey }) {
-        return practiceRecord?.learnerKey === learnerKey ? [practiceRecord] : [];
-      }
+      async runWithPracticeProjectScope(input, operation) { scopes.push(input); return operation(); }
     },
     projectRepositoryService: {
       async verifyTrainingProjectSource(input, options) { calls.push(["source-proof", input, options]); return { commit: "d".repeat(40), branch: "main" }; },
@@ -79,15 +78,16 @@ async function fixture(t, { enabled = true, courseStatus = "released", phase = "
     sessions: { async createSession(input, options) { calls.push(["session-create", input, options]); session = { sessionId: options.sessionId, status: "open", workspaceSetup: { status: setup } }; return session; } }
   };
   return { root, sourceRoot, projectRoot, owners, calls, attempt, state, scopes, get failure() { return failure; },
-    setPracticeRecord(value) { practiceRecord = value; },
+    setProgress(value) { progress = value; },
     setMetadata(value) { metadata = value; }, setSession(value) { session = value; }, service: createTrainingService(owners) };
 }
 
 test("enabled course reserves exact approved pin before effects and pending setup is not ready", async t => {
   const f = await fixture(t);
   const result = await f.service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "start-1" });
-  assert.deepEqual(f.calls[0], ["reserve", { actor, expectedRevision: 0, requestId: "start-1", pin, livePracticeIds: [] }]);
-  assert.deepEqual(f.calls.slice(0, 5).map(value => value[0]), ["reserve", "lock", "lesson", "begin", "exercise"]);
+  assert.deepEqual(f.calls[0], ["reserve", { actor, expectedRevision: 0, requestId: "start-1", pin }]);
+  assert.deepEqual(f.calls.slice(0, 6).map(value => value[0]), ["reserve", "mode", "lock", "lesson", "begin", "exercise"]);
+  assert.equal(f.calls[1][1], true, "a start switches the learner to Learn mode");
   assert.equal(result.attempt.preparation.phase, "preparing");
   assert.equal(result.previewReady, false);
   assert.equal(f.calls.some(value => value[0] === "ready"), false);
@@ -113,7 +113,7 @@ test("no-exercise start and resume retain their exact reservation without projec
   assert.equal(Object.hasOwn(resumed.attempt, "preparation") || Object.hasOwn(resumed.attempt, "projectSlug"), false);
   assert.equal(resumed.revision, 1);
   assert.equal(resumed.previewReady, false);
-  assert.deepEqual(f.calls.map(([name]) => name), ["reserve", "lock", "lesson", "lock", "lesson"]);
+  assert.deepEqual(f.calls.map(([name]) => name), ["reserve", "mode", "lock", "lesson", "lock", "lesson"]);
   await assert.rejects(readFile(path.join(f.sourceRoot, "genesis/stack.md")), { code: "ENOENT" });
 });
 
@@ -142,7 +142,7 @@ test("a preview course admits a new start only for the workspace owner; released
   const owner = { ...actor, role: "owner" };
   const tried = await fixture(t, { courseStatus: "preview" });
   const started = await tried.service.startLesson({ actor: owner, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "try-1" });
-  assert.deepEqual(tried.calls.find(([name]) => name === "reserve"), ["reserve", { actor: owner, expectedRevision: 0, requestId: "try-1", pin, livePracticeIds: [] }]);
+  assert.deepEqual(tried.calls.find(([name]) => name === "reserve"), ["reserve", { actor: owner, expectedRevision: 0, requestId: "try-1", pin }]);
   assert.equal(started.attempt.preparation.phase, "preparing");
   // The owner's preview attempt is ordinary saved work: resume reads no catalogue.
   tried.owners.catalogue.readCatalogue = () => assert.fail("Resume must not re-admit the course");
@@ -280,35 +280,6 @@ test("saved setup success cannot admit a changed current recipe", async t => {
   assert.equal(f.calls.filter(value => value[0] === "session-create").length, 1);
 });
 
-test("ending learning excludes preparation and old end replay cannot acquire a successor lock", async t => {
-  const f = await fixture(t);
-  const input = { actor, attemptId, requestId: "end-one", expectedRevision: 1, reason: "finished" };
-  f.owners.learners.readState = async ({ actor: user, includeCompletion }) => {
-    assert.equal(user, actor);
-    assert.equal(includeCompletion, true);
-    return { progress: { attempts: [f.attempt] } };
-  };
-  f.owners.learners.endAttempt = async value => {
-    assert.deepEqual(value, input);
-    f.calls.push(["end", value]);
-    f.attempt.ended = { requestId: "end-one", revision: 2, reason: "finished" };
-    return { revision: 2, attempt: f.attempt, active: null, replayed: false };
-  };
-  const service = createTrainingService(f.owners);
-  const ended = await service.endLesson(input);
-  assert.equal(ended.active, null);
-  assert.deepEqual(f.calls.map(([name]) => name), ["lock", "end"]);
-  f.owners.learners.runPreparationExclusive = () => assert.fail("Ended replay cannot lock a successor's preparation.");
-  f.owners.learners.endAttempt = async value => {
-    assert.deepEqual(value, input);
-    return { ...ended, active: { attemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }, replayed: true };
-  };
-  const replay = await service.endLesson(input);
-  assert.equal(replay.replayed, true);
-  assert.notEqual(replay.active.attemptId, attemptId);
-  assert.deepEqual(f.calls.map(([name]) => name), ["lock", "end"], "no native Stop/archive/delete or source effects");
-});
-
 test("an ended reservation replay is returned without preparing or reactivating its project", async t => {
   const f = await fixture(t);
   f.attempt.ended = { requestId: "end-one", revision: 2, reason: "finished" };
@@ -318,89 +289,6 @@ test("an ended reservation replay is returned without preparing or reactivating 
   assert.deepEqual(f.calls.map(([name]) => name), ["reserve"]);
 });
 
-test("explicit continuation derives a disabled release pin from ended learner history and reserves before effects", async t => {
-  const f = await fixture(t, { enabled: false, setup: "succeeded" });
-  const oldId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-  const previous = { ...structuredClone(f.attempt), attemptId: oldId,
-    ended: { requestId: "end-old", revision: 8, reason: "discard" } };
-  f.owners.learners.readState = async input => {
-    assert.deepEqual(input, { actor, includeCompletion: true });
-    return { revision: 8, active: null, progress: { attempts: [previous] } };
-  };
-  f.owners.catalogue.readCatalogue = () => assert.fail("Continuation is bound to retained content, not new course admission.");
-  const result = await f.service.continueLesson({ actor, attemptId: oldId, requestId: "continue-one", expectedRevision: 8 });
-  assert.deepEqual(f.calls.find(([name]) => name === "reserve"), ["reserve", { actor, pin, requestId: `continue_${oldId}_continue-one`, expectedRevision: 8, livePracticeIds: [] }]);
-  assert.equal(result.attempt.attemptId, attemptId);
-  assert.notEqual(result.attempt.attemptId, oldId);
-  assert.deepEqual(result.attempt.pin, previous.pin);
-  assert.equal(result.attempt.preparation.phase, "ready");
-  assert.equal(result.previewReady, false);
-  assert.equal(f.calls.filter(([name]) => name === "project").length, 1);
-  assert.equal(f.calls.filter(([name]) => name === "session-create").length, 1);
-  assert.equal(f.calls.some(([name]) => ["end", "archive", "delete"].includes(name)), false);
-});
-
-test("continuation rejects foreign, unended and unrelated active targets before reservation or preparation", async t => {
-  const f = await fixture(t, { enabled: false });
-  const old = { ...structuredClone(f.attempt), ended: { requestId: "ended", revision: 2, reason: "finished" } };
-  for (const saved of [
-    { active: null, progress: { attempts: [] } },
-    { active: f.attempt, progress: { attempts: [f.attempt] } },
-    { active: { ...f.attempt, attemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", requestIds: ["independent-start"] }, progress: { attempts: [old] } }
-  ]) {
-    f.owners.learners.readState = async () => saved;
-    await assert.rejects(f.service.continueLesson({ actor, attemptId, requestId: "new-continuation", expectedRevision: 2 }),
-      error => ["VIBE64_TRAINING_ATTEMPT_MISSING", "VIBE64_TRAINING_ATTEMPT_CONFLICT"].includes(error.code));
-    assert.deepEqual(f.calls, []);
-  }
-});
-
-test("exact continuation replay returns its ended target without locking an independent successor", async t => {
-  const f = await fixture(t);
-  const continuedId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-  const previous = { ...structuredClone(f.attempt), ended: { requestId: "end-old", revision: 2, reason: "finished" } };
-  const continued = { ...structuredClone(f.attempt), attemptId: continuedId,
-    requestIds: [`continue_${attemptId}_retry-one`], ended: { requestId: "end-continued", revision: 4, reason: "finished" } };
-  const successor = { ...structuredClone(f.attempt), attemptId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", requestIds: ["independent-start"] };
-  f.owners.learners.readState = async () => ({ active: successor, progress: { attempts: [previous, continued, successor] } });
-  f.owners.learners.reserveAttempt = async input => {
-    f.calls.push(["reserve", input]);
-    return { revision: 5, attempt: continued, active: successor, replayed: true };
-  };
-  f.owners.learners.runPreparationExclusive = () => assert.fail("An ended continuation replay cannot lock a successor.");
-  const result = await f.service.continueLesson({ actor, attemptId, requestId: "retry-one", expectedRevision: 2 });
-  assert.equal(result.attempt.attemptId, continuedId);
-  assert.equal(result.active.attemptId, successor.attemptId);
-  assert.equal(result.replayed, true);
-  assert.equal(result.previewReady, false);
-  assert.deepEqual(f.calls.map(([name]) => name), ["reserve"]);
-});
-
-test("continuation preserves the original admission revision and bounds its actor-scoped request", async t => {
-  const f = await fixture(t);
-  const previous = { ...structuredClone(f.attempt), ended: { requestId: "end-old", revision: 2, reason: "finished" } };
-  f.owners.learners.readState = async () => ({ revision: 99, active: null, progress: { attempts: [previous] } });
-  f.owners.learners.reserveAttempt = () => assert.fail("A stale or future admitted revision must refuse before reservation.");
-  for (const expectedRevision of [2, 100]) {
-    await assert.rejects(f.service.continueLesson({ actor, attemptId, requestId: "stale", expectedRevision }), { code: "VIBE64_TRAINING_STATE_REVISION_CONFLICT" });
-  }
-  assert.deepEqual(f.calls, []);
-  for (const requestId of [undefined, "", "a".repeat(19), "bad/request"]) {
-    await assert.rejects(f.service.continueLesson({ actor, attemptId, requestId, expectedRevision: 2 }), /continuation request/u);
-  }
-  assert.deepEqual(f.calls, []);
-});
-
-test("ordinary starts cannot preoccupy host-owned continuation identities", async t => {
-  const f = await fixture(t);
-  f.owners.catalogue.readCatalogue = () => assert.fail("A reserved continuation identity refuses before catalogue or effects.");
-  await assert.rejects(f.service.startLesson({ actor, courseId: "intro", release: "0.1.0", lessonCode: "USE-ONE",
-    requestId: `continue_${attemptId}_native-continue`, expectedRevision: 0 }), { code: "VIBE64_TRAINING_REQUEST_INVALID" });
-  assert.deepEqual(f.calls, []);
-});
-
-
-
 test("missing exercise provisioner refuses before preparation effects while retaining the original reservation", async t => {
   for (const missing of [undefined, {}, { createManagedGitProject() {} }, { verifyTrainingProjectSource() {} }]) {
     const f = await fixture(t);
@@ -408,12 +296,12 @@ test("missing exercise provisioner refuses before preparation effects while reta
     const service = createTrainingService(f.owners);
     await assert.rejects(service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "local-start" }),
       { code: "VIBE64_TRAINING_EXERCISE_UNAVAILABLE", statusCode: 409 });
-    assert.deepEqual(f.calls.map(([name]) => name), ["reserve", "lock", "lesson"]);
+    assert.deepEqual(f.calls.map(([name]) => name), ["reserve", "mode", "lock", "lesson"]);
     assert.equal(f.attempt.preparation.phase, "reserved");
     assert.equal(f.failure, null);
     assert.equal(f.state().revision, 1);
     await assert.rejects(service.prepareLesson({ actor, attemptId }), { code: "VIBE64_TRAINING_EXERCISE_UNAVAILABLE" });
-    assert.deepEqual(f.calls.map(([name]) => name), ["reserve", "lock", "lesson", "lock", "lesson"]);
+    assert.deepEqual(f.calls.map(([name]) => name), ["reserve", "mode", "lock", "lesson", "lock", "lesson"]);
     await assert.rejects(readFile(path.join(f.sourceRoot, "genesis/stack.md")), { code: "ENOENT" });
   }
 });
@@ -427,7 +315,7 @@ test("no-exercise preparation does not require an exercise provisioner", async t
   const resumed = await service.prepareLesson({ actor, attemptId });
   assert.deepEqual(resumed, started);
   assert.equal(resumed.attempt.preparation.phase, "reserved");
-  assert.deepEqual(f.calls.map(([name]) => name), ["reserve", "lock", "lock"]);
+  assert.deepEqual(f.calls.map(([name]) => name), ["reserve", "mode", "lock", "lock"]);
   assert.equal(f.failure, null);
 });
 
@@ -549,110 +437,90 @@ test("practice preparation creates an ordinary initial session under exactly its
   assert.equal(core.targetRoot, working);
 });
 
-// Rev 3 R3: Continue lesson picks the lesson up in the same practice project.
-async function continuationFixture(t, { session = true, project = true } = {}) {
-  const f = await fixture(t, { setup: "succeeded" });
-  const practiceId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
-  const previous = { ...structuredClone(f.attempt), attemptId: practiceId, projectSlug: "training-bbbbbbbbbbbb4bbb8bbbbbbbbbbbbbbb",
-    ended: { requestId: "leave-old", revision: 4, reason: "left" } };
-  const training = { schemaVersion: 2, learnerKey: Buffer.from("123").toString("base64url"), practiceId, pin,
-    exercise: { kind: "bundled", sourcePath: "training/exercises/orientation-app" } };
-  f.owners.learners.readState = async () => ({ revision: 4, active: null, progress: { attempts: [previous] } });
-  const originalReserve = f.owners.learners.reserveAttempt;
-  f.owners.learners.reserveAttempt = async input => {
-    if (input.practiceId) Object.assign(f.attempt, { practiceId: input.practiceId, projectSlug: previous.projectSlug });
-    return originalReserve(input);
+// Rev 4 H4/H5: one lesson in progress; restart, finish and delete close the
+// attempt through the learning space (learningSpace.closeAttempt).
+const otherId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const otherPin = { ...pin, lesson: { code: "V64-START-02", hash: "e".repeat(64) } };
+const inProgress = (f, attempt, revision = 5) => f.setProgress({ revision, completion: null,
+  progress: { activeAttemptId: attempt.attemptId, attempts: [attempt] } });
+
+test("another lesson in progress refuses a start once with its title; archiveCurrent archives it first", async t => {
+  const f = await fixture(t);
+  f.owners.content.readLesson = async input => {
+    f.calls.push(["lesson", input]);
+    return { lesson: { title: input.lessonCode === "V64-START-02" ? "Your second lesson" : "First", exercise: { kind: "bundled" } } };
   };
-  if (project) {
-    f.setPracticeRecord({ slug: previous.projectSlug, learnerKey: training.learnerKey, practiceId, training });
-    await mkdir(f.projectRoot);
-    f.setMetadata({ training, repository: { mode: "managed_git" } });
-  }
-  if (session) f.setSession({ sessionId: `training-${practiceId}`, status: "open", workspaceSetup: { status: "succeeded" } });
-  return { ...f, practiceId, previous, training, service: createTrainingService(f.owners) };
-}
-
-test("Continue lesson reuses the previous practice project and its session", async t => {
-  const f = await continuationFixture(t);
-  const result = await f.service.continueLesson({ actor, attemptId: f.practiceId, requestId: "next", expectedRevision: 4 });
-  // The live practice projects let a reservation at the attempt cap prune only attempts no kept project needs.
-  assert.deepEqual(f.calls.find(([name]) => name === "reserve"), ["reserve", { actor, pin, requestId: `continue_${f.practiceId}_next`, expectedRevision: 4,
-    livePracticeIds: [f.practiceId], practiceId: f.practiceId }]);
-  assert.deepEqual(f.calls.find(([name]) => name === "begin"), ["begin", `training-${f.practiceId}`]);
-  assert.equal(result.attempt.preparation.phase, "ready");
-  assert.deepEqual(f.calls.filter(([name]) => ["project", "source-proof", "session-create"].includes(name)), [],
-    "no new project, exercise proof or session");
-  assert.equal(f.scopes.every(scope => scope.training.practiceId === f.practiceId), true, "every effect runs in that practice project's scope");
-});
-
-test("Continue lesson without the old session starts a new one at the project's current code, without exercise proof", async t => {
-  const f = await continuationFixture(t, { session: false });
-  const result = await f.service.continueLesson({ actor, attemptId: f.practiceId, requestId: "next", expectedRevision: 4 });
-  assert.deepEqual(f.calls.find(([name]) => name === "begin"), ["begin", `training-${attemptId}`]);
-  assert.equal(result.attempt.preparation.initialSessionId, `training-${attemptId}`);
-  assert.deepEqual(f.calls.filter(([name]) => ["project", "source-proof"].includes(name)), [], "the learner's edits are kept, not re-proved");
-  const creation = f.calls.find(([name]) => name === "session-create");
-  assert.deepEqual(creation[2], { sessionId: `training-${attemptId}` }, "the new session starts at HEAD");
-});
-
-test("Continue lesson whose practice project is gone prepares a fresh one as a first start does", async t => {
-  const f = await continuationFixture(t, { session: false, project: false });
-  await f.service.continueLesson({ actor, attemptId: f.practiceId, requestId: "next", expectedRevision: 4 });
-  assert.equal(Object.hasOwn(f.calls[0][1], "practiceId"), false);
-  assert.equal(f.calls.find(([name]) => name === "project")[1].training.practiceId, attemptId);
-  assert.equal(f.calls.filter(([name]) => name === "source-proof").length, 1);
-});
-
-test("opening a practice project ends another lesson in progress (left) and continues its lesson there", async t => {
-  const f = await continuationFixture(t);
-  const other = { ...structuredClone(f.attempt), attemptId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc" };
-  let ended = null;
-  f.owners.learners.readState = async () => ended
-    ? { revision: 6, active: null, progress: { attempts: [f.previous, other], activeAttemptId: null } }
-    : { revision: 5, active: other, progress: { attempts: [f.previous, other], activeAttemptId: other.attemptId } };
-  f.owners.learners.endAttempt = async input => { ended = input; return { revision: 6, attempt: { ...other, ended: input } }; };
+  inProgress(f, { attemptId: otherId, pin: otherPin, requestIds: ["other"] });
   const service = createTrainingService(f.owners);
-  await assert.rejects(service.openPractice({ actor, practiceId: f.practiceId, requestId: "open-1", expectedRevision: 4 }),
+  const start = extra => service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, requestId: "start-1", expectedRevision: 5, ...extra });
+  await assert.rejects(start(), error => error.code === "VIBE64_TRAINING_LESSON_IN_PROGRESS" && error.statusCode === 409 &&
+    error.details.attemptId === otherId && error.details.lessonTitle === "Your second lesson");
+  await assert.rejects(start({ archiveCurrent: true, expectedRevision: 4 }), { code: "VIBE64_TRAINING_STATE_REVISION_CONFLICT" });
+  assert.deepEqual(f.calls.filter(([name]) => ["close", "reserve"].includes(name)), [], "a refusal changes nothing");
+
+  // The confirmed start archives the lesson in progress, then reserves at the
+  // revision that archive left.
+  f.owners.learners.readState = async () => f.calls.some(([name]) => name === "close")
+    ? { revision: 6, progress: { activeAttemptId: null, attempts: [] } }
+    : { revision: 5, progress: { activeAttemptId: otherId, attempts: [{ attemptId: otherId, pin: otherPin, requestIds: [] }] } };
+  await start({ archiveCurrent: true });
+  assert.deepEqual(f.calls.filter(([name]) => ["close", "reserve", "mode"].includes(name)), [
+    ["close", { actor, attemptId: otherId, archive: true, reason: "archived" }],
+    ["reserve", { actor, requestId: "start-1", expectedRevision: 6, pin }], ["mode", true]]);
+});
+
+test("the same lesson in progress, or a replayed start, goes straight to the learner store", async t => {
+  const f = await fixture(t);
+  inProgress(f, { attemptId, pin, requestIds: ["start-0"] });
+  await f.service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, requestId: "start-1", expectedRevision: 5 });
+  inProgress(f, { attemptId: otherId, pin: otherPin, requestIds: ["start-1"] });
+  await f.service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, requestId: "start-1", expectedRevision: 5 });
+  assert.equal(f.calls.filter(([name]) => name === "reserve").length, 2);
+  assert.equal(f.calls.some(([name]) => name === "close"), false);
+});
+
+test("restart archives the attempt, then prepares a new attempt of the same lesson with a fresh project and session", async t => {
+  const f = await fixture(t, { setup: "succeeded" });
+  const old = { attemptId: otherId, pin, projectSlug: "training-bbbbbbbbbbbb4bbb8bbbbbbbbbbbbbbb", requestIds: ["start-0"] };
+  inProgress(f, old);
+  f.owners.catalogue.readCatalogue = () => assert.fail("Restart keeps the saved pin; it is not a new course admission.");
+  const service = createTrainingService(f.owners);
+  await assert.rejects(service.restartLesson({ actor, attemptId: otherId, requestId: "restart-1", expectedRevision: 4 }),
     { code: "VIBE64_TRAINING_STATE_REVISION_CONFLICT" });
-  assert.equal(ended, null);
-  await service.openPractice({ actor, practiceId: f.practiceId, requestId: "open-1", expectedRevision: 5 });
-  assert.deepEqual({ ...ended, actor: undefined }, { actor: undefined, attemptId: other.attemptId, requestId: `leave-${other.attemptId}`,
-    expectedRevision: 5, reason: "left" });
-  // Scoped and bounded, so it never collides with a lesson.start id or another open.
-  const scoped = `open_${f.practiceId.replaceAll("-", "")}_${createHash("sha256").update("open-1").digest("hex").slice(0, 26)}`;
-  assert.equal(scoped.length, 64);
-  assert.deepEqual(f.calls.find(([name]) => name === "reserve")[1], { actor, requestId: scoped, expectedRevision: 6, pin, practiceId: f.practiceId,
-    livePracticeIds: [f.practiceId] });
-  await assert.rejects(service.startLesson({ actor, courseId: "intro", release: "0.1.0", lessonCode: "X", requestId: scoped, expectedRevision: 6 }),
-    { code: "VIBE64_TRAINING_REQUEST_INVALID" }, "the open namespace is host-owned");
-  f.setPracticeRecord(null);
-  await assert.rejects(service.openPractice({ actor, practiceId: f.practiceId, requestId: "open-2", expectedRevision: 6 }),
-    { code: "VIBE64_TRAINING_PRACTICE_MISSING" });
+  await assert.rejects(service.restartLesson({ actor, attemptId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", requestId: "restart-1", expectedRevision: 5 }),
+    { code: "VIBE64_TRAINING_ATTEMPT_MISSING", statusCode: 404 });
+  assert.deepEqual(f.calls, []);
+  const result = await service.restartLesson({ actor, attemptId: otherId, requestId: "restart-1", expectedRevision: 5 });
+  assert.deepEqual(f.calls.slice(0, 3), [["close", { actor, attemptId: otherId, archive: true, reason: "archived" }],
+    ["reserve", { actor, requestId: "restart-1", expectedRevision: 5, pin }], ["mode", true]]);
+  assert.equal(result.attempt.attemptId, attemptId);
+  assert.equal(f.calls.find(([name]) => name === "project")[1].training.practiceId, attemptId, "the marker names the new attempt");
+  assert.equal(f.calls.find(([name]) => name === "session-create")[2].sessionId, `training-${attemptId}`);
+  assert.equal(f.calls.filter(([name]) => name === "source-proof").length, 1, "the fresh project is proved like any first start");
+
+  // A retry after the archive finishes the restart through the replayed reservation.
+  f.setProgress({ revision: 9, progress: { activeAttemptId: null, attempts: [{ ...old, ended: { reason: "archived" } }] } });
+  f.calls.length = 0;
+  await service.restartLesson({ actor, attemptId: otherId, requestId: "restart-1", expectedRevision: 5 });
+  assert.deepEqual(f.calls[0], ["reserve", { actor, requestId: "restart-1", expectedRevision: 9, pin }]);
+  f.setProgress({ revision: 9, progress: { activeAttemptId: null, attempts: [{ ...old, ended: { reason: "deleted" } }] } });
+  await assert.rejects(service.restartLesson({ actor, attemptId: otherId, requestId: "restart-2", expectedRevision: 9 }),
+    { code: "VIBE64_TRAINING_ATTEMPT_MISSING" }, "a deleted lesson is not restarted");
 });
 
-test("opening refuses a practice project being deleted or a lesson that cannot be prepared before ending another lesson", async t => {
-  const f = await continuationFixture(t);
-  const other = { ...structuredClone(f.attempt), attemptId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc" };
-  let ended = null;
-  f.owners.learners.readState = async () => ({ revision: 5, active: other, progress: { attempts: [f.previous, other], activeAttemptId: other.attemptId } });
-  f.owners.learners.endAttempt = async input => { ended = input; return { revision: 6, attempt: { ...other, ended: input } }; };
-  const service = createTrainingService(f.owners);
-  f.setPracticeRecord({ slug: f.previous.projectSlug, learnerKey: f.training.learnerKey, practiceId: f.practiceId, training: f.training, deleting: true });
-  await assert.rejects(service.openPractice({ actor, practiceId: f.practiceId, requestId: "open-1", expectedRevision: 5 }),
-    { code: "VIBE64_TRAINING_PRACTICE_MISSING", message: /Nothing was changed/u });
-  f.setPracticeRecord({ slug: f.previous.projectSlug, learnerKey: f.training.learnerKey, practiceId: f.practiceId, training: f.training });
-  const unreadable = Object.assign(new Error("The installed lesson content is missing."), { code: "VIBE64_TRAINING_CONTENT_MISSING" });
-  f.owners.content.readExercise = async () => { throw unreadable; };
-  await assert.rejects(service.openPractice({ actor, practiceId: f.practiceId, requestId: "open-1", expectedRevision: 5 }), unreadable);
-  assert.equal(ended, null, "the other lesson keeps going");
-  assert.deepEqual(f.calls.filter(([name]) => name === "reserve"), []);
-});
-
-test("Continue lesson whose practice project is being deleted prepares a fresh one", async t => {
-  // Only the learning-space record (with its deletion marker) remains to be seen.
-  const f = await continuationFixture(t, { session: false, project: false });
-  f.setPracticeRecord({ slug: f.previous.projectSlug, learnerKey: f.training.learnerKey, practiceId: f.practiceId, training: f.training, deleting: true });
-  await f.service.continueLesson({ actor, attemptId: f.practiceId, requestId: "next", expectedRevision: 4 });
-  assert.equal(Object.hasOwn(f.calls[0][1], "practiceId"), false);
-  assert.equal(f.calls.find(([name]) => name === "project")[1].training.practiceId, attemptId);
+test("finish is refused until every required step passed, then archives the attempt as finished; delete keeps no archive", async t => {
+  const f = await fixture(t);
+  const saved = (passed, revision = 5) => f.setProgress({ revision, completion: { required: 2, passed },
+    progress: { activeAttemptId: attemptId, attempts: [{ attemptId, pin }] } });
+  saved(1);
+  await assert.rejects(f.service.finishLesson({ actor, attemptId, expectedRevision: 5 }), { code: "VIBE64_TRAINING_LESSON_INCOMPLETE" });
+  saved(2);
+  await assert.rejects(f.service.finishLesson({ actor, attemptId, expectedRevision: 4 }), { code: "VIBE64_TRAINING_STATE_REVISION_CONFLICT" });
+  assert.deepEqual(f.calls, []);
+  assert.equal((await f.service.finishLesson({ actor, attemptId, expectedRevision: 5 })).closed, true);
+  assert.deepEqual(await f.service.deleteLesson({ actor, attemptId }), { ok: true, attemptId, closed: true });
+  assert.deepEqual(f.calls, [["close", { actor, attemptId, archive: true, reason: "finished" }],
+    ["close", { actor, attemptId, archive: false, reason: "deleted" }]]);
+  const service = createTrainingService({ ...f.owners, learningSpace: null });
+  await assert.rejects(service.deleteLesson({ actor, attemptId }), { code: "VIBE64_TRAINING_PRACTICE_UNAVAILABLE" });
 });

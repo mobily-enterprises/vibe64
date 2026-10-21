@@ -25,6 +25,8 @@ Training actions.
 - `packages/vibe64-core/src/server/learningMode.js`
 - `packages/vibe64-training/src/server/learningSpace.js`
 - `packages/vibe64-training/src/server/stepActions.js`
+- `packages/vibe64-training/src/server/preparation.js`
+- `packages/vibe64-training/src/server/actions.js`
 
 ## Public contract
 
@@ -61,70 +63,76 @@ guide overlay 3000 above L 2400 above Colleague.
   place is kept per tab in `sessionStorage` and saved for the account through
   `reader.save` (debounced, flushed on minimise), so a reload or another
   browser reopens the same step and scroll.
-- Learning mode: a lesson is either in progress (the learner's active attempt)
-  or not; there is no paused state. In progress is learning mode for the
-  learner across the environment, server-backed so it holds in every tab and
-  device; its only project is the attempt's practice project (none for Lesson
-  0). `learning-mode.read` and `learningMode` in `learning.read` expose
-  `{on, attemptId, lessonCode, lessonTitle, practiceSlug, projectSlugs}`.
-  **Leave lesson** (`learning-mode.leave`) ends the attempt with reason `left`:
-  step results and the practice project are kept, learning mode ends and normal
-  projects come back. **Continue lesson** (`lesson.continue`) starts a new
-  attempt with the same pin in the same practice project while it is still in
-  the learning space (the attempt records its `practiceId`), reusing the
-  project's session `training-<practiceId>` when it exists and is not archived,
-  otherwise creating `training-<attemptId>` at the project's current code
-  without exercise-source verification; a missing project, or one whose
-  deletion stopped part-way, gets a fresh one.
-  Passed steps count per lesson content, so L opens at the first one not passed.
-  Core `learningMode.js` holds one host-registered reader that
-  fails open (a failed read is reported and treated as not in learning mode,
-  since the mode focuses a learner and is not an access boundary). Enforcement:
-  HTTP and WebSocket project admission (`resolveProjectRequestContext`), project
-  context for Colleague actions (Colleague `navigation.open` checks first so its
-  refusal carries the exact reason), and project listings, which show only the
-  lesson's practice project. Refusals are 403 `vibe64_learning_mode_project`,
-  "You're in a lesson. Leave lesson to get back to your projects." The client
-  guards navigation by redirecting away from other projects (a note with
-  **Leave lesson**), L's header also offers **Leave lesson**, and non-project
-  pages (Learning, Account settings, AI Accounts) are never limited, so leaving
-  is always one click.
-- Practice projects (server, `packages/vibe64-training/src/server/learningSpace.js`):
-  the learner's practice projects live in the learning space, never in the
-  project catalogue. `practice.list` returns `projects` (practiceId, slug,
-  lesson code and title, status `in-progress`, `finished`, `not-finished` or
-  `deleting` for a delete that stopped part-way, read from core's
-  `readLearningSpaceProject` without a practice scope) and `archived`
-  (practiceId, archiveId, lesson, archivedAt; an entry whose `practice.json` is
-  missing or damaged is left out); author-preview practice projects are left
-  out. `practice.open` returns the lesson already in progress there; otherwise
-  it refuses a project being deleted with nothing changed, checks that the
-  lesson's installed content (and exercise) can be read, then ends another
-  lesson in progress (`left`) and continues this project's lesson as above,
-  under the scoped request `open_<practiceId hex>_<request hash>`. `practice.archive`, `practice.delete` and
-  `practice.archived.delete` are one click for the learner and need the
-  person's confirmation (`confirmed: true`) from Colleague. Archive and delete
-  run inside the learner's practice scope with the shared project archive
-  service (a host's `trainingHost.projectArchive`, a standalone
-  `createProjectArchiveService` locally). The in-progress attempt on that
-  project ends (`discard`) in the archiver's `beforeRemove` step, under its
-  per-slug lock after every refusal (pinned session, storage headroom), so a
-  refusal changes nothing; then the code ledger is forgotten. A failure after
-  the attempt ended still emits the change and reports `ended: true`. Archive
-  bundles go to `<systemRoot>/training/practice-archives/<learnerKey>/<slug>/<UTC>-<slug>/`
-  (the archiver's `<archiveRoot>/<slug>/` layout, so keyed by the practice
-  slug, which names the practiceId) with `practice.json` (practiceId,
-  learnerKey, pin, archivedAt) beside them, written in that same step. Only a
-  folder holding a bundle counts toward the 20 archives per learner; delete
-  also removes a stopped archive's partial bundle. Routes:
-  `GET /api/vibe64/training/practice`, `POST …/practice/:practiceId/{open,archive,delete}`
-  and `POST …/practice/:practiceId/archives/:archiveId/delete`. Each change
-  emits `vibe64.training.learner.changed`.
+- Learn mode (server): Vibe64 has two modes, Develop and Learn, with the same
+  screens. Learn mode is a saved per-learner flag
+  (`<sys>/training/users/<key>/learning-mode.json`, `{on}`), separate from any
+  lesson; absent means Develop. The current lesson is the one in progress (the
+  learner's active attempt), so it is derived, not stored.
+  `learning-mode.read` and `learningMode` in `learning.read` expose
+  `{on, currentAttemptId, lessonCode, lessonTitle, practiceSlug}`;
+  `learning-mode.set {on}` (`POST /api/vibe64/training/learning-mode`, the L
+  toggle) switches it and emits `learner.changed` with reason `learning-mode`
+  only when it changed. Switching never ends, archives or changes an attempt.
+  `lesson.start` and `lesson.restart` turn Learn mode on. Core
+  `learningMode.js` holds one host-registered reader (a failed read counts as
+  Develop) and the Learn/Develop project rule.
+- Attempt lifecycle (server, `preparation.js` and
+  `packages/vibe64-training/src/server/learningSpace.js`): an attempt is one
+  run of a lesson and the parent of its step results, its practice project
+  (`training-<attemptId hex>`, only when the lesson has an exercise; the
+  marker's `practiceId` is the attemptId) and its teacher conversation
+  (Colleague's Learn thread for that attempt). At most one attempt is in
+  progress. `lesson.start` with a different lesson in progress refuses 409
+  `VIBE64_TRAINING_LESSON_IN_PROGRESS` with `details {attemptId, lessonTitle}`
+  (the client's one confirmation); repeating it with `archiveCurrent: true`
+  checks the admitted revision, archives the current attempt, then reserves
+  the new one. The same lesson in progress, or a replayed start request, goes
+  straight to the learner store. `lesson.restart {attemptId, requestId,
+  expectedRevision}` archives the attempt and reserves a new attempt with the
+  same pin and request (a retry finishes a stopped restart through the
+  replayed reservation); preparation then creates a fresh project and session
+  `training-<attemptId>` with exercise-source proof. `lesson.finish` is refused
+  (`VIBE64_TRAINING_LESSON_INCOMPLETE`) until every required step passed, then
+  archives with reason `finished` (the learner store records the completion).
+  `lesson.delete {attemptId, confirmed?}` removes the project and conversation
+  with no archive (reason `deleted`).
+- Close (`learningSpace.closeAttempt({actor, attemptId, archive, reason})`) is
+  the one implementation behind finish, restart, start-with-archive and delete.
+  An archive at the cap of 20 per learner refuses first. Then, inside the
+  learner's practice scope, the shared project archive service (a host's
+  `trainingHost.projectArchive`, a standalone `createProjectArchiveService`
+  locally) archives or removes the project; for an archive its `beforeRemove`
+  step, under the per-slug lock after every refusal (pinned session, storage
+  headroom), writes `attempt.json` from `learners.readAttemptRecord`, so a
+  refusal changes nothing. A lesson without a project writes `attempt.json`
+  directly. A delete then removes any partial bundle. Next core
+  `releaseLearnThread` lets Colleague release the attempt's thread, and the
+  thread file (`learnThreadFile`) moves into the bundle as
+  `conversation.json` (archive) or is removed (delete). Last, the learner store
+  ends the attempt under the preparation barrier (request `close-<attemptId>`),
+  which also forgets its code ledger. A close that stops part-way leaves the
+  attempt in progress (its project `deleting`); repeating it resumes, and a
+  close of an ended attempt is a no-op. Bundles:
+  `<systemRoot>/training/practice-archives/<learnerKey>/<attemptId>/` with
+  `attempt.json` (`{schemaVersion: 1, attemptId, learnerKey, pin, lessonTitle,
+  reason: finished|archived, createdAt, archivedAt, stepProgress}`),
+  `conversation.json` and `project/<slug>/<UTC>-<slug>/`. `practice.list`
+  returns `current` (`{attemptId, lesson {code, title}, slug?, status
+  in-progress|deleting}` or null; author-preview attempts are left out) and
+  `archived` (`[{attemptId, lesson, reason, archivedAt, hasProject}]`, newest
+  first; a folder without a valid `attempt.json`, or the attempt still in
+  progress, is left out). `practice.archived.delete {attemptId, confirmed?}`
+  removes one bundle. Deletions are one click for the learner and need the
+  person's confirmation (`confirmed: true`) from Colleague. Routes:
+  `POST …/attempts/:attemptId/{restart,finish,delete}`, `GET …/practice` and
+  `POST …/archives/:attemptId/delete`. `learner.changed` carries
+  `{learnerId, attemptId?, reason}` with reason `learning-mode`, `lesson`,
+  `steps`, `practice` or `notes`.
 - Lesson: `loadLesson(attemptId)` reads `lesson.read`; every step action is
   followed by a fresh read. `answer(stepId, selected)` (`step.answer`),
   `done(stepId)` (`step.done`) and `runCheck(stepId)` (`step.check.run`) are the
-  learner's own browser actions with a stable request ID; `endLesson` ends an
-  earlier-format attempt. Statuses come only from these results.
+  learner's own browser actions with a stable request ID. Statuses come only
+  from these results.
 - App press (`step.observe`): `exerciseStep(projectSlug)` names L's current
   step only for its prepared, not-ended version 2 attempt whose practice
   project is `projectSlug`, while L is not open over the app, when that step's
@@ -180,15 +188,11 @@ full-screen sheet whose **Courses** tab never shrinks, with a row of numbered
 step circles and, for a complete lesson, one short row of **✓ Lesson complete**,
 **Lesson finished** and **Practice**; when the row overflows,
 `revealCurrentStep` scrolls only that row to keep the current step visible on
-step changes and reopening. An earlier-format
-(version 1) attempt is shown as readable history with **End this lesson**; a
+step changes and reopening. A
 version 2 lesson whose required steps all passed offers **Lesson finished**,
-which reopens `Vibe64LearningFinished`. That screen ends the attempt itself
-with reason `finished` (**Finish lesson** retries an unconfirmed end) and emits
-`ended` so the overlay rereads saved learning. It then offers **Archive practice
-project** (`practice.archive`), **Delete practice project** (`practice.delete`)
-or **Keep**, **Next lesson: <title>** (next unfinished lesson of the course),
-**Back to courses** and **Read the lesson again**. The step body is `Vibe64LearningStep`, shared
+which reopens `Vibe64LearningFinished`. That screen finishes the attempt with
+`lesson.finish` (retried while unconfirmed) and offers **Next lesson** and
+**Back to courses**. The step body is `Vibe64LearningStep`, shared
 with Colleague's current-step dialog. A passed choice
 question is not compared again (the server keeps the pass), so the reader says
 so and disables **Check answer**. Links in lesson Markdown to another origin open
@@ -196,6 +200,8 @@ in a new tab (`openLessonLink`), keeping the app and L open.
 
 Evidence: `tests/server/vibe64TrainingLearningSpace.unit.test.js`,
 `tests/server/vibe64TrainingLearningMode.unit.test.js`,
+`tests/server/vibe64TrainingPreparation.unit.test.js`,
+`tests/server/vibe64TrainingStepActions.unit.test.js`,
 `tests/client/vibe64LearningEnvironment.vitest.js` and
 `tests/client/vibe64LearningCourses.vitest.js`; the App press capture and its sent
 identities in `tests/client/vibe64OutputControlsSurface.vitest.js`; live browser

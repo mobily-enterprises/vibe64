@@ -17,9 +17,8 @@ function registerTrainingRoutes(http) {
       // The lesson reader pages long step text; the page is its only query input.
       const query = operation === "lesson.read" ? routes.requestQuery(request) : {};
       const page = /^[0-9]{1,2}$/u.test(String(query.page ?? "")) ? { page: Number(query.page) } : {};
-      // Path identities (attemptId, practiceId, archiveId) come only from the route.
-      const identities = Object.fromEntries(["attemptId", "practiceId", "archiveId"]
-        .filter(name => suffix.includes(`:${name}`)).map(name => [name, request.params[name]]));
+      // The path identity (attemptId) comes only from the route.
+      const identities = suffix.includes(":attemptId") ? { attemptId: request.params.attemptId } : {};
       return { ...input, ...page, ...identities };
     },
     summary: `Use the canonical Training ${operation} operation.`
@@ -31,8 +30,9 @@ function registerTrainingRoutes(http) {
   actionRoute("GET", "/learning", "learning.read");
   actionRoute("POST", "/lessons/start", "lesson.start");
   actionRoute("POST", "/attempts/:attemptId/resume", "lesson.resume");
-  actionRoute("POST", "/attempts/:attemptId/end", "lesson.end");
-  actionRoute("POST", "/attempts/:attemptId/continue", "lesson.continue");
+  actionRoute("POST", "/attempts/:attemptId/restart", "lesson.restart");
+  actionRoute("POST", "/attempts/:attemptId/finish", "lesson.finish");
+  actionRoute("POST", "/attempts/:attemptId/delete", "lesson.delete");
   // Learning v2 reader and step results (contract C3).
   actionRoute("GET", "/lesson", "lesson.read");
   actionRoute("GET", "/attempts/:attemptId/lesson", "lesson.read");
@@ -41,15 +41,12 @@ function registerTrainingRoutes(http) {
   actionRoute("POST", "/attempts/:attemptId/steps/answer", "step.answer");
   actionRoute("POST", "/attempts/:attemptId/steps/done", "step.done");
   actionRoute("POST", "/attempts/:attemptId/reader", "reader.save");
-  // The learner's practice projects in the learning space (Rev 3 R6).
+  // The lesson in progress and the archived lessons (Rev 4 C2).
   actionRoute("GET", "/practice", "practice.list");
-  actionRoute("POST", "/practice/:practiceId/open", "practice.open");
-  actionRoute("POST", "/practice/:practiceId/archive", "practice.archive");
-  actionRoute("POST", "/practice/:practiceId/delete", "practice.delete");
-  actionRoute("POST", "/practice/:practiceId/archives/:archiveId/delete", "practice.archived.delete");
-  // Learning mode: read, and leave (ends the lesson in progress).
+  actionRoute("POST", "/archives/:attemptId/delete", "practice.archived.delete");
+  // Learn mode: read, and switch between Learn and Develop (L).
   actionRoute("GET", "/learning-mode", "learning-mode.read");
-  actionRoute("POST", "/attempts/:attemptId/learning-mode/leave", "learning-mode.leave");
+  actionRoute("POST", "/learning-mode", "learning-mode.set");
   // Learner notes (contract C7): the signed-in learner's own, never another's.
   // 4000 characters of Markdown may take up to 16 KiB of escaped JSON.
   actionRoute("GET", "/teacher-notes", "learner-notes.read");

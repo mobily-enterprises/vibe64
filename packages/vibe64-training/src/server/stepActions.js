@@ -1,14 +1,13 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { trainingStepObservationSchema } from "../shared/practicalSchemas.js";
-import { lessonSteps } from "./learnerState.js";
-import { attemptId, attemptSummary, id, operationError, pick as pickPresent, practiceSlug, requestId, revision, text } from "./actions.js";
+import { attemptId, attemptSummary, id, operationError, pick as pickPresent, practiceSlug, requestId, text } from "./actions.js";
 
-// Learning v2 (contract C3, Rev 3 R6): the lesson reader, step results, reader
-// position and the learner's practice projects. Admission is the existing
+// Learning v2 (Rev 4 C2): the lesson reader, step results, reader position,
+// the lesson in progress and the archived lessons. Admission is the existing
 // action context; decisions stay with their owners: the step owner
 // (stepChecks.js) decides what may pass, the learner store saves, and the
-// learning space (learningSpace.js) lists, archives and removes. "Browser"
+// learning space (learningSpace.js) lists and closes attempts. "Browser"
 // actions run only on the learner's own api channel and are excluded from
 // Colleague's tools.
 const MAX_RESULT_BYTES = 128 * 1024;
@@ -37,18 +36,14 @@ const lessonOutput = {
     page: { ...opaque }, error: { ...text, required: false, maxLength: 512 }
   })
 };
-// A practice project is named by the UUID of the attempt that created it.
-const practiceId = attemptId;
 const practiceOutput = {
   mode: "replace",
   schema: createSchema({
     ok: { type: "boolean", required: true }, available: { type: "boolean", required: true },
-    projects: { type: "array", required: false, maxLength: 256, items: opaque },
+    current: { ...opaque, nullable: true },
     archived: { type: "array", required: false, maxLength: 64, items: opaque },
-    revision: { ...revision, required: false }, attempt: { ...opaque, nullable: true },
-    practiceId: { ...practiceId, required: false }, slug: { ...text, required: false, maxLength: 128 },
-    archiveId: { ...text, required: false, maxLength: 128 },
-    removed: { type: "boolean", required: false }, ended: { type: "boolean", required: false },
+    attemptId: { ...attemptId, required: false },
+    removed: { type: "boolean", required: false }, changed: { type: "boolean", required: false },
     error: { ...text, required: false, maxLength: 512 }
   })
 };
@@ -186,7 +181,7 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
   const lessonRead = definition("lesson.read", { attemptId: { ...attemptId, required: false },
     page: { type: "integer", required: false, min: 0, max: 31 } }, { kind: "query", idempotency: "none", output: lessonOutput,
     transformResult: assistantLessonResult,
-    description: "Read the learner's lesson as the reader shows it: its steps in order with their text, visual and guide, each step's check kind (automatic, choice, self-check or none) and the learner's saved step results. Without attemptId this reads the active attempt; learning.read lists the others. Teach from this: explain the current step, open the real screens with navigation guides and replay the step's visual. A choice question never includes its answer; never guess or reveal one. Results are decided only by automatic checks, the learner's own answer and the learner's own Done; never say a step passed unless a result here says passed. When page.count is above 1, read the other pages for the remaining step text. An earlier-format (version 1) lesson returns its identity only; it can be read in history but not continued." },
+    description: "Read the learner's lesson as the reader shows it: its steps in order with their text, visual and guide, each step's check kind (automatic, choice, self-check or none) and the learner's saved step results. Without attemptId this reads the active attempt; learning.read lists the others. Teach from this: explain the current step, open the real screens with navigation guides and replay the step's visual. A choice question never includes its answer; never guess or reveal one. Results are decided only by automatic checks, the learner's own answer and the learner's own Done; never say a step passed unless a result here says passed. When page.count is above 1, read the other pages for the remaining step text." },
   async (input, actor) => {
     let attempt;
     if (input.attemptId) attempt = (await readAttempt(actor, input.attemptId)).attempt;
@@ -195,10 +190,6 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
     const slug = await practiceSlug({ attempt, actor, learningSpace });
     const lesson = await content.readLesson({ ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
     const summary = attemptSummary(attempt, slug);
-    if (!lessonSteps(lesson)) {
-      return { ok: true, available: true, attempt: summary,
-        lesson: { schemaVersion: lesson.lesson.schemaVersion, code: lesson.lesson.code, hash: lesson.hash, title: lesson.lesson.title } };
-    }
     const projected = lesson.steps.map(step => ({ ...stepProjection(step), bodyText: step.bodyText }));
     const count = pageBodies(projected, lesson.notesText);
     const index = input.page ?? 0;
@@ -228,35 +219,29 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
   };
 
   const unavailablePractice = operation => ({ ok: false, available: false,
-    error: `${operation} practice projects is unavailable in this installation. Nothing was changed.` });
+    error: `${operation} lessons is unavailable in this installation. Nothing was changed.` });
 
-  // A learning-space change the learner asked for. Colleague needs the
-  // person's confirmation; the learner's own one-click browser action does
-  // not. A refusal (pinned session, archive limit, storage, not this
-  // learner's) is reported with nothing changed. A failure after the lesson in
-  // progress ended still publishes the change and reports ended: true.
-  const practiceCommand = (name, fields, description, run) => definition(name, { ...fields,
+  // A removal the learner asked for. Colleague needs the person's
+  // confirmation; the learner's own one-click browser action does not. A
+  // refusal (pinned session, not this learner's) is reported with nothing
+  // changed; a removal that stopped part-way is reported and resumes on retry.
+  const removal = (name, description, reason, run) => definition(name, { attemptId,
     confirmed: { type: "boolean", required: false } }, { output: practiceOutput, description },
   async (input, actor, context) => {
     if (context.channel !== "api" && input.confirmed !== true) {
-      throw failure("Ask the person to confirm this practice project change, then repeat with confirmed: true.",
+      throw failure("Ask the person to confirm this deletion, then repeat with confirmed: true.",
         "VIBE64_TRAINING_PRACTICE_UNCONFIRMED");
     }
-    if (!learningSpace) return unavailablePractice("Changing");
     let result;
     try { result = await run(input, actor); }
     catch (cause) {
-      const refusal = cause.statusCode < 500 && /^(VIBE64_TRAINING_PRACTICE_|vibe64_project_pinned)/u.test(cause.code || "");
-      if (cause.ended === true) {
-        await notify(actor, "", "practice");
-        return { ok: false, available: true, practiceId: input.practiceId, ended: true,
-          error: `${refusal ? `${refusalText(cause.message, "The change stopped.").slice(0, 400)} ` : "The change stopped part-way. "}The lesson in progress has ended (its results are kept); retry to finish.` };
-      }
-      if (!refusal) throw cause;
-      return { ok: false, available: true, practiceId: input.practiceId, error: refusalText(cause.message, "Nothing was changed.") };
+      if (!(cause.statusCode < 500 && /^(VIBE64_TRAINING_(PRACTICE_|ATTEMPT_MISSING)|vibe64_project_pinned)/u.test(cause.code || ""))) throw cause;
+      return { ok: false, available: true, attemptId: input.attemptId, error: refusalText(cause.message, "Nothing was changed.") };
     }
-    await notify(actor, "", "practice");
-    return { ok: true, available: true, ...pick(result, ["practiceId", "slug", "archiveId", "removed", "ended"]) };
+    if (result === null) return unavailablePractice("Deleting");
+    await notify(actor, input.attemptId, reason);
+    return { ok: true, available: true, attemptId: input.attemptId, ...pick(result, ["removed"]),
+      ...(Object.hasOwn(result, "closed") ? { changed: result.closed } : {}) };
   });
 
   return Object.freeze([
@@ -267,7 +252,7 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
       await readAttempt(actor, input.attemptId);
       const result = await steps.observe({ actor, attemptId: input.attemptId, stepId: input.stepId,
         observation: input.observation, context: stepContext(context) });
-      return recorded(result, actor, input.attemptId, "step");
+      return recorded(result, actor, input.attemptId, "steps");
     }),
     definition("step.check.run", { attemptId, stepId: id, requestId }, {
       description: "Run the declared automatic check of one step of the learner's active lesson (lesson.read shows which steps have one). Use a new requestId for a new check and the same one to retry. A check you run is a diagnostic only: it tells you whether the work is ready and is never saved, so the step stays unpassed until the learner presses Check in the lesson. A response check needs the learner's own press of the App's control in this lesson's Preview first. Report the outcome and reason as returned; never claim the step passed." },
@@ -275,43 +260,35 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
       await readAttempt(actor, input.attemptId);
       const result = await steps.runCheck({ actor, attemptId: input.attemptId, stepId: input.stepId, requestId: input.requestId,
         context: stepContext(context) });
-      return recorded(result, actor, input.attemptId, "step");
+      return recorded(result, actor, input.attemptId, "steps");
     }),
     definition("step.answer", { attemptId, stepId: id, requestId,
       selected: { type: "array", required: true, minLength: 1, maxLength: 8, items: { type: "integer", required: true, min: 0, max: 7 } }
     }, { browser: true }, async (input, actor, context) => recorded(await steps.answer({ actor, context,
-      ...pick(input, ["attemptId", "stepId", "selected", "requestId"]) }), actor, input.attemptId, "step")),
+      ...pick(input, ["attemptId", "stepId", "selected", "requestId"]) }), actor, input.attemptId, "steps")),
     definition("step.done", { attemptId, stepId: id, requestId }, { browser: true },
       async (input, actor, context) => recorded(await steps.done({ actor, context,
-        ...pick(input, ["attemptId", "stepId", "requestId"]) }), actor, input.attemptId, "step")),
+        ...pick(input, ["attemptId", "stepId", "requestId"]) }), actor, input.attemptId, "steps")),
     definition("reader.save", { attemptId, stepId: id,
       scroll: { type: "number", required: true, min: 0, max: 10_000_000 } }, { browser: true, idempotency: "none" },
     async (input, actor) => {
       const { reader, baseline } = await steps.saveReader({ actor, ...pick(input, ["attemptId", "stepId", "scroll"]) });
-      await notify(actor, input.attemptId, "reader");
+      await notify(actor, input.attemptId, "steps");
       return { ok: true, reader: pick(reader, ["attemptId", "stepId", "scroll"]),
         ...(baseline ? { baseline: pick(baseline, ["recorded", "code", "reason"]) } : {}) };
     }),
     definition("practice.list", {}, { kind: "query", idempotency: "none", output: practiceOutput,
-      description: "List the learner's practice projects in the learning space: each with its lesson (code, title), status (in-progress, finished, not-finished, or deleting when a delete stopped part-way) and practiceId; and archived practice projects with their lesson and archive date. Practice projects never appear among the person's normal projects. This is read-only." },
+      description: "List the learner's lessons in the learning space: current is the one lesson in progress (attemptId, lesson code and title, its practice project slug when it has one, status in-progress, or deleting when a delete stopped part-way), or null; archived lists the archived lessons (finished, or archived by a restart or a new start), newest first, with their lesson, reason, archive date and whether a practice project was kept. Practice projects never appear among the person's normal projects. This is read-only." },
     async (_input, actor) => {
       if (typeof learningSpace?.list !== "function") return unavailablePractice("Listing");
       return { ok: true, available: true, ...await learningSpace.list(actor) };
     }),
-    definition("practice.open", { practiceId, requestId, expectedRevision: revision }, { output: practiceOutput,
-      description: "Open one of the learner's practice projects with its lesson, only after the person's direct request or accepted offer. Read practice.list and learning.read for the practiceId and current revision. When it is already the lesson in progress it is returned unchanged. Another lesson in progress is ended first (as Leave lesson: results and its practice project kept). Then the lesson continues in this practice project as a new attempt at the first step that has not passed, and learning mode turns on. Keep the same requestId on an uncertain retry." },
-    async (input, actor) => {
-      if (typeof exercises?.openPractice !== "function") return unavailablePractice("Opening");
-      const result = await exercises.openPractice({ actor, ...pick(input, ["practiceId", "requestId", "expectedRevision"]) });
-      await notify(actor, result.attempt?.attemptId || "", "learning-mode");
-      return { ok: true, available: true, revision: result.revision, attempt: attemptSummary(result.attempt, result.attempt.projectSlug) };
-    }),
-    practiceCommand("practice.archive", { practiceId }, "Archive one of the learner's practice projects, only after the person asked for it and then confirmed it in the conversation; pass confirmed: true only then. Its lesson in progress, if any, ends first (results kept). The project's code and sessions are packed into an archive bundle (rebuildable dependencies such as node_modules are left out) and the project leaves the learning space; practice.list then shows it under archived. A pinned session refuses the archive until it is unpinned, and a learner keeps at most 20 archives; those refusals change nothing.",
-      (input, actor) => learningSpace.archive({ actor, practiceId: input.practiceId })),
-    practiceCommand("practice.delete", { practiceId }, "Delete one of the learner's practice projects, only after the person asked for it and then confirmed this exact deletion in the conversation; pass confirmed: true only then. Name the lesson and say the project's files, sessions and Preview go away for good, with no archive (practice.archive keeps one). Its lesson in progress, if any, ends first; step results are kept. A pinned session refuses the delete until it is unpinned; that refusal changes nothing. A delete that stopped part-way (status deleting) resumes. Another learner's practice project is not reachable here.",
-      (input, actor) => learningSpace.remove({ actor, practiceId: input.practiceId })),
-    practiceCommand("practice.archived.delete", { practiceId, archiveId: { ...text, maxLength: 128 } }, "Delete one archived practice project of the learner for good, only after the person asked for it and then confirmed it in the conversation; pass confirmed: true only then. Use the practiceId and archiveId from practice.list archived.",
-      (input, actor) => learningSpace.deleteArchive({ actor, ...pick(input, ["practiceId", "archiveId"]) }))
+    removal("lesson.delete", "Delete the lesson in progress for good, only after the person asked for it and then confirmed this exact deletion in the conversation; pass confirmed: true only then. Name the lesson and say its practice project (files, sessions, Preview) and its teacher conversation go away, with no archive; Restart keeps an archive instead. Lesson completion already earned is kept. A pinned session refuses the delete until it is unpinned; that refusal changes nothing. A delete that stopped part-way (status deleting) resumes. Use the attemptId from practice.list current.",
+    "lesson", (input, actor) => typeof exercises?.deleteLesson === "function"
+      ? exercises.deleteLesson({ actor, attemptId: input.attemptId }) : null),
+    removal("practice.archived.delete", "Delete one archived lesson of the learner for good (its record, practice project and conversation), only after the person asked for it and then confirmed it in the conversation; pass confirmed: true only then. Use the attemptId from practice.list archived. Lesson completion already earned is kept.",
+    "practice", (input, actor) => typeof learningSpace?.deleteArchive === "function"
+      ? learningSpace.deleteArchive({ actor, attemptId: input.attemptId }) : null)
   ]);
 }
 
