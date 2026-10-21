@@ -125,6 +125,8 @@ again; do not resend a message whose delivery is uncertain.
 A temporary chat opened in one browser tab or window appears in the session's
 other open tabs once it is saved, which happens when it is created or its first
 message is sent. A tab that lost its connection catches up when it reconnects.
+Every open tab shows the same progress: when the reply arrives, “AI is working…”
+clears in each tab, including tabs that did not send the message.
 
 Leaving the view does not stop work or close a chat. Use **Stop** to interrupt
 work while retaining the conversation, or **Close** to remove that chat after

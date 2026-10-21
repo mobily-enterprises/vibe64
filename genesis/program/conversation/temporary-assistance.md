@@ -558,6 +558,12 @@ Update.
 
 The selected chat's saved transcript is projected without provider observation
 when source coordination is busy; its snapshot explicitly defers reconciliation.
+Every status change is saved before it is announced, so each view applies the
+saved status from such a snapshot exactly as from a reconciled one. A routing
+notice marks a view working only while its request is delivering or running, and
+adopts that request's ID; the send fence holds only a request that the saved
+transcript has not yet followed with a later one. Every view showing a reply
+therefore settles on the same finished state, whichever view sent it.
 Plain draft-only writes use the short session-store mutation and a durable draft
 revision, so admission of an older message cannot clear newer typing or files.
 The Update request identity is recorded on the existing background task. The

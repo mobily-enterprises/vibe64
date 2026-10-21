@@ -14,6 +14,7 @@ import {
 import { chatMessagePayload } from "@/lib/vibe64ChatMessage.js";
 import { useAssistantConversationFactory } from "@jskit-ai/assistant-runtime/client";
 import { temporaryConversationId } from "@local/vibe64-sessions/shared/conversation";
+import { assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import {
   VIBE64_SESSION_CHANGED_EVENT,
@@ -169,16 +170,23 @@ function useVibe64TemporaryAi({
             if (Object.hasOwn(observed, field)) update[field] = observed[field];
           }
           // Only the server's turn report can show the assistant as working;
-          // local Send state and request fences never do.
-          if (!observed.readError && !observed.deferredReconciliation) {
+          // local Send state and request fences never do. A deferred read
+          // reports the saved record, which every status change writes before
+          // announcing it, so it is as authoritative as a reconciled read.
+          if (!observed.readError) {
             update.nativeWorking = temporaryAiTurnIsActive(temporaryAiText(observed.status));
           }
           const route = JSON.parse(observed.routingMetadata?.assistant_routing_request || "null");
           // The old poll's captured turn/send fence remains product policy. A
           // pre-Send read cannot finish a newer request while preparation runs.
-          const sameRequest = !task.messageId || observed.messageId === task.messageId || route?.messageId === task.messageId;
+          // A request followed by a later one in the saved transcript is no
+          // longer current, whichever view sent the later one.
+          const requests = (snapshot.conversationLog || []).map(turn => turn.user?.messageId).filter(Boolean);
+          const superseded = requests.includes(task.messageId) && requests.at(-1) !== task.messageId;
+          const sameRequest = !task.messageId || superseded || observed.messageId === task.messageId || route?.messageId === task.messageId;
           if (canApplyProgress && !sending && (!task.busy || sameRequest)) {
-            if (!observed.readError && !observed.deferredReconciliation) {
+            if (superseded && observed.messageId) update.messageId = observed.messageId;
+            if (!observed.readError) {
               update.status = temporaryAiText(observed.status) || task.status;
               update.busy = temporaryAiTurnIsActive(update.status);
               update.phase = update.busy ? temporaryAiText(snapshot.phase) : "";
@@ -933,7 +941,13 @@ function useVibe64TemporaryAi({
       if (payload.reason === "temporary-conversation-closed") removeTask(task?.id || payload.conversationId);
       else if (payload.reason === "temporary-conversation-renamed") void restoreTasks();
       else if (task && payload.assistantRoutingRequest) {
-        updateTask(task.id, { routingMetadata: { ...task.routingMetadata, assistant_routing_request: JSON.stringify(payload.assistantRoutingRequest) }, busy: true });
+        const route = payload.assistantRoutingRequest;
+        // A routed request that is still being delivered or run becomes this
+        // view's current request unless its own Send awaits acceptance. Any
+        // other notice only asks for the saved state.
+        const current = route.status === "working" || assistantRoutingStatusIsPending(route);
+        updateTask(task.id, { routingMetadata: { ...task.routingMetadata, assistant_routing_request: JSON.stringify(route) },
+          ...(current ? { busy: true, messageId: task.pendingMessageId || route.messageId || task.messageId } : {}) });
         void task.binding.runtime.value.reload();
       }
     }

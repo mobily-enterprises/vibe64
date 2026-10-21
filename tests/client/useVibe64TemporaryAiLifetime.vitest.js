@@ -304,6 +304,86 @@ describe("temporary AI mounted lifetime", () => {
     expect(reads()).toHaveLength(2);
   });
 
+  describe("viewers converge on the saved turn state", () => {
+    const ROUTE = { reason: "assistant-routing-changed", conversationId: "conversation-1", projectSlug: "project-a", sessionId: "session-1" };
+    const request1 = { id: "request-1", role: "user", text: "Swap the Name and Age columns." };
+    const reply1 = { id: "reply-1", role: "assistant", text: "I changed two columns." };
+    const request2 = { id: "request-2", role: "user", text: "Now sort by Age." };
+    const reply2 = { id: "reply-2", role: "assistant", text: "Sorted by Age." };
+    // The server's own completion write holds the session lease, so a read
+    // returns the saved record without reconciling it.
+    const deferred = (value) => ({ ok: true, ...value, deferredReconciliation: true });
+    const live = (value) => ({ ok: true, ...value, deferredReconciliation: false });
+    function serve(listed, read) {
+      http.request.mockImplementation(async (url) => url === canonicalPath() ? read() : { ok: true, conversations: [listed()] });
+    }
+    const notice = (socket, route) => socket.emit("vibe64.session.changed", { ...ROUTE, assistantRoutingRequest: route });
+
+    it("settles every viewer when the completion notice's read is deferred for one of them", async () => {
+      let server = { conversationId: "conversation-1", status: "inProgress", runId: "turn-1", messageId: "request-1", messages: [request1] };
+      let reads = 0;
+      serve(() => server, () => (++reads % 2 ? live(server) : deferred(server)));
+      const first = mountTemporaryAi({ openTask: false });
+      const second = mountTemporaryAi({ openTask: false });
+      await vi.advanceTimersByTimeAsync(0);
+      expect([first, second].map(view => view.temporary.activeTask.value.busy)).toEqual([true, true]);
+
+      server = { ...server, status: "completed", messages: [request1, reply1] };
+      for (const view of [first, second]) notice(view.socket, { status: "complete", delivery: "accepted", messageId: "request-1" });
+      await vi.advanceTimersByTimeAsync(0);
+      for (const view of [first, second]) {
+        expect(view.temporary.activeTask.value).toMatchObject({ busy: false, nativeWorking: false, status: "completed" });
+        expect(view.temporary.activeTask.value.messages.at(-1).text).toBe("I changed two columns.");
+      }
+    });
+
+    it("finishes another viewer's request in a viewer that sent an earlier one", async () => {
+      let server = { conversationId: "conversation-1", status: "completed", runId: "turn-1", messageId: "request-1", messages: [request1, reply1] };
+      serve(() => server, () => live(server));
+      const { socket, temporary } = mountTemporaryAi({ openTask: false });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(temporary.activeTask.value).toMatchObject({ busy: false, messageId: "request-1" });
+
+      server = { ...server, status: "inProgress", runId: "turn-2", messageId: "request-2", messages: [request1, reply1, request2] };
+      notice(socket, { status: "working", delivery: "accepted", messageId: "request-2" });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(temporary.activeTask.value.busy).toBe(true);
+
+      server = { ...server, status: "completed", messages: [request1, reply1, request2, reply2] };
+      notice(socket, { status: "complete", delivery: "accepted", messageId: "request-2" });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(temporary.activeTask.value).toMatchObject({ busy: false, status: "completed", messageId: "request-2" });
+    });
+
+    it("does not let a late working notice outlast the saved completion", async () => {
+      let server = { conversationId: "conversation-1", status: "completed", runId: "turn-1", messageId: "request-1", messages: [request1, reply1] };
+      serve(() => deferred(server), () => deferred(server));
+      const { socket, temporary } = mountTemporaryAi({ openTask: false });
+      await vi.advanceTimersByTimeAsync(0);
+      notice(socket, { status: "working", delivery: "accepted", messageId: "request-1" });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(temporary.activeTask.value).toMatchObject({ busy: false, status: "completed" });
+    });
+
+    it("resyncs a busy viewer that missed a later turn while disconnected", async () => {
+      let server = { conversationId: "conversation-1", status: "inProgress", runId: "turn-1", messageId: "request-1", messages: [request1] };
+      serve(() => server, () => live(server));
+      const { socket, temporary } = mountTemporaryAi({ openTask: false });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(temporary.activeTask.value).toMatchObject({ busy: true, messageId: "request-1" });
+
+      // Another browser finished this turn and a later one while this view
+      // was offline; every read after reconnecting finds the lease held.
+      server = deferred({ ...server, status: "completed", runId: "turn-2", messageId: "request-2",
+        messages: [request1, reply1, request2, reply2] });
+      socket.emit("disconnect");
+      socket.emit("connect");
+      await vi.advanceTimersByTimeAsync(0);
+      expect(temporary.activeTask.value).toMatchObject({ busy: false, status: "completed", messageId: "request-2" });
+      expect(temporary.activeTask.value.messages.at(-1).text).toBe("Sorted by Age.");
+    });
+  });
+
   it("observes a new turn after the stopped turn's pending read settles", async () => {
     const oldRead = Promise.withResolvers();
     let turn = 0;
