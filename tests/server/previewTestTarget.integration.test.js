@@ -12,6 +12,7 @@ import { initializeGenesisProject, inspectVibe64Outputs, inspectVibe64WorkspaceS
 import { createOutputTargetTerminalController } from "../../packages/vibe64-terminals/src/server/outputTargetTerminal.js";
 import { createAgentPreviewCommandService, prepareAgentPreviewCommand } from "../../packages/vibe64-terminals/src/server/agentPreviewCommand.js";
 import { startTerminalSession } from "../../packages/vibe64-execution/src/server/engines/terminalSessions.js";
+import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/index.js";
 import { runCaptureCommand, stopCaptureExecution } from "../../packages/vibe64-execution/src/server/engines/capture.js";
 import { runDetachedCommand, stopDetachedExecution } from "../../packages/vibe64-execution/src/server/engines/detached.js";
 import { SESSION_SOURCE_PATH_AUTHORITY_MANAGED } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
@@ -22,6 +23,8 @@ const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
 const { chromium } = require("@playwright/test");
 const browsersPath = path.dirname(path.dirname(path.dirname(chromium.executablePath())));
+
+test.after(() => configureVibe64Host(null));
 
 test("shared assistant instructions explain target discovery, safe setup, invocation and restoration", () => {
   const instructions = vibe64Driver({
@@ -304,8 +307,9 @@ try {
   console.log('Node browser assertions passed');
 } finally { await browser.close(); }
 `);
+  configureVibe64Host({ runtimePackRoot: runtimeRoot });
   const prepared = await prepareAgentPreviewCommand({
-    commandService: f.commandService, env: { TMPDIR: f.socketRoot, VIBE64_RUNTIME_PACK_ROOT: runtimeRoot },
+    commandService: f.commandService, env: { TMPDIR: f.socketRoot },
     project: { slug: "test-target" }, sessionId: f.sessionId,
     worktreePath: f.sourceRoot, wrapperHostDir: path.join(f.root, "commands")
   });

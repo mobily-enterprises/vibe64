@@ -18,6 +18,7 @@ import path from "node:path";
 import { PassThrough, Readable } from "node:stream";
 import test from "node:test";
 import Fastify from "fastify";
+import { configureVibe64Host } from "@local/vibe64-execution/server";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createVibe64SessionStore, VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import { createSessionAttachments } from "../../packages/vibe64-terminals/src/server/sessionAttachments.js";
@@ -424,7 +425,7 @@ test("Codex attachment streams preserve binary bytes and atomically expose the f
 
 test("managed attachment files and directories honor the shared-process umask contract", async () => {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-mode-test-"));
-  const previousUmask = process.umask(0o007);
+  configureVibe64Host({ sharedGroupAccess: true });
   try {
     await withAttachmentRoot(root, async () => {
       const result = await storeCodexAttachment({
@@ -439,7 +440,7 @@ test("managed attachment files and directories honor the shared-process umask co
       await cleanupCodexAttachments("/source/project", "permissions-session");
     });
   } finally {
-    process.umask(previousUmask);
+    configureVibe64Host(null);
     await rm(root, { force: true, recursive: true });
   }
 });

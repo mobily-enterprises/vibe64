@@ -2069,13 +2069,11 @@ async function prepareAgentPreviewCommand({
       ok: false
     };
   }
-  const packRoot = runtimePackRoot({
-    env
-  });
+  const packRoot = runtimePackRoot();
   // Without runtime packs, the browser runs on this server's Node.js and the
   // project's own Playwright.
   const [nodeBinDir] = packRoot
-    ? runtimePackBinPaths("node26", { env })
+    ? runtimePackBinPaths("node26")
     : [path.dirname(process.execPath)];
   const managedNodePath = packRoot ? path.join(nodeBinDir, "node") : process.execPath;
   const managedNpmPath = path.join(nodeBinDir, "npm");

@@ -12,8 +12,10 @@ import {
   createAgentPreviewCommandService,
   prepareAgentPreviewCommand
 } from "../../packages/vibe64-terminals/src/server/agentPreviewCommand.js";
+import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/index.js";
 
 const execFileAsync = promisify(execFile);
+test.afterEach(() => configureVibe64Host(null));
 
 async function writeExecutable(filePath, source) {
   await mkdir(path.dirname(filePath), {
@@ -250,12 +252,10 @@ async function prepareFixture(root, projectVersion, runtimeVersion = projectVers
       });
     }
   });
+  configureVibe64Host({ runtimePackRoot: runtimeRoot });
   const managedCommands = [];
   const prepared = await prepareAgentPreviewCommand({
     commandService,
-    env: {
-      VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
-    },
     project: {
       slug: "example"
     },

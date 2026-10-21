@@ -52,7 +52,7 @@ test("project prompt hints save one small atomic runtime record", async () => {
       (await readProjectPromptHints({ projectRuntimeRoot })).settings,
       saved.settings
     );
-    assert.equal((await stat(saved.filePath)).mode & 0o777, 0o660);
+    assert.equal((await stat(saved.filePath)).mode & 0o777, 0o600);
     assert.deepEqual(JSON.parse(await readFile(saved.filePath, "utf8")), saved.settings);
 
     await writeFile(saved.filePath, "not-json\n", "utf8");

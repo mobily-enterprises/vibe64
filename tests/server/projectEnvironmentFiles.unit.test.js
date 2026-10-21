@@ -70,7 +70,7 @@ test("project environment files are deterministic shared-workspace Stack project
     "DB_PORT=3306",
     ""
   ].join("\n"));
-  assert.equal((await lstat(path.join(sourceRoot, ".env"))).mode & 0o777, 0o660);
+  assert.equal((await lstat(path.join(sourceRoot, ".env"))).mode & 0o777, 0o600);
   assert.equal(await readFile(path.join(sourceRoot, ".git", "info", "exclude"), "utf8"), [
     "# Keep local rules.",
     "",
@@ -80,7 +80,7 @@ test("project environment files are deterministic shared-workspace Stack project
     "# END Vibe64 managed environment files",
     ""
   ].join("\n"));
-  assert.equal((await lstat(path.join(sourceRoot, ".git", "info", "exclude"))).mode & 0o777, 0o660);
+  assert.equal((await lstat(path.join(sourceRoot, ".git", "info", "exclude"))).mode & 0o777, 0o600);
 });
 
 test("checking environment readiness does not create files or take ownership of user content", async (t) => {

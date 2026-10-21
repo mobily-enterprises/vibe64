@@ -5,6 +5,7 @@ import { lstat, mkdir, readFile, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
+import { configureVibe64Host } from "@local/vibe64-execution/server";
 import { inspectConnectedDevelopmentInputs, inspectConnectedWorkspaceSetup, materializeConnectedDevelopmentInputs } from "../../packages/vibe64-project/src/server/connectedDevelopment.js";
 import { materializeProjectEnvironmentFiles, projectEnvironmentFilesAreCurrent } from "../../packages/vibe64-project/src/server/projectEnvironmentFiles.js";
 import { CONNECTED_PACKAGE_TYPE_VALUES } from "../../packages/vibe64-genesis/src/shared/connectedPackageTypes.js";
@@ -35,8 +36,8 @@ async function fixture(target, name = "task") {
 }
 
 test("connected source inputs are task-specific, ignored, repeatable and usable without changing release files", async (t) => {
-  const previousUmask = process.umask(0o007);
-  t.after(() => process.umask(previousUmask));
+  configureVibe64Host({ sharedGroupAccess: true });
+  t.after(() => configureVibe64Host(null));
   await withTemporaryRoot(async target => {
     const first = await fixture(target, "task-a");
     const second = await fixture(target, "task-b");

@@ -16,7 +16,8 @@ import { sourceMetadata, sourcePath, withTemporaryRoot } from "./vibe64TestHelpe
 import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/server/agentHelperCommand.js";
 import {
   agentPreviewBrowserWorkerSource,
-  agentPreviewWrapperSource
+  agentPreviewWrapperSource,
+  configureVibe64Host
 } from "../../packages/vibe64-execution/src/server/index.js";
 import {
   APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
@@ -35,6 +36,13 @@ import {
 } from "../../packages/vibe64-terminals/src/server/agentPreviewCommand.js";
 
 const execFileAsync = promisify(execFile);
+
+// The host profile names the managed runtime packs; each test resets it.
+function packEnv(runtimeRoot) {
+  configureVibe64Host({ runtimePackRoot: runtimeRoot });
+  return {};
+}
+test.afterEach(() => configureVibe64Host(null));
 const FAKE_SCREENSHOT_BASE64 = "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAGYktHRAD/AP8A/6C9p5MAAAAHdElNRQfqBw4XCBDl8xb+AAAAFklEQVQI12NgYGD4//8/4////xkYGAAp6wX8D0F0QAAAAABJRU5ErkJggg==";
 const FAKE_SCREENSHOT_BYTES = Buffer.from(FAKE_SCREENSHOT_BASE64, "base64");
 
@@ -453,7 +461,7 @@ test("managed preview browser eval validates stdin before starting browser contr
     await writeFile(path.join(root, "node_modules/@playwright/test/cli.js"), "");
     const prepared = await prepareAgentPreviewCommand({
       commandService,
-      env: { VIBE64_RUNTIME_PACK_ROOT: runtimeRoot },
+      env: packEnv(runtimeRoot),
       sessionId,
       wrapperHostDir: root
     });
@@ -1026,7 +1034,7 @@ test("managed browser and Playwright receive saved project secrets and reload th
       await createFakePlaywrightRuntime(runtimeRoot);
       const prepared = await prepareAgentPreviewCommand({
         commandService, project, sessionId, worktreePath,
-        env: { VIBE64_RUNTIME_PACK_ROOT: runtimeRoot },
+        env: packEnv(runtimeRoot),
         wrapperHostDir: path.join(root, "commands")
       });
       const env = { ...process.env, ...prepared.env, BROWSER_REFERENCE_SECRET: "wrong-caller-value" };
@@ -1093,9 +1101,7 @@ test("managed preview browser surfaces capacity refusal without creating a worke
     await createFakePlaywrightRuntime(runtimeRoot);
     const prepared = await prepareAgentPreviewCommand({
       commandService,
-      env: {
-        VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
-      },
+      env: packEnv(runtimeRoot),
       sessionId,
       project: { slug: "browser-project" },
       worktreePath: root,
@@ -1219,9 +1225,7 @@ test("managed preview browser selects configured identities and retains signed-o
     await createFakePlaywrightRuntime(runtimeRoot);
     const prepared = await prepareAgentPreviewCommand({
       commandService,
-      env: {
-        VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
-      },
+      env: packEnv(runtimeRoot),
       sessionId,
       wrapperHostDir: root
     });
@@ -1398,7 +1402,7 @@ exports.chromium = { launch(options) {
 exports.request = playwright.request;
 `, "utf8");
     const prepared = await prepareAgentPreviewCommand({
-      commandService, env: { VIBE64_RUNTIME_PACK_ROOT: runtimeRoot }, sessionId,
+      commandService, env: packEnv(runtimeRoot), sessionId,
       wrapperHostDir: path.join(root, "commands")
     });
     const env = { ...process.env, ...prepared.env };
@@ -1498,9 +1502,7 @@ test("managed preview writes authenticated Playwright state without changing the
     });
     const prepared = await prepareAgentPreviewCommand({
       commandService,
-      env: {
-        VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
-      },
+      env: packEnv(runtimeRoot),
       sessionId,
       wrapperHostDir: path.join(root, "commands")
     });
@@ -1600,7 +1602,7 @@ exports.request = require(${JSON.stringify(playwrightPath)}).request;
 exports.chromium = { launch() { throw new Error("Storage state must not start Chromium."); } };
 `, "utf8");
     const prepared = await prepareAgentPreviewCommand({
-      commandService, env: { VIBE64_RUNTIME_PACK_ROOT: runtimeRoot }, sessionId,
+      commandService, env: packEnv(runtimeRoot), sessionId,
       wrapperHostDir: path.join(root, "commands")
     });
     await execFileAsync(prepared.hostWrapperPath, ["browser", "storage-state", "default", "--output", outputPath], {
@@ -1655,9 +1657,7 @@ test("agent preview wrapper captures the authenticated page from a long workspac
 
     const prepared = await prepareAgentPreviewCommand({
       commandService,
-      env: {
-        VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
-      },
+      env: packEnv(runtimeRoot),
       sessionId,
       wrapperHostDir: path.join(root, "workspace-path-".repeat(8), "wrappers")
     });
@@ -1760,9 +1760,7 @@ test("managed preview browser inspects auxiliary localhost apps and recovers kil
     await createFakePlaywrightRuntime(runtimeRoot);
     const prepared = await prepareAgentPreviewCommand({
       commandService,
-      env: {
-        VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
-      },
+      env: packEnv(runtimeRoot),
       sessionId,
       wrapperHostDir: root
     });
@@ -1878,7 +1876,7 @@ test("managed preview browser recovers a stale ownership record through its sess
     await createFakePlaywrightRuntime(runtimeRoot);
     const prepared = await prepareAgentPreviewCommand({
       commandService,
-      env: { VIBE64_RUNTIME_PACK_ROOT: runtimeRoot },
+      env: packEnv(runtimeRoot),
       project: { slug: "browser-project" },
       sessionId,
       wrapperHostDir: root
@@ -1926,7 +1924,7 @@ test("managed preview browser can retry recovery after cleanup fails", async () 
     await createFakePlaywrightRuntime(runtimeRoot);
     const prepared = await prepareAgentPreviewCommand({
       commandService,
-      env: { VIBE64_RUNTIME_PACK_ROOT: runtimeRoot },
+      env: packEnv(runtimeRoot),
       sessionId,
       wrapperHostDir: root
     });
@@ -2022,9 +2020,7 @@ test("managed preview browser drains the previous control generation before repl
     await createFakePlaywrightRuntime(runtimeRoot);
     const preparationOptions = {
       commandService,
-      env: {
-        VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
-      },
+      env: packEnv(runtimeRoot),
       sessionId,
       wrapperHostDir: root
     };
@@ -2083,9 +2079,7 @@ test("managed preview browser exits after idle expiry and loss of its Vibe64 con
         browserControlHealthIntervalMs: 30,
         browserIdleTimeoutMs: mode === "idle" ? 100 : 10_000,
         commandService,
-        env: {
-          VIBE64_RUNTIME_PACK_ROOT: runtimeRoot
-        },
+        env: packEnv(runtimeRoot),
         sessionId,
         wrapperHostDir: root
       });

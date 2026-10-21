@@ -7,6 +7,7 @@ import path from "node:path";
 import test from "node:test";
 import { resourceWorkflowIdentity, startResourceWorkflow } from "../../packages/vibe64-terminals/src/server/resourceWorkflow.js";
 import { installVibe64ManagedExecutionProvider } from "../../packages/vibe64-execution/src/server/managedExecution.js";
+import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/index.js";
 import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 
 async function fixture(t) {
@@ -18,12 +19,13 @@ async function fixture(t) {
   await mkdir(sourceRoot);
   await writeFile(path.join(runtimeRoot, "node26/bin/node"), "runtime-version-one");
   await writeFile(path.join(sourceRoot, "package-lock.json"), '{"lockfileVersion":3}');
+  configureVibe64Host({ runtimePackRoot: runtimeRoot });
+  t.after(() => configureVibe64Host(null));
   return {
     root, sourceRoot, runtimeRoot,
     input: {
       sourceRoot, operation: { kind: "output", targetId: "app" }, runtimes: ["node26"],
-      steps: [{ argv: ["npm", "run", "dev"], workdir: "." }],
-      env: { VIBE64_RUNTIME_PACK_ROOT: runtimeRoot }
+      steps: [{ argv: ["npm", "run", "dev"], workdir: "." }]
     }
   };
 }

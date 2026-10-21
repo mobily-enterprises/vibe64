@@ -57,6 +57,7 @@ import {
   listTerminalSessions,
   startTerminalSession
 } from "../../packages/vibe64-execution/src/server/engines/terminalSessions.js";
+import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/index.js";
 import {
   defineSessionRenewalHandoverText,
   sessionRenewalManualHandoverTemplate
@@ -415,9 +416,9 @@ async function renewalHarness(targetRoot, {
   const attachmentRoot = path.join(targetRoot, "attachments");
   const env = {
     VIBE64_CODEX_ATTACHMENTS_ROOT: attachmentRoot,
-    VIBE64_RUNTIME_NAMESPACE: `renewal-resource-${randomUUID()}`,
-    VIBE64_RUNTIME_PACK_ROOT: path.join(targetRoot, "runtime-packs")
+    VIBE64_RUNTIME_NAMESPACE: `renewal-resource-${randomUUID()}`
   };
+  configureVibe64Host({ runtimePackRoot: path.join(targetRoot, "runtime-packs") });
   const codexToolHomeSource = path.join(targetRoot, "codex-tool-home");
   await mkdir(path.join(codexToolHomeSource, ".codex"), { recursive: true });
   await writeFile(
@@ -594,6 +595,8 @@ async function closeHarness(context) {
     context.terminalService.close()
   ]);
 }
+
+test.after(() => configureVibe64Host(null));
 
 test("completed renewal removes every predecessor process, command, attachment, and managed resource", {
   timeout: 60_000
