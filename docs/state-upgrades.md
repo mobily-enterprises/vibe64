@@ -1411,21 +1411,18 @@ oversized or another learner's record without repair. Focused evidence:
 
 ## Training learning mode (no upgrade)
 
-Learning mode adds, per learner under `training/users/<key>/`, an optional
-`learning-mode.json` (schema version 1: the learner identity, an optional
-`pausedAttemptId` and `updatedAt`; 1 KiB bound) with its own
-`learning-mode.lock`. Only an explicit `learning-mode.leave` or
-`learning-mode.enter` writes it, and `lesson.start`, `lesson.resume` and
-`lesson.continue` clear the pause of the attempt they resume. No existing record
-changes and nothing is backfilled: a missing file means not paused, so an
-existing learner with an active attempt is in learning mode after the upgrade,
-which is the intended product behavior. Older releases never open the file, so
-it needs no compatibility boundary and no numbered upgrade; it cannot change
-attempts, step results or completion. Readers validate the file and refuse an
-invalid, oversized or another learner's record without repair, and project
-admission treats a failed read as not in learning mode (fail open), so a damaged
-record never locks a learner out of their projects. Focused evidence:
-`vibe64TrainingLearningMode.unit.test.js`.
+Learn/Develop mode is one optional file per learner under
+`training/users/<key>/`: `learning-mode.json` (schema version 1:
+`{schemaVersion, learnerId, on}`, 1 KiB bound). Only an explicit
+`learning-mode.set` (the L button) writes it, last write wins; starting a
+lesson also turns it on. The current lesson is not stored there: it is the one
+attempt in progress in `progress.json`. A missing file means Develop, so no
+backfill is needed; the `20261022-learning-space-reset` retires any earlier
+Learning-mode file. Readers validate the file and refuse an invalid, oversized
+or another learner's record without repair, and project admission treats a
+failed read as Develop (fail open), so a damaged record never locks a learner
+out of their projects. Focused evidence: `vibe64TrainingLearnerState.unit.test.js`
+and `vibe64TrainingLearningMode.unit.test.js`.
 
 ## Shared database session override
 

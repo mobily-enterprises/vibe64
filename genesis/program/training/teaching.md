@@ -35,28 +35,27 @@ lesson end and retained-pin lesson continuation. They use Core's fresh actor
 context and expose bounded saved facts without source paths, executable
 controllers or shell authority. A host supplies the existing exercise
 preparation/retirement owner; without its relevant method,
-start/resume/end/continue reports unavailable. `learning.read` returns progress,
+start/resume/restart/finish/delete reports unavailable. `learning.read` returns progress,
 completion, per-lesson summaries and bounded ended history; the learner identity
 reaches only the browser, never Colleague's tool result. Readers do not reserve or repair
 state. An ended start replay returns its original target and actual current
 active attempt without provisioning it.
 
-`lesson.end` accepts exact attempt/request/revision and a left/finished/discard
-reason (L's Lesson finished screen sends `finished`),
-returns the ended target plus actual active state and native replay flag, and
-retains the exercise and all history. It stops no agent work: the practice
-project and its ordinary sessions stay usable. It does not close, archive or
-delete; those are separate existing authorised operations. Neither old replay
-can retire or reactivate a successor. `lesson.continue` accepts an ended attempt
-ID, a stable request of at most 18 characters and the current expected learning
-revision. The host derives the exact pin from that actor's verified history; the
-model cannot supply a pin or source. It uses the original reservation and
-preparation owners. An independent active attempt is refused. Missing
-host/content or capacity refusal retains history.
+One lesson is in progress at a time. `lesson.start` refuses another lesson
+with `VIBE64_TRAINING_LESSON_IN_PROGRESS` unless `archiveCurrent` is true, which
+archives the current attempt first. `lesson.restart` archives the attempt and
+starts the same pinned lesson afresh; `lesson.finish` (refused until every
+required step passed) archives it as finished; `lesson.delete` removes its
+practice project and teacher conversation with no archive. All three close
+through `learningSpace.closeAttempt`, keyed by attemptId, so a stopped close
+resumes. Switching Learn/Develop (`learning-mode.set`) never ends a lesson.
+The host derives the exact pin from that actor's verified history; the model
+cannot supply a pin or source. Missing host/content or capacity refusal retains
+history.
 
 `stepActions.js` adds the step operations `lesson.read`, `step.observe`,
-`step.check.run`, `step.answer`, `step.done`, `reader.save` and
-`practice.delete`. A step result is recorded only for the learner's own action:
+`step.check.run`, `step.answer`, `step.done`, `reader.save`,
+`practice.list` and `practice.archived.delete`. A step result is recorded only for the learner's own action:
 a choice answer compared by the server, **Done** on a self-check step, or an
 automatic check started by the learner's App press or code-step **Check now**. A check
 Colleague runs through `step.check.run` reports its finding and saves nothing.
@@ -126,10 +125,10 @@ The practice project's ordinary Files editor saves through
 (`createTrainingCodeSaveOwner`, installed with `setFileSaveOwner`) routes a save
 in the actor's own practice project with an active attempt to the generic
 source-editor save under the ledger lock and records it in that practice
-project's private `code-ledgers/<practiceId>.json`, shared by every attempt that
-continues the project. A save whose read-back bytes differ from the learner's
+attempt's private `code-ledgers/<attemptId>.json`, removed when the attempt
+closes. A save whose read-back bytes differ from the learner's
 text is recorded as foreign. A host with several stores (for example normal and
-author-preview) passes `selectOwners({actor, practiceId})`, which returns the
+author-preview) passes `selectOwners({actor, attemptId})`, which returns the
 store whose in-progress attempt works in that practice project, or null for a
 plain save.
 

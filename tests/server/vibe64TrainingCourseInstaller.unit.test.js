@@ -42,10 +42,10 @@ async function fixture(t, { status = "released" } = {}) {
       outline: "training/outline.md", prerequisites: [],
       lessons: [{ code: "USE-ONE", descriptor: "training/lessons/USE-ONE/lesson.json", status: "published", required: true }] } });
   await write(topicRoot, "training/outline.md", "# One lesson\nTry the application.\n");
-  await write(topicRoot, "training/lessons/USE-ONE/lesson.json", { schemaVersion: 1, code: "USE-ONE", title: "Try the application",
-    document: "lesson.md", prerequisites: [], estimatedMinutes: 5, visuals: [{ id: "request", descriptor: "../../visuals/request/visual.json" }],
-    assessments: [{ id: "explain", kind: "answer", required: true, rubric: "lesson.md#explain" }] });
-  await write(topicRoot, "training/lessons/USE-ONE/lesson.md", '# Try the app\n<a id="explain"></a>\nExplain what you tried.\n');
+  await write(topicRoot, "training/lessons/USE-ONE/lesson.json", { schemaVersion: 2, code: "USE-ONE", title: "Try the application",
+    prerequisites: [], estimatedMinutes: 5, visuals: [{ id: "request", descriptor: "../../visuals/request/visual.json" }],
+    steps: [{ id: "try", title: "Try it", body: "steps/try.md", visual: { id: "request" }, check: { kind: "self" }, required: true }] });
+  await write(topicRoot, "training/lessons/USE-ONE/steps/try.md", "Try the application.\n");
   await write(topicRoot, "training/visuals/request/visual.json", { schemaVersion: 1, id: "request", title: "One request", svg: "diagram.svg",
     controller: "controller.js", initialState: "overview", states: ["overview"], description: "A display-only request.", commands: [] });
   await write(topicRoot, "training/visuals/request/diagram.svg", '<svg xmlns="http://www.w3.org/2000/svg"><title>Request</title></svg>');
@@ -280,7 +280,7 @@ test("an update installs the newer release and retires older releases for new st
   // The catalogue publishes 0.2.0 with a changed lesson.
   const metadata = JSON.parse(git(f.topicRoot, "show", "HEAD:package.json"));
   await write(f.topicRoot, "package.json", { ...metadata, version: "0.2.0" });
-  await write(f.topicRoot, "training/lessons/USE-ONE/lesson.md", '# Try the app\n<a id="explain"></a>\nExplain what you tried, in one sentence.\n');
+  await write(f.topicRoot, "training/lessons/USE-ONE/steps/try.md", "Try the application, then describe it in one sentence.\n");
   git(f.topicRoot, "commit", "-q", "-am", "Topic 0.2.0");
   const next = await readPinnedTopic(f.topicRoot);
   const course = { ...f.course, release: "0.2.0", topics: [{ topicId: next.topicId, release: "0.2.0" }] };

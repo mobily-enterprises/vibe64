@@ -1,12 +1,13 @@
 # Installing and updating Learning courses
 
-Learning (the **L** button) can install courses from the official Vibe64 course catalogue
-straight from the **Courses** pane. Nobody needs a terminal for official
+Learning can install courses from the official Vibe64 course catalogue
+straight from the **Courses** overlay. Nobody needs a terminal for official
 courses.
 
 ## Where it is
 
-1. Open Learning with the **L** button at the left of the header.
+1. Press **L** at the left of the header to switch to Learn mode, then press
+   the **Courses** button in the yellow app bar.
 2. Its **Courses** tab shows your installed course cards first. Below them is
    the **Course catalogue** section, headed **Install a course**.
 3. The catalogue is grouped by **topic** (for example **Vibe64**). Under each

@@ -64,22 +64,24 @@ creates in it is an ordinary session.
 In Learn mode, **Courses** (beside **L**) has an **In progress** list and an
 **Archived** list.
 
-**In progress** shows the lesson in progress, if any, with **Practice:** and its
-lesson title. It has three buttons:
+**In progress** shows the lesson in progress, if any: its title and its
+practice project's name (or **No practice project**). Without one it says
+**No lesson in progress. Start one from Courses.** The row has three buttons:
 
 - **Open** opens the lesson and its practice project (or, for a lesson
   without one, the lesson with no project selected).
 - **Restart** archives this attempt and starts the same lesson again with a new
   practice project, a new teacher conversation and no step results.
-- **Delete** deletes the lesson in progress for good: its practice project
-  (files, sessions and Preview) and its teacher conversation go, with no
-  archive. A lesson you completed before stays completed.
+- **Delete** turns into **Delete for good**; press that to delete the lesson
+  in progress for good: its practice project (files, sessions and Preview) and
+  its teacher conversation go, with no archive. A lesson you completed before
+  stays completed.
 
 **Archived** lists your archived lessons, newest first, with the lesson title,
-whether it was finished or archived, and the date. Each row has **Delete**,
-which removes that archive for good. You can keep at most 20 archived lessons;
+whether it was finished or archived, and the date. Each row has a delete
+icon, then **Delete for good**, which removes that archive for good. You can keep at most 20 archived lessons;
 finishing, restarting or archiving another lesson is refused until you delete
-one. Archived lessons cannot be reopened from Vibe64; use **Start** again to
+one. Archived lessons cannot be reopened from Vibe64; use **Start lesson** again to
 redo a lesson.
 
 An archive keeps the attempt's record and step results, its teacher
@@ -92,8 +94,8 @@ only its record and conversation.
 When every required step has passed, the lesson's **Lesson finished** screen
 finishes it: the lesson counts as completed for good, and the attempt is
 archived as one bundle (its record, practice project and conversation). The
-screen then offers **Next lesson** and **Back to courses**. **Redo** in
-**Courses** starts a new attempt with a fresh project, teacher and results; the
+screen then offers **Next lesson** and **Back to courses**. **Start lesson** on
+the course page starts a new attempt with a fresh project, teacher and results; the
 course list still shows the lesson as completed.
 
 ## When something refuses or stops

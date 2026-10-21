@@ -596,7 +596,7 @@ function projectRuntimeClosedPayloadMatches(payload = {}, currentSlug = "", { pr
     return false;
   }
   // Deleting an open practice project closes its runtime first. The project
-  // page's selection gate then shows "This practice project was deleted", so
+  // page's selection gate then shows "This practice project is gone", so
   // the page must not leave for the hosted Projects page (absent locally).
   if (practice && String(payload?.runtimeCloseReason || "").trim() === "project-delete") {
     return false;
