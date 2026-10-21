@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 import { canonicalJson } from "./content.js";
 import { compareChoiceAnswer } from "./installedContent.js";
 import { validateContent } from "./contentSchemas.js";
-import { lessonStepEntry, lessonSteps, MAX_STEP_RESULTS } from "./learnerState.js";
+import { lessonSteps, MAX_STEP_RESULTS } from "./learnerState.js";
 import { trainingStepObservationSchema } from "../shared/practicalSchemas.js";
 
 const idPattern = /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u;
@@ -74,9 +74,9 @@ function requireLearnerChannel(context, what) {
 // with learner-origin evidence (a browser-captured exercise interaction, or
 // learner-authored code per the authorship ledger) when the learner triggered
 // it, the choice comparator, or the learner's own self-check. Results belong to
-// the lesson content, so every attempt of it (Continue lesson included) shares
-// them. A check the assistant triggers returns diagnostics only and records
-// nothing, so Colleague can never use up the lesson's result budget.
+// the attempt in progress; a new attempt (Redo, Restart) starts with none. A
+// check the assistant triggers returns diagnostics only and records nothing, so
+// Colleague can never use up the attempt's result budget.
 // Verdicts are final: there is no rubric and no AI grader.
 function createTrainingStepChecks({ learners, content, checks, authorship, actions } = {}) {
   if (!learners?.readState || !learners?.readStepProgress || !learners?.updateStepProgress || !learners?.saveReader ||
@@ -116,7 +116,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
   }
 
   async function savedEntry(actor, attempt) {
-    return lessonStepEntry((await learners.readStepProgress({ actor })).lessons, attempt.pin.lesson);
+    return (await learners.readStepProgress({ actor, attemptId: attempt.attemptId })).entry;
   }
 
   function replayed(result, stepId, same = () => true) {
@@ -127,7 +127,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
   }
 
   // Append-only. A request ID replays its original result; a step that already
-  // passed for this lesson content keeps that pass and records nothing further.
+  // passed in this attempt keeps that pass and records nothing further.
   // Capacity for one pass of every checkable step not yet passed is always
   // reserved: a not-yet-passed result that would eat into it is returned but
   // not saved, so retries never block the learner's real pass.
@@ -149,8 +149,8 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
           "VIBE64_TRAINING_STEP_RESULTS_FULL");
       }
       const saved = { ...result, requestId, recordedAt: new Date().toISOString() };
-      const receipts = receipt ? [...(entry.receipts || []).filter(value => value.stepId !== receipt.stepId), receipt] : entry.receipts;
-      return { entry: { results: [...entry.results, saved], ...(receipts?.length ? { receipts } : {}) },
+      const receipts = receipt ? [...entry.receipts.filter(value => value.stepId !== receipt.stepId), receipt] : entry.receipts;
+      return { entry: { results: [...entry.results, saved], receipts },
         value: { ok: true, stepId: result.stepId, outcome: saved.outcome, recorded: true, replayed: false,
           ...(saved.reason ? { reason: saved.reason } : {}) } };
     });
@@ -215,7 +215,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
         ...(Array.isArray(checked.files) && checked.files.length ? { filesHash: sha256(canonicalJson(checked.files)) } : {}) };
     } else {
       if (!actions?.execute) throw stepFailure("Native lesson observations are unavailable in this host.");
-      const receipt = entry.receipts?.find(value => value.stepId === stepId && value.checkId === check.id);
+      const receipt = entry.receipts.find(value => value.stepId === stepId && value.checkId === check.id);
       if (!receipt || receipt.sessionId !== target.sessionId) {
         return { ok: true, stepId, outcome: "not-yet-passed", recorded: false, replayed: false,
           reason: "No App interaction has been captured for this step yet. Press the App's control in this lesson's Preview first." };
@@ -269,17 +269,15 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     return record({ actor, attemptId, requestId, lesson, result: { stepId, kind: "self", outcome: "passed", evidence: {}, origin: "learner" } });
   }
 
-  // The saved step results of this attempt's lesson content and the steps
-  // passed in them (which is what completion counts).
+  // The saved step results of this attempt and the steps passed in them (which
+  // is what completion counts). An ended attempt's results went with it.
   async function read({ actor, attemptId } = {}) {
     if (!uuidPattern.test(attemptId || "")) throw stepFailure("Use an exact saved attempt ID.", "ACTION_VALIDATION_FAILED", 400);
-    const { lessons, revision, progress } = await learners.readStepProgress({ actor });
-    const attempt = progress.attempts.find(value => value.attemptId === attemptId);
-    if (!attempt) throw stepFailure("This learner has no matching saved attempt.", "VIBE64_TRAINING_ATTEMPT_MISSING", 404);
+    const { entry, revision, attempt } = await learners.readStepProgress({ actor, attemptId });
     const lesson = await content.readLesson({ ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
     const steps = lessonSteps(lesson);
     if (!steps) throw stepFailure("This lesson uses assessments, not steps.", "VIBE64_TRAINING_LESSON_VERSION");
-    const results = lessonStepEntry(lessons, attempt.pin.lesson).results.map(result => structuredClone(result));
+    const results = entry.results.map(result => structuredClone(result));
     const passed = new Set(results.filter(result => result.outcome === "passed").map(result => result.stepId));
     const required = steps.filter(step => step.required).map(step => step.id);
     return { attemptId, revision, results, passedStepIds: steps.map(step => step.id).filter(id => passed.has(id)),

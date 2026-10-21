@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -11,7 +11,7 @@ import { createTrainingLearnerState } from "../../packages/vibe64-training/src/s
 import { createTrainingStepChecks } from "../../packages/vibe64-training/src/server/stepChecks.js";
 import { v2Content } from "./vibe64TrainingV2LessonStub.js";
 
-// Version 2 learner state: step-progress.json, reader.json and the pass rules.
+// Learner state: step-progress.json (the attempt in progress), reader.json and the pass rules.
 // Lesson content is the real bundled code-practical fixture projected through
 // the contract C1 readLesson shape (stub); checks and actions are explicit
 // fixtures here. The real check gateway is covered by DeclaredCheck and
@@ -45,8 +45,8 @@ async function fixture(t, { lessonVersion = 2 } = {}) {
   const learners = createTrainingLearnerState({ systemRoot, content });
   const actor = { uid: 42, username: "alice" };
   let revision = 0;
-  async function start(requestId = "start", { practiceId } = {}) {
-    const reserved = await learners.reserveAttempt({ actor, expectedRevision: revision, requestId, pin, practiceId });
+  async function start(requestId = "start") {
+    const reserved = await learners.reserveAttempt({ actor, expectedRevision: revision, requestId, pin });
     const attemptId = reserved.attempt.attemptId;
     const begun = await learners.beginPreparation({ actor, attemptId, expectedRevision: reserved.revision });
     const sessionId = begun.attempt.preparation.initialSessionId;
@@ -54,8 +54,8 @@ async function fixture(t, { lessonVersion = 2 } = {}) {
     revision = ready.revision;
     return { attemptId, projectSlug: reserved.attempt.projectSlug, sessionId };
   }
-  async function end(attemptId, requestId = "end") {
-    revision = (await learners.endAttempt({ actor, attemptId, requestId, expectedRevision: revision, reason: "left" })).revision;
+  async function end(attemptId, requestId = "end", reason = "archived") {
+    revision = (await learners.endAttempt({ actor, attemptId, requestId, expectedRevision: revision, reason })).revision;
   }
   const checkCalls = [];
   const actionCalls = [];
@@ -106,16 +106,17 @@ test("choice and self steps record learner-origin results that replay by request
   await assert.rejects(f.owner.done({ ...api, actor: f.actor, attemptId: attempt.attemptId, stepId: "read-intro", requestId: "done-x" }), { code: "VIBE64_TRAINING_CHECK_UNDECLARED" });
   assert.equal((await f.owner.done({ ...api, actor: f.actor, attemptId: attempt.attemptId, stepId: "try-it", requestId: "done-1" })).outcome, "passed");
   const saved = JSON.parse(await readFile(f.files.stepProgress, "utf8"));
-  assert.equal(saved.schemaVersion, 2);
+  assert.equal(saved.schemaVersion, 3);
   assert.equal(saved.learnerId, "42");
   assert.equal(saved.revision, 3);
-  assert.deepEqual(saved.lessons[0].lesson, (await f.learners.readState({ actor: f.actor })).progress.attempts[0].pin.lesson,
-    "results are kept per lesson content");
-  assert.deepEqual(saved.lessons[0].results.map(value => [value.stepId, value.kind, value.outcome, value.origin, value.requestId]), [
+  assert.equal(saved.attemptId, attempt.attemptId, "results belong to the attempt in progress");
+  assert.deepEqual(saved.lesson, (await f.learners.readState({ actor: f.actor })).progress.attempts[0].pin.lesson);
+  assert.deepEqual(saved.results.map(value => [value.stepId, value.kind, value.outcome, value.origin, value.requestId]), [
     ["pick-answer", "choice", "not-yet-passed", "learner", "answer-1"], ["pick-answer", "choice", "passed", "learner", "answer-2"],
     ["try-it", "self", "passed", "learner", "done-1"]]);
-  assert.deepEqual(saved.lessons[0].results[1].evidence, { selected: [1] });
-  assert.deepEqual(saved.lessons[0].results[2].evidence, {});
+  assert.deepEqual(saved.results[1].evidence, { selected: [1] });
+  assert.deepEqual(saved.results[2].evidence, {});
+  assert.deepEqual(saved.receipts, []);
   assert.deepEqual(await readFile(f.files.progress), progressBefore, "step results never advance progress.json");
   const read = await f.owner.read({ actor: f.actor, attemptId: attempt.attemptId });
   assert.deepEqual(read.passedStepIds, ["pick-answer", "try-it"]);
@@ -163,7 +164,7 @@ test("assistant-triggered checks never write a pass; learner-origin App receipts
   assert.equal((await f.learners.readState({ actor: f.actor, includeCompletion: true })).completion.passed, 0);
   const byLearner = await f.owner.runCheck({ ...base, requestId: "learner-1", ...api });
   assert.deepEqual({ outcome: byLearner.outcome, recorded: byLearner.recorded }, { outcome: "passed", recorded: true });
-  const saved = JSON.parse(await readFile(f.files.stepProgress, "utf8")).lessons[0];
+  const saved = JSON.parse(await readFile(f.files.stepProgress, "utf8"));
   assert.deepEqual(saved.results.map(value => [value.requestId, value.outcome, value.origin]), [
     [first.exercise.requestId, "not-yet-passed", "check"], ["learner-1", "passed", "check"]]);
   assert.deepEqual(Object.keys(saved.results[1].evidence).sort(), ["checkId", "observationId"]);
@@ -201,54 +202,81 @@ test("saved App receipts bound only the session ID format, so practice-session n
   const attempt = await f.start();
   await f.owner.observe({ ...api, actor: f.actor, attemptId: attempt.attemptId, stepId: "press-app", observation: observation(attempt) });
   const saved = JSON.parse(await readFile(f.files.stepProgress, "utf8"));
-  saved.lessons[0].receipts[0].sessionId = "ordinary-session-1";
+  saved.receipts[0].sessionId = "ordinary-session-1";
   await writeFile(f.files.stepProgress, `${JSON.stringify(saved)}\n`);
   assert.equal((await f.learners.readState({ actor: f.actor, includeCompletion: true })).completion.required, 3, "the record stays readable");
   const stale = await f.owner.runCheck({ ...api, actor: f.actor, attemptId: attempt.attemptId, stepId: "press-app", requestId: "check-1" });
   assert.deepEqual({ outcome: stale.outcome, recorded: stale.recorded }, { outcome: "not-yet-passed", recorded: false },
     "a receipt from another session is never verified against this attempt");
-  saved.lessons[0].receipts[0].sessionId = "../escape";
+  saved.receipts[0].sessionId = "../escape";
   await writeFile(f.files.stepProgress, `${JSON.stringify(saved)}\n`);
   await assert.rejects(f.learners.readState({ actor: f.actor, includeCompletion: true }), { code: "VIBE64_TRAINING_STATE_INVALID" });
 });
 
-test("v2 completion counts passes of the same lesson content in every attempt and ended attempts stay read-only", async t => {
+test("results belong to one attempt: ending removes them and a new attempt starts fresh", async t => {
   const f = await fixture(t);
   const first = await f.start();
   for (const [stepId, call] of [["pick-answer", "answer"], ["try-it", "done"]]) {
     await f.owner[call]({ ...api, actor: f.actor, attemptId: first.attemptId, stepId, selected: [1], requestId: `${stepId}-1` });
   }
+  assert.equal((await f.learners.readAttemptRecord({ actor: f.actor, attemptId: first.attemptId })).stepProgress.results.length, 2,
+    "the archive bundle reads them before the attempt ends");
   await f.end(first.attemptId);
+  await assert.rejects(readFile(f.files.stepProgress), { code: "ENOENT" });
   await assert.rejects(f.owner.done({ ...api, actor: f.actor, attemptId: first.attemptId, stepId: "try-it", requestId: "late" }),
     { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
-  assert.equal((await f.owner.read({ actor: f.actor, attemptId: first.attemptId })).results.length, 2);
+  assert.equal((await f.owner.read({ actor: f.actor, attemptId: first.attemptId })).results.length, 0);
   const second = await f.start("start-2");
+  assert.deepEqual((await f.owner.read({ actor: f.actor, attemptId: second.attemptId })).passedStepIds, [], "a redo starts with fresh results");
   await f.owner.observe({ ...api, actor: f.actor, attemptId: second.attemptId, stepId: "press-app", observation: observation(second) });
   const state = await f.learners.readState({ actor: f.actor, includeCompletion: true });
   assert.deepEqual({ required: state.completion.required, passed: state.completion.passed, completed: state.completion.completed },
-    { required: 3, passed: 3, completed: true });
-  assert.equal(state.lessonCompletions.length, 1);
-  assert.equal(state.lessonCompletions[0].completed, true);
-  assert.equal((await f.learners.resumeAttempt({ actor: f.actor, attemptId: second.attemptId })).completion.completed, true);
-  assert.deepEqual((await f.owner.read({ actor: f.actor, attemptId: second.attemptId })).passedStepIds, ["pick-answer", "try-it", "press-app"]);
+    { required: 3, passed: 1, completed: false });
+  assert.deepEqual(state.lessonCompletions.map(value => [value.passed, value.completed, value.open]), [[1, false, true]]);
+  assert.equal((await f.learners.resumeAttempt({ actor: f.actor, attemptId: second.attemptId })).completion.passed, 1);
 });
 
-test("Continue lesson in the same practice project keeps its passes, App receipt and session", async t => {
+test("finishing needs every required pass, keeps completion across redo and pruning, and removes the results", async t => {
+  const f = await fixture(t);
+  const first = await f.start();
+  await assert.rejects(f.end(first.attemptId, "finish-early", "finished"), { code: "VIBE64_TRAINING_LESSON_INCOMPLETE" });
+  await f.owner.answer({ ...api, actor: f.actor, attemptId: first.attemptId, stepId: "pick-answer", selected: [1], requestId: "answer-1" });
+  await f.owner.done({ ...api, actor: f.actor, attemptId: first.attemptId, stepId: "try-it", requestId: "done-1" });
+  await f.owner.observe({ ...api, actor: f.actor, attemptId: first.attemptId, stepId: "press-app", observation: observation(first) });
+  await f.end(first.attemptId, "finish-1", "finished");
+  await assert.rejects(readFile(f.files.stepProgress), { code: "ENOENT" });
+  const finished = await f.learners.readState({ actor: f.actor, includeCompletion: true });
+  assert.equal(finished.progress.attempts[0].ended.reason, "finished");
+  assert.deepEqual(finished.progress.completedLessons.map(value => [value.code, value.hash]), [[finished.progress.attempts[0].pin.lesson.code,
+    finished.progress.attempts[0].pin.lesson.hash]]);
+  assert.deepEqual(finished.lessonCompletions.map(value => [value.completed, value.open]), [[true, false]]);
+  const redo = await f.start("redo");
+  const reading = await f.learners.readState({ actor: f.actor, includeCompletion: true });
+  assert.deepEqual({ passed: reading.completion.passed, completed: reading.completion.completed }, { passed: 0, completed: false },
+    "the redo's own results are fresh");
+  assert.deepEqual(reading.lessonCompletions.map(value => [value.passed, value.completed, value.open]), [[0, true, true]],
+    "the course list still shows the lesson completed");
+  await f.end(redo.attemptId, "archive-redo");
+  for (let index = 0; index < 33; index++) await f.end((await f.start(`again-${index}`)).attemptId, `end-${index}`);
+  const pruned = await f.learners.readState({ actor: f.actor, includeCompletion: true });
+  assert.equal(pruned.progress.attempts.length, 32);
+  assert.equal(pruned.progress.attempts.some(value => value.attemptId === first.attemptId), false);
+  assert.equal(pruned.lessonCompletions[0].completed, true, "pruning never un-completes a lesson");
+});
+
+test("a record an earlier attempt left behind is never read as the new attempt's and its first result replaces it", async t => {
   const f = await fixture(t);
   const first = await f.start();
   await f.owner.done({ ...api, actor: f.actor, attemptId: first.attemptId, stepId: "try-it", requestId: "done-1" });
-  await f.owner.observe({ ...api, actor: f.actor, attemptId: first.attemptId, stepId: "press-app", observation: observation(first) });
+  const left = await readFile(f.files.stepProgress);
   await f.end(first.attemptId);
-  const continued = await f.start("continue-1", { practiceId: first.attemptId });
-  assert.notEqual(continued.attemptId, first.attemptId);
-  assert.deepEqual({ projectSlug: continued.projectSlug, sessionId: continued.sessionId }, { projectSlug: first.projectSlug, sessionId: first.sessionId });
-  const read = await f.owner.read({ actor: f.actor, attemptId: continued.attemptId });
-  assert.deepEqual(read.passedStepIds, ["try-it", "press-app"], "the lesson opens at its first unpassed step");
-  assert.equal((await f.owner.done({ ...api, actor: f.actor, attemptId: continued.attemptId, stepId: "try-it", requestId: "done-2" })).alreadyPassed, true);
-  const calls = f.checkCalls.length;
-  const recheck = await f.owner.runCheck({ ...api, actor: f.actor, attemptId: continued.attemptId, stepId: "press-app", requestId: "check-2" });
-  assert.equal(recheck.alreadyPassed, true);
-  assert.equal(f.checkCalls.length, calls + 1, "the earlier App receipt belongs to the same practice session, so it is re-verified");
+  await writeFile(f.files.stepProgress, left);
+  const second = await f.start("start-2");
+  assert.deepEqual((await f.owner.read({ actor: f.actor, attemptId: second.attemptId })).results, []);
+  assert.equal((await f.owner.done({ ...api, actor: f.actor, attemptId: second.attemptId, stepId: "try-it", requestId: "done-1" })).replayed, false,
+    "request IDs of the earlier attempt never replay");
+  const saved = JSON.parse(await readFile(f.files.stepProgress, "utf8"));
+  assert.deepEqual([saved.attemptId, saved.revision, saved.results.length], [second.attemptId, 1, 1]);
 });
 
 test("reader.json keeps the last position for any retained attempt and refuses undeclared steps", async t => {
@@ -278,17 +306,17 @@ test("invalid, cross-attempt or full step records fail closed without writes; a 
   const attempt = await f.start();
   await f.owner.done({ ...api, actor: f.actor, attemptId: attempt.attemptId, stepId: "try-it", requestId: "done-1" });
   const valid = JSON.parse(await readFile(f.files.stepProgress, "utf8"));
-  const entry = valid.lessons[0];
-  const recordedAt = entry.results[0].recordedAt;
+  const recordedAt = valid.results[0].recordedAt;
   const invalids = [
     { ...valid, learnerId: "43" },
-    { ...valid, lessons: [entry, entry] },
-    { ...valid, lessons: [{ ...entry, lesson: { ...entry.lesson, hash: "not-a-hash" } }] },
-    { ...valid, lessons: [{ ...entry, results: [{ ...entry.results[0], origin: "check" }] }] },
-    { ...valid, lessons: [{ ...entry, results: [{ ...entry.results[0], stepId: "pick-answer" }] }] },
-    { ...valid, lessons: [{ ...entry, results: [{ ...entry.results[0], evidence: { selected: [1] } }] }] },
-    { ...valid, lessons: [{ ...entry, results: [entry.results[0], entry.results[0]] }] },
-    { ...valid, schemaVersion: 1 }
+    { ...valid, attemptId: "not-an-attempt" },
+    { ...valid, lesson: { ...valid.lesson, hash: "not-a-hash" } },
+    { ...valid, lesson: { ...valid.lesson, code: "OTHER-ONE" } },
+    { ...valid, results: [{ ...valid.results[0], origin: "check" }] },
+    { ...valid, results: [{ ...valid.results[0], stepId: "pick-answer" }] },
+    { ...valid, results: [{ ...valid.results[0], evidence: { selected: [1] } }] },
+    { ...valid, results: [valid.results[0], valid.results[0]] },
+    { ...valid, schemaVersion: 2 }
   ];
   for (const record of invalids) {
     await writeFile(f.files.stepProgress, `${JSON.stringify(record)}\n`);
@@ -299,9 +327,9 @@ test("invalid, cross-attempt or full step records fail closed without writes; a 
     assert.deepEqual(await readFile(f.files.stepProgress), before);
   }
   assert.equal((await f.learners.readState({ actor: f.actor })).progress.attempts.length, 1, "progress reads stay content- and step-independent");
-  const full = { ...valid, lessons: [{ lesson: entry.lesson, results: Array.from({ length: 64 }, (_, index) => ({
+  const full = { ...valid, results: Array.from({ length: 64 }, (_, index) => ({
     stepId: "pick-answer", kind: "choice", outcome: "not-yet-passed", evidence: { selected: [0] }, origin: "learner",
-    requestId: `answer-${index}`, recordedAt })) }] };
+    requestId: `answer-${index}`, recordedAt })) };
   await writeFile(f.files.stepProgress, `${JSON.stringify(full)}\n`);
   // A record already at the bound (never produced now that passes are reserved) still fails closed.
   await assert.rejects(f.owner.answer({ ...api, actor: f.actor, attemptId: attempt.attemptId, stepId: "pick-answer", selected: [1], requestId: "answer-65" }),
@@ -309,9 +337,9 @@ test("invalid, cross-attempt or full step records fail closed without writes; a 
   assert.equal((await f.owner.answer({ ...api, actor: f.actor, attemptId: attempt.attemptId, stepId: "pick-answer", selected: [0], requestId: "answer-3" })).replayed, true);
   await writeFile(f.files.stepProgress, `${JSON.stringify(valid)}\n`);
   // Capacity for one pass of every checkable step not yet passed is reserved.
-  const nearlyFull = { ...valid, lessons: [{ lesson: entry.lesson, results: Array.from({ length: 62 }, (_, index) => ({
+  const nearlyFull = { ...valid, results: Array.from({ length: 62 }, (_, index) => ({
     stepId: "pick-answer", kind: "choice", outcome: "not-yet-passed", evidence: { selected: [0] }, origin: "learner",
-    requestId: `retry-${index}`, recordedAt })) }] };
+    requestId: `retry-${index}`, recordedAt })) };
   await writeFile(f.files.stepProgress, `${JSON.stringify(nearlyFull)}\n`);
   const unsaved = await f.owner.answer({ ...api, actor: f.actor, attemptId: attempt.attemptId, stepId: "pick-answer", selected: [2], requestId: "retry-62" });
   assert.deepEqual({ outcome: unsaved.outcome, recorded: unsaved.recorded }, { outcome: "not-yet-passed", recorded: false },
@@ -321,7 +349,7 @@ test("invalid, cross-attempt or full step records fail closed without writes; a 
     const passed = await f.owner[call]({ ...api, actor: f.actor, attemptId: attempt.attemptId, stepId, requestId: `final-${stepId}`, ...extra });
     assert.deepEqual({ outcome: passed.outcome, recorded: passed.recorded }, { outcome: "passed", recorded: true }, "a full budget still accepts the learner's passes");
   }
-  assert.equal(JSON.parse(await readFile(f.files.stepProgress, "utf8")).lessons[0].results.length, 64);
+  assert.equal(JSON.parse(await readFile(f.files.stepProgress, "utf8")).results.length, 64);
   await writeFile(f.files.stepProgress, `${JSON.stringify(valid)}\n`);
   const release = await tryAcquireExclusiveFileLock(f.files.stepLock);
   try {
@@ -332,48 +360,8 @@ test("invalid, cross-attempt or full step records fail closed without writes; a 
   assert.equal((await f.owner.answer({ ...api, actor: f.actor, attemptId: attempt.attemptId, stepId: "pick-answer", selected: [1], requestId: "answer-1" })).outcome, "passed");
 });
 
-test("results of lesson content no retained attempt names stay readable and unvalidated against content", async t => {
-  const f = await fixture(t);
-  const attempt = await f.start();
-  await f.owner.done({ ...api, actor: f.actor, attemptId: attempt.attemptId, stepId: "try-it", requestId: "done-1" });
-  const saved = JSON.parse(await readFile(f.files.stepProgress, "utf8"));
-  const pruned = { ...saved.lessons[0], lesson: { code: "PRUNED-ONE", hash: "e".repeat(64) },
-    results: [{ ...saved.lessons[0].results[0], stepId: "only-in-pruned-lesson" }] };
-  await writeFile(f.files.stepProgress, `${JSON.stringify({ ...saved, lessons: [pruned, ...saved.lessons] })}\n`);
-  assert.equal((await f.learners.readState({ actor: f.actor, includeCompletion: true })).completion.passed, 1);
-  assert.equal((await f.owner.read({ actor: f.actor, attemptId: attempt.attemptId })).results.length, 1);
-});
-
-test("at the lesson bound a new lesson's results drop the oldest results no retained attempt pins", async t => {
-  const f = await fixture(t);
-  const attempt = await f.start();
-  await f.owner.done({ ...api, actor: f.actor, attemptId: attempt.attemptId, stepId: "try-it", requestId: "done-1" });
-  const saved = JSON.parse(await readFile(f.files.stepProgress, "utf8"));
-  const current = saved.lessons[0];
-  const unpinned = Array.from({ length: 128 }, (_, index) => ({ ...current,
-    lesson: { code: `OLD-${index}`, hash: createHash("sha256").update(String(index)).digest("hex") } }));
-  // The current lesson's entry is the most recently written; 127 older ones
-  // fill the bound with it, then a full bound of unpinned ones without it.
-  await writeFile(f.files.stepProgress, `${JSON.stringify({ ...saved, lessons: [...unpinned.slice(1), current] })}\n`);
-  await f.owner.answer({ ...api, actor: f.actor, attemptId: attempt.attemptId, stepId: "pick-answer", selected: [1], requestId: "answer-1" });
-  let kept = JSON.parse(await readFile(f.files.stepProgress, "utf8")).lessons;
-  assert.equal(kept.length, 128, "an existing entry is replaced in place of the bound");
-  await writeFile(f.files.stepProgress, `${JSON.stringify({ ...saved, lessons: unpinned })}\n`);
-  await f.owner.done({ ...api, actor: f.actor, attemptId: attempt.attemptId, stepId: "try-it", requestId: "done-2" });
-  kept = JSON.parse(await readFile(f.files.stepProgress, "utf8")).lessons;
-  assert.equal(kept.length, 128);
-  assert.deepEqual(kept.slice(0, 127).map(entry => entry.lesson.code), unpinned.slice(1).map(entry => entry.lesson.code),
-    "only the oldest unpinned lesson content made room");
-  assert.deepEqual(kept.at(-1).lesson, current.lesson);
-  assert.equal((await f.learners.readState({ actor: f.actor, includeCompletion: true })).completion.passed, 1);
-});
-
-test("v1 lessons refuse step writes and keep their assessment completion read", async t => {
+test("a lesson in the retired version 1 format cannot be started", async t => {
   const v1 = await fixture(t, { lessonVersion: 1 });
-  const attempt = await v1.start();
-  await assert.rejects(v1.learners.updateStepProgress({ actor: v1.actor, attemptId: attempt.attemptId }, async () => null),
-    { code: "VIBE64_TRAINING_LESSON_VERSION" });
-  await assert.rejects(v1.owner.done({ ...api, actor: v1.actor, attemptId: attempt.attemptId, stepId: "try-it", requestId: "done-1" }),
-    { code: "VIBE64_TRAINING_LESSON_VERSION" });
-  assert.equal((await v1.learners.readState({ actor: v1.actor, includeCompletion: true })).completion.required, 1, "v1 keeps its assessment path");
+  await assert.rejects(v1.start(), { code: "VIBE64_TRAINING_LESSON_VERSION" });
+  assert.equal((await v1.learners.readState({ actor: v1.actor })).revision, 0);
 });

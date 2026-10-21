@@ -7,7 +7,7 @@ import { listProjectRuntimeRoots, resolveProjectRecordPath } from "@local/vibe64
 import { readProjectRecordMetadata } from "@local/vibe64-core/server/projectRecordMetadata";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { createInstalledTrainingContent } from "./installedContent.js";
-import { createTrainingLearnerState } from "./learnerState.js";
+import { createPracticeHistoryReader } from "./practiceHistoryReader.js";
 
 // Candidate CLI only, with original writers stopped. Durable preparation owns
 // this narrow historical adoption; project names and browser context do not.
@@ -47,7 +47,7 @@ export async function upgradeLearningPracticeHistory({ systemRoot, backupRoot, a
     let entries;
     try { entries = await readdir(usersRoot, { withFileTypes: true }); }
     catch (error) { if (error.code === "ENOENT") continue; throw error; }
-    const learners = createTrainingLearnerState({ systemRoot: namespace.root, content: namespace.content });
+    const learners = createPracticeHistoryReader({ systemRoot: namespace.root, content: namespace.content });
     for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
       if (!entry.isDirectory()) throw new Error(`Practice history ${namespace.name} learner inventory contains a non-directory. Inspect it before upgrading.`);
       const learnerId = Buffer.from(entry.name, "base64url").toString("utf8");

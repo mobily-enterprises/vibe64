@@ -2,10 +2,9 @@ import { createHash } from "node:crypto";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { attemptPracticeId } from "./learnerState.js";
 
 const MAX_FILE_BYTES = 1024 * 1024;
-// Code steps share one save log per practice project (the ledger holds 256);
+// Code steps share one save log per attempt (the ledger holds 256);
 // one slot stays free so a save that cannot extend the previous entry fits.
 const MAX_SEPARATE_ENTRIES = 255;
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
@@ -69,7 +68,7 @@ function verifyLedgerChain(baselineFiles, entries, files) {
 }
 
 // Paths whose saves the ledger records: the files of every code step entered
-// so far in this practice project.
+// so far in this attempt.
 function trackedPaths(ledger) {
   return new Set(ledger.steps.flatMap(step => step.baseline).map(file => file.path));
 }
@@ -86,10 +85,10 @@ function codeStepOf(lesson, stepId) {
 
 // Training owns the authorship baseline and the save ledger for code steps.
 // The generic source editor still performs every save; this owner only
-// records it. The ledger belongs to the practice project, so code saved before
-// Continue lesson still counts in the continued attempt.
+// records it. The ledger belongs to the attempt in progress, whose practice
+// project is training-<attemptId>.
 function createTrainingCodeAuthorship({ learners, content, project } = {}) {
-  if (!learners?.readState || !learners?.activeAttemptForPractice || !learners?.updateCodeLedger || !content?.readLesson ||
+  if (!learners?.readState || !learners?.activeAttemptForProject || !learners?.updateCodeLedger || !content?.readLesson ||
       !project?.runInProjectContext || !project?.createRuntime) {
     throw new TypeError("Code authorship requires the original learner, installed content and Project owners.");
   }
@@ -113,16 +112,15 @@ function createTrainingCodeAuthorship({ learners, content, project } = {}) {
   }
 
   // Called when the learner enters a code step. Each code step keeps the
-  // baseline of its first entry in this practice project: returning to it,
-  // moving between code steps or continuing the lesson never adopts
-  // intervening edits as its start.
+  // baseline of its first entry in this attempt: returning to it or moving
+  // between code steps never adopts intervening edits as its start.
   async function recordStepBaseline({ actor, attemptId, stepId } = {}) {
     const { progress } = await learners.readState({ actor });
     const active = progress.attempts.find(value => value.attemptId === progress.activeAttemptId);
     const open = active?.attemptId === attemptId ? await openCodeStep(active, stepId) : null;
     if (!open) return { recorded: false };
-    const { revision } = await learners.readStepProgress({ actor });
-    const { ledger } = await learners.updateCodeLedger({ actor, practiceId: attemptPracticeId(active) }, async current => {
+    const { revision } = await learners.readStepProgress({ actor, attemptId });
+    const { ledger } = await learners.updateCodeLedger({ actor, attemptId }, async current => {
       if (current?.steps.some(step => step.stepId === stepId)) return null;
       const files = await liveFiles(open.attempt, open.files);
       const entries = current?.entries || [];
@@ -133,13 +131,13 @@ function createTrainingCodeAuthorship({ learners, content, project } = {}) {
     return { recorded: true, step: { stepId, enteredRevision: step.enteredRevision }, baseline: structuredClone(step.baseline) };
   }
 
-  // The admitted learning save in a practice project. `save` is the generic
-  // editor save already bound to this learner's practice session; it enforces
-  // baseHash itself. Without an active attempt there, it is a plain save.
-  async function saveLearnerFile({ actor, practiceId, input, save } = {}) {
+  // The admitted learning save in an attempt's practice project. `save` is the
+  // generic editor save already bound to this learner's practice session; it
+  // enforces baseHash itself. Unless that attempt is in progress, it is a plain save.
+  async function saveLearnerFile({ actor, attemptId, input, save } = {}) {
     if (typeof save !== "function") throw new TypeError("A learner code save requires the original editor save.");
-    if (!await learners.activeAttemptForPractice({ actor, practiceId })) return save();
-    const result = await learners.updateCodeLedger({ actor, practiceId }, async (current, { learnerId, attempt }) => {
+    if (!await learners.activeAttemptForProject({ actor, attemptId })) return save();
+    const result = await learners.updateCodeLedger({ actor, attemptId }, async (current, { learnerId, attempt }) => {
       const tracking = Boolean(current && await openCodeStep(attempt, current.steps[0].stepId));
       if (tracking && current.entries.length >= MAX_SEPARATE_ENTRIES) {
         throw failure("VIBE64_TRAINING_CODE_LEDGER_FULL", "This code step recorded too many separate edits. Ask the lesson owner to review it.");

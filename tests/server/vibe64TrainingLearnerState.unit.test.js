@@ -16,7 +16,7 @@ import { createInstalledTrainingContent } from "../../packages/vibe64-training/s
 import { createInstalledTrainingCatalogue } from "@local/vibe64-training/server/installed-catalogue";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 
-async function fixture(t, { published = true, learning = false, noExercise = false } = {}) {
+async function fixture(t, { published = true, noExercise = false } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "vibe64-learner-state-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const systemRoot = path.join(root, "system");
@@ -32,26 +32,10 @@ async function fixture(t, { published = true, learning = false, noExercise = fal
     lessons: [{ code: "INTRO-01", descriptor: "training/lessons/INTRO-01/lesson.json", status: published ? "published" : "draft", required: true }] };
   await write("package.json", { name: "learn-state-fixture", version: "0.1.0", repository: { type: "git", url: "https://github.com/examples/learn-state-fixture.git" }, vibe64Training: topic });
   await write("training/outline.md", "# One introduction\nTry the practice app.\n");
-  const assessments = learning ? [
-    ...["answer-one", "answer-two", "answer-three"].map(id => ({ id, kind: "answer", required: true, rubric: `lesson.md#${id}` })),
-    ...["workspace", "exercise", "colleague"].map(producer => ({ id: `${producer}-practice`, kind: "practical", required: true,
-      rubric: `lesson.md#${producer}-practice`, evidence: { producer, operation: `${producer}-practice`,
-        ...(producer === "exercise" ? { check: "response", explanationRequired: true } : {}) } }))
-  ] : [{ id: "explain", kind: "answer", required: true, rubric: "lesson.md#explain" }];
-  await write("training/lessons/INTRO-01/lesson.json", { schemaVersion: 1, code: "INTRO-01", title: "Try the practice app", document: "lesson.md", prerequisites: [], estimatedMinutes: 10,
-    visuals: learning ? [{ id: "request", descriptor: "../../visuals/request/visual.json" }] : [],
-    ...(noExercise ? {} : { exercise: { kind: "bundled", source: "../../exercises/app", reuse: "attempt" } }), assessments,
-    ...(learning ? { checks: [{ id: "response", file: "../../checks/response.mjs" }] } : {}) });
-  await write("training/lessons/INTRO-01/lesson.md", learning
-    ? `# Try the app\n${assessments.map(value => `<a id="${value.id}"></a>\nExplain what you tried.\n`).join("")}`
-    : '# Try the app\n<a id="explain"></a>\nExplain what you tried.\n');
-  if (learning) {
-    await write("training/checks/response.mjs", "export default () => true;\n");
-    await write("training/visuals/request/visual.json", { schemaVersion: 1, id: "request", title: "A request", svg: "diagram.svg", controller: "controller.js",
-      initialState: "overview", states: ["overview", "arrived"], description: "Follow a request.", commands: [] });
-    await write("training/visuals/request/diagram.svg", '<svg xmlns="http://www.w3.org/2000/svg"></svg>');
-    await write("training/visuals/request/controller.js", "export function mountVisual() {}\n");
-  }
+  await write("training/lessons/INTRO-01/lesson.json", { schemaVersion: 2, code: "INTRO-01", title: "Try the practice app", prerequisites: [], estimatedMinutes: 10,
+    visuals: [], ...(noExercise ? {} : { exercise: { kind: "bundled", source: "../../exercises/app", reuse: "attempt" } }),
+    steps: [{ id: "try-it", title: "Try it", body: "steps/try.md", check: { kind: "self" }, required: true }] });
+  await write("training/lessons/INTRO-01/steps/try.md", "# Try the app\nPress its button.\n");
   await write("training/exercises/app/package.json", { name: "state-practice-app", private: true, type: "module" });
   await write("training/exercises/app/server.mjs", 'import { createServer } from "node:http";\nconst args = process.argv.slice(2);\ncreateServer((request, response) => response.end("Practice app")).listen(Number(args[args.indexOf("--port") + 1] || 8080), args[args.indexOf("--host") + 1] || "127.0.0.1");\n');
   await write("training/exercises/app/genesis/version", "3\n");
@@ -67,9 +51,20 @@ async function fixture(t, { published = true, learning = false, noExercise = fal
   const actor = { uid: 42, username: "learner" };
   const state = createTrainingLearnerState({ systemRoot });
   const userRoot = value => path.join(systemRoot, "training", "users", Buffer.from(String(value.uid ?? value.username)).toString("base64url"));
-  const paths = { root: userRoot(actor), progress: path.join(userRoot(actor), "progress.json"), active: path.join(userRoot(actor), "active-lesson.json"), lock: path.join(userRoot(actor), "state.lock") };
+  const paths = { root: userRoot(actor), progress: path.join(userRoot(actor), "progress.json"), active: path.join(userRoot(actor), "active-lesson.json"),
+    mode: path.join(userRoot(actor), "learning-mode.json"), lock: path.join(userRoot(actor), "state.lock") };
   const reserve = options => state.reserveAttempt({ actor, requestId: "start-1", expectedRevision: 0, pin, ...options });
   return { root, systemRoot, sourceRoot, pin, actor, state, userRoot, paths, reserve, write };
+}
+
+// The version 2 marker and session the preparation owner gives an attempt's
+// practice project (training-<attemptId>; the marker field keeps its name).
+async function practiceScope(f, actor, attemptId) {
+  const attempt = (await f.state.readState({ actor })).progress.attempts.find(value => value.attemptId === attemptId);
+  if (!attempt) throw Object.assign(new Error("This learner has no matching saved attempt."), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
+  return { projectSlug: attempt.projectSlug, initialSessionId: `training-${attemptId}`, training: { schemaVersion: 2,
+    learnerKey: Buffer.from(String(actor.uid ?? actor.username)).toString("base64url"), practiceId: attemptId, pin: attempt.pin,
+    exercise: { kind: "bundled", sourcePath: "training/exercises/app" } } };
 }
 
 async function treeState(directory) {
@@ -137,18 +132,14 @@ test("a lesson without an exercise reserves no practice project, and only that l
   assert.deepEqual(Object.keys(reserved.active).sort(), ["attemptId", "learnerId", "pin", "progressRevision", "schemaVersion"]);
   const { attemptId } = reserved.attempt;
   assert.deepEqual((await f.state.readState({ actor: f.actor, includeCompletion: true })).progress.attempts, [reserved.attempt]);
-  assert.deepEqual(await f.state.readLearningMode({ actor: f.actor }), { on: true, attemptId, lessonCode: "INTRO-01", practiceSlug: "", projectSlugs: [] });
+  assert.deepEqual(await f.state.readLearningMode({ actor: f.actor }),
+    { on: false, currentAttemptId: attemptId, lessonCode: "INTRO-01", lessonTitle: "", practiceSlug: "" });
   await assert.rejects(() => f.state.beginPreparation({ actor: f.actor, attemptId, expectedRevision: 1 }), { code: "VIBE64_TRAINING_EXERCISE_MISSING" });
-  await f.state.endAttempt({ actor: f.actor, attemptId, requestId: "end-1", expectedRevision: 1, reason: "left" });
-  await assert.rejects(() => f.reserve({ requestId: "continue-1", expectedRevision: 2, practiceId: attemptId }), /invalid attempt identity/u);
+  await f.state.endAttempt({ actor: f.actor, attemptId, requestId: "end-1", expectedRevision: 1, reason: "archived" });
 
-  // vibe64 0.1.35 reserved a slug for every lesson; published upgrades still read that progress.
   const progress = JSON.parse(await fs.readFile(f.paths.progress, "utf8"));
   const projectSlug = `training-${attemptId.replaceAll("-", "")}`;
   progress.attempts[0] = { ...progress.attempts[0], projectSlug, preparation: { phase: "reserved" } };
-  await f.write("progress.json", progress, f.paths.root);
-  assert.equal((await f.state.readState({ actor: f.actor, includeCompletion: true })).progress.attempts[0].projectSlug, projectSlug);
-  progress.attempts[0].preparation = { phase: "preparing", initialSessionId: `training-${attemptId}` };
   await f.write("progress.json", progress, f.paths.root);
   await assert.rejects(() => f.state.readState({ actor: f.actor, includeCompletion: true }), /exactly when its lesson declares an exercise/u);
   delete progress.attempts[0].preparation;
@@ -185,7 +176,12 @@ test("request replay precedes revision checks, distinct admitted requests share 
   const differentCourse = { ...f.pin, course: { ...f.pin.course, release: "0.1.1" } };
   const beforeConflict = await treeState(f.systemRoot);
   await assert.rejects(() => f.reserve({ pin: differentCourse }), error => error.code === "VIBE64_TRAINING_REQUEST_CONFLICT");
-  await assert.rejects(() => f.reserve({ pin: differentCourse, requestId: "another-start", expectedRevision: 2 }), error => error.code === "VIBE64_TRAINING_ATTEMPT_CONFLICT");
+  // One lesson in progress at a time: another lesson is refused with the one in progress.
+  await assert.rejects(() => f.reserve({ pin: differentCourse, requestId: "another-start", expectedRevision: 2 }), error =>
+    error.code === "VIBE64_TRAINING_LESSON_IN_PROGRESS" && error.statusCode === 409 &&
+    JSON.stringify(error.details) === JSON.stringify({ attemptId: first.attempt.attemptId, lessonCode: "INTRO-01", lessonTitle: "Try the practice app" }));
+  await assert.rejects(() => f.reserve({ pin: differentCourse, requestId: "stale-start", expectedRevision: 0 }), { code: "VIBE64_TRAINING_LESSON_IN_PROGRESS" },
+    "the refusal names the lesson in progress whatever revision the caller read");
   assert.deepEqual(await treeState(f.systemRoot), beforeConflict);
 });
 
@@ -330,7 +326,9 @@ test("malformed, unsupported, cross-learner and conflicting records fail closed 
   const progress = JSON.parse(originalProgress);
   const active = JSON.parse(originalActive);
   const cases = [
-    [f.paths.progress, "null"], [f.paths.progress, "{corrupt"], [f.paths.progress, JSON.stringify({ ...progress, schemaVersion: 2 })],
+    [f.paths.progress, "null"], [f.paths.progress, "{corrupt"], [f.paths.progress, JSON.stringify({ ...progress, schemaVersion: 1 })],
+    [f.paths.progress, JSON.stringify({ ...progress, attempts: [{ ...progress.attempts[0], practiceId: randomUUID() }] })],
+    [f.paths.progress, JSON.stringify({ ...progress, completedLessons: [{ ...f.pin.lesson, completedAt: "yesterday" }] })],
     [f.paths.progress, JSON.stringify({ ...progress, learnerId: "someone-else" })], [f.paths.progress, JSON.stringify({ ...progress, results: [{ outcome: "passed" }] })],
     [f.paths.progress, JSON.stringify({ ...progress, attempts: [{ ...progress.attempts[0], projectSlug: "caller-chosen" }] })],
     [f.paths.active, "[]"], [f.paths.active, JSON.stringify({ ...active, schemaVersion: 2 })], [f.paths.active, JSON.stringify({ ...active, learnerId: "someone-else" })],
@@ -370,9 +368,9 @@ test("all state hierarchy aliases and oversized records are rejected without rew
       assert.deepEqual(await treeState(f.systemRoot), before);
     } finally { await fs.rm(target); await fs.rename(actual, target); }
   }
-  await fs.writeFile(f.paths.active, "x".repeat(64 * 1024 + 1));
+  await fs.writeFile(f.paths.active, "x".repeat(128 * 1024 + 1));
   const before = await treeState(f.paths.root);
-  await assert.rejects(() => f.state.readState({ actor: f.actor }), /64 KiB/u);
+  await assert.rejects(() => f.state.readState({ actor: f.actor }), /128 KiB/u);
   assert.deepEqual(await treeState(f.paths.root), before);
 });
 
@@ -544,7 +542,7 @@ test("documented staged validation refuses invalid identity, newer records and m
   const liveBefore = await treeState(path.dirname(f.paths.root));
   const contentRoot = path.join(f.systemRoot, "training/content");
   const contentBefore = await treeState(contentRoot);
-  for (const invalid of ["{corrupt", JSON.stringify({ ...progress, learnerId: "another-user" }), JSON.stringify({ ...progress, schemaVersion: 2 })]) {
+  for (const invalid of ["{corrupt", JSON.stringify({ ...progress, learnerId: "another-user" }), JSON.stringify({ ...progress, schemaVersion: 1 })]) {
     await fs.writeFile(savedProgress, invalid);
     await assert.rejects(() => procedure.restore(checkpoint), /Learning state is invalid/u);
     assert.deepEqual(await treeState(path.dirname(f.paths.root)), liveBefore);
@@ -731,7 +729,7 @@ test("disabled installed snapshots remain verified and catalogue failures do not
   const filename = path.join(f.systemRoot, "training/catalogue.json");
   const bytesBefore = await fs.readFile(filename, "utf8");
   const snapshot = path.join(f.systemRoot, "training/content", f.pin.topic.topicId, f.pin.topic.commit);
-  const descriptor = path.join(snapshot, "files/training/lessons/INTRO-01/lesson.md");
+  const descriptor = path.join(snapshot, "files/training/lessons/INTRO-01/steps/try.md");
   const document = await fs.readFile(descriptor, "utf8");
   await fs.writeFile(descriptor, `${document}Changed cache bytes\n`);
   await assert.rejects(() => catalogue.readCatalogue(), error => error.code === "VIBE64_TRAINING_CATALOGUE_INVALID" && /pinned content/u.test(error.message));
@@ -916,7 +914,7 @@ test("stored attempt inventory refuses a second individually valid reservation b
   });
   await f.write("progress.json", progress, f.paths.root);
   const before = await treeState(f.systemRoot);
-  const invalid = error => error.code === "VIBE64_TRAINING_STATE_INVALID" && /exactly one active attempt/u.test(error.cause?.message);
+  const invalid = error => error.code === "VIBE64_TRAINING_STATE_INVALID" && /exactly one lesson in progress/u.test(error.cause?.message);
   await assert.rejects(() => f.state.readState({ actor: f.actor }), invalid);
   await assert.rejects(() => f.reserve(), invalid);
   await assert.rejects(() => f.state.resumeAttempt({ actor: f.actor, attemptId: reserved.attempt.attemptId }), invalid);
@@ -1563,11 +1561,11 @@ test("explicit end retains the pinned attempt and fresh reserve creates new proj
   const prepared = await f.state.beginPreparation({ actor: f.actor, attemptId, expectedRevision: reserved.revision });
   const previous = await f.state.readState({ actor: f.actor });
   const attempt = previous.progress.attempts[0];
-  const input = { actor: f.actor, attemptId, requestId: "end-first", expectedRevision: previous.revision, reason: "left" };
+  const input = { actor: f.actor, attemptId, requestId: "end-first", expectedRevision: previous.revision, reason: "archived" };
   const ended = await f.state.runPreparationExclusive(input, () => f.state.endAttempt(input));
   assert.equal(ended.replayed, false);
   assert.equal(ended.active, null);
-  assert.deepEqual(ended.attempt, { ...attempt, ended: { requestId: "end-first", revision: previous.revision + 1, reason: "left" } });
+  assert.deepEqual(ended.attempt, { ...attempt, ended: { requestId: "end-first", revision: previous.revision + 1, reason: "archived" } });
   assert.deepEqual(JSON.parse(await fs.readFile(f.paths.active, "utf8")), {
     schemaVersion: 1, learnerId: "42", progressRevision: ended.revision, attemptId: null
   });
@@ -1584,8 +1582,8 @@ test("explicit end retains the pinned attempt and fresh reserve creates new proj
     revision: current.revision, attempt: ended.attempt, active: current.active, replayed: true
   });
   assert.equal((await f.reserve()).attempt.attemptId, attemptId);
-  assert.equal((await f.reserve()).attempt.ended.reason, "left");
-  await assert.rejects(() => f.state.endAttempt({ ...input, reason: "discard" }), error => error.code === "VIBE64_TRAINING_REQUEST_CONFLICT");
+  assert.equal((await f.reserve()).attempt.ended.reason, "archived");
+  await assert.rejects(() => f.state.endAttempt({ ...input, reason: "deleted" }), error => error.code === "VIBE64_TRAINING_REQUEST_CONFLICT");
   await assert.rejects(() => f.state.endAttempt({ ...input, attemptId: next.attempt.attemptId }), error => error.code === "VIBE64_TRAINING_REQUEST_CONFLICT");
   await assert.rejects(() => f.reserve({ requestId: "end-first" }), error => error.code === "VIBE64_TRAINING_REQUEST_CONFLICT");
   for (const operation of [
@@ -1596,91 +1594,50 @@ test("explicit end retains the pinned attempt and fresh reserve creates new proj
   assert.deepEqual(await treeState(f.systemRoot), before);
 });
 
-test("continuing a practice project reserves a new attempt in the same practice and learning mode names it", async t => {
+test("Learn mode is a saved per-learner flag and switching it never ends or changes the lesson in progress", async t => {
   const f = await fixture(t);
-  assert.deepEqual(await f.state.readLearningMode({ actor: f.actor }), { on: false });
+  const develop = { on: false, currentAttemptId: "", lessonCode: "", lessonTitle: "", practiceSlug: "" };
+  assert.deepEqual(await f.state.readLearningMode({ actor: f.actor }), develop, "absent means Develop");
+  await assert.rejects(() => fs.lstat(f.paths.root), { code: "ENOENT" }, "reading creates nothing");
+  assert.deepEqual(await f.state.setLearningMode({ actor: f.actor, on: true }), { ...develop, on: true }, "Learn mode with no lesson is normal");
+  assert.deepEqual(JSON.parse(await fs.readFile(f.paths.mode, "utf8")), { schemaVersion: 1, learnerId: "42", on: true });
+  assert.equal((await fs.lstat(f.paths.mode)).mode & 0o777, 0o600);
   const first = await f.reserve();
-  const practiceId = first.attempt.attemptId;
-  assert.equal(first.attempt.practiceId, undefined, "a fresh attempt is its own practice");
-  assert.deepEqual(await f.state.readLearningMode({ actor: f.actor }), { on: true, attemptId: practiceId,
-    lessonCode: "INTRO-01", practiceSlug: "", projectSlugs: [] });
-  const prepared = await f.state.beginPreparation({ actor: f.actor, attemptId: practiceId, expectedRevision: first.revision });
-  const mode = await f.state.readLearningMode({ actor: f.actor, includeTitle: true });
-  assert.deepEqual(mode, { on: true, attemptId: practiceId, lessonCode: "INTRO-01", practiceSlug: first.attempt.projectSlug,
-    projectSlugs: [first.attempt.projectSlug], lessonTitle: "Try the practice app" });
-  assert.equal((await f.state.activeAttemptForPractice({ actor: f.actor, practiceId })).attemptId, practiceId);
-  const ended = await f.state.endAttempt({ actor: f.actor, attemptId: practiceId, requestId: "leave-1",
-    expectedRevision: prepared.revision, reason: "left" });
-  assert.equal(await f.state.activeAttemptForPractice({ actor: f.actor, practiceId }), null);
-  const otherPin = { ...f.pin, lesson: { ...f.pin.lesson, code: "INTRO-02" } };
-  await assert.rejects(() => f.reserve({ requestId: "wrong-lesson", expectedRevision: ended.revision, practiceId, pin: otherPin }));
-  const next = await f.reserve({ requestId: "continue-1", expectedRevision: ended.revision, practiceId });
-  assert.notEqual(next.attempt.attemptId, practiceId);
-  assert.equal(next.attempt.practiceId, practiceId);
-  assert.equal(next.attempt.projectSlug, first.attempt.projectSlug, "the same practice project continues");
-  await assert.rejects(() => f.reserve({ requestId: "continue-1", expectedRevision: 0 }), { code: "VIBE64_TRAINING_REQUEST_CONFLICT" });
-  await assert.rejects(() => f.reserve({ requestId: "other-practice", expectedRevision: next.revision, practiceId: randomUUID() }),
-    { code: "VIBE64_TRAINING_ATTEMPT_CONFLICT" });
-  const continued = await f.state.beginPreparation({ actor: f.actor, attemptId: next.attempt.attemptId, expectedRevision: next.revision,
-    initialSessionId: prepared.attempt.preparation.initialSessionId });
-  assert.equal(continued.attempt.preparation.initialSessionId, `training-${practiceId}`);
-  // The practice project resolves to the continued attempt, which admits work
-  // there; the attempt-keyed published-upgrade reader refuses it.
-  const scope = await f.state.readPracticeProjectScope({ actor: f.actor, practiceId, access: "write" });
-  assert.equal(scope.practiceId, practiceId);
-  assert.equal(scope.scope.attemptId, next.attempt.attemptId);
-  assert.equal(scope.active, true);
-  assert.equal(scope.projectSlug, first.attempt.projectSlug);
-  assert.equal(scope.initialSessionId, `training-${practiceId}`);
-  assert.deepEqual(Object.keys(scope.training).sort(), ["exercise", "learnerKey", "pin", "practiceId", "schemaVersion"]);
-  assert.equal(scope.training.schemaVersion, 2);
-  await assert.rejects(() => f.state.readExerciseProjectScope({ actor: f.actor, attemptId: next.attempt.attemptId }),
-    { code: "VIBE64_TRAINING_ATTEMPT_CONFLICT" });
-  assert.equal((await f.state.activeAttemptForPractice({ actor: f.actor, practiceId })).attemptId, next.attempt.attemptId);
-  const left = await f.state.endAttempt({ actor: f.actor, attemptId: next.attempt.attemptId, requestId: "leave-2",
-    expectedRevision: continued.revision, reason: "left" });
-  const afterLeave = await f.state.readPracticeProjectScope({ actor: f.actor, practiceId, access: "control" });
-  assert.equal(afterLeave.scope.attemptId, next.attempt.attemptId, "the latest retained attempt names the project");
-  assert.equal(afterLeave.active, false);
-  await assert.rejects(() => f.state.readPracticeProjectScope({ actor: f.actor, practiceId, access: "write" }),
-    { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
-  await assert.rejects(() => f.state.readPracticeProjectScope({ actor: f.actor, practiceId: randomUUID() }),
-    { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
-  await assert.rejects(() => f.state.readPracticeProjectScope({ actor: f.actor, practiceId: "../practice" }));
-  assert.equal(left.active, null);
-});
-
-test("retired format-1 learning records stay readable and count toward completion at their exact pin", async t => {
-  const f = await fixture(t);
-  const reserved = await f.reserve();
-  const ended = await f.state.endAttempt({ actor: f.actor, attemptId: reserved.attempt.attemptId, requestId: "end-v1",
-    expectedRevision: reserved.revision, reason: "finished" });
-  const progress = JSON.parse(await fs.readFile(f.paths.progress, "utf8"));
-  const attemptId = progress.attempts[0].attemptId;
-  progress.attempts[0].learning = { submissions: [{ submissionId: "saved-answer", assessmentId: "explain", kind: "answer", rubric: "lesson.md#explain",
-    rubricRevision: f.pin.lesson.hash, outcome: "passed", assistance: "none", explanation: "The saved answer met the rubric.",
-    recordedAt: "2026-10-06T01:00:00.000Z", evidence: { kind: "answer", learnerId: "42", attemptId, messageId: "message-1",
-      questionId: "question-1", text: "The browser asks and the server answers." } }] };
-  await f.write("progress.json", progress, f.paths.root);
-  const state = await f.state.readState({ actor: f.actor, includeCompletion: true });
-  assert.deepEqual(state.progress.attempts[0].learning, progress.attempts[0].learning);
-  assert.deepEqual(state.lessonCompletions, [{ lessonCode: "INTRO-01", lessonHash: f.pin.lesson.hash, required: 1, passed: 1,
-    completed: true, open: false }]);
-  const next = await f.reserve({ requestId: "start-again", expectedRevision: ended.revision });
-  assert.equal((await f.state.resumeAttempt({ actor: f.actor, attemptId: next.attempt.attemptId })).completion.completed, true);
-  progress.attempts[0].learning.submissions[0].rubric = "lesson.md#other";
-  progress.attempts.push(...JSON.parse(await fs.readFile(f.paths.progress, "utf8")).attempts.slice(1));
-  Object.assign(progress, { revision: next.revision, activeAttemptId: next.attempt.attemptId });
-  await f.write("progress.json", progress, f.paths.root);
-  await assert.rejects(() => f.state.readState({ actor: f.actor, includeCompletion: true }), /exact pinned assessment/u);
+  const attemptId = first.attempt.attemptId;
+  assert.deepEqual(await f.state.readLearningMode({ actor: f.actor }),
+    { on: true, currentAttemptId: attemptId, lessonCode: "INTRO-01", lessonTitle: "", practiceSlug: "" }, "no practice project before preparation");
+  const prepared = await f.state.beginPreparation({ actor: f.actor, attemptId, expectedRevision: first.revision });
+  const learn = { on: true, currentAttemptId: attemptId, lessonCode: "INTRO-01", lessonTitle: "Try the practice app", practiceSlug: first.attempt.projectSlug };
+  assert.deepEqual(await f.state.readLearningMode({ actor: f.actor, includeTitle: true }), learn);
+  assert.deepEqual(await f.state.activeAttemptForProject({ actor: f.actor, attemptId }), prepared.attempt);
+  const progress = await fs.readFile(f.paths.progress);
+  assert.deepEqual(await f.state.setLearningMode({ actor: f.actor, on: false }), { ...learn, on: false }, "the paused lesson stays current");
+  assert.deepEqual(await fs.readFile(f.paths.progress), progress, "switching to Develop never ends the lesson");
+  assert.deepEqual(await f.state.activeAttemptForProject({ actor: f.actor, attemptId }), prepared.attempt);
+  assert.deepEqual(await f.state.setLearningMode({ actor: f.actor, on: true }), learn);
+  assert.deepEqual(await f.state.readLearningMode({ actor: { uid: 43 } }), develop, "each learner has their own mode");
+  for (const on of [undefined, "true", 1]) {
+    await assert.rejects(() => f.state.setLearningMode({ actor: f.actor, on }), { code: "VIBE64_TRAINING_MODE_INVALID", statusCode: 400 });
+  }
+  for (const invalid of [{ schemaVersion: 1, learnerId: "43", on: true }, { schemaVersion: 1, learnerId: "42", on: "yes" },
+    { schemaVersion: 1, learnerId: "42", on: true, currentAttemptId: attemptId }]) {
+    await f.write("learning-mode.json", invalid, f.paths.root);
+    await assert.rejects(() => f.state.readLearningMode({ actor: f.actor }), { code: "VIBE64_TRAINING_STATE_INVALID" });
+  }
+  await f.state.setLearningMode({ actor: f.actor, on: true });
+  await f.state.endAttempt({ actor: f.actor, attemptId, requestId: "archive-1", expectedRevision: prepared.revision, reason: "archived" });
+  assert.deepEqual(await f.state.readLearningMode({ actor: f.actor }), { ...develop, on: true }, "ending the lesson leaves Learn mode on");
+  assert.equal(await f.state.activeAttemptForProject({ actor: f.actor, attemptId }), null);
+  await assert.rejects(() => f.state.activeAttemptForProject({ actor: f.actor, attemptId: "../attempt" }), /exact attempt/u);
 });
 
 test("attempt end refuses malformed, other-actor and stale admissions and composes with the original preparation exclusion", async t => {
   const f = await fixture(t);
   const reserved = await f.reserve();
-  const input = { actor: f.actor, attemptId: reserved.attempt.attemptId, requestId: "end-1", expectedRevision: 1, reason: "discard" };
+  const input = { actor: f.actor, attemptId: reserved.attempt.attemptId, requestId: "end-1", expectedRevision: 1, reason: "deleted" };
   const before = await treeState(f.systemRoot);
-  for (const change of [{ actor: undefined }, { attemptId: "caller" }, { requestId: " " }, { expectedRevision: -1 }, { reason: "delete" }]) {
+  for (const change of [{ actor: undefined }, { attemptId: "caller" }, { requestId: " " }, { expectedRevision: -1 }, { reason: "delete" },
+    { reason: "left" }, { reason: "discard" }, { reason: "restart" }]) {
     await assert.rejects(() => f.state.endAttempt({ ...input, ...change }));
   }
   await assert.rejects(() => f.state.endAttempt({ ...input, expectedRevision: 0 }), error => error.code === "VIBE64_TRAINING_STATE_REVISION_CONFLICT");
@@ -1711,7 +1668,7 @@ test("attempt end refuses malformed, other-actor and stale admissions and compos
 test("interrupted end and new-start summary publication retain real history and reconcile only on explicit replay", async t => {
   const f = await fixture(t);
   const reserved = await f.reserve();
-  const input = { actor: f.actor, attemptId: reserved.attempt.attemptId, requestId: "retire-1", expectedRevision: 1, reason: "discard" };
+  const input = { actor: f.actor, attemptId: reserved.attempt.attemptId, requestId: "retire-1", expectedRevision: 1, reason: "deleted" };
   const realRename = fs.rename;
   const mock = t.mock.method(fs, "rename", async (...args) => {
     if (args[1] === f.paths.active) throw Object.assign(new Error("Summary publication interrupted"), { code: "EIO" });
@@ -1752,7 +1709,7 @@ test("end progress failures before and after atomic rename retry the original re
   for (const afterRename of [false, true]) {
     const f = await fixture(t);
     const reserved = await f.reserve();
-    const input = { actor: f.actor, attemptId: reserved.attempt.attemptId, requestId: "end-1", expectedRevision: 1, reason: "left" };
+    const input = { actor: f.actor, attemptId: reserved.attempt.attemptId, requestId: "end-1", expectedRevision: 1, reason: "archived" };
     const realRename = fs.rename;
     const mock = t.mock.method(fs, "rename", async (...args) => {
       if (args[1] === f.paths.progress) {
@@ -1779,15 +1736,16 @@ test("end progress failures before and after atomic rename retry the original re
   }
 });
 
-// Step results live with the lesson content and code ledgers with the practice
-// project, so a new attempt beyond 32 drops only the oldest ended attempt.
-test("a 33rd attempt prunes the oldest ended attempt and the total byte bound still refuses growth", async t => {
-  const f = await fixture(t, { learning: true });
+// Completion lives in completedLessons and step results with the attempt in
+// progress, so a new attempt beyond 32 (or past the byte bound) drops the
+// oldest ended attempts and is never refused.
+test("a new attempt past the count or byte bound prunes the oldest ended attempts instead of refusing", async t => {
+  const f = await fixture(t);
   let state = await f.state.readState({ actor: f.actor });
   for (let index = 0; index < 32; index++) {
     const reserved = await f.reserve({ requestId: `start-${index}`, expectedRevision: state.revision });
     state = await f.state.endAttempt({ actor: f.actor, attemptId: reserved.attempt.attemptId,
-      requestId: `end-${index}`, expectedRevision: reserved.revision, reason: "left" });
+      requestId: `end-${index}`, expectedRevision: reserved.revision, reason: "archived" });
   }
   const valid = JSON.parse(await fs.readFile(f.paths.progress, "utf8"));
   assert.equal(valid.attempts.length, 32);
@@ -1795,59 +1753,38 @@ test("a 33rd attempt prunes the oldest ended attempt and the total byte bound st
   assert.equal((await f.reserve({ requestId: "start-0", expectedRevision: 0 })).attempt.attemptId, valid.attempts[0].attemptId);
   const pruned = await f.reserve({ requestId: "start-33", expectedRevision: state.revision });
   const kept = JSON.parse(await fs.readFile(f.paths.progress, "utf8"));
-  assert.equal(kept.attempts.length, 32);
   assert.deepEqual(kept.attempts.map(value => value.attemptId), [...valid.attempts.slice(1).map(value => value.attemptId), pruned.attempt.attemptId]);
-  await f.write("reader.json", { schemaVersion: 1, learnerId: "42", attemptId: valid.attempts[0].attemptId, stepId: "explain", scroll: 0 }, f.paths.root);
+  await f.write("reader.json", { schemaVersion: 1, learnerId: "42", attemptId: valid.attempts[0].attemptId, stepId: "try-it", scroll: 0 }, f.paths.root);
   assert.equal(await f.state.readReader({ actor: f.actor }), null, "a pruned attempt has no reader position");
-  await f.state.endAttempt({ actor: f.actor, attemptId: pruned.attempt.attemptId, requestId: "end-33", expectedRevision: pruned.revision, reason: "discard" });
+  await f.state.endAttempt({ actor: f.actor, attemptId: pruned.attempt.attemptId, requestId: "end-33", expectedRevision: pruned.revision, reason: "deleted" });
+  const current = JSON.parse(await fs.readFile(f.paths.progress, "utf8"));
   const ninth = randomUUID();
   const oversized = { ...valid, revision: valid.revision + 2, attempts: [...valid.attempts, {
     ...valid.attempts[0], attemptId: ninth, projectSlug: `training-${ninth.replaceAll("-", "")}`,
-    requestIds: ["ninth-reservation"], ended: { requestId: "ninth-end", revision: valid.revision + 2, reason: "discard" }
+    requestIds: ["ninth-reservation"], ended: { requestId: "ninth-end", revision: valid.revision + 2, reason: "deleted" }
   }] };
   await f.write("progress.json", oversized, f.paths.root);
   const invalidBefore = await treeState(f.systemRoot);
   await assert.rejects(() => f.state.readState({ actor: f.actor }), error => error.code === "VIBE64_TRAINING_STATE_INVALID" &&
     /Expected at most 32 items/u.test(JSON.stringify(error.cause?.fieldErrors)));
   assert.deepEqual(await treeState(f.systemRoot), invalidBefore);
-  await f.write("progress.json", valid, f.paths.root);
-  // Fill only valid bounded fields until an end's prospective pretty-printed
-  // record would exceed the shared byte budget; no receipt is evicted to fit.
-  // Eight attempts with maximal learning still fill the byte bound exactly.
-  const bytesFull = structuredClone({ ...valid, attempts: valid.attempts.slice(0, 8) });
-  bytesFull.revision = bytesFull.attempts[7].ended.revision;
-  delete bytesFull.attempts[7].ended;
-  bytesFull.activeAttemptId = bytesFull.attempts[7].attemptId;
-  for (const [index, attempt] of bytesFull.attempts.entries()) {
-    attempt.learning = { submissions: [], resume: { requestId: `resume-${index}`, revision: attempt.ended ? attempt.ended.revision - 1 : bytesFull.revision,
-      stage: "introduction", summary: index === 7 ? "" : "s".repeat(2048),
-      pendingQuestion: { id: `question-${index}`, assessmentId: "answer-one", text: "q".repeat(2048) },
-      visuals: [{ visualId: "request", snapshot: { state: "overview", paused: true, labels: {} } }] } };
-  }
-  const size = () => Buffer.byteLength(`${JSON.stringify(bytesFull, null, 2)}\n`);
-  const target = 65536 - 40;
-  let labelLength = 1;
-  for (; labelLength <= 256; labelLength++) {
-    for (const attempt of bytesFull.attempts) {
-      attempt.learning.resume.visuals[0].snapshot.labels = Object.fromEntries(Array.from({ length: 12 },
-        (_, index) => [`detail-${index}`, "d".repeat(labelLength)]));
+  // 26 ended attempts whose retry inventories nearly fill the byte bound: the
+  // next reservation prunes by size, not count.
+  const limit = 128 * 1024;
+  const full = { ...current, attempts: current.attempts.slice(6) };
+  const size = () => Buffer.byteLength(`${JSON.stringify(full, null, 2)}\n`);
+  for (const [index, attempt] of full.attempts.entries()) {
+    for (let retry = 0; attempt.requestIds.length < 64 && size() + 80 < limit - 600; retry++) {
+      attempt.requestIds.push(`retry-${index}-${retry}-${"r".repeat(48)}`.slice(0, 64));
     }
-    // Each snapshot also remains below its independent 4096-byte cap.
-    if (size() + 96 >= target) break;
   }
-  assert.ok(labelLength <= 256);
-  assert.ok(size() <= target);
-  const padding = target - size();
-  assert.ok(padding <= 2048);
-  bytesFull.attempts[7].learning.resume.summary = "s".repeat(padding);
-  assert.equal(size(), target);
-  await f.write("progress.json", `${JSON.stringify(bytesFull, null, 2)}\n`, f.paths.root);
-  await fs.rm(f.paths.active);
-  const beforeEnd = await treeState(f.systemRoot);
-  assert.equal((await f.state.readState({ actor: f.actor, includeCompletion: true })).progress.attempts.length, 8);
-  await assert.rejects(() => f.state.endAttempt({ actor: f.actor, attemptId: bytesFull.activeAttemptId,
-    requestId: "capacity-end", expectedRevision: bytesFull.revision, reason: "discard" }), /64 KiB/u);
-  assert.deepEqual(await treeState(f.systemRoot), beforeEnd);
+  assert.ok(size() > limit - 700 && size() <= limit);
+  await f.write("progress.json", full, f.paths.root);
+  const roomy = await f.reserve({ requestId: "by-size", expectedRevision: full.revision });
+  const trimmed = JSON.parse(await fs.readFile(f.paths.progress, "utf8"));
+  assert.deepEqual(trimmed.attempts.map(value => value.attemptId),
+    [...full.attempts.slice(1).map(value => value.attemptId), roomy.attempt.attemptId], "only the oldest attempt made room");
+  assert.ok(Buffer.byteLength(await fs.readFile(f.paths.progress)) <= limit);
 });
 
 test("stale summaries across retirement remain tied to the retained attempt and reject impossible or cross-identity histories without writes", async t => {
@@ -1855,7 +1792,7 @@ test("stale summaries across retirement remain tied to the retained attempt and 
   const first = await f.reserve();
   const oldSummary = JSON.parse(await fs.readFile(f.paths.active, "utf8"));
   const ended = await f.state.endAttempt({ actor: f.actor, attemptId: first.attempt.attemptId,
-    requestId: "end-1", expectedRevision: first.revision, reason: "left" });
+    requestId: "end-1", expectedRevision: first.revision, reason: "archived" });
   const empty = JSON.parse(await fs.readFile(f.paths.active, "utf8"));
   const next = await f.reserve({ requestId: "start-2", expectedRevision: ended.revision });
   const canonical = JSON.parse(await fs.readFile(f.paths.progress, "utf8"));
@@ -1882,7 +1819,7 @@ test("stale summaries across retirement remain tied to the retained attempt and 
     const before = await treeState(f.systemRoot);
     for (const operation of [() => f.state.readState({ actor: f.actor }),
       () => f.state.resumeAttempt({ actor: f.actor, attemptId: next.attempt.attemptId }),
-      () => f.state.endAttempt({ actor: f.actor, attemptId: first.attempt.attemptId, requestId: "end-1", expectedRevision: 0, reason: "left" })]) {
+      () => f.state.endAttempt({ actor: f.actor, attemptId: first.attempt.attemptId, requestId: "end-1", expectedRevision: 0, reason: "archived" })]) {
       await assert.rejects(operation, error => error.code === "VIBE64_TRAINING_STATE_INVALID");
     }
     assert.deepEqual(await treeState(f.systemRoot), before);
@@ -1932,75 +1869,6 @@ test("an isolated original store admits drafts only through its configured autho
   }
 });
 
-test("exercise project scope reads the exact saved learner and installed exercise without writes", async t => {
-  const f = await fixture(t);
-  const reserved = await f.reserve();
-  const attemptId = reserved.attempt.attemptId;
-  const before = await treeState(f.systemRoot);
-  const saved = await f.state.readExerciseProjectScope({ actor: f.actor, attemptId, access: "create" });
-  // The attempt-keyed reader stays the version 1 marker its published upgrade
-  // compares; the practice-keyed reader gives the learning-space marker.
-  assert.deepEqual(saved, { scope: { learnerId: "42", attemptId, pin: f.pin, noExercise: false }, systemRoot: f.systemRoot,
-    training: { schemaVersion: 1, learnerKey: "NDI", attemptId, pin: f.pin,
-    exercise: { kind: "bundled", sourcePath: "training/exercises/app" } },
-    projectSlug: reserved.attempt.projectSlug, active: true, activeSummaryCurrent: true });
-  assert.deepEqual(await f.state.readPracticeProjectScope({ actor: f.actor, practiceId: attemptId, access: "create" }), {
-    scope: { learnerId: "42", attemptId, pin: f.pin, noExercise: false }, systemRoot: f.systemRoot,
-    practiceId: attemptId, training: { schemaVersion: 2, learnerKey: "NDI", practiceId: attemptId, pin: f.pin,
-    exercise: { kind: "bundled", sourcePath: "training/exercises/app" } },
-    projectSlug: reserved.attempt.projectSlug, active: true, activeSummaryCurrent: true });
-  saved.training.pin.lesson.hash = "e".repeat(64);
-  assert.deepEqual((await f.state.readExerciseProjectScope({ actor: f.actor, attemptId })).training.pin, f.pin);
-  await assert.rejects(() => f.state.readExerciseProjectScope({ actor: { uid: 43 }, attemptId }), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
-  await assert.rejects(() => f.state.readExerciseProjectScope({ actor: f.actor, attemptId: "../attempt" }));
-  await assert.rejects(() => f.state.readExerciseProjectScope({ actor: f.actor, attemptId, access: "all" }));
-  assert.deepEqual(await treeState(f.systemRoot), before);
-  const withoutExercise = await fixture(t, { noExercise: true });
-  const noExerciseReservation = await withoutExercise.reserve();
-  const noExerciseBefore = await treeState(withoutExercise.systemRoot);
-  await assert.rejects(() => withoutExercise.state.readExerciseProjectScope({ actor: withoutExercise.actor,
-    attemptId: noExerciseReservation.attempt.attemptId }), { code: "VIBE64_TRAINING_EXERCISE_MISSING" });
-  assert.deepEqual(await treeState(withoutExercise.systemRoot), noExerciseBefore);
-});
-
-test("exercise scope keeps ended history observable but denies fresh work and invalid installed pins without repair", async t => {
-  const f = await fixture(t);
-  const reserved = await f.reserve();
-  const attemptId = reserved.attempt.attemptId;
-  const begun = await f.state.beginPreparation({ actor: f.actor, attemptId, expectedRevision: reserved.revision });
-  assert.equal((await f.state.readExerciseProjectScope({ actor: f.actor, attemptId })).initialSessionId, begun.attempt.preparation.initialSessionId);
-  await fs.rm(f.paths.active);
-  const unconfirmedBefore = await treeState(f.systemRoot);
-  const unconfirmed = await f.state.readExerciseProjectScope({ actor: f.actor, attemptId });
-  assert.equal(unconfirmed.activeSummaryCurrent, false);
-  await assert.rejects(() => f.state.readExerciseProjectScope({ actor: f.actor, attemptId, access: "create" }), { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
-  assert.deepEqual(await treeState(f.systemRoot), unconfirmedBefore);
-  const resumed = await f.state.resumeAttempt({ actor: f.actor, attemptId });
-  await f.state.endAttempt({ actor: f.actor, attemptId, expectedRevision: resumed.revision, requestId: "practice-end", reason: "left" });
-  const endedBefore = await treeState(f.systemRoot);
-  const historical = await f.state.readExerciseProjectScope({ actor: f.actor, attemptId, access: "control" });
-  assert.equal(historical.active, false);
-  assert.deepEqual(historical.training.pin, f.pin);
-  for (const access of ["write", "create"]) {
-    await assert.rejects(() => f.state.readExerciseProjectScope({ actor: f.actor, attemptId, access }), { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
-  }
-  assert.deepEqual(await treeState(f.systemRoot), endedBefore);
-  const exerciseFile = path.join(f.systemRoot, "training/content", f.pin.topic.topicId, f.pin.topic.commit,
-    "files/training/exercises/app/server.mjs");
-  await fs.writeFile(exerciseFile, "changed installed source");
-  const invalidBefore = await treeState(f.systemRoot);
-  assert.deepEqual((await f.state.readExerciseProjectScope({ actor: f.actor, attemptId })).scope, historical.scope,
-    "damaged exercise bytes do not hide historical chat identity");
-  const reader = createInstalledTrainingContent({ systemRoot: f.systemRoot });
-  await assert.rejects(() => reader.readExercise({ ...f.pin.topic, lessonCode: f.pin.lesson.code,
-    lessonHash: f.pin.lesson.hash }), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
-  assert.deepEqual(await treeState(f.systemRoot), invalidBefore);
-  const descriptor = path.join(f.systemRoot, "training/content", f.pin.topic.topicId, f.pin.topic.commit,
-    "files/training/lessons/INTRO-01/lesson.json");
-  await fs.writeFile(descriptor, "{}");
-  await assert.rejects(() => f.state.readExerciseProjectScope({ actor: f.actor, attemptId }), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
-});
-
 test("actual saved exercise caller admits only its same original local Project record inside the owning callback", async t => {
   const f = await fixture(t);
   const [{ createStudioProjectContext }, { createService: createProject }, { currentProjectRequestContext }] = await Promise.all([
@@ -2011,16 +1879,16 @@ test("actual saved exercise caller admits only its same original local Project r
   const projectContext = createStudioProjectContext({ explicitTargetRoot: f.sourceRoot, explicitSystemRoot: f.systemRoot,
     explicitManagedSourceRoot: path.join(f.root, "managed-source"), home: f.root, runtimeProfile: { local: true, mode: "local" } });
   const project = createProject({ projectContext });
-  // Practice projects are ordinary projects: the saved exercise scope is read
-  // fresh and the original local practice admission owns the callback.
+  // Practice projects are ordinary projects: the attempt is read fresh and the
+  // original local practice admission owns the callback.
   const practice = async ({ actor, attemptId: id, access = "observe" }, operation) => {
-    const saved = await f.state.readPracticeProjectScope({ actor, practiceId: id, access });
+    const saved = await practiceScope(f, actor, id);
     return projectContext.runWithPracticeProjectScope({ actor, training: saved.training, access },
       operation && (() => operation({ projectSlug: saved.projectSlug })));
   };
   const reserved = await f.reserve();
   const attemptId = reserved.attempt.attemptId;
-  const scope = await f.state.readPracticeProjectScope({ actor: f.actor, practiceId: attemptId, access: "create" });
+  const scope = await practiceScope(f, f.actor, attemptId);
   const progressBefore = await fs.readFile(f.paths.progress);
   const activeBefore = await fs.readFile(f.paths.active);
   let captured;
@@ -2075,7 +1943,7 @@ test("a practice session is an ordinary local project session that stays the lea
   const reserved = await f.reserve();
   const attemptId = reserved.attempt.attemptId;
   await f.state.beginPreparation({ actor: f.actor, attemptId, expectedRevision: reserved.revision });
-  const saved = await f.state.readPracticeProjectScope({ actor: f.actor, practiceId: attemptId, access: "create" });
+  const saved = await practiceScope(f, f.actor, attemptId);
   const installed = createInstalledTrainingContent({ systemRoot: f.systemRoot });
   const exercise = await installed.readExercise({ ...f.pin.topic, lessonCode: f.pin.lesson.code, lessonHash: f.pin.lesson.hash });
   const selection = { agentId: "build", catalogRevision: `sha256:${"a".repeat(64)}`, engineId: "opencode", modelId: "big-pickle",
@@ -2133,7 +2001,7 @@ test("a practice session is an ordinary local project session that stays the lea
   await runWithProjectRequestContext(retained, () => assert.doesNotThrow(assertProjectEffectAdmission));
   const current = await f.state.resumeAttempt({ actor: f.actor, attemptId });
   await f.state.endAttempt({ actor: f.actor, attemptId, expectedRevision: current.revision,
-    requestId: "end-ordinary-practice", reason: "left" });
+    requestId: "end-ordinary-practice", reason: "archived" });
   await openProject(async () => {
     assert.doesNotThrow(assertProjectEffectAdmission, "the project stays writable after its lesson ends");
     const runtime = await project.createRuntime({ inspectSource: false });
@@ -2142,95 +2010,6 @@ test("a practice session is an ordinary local project session that stays the lea
   // Another person cannot open this learner's practice slug.
   await assert.rejects(openProject(() => assert.fail(), { uid: 43 }), { code: "vibe64_practice_project_deleted" });
 });
-
-test("admitted exercise scope validates once per fresh read and refuses changed content or returned identity", async t => {
-  const f = await fixture(t);
-  const reserved = await f.reserve();
-  const reader = createInstalledTrainingContent({ systemRoot: f.systemRoot });
-  const calls = [];
-  const state = createTrainingLearnerState({ systemRoot: f.systemRoot, content: {
-    async readLesson(input) { calls.push("lesson"); return reader.readLesson(input); },
-    async readExercise(input) {
-      calls.push("exercise");
-      assert.equal(input.metadataOnly, true, "scope admission does not request preparation bytes");
-      const result = await reader.readExercise(input);
-      assert.equal(Object.hasOwn(result, "files"), false);
-      return result;
-    }
-  } });
-  const input = { actor: f.actor, attemptId: reserved.attempt.attemptId, access: "create" };
-  const before = await treeState(f.systemRoot);
-  const first = await state.readExerciseProjectScope(input);
-  assert.deepEqual(await state.readExerciseProjectScope(input), first);
-  assert.deepEqual(calls, ["exercise", "exercise"]);
-  assert.deepEqual(await treeState(f.systemRoot), before);
-  for (const changed of [
-    { pin: { ...f.pin.topic, release: "9.9.9" } },
-    { lessonCode: "OTHER" },
-    { lessonHash: "f".repeat(64) }
-  ]) {
-    const mismatched = createTrainingLearnerState({ systemRoot: f.systemRoot, content: {
-      readLesson: reader.readLesson,
-      async readExercise(value) { return { ...await reader.readExercise(value), ...changed }; }
-    } });
-    await assert.rejects(() => mismatched.readExerciseProjectScope(input), /installed topic differs from the admitted reservation pin/u);
-  }
-  const readerFailure = new Error("Existing exercise reader failure");
-  const failed = createTrainingLearnerState({ systemRoot: f.systemRoot, content: {
-    readLesson: reader.readLesson, async readExercise() { throw readerFailure; }
-  } });
-  await assert.rejects(() => failed.readExerciseProjectScope(input), error => error === readerFailure);
-  await fs.writeFile(path.join(f.systemRoot, "training/content", f.pin.topic.topicId, f.pin.topic.commit,
-    "files/training/exercises/app/server.mjs"), "changed after fresh admitted read");
-  await assert.rejects(() => state.readExerciseProjectScope(input), { code: "VIBE64_TRAINING_CONTENT_INVALID" });
-  assert.deepEqual(calls, ["exercise", "exercise", "exercise"]);
-});
-
-test("exercise scope preserves no-exercise pin inactive and unavailable-reader refusal precedence", async t => {
-  const f = await fixture(t);
-  const reserved = await f.reserve();
-  const reader = createInstalledTrainingContent({ systemRoot: f.systemRoot });
-  const calls = [];
-  const unavailable = createTrainingLearnerState({ systemRoot: f.systemRoot, content: {
-    async readLesson(input) { calls.push("lesson"); return reader.readLesson(input); }
-  } });
-  const input = { actor: f.actor, attemptId: reserved.attempt.attemptId, access: "create" };
-  await assert.rejects(() => unavailable.readExerciseProjectScope(input), { code: "VIBE64_TRAINING_EXERCISE_UNAVAILABLE" });
-  assert.deepEqual(calls, ["lesson"]);
-  await f.state.endAttempt({ actor: f.actor, attemptId: input.attemptId,
-    expectedRevision: reserved.revision, requestId: "validation-end", reason: "left" });
-  await assert.rejects(() => unavailable.readExerciseProjectScope(input), { code: "VIBE64_TRAINING_ATTEMPT_INACTIVE" });
-  assert.deepEqual(calls, ["lesson", "lesson"]);
-  const wrongPin = createTrainingLearnerState({ systemRoot: f.systemRoot, content: {
-    async readLesson(value) { const lesson = await reader.readLesson(value); return { ...lesson, pin: { ...lesson.pin, release: "9.9.9" } }; }
-  } });
-  await assert.rejects(() => wrongPin.readExerciseProjectScope(input), /installed topic differs from the admitted reservation pin/u);
-  const absent = await fixture(t, { noExercise: true });
-  const noExercise = await absent.reserve();
-  const absentReader = createInstalledTrainingContent({ systemRoot: absent.systemRoot });
-  const absentInput = { actor: absent.actor, attemptId: noExercise.attempt.attemptId, access: "create" };
-  const absentBefore = await treeState(absent.systemRoot);
-  await assert.rejects(() => absent.state.readExerciseProjectScope(absentInput), {
-    code: "VIBE64_TRAINING_EXERCISE_MISSING", statusCode: 409,
-    message: "This saved lesson has no practice project. Use its source-less learning conversation."
-  });
-  const absentUnavailable = createTrainingLearnerState({ systemRoot: absent.systemRoot, content: { readLesson: absentReader.readLesson } });
-  await assert.rejects(() => absentUnavailable.readExerciseProjectScope(absentInput), { code: "VIBE64_TRAINING_EXERCISE_MISSING" });
-  assert.deepEqual(await treeState(absent.systemRoot), absentBefore);
-  await absent.state.endAttempt({ actor: absent.actor, attemptId: absentInput.attemptId,
-    expectedRevision: noExercise.revision, requestId: "absent-validation-end", reason: "left" });
-  await assert.rejects(() => absentUnavailable.readExerciseProjectScope(absentInput), { code: "VIBE64_TRAINING_EXERCISE_MISSING" });
-  const progress = JSON.parse(await fs.readFile(absent.paths.progress, "utf8"));
-  for (const changed of [{ release: "9.9.9" }, { repository: "different/learn-topic" }]) {
-    progress.attempts[0].pin.topic = { ...absent.pin.topic, ...changed };
-    await fs.writeFile(absent.paths.progress, `${JSON.stringify(progress)}\n`);
-    await assert.rejects(() => absent.state.readExerciseProjectScope({ ...absentInput, access: "observe" }),
-      /installed topic differs from the admitted reservation pin/u);
-  }
-});
-
-
-
 
 test("reading progress verifies each pinned lesson once, not once per past attempt", async t => {
   const f = await fixture(t, { noExercise: true });
@@ -2244,7 +2023,7 @@ test("reading progress verifies each pinned lesson once, not once per past attem
   for (let index = 1; index <= 6; index++) {
     const { attempt } = await state.reserveAttempt({ actor: f.actor, requestId: `start-${index}`, expectedRevision: revision, pin: f.pin });
     const ended = await state.endAttempt({ actor: f.actor, attemptId: attempt.attemptId, requestId: `leave-${index}`,
-      expectedRevision: revision + 1, reason: "left" });
+      expectedRevision: revision + 1, reason: "archived" });
     revision = ended.revision;
     counts.push(await readsFor(() => state.readState({ actor: f.actor, includeCompletion: true })));
   }

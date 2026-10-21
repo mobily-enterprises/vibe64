@@ -7,7 +7,6 @@ import { createHash } from "node:crypto";
 import { canonicalJson } from "./content.js";
 import { validateContent } from "./contentSchemas.js";
 import { codeStepOf, readDeclaredFiles, verifyStepAuthorship } from "./codeAuthorship.js";
-import { attemptPracticeId } from "./learnerState.js";
 
 const identity = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 128,
   pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$" };
@@ -215,7 +214,7 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
       if (paths.sessionRoot !== session.sessionRoot) throw failure("VIBE64_TRAINING_CHECK_RUN_STALE", "The lesson session artifact identity changed.");
       const files = await readDeclaredFiles(sessionSourcePath(session), declaredFiles);
       const checked = files.map(file => ({ path: file.path, sha256: file.sha256 }));
-      const ledger = await learners.readCodeLedger({ actor, practiceId: attemptPracticeId(attempt) });
+      const ledger = await learners.readCodeLedger({ actor, attemptId: attempt.attemptId });
       const authorship = verifyStepAuthorship(ledger, input.stepId, files);
       if (!authorship.intact) {
         return result("not-yet-passed", { authorship: "other", files: checked,
