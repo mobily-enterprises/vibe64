@@ -51,7 +51,9 @@ guide overlay 3000 above L 2400 above Colleague.
   defaults to the practice project or `/app/learning`, Develop to `/app`).
   `modeRedirect({mode, slug})` sends a Learn tab off a normal project and a
   Develop tab off a practice project.
-- Courses overlay: `coursesOpen`, `openCourses()`, `closeCourses()`, `surface`
+- Courses overlay: `coursesOpen`, `openCourses()` and `closeCourses()` (the
+  learner's own button and close), `show({surface, attemptId, stepId})` and
+  `minimise()` (Colleague, Show me and app navigation), `surface`
   (`courses`, `progress`, `archived` or `lesson`), `attemptId`, `stepId`,
   `scroll`, the read `lesson`, its `steps`, `results`, `stepStatus(stepId)` and
   `focus` (`learningOpen` is the overlay being open, `learningSurface`,

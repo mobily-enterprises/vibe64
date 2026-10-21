@@ -33,10 +33,11 @@ export function learningPanelFocus(controller) {
 
 // Applies a navigation command's `learning` part ({ open, attemptId?, stepId? })
 // through the host's Learning controller; the caller then waits for
-// learningPanelMatches.
+// learningPanelMatches. Opening shows Courses at that attempt and step;
+// closing hides it with its place kept, not as the learner's own close.
 export async function applyLearningNavigation(controller, learning) {
   if (!controller) throw new Error("Courses is unavailable in this view.");
   const { open, attemptId, stepId } = learning;
-  if (open) await controller.openCourses({ ...(attemptId ? { attemptId } : {}), ...(stepId ? { stepId } : {}) });
-  else await controller.closeCourses();
+  if (open) await controller.show({ ...(attemptId ? { attemptId } : {}), ...(stepId ? { stepId } : {}) });
+  else await controller.minimise();
 }

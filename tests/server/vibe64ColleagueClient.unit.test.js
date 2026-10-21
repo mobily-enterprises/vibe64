@@ -218,8 +218,9 @@ test("Teach me without a usable AI model opens Colleague, says so and sends noth
 
 test("on a phone, the learner's own L hiding Learning opened from Colleague returns to Colleague's dialog", async t => {
   const learning = vue.reactive({ coursesOpen: false, hiddenBy: "", surface: "courses", mode: { on: true, currentAttemptId: "" }, stepId: "",
-    lesson: null, results: [], openCourses() { learning.coursesOpen = true; learning.hiddenBy = ""; },
-    closeCourses(by = "") { learning.hiddenBy = by; learning.coursesOpen = false; } });
+    lesson: null, results: [], show() { learning.coursesOpen = true; learning.hiddenBy = ""; },
+    minimise(by = "") { learning.hiddenBy = by; learning.coursesOpen = false; },
+    openCourses() { learning.show(); }, closeCourses() { learning.minimise("learner"); } });
   const view = mount(t, async () => ({ ok: true, conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} }),
     undefined, null, null, null, { learning });
   await flush();
@@ -231,7 +232,7 @@ test("on a phone, the learner's own L hiding Learning opened from Colleague retu
   await flush();
   assert.equal(view.state.shown.value, false, "the phone dialog gives way to Learning");
   assert.equal(learning.coursesOpen, true);
-  learning.closeCourses("learner");
+  learning.closeCourses();
   await flush();
   assert.equal(view.state.shown.value, true, "hiding Learning with L returns to Colleague, not the app");
 
@@ -239,14 +240,14 @@ test("on a phone, the learner's own L hiding Learning opened from Colleague retu
   await view.state.handleNavigation({ id: "phone-learning-2", status: "pending", learning: { open: true } });
   await flush();
   assert.equal(view.state.shown.value, false);
-  learning.closeCourses();
+  learning.minimise();
   await flush();
   assert.equal(view.state.shown.value, false, "Show me keeps the app visible");
 
   // Learning the learner opened without Colleague never brings the dialog back.
   learning.openCourses();
   await flush();
-  learning.closeCourses("learner");
+  learning.closeCourses();
   await flush();
   assert.equal(view.state.shown.value, false);
 
@@ -260,7 +261,7 @@ test("on a phone, the learner's own L hiding Learning opened from Colleague retu
   await flush();
   assert.equal(view.state.shown.value, false);
   assert.equal(learning.coursesOpen, true);
-  learning.closeCourses("learner");
+  learning.closeCourses();
   await flush();
   assert.equal(view.state.shown.value, true);
 });
@@ -1635,8 +1636,8 @@ test("Colleague opening an app place minimises Learning, and a phone minimises i
   const calls = [];
   const learning = vue.shallowRef(vue.reactive({ coursesOpen: true, surface: "lesson",
     mode: { on: true, currentAttemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }, stepId: "open-preview", lesson: null, results: [],
-    openCourses(input) { calls.push(["openCourses", input]); this.coursesOpen = true; },
-    closeCourses() { calls.push(["closeCourses"]); this.coursesOpen = false; } }));
+    show(input) { calls.push(["show", input]); this.coursesOpen = true; },
+    minimise(by = "") { calls.push(["minimise", by]); this.coursesOpen = false; } }));
   const view = mount(t, async (url, options) => {
     if (url.endsWith("/navigation/ack")) { acks.push(options.body); return { ok: true }; }
     return { conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} };
@@ -1644,7 +1645,7 @@ test("Colleague opening an app place minimises Learning, and a phone minimises i
   await flush();
   view.state.props.navigate = async command => ({ projectSlug: command.projectSlug || "", learningOpen: learning.value.coursesOpen });
   await view.state.handleNavigation({ id: "open-preview", status: "pending", projectSlug: "alpha", sessionId: "", pane: "preview" });
-  assert.deepEqual(calls, [["closeCourses"]], "the app place becomes visible; Courses keeps its state");
+  assert.deepEqual(calls, [["minimise", ""]], "the app place becomes visible; Courses keeps its state, not as the learner's close");
   assert.equal(acks.at(-1).focus.learningOpen, false);
   calls.length = 0;
   learning.value.coursesOpen = true;
@@ -1672,7 +1673,7 @@ test("the header's current-step button follows the shared Learning controller an
   const calls = [];
   const controller = vue.reactive({ coursesOpen: false, surface: "lesson", mode: { on: true, currentAttemptId: "" }, stepId: "",
     lesson: { title: "Your first change", steps: [{ id: "read", title: "Read the greeting" }, { id: "change", title: "Change the greeting" }] },
-    results: [], openCourses(input) { calls.push(input); }, closeCourses() {} });
+    results: [], show(input) { calls.push(input); }, minimise() {} });
   const view = mount(t, async () => ({ conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} }),
     undefined, null, null, null, { learning: controller });
   await flush();
@@ -1727,7 +1728,7 @@ test("the header's current-step button follows the shared Learning controller an
 test("the current-step dialog gives way to Show me, Teach me and L, and comes back when Show me cannot show its place", async t => {
   const controller = vue.reactive({ coursesOpen: false, surface: "lesson", mode: { on: true, currentAttemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
     stepId: "read", lesson: { title: "Lesson", steps: [{ id: "read", title: "Read" }] }, results: [],
-    openCourses() { controller.coursesOpen = true; }, closeCourses(by = "") { controller.coursesOpen = false; controller.hiddenBy = by; }, hiddenBy: "" });
+    openCourses() { controller.coursesOpen = true; controller.hiddenBy = ""; }, closeCourses() { controller.coursesOpen = false; controller.hiddenBy = "learner"; }, hiddenBy: "" });
   const view = mount(t, async () => ({ conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} }),
     undefined, null, null, null, { learning: controller });
   await flush();
@@ -1764,7 +1765,7 @@ test("the current-step dialog gives way to Show me, Teach me and L, and comes ba
   await flush();
   assert.equal(view.state.stepDialog.value, false);
   assert.equal(view.state.shown.value, false);
-  controller.closeCourses("learner");
+  controller.closeCourses();
   await flush();
   assert.equal(view.state.shown.value, true);
 });
@@ -2219,11 +2220,11 @@ test("the local Colleague host reports the shared Learning state and opens its e
     setText() {}, setElementText() {}, patchProp() {}, insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
   const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   const controller = vue.reactive({ coursesOpen: false, surface: "lesson", mode: { on: true, currentAttemptId: attemptId }, stepId: "one",
-    async openCourses({ attemptId: shownAttempt, stepId } = {}) {
+    async show({ attemptId: shownAttempt, stepId } = {}) {
       await Promise.resolve();
       Object.assign(this, { coursesOpen: true, surface: shownAttempt ? "lesson" : this.surface, ...(stepId ? { stepId } : {}) });
     },
-    closeCourses() { this.coursesOpen = false; } });
+    minimise() { this.coursesOpen = false; } });
   const navigation = vue.shallowRef(null);
   const host = renderer.createApp(module.exports.default);
   for (const key of Object.values(hostKeys)) host.provide(key, vue.ref(null));

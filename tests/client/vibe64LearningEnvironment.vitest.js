@@ -6,6 +6,7 @@ import { transformSync } from "esbuild";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as LearningLib from "../../src/lib/vibe64Learning.js";
 import { watchColleagueLearningRequests } from "../../packages/vibe64-colleague/src/client/colleagueLearningRequests.js";
+import { applyLearningNavigation, learningPanelFocus, learningPanelMatches } from "../../packages/vibe64-colleague/src/shared/learningFocus.js";
 
 const { VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_TEACH_MESSAGE, createVibe64Learning, openLessonLink, revealCurrentStep, showMeCommand } = LearningLib;
 
@@ -126,6 +127,18 @@ describe("useVibe64Learning controller", () => {
     learning.closeCourses();
     expect(learning.hiddenBy, "closing Courses is the learner's own hide").toBe("learner");
     expect(learning.minimised).toBe(true);
+  });
+
+  it("opens Courses at Colleague's exact lesson step and closes it as app navigation, through the shared Colleague rule", async () => {
+    const { learning } = controller();
+    learning.setViewer("member");
+    await vi.waitFor(() => expect(learning.mode?.currentAttemptId).toBe(ATTEMPT));
+    const command = { learning: { open: true, attemptId: ATTEMPT, stepId: "tick" } };
+    await applyLearningNavigation(learning, command.learning);
+    expect([learning.coursesOpen, learning.surface, learning.attemptId, learning.stepId]).toEqual([true, "lesson", ATTEMPT, "tick"]);
+    expect(learningPanelMatches(command, learningPanelFocus(learning)), "the acknowledgement Colleague waits for").toBe(true);
+    await applyLearningNavigation(learning, { open: false });
+    expect([learning.coursesOpen, learning.hiddenBy], "Colleague's close is not the learner's own").toEqual([false, ""]);
   });
 
   it("reads the learner's mode: Learn with its current lesson, Develop, and an unreadable mode counts as Develop", async () => {

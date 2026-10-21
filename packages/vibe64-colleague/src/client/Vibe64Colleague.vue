@@ -88,12 +88,12 @@ function returnToStep() {
   if (xs.value) reopenConversation();
   stepDialog.value = true;
 }
-// Open in Courses: exactly this step, like Colleague's Courses command.
+// Open in Learning: Courses at exactly this step, like Colleague's Courses command.
 function openLearningStep() {
   const step = learningStep.value;
   const controller = learningController.value;
   stepDialog.value = false;
-  if (!step || typeof controller?.openCourses !== "function") return;
+  if (!step || typeof controller?.show !== "function") return;
   const reopen = () => applyLearningNavigation(controller, { open: true, attemptId: step.attemptId, stepId: step.stepId });
   // A phone shows one surface: minimise the dialog so Courses is visible.
   if (xs.value && shown.value) leaveForLearning().then(reopen).catch(reportFailure);
@@ -266,7 +266,7 @@ function apply(result, expectedRevision, expectedActor, allowRetarget = false) {
 async function navigateBrowser(command) {
   const controller = learningController.value;
   const appPlace = command.projectSlug || command.managementView || (command.guide && command.guide.target !== "learning");
-  if (appPlace && !command.learning && unref(controller?.coursesOpen) && typeof controller.closeCourses === "function") {
+  if (appPlace && !command.learning && unref(controller?.coursesOpen) && typeof controller.minimise === "function") {
     await applyLearningNavigation(controller, { open: false });
   }
   if (!command.guide) return props.navigate(command);

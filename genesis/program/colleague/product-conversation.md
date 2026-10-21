@@ -115,9 +115,13 @@ Teaching uses only client state and existing operations. Both hosts report
 `archived` or `lesson`), `learningAttemptId` (the mode's `currentAttemptId`) and
 `learningStepId` in focus from the shared Learning controller, so Colleague
 knows the current step even while Courses is closed. Both derive those fields,
-apply a command's `learning` part (`openCourses`/`closeCourses`) and confirm it
-with the one shared rule in `shared/learningFocus.js` (`learningPanelFocus`,
-`applyLearningNavigation`, `learningPanelMatches`). **Teach me** records one
+apply a command's `learning` part and confirm it with the one shared rule in `shared/learningFocus.js` (`learningPanelFocus`,
+`applyLearningNavigation`, `learningPanelMatches`). Opening calls the
+controller's `show({attemptId, stepId})`, so Courses shows exactly that lesson
+step; closing (and opening an app place while Courses is open) calls
+`minimise()`, which keeps Courses' place and is not the learner's own close, so
+a phone's Colleague dialog does not come back afterwards. `openCourses()` and
+`closeCourses()` stay the learner's own Courses button and close. **Teach me** records one
 request on that controller; `colleagueLearningRequests.js` consumes it once for
 the same signed-in person, reveals Colleague, rereads its state (so the send
 goes to the lesson's Learn thread) and sends the fixed text "Teach me this
