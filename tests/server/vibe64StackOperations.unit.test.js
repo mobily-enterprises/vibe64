@@ -262,7 +262,7 @@ test("Deployment Markdown normalizes the exact ordered publication recipe", () =
   });
 });
 
-test("Deployment rejects unsafe paths, shell strings, missing proof, and phase reordering", () => {
+test("Deployment rejects unsafe paths, shell strings, placeholders, missing proof, and phase reordering", () => {
   const invalid = [
     deploymentLines({ workdir: "../escape" }),
     deploymentLines({ ready: false }),
@@ -281,7 +281,8 @@ test("Deployment rejects unsafe paths, shell strings, missing proof, and phase r
       "- Serve `Start`: `npm` `start`",
       "- Build `Late build`: `npm` `run` `build`"
     ] }),
-    deploymentLines({ steps: ["- Serve `Start`: `npm start`"] })
+    deploymentLines({ steps: ["- Serve `Start`: `npm start`"] }),
+    deploymentLines({ steps: ["- Serve `Start`: `php` `artisan` `serve` `--port={port}`"] })
   ];
   for (const lines of invalid) {
     assert.throws(

@@ -190,7 +190,7 @@ ${list(OUTPUTS_ENTRY_FORMS.previewIdentity)}
 Entries:
 ${list(DEPLOYMENT_ENTRY_FORMS)}
 
-- Steps are ordered ${DEPLOYMENT_STEP_ROLES.join(", ")}; exactly one Serve step comes last. Serve starts the long-running application.
+- Steps are ordered ${DEPLOYMENT_STEP_ROLES.join(", ")}; exactly one Serve step comes last. Serve starts the long-running application, which listens on the address given by the \`HOST\` and \`PORT\` environment variables. Arguments are passed literally (no \`{host}\` or \`{port}\` placeholders), so a server that takes its address only as arguments needs a committed project script that reads them.
 - One Ready when entry is required (status 200 through 399). Workdir defaults to \`.\`. Each other entry appears at most once.
 - Recreate on restore lists project-relative globs (only \`*\` and \`**\`) that a restored deployment rebuilds with its Prepare step, such as installed dependencies. It requires a Prepare step.
 - Migrate applies pending migrations without destroying data.
@@ -243,7 +243,7 @@ ${list([...VIBE64_RESOURCE_ESTIMATE_FIELDS.keys()].map((field) => `- ${field}: \
 Entries:
 ${list(CONNECTED_DEVELOPMENT_ENTRY_FORMS)}
 
-- Declare either a Default package type alone, or a Sources file with Verify entries or a Custom runner. All Prepare entries precede Verify entries. Steps run unconditionally (no \`when\`/\`if\`); at most one Custom runner.
+- Declare a Default package type alone, or a Sources file with Verify entries or a Custom runner (keeping any Default package type). All Prepare entries precede Verify entries. Steps run unconditionally (no \`when\`/\`if\`); at most one Custom runner.
 - Package types: ${CONNECTED_PACKAGE_TYPES.map(({ value }) => `\`${value}\``).join(", ")}. A type is a declared label: Vibe64 never runs a package manager for it. This project's own Prepare/Verify commands give each connected source its ecosystem's treatment, and Verify must prove that the source is consumed.
 - The Sources file is a development-only path outside \`.git\`, never tracked; Vibe64 writes it when it prepares connected sources and excludes it from Git. Its JSON: \`{"contract":"${CONNECTED_SOURCES_CONTRACT}","sessionId":"…","projects":[{"name":"…","repository":"https://github.com/owner/repo","relationship":"dependency|composition","type":"npm","sourceRoot":"/absolute/receiving/source","contributionId":"…"}]}\`; a custom connection also carries \`"script"\`.
 - Custom connections: ${CONNECTED_CUSTOM_RUNNER_CONTRACT}

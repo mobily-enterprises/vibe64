@@ -54,7 +54,7 @@ An application-owned executable, declared under an Outputs web target's \`#### P
 
 ## Execution
 
-- Vibe64 runs the declared argv from the session's project root with the declared runtimes and timeout, in the Preview's environment. For an enabled run the declared Enabled environment name is \`true\` and the Secret environment name holds a fresh per-run secret. Keep the exchange disabled unless both are present; it is a development-preview control, never a production sign-in API.
+- Vibe64 runs the declared argv from the session's project root with the declared runtimes and timeout. Its environment adds only the Enabled and Secret names, not the project's Env values, so the command loads the application's own configuration itself (for example its generated environment file). For an enabled run the declared Enabled environment name is \`true\` and the Secret environment name holds a fresh per-run secret. Keep the exchange disabled unless both are present; it is a development-preview control, never a production sign-in API.
 - stdin: one JSON request line. stdout: one JSON response (at most ${PREVIEW_IDENTITY_COMMAND_MAX_OUTPUT_BYTES} bytes). Exit 0 after writing the response; a non-zero exit or timeout fails the exchange. Write diagnostics to stderr.
 - Use the same database and configuration as the server behind \`target.origin\` (for a test target, its test database).
 

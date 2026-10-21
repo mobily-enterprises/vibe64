@@ -66,9 +66,17 @@ function disposablePaths(source, deploymentPath, line) {
 }
 
 function deploymentStep(match, deploymentPath, line) {
+  const argv = processArguments(match[3], ERROR_CODE, deploymentPath, "Deployment command", line);
+  if (argv.some((value) => /\{(?:host|port)\}/u.test(value))) {
+    invalid(
+      deploymentPath,
+      "Deployment commands take no {host} or {port} placeholders; Serve reads HOST and PORT from its environment.",
+      line
+    );
+  }
   return {
     label: oneLineText(match[2], ERROR_CODE, deploymentPath, "Deployment step label", line),
-    argv: processArguments(match[3], ERROR_CODE, deploymentPath, "Deployment command", line),
+    argv,
     role: match[1].toLowerCase()
   };
 }

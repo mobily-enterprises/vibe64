@@ -19,6 +19,11 @@ contains exact argument arrays, working directory, runtime requirements,
 release-recreation paths, and success condition. Invalid, absent, and competing
 declarations remain explicit states.
 
+Commands are exact argument arrays with no placeholder expansion; `{host}` and
+`{port}` are rejected. The executor starts the single, last Serve step with its
+listen address in the `HOST` and `PORT` environment variables and probes the
+Ready when path there.
+
 Genesis does not know what Deployment means. Vibe64 does not infer scripts from
 the selected language or framework. The application or technology Stack owns
 the scripts and checks; a project-owned section replaces a component proposal
