@@ -14,7 +14,8 @@ const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a
 const LEARNER_FILES = new Set(["progress.json", "active-lesson.json", "step-progress.json", "reader.json",
   "code-ledger.json", "learning-mode.json", "state.lock", "preparation.lock", "step-progress.lock", "reader.lock",
   "code-ledger.lock", "learning-mode.lock"]);
-const SOURCELESS_STORES = "learning-sessions";
+// The source-less teacher's stores and the per-practice code ledgers.
+const LEARNER_DIRECTORIES = new Set(["learning-sessions", "code-ledgers"]);
 
 const object = value => value && typeof value === "object" && !Array.isArray(value);
 
@@ -178,7 +179,7 @@ async function selectMoves({ systemRoot, projectsRoot, managedSourceRoot, planne
     report("warning", `${selected} hosted practice project(s) may have managed databases or resource profiles keyed by their slugs. This upgrade cannot remove them; they become unreachable and never collide with new practice projects.`);
   }
 
-  // Learner attempt state and the source-less teacher's stores.
+  // Learner attempt state, code ledgers and the source-less teacher's stores.
   for (const namespace of [systemRoot, path.join(systemRoot, "author-preview")]) {
     const usersRoot = path.join(namespace, "training", "users");
     await verifyUpgradeParents(systemRoot, path.join(usersRoot, "placeholder"));
@@ -186,9 +187,10 @@ async function selectMoves({ systemRoot, projectsRoot, managedSourceRoot, planne
       const learnerRoot = path.join(usersRoot, learner);
       if (!await expect(learnerRoot, "directory", "Learner directory")) continue;
       for (const name of await names(learnerRoot)) {
-        if (!LEARNER_FILES.has(name) && name !== SOURCELESS_STORES) continue;
+        const directory = LEARNER_DIRECTORIES.has(name);
+        if (!LEARNER_FILES.has(name) && !directory) continue;
         const source = path.join(learnerRoot, name);
-        if (!await expect(source, name === SOURCELESS_STORES ? "directory" : "file", "Learner state")) continue;
+        if (!await expect(source, directory ? "directory" : "file", "Learner state")) continue;
         report("info", `Learner state ${path.relative(systemRoot, source)} will be retired.`);
         moves.push(retire(source));
       }
@@ -208,12 +210,15 @@ async function selectMoves({ systemRoot, projectsRoot, managedSourceRoot, planne
  * Learning v2 (20261022): practice projects move to the learning space and old
  * Learning data is disposable. Retire every v1 practice project (strictly by
  * its marker; normal projects are never read beyond their names) and every
- * learner's attempt state and source-less stores. Moves only, nothing deleted:
- * hosted namespaces to <projectsRoot>/.learning-reset-20261022, local session
- * sources to <managedSourceRoot>/.learning-reset-20261022, everything under
- * systemRoot to training/retired/<upgrade id>, outside the upgrade backups that
- * retention removes. The manifest is written before the first move; a retry
- * finishes the same plan. Offline, with every writer stopped.
+ * learner's attempt state, code ledgers and source-less stores. Absent learner
+ * files read as Develop mode with no lesson, so nothing new is written, and
+ * each person's Colleague conversation stays as their Develop thread. Moves
+ * only, nothing deleted: hosted namespaces to
+ * <projectsRoot>/.learning-reset-20261022, local session sources to
+ * <managedSourceRoot>/.learning-reset-20261022, everything under systemRoot to
+ * training/retired/<upgrade id>, outside the upgrade backups that retention
+ * removes. The manifest is written before the first move; a retry finishes the
+ * same plan. Offline, with every writer stopped.
  */
 export async function resetLearningForLearningSpace({ systemRoot, projectsRoot, managedSourceRoot, apply, backupRoot, report,
   renamePath = rename, removeTree = rm }) {

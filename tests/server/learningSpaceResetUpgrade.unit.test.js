@@ -84,6 +84,11 @@ async function fixture(t) {
     await put(path.join(userRoot, name), `{"file":"${name}"}`);
   }
   await put(path.join(userRoot, "learning-sessions", ids.local, "sessions/active/teacher/history.json"), "{}");
+  await put(path.join(userRoot, "code-ledgers", `${ids.space}.json`), "{}");
+  // The person's Colleague conversation stays as their Develop thread.
+  const colleague = path.join(systemRoot, "colleague", learnerKey);
+  await put(path.join(colleague, "conversation.json"), '{"conversationLog":["develop chat"]}');
+  normal.push(colleague);
   await put(path.join(systemRoot, "author-preview/training/users", learnerKey, "progress.json"), "{}");
   // A v1 practice project archived as an ordinary project stays archived.
   const archived = path.join(systemRoot, "project-archives", slug(ids.unmarked), `20261001T000000Z-${slug(ids.unmarked)}`);
@@ -98,7 +103,7 @@ async function hashes(paths) {
   return Promise.all(paths.map(treeHash));
 }
 
-test("check lists the exact practice projects and learner files and changes nothing; apply moves only them and keeps teacher notes", async t => {
+test("check lists the exact practice projects, learner files and code ledgers and changes nothing; apply moves only them and keeps teacher notes and Colleague", async t => {
   const f = await fixture(t);
   const practice = await f.project(slug(ids.hosted), { repository: { mode: "managed_git" }, training: marker(ids.hosted) });
   const normalBefore = await hashes(f.normal);
@@ -113,18 +118,19 @@ test("check lists the exact practice projects and learner files and changes noth
   assert.ok(!messages.some(line => line.includes(slug(ids.space))), "a learning-space practice project is skipped silently");
   assert.ok(messages.some(line => /^warning: 1 hosted practice project\(s\) may have managed databases/u.test(line)));
   assert.ok(messages.includes(`info: Learner state training/users/${learnerKey}/state.lock will be retired.`));
+  assert.ok(messages.includes(`info: Learner state training/users/${learnerKey}/code-ledgers will be retired.`));
   assert.ok(!messages.some(line => line.includes("teacher-notes")), "the learner's notes and their lock stay");
   assert.ok(messages.includes(`info: 1 archived project bundle(s) named like v1 practice projects stay in project-archives and are not part of Learning: ${slug(ids.unmarked)}.`));
-  assert.ok(messages.includes("info: 8 Learning item(s) to retire; 0 already retired."));
+  assert.ok(messages.includes("info: 9 Learning item(s) to retire; 0 already retired."));
 
   await f.run({ projectsRoot: f.projectsRoot, apply: true });
-  assert.deepEqual(await hashes(f.normal), normalBefore, "normal projects, sessions, chats and code are byte-identical");
+  assert.deepEqual(await hashes(f.normal), normalBefore, "normal projects, sessions, chats, code and Colleague are byte-identical");
   await assert.rejects(lstat(practice), { code: "ENOENT" });
   await assert.rejects(lstat(f.runtime(slug(ids.hosted))), { code: "ENOENT" });
   assert.equal(await readFile(path.join(f.projectsRoot, ".learning-reset-20261022", slug(ids.hosted), "sessions/working/source/index.js"), "utf8"),
     `// ${slug(ids.hosted)} code\n`);
   assert.ok((await lstat(path.join(f.retired(f.runtime(slug(ids.hosted))), "project.json"))).isFile());
-  for (const name of ["progress.json", "step-progress.json", "learning-mode.json", "state.lock", "learning-sessions"]) {
+  for (const name of ["progress.json", "step-progress.json", "learning-mode.json", "state.lock", "learning-sessions", "code-ledgers"]) {
     await assert.rejects(lstat(path.join(f.userRoot, name)), { code: "ENOENT" }, name);
     assert.ok(await lstat(f.retired(path.join(f.userRoot, name))), name);
   }
@@ -132,14 +138,14 @@ test("check lists the exact practice projects and learner files and changes noth
   assert.equal(await readFile(path.join(f.userRoot, "teacher-notes.lock"), "utf8"), '{"file":"teacher-notes.lock"}');
   await assert.rejects(lstat(path.join(f.systemRoot, "author-preview/training/users", learnerKey, "progress.json")), { code: "ENOENT" });
   const manifest = JSON.parse(await readFile(path.join(f.backupRoot, "manifest.json"), "utf8"));
-  assert.equal(manifest.moves.length, 8);
+  assert.equal(manifest.moves.length, 9);
   assert.equal(manifest.moves[0].source, practice);
 
   const after = await treeHash(f.root);
   f.reports.length = 0;
   await f.run({ projectsRoot: f.projectsRoot, apply: true });
   assert.equal(await treeHash(f.root), after, "a completed reset is a no-op");
-  assert.ok(f.reports.some(({ message }) => message === "0 Learning item(s) to retire; 8 already retired."));
+  assert.ok(f.reports.some(({ message }) => message === "0 Learning item(s) to retire; 9 already retired."));
 });
 
 test("an interrupted local apply resumes the same manifest and a cross-filesystem move copies, verifies, then removes", async t => {
@@ -229,6 +235,10 @@ test("refuses symlinks, non-directories and an unexpected destination", async t 
     "symlinked learner file": async f => {
       await rm(path.join(f.userRoot, "progress.json"));
       await symlink(path.join(f.root, "elsewhere"), path.join(f.userRoot, "progress.json"));
+    },
+    "file code ledgers": async f => {
+      await rm(path.join(f.userRoot, "code-ledgers"), { recursive: true });
+      await put(path.join(f.userRoot, "code-ledgers"), "not a directory");
     },
     "unexpected destination": async f => {
       await f.project(slug(ids.hosted), { repository: { mode: "managed_git" }, training: marker(ids.hosted) });
