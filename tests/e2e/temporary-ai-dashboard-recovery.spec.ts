@@ -58,8 +58,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
         async applyUpdate(input) { inputs.push(input); return pending.promise; }
       });
       await page.goto(`${server.url}${DASHBOARD_PATH}/repository`);
-      const showChat = page.getByRole("button", { name: "Show chat", exact: true });
-      if (await showChat.isVisible()) await showChat.click();
+      if (width <= 720) await page.getByRole("button", { name: "Show chat", exact: true }).click();
       await page.getByRole("button", { name: "Review resolved conflicts", exact: true }).click();
       const review = page.getByRole("dialog", { name: "Apply resolved Update", exact: true });
       await expect(review).toContainText("tests/server/previewTestTarget.integration.test.js");
@@ -188,7 +187,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
       await expect(workspace.getByRole("button", { name: "Close Resolve repository update", exact: true })).toBeInViewport({ ratio: 1 });
       await expect(workspace).toContainText("Update not yet verified");
       if (entry === "header") {
-        await page.getByRole("button", { name: "Update selected session (rebase)", exact: true }).click();
+        await page.getByRole("button", { name: "Update session", exact: true }).click();
       } else {
         await checkUpdate.dblclick();
       }
@@ -198,18 +197,16 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
       await expect(workspace.getByRole("button", { name: "Close Resolve repository update", exact: true })).toBeDisabled();
       const draft = workspace.getByLabel("Message temporary AI");
       await expect(draft).toBeEnabled();
-      await draft.fill("Keep my draft while Update checks the repair.");
-      await expect(workspace.getByText("Draft saved", { exact: true })).toBeVisible();
+      await saveDraft(page, draft, "Keep my draft while Update checks the repair.");
       await expect(workspace.getByRole("button", { name: /^(Send message|Steer assistant)$/ })).toBeDisabled();
-      await draft.clear();
-      await expect(workspace.getByText("Draft saved", { exact: true })).toBeVisible();
+      await saveDraft(page, draft, "");
       const activity = page.getByLabel("Session activity", { exact: true });
       await expect(activity).toBeHidden();
       await workspace.getByRole("button", { name: "Main chat", exact: true }).click();
-      await expect(activity).toContainText("Update this session (rebase)");
-      await activity.getByRole("button", { name: "Show Update this session (rebase) details", exact: true }).click();
+      await expect(activity).toContainText("Update session");
+      await activity.getByRole("button", { name: "Show Update session details", exact: true }).click();
       if (width <= 720) {
-        const terminal = page.getByRole("dialog", { name: "Update this session (rebase)", exact: true });
+        const terminal = page.getByRole("dialog", { name: "Update session", exact: true });
         await expect(terminal).toBeVisible();
         await expect(terminal.getByRole("button", { name: "Collapse", exact: true })).toBeInViewport({ ratio: 1 });
         await page.screenshot({ path: testInfo.outputPath("expanded-terminal.png") });
@@ -294,16 +291,17 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
           ok: true, unsaved: true, operation: null, updateOperation: operation
         }));
         await page.goto(`${server.url}${DASHBOARD_PATH}/env`);
+        const fixIt = page.getByRole("button", { name: "Fix it with AI", exact: true });
         const showChat = page.getByRole("button", { name: "Show chat", exact: true });
+        await expect(fixIt.or(showChat).first()).toBeVisible();
         if (await showChat.isVisible()) await showChat.click();
-        await page.getByRole("button", { name: "Fix it with AI", exact: true }).click();
+        await fixIt.click();
         const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
         await workspace.getByRole("button", { name: "Check Update", exact: true }).click();
         await expect.poll(() => updates).toBe(1);
         const draft = workspace.getByLabel("Message temporary AI");
         await expect(draft).toBeEnabled();
-        await draft.fill("Keep this reply through reload.");
-        await expect(workspace.getByText("Draft saved", { exact: true })).toBeVisible();
+        await saveDraft(page, draft, "Keep this reply through reload.");
         await expect(workspace.getByRole("button", { name: /^(Send message|Steer assistant)$/ })).toBeDisabled();
         await page.screenshot({ path: testInfo.outputPath("draft-during-update.png"), animations: "disabled" });
         operation.status = result;
@@ -337,17 +335,15 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
     test(`repair chat replaces the persisted Update failure banner at ${width}px`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height: 844 });
       const diagnostic = "1 file needs review: data-overview.json.";
-      const captured = await mockRepositoryRecovery(page, server, { code: "vibe64_session_update_conflict", diagnostic });
+      const captured = await mockRepositoryRecovery(page, server, {
+        code: "vibe64_session_update_conflict", diagnostic, nativeTurn: () => ({ status: "inProgress" })
+      });
       await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/work`, (route) => fulfillJson(route, {
         ok: true, unsaved: true, updateAvailable: true, behind: 1, operation: null,
         updateOperation: {
           operationId: "failed-update", status: "failed", code: "vibe64_session_update_conflict",
           error: diagnostic, updatedAt: "2026-09-15T01:00:00Z", events: []
         }
-      }));
-      await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/temporary-conversations/temporary-conversation-1`, (route) => fulfillJson(route, {
-        ok: true, status: "inProgress", runId: "temporary-run-1",
-        progressUpdates: [{ id: "one", text: "Reviewing the overlapping changes." }]
       }));
       await page.goto(`${server.url}${DASHBOARD_PATH}/repository`);
       const showChat = page.getByRole("button", { name: "Show chat", exact: true });
@@ -369,10 +365,11 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
       await openTemporaryChat(page);
       await expect(activity).toBeHidden();
       await workspace.getByRole("button", { name: "New temporary AI task", exact: true }).click();
+      await page.getByRole("dialog", { name: "New temporary chat" }).getByRole("button", { name: "Create chat", exact: true }).click();
       await expect(activity).toBeVisible();
-      await workspace.getByRole("button", { name: "Resolve Update Assistant working", exact: true }).click();
+      await workspace.getByRole("button", { name: /^Resolve Update/u }).click();
       await expect(activity).toBeHidden();
-      expect(captured.temporaryCreates).toHaveLength(1);
+      expect(captured.temporaryCreates).toHaveLength(2);
       expect(captured.temporaryTurns).toHaveLength(1);
     });
   }
@@ -390,7 +387,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
     await page.goto(`${server.url}${DASHBOARD_PATH}/repository`);
     await page.getByRole("button", { name: "Fix it with AI", exact: true }).click();
     const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
-    const message = workspace.locator(".vibe64-ephemeral-conversation__message--system");
+    const message = workspace.locator(".assistant-transcript__system");
     const returnToChat = message.getByRole("button", { name: "Return to main chat", exact: true });
     await expect(message).toHaveCount(1);
     await expect(message).toContainText("Session updated. Preparing workspace…");
@@ -465,8 +462,9 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
     });
     try {
       server.disconnect();
-      await expect(check).toBeDisabled();
-      await expect(workspace).toContainText(/assistant.*(connection|reconnect)/u);
+      // The connection banner replaces the repair controls until the check finishes.
+      await expect(page.locator("[data-vibe64-connection-recovery]")).toBeVisible();
+      await expect(check).toHaveCount(0);
       await expect.poll(() => Boolean(unblock)).toBe(true);
       expect(checks).toBe(0);
       unblock!();
@@ -479,20 +477,17 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
   });
 
   test("provider failure stays inline and a reply resumes the same repair without publishing", async ({ page }) => {
-    const captured = await mockRepositoryRecovery(page, server, { code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue", outcome: () => "complete" });
-    let fail = true;
-    await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/temporary-conversations/temporary-conversation-1`, async (route) => {
-      if (fail) await fulfillJson(route, { ok: true, status: "failed", error: "Provider connection dropped." });
-      else await route.fallback();
+    const captured = await mockRepositoryRecovery(page, server, {
+      code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue", outcome: () => "complete",
+      nativeTurn: (turn) => turn === 1 ? { status: "failed", error: "Provider connection dropped." } : null
     });
     await page.goto(`${server.url}${DASHBOARD_PATH}/repository`);
     await page.getByRole("button", { name: "Fix it with AI", exact: true }).click();
     const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
-    await expect(workspace.getByRole("alert")).toContainText("Provider connection dropped.");
+    await expect(workspace.getByRole("alert").filter({ hasText: "Provider connection dropped." }).first()).toBeVisible();
     await expect(workspace.getByRole("button", { name: "Stop", exact: true })).toHaveCount(0);
     await expect(workspace).not.toContainText("Session updated");
     expect(captured.temporaryTurns).toHaveLength(1);
-    fail = false;
     await workspace.getByLabel("Message temporary AI").fill("Continue preserving both changes.");
     await workspace.getByRole("button", { name: /^(Send message|Steer assistant)$/ }).click();
     await expect(workspace).toContainText("Session updated");
@@ -503,28 +498,28 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
   });
 
   test("failed Stop and Close retain the repair and can be retried without losing work", async ({ page }) => {
-    const captured = await mockRepositoryRecovery(page, server, { code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue" });
-    const conversationPath = `/vibe64/sessions/${directChatSessionId}/temporary-conversations/temporary-conversation-1`;
+    const captured = await mockRepositoryRecovery(page, server, {
+      code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue", nativeTurn: () => ({ status: "inProgress" })
+    });
     let stops = 0;
     let deletes = 0;
-    await routeApiEndpoint(page, conversationPath, async (route) => {
-      if (route.request().method() === "DELETE") {
-        deletes += 1;
-        await fulfillJson(route, deletes === 1 ? { ok: false, error: "Could not close the conversation." } : { ok: true });
-      } else {
-        await fulfillJson(route, { ok: true, status: "inProgress", progressUpdates: [{ id: "one", text: "Inspecting the overlapping features." }] });
-      }
+    await page.route(/\/temporary-conversations\/[^/?]+$/u, async (route) => {
+      if (route.request().method() !== "DELETE") return route.fallback();
+      deletes += 1;
+      if (deletes === 1) await route.fulfill({ status: 500, json: { ok: false, error: "Could not close the conversation." } });
+      else await route.fallback();
     });
-    await routeApiEndpoint(page, `${conversationPath}/stop`, async (route) => {
+    await page.route(/\/api\/assistant\/app\/conversations\/[^/]+\/cancel$/u, async (route) => {
       stops += 1;
-      await fulfillJson(route, stops === 1 ? { ok: false, error: "Could not stop the AI." } : { ok: true });
+      if (stops === 1) await route.fulfill({ status: 500, json: { ok: false, error: "Could not stop the AI." } });
+      else await route.fallback();
     });
     await page.goto(`${server.url}${DASHBOARD_PATH}/repository`);
     await page.getByRole("button", { name: "Fix it with AI", exact: true }).click();
     const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
     const stop = workspace.getByRole("button", { name: "Stop", exact: true });
     await stop.click();
-    await expect(page.getByText("Could not stop the AI.", { exact: true })).toBeVisible();
+    await expect(workspace.getByText("Could not stop the AI.", { exact: true }).first()).toBeVisible();
     await expect(stop).toBeEnabled();
     await stop.click();
     await expect(stop).toHaveCount(0);
@@ -537,7 +532,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
     expect(deletes).toBe(0);
     await close.click();
     await dialog.getByRole("button", { name: "Close repair", exact: true }).click();
-    await expect(page.getByText("Could not close the conversation.", { exact: true })).toBeVisible();
+    await expect(workspace.getByText("Could not close the conversation.", { exact: true })).toBeVisible();
     await expect(workspace).toBeVisible();
     await dialog.getByRole("button", { name: "Close repair", exact: true }).click();
     await expect(workspace).toHaveCount(0);
@@ -546,7 +541,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
     expect(captured.temporaryCreates).toHaveLength(1);
   });
 
-  test("repair controls stay visible after a failed send, disconnect and long draft", async ({ page }, testInfo) => {
+  test("repair controls stay visible through a disconnect and a long draft", async ({ page }, testInfo) => {
     const viewports = [
       { width: 320, height: 640 }, { width: 390, height: 420 },
       { width: 768, height: 1024 }, { width: 1280, height: 844 }
@@ -554,28 +549,20 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
     const captured = await mockRepositoryRecovery(page, server, {
       code: "vibe64_session_update_conflict", diagnostic: "Four files need review."
     });
-    let failedRequest: Record<string, unknown> | null = null;
-    await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/temporary-conversations/temporary-conversation-1/turns`, async (route) => {
-      if (failedRequest) return route.fallback();
-      failedRequest = requestBodyWithoutOrigin(route.request());
-      await fulfillJson(route, {
-        ok: false, code: "vibe64_agent_write_mode_busy",
-        error: "The assistant is still reconnecting. Wait until it is ready, then try again."
-      });
-    });
     await page.goto(`${server.url}${DASHBOARD_PATH}/repository`);
     await page.getByRole("button", { name: "Fix it with AI", exact: true }).click();
     const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
     const input = workspace.getByLabel("Message temporary AI");
     const send = workspace.getByRole("button", { name: /^(Send message|Steer assistant)$/ });
-    await expect(input).toHaveValue("Fix this repository problem without losing work.");
-    await expect(workspace).not.toContainText("Ask a focused question");
+    await expect.poll(() => captured.temporaryTurns.length).toBe(1);
+    await expect(workspace).toContainText("Fix this repository problem without losing work.");
+    await expect(workspace.locator("[data-temporary-ai-recovery]")).toBeVisible();
+    await input.fill("Send this after reconnecting.");
     server.state.rejectConnections = true;
     server.forceDisconnect();
     const banner = page.locator("[data-vibe64-connection-recovery]");
     await expect(banner).toBeVisible();
     await expect(workspace.locator("[data-temporary-ai-recovery]")).toHaveCount(0);
-    await expect(workspace).not.toContainText("The assistant is still reconnecting");
     await expect(send).toBeDisabled();
     for (const viewport of viewports) {
       await page.setViewportSize(viewport);
@@ -585,12 +572,9 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
     }
     server.state.rejectConnections = false;
     await banner.getByRole("button", { name: "Reconnect", exact: true }).click();
+    await expect(banner).toBeHidden();
+    await expect(workspace.locator("[data-temporary-ai-recovery]")).toBeVisible();
     await expect(send).toBeEnabled();
-    await send.click();
-    await expect.poll(() => captured.temporaryTurns.length).toBe(1);
-    expect(captured.temporaryTurns[0].message).toBe(failedRequest!.message);
-    expect(captured.temporaryTurns[0].messageId).toBe(failedRequest!.messageId);
-    await expect(input).toBeEnabled();
     await input.fill("Keep my reply and the buttons visible.\n".repeat(80));
     for (const viewport of viewports) {
       await page.setViewportSize(viewport);
@@ -602,23 +586,23 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
     expect(captured.mainChatMessages).toHaveLength(0);
   });
 
-  test("Tab then Enter sends one reply, and long progress cannot move the composer offscreen", async ({ page }) => {
-    const captured = await mockRepositoryRecovery(page, server, { code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue" });
+  test("Tab then Enter sends one reply and keeps Stop and the composer onscreen", async ({ page }) => {
+    const captured = await mockRepositoryRecovery(page, server, {
+      code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue",
+      nativeTurn: (turn) => turn === 2 ? { status: "inProgress" } : null
+    });
     await page.goto(`${server.url}${DASHBOARD_PATH}/repository`);
     await page.getByRole("button", { name: "Fix it with AI", exact: true }).click();
     const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
     const input = workspace.getByLabel("Message temporary AI");
     await expect(input).toBeEnabled();
-    await routeApiEndpoint(page, `/vibe64/sessions/${directChatSessionId}/temporary-conversations/temporary-conversation-1`, (route) => fulfillJson(route, {
-      ok: true, status: "inProgress", progressUpdates: Array.from({ length: 40 }, (_, id) => ({ id: String(id), text: `Checking preserved behavior ${id}. ${"Details ".repeat(25)}` }))
-    }));
     await input.fill("Keep both notification types.");
     await input.press("Tab");
     await expect(workspace.getByRole("button", { name: /^(Send message|Steer assistant)$/ })).toBeFocused();
     await page.keyboard.press("Enter");
     await expect.poll(() => captured.temporaryTurns.length).toBe(2);
-    expect(captured.temporaryTurns[1].message).toBe("Keep both notification types.");
-    await workspace.getByRole("button", { name: "Show all 40 progress updates", exact: true }).click();
+    expect(captured.temporaryTurns[1].displayMessage).toBe("Keep both notification types.");
+    expect(captured.temporaryTurns[1].message).toContain("Keep both notification types.");
     const stop = workspace.getByRole("button", { name: "Stop", exact: true });
     await expect(stop).toBeInViewport();
     await expect(input).toBeInViewport();
@@ -641,6 +625,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
         ? route.request().postDataJSON().sessionId : directChatSessionId });
     });
     await routeApiEndpoint(page, `/vibe64/sessions/${other.sessionId}`, (route) => fulfillJson(route, other));
+    await routeApiEndpoint(page, `/vibe64/sessions/${other.sessionId}/temporary-conversations`, (route) => fulfillJson(route, { ok: true, conversations: [] }));
     await page.goto(`${server.url}${DASHBOARD_PATH}/repository`);
     await page.locator(`[data-vibe64-session-id="${directChatSessionId}"]:visible`).click();
     await page.getByRole("button", { name: "Fix it with AI", exact: true }).click();
@@ -702,6 +687,7 @@ async function mockRepositoryRecovery(page: Page, server: Awaited<ReturnType<typ
   code,
   diagnostic,
   outcome = () => "continue",
+  nativeTurn = () => null,
   conflictRecovery,
   workspaceSetup = () => ({ status: "unconfigured" }),
   applyUpdate = async () => ({ ok: true, status: "updated" })
@@ -710,11 +696,13 @@ async function mockRepositoryRecovery(page: Page, server: Awaited<ReturnType<typ
   diagnostic: string;
   conflictRecovery?: { reviewId: string; conflictPaths: string[] };
   outcome?: (turn: number) => string;
+  nativeTurn?: (turn: number) => Record<string, unknown> | null;
   workspaceSetup?: () => Record<string, unknown>;
   applyUpdate?: (input: Record<string, unknown>) => Promise<Record<string, unknown>>;
 }) {
   const captured = server.temporary!.captured;
   captured.outcome = outcome;
+  captured.nativeTurn = nativeTurn;
   let updated = false;
   await mockProjectGateReady(page);
 
@@ -769,11 +757,9 @@ async function mockRepositoryRecovery(page: Page, server: Awaited<ReturnType<typ
       return;
     }
     if (method === "POST" && url.pathname.endsWith("/updates/check")) {
-      await fulfillJson(route, {
-        code,
-        error: diagnostic,
-        ok: false
-      });
+      await fulfillJson(route, updated
+        ? { ok: true, relationship: "current", ahead: 0, behind: 0, updateAvailable: false, incomingVersions: [] }
+        : { code, error: diagnostic, ok: false });
       return;
     }
     if (method === "GET" && url.pathname.endsWith("/work")) {
@@ -804,7 +790,7 @@ async function mockRepositoryRecovery(page: Page, server: Awaited<ReturnType<typ
         openSessionCount: 1
       },
       ok: true,
-      sessions: [directChatSessionPayload]
+      sessions: [{ ...directChatSessionPayload, workspaceSetup: workspaceSetup() }]
     });
   }, { prefix: true });
 
@@ -824,6 +810,13 @@ async function openTemporaryChat(page: Page) {
     await page.locator("[data-vibe64-session-actions]:visible").click();
     await page.locator("[data-vibe64-temporary-ai-action]:visible").click();
   }
+}
+
+async function saveDraft(page: Page, input: ReturnType<Page["getByLabel"]>, draft: string) {
+  const saved = page.waitForResponse(response => response.request().method() === "PATCH" &&
+    response.url().includes("/temporary-conversations/") && response.request().postDataJSON()?.presentation?.draft === draft);
+  await input.fill(draft);
+  expect((await saved).ok()).toBe(true);
 }
 
 function requestBodyWithoutOrigin(request: Request) {

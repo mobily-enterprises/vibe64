@@ -634,6 +634,7 @@
         :session-selected="props.active"
         :assistant-selection="props.session?.assistantSelection"
         :assistant-ready="Boolean(sessionId) && !props.sessionSelectionArchived"
+        :connection-unavailable="connectionRecoveryVisible"
         :can-configure-routing="assistantCanConfigureRouting"
         :preview-attachment-state="previewAttachmentState"
         :project-slug="projectSlug"

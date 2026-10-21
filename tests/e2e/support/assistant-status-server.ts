@@ -504,7 +504,9 @@ async function temporaryConversationsFixture({ engineId, session, actions, publi
   const native = new Map();
   let nextNativeId = 0;
   const captured = { temporaryCreates: [] as Record<string, unknown>[], temporaryTurns: [] as Record<string, unknown>[],
-    temporaryDeletes: 0, outcome: (_turn: number) => "continue" };
+    temporaryDeletes: 0, outcome: (_turn: number) => "continue",
+    // Replaces the completed native result, for example { status: "inProgress" }.
+    nativeTurn: (_turn: number): Record<string, unknown> | null => null };
   const sessionAgent = {
     async inspectAssistantPurposes() { return {}; },
     async assistantAccess() { return { canUse: true }; },
@@ -530,8 +532,12 @@ async function temporaryConversationsFixture({ engineId, session, actions, publi
       const text = input.outputSchema ? JSON.stringify({ kind: captured.outcome(captured.temporaryTurns.length),
         message, report: message }) : message;
       record.accepted.add(input.messageId);
-      Object.assign(record, { status: "completed", runId, text });
-      record.messages.push({ id: `${runId}-assistant`, role: "assistant", text, at: new Date().toISOString(), complete: true });
+      const replacement = captured.nativeTurn(captured.temporaryTurns.length);
+      if (replacement) Object.assign(record, { runId, text: "", error: "" }, replacement);
+      else {
+        Object.assign(record, { status: "completed", runId, text });
+        record.messages.push({ id: `${runId}-assistant`, role: "assistant", text, at: new Date().toISOString(), complete: true });
+      }
       return { ok: true, runId, status: "inProgress" };
     },
     async stopConversation(_id, input) {
@@ -598,6 +604,6 @@ async function temporaryConversationsFixture({ engineId, session, actions, publi
         return { ...handle, subscribe(listener) { onSubscribe(conversationId); return handle.subscribe(listener); } };
       }
     },
-    async close() { await service.close(); await common.close(); await rm(root, { recursive: true, force: true }); }
+    async close() { await service.close(); await common.close(); await rm(root, { recursive: true, force: true, maxRetries: 5 }); }
   };
 }

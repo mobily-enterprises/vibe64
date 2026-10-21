@@ -172,10 +172,10 @@
         @edit="temporary.editMessage(activeTask.id, $event)"
       >
         <template #message-text="{ message }">
-          <p v-if="message.id === recoveryMessageId" ref="completionMessage">{{ updateCompletionText || message.text }}</p>
+          <p v-if="message.messageId === recoveryMessageId" ref="completionMessage">{{ updateCompletionText || message.text }}</p>
           <p v-else>{{ message.text }}</p>
           <v-btn
-            v-if="message.id === recoveryMessageId && canReturnToMainChat"
+            v-if="message.messageId === recoveryMessageId && canReturnToMainChat"
             ref="returnToMainButton"
             :aria-busy="closingTask"
             class="vibe64-temporary-ai__return"
