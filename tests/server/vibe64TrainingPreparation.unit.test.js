@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { createTrainingService } from "@local/vibe64-training/server/preparation";
 
 const actor = { uid: 123, username: "learner" };
@@ -453,7 +454,7 @@ test("another lesson in progress refuses a start once with its title; archiveCur
   inProgress(f, { attemptId: otherId, pin: otherPin, requestIds: ["other"] });
   const service = createTrainingService(f.owners);
   const start = extra => service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, requestId: "start-1", expectedRevision: 5, ...extra });
-  await assert.rejects(start(), error => error.code === "VIBE64_TRAINING_LESSON_IN_PROGRESS" && error.statusCode === 409 &&
+  await assert.rejects(start(), error => error instanceof AppError && error.code === "VIBE64_TRAINING_LESSON_IN_PROGRESS" && error.statusCode === 409 &&
     error.details.attemptId === otherId && error.details.lessonTitle === "Your second lesson");
   await assert.rejects(start({ archiveCurrent: true, expectedRevision: 4 }), { code: "VIBE64_TRAINING_STATE_REVISION_CONFLICT" });
   assert.deepEqual(f.calls.filter(([name]) => ["close", "reserve"].includes(name)), [], "a refusal changes nothing");

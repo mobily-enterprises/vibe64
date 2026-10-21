@@ -1,6 +1,7 @@
 import { lstat, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
+import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { practiceLearnerKey } from "@local/vibe64-core/server/learningSpace";
 
 function trainingError(code, message) {
@@ -52,8 +53,9 @@ function createTrainingService({ catalogue, content, learners, learningSpace = n
     const replay = saved.progress.attempts.some(value => value.requestIds?.includes(requestId));
     if (current && !replay && !isDeepStrictEqual(current.pin, pin)) {
       if (archiveCurrent !== true) {
-        throw Object.assign(trainingError("VIBE64_TRAINING_LESSON_IN_PROGRESS",
-          "Another lesson is in progress. Archive it to start this one, or continue it."), {
+        // An AppError: the HTTP error response carries only an AppError's details.
+        throw new AppError(409, "Another lesson is in progress. Archive it to start this one, or continue it.", {
+          code: "VIBE64_TRAINING_LESSON_IN_PROGRESS",
           details: { attemptId: current.attemptId, lessonTitle: await lessonTitle(current.pin) } });
       }
       if (expectedRevision !== saved.revision) throw revisionConflict();
