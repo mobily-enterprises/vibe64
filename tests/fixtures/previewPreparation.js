@@ -39,6 +39,9 @@ export async function createPreviewPreparationFixture({
 ## Workspace setup
 - Prepare \`Prepare fixture\` with \`nodejs\`: \`node\` \`setup.cjs\`
 
+## Connected development
+- Default package type: \`npm\`
+
 ## Outputs
 
 ### Target \`app\`: Preview fixture

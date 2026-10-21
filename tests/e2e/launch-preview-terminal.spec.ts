@@ -84,7 +84,7 @@ for (const width of [390, 1440]) {
   test(`@update-icon failed Update retains Rebase until success at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
     await mockLaunchTerminalSocket(page);
-    await mockLaunchSession(page, { assistantAccess: PERSONAL_ASSISTANT_ACCESS });
+    await mockLaunchSession(page);
     let behind = true;
     let attempts = 0;
     await page.route("**/sessions/*/work", (route) => fulfillJson(route, {
@@ -107,8 +107,8 @@ for (const width of [390, 1440]) {
         : { ok: true, status: "updated" });
     });
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-    const rebase = page.getByRole("button", { name: "Update selected session (rebase)", exact: true });
-    const save = page.getByRole("button", { name: "Save selected session work", exact: true });
+    const rebase = page.getByRole("button", { name: "Update session", exact: true });
+    const save = page.getByRole("button", { name: "Review selected session changes", exact: true });
     await expect(rebase).toBeEnabled();
     await expect(save).toHaveCount(0);
     await page.reload();
@@ -133,7 +133,7 @@ for (const width of [390, 1440]) {
       }));
       const targetId = sessions[1].sessionId;
       await mockLaunchSession(page, {
-        assistantAccess: PERSONAL_ASSISTANT_ACCESS, session: sessions[0], sessionList: sessions
+        session: sessions[0], sessionList: sessions
       });
       const checkGate = Promise.withResolvers<void>();
       const workGate = Promise.withResolvers<void>();
@@ -175,7 +175,7 @@ for (const width of [390, 1440]) {
         });
         if (first === "realtime") await notify();
         else checkGate.resolve();
-        const update = chat.getByRole("button", { name: "Update selected session (rebase)", exact: true });
+        const update = chat.getByRole("button", { name: "Update session", exact: true });
         await expect(update).toBeEnabled({ timeout: 1500 });
         expect(workFinished).toBe(false);
         await expect(composer).toHaveValue("Keep this draft while checking for updates.");
@@ -208,7 +208,6 @@ for (const width of [390, 1440]) {
       sessionName
     }));
     await mockLaunchSession(page, {
-      assistantAccess: PERSONAL_ASSISTANT_ACCESS,
       session: sessions[0],
       sessionList: sessions
     });
@@ -235,8 +234,8 @@ for (const width of [390, 1440]) {
     try {
       await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
       const chat = page.locator(".studio-autopilot:visible");
-      const save = chat.getByRole("button", { name: "Save selected session work", exact: true });
-      const update = chat.getByRole("button", { name: "Update selected session (rebase)", exact: true });
+      const save = chat.getByRole("button", { name: "Review selected session changes", exact: true });
+      const update = chat.getByRole("button", { name: "Update session", exact: true });
       for (const session of sessions.slice(1)) {
         await page.locator(`[data-vibe64-session-id='${session.sessionId}']:visible`).click();
         await expect(save).toBeEnabled();
@@ -272,7 +271,6 @@ test.describe("temporary workspace lifetime", () => {
       await mockLaunchTerminalSocket(page);
       const requests: TemporaryAiRecoveryRequests = { mainMessages: [], temporaryStarts: [], temporaryTurns: [] };
       await mockLaunchSession(page, {
-        assistantAccess: PERSONAL_ASSISTANT_ACCESS,
         temporaryAiRecoveryRequests: requests
       });
       const errors: string[] = [];
@@ -360,7 +358,6 @@ for (const width of [390, 1440]) {
     await mockLaunchTerminalSocket(page);
     const requests: TemporaryAiRecoveryRequests = { mainMessages: [], temporaryStarts: [], temporaryTurns: [] };
     await mockLaunchSession(page, {
-      assistantAccess: PERSONAL_ASSISTANT_ACCESS,
       sessionList: [sessionPayload(), sessionPayload({ sessionId: "session-other", sessionName: "Other" })],
       temporaryAiRecoveryRequests: requests
     });
@@ -493,7 +490,6 @@ for (const width of [390, 1440]) {
     await page.setViewportSize({ width, height: 844 });
     await mockLaunchTerminalSocket(page);
     await mockLaunchSession(page, {
-      assistantAccess: PERSONAL_ASSISTANT_ACCESS,
       temporaryAiRecoveryRequests: { mainMessages: [], temporaryStarts: [], temporaryTurns: [] }
     });
     let stopCount = 0;
@@ -580,7 +576,7 @@ for (const width of [390, 1440]) {
       expect(stopCount).toBe(2);
       expect(deleteCount).toBe(2);
       expect(updateCount).toBe(0);
-      await expect(page.getByRole("button", { name: "Update selected session (rebase)", exact: true })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Update session", exact: true })).toBeVisible();
     } finally {
       releaseStop!();
     }
@@ -623,7 +619,7 @@ for (const width of [1440, 390]) {
         await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
         if (width < 600) await page.getByRole("button", { name: "Show project" }).click();
         if (changeEnvironment) {
-          await expect(page.getByText("Waiting for the assistant operation to finish. Preview will retry automatically.")).toBeVisible();
+          await expect(page.getByText("Waiting for the current workspace operation to finish. Preview will retry automatically.")).toBeVisible();
           expect(starts).toBe(1);
           await page.screenshot({ path: testInfo.outputPath("real-preparation-waiting.png") });
           await release();
@@ -652,7 +648,10 @@ const PERSONAL_ASSISTANT_ACCESS = Object.freeze({
   canUse: true,
   nativeCanUse: true,
   ok: true,
-  ownerOnly: true
+  ownerOnly: true,
+  purposes: Object.fromEntries(
+    ["junior", "senior", "helper", "source_explanation", "prompt_hint", "auto"].map((purpose) => [purpose, { available: true }])
+  )
 });
 type SourceExplanationPayload = Record<string, unknown>;
 type SourceExplanationResponse = unknown[] | ((payload: SourceExplanationPayload) => unknown[]);
@@ -947,7 +946,7 @@ test("@render-recovery keeps GitHub sessions and preview alive through navigatio
     });
     return session;
   });
-  await mockLaunchSession(page, { assistantAccess: PERSONAL_ASSISTANT_ACCESS, session: sessions[0], sessionList: sessions });
+  await mockLaunchSession(page, { session: sessions[0], sessionList: sessions });
   await page.goto(`${BASE_URL}${DASHBOARD_PATH}/session`);
   await expect(page.getByLabel("Message AI assistant")).toBeVisible();
   for (let round = 0; round < 4; round += 1) {
@@ -986,7 +985,6 @@ test("@render-recovery creates three sessions while previews finish in the backg
   });
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page, {
-    assistantAccess: PERSONAL_ASSISTANT_ACCESS,
     previewResponseDelayMs: 1000,
     sessionList: []
   });
@@ -1025,7 +1023,6 @@ test("@render-recovery completes hidden preview loads across toolbar moves", asy
     sessionName
   }));
   await mockLaunchSession(page, {
-    assistantAccess: PERSONAL_ASSISTANT_ACCESS,
     previewResponseDelayMs: 2000,
     previewIdentity: previewIdentityCapability(),
     previewIdentityExchange: () => ({ ok: true, identity: { email: "admin@example.com" } }),
@@ -1059,7 +1056,7 @@ for (const width of [1280, 768, 390]) {
     session.agentSession.turn.active = true;
     const requests: TemporaryAiRecoveryRequests = { mainMessages: [], temporaryStarts: [], temporaryTurns: [] };
     const launch = await mockLaunchSession(page, {
-      session, assistantAccess: PERSONAL_ASSISTANT_ACCESS, temporaryAiRecoveryRequests: requests
+      session, temporaryAiRecoveryRequests: requests
     });
     let state = "attention";
     let failInspection = false;
@@ -1294,7 +1291,6 @@ for (const width of [390, 1440]) {
       temporaryTurns: []
     };
     const launchSession = await mockLaunchSession(page, {
-      assistantAccess: PERSONAL_ASSISTANT_ACCESS,
       previewIdentity: previewIdentityCapability(),
       previewIdentityExchange: (selection) => {
         if (selection.selector?.value === "missing@example.com") {
@@ -1446,7 +1442,6 @@ test("@preview-lifecycle attaches multiple visible preview frames and stops each
   });
   await mockLaunchTerminalSocket(page);
   const launchSession = await mockLaunchSession(page, {
-    assistantAccess: PERSONAL_ASSISTANT_ACCESS,
     attachmentUploadResponseDelayMs: 800,
     previewResponseDelayMs: 800
   });
@@ -1518,7 +1513,6 @@ test("@preview-lifecycle attaches multiple visible preview frames and stops each
 test("@preview-lifecycle attaches isolated proxied-app console and network diagnostics", async ({ page }) => {
   await mockLaunchTerminalSocket(page);
   const launchSession = await mockLaunchSession(page, {
-    assistantAccess: PERSONAL_ASSISTANT_ACCESS,
     attachmentUploadResponseDelayMs: 800
   });
   await page.route("http://127.0.0.1:49000/api/diagnostics", async (route) => {
@@ -1636,7 +1630,6 @@ for (const viewportWidth of [390, 960, 1600]) {
     });
     await mockLaunchTerminalSocket(page);
     const launchSession = await mockLaunchSession(page, {
-      assistantAccess: PERSONAL_ASSISTANT_ACCESS,
       attachmentUploadOutcomes: ["failure", "success"],
       attachmentUploadResponseDelayMs: 800
     });
@@ -1719,7 +1712,6 @@ test("@preview-lifecycle multipart upload exposes genuine nonzero monotonic brow
   await observeBrowserUploadProgress(page);
   await mockLaunchTerminalSocket(page);
   const launchSession = await mockLaunchSession(page, {
-    assistantAccess: PERSONAL_ASSISTANT_ACCESS,
     attachmentUploadResponseDelayMs: 1000
   });
   const fileName = "observed-browser-progress.bin";
@@ -1766,7 +1758,6 @@ test("@preview-lifecycle reduced motion keeps unknown upload progress stationary
   });
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page, {
-    assistantAccess: PERSONAL_ASSISTANT_ACCESS,
     attachmentUploadResponseDelayMs: 1000
   });
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
@@ -1803,7 +1794,6 @@ test("@preview-lifecycle Temporary AI keeps its shared upload queue across task 
   await page.setViewportSize({ height: 844, width: 390 });
   await mockLaunchTerminalSocket(page);
   const launchSession = await mockLaunchSession(page, {
-    assistantAccess: PERSONAL_ASSISTANT_ACCESS,
     attachmentUploadResponseDelayMs: 1000
   });
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
@@ -1855,7 +1845,7 @@ for (const width of [390, 720, 768, 1280]) {
     page.setDefaultTimeout(10_000);
     await page.setViewportSize({ width, height: 844 });
     await mockLaunchTerminalSocket(page);
-    await mockLaunchSession(page, { assistantAccess: PERSONAL_ASSISTANT_ACCESS, session: sessionPayload({
+    await mockLaunchSession(page, { session: sessionPayload({
       agentTerminal: { commandPreview: "codex", id: "server-agent-terminal", status: "running" }
     }) });
     const deletes: string[] = [];
@@ -1924,7 +1914,7 @@ test("@temporary-model merge repair exposes the shared picker and retains Senior
   const catalog = assistantCatalogPayload({ includeOpenCode: true });
   const codex = sessionPayload().assistantSelection;
   const previous = { ...codex, engineId: "opencode", agentId: "build", modelProviderId: "zai-coding-plan", modelId: "glm-5.3", variantId: "high" };
-  await mockLaunchSession(page, { assistantAccess: PERSONAL_ASSISTANT_ACCESS, assistantCatalog: catalog });
+  await mockLaunchSession(page, { assistantCatalog: catalog });
   const record = { conversationId: "repair-model", state: "open", title: "Resolve Update", status: "completed", messages: [],
     assistantSelection: previous, agentSettings: { model: previous.modelId, thinking: "high" },
     recoveryOperation: "update", recoveryContext: "Preserve booking validation.",
@@ -1971,7 +1961,7 @@ test("@session-toolbar crowded actions shrink, recover their spacing, and use a 
   await mockLaunchTerminalSocket(page);
   const sessions = ["#60 Booking validation", "#61 Invoice totals", "#53 Appointment screen"].map((sessionName, index) =>
     sessionPayload({ sessionName, sessionId: index ? `toolbar-${index}` : SESSION_ID }));
-  await mockLaunchSession(page, { assistantAccess: PERSONAL_ASSISTANT_ACCESS, session: sessions[0], sessionList: sessions });
+  await mockLaunchSession(page, { session: sessions[0], sessionList: sessions });
   await page.route("**/sessions/*/work", (route) => fulfillJson(route, {
     ok: true, checkedAt: new Date().toISOString(), unsaved: true, updateAvailable: true
   }));
@@ -1980,12 +1970,12 @@ test("@session-toolbar crowded actions shrink, recover their spacing, and use a 
   await separator.focus();
   await separator.press("End");
   const header = page.locator(".studio-autopilot__session-header:visible");
-  const undo = header.getByRole("button", { name: "Undo last turn", exact: true });
-  await expect.poll(async () => Math.round((await undo.boundingBox())!.width)).toBe(48);
+  const temporaryAi = header.getByRole("button", { name: "Open temporary AI", exact: true });
+  await expect.poll(async () => Math.round((await temporaryAi.boundingBox())!.width)).toBe(48);
   await expect.poll(() => header.locator(".studio-autopilot__header-actions--expanded").evaluate(element => getComputedStyle(element).gap)).toBe("6.4px");
   await header.screenshot({ path: testInfo.outputPath("toolbar-roomy.png") });
   for (let i = 0; i < 7; i += 1) await separator.press("ArrowLeft");
-  await expect.poll(async () => Math.round((await undo.boundingBox())!.width)).toBe(44);
+  await expect.poll(async () => Math.round((await temporaryAi.boundingBox())!.width)).toBe(44);
   const actions = header.locator(".studio-autopilot__header-actions--expanded");
   await expect.poll(() => actions.evaluate(element => getComputedStyle(element).gap)).toBe("0px");
   const actionBox = (await actions.boundingBox())!;
@@ -1997,7 +1987,7 @@ test("@session-toolbar crowded actions shrink, recover their spacing, and use a 
   expect(commitBox.height).toBeGreaterThan(commitBox.width);
   await header.screenshot({ path: testInfo.outputPath("toolbar-crowded.png") });
   await separator.press("End");
-  await expect.poll(async () => Math.round((await undo.boundingBox())!.width)).toBe(48);
+  await expect.poll(async () => Math.round((await temporaryAi.boundingBox())!.width)).toBe(48);
 });
 
 for (const status of ["required", "failed"]) {
@@ -2007,7 +1997,7 @@ for (const status of ["required", "failed"]) {
     const session = { ...sessionPayload(), workspaceSetup: { status, updatedAt: "2026-09-29T07:00:00Z",
       transcript: "Previous setup output.",
       diagnostic: status === "required" ? "Install updated project dependencies." : "npm install failed." } };
-    await mockLaunchSession(page, { session, assistantAccess: PERSONAL_ASSISTANT_ACCESS });
+    await mockLaunchSession(page, { session });
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?session=${SESSION_ID}&chat=main`);
     const notice = page.locator(".vibe64-temporary-action-terminal:visible").filter({ hasText: /Workspace preparation/ });
     await expect(notice).toBeVisible();
@@ -2062,7 +2052,6 @@ test("@preview-lifecycle Codex interactive terminal keeps one attachment queue a
   await mockLaunchTerminalSocket(page);
   const launchSession = await mockLaunchSession(page, {
     agentTerminalControlOutcomes: ["failure", "success"],
-    assistantAccess: PERSONAL_ASSISTANT_ACCESS,
     attachmentUploadOutcomes: ["success", "failure"],
     attachmentUploadResponseDelayMs: 800,
     session: sessionPayload({
@@ -2172,7 +2161,6 @@ for (const viewportWidth of [390, 1600]) {
     });
     await mockLaunchTerminalSocket(page);
     const launchSession = await mockLaunchSession(page, {
-      assistantAccess: PERSONAL_ASSISTANT_ACCESS,
       attachmentUploadResponseDelayMs: 800,
       session: sessionPayload({
         agentTerminal: {
@@ -2231,7 +2219,6 @@ test("@preview-lifecycle Codex terminal picker keeps a 48px coarse touch target"
   try {
     await mockLaunchTerminalSocket(page);
     await mockLaunchSession(page, {
-      assistantAccess: PERSONAL_ASSISTANT_ACCESS,
       session: sessionPayload({
         agentTerminal: {
           commandPreview: "codex",
@@ -2265,7 +2252,6 @@ test("@preview-lifecycle interactive terminal is selected only by the session's 
     }
   });
   await mockLaunchSession(page, {
-    assistantAccess: PERSONAL_ASSISTANT_ACCESS,
     assistantCatalog: assistantCatalogPayload({ includeOpenCode: true }),
     session: {
       ...baseSession,
@@ -2493,7 +2479,7 @@ for (const width of [1440, 390]) {
       const failure = page.locator("strong").filter({ hasText: "Preview could not be started" });
       if (!readinessFirst) {
         releaseStart();
-        await expect(page.getByText("Waiting for the assistant operation to finish. Preview will retry automatically.")).toBeVisible();
+        await expect(page.getByText("Waiting for the current workspace operation to finish. Preview will retry automatically.")).toBeVisible();
         await expect(failure).toHaveCount(0);
         await expect(page.getByText("Another assistant operation is starting. Try again in a moment.", { exact: true })).toHaveCount(0);
         await page.screenshot({ path: testInfo.outputPath("start-rejected.png") });
@@ -2544,13 +2530,13 @@ for (const width of [1440, 390]) {
     if (width < 600) {
       await page.getByRole("button", { name: "Show project" }).click();
     }
-    await expect(page.getByText("Waiting for the assistant operation to finish. Preview will retry automatically.")).toBeVisible();
+    await expect(page.getByText("Waiting for the current workspace operation to finish. Preview will retry automatically.")).toBeVisible();
     await page.screenshot({ path: testInfo.outputPath("waiting.png") });
     await expect(page.locator(".vibe64-launch-controls__preview-frame")).toBeVisible({ timeout: 35_000 });
     await expect(page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")).toBeVisible();
     await expect(page.locator("strong").filter({ hasText: "Preview could not be started" })).toHaveCount(0);
     expect(await page.evaluate(() => (window as typeof window & { busyErrorShown?: boolean }).busyErrorShown)).toBe(false);
-    await expect(page.getByText("Waiting for the assistant operation to finish. Preview will retry automatically.")).toHaveCount(0);
+    await expect(page.getByText("Waiting for the current workspace operation to finish. Preview will retry automatically.")).toHaveCount(0);
     expect(starts).toBe(4);
     for (let index = 1; index < startTimes.length; index += 1) {
       expect(startTimes[index] - startTimes[index - 1]).toBeGreaterThanOrEqual(6500);
@@ -2596,7 +2582,7 @@ test("@preview-contention reload preserves the retry cooldown and recovers", asy
     }, { status: 409 });
   });
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-  await expect(page.getByText("Waiting for the assistant operation to finish. Preview will retry automatically.")).toBeVisible();
+  await expect(page.getByText("Waiting for the current workspace operation to finish. Preview will retry automatically.")).toBeVisible();
   await page.reload();
   await expect(page.frameLocator(".vibe64-launch-controls__preview-frame").getByText("Preview app")).toBeVisible({ timeout: 15_000 });
   expect(startTimes).toHaveLength(2);
@@ -2608,7 +2594,6 @@ for (const cancelHint of [false, true]) {
     await mockLaunchTerminalSocket(page);
     const requests: TemporaryAiRecoveryRequests = { mainMessages: [], temporaryStarts: [], temporaryTurns: [] };
     await mockLaunchSession(page, {
-      assistantAccess: PERSONAL_ASSISTANT_ACCESS,
       conversationLog: [{
         assistant: { at: "2026-09-07T00:00:00Z", role: "assistant", text: "The application is ready to preview." },
         turnId: "completed-preview-work"
@@ -2762,6 +2747,7 @@ test("@preview-lifecycle auto-starts without exposing passive actions", async ({
   await expect(waitingState.getByRole("button")).toHaveCount(0);
   await expect.poll(() => launchSession.getLaunchStartPayloads()).toEqual([
     {
+      automatic: true,
       outputTargetId: "dev",
       originId: expect.stringMatching(/^tab:/u)
     }
@@ -2793,6 +2779,7 @@ test("@preview-lifecycle automatically recovers when the first status has no tar
 
   await expect.poll(() => launchSession.getLaunchStartPayloads()).toEqual([
     {
+      automatic: true,
       outputTargetId: "dev",
       originId: expect.stringMatching(/^tab:/u)
     }
@@ -2827,6 +2814,7 @@ test("@preview-lifecycle refreshes disabled targets after the selected session a
   await expect.poll(() => launchSession.getLaunchStatusRequestCount()).toBe(2);
   await expect.poll(() => launchSession.getLaunchStartPayloads()).toEqual([
     {
+      automatic: true,
       outputTargetId: "dev",
       originId: expect.stringMatching(/^tab:/u)
     }
@@ -2851,6 +2839,7 @@ test("@preview-lifecycle lets the user recheck a disabled target without a sessi
   await expect.poll(() => launchSession.getLaunchStatusRequestCount()).toBe(2);
   await expect.poll(() => launchSession.getLaunchStartPayloads()).toEqual([
     {
+      automatic: true,
       outputTargetId: "dev",
       originId: expect.stringMatching(/^tab:/u)
     }
@@ -3307,11 +3296,10 @@ test("mobile dashboard section links keep the active project slug", async ({ pag
   await page.getByRole("button", {
     name: "Show project"
   }).click();
-  await page.locator(".section-container-shell__mobile-section-title", {
-    hasText: "Env"
-  }).click();
+  await page.locator(".v-select").filter({ has: page.getByRole("combobox", { name: "Dashboard section" }) }).click();
+  await page.getByRole("option", { name: "Project settings", exact: true }).click();
 
-  await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/env`);
+  await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/settings`);
   expect(page.url()).not.toContain("[slug]");
 });
 
@@ -3361,7 +3349,7 @@ for (const viewportWidth of [390, 960, 1600]) {
     }
     const pendingBox = await firstTrigger.boundingBox();
     expect(Math.abs((pendingBox?.width || 0) - (idleBox?.width || 0))).toBeLessThan(1);
-    expect(pendingBox?.height || 0).toBeGreaterThanOrEqual(47);
+    expect(Math.abs((pendingBox?.height || 0) - (idleBox?.height || 0))).toBeLessThan(1);
     await expect(page.locator(".v-progress-circular")).toHaveCount(0);
 
     creation.releaseNextSessionCreation();
@@ -3938,6 +3926,7 @@ for (const viewportWidth of [390, 960, 1600]) {
       if (new URL(request.url()).pathname.endsWith("/development-database")) {
         expect(request.method()).toBe("PUT");
         expect(request.postDataJSON()).toEqual({
+          allowSharedDatabaseSessions: false,
           scope: "session"
         });
         databaseScope = "session";
@@ -4054,7 +4043,6 @@ test("the chat cog stays available and delivery actions stay aligned during an a
     }
   };
   await mockLaunchSession(page, {
-    assistantAccess: PERSONAL_ASSISTANT_ACCESS,
     assistantCatalog: assistantCatalogPayload({ includeOpenCode: true }),
     session: selectedSession
   });
@@ -4344,7 +4332,6 @@ test("source explanations keep live progress compact and answers above the follo
   ].join("\n");
   await mockLaunchTerminalSocket(page);
   await mockLaunchSession(page, {
-    assistantAccess: PERSONAL_ASSISTANT_ACCESS,
     conversationLog: [
       {
         assistant: {
@@ -4722,7 +4709,7 @@ for (const width of [1440, 390]) {
     await mockLaunchTerminalSocket(page);
     const session = sessionPayload();
     const conversationLog: unknown[] = [];
-    await mockLaunchSession(page, { assistantAccess: PERSONAL_ASSISTANT_ACCESS, conversationLog, session });
+    await mockLaunchSession(page, { conversationLog, session });
     const requests: Record<string, unknown>[] = [];
     let releaseFirst!: () => void;
     const firstResponse = new Promise<void>((resolve) => { releaseFirst = resolve; });
@@ -4785,7 +4772,6 @@ for (const width of [1440, 390]) {
     Object.assign(session.agentSession.turn, { active: true, id: "turn-stopping", state: "active" });
     const requests: TemporaryAiRecoveryRequests = { mainMessages: [], temporaryStarts: [], temporaryTurns: [] };
     await mockLaunchSession(page, {
-      assistantAccess: PERSONAL_ASSISTANT_ACCESS,
       session,
       temporaryAiRecoveryRequests: requests
     });
@@ -5221,7 +5207,7 @@ async function responsiveChatHarness(page: Page, {
   }
   Object.assign(sessions[0].agentSession.turn, { active, id: "turn-stress", state: active ? "active" : "idle" });
   const conversationLog = [...history];
-  await mockLaunchSession(page, { assistantAccess: PERSONAL_ASSISTANT_ACCESS, assistantCatalog, conversationLog, session: sessions[0], sessionList: sessions });
+  await mockLaunchSession(page, { assistantCatalog, conversationLog, session: sessions[0], sessionList: sessions });
   const messages: HeldChatRequest[] = [];
   const interrupts: HeldChatRequest[] = [];
   const errors: string[] = [];
@@ -5299,7 +5285,7 @@ async function publishChatSessionChange(page: Page, payload: Record<string, unkn
 
 async function mockLaunchSession(page: Page, {
   agentTerminalControlOutcomes = [],
-  assistantAccess = null,
+  assistantAccess = PERSONAL_ASSISTANT_ACCESS,
   assistantCatalog = assistantCatalogPayload(),
   attachmentUploadOutcomes = [],
   attachmentUploadResponseDelayMs = 0,
@@ -5325,7 +5311,7 @@ async function mockLaunchSession(page: Page, {
   temporaryAiRecoveryRequests = null
 }: {
   agentTerminalControlOutcomes?: Array<"failure" | "success">;
-  assistantAccess?: Record<string, unknown> | null;
+  assistantAccess?: Record<string, unknown>;
   assistantCatalog?: ReturnType<typeof assistantCatalogPayload>;
   attachmentUploadOutcomes?: Array<"failure" | "success">;
   attachmentUploadResponseDelayMs?: number;
@@ -5568,7 +5554,7 @@ async function mockLaunchSession(page: Page, {
       });
       return;
     }
-    if (assistantAccess && method === "GET" && url.pathname.endsWith("/assistant-access")) {
+    if (method === "GET" && url.pathname.endsWith("/assistant-access")) {
       await fulfillJson(route, assistantAccess);
       return;
     }
@@ -6793,7 +6779,7 @@ for (const engine of ["codex", "opencode"]) {
         assistantSelection: { agentId: "build", catalogRevision: TEST_ASSISTANT_CATALOG_REVISION, engineId: "opencode", modelId: "glm-5.3", modelProviderId: "zai-coding-plan", variantId: "high" }
       };
       const conversationLog: unknown[] = [];
-      await mockLaunchSession(page, { session, conversationLog, assistantAccess: PERSONAL_ASSISTANT_ACCESS, assistantCatalog: assistantCatalogPayload({ includeOpenCode: true }) });
+      await mockLaunchSession(page, { session, conversationLog, assistantCatalog: assistantCatalogPayload({ includeOpenCode: true }) });
       const uploads = new Map<string, AttachmentUpload>();
       const deleted: string[] = [];
       const messages: Record<string, unknown>[] = [];
@@ -6991,7 +6977,7 @@ for (const width of [390, 820, 1440]) {
       Object.assign(session.assistantSelection, harness.selection);
       Object.assign(session.agentSession, { providerId: "opencode", transportId: "opencode_server" });
       const engine = await harness.controller.capabilities({ engineId: "opencode", modelProviderId: "deepseek" });
-      await mockLaunchSession(page, { session, conversationLog, assistantAccess: PERSONAL_ASSISTANT_ACCESS, assistantCatalog: { ok: true, engines: [engine] } as any });
+      await mockLaunchSession(page, { session, conversationLog, assistantCatalog: { ok: true, engines: [engine] } as any });
       await page.route(/\/sessions\/[^/]+\/(?:agent-message|agent-turn\/interrupt)$/u, async (route) => {
         try {
           const result = route.request().url().endsWith("/agent-message")
@@ -7056,7 +7042,7 @@ for (const width of [390, 820, 1440]) {
       const engine = catalog.engines.find((item) => item.engineId === engineId)!;
       Object.assign(session.assistantSelection, { ...engine.defaults, engineId });
       Object.assign(session.agentSession, { providerId: engineId, transportId: engine.transportId });
-      await mockLaunchSession(page, { session, assistantAccess: PERSONAL_ASSISTANT_ACCESS, assistantCatalog: catalog });
+      await mockLaunchSession(page, { session, assistantCatalog: catalog });
       let hold = false;
       let releaseRefresh: (() => void) | undefined;
       let loaded = 0;

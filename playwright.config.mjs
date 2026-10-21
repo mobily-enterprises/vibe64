@@ -3,7 +3,8 @@ import { defineConfig } from "@playwright/test";
 const managedBaseUrl = String(process.env.PLAYWRIGHT_BASE_URL || "")
   .trim()
   .replace(/\/+$/u, "");
-const baseURL = managedBaseUrl || "http://127.0.0.1:4173";
+const port = String(process.env.PLAYWRIGHT_PORT || "").trim() || "4173";
+const baseURL = managedBaseUrl || `http://127.0.0.1:${port}`;
 const storageState = String(process.env.VIBE64_PLAYWRIGHT_STORAGE_STATE || "").trim();
 const useRunningServer = Boolean(managedBaseUrl) || process.env.VIBE64_LIVE_E2E === "1";
 
@@ -25,7 +26,7 @@ export default defineConfig({
     webServer: {
       command: "npm run build && node ./tests/e2e/support/start-web-server.mjs",
       env: {
-        PORT: "4173"
+        PORT: port
       },
       url: `${baseURL}/api/health`,
       reuseExistingServer: true,
