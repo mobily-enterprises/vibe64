@@ -946,6 +946,8 @@ function expanded(card) {
   .aio-card:not(.aio-card--featured) .aio-card__ctas { align-content: start; grid-area: ctas; }
   .aio-card:not(.aio-card--featured) .aio-card__free { grid-area: free; margin-top: var(--v64-space-1); }
 }
+.aio-card--connected { border: 2px solid var(--v64-success); }
+/* Badges straddle the top border, so they never compete with the name for width. */
 .aio-card__ribbon,
 .aio-card__connected {
   align-items: center;
