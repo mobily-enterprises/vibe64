@@ -442,6 +442,28 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   // The Courses button: the overlay where the learner left it (or on a surface).
   const openCourses = surface => show({ surface });
 
+  // The Lesson pane of the Learn page: Learn mode on, Courses closed (not as
+  // the learner's own close), the step selected, and the lesson's home (its
+  // practice project, else /app/learning) showing its Lesson pane.
+  async function openLesson({ attemptId, stepId } = {}) {
+    if (!state.actorKey) throw new Error("Sign in before opening a lesson.");
+    const value = learnMode.value ? mode.value : await setMode(true);
+    if (!value?.on) return null;
+    minimise();
+    if (text(attemptId) && attemptId !== state.attemptId) {
+      state.finished = false;
+      selectAttempt(attemptId, stepId);
+    } else if (text(stepId) && stepId !== state.stepId) {
+      if (steps.value.length) selectStep(stepId);
+      else state.stepId = stepId;
+    }
+    remember();
+    const target = `${learnHomePath(value)}?pane=lesson`;
+    if (router && currentPath() !== target) await router.push(target);
+    if (!lesson.value || text(attemptId)) await loadLesson();
+    return focus.value;
+  }
+
   // Hide the overlay with its state kept; Courses or Colleague brings it back.
   // by = "learner" only for the learner's own close or Escape; Show me, Teach
   // me and app navigation hide it to show something else.
@@ -891,6 +913,8 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     get finished() { return state.finished; },
     get mode() { return mode.value; },
     get learnMode() { return learnMode.value; },
+    // The lesson the Lesson pane shows: the mode's current attempt.
+    get lessonAttemptId() { return mode.value?.currentAttemptId || ""; },
     get lessonTitle() { return mode.value?.currentAttemptId ? mode.value.lessonTitle || mode.value.lessonCode || "" : ""; },
     get practice() { return practice.value; },
     get confirmArchive() { return confirmArchive.value; },
@@ -898,7 +922,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     get notice() { return state.notice; },
     lesson, results, steps, currentStep, focus, colleagueRequest, notes, notesState: readonly(notesState),
     stepStatus: stepId => stepStatus(results.value, stepId, lesson.value?.passedStepIds || []),
-    setViewer, show, openCourses, closeCourses, showFinished, minimise, selectStep, setScroll, flushReader, loadLesson,
+    setViewer, show, openCourses, openLesson, closeCourses, showFinished, minimise, selectStep, setScroll, flushReader, loadLesson,
     runCheck, answer, done, showMe, teachMe, consumeColleagueRequest, learnerChanged,
     exerciseStep, beginExercise, exerciseCurrent, finishExercise, prepareExercise,
     readNotes, saveNotes, clearNotes,

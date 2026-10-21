@@ -5,6 +5,7 @@ import {
   mdiChevronDown,
   mdiChevronLeft,
   mdiChevronRight,
+  mdiSchoolOutline,
   mdiViewDashboardOutline
 } from "@mdi/js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
@@ -45,16 +46,27 @@ const SELF_TARGET_AUTO_SELECT_DELAY_MS = 3000;
 const PREVIEW_TOOLBAR_HOST_ID = "studio-home-shell-preview-toolbar";
 const PROJECT_RUNTIME_CLOSE_API_PATH = "/api/vibe64/project-runtime/close";
 const PROJECT_RUNTIME_OPEN_API_PATH = "/api/vibe64/project-runtime/open";
-const projectTabs = Object.freeze([
-  {
-    id: "preview",
-    label: "Preview"
-  },
-  {
-    id: "dashboard",
-    label: "Dashboard"
-  }
-]);
+// The project panes. Learn mode adds the current lesson's Lesson pane: a
+// tab on its practice project, and the main pane (instead of Preview) of a
+// lesson without one.
+const PROJECT_PANES = Object.freeze({
+  preview: Object.freeze({ id: "preview", label: "Preview", icon: mdiApplicationOutline }),
+  dashboard: Object.freeze({ id: "dashboard", label: "Dashboard", icon: mdiViewDashboardOutline }),
+  lesson: Object.freeze({ id: "lesson", label: "Lesson", icon: mdiSchoolOutline })
+});
+
+function projectPaneTabs({ projectSlug = "", lesson = false } = {}) {
+  const { preview, dashboard, lesson: lessonPane } = PROJECT_PANES;
+  if (!lesson) return [preview, dashboard];
+  return projectSlug ? [preview, dashboard, lessonPane] : [lessonPane, dashboard];
+}
+
+// The phone's "next pane" pill: the pane after the shown one, in tab order.
+function nextProjectPane(tabs = [], pane = "") {
+  const index = tabs.findIndex(tab => tab.id === pane);
+  const next = tabs[(index + 1) % tabs.length] || null;
+  return next && { ariaLabel: `Go to ${next.label.toLowerCase()}`, icon: next.icon, label: next.label, pane: next.id };
+}
 
 function useVibe64AppPage() {
   const route = useRoute();
@@ -146,12 +158,20 @@ function useVibe64AppPage() {
   const developmentBasePath = computed(() => projectAppPath(projectSlug.value));
   const dashboardBasePath = computed(() => `${developmentBasePath.value}/dashboard`);
   const dashboardRouteActive = computed(() => normalizedPath(route.path).startsWith(`${dashboardBasePath.value}/`));
+  // Learn mode's current lesson has a Lesson pane (?pane=lesson on the
+  // project's base path; the default pane without a project).
+  const lessonPaneAvailable = computed(() => Boolean(learning?.learnMode && learning.lessonAttemptId));
   // Without a project the panes are empty and switch in place; the pane and
   // the dashboard section live in the address, so Learn mode's place keeps them.
-  const emptyPane = computed(() => route.query?.pane === "dashboard" ? "dashboard" : "preview");
+  const emptyPane = computed(() => route.query?.pane === "dashboard" ? "dashboard"
+    : lessonPaneAvailable.value ? "lesson" : "preview");
   const emptySection = computed(() => typeof route.query?.section === "string" ? route.query.section : "");
   const projectPane = computed(() => !projectSlug.value ? emptyPane.value
-    : dashboardRouteActive.value ? "dashboard" : "preview");
+    : dashboardRouteActive.value ? "dashboard"
+      : route.query?.pane === "lesson" && lessonPaneAvailable.value ? "lesson" : "preview");
+  const projectTabs = computed(() => projectPaneTabs({ projectSlug: projectSlug.value, lesson: lessonPaneAvailable.value }));
+  // A lesson without a practice project has no coding session, so no chat column.
+  const chatColumnVisible = computed(() => Boolean(projectSlug.value) || !lessonPaneAvailable.value);
   const sortedProjects = computed(() => [...projects.value].sort((left, right) => left.slug.localeCompare(right.slug)));
   // Learn lists only the current lesson's practice project, beside Courses.
   const learnMode = computed(() => Boolean(learning?.learnMode));
@@ -171,35 +191,25 @@ function useVibe64AppPage() {
     }
     return chatCollapsed.value ? "Show chat" : "Collapse chat";
   });
-  const mobileProjectAction = computed(() => (
-    projectPane.value === "dashboard"
-      ? {
-          ariaLabel: "Go to preview",
-          icon: mdiApplicationOutline,
-          label: "Preview",
-          pane: "preview"
-        }
-      : {
-          ariaLabel: "Go to dashboard",
-          icon: mdiViewDashboardOutline,
-          label: "Dashboard",
-          pane: "dashboard"
-        }
-  ));
+  const mobileProjectAction = computed(() => nextProjectPane(projectTabs.value, projectPane.value));
   const projectPaneNavigationVisible = computed(() => !projectSlug.value || projectPaneNavigationReady({
     selectionReady: projectSelectionReady.value,
     projectSlug: projectSlug.value,
     readyProjectSlug: projectPaneNavigationReadySlug.value
   }));
   const mobileProjectActionVisible = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value &&
-    chatCollapsed.value);
-  const mobilePaneSwipeEnabled = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value);
+    (chatCollapsed.value || !chatColumnVisible.value));
+  const mobilePaneSwipeEnabled = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value &&
+    chatColumnVisible.value);
+  const projectVisible = computed(() => !mobilePaneLayout.value || chatCollapsed.value || !chatColumnVisible.value);
   const colleagueLayout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
   const layoutOwner = {
     get projectSlug() { return projectSlug.value; },
     get ready() { return projectPaneNavigationVisible.value; },
-    get projectVisible() { return !mobilePaneLayout.value || chatCollapsed.value; },
-    get chatVisible() { return !chatCollapsed.value; },
+    get projectVisible() { return projectVisible.value; },
+    // The Lesson pane is on screen (Colleague's focus reports pane=lesson).
+    get lessonVisible() { return projectVisible.value && projectPane.value === "lesson"; },
+    get chatVisible() { return chatColumnVisible.value && !chatCollapsed.value; },
     showProject: showProjectPane,
     showChat() { setChatCollapsed(false); }
   };
@@ -285,6 +295,11 @@ function useVibe64AppPage() {
   );
 
   watch(projectSlug, retryProjectRuntime, { flush: "sync" });
+  // A phone shows one surface: opening the Lesson pane (the step bar's Open,
+  // a started lesson, Colleague) shows the project side.
+  watch(projectPane, pane => {
+    if (pane === "lesson" && mobilePaneLayout.value) setChatCollapsed(true);
+  });
   watch(
     [projectOpenKey, () => openProjectRuntimeCommand.canRun, () => openProjectRuntimeCommand.isRunning],
     ([key, canRun, running]) => {
@@ -355,6 +370,7 @@ function useVibe64AppPage() {
 
   return {
     chatCollapsed,
+    chatColumnVisible,
     chatToggleIcon,
     chatToggleTitle,
     closeProjectRuntimeForSlug,
@@ -409,14 +425,19 @@ function useVibe64AppPage() {
   }
 
   function selectProjectPane(pane = "") {
+    const known = projectTabs.value.some(tab => tab.id === pane) ? pane : "preview";
     if (!projectSlug.value) {
-      void router.replace({ query: { ...route.query, pane: pane === "dashboard" ? "dashboard" : "preview" } });
+      void router.replace({ query: { ...route.query, pane: known } });
       return;
     }
     if (mobilePaneLayout.value) {
       setChatCollapsed(true);
     }
-    if (pane === "dashboard") {
+    if (known === "lesson") {
+      void router.push({ path: developmentBasePath.value, query: { pane: "lesson" } });
+      return;
+    }
+    if (known === "dashboard") {
       void router.push(dashboardReturnPath({
         dashboardBasePath: dashboardBasePath.value,
         lastDashboardRoutePath: lastDashboardRoutePath.value
@@ -710,7 +731,9 @@ export {
   PREVIEW_TOOLBAR_HOST_ID,
   SELF_TARGET_AUTO_SELECT_DELAY_MS,
   dashboardReturnPath,
+  nextProjectPane,
   openProjectSwitcherProjects,
+  projectPaneTabs,
   projectPaneNavigationReady,
   projectRuntimeClosedPayloadMatches,
   previewToolbarTargetVisible,

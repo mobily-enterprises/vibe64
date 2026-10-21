@@ -52,10 +52,11 @@ with a newer release shows **Update available** and **Update** (see
 [Installing and updating Learning courses](learning-course-catalogue.md)).
 
 A lesson without a practice project, such as a course's first setup lesson
-(Lesson 0), opens with **No project selected**: the usual project page (at
-`/app/learning`) with the chat column, the **Preview** and **Dashboard**
-switches and empty panes each saying **No project selected**, and no sessions.
-The Dashboard still lists its sections. Your own projects stay hidden until you
+(Lesson 0), opens on the Learn page (at `/app/learning`) with no project
+selected: the lesson's own **Lesson** pane fills the page beside Colleague,
+with **Lesson** and **Dashboard** switches, no chat column and no sessions (see
+the shared guide's *The Lesson tab*). The Dashboard still lists its sections
+and says **No project selected**. Your own projects stay hidden until you
 press **L** to go back to Develop. Its steps say which real screens it uses, for
 example **Account settings → AI Accounts** to connect an AI.
 

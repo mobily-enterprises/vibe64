@@ -26,6 +26,7 @@ const githubActorTeleportTarget = `#${githubActorHostId}`;
 
 const {
   chatCollapsed,
+  chatColumnVisible,
   chatToggleIcon,
   chatToggleTitle,
   dashboardRouteActive,
@@ -137,6 +138,7 @@ const {
 
         <div class="studio-home-shell-project-controls">
           <v-btn
+            v-if="chatColumnVisible"
             class="studio-home-shell-chat-toggle"
             data-vibe64-guide="pane-switch"
             density="comfortable"

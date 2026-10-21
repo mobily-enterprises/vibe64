@@ -7,6 +7,8 @@
 defineProps({
   chatCollapsed: Boolean,
   dashboard: Boolean,
+  // Learn mode's Lesson pane (its #lesson slot) instead of Preview.
+  lesson: Boolean,
   hint: {
     default: "",
     type: String
@@ -67,6 +69,12 @@ defineProps({
         class="studio-ai-sessions__dashboard-empty-pane"
       >
         <slot name="dashboard" />
+      </div>
+      <div
+        v-else-if="lesson"
+        class="studio-ai-sessions__lesson-empty-pane"
+      >
+        <slot name="lesson" />
       </div>
       <div
         v-else
@@ -193,6 +201,12 @@ defineProps({
   overflow-y: auto;
   padding: 0.85rem;
   scrollbar-gutter: stable;
+}
+
+.studio-ai-sessions__lesson-empty-pane {
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .studio-ai-sessions__preview-empty-pane {

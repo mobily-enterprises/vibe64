@@ -35,6 +35,7 @@
       :aria-hidden="selectedSessionArchiving ? 'true' : undefined"
       :chat-collapsed="chatCollapsed"
       :dashboard="dashboardProjectActive"
+      :lesson="projectPane === 'lesson'"
       :hint="emptyChatHintText"
       :inert="selectedSessionArchiving"
       :preview-detail="emptyPreviewDetailText"
@@ -61,6 +62,9 @@
       </template>
       <template #dashboard>
         <slot name="dashboard" :dashboard-context="{ ...emptyDashboardContext, sessionToolbar: toolbar }" />
+      </template>
+      <template #lesson>
+        <Vibe64LearningLessonPane />
       </template>
       <template #preview>
         <div
@@ -136,6 +140,7 @@ import Vibe64SessionRuntimeHost from "@/components/studio/vibe64-session/Vibe64S
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import Vibe64CreateSessionButton from "@/components/studio/vibe64-session/Vibe64CreateSessionButton.vue";
 import Vibe64EmptySessionLayout from "@/components/studio/Vibe64EmptySessionLayout.vue";
+import Vibe64LearningLessonPane from "@/components/learning/Vibe64LearningLessonPane.vue";
 import Vibe64SessionFrame from "@/components/studio/Vibe64SessionFrame.vue";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import Vibe64UnavailableSessions from "@/components/studio/Vibe64UnavailableSessions.vue";

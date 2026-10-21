@@ -5,14 +5,19 @@ import Vibe64LearningMarkdown from "./Vibe64LearningMarkdown.vue";
 import Vibe64LearningStep from "./Vibe64LearningStep.vue";
 
 // The lesson reader: the lesson's steps with their status, and the current
-// step (Vibe64LearningStep, shared with Colleague's current-step dialog).
+// step (Vibe64LearningStep, shared with Colleague's current-step dialog). It
+// lays itself out by its own width, so a narrow pane gets the phone step row.
 // Verdicts come only from the Training actions (auto check, choice comparator,
 // self Done); this view displays the saved results.
 const props = defineProps({
   learning: { type: Object, required: true },
+  // The reader is on screen: it then restores its saved scroll place.
+  visible: { type: Boolean, default: true },
   // Test seam for the step's visual resource read.
   readVisual: { type: Function, default: null }
 });
+// return: Show me could not show its place, so the host shows the step again.
+const emit = defineEmits(["return"]);
 const lesson = computed(() => props.learning.lesson.value);
 const steps = computed(() => lesson.value?.steps || []);
 const step = computed(() => props.learning.currentStep.value);
@@ -35,7 +40,7 @@ function requestAnimationFrameSafe(callback) {
   else setTimeout(callback, 0);
 }
 // Separate sources: a realtime lesson reread keeps the step ID and must not jump the scroll back.
-watch([() => step.value?.id, () => props.learning.state.open], ([, open]) => { if (open) void restoreScroll(); }, { immediate: true });
+watch([() => step.value?.id, () => props.visible], ([, shown]) => { if (shown) void restoreScroll(); }, { immediate: true });
 let scrollTimer = null;
 function onScroll() {
   if (restoring || !body.value) return;
@@ -47,8 +52,8 @@ onBeforeUnmount(() => clearTimeout(scrollTimer));
 
 // The phone step row follows the current step (Next, Previous, a restored place).
 const stepList = ref(null);
-watch([() => step.value?.id, () => props.learning.state.open], async ([, open]) => {
-  if (!open) return;
+watch([() => step.value?.id, () => props.visible], async ([, shown]) => {
+  if (!shown) return;
   await nextTick();
   revealCurrentStep(stepList.value);
 }, { immediate: true });
@@ -58,6 +63,7 @@ const openPractice = () => props.learning.openCurrent();
 </script>
 
 <template>
+  <div class="vibe64-learning-reader-frame">
   <div class="vibe64-learning-reader" :aria-busy="learning.state.loading">
     <v-alert v-if="learning.state.error" type="error" variant="tonal" rounded="lg" class="vibe64-learning-reader__alert" role="alert">
       {{ learning.state.error }}
@@ -102,7 +108,7 @@ const openPractice = () => props.learning.openCurrent();
       </nav>
 
       <article v-if="step" ref="body" class="vibe64-learning-reader__body" :aria-labelledby="`vibe64-learning-step-${step.id}`" @scroll.passive="onScroll">
-        <Vibe64LearningStep :learning="learning" :heading-id="`vibe64-learning-step-${step.id}`" :read-visual="readVisual" @return="learning.show()">
+        <Vibe64LearningStep :learning="learning" :heading-id="`vibe64-learning-step-${step.id}`" :read-visual="readVisual" @return="emit('return')">
           <template #after-actions>
             <details v-if="lesson.notesText" class="vibe64-learning-reader__notes">
               <summary>Lesson notes</summary>
@@ -113,9 +119,12 @@ const openPractice = () => props.learning.openCurrent();
       </article>
     </template>
   </div>
+  </div>
 </template>
 
 <style scoped>
+/* The reader's own width decides its layout (a pane beside the chat column and Colleague is narrow). */
+.vibe64-learning-reader-frame { container-type: inline-size; height: 100%; min-height: 0; }
 .vibe64-learning-reader {
   display: grid;
   gap: var(--v64-space-4, 16px);
@@ -160,8 +169,8 @@ const openPractice = () => props.learning.openCurrent();
 .vibe64-learning-reader__notes { margin-top: var(--v64-space-5, 24px); }
 .vibe64-learning-reader .v-btn { letter-spacing: 0; text-transform: none; }
 
-@media (max-width: 760px) {
-  /* Phone: steps become a horizontal strip above the step. */
+@container (max-width: 760px) {
+  /* Narrow: steps become a horizontal strip above the step. */
   .vibe64-learning-reader { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 0; }
   .vibe64-learning-reader__steps { border-inline-end: 0; border-bottom: 1px solid var(--v64-outline-variant, rgba(0, 0, 0, 0.12)); padding: var(--v64-space-2, 8px) var(--v64-space-3, 12px); }
   .vibe64-learning-reader__steps ol { display: flex; overflow-x: auto; margin: var(--v64-space-2, 8px) 0 0; }

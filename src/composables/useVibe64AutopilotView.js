@@ -255,7 +255,7 @@ function agentConnectionThinkingLabel({
 }
 
 function normalizeProjectPane(value = "") {
-  return value === "dashboard" ? "dashboard" : "preview";
+  return ["dashboard", "lesson"].includes(value) ? value : "preview";
 }
 
 function sessionNavLabel(session = {}) {
@@ -2045,7 +2045,7 @@ function useVibe64AutopilotView(props, emit, {
     assistantAccessPending.value,
     assistantDirectAllowed.value
   ].join("|"), () => {
-    if (!props.active || projectPaneValue.value === "preview") {
+    if (!props.active || projectPaneValue.value !== "dashboard") {
       return;
     }
     if (sourceToolLoading.value) {

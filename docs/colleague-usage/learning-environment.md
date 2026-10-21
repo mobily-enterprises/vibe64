@@ -33,8 +33,9 @@ space only (see [Practice projects](learning-practice-projects.md)):
   project lists are empty. Opening any other project (for example from a saved
   address) takes you to the practice project with the note "You're in Learn
   mode. Press L to go back to your projects."
-- With no lesson in progress, or a lesson without a practice project such as
-  Lesson 0, the page shows **No project selected** (below).
+- With no lesson in progress the page shows **No project selected** (below).
+  A lesson without a practice project, such as Lesson 0, shows the lesson
+  itself on that page (see [The Lesson tab](#the-lesson-tab)).
 - Nothing inside the lesson's practice project is limited: Preview, Files,
   Database, coding chats and Colleague all work. Account settings and AI
   Accounts stay available, so you can connect an AI during a lesson.
@@ -53,10 +54,38 @@ Learn." The workspace owner works the same way.
 In Learn mode, while your lesson is loaded, a yellow bar above the project page
 names the lesson and shows **Step N of M** with the step's title and status.
 **Previous step** and **Next step** (arrow buttons) move through the steps, and
-**Open** shows the step in the Courses overlay. The chevron at its left
-collapses it to one line (**Hide the lesson step**) and expands it again
-(**Show the lesson step**); this tab remembers the choice. On a phone the lesson
-name is hidden.
+**Open** shows the step in the page's **Lesson** tab (below); **Open** is hidden
+while the Lesson tab is showing. The chevron at its left collapses it to one
+line (**Hide the lesson step**) and expands it again (**Show the lesson step**);
+this tab remembers the choice. On a phone the lesson name is hidden, and
+**Open** shows the project side of the page (instead of the chat) on the Lesson
+tab.
+
+## The Lesson tab
+
+In Learn mode the current lesson is also read on the project page itself,
+beside Colleague, your teacher. The **Lesson** pane holds the same lesson
+reader as the Courses overlay: the step list, the current step with its text,
+diagram, question or check, **Show me** and **Teach me** (see
+[Reading a lesson](#reading-a-lesson)).
+
+- **On the lesson's practice project** the project switches read **Preview**,
+  **Dashboard** and **Lesson**. Select **Lesson** to read the lesson; Preview
+  keeps running behind it, so its App is still there when you select
+  **Preview** again. The address ends in `?pane=lesson`, so a reload, or
+  **L** back to Learn, returns to the Lesson tab.
+- **On a lesson without a practice project** (such as Lesson 0) there is no
+  coding session, so there is no chat column: the Lesson pane fills the page,
+  and the switches read **Lesson** and **Dashboard** (there is no Preview). The
+  Dashboard keeps **Account settings** and the other sections.
+- The reader lays itself out by the width it has: in a narrow pane, for
+  example beside the chat column and an open Colleague, the step list becomes
+  the row of numbered circles described under the Courses overlay.
+- On a phone (and other narrow screens up to 980px wide) the page shows one
+  side at a time: the chat or the project pane. The next-pane button at the top
+  goes from **Lesson** to **Preview** to **Dashboard** and back to **Lesson**,
+  showing the next pane's name; without a practice project it switches between
+  **Lesson** and **Dashboard**, and the page opens on the Lesson pane.
 
 ## No project selected and `/app`
 
@@ -73,8 +102,10 @@ sessions. It is used in two cases:
   is in the chat column, which a phone shows first; on a desktop the chat
   column says your teacher will chat there once a lesson starts. The
   Dashboard says **No lesson in progress** with the same button.
-- **A lesson without a practice project** (such as Lesson 0). The chat column
-  and each pane say **No project selected**, and **L** only switches mode.
+- **A lesson without a practice project** (such as Lesson 0). The page shows
+  the lesson in its Lesson pane, with no chat column, and a **Dashboard**
+  switch whose page says **No project selected** (see
+  [The Lesson tab](#the-lesson-tab)). **L** only switches mode.
 
 A local Vibe64 has no Projects page. Its `/` and `/app` addresses open Develop's
 place, the project Vibe64 was started in, or in Learn mode Learn's place (the

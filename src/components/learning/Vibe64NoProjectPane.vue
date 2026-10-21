@@ -5,11 +5,14 @@ import Vibe64DashboardShell from "@/components/studio/Vibe64DashboardShell.vue";
 import Vibe64EmptySessionLayout from "@/components/studio/Vibe64EmptySessionLayout.vue";
 import Vibe64SessionFrame from "@/components/studio/Vibe64SessionFrame.vue";
 import Vibe64LearnWelcome from "@/components/learning/Vibe64LearnWelcome.vue";
+import Vibe64LearningLessonPane from "@/components/learning/Vibe64LearningLessonPane.vue";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 
 // No project selected: Learn mode without a practice project (/app/learning):
-// no lesson in progress, or a lesson without one (Lesson 0). The session area
-// a project shows with no session open. With no lesson, Preview shows Learn's
+// no lesson in progress, or a lesson without one (Lesson 0). A lesson without
+// one has no coding session, so no chat column: its Lesson pane (or the
+// Dashboard) fills the area, beside Colleague. With no lesson it is the
+// session area a project shows with no session open: Preview shows Learn's
 // welcome (on a phone the chat column shows it, since a phone opens there),
 // the desktop chat column says where the teacher will talk, and the Dashboard
 // offers Choose a lesson beside its section menu. Both hosts render it.
@@ -22,15 +25,31 @@ defineEmits(["select"]);
 
 const learning = useVibe64Learning();
 const noLesson = computed(() => Boolean(learning?.mode) && !learning.mode.currentAttemptId);
+const lesson = computed(() => Boolean(learning?.learnMode && learning.lessonAttemptId));
 </script>
 
 <template>
   <Vibe64SessionFrame
     class="studio-screen__no-project"
-    :chat-collapsed="chatCollapsed"
+    :chat-collapsed="chatCollapsed || lesson"
     data-test="no-project-pane"
   >
+    <div v-if="lesson" class="studio-screen__lesson-layout">
+      <Vibe64LearningLessonPane v-if="projectPane === 'lesson'" />
+      <div v-else class="studio-screen__lesson-dashboard">
+        <Vibe64DashboardShell
+          no-project
+          :section="section"
+          @select="$emit('select', $event)"
+        >
+          <div class="studio-screen__no-project-text">
+            <p>No project selected</p>
+          </div>
+        </Vibe64DashboardShell>
+      </div>
+    </div>
     <Vibe64EmptySessionLayout
+      v-else
       :chat-collapsed="chatCollapsed"
       :dashboard="projectPane === 'dashboard'"
       :hint="noLesson ? '' : 'No project selected'"
@@ -76,6 +95,24 @@ const noLesson = computed(() => Boolean(learning?.mode) && !learning.mode.curren
 .studio-screen__no-project {
   flex: 1 1 auto;
   min-height: 0;
+}
+
+.studio-screen__lesson-layout {
+  border: 1px solid rgba(var(--v-theme-outline), 0.14);
+  border-radius: 14px;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.studio-screen__lesson-dashboard {
+  background: rgb(var(--v-theme-surface));
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.85rem;
 }
 
 .studio-screen__no-project-text {

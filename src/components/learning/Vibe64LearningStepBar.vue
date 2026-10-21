@@ -1,13 +1,17 @@
 <script setup>
-import { computed } from "vue";
+import { computed, inject } from "vue";
 import { mdiChevronDown, mdiChevronLeft, mdiChevronRight, mdiChevronUp } from "@mdi/js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
+import { VIBE64_COLLEAGUE_LAYOUT_KEY } from "@/lib/vibe64AssistantHost.js";
 
 // The current lesson's step bar, at the top of the project page in Learn
 // mode (also with no project selected). It names the lesson and its current
 // step with its status; Previous/Next move through the steps and Open shows
-// the step in the lesson reader. It collapses to one line.
+// the step in the page's Lesson pane (hidden while that pane shows). It
+// collapses to one line.
 const learning = useVibe64Learning();
+const layout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
+const lessonShown = computed(() => Boolean(layout?.value?.lessonVisible));
 const lesson = computed(() => learning?.lesson.value || null);
 const steps = computed(() => lesson.value?.steps || []);
 const step = computed(() => learning?.currentStep.value || null);
@@ -55,8 +59,9 @@ const go = offset => {
         :disabled="index >= steps.length - 1" data-test="learning-step-bar-next" @click="go(1)"
       />
       <v-btn
+        v-if="!lessonShown"
         variant="tonal" rounded="pill" min-height="40" data-test="learning-step-bar-open"
-        @click="learning.show({ surface: 'lesson', stepId: step.id })"
+        @click="learning.openLesson({ stepId: step.id })"
       >
         Open
       </v-btn>

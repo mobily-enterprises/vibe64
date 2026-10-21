@@ -210,6 +210,25 @@ describe("useVibe64Learning controller", () => {
     expect(again.learning.state.modeBusy).toBe("");
   });
 
+  it("opens the Lesson pane at a step: Courses closes, and the lesson's home shows ?pane=lesson", async () => {
+    const route = { fullPath: "/app/project/practice-one" };
+    const router = { currentRoute: { value: route }, push: vi.fn(async path => { route.fullPath = path; }) };
+    const { learning } = controller({ router });
+    learning.setViewer("member");
+    await flush();
+    await learning.openCourses("courses");
+    await learning.openLesson({ stepId: "quiz" });
+    expect(router.push).toHaveBeenLastCalledWith("/app/project/practice-one?pane=lesson");
+    expect([learning.open, learning.hiddenBy, learning.stepId]).toEqual([false, "", "quiz"]);
+    expect(learning.lessonAttemptId).toBe(ATTEMPT);
+    // Without a practice project the lesson's home is the Learn page.
+    const plain = controller({ router, mode: () => ({ ...LEARN, practiceSlug: "" }) });
+    plain.learning.setViewer("member");
+    await flush();
+    await plain.learning.openLesson();
+    expect(router.push).toHaveBeenLastCalledWith(`${LearningLib.VIBE64_LEARNING_PAGE_PATH}?pane=lesson`);
+  });
+
   it("opens Courses on its lesson picker when L switches to Learn with no lesson in progress", async () => {
     const route = { fullPath: "/app/project/my-shop" };
     const router = { currentRoute: { value: route }, push: vi.fn(async path => { route.fullPath = path; }) };
@@ -699,7 +718,8 @@ describe("Learning reader", () => {
     const { learning } = controller();
     learning.setViewer("member");
     await learning.show({ attemptId: ATTEMPT, stepId: "read" });
-    const view = await mountReader(learning);
+    const visible = Vue.ref(true);
+    const view = await mountReader(learning, { get visible() { return visible.value; } });
     try {
       // The rendered row has no layout here: give it a phone's overflowing
       // geometry and resolve the current circle from the rendered buttons.
@@ -717,10 +737,10 @@ describe("Learning reader", () => {
       await flush();
       expect(revealed).toEqual([stepButtons[3].props["data-step-id"]]);
       expect(row.scrollLeft).toBe(98);
-      // Reopening L brings the current step back into view as well.
-      learning.minimise();
+      // Showing the reader again (its pane or L) brings the current step back into view as well.
+      visible.value = false;
       await flush();
-      await learning.show();
+      visible.value = true;
       await flush();
       expect(revealed).toEqual([stepButtons[3].props["data-step-id"], stepButtons[3].props["data-step-id"]]);
     } finally { view.app.unmount(); }
@@ -1423,16 +1443,20 @@ describe("Lesson finished screen", () => {
 });
 
 describe("Lesson step bar", () => {
-  it("shows the current lesson's step in Learn mode, moves through steps, opens the reader and collapses", async () => {
+  it("shows the current lesson's step in Learn mode, moves through steps, opens the Lesson pane and collapses", async () => {
     let on = true;
     const { learning } = controller({ mode: () => ({ ...LEARN, on }) });
     learning.setViewer("member");
     await flush();
+    const LAYOUT = Symbol("layout");
+    const layout = Vue.shallowRef({ lessonVisible: false });
     const bar = compiledUi(path.resolve("src/components/learning/Vibe64LearningStepBar.vue"), {
       vue: Vue, "@mdi/js": { mdiChevronDown: "down", mdiChevronLeft: "left", mdiChevronRight: "right", mdiChevronUp: "up" },
+      "@/lib/vibe64AssistantHost.js": { VIBE64_COLLEAGUE_LAYOUT_KEY: LAYOUT },
       "@/composables/useVibe64Learning.js": { useVibe64Learning: () => learning } });
     const root = { children: [] };
     const app = uiRenderer().createApp({ render: () => Vue.h(bar) });
+    app.provide(LAYOUT, layout);
     for (const tag of WIDGETS) app.component(tag, widget);
     app.mount(root);
     try {
@@ -1445,7 +1469,12 @@ describe("Lesson step bar", () => {
       expect(learning.stepId).toBe("quiz");
       expect(textOf(root)).toContain("Not checked yet");
       await byTest(root, "learning-step-bar-open").props.onClick();
-      expect([learning.open, learning.surface, learning.stepId]).toEqual([true, "lesson", "quiz"]);
+      expect([learning.open, learning.stepId], "Open shows the step in the Lesson pane, not in Courses").toEqual([false, "quiz"]);
+      layout.value = { lessonVisible: true };
+      await flush();
+      expect(byTest(root, "learning-step-bar-open"), "no Open while the Lesson pane shows").toBeUndefined();
+      layout.value = { lessonVisible: false };
+      await flush();
       byTest(root, "learning-step-bar-toggle").props.onClick();
       await flush();
       expect(learning.stepBarCollapsed).toBe(true);

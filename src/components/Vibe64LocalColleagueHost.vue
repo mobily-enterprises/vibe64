@@ -37,7 +37,8 @@ const focus = computed(() => {
   const projectSlug = projectSlugFromRoute(route);
   const current = view.value?.projectSlug === projectSlug ? view.value : null;
   const pane = layout.value?.ready && layout.value.projectSlug === projectSlug
-    ? layout.value.projectVisible ? route.path.split("/dashboard/")[1]?.split("/")[0] || "preview" : "chat"
+    ? !layout.value.projectVisible ? "chat" : layout.value.lessonVisible ? "lesson"
+      : route.path.split("/dashboard/")[1]?.split("/")[0] || "preview"
     : "";
   const result = { projectSlug, sessionId: current?.sessionId || "", conversationId: current?.conversationId || "", pane,
     ...learningPanelFocus(learningController.value) };

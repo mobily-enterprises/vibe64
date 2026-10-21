@@ -820,8 +820,13 @@
         </v-dialog>
       </section>
 
+      <!-- Learn mode's Lesson pane; Preview stays mounted (and running) behind it. -->
+      <Vibe64LearningLessonPane
+        v-if="props.projectPane === 'lesson' && props.active"
+        class="studio-autopilot__right-pane-page"
+      />
       <div
-        v-show="props.projectPane !== 'dashboard'"
+        v-show="props.projectPane === 'preview'"
         class="studio-autopilot__right-pane-page"
         data-vibe64-guide-pane="preview"
         role="tabpanel"
@@ -1016,6 +1021,7 @@ import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64Sessi
 import Vibe64ComposerDelivery from "./Vibe64ComposerDelivery.vue";
 import Vibe64TemporaryAiWorkspace from "@/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue";
 import Vibe64DashboardShell from "@/components/studio/Vibe64DashboardShell.vue";
+import Vibe64LearningLessonPane from "@/components/learning/Vibe64LearningLessonPane.vue";
 import { vibe64SessionToolGuideId } from "@/lib/vibe64SessionToolDefinitions.js";
 import { writeClipboardText } from "@/lib/clipboard.js";
 import { resolveStudioRequestUrl } from "@/lib/studioUrls.js";

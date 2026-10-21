@@ -152,7 +152,7 @@ function keydown(event) {
       <div v-else-if="learning.state.finished && learning.lesson.value" class="vibe64-learning__scroll">
         <Vibe64LearningFinished :learning="learning" :courses="courses" />
       </div>
-      <Vibe64LearningReader v-else :learning="learning" />
+      <Vibe64LearningReader v-else :learning="learning" :visible="open" @return="learning.show()" />
     </div>
   </div>
   <!-- Above Courses (2400) by style: Vuetify stacks a dialog 10 above the topmost
