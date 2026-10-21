@@ -1313,15 +1313,20 @@ without it the local managed source root is resolved as runtime resolves it.
   `active-lesson.json`, `step-progress.json`, `reader.json`, `code-ledger.json`,
   `learning-mode.json`, the lock files that guard them (`state.lock`,
   `preparation.lock`, `step-progress.lock`, `reader.lock`, `code-ledger.lock`,
-  `learning-mode.lock`) and the source-less `learning-sessions/` stores.
+  `learning-mode.lock`), the per-practice `code-ledgers/` directory and the
+  source-less `learning-sessions/` stores.
   `teacher-notes.json` and `teacher-notes.lock` (the learner's own notes) stay.
+  Nothing new is written: absent learner files read as Develop mode with no
+  lesson in progress.
   A v1 practice project archived as an ordinary project stays in
   `project-archives/<slug>/`; check lists those names. Practice archives are
   listed only from the learning space's own archive root by their schema 2
   `practice.json`, so these bundles are never listed or opened as practice.
 - Colleague (`retireColleagueLearningWatches`) removes every `learning-task`
   watch and its queued observations from `colleague/<owner>/conversation.json`
-  through the backed-up publisher; history and other watches are kept.
+  through the backed-up publisher; history and other watches are kept. That
+  file stays the person's Develop conversation; Learn threads
+  (`colleague/<owner>/learn/`) start empty.
 
 Training only moves; it deletes nothing. Apply first writes
 `upgrades/backups/20261022-learning-space-reset/training/manifest.json` with
@@ -1354,7 +1359,8 @@ every writer stopped; never edit the ledger or start an older release against
 partial state; the older registry refuses this newer ledger. Focused evidence:
 `learningSpaceResetUpgrade.unit.test.js` (check-only, apply and interrupted
 retry, the cross-filesystem copy and an interrupted source removal, a
-tree-hash proof that normal projects and archives stay byte-identical, a
+tree-hash proof that normal projects, archives and the Colleague conversation
+stay byte-identical, retired code ledgers, a
 skipped learning-space project, kept teacher notes, a deleted namespace on
 either host, refusals and a fresh install),
 `stateUpgrades.unit.test.js` and `colleagueConversationUpgrade.unit.test.js`.
