@@ -109,7 +109,8 @@ test("printed entry forms are the parsers' own tables, and unknown entries list 
   for (const field of Object.keys(ARCHITECTURE_INSPECTOR_FIELDS)) assert.ok(inspection.includes(`- ${field}: `), field);
   const identities = (await cli(["preview-identities"])).stdout;
   assert.match(identities, new RegExp(`At most ${PREVIEW_APPLICATION_IDENTITY_LIMIT} entries`, "u"));
-  assert.match(identities, /Dashboard > App access > Managed app access/u);
+  assert.match(identities, /vibe64-helper preview identities save < identities\.json/u);
+  assert.match(identities, /Never create application accounts or change roles/u);
 });
 
 test("the Preview identity protocol examples satisfy the real response validation", async () => {

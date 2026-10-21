@@ -93,8 +93,10 @@ The ordered list of named existing application accounts that Preview and managed
 
 - Each entry has a \`name\`, a selector \`type\` (${types}) and the application's \`value\` for that account. Names are unique, start with a lowercase letter and use at most 64 lowercase letters, digits, \`_\` or \`-\`; ${[...PREVIEW_APPLICATION_IDENTITY_RESERVED_NAMES].map((name) => `\`${name}\``).join(", ")} are reserved. At most ${PREVIEW_APPLICATION_IDENTITY_LIMIT} entries; the first is the default.
 - Entries are selectors only, never passwords. A saved entry does not prove that the account exists or can reach a page: verify the selected account's actual Preview access.
-- Read the configured names and whether the application supports identity exchange with \`vibe64-helper preview status\`. Sign in with \`vibe64-helper preview browser identity <name>\`.
-- Coding agents never write this list. The person chooses which existing accounts represent each role: they configure it in Dashboard > App access > Managed app access, or ask Colleague to save it. Ask the person which accounts (email, login or user ID) represent admin and other required roles, and wait for their choice.
+- Read the list and the Stack's declared types with \`vibe64-helper preview identities\`; \`vibe64-helper preview status\` shows the configured names and whether the application supports identity exchange.
+- Save with \`vibe64-helper preview identities save < identities.json\`: the complete ordered JSON array replaces the list (preserve unrequested entries), each \`type\` must be declared in the target's \`#### Preview identity\` block, and it prints the saved list. It is written to this session's source, so the person's normal Save keeps it. The person can also use Dashboard > App access or Colleague.
+- The person chooses which existing accounts represent each role. Ask which accounts (email, login or user ID) represent admin and other required roles; you may propose them from existing application accounts. Save only names and accounts the person asked for or confirmed. Never create application accounts or change roles for this.
+- After saving, verify each entry with \`vibe64-helper preview browser identity <name>\` and the rendered access.
 
 Entry shape:
 

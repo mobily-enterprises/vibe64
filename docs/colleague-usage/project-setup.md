@@ -35,8 +35,10 @@ The agent should reuse answers you already gave and wait for your choices.
 Choosing a name such as “admin” does not grant that account administrator rights.
 
 The coding agent can implement the application's Preview identity adapter after
-you accept that work. To configure named accounts, open **Dashboard > App access**
-and use **Managed app access > Add identity**. Enter **Name**, **App identifier**
+you accept that work. It can also save the named accounts you give or confirm
+(for example `admin` and `user` with their emails) and then verify each in Preview;
+it never creates accounts or changes roles for this. To configure them yourself,
+open **Dashboard > App access** and use **Managed app access > Add identity**. Enter **Name**, **App identifier**
 and **Application value**, choose **Make default** if needed, then **Save**.
 On mobile, use **Show project** to reach Dashboard. Colleague can explain these
 fields and, when asked, save the supported identity settings; application code

@@ -36,7 +36,12 @@ and configured selectors still require rendered authentication/access evidence.
 Managed app access stores named selectors in `.vibe64/preview-identities.json`
 inside the exact selected source, so session changes follow ordinary Save.
 Colleague reads and replaces the same complete ordered list through the canonical
-Project actions. The first entry is the default. It preserves unrequested entries,
+Project actions. A session's coding agent does the same with
+`vibe64-helper preview identities [save]`: the preview command service scopes it
+to the session's bound project and source, accepts only selector types its Stack
+declares under `#### Preview identity`, and calls the same Project save. The agent
+saves only names and accounts the person asked for or confirmed, never creates
+application accounts or changes roles, and then verifies each name in Preview. The first entry is the default. It preserves unrequested entries,
 uses the user's actual identifiers and retains the ordinary project permissions
 and source-work locks. Inputs describe name, selector type and value explicitly;
 the existing owner validates unique names, supported selectors and the 32-entry
@@ -70,7 +75,7 @@ even after code has navigated the page elsewhere. Command help and session
 guidance show route navigation relative to that URL. The preview wrapper owns
 its help text and prints it without the control socket; the session command
 service reuses that one text. When no identity is configured, status names the
-configuration route: the person in App access or Colleague's save action.
+helper save route.
 
 After a service restart, stale browser metadata may no longer match the current
 control token. Browser recovery uses the execution manager's durable ownership

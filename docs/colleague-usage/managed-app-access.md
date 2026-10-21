@@ -26,9 +26,12 @@ account creation and browser sign-in have distinct effects. If the application
 cannot resolve an identity, check that account and the declared exchange rather
 than inventing another selector type. A failed save retains recoverable feedback.
 
-Coding agents read the configured names with `vibe64-helper preview status`; when
-none exist it reports **Managed app identities: none configured** and points to
-App access or Colleague. Agents do not write this configuration themselves.
+The coding agent can also save this list for you in its session. Tell it which
+existing accounts to use, or confirm the names and accounts it proposes from the
+application's existing accounts. It saves only what you asked for or confirmed,
+never creates application accounts or changes roles, and then signs in as each
+name in Preview to verify access. The saved list appears here and in Preview's
+identity menu; use the session's normal Save to keep it.
 
 Colleague can read the available identity metadata and make an explicitly requested
 configuration change, including a selective removal, through the native owner.
