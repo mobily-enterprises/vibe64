@@ -42,14 +42,6 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     return record?.learnerKey === learnerIdentity(actor).key ? record : null;
   }
 
-  async function lessonTitle(pin) {
-    try {
-      return (await content.readLesson({ ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash })).lesson.title;
-    } catch {
-      return pin.lesson.code;
-    }
-  }
-
   // An archived attempt's `attempt.json`, or null when it is missing or
   // damaged (that entry is left out, never the whole list).
   async function readBundle(directory, attemptId) {
@@ -70,7 +62,7 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     let current = null;
     if (active && active.pin.course.courseId !== AUTHOR_PREVIEW_COURSE) {
       const record = active.projectSlug ? await findRecord(actor, active.attemptId) : null;
-      current = { attemptId: active.attemptId, lesson: { code: active.pin.lesson.code, title: await lessonTitle(active.pin) },
+      current = { attemptId: active.attemptId, lesson: { code: active.pin.lesson.code, title: await lessonTitle(content, active.pin) },
         ...(record ? { slug: record.slug } : {}), status: record?.deleting ? "deleting" : "in-progress" };
     }
     const archived = [];
@@ -215,6 +207,15 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
   return Object.freeze({ list, exists, closeAttempt, deleteArchive });
 }
 
+// The pinned lesson's title, or its code when its content cannot be read.
+async function lessonTitle(content, pin) {
+  try {
+    return (await content.readLesson({ ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash })).lesson.title;
+  } catch {
+    return pin.lesson.code;
+  }
+}
+
 async function isDirectory(directory) {
   return lstat(directory).then(info => info.isDirectory(), missingAsFalse);
 }
@@ -229,4 +230,4 @@ function missingAsEmpty(error) {
   throw error;
 }
 
-export { createTrainingLearningSpace, MAX_ARCHIVES };
+export { createTrainingLearningSpace, lessonTitle, MAX_ARCHIVES };

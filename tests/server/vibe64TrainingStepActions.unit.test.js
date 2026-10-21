@@ -257,7 +257,8 @@ test("a refused deletion (a pinned session, not this learner's) changes nothing 
     throw Object.assign(new Error("Project runtime could not be closed."), { code: "vibe64_project_runtime_close_failed" }); } } });
   await assert.rejects(failed.execute("lesson.delete", { attemptId }), { code: "vibe64_project_runtime_close_failed" },
     "a delete that stopped part-way is an error the learner retries");
-  assert.deepEqual([f.published, failed.published], [[], []]);
+  assert.deepEqual(f.published, [], "a refusal changes nothing and notifies nobody");
+  assert.equal(failed.published.length, 1, "a stopped delete changed the lesson (its project deleting): every tab rereads");
 });
 
 test("a practice presence check that fails keeps that project listed without failing learning.read", async t => {

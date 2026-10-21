@@ -3,6 +3,7 @@ import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { practiceLearnerKey } from "@local/vibe64-core/server/learningSpace";
+import { lessonTitle } from "./learningSpace.js";
 
 function trainingError(code, message) {
   return Object.assign(new Error(message), { code, statusCode: 409 });
@@ -56,7 +57,7 @@ function createTrainingService({ catalogue, content, learners, learningSpace = n
         // An AppError: the HTTP error response carries only an AppError's details.
         throw new AppError(409, "Another lesson is in progress. Archive it to start this one, or continue it.", {
           code: "VIBE64_TRAINING_LESSON_IN_PROGRESS",
-          details: { attemptId: current.attemptId, lessonTitle: await lessonTitle(current.pin) } });
+          details: { attemptId: current.attemptId, lessonTitle: await lessonTitle(content, current.pin) } });
       }
       if (expectedRevision !== saved.revision) throw revisionConflict();
       await requireCloser().closeAttempt({ actor, attemptId: current.attemptId, archive: true, reason: "archived" });
@@ -115,14 +116,6 @@ function createTrainingService({ catalogue, content, learners, learningSpace = n
       throw trainingError("VIBE64_TRAINING_PRACTICE_UNAVAILABLE", "Closing lessons is unavailable in this installation. Nothing was changed.");
     }
     return learningSpace;
-  }
-
-  async function lessonTitle(pin) {
-    try {
-      return (await content.readLesson({ ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash })).lesson.title;
-    } catch {
-      return pin.lesson.code;
-    }
   }
 
   // Creating the exercise session starts the original asynchronous Workspace
@@ -195,32 +188,28 @@ function createTrainingService({ catalogue, content, learners, learningSpace = n
             } }));
           }
           stage = "session";
+          // The initial practice session is an ordinary project session with no
+          // learning binding, prepared inside the learner's own practice scope.
           const session = await project.runInProjectContext(attempt.projectSlug, async () => {
-            const prepareSession = async () => {
-              const runtime = await project.createRuntime({ inspectSource: false });
-              let current;
-              try { current = await runtime.getSession(initialSessionId, { inspectSource: false }); }
-              catch (error) {
-                if (error.code !== "vibe64_session_not_found") throw error;
-                if (attempt.preparation.phase === "ready") throw trainingError("VIBE64_TRAINING_SESSION_MISSING", "Your prepared exercise session is missing. Ask the owner to restore it; this attempt cannot silently create a replacement.");
-                // Prove the original exercise before the first session exists.
-                const expectedCommit = (await projectRepositoryService.verifyTrainingProjectSource({ slug: attempt.projectSlug, training }, { files: exercise.files })).commit;
-                current = requireSuccess(await sessions.createSession({ vibe64User: actor }, { sessionId: initialSessionId, expectedCommit }));
-              }
-              if (current.sessionId !== initialSessionId || current.status === "archived" || current.closing) {
-                throw trainingError("VIBE64_TRAINING_SESSION_CONFLICT", "The reserved exercise session is unavailable. Keep your progress and ask the owner to inspect it; no alternative session was selected.");
-              }
-              if (current.workspaceSetup?.status === "succeeded" && !await terminals.workspaceSetupIsPrepared(initialSessionId)) {
-                throw trainingError("VIBE64_TRAINING_SETUP_CHANGED", "Workspace setup no longer matches this exercise session. Use its existing setup recovery, then resume the same lesson; no replacement was created.");
-              }
-              // The setup runner is keyed in this Project context.
-              setupRun = current.workspaceSetup?.status === "succeeded" ? null : terminals.waitForWorkspaceSetup?.(initialSessionId) || null;
-              return current;
-            };
-            // The initial practice session is an ordinary project session: no
-            // learning binding; prepareExercise runs inside the learner's own
-            // practice scope.
-            return prepareSession();
+            const runtime = await project.createRuntime({ inspectSource: false });
+            let current;
+            try { current = await runtime.getSession(initialSessionId, { inspectSource: false }); }
+            catch (error) {
+              if (error.code !== "vibe64_session_not_found") throw error;
+              if (attempt.preparation.phase === "ready") throw trainingError("VIBE64_TRAINING_SESSION_MISSING", "Your prepared exercise session is missing. Ask the owner to restore it; this attempt cannot silently create a replacement.");
+              // Prove the original exercise before the first session exists.
+              const expectedCommit = (await projectRepositoryService.verifyTrainingProjectSource({ slug: attempt.projectSlug, training }, { files: exercise.files })).commit;
+              current = requireSuccess(await sessions.createSession({ vibe64User: actor }, { sessionId: initialSessionId, expectedCommit }));
+            }
+            if (current.sessionId !== initialSessionId || current.status === "archived" || current.closing) {
+              throw trainingError("VIBE64_TRAINING_SESSION_CONFLICT", "The reserved exercise session is unavailable. Keep your progress and ask the owner to inspect it; no alternative session was selected.");
+            }
+            if (current.workspaceSetup?.status === "succeeded" && !await terminals.workspaceSetupIsPrepared(initialSessionId)) {
+              throw trainingError("VIBE64_TRAINING_SETUP_CHANGED", "Workspace setup no longer matches this exercise session. Use its existing setup recovery, then resume the same lesson; no replacement was created.");
+            }
+            // The setup runner is keyed in this Project context.
+            setupRun = current.workspaceSetup?.status === "succeeded" ? null : terminals.waitForWorkspaceSetup?.(initialSessionId) || null;
+            return current;
           });
           stage = "setup";
           // Creating a session starts the original asynchronous Workspace setup.

@@ -235,7 +235,11 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
     let result;
     try { result = await run(input, actor); }
     catch (cause) {
-      if (!(cause.statusCode < 500 && /^(VIBE64_TRAINING_(PRACTICE_|ATTEMPT_MISSING)|vibe64_project_pinned)/u.test(cause.code || ""))) throw cause;
+      if (!(cause.statusCode < 500 && /^(VIBE64_TRAINING_(PRACTICE_|ATTEMPT_MISSING)|vibe64_project_pinned)/u.test(cause.code || ""))) {
+        // A removal that stopped part-way changed the lesson (its project deleting).
+        await notify(actor, input.attemptId, reason).catch(() => {});
+        throw cause;
+      }
       return { ok: false, available: true, attemptId: input.attemptId, error: refusalText(cause.message, "Nothing was changed.") };
     }
     if (result === null) return unavailablePractice("Deleting");
