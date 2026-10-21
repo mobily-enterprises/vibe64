@@ -195,6 +195,30 @@ test("history recovery refuses changed reviews and leaves hosted history-rewrite
   await assert.rejects(checkSessionUpdatesDirect({ ...input, project }), { code: "vibe64_session_update_history_diverged" });
 });
 
+test("a hosted session that rewrote and published the saved history adopts it as its base", async (t) => {
+  const f = await fixture(t);
+  const sourcePath = path.join(f.root, "session");
+  await git(f.root, "clone", f.remote, sourcePath); await git(sourcePath, "checkout", "-b", "vibe64/session");
+  await f.commit(sourcePath, "a.txt", "a\n");
+  const oldBase = await f.commit(sourcePath, "b.txt", "b\n");
+  await git(sourcePath, "push", "origin", "HEAD:trunk");
+  await git(sourcePath, "reset", "--soft", "HEAD~2"); await git(sourcePath, "commit", "-m", "a and b");
+  const rewritten = await git(sourcePath, "rev-parse", "HEAD");
+  await git(sourcePath, "push", "--force", "origin", "HEAD:trunk");
+  const project = { ...f.project, repositoryMode: "github", repository: { defaultBranch: "trunk", mode: "github", github: { cloneUrl: f.remote } }, githubRepository: { cloneUrl: f.remote } };
+  const session = { sessionId: "session", sourcePath, metadata: { source_path: sourcePath,
+    branch: "vibe64/session", base_branch: "trunk", base_commit: oldBase } };
+  const input = { project, session, runCommand };
+  const check = await checkSessionUpdatesDirect(input);
+  assert.equal(check.canonicalCommit, rewritten);
+  assert.equal(check.reconciled, true);
+  assert.equal(check.updateAvailable, false);
+  assert.equal(check.historyReview, undefined);
+  assert.equal((await updateSessionWork(input)).status, "already_current");
+  await git(sourcePath, "reset", "--hard", oldBase);
+  await assert.rejects(checkSessionUpdatesDirect(input), { code: "vibe64_session_update_history_diverged" });
+});
+
 test("unconfigured branches require an explicit upstream, and ambiguous Git settings are not guessed", async (t) => {
   const f = await fixture(t);
   await git(f.source, "branch", "--unset-upstream");

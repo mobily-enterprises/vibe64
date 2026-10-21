@@ -20,6 +20,15 @@ history offer only the repair, because retrying alone cannot succeed. Review the
 repair's result, then retry the operation. Selecting the button requires the
 person's interaction; Colleague can explain it.
 
+If a session's own coding agent rewrote the saved branch's history and pushed it
+(for example, by splitting large commits and force-pushing), select **Check for
+updates** in Repository. When the session already contains the rewritten branch,
+Vibe64 adopts it as the session's new starting version: the update status and Git
+log refresh, and Update and Save work normally, with no repair needed. A rewrite
+pushed from elsewhere while this session still holds the old history remains a
+diverged-history error; start a new session on that branch and carry the work
+across. These steps apply on desktop and mobile.
+
 For Genesis projects, Save checks the selected Stack contracts before asking the
 assistant to name the version. If it reports a missing **Connected development**
 section, the project needs its Stack reconciled; retrying Save alone does not

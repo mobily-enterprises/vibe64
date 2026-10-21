@@ -531,8 +531,10 @@ repair check may reuse a reviewed conflict while its base, canonical version,
 HEAD and index remain unchanged. A changed baseline requires a new review.
 New local sessions remember their original project branch and refuse to retarget
 when the opened folder switches branches. Legacy sessions without this marker
-continue using verified project authority. Hosted rewritten-history rejection
-is unchanged.
+continue using verified project authority. Hosted rewritten history is
+rejected unless the session itself adopted it: its HEAD contains the new
+canonical commit and no longer contains its old base. Check, Update and Save then
+treat the session as current, and the base moves to the canonical commit.
 
 Switch branch and New branch review the original folder's current branch, HEAD
 and configuration, require a clean tree and no merge/rebase/sequencer in progress,

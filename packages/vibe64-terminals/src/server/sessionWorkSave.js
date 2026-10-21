@@ -699,6 +699,19 @@ async function commitIsAncestor(runCommand, context, ancestor, descendant, optio
   return result?.ok === true;
 }
 
+// A session that rewrote and published the saved history itself (HEAD contains
+// the new saved tip and no longer contains its old base) has nothing to replay.
+async function savedHistoryRewritten(runCommand, context, canonicalCommit, sessionHead, options = {}) {
+  if (await commitIsAncestor(runCommand, context, context.baseCommit, canonicalCommit, options)) {
+    return false;
+  }
+  const [canonicalInSession, baseInSession] = await Promise.all([
+    commitIsAncestor(runCommand, context, canonicalCommit, sessionHead, options),
+    commitIsAncestor(runCommand, context, context.baseCommit, sessionHead, options)
+  ]);
+  return !canonicalInSession || baseInSession;
+}
+
 async function observedCanonicalCommit(runCommand, context, options = {}) {
   const [stable, recorded, base] = await Promise.all([
     optionalGitOutput(runCommand, context, [
@@ -2122,17 +2135,10 @@ async function checkSessionUpdatesDirect({
       worktreePath: context.worktreePath
     })
   ]);
-  const ancestor = await git(runCommand, context, [
-    "merge-base",
-    "--is-ancestor",
-    context.baseCommit,
-    canonicalCommit
-  ], {
+  const historyRewritten = await savedHistoryRewritten(runCommand, context, canonicalCommit, sessionHead, {
     commandOptions,
-    project,
-    required: false
+    project
   });
-  const historyRewritten = ancestor?.ok !== true;
   if (historyRewritten && context.mode !== PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
     throw saveError(
       "The saved project history no longer descends from this session's starting version.",
@@ -2330,17 +2336,10 @@ async function prepareSessionWorkUpdateDirect({
     operationId,
     { commandOptions, project }
   );
-  const ancestor = await git(runCommand, context, [
-    "merge-base",
-    "--is-ancestor",
-    context.baseCommit,
-    canonicalCommit
-  ], {
+  const historyRewritten = await savedHistoryRewritten(runCommand, context, canonicalCommit, oldHead, {
     commandOptions,
-    project,
-    required: false
+    project
   });
-  const historyRewritten = ancestor?.ok !== true;
   if (historyRewritten || historyReview) {
     if (context.mode !== PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
       throw saveError("The saved project history no longer descends from this session's starting version.",
@@ -2866,17 +2865,7 @@ async function prepareSessionWorkSave(runCommand, context, {
       project
     })
   ]);
-  const ancestor = await git(runCommand, context, [
-    "merge-base",
-    "--is-ancestor",
-    context.baseCommit,
-    canonicalCommit
-  ], {
-    commandOptions,
-    project,
-    required: false
-  });
-  if (ancestor?.ok !== true) {
+  if (await savedHistoryRewritten(runCommand, context, canonicalCommit, sessionHead, { commandOptions, project })) {
     throw saveError(
       "Canonical history no longer descends from this session's saved base.",
       "vibe64_session_save_history_diverged"
