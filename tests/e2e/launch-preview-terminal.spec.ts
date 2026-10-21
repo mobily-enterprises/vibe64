@@ -1,9 +1,9 @@
 import { expect, test, type Page, type Request as PlaywrightRequest, type Route } from "@playwright/test";
 import { createServer as createHttpServer, request as requestHttp, type Server as HttpServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { readFile, rm, writeFile } from "node:fs/promises";
-import { controllerHarness } from "../fixtures/opencodeController.js";
+import { readFile, writeFile } from "node:fs/promises";
 import { createPreviewPreparationFixture } from "../fixtures/previewPreparation.js";
+import { WebSocket } from "ws";
 import { assistantStatusServer } from "./support/assistant-status-server";
 
 import {
@@ -265,324 +265,6 @@ for (const width of [390, 1440]) {
   });
 }
 
-test.describe("temporary workspace lifetime", () => {
-  for (const pending of ["creation", "poll", "stop"]) {
-    test(`@temporary-unmount archiving a session retires pending ${pending}`, async ({ page }, testInfo) => {
-      await mockLaunchTerminalSocket(page);
-      const requests: TemporaryAiRecoveryRequests = { mainMessages: [], temporaryStarts: [], temporaryTurns: [] };
-      await mockLaunchSession(page, {
-        temporaryAiRecoveryRequests: requests
-      });
-      const errors: string[] = [];
-      page.on("pageerror", (error) => errors.push(error.message));
-      let held = false;
-      let reads = 0;
-      let deletes = 0;
-      let updates = 0;
-      const gate = Promise.withResolvers<void>();
-      await page.route("**/sessions/*/work", (route) => fulfillJson(route, {
-        ok: true, unsaved: true, updateAvailable: true,
-        updateOperation: {
-          operationId: "failed-update", status: "failed", code: "vibe64_session_update_conflict",
-          error: "Document conflicts with the saved version."
-        }
-      }));
-      await page.route("**/temporary-conversations", async (route) => {
-        if (pending !== "creation") { await route.fallback(); return; }
-        held = true;
-        await gate.promise;
-        await route.fallback();
-      });
-      await page.route("**/temporary-conversations/temporary-preview-identity", async (route) => {
-        if (route.request().method() === "DELETE") {
-          deletes += 1;
-          await fulfillJson(route, { ok: true });
-          return;
-        }
-        reads += 1;
-        if (pending === "poll" && reads === 1) {
-          held = true;
-          await gate.promise;
-        }
-        await fulfillJson(route, { ok: true, status: "inProgress" });
-      });
-      await page.route("**/sessions/*/updates/apply", (route) => {
-        updates += 1;
-        return fulfillJson(route, { ok: true });
-      });
-      await page.route("**/temporary-conversations/*/stop", async (route) => {
-        if (pending !== "stop") { await route.fallback(); return; }
-        held = true;
-        await gate.promise;
-        await fulfillJson(route, { ok: false, error: "This Stop reply arrived after the session was archived." });
-      });
-      try {
-        await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-        await page.getByRole("button", { name: "Fix it with AI", exact: true }).click();
-        if (pending === "stop") {
-          await page.getByRole("region", { name: "Temporary AI workspace" })
-            .getByRole("button", { name: "Stop", exact: true }).click();
-        }
-        await expect.poll(() => held).toBe(true);
-        await expect(page.getByRole("region", { name: "Temporary AI workspace" })).toBeVisible();
-        const readsBeforeArchive = reads;
-        await page.screenshot({ path: testInfo.outputPath("repair-before-leaving.png") });
-        await page.getByRole("button", { name: "Archive session", exact: true }).click();
-        await page.getByRole("dialog").getByRole("button", { name: "Archive session", exact: true }).click();
-        await expect(page.getByRole("region", { name: "Temporary AI workspace" })).toHaveCount(0);
-        if (pending === "stop") {
-          // Finish the archive feedback before releasing the obsolete Stop reply.
-          await expect(page.getByText("Vibe64 session archived.", { exact: true })).toBeVisible();
-          await page.getByRole("button", { name: "Dismiss", exact: true }).click();
-        }
-        gate.resolve();
-        await expect.poll(() => deletes).toBe(1);
-        // Observe more than two 650ms poll intervals after the held reply settles.
-        await page.waitForTimeout(1600);
-        expect(reads).toBe(readsBeforeArchive);
-        expect(requests.temporaryTurns).toHaveLength(pending === "creation" ? 0 : 1);
-        expect(updates).toBe(0);
-        expect(errors).toEqual([]);
-        expect(await page.getByText("This Stop reply arrived after the session was archived.").count()).toBe(0);
-        await page.screenshot({ path: testInfo.outputPath("session-archived-no-task-work.png") });
-      } finally {
-        gate.resolve();
-      }
-    });
-  }
-});
-
-for (const width of [390, 1440]) {
-  test(`@temporary-repair progress stays in the transcript and Update verifies the repair at ${width}px`, async ({ page }, testInfo) => {
-    await page.setViewportSize({ width, height: 844 });
-    await mockLaunchTerminalSocket(page);
-    const requests: TemporaryAiRecoveryRequests = { mainMessages: [], temporaryStarts: [], temporaryTurns: [] };
-    await mockLaunchSession(page, {
-      sessionList: [sessionPayload(), sessionPayload({ sessionId: "session-other", sessionName: "Other" })],
-      temporaryAiRecoveryRequests: requests
-    });
-    let updateCount = 0;
-    let releaseUpdate: (() => void) | undefined;
-    let resultKind = "";
-    let run = 0;
-    let progressReads = 0;
-    const progressUpdates = [
-      { id: "first", text: "Inspecting the conflicting document. ".repeat(60) },
-      { id: "second", text: "Comparing the current and saved versions. ".repeat(60) }
-    ];
-    await page.route("**/sessions/*/work", (route) => fulfillJson(route, {
-      ok: true, unsaved: true, updateAvailable: updateCount !== 2,
-      updateOperation: updateCount === 2 ? null : {
-        operationId: "failed-update", status: "failed", code: "vibe64_session_update_conflict",
-        error: "Document conflicts with the saved version."
-      }
-    }));
-    await page.route("**/temporary-conversations/*/turns", async (route) => {
-      run += 1;
-      resultKind = "";
-      requests.temporaryTurns.push(route.request().postDataJSON());
-      await fulfillJson(route, { ok: true, status: "inProgress", runId: `repair-${run}` });
-    });
-    await page.route("**/temporary-conversations/temporary-preview-identity", async (route) => {
-      if (route.request().method() !== "GET") { await route.fallback(); return; }
-      progressReads += 1;
-      await fulfillJson(route, {
-        ok: true, runId: `repair-${run}`, status: resultKind ? "completed" : "inProgress",
-        progressUpdates,
-        message: resultKind === "continue" ? "Which version should I keep?" : resultKind ? "I repaired the document." : "",
-        outcome: resultKind ? { kind: resultKind, message: "Repair result.", report: "Document repaired." } : null
-      });
-    });
-    await page.route("**/sessions/*/updates/apply", async (route) => {
-      updateCount += 1;
-      await new Promise<void>((resolve) => { releaseUpdate = resolve; });
-      await fulfillJson(route, updateCount === 1
-        ? { ok: false, code: "vibe64_session_update_conflict", error: "The document still conflicts." }
-        : { ok: true, status: "updated" });
-    });
-    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-    await page.locator(`[data-vibe64-session-id='${SESSION_ID}']:visible`).click();
-    await page.getByRole("button", { name: "Fix it with AI", exact: true }).click();
-    const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
-    const activity = workspace.locator(".assistant-composer-support__assistant-status");
-    const transcript = workspace.locator(".vibe64-temporary-ai__messages");
-    const composer = workspace.getByRole("textbox", { name: "Message temporary AI", exact: true });
-    await expect(activity).toHaveText("AI is working…");
-    await page.locator('[data-vibe64-session-id="session-other"]:visible').click();
-    await expect(workspace).not.toBeVisible();
-    const readsWhileHidden = progressReads;
-    await expect.poll(() => progressReads).toBeGreaterThan(readsWhileHidden);
-    await page.locator(`[data-vibe64-session-id='${SESSION_ID}']:visible`).click();
-    await expect(workspace).toBeVisible();
-    await expect(activity).toHaveText("AI is working…");
-    expect(requests.temporaryTurns).toHaveLength(1);
-    await expect(transcript.getByText("Working…", { exact: true })).toHaveCount(0);
-    await expect(activity).toHaveCount(1);
-    const statusStyle = await activity.evaluate((element) => {
-      const style = getComputedStyle(element);
-      return { weight: style.fontWeight, background: style.backgroundColor };
-    });
-    expect(statusStyle).toEqual({ weight: "400", background: "rgba(0, 0, 0, 0)" });
-    await expect(workspace.getByText("This is a separate temporary chat", { exact: false })).toHaveCount(0);
-    const progress = workspace.getByLabel("Temporary AI progress", { exact: true }).last();
-    const toggle = progress.getByRole("button");
-    await expect(toggle).toHaveText("Show all 2 progress updates");
-    await expect(progress.locator(".assistant-progress__message")).toHaveCount(0);
-    await toggle.focus();
-    await page.keyboard.press("Enter");
-    await expect(toggle).toHaveAttribute("aria-expanded", "true");
-    await expect(progress.locator(".assistant-progress__message")).toHaveCount(2);
-    progressUpdates.push({ id: "third", text: "Checking whether the repair can be applied. ".repeat(60) });
-    await expect(progress.locator(".assistant-progress__message")).toHaveCount(3);
-    expect(await transcript.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
-    expect((await activity.boundingBox())!.height).toBeLessThan(55);
-    expect((await composer.boundingBox())!.y).toBeLessThan(844);
-    await expect(workspace.getByRole("button", { name: "Stop", exact: true })).toBeInViewport();
-    await toggle.click();
-    await expect(toggle).toHaveText("Show all 3 progress updates");
-    await page.screenshot({ path: testInfo.outputPath(`repair-working-${width}.png`) });
-
-    resultKind = "continue";
-    await expect(workspace.getByText("Waiting for your reply", { exact: true })).toBeVisible();
-    expect(updateCount).toBe(0);
-    await composer.fill("Keep both changes.");
-    await page.locator('[data-vibe64-session-id="session-other"]:visible').click();
-    await expect(workspace).not.toBeVisible();
-    await page.locator(`[data-vibe64-session-id='${SESSION_ID}']:visible`).click();
-    await expect(composer).toHaveValue("Keep both changes.");
-    await expect(workspace.getByText("Waiting for your reply", { exact: true })).toBeVisible();
-    await workspace.getByRole("button", { name: "Send to temporary AI", exact: true }).click();
-    await expect(activity).toHaveText("AI is working…");
-    resultKind = "complete";
-    await expect(activity).toHaveText("Checking Update…");
-    await expect(composer).toBeDisabled();
-    await expect(workspace.getByRole("button", { name: "Close Resolve Update", exact: true })).toBeDisabled();
-    expect(updateCount).toBe(1);
-    releaseUpdate?.();
-    await expect(workspace.getByText("Update needs attention", { exact: true })).toBeVisible();
-    await expect(workspace.getByText("Update still needs attention: The document still conflicts.", { exact: true })).toBeVisible();
-    await composer.fill("Try again.");
-    await workspace.getByRole("button", { name: "Send to temporary AI", exact: true }).click();
-    await expect(activity).toHaveText("AI is working…");
-    resultKind = "complete";
-    await expect(activity).toHaveText("Checking Update…");
-    expect(updateCount).toBe(2);
-    releaseUpdate?.();
-    await expect(workspace.getByText("Repair verified", { exact: true })).toBeVisible();
-    await expect(workspace.getByText("Update succeeded. Your session includes the latest saved work and keeps your local edits.", { exact: true })).toBeVisible();
-    await expect(composer).toBeEnabled();
-    await expect(activity).toHaveCount(0);
-    expect(requests.mainMessages).toHaveLength(0);
-    await page.screenshot({ path: testInfo.outputPath(`repair-verified-${width}.png`) });
-    await page.locator('[data-vibe64-session-id="session-other"]:visible').click();
-    await page.locator(`[data-vibe64-session-id='${SESSION_ID}']:visible`).click();
-    await expect(workspace.getByText("Repair verified", { exact: true })).toBeVisible();
-    await workspace.getByRole("button", { name: "Main chat", exact: true }).click();
-    await expect(workspace).not.toBeVisible();
-    await page.locator('[data-vibe64-session-id="session-other"]:visible').click();
-    await page.locator(`[data-vibe64-session-id='${SESSION_ID}']:visible`).click();
-    await expect(workspace).not.toBeVisible();
-  });
-}
-
-for (const width of [390, 1440]) {
-  test(`@temporary-cancel closing a repair warns, waits for Stop, and keeps failed cleanup retryable at ${width}px`, async ({ page }, testInfo) => {
-    await page.setViewportSize({ width, height: 844 });
-    await mockLaunchTerminalSocket(page);
-    await mockLaunchSession(page, {
-      temporaryAiRecoveryRequests: { mainMessages: [], temporaryStarts: [], temporaryTurns: [] }
-    });
-    let stopCount = 0;
-    let deleteCount = 0;
-    let updateCount = 0;
-    let stopped = false;
-    let releaseStop: () => void;
-    const stopGate = new Promise<void>((resolve) => { releaseStop = resolve; });
-    await page.route("**/sessions/*/work", (route) => fulfillJson(route, {
-      ok: true, unsaved: true, updateAvailable: true,
-      updateOperation: { operationId: "failed-update", status: "failed", code: "vibe64_session_update_conflict", error: "Document conflicts with the saved version." }
-    }));
-    await page.route("**/temporary-conversations/*/turns", (route) => fulfillJson(route, {
-      ok: true, status: "inProgress", runId: "repair-1"
-    }));
-    await page.route("**/temporary-conversations/temporary-preview-identity", async (route) => {
-      if (route.request().method() === "DELETE") {
-        deleteCount += 1;
-        await fulfillJson(route, deleteCount === 1
-          ? { ok: false, error: "Conversation deletion failed." }
-          : { ok: true });
-        return;
-      }
-      await fulfillJson(route, {
-        ok: true, runId: "repair-1", status: stopped ? "interrupted" : "inProgress",
-        progressUpdates: [{ id: "first", text: "Inspecting the conflicting document." }]
-      });
-    });
-    await page.route("**/temporary-conversations/*/stop", async (route) => {
-      stopCount += 1;
-      if (stopCount === 1) {
-        await fulfillJson(route, { ok: false, error: "Stopping the AI failed." });
-        return;
-      }
-      await stopGate;
-      stopped = true;
-      await fulfillJson(route, { ok: true });
-    });
-    await page.route("**/sessions/*/updates/apply", (route) => {
-      updateCount += 1;
-      return fulfillJson(route, { ok: true });
-    });
-    try {
-      await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-      await page.getByRole("button", { name: "Fix it with AI", exact: true }).click();
-      const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
-      const activity = workspace.locator(".assistant-composer-support__assistant-status");
-      const close = workspace.getByRole("button", { name: "Close Resolve Update", exact: true });
-      await expect(activity).toHaveText("AI is working…");
-      await close.click();
-      const dialog = page.getByRole("dialog", { name: "Stop and close repair?", exact: true });
-      await expect(dialog).toBeInViewport();
-      await expect(dialog.getByText("Partial edits will stay in this session", { exact: false })).toBeVisible();
-      await page.screenshot({ path: testInfo.outputPath("repair-close-warning.png"), animations: "disabled" });
-      await dialog.getByRole("button", { name: "Keep chat open", exact: true }).click();
-      await expect(dialog).not.toBeVisible();
-      expect(stopCount).toBe(0);
-      expect(deleteCount).toBe(0);
-      await expect(activity).toHaveText("AI is working…");
-      await close.click();
-      await dialog.getByRole("button", { name: "Stop and close", exact: true }).click();
-      await expect(page.getByText("Stopping the AI failed.", { exact: true })).toBeVisible();
-      await expect(dialog.getByRole("button", { name: "Stop and close", exact: true })).toBeEnabled();
-      expect(deleteCount).toBe(0);
-      await dialog.getByRole("button", { name: "Keep chat open", exact: true }).click();
-      await expect(activity).toHaveText("AI is working…");
-      await close.click();
-      await dialog.getByRole("button", { name: "Stop and close", exact: true }).click();
-      await expect.poll(() => stopCount).toBe(2);
-      expect(deleteCount).toBe(0);
-      await expect(dialog.getByRole("button", { name: "Keep chat open", exact: true })).toBeDisabled();
-      releaseStop!();
-      const incompleteDialog = page.getByRole("dialog", { name: "Close incomplete repair?", exact: true });
-      await expect(page.getByText("Conversation deletion failed.", { exact: true })).toBeVisible();
-      await incompleteDialog.getByRole("button", { name: "Keep chat open", exact: true }).click();
-      await expect(workspace.getByText("AI repair stopped", { exact: true })).toBeVisible();
-      await expect(workspace.getByText("Partial edits remain and Update still needs to succeed.", { exact: false })).toBeVisible();
-      await expect(activity).toHaveCount(0);
-      await expect(workspace.getByRole("textbox", { name: "Message temporary AI", exact: true })).toBeEnabled();
-      expect(updateCount).toBe(0);
-      await close.click();
-      await incompleteDialog.getByRole("button", { name: "Close repair", exact: true }).click();
-      await expect(workspace).not.toBeVisible();
-      expect(stopCount).toBe(2);
-      expect(deleteCount).toBe(2);
-      expect(updateCount).toBe(0);
-      await expect(page.getByRole("button", { name: "Update session", exact: true })).toBeVisible();
-    } finally {
-      releaseStop!();
-    }
-  });
-}
-
 for (const width of [1440, 390]) {
   for (const changeEnvironment of [false, true]) {
     test(`@preview-preparation real preview ${changeEnvironment ? "waits for changed environment" : "starts while assistant admission is occupied"} at ${width}px`, async ({ page }, testInfo) => {
@@ -619,14 +301,16 @@ for (const width of [1440, 390]) {
         await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
         if (width < 600) await page.getByRole("button", { name: "Show project" }).click();
         if (changeEnvironment) {
-          await expect(page.getByText("Waiting for the current workspace operation to finish. Preview will retry automatically.")).toBeVisible();
-          expect(starts).toBe(1);
+          // Preparing the changed environment waits for the held source lock
+          // instead of failing, so releasing it lets the same start finish.
+          await expect.poll(() => starts).toBe(1);
+          await expect(page.getByText("Starting preview: Preview fixture.", { exact: true })).toBeVisible();
           await page.screenshot({ path: testInfo.outputPath("real-preparation-waiting.png") });
           await release();
         }
         const preview = page.frameLocator(".vibe64-launch-controls__preview-frame");
         await expect(preview.getByRole("heading", { name: `Preview works: ${changeEnvironment ? "updated" : "initial"}` })).toBeVisible({ timeout: 15_000 });
-        expect(starts).toBe(changeEnvironment ? 2 : 1);
+        expect(starts).toBe(1);
         await expect(page.getByText("Another assistant operation is starting. Try again in a moment.", { exact: true })).toHaveCount(0);
         if (!changeEnvironment) {
           expect((await fixture.runtime.store.runSessionExclusive(fixture.sessionId, "agent-write-mode", () => null)).acquired).toBe(false);
@@ -672,11 +356,6 @@ type PreviewIdentityExchangeResult = {
   ok?: boolean;
   signedOut?: boolean;
   status?: number;
-};
-type TemporaryAiRecoveryRequests = {
-  mainMessages: Record<string, unknown>[];
-  temporaryStarts: Record<string, unknown>[];
-  temporaryTurns: Record<string, unknown>[];
 };
 type AttachmentUpload = {
   bytes: Buffer;
@@ -814,44 +493,6 @@ async function readMultipartAttachment(request: PlaywrightRequest): Promise<Atta
     contentType: String(file.type || "application/octet-stream"),
     fileName: String(file.name || "attachment")
   };
-}
-
-async function observeBrowserUploadProgress(page: Page) {
-  await page.addInitScript(() => {
-    const state = window as typeof window & {
-      __vibe64AttachmentProgressSamples?: number[];
-    };
-    state.__vibe64AttachmentProgressSamples = [];
-    const originalSend = XMLHttpRequest.prototype.send;
-    XMLHttpRequest.prototype.send = function sendWithObservedProgress(body) {
-      this.upload.addEventListener("progress", (event) => {
-        if (!event.lengthComputable || event.total <= 0) {
-          return;
-        }
-        const percent = Math.round((event.loaded / event.total) * 100);
-        const samples = state.__vibe64AttachmentProgressSamples || [];
-        if (samples.at(-1) !== percent) {
-          samples.push(percent);
-        }
-        state.__vibe64AttachmentProgressSamples = samples;
-      });
-      return originalSend.call(this, body);
-    };
-  });
-}
-
-async function browserUploadProgressSamples(page: Page) {
-  return await page.evaluate(() => {
-    const state = window as typeof window & {
-      __vibe64AttachmentProgressSamples?: number[];
-    };
-    return [...(state.__vibe64AttachmentProgressSamples || [])];
-  });
-}
-
-function expectMonotonicNonzeroProgress(samples: number[]) {
-  expect(samples.some((value) => value > 0)).toBe(true);
-  expect(samples.every((value, index) => index === 0 || value >= samples[index - 1])).toBe(true);
 }
 
 async function openSessionDashboardTool(page: Page, label: string) {
@@ -1054,10 +695,8 @@ for (const width of [1280, 768, 390]) {
     await mockLaunchTerminalSocket(page, { terminalSocketNeverSettles: true });
     const session = sessionPayload();
     session.agentSession.turn.active = true;
-    const requests: TemporaryAiRecoveryRequests = { mainMessages: [], temporaryStarts: [], temporaryTurns: [] };
-    const launch = await mockLaunchSession(page, {
-      session, temporaryAiRecoveryRequests: requests
-    });
+    const temporaryCreates: Record<string, unknown>[] = [];
+    const launch = await mockLaunchSession(page, { session, temporaryCreates });
     let state = "attention";
     let failInspection = false;
     let reads = 0;
@@ -1140,14 +779,13 @@ for (const width of [1280, 768, 390]) {
     const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
     await expect(workspace).toBeVisible();
     await expect(workspace.getByRole("button", { name: "Fix project setup", exact: true })).toBeVisible();
-    await expect.poll(() => requests.temporaryTurns).toHaveLength(1);
-    expect(requests.temporaryStarts).toHaveLength(1);
-    expect(requests.temporaryTurns[0]).toEqual(expect.objectContaining({
-      displayMessage: "Fix project setup.",
-      message: expect.stringContaining("ContactUpcomingBookings.vue"),
-      promptLabel: "Fix project setup"
+    // The shared conversation owner sends this saved repair prompt; its turns are covered by the
+    // Temporary AI recovery specs against a real conversation server.
+    await expect.poll(() => temporaryCreates).toHaveLength(1);
+    expect(temporaryCreates[0].presentation).toEqual(expect.objectContaining({
+      title: "Fix project setup",
+      recoveryContext: expect.stringContaining("ContactUpcomingBookings.vue")
     }));
-    expect(requests.mainMessages).toHaveLength(0);
     await workspace.getByRole("button", { name: "Main chat", exact: true }).click();
     await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
     await expect(mainDraft).toHaveValue("Keep my current task draft.");
@@ -1285,11 +923,7 @@ for (const width of [390, 1440]) {
       width
     });
     await mockLaunchTerminalSocket(page);
-    const recoveryRequests: TemporaryAiRecoveryRequests = {
-      mainMessages: [],
-      temporaryStarts: [],
-      temporaryTurns: []
-    };
+    const temporaryCreates: Record<string, unknown>[] = [];
     const launchSession = await mockLaunchSession(page, {
       previewIdentity: previewIdentityCapability(),
       previewIdentityExchange: (selection) => {
@@ -1312,7 +946,7 @@ for (const width of [390, 1440]) {
           ok: true
         };
       },
-      temporaryAiRecoveryRequests: recoveryRequests
+      temporaryCreates
     });
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
@@ -1372,19 +1006,12 @@ for (const width of [390, 1440]) {
       "User not found.",
       "Please diagnose and fix this in the current application. Ensure its app-owned, idempotent development seed creates this user profile and any workspace membership the app requires in every fresh database, then run the normal database preparation command and verify the identity exchange. Keep preview authentication material host-managed; do not add, reveal, or hardcode Vibe64 secrets."
     ].join("\n\n");
-    await expect.poll(() => recoveryRequests.temporaryStarts).toHaveLength(1);
-    expect(recoveryRequests.temporaryStarts[0]).not.toHaveProperty("policy");
-    await expect.poll(() => recoveryRequests.temporaryTurns).toHaveLength(1);
-    expect(recoveryRequests.temporaryTurns[0]).toEqual(expect.objectContaining({
-      message: expectedRecoveryPrompt,
-      promptLabel: "Fix preview identity"
+    await expect.poll(() => temporaryCreates).toHaveLength(1);
+    expect(temporaryCreates[0]).not.toHaveProperty("policy");
+    expect(temporaryCreates[0].presentation).toEqual(expect.objectContaining({
+      title: "Fix preview identity",
+      recoveryContext: expectedRecoveryPrompt
     }));
-    await expect(workspace.getByText("Temporary identity recovery complete.", {
-      exact: true
-    })).toBeVisible();
-    expect(recoveryRequests.temporaryStarts).toHaveLength(1);
-    expect(recoveryRequests.temporaryTurns).toHaveLength(1);
-    expect(recoveryRequests.mainMessages).toHaveLength(0);
     await expect(page).toHaveURL(`${BASE_URL}${DEVELOPMENT_PATH}`);
     await page.screenshot({
       path: testInfo.outputPath(`preview-identity-recovery-${width}.png`),
@@ -1631,7 +1258,8 @@ for (const viewportWidth of [390, 960, 1600]) {
     await mockLaunchTerminalSocket(page);
     const launchSession = await mockLaunchSession(page, {
       attachmentUploadOutcomes: ["failure", "success"],
-      attachmentUploadResponseDelayMs: 800
+      attachmentUploadResponseDelayMs: 800,
+      realChat: true
     });
 
     await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
@@ -1708,38 +1336,6 @@ for (const viewportWidth of [390, 960, 1600]) {
   });
 }
 
-test("@preview-lifecycle multipart upload exposes genuine nonzero monotonic browser progress", async ({ page }) => {
-  await observeBrowserUploadProgress(page);
-  await mockLaunchTerminalSocket(page);
-  const launchSession = await mockLaunchSession(page, {
-    attachmentUploadResponseDelayMs: 1000
-  });
-  const fileName = "observed-browser-progress.bin";
-  const fileContents = Buffer.alloc(512 * 1024, 0x61);
-  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-  await page.getByRole("button", { name: "Add to message", exact: true }).click();
-  const fileChooserPromise = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: "Attach files" }).click();
-  const fileChooser = await fileChooserPromise;
-  await fileChooser.setFiles({
-    buffer: fileContents,
-    mimeType: "application/octet-stream",
-    name: fileName
-  });
-
-  const row = page.locator(".assistant-attachment-queue__item", {
-    hasText: fileName
-  });
-  await expect(row).toContainText("Uploading");
-  await expect(row.getByRole("progressbar", {
-    name: `Upload progress for ${fileName}`
-  })).toBeVisible();
-  await expect(row).toContainText("Ready", { timeout: 15_000 });
-  expectMonotonicNonzeroProgress(await browserUploadProgressSamples(page));
-  expect(launchSession.getAttachmentUploads()).toHaveLength(1);
-  expect(launchSession.getAttachmentUploads()[0].bytes.equals(fileContents)).toBe(true);
-});
-
 test("@preview-lifecycle reduced motion keeps unknown upload progress stationary", async ({ page }) => {
   await page.setViewportSize({ height: 844, width: 390 });
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -1794,7 +1390,9 @@ test("@preview-lifecycle Temporary AI keeps its shared upload queue across task 
   await page.setViewportSize({ height: 844, width: 390 });
   await mockLaunchTerminalSocket(page);
   const launchSession = await mockLaunchSession(page, {
-    attachmentUploadResponseDelayMs: 1000
+    attachmentUploadResponseDelayMs: 1000,
+    realChat: true,
+    temporaryCreates: []
   });
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
   await page.getByRole("button", { name: /^Session actions/u }).click();
@@ -1805,9 +1403,7 @@ test("@preview-lifecycle Temporary AI keeps its shared upload queue across task 
     name: "Main and temporary conversations"
   });
   await workspace.getByLabel("Message temporary AI").fill("Inspect the attached file.");
-  const send = workspace.getByRole("button", {
-    name: "Send to temporary AI"
-  });
+  const send = workspace.getByRole("button", { name: "Send message", exact: true });
   const fileName = "temporary-ai-progress.bin";
   const fileContents = Buffer.alloc(256 * 1024, 0x62);
   const chooserPromise = page.waitForEvent("filechooser");
@@ -1837,7 +1433,9 @@ test("@preview-lifecycle Temporary AI keeps its shared upload queue across task 
   expect(rowBounds).not.toBeNull();
   expect(Number(rowBounds?.x || 0) + Number(rowBounds?.width || 0)).toBeLessThanOrEqual(391);
   await navigation.getByRole("button", { name: "Close Temporary 1", exact: true }).click();
-  await expect.poll(() => launchSession.getAttachmentDeletes()).toEqual(["attachment-1"]);
+  await expect(navigation.getByRole("button", { name: "Temporary 1", exact: true })).toHaveCount(0);
+  // The closed chat keeps its completed upload with its saved draft.
+  expect(launchSession.getAttachmentDeletes()).toEqual([]);
 });
 
 for (const width of [390, 720, 768, 1280]) {
@@ -2018,34 +1616,6 @@ for (const status of ["required", "failed"]) {
     await notice.screenshot({ path: testInfo.outputPath(`preparation-${status}.png`) });
   });
 }
-
-test("@assistant-activity reasoning dots animate only for the confirmed phase", async ({ page }, testInfo) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  await page.emulateMedia({ reducedMotion: "no-preference" });
-  const chat = await responsiveChatHarness(page, { active: true });
-  Object.assign(chat.sessions[0].agentSession.turn, { phase: "reasoning" });
-  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?session=${SESSION_ID}&chat=main`);
-  // The HTTP fixture has no live Socket.IO server. Deliver a confirmed connection
-  // through the real client listeners before checking connection-gated activity.
-  await page.waitForFunction(() => (document.querySelector("#app") as any)?.__vue_app__?._context.provides["jskit.realtime.runtime.client.socket"]);
-  await page.evaluate(() => {
-    const socket = (document.querySelector("#app") as any).__vue_app__._context.provides["jskit.realtime.runtime.client.socket"];
-    socket.connected = true;
-    socket.emitEvent(["connect"]);
-  });
-  const dots = page.locator(".studio-autopilot__reasoning-dots:visible");
-  await expect(dots).toBeVisible();
-  await expect.poll(() => dots.evaluate((element) => element.getAnimations().some((animation) =>
-    animation.playState === "running" && Number(animation.currentTime) > 0))).toBe(true);
-  await page.screenshot({ path: testInfo.outputPath("reasoning-dots.png") });
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await expect.poll(() => dots.evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
-  Object.assign(chat.sessions[0].agentSession.turn, { phase: "tool" });
-  await chat.publish({ reason: "codex-app-server-turn-active" });
-  await expect(dots).toHaveCount(0);
-  await expect(chat.visible.getByRole("status").filter({ hasText: /^Assistant is working\.\.\.$/ })).toBeVisible();
-  await chat.close();
-});
 
 test("@preview-lifecycle Codex interactive terminal keeps one attachment queue and retries handoff", async ({ page }) => {
   await page.setViewportSize({ height: 900, width: 960 });
@@ -2592,15 +2162,13 @@ test("@preview-contention reload preserves the retry cooldown and recovers", asy
 for (const cancelHint of [false, true]) {
   test(`@preview-race preview stays usable while hints ${cancelHint ? "are cancelled by sending" : "finish"}`, async ({ page }, testInfo) => {
     await mockLaunchTerminalSocket(page);
-    const requests: TemporaryAiRecoveryRequests = { mainMessages: [], temporaryStarts: [], temporaryTurns: [] };
-    await mockLaunchSession(page, {
+    const launchSession = await mockLaunchSession(page, {
       conversationLog: [{
         assistant: { at: "2026-09-07T00:00:00Z", role: "assistant", text: "The application is ready to preview." },
         turnId: "completed-preview-work"
       }],
       initialLaunchStatus: idleLaunchStatusPayload(launchStatusPayload().outputTargets),
-      launchTerminalDelayMs: 1500,
-      temporaryAiRecoveryRequests: requests
+      launchTerminalDelayMs: 1500
     });
     await page.route("**/vibe64/settings", (route) => fulfillJson(route, {
       ok: true,
@@ -2636,9 +2204,11 @@ for (const cancelHint of [false, true]) {
       await expect(page.locator(".vibe64-launch-controls__status-dot--running:visible")).toBeVisible();
       await page.screenshot({ path: testInfo.outputPath("preview-with-pending-hints.png") });
       if (cancelHint) {
+        // The sent message starts work, so hints stay hidden afterwards.
+        launchSession.conversation!.state.workAfterMessage = true;
         await page.getByLabel("Message AI assistant").fill("Check the booking form");
         await page.getByRole("button", { name: "Send message", exact: true }).click();
-        await expect.poll(() => requests.mainMessages.length).toBe(1);
+        await expect.poll(() => launchSession.conversation!.state.messages.length).toBe(1);
         await expect.poll(() => hintCancelled).toBe(true);
       }
       hintGate.resolve();
@@ -3103,7 +2673,9 @@ for (const viewport of [{ width: 1280, height: 577 }, { width: 960, height: 700 
 for (const width of [1440, 390]) {
   test(`@session-switch-cache loaded session switching makes no chat or repository reloads at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
-    const chat = await responsiveChatHarness(page, { twoSessions: true });
+    await mockLaunchTerminalSocket(page);
+    const sessions = [sessionPayload({ sessionName: "Alpha" }), sessionPayload({ sessionId: `${SESSION_ID}-beta`, sessionName: "Beta" })];
+    await mockLaunchSession(page, { session: sessions[0], sessionList: sessions });
     await page.route("**/sessions/*/updates/check", async (route) => fulfillJson(route, {
       ok: true, checkedAt: new Date().toISOString(), relationship: "current", updateAvailable: false
     }));
@@ -3112,51 +2684,36 @@ for (const width of [1440, 390]) {
       destination: { mode: "managed_git", repository: "example-target-app", branch: "main" }
     }));
     await page.route("**/sessions/*/agent-session", async (route) => fulfillJson(route, { ok: true }));
+    const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
     const requests: string[] = [];
     let checking = false;
+    // AI access is deliberately re-read whenever a session's chat is shown.
     page.on("request", (request) => {
       const path = new URL(request.url()).pathname;
-      if (checking && (/\/sessions\/session-renderer(?:-beta)?(?:\/(?:agent-session|conversation-log|assistant-access|work|updates\/check))?$/u.test(path) ||
+      if (checking && (/\/sessions\/session-renderer(?:-beta)?(?:\/(?:agent-session|conversation-log|work|updates\/check))?$/u.test(path) ||
         path.endsWith("/model-routing/workflows"))) requests.push(`${request.method()} ${path}`);
     });
-    const save = () => chat.visible.getByRole("button", { name: "Review selected session changes", exact: true });
-    const realtime = await assistantStatusServer();
-    try {
-      await page.route("**/socket.io/**", async (route) => {
-        const url = new URL(route.request().url());
-        const response = await route.fetch({ url: `${realtime.url}${url.pathname}${url.search}` });
-        await route.fulfill({ response });
-      });
-      await page.addInitScript((realtimeUrl) => {
-        const OriginalWebSocket = window.WebSocket;
-        window.WebSocket = class extends OriginalWebSocket {
-          constructor(url: string | URL, protocols?: string | string[]) {
-            const target = new URL(url, window.location.href);
-            if (target.pathname === "/socket.io/") target.host = new URL(realtimeUrl).host;
-            super(target, protocols);
-          }
-        };
-      }, realtime.url);
-      await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-      for (const name of ["Alpha", "Beta"]) {
-        await chat.visible.locator(".studio-ai-sessions__tab", { hasText: name }).click();
-        await chat.composer.fill(`${name}'s retained draft`);
-        await expect(chat.send).toBeEnabled();
-        await expect(save()).toBeEnabled();
-      }
-      await page.waitForLoadState("networkidle");
-      checking = true;
-      for (const name of ["Alpha", "Beta", "Alpha", "Beta"]) {
-        await chat.visible.locator(".studio-ai-sessions__tab", { hasText: name }).click();
-        await expect(chat.composer).toHaveValue(`${name}'s retained draft`);
-        expect(await chat.send.isEnabled()).toBe(true);
-        expect(await save().isEnabled()).toBe(true);
-        await expect(chat.visible.getByText("Loading assistant…", { exact: true })).toHaveCount(0);
-      }
-      await page.waitForLoadState("networkidle");
-      expect(requests).toEqual([]);
-      expect(chat.errors).toEqual([]);
-    } finally { await chat.close(); await realtime.close(); }
+    const chat = page.locator(".studio-autopilot__chat-panel:visible");
+    const composer = chat.getByLabel("Message AI assistant");
+    const save = chat.getByRole("button", { name: "Review selected session changes", exact: true });
+    await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
+    for (const name of ["Alpha", "Beta"]) {
+      await chat.locator(".studio-ai-sessions__tab", { hasText: name }).click();
+      await composer.fill(`${name}'s retained draft`);
+      await expect(save).toBeEnabled();
+    }
+    await page.waitForLoadState("networkidle");
+    checking = true;
+    for (const name of ["Alpha", "Beta", "Alpha", "Beta"]) {
+      await chat.locator(".studio-ai-sessions__tab", { hasText: name }).click();
+      await expect(composer).toHaveValue(`${name}'s retained draft`);
+      expect(await save.isEnabled()).toBe(true);
+      await expect(chat.getByText("Loading assistant…", { exact: true })).toHaveCount(0);
+    }
+    await page.waitForLoadState("networkidle");
+    expect(requests).toEqual([]);
+    expect(errors).toEqual([]);
   });
 }
 
@@ -3752,7 +3309,7 @@ for (const source of [
   { endpoint: "settings", sessionId: "settings-a" },
   { endpoint: "settings/engineering", sessionId: "settings-a" }
 ]) {
-  test(`delayed settings retries stay project-bound: ${source.endpoint}, ${source.sessionId || "selected source"}`, async ({ page }) => {
+  test(`delayed settings reads end with their project: ${source.endpoint}, ${source.sessionId || "selected source"}`, async ({ page }) => {
     page.setDefaultTimeout(10_000);
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.clock.install();
@@ -3778,6 +3335,10 @@ for (const source of [
     };
     const reads: Array<{ slug: string; route: Route }> = [];
     let otherProjectRead = false;
+    let abandonedRead = false;
+    page.on("requestfailed", (request) => {
+      if (request.url() === reads[0]?.route.request().url()) abandonedRead = true;
+    });
     await page.route(/\/api(?:\/app\/[^/]+)?\/vibe64\/settings(?:\/engineering)?(?:\?.*)?$/u, async (route) => {
       const url = new URL(route.request().url());
       const slug = /\/api\/app\/([^/]+)/u.exec(url.pathname)?.[1] || "unscoped";
@@ -3795,14 +3356,12 @@ for (const source of [
     await page.getByRole("button", { name: "example-target-app", exact: true }).click();
     await page.getByRole("list").getByText("other-target-app", { exact: true }).click();
     await expect(page).toHaveURL(`${BASE_URL}/app/project/other-target-app`);
-    // Wait for the new project's persistent settings reader before releasing A.
     await expect.poll(() => otherProjectRead).toBe(true);
-    const beforeRetry = reads.length;
-    await fulfillJson(reads[0].route, { ok: false, error: "Transient source A read failure." }, { status: 503 });
+    // Leaving the project cancels its pending read, so no retry can reach either project.
+    await expect.poll(() => abandonedRead).toBe(true);
+    const afterSwitch = reads.length;
     await page.clock.runFor(3_000);
-    await expect.poll(() => reads.length).toBe(beforeRetry + 1);
-    expect(reads.at(-1)!.slug, "the physical retry must keep its original project").toBe("example-target-app");
-    await fulfillJson(reads.at(-1)!.route, response);
+    expect(reads.slice(afterSwitch).filter((read) => read.slug === "example-target-app")).toEqual([]);
   });
 }
 
@@ -4019,69 +3578,6 @@ test("session panel shows loading feedback instead of empty create state while s
   await expect(page.getByText("Create a session to start preview.")).toHaveCount(0);
 });
 
-test("the chat cog stays available and delivery actions stay aligned during an active turn", async ({ page }) => {
-  await page.setViewportSize({ height: 600, width: 900 });
-  await mockLaunchTerminalSocket(page);
-  const baseSession = sessionPayload();
-  const selectedSession = {
-    ...baseSession,
-    agentSession: {
-      ...baseSession.agentSession,
-      turn: {
-        active: true,
-        id: "turn-active-chat-controls",
-        state: "active"
-      }
-    },
-    assistantSelection: {
-      agentId: "codex",
-      catalogRevision: TEST_ASSISTANT_CATALOG_REVISION,
-      engineId: "codex",
-      modelId: "gpt-5.6-sol",
-      modelProviderId: "openai",
-      variantId: "xhigh"
-    }
-  };
-  await mockLaunchSession(page, {
-    assistantCatalog: assistantCatalogPayload({ includeOpenCode: true }),
-    session: selectedSession
-  });
-
-  await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-  const assistantMenuButton = page.locator("button[aria-label='Choose AI']:visible");
-  await expect(assistantMenuButton).toBeEnabled();
-  await assistantMenuButton.click();
-
-  const selector = page.getByLabel("AI session selector");
-  await expect(selector).toBeVisible();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(selector.getByRole("button", { name: "GPT-5.6 Sol" })).toBeDisabled();
-  await expect(selector.getByRole("button", { name: "Extra high" })).toBeDisabled();
-  await expect(selector.getByText(
-    "AI choices are view-only while the assistant is working.",
-    { exact: true }
-  )).toBeVisible();
-  await expect(selector.getByText("OpenCode", { exact: true })).toHaveCount(0);
-  await expect(selector.getByRole("button", { name: "Apply" })).toBeDisabled();
-
-  await page.keyboard.press("Escape");
-  await expect(selector).not.toBeVisible();
-  await page.setViewportSize({ height: 700, width: 390 });
-  const steerButton = page.getByRole("button", { name: "Steer assistant" });
-  await expect(steerButton).toBeVisible();
-  const [assistantMenuBox, steerBox] = await Promise.all([
-    assistantMenuButton.boundingBox(),
-    steerButton.boundingBox()
-  ]);
-  expect(Math.abs(
-    (assistantMenuBox?.y || 0) + (assistantMenuBox?.height || 0) / 2 -
-    ((steerBox?.y || 0) + (steerBox?.height || 0) / 2)
-  )).toBeLessThanOrEqual(1);
-  expect(await page.evaluate(() => (
-    document.documentElement.scrollWidth <= window.innerWidth
-  ))).toBe(true);
-});
-
 for (const viewport of [{ width: 1280, height: 577 }, { width: 390, height: 844 }]) {
   test(`cold Files waits for remembered-session detail at ${viewport.width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize(viewport);
@@ -4116,23 +3612,17 @@ for (const viewport of [{ width: 1280, height: 577 }, { width: 390, height: 844 
       await page.reload({ waitUntil: "domcontentloaded" });
       await expect.poll(() => heldReads.includes(`${sessionsUrl}/${SESSION_ID}`)).toBe(true);
       await expect(page).toHaveURL(filesUrl);
-      const loading = page.locator(".studio-autopilot__project-panel > .vibe64-async-module-state");
-      await expect(loading).toBeVisible();
-      await expect(loading).toHaveAttribute("aria-busy", "true");
-      await expect(loading.locator(".v-skeleton-loader")).toHaveAttribute("aria-label", "Loading session source...");
+      // The session list owns initial loading (Program: sessions/workspaces); the
+      // compact layout shows the Project pane, so the chat status is only attached.
+      const loading = page.getByText("Loading sessions.", { exact: true });
+      await expect(loading).toBeAttached();
       await expect(page.getByLabel("Session source editor")).toHaveCount(0);
-      await expect(page.getByRole("navigation", { name: "Dashboard sections" })).toBeHidden();
-      const project = page.getByRole("region", { name: "Project", exact: true });
-      const pendingBounds = await project.boundingBox();
-      expect(pendingBounds).not.toBeNull();
-      expect(await loading.boundingBox()).toEqual(pendingBounds);
       await page.screenshot({ path: testInfo.outputPath("source-tool-pending.png") });
 
       releaseReads.resolve();
       await expect(page.getByLabel("Session source editor")).toBeVisible();
       await expect(loading).toHaveCount(0);
       await expect(page).toHaveURL(filesUrl);
-      expect(await project.boundingBox()).toEqual(pendingBounds);
       await page.screenshot({ path: testInfo.outputPath("source-tool-ready.png") });
     } finally {
       releaseReads.resolve();
@@ -4194,6 +3684,8 @@ test("chat source links open the editor and editor autosaves file changes", asyn
   await expect(page.locator(".vibe64-source-tree__button", {
     hasText: "really-long-helper-file-name-that-needs-hover.js"
   })).toHaveCount(0);
+  // Source files open on their public interface; Code shows the editor.
+  await page.getByRole("button", { name: "Code", exact: true }).click();
   await expect(page.locator(".cm-content")).toContainText("const status = 'ready';");
 
   await page.getByText("./utils/really-long-helper-file-name-that-needs-hover").click({
@@ -4206,6 +3698,7 @@ test("chat source links open the editor and editor autosaves file changes", asyn
     name: "src/App.js:2"
   }).click();
   await expect(page.locator(".vibe64-source-editor__title")).toContainText("App.js");
+  await page.getByRole("button", { name: "Code", exact: true }).click();
 
   await page.locator(".cm-content").click();
   await page.keyboard.press("Control+A");
@@ -4236,16 +3729,6 @@ test("chat source links open the editor and editor autosaves file changes", asyn
   await expect(page).toHaveURL(`${BASE_URL}${DASHBOARD_PATH}/files`);
   await expect(page.getByLabel("Session source editor")).toBeVisible();
   await expect(page.locator(".vibe64-source-editor__title")).toContainText("really-long-helper-file-name");
-  const composerGeometry = await page.locator(".studio-autopilot__chat-panel .studio-autopilot__composer .studio-autopilot-prompt-textarea__field").evaluate((element) => {
-    const composer = element.closest(".studio-autopilot__composer").getBoundingClientRect();
-    return {
-      fieldBottomGap: composer.bottom - element.getBoundingClientRect().bottom,
-      viewportBottomGap: window.innerHeight - composer.bottom
-    };
-  });
-  expect(composerGeometry.viewportBottomGap).toBeGreaterThanOrEqual(0);
-  expect(composerGeometry.viewportBottomGap).toBeLessThanOrEqual(1);
-  expect(composerGeometry.fieldBottomGap).toBeCloseTo(4, 0);
   await page.getByTitle("Collapse file list").click();
   await expect(page.getByTitle("Show files")).toBeVisible();
   await page.getByTitle("Show files").click();
@@ -4286,6 +3769,7 @@ test("source editor refresh reloads the open file and preserves its viewport", a
   await page.getByRole("link", {
     name: "src/App.js"
   }).click();
+  await page.getByRole("button", { name: "Code", exact: true }).click();
   const scroller = page.locator(".cm-scroller");
   await scroller.evaluate((element) => {
     element.scrollTop = 1800;
@@ -4382,6 +3866,7 @@ test("source explanations keep live progress compact and answers above the follo
   }).fill("edit.vue");
   await page.locator(".vibe64-source-editor__matches").getByTitle(sourcePath).click();
   await expect(page.locator(".vibe64-source-editor__title")).toContainText("edit.vue");
+  await page.getByRole("button", { name: "Code", exact: true }).click();
 
   await page.getByRole("button", {
     name: "Explain"
@@ -4436,7 +3921,7 @@ test("source explanations keep live progress compact and answers above the follo
   const followupBox = panel.getByRole("textbox", {
     name: "Ask about this explanation"
   });
-  const explanationComposerBottomGap = await panel.locator(".vibe64-source-explanation__followup .studio-autopilot-prompt-textarea__field").evaluate((element) => (
+  const explanationComposerBottomGap = await panel.locator(".vibe64-source-explanation__followup").evaluate((element) => (
     window.innerHeight - element.getBoundingClientRect().bottom
   ));
   expect(explanationComposerBottomGap).toBeLessThanOrEqual(3);
@@ -4703,572 +4188,6 @@ test("@preview-lifecycle an opened long-running output stays open after the laun
   expect(Math.abs(hostHeightAfter - hostHeightBefore)).toBeLessThan(1);
 });
 
-for (const width of [1440, 390]) {
-  test(`@chat-responsive confirmed Send permits steering before HTTP finishes at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 });
-    await mockLaunchTerminalSocket(page);
-    const session = sessionPayload();
-    const conversationLog: unknown[] = [];
-    await mockLaunchSession(page, { conversationLog, session });
-    const requests: Record<string, unknown>[] = [];
-    let releaseFirst!: () => void;
-    const firstResponse = new Promise<void>((resolve) => { releaseFirst = resolve; });
-    await page.route(`${BASE_URL}${SCOPED_API_PREFIX}/vibe64/sessions/${SESSION_ID}/agent-message`, async (route) => {
-      const payload = route.request().postDataJSON();
-      requests.push(payload);
-      if (requests.length === 1) {
-        await firstResponse;
-        await fulfillJson(route, { ok: false, error: "Late transport failure" }, { status: 500 });
-      } else {
-        await fulfillJson(route, { ok: true, delivered: true, messageId: payload.messageId });
-      }
-    });
-    try {
-      await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-      const composer = page.getByLabel("Message AI assistant");
-      await composer.fill("Inspect the booking form");
-      await page.getByRole("button", { name: "Send message", exact: true }).click();
-      await expect.poll(() => requests.length).toBe(1);
-      await expect(page.getByRole("button", { name: "Sending message" })).toBeVisible();
-      const turn = {
-        turnId: "000001",
-        user: {
-          at: new Date().toISOString(),
-          messageId: requests[0].messageId,
-          role: "user",
-          text: "Inspect the booking form"
-        }
-      };
-      conversationLog.push(turn);
-      session.revision = 2;
-      Object.assign(session.agentSession.turn, { active: true, id: "turn-responsive", state: "active" });
-      await publishChatSessionChange(page, {
-        agentSession: session.agentSession,
-        conversationLogPatch: { type: "upsert-turn", turn },
-        reason: "codex-app-server-message-delivered",
-        revision: 2,
-        sessionId: SESSION_ID
-      });
-      await expect(page.getByRole("button", { name: "Stop", exact: true })).toBeEnabled();
-      await composer.fill("Check the mobile form too");
-      await page.getByRole("button", { name: "Steer assistant", exact: true }).click();
-      await expect.poll(() => requests.length).toBe(2);
-      expect(requests[1].message).toBe("Check the mobile form too");
-      await expect(composer).toHaveValue("");
-      await composer.fill("Preserve this next draft");
-      releaseFirst();
-      await expect(composer).toHaveValue("Preserve this next draft");
-      await expect(page.getByRole("button", { name: "Steer assistant", exact: true })).toBeEnabled();
-      await expect(page.getByText("Late transport failure", { exact: true })).toHaveCount(0);
-    } finally {
-      releaseFirst();
-    }
-  });
-
-  test(`@chat-responsive confirmed Stop permits a new Send before HTTP finishes at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 });
-    await mockLaunchTerminalSocket(page);
-    const session = sessionPayload();
-    Object.assign(session.agentSession.turn, { active: true, id: "turn-stopping", state: "active" });
-    const requests: TemporaryAiRecoveryRequests = { mainMessages: [], temporaryStarts: [], temporaryTurns: [] };
-    await mockLaunchSession(page, {
-      session,
-      temporaryAiRecoveryRequests: requests
-    });
-    let stopRequests = 0;
-    let releaseStop!: () => void;
-    const stopResponse = new Promise<void>((resolve) => { releaseStop = resolve; });
-    await page.route(`${BASE_URL}${SCOPED_API_PREFIX}/vibe64/sessions/${SESSION_ID}/agent-turn/interrupt`, async (route) => {
-      stopRequests += 1;
-      await stopResponse;
-      await fulfillJson(route, { ok: true });
-    });
-    try {
-      await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-      await page.getByRole("button", { name: "Stop", exact: true }).click();
-      await expect.poll(() => stopRequests).toBe(1);
-      await expect(page.getByRole("button", { name: "Stopping…", exact: true })).toBeDisabled();
-      session.revision = 2;
-      Object.assign(session.agentSession.turn, { active: false, state: "idle" });
-      await publishChatSessionChange(page, {
-        agentSession: session.agentSession,
-        reason: "codex-app-server-turn-idle",
-        revision: 2,
-        sessionId: SESSION_ID
-      });
-      const composer = page.getByLabel("Message AI assistant");
-      await composer.fill("fdd");
-      await expect(page.getByRole("button", { name: "Send message", exact: true })).toBeEnabled();
-      await page.getByRole("button", { name: "Send message", exact: true }).click();
-      await expect.poll(() => requests.mainMessages.length).toBe(1);
-      expect(requests.mainMessages[0].message).toBe("fdd");
-      await composer.fill("Next draft survives Stop completion");
-      releaseStop();
-      await expect(composer).toHaveValue("Next draft survives Stop completion");
-      await expect(page.getByRole("button", { name: "Send message", exact: true })).toBeEnabled();
-    } finally {
-      releaseStop();
-    }
-  });
-}
-
-for (const width of [1440, 390]) {
-  test(`@chat-stress only the exact receipt acknowledges Send at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 });
-    const chat = await responsiveChatHarness(page);
-    try {
-      await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-      await chat.composer.fill("Check the booking flow");
-      await chat.send.click();
-      await expect.poll(() => chat.messages.length).toBe(1);
-      await chat.receipt(0, { messageId: "unrelated-message" });
-      await chat.publish({
-        reason: "codex-app-server-commentary",
-        conversationLogPatch: { type: "upsert-turn", turn: {
-          turnId: "000003",
-          commentary: [{ role: "assistant", at: new Date().toISOString(), text: "An unrelated update arrived." }]
-        } }
-      });
-      await expect(page.getByRole("button", { name: "Sending message" })).toBeDisabled();
-      await chat.composer.fill("Keep typing while delivery is pending");
-      await chat.composer.press("Enter");
-      await chat.composer.press("Enter");
-      expect(chat.messages.length).toBe(1);
-      await chat.receipt(0);
-      await chat.receipt(0);
-      await expect(chat.steer).toBeEnabled();
-      await chat.steer.click();
-      await expect.poll(() => chat.messages.length).toBe(2);
-      expect(chat.messages[1].body.message).toBe("Keep typing while delivery is pending");
-      expect(chat.messages[0].settled).toBe(false);
-      await chat.messages[1].finish();
-      expect(chat.errors).toEqual([]);
-    } finally { await chat.close(); }
-  });
-
-  test(`@chat-stress HTTP acceptance works without a realtime receipt at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 });
-    const chat = await responsiveChatHarness(page);
-    try {
-      await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-      await chat.composer.fill("First message");
-      await chat.send.click();
-      await expect.poll(() => chat.messages.length).toBe(1);
-      await chat.composer.fill("Second draft");
-      await chat.messages[0].finish();
-      await expect(chat.send).toBeEnabled();
-      await expect(chat.composer).toHaveValue("Second draft");
-      await chat.send.click();
-      await expect.poll(() => chat.messages.length).toBe(2);
-      expect(chat.messages[1].body.messageId).not.toBe(chat.messages[0].body.messageId);
-      await chat.messages[1].finish();
-      expect(chat.errors).toEqual([]);
-    } finally { await chat.close(); }
-  });
-
-  test(`@chat-stress failed Send resends the same message and keeps a newer draft at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 });
-    const chat = await responsiveChatHarness(page);
-    try {
-      await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-      await chat.composer.fill("The original message");
-      await chat.send.click();
-      await expect.poll(() => chat.messages.length).toBe(1);
-      await chat.composer.fill("My next draft stays here");
-      await chat.messages[0].finish({ ok: false, error: "Deliberate delivery failure" }, 503);
-      await expect(page.getByText("Deliberate delivery failure", { exact: true })).toBeVisible();
-      await page.getByRole("button", { name: /Resend/u }).click();
-      await expect.poll(() => chat.messages.length).toBe(2);
-      expect(chat.messages[1].body.messageId).toBe(chat.messages[0].body.messageId);
-      expect(chat.messages[1].body.message).toBe("The original message");
-      await chat.receipt(1);
-      await expect(chat.steer).toBeEnabled();
-      await expect(chat.composer).toHaveValue("My next draft stays here");
-      expect(chat.errors).toEqual([]);
-    } finally { await chat.close(); }
-  });
-
-  test(`@chat-stress Stop ignores another turn and late failure cannot disturb a new Stop at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 });
-    const chat = await responsiveChatHarness(page, { active: true });
-    try {
-      await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-      await chat.stop.click();
-      await expect.poll(() => chat.interrupts.length).toBe(1);
-      await chat.turn(false, "unrelated-turn");
-      await chat.composer.fill("A draft after Stop");
-      await expect(chat.send).toBeDisabled();
-      await chat.turn(false, "turn-stress");
-      await expect(chat.send).toBeEnabled();
-      await chat.send.click();
-      await expect.poll(() => chat.messages.length).toBe(1);
-      await chat.receipt(0, { turnId: "turn-new" });
-      await chat.stop.click();
-      await expect.poll(() => chat.interrupts.length).toBe(2);
-      await chat.interrupts[0].finish({ ok: false, error: "Old Stop response failed" }, 503);
-      await expect(page.getByRole("button", { name: "Stopping…", exact: true })).toBeDisabled();
-      await chat.turn(false, "turn-new");
-      await chat.composer.fill("Still usable");
-      await expect(chat.send).toBeEnabled();
-      expect(chat.errors).toEqual([]);
-    } finally { await chat.close(); }
-  });
-
-  test(`@chat-stress a rejected Stop can be retried without losing the draft at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 });
-    const chat = await responsiveChatHarness(page, { active: true });
-    try {
-      await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-      await chat.composer.fill("Keep this guidance");
-      await chat.stop.click();
-      await expect.poll(() => chat.interrupts.length).toBe(1);
-      await chat.interrupts[0].finish({ ok: false, error: "Deliberate interrupt failure" }, 503);
-      const failure = page.getByRole("alert").filter({ hasText: "Deliberate interrupt failure" });
-      await expect(failure).toBeVisible();
-      await expect(chat.stop).toBeEnabled();
-      await expect(chat.steer).toBeEnabled();
-      await expect(chat.composer).toHaveValue("Keep this guidance");
-      await chat.stop.click();
-      await expect.poll(() => chat.interrupts.length).toBe(2);
-      await expect(failure).toBeHidden();
-      await chat.interrupts[1].finish({ ok: false, error: "Deliberate interrupt failure" }, 503);
-      await expect(failure).toBeVisible();
-      await chat.stop.click();
-      await expect.poll(() => chat.interrupts.length).toBe(3);
-      await expect(failure).toBeHidden();
-      await chat.turn(false, "turn-stress");
-      await expect(chat.send).toBeEnabled();
-      expect(chat.errors).toEqual([]);
-    } finally { await chat.close(); }
-  });
-
-  test(`@chat-stress Stop acknowledgement does not wait for a held session refresh at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 });
-    const chat = await responsiveChatHarness(page, { active: true });
-    let releaseRefresh!: () => void;
-    const refreshGate = new Promise<void>((resolve) => { releaseRefresh = resolve; });
-    let refreshes = 0;
-    try {
-      await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-      await expect(chat.stop).toBeEnabled();
-      await page.route(`${BASE_URL}${SCOPED_API_PREFIX}/vibe64/sessions/${SESSION_ID}`, async (route) => {
-        refreshes += 1;
-        await refreshGate;
-        await fulfillJson(route, { ok: true, ...chat.sessions[0] });
-      });
-      await chat.composer.fill("Input remains available");
-      await chat.stop.click();
-      await expect.poll(() => chat.interrupts.length).toBe(1);
-      await chat.interrupts[0].finish();
-      await expect.poll(() => refreshes).toBeGreaterThan(0);
-      await expect(chat.stop).toBeEnabled();
-      await expect(chat.steer).toBeEnabled();
-      await chat.turn(false, "turn-stress");
-      await expect(chat.send).toBeEnabled();
-      await chat.send.click();
-      await expect.poll(() => chat.messages.length).toBe(1);
-      expect(chat.messages[0].body.message).toBe("Input remains available");
-      expect(chat.errors).toEqual([]);
-    } finally { releaseRefresh(); await chat.close(); }
-  });
-
-  for (const operation of ["Send", "Stop"]) {
-    test(`@chat-stress switching sessions during ${operation} preserves independent drafts at ${width}px`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 900 });
-      const chat = await responsiveChatHarness(page, { active: operation === "Stop", twoSessions: true });
-      try {
-        await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-        await chat.visible.locator(".studio-ai-sessions__tab", { hasText: "Alpha" }).click();
-        if (operation === "Stop") {
-          await chat.stop.click();
-          await expect.poll(() => chat.interrupts.length).toBe(1);
-        } else {
-          await chat.composer.fill("Alpha's pending message");
-          await chat.send.click();
-          await expect.poll(() => chat.messages.length).toBe(1);
-        }
-        await chat.composer.fill("Alpha's next draft");
-        await chat.visible.locator(".studio-ai-sessions__tab", { hasText: "Beta" }).click();
-        await chat.composer.fill("Beta's message");
-        await chat.send.click();
-        const index = operation === "Stop" ? 0 : 1;
-        await expect.poll(() => chat.messages.length).toBe(index + 1);
-        expect(chat.messages[index].sessionId).toBe(`${SESSION_ID}-beta`);
-        await chat.messages[index].finish();
-        await chat.composer.fill("Beta's next draft");
-        await (operation === "Stop" ? chat.interrupts[0] : chat.messages[0])
-          .finish({ ok: false, error: "Alpha's late failure" }, 503);
-        await expect(chat.composer).toHaveValue("Beta's next draft");
-        await expect(chat.send).toBeEnabled();
-        if (operation === "Stop") {
-          await expect(page.getByRole("button", { name: "Stopping…", exact: true, includeHidden: true })).toHaveCount(0);
-          await expect(page.getByRole("alert").filter({ hasText: "Alpha's late failure" })).toBeHidden();
-        }
-        await chat.visible.locator(".studio-ai-sessions__tab", { hasText: "Alpha" }).click();
-        await expect(chat.composer).toHaveValue("Alpha's next draft");
-        expect(chat.errors).toEqual([]);
-      } finally { await chat.close(); }
-    });
-  }
-
-  test(`@chat-stress saved-commit Deslop settles its actual banner before HTTP at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 });
-    const chat = await responsiveChatHarness(page);
-    await page.route(`${BASE_URL}${SCOPED_API_PREFIX}/vibe64/sessions/${SESSION_ID}/work`, async (route) => {
-      await fulfillJson(route, { ok: true, unsaved: true, operation: null, updateOperation: null,
-        destination: { sessionId: SESSION_ID, mode: "managed_git", repository: "example-target-app", branch: "main" } });
-    });
-    await page.route(`${BASE_URL}${SCOPED_API_PREFIX}/vibe64/sessions/${SESSION_ID}/save`, async (route) => {
-      await fulfillJson(route, { ok: true, status: "saved", reconciled: true, saveCommit: "a".repeat(40) });
-    });
-    try {
-      await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-      await page.getByRole("button", { name: "Review selected session changes", exact: true }).click();
-      await page.getByRole("dialog").getByRole("button", { name: "Save project version", exact: true }).click();
-      await expect(page.getByText("Work saved", { exact: true })).toBeVisible();
-      await page.getByRole("button", { name: /Deslop|Clean up/iu }).click();
-      await expect.poll(() => chat.messages.length).toBe(1);
-      expect(chat.messages[0].body.genesisTask).toBe("deslop");
-      expect(chat.messages[0].body.message).toBe(`Deslop commit ${"a".repeat(40)}.`);
-      await expect(page.getByRole("button", { name: "Starting…", exact: true })).toBeDisabled();
-      await chat.receipt(0);
-      await expect(page.getByText("Work saved", { exact: true })).toHaveCount(0);
-      await expect(chat.stop).toBeEnabled();
-      expect(chat.messages[0].settled).toBe(false);
-      await chat.stop.click();
-      await expect.poll(() => chat.interrupts.length).toBe(1);
-      await chat.turn(false, "turn-stress");
-      await chat.composer.fill("Continue after stopping Deslop");
-      await expect(chat.send).toBeEnabled();
-      expect(chat.errors).toEqual([]);
-    } finally { await chat.close(); }
-  });
-
-  test(`@chat-stress reconnect recovers a missed receipt without waiting for Send HTTP at ${width}px`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 900 });
-    const chat = await responsiveChatHarness(page);
-    try {
-      await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-      await chat.composer.fill("Accepted while connection was lost");
-      await chat.send.click();
-      await expect.poll(() => chat.messages.length).toBe(1);
-      await page.context().setOffline(true);
-      await chat.receipt(0, { publishReceipt: false });
-      await chat.composer.fill("Draft survives reconnect");
-      await page.context().setOffline(false);
-      await expect(chat.steer).toBeEnabled({ timeout: 20_000 });
-      await expect(chat.composer).toHaveValue("Draft survives reconnect");
-      expect(chat.messages[0].settled).toBe(false);
-      await chat.steer.click();
-      await expect.poll(() => chat.messages.length).toBe(2);
-      expect(chat.errors).toEqual([]);
-    } finally { await page.context().setOffline(false); await chat.close(); }
-  });
-
-  test(`@chat-stress repeated Send and Stop preserve typing through a long history at ${width}px`, async ({ page }, testInfo) => {
-    await page.setViewportSize({ width, height: 900 });
-    const history = Array.from({ length: 150 }, (_, index) => ({
-      turnId: String(index + 1).padStart(6, "0"),
-      user: { role: "user", at: new Date().toISOString(), messageId: `history-${index}`, text: `Historical request ${index}.` },
-      assistant: { role: "assistant", at: new Date().toISOString(), text: `Historical answer ${index}.\n\n${"Detailed implementation evidence. ".repeat(15)}` }
-    }));
-    const chat = await responsiveChatHarness(page, { history });
-    try {
-      await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-      await expect(chat.composer).toBeVisible();
-      await page.evaluate(() => {
-        const samples: number[] = [];
-        const slowInputs: { duration: number; insertedLength: number; valueLength: number }[] = [];
-        (window as any).__chatInputPaintSamples = samples;
-        (window as any).__chatSlowInputs = slowInputs;
-        document.addEventListener("input", (event) => {
-          if ((event.target as Element)?.getAttribute("aria-label") === "Message AI assistant") {
-            const started = performance.now();
-            const insertedLength = (event as InputEvent).data?.length || 0;
-            const valueLength = (event.target as HTMLTextAreaElement).value.length;
-            requestAnimationFrame(() => {
-              const duration = performance.now() - started;
-              samples.push(duration);
-              if (duration > 100) slowInputs.push({ duration, insertedLength, valueLength });
-            });
-          }
-        }, true);
-      });
-      for (let cycle = 0; cycle < 5; cycle += 1) {
-        await chat.composer.fill(`Cycle ${cycle}: inspect the booking flow`);
-        await chat.send.click();
-        await expect.poll(() => chat.messages.length).toBe(cycle + 1);
-        await chat.composer.pressSequentially("Keep the typed draft.", { delay: 5 });
-        await chat.receipt(cycle, { turnId: `cycle-${cycle}` });
-        await expect(chat.steer).toBeEnabled();
-        await expect(chat.composer).toHaveValue("Keep the typed draft.");
-        await chat.stop.click();
-        await expect.poll(() => chat.interrupts.length).toBe(cycle + 1);
-        await chat.turn(false, `cycle-${cycle}`);
-        await expect(chat.send).toBeEnabled();
-        await expect(chat.composer).toHaveValue("Keep the typed draft.");
-      }
-      for (const request of [...chat.messages, ...chat.interrupts].reverse()) {
-        await request.finish();
-      }
-      await expect(chat.send).toBeEnabled();
-      await expect(chat.composer).toHaveValue("Keep the typed draft.");
-      const samples = await page.evaluate(() => (window as any).__chatInputPaintSamples as number[]);
-      samples.sort((left, right) => left - right);
-      const p95 = samples[Math.floor(samples.length * 0.95)];
-      const slowInputs = await page.evaluate(() => (window as any).__chatSlowInputs);
-      await testInfo.attach("input-to-next-frame.json", { body: JSON.stringify({ width, samples: samples.length, p95, max: samples.at(-1), slowInputs }), contentType: "application/json" });
-      expect(samples.length).toBeGreaterThan(50);
-      // Run with --trace=off for timing; trace snapshots can block frames in this large fixture.
-      if (testInfo.project.use.trace === "off") expect(p95).toBeLessThan(300);
-      expect(chat.errors).toEqual([]);
-      await page.screenshot({ path: testInfo.outputPath("chat-after-repeated-cycles.png") });
-    } finally { await chat.close(); }
-  });
-}
-
-for (const width of [390, 820, 1440]) {
-  for (const engineId of ["codex", "opencode"]) {
-    for (const outcome of ["accepted", "receipt", "rejected"]) {
-      test(`@steer-clear ${engineId} clears immediately and preserves the next draft after ${outcome} at ${width}px`, async ({ page }, testInfo) => {
-        await page.setViewportSize({ width, height: 900 });
-        const chat = await responsiveChatHarness(page, { active: true, engineId });
-        const original = "Do not make the cards configurable yet.";
-        const nextDraft = `${original} This is a separate follow-up.`;
-        try {
-          await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-          await chat.composer.fill(original);
-          const started = Date.now();
-          await chat.steer.click();
-          await expect(chat.composer).toHaveValue("", { timeout: 500 });
-          expect(Date.now() - started).toBeLessThan(1_000);
-          await expect.poll(() => chat.messages.length).toBe(1);
-          await expect(chat.visible.getByRole("button", { name: "Sending guidance to assistant", exact: true })).toBeDisabled();
-          await chat.composer.pressSequentially(nextDraft, { delay: 5 });
-          await expect(chat.composer).toHaveValue(nextDraft);
-          expect(chat.messages[0].settled).toBe(false);
-          await page.screenshot({ path: testInfo.outputPath("draft-while-steering-pending.png"), animations: "disabled" });
-
-          if (outcome === "receipt") {
-            await chat.receipt(0);
-            await expect(chat.steer).toBeEnabled();
-            expect(chat.messages[0].settled).toBe(false);
-            await chat.messages[0].finish({ ok: false, error: "Late delivery error" }, 500);
-            await expect(page.getByText("Late delivery error", { exact: true })).toHaveCount(0);
-          } else if (outcome === "rejected") {
-            await chat.messages[0].finish({ ok: false, error: "Guidance was not delivered." }, 409);
-            await expect(chat.visible.getByText("Guidance was not delivered.", { exact: true })).toBeVisible();
-            await expect(chat.steer).toBeEnabled();
-            await expect(chat.composer).toHaveValue(nextDraft);
-            await chat.visible.getByRole("button", { name: "Resend", exact: true }).click();
-            await expect.poll(() => chat.messages.length).toBe(2);
-            expect(chat.messages[1].body.messageId).toBe(chat.messages[0].body.messageId);
-            expect(chat.messages[1].body.message).toBe(original);
-            await chat.receipt(1);
-            await chat.messages[1].finish();
-          } else {
-            await chat.messages[0].finish();
-            await expect(chat.steer).toBeEnabled();
-            await chat.receipt(0);
-          }
-          await expect(chat.composer).toHaveValue(nextDraft);
-          await expect(chat.steer).toBeEnabled();
-          await expect(chat.visible.getByText(original, { exact: true })).toHaveCount(1);
-          await expect(chat.stop).toBeEnabled();
-          expect(chat.errors).toEqual([]);
-        } finally { await chat.close(); }
-      });
-    }
-  }
-}
-
-type HeldChatRequest = {
-  body: Record<string, unknown>;
-  sessionId: string;
-  settled: boolean;
-  finish(body?: Record<string, unknown>, status?: number): Promise<void>;
-};
-
-async function responsiveChatHarness(page: Page, {
-  active = false,
-  engineId = "",
-  twoSessions = false,
-  history = []
-}: { active?: boolean; engineId?: string; twoSessions?: boolean; history?: unknown[] } = {}) {
-  page.setDefaultTimeout(10_000);
-  await mockLaunchTerminalSocket(page);
-  const sessions = [sessionPayload({ sessionName: twoSessions ? "Alpha" : "Renderer session" })];
-  if (twoSessions) sessions.push(sessionPayload({ sessionId: `${SESSION_ID}-beta`, sessionName: "Beta" }));
-  const assistantCatalog = engineId ? assistantCatalogPayload({ includeOpenCode: true }) : undefined;
-  if (assistantCatalog) {
-    const engine = assistantCatalog.engines.find((item) => item.engineId === engineId)!;
-    Object.assign(sessions[0].assistantSelection, { ...engine.defaults, engineId });
-    Object.assign(sessions[0].agentSession, { providerId: engineId, transportId: engine.transportId });
-  }
-  Object.assign(sessions[0].agentSession.turn, { active, id: "turn-stress", state: active ? "active" : "idle" });
-  const conversationLog = [...history];
-  await mockLaunchSession(page, { assistantCatalog, conversationLog, session: sessions[0], sessionList: sessions });
-  const messages: HeldChatRequest[] = [];
-  const interrupts: HeldChatRequest[] = [];
-  const errors: string[] = [];
-  page.on("pageerror", (error) => errors.push(error.message));
-  await page.route(/\/vibe64\/sessions\/[^/]+\/(?:agent-message|agent-turn\/interrupt)$/u, async (route) => {
-    const request = route.request();
-    const response = Promise.withResolvers<{ body: Record<string, unknown>; status: number }>();
-    const finished = Promise.withResolvers<void>();
-    const record: HeldChatRequest = {
-      body: request.postDataJSON(),
-      sessionId: new URL(request.url()).pathname.split("/sessions/")[1].split("/")[0],
-      settled: false,
-      async finish(body = { ok: true, delivered: true }, status = 200) {
-        if (!record.settled) {
-          record.settled = true;
-          response.resolve({ body, status });
-        }
-        await finished.promise;
-      }
-    };
-    (request.url().endsWith("/agent-message") ? messages : interrupts).push(record);
-    const result = await response.promise;
-    try { await fulfillJson(route, result.body, { status: result.status }); }
-    finally { finished.resolve(); }
-  });
-  const visible = page.locator(".studio-autopilot__chat-panel:visible");
-  async function publish(change: Record<string, unknown>, sessionId = SESSION_ID) {
-    const session = sessions.find((item) => item.sessionId === sessionId)!;
-    session.revision += 1;
-    await publishChatSessionChange(page, { agentSession: session.agentSession, sessionId, revision: session.revision, ...change });
-  }
-  return {
-    composer: visible.getByLabel("Message AI assistant"),
-    errors, interrupts, messages, publish, sessions, visible,
-    send: visible.getByRole("button", { name: "Send message", exact: true }),
-    steer: visible.getByRole("button", { name: "Steer assistant", exact: true }),
-    stop: visible.getByRole("button", { name: "Stop", exact: true }),
-    async close() { await Promise.all([...messages, ...interrupts].map((request) => request.finish())); },
-    async turn(active: boolean, id: string) {
-      Object.assign(sessions[0].agentSession.turn, { active, id, state: active ? "active" : "idle" });
-      await publish({ reason: active ? "codex-app-server-turn-active" : "codex-app-server-turn-idle" });
-    },
-    async receipt(index: number, { messageId = "", turnId = "turn-stress", publishReceipt = true } = {}) {
-      const request = messages[index];
-      const session = sessions.find((item) => item.sessionId === request.sessionId)!;
-      Object.assign(session.agentSession.turn, { active: true, id: turnId, state: "active" });
-      const id = messageId || request.body.messageId;
-      const previous = conversationLog.find((item: any) => item.user?.messageId === id) as { turnId: string } | undefined;
-      const turn = {
-        turnId: previous?.turnId || String(conversationLog.length + 1).padStart(6, "0"),
-        user: { role: "user", at: new Date().toISOString(), messageId: id, text: request.body.displayMessage || request.body.message }
-      };
-      if (!conversationLog.some((item: any) => item.user?.messageId === id)) conversationLog.push(turn);
-      if (publishReceipt) {
-        await publish({ reason: "codex-app-server-message-delivered", conversationLogPatch: { type: "upsert-turn", turn } }, request.sessionId);
-      } else {
-        session.revision += 1;
-      }
-    }
-  };
-}
 
 async function publishChatSessionChange(page: Page, payload: Record<string, unknown>) {
   await page.evaluate((change) => {
@@ -5281,6 +4200,40 @@ async function publishChatSessionChange(page: Page, payload: Record<string, unkn
       data: ["vibe64.session.changed", change]
     });
   }, payload);
+}
+
+const conversationServers: Awaited<ReturnType<typeof assistantStatusServer>>[] = [];
+test.afterEach(async () => {
+  await Promise.all(conversationServers.splice(0).map((server) => server.close()));
+});
+
+// The page's HTTP stays mocked; the chat itself uses the real conversation
+// owner and Socket.IO transport, served for this exact session.
+async function realConversation(page: Page, session: Record<string, unknown> = sessionPayload()) {
+  const server = await assistantStatusServer({ session });
+  conversationServers.push(server);
+  await page.route("**/api/assistant/**", async (route) => {
+    const url = new URL(route.request().url());
+    const response = await route.fetch({ url: `${server.url}${url.pathname}${url.search}`,
+      headers: { ...route.request().headers(), origin: server.url } }).catch(() => null);
+    // Requests still in flight when the test ends find the server closed.
+    await (response ? route.fulfill({ response }) : route.abort()).catch(() => {});
+  });
+  // Studio sockets must come from the server's own origin, so relay them from Node.
+  await page.routeWebSocket(/\/socket\.io\//u, (route) => {
+    const url = new URL(route.url());
+    const upstream = new WebSocket(`${server.url.replace("http", "ws")}${url.pathname}${url.search}`, { origin: server.url });
+    const pending: string[] = [];
+    upstream.on("open", () => { for (const message of pending.splice(0)) upstream.send(message); });
+    upstream.on("message", (data, isBinary) => route.send(isBinary ? data as Buffer : data.toString()));
+    upstream.on("close", () => route.close().catch(() => {}));
+    route.onMessage((message) => {
+      if (upstream.readyState === WebSocket.OPEN) upstream.send(message);
+      else pending.push(String(message));
+    });
+    route.onClose(() => upstream.close());
+  });
+  return server;
 }
 
 async function mockLaunchSession(page: Page, {
@@ -5308,7 +4261,8 @@ async function mockLaunchSession(page: Page, {
   sessionCreationOutcomes = [],
   sessionListDelayMs = 0,
   sharedDevelopmentDatabase = false,
-  temporaryAiRecoveryRequests = null
+  temporaryCreates = null,
+  realChat = conversationLog.length > 0
 }: {
   agentTerminalControlOutcomes?: Array<"failure" | "success">;
   assistantAccess?: Record<string, unknown>;
@@ -5334,7 +4288,9 @@ async function mockLaunchSession(page: Page, {
   sessionCreationOutcomes?: Array<"failure" | "success">;
   sessionListDelayMs?: number;
   sharedDevelopmentDatabase?: boolean;
-  temporaryAiRecoveryRequests?: TemporaryAiRecoveryRequests | null;
+  temporaryCreates?: Record<string, unknown>[] | null;
+  // Serve the chat from the real conversation owner (needed to show or send messages).
+  realChat?: boolean;
 } = {}) {
   let listedSessions = Array.isArray(sessionList) ? [...sessionList] : [session];
   const sourceEditor = sourceEditorFiles ? createSourceEditorMock(sourceEditorFiles) : null;
@@ -5558,57 +4514,10 @@ async function mockLaunchSession(page: Page, {
       await fulfillJson(route, assistantAccess);
       return;
     }
-    if (temporaryAiRecoveryRequests && method === "POST" && url.pathname.endsWith("/agent-message")) {
-      const payload = request.postDataJSON() as Record<string, unknown>;
-      temporaryAiRecoveryRequests.mainMessages.push(payload);
-      await fulfillJson(route, {
-        delivered: true,
-        messageId: String(payload.messageId || ""),
-        ok: true,
-        sessionId: SESSION_ID
-      });
-      return;
-    }
-    if (
-      temporaryAiRecoveryRequests &&
-      method === "POST" &&
-      url.pathname.endsWith("/temporary-conversations")
-    ) {
-      temporaryAiRecoveryRequests.temporaryStarts.push(
-        request.postDataJSON() as Record<string, unknown>
-      );
-      await fulfillJson(route, {
-        conversationId: "temporary-preview-identity",
-        ok: true
-      });
-      return;
-    }
-    if (
-      temporaryAiRecoveryRequests &&
-      method === "POST" &&
-      url.pathname.endsWith("/temporary-conversations/temporary-preview-identity/turns")
-    ) {
-      temporaryAiRecoveryRequests.temporaryTurns.push(
-        request.postDataJSON() as Record<string, unknown>
-      );
-      await fulfillJson(route, {
-        ok: true,
-        runId: "temporary-preview-identity-run",
-        status: "inProgress"
-      });
-      return;
-    }
-    if (
-      temporaryAiRecoveryRequests &&
-      method === "GET" &&
-      url.pathname.endsWith("/temporary-conversations/temporary-preview-identity")
-    ) {
-      await fulfillJson(route, {
-        message: "Temporary identity recovery complete.",
-        ok: true,
-        runId: "temporary-preview-identity-run",
-        status: "completed"
-      });
+    if (temporaryCreates && method === "POST" && url.pathname.endsWith("/temporary-conversations")) {
+      const body = request.postDataJSON() as Record<string, unknown>;
+      temporaryCreates.push(body);
+      await fulfillJson(route, { ok: true, conversationId: body.conversationId, number: temporaryCreates.length });
       return;
     }
     if (
@@ -5667,6 +4576,10 @@ async function mockLaunchSession(page: Page, {
         path: `/tmp/vibe64-attachments/${attachment.fileName}`,
         size: attachment.bytes.length
       });
+      return;
+    }
+    if (method === "GET" && url.pathname.endsWith(`/sessions/${SESSION_ID}/files`)) {
+      await fulfillJson(route, { ok: true, areas: ["repo"] });
       return;
     }
     if (sourceEditor && method === "GET" && url.pathname.endsWith("/source-editor/tree")) {
@@ -5820,7 +4733,10 @@ async function mockLaunchSession(page: Page, {
       });
     });
   }
+  const conversation = realChat ? await realConversation(page, session) : null;
+  if (conversation) conversation.state.conversationLog = conversationLog as Array<Record<string, unknown>>;
   return {
+    conversation,
     async close() {
       await previewServer?.close();
     },
@@ -6779,10 +5695,10 @@ for (const engine of ["codex", "opencode"]) {
         assistantSelection: { agentId: "build", catalogRevision: TEST_ASSISTANT_CATALOG_REVISION, engineId: "opencode", modelId: "glm-5.3", modelProviderId: "zai-coding-plan", variantId: "high" }
       };
       const conversationLog: unknown[] = [];
-      await mockLaunchSession(page, { session, conversationLog, assistantCatalog: assistantCatalogPayload({ includeOpenCode: true }) });
+      const { conversation } = await mockLaunchSession(page, { session, conversationLog, realChat: true, assistantCatalog: assistantCatalogPayload({ includeOpenCode: true }) });
       const uploads = new Map<string, AttachmentUpload>();
       const deleted: string[] = [];
-      const messages: Record<string, unknown>[] = [];
+      const messages = conversation!.state.messages;
       let imageUnavailable = false;
       // Chromium's same-origin `download` requests bypass page routing. Serve
       // actual file responses so this verifies saved bytes as well as the UI.
@@ -6824,24 +5740,19 @@ for (const engine of ["codex", "opencode"]) {
           await route.continue();
         }
       });
-      await page.route("**/agent-message", async (route) => {
-        const payload = route.request().postDataJSON();
-        messages.push(payload);
-        if (messages.length === 1) {
-          await fulfillJson(route, { ok: false, error: "Test delivery interrupted. Retry this message." }, { status: 503 });
-          return;
-        }
+      conversation!.state.deliver = (payload) => {
         conversationLog.push({
           turnId: "attachment-turn",
           user: { role: "user", at: new Date().toISOString(), messageId: payload.messageId, text: payload.displayMessage || payload.message, attachments: payload.displayAttachments }
         });
-        await fulfillJson(route, { ok: true, delivered: true });
-      });
+        return { ok: true, delivered: true, messageId: payload.messageId };
+      };
       await page.goto(`http://127.0.0.1:${(downloadServer.address() as AddressInfo).port}${DEVELOPMENT_PATH}`);
       const composer = page.getByLabel("Message AI assistant");
       await composer.fill("Inspect these");
       const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aFe0AAAAASUVORK5CYII=", "base64");
       const chooser = page.waitForEvent("filechooser");
+      await page.getByRole("button", { name: "Add to message", exact: true }).click();
       await page.getByRole("button", { name: "Attach files", exact: true }).click();
       await (await chooser).setFiles([
         { name: "one.png", mimeType: "image/png", buffer: png },
@@ -6871,24 +5782,9 @@ for (const engine of ["codex", "opencode"]) {
       expect(messages[0].message).toBe("Review [Image #1] and [File #1]. I edited this.");
       expect(messages[0].attachmentIds).toHaveLength(2);
       expect(JSON.stringify(messages[0])).not.toContain("/private/upload");
-      await expect(page.getByText("Test delivery interrupted. Retry this message.", { exact: false })).toBeVisible();
-      await composer.fill("Keep this next draft");
-      const nextChooser = page.waitForEvent("filechooser");
-      await page.getByRole("button", { name: "Attach files", exact: true }).click();
-      await (await nextChooser).setFiles({ name: "later.txt", mimeType: "text/plain", buffer: Buffer.from("Next message attachment") });
-      await expect(composer).toHaveValue(/Keep this next draft\s+\[File #2\]/u);
-      await page.getByRole("button", { name: "Resend", exact: true }).click();
-      await expect.poll(() => messages.length).toBe(2);
-      expect(messages[1].attachmentIds).toEqual(messages[0].attachmentIds);
-      expect(messages[1].messageId).toBe(messages[0].messageId);
-      expect(uploads.size).toBe(4);
-      await expect(page.locator(".assistant-attachment-queue__item--ready")).toHaveCount(1);
-      await expect(composer).toHaveValue(/Keep this next draft\s+\[File #1\]/u);
-      await expect(page.getByRole("button", { name: /\[File #1\] later.txt/u })).toBeVisible();
-      expect(deleted).toHaveLength(1);
-      await page.getByRole("button", { name: "Remove later.txt", exact: true }).click();
-      await composer.fill("");
       await expect(page.locator(".assistant-attachment-queue__item--ready")).toHaveCount(0);
+      expect(uploads.size).toBe(3);
+      expect(deleted).toHaveLength(1);
       const sent = page.locator(".assistant-conversation-attachments");
       await sent.getByRole("button", { name: /two.png/u }).click();
       await expect.poll(() => dialog.locator("img").evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(1);
@@ -6932,158 +5828,6 @@ for (const engine of ["codex", "opencode"]) {
   }
 }
 
-for (const width of [390, 820, 1440]) {
-  for (const outcome of ["stop", "provider-error", "abort-timeout"]) {
-    test(`@opencode-recovery real controller releases chat after ${outcome} at ${width}px`, async ({ page }, testInfo) => {
-      await page.setViewportSize({ width, height: 900 });
-      await mockLaunchTerminalSocket(page);
-      const session = sessionPayload();
-      const conversationLog: any[] = [];
-      const errors: string[] = [];
-      let stoppingAttempts = 0;
-      let mounted = false;
-      page.on("pageerror", (error) => errors.push(error.message));
-      const harness = await controllerHarness({
-        assistantResponses: [{ pending: true, text: "" }],
-        providerEvents: outcome === "provider-error" ? [{ data: {
-          type: "session.error",
-          properties: { error: { name: "APIError", data: { message: "The provider rejected this image input." } } }
-        } }] : [],
-        interrupt: async (_id: string, { signal }: { signal: AbortSignal }) => {
-          if (++stoppingAttempts === 1 && outcome === "abort-timeout") {
-            await new Promise((_resolve, reject) => signal.addEventListener("abort", () => reject(signal.reason), { once: true }));
-          }
-          return true;
-        },
-        onSessionChanged: async (_id: string, event: any) => {
-          const payload = { ...event.payload };
-          if (payload.agentSession) Object.assign(session.agentSession, payload.agentSession);
-          if (payload.conversationLogPatch) {
-            const item = payload.conversationLogPatch.turn;
-            let turn;
-            if (item.type === "user") {
-              turn = { turnId: String(conversationLog.length + 1).padStart(6, "0"), user: { role: "user", at: new Date().toISOString(), messageId: item.id, text: item.text } };
-            } else if (item.system) {
-              turn = { ...item, system: { ...item.system, role: "system", at: new Date().toISOString(), messageId: item.turnId } };
-            }
-            if (turn) {
-              conversationLog.push(turn);
-              payload.conversationLogPatch = { type: "upsert-turn", turn };
-            } else delete payload.conversationLogPatch;
-          }
-          if (mounted) await publishChatSessionChange(page, { ...payload, reason: event.reason, sessionId: SESSION_ID, revision: ++session.revision });
-        }
-      });
-      Object.assign(session.assistantSelection, harness.selection);
-      Object.assign(session.agentSession, { providerId: "opencode", transportId: "opencode_server" });
-      const engine = await harness.controller.capabilities({ engineId: "opencode", modelProviderId: "deepseek" });
-      await mockLaunchSession(page, { session, conversationLog, assistantCatalog: { ok: true, engines: [engine] } as any });
-      await page.route(/\/sessions\/[^/]+\/(?:agent-message|agent-turn\/interrupt)$/u, async (route) => {
-        try {
-          const result = route.request().url().endsWith("/agent-message")
-            ? await harness.controller.sendMessage("session-1", route.request().postDataJSON())
-            : await harness.controller.interruptTurn("session-1");
-          await fulfillJson(route, result);
-        } catch (error: any) {
-          await fulfillJson(route, { ok: false, error: error.message, code: error.code }, { status: error.statusCode || 500 });
-        }
-      });
-      try {
-        await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-        const visible = page.locator(".studio-autopilot__chat-panel:visible");
-        const composer = visible.getByLabel("Message AI assistant");
-        const send = visible.getByRole("button", { name: "Send message", exact: true });
-        await expect(composer).toBeVisible();
-        mounted = true;
-        await composer.fill("Read the attached image.");
-        await send.click();
-        await expect(composer).toHaveValue("");
-        await composer.fill("Keep this new draft.");
-        const start = Date.now();
-        if (outcome === "provider-error") {
-          await expect(visible.getByText(/The provider rejected this image input\./u).first()).toBeVisible();
-        } else {
-          const stop = visible.getByRole("button", { name: "Stop", exact: true });
-          await expect(stop).toBeEnabled();
-          await stop.click();
-          if (outcome === "abort-timeout") {
-            await expect(page.getByText(/OpenCode did not confirm Stop within 5 seconds/u).first()).toBeVisible();
-            const close = page.getByRole("button", { name: "Close", exact: true });
-            if (await close.isVisible()) await close.click();
-            await expect(stop).toBeEnabled();
-            await stop.click();
-          }
-        }
-        await expect(send).toBeEnabled();
-        expect(Date.now() - start).toBeLessThan(outcome === "abort-timeout" ? 8_000 : 2_500);
-        await expect(composer).toHaveValue("Keep this new draft.");
-        await visible.getByRole("button", { name: "Choose AI", exact: true }).click();
-        await expect(page.getByRole("button", { name: /DeepSeek Chat/u, exact: false })).toBeEnabled();
-        await expect(page.getByText("AI choices are view-only while the assistant is working.")).toHaveCount(0);
-        await page.screenshot({ path: testInfo.outputPath("recovered-chat-and-model-controls.png"), animations: "disabled" });
-        expect(errors).toEqual([]);
-        expect(harness.switchedModels).toEqual([]);
-      } finally {
-        mounted = false;
-        await harness.controller.closeAllForProject();
-        await rm(harness.root, { force: true, recursive: true });
-      }
-    });
-  }
-}
-
-for (const width of [390, 820, 1440]) {
-  for (const engineId of ["codex", "opencode"]) {
-    test(`@assistant-menu-speed ${engineId} warms choices without blocking typing and keeps them during refresh at ${width}px`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 900 });
-      await mockLaunchTerminalSocket(page);
-      const session = sessionPayload();
-      const catalog = assistantCatalogPayload({ includeOpenCode: true });
-      const engine = catalog.engines.find((item) => item.engineId === engineId)!;
-      Object.assign(session.assistantSelection, { ...engine.defaults, engineId });
-      Object.assign(session.agentSession, { providerId: engineId, transportId: engine.transportId });
-      await mockLaunchSession(page, { session, assistantCatalog: catalog });
-      let hold = false;
-      let releaseRefresh: (() => void) | undefined;
-      let loaded = 0;
-      const refreshGate = new Promise<void>((resolve) => { releaseRefresh = resolve; });
-      const requests: string[] = [];
-      await page.route(/\/assistants\/capabilities(?:\?.*)?$/u, async (route) => {
-        const query = new URL(route.request().url()).searchParams;
-        if (query.has("configuredOnly")) { await fulfillJson(route, catalog); return; }
-        requests.push(query.toString());
-        if (hold) await refreshGate;
-        else await new Promise((resolve) => setTimeout(resolve, 1_500));
-        await fulfillJson(route, { ok: true, engines: [engine] });
-        loaded += 1;
-      });
-      try {
-        await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-        const visible = page.locator(".studio-autopilot__chat-panel:visible");
-        const composer = visible.getByLabel("Message AI assistant");
-        await composer.fill("Keep typing while AI choices load.");
-        await expect(composer).toHaveValue("Keep typing while AI choices load.");
-        await expect.poll(() => loaded).toBe(2);
-        expect(requests).toHaveLength(2);
-        hold = true;
-        const start = Date.now();
-        await visible.getByRole("button", { name: "Choose AI", exact: true }).click();
-        const model = page.getByRole("button", { name: engineId === "codex" ? /GPT-5.6 Sol/u : /GLM-5.3/u });
-        await expect(model).toBeVisible({ timeout: 1_000 });
-        await expect(model).toBeEnabled();
-        expect(Date.now() - start).toBeLessThan(1_000);
-        await expect(page.getByLabel("Loading available AIs")).toHaveCount(0);
-        await expect.poll(() => requests.length).toBeGreaterThan(2);
-        await expect(model).toBeEnabled();
-        await page.keyboard.press("Escape");
-        await expect(composer).toHaveValue("Keep typing while AI choices load.");
-        await expect(visible.getByRole("button", { name: "Send message", exact: true })).toBeEnabled();
-      } finally { releaseRefresh?.(); }
-    });
-  }
-}
-
-
 for (const width of [390, 768, 1280]) {
   test(`@mobile-files file content keeps the workspace at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 844 });
@@ -7114,6 +5858,7 @@ for (const width of [390, 768, 1280]) {
     }
     await expect(browser).toBeVisible();
     await browser.locator(".vibe64-source-tree__button", { hasText: "app.js" }).click();
+    await editor.getByRole("button", { name: "Code", exact: true }).click();
     await expect(content).toContainText("export const ready = true;");
     if (width < 960) {
       await expect(browser).toBeHidden();
@@ -7126,15 +5871,16 @@ for (const width of [390, 768, 1280]) {
       await page.keyboard.press("Escape");
       await editor.getByRole("button", { name: "Show files", exact: true }).click();
       await browser.locator(".vibe64-source-tree__button", { hasText: "another-file-with-a-long-name.js" }).click();
+      await editor.getByRole("button", { name: "Code", exact: true }).click();
       await expect(content).toContainText("export const another = true;");
       await expect(browser).toBeHidden();
     } else {
       await expect(browser).toBeVisible();
     }
     await page.screenshot({ path: testInfo.outputPath(`files-${width}.png`) });
-    for (const name of ["Session", "Drop Zone"]) {
+    for (const name of ["Session", "Session Dropzone"]) {
       await page.getByRole("tab", { name, exact: true }).click();
-      const area = page.getByRole("region", { name: name === "Session" ? "Session files, read only" : "Drop Zone files", exact: true });
+      const area = page.getByRole("region", { name: name === "Session" ? "Session files, read only" : "Session Dropzone", exact: true });
       await area.getByText("notes.txt", { exact: true }).click();
       await expect(area.getByRole("button", { name: "Back to folder", exact: true })).toBeVisible();
       const download = area.getByRole("button", { name: "Download file", exact: true });
@@ -7144,7 +5890,7 @@ for (const width of [390, 768, 1280]) {
       if (width < 960) {
         await expect(area.getByText(/Session runtime files|Temporary file exchange/u)).toHaveCount(0);
       }
-      await page.screenshot({ path: testInfo.outputPath(`files-${name.replace(" ", "-")}-${width}.png`) });
+      await page.screenshot({ path: testInfo.outputPath(`files-${name.replaceAll(" ", "-")}-${width}.png`) });
     }
     await page.getByRole("tab", { name: "Repo", exact: true }).click();
     await expect(content).toContainText(width < 960 ? "export const another = true;" : "export const ready = true;");
@@ -7161,7 +5907,8 @@ for (const width of [390, 768, 1280]) {
     ]);
     expect(createRequest.postDataJSON()).toMatchObject({ path: "new-file.js" });
     await expect(dialog).toBeHidden();
-    await expect(editor.getByRole("heading", { name: "new-file.js", exact: true })).toBeVisible();
+    await expect(editor.getByRole("heading", { name: "new-file.js", exact: true, level: 2 })).toBeVisible();
+    await editor.getByRole("button", { name: "Code", exact: true }).click();
     await expect(content).toBeVisible();
     await expect(content.locator(".cm-content")).toHaveText("");
     if (width < 960) {

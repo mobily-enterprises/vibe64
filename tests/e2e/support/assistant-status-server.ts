@@ -49,20 +49,23 @@ export function json(response: ServerResponse, value: unknown, status = 200) {
 
 // Production client and real HTTP/Socket.IO transports. Provider responses are
 // controlled here so failures never touch a real assistant or user project.
-export async function assistantStatusServer({ temporaryEngineId = null, colleague = false }: {
-  temporaryEngineId?: "codex" | "opencode" | null; colleague?: boolean
+// A supplied session (another spec's mocked session) keeps its own turn and history.
+export async function assistantStatusServer({ temporaryEngineId = null, colleague = false, session: suppliedSession = null }: {
+  temporaryEngineId?: "codex" | "opencode" | null; colleague?: boolean; session?: Record<string, any> | null
 } = {}) {
-  const session = structuredClone(directChatSessionPayload);
-  session.sessionName = "Status recovery";
-  session.agentSession.turn = { active: true, id: "turn-status", state: "active" } as typeof session.agentSession.turn;
+  const session = structuredClone(suppliedSession || directChatSessionPayload);
   const conversation = {
     turnId: "turn-status",
     user: { role: "user", text: "Keep working while the connection recovers.", at: new Date().toISOString() },
     commentary: [{ role: "commentary", text: "I am working on the project.", at: new Date().toISOString() }]
   };
+  if (!suppliedSession) {
+    session.sessionName = "Status recovery";
+    session.agentSession.turn = { active: true, id: "turn-status", state: "active" } as typeof session.agentSession.turn;
+  }
   const state = {
     assistantAccess: { ok: true, available: true, canUse: true, ownerOnly: false },
-    conversationLog: [conversation] as Array<Record<string, unknown>>,
+    conversationLog: (suppliedSession ? [] : [conversation]) as Array<Record<string, unknown>>,
     checks: [] as Handler[],
     checkCount: 0,
     checkTimes: [] as number[],
@@ -73,6 +76,8 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     detailCount: 0,
     detailHandler: null as Handler | null,
     messages: [] as Record<string, unknown>[],
+    // Replaces the delivery result; a thrown error fails the send.
+    deliver: null as ((message: Record<string, unknown>) => unknown) | null,
     steering: true,
     workAfterMessage: false,
     goal: null as GoalView | null,
@@ -148,6 +153,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
       requireSession(sessionId);
       const { vibe64User: _user, ...message } = input;
       state.messages.push(message);
+      if (state.deliver) return state.deliver(message);
       if (state.workAfterMessage) { session.agentSession.turn.active = true; publishTurn(); }
       return { ok: true, delivered: true, messageId: message.messageId };
     },
@@ -387,6 +393,12 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
       else if (route === "/vibe64/accounts") result = { ok: true, ready: true, accounts: [] };
       else if (route === "/vibe64/accounts/model-routing") result = { ok: true, routing: null };
       else if (route === "/vibe64/accounts/model-routing/workflows") result = { ok: true, canConfigure: true, workflows: [] };
+      else if (route === "/vibe64/accounts/codex-providers") result = { ok: true, providers: [] };
+      else if (route === "/vibe64/accounts/ai-connections") result = { ok: true, connections: [] };
+      else if (route === "/vibe64/training/learning-mode") result = { ok: true, available: true, learningMode: null };
+      else if (route === "/vibe64/training/courses") result = { ok: true, courses: [] };
+      else if (route === "/vibe64/training/learning") result = { ok: true, available: false };
+      else if (route === "/vibe64/colleague") result = { ok: false, error: "Colleague is not part of this scenario." };
       if (request.method !== "GET" || result === undefined) {
         state.unexpectedRequests.push(requestKey);
         json(response, { ok: false, error: `Unexpected status fixture request: ${requestKey}` }, 404);

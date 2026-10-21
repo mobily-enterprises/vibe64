@@ -112,7 +112,7 @@ test("failed control recovery keeps Retry and Renew accessible above a checkpoin
   const renew = banner.getByRole("button", { name: "Renew session", exact: true });
   await expect(banner.getByRole("button", { name: "Retry connection", exact: true })).toBeInViewport({ ratio: 1 });
   await expect(renew).toBeInViewport({ ratio: 1 });
-  await expect(page.getByText("Recovery checkpoint failed", { exact: true })).toBeVisible();
+  await expect(page.getByText("Recovery snapshot not saved", { exact: true })).toBeVisible();
   await composer(page).fill("Keep my draft while I choose recovery.");
   await renew.click();
   await expect(page.getByRole("dialog", { name: "Renew this session", exact: true })).toBeVisible();
@@ -204,7 +204,7 @@ test("a blocked goal can be cancelled without resuming and stays cleared after r
   await page.getByRole("button", { name: "Cancel goal", exact: true }).click();
   await cancelReceived.promise;
   try {
-    await expect(page.getByRole("button", { name: "Cancel goal", exact: true })).toBeDisabled();
+    await expect(page.getByRole("button", { name: "Cancelling…", exact: true })).toBeDisabled();
   } finally {
     releaseCancel.resolve();
   }
@@ -221,17 +221,15 @@ test("a blocked goal can be cancelled without resuming and stays cleared after r
   await expectCanonicalConversation({ goals: 1, connections: 2 });
 });
 
-test("a hung initial session read recovers after its deadline", async ({ page }) => {
-  test.setTimeout(90_000);
-  server.state.detailHandler = (response) => {
-    if (server.state.detailCount > 1) json(response, server.state.session);
-  };
+// The conversation owner supplies the live turn, so a hung detail read (retried
+// after its 20 s deadline) no longer holds the chat.
+test("a hung initial session read does not block the chat", async ({ page }) => {
+  server.state.detailHandler = () => {};
   await openChat(page);
   await expect.poll(() => server.state.detailCount).toBe(1);
   await composer(page).fill("Keep this unsent draft.");
-  await expect(steer(page)).toBeEnabled({ timeout: 65_000 });
+  await expect(steer(page)).toBeEnabled();
   await expect(composer(page)).toHaveValue("Keep this unsent draft.");
-  expect(server.state.detailCount).toBeGreaterThan(1);
   expect(server.state.interrupts).toBe(0);
 });
 
@@ -736,4 +734,21 @@ test("expired archived attachments keep their description and offer no broken do
     await expect(page.getByText("Keep the explanation for", { exact: false })).toBeVisible();
   }
   expect(methods).toEqual(["HEAD", "HEAD"]);
+});
+
+test("reasoning dots animate only for the confirmed phase", async ({ page }, info) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.emulateMedia({ reducedMotion: "no-preference" });
+  Object.assign(server.state.session.agentSession.turn, { phase: "reasoning" });
+  await openChat(page);
+  const dots = page.locator(".studio-autopilot__reasoning-dots:visible");
+  await expect(dots).toBeVisible();
+  await expect.poll(() => dots.evaluate((element) => element.getAnimations().some((animation) =>
+    animation.playState === "running" && Number(animation.currentTime) > 0))).toBe(true);
+  await page.screenshot({ path: info.outputPath("reasoning-dots.png") });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect.poll(() => dots.evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
+  Object.assign(server.state.session.agentSession.turn, { phase: "tool" });
+  server.publishTurn();
+  await expect(dots).toHaveCount(0);
 });

@@ -497,7 +497,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
     await expect(page.locator(".v-snackbar")).toHaveCount(0);
   });
 
-  test("failed Stop and Close retain the repair and can be retried without losing work", async ({ page }) => {
+  test("failed Stop and Stop and close retain the repair and can be retried", async ({ page }) => {
     const captured = await mockRepositoryRecovery(page, server, {
       code: "vibe64_session_update_conflict", diagnostic: "Review messages.vue", nativeTurn: () => ({ status: "inProgress" })
     });
@@ -521,9 +521,6 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
     await stop.click();
     await expect(workspace.getByText("Could not stop the AI.", { exact: true }).first()).toBeVisible();
     await expect(stop).toBeEnabled();
-    await stop.click();
-    await expect(stop).toHaveCount(0);
-    await expect(workspace).toContainText("You stopped this repair");
     const close = workspace.getByRole("button", { name: "Close Resolve repository update", exact: true });
     await close.click();
     const dialog = page.getByRole("dialog");
@@ -531,12 +528,13 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
     await dialog.getByRole("button", { name: "Keep chat open", exact: true }).click();
     expect(deletes).toBe(0);
     await close.click();
-    await dialog.getByRole("button", { name: "Close repair", exact: true }).click();
-    await expect(workspace.getByText("Could not close the conversation.", { exact: true })).toBeVisible();
+    await dialog.getByRole("button", { name: "Stop and close", exact: true }).click();
+    await expect(dialog.getByText("Could not close the conversation.", { exact: true })).toBeVisible();
     await expect(workspace).toBeVisible();
-    await dialog.getByRole("button", { name: "Close repair", exact: true }).click();
+    // Closing stops native work on the server, so a retry needs no separate Stop.
+    await dialog.getByRole("button", { name: "Stop and close", exact: true }).click();
     await expect(workspace).toHaveCount(0);
-    expect(stops).toBe(2);
+    expect(stops).toBe(1);
     expect(deletes).toBe(2);
     expect(captured.temporaryCreates).toHaveLength(1);
   });
