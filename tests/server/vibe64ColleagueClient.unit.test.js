@@ -217,20 +217,21 @@ test("Teach me without a usable AI model opens Colleague, says so and sends noth
 });
 
 test("on a phone, the learner's own L hiding Learning opened from Colleague returns to Colleague's dialog", async t => {
-  const learning = vue.reactive({ open: false, hiddenBy: "", surface: "courses", attemptId: "", stepId: "", lesson: null, results: [],
-    show() { learning.open = true; learning.hiddenBy = ""; }, minimise(by = "") { learning.hiddenBy = by; learning.open = false; } });
+  const learning = vue.reactive({ coursesOpen: false, hiddenBy: "", surface: "courses", mode: { on: true, currentAttemptId: "" }, stepId: "",
+    lesson: null, results: [], openCourses() { learning.coursesOpen = true; learning.hiddenBy = ""; },
+    closeCourses(by = "") { learning.hiddenBy = by; learning.coursesOpen = false; } });
   const view = mount(t, async () => ({ ok: true, conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} }),
     undefined, null, null, null, { learning });
   await flush();
-  view.state.props.navigate = async command => { if (command.learning) learning.show(); return { learningOpen: learning.open }; };
+  view.state.props.navigate = async command => { if (command.learning) learning.openCourses(); return { learningOpen: learning.coursesOpen }; };
   view.state.xs.value = true;
   view.state.open.value = true;
   await flush();
   await view.state.handleNavigation({ id: "phone-learning", status: "pending", learning: { open: true } });
   await flush();
   assert.equal(view.state.shown.value, false, "the phone dialog gives way to Learning");
-  assert.equal(learning.open, true);
-  learning.minimise("learner");
+  assert.equal(learning.coursesOpen, true);
+  learning.closeCourses("learner");
   await flush();
   assert.equal(view.state.shown.value, true, "hiding Learning with L returns to Colleague, not the app");
 
@@ -238,19 +239,19 @@ test("on a phone, the learner's own L hiding Learning opened from Colleague retu
   await view.state.handleNavigation({ id: "phone-learning-2", status: "pending", learning: { open: true } });
   await flush();
   assert.equal(view.state.shown.value, false);
-  learning.minimise();
+  learning.closeCourses();
   await flush();
   assert.equal(view.state.shown.value, false, "Show me keeps the app visible");
 
   // Learning the learner opened without Colleague never brings the dialog back.
-  learning.show();
+  learning.openCourses();
   await flush();
-  learning.minimise("learner");
+  learning.closeCourses("learner");
   await flush();
   assert.equal(view.state.shown.value, false);
 
   // The step dialog's Open in Learning behaves like Colleague's Learning command.
-  learning.attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  learning.mode = { on: true, currentAttemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" };
   learning.stepId = "read";
   learning.lesson = { title: "Lesson", steps: [{ id: "read", title: "Read" }] };
   view.state.open.value = true;
@@ -258,8 +259,8 @@ test("on a phone, the learner's own L hiding Learning opened from Colleague retu
   view.state.openLearningStep();
   await flush();
   assert.equal(view.state.shown.value, false);
-  assert.equal(learning.open, true);
-  learning.minimise("learner");
+  assert.equal(learning.coursesOpen, true);
+  learning.closeCourses("learner");
   await flush();
   assert.equal(view.state.shown.value, true);
 });
@@ -969,6 +970,8 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
   const imports = {
     "./colleagueFocusBinding.js": { createColleagueFocusBinding },
     "./colleagueLearningRequests.js": { watchColleagueLearningRequests },
+    "../shared/learningFocus.js": learningFocus,
+    "@local/vibe64-training/shared/learner-events": { VIBE64_TRAINING_LEARNER_CHANGED_EVENT: "vibe64.training.learner.changed" },
     "/src/lib/vibe64ColleagueModelBridge.js": { registerVibe64ColleagueModel: () => () => {} },
     "./colleagueSelectionLabels.js": { selectionLabels },
     "@local/vibe64-accounts/client": { AiOnboardingNudge: {}, requestVibe64AiOnboarding: () => events.push(["ai-onboarding"]) },
@@ -1043,7 +1046,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     if (previousWindow === undefined) delete globalThis.window; else globalThis.window = previousWindow;
     if (previousConfig === undefined) delete globalThis.__JSKIT_CLIENT_APP_CONFIG__; else globalThis.__JSKIT_CLIENT_APP_CONFIG__ = previousConfig;
   });
-  return { state, notices, events, requests, focusUpdates, socket, subscriptions, publish, setConversation, display: element.conversation,
+  return { state, notices, events, requests, focusUpdates, socket, subscriptions, publish, setConversation, dispatch, display: element.conversation,
     reconnect() {
       socket.connected = false;
       dispatch("disconnect");
@@ -1500,6 +1503,40 @@ test("another tab's held product refresh retains old recognized words and requir
   assert.equal(nonFocusPosts(view.requests).length, 0);
 });
 
+// Rev 4 (C3): L switches between Develop's conversation and a Learn thread.
+// That is the person's own choice: no "changed in another tab" notice, and
+// each thread keeps its own draft.
+test("switching between Develop and a Learn thread follows the learner's mode without the other-tab notice", async t => {
+  let product = { conversationId: "develop", thread: { kind: "develop" } };
+  const view = mount(t, async url => {
+    if (url.startsWith("/api/vibe64/colleague?")) return { ok: true, ...product, messages: [], status: "ready" };
+    return conversationSnapshot({ conversationId: product.conversationId });
+  });
+  await flush();
+  await view.state.openVoice();
+  view.state.voice.controller.state.session.hasUnsentSpeech.value = true;
+  view.state.draft.value = "Develop draft";
+  const reads = () => view.requests.filter(request => request.url.startsWith("/api/vibe64/colleague?")).length;
+  const before = reads();
+  product = { conversationId: "teacher", thread: { kind: "learn", attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } };
+  view.dispatch("vibe64.training.learner.changed", { learnerId: "local", reason: "notes" });
+  await flush();
+  assert.equal(reads(), before, "a notes change keeps the thread");
+  view.dispatch("vibe64.training.learner.changed", { learnerId: "local", reason: "learning-mode" });
+  await flush();
+  assert.equal(reads(), before + 1, "a mode change reads the server's thread");
+  assert.equal(view.state.product.value.conversationId, "teacher");
+  assert.deepEqual(view.state.product.value.thread, product.thread);
+  assert.equal(view.state.pointerNotice.value, "", "a thread switch is never another tab's change");
+  assert.notEqual(view.state.draft.value, "Develop draft", "Develop's draft stays with Develop");
+  // Another lesson is another thread too.
+  product = { conversationId: "lobby", thread: { kind: "learn" } };
+  view.dispatch("vibe64.training.learner.changed", { learnerId: "local", reason: "lesson" });
+  await flush();
+  assert.equal(view.state.product.value.conversationId, "lobby");
+  assert.equal(view.state.pointerNotice.value, "");
+});
+
 test("explicit external retarget retains the original uncertain UUID/payload in the original tab draft owner", async t => {
   const records = new Map();
   const storage = { getItem: key => records.get(key) ?? null, setItem: (key, value) => records.set(key, value), removeItem: key => records.delete(key) };
@@ -1596,21 +1633,21 @@ test("Colleague guide commands point without navigating and show me through the 
 test("Colleague opening an app place minimises Learning, and a phone minimises its own dialog for guides and Learning", async t => {
   const acks = [];
   const calls = [];
-  const learning = vue.shallowRef(vue.reactive({ open: true, surface: "lesson", attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-    stepId: "open-preview", lesson: null, results: [],
-    show(input) { calls.push(["show", input]); this.open = true; }, minimise() { calls.push(["minimise"]); this.open = false; },
-    close() { calls.push(["close"]); this.open = false; } }));
+  const learning = vue.shallowRef(vue.reactive({ coursesOpen: true, surface: "lesson",
+    mode: { on: true, currentAttemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }, stepId: "open-preview", lesson: null, results: [],
+    openCourses(input) { calls.push(["openCourses", input]); this.coursesOpen = true; },
+    closeCourses() { calls.push(["closeCourses"]); this.coursesOpen = false; } }));
   const view = mount(t, async (url, options) => {
     if (url.endsWith("/navigation/ack")) { acks.push(options.body); return { ok: true }; }
     return { conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} };
   }, undefined, null, null, null, { learning });
   await flush();
-  view.state.props.navigate = async command => ({ projectSlug: command.projectSlug || "", learningOpen: learning.value.open });
+  view.state.props.navigate = async command => ({ projectSlug: command.projectSlug || "", learningOpen: learning.value.coursesOpen });
   await view.state.handleNavigation({ id: "open-preview", status: "pending", projectSlug: "alpha", sessionId: "", pane: "preview" });
-  assert.deepEqual(calls, [["minimise"]], "the app place becomes visible; Learning keeps its state");
+  assert.deepEqual(calls, [["closeCourses"]], "the app place becomes visible; Courses keeps its state");
   assert.equal(acks.at(-1).focus.learningOpen, false);
   calls.length = 0;
-  learning.value.open = true;
+  learning.value.coursesOpen = true;
   await view.state.handleNavigation({ id: "open-learning", status: "pending", learning: { open: true } });
   assert.deepEqual(calls, [], "a Learning command is the host navigator's own selection");
 
@@ -1633,17 +1670,21 @@ test("Colleague opening an app place minimises Learning, and a phone minimises i
 
 test("the header's current-step button follows the shared Learning controller and its dialog reopens the exact step in L", async t => {
   const calls = [];
-  const controller = vue.reactive({ open: false, surface: "lesson", attemptId: "", stepId: "",
+  const controller = vue.reactive({ coursesOpen: false, surface: "lesson", mode: { on: true, currentAttemptId: "" }, stepId: "",
     lesson: { title: "Your first change", steps: [{ id: "read", title: "Read the greeting" }, { id: "change", title: "Change the greeting" }] },
-    results: [], show(input) { calls.push(input); }, minimise() {}, close() {} });
+    results: [], openCourses(input) { calls.push(input); }, closeCourses() {} });
   const view = mount(t, async () => ({ conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} }),
     undefined, null, null, null, { learning: controller });
   await flush();
   assert.equal(view.state.learningStep.value, null, "no attempt, no step button");
-  controller.attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+  controller.mode = { on: false, currentAttemptId: attemptId };
   controller.stepId = "change";
   await flush();
-  assert.deepEqual(view.state.learningStep.value, { attemptId: controller.attemptId, stepId: "change",
+  assert.equal(view.state.learningStep.value, null, "Develop's Colleague shows no lesson step, even with a lesson in progress");
+  controller.mode = { on: true, currentAttemptId: attemptId };
+  await flush();
+  assert.deepEqual(view.state.learningStep.value, { attemptId, stepId: "change",
     lessonTitle: "Your first change", title: "Change the greeting", position: 2, total: 2, passed: false });
   controller.results = [{ stepId: "change", outcome: "not-yet-passed" }, { stepId: "read", outcome: "passed" }];
   await flush();
@@ -1654,7 +1695,7 @@ test("the header's current-step button follows the shared Learning controller an
   view.state.stepDialog.value = true;
   view.state.openLearningStep();
   assert.equal(view.state.stepDialog.value, false, "Open in Learning closes the step dialog");
-  assert.deepEqual(calls, [{ attemptId: controller.attemptId, stepId: "change" }]);
+  assert.deepEqual(calls, [{ attemptId, stepId: "change" }]);
   // On a phone the full-screen dialog would cover Learning: it minimises first.
   view.state.xs.value = true;
   view.state.open.value = true;
@@ -1663,7 +1704,7 @@ test("the header's current-step button follows the shared Learning controller an
   view.state.openLearningStep();
   await flush();
   assert.equal(view.state.shown.value, false, "the phone dialog minimises so the lesson is visible");
-  assert.deepEqual(calls.at(-1), { attemptId: controller.attemptId, stepId: "change" });
+  assert.deepEqual(calls.at(-1), { attemptId, stepId: "change" });
   assert.equal(calls.length, 2);
   view.state.xs.value = false;
   controller.stepId = "missing";
@@ -1684,9 +1725,9 @@ test("the header's current-step button follows the shared Learning controller an
 });
 
 test("the current-step dialog gives way to Show me, Teach me and L, and comes back when Show me cannot show its place", async t => {
-  const controller = vue.reactive({ open: false, surface: "lesson", attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", stepId: "read",
-    lesson: { title: "Lesson", steps: [{ id: "read", title: "Read" }] }, results: [], show() { controller.open = true; },
-    minimise(by = "") { controller.open = false; controller.hiddenBy = by; }, hiddenBy: "" });
+  const controller = vue.reactive({ coursesOpen: false, surface: "lesson", mode: { on: true, currentAttemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+    stepId: "read", lesson: { title: "Lesson", steps: [{ id: "read", title: "Read" }] }, results: [],
+    openCourses() { controller.coursesOpen = true; }, closeCourses(by = "") { controller.coursesOpen = false; controller.hiddenBy = by; }, hiddenBy: "" });
   const view = mount(t, async () => ({ conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} }),
     undefined, null, null, null, { learning: controller });
   await flush();
@@ -1719,11 +1760,11 @@ test("the current-step dialog gives way to Show me, Teach me and L, and comes ba
   // L opening (a finished lesson's screen) closes the dialog; on a phone
   // Colleague gives way and returns when the learner hides L.
   view.state.stepDialog.value = true;
-  controller.show();
+  controller.openCourses();
   await flush();
   assert.equal(view.state.stepDialog.value, false);
   assert.equal(view.state.shown.value, false);
-  controller.minimise("learner");
+  controller.closeCourses("learner");
   await flush();
   assert.equal(view.state.shown.value, true);
 });
@@ -2177,13 +2218,12 @@ test("the local Colleague host reports the shared Learning state and opens its e
   const renderer = vue.createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
     setText() {}, setElementText() {}, patchProp() {}, insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
   const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-  const controller = vue.reactive({ open: false, surface: "lesson", attemptId, stepId: "one",
-    async show({ attemptId: shownAttempt, stepId } = {}) {
+  const controller = vue.reactive({ coursesOpen: false, surface: "lesson", mode: { on: true, currentAttemptId: attemptId }, stepId: "one",
+    async openCourses({ attemptId: shownAttempt, stepId } = {}) {
       await Promise.resolve();
-      Object.assign(this, { open: true, surface: shownAttempt ? "lesson" : this.surface,
-        ...(shownAttempt ? { attemptId: shownAttempt } : {}), ...(stepId ? { stepId } : {}) });
+      Object.assign(this, { coursesOpen: true, surface: shownAttempt ? "lesson" : this.surface, ...(stepId ? { stepId } : {}) });
     },
-    minimise() { this.open = false; }, close() { this.open = false; } });
+    closeCourses() { this.coursesOpen = false; } });
   const navigation = vue.shallowRef(null);
   const host = renderer.createApp(module.exports.default);
   for (const key of Object.values(hostKeys)) host.provide(key, vue.ref(null));
@@ -2194,8 +2234,8 @@ test("the local Colleague host reports the shared Learning state and opens its e
   host.mount({}); t.after(() => host.unmount());
   await flush();
   assert.equal(received.focus.learningOpen, false);
-  assert.equal(received.focus.learningSurface, undefined, "a minimised Learning shows no surface");
-  assert.equal(received.focus.learningAttemptId, attemptId, "the current step stays known while minimised");
+  assert.equal(received.focus.learningSurface, undefined, "closed Courses shows no surface");
+  assert.equal(received.focus.learningAttemptId, attemptId, "the current step stays known while Courses is closed");
   assert.equal(received.focus.learningStepId, "one");
   const opened = await navigation.value({ id: "learning", status: "pending", learning: { open: true, attemptId, stepId: "two" } });
   assert.deepEqual([opened.learningOpen, opened.learningSurface, opened.learningAttemptId, opened.learningStepId],
@@ -2238,6 +2278,6 @@ test("the local Colleague host refuses a Learning command when no Learning contr
   host.mount({}); t.after(() => host.unmount());
   await flush();
   assert.equal(Object.hasOwn(received.focus, "learningOpen"), false, "no controller, no Learning focus");
-  await assert.rejects(navigation.value({ id: "learning", status: "pending", learning: { open: true } }), /Learning is unavailable/u);
+  await assert.rejects(navigation.value({ id: "learning", status: "pending", learning: { open: true } }), /Courses is unavailable/u);
 });
 

@@ -31,7 +31,9 @@ workspace.
 - `packages/vibe64-core/src/server/projectState.js`
 - `packages/vibe64-core/src/server/projectRequestContext.js`
 - `packages/vibe64-core/src/server/actionContext.js`
+- `packages/vibe64-core/src/server/learningMode.js`
 - `tests/server/vibe64ActionContext.unit.test.js`
+- `tests/server/vibe64ProjectActions.unit.test.js`
 - `packages/vibe64-training/src/server/learnerState.js`
 - `tests/server/studioProjectContext.unit.test.js`
 - `tests/server/vibe64TrainingLearnerState.unit.test.js`
@@ -295,8 +297,20 @@ host-resolved project) keeps the person's original request, so a local
 browser action is admitted only for that person's own practice project; only an
 action with no request runs as the marker's learner.
 When the learning space has no such project, only a pre-existing project of that
-name (the explicit local project or `<projectsRoot>/<slug>`) opens. Learning
-mode (`learningMode.js`) allows only the active lesson's `practiceSlug`.
+name (the explicit local project or `<projectsRoot>/<slug>`) opens.
+
+Each person is in Develop or Learn mode (core `learningMode.js`, read through
+the host's registered Training reader). For a person's request (one carrying
+headers), `resolveProjectRequestContext` applies the mode after practice
+admission: Learn opens only an admitted practice project ("You're in Learn
+mode. Press L to go back to your projects."), Develop refuses one ("This is a
+practice project. Press L to switch to Learn."), both `vibe64_learning_mode_project`
+(403). A catalogue `training-<hex>` project that the learning space does not
+hold is not practice, so it opens in Develop. A reader failure counts as
+Develop; without a registered reader nothing is limited; internal work is never
+limited. Callers without admission (Colleague's pre-check, `projects.select`)
+treat only the mode's current `practiceSlug` as practice. In Learn,
+`vibe64.project.projects.create` is refused with the Learn reason.
 
 People see a practice project by its lesson, never its `training-<practice ID>`
 slug, which stays the address. The client `vibe64PracticeProjectName.js`

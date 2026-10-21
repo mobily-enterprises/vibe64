@@ -388,3 +388,33 @@ test("a practice project action admits only its own learner, through the host co
     await rm(root, { force: true, recursive: true });
   }
 });
+
+test("Colleague acting for a learner opens only the projects of their mode and relays the exact reason", async (t) => {
+  const { registerLearningModeReader, LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE } =
+    await import("@local/vibe64-core/server/learningMode");
+  const root = await mkdtemp(path.join(tmpdir(), "vibe64-colleague-mode-"));
+  configureStudioProjectContext({ explicitProjectsRoot: path.join(root, "projects"), explicitSystemRoot: path.join(root, "system"),
+    explicitManagedSourceRoot: path.join(root, "projects"), env: {}, home: root, learningSpace: { root: path.join(root, "projects", ".learning") } });
+  t.after(async () => {
+    registerLearningModeReader(null);
+    configureStudioProjectContext();
+    await rm(root, { force: true, recursive: true });
+  });
+  const practiceSlug = "training-12345678123442348234123456789abc";
+  const user = { uid: 42, username: "learner", role: "member" };
+  const definition = withVibe64ActionContext({
+    id: "vibe64.test.colleague-open", kind: "query", channels: ["automation"], surfaces: ["app"],
+    input: { schema: createSchema({}), mode: "create" }, execute: () => ({ ok: true })
+  });
+  const open = projectSlug => definition.execute({ projectSlug }, { colleague: {}, requestMeta: { request: { vibe64User: user } } });
+  const reads = [];
+  let mode = { on: false, currentAttemptId: "", lessonCode: "", practiceSlug };
+  registerLearningModeReader(({ actor }) => { reads.push(actor); return mode; });
+  await assert.rejects(open(practiceSlug), { code: "vibe64_learning_mode_project", statusCode: 403, message: PRACTICE_PROJECT_MODE_MESSAGE });
+  assert.deepEqual(reads.at(-1), user, "the mode is the acting person's");
+  mode = { ...mode, on: true, currentAttemptId: "12345678-1234-4234-8234-123456789abc" };
+  await assert.rejects(open("alpha"), { code: "vibe64_learning_mode_project", statusCode: 403, message: LEARNING_MODE_PROJECT_MESSAGE,
+    details: { practiceSlug } });
+  // Learn lets the practice project through to admission (here: no such project).
+  await assert.rejects(open(practiceSlug), { code: "vibe64_practice_project_deleted" });
+});

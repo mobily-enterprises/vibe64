@@ -16,7 +16,8 @@ export function validateColleagueConversationRecord(record, ownerKey) {
   const scopes = new Set(), runtimes = new Set(), operations = new Set();
   for (const value of [record, ...record.previousConversations]) {
     chat(value);
-    if (typeof value.runtimeId !== "string" || !/^[\w-]+(?::colleague_[\w-]+)?$/u.test(value.runtimeId) ||
+    // A Learn thread's owner key is <user>:learn or <user>:learn:<attemptId>.
+    if (typeof value.runtimeId !== "string" || !/^[\w-]+(?::learn(?::[\w-]+)?)?(?::colleague_[\w-]+)?$/u.test(value.runtimeId) ||
         (ownerKey && value.runtimeId !== ownerKey && value.runtimeId !== `${ownerKey}:${value.scopeId}`) ||
         scopes.has(value.scopeId) || runtimes.has(value.runtimeId)) invalid();
     scopes.add(value.scopeId);

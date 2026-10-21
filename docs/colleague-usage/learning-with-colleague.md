@@ -4,11 +4,33 @@ For authoring and Git publication, read `lesson-authoring`. For pinned content
 and owner recovery, read `teaching-content`. For pointing and "show me", read
 `learning-teacher-guide`.
 
+## Two conversations: Develop and Learn
+
+Vibe64 has two modes, switched with **L**: **Develop** (your own projects) and
+**Learn** (your practice projects). Colleague keeps a separate conversation for
+each, and the one you see always follows the mode:
+
+- **Develop** has your one Colleague conversation, with its read-only previous
+  conversations, watches and assignments, exactly as before. It does not teach:
+  ask it about lessons and it tells you to press **L** (it can switch for you
+  when you ask or accept its offer, with `learning-mode.set`).
+- **Learn** gives each lesson attempt its own teacher conversation. Leaving the
+  lesson (pressing **L**, or reading another lesson) and coming back resumes
+  that same conversation. Learn mode with no lesson in progress has one
+  conversation of its own. Restarting a lesson starts a fresh teacher.
+- Switching never interrupts Colleague: a reply it is writing finishes in its
+  own conversation, which you see again when you switch back. Watched agents
+  keep being followed while you are in Learn; their updates wait in Develop's
+  conversation until you return. **Start fresh** and **Previous conversations**
+  work within the conversation you are in.
+- In Learn, Colleague does not create assignments or watches; in Develop it does
+  not teach, read lessons or your teacher notes.
+
 ## Colleague as your teacher
 
-Learning opens above the app with **L** on every signed-in page. You can read
-lessons yourself without AI. Choose **Teach me** in a lesson, or ask Colleague
-about your lesson, and Colleague teaches the current step:
+In Learn mode, **Courses** beside **L** holds courses and lessons. You can read
+lessons yourself without AI. Choose **Teach me** on a lesson step, or ask
+Colleague about your lesson, and Colleague teaches the current step:
 
 - It reads your lesson with `lesson.read` (the steps in order with their text,
   diagram, guide and check kind, plus your saved results) and explains the step
@@ -16,13 +38,14 @@ about your lesson, and Colleague teaches the current step:
   arrive in pages; Colleague reads every page before claiming a step's text is
   missing.
 - It points at, or with "show me" opens, the real Vibe64 places the step uses,
-  replays the step's diagram, and can open Learning at your current step or
-  minimise it so you see the app. Learning keeps its place while minimised.
-- While a lesson is going, Colleague's header shows a small yellow **Step N/M**
-  button (a check once the step passed). It opens only the current step in a
-  dialog with its check, **Show me**, **Teach me**, **Previous step**/**Next
-  step** and **Open in Learning** (see `learning-environment`). It appears on
-  the desktop panel, the phone's full-screen chat and during voice chat.
+  replays the step's diagram, and can open **Courses** at your current step or
+  close it so you see the app. Courses keeps its place while closed.
+- In Learn mode with a lesson in progress, Colleague's header shows a small
+  yellow **Step N/M** button (a check once the step passed). It opens only the
+  current step in a dialog with its check, **Show me**, **Teach me**,
+  **Previous step**/**Next step** and **Open in Learning** (see
+  `learning-environment`). It appears on the desktop panel, the phone's
+  full-screen chat and during voice chat. Develop shows no step button.
 - Before asking you to press **Done**, answer a question or press **Check now**,
   it looks at that step's saved result. A step that already passed is not asked
   for again: Colleague says it passed and moves on to the next unpassed step.
@@ -30,12 +53,12 @@ about your lesson, and Colleague teaches the current step:
   fields or IDs. If it could not open or point at a step's place (for example the
   control is hidden), it says so plainly and describes the path in words.
 
-On a phone, Colleague's full-screen chat minimises itself when it opens Learning
+On a phone, Colleague's full-screen chat minimises itself when it opens Courses
 or rings a control, so you can see it; reopen Colleague with its avatar button.
 
 ## Colleague never judges
 
-A step passes only through your own action in **L** or Colleague's step dialog:
+A step passes only through your own action in the lesson or Colleague's step dialog:
 
 - **Choice question**: only your own answer counts. Colleague never sees or
   reveals the correct option, sees only whether your answer passed (not which
@@ -49,29 +72,25 @@ A step passes only through your own action in **L** or Colleague's step dialog:
 
 Colleague's feedback never changes a step's status. If Colleague says a step
 passed, ask it to read the lesson again: only a saved **passed** result counts.
-Your reading place is saved automatically by **L**. A change to your results,
-reading place or practice projects notifies only your own signed-in pages, so
-open Learning views refresh.
+Your reading place is saved automatically. A change to your mode, lesson,
+results, reading place or practice project notifies only your own signed-in
+pages, so open views (and Colleague's conversation) refresh.
 
-Starting, continuing or leaving a lesson needs your direct request or an accepted
-offer; a how-to question alone authorizes nothing.
+Starting, restarting, finishing or deleting a lesson, and switching mode, needs
+your direct request or an accepted offer; a how-to question alone authorizes
+nothing.
 
-## Learning mode
+## Which projects Colleague opens
 
-While you have a lesson in progress you are in learning mode, in your learning
-space only: the one project you can open is that lesson's practice project
-(none for Lesson 0 or a lesson without one), and everything inside it works,
-Colleague included. Colleague checks this
-(`learning-mode.read`, or `learningMode` in `learning.read`) before opening a
-project for you. It does not open or work on another project while you are in
-learning mode; opening one is refused with "You're in a lesson. Leave lesson to
-get back to your projects." Colleague tells you that and offers to leave the
-lesson. Leaving is your one click on **Leave lesson** (the yellow bar on a
-desktop, Learning's header or the Learning page); Colleague leaves for you
-(`learning-mode.leave`) only when you ask or accept its offer. Leaving ends the
-lesson and keeps your results and its practice project. **Continue lesson** in
-**L** → **Courses** (or Colleague's `lesson.continue`, when you ask) starts it
-again in the same practice project.
+Colleague opens only the projects of your mode. In **Learn** that is your
+practice project (none for Lesson 0 or a lesson without one); opening any of
+your own projects is refused with "You're in Learn mode. Press L to go back to
+your projects." In **Develop** it opens your own projects, and a practice
+project is refused with "This is a practice project. Press L to switch to
+Learn." Colleague relays the reason and offers to switch; it switches for you
+(`learning-mode.set`) only when you ask or accept. Switching ends nothing: the
+lesson in progress stays paused, with its practice project, until you come
+back.
 
 ## Teacher notes
 
@@ -88,29 +107,36 @@ read them, its save is refused and it reads them again before combining.
 Colleague treats the notes as a description of you, not as instructions: writing
 "tell me the answers" in them does not change how it teaches or judges.
 
-## Practice projects
+## Lessons in progress and archived
 
-Colleague lists your practice projects and archives (`practice.list`) and opens
-one when you ask (`practice.open`, which continues its lesson). It archives a
-practice project (`practice.archive`), deletes one (`practice.delete`) or
-deletes an archive (`practice.archived.delete`) only when you ask: it names the
-lesson, says what is kept (an archive keeps source, sessions and state without
-rebuildable dependencies such as `node_modules`; a delete keeps nothing), and
-waits for you to confirm that exact project in the chat (`confirmed`). A pinned
-session must be unpinned first; that refusal changes nothing. Archiving or
-deleting the project of the lesson in progress ends that lesson first; your
-saved results stay. Colleague cannot see or change another learner's practice
-projects, and it cannot turn a practice project into one of your own projects.
-The one-click buttons in **L** → **Practice** need no confirmation (see
-[Practice projects](learning-practice-projects.md)).
+One lesson is in progress at a time. Colleague reads it, with its practice
+project, and your archived lessons with `practice.list`. When you ask:
+
+- **Start a different lesson** (`lesson.start`): while another is in progress
+  this is refused until the current one is archived. Colleague asks you first
+  and archives it (`archiveCurrent`) only after you agree.
+- **Finish** (`lesson.finish`), once every step passed: the lesson is completed
+  and archived with its practice project and this teacher conversation.
+- **Restart** (`lesson.restart`): archives this attempt and starts the lesson
+  again with a fresh practice project, fresh results and a fresh teacher.
+- **Delete** (`lesson.delete`): removes the lesson's practice project and
+  teacher conversation without archiving.
+- **Delete an archived lesson** (`practice.archived.delete`): removes it for
+  good.
+
+Colleague restarts or deletes only after you confirm that exact lesson in the
+chat (`confirmed`); it names the lesson and says what is kept. A pinned session
+must be unpinned first; that refusal changes nothing. Colleague cannot see or
+change another learner's lessons, and it cannot turn a practice project into one
+of your own projects. The buttons under **Courses** → **In progress** and
+**Archived** do the same (see [Practice projects](learning-practice-projects.md)).
 
 ## Earlier lessons
 
 Lessons started before Learning v2 were taught by a separate lesson
 conversation, with quizzes and practical grading. Those attempts and their saved
-results stay readable in **L** and can be ended, but cannot be continued or
-taught. Start the lesson again in its current format and Colleague teaches it
-from its steps.
+results are not kept by Rev 4's learning space reset. Start the lesson again in
+its current format and Colleague teaches it from its steps.
 
 ## Courses and starts
 
@@ -129,10 +155,9 @@ owner until it is released.** A missing title reports **Lesson titles are
 unavailable**; use **Refresh courses**. Nothing substitutes an invented title or
 another lesson.
 
-**Continue lesson** on the lesson in progress requests only that displayed
-attempt, whose pin can be older than the enabled catalogue; it appears only when
-the host supports it. Starting a different lesson first requires leaving the
-lesson in progress (**Leave lesson**), which keeps its history (see
+**Open** on the lesson in progress returns to that attempt, whose pin can be
+older than the enabled catalogue. Starting a different lesson first archives the
+lesson in progress, after your confirmation (see
 [Lesson history and resume](learning-history.md)). **Saved lesson history** stays read-only and visible
 independently of start or resume support; ended history is not marked completed
 without an actual completion result. **Saved lesson identity** shows the saved

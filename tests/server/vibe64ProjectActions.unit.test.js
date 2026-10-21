@@ -11,9 +11,11 @@ import {
   ACTION_SAVE_COLLABORATION_SETTINGS,
   ACTION_SAVE_ENGINEERING_PROFILE,
   ACTION_SAVE_PROJECT_PROMPT_HINTS,
+  ACTION_SELECT_PROJECT,
   createVibe64ProjectChangedPublisher,
   createProjectActions
 } from "../../packages/vibe64-project/src/server/actions.js";
+import { LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE, registerLearningModeReader } from "@local/vibe64-core/server/learningMode";
 
 const localUser = { username: "local", role: "owner" };
 
@@ -274,4 +276,26 @@ test("repository policy changes carry only their public setting on the existing 
   assert.deepEqual(event.realtime.payload, {
     projectSlug: "project-a", repositoryWorkflow: { requirePullRequest: true }, reason: "repository-workflow-settings"
   });
+});
+
+test("Learn mode creates no projects and selects only the practice project; Develop never selects it", async (t) => {
+  t.after(() => registerLearningModeReader(null));
+  const calls = [];
+  const project = { createProject: input => { calls.push(["create", input.name]); return { ok: true }; },
+    selectProject: input => { calls.push(["select", input.slug]); return { ok: true }; } };
+  const create = featureAction(project, ACTION_CREATE_PROJECT);
+  const select = featureAction(project, ACTION_SELECT_PROJECT);
+  const practiceSlug = "training-12345678123442348234123456789abc";
+  let mode = { on: true, currentAttemptId: "12345678-1234-4234-8234-123456789abc", lessonCode: "INTRO-01", practiceSlug };
+  registerLearningModeReader(() => mode);
+  const learn = { code: "vibe64_learning_mode_project", statusCode: 403, message: LEARNING_MODE_PROJECT_MESSAGE };
+  await assert.rejects(create.execute({ name: "shop" }), learn);
+  await assert.rejects(select.execute({ slug: "shop" }), learn);
+  await select.execute({ slug: practiceSlug });
+  mode = { ...mode, on: false };
+  await assert.rejects(select.execute({ slug: practiceSlug }),
+    { code: "vibe64_learning_mode_project", statusCode: 403, message: PRACTICE_PROJECT_MODE_MESSAGE });
+  await create.execute({ name: "shop" });
+  await select.execute({ slug: "shop" });
+  assert.deepEqual(calls, [["select", practiceSlug], ["create", "shop"], ["select", "shop"]]);
 });

@@ -11,11 +11,12 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createEventRuntime } from "@jskit-ai/kernel/server/runtime";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { registerVibe64ActionContext, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
-import { LEARNING_MODE_PROJECT_CODE, LEARNING_MODE_PROJECT_MESSAGE, registerLearningModeReader } from "@local/vibe64-core/server/learningMode";
+import { LEARNING_MODE_PROJECT_CODE, LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE, registerLearningModeReader } from "@local/vibe64-core/server/learningMode";
+import { releaseLearnThread } from "@local/vibe64-core/server/learnThreads";
 import { createColleagueService } from "../../packages/vibe64-colleague/src/server/service.js";
 import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/actions.js";
 import { conversationObservation, readWatchedConversation, watchUpdate } from "../../packages/vibe64-colleague/src/server/attention.js";
-import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions as colleagueInstructions } from "../../packages/vibe64-colleague/src/server/protocol.js";
+import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions as colleagueInstructions, learnInstructions } from "../../packages/vibe64-colleague/src/server/protocol.js";
 import { createColleagueNavigationCoordination } from "../../packages/vibe64-colleague/src/server/navigationCoordination.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
@@ -56,7 +57,7 @@ function modelStream() {
   };
 }
 
-async function fixture(t, responses, { systemRoot, discovery = false, discoveryQueries = false, watching = false, assigning = false, watchPollMs = 30000, native = false } = {}) {
+async function fixture(t, responses, { systemRoot, discovery = false, discoveryQueries = false, watching = false, assigning = false, watchPollMs = 30000, native = false, extraActions = [] } = {}) {
   watching ||= assigning;
   const root = systemRoot || await mkdtemp(path.join(os.tmpdir(), "colleague-test-"));
   let resources = fixtureResources.get(t);
@@ -251,7 +252,7 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
       return { ok: true };
     }
   } }).filter(({ id }) => ["vibe64.sessions.inspect", "vibe64.sessions.conversation-log.read"].includes(id) || (assigning && id === "vibe64.sessions.agent-message.send")));
-  actions.register({ contributorId: "colleague-test", domain: "vibe64", actions: [operation, ...extras, ...createColleagueActions(service)]
+  actions.register({ contributorId: "colleague-test", domain: "vibe64", actions: [operation, ...extras, ...extraActions, ...createColleagueActions(service)]
     .map((action) => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...action })) });
   const send = (message, messageId = "user-1", extra = {}) => actions.execute({ actionId: "vibe64.colleague.message.send", input: {
     clientId: "browser-1", message, messageId, ...extra
@@ -1730,8 +1731,11 @@ test("focus keys of the retired Learning mode are refused like any unknown focus
   await assert.rejects(f.actions.execute({ actionId: "vibe64.colleague.focus.update", context: f.context,
     input: { clientId: "browser-1", focus: { projectSlug: "alpha", learningView: "workspace" } } }), { code: "ACTION_VALIDATION_FAILED" });
   const updated = await f.actions.execute({ actionId: "vibe64.colleague.focus.update", context: f.context,
-    input: { clientId: "browser-1", focus: { projectSlug: "alpha", learningOpen: true, learningSurface: "practice" } } });
-  assert.deepEqual(updated.focus, { projectSlug: "alpha", learningOpen: true, learningSurface: "practice" });
+    input: { clientId: "browser-1", focus: { projectSlug: "alpha", learningOpen: true, learningSurface: "progress" } } });
+  assert.deepEqual(updated.focus, { projectSlug: "alpha", learningOpen: true, learningSurface: "progress" });
+  await assert.rejects(f.actions.execute({ actionId: "vibe64.colleague.focus.update", context: f.context,
+    input: { clientId: "browser-1", focus: { learningOpen: true, learningSurface: "practice" } } }), { code: "ACTION_VALIDATION_FAILED" },
+  "the Rev 3 Practice surface is gone");
 });
 
 test("steering received during a model response takes precedence before any tool dispatch", async (t) => {
@@ -1860,57 +1864,50 @@ test("project navigation carries bounded panes and exact conversation targets, w
   await assert.rejects(execute(input), { statusCode: 403 });
 });
 
-test("in learning mode Colleague opens only the lesson's practice project and relays the exact reason", async (t) => {
+test("Colleague opens only the projects of the person's mode and relays the exact reason", async (t) => {
   const f = await fixture(t, [], { watching: true });
   const reads = [];
-  registerLearningModeReader(async ({ actor }) => {
-    reads.push(actor);
-    return { on: true, attemptId: "a", lessonCode: "L1", practiceSlug: "alpha", projectSlugs: ["alpha"] };
-  });
+  const practiceSlug = "alpha";
+  let mode = { on: true, currentAttemptId: "12345678-1234-4234-8234-123456789abc", lessonCode: "L1", practiceSlug };
+  registerLearningModeReader(async ({ actor }) => { reads.push(actor); return mode; });
   t.after(() => registerLearningModeReader(null));
   await f.service.focus({ clientId: "tab-a", focus: {} }, f.context);
   const context = { ...f.context, colleague: { clientId: "tab-a" } };
   const execute = (input) => f.actions.execute({ actionId: "vibe64.colleague.navigation.open", input, context });
+  const opens = async projectSlug => {
+    const pending = execute({ projectSlug });
+    const navigation = await pendingNavigation(f, "tab-a", command => command.projectSlug === projectSlug);
+    await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: navigation.id, ok: true, focus: { projectSlug } }, f.context);
+    assert.equal((await pending).ok, true, projectSlug);
+  };
   await assert.rejects(execute({ projectSlug: "beta" }),
     { code: LEARNING_MODE_PROJECT_CODE, statusCode: 403, message: LEARNING_MODE_PROJECT_MESSAGE });
   assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null, "nothing is sent to the browser");
   assert.equal(reads.at(-1)?.uid, f.context.requestMeta.request.vibe64User.uid, "the mode is the acting person's");
-  // The lesson's practice project still opens normally.
-  const pending = execute({ projectSlug: "alpha" });
-  let state;
-  for (let index = 0; index < 20; index += 1) {
-    state = await f.service.read({ clientId: "tab-a" }, f.context);
-    if (state.navigation) break;
-    await new Promise((resolve) => setImmediate(resolve));
-  }
-  assert.equal(state.navigation.projectSlug, "alpha");
-  await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id, ok: true, focus: { projectSlug: "alpha" } }, f.context);
-  assert.equal((await pending).ok, true);
-  // Outside learning mode other projects open again.
-  registerLearningModeReader(async () => ({ on: false }));
-  const other = execute({ projectSlug: "beta" });
-  for (let index = 0; index < 20; index += 1) {
-    state = await f.service.read({ clientId: "tab-a" }, f.context);
-    if (state.navigation?.projectSlug === "beta") break;
-    await new Promise((resolve) => setImmediate(resolve));
-  }
-  assert.equal(state.navigation.projectSlug, "beta");
-  await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id, ok: true, focus: { projectSlug: "beta" } }, f.context);
-  assert.equal((await other).ok, true);
+  await opens(practiceSlug);
+  // Develop opens the person's projects and refuses the practice project.
+  mode = { ...mode, on: false };
+  await assert.rejects(execute({ projectSlug: practiceSlug }),
+    { code: LEARNING_MODE_PROJECT_CODE, statusCode: 403, message: PRACTICE_PROJECT_MODE_MESSAGE });
+  await opens("beta");
 });
 
-test("Colleague's protocol keeps learning mode: no other projects, the exact reason, leaving only on request", () => {
-  assert.match(colleagueInstructions, /learning mode/u);
-  assert.match(colleagueInstructions, /learning-mode\.read/u);
-  assert.ok(colleagueInstructions.includes(LEARNING_MODE_PROJECT_MESSAGE));
-  assert.match(colleagueInstructions, /learning-mode\.leave only after their direct request or accepted offer/u);
-  // A lesson is in progress or not: leaving ends it, and no paused lesson is re-entered.
-  assert.match(colleagueInstructions, /Leaving ends the lesson attempt/u);
-  assert.doesNotMatch(colleagueInstructions, /learning-mode\.enter|paused/u);
-  // Practice projects live in the learning space and change only on the person's confirmation.
-  for (const action of ["practice.list", "practice.open", "practice.archive", "practice.delete", "practice.archived.delete"]) {
-    assert.ok(colleagueInstructions.includes(action), action);
+test("Colleague's Develop and Learn protocols: only Learn teaches, and each relays its mode's reason", () => {
+  assert.ok(colleagueInstructions.includes(PRACTICE_PROJECT_MODE_MESSAGE));
+  assert.ok(learnInstructions.includes(LEARNING_MODE_PROJECT_MESSAGE));
+  for (const text of [colleagueInstructions, learnInstructions]) {
+    assert.match(text, /learning-mode\.set only after their direct request or accepted offer|run it only after their direct request or accepted offer/u);
+    assert.match(text, /ends nothing/u, "switching mode never ends a lesson");
+    assert.doesNotMatch(text, /Leave lesson|learning-mode\.leave|practice\.open|practice\.archive\b|practice\.delete/u);
   }
+  assert.doesNotMatch(colleagueInstructions, /you are their teacher|lesson\.read|learner-notes|step\.check\.run/u, "Develop keeps Colleague's ordinary role");
+  // One lesson in progress; lifecycle operations only on confirmation.
+  assert.match(learnInstructions, /One lesson is in progress at a time/u);
+  assert.match(learnInstructions, /pass archiveCurrent to lesson\.start only after they agree/u);
+  for (const action of ["practice.list", "lesson.finish", "lesson.restart", "lesson.delete", "practice.archived.delete"]) {
+    assert.ok(learnInstructions.includes(action), action);
+  }
+  assert.match(learnInstructions, /Restart or delete only after the person explicitly confirms that exact operation/u);
 });
 
 // Learning v2 (C4): navigation coordination moved from vibe64-training's
@@ -2066,6 +2063,7 @@ test("moved navigation coordination fails an unacknowledged command after its or
 });
 
 test("Colleague teaches through lessons, navigation, guides and checks, and never judges or reveals answers", () => {
+  const colleagueInstructions = learnInstructions;
   assert.match(colleagueInstructions, /lesson\.read/u);
   assert.match(colleagueInstructions, /navigation\.open guide/u);
   assert.match(colleagueInstructions, /navigation\.open-learning/u);
@@ -5338,4 +5336,152 @@ test("Colleague browser focus adapter owns its subscription independently of Col
   assert.equal(Vibe64ColleagueProvider.requires.realtime, undefined);
   await Vibe64ColleagueFocusProvider.shutdown({}, { outputs });
   assert.equal(released, 1);
+});
+
+// Rev 4 (C3): Develop keeps the one Colleague conversation; each lesson
+// attempt has its own teacher thread, and Learn without a lesson a lobby.
+const LESSON_ATTEMPT = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+function learnModeFixture(t) {
+  const learning = { mode: { on: false, currentAttemptId: "", lessonCode: "", practiceSlug: "" } };
+  registerLearningModeReader(async () => learning.mode);
+  t.after(() => registerLearningModeReader(null));
+  learning.develop = () => { learning.mode = { ...learning.mode, on: false }; };
+  learning.learn = (currentAttemptId = LESSON_ATTEMPT) => { learning.mode = { ...learning.mode, on: true, currentAttemptId }; };
+  return learning;
+}
+const savedThread = async (root, file) => JSON.parse(await readFile(path.join(root, "colleague", "NDI", file), "utf8"));
+const exists = file => fs.access(file).then(() => true, () => false);
+
+test("each lesson attempt keeps its own teacher thread across mode switches, Learn without a lesson has a lobby, and Develop is unchanged", async t => {
+  const f = await fixture(t, [reply("Develop answer"), reply("Teacher answer"), reply("Lobby answer"), reply("Develop again"), reply("Teacher again")]);
+  const learning = learnModeFixture(t);
+  await f.send("Hello", "develop-1");
+  const develop = await f.service.wait(f.context);
+  assert.deepEqual(develop.thread, { kind: "develop" });
+  const developRecord = await savedThread(f.root, "conversation.json");
+  assert.equal(developRecord.runtimeId, "NDI");
+  assert.doesNotMatch(f.observations.starts[0].scope.stableContext, /you are their teacher/u);
+
+  learning.learn();
+  const fresh = await f.service.read({}, f.context);
+  assert.deepEqual(fresh.thread, { kind: "learn", attemptId: LESSON_ATTEMPT });
+  assert.notEqual(fresh.conversationId, develop.conversationId);
+  assert.deepEqual(fresh.messages, [], "a new attempt starts a fresh teacher");
+  await f.send("Teach me", "learn-1");
+  const taught = await f.service.wait(f.context);
+  assert.equal(taught.conversationId, fresh.conversationId);
+  assert.match(f.observations.starts[1].scope.stableContext, /you are their teacher/u, "Learn threads carry the teaching guidance");
+  const learnRecord = await savedThread(f.root, path.join("learn", `${LESSON_ATTEMPT}.json`));
+  assert.equal(learnRecord.runtimeId, `NDI:learn:${LESSON_ATTEMPT}`);
+  assert.deepEqual(learnRecord.conversationLog.flatMap(turn => turn.messages.map(message => message.text)), ["Teach me", "Teacher answer"]);
+
+  learning.learn("");
+  const lobby = await f.service.read({}, f.context);
+  assert.deepEqual(lobby.thread, { kind: "learn" });
+  await f.send("What can I learn?", "lobby-1");
+  assert.equal((await f.service.wait(f.context)).conversationId, lobby.conversationId);
+  assert.equal((await savedThread(f.root, path.join("learn", "lobby.json"))).runtimeId, "NDI:learn");
+
+  learning.develop();
+  const back = await f.service.read({}, f.context);
+  assert.equal(back.conversationId, develop.conversationId, "Develop resumes its own conversation");
+  assert.deepEqual(back.messages.map(message => message.text), ["Hello", "Develop answer"]);
+  assert.deepEqual(await savedThread(f.root, "conversation.json"), developRecord, "switching never touches Develop's file");
+  await f.send("Back to work", "develop-2");
+  await f.service.wait(f.context);
+
+  learning.learn();
+  const resumed = await f.service.read({}, f.context);
+  assert.equal(resumed.conversationId, fresh.conversationId, "coming back to the attempt resumes its teacher");
+  assert.deepEqual(resumed.messages.map(message => message.text), ["Teach me", "Teacher answer"]);
+  await f.send("And now?", "learn-2");
+  assert.deepEqual((await f.service.wait(f.context)).messages.map(message => message.text),
+    ["Teach me", "Teacher answer", "And now?", "Teacher again"]);
+});
+
+test("Develop hides teaching tools and Learn hides delegation and watches", async t => {
+  const training = name => withVibe64ActionContext({ id: `vibe64.training.${name}`, kind: "query", idempotency: "none",
+    input: { schema: createSchema({}), mode: "create" }, execute: () => ({ ok: true }),
+    output: { schema: createSchema({ ok: { type: "boolean", required: true } }), mode: "replace" },
+    extensions: { assistant: { description: `Test ${name}.` } } }, { projectScoped: false });
+  const f = await fixture(t, [reply("Develop"), reply("Learn")], { extraActions: [training("lesson.read"), training("learning-mode.set")] });
+  const learning = learnModeFixture(t);
+  const tools = start => start.body.tools.map(tool => tool.function.name);
+  await f.send("Hello", "develop-1");
+  await f.service.wait(f.context);
+  const develop = tools(f.observations.starts[0]);
+  assert.ok(develop.includes("vibe64_training_learning_mode_set"), "Develop can switch the mode for the person");
+  for (const hidden of ["vibe64_training_lesson_read", "vibe64_colleague_navigation_open_learning"]) assert.equal(develop.includes(hidden), false, hidden);
+  for (const shown of ["vibe64_colleague_assignment_create", "vibe64_colleague_watch_create"]) assert.ok(develop.includes(shown), shown);
+  learning.learn();
+  await f.send("Teach me", "learn-1");
+  await f.service.wait(f.context);
+  const learn = tools(f.observations.starts[1]);
+  for (const shown of ["vibe64_training_lesson_read", "vibe64_training_learning_mode_set", "vibe64_colleague_navigation_open_learning"]) {
+    assert.ok(learn.includes(shown), shown);
+  }
+  for (const hidden of ["vibe64_colleague_assignment_create", "vibe64_colleague_watch_create"]) assert.equal(learn.includes(hidden), false, hidden);
+});
+
+test("switching threads never interrupts a running turn, and only the visible thread keeps a live handle", async t => {
+  const stream = modelStream();
+  const f = await fixture(t, [signal => stream.response(signal), reply("Teacher answer"), reply("Develop again")]);
+  t.after(() => stream.finish());
+  const learning = learnModeFixture(t);
+  await f.send("Long question", "develop-1");
+  await until(() => f.observations.starts.length === 1);
+  assert.equal(f.observations.creates, 1);
+  learning.learn();
+  await f.send("Teach me", "learn-1");
+  const learn = await f.service.wait(f.context);
+  assert.equal(learn.messages.at(-1).text, "Teacher answer", "the Learn thread answers while Develop is still working");
+  assert.equal(f.observations.creates, 2);
+  // Develop's turn finishes undisturbed in the background.
+  stream.write({ content: "Long answer" });
+  stream.write({}, "stop");
+  stream.finish();
+  const developContext = { ...f.context, colleague: { threadKey: "NDI" } };
+  const develop = await f.service.wait(developContext);
+  assert.equal(develop.status, "ready", develop.error);
+  assert.deepEqual(develop.messages.map(message => message.text), ["Long question", "Long answer"]);
+  // Once it settled, the hidden Develop thread released its handle: returning opens a new one.
+  await new Promise(resolve => setTimeout(resolve, 50));
+  learning.develop();
+  await f.send("Back to work", "develop-2");
+  assert.equal((await f.service.wait(f.context)).status, "ready");
+  assert.equal(f.observations.creates, 3, "Develop reopened its runtime after being hidden");
+});
+
+test("Training's release ends an attempt's thread, even mid-turn, and leaves its file for Training to move", async t => {
+  const stream = modelStream();
+  const f = await fixture(t, [reply("Teacher answer"), signal => stream.response(signal), reply("Lobby answer")]);
+  t.after(() => stream.finish());
+  const learning = learnModeFixture(t);
+  learning.learn();
+  await f.send("Teach me", "learn-1");
+  const taught = await f.service.wait(f.context);
+  const file = path.join(f.root, "colleague", "NDI", "learn", `${LESSON_ATTEMPT}.json`);
+  const workdir = path.join(f.root, "colleague", "NDI", "learn", LESSON_ATTEMPT);
+  assert.ok(await exists(workdir), "the thread's runtime work lives beside its file");
+  await f.send("Finish my lesson", "learn-2");
+  await until(() => f.observations.starts.length === 2);
+  // Training releases the thread while that very turn runs, then moves the file.
+  await releaseLearnThread({ learnerKey: "NDI", attemptId: LESSON_ATTEMPT });
+  const archived = path.join(f.root, "archive.json");
+  await fs.rename(file, archived);
+  stream.finish();
+  await until(async () => !await exists(workdir));
+  assert.equal(await exists(file), false, "the released thread never writes its file again");
+  assert.equal(JSON.parse(await readFile(archived, "utf8")).scopeId, taught.conversationId);
+  await assert.rejects(f.service.wait({ ...f.context, colleague: { threadKey: `NDI:learn:${LESSON_ATTEMPT}` } }),
+    { code: "conversation_forbidden" }, "the ended attempt's operations are refused");
+  learning.learn("");
+  const lobby = await f.service.read({}, f.context);
+  assert.deepEqual(lobby.thread, { kind: "learn" });
+  await f.send("What next?", "lobby-1");
+  assert.equal((await f.service.wait(f.context)).messages.at(-1).text, "Lobby answer");
+  // Releasing a thread that is not loaded still removes its runtime work.
+  await fs.mkdir(path.join(f.root, "colleague", "NDI", "learn", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"), { recursive: true });
+  await releaseLearnThread({ learnerKey: "NDI", attemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" });
+  assert.equal(await exists(path.join(f.root, "colleague", "NDI", "learn", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")), false);
 });

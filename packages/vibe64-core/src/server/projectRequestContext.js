@@ -46,9 +46,11 @@ async function resolveProjectRequestContext({
   ).trim();
   const vibe64User = request?.vibe64User || null;
   // A person's own page or session request (HTTP or WebSocket, which carry
-  // headers) in learning mode opens only that lesson's practice projects.
-  // Internal work resolves without a request and is never limited.
-  if (request?.headers) await assertLearningModeAllowsProject({ actor: vibe64User, slug, request });
+  // headers) opens only the projects of their mode, once admission has said
+  // whether the slug is one of their practice projects: Learn opens only
+  // those, Develop refuses them. Internal work is never limited.
+  const assertMode = isPractice => request?.headers
+    ? assertLearningModeAllowsProject({ actor: vibe64User, slug, request, practice: isPractice }) : null;
   const practice = resolvedProjectContext.currentPracticeProjectScope?.();
   if (practice) {
     if (slug !== practice.slug) {
@@ -73,13 +75,17 @@ async function resolveProjectRequestContext({
   const explicitContext = explicitProjectRequestContextForSlug(resolvedProjectContext, slug, projectsRoot);
   if (practiceIdFromSlug(slug)) {
     const admitted = await admitPracticeRequest({ projectContext: resolvedProjectContext, request, slug, vibe64User });
-    if (admitted) return admitted;
+    if (admitted) {
+      await assertMode(true);
+      return admitted;
+    }
     // Not in the learning space: only a pre-existing project of that name opens.
     if (!explicitContext && !(resolvedProjectContext.projectCatalogEnabled !== false &&
         await pathExists(resolveProjectContextRoot({ projectsRoot, slug })))) {
       throw practiceProjectDeletedError();
     }
   }
+  await assertMode(false);
   if (explicitContext) {
     await assertProjectDirectoryUsable(explicitContext.targetRoot);
     if (explicitContext.projectRuntimeRoot) {

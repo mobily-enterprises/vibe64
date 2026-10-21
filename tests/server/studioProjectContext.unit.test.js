@@ -2014,6 +2014,49 @@ test("a pre-existing normal training-<hex> project still opens and new projects 
   });
 });
 
+test("Learn opens only the learner's practice projects and Develop refuses them, after practice admission", async (t) => {
+  const { registerLearningModeReader, LEARNING_MODE_PROJECT_MESSAGE, PRACTICE_PROJECT_MODE_MESSAGE } =
+    await import("../../packages/vibe64-core/src/server/learningMode.js");
+  t.after(() => registerLearningModeReader(null));
+  const learn = { code: "vibe64_learning_mode_project", statusCode: 403, message: LEARNING_MODE_PROJECT_MESSAGE };
+  const develop = { code: "vibe64_learning_mode_project", statusCode: 403, message: PRACTICE_PROJECT_MODE_MESSAGE };
+  for (const host of ["local", "hosted"]) {
+    await withTemporaryRoot(async root => {
+      const context = host === "local" ? await localPracticeContext(root) : hostedPracticeContext(root);
+      const training = trainingProvenance();
+      const slug = practiceSlugOf(training);
+      await createPracticeProject(context, training);
+      // A pre-existing catalogue training-<hex> project (G6) is not practice.
+      const catalogue = "training-32345678123442348234123456789abc";
+      const own = host === "local" ? context.selectedProject.slug : catalogue;
+      if (host === "hosted") {
+        await mkdir(path.join(root, "projects", catalogue), { recursive: true });
+        await writeTestFile(context.projectRecordPathForSlug(catalogue), JSON.stringify({ repository: { mode: "managed_git", defaultBranch: "main" } }));
+      }
+      const open = (target, request = { headers: {} }) => resolveProjectRequestContext({ projectContext: context,
+        request: { params: { slug: target }, vibe64User: learner, ...request } });
+      let mode = { on: false, currentAttemptId: "", lessonCode: "", practiceSlug: slug };
+      registerLearningModeReader(() => mode);
+      await assert.rejects(open(slug), develop, `${host}: Develop refuses the practice project`);
+      assert.equal((await open(own)).slug, own, `${host}: Develop opens the learner's own project`);
+      assert.equal((await open(slug, {})).slug, slug, `${host}: work without a person is never limited`);
+      // Learn, with the lesson's project or with none (the practice project
+      // may still be preparing): admission, not the saved slug, decides.
+      for (const practiceSlug of [slug, ""]) {
+        mode = { on: true, currentAttemptId: training.practiceId, lessonCode: "INTRO-01", practiceSlug };
+        assert.equal((await open(slug)).slug, slug, `${host}: Learn opens the practice project`);
+        await assert.rejects(open(own), learn, `${host}: Learn refuses the learner's own project`);
+        assert.equal((await open(own, {})).slug, own, `${host}: internal work still opens it`);
+      }
+      registerLearningModeReader(() => { throw new Error("unreadable"); });
+      await assert.rejects(open(slug), develop, `${host}: a reader failure counts as Develop`);
+      assert.equal((await open(own)).slug, own);
+      registerLearningModeReader(null);
+      assert.equal((await open(slug)).slug, slug, `${host}: without Learning nothing is limited`);
+    });
+  }
+});
+
 test("an old v1 practice project in the hosted catalogue never takes the normal projects' listing down", async (t) => {
   const warn = t.mock.method(console, "warn", () => {});
   await withTemporaryRoot(async root => {

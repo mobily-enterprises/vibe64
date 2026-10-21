@@ -69,9 +69,10 @@ function withVibe64ActionContext(definition, { projectScoped = true, ownerRequir
       const slug = actionProjectSlug(input, context);
       if (forwardsProjectSlug) trustedInput.projectSlug = slug;
       const resolved = context.vibe64Action?.project;
-      // Colleague acting for a learner in learning mode opens only that
-      // lesson's practice projects. A host contributor that resolved the
-      // project already applied this through its authorizeProject.
+      // Colleague acting for a learner opens only the projects of their mode
+      // (Learn: their practice project; Develop: never it), so it can relay
+      // the exact reason. A host contributor that resolved the project
+      // already applied this through its authorizeProject.
       if (context.colleague && !resolved) await assertLearningModeAllowsProject({ actor: user, slug });
       if (resolved && resolved.slug !== slug) {
         throw actionContextError("vibe64_action_project_mismatch", "The authorized project does not match this operation.");

@@ -1,8 +1,9 @@
 # Lesson operations and declared checks
 
-Training's shared lesson operations start, resume, end and continue saved
-lessons, read and record step results, and run each lesson's declared checks.
-Colleague teaches every lesson from its steps.
+Training's shared lesson operations start, resume and close saved lessons,
+read and record step results, and run each lesson's declared checks. Colleague
+teaches every lesson from its steps, in Learn mode, in that lesson attempt's own
+teacher conversation.
 
 ## Sources
 
@@ -62,6 +63,25 @@ Colleague runs through `step.check.run` reports its finding and saves nothing.
 The inner session-inspect and App-run reads of `step.observe` and
 `step.check.run` re-admit the learner's own request on the practice project's
 ordinary project target; practice sessions carry no learning-scoped input.
+
+### Teacher conversations
+
+Each lesson attempt has its own Colleague teacher thread, keyed by `attemptId`
+(`<sys>/colleague/<learnerKey>/learn/<attemptId>.json`), and Learn mode without
+a lesson uses one learner-level lobby thread (`learn/lobby.json`). Colleague
+picks the thread on the server from the learner's mode (core
+`readLearningModeFor`: Develop, or Learn with `currentAttemptId`), so leaving
+and coming back to an attempt resumes its conversation. Only Learn threads
+carry the teaching guidance and Training's lesson tools; Develop can read and
+set the mode only. Closing an attempt calls core `releaseLearnThread` (Colleague
+stops the thread) and then moves the file into the attempt's archive bundle or
+removes it; Training never imports Colleague. See
+`genesis/program/colleague/product-conversation.md`.
+
+Sources: `packages/vibe64-core/src/server/learnThreads.js`,
+`packages/vibe64-core/src/server/learningMode.js`,
+`packages/vibe64-colleague/src/server/service.js`,
+`packages/vibe64-colleague/src/server/protocol.js`.
 
 ### Version 1 lessons
 
