@@ -1848,7 +1848,7 @@ test("execution helper client sends normalized payloads through sudo helper", as
   const calls = [];
   const result = await runHelperCommand(payload, {
     env: {
-      VIBE64_EXEC_HELPER_PATH: "/tmp/ignored-by-explicit-helper"
+      HELPER_ENV_PROBE: "passed-through"
     },
     helperPath: "/tmp/vibe64-exec-helper",
     outputEncoding: "base64",
@@ -1876,7 +1876,7 @@ test("execution helper client sends normalized payloads through sudo helper", as
       command: "sudo",
       options: {
         env: {
-          VIBE64_EXEC_HELPER_PATH: "/tmp/ignored-by-explicit-helper"
+          HELPER_ENV_PROBE: "passed-through"
         },
         input: `${JSON.stringify(payload)}\n`,
         outputEncoding: "base64",

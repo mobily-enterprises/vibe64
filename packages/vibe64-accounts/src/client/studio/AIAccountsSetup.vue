@@ -1,11 +1,11 @@
 <template>
   <NativeProviderConnections
     v-if="!embedded && ['codex', 'claude'].includes(providerId)" v-model="selectedModelProviderId" :engine-id="providerId"
-    :actions-enabled="actionsEnabled" :cli-account="aiAccountRows[0]" :cli-checking="Boolean(accounts.isLoading.value)"
-    @check-cli="accounts.refresh()"
+    :actions-enabled="actionsEnabled" :cli-account="nativeLogin ? {} : aiAccountRows[0]"
+    :cli-checking="Boolean(accounts.isLoading.value)" @check-cli="accounts.refresh()"
   />
   <ProviderAccountsSetup
-    v-if="['openai', 'anthropic'].includes(selectedModelProviderId)"
+    v-if="nativeLogin"
     :accounts="accounts"
     :actions-disabled-message="actionsDisabledMessage"
     :actions-enabled="actionsEnabled"
@@ -82,6 +82,8 @@ const selectedModelProviderId = ref("");
 watch(() => [props.providerId, props.modelProviderId], ([id, fixed]) => {
   selectedModelProviderId.value = fixed || (id === "claude" ? "anthropic" : "openai");
 }, { immediate: true });
+// A native login shows the CLI's install notice in its own account row.
+const nativeLogin = computed(() => ["openai", "anthropic"].includes(selectedModelProviderId.value));
 const emit = defineEmits(["back", "continue", "connected"]);
 const accounts = useVibe64Accounts({
   client: props.accountsClient

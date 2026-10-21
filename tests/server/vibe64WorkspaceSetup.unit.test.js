@@ -42,7 +42,7 @@ async function workspaceSession(targetRoot, sessionId = "workspace-session") {
   });
   const runtime = new Vibe64SessionRuntime({
     promptEnvironment: {
-      VIBE64_RUNTIME_PACK_ROOT: "/managed/runtime-packs"
+      SETUP_ENV_PROBE: "from-prompt-environment"
     },
     projectContextRoot: targetRoot,
     projectRuntimeRoot: projectRuntimeRoot(targetRoot)
@@ -145,7 +145,7 @@ test("workspace preparation executes declared argv in order through the managed 
       { argv: ["npm", "install"], workdir: "web" }
     ]);
     assert.deepEqual(workflowCalls[0].runtimes, ["node26", "composer", "php"]);
-    assert.equal(workflowCalls[0].env.VIBE64_RUNTIME_PACK_ROOT, "/managed/runtime-packs");
+    assert.equal(workflowCalls[0].env.SETUP_ENV_PROBE, "from-prompt-environment");
     assert.deepEqual(workflowCalls[1], { id: workflowId, outcome: "succeeded", defer: true });
 
     assert.deepEqual(calls.map(({ command, args, cwd }) => ({ args, command, cwd })), [{

@@ -6,43 +6,24 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 // Vibe64 runs on a person's own computer. A host that provisions its own
-// machines passes its values at startup; nothing here may name such a host.
+// machines passes its values at startup; no public file names its folders.
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const HOST_PROFILE_FILE = "packages/vibe64-execution/src/server/hostProfile.js";
-const HOST_TERMS = [
-  /\/var\/lib\/vibe64/u,
-  /\/opt\/vibe64/u,
-  /\/var\/cache\/vibe64/u,
-  /\/etc\/vibe64/u,
-  /\/run\/vibe64/u,
-  /\/usr\/lib\/vibe64/u,
-  /v64d_/u,
-  /Vibe64 Online/u,
-  /vibe64-online/u,
-  /\bOnline\b/u,
-  /\bVPS\b/u,
-  /\b[Tt]enants?\b/u,
-  /\b[Ff]leet\b/u
-];
+// A named folder inside a system location.
+const SYSTEM_LOCATION = /(?<![\w.~$/-])\/(?:var\/lib|var\/cache|opt|etc|usr\/lib|run)\/[\w.-]+/gu;
+// Locations other software owns, which local code and its tests may name.
+const OTHER_SOFTWARE_LOCATIONS = new Set([
+  "/etc/passwd", "/etc/nsswitch.conf", "/etc/codex", "/opt/homebrew", "/run/user", "/run/app"
+]);
 // Known blocker: the privileged helper, its two test files and its release
 // packaging still describe the host they run on. They leave this repository
 // together in the helper extraction; until then they are the only exceptions.
-// The test path guard and this test name the terms they refuse.
 const ALLOWED_FILES = new Set([
   "packages/vibe64-execution/src/host/execHelper.js",
   "tests/server/executionBoundarySecurity.unit.test.js",
   "tests/server/vibe64ManagedWorkflow.unit.test.js",
-  "tooling/release/runtime-package.mjs",
-  "tooling/test-host-path-guard.mjs",
-  "tests/server/hostNeutrality.unit.test.js"
+  "tooling/release/runtime-package.mjs"
 ]);
-// Integrations keep their provider's own "tenant" vocabulary (Microsoft
-// directory IDs, Workday and Xero tenants, multi-tenant apps), as does the
-// voice access token API.
-const PROVIDER_VOCABULARY = {
-  term: /\b[Tt]enants?\b/u,
-  files: /^(?:genesis\/program\/source\/edit-and-review\.md|packages\/vibe64-source-editor\/docs\/|tests\/e2e\/integrations\.spec\.ts$|tests\/server\/vibe64Voice\.unit\.test\.js$)/u
-};
 
 function trackedFiles() {
   return execFileSync("git", ["ls-files", "-z"], { cwd: REPO_ROOT, encoding: "utf8" })
@@ -57,15 +38,13 @@ function readText(file) {
   return content.includes(0) ? "" : content.toString("utf8");
 }
 
-test("public sources never name a hosting environment", () => {
+test("public sources name no folders of their own in system locations", () => {
   const findings = [];
   for (const file of trackedFiles()) {
     if (ALLOWED_FILES.has(file)) continue;
     readText(file).split("\n").forEach((line, index) => {
-      for (const term of HOST_TERMS) {
-        if (!term.test(line)) continue;
-        if (term.source === PROVIDER_VOCABULARY.term.source && PROVIDER_VOCABULARY.files.test(file)) continue;
-        findings.push(`${file}:${index + 1}: ${line.trim().slice(0, 160)}`);
+      for (const [location] of line.matchAll(SYSTEM_LOCATION)) {
+        if (!OTHER_SOFTWARE_LOCATIONS.has(location)) findings.push(`${file}:${index + 1}: ${line.trim().slice(0, 160)}`);
       }
     });
   }

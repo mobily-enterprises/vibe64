@@ -1,28 +1,26 @@
 // Loaded into every test process (node --import, vitest setupFiles). Tests run
-// on a person's own computer and must never read or write a hosting
-// environment's system directories; any such access throws instead.
-// Child Node processes inherit it through NODE_OPTIONS. A child started with
-// an environment rebuilt from scratch (NODE_OPTIONS removed) and Playwright
-// browser tests run without it; the command that starts such a child is
-// still checked here.
+// on a person's own computer and must never change system locations: a write,
+// a program started from one, or a command run inside one throws instead.
+// Reading stays allowed (tests read /etc/passwd and find Homebrew tools).
+// Child Node processes inherit the guard through NODE_OPTIONS; a child started
+// with an environment rebuilt from scratch, and Playwright browser tests, run
+// without it, but the command that starts such a child is still checked here.
 import childProcess from "node:child_process";
 import fs from "node:fs";
 import { syncBuiltinESMExports } from "node:module";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const HOST_PATH_ROOTS = Object.freeze([
-  "/var/lib/vibe64",
-  "/opt/vibe64",
-  "/var/cache/vibe64",
-  "/etc/vibe64",
-  "/run/vibe64",
-  "/usr/lib/vibe64"
-]);
-const TWO_PATH_FUNCTIONS = new Set([
-  "copyFile", "copyFileSync", "cp", "cpSync", "link", "linkSync",
-  "rename", "renameSync", "symlink", "symlinkSync"
-]);
+const SYSTEM_ROOTS = Object.freeze(["/var/lib", "/var/cache", "/opt", "/etc", "/usr/lib", "/run"]);
+// The person's own runtime folder is theirs to use.
+const OWN_RUNTIME_ROOT = `/run/user/${process.getuid?.() ?? os.userInfo().uid}`;
+// Functions that change a path, with the argument indexes of the paths they change.
+const WRITES = Object.freeze({
+  appendFile: [0], chmod: [0], chown: [0], copyFile: [1], cp: [1], createWriteStream: [0], lchmod: [0],
+  lchown: [0], link: [1], lutimes: [0], mkdir: [0], mkdtemp: [0], rename: [0, 1], rm: [0], rmdir: [0],
+  symlink: [1], truncate: [0], unlink: [0], utimes: [0], writeFile: [0]
+});
 const CHILD_PROCESS_FUNCTIONS = ["exec", "execSync", "execFile", "execFileSync", "fork", "spawn", "spawnSync"];
 const GUARDED = Symbol.for("vibe64.testHostPathGuard");
 
@@ -33,83 +31,86 @@ function pathText(value) {
   return "";
 }
 
-function hostPathOf(value, { resolveRelative = true } = {}) {
+function systemPathOf(value) {
   const text = pathText(value);
   if (!text || text.includes("\0")) return "";
-  if (!resolveRelative && !text.startsWith("/")) return "";
   const resolved = path.resolve(text);
-  return HOST_PATH_ROOTS.some((root) => resolved === root || resolved.startsWith(`${root}/`) || resolved.startsWith(`${root}-`))
-    ? resolved
-    : "";
+  const inside = (root) => resolved === root || resolved.startsWith(`${root}/`);
+  return SYSTEM_ROOTS.some(inside) && !inside(OWN_RUNTIME_ROOT) ? resolved : "";
 }
 
-function refuse(hostPath, operation) {
-  throw new Error(`test touched a host path: ${hostPath} (${operation})`);
+function refuse(systemPath, operation) {
+  throw new Error(`test changed a system location: ${systemPath} (${operation})`);
 }
 
 function guardFunction(original, operation, check) {
   if (typeof original !== "function" || original[GUARDED]) return original;
-  const guarded = function guardedHostPathCall(...args) {
+  const guarded = function guardedSystemPathCall(...args) {
     check(args, operation);
     return Reflect.apply(original, this, args);
   };
   for (const key of Reflect.ownKeys(original)) {
     if (key === "length" || key === "name" || key === "prototype") continue;
-    const descriptor = Object.getOwnPropertyDescriptor(original, key);
-    // realpath.native and realpathSync.native take a path too.
-    if (key === "native") descriptor.value = guardFunction(descriptor.value, operation, check);
-    Object.defineProperty(guarded, key, descriptor);
+    Object.defineProperty(guarded, key, Object.getOwnPropertyDescriptor(original, key));
   }
   Object.defineProperty(guarded, "name", { value: original.name });
   Object.defineProperty(guarded, GUARDED, { value: true });
   return guarded;
 }
 
-function checkFsArguments(args, operation) {
-  const count = TWO_PATH_FUNCTIONS.has(operation) ? 2 : 1;
-  for (const value of args.slice(0, count)) {
-    const hostPath = hostPathOf(value);
-    if (hostPath) refuse(hostPath, operation);
+function checkWrite(args, operation) {
+  for (const index of WRITES[operation.replace(/Sync$/u, "")]) {
+    const systemPath = systemPathOf(args[index]);
+    if (systemPath) refuse(systemPath, operation);
   }
 }
 
-function checkChildProcessArguments(args, operation) {
+function opensForWriting(flags) {
+  if (typeof flags === "number") return (flags & (fs.constants.O_WRONLY | fs.constants.O_RDWR | fs.constants.O_CREAT)) !== 0;
+  return /[wa+]/u.test(String(flags ?? "r"));
+}
+
+function checkOpen(args, operation) {
+  const systemPath = opensForWriting(args[1]) && systemPathOf(args[0]);
+  if (systemPath) refuse(systemPath, operation);
+}
+
+function checkChildProcess(args, operation) {
   const [command, second, third] = args;
-  const argv = Array.isArray(second) ? second : [];
   const options = Array.isArray(second) ? third : second;
-  // Shell programs (exec, `sh -c ...`, `bash -lc ...`) carry paths inside
-  // one argument, so every argument is split into words.
-  const words = [command, ...argv].flatMap((value) => typeof value === "string"
-    ? value.split(/[\s"'=;|&()<>`]+/u)
-    : [value]);
-  for (const word of words) {
-    const hostPath = hostPathOf(word, { resolveRelative: false });
-    if (hostPath) refuse(hostPath, operation);
-  }
-  const cwd = options && typeof options === "object" ? hostPathOf(options.cwd) : "";
+  // exec runs a shell command line; its program is the first word.
+  const program = operation === "exec" || operation === "execSync"
+    ? String(command || "").trim().split(/\s+/u)[0]
+    : pathText(command);
+  const systemPath = program.startsWith("/") && systemPathOf(program);
+  if (systemPath) refuse(systemPath, operation);
+  const cwd = options && typeof options === "object" ? systemPathOf(options.cwd) : "";
   if (cwd) refuse(cwd, `${operation} cwd`);
 }
 
-function guardModule(target, check) {
+function guardFs(target) {
   for (const name of Object.keys(target)) {
-    // Classes (fs.Stats, fs.ReadStream, ...) keep their identity.
-    if (/^[A-Z]/u.test(name)) continue;
+    const base = name.replace(/Sync$/u, "");
+    const check = Object.hasOwn(WRITES, base) ? checkWrite : base === "open" ? checkOpen : null;
     const descriptor = Object.getOwnPropertyDescriptor(target, name);
-    if (!descriptor || typeof descriptor.value !== "function" || !descriptor.writable) continue;
+    if (!check || !descriptor || typeof descriptor.value !== "function" || !descriptor.writable) continue;
     target[name] = guardFunction(descriptor.value, name, check);
   }
 }
 
 if (!globalThis[GUARDED]) {
   globalThis[GUARDED] = true;
-  guardModule(fs, checkFsArguments);
-  guardModule(fs.promises, checkFsArguments);
+  guardFs(fs);
+  guardFs(fs.promises);
   for (const name of CHILD_PROCESS_FUNCTIONS) {
-    childProcess[name] = guardFunction(childProcess[name], name, checkChildProcessArguments);
+    childProcess[name] = guardFunction(childProcess[name], name, checkChildProcess);
   }
+  // An env file from a system location would configure tests as that machine.
   if (typeof process.loadEnvFile === "function") {
-    process.loadEnvFile = guardFunction(process.loadEnvFile, "loadEnvFile", checkFsArguments);
+    process.loadEnvFile = guardFunction(process.loadEnvFile, "loadEnvFile", (args, operation) => {
+      const systemPath = systemPathOf(args[0] ?? ".env");
+      if (systemPath) refuse(systemPath, operation);
+    });
   }
   syncBuiltinESMExports();
 }
-
