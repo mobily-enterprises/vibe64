@@ -409,10 +409,15 @@ A project without a web target hides unavailable browser-address controls and
 points to Run for terminal or downloadable outputs. No declared outputs remains
 a normal idle state that does not demand a web server.
 
-Preview translates the browser's exact own Origin to the loopback target host
-for HTTP and WebSocket requests while retaining the browser-facing scheme in
-Origin and forwarded protocol. Proxy-aware applications can therefore retain
-Secure cookies on HTTPS previews. Redirects from the target's ordinary origin or
+Preview rewrites Host to the loopback target. On every HTTP and WebSocket
+request it drops any inbound `Forwarded`, `X-Forwarded-Host`, `X-Forwarded-Proto`
+and `X-Forwarded-Port` and sets the last three from its own browser-facing
+origin, never from client or edge headers. Applications that trust the loopback
+proxy therefore build absolute URLs on the Preview address and retain Secure
+cookies on HTTPS previews. Preview also translates the browser's exact own Origin
+to the loopback target host while retaining the browser-facing scheme. A
+framework that trusts the forwarded host and also compares Origin with it may
+reject such same-origin writes. Redirects from the target's ordinary origin or
 its forwarded-scheme origin stay on the preview origin. Foreign,
 opaque and absent origins are preserved so application origin checks still apply.
 The preview proxy's own bearer cookie uses `SameSite=None; Secure` on hosted

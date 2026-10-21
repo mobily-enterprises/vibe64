@@ -396,8 +396,10 @@ test("HTTPS preview preserves secure cookies and redirects from a proxy-aware HT
         headers: {
           Host: url.host,
           Origin: publicOrigin,
+          Forwarded: "host=spoofed.invalid;proto=http",
           "X-Forwarded-Proto": "http",
-          "X-Forwarded-Host": url.host
+          "X-Forwarded-Host": url.host,
+          "X-Forwarded-Port": "8080"
         },
         path: `${url.pathname}${url.search}`,
         socketPath: previewPublicSocketPath(publicOrigin, env)
@@ -408,7 +410,9 @@ test("HTTPS preview preserves secure cookies and redirects from a proxy-aware HT
       const forwarded = target.requests.at(-1);
       assert.equal(forwarded.origin, target.origin.replace("http:", "https:"));
       assert.equal(forwarded.forwardedProto, "https");
-      assert.equal(forwarded.forwardedHost, undefined);
+      assert.equal(forwarded.forwardedHost, new URL(publicOrigin).host);
+      assert.equal(forwarded.forwardedPort, "443");
+      assert.equal(forwarded.forwarded, undefined);
     } finally {
       await registry.closeAll();
       await rm(socketDir, { force: true, recursive: true });
@@ -1417,7 +1421,7 @@ test("launch preview proxy blocks target cookie-profile auth cookies from leakin
   });
 });
 
-test("preview HTTP and WebSockets translate only their own origin to the loopback app", async () => {
+test("preview HTTP and WebSockets translate only their own origin and always forward the browser origin", async () => {
   for (const transport of ["http", "websocket"]) {
     const withServer = transport === "http" ? withTargetServer : withWebSocketTargetServer;
     await withServer(async (target) => {
@@ -1429,6 +1433,9 @@ test("preview HTTP and WebSockets translate only their own origin to the loopbac
         const origin = browserUrl.origin;
         for (const browserOrigin of [origin, `${origin}.foreign.invalid`, "https://foreign.invalid", "null", undefined]) {
           const headers = {
+            Forwarded: "host=spoofed.invalid;proto=https",
+            "X-Forwarded-Host": "spoofed.invalid",
+            "X-Forwarded-Port": "443",
             "X-Forwarded-Proto": "https",
             ...(browserOrigin === undefined ? {} : { Origin: browserOrigin })
           };
@@ -1445,7 +1452,10 @@ test("preview HTTP and WebSockets translate only their own origin to the loopbac
           }
           const forwarded = (target.requests || target.upgradeRequests).at(-1);
           assert.equal(forwarded.origin, browserOrigin === origin ? target.origin : browserOrigin);
-          assert.equal(forwarded.forwardedProto, browserOrigin === origin ? "http" : "https");
+          assert.equal(forwarded.forwardedProto, "http");
+          assert.equal(forwarded.forwardedHost, browserUrl.host);
+          assert.equal(forwarded.forwardedPort, browserUrl.port);
+          assert.equal(forwarded.forwarded, undefined);
         }
       } finally {
         await registry.closeAll();
@@ -1760,8 +1770,10 @@ async function withTargetServer(callback) {
     const requestRecord = {
       body: "",
       origin: request.headers.origin,
+      forwarded: request.headers.forwarded,
       forwardedProto: request.headers["x-forwarded-proto"],
       forwardedHost: request.headers["x-forwarded-host"],
+      forwardedPort: request.headers["x-forwarded-port"],
       cookie: request.headers.cookie || "",
       host: request.headers.host || "",
       ifModifiedSince: request.headers["if-modified-since"] || "",
@@ -1901,7 +1913,10 @@ async function withWebSocketTargetServer(callback) {
   server.on("upgrade", (request, socket, head) => {
     upgradeRequests.push({
       origin: request.headers.origin,
+      forwarded: request.headers.forwarded,
       forwardedProto: request.headers["x-forwarded-proto"],
+      forwardedHost: request.headers["x-forwarded-host"],
+      forwardedPort: request.headers["x-forwarded-port"],
       cookie: request.headers.cookie || "",
       url: request.url
     });

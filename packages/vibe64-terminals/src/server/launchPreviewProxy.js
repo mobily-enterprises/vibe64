@@ -113,6 +113,7 @@ function proxyRequestHeaders(headers = {}, targetUrl, {
   }
   nextHeaders["accept-encoding"] = "identity";
   nextHeaders.host = targetHost || targetUrl.host;
+  forwardedHeaders(nextHeaders, proxyOrigin);
   remapPreviewOrigin(nextHeaders, proxyOrigin);
   return nextHeaders;
 }
@@ -134,19 +135,33 @@ function proxyUpgradeHeaders(headers = {}, targetUrl, {
     delete nextHeaders.cookie;
   }
   nextHeaders.host = targetHost || targetUrl.host;
+  forwardedHeaders(nextHeaders, proxyOrigin);
   remapPreviewOrigin(nextHeaders, proxyOrigin);
   return nextHeaders;
+}
+
+function forwardedHeaders(headers, browserOrigin) {
+  // Host addresses the loopback app. Proxy-aware apps build absolute URLs and
+  // secure cookies from these, so only the proxy's own origin supplies them.
+  delete headers.forwarded;
+  delete headers["x-forwarded-host"];
+  delete headers["x-forwarded-proto"];
+  delete headers["x-forwarded-port"];
+  if (!browserOrigin) {
+    return;
+  }
+  const url = new URL(browserOrigin);
+  headers["x-forwarded-host"] = url.host;
+  headers["x-forwarded-proto"] = url.protocol.slice(0, -1);
+  headers["x-forwarded-port"] = url.port || (url.protocol === "https:" ? "443" : "80");
 }
 
 function remapPreviewOrigin(headers, proxyOrigin) {
   // Host addresses the loopback app. Translate only this preview's own browser
   // origin to match it; foreign and opaque origins must still fail app checks.
   if (proxyOrigin && headers.origin === proxyOrigin) {
-    // Retain the browser-facing scheme so proxy-aware apps keep secure cookies.
     const protocol = new URL(proxyOrigin).protocol;
     headers.origin = new URL(`${protocol}//${headers.host}`).origin;
-    headers["x-forwarded-proto"] = protocol.slice(0, -1);
-    delete headers["x-forwarded-host"];
   }
 }
 

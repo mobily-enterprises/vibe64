@@ -53,6 +53,12 @@ If the previewed application shows its own login screen, enter that application'
 credentials. Its login and realtime connection run through the Preview address.
 HTTPS previews retain the HTTPS scheme for applications that use it to set
 secure login cookies and redirects.
+Preview tells the application its browser-facing address through the standard
+forwarded headers. An application configured to trust its local proxy then
+builds absolute links, asset URLs and callbacks on the Preview address. If pages
+load without styles or links point to `127.0.0.1`, the application does not
+trust the proxy yet; ask the agent to configure trusted proxies for its
+framework.
 In the local editor, Preview keeps the editor's loopback hostname through login
 and page navigation, so opening the editor on `localhost` also works. If a tab
 shows an expired Preview access error after a restart, use **Reload preview**
