@@ -32,95 +32,39 @@ const systemWorldSessionPayload = {
   sourceReady: true
 };
 
-const machineCity = {
-  schema: "genesis.machine-city.v1",
-  schemaVersion: 1,
-  status: "current",
-  codeHash: "machine-hash",
-  stackComponents: ["nodejs"],
-  indexers: ["javascript"],
-  diagnostics: [],
-  districts: [{
-    id: "directory:.",
-    path: "",
-    title: "Project",
-    parentId: null
-  }, {
-    id: "directory:src",
-    path: "src",
-    title: "src",
-    parentId: "directory:."
+const architecture = {
+  subsystems: [{
+    id: "catalog",
+    root: "src/catalog",
+    title: "Catalog",
+    description: "Owns the book catalogue.",
+    fileIds: ["file:src/catalog/catalog.js"]
   }],
-  buildings: [{
-    id: "file:src/catalog.js",
-    path: "src/catalog.js",
-    title: "catalog.js",
-    districtId: "directory:src",
-    language: "javascript",
-    role: "source",
-    mode: 0o100644,
-    bytes: 72_000,
-    lines: 1_800,
-    hash: "catalog-hash",
-    extractors: ["javascript"],
-    functionIds: ["function:catalog:listBooks"],
-    publicFunctionCount: 1,
-    internalFunctionCount: 0
+  files: [{
+    id: "file:src/catalog/catalog.js",
+    path: "src/catalog/catalog.js",
+    subsystemId: "catalog",
+    sourceLines: 120
   }],
-  functions: [{
-    id: "function:catalog:listBooks",
-    name: "listBooks",
-    qualifiedName: "listBooks",
-    kind: "function",
-    visibility: "public",
-    container: null,
-    path: "src/catalog.js",
-    fileId: "file:src/catalog.js",
-    line: 12,
-    column: 1,
-    parameters: [],
-    async: false,
-    generator: false,
-    static: false,
-    role: "source",
-    language: "javascript",
-    extractor: "javascript"
-  }]
+  symbols: [],
+  relations: [],
+  program: {
+    status: "valid",
+    diagnostics: [],
+    modules: [{
+      id: "catalog/list-books",
+      subsystemId: "catalog",
+      title: "List books",
+      description: "Lists the current book catalogue.",
+      publicContract: "Returns every current book in catalogue order.",
+      path: "genesis/program/catalog/list-books.md",
+      mainSource: "src/catalog/catalog.js",
+      sources: ["src/catalog/catalog.js"]
+    }]
+  }
 };
 
-const programCity = {
-  schema: "genesis.program-city.v1",
-  schemaVersion: 1,
-  status: "valid",
-  programHash: "program-hash",
-  diagnostics: [],
-  districts: [{
-    id: "subsystem:catalog",
-    path: "catalog",
-    title: "catalog",
-    parentId: null
-  }],
-  buildings: [{
-    id: "operation:catalog/list-books",
-    name: "list-books",
-    title: "List books",
-    description: "Lists the current book catalogue.",
-    publicContract: "Returns every current book in catalogue order.",
-    implementationMap: "- `listBooks()` reads and returns the records.",
-    path: "genesis/program/catalog/list-books.md",
-    subsystem: "catalog",
-    districtId: "subsystem:catalog",
-    sources: ["src/catalog.js"],
-    sourceFileIds: ["file:src/catalog.js"]
-  }],
-  links: [{
-    kind: "implemented-by",
-    fromId: "operation:catalog/list-books",
-    toId: "file:src/catalog.js"
-  }]
-};
-
-test("Subsystems keeps Overview and a responsive Machine map without a Program switch", async ({ page }) => {
+test("Architecture shows the Engine map, zooms into a subsystem and its Program, and re-scans", async ({ page }) => {
   test.setTimeout(60_000);
   await mockDirectChatSession(page);
   await page.unroute(apiEndpointPattern("/vibe64/sessions"));
@@ -146,100 +90,56 @@ test("Subsystems keeps Overview and a responsive Machine map without a Program s
   await routeApiEndpoint(page, `${sessionApi}/status`, async (route) => {
     await fulfillJson(route, {
       cities: {
-        machine: {
-          available: true,
-          error: null,
-          path: ".genesis/machine-city.json",
-          schema: machineCity.schema,
-          schemaVersion: 1,
-          state: "ready",
-          status: machineCity.status
-        },
-        program: {
-          available: true,
-          error: null,
-          path: ".genesis/program-city.json",
-          schema: programCity.schema,
-          schemaVersion: 1,
-          state: "ready",
-          status: programCity.status
-        }
+        machine: { available: true, error: null, path: ".genesis/machine-city.json", state: "ready", status: "current" },
+        program: { available: true, error: null, path: ".genesis/program-city.json", state: "ready", status: "valid" }
       },
       ok: true,
       status: "ready"
     });
   });
-  await routeApiEndpoint(page, `${sessionApi}/cities/machine`, async (route) => {
-    await fulfillJson(route, {
-      city: machineCity,
-      kind: "machine",
-      ok: true,
-      path: ".genesis/machine-city.json"
-    });
+  await routeApiEndpoint(page, `${sessionApi}/refresh/status`, async (route) => {
+    await fulfillJson(route, { ok: true, refresh: null });
   });
-  await routeApiEndpoint(page, `${sessionApi}/cities/program`, async (route) => {
-    await fulfillJson(route, {
-      city: programCity,
-      kind: "program",
-      ok: true,
-      path: ".genesis/program-city.json"
-    });
-  });
-  await routeApiEndpoint(page, `${sessionApi}/subsystems`, async (route) => {
-    await fulfillJson(route, {
-      status: "valid",
-      subsystems: [{
-        id: "catalog", title: "Catalog", description: "Owns the book catalogue.",
-        program: [programCity.buildings[0].path], dataOwned: [], dataUsed: []
-      }]
-    });
+  await routeApiEndpoint(page, `${sessionApi}/architecture`, async (route) => {
+    await fulfillJson(route, { architecture, ok: true });
   });
   await routeApiEndpoint(page, `${sessionApi}/refresh`, async (route) => {
     refreshCount += 1;
-    await fulfillJson(route, {
-      changedFiles: [],
-      cities: {
-        machine: machineCity,
-        program: programCity
-      },
-      diagnostics: [],
-      ok: true,
-      status: "ready",
-      summary: "Indexed one function and one Program operation."
-    });
+    await fulfillJson(route, { changedFiles: [], diagnostics: [], ok: true, status: "ready" });
   });
 
   await page.goto(DEVELOPMENT_PATH);
   await expect(page.getByRole("region", { name: "Session chat" })).toBeVisible({ timeout: 15_000 });
   await page.getByRole("tab", { name: "Dashboard" }).click();
-  await page.getByRole("link", { exact: true, name: "Subsystems" }).click();
-  await expect(page.getByRole("button", { exact: true, name: "Overview" })).toBeVisible();
-  await page.getByRole("button", { exact: true, name: "Map" }).click();
+  await page.getByRole("link", { exact: true, name: "Architecture" }).click();
 
-  await expect(page.getByText(/Machine City · \d+/u)).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole("button", { exact: true, name: "Machine" })).toHaveCount(0);
-  await expect(page.getByRole("button", { exact: true, name: "Program" })).toHaveCount(0);
-  await expect(page.locator("canvas[aria-label^='Interactive 3D Genesis City']")).toBeVisible();
-  await expect(page.getByText("Moving around the City", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Got it" }).click();
-  await expect(page.getByRole("navigation", { name: "Machine City explorer" })).toBeVisible();
+  const sheet = page.getByRole("region", { name: "UI and Engine architecture" });
+  await expect(sheet.getByRole("heading", { level: 1, name: "Architecture" })).toBeVisible();
+  await expect(sheet.getByText("0 pages / screens / scenes · 1 subsystems")).toBeVisible({ timeout: 15_000 });
+  const subsystem = sheet.locator(".engine-subsystem").filter({ hasText: "Catalog" });
+  await expect(subsystem).toContainText("Owns the book catalogue.");
+  await expect(subsystem).toContainText("120 source lines");
 
-  await page.getByRole("button", { name: /catalog.*1 operation.*1 file/iu }).click();
-  await expect(page.getByRole("heading", { level: 2, name: "catalog" })).toBeVisible();
-  await expect(page.getByText("1 exact files", { exact: true })).toBeVisible();
+  await subsystem.click();
+  const zoomed = page.getByRole("article", { name: "Zoomed subsystem" });
+  const location = zoomed.getByRole("navigation", { name: "Architecture location" });
+  await expect(location.getByText("Catalog", { exact: true })).toBeVisible({ timeout: 15_000 });
+  const explanation = zoomed.getByRole("region", { name: "Subsystem explanation" });
+  await expect(explanation).toContainText("Owns the book catalogue.");
 
-  for (let visit = 0; visit < 3; visit += 1) {
-    await page.getByRole("button", { exact: true, name: "Overview" }).click();
-    await expect(page.getByRole("heading", { level: 2, name: "Catalog" })).toBeVisible();
-    await expect(page.locator("canvas[aria-label^='Interactive 3D Genesis City']")).toHaveCount(0);
-    await page.getByRole("button", { exact: true, name: "Map" }).click();
-    const canvas = page.locator("canvas[aria-label^='Interactive 3D Genesis City']");
-    await expect(canvas).toBeVisible();
-    const before = await canvas.screenshot();
-    await page.getByRole("button", { name: "Rotate view right", exact: true }).click();
-    await expect.poll(async () => before.equals(await canvas.screenshot())).toBe(false);
-  }
+  await zoomed.getByRole("region", { name: "Subsystem Programs" }).getByRole("button", { name: /List books/u }).click();
+  const program = zoomed.getByRole("region", { name: "Program explanation" });
+  await expect(program.getByRole("heading", { level: 2, name: "List books" })).toBeVisible();
+  await expect(program.getByRole("button", { name: /^Main source file src\/catalog\/catalog\.js/u })).toBeVisible();
+  await expect(location.getByText("List books", { exact: true })).toBeVisible();
 
-  await page.getByRole("button", { name: "Refresh Cities" }).click();
+  await location.getByRole("button", { name: "Back to previous view" }).first().click();
+  await expect(program).toBeHidden();
+  await expect(explanation).toBeVisible();
+  await location.getByRole("button", { exact: true, name: "Engine" }).click();
+  await expect(zoomed).toHaveCount(0);
+
+  await sheet.getByRole("button", { name: "Architecture options" }).click();
+  await page.getByRole("listitem").filter({ hasText: "Re-scan project" }).click();
   await expect.poll(() => refreshCount).toBe(1);
 });
