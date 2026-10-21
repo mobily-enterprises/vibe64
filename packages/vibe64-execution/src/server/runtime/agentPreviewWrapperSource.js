@@ -16,6 +16,8 @@ const AGENT_PREVIEW_USAGE = [
   "  vibe64-helper preview browser status",
   "  vibe64-helper preview browser reset",
   "  vibe64-helper preview browser close",
+  "  vibe64-helper preview identities",
+  "  vibe64-helper preview identities save < identities.json",
   "  vibe64-helper preview logs [--lines <count>] [--json]",
   "  vibe64-helper preview restart [--wait] [--json] [--timeout-ms <ms>]",
   "  vibe64-helper playwright [--target <target-id>] [--identity <default|guest|configured-name>] test [playwright test arguments]",
@@ -25,6 +27,8 @@ const AGENT_PREVIEW_USAGE = [
   "  status/ensure/restart/stop --json: ready, stoppedIntent, stale, outputTargetId, endpoints.browser {url, hostname, port}, currentPage {url, route, title, observedAt}, terminal {id, status, running, exitCode, command, createdAt}, defaultIdentity, identities [{name, type}], identityTypes, diagnostics {latest, log, directApplicationEndpoint}.",
   "  screenshot: outputPath, byteLength, sha256, capturedAt, url, title, width, height, luminance, darkPixelPercentage, domTextLength, domTextSummary.",
   "  browser eval: result (the code's JSON-safe return value), logs [{level, values}] from console, url (the page afterwards).",
+  "  identities: the project's Managed app identities [{name, type, value}] (first is the default) and the Stack's declared Preview identity types.",
+  "  identities save: replaces the whole ordered list with the JSON array on stdin (or {\"identities\": [...]}); each type must be declared. Save only names and accounts the person asked for or confirmed; never create app accounts or change roles for this. Then verify each with preview browser identity <name>.",
   "  browser storage-state: writes the identity's Playwright storage state to a new file at --output; the interactive browser keeps its identity.",
   "",
   "Screenshot commands emit JSON metadata for a uniquely named, immutable PNG.",
@@ -247,8 +251,9 @@ async function streamingControlRequest(requestPath, input = {}) {
   });
 }
 
-async function remoteCommand(args = []) {
+async function remoteCommand(args = [], extra = {}) {
   return controlRequest("/agent-preview-command/run", {
+    ...extra,
     args,
     cwd: process.cwd()
   });
@@ -566,7 +571,9 @@ try {
     printJson(await interactiveCommand("screenshot", { outputPath }));
     process.exit(0);
   }
-  const payload = await remoteCommand(args);
+  const payload = args[0] === "identities" && args[1] === "save"
+    ? await remoteCommand(args, { stdin: await readStdin() })
+    : await remoteCommand(args);
   writePayload(payload);
   process.exit(payloadExitCode(payload));
 } catch (error) {

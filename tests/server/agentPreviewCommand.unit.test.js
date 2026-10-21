@@ -454,8 +454,85 @@ test("agent preview help works without the control socket and documents every br
   const status = await command.run({ args: ["status"], sessionId: "preview-help-session" });
   assert.match(
     status.stdout,
-    /Managed app identities: none configured - the person configures them in Dashboard > App access \(or asks Colleague\); see vibe64-helper spec preview-identities/u
+    /Managed app identities: none configured - save the accounts the person names or confirms with vibe64-helper preview identities save; see vibe64-helper spec preview-identities/u
   );
+});
+
+test("agent preview identities read and save only the session's bound project through its save path", async () => {
+  const calls = [];
+  let context = "";
+  let identityTypes = ["email"];
+  const command = createAgentPreviewCommandService({
+    projectService: {
+      async runInProjectContext(slug, operation) {
+        context = slug;
+        try {
+          return await operation();
+        } finally {
+          context = "";
+        }
+      },
+      async readPreviewApplicationIdentities(input) {
+        calls.push(["read", context, input]);
+        return { ok: true, identities: [{ name: "admin", type: "email", value: "admin@example.com" }] };
+      },
+      async savePreviewApplicationIdentities(input) {
+        calls.push(["save", context, input]);
+        return { ok: true, identities: input.identities };
+      }
+    },
+    launchTarget: {
+      async launchStatus(sessionId) {
+        calls.push(["status", context, sessionId]);
+        return { outputTargets: [{ id: "dev", identityTypes }, { id: "build" }] };
+      }
+    }
+  });
+  command.registerBrowserWorker("session-a", { project: { slug: "alpha" }, socketPath: "/tmp/alpha.sock" });
+
+  const listed = await command.run({ args: ["identities"], sessionId: "session-a" });
+  assert.equal(listed.ok, true);
+  assert.deepEqual(JSON.parse(listed.stdout), {
+    identities: [{ name: "admin", type: "email", value: "admin@example.com" }],
+    identityTypes: ["email"]
+  });
+
+  const requested = [
+    { name: "admin", type: "email", value: "admin@nf-dam.local" },
+    { name: "utente", type: "email", value: "utente@nf-dam.local" }
+  ];
+  const saved = await command.run({
+    args: ["identities", "save"],
+    projectSlug: "beta",
+    sourceRoot: "/elsewhere",
+    sessionId: "session-a",
+    stdin: JSON.stringify(requested)
+  });
+  assert.equal(saved.ok, true);
+  assert.deepEqual(JSON.parse(saved.stdout).identities, requested);
+  assert.deepEqual(calls.slice(-2), [
+    ["status", "alpha", "session-a"],
+    ["save", "alpha", { identities: requested, sessionId: "session-a" }]
+  ]);
+
+  calls.length = 0;
+  const undeclared = await command.run({
+    args: ["identities", "save"],
+    sessionId: "session-a",
+    stdin: JSON.stringify([{ name: "admin", type: "login", value: "admin" }])
+  });
+  assert.equal(undeclared.code, "vibe64_agent_preview_identities_type_undeclared");
+  assert.match(undeclared.stderr, /declares in #### Preview identity: email/u);
+  identityTypes = [];
+  const unsupported = await command.run({ args: ["identities", "save"], sessionId: "session-a", stdin: JSON.stringify(requested) });
+  assert.match(unsupported.stderr, /declares no #### Preview identity types/u);
+  const invalid = await command.run({ args: ["identities", "save"], sessionId: "session-a", stdin: "admin" });
+  assert.equal(invalid.code, "vibe64_agent_preview_identities_input_invalid");
+  assert.equal(calls.some(([kind]) => kind === "save"), false);
+
+  const unbound = await command.run({ args: ["identities", "save"], sessionId: "session-b", stdin: "[]" });
+  assert.equal(unbound.code, "vibe64_agent_preview_identities_project_required");
+  assert.equal(calls.some(([, , input]) => input === "session-b"), false);
 });
 
 test("agent preview stop uses the session lifecycle and reports saved intent", async () => {
@@ -1039,6 +1116,14 @@ test("agent preview wrapper forwards command input over the private session sock
       "--json"
     ]);
     assert.equal(receivedInput.sessionId, "wrapper-session");
+
+    const identities = '[{"name":"admin","type":"email","value":"admin@example.com"}]';
+    await execWithInput(prepared.hostWrapperPath, ["identities", "save"], {
+      env: { ...process.env, ...prepared.env },
+      input: identities
+    });
+    assert.deepEqual(receivedInput.args, ["identities", "save"]);
+    assert.equal(receivedInput.stdin, identities);
   } finally {
     await rm(root, {
       force: true,

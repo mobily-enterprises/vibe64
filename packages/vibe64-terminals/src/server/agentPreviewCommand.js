@@ -399,7 +399,7 @@ function previewSummaryLines(summary = {}) {
     summary.terminal?.id ? `Terminal: ${summary.terminal.id} (${summary.terminal.status || "unknown"})` : "",
     summary.identities?.length
       ? `Managed app identities: ${summary.identities.map((identity) => identity.name).join(", ")}`
-      : "Managed app identities: none configured - the person configures them in Dashboard > App access (or asks Colleague); see vibe64-helper spec preview-identities",
+      : "Managed app identities: none configured - save the accounts the person names or confirms with vibe64-helper preview identities save; see vibe64-helper spec preview-identities",
     `Stale: ${summary.stale ? "yes" : "no"}`
   ].filter(Boolean);
 }
@@ -829,6 +829,52 @@ function createAgentPreviewCommandService({
     };
   }
 
+  // Managed app identities belong to the project; the session's bound project
+  // and source scope every read and save, never a caller-supplied target.
+  async function previewIdentities(sessionId = "", args = [], stdin = "") {
+    const words = (Array.isArray(args) ? args : []).map(normalizeText).filter(Boolean);
+    const subcommand = words[1] || "";
+    if (words[0] !== "identities" || words.length > (subcommand === "save" ? 2 : 1) || (subcommand && subcommand !== "save")) {
+      return responseError("Usage: vibe64-helper preview identities [save < identities.json]", "vibe64_agent_preview_identities_usage", { exitCode: 64 });
+    }
+    const project = [...(browserWorkers.get(sessionId)?.values() || [])][0]?.project;
+    const projectSlug = normalizeText(project?.slug || project?.name);
+    if (!projectSlug) {
+      return responseError("Managed app identities are not bound to this session's project. Reconnect the assistant.", "vibe64_agent_preview_identities_project_required");
+    }
+    return projectService.runInProjectContext(projectSlug, async () => {
+      const status = await launchTarget.launchStatus(sessionId);
+      if (status?.ok === false) return status;
+      const identityTypes = [...new Set((status.outputTargets || []).flatMap((target) => target.identityTypes || []))];
+      let result;
+      if (subcommand === "save") {
+        let identities = null;
+        try {
+          const value = JSON.parse(String(stdin || ""));
+          identities = Array.isArray(value) ? value : value?.identities;
+        } catch {}
+        if (!Array.isArray(identities)) {
+          return responseError("Provide the complete ordered identity list as a JSON array on stdin.", "vibe64_agent_preview_identities_input_invalid", { exitCode: 64 });
+        }
+        const undeclared = identities.filter((identity) => !identityTypes.includes(normalizeText(identity?.type)));
+        if (undeclared.length) {
+          return responseError(identityTypes.length
+            ? `Identity types must be ones this project's Stack declares in #### Preview identity: ${identityTypes.join(", ")}.`
+            : "This project's Stack declares no #### Preview identity types; add the application's Preview identity command first (vibe64-helper spec outputs).",
+          "vibe64_agent_preview_identities_type_undeclared");
+        }
+        result = await projectService.savePreviewApplicationIdentities({ identities, sessionId });
+      } else {
+        result = await projectService.readPreviewApplicationIdentities({ sessionId });
+      }
+      return result?.ok === false ? result : {
+        exitCode: 0,
+        ok: true,
+        stdout: `${JSON.stringify({ identities: result.identities, identityTypes }, null, 2)}\n`
+      };
+    });
+  }
+
   function statusSummary(status = {}, sessionId = "") {
     const uiState = typeof readSessionUiState === "function"
       ? readSessionUiState(sessionId)
@@ -973,6 +1019,12 @@ function createAgentPreviewCommandService({
       return finish({ ok: true, exitCode: 0, stdout: parsed.json
         ? `${JSON.stringify(summary, null, 2)}\n`
         : `${previewSummaryLines(summary).join("\n")}\n` });
+    }
+    if (parsed.command === "identities") {
+      const result = await previewIdentities(sessionId, input.args, input.stdin);
+      return finish(result?.ok === false
+        ? { ...result, exitCode: result.exitCode || 1, stderr: `${result.error || "Managed app identities failed."}\n` }
+        : result);
     }
     if (!["ensure", "restart"].includes(parsed.command)) {
       return finish(responseError(`Unknown Vibe64 preview command: ${parsed.command}`, "vibe64_agent_preview_command_unknown", {

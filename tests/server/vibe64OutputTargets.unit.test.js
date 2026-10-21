@@ -17,6 +17,7 @@ import {
   inspectVibe64WorkspaceSetupForContext,
   listVibe64OutputTargets,
   vibe64OutputCommand,
+  vibe64OutputTargetView,
   vibe64RuntimePacks,
   vibe64WebOutputDescriptor
 } from "../../packages/vibe64-terminals/src/server/vibe64OutputTargets.js";
@@ -231,6 +232,9 @@ test("web output descriptors retain web-only identity and readiness details", ()
     ...previewIdentity,
     runtimes: ["node26"]
   });
+  // Agents validate managed app identity types against these declared types.
+  assert.deepEqual(vibe64OutputTargetView(webOutputTarget({ previewIdentity })).identityTypes, ["user"]);
+  assert.equal(Object.hasOwn(vibe64OutputTargetView(webOutputTarget()), "identityTypes"), false);
   assert.deepEqual(descriptor.readiness, {
     kind: "http",
     method: "GET",

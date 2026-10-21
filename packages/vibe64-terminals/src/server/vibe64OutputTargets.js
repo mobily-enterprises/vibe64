@@ -88,6 +88,9 @@ function vibe64OutputTargetView(target = {}) {
       name: String(download?.name || download?.id || "download").trim()
     })).filter(({ id }) => Boolean(id)),
     id: String(target.id || "").trim(),
+    ...(target.previewIdentity?.identityTypes?.length
+      ? { identityTypes: [...target.previewIdentity.identityTypes] }
+      : {}),
     label: String(target.label || target.id || "").trim(),
     mode: String(target.mode || "").trim(),
     ...(target.dataMode ? { dataMode: target.dataMode } : {}),
