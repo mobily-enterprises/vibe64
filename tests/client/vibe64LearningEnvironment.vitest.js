@@ -76,9 +76,9 @@ describe("useVibe64Learning controller", () => {
     expect(learning.lesson.value.steps.every(step => !Object.hasOwn(step.check || {}, "answer"))).toBe(true);
   });
 
-  it("shows a step passed in an earlier attempt of the same lesson content as passed", async () => {
-    // A continued or restarted lesson has no results of its own yet; lesson.read
-    // names the steps already passed in any attempt of this exact lesson content.
+  it("shows a step lesson.read names as passed as passed", async () => {
+    // lesson.read names the steps this attempt has passed, also when the
+    // results page does not carry them.
     const { learning } = controller({ reads: () => lessonResult({ results: [], passedStepIds: ["quiz"] }) });
     learning.setViewer("member");
     await learning.show({ attemptId: ATTEMPT });
@@ -90,7 +90,7 @@ describe("useVibe64Learning controller", () => {
     const { learning } = controller({ reads: () => lessonResult({ results: [], passedStepIds: ["quiz"] }) });
     learning.setViewer("member");
     await learning.show({ attemptId: ATTEMPT });
-    expect(learning.stepId, "read is optional and quiz passed in an earlier attempt").toBe("preview");
+    expect(learning.stepId, "read is optional and quiz is passed").toBe("preview");
   });
 
   it("opens a lesson with nothing passed yet at its first step, even when that step is optional", async () => {
@@ -847,7 +847,7 @@ describe("Learning reader", () => {
     } finally { view.app.unmount(); }
   });
 
-  it("leaves a self step's instruction to the lesson and says when an earlier attempt already passed it", async () => {
+  it("leaves a self step's instruction to the lesson and says when it is already passed", async () => {
     const { learning } = controller();
     learning.setViewer("member");
     await learning.show({ attemptId: ATTEMPT, stepId: "tick" });

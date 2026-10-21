@@ -92,11 +92,11 @@ can show the real place in the application it talks about, ringing the control
 with a caption. Each step is checked in one of four ways: an automatic check of
 the learner's own work in their practice project, a multiple-choice question
 compared on the server, the learner's own Done, or no check for reading. A lesson
-is complete when every required step has passed, in any attempt of the same
-lesson content.
-The learner's own result that completes it opens a Lesson finished screen that
-ends the lesson (results kept) and offers archiving, deleting or keeping the
-practice project, the next lesson, the courses, or reading the lesson again.
+is complete when every required step has passed in the attempt in progress; a
+restart or redo starts again with fresh results.
+The learner's own result that completes it opens a Lesson finished screen; Finish
+archives the attempt (its record, practice project and teacher conversation) and
+offers the next lesson or the courses.
 Colleague is the teacher. Teach me minimises Learning and opens Colleague,
 whose header button opens the current step in a dialog, and Colleague explains the step in its own
 words, by text or voice, opens and highlights real screens and replays diagrams.

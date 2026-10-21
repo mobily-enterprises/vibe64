@@ -147,9 +147,8 @@ as instructions, so they cannot change its teaching or judging rules.
 
 The left column (top row on a phone) lists the steps in order. Each shows its
 title and **Passed**, **Not yet passed**, **Not checked yet** or **Optional**.
-Select a step to read it. A step you passed in an earlier attempt of the same
-lesson (for example before you started it again) shows **Passed** and still
-counts. When every required step has passed the list says
+Select a step to read it. Only this attempt's results count: after **Restart**
+or a redo every step starts again as not passed. When every required step has passed the list says
 **Every required step is passed. This lesson is complete.** with a **Lesson
 finished** button (on a phone one short row under the step circles: **✓ Lesson
 complete**, **Lesson finished** and **Practice**, which opens the practice

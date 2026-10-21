@@ -170,7 +170,8 @@ read it opens Learn's place in Learn, else the started project, found by
 following the server's `/app` redirect with a `HEAD` fetch, with an error notice
 and **Try again**. The page is not reloaded, so the overlay keeps its place. The
 local server redirects `/` there too. `/app/learning` is the project page
-(`project/[slug].vue`) with no slug: **No project selected** in the chat column
+(`project/[slug].vue`) with no slug, rendering `Vibe64NoProjectPane` (Online's
+project shell renders the same pane and step bar): **No project selected** in the chat column
 and both panes, Preview/Dashboard switching in place (`useVibe64AppPage`'s
 empty pane, kept in the `pane` query), the Dashboard's section list without
 routing (`Vibe64DashboardShell` `no-project`, selection kept in the `section`

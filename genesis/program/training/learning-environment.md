@@ -188,7 +188,7 @@ step IDs as separate sources, so a realtime lesson reread does not remount a
 playing diagram or move the scroll), a choice question (**Check answer**; a passed question shows the options of its
 latest passing result's `evidence.selected`, so another browser shows them too),
 **Done** for a self-check (no instruction line of its own: the step text says
-when; a step already passed in any attempt of the lesson says so, as a passed
+when; a step this attempt already passed says so, as a passed
 question does), **Check now** for an automatic check (a code step, one declaring
 `check.files`, says saving does not check it; a not-passed result's reason, or
 the server's `alreadyPassed` answer for a step already passed, is shown under
