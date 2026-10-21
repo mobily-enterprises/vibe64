@@ -943,11 +943,13 @@ function useVibe64TemporaryAi({
       else if (task && payload.assistantRoutingRequest) {
         const route = payload.assistantRoutingRequest;
         // A routed request that is still being delivered or run becomes this
-        // view's current request unless its own Send awaits acceptance. Any
-        // other notice only asks for the saved state.
+        // view's current request. Any other notice only asks for the saved state.
+        // Only a Send this view is still delivering keeps its own id; a failed
+        // or another view's pending id never fences the routed request.
         const current = route.status === "working" || assistantRoutingStatusIsPending(route);
+        const sending = task.pendingMessageId && task.delivery?.find(task.pendingMessageId)?.status === "pending";
         updateTask(task.id, { routingMetadata: { ...task.routingMetadata, assistant_routing_request: JSON.stringify(route) },
-          ...(current ? { busy: true, messageId: task.pendingMessageId || route.messageId || task.messageId } : {}) });
+          ...(current ? { busy: true, messageId: (sending && task.pendingMessageId) || route.messageId || task.messageId } : {}) });
         void task.binding.runtime.value.reload();
       }
     }

@@ -130,7 +130,9 @@ function createSessionConversations({
   prepareSelection = async () => {},
   publishSessionChanged = async () => {},
   publishConversation = async () => {},
-  temporarySaveDelayMs = 1_000
+  temporarySaveDelayMs = 1_000,
+  temporaryCompletionAttempts = 6,
+  temporaryCompletionRetryMs = 500
 }) {
   async function recordFor(ctx, conversationId) {
     const record = await ctx.runtime.store.readSessionConversation(ctx.session.sessionId, conversationId);
@@ -893,16 +895,28 @@ function createSessionConversations({
     },
 
     async afterTemporaryTurn(sessionId, payload, options = {}) {
-      const record = await write(sessionId, options, async (ctx) => {
-        const conversations = await ctx.runtime.store.listSessionConversations(sessionId);
-        const completed = conversations.find((item) => item.providerConversationId === payload.conversationId && item.state !== "closing");
-        if (!completed) return null;
-        // Persist the completed reply before review checks for unanswered questions.
-        const observed = await snapshot(ctx, completed);
-        if (observed.readError) throw new Error(observed.error);
-        return completed;
-      });
-      if (record?.conversationId) await routing.afterTurn(sessionId, { payload: { agentRun: payload.temporaryRun } }, { ...options, conversationId: record.conversationId });
+      // The idle completion is the last server work for a finished turn; no
+      // browser event follows it. A busy lease therefore retries both steps
+      // instead of leaving the saved turn in progress, and finally fails loudly.
+      for (let attempt = 1; ; attempt += 1) {
+        try {
+          const record = await write(sessionId, options, async (ctx) => {
+            const conversations = await ctx.runtime.store.listSessionConversations(sessionId);
+            const completed = conversations.find((item) => item.providerConversationId === payload.conversationId && item.state !== "closing");
+            if (!completed) return null;
+            // Persist the completed reply before review checks for unanswered questions.
+            const observed = await snapshot(ctx, completed);
+            if (observed.readError) throw new Error(observed.error);
+            return completed;
+          });
+          if (record?.code === "vibe64_agent_write_mode_busy") throw Object.assign(new Error(record.error), record);
+          if (record?.conversationId) await routing.afterTurn(sessionId, { payload: { agentRun: payload.temporaryRun } }, { ...options, conversationId: record.conversationId });
+          return;
+        } catch (error) {
+          if (error?.code !== "vibe64_agent_write_mode_busy" || attempt >= temporaryCompletionAttempts) throw error;
+        }
+        await new Promise(resolve => setTimeout(resolve, temporaryCompletionRetryMs));
+      }
     }
   };
   return service;

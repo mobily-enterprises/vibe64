@@ -355,6 +355,28 @@ describe("temporary AI mounted lifetime", () => {
       expect(temporary.activeTask.value).toMatchObject({ busy: false, status: "completed", messageId: "request-2" });
     });
 
+    it("finishes another viewer's request in a viewer whose own earlier Send failed", async () => {
+      const { socket, temporary, task } = mountTemporaryAi();
+      http.request.mockResolvedValueOnce({ ok: true, conversationId: "conversation-1" })
+        .mockResolvedValueOnce({ ok: false, error: "Another assistant operation is starting." });
+      await expect(temporary.send(task.id)).resolves.toBe(false);
+      expect(temporary.activeTask.value).toMatchObject({ busy: false, status: "failed" });
+      expect(temporary.activeTask.value.pendingMessageId).not.toBe("");
+      const conversationId = createdId;
+      const routed = route => socket.emit("vibe64.session.changed", { ...ROUTE, conversationId, assistantRoutingRequest: route });
+
+      let server = { conversationId, status: "inProgress", runId: "turn-2", messageId: "request-2", messages: [request2] };
+      serve(() => server, () => live(server));
+      routed({ status: "working", delivery: "accepted", messageId: "request-2" });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(temporary.activeTask.value).toMatchObject({ busy: true, messageId: "request-2" });
+
+      server = { ...server, status: "completed", messages: [request2, reply2] };
+      routed({ status: "complete", delivery: "accepted", messageId: "request-2" });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(temporary.activeTask.value).toMatchObject({ busy: false, status: "completed", messageId: "request-2" });
+    });
+
     it("does not let a late working notice outlast the saved completion", async () => {
       let server = { conversationId: "conversation-1", status: "completed", runId: "turn-1", messageId: "request-1", messages: [request1, reply1] };
       serve(() => deferred(server), () => deferred(server));

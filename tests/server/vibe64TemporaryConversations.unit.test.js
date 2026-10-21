@@ -377,6 +377,47 @@ test("temporary direct Junior ignores an unusable working plan and persists no p
   });
 });
 
+test("the idle completion retries a busy lease instead of leaving the saved turn in progress", { timeout: 5000 }, async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await conversationFixture(root);
+    const service = f.restart({ temporaryCompletionAttempts: 5, temporaryCompletionRetryMs: 200 });
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
+    await service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "question", message: "Explain this" });
+    f.native.status = "completed";
+    const idle = { conversationId: "native", temporaryRun: { state: "completed", providerTurnId: "turn-1" } };
+    const hold = () => {
+      const entered = Promise.withResolvers();
+      const release = Promise.withResolvers();
+      const holding = f.store.runSessionExclusive("one", "agent-write-mode", async () => {
+        entered.resolve();
+        await release.promise;
+      }, { operation: "prepare-agent-session" });
+      return { entered: entered.promise, release: () => { release.resolve(); return holding; } };
+    };
+    const saved = async () => {
+      const record = await f.store.readSessionConversation("one", "chat");
+      return [record.status, JSON.parse(record.routingMetadata.assistant_routing_request).status];
+    };
+
+    const brief = hold();
+    await brief.entered;
+    const completing = service.afterTemporaryTurn("one", idle, { lockWaitMs: 0 });
+    await new Promise(resolve => setTimeout(resolve, 30));
+    assert.notDeepEqual(await saved(), ["completed", "complete"]);
+    await brief.release();
+    await completing;
+    assert.deepEqual(await saved(), ["completed", "complete"]);
+
+    const held = hold();
+    await held.entered;
+    try {
+      await assert.rejects(service.afterTemporaryTurn("one", idle, { lockWaitMs: 0 }), { code: "vibe64_agent_write_mode_busy" });
+    } finally {
+      await held.release();
+    }
+  });
+});
+
 test("temporary conversation reads page backwards by stable message identity without touching Main", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await conversationFixture(root);
