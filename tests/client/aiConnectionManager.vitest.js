@@ -23,12 +23,12 @@ vi.mock("../../packages/vibe64-accounts/src/client/onboarding/aiOnboardingEvents
   aiOnboardingAvailable: ref(true),
   requestVibe64AiOnboarding: (...args) => mocks.requestOnboarding(...args)
 }));
-import AiConnectionsSettings from "../../packages/vibe64-accounts/src/client/studio/AiConnectionsSettings.vue";
+import { useAiConnectionManager } from "../../packages/vibe64-accounts/src/client/composables/useAiConnectionManager.js";
 
 let app;
 function mount() {
   const renderer = createRenderer({ createComment: text => ({ text }), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
-  app = renderer.createApp({ ...AiConnectionsSettings, render: () => null }, { isOwner: true });
+  app = renderer.createApp({ setup: () => useAiConnectionManager({ isOwner: true }), render: () => null });
   app.provide(ssrContextKey, { modules: new Set() });
   app.mount({});
   return app._instance.setupState;

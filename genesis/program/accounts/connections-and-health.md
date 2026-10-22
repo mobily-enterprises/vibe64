@@ -61,6 +61,7 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-accounts/src/server/assistantProviderPolicy.js`
 - `packages/vibe64-accounts/src/server/zaiConnectionVerifier.js`
 - `packages/vibe64-accounts/src/client/studio/AiConnectionsSettings.vue`
+- `packages/vibe64-accounts/src/client/composables/useAiConnectionManager.js`
 - `packages/vibe64-accounts/src/client/composables/useAiConnections.js`
 
 - `packages/vibe64-core/src/shared/curatedCodexProviders.js`
