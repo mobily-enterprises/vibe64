@@ -37,12 +37,13 @@ unknown delivery or claim a failed request was delivered.
 
 ## When a turn finishes while you send
 
-Sending a new instruction while Claude works uses its targeted **Send now**
-control when supported by the installed Claude version. Background agents and
-background tasks continue; foreground work may be interrupted to read your
-instruction. This also applies to **Set goal** and **Resume goal** during active
-work. **Stop** keeps its cancellation behavior. Older Claude versions retain
-their previous interruption behavior. These controls work on desktop and mobile.
+Sending a new instruction while Claude works never interrupts it. Claude queues
+the message, lets the running command finish (for example a long deploy or test
+run), then reads your instruction before continuing. Background agents and
+background tasks also continue. A short question such as "status?" therefore
+gets its answer once the current command completes, not immediately. This also
+applies to **Set goal** and **Resume goal** during active work. Use **Stop** when
+you want to cancel the current work. These controls work on desktop and mobile.
 
 If you send a steering message just as Claude or Codex finishes, the queue can
 submit those same words and attachments as the next ordinary request. This happens

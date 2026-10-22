@@ -47,8 +47,9 @@ so other viewers and a later reopen see them with their actual timing.
 The same controls remain available in narrow layouts. Goals are not offered in
 Temporary chat.
 
-Steering can interrupt an unfinished reply. Any partial reply remains attached
-to its original request; the follow-up response belongs to the new request.
+Guidance sent to a working Claude chat does not interrupt it: Claude reads the
+guidance after its current command finishes. Output already shown remains
+attached to its original request; the follow-up response belongs to the new request.
 Reloading the chat preserves that relationship and the recorded AI labels.
 After **Stop** confirms a Claude reply has stopped, text already shown remains
 under **Show all … progress updates** on its original request. It is an

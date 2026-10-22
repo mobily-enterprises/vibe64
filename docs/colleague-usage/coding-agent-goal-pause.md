@@ -41,11 +41,11 @@ available during that wait. Use **Resume goal** when you want work to continue.
 You can choose **Set goal** and **Start goal** while Claude is working. The goal
 uses the same conversation's steering path, and **Goal** shows it after Claude
 acknowledges the command. You do not need to stop the current work first.
-On Claude versions supporting targeted **Send now**, setting or resuming a goal
-while work is active preserves its background agents and background tasks.
-Foreground work may be interrupted so Claude can read the new instruction.
-Older Claude versions retain their previous interruption behavior. **Stop** and
-**Pause goal** still stop work; use those controls when cancellation is intended.
+Setting or resuming a goal while Claude works never interrupts that work: a
+running command (for example a long deploy), background agents and background
+tasks all continue. Claude reads the goal after its current tool call finishes.
+**Stop** and **Pause goal** still stop work; use those controls when cancellation
+is intended.
 When a background task finishes, Claude stays working while it reads and handles
 the result. Its goal controls remain available during that follow-up, including
 a requested Pause after the worker's safe checkpoint. The worker finishing alone
