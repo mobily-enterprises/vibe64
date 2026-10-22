@@ -14,7 +14,11 @@ Stack defaults are editable fallbacks: saving one creates a project override,
 and removing that override reveals the current declared default again. Defaults
 are user-owned in Env; platform-injected runtime values remain system-owned and
 non-editable, even when Stack declares the same name. Reserved Vibe64-prefixed
-names require a Stack declaration before a user can supply them.
+names require a Stack declaration before a user can supply them. When a Stack
+resource, such as a starter's database, is not yet configured, its bindings that
+have a default keep their default row; only the values without one, for example
+`DB_PASSWORD`, appear as empty rows to fill, and the setup message lists them
+as missing.
 
 Saved development values are available to the coding agent, its managed browser,
 and managed Playwright commands. For an authorized external site, tell the coding

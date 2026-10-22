@@ -69,7 +69,10 @@ work. Public applications and non-web projects do not need preview accounts.
    product you want. Preparation adds it to this session; use the session's
    **Save** control to keep the work in the project. A failed application reports
    its error and preserves existing work.
-3. Alternatively, choose **Start through conversation** to open Temporary AI for
+3. You can also describe the app directly in the session's main chat. In an
+   empty folder that was never set up, the coding agent first initializes Genesis,
+   then proposes a Blueprint and the matching Stack components for your answer.
+4. Alternatively, choose **Start through conversation** to open Temporary AI for
    project creation. Discuss what you want, who uses it and its first useful
    outcome before choosing technology. If no starters are configured, this
    conversation route is still offered when a coding assistant is available.
