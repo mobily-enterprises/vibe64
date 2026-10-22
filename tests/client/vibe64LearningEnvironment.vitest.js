@@ -1632,6 +1632,44 @@ describe("Lesson step bar", () => {
     } finally { app.unmount(); }
   });
 
+  it("checks a review step's work with the learner's AI and shows its verdict, hint and saved pass", async () => {
+    let passed = false;
+    const reads = () => {
+      const value = lessonResult(passed ? { results: [{ stepId: "tick", outcome: "passed", kind: "review",
+        review: { comment: "Clean change." } }] } : {});
+      value.lesson.steps[3] = { ...value.lesson.steps[3], check: { kind: "review", rubric: "The heading is green.", evidence: ["changes"] },
+        beats: [{ kind: "do", target: "send-message", prompt: "Make it green", text: "Ask it: \"Make it green\"" },
+          { kind: "check", target: "review", text: "" }] };
+      return value;
+    };
+    const posts = vi.fn(async url => url === VIBE64_LEARNING_ROUTES.stepReview(ATTEMPT) ? (passed
+      ? { ok: true, stepId: "tick", outcome: "passed", recorded: true, review: { comment: "Clean change." } }
+      : { ok: true, stepId: "tick", outcome: "not-yet-passed", recorded: true, review: { comment: "The box lost its border.", hint: "Keep the border." } })
+      : { ok: true });
+    const { learning, calls } = controller({ reads, posts });
+    learning.setViewer("member");
+    await flush();
+    const { root, app } = mountStepBar(learning);
+    try {
+      learning.selectStep("tick", 1);
+      await flush();
+      expect(textOf(byTest(root, "learning-step-bar-beat")), "a review check's line is the rubric").toBe("The heading is green.");
+      expect(textOf(byTest(root, "learning-step-bar-verdict")).trim()).toBe("Check my work");
+      await byTest(root, "learning-step-bar-verdict").props.onClick();
+      await flush();
+      expect(calls.filter(call => call.method === "POST").at(-1)).toMatchObject({ url: VIBE64_LEARNING_ROUTES.stepReview(ATTEMPT), body: { stepId: "tick" } });
+      expect(textOf(byTest(root, "learning-step-bar-note"))).toBe("Not yet: The box lost its border. Hint: Keep the border.");
+      expect(textOf(byTest(root, "learning-step-bar-verdict")).trim()).toBe("Check again");
+      passed = true;
+      await byTest(root, "learning-step-bar-verdict").props.onClick();
+      await flush();
+      expect(textOf(byTest(root, "learning-step-bar-beat"))).toBe("Passed ✓ Clean change.");
+      expect(byTest(root, "learning-step-bar-verdict"), "a pass is final").toBeUndefined();
+      expect(LearningLib.reviewNote({ outcome: "not-yet-passed", recorded: false, reason: "No changes yet. Change your practice project first, then check your work again." }))
+        .toBe("No changes yet. Change your practice project first, then check your work again.");
+    } finally { app.unmount(); }
+  });
+
   it("opens Colleague for an open request without sending anything", async () => {
     const learning = { colleagueRequest: Vue.shallowRef(null), consumeColleagueRequest(id) {
       const value = this.colleagueRequest.value?.id === id ? this.colleagueRequest.value : null;

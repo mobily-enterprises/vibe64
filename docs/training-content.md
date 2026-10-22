@@ -171,8 +171,10 @@ One beat per line: `<show|do|check> <target>[ <path>]: <text>`.
   `agent-finished`, `app-pressed`, `colleague-minimised` and `learning` (which
   it only points at). A `check done` step whose do beats were
   all detected is recorded done without a press.
-- `check <auto|done>` is the step's own check (`auto` for `check.kind:"auto"`,
-  `done` for `self`): at most one, and the last line.
+- `check <auto|done>: <text>` is the step's own check (`auto` for
+  `check.kind:"auto"`, `done` for `self`): at most one, and the last line.
+  `check review` (for `check.kind:"review"`) takes no text: the bar shows the
+  step's `check.rubric` from `lesson.json`, its single source.
 - Places: `preview`, `dashboard`, `database-erd`, `database-data`, `files`,
   `changes`, `git-log`, `session-info`, `architecture`, `learning` (the **L**
   button), `lesson` (the Lesson tab), `chat` (the coding chat), `colleague`,

@@ -23,6 +23,8 @@ const VIBE64_LEARNING_ROUTES = Object.freeze({
   stepCheck: attemptId => attemptPath(attemptId, "/steps/check"),
   stepAnswer: attemptId => attemptPath(attemptId, "/steps/answer"),
   stepDone: attemptId => attemptPath(attemptId, "/steps/done"),
+  // check.kind "review": an AI review of the learner's work, on their own AI.
+  stepReview: attemptId => attemptPath(attemptId, "/steps/review"),
   readerSave: attemptId => attemptPath(attemptId, "/reader"),
   visual: (attemptId, visualId) => attemptPath(attemptId, `/visuals/${encodeURIComponent(visualId)}`),
   // The lesson in progress: restart (archive it, start again), finish (archive a complete lesson), delete.
@@ -173,6 +175,19 @@ function modeRedirect({ mode = null, slug = "", path = "" } = {}) {
   if (atLearnPage) return Object.freeze({ path: DEVELOP_HOME_PATH, note: "" });
   if (projectSlug && projectSlug === mode.practiceSlug) return Object.freeze({ path: DEVELOP_HOME_PATH, note: VIBE64_DEVELOP_MODE_NOTE });
   return null;
+}
+
+// The words for a review result (step.review.run, or a saved review result):
+// its verdict with the reviewer's comment, and a Not yet's hint.
+function reviewNote(result) {
+  if (!result) return "";
+  if (result.alreadyPassed) return "You already passed this step, so your work was not reviewed again. Your earlier pass counts.";
+  const comment = String(result.review?.comment || "").trim();
+  const hint = String(result.review?.hint || "").trim();
+  if (result.outcome === "passed") return comment ? `Passed ✓ ${comment}` : "Passed ✓";
+  // No review (for example no changes yet): the server's reason as it is.
+  if (!comment) return String(result.reason || "").trim();
+  return `Not yet: ${comment}${hint ? ` Hint: ${hint}` : ""}`;
 }
 
 // passed wins over any later not-yet-passed (a pass is final); otherwise the latest outcome.
@@ -686,6 +701,11 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   const answer = (stepId, selected) => stepAction("answer", VIBE64_LEARNING_ROUTES.stepAnswer, stepId,
     { selected: [...selected].map(Number).sort((left, right) => left - right) });
   const done = stepId => stepAction("done", VIBE64_LEARNING_ROUTES.stepDone, stepId);
+  // Check my work on a review step: one press, one review (a repeat with the
+  // same work answers from the saved result); failures record nothing.
+  const review = stepId => stepAction("review", VIBE64_LEARNING_ROUTES.stepReview, stepId);
+  // The step's latest saved review result, if any.
+  const savedReview = stepId => results.value.filter(result => result?.stepId === stepId && result.review).at(-1) || null;
 
   // Show me: minimise Courses, then point at (and, when declared, open) the
   // real place. A step with beats instead plays them in the step bar from the
@@ -1082,7 +1102,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     lesson, results, steps, currentStep, focus, colleagueRequest, notes, notesState: readonly(notesState), player,
     stepStatus: stepId => stepStatus(results.value, stepId, lesson.value?.passedStepIds || []),
     setViewer, show, openCourses, openLesson, closeCourses, showFinished, minimise, selectStep, setScroll, flushReader, loadLesson,
-    runCheck, answer, done, showMe, teachMe, stuck, doItForMe, doItForMeKind, consumeColleagueRequest, learnerChanged,
+    runCheck, answer, done, review, savedReview, reviewNote, showMe, teachMe, stuck, doItForMe, doItForMeKind, consumeColleagueRequest, learnerChanged,
     exerciseStep, beginExercise, exerciseCurrent, finishExercise, prepareExercise,
     readNotes, saveNotes, clearNotes,
     readLearningMode, setMode, toggleMode, modePlace, openCurrent, toggleStepBar, setStepText, showNotice, clearNotice,
@@ -1118,4 +1138,4 @@ function revealCurrentStep(list) {
   return true;
 }
 
-export { VIBE64_DEVELOP_MODE_NOTE, VIBE64_LEARNING_MODE_NOTE, VIBE64_LEARNING_MODE_PROJECT_CODE, VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_PAGE_PATH, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_STUCK_MESSAGE, VIBE64_LEARNING_TEACH_MESSAGE, VIBE64_LESSON_IN_PROGRESS_CODE, createVibe64Learning, modeRedirect, normalizePractice, openLessonLink, revealCurrentStep, showMeCommand, stepStatus };
+export { VIBE64_DEVELOP_MODE_NOTE, VIBE64_LEARNING_MODE_NOTE, VIBE64_LEARNING_MODE_PROJECT_CODE, VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_PAGE_PATH, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_STUCK_MESSAGE, VIBE64_LEARNING_TEACH_MESSAGE, VIBE64_LESSON_IN_PROGRESS_CODE, createVibe64Learning, modeRedirect, normalizePractice, openLessonLink, reviewNote, revealCurrentStep, showMeCommand, stepStatus };

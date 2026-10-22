@@ -5,18 +5,19 @@ import { TRAINING_BEAT_ACTIONS, TRAINING_GUIDE_FILE_PATH, TRAINING_GUIDE_PLACES,
 // beat per line: `<show|do|check> <target>[ <arg>]: <text>`.
 //   show <place>                  point at a place (auto-advances)
 //   do <place|action>[ <path>]    wait until the learner is there or did it
-//   check <auto|review|done>      the step's own check, last
+//   check <auto|done>: <text>     the step's own check, last
+//   check review                  the same, with no text: the bar shows the
+//                                 step's check.rubric (lesson.json)
 // The bundler validates them and the installed reader serves them parsed;
 // the browser never parses Markdown beats.
 const BEATS_MAX = 8;
 const TEXT_MAX = 160;
 const PROMPT_MAX = 500;
-const RUBRIC_MAX = 600;
 const SEND_TEXT_MAX = 600;
 // A check beat names the step's check kind.
 const TRAINING_BEAT_CHECKS = Object.freeze({ auto: "auto", review: "review", done: "self" });
 const fence = /^```beats[ \t]*$/mu;
-const line = /^(show|do|check)[ \t]+([a-z][a-z-]*)(?:[ \t]+([^:]+?))?[ \t]*:[ \t]*(.*)$/u;
+const line = /^(show|do|check)[ \t]+([a-z][a-z-]*)(?:[ \t]+([^:]+?))?[ \t]*(?::[ \t]*(.*))?$/u;
 const quoted = /["“]([^"“”]+)["”]/gu;
 
 function beatFailure(message) {
@@ -31,8 +32,12 @@ const doable = target => Boolean(TRAINING_BEAT_ACTIONS[target] || TRAINING_GUIDE
 function parseBeat(source, number) {
   const match = line.exec(source);
   if (!match) throw beatFailure(`beat ${number} must read "<show|do|check> <target>: <text>".`);
-  const [, kind, target, arg, text] = match;
+  const [, kind, target, arg, text = ""] = match;
   const label = `beat ${number} (${kind} ${target})`;
+  if (kind === "check" && target === "review") {
+    if (text.trim() || arg !== undefined) throw beatFailure(`${label} takes no text: the bar shows the step's check.rubric.`);
+    return { kind, target, text: "" };
+  }
   if (!text.trim()) throw beatFailure(`${label} needs its text after the colon.`);
   const beat = { kind, target, text: text.trim() };
   if (arg !== undefined && !(kind === "do" && target === "file-opened")) throw beatFailure(`${label} takes no argument; only do file-opened names a path.`);
@@ -43,7 +48,7 @@ function parseBeat(source, number) {
     if (!TRAINING_GUIDE_FILE_PATH.test(arg)) throw beatFailure(`${label} needs a relative practice project file path without '..'.`);
     beat.path = arg;
   }
-  const limit = kind === "check" && target === "review" ? RUBRIC_MAX : target === "send-message" ? SEND_TEXT_MAX : TEXT_MAX;
+  const limit = target === "send-message" ? SEND_TEXT_MAX : TEXT_MAX;
   if (beat.text.length > limit) throw beatFailure(`${label} text is longer than ${limit} characters.`);
   if (target === "send-message") {
     const prompts = [...beat.text.matchAll(quoted)].map(value => value[1].trim());

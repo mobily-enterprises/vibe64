@@ -8,6 +8,7 @@ import { bundleFiles, canonicalJson, validateTopic } from "../../packages/vibe64
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
 import { installVibe64ManagedExecutionProvider, runCaptureCommand } from "../../packages/vibe64-execution/src/server/index.js";
 import { createCourseLock, readPinnedTopic } from "../../packages/vibe64-training/src/server/catalogue.js";
+import { splitStepBeats } from "../../packages/vibe64-training/src/shared/beats.js";
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-training-content-"));
@@ -689,4 +690,12 @@ test("authoring CLI validates, bundles and publishes a course lock for a v2 topi
   await runTrainingCli(["publish-manifest", path.join(catalogue, "course.json"), f.root], { write() {} });
   const lock = JSON.parse(await readFile(path.join(catalogue, "course.lock.json"), "utf8"));
   assert.deepEqual(lock.topics[0].lessons.map(lesson => [lesson.code, lesson.hash]), [["STEPS-ONE", messages[0].lessons[0].hash]]);
+});
+
+test("a check review beat takes no text: the bar shows the step's rubric", () => {
+  const block = lines => `Do it.\n\n\`\`\`beats\n${lines.join("\n")}\n\`\`\`\n`;
+  assert.deepEqual(splitStepBeats(block(["do chat: Ask for it.", "check review"])).beats.at(-1), { kind: "check", target: "review", text: "" });
+  assert.equal(splitStepBeats(block(["check review:"])).beats[0].text, "");
+  assert.throws(() => splitStepBeats(block(["check review: The heading is green."])), /takes no text/u);
+  assert.throws(() => splitStepBeats(block(["check done"])), /needs its text/u);
 });

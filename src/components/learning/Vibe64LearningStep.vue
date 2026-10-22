@@ -132,6 +132,15 @@ async function runCheck() {
   const result = await props.learning.runCheck(stepId);
   if (step.value?.id === stepId) checkReason.value = resultNote(result);
 }
+// A review step: the reviewer's verdict, or why it could not review.
+async function runReview() {
+  const stepId = step.value.id;
+  checkReason.value = "";
+  const result = await props.learning.review(stepId);
+  if (step.value?.id === stepId) {
+    checkReason.value = result ? props.learning.reviewNote(result) : props.learning.state.error || "Your work could not be checked. Try again.";
+  }
+}
 async function answer() {
   const stepId = step.value.id;
   checkReason.value = "";
@@ -234,6 +243,18 @@ async function markRead() {
       <v-btn variant="tonal" rounded="pill" min-height="48" data-test="learning-check"
         :disabled="Boolean(busy)" :loading="busy === `check:${step.id}`" @click="runCheck">Check now</v-btn>
       <p v-if="checkReason" class="vibe64-learning-step__hint" role="status" data-test="learning-check-reason">{{ checkReason }}</p>
+    </section>
+    <section v-else-if="!ended && kind === 'review'" class="vibe64-learning-step__check" aria-label="Review">
+      <p>Your AI reviews your work in the practice project against this: <strong>{{ step.check.rubric }}</strong></p>
+      <p v-if="statusOf(step.id) === 'passed'" class="vibe64-learning-step__hint" data-test="learning-review-saved">
+        {{ learning.reviewNote(learning.savedReview(step.id)) || "Passed ✓" }}
+      </p>
+      <template v-else>
+        <v-btn variant="tonal" rounded="pill" min-height="48" data-test="learning-review"
+          :disabled="Boolean(busy)" :loading="busy === `review:${step.id}`" @click="runReview">{{ checkReason ? "Check again" : "Check my work" }}</v-btn>
+        <p v-if="busy === `review:${step.id}`" class="vibe64-learning-step__hint" role="status">Checking your work with your AI…</p>
+        <p v-if="checkReason" class="vibe64-learning-step__hint" role="status" data-test="learning-check-reason">{{ checkReason }}</p>
+      </template>
     </section>
     <section v-else-if="!ended && kind === 'self'" class="vibe64-learning-step__check" aria-label="Self check">
       <!-- The step text says when to press Done; a step already passed is said here, as for questions. -->

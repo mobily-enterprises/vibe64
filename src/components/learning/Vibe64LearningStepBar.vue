@@ -43,11 +43,16 @@ const verdict = computed(() => {
   if (kind.value === "self") return { label: "Done", run: () => learning.done(stepId), busy: `done:${stepId}` };
   if (kind.value === "none") return { label: "Mark as done", run: () => learning.done(stepId), busy: `done:${stepId}` };
   if (kind.value === "auto") return { label: "Check my work", run: check, busy: `check:${stepId}` };
+  if (kind.value === "review") return { label: note.value ? "Check again" : "Check my work", run: checkReview, busy: `review:${stepId}` };
   if (kind.value === "choice") return { label: "Answer in Step", run: () => learning.setStepText(true), busy: "" };
   return null;
 });
 const beatText = computed(() => {
   if (player.value?.confirmed) return player.value.confirmed;
+  if (reviewing.value) return "Checking your work with your AI…";
+  if (final.value && status.value === "passed" && kind.value === "review") return learning.reviewNote(learning.savedReview(step.value.id)) || "Passed ✓";
+  // A review check's line is the step's rubric.
+  if (beat.value?.kind === "check" && beat.value.target === "review") return step.value?.check?.rubric || "";
   if (beat.value && !(final.value && status.value === "passed")) return beat.value.text;
   if (status.value === "passed") return kind.value === "none" || kind.value === "self" ? "Done ✓" : "Passed ✓";
   return step.value?.title || "";
@@ -60,6 +65,16 @@ async function check() {
   note.value = "";
   const result = await learning.runCheck(stepId);
   if (step.value?.id === stepId && result?.outcome === "not-yet-passed" && result.reason) note.value = `Not yet: ${result.reason}`;
+}
+// Check my work on a review step: the reviewer's verdict, or why it could not review.
+const reviewing = computed(() => Boolean(step.value && busy.value === `review:${step.value.id}`));
+async function checkReview() {
+  const stepId = step.value.id;
+  note.value = "";
+  const result = await learning.review(stepId);
+  // A pass on a step with beats is said on the beat's line itself.
+  if (step.value?.id !== stepId || (result?.outcome === "passed" && beats.value.length)) return;
+  note.value = result ? learning.reviewNote(result) : learning.state.error || "Your work could not be checked. Try again.";
 }
 async function showMe() {
   note.value = "";
@@ -183,6 +198,7 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
         >
           Show me
         </v-btn>
+        <span v-if="reviewing && !beats.length" class="vibe64-learning-step-bar__note" role="status">Checking your work with your AI…</span>
         <span v-if="note" class="vibe64-learning-step-bar__note" role="status" data-test="learning-step-bar-note">{{ note }}</span>
       </div>
       <div v-if="!collapsed" class="vibe64-learning-step-bar__controls">

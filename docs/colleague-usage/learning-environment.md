@@ -113,8 +113,8 @@ current one), then the beat's line:
 - **Back** and **Next** (arrows) move one beat, and into the previous or next
   step at either end.
 - After the last beat the bar shows the step's own control: **Done**, **Mark as
-  done**, **Check my work** (an automatic check; a check that does not pass says
-  why under the line) or **Answer in Step** for a question, which opens the
+  done**, **Check my work** (an automatic check, or a review; a check that does
+  not pass says why under the line) or **Answer in Step** for a question, which opens the
   step under the bar. When the step has passed it shows **Next step**. **I'm stuck**
   (on a *do* line, and after the last beat of a step that **Check my work**
   decides, until the step passes; also in **Step** beside **Teach me**) opens
@@ -124,6 +124,20 @@ current one), then the beat's line:
   A step never moves on by itself.
 - **Show me** on such a step (in the bar's step or the Lesson tab) plays its
   beats again from the first one.
+
+**Check my work on a reviewed step.** Some steps are checked by a review of
+your work: the bar's line (and the step under **Step**) shows what the review
+looks for. **Check my work** uses your own AI (the Lesson review route in AI
+Accounts → Model routing) to look at the changes in your practice project
+(and, when the step says so, your coding chat); the line says **Checking your
+work with your AI…** for up to about a minute, without a Cancel. **Passed ✓**
+with the reviewer's comment passes the step for good. **Not yet:** says what
+is missing, often with a **Hint:**; change your work and press **Check
+again**. Checking unchanged work again repeats the saved answer without using
+your AI. With no changes yet it says so and uses nothing. If the review cannot
+run (the agent is still working, no AI route, a provider error), the bar says
+why, nothing is recorded, and you can press **Check again**. Colleague never
+runs a review or passes a step for you.
 
 This tab remembers the beat and the pause; another tab or device starts the
 step at its first beat. Collapsing the bar leaves only the step position and

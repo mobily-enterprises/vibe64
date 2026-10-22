@@ -98,6 +98,15 @@ guide overlay 3000 above L 2400 above Colleague.
   (`learn-toggled`, place `learning`). It shows a confirmation for 1.5 s, then moves on. The
   detected do beats are this tab's only; when all of a `self` step's do beats
   were detected the controller records `done`.
+- Review check (`review(stepId)`, `savedReview`, `reviewNote`): Check my work
+  on a `check.kind:"review"` step posts `step.review.run` (route
+  `/attempts/:attemptId/steps/review`) through the same step action path as
+  done/answer (one request ID per press until confirmed). The bar's line for
+  the `check review` beat is `check.rubric`; while it runs it reads "Checking
+  your work with your AI…" (no Cancel); the result shows Passed ✓ with the
+  comment, Not yet with comment and Hint (Check again), or the server's reason
+  (No changes yet) or failure message; a passed review step shows its saved
+  comment. The step view offers the same.
 - I'm stuck (`stuck(stepId)`): offered until the step passes, by the bar on a
   do beat and in the final state of an `auto` or `review` step, and by the step
   view on such steps (focus also reports `learningBeat`, the bar's beat index); it records a Colleague request of kind
