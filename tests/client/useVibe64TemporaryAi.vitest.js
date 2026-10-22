@@ -16,7 +16,8 @@ vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({
   getHttpWebClient: () => ({ request: (...args) => mocks.transport.request(...args) })
 }));
 vi.mock("@jskit-ai/assistant-core/client", async (importOriginal) => ({
-  ...await importOriginal(), assistantHttpClient: { request: (...args) => mocks.transport.request(...args) }
+  // A local editor has no CSRF session route, so JSKIT's default client fails.
+  ...await importOriginal(), assistantHttpClient: { request: async () => { throw new Error("Not Found"); } }
 }));
 let createdId = "conversation-1";
 const mountedApps = new Set();
