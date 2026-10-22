@@ -1699,7 +1699,7 @@ describe("Lesson step bar", () => {
     stop();
   });
 
-  it("shows the current lesson's step in Learn mode, moves through steps and collapses", async () => {
+  it("shows the current lesson's step in Learn mode and moves through steps, with no Open and no collapse", async () => {
     let on = true;
     const { learning } = controller({ mode: () => ({ ...LEARN, on }) });
     learning.setViewer("member");
@@ -1715,10 +1715,8 @@ describe("Lesson step bar", () => {
       expect(learning.stepId).toBe("quiz");
       expect(textOf(root)).toContain("Not checked yet");
       expect(byTest(root, "learning-step-bar-open"), "the Lesson tab opens the lesson; the bar has no Open").toBeUndefined();
-      byTest(root, "learning-step-bar-toggle").props.onClick();
-      await flush();
-      expect(learning.stepBarCollapsed).toBe(true);
-      expect(textOf(root)).toContain("Step 2 of 4");
+      expect([byTest(root, "learning-step-bar-toggle"), learning.toggleStepBar], "the bar is always its one line").toEqual([undefined, undefined]);
+      expect(textOf(root)).toContain("Step 2 of 4: Quiz");
       on = false;
       await learning.readLearningMode();
       await flush();
@@ -1843,13 +1841,6 @@ describe("Lesson step bar", () => {
       keys.get("keydown")({ key: "Escape" });
       await flush();
       expect([learning.stepTextOpen, byTest(root, "learning-step-bar-text")]).toEqual([false, undefined]);
-      // A question has no beats here; its answer is given in the step text.
-      learning.setStepText(true);
-      learning.toggleStepBar();
-      await flush();
-      expect(byTest(root, "learning-step-bar-text"), "a collapsed bar hides it").toBeUndefined();
-      learning.toggleStepBar();
-      learning.setStepText(false);
       learning.selectStep("tick");
       await flush();
       byTest(root, "learning-step-bar-step").props.onClick();

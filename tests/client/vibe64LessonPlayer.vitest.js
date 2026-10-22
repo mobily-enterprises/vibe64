@@ -13,7 +13,7 @@ const STEPS = [
 ];
 
 function harness({ reduced = false, hidden = false, steps: lessonSteps = STEPS, stepId = "intro" } = {}) {
-  const state = reactive({ stepId, beat: 0, beatPaused: false, open: false, stepBarCollapsed: false });
+  const state = reactive({ stepId, beat: 0, beatPaused: false, open: false });
   const steps = ref(lessonSteps);
   const focus = ref(null);
   const activity = createPageActivity();
@@ -60,7 +60,7 @@ describe("lesson beat player", () => {
     expect(h.state.stepId).toBe("intro");
   });
 
-  it("holds show beats while paused, held, covered by Courses, collapsed, hidden or under reduced motion", async () => {
+  it("holds show beats while paused, held, covered by Courses, hidden or under reduced motion", async () => {
     const h = harness();
     await settle();
     const stays = async (change, undo) => {
@@ -76,7 +76,6 @@ describe("lesson beat player", () => {
     expect(h.remember).toHaveBeenCalled();
     await stays(() => h.player.hold(true), () => h.player.hold(false));
     await stays(() => { h.state.open = true; }, () => { h.state.open = false; });
-    await stays(() => { h.state.stepBarCollapsed = true; }, () => { h.state.stepBarCollapsed = false; });
     await stays(() => { h.flags.hidden = true; }, () => { h.flags.hidden = false; });
     await stays(() => { h.flags.reduced = true; }, () => { h.flags.reduced = false; });
     await stays(() => { h.shown.value = false; }, () => { h.shown.value = true; });

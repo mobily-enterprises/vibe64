@@ -45,8 +45,8 @@ function beatPlace(beat) {
   return TRAINING_BEAT_ACTIONS[beat.target] ? TRAINING_BEAT_ACTIONS[beat.target].place || "" : beat.target;
 }
 
-// state: the controller's reactive state (stepId, beat, beatPaused, open,
-// stepBarCollapsed); steps/currentStep: its computed lesson steps; active():
+// state: the controller's reactive state (stepId, beat, beatPaused, open);
+// steps/currentStep: its computed lesson steps; active():
 // the step bar shows the current lesson's step; selectStep(id, beat) and
 // remember() are the controller's own. focus(): the page focus (null when the
 // host has none); activity: the page activity channel; practiceSlug(): the
@@ -80,7 +80,7 @@ function createLessonPlayer({ state, steps, currentStep, active, selectStep, rem
   // Everything that holds a show beat still except the document's visibility,
   // which the tick reads.
   const playing = computed(() => Boolean(active() && beat.value?.kind === "show" && !state.beatPaused && !local.held &&
-    !state.open && !state.stepBarCollapsed));
+    !state.open));
 
   function moveTo(value) {
     local.confirmed = "";
@@ -185,14 +185,14 @@ function createLessonPlayer({ state, steps, currentStep, active, selectStep, rem
     if (local.confirmed || !active() || !activityMatches(value, event)) return;
     confirm(value, "✓ Done.", history.events.length - 1);
   });
-  // A collapsed bar or open Courses takes the ring away with the beat's text.
-  watch(() => state.stepBarCollapsed || state.open, covered => {
+  // Open Courses takes the ring away with the beat's text.
+  watch(() => state.open, covered => {
     if (covered && local.ring) clearGuide(local.ring);
   });
 
   async function point(value) {
     const place = beatPlace(value);
-    if (!place || state.stepBarCollapsed || state.open) return null;
+    if (!place || state.open) return null;
     const request = { target: place, ...(value.path ? { filePath: value.path } : {}) };
     const guideSteps = trainingGuideSteps(request);
     const receipt = await showGuide({ ...request, highlight: true, navigate: false, steps: guideSteps,
@@ -201,8 +201,8 @@ function createLessonPlayer({ state, steps, currentStep, active, selectStep, rem
     { settleMs: POINT_SETTLE_MS, durationMs: value.kind === "show" ? local.duration : DO_RING_MS });
     if (receipt?.shown) {
       // Only this player's own ring is taken away again.
-      // A ring drawn after its beat moved on, or after Courses or a collapse covered it, goes at once.
-      if (beat.value === value && !state.open && !state.stepBarCollapsed) local.ring = shownGuide();
+      // A ring drawn after its beat moved on, or after Courses covered it, goes at once.
+      if (beat.value === value && !state.open) local.ring = shownGuide();
       else clearGuide(shownGuide());
     }
     return receipt;

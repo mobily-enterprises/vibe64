@@ -16,10 +16,9 @@ Escape closes it, and **Show me** closes it so the place it shows is in view.
 This tab remembers whether it is open. To read the step in the page's
 **Lesson** tab, select that tab (see [The Lesson tab](learning-environment.md#the-lesson-tab));
 the bar has no separate Open button. **Courses**, at its right end (a book icon
-on a phone), opens the Courses overlay to choose another lesson; it stays
-there when the bar is collapsed. The chevron at its left collapses it to one
-line (**Hide the lesson step**) and expands it again (**Show the lesson step**);
-this tab remembers the choice. On a phone the lesson name is hidden.
+on a phone), opens the Courses overlay to choose another lesson. The bar is
+always shown in full; it cannot be collapsed or hidden. On a phone the lesson
+name is hidden.
 
 ### Steps with beats
 
@@ -32,7 +31,7 @@ current one), then the beat's line:
   coding chat) and moves on by itself after a few seconds; a thin line under
   the bar shows the time left. **Pause** (and **Play**) stops and resumes it;
   it also waits while your pointer or keyboard focus is on the bar, while
-  Courses is open, while the bar is collapsed or the tab is hidden. With
+  Courses is open or while the tab is hidden. With
   reduced motion turned on in your system it never moves by itself: press
   **Next**.
 - A *do* line waits for you to do what it says, in this lesson's practice
@@ -93,8 +92,7 @@ why, nothing is recorded, and you can press **Check again**. Colleague never
 runs a review or passes a step for you.
 
 This tab remembers the beat and the pause; another tab or device starts the
-step at its first beat. Collapsing the bar leaves only the step position and
-its dots. On a phone the bar has two lines: the position and arrows above,
+step at its first beat. On a phone the bar has two lines: the position and arrows above,
 the beat's line and its one button below; **Step** and **Courses** show only
 their icons, and the open step fills the width. A step without beats shows its title
 and status as before, and **Show me** when it can point at a place.

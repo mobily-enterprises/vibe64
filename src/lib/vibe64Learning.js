@@ -97,7 +97,6 @@ function readPlace(actorKey) {
     attemptId: text(value.attemptId) ? value.attemptId : "", stepId: text(value.stepId) ? value.stepId : "",
     trialAttemptId: text(value.trialAttemptId) && value.trialAttemptId === value.attemptId ? value.trialAttemptId : "",
     scroll: Number.isSafeInteger(value.scroll) && value.scroll >= 0 ? value.scroll : 0,
-    stepBarCollapsed: value.stepBarCollapsed === true,
     beat: Number.isSafeInteger(value.beat) && value.beat >= 0 ? value.beat : 0, beatPaused: value.beatPaused === true,
     stepTextOpen: value.stepTextOpen === true };
 }
@@ -227,7 +226,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   // unreadable).
   const state = reactive({ open: false, minimised: false, surface: "courses", attemptId: "", stepId: "", scroll: 0,
     loading: false, error: "", actorKey: "", busy: "", hiddenBy: "", finished: false, notice: "", modeBusy: "",
-    modeRead: false, stepBarCollapsed: false, trialAttemptId: "", beat: 0, beatPaused: false, stepTextOpen: false });
+    modeRead: false, trialAttemptId: "", beat: 0, beatPaused: false, stepTextOpen: false });
   const lesson = shallowRef(null);
   // The learner's mode (server-backed): null until read or when unreadable (Develop).
   const mode = shallowRef(null);
@@ -296,7 +295,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   function remember() {
     if (!state.actorKey) return;
     writeJson("sessionStorage", `${STORAGE_PREFIX}${state.actorKey}`, { surface: state.surface, attemptId: state.attemptId,
-      stepId: state.stepId, scroll: state.scroll, stepBarCollapsed: state.stepBarCollapsed, trialAttemptId: state.trialAttemptId,
+      stepId: state.stepId, scroll: state.scroll, trialAttemptId: state.trialAttemptId,
       beat: state.beat, beatPaused: state.beatPaused, stepTextOpen: state.stepTextOpen });
   }
 
@@ -322,7 +321,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     Object.assign(notesState, { loading: false, saving: false, error: "" });
     Object.assign(state, { open: false, minimised: false, surface: "courses", attemptId: "", stepId: "", scroll: 0,
       loading: false, error: "", busy: "", hiddenBy: "", finished: false, notice: "", modeBusy: "", modeRead: false,
-      stepBarCollapsed: false, trialAttemptId: "", beat: 0, beatPaused: false, stepTextOpen: false, actorKey: next });
+      trialAttemptId: "", beat: 0, beatPaused: false, stepTextOpen: false, actorKey: next });
     finishRun = null;
     const place = next ? readPlace(next) : null;
     if (place) Object.assign(state, place);
@@ -552,11 +551,6 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   }
 
   const closeCourses = () => minimise("learner");
-
-  function toggleStepBar() {
-    state.stepBarCollapsed = !state.stepBarCollapsed;
-    remember();
-  }
 
   // ≡ Step: the current step's full text, open under the step bar.
   function setStepText(open) {
@@ -1103,7 +1097,6 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     get lessonTitle() { return mode.value?.currentAttemptId ? mode.value.lessonTitle || mode.value.lessonCode || "" : ""; },
     get practice() { return practice.value; },
     get confirmArchive() { return confirmArchive.value; },
-    get stepBarCollapsed() { return state.stepBarCollapsed; },
     get stepTextOpen() { return state.stepTextOpen; },
     get notice() { return state.notice; },
     lesson, results, steps, currentStep, focus, colleagueRequest, notes, notesState: readonly(notesState), player,
@@ -1112,7 +1105,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     runCheck, answer, done, review, savedReview, reviewNote, showMe, teachMe, stuck, doItForMe, doItForMeKind, consumeColleagueRequest, learnerChanged,
     exerciseStep, beginExercise, exerciseCurrent, finishExercise, prepareExercise,
     readNotes, saveNotes, clearNotes,
-    readLearningMode, setMode, toggleMode, modePlace, openCurrent, toggleStepBar, setStepText, showNotice, clearNotice,
+    readLearningMode, setMode, toggleMode, modePlace, openCurrent, setStepText, showNotice, clearNotice,
     startLesson, admitted, opened, confirmArchiveAndStart, cancelArchive, restart, finish, deleteAttempt, readPractice, deleteArchived
   });
 }

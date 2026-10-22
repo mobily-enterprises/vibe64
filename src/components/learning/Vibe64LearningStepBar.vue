@@ -14,7 +14,7 @@ import Vibe64LearningStep from "./Vibe64LearningStep.vue";
 // and status, with Show me when it declares a guide. ≡ Step drops the
 // whole step (the reader's own step view, with every control) open under the
 // bar, in place. Courses, always on it, is the way out to the catalogue. It
-// collapses to its position and dots. While the lesson waits for the
+// is always this one line (two on a phone); it does not collapse. While the lesson waits for the
 // learner's AI (its practice project could not be prepared without one), the
 // line says so instead and offers Set up your AI.
 const learning = useVibe64Learning();
@@ -24,7 +24,6 @@ const step = computed(() => learning?.currentStep.value || null);
 const player = computed(() => learning?.player || null);
 const index = computed(() => steps.value.findIndex(value => value.id === step.value?.id));
 const visible = computed(() => Boolean(learning?.stepBarVisible));
-const collapsed = computed(() => Boolean(learning?.stepBarCollapsed));
 const ended = computed(() => Boolean(lesson.value?.attempt?.ended));
 const aiRequired = computed(() => Boolean(learning?.aiRequired));
 const busy = computed(() => learning?.state.busy || "");
@@ -115,8 +114,8 @@ const go = offset => {
   const next = steps.value[index.value + offset];
   if (next) learning.selectStep(next.id);
 };
-// ≡ Step: open while the bar is expanded; Escape closes it.
-const stepTextShown = computed(() => Boolean(learning?.stepTextOpen && !collapsed.value));
+// ≡ Step: the step open under the bar; Escape closes it.
+const stepTextShown = computed(() => Boolean(learning?.stepTextOpen));
 const stepError = ref("");
 function closeOnEscape(event) {
   if (event.key === "Escape" && stepTextShown.value) learning.setStepText(false);
@@ -138,23 +137,16 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
   >
     <section
       class="vibe64-learning-step-bar"
-      :class="{ 'vibe64-learning-step-bar--collapsed': collapsed, 'vibe64-learning-step-bar--beats': beats.length }"
+      :class="{ 'vibe64-learning-step-bar--beats': beats.length }"
       aria-label="Lesson steps"
       data-test="learning-step-bar"
       data-vibe64-guide="lesson-bar"
     >
-      <button
-        type="button" class="vibe64-learning-step-bar__toggle" :aria-expanded="!collapsed"
-        :aria-label="collapsed ? 'Show the lesson step' : 'Hide the lesson step'" data-test="learning-step-bar-toggle"
-        @click="learning.toggleStepBar()"
-      >
-        <v-icon :icon="collapsed ? mdiChevronDown : mdiChevronUp" size="20" />
-      </button>
       <div class="vibe64-learning-step-bar__position">
         <span class="vibe64-learning-step-bar__lesson">{{ lesson.title || lesson.code }}</span>
         <span class="vibe64-learning-step-bar__step">
           <template v-if="beats.length">{{ index + 1 }}/{{ steps.length }}</template>
-          <template v-else>Step {{ index + 1 }} of {{ steps.length }}<template v-if="!collapsed">: {{ step.title }}</template></template>
+          <template v-else>Step {{ index + 1 }} of {{ steps.length }}: {{ step.title }}</template>
         </span>
         <span
           v-if="beats.length" class="vibe64-learning-step-bar__dots" role="img"
@@ -166,7 +158,7 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
           />
         </span>
       </div>
-      <div v-if="!collapsed && aiRequired" class="vibe64-learning-step-bar__line">
+      <div v-if="aiRequired" class="vibe64-learning-step-bar__line">
         <span class="vibe64-learning-step-bar__beat" role="status" data-test="learning-step-bar-ai-required">{{ lesson.attempt.preparation.failure.message }}</span>
         <v-btn
           v-if="setUpAiOffered" color="primary" variant="flat" rounded="pill" min-height="40" data-test="learning-step-bar-set-up-ai"
@@ -175,7 +167,7 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
           Set up your AI
         </v-btn>
       </div>
-      <div v-else-if="!collapsed" class="vibe64-learning-step-bar__line">
+      <div v-else class="vibe64-learning-step-bar__line">
         <span v-if="beats.length" class="vibe64-learning-step-bar__beat" aria-live="polite" data-test="learning-step-bar-beat">{{ beatText }}</span>
         <span v-else-if="step.required || status === 'passed'" class="vibe64-learning-step-bar__status" :class="`is-${status}`">
           {{ step.required ? statusLabel[status] : "Done" }}
@@ -220,7 +212,7 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
           Set up your AI
         </v-btn>
       </div>
-      <div v-if="!collapsed" class="vibe64-learning-step-bar__controls">
+      <div class="vibe64-learning-step-bar__controls">
         <v-btn
           v-if="beat?.kind === 'show' && !aiRequired" :icon="player.paused ? mdiPlay : mdiPause" variant="text" size="small" min-width="40" min-height="40"
           :aria-label="player.paused ? 'Play' : 'Pause'" data-test="learning-step-bar-pause" @click="player.togglePause()"
@@ -250,7 +242,7 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
         <span class="vibe64-learning-step-bar__courses-label">Courses</span>
       </v-btn>
       <span
-        v-if="!collapsed && beat?.kind === 'show' && !aiRequired" class="vibe64-learning-step-bar__progress" aria-hidden="true"
+        v-if="beat?.kind === 'show' && !aiRequired" class="vibe64-learning-step-bar__progress" aria-hidden="true"
         :style="{ transform: `scaleX(${player.progress})` }"
       />
     </section>
@@ -291,23 +283,9 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
   gap: var(--v64-space-2, 8px);
   min-width: 0;
   overflow: hidden;
-  padding: 2px var(--v64-space-2, 8px) 2px 2px;
+  padding: 2px var(--v64-space-2, 8px);
   position: relative;
 }
-.vibe64-learning-step-bar__toggle {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: 999px;
-  color: inherit;
-  cursor: pointer;
-  display: inline-flex;
-  flex: 0 0 auto;
-  height: 40px;
-  justify-content: center;
-  width: 40px;
-}
-.vibe64-learning-step-bar__toggle:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: -2px; }
 .vibe64-learning-step-bar__position {
   align-items: baseline;
   display: flex;

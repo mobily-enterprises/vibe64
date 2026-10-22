@@ -70,15 +70,15 @@ guide overlay 3000 above L 2400 above Colleague.
   `cancelArchive()` keeps the lesson in progress), `openCurrent()`,
   `restart()`, `finish()`, `deleteAttempt()`, `practice` (from
   `practice.list`, refreshed by `readPractice()`) and
-  `deleteArchived(attemptId)`. The collapsible lesson step bar
-  (`stepBarCollapsed`, `toggleStepBar()`, `stepBarVisible`) shows the current
-  lesson at the top of its project.
+  `deleteArchived(attemptId)`. The lesson step bar
+  (`stepBarVisible`; always shown in full, it does not collapse) shows the
+  current lesson at the top of its project.
 - Beat player (`src/lib/vibe64LessonPlayer.js`, `learning.player`): plays the
   current step's `beats` in the step bar. A show beat rings its place
   point-only (`showTrainingGuide`, its own ring cleared on change) and advances
   after clamp(5 s + 50 ms per character, 5–12 s), held while paused
   (`beatPaused`), while the pointer or focus is in the bar (`hold`), while
-  Courses is open, the bar is collapsed or the document hidden, and never
+  Courses is open or the document hidden, and never
   advancing under reduced motion. Back/Next move by beat and cross steps
   (`selectStep(id, beat)`; Back enters a step at its end). A step ends on its
   check beat, else one past its last beat, where the bar shows its own verdict
@@ -126,7 +126,7 @@ guide overlay 3000 above L 2400 above Colleague.
 - ≡ Step (`stepTextOpen`, `setStepText(open)`, this tab's place): the step bar
   drops the current step open under itself, rendering the reader's own
   `Vibe64LearningStep.vue` (max 60 % of the viewport, scrolling; ≡ or Escape
-  closes it; hidden while the bar is collapsed). `showMe` closes it. A choice
+  closes it). `showMe` closes it. A choice
   step's final beat state offers **Answer in Step**, which opens it.
 - Learn mode (server): Vibe64 has two modes, Develop and Learn, with the same
   screens. Learn mode is a saved per-learner flag
