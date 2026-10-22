@@ -1,7 +1,7 @@
 <script setup>
 import { computed, inject, nextTick, onBeforeUnmount, ref, toValue, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { mdiClose } from "@mdi/js";
+import { mdiArrowLeft, mdiClose } from "@mdi/js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import TrainingGuideOverlay from "@local/vibe64-training/client/guide-overlay";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
@@ -130,6 +130,13 @@ function keydown(event) {
           {{ tab.label }}
         </button>
       </nav>
+      <!-- The labelled way out; the X stays for people who look for it. -->
+      <v-btn
+        color="primary" variant="flat" rounded="pill" min-height="40" :prepend-icon="mdiArrowLeft"
+        class="vibe64-learning__exit" data-test="learning-back-to-editor" @click="learning.closeCourses()"
+      >
+        Back to editor
+      </v-btn>
       <v-btn
         :icon="mdiClose" variant="text" min-width="48" min-height="48" aria-label="Close Courses"
         title="Close Courses (your place is kept)" data-test="learning-hide" @click="learning.closeCourses()"
@@ -217,6 +224,7 @@ function keydown(event) {
 }
 .vibe64-learning__tab[aria-current="page"] { background: var(--v64-learning-container, rgba(245, 197, 24, 0.24)); color: var(--v64-on-learning-container, inherit); font-weight: 700; }
 .vibe64-learning__tab:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
+.vibe64-learning__exit { flex: 0 0 auto; font-weight: 700; text-transform: none; }
 .vibe64-learning:focus { outline: none; }
 .vibe64-learning__content { flex: 1 1 auto; min-height: 0; overflow: hidden; padding-bottom: env(safe-area-inset-bottom, 0px); }
 .vibe64-learning__scroll { height: 100%; overflow-y: auto; }

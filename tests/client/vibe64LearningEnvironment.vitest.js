@@ -1166,6 +1166,12 @@ describe("Courses overlay", () => {
       byTest(root, "learning-archived-tab").props.onClick();
       await flush();
       expect([learning.surface, byTest(root, "attempts").props.archived]).toEqual(["archived", true]);
+      expect(textOf(byTest(root, "learning-back-to-editor")).trim()).toBe("Back to editor");
+      byTest(root, "learning-back-to-editor").props.onClick();
+      await flush();
+      expect([learning.open, learning.minimised, learning.hiddenBy], "the labelled way out closes Courses").toEqual([false, true, "learner"]);
+      await learning.openCourses("archived");
+      await flush();
       byTest(root, "learning-hide").props.onClick();
       await flush();
       expect([learning.open, learning.minimised, learning.hiddenBy]).toEqual([false, true, "learner"]);

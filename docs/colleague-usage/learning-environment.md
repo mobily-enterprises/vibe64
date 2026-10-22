@@ -128,12 +128,13 @@ project page.
 **Courses** on the lesson step bar, or in the project menu beside **L**, opens
 the Courses overlay above the page: the
 catalogue where you choose, start and manage lessons. It fills the screen, with
-a **Courses** tab, an **In progress** tab and an **Archived** tab, and a close
-button (×, **Close Courses**) at the right. A lesson is not read here: opening
+a **Courses** tab, an **In progress** tab and an **Archived** tab, and at the
+right a blue **Back to editor** button and a close button (×, **Close
+Courses**). A lesson is not read here: opening
 one closes Courses and shows it in the page's
 [Lesson tab](#the-lesson-tab).
 
-- Press × or Escape to close it. The page you were on, and Colleague, are
+- Press **Back to editor**, × or Escape to close it. The page you were on, and Colleague, are
   visible again.
 - Press **Courses** again to come back to the same tab.
 - A reload of the page leaves Courses closed; this tab remembers which Courses
