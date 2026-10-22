@@ -452,6 +452,37 @@ for (const kind of ["main", "temporary", "goal"]) test(`${kind} assistant work r
   assert.equal(sourceWrites, 1);
 });
 
+for (const practice of [true, false]) test(`${practice ? "practice" : "ordinary"} project agent guidance ${practice ? "stays out of" : "remains in"} Current changes`, async (t) => {
+  const lock = agentWriteLockHarness();
+  const { service, session, runtime, root, projectService } = await terminalServiceFixture(t, lock, {
+    opencodeTerminalController: { createServerProcess() { throw new Error("The test does not start an AI provider."); } }
+  });
+  projectService.runProjectSourceExclusive = async (operation) => operation();
+  if (practice) {
+    // A learning-space practice project's context root is named by its reserved slug.
+    runtime.projectContextRoot = path.join(root, "learning", "learner", "practice", `training-${"a".repeat(32)}`);
+    await mkdir(runtime.projectContextRoot, { recursive: true });
+  }
+  const projectRoot = session.metadata.source_path;
+  await outdatedSkillFixture(projectRoot);
+  await rm(path.join(projectRoot, ".claude/settings.json"));
+  await service.sendAgentMessage(session.sessionId, { message: "Continue." }, { engineId: "opencode" }).catch(() => null);
+  await access(path.join(projectRoot, ".claude/settings.json"));
+  const { stdout } = await execFileAsync("git", ["status", "--porcelain", "--untracked-files=all"], { cwd: projectRoot });
+  const guidance = stdout.split("\n").filter((line) => /^\?\? \.(agents|claude|codex|opencode)\//u.test(line));
+  const exclude = await readFile(path.join(projectRoot, ".git/info/exclude"), "utf8");
+  if (practice) {
+    assert.deepEqual(guidance, []);
+    assert.match(stdout, /genesis\/blueprint\.md/u);
+    for (const pattern of [".agents/", ".claude/", ".codex/", ".opencode/"]) assert.equal(exclude.split("\n").filter((line) => line === pattern).length, 1);
+    await service.sendAgentMessage(session.sessionId, { message: "Continue." }, { engineId: "opencode" }).catch(() => null);
+    assert.equal(await readFile(path.join(projectRoot, ".git/info/exclude"), "utf8"), exclude);
+  } else {
+    assert.equal(guidance.length > 0, true);
+    assert.doesNotMatch(exclude, /^\.agents\/$/mu);
+  }
+});
+
 test("missing project-pinned skills leave chat delivery and preparation recovery available", async (t) => {
   const lock = agentWriteLockHarness();
   const warnings = [];

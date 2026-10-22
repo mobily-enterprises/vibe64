@@ -1,4 +1,5 @@
 import { createPreviewDiagnosticRecorder } from "./previewDiagnostics.js";
+import { excludeAgentGuidanceFromPracticeHistory, isPracticeProjectRuntime } from "./practiceAgentGuidance.js";
 import { ACTION_PAUSE_MAIN_GOAL, ACTION_BLOCK_MAIN_GOAL } from "./assistantContracts.js";
 import { randomUUID } from "node:crypto";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
@@ -1630,6 +1631,7 @@ function createService({
     if (temporary.active) return;
     const format = await inspectGenesisProjectFormat({ projectRoot });
     if (format.status !== "current") return;
+    if (isPracticeProjectRuntime(context.runtime)) await excludeAgentGuidanceFromPracticeHistory(projectRoot);
     let inspection;
     try {
       inspection = await inspectAgentSkills({ projectRoot });

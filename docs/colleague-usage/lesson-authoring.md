@@ -95,7 +95,9 @@ its files validate.
 
 Use a topic repository whose name begins with `learn-`. Keep the lesson
 descriptors, step texts, SVG descriptors, checks and runnable exercise in that
-repository. New lessons use lesson format v2 (`schemaVersion: 2`): optional
+repository. An exercise needs no `.gitignore` for Vibe64's agent guidance
+folders (`.agents`, `.claude`, `.codex`, `.opencode`): practice projects keep
+them out of the learner's changes by themselves. New lessons use lesson format v2 (`schemaVersion: 2`): optional
 notes and 1–32 ordered steps. Each step has a Markdown body a learner can read
 without AI, an optional diagram to play and an optional guide that points at a
 real Vibe64 place, and one check: `auto` (a declared check against the

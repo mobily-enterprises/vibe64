@@ -55,6 +55,13 @@ security boundary: agents and the practice application run on the same machine,
 with the same system access, as your other projects. Treat a practice project
 like any of your projects and do not put secrets in it.
 
+Before an agent turn, Vibe64 writes its agent guidance (the `.agents`,
+`.claude`, `.codex` and `.opencode` folders) into the project. In a practice
+project these folders stay out of **Current changes** and out of what **Save**
+commits, so you see and save only your own changes; every lesson gets this
+without anything in its exercise. In your own projects they appear as changes
+to save, as before.
+
 A practice project is a complete project. Its chat, **Preview**, **Dashboard**
 and sessions work as in any project. The session that lesson preparation
 creates in it is an ordinary session.
