@@ -17,6 +17,13 @@ development account `developer@example.com` / `developer`; for the others, ask
 the coding agent to add accounts. These starters do not declare **Browser test
 app**.
 
+When the installation does not supply their database itself, Preview stops at
+**Set up your project's environment** and names the missing value: `DB_NAME`
+for Django and Next.js, `DB_DATABASE` for Rails and Express, the `DB_*` server
+values for Spring Boot. Choose **Open Env**, enter an absolute SQLite file path
+outside the project (or the MySQL/MariaDB details) and **Save**; preparation
+then continues and the app starts.
+
 The same choices appear on desktop and mobile. Applying a starter imports its
 source. Finish **Prepare workspace** to install dependencies and provision its
 declared resources and migrations; a failed preparation offers **Retry**.
