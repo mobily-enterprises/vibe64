@@ -78,11 +78,94 @@ async function readLedger(ledgerPath) {
   return ledger;
 }
 
-async function runStateUpgrades({ systemRoot, projectsRoot, managedSourceRoot, apply = false, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, inspectConversationUndoRetirement, upgradeLearningPracticeHistory, upgradePlanProgress, upgradeIndependentProviderCredentials, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, upgradeAssistantWorkflow, upgradeClaudeRejectedInput, upgradeClaudeCommandMessages, repairColleagueRetiredOperation, upgradeColleagueHistoricalInteractiveContinuity, resetLearningForLearningSpace, retireColleagueLearningWatches, retireFreeModelRouting, retireColleagueFreeModel, repairRetiredOperation = false, repairInteractiveContinuity = false,
-  report = (level, message) => console.log(`[${level}] ${message}`) }) {
+function requireSystemRoot(systemRoot) {
   if (typeof systemRoot !== "string" || !path.isAbsolute(systemRoot) || path.resolve(systemRoot) === path.parse(systemRoot).root) {
     throw new Error("State upgrades require an absolute, non-root Vibe64 system directory.");
   }
+}
+
+async function writeLedger(ledgerPath, ledger) {
+  const temporaryPath = `${ledgerPath}.${randomUUID()}.tmp`;
+  try {
+    await writeFile(temporaryPath, `${JSON.stringify(ledger, null, 2)}\n`, { flag: "wx", mode: 0o600 });
+    await rename(temporaryPath, ledgerPath);
+  } finally {
+    await rm(temporaryPath, { force: true });
+  }
+}
+
+function ledgerExists(ledgerPath) {
+  return lstat(ledgerPath).then(() => true, error => {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  });
+}
+
+// Any non-directory entry (file, link, socket) is existing state; a tree of
+// empty directories, as host provisioning prepares, is still fresh.
+async function containsState(directory, ignoredPath) {
+  let entries;
+  try {
+    entries = await readdir(directory, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === "ENOENT") return false;
+    throw error;
+  }
+  for (const entry of entries) {
+    const entryPath = path.join(directory, entry.name);
+    if (entryPath === ignoredPath) continue;
+    if (!entry.isDirectory() || await containsState(entryPath, ignoredPath)) return true;
+  }
+  return false;
+}
+
+const BASELINE_LEDGER_EXISTS = "state_upgrade_ledger_exists";
+const BASELINE_STATE_WITHOUT_LEDGER = "state_upgrade_state_without_ledger";
+
+// A brand-new installation is created in the current format, so it records
+// every upgrade this release knows as complete without running them. Only an
+// empty state root qualifies: replaying history against current data fails,
+// and recording history over unknown older data would skip needed upgrades.
+async function recordStateUpgradeBaseline({ systemRoot, report = (level, message) => console.log(`[${level}] ${message}`) } = {}) {
+  requireSystemRoot(systemRoot);
+  const upgradeRoot = path.join(systemRoot, "upgrades");
+  const ledgerPath = path.join(upgradeRoot, "applied.json");
+  const lockPath = path.join(upgradeRoot, "apply.lock");
+  const refuseUnlessFresh = async ignoredPath => {
+    if (await ledgerExists(ledgerPath)) {
+      throw Object.assign(new Error("State upgrade ledger already exists; a baseline is only for a new installation. Use --check/--apply."),
+        { code: BASELINE_LEDGER_EXISTS });
+    }
+    if (await containsState(systemRoot, ignoredPath)) {
+      throw Object.assign(new Error(`Vibe64 state without a state upgrade ledger in ${systemRoot}: inspect it before recording history. ` +
+        "Its data may already be current, so replaying every upgrade may fail; a baseline would skip upgrades it may still need."),
+      { code: BASELINE_STATE_WITHOUT_LEDGER });
+    }
+  };
+  await refuseUnlessFresh();
+  await mkdir(upgradeRoot, { recursive: true, mode: 0o700 });
+  let lock;
+  try {
+    lock = await open(lockPath, "wx", 0o600);
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    throw new Error("State upgrade lock exists. Check for a running upgrade; remove a stale lock only after confirming it has stopped.");
+  }
+  try {
+    await refuseUnlessFresh(lockPath);
+    const completedAt = new Date().toISOString();
+    await writeLedger(ledgerPath, { version: 1, applied: upgrades.map(upgrade => ({ id: upgrade.id, completedAt })) });
+    report("info", `Recorded ${upgrades.length} state upgrade(s) as the baseline of a new installation.`);
+    return { recorded: upgrades.map(upgrade => upgrade.id) };
+  } finally {
+    await lock.close();
+    await rm(lockPath);
+  }
+}
+
+async function runStateUpgrades({ systemRoot, projectsRoot, managedSourceRoot, apply = false, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, inspectConversationUndoRetirement, upgradeLearningPracticeHistory, upgradePlanProgress, upgradeIndependentProviderCredentials, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, upgradeAssistantWorkflow, upgradeClaudeRejectedInput, upgradeClaudeCommandMessages, repairColleagueRetiredOperation, upgradeColleagueHistoricalInteractiveContinuity, resetLearningForLearningSpace, retireColleagueLearningWatches, retireFreeModelRouting, retireColleagueFreeModel, repairRetiredOperation = false, repairInteractiveContinuity = false,
+  report = (level, message) => console.log(`[${level}] ${message}`) }) {
+  requireSystemRoot(systemRoot);
   const upgradeRoot = path.join(systemRoot, "upgrades");
   const ledgerPath = path.join(upgradeRoot, "applied.json");
   const lockPath = path.join(upgradeRoot, "apply.lock");
@@ -97,6 +180,13 @@ async function runStateUpgrades({ systemRoot, projectsRoot, managedSourceRoot, a
     }
   }
   try {
+    // Missing history normally means a legacy installation that predates the
+    // ledger. State created by a current release without its baseline is not
+    // one, and replaying old upgrades against it fails; say so with the error.
+    const ledgerMissingHint = await ledgerExists(ledgerPath) ? "" :
+      " This installation has no state upgrade ledger. If a release that already included these upgrades created its state " +
+      "(for example, provisioning that skipped the baseline), its data is current: inspect it and record that history " +
+      "deliberately as docs/state-upgrades.md describes instead of replaying the upgrades.";
     const ledger = await readLedger(ledgerPath);
     const pending = upgrades.slice(ledger.applied.length);
     report("info", `${pending.length} pending state upgrade(s).`);
@@ -135,7 +225,7 @@ async function runStateUpgrades({ systemRoot, projectsRoot, managedSourceRoot, a
       backupRoot: path.join(upgradeRoot, "backups", upgrade.id, backupSuffix),
       report: (level, message) => report(level, `${upgrade.id}: ${message}`)
     }).catch(error => {
-      throw new Error(`${upgrade.id}: ${error.message}`, { cause: error });
+      throw new Error(`${upgrade.id}: ${error.message}${ledgerMissingHint}`, { cause: error });
     });
     if (repairRetiredOperation || repairInteractiveContinuity) {
       if (repairRetiredOperation && repairInteractiveContinuity) throw new Error("Choose one explicit Colleague repair at a time.");
@@ -150,13 +240,7 @@ async function runStateUpgrades({ systemRoot, projectsRoot, managedSourceRoot, a
     for (const upgrade of pending) {
       await run(upgrade, true);
       ledger.applied.push({ id: upgrade.id, completedAt: new Date().toISOString() });
-      const temporaryPath = `${ledgerPath}.${randomUUID()}.tmp`;
-      try {
-        await writeFile(temporaryPath, `${JSON.stringify(ledger, null, 2)}\n`, { flag: "wx", mode: 0o600 });
-        await rename(temporaryPath, ledgerPath);
-      } finally {
-        await rm(temporaryPath, { force: true });
-      }
+      await writeLedger(ledgerPath, ledger);
       applied.push(upgrade.id);
       report("info", `${upgrade.id}: completed and recorded.`);
     }
@@ -248,4 +332,4 @@ async function maintainStateUpgradeBackups({ systemRoot, dryRun = false, now = D
   }
 }
 
-export { maintainStateUpgradeBackups, runStateUpgrades };
+export { BASELINE_LEDGER_EXISTS, BASELINE_STATE_WITHOUT_LEDGER, maintainStateUpgradeBackups, recordStateUpgradeBaseline, runStateUpgrades };

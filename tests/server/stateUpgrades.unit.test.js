@@ -6,7 +6,7 @@ import path from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { runStateUpgrades as runRegistryUpgrades } from "../../packages/vibe64-core/src/server/stateUpgrades.js";
+import { BASELINE_LEDGER_EXISTS, BASELINE_STATE_WITHOUT_LEDGER, recordStateUpgradeBaseline, runStateUpgrades as runRegistryUpgrades } from "../../packages/vibe64-core/src/server/stateUpgrades.js";
 import { upgradeSessionConversations, inspectConversationUndoRetirement } from "../../packages/vibe64-runtime/src/server/conversationStorageUpgrade.js";
 import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeContinuity, upgradeColleagueNativeInstructions, repairColleagueRetiredOperation, upgradeColleagueHistoricalInteractiveContinuity } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
 import { upgradeAssistantHelpers } from "../../packages/vibe64-accounts/src/server/assistantHelperUpgrade.js";
@@ -385,8 +385,56 @@ test("the packaged standalone CLI checks, applies and reports failure without so
   assert.equal(routing.orchestrators.opencode, undefined);
   assert.equal(JSON.parse(await store.readMetadataValue("archived", "assistant_routing")).workflowEngineId, "opencode");
   await assert.rejects(exec(process.execPath, args), error => error.code === 1 && error.stderr.includes("Usage:"));
+  await assert.rejects(exec(process.execPath, [...args, "--baseline"]), error => error.code === 1 && error.stderr.includes("ledger already exists"));
+  await assert.rejects(exec(process.execPath, [...args, "--baseline", "--check"]), error => error.code === 1 && error.stderr.includes("Usage:"));
   await writeFile(f.ledgerPath, "{invalid");
   await assert.rejects(exec(process.execPath, [...args, "--apply"]), error => error.code === 1 && error.stderr.includes("ERROR:"));
+  const freshArgs = [outfile, `--system-root=${path.join(f.root, "fresh-state")}`];
+  assert.match((await exec(process.execPath, [...freshArgs, "--baseline"], { cwd: f.root })).stdout, new RegExp(`Recorded ${upgradeIds.length} state upgrade`));
+  assert.match((await exec(process.execPath, [...freshArgs, "--check"], { cwd: f.root })).stdout, /\b0 pending state upgrade\(s\)\./);
+});
+
+test("a baseline records every known upgrade for a fresh state root, privately and once", async t => {
+  const f = await fixture(t);
+  // Host provisioning prepares empty private directories before any state.
+  await mkdir(path.join(f.systemRoot, "attachments"), { recursive: true });
+  await mkdir(path.join(f.systemRoot, "users"), { recursive: true });
+  assert.deepEqual((await recordStateUpgradeBaseline({ systemRoot: f.systemRoot, report: (level, message) => f.messages.push({ level, message }) })).recorded, upgradeIds);
+  const ledger = JSON.parse(await readFile(f.ledgerPath, "utf8"));
+  assert.deepEqual(ledger.applied.map(entry => entry.id), upgradeIds);
+  assert.equal(ledger.version, 1);
+  assert.equal((await stat(f.ledgerPath)).mode & 0o777, 0o600);
+  assert.equal((await stat(path.dirname(f.ledgerPath))).mode & 0o777, 0o700);
+  await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
+  assert.deepEqual((await f.run()).pending, []);
+  const recorded = await readFile(f.ledgerPath, "utf8");
+  await assert.rejects(recordStateUpgradeBaseline({ systemRoot: f.systemRoot, report() {} }), { code: BASELINE_LEDGER_EXISTS });
+  assert.equal(await readFile(f.ledgerPath, "utf8"), recorded);
+  // A root that does not exist yet is fresh as well.
+  const missing = path.join(f.root, "missing/state");
+  await recordStateUpgradeBaseline({ systemRoot: missing, report() {} });
+  assert.equal(JSON.parse(await readFile(path.join(missing, "upgrades/applied.json"), "utf8")).applied.length, upgradeIds.length);
+  await assert.rejects(recordStateUpgradeBaseline({ systemRoot: "relative/state", report() {} }), /absolute, non-root/);
+});
+
+test("a baseline refuses existing state without a ledger, and the upgrade check explains that case", async t => {
+  const f = await fixture(t);
+  await f.marker('{"secret":"DO-NOT-LOG",');
+  await assert.rejects(recordStateUpgradeBaseline({ systemRoot: f.systemRoot, report() {} }),
+    error => error.code === BASELINE_STATE_WITHOUT_LEDGER && /state without a state upgrade ledger/u.test(error.message));
+  await assert.rejects(stat(path.join(f.systemRoot, "upgrades")), { code: "ENOENT" });
+  await assert.rejects(f.run(), error => error.message.includes(id) && error.message.includes("no state upgrade ledger") &&
+    !error.message.includes("DO-NOT-LOG"));
+  // With history present the hint is not added.
+  await mkdir(path.dirname(f.ledgerPath));
+  await writeFile(f.ledgerPath, JSON.stringify({ version: 1, applied: [] }));
+  await assert.rejects(f.run(), error => error.message.includes(id) && !error.message.includes("no state upgrade ledger"));
+  // An existing lock is never taken over.
+  const g = await fixture(t);
+  await mkdir(path.join(g.systemRoot, "upgrades"), { recursive: true });
+  await writeFile(path.join(g.systemRoot, "upgrades/apply.lock"), "other process");
+  await assert.rejects(recordStateUpgradeBaseline({ systemRoot: g.systemRoot, report() {} }), { code: BASELINE_STATE_WITHOUT_LEDGER });
+  assert.equal(await readFile(path.join(g.systemRoot, "upgrades/apply.lock"), "utf8"), "other process");
 });
 
 test("routing preflight failure blocks earlier identity writes as well", async t => {

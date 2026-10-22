@@ -55,6 +55,11 @@ import {
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import { configureCodexAttachmentHostRoot } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import {
+  BASELINE_LEDGER_EXISTS,
+  BASELINE_STATE_WITHOUT_LEDGER,
+  recordStateUpgradeBaseline
+} from "@local/vibe64-core/server/stateUpgrades";
+import {
   assertSafeLocalModeListenTarget,
   createVibe64RuntimeProfile
 } from "./server/lib/runtimeProfile.js";
@@ -482,6 +487,15 @@ async function createServer(options = {}) {
   const projectsRoot = rootContract.projectsRoot;
   const managedSourceRoot = rootContract.managedSourceRoot;
   const systemRoot = rootContract.systemRoot;
+  // A brand-new installation starts with the current format, so it records
+  // this release's upgrades before writing any state. Existing state, with or
+  // without history, is left to the operator's upgrade command.
+  await recordStateUpgradeBaseline({
+    systemRoot,
+    report: (level, message) => app.log.info({ component: "state-upgrades" }, message)
+  }).catch(error => {
+    if (error.code !== BASELINE_LEDGER_EXISTS && error.code !== BASELINE_STATE_WITHOUT_LEDGER) throw error;
+  });
   // Live session state (agent command helpers, pending uploads) lives below the
   // system root for the life of the process, so every caller resolves it alike.
   configureCodexAttachmentHostRoot(systemRoot);

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, lstat, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { access, lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -152,6 +152,26 @@ test("local single-folder server redirects / and /app to the startup project rou
       force: true,
       recursive: true
     });
+  }
+});
+
+test("server first start records the release baseline only for a fresh state root", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "vibe64-baseline-"));
+  const fresh = path.join(root, "fresh");
+  const existing = path.join(root, "existing");
+  await mkdir(path.join(existing, "users"), { recursive: true });
+  await writeFile(path.join(existing, "users/owner.json"), "{}\n");
+  try {
+    for (const systemRoot of [fresh, existing, fresh]) {
+      const app = await createServer({ runtimeMode: "local", startupSlug: "local-target", systemRoot, targetRoot: root });
+      await app.close();
+    }
+    const ledger = JSON.parse(await readFile(path.join(fresh, "upgrades/applied.json"), "utf8"));
+    assert.ok(ledger.applied.length > 0);
+    assert.equal(ledger.applied.at(0).id, "20260923-codex-login-id");
+    await assert.rejects(lstat(path.join(existing, "upgrades")), { code: "ENOENT" });
+  } finally {
+    await rm(root, { force: true, recursive: true });
   }
 });
 

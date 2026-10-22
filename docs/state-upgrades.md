@@ -54,8 +54,44 @@ after inspection. It inspects every
 pending upgrade and prints INFO and WARNING diagnostics. `--apply` holds an
 exclusive lock, checks pending work again, then applies it in order. It records
 each completed script atomically in `<systemRoot>/upgrades/applied.json`.
-Completed entries are never run again during normal deployment. A fresh
-installation records successful no-ops so later releases use the same history.
+Completed entries are never run again during normal deployment.
+
+## New installations: the baseline
+
+A missing ledger reads as "nothing applied". That is right only for a legacy
+installation that predates the ledger. State that a current release created is
+already in the current format, and replaying history against it fails (an early
+upgrade refuses data written in a later format). Every new installation
+therefore records its baseline before any state exists:
+
+```sh
+node /release/bin/upgrade-state.js --system-root=/absolute/vibe64/state --baseline
+```
+
+`--baseline` (`recordStateUpgradeBaseline` in Core) records every upgrade known
+to that release as completed, without running them, under the same
+`upgrades/apply.lock`, with the same private modes (directory `0700`, ledger
+`0600`) and atomic publication as `--apply`. It accepts only a fresh state root:
+one that is missing or holds nothing but empty directories. It refuses, writing
+nothing, when:
+
+- a ledger already exists (`state_upgrade_ledger_exists`): use `--check`/`--apply`;
+- any file exists without a ledger (`state_upgrade_state_without_ledger`): the
+  data may be current or legacy, and only inspection can tell. Neither a
+  baseline nor a blind replay is safe.
+
+The server records the same baseline on its first start of a fresh state root,
+before writing any state, so a new local installation has its history. It
+leaves existing state, with or without a ledger, untouched. Hosted provisioning
+records the baseline itself, as the state owner, before seeding any state.
+
+When `--check` or `--apply` fails on an installation without a ledger, the
+error says so. If that state was created by a release that already included
+the upgrades (for example, provisioning that skipped the baseline), its data is
+current: after inspection, the operator writes the ledger listing the upgrades
+that release contained, in registry order, as the state owner with the private
+modes above, and then runs `--check`. Never do this for genuinely older data;
+apply its upgrades instead.
 
 An ERROR exits nonzero and must block activation. Earlier completed upgrades
 remain recorded; a failing upgrade remains pending. Correct the reported cause

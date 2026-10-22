@@ -54,7 +54,10 @@ Runtime packages include an explicit state-upgrade command. Operators preflight
 pending numbered scripts with `--check`, stop writers, then use `--apply` before
 activating the candidate. The installation records each successful upgrade once,
 retains private backups, and rejects unsupported upgrade history. Errors stop
-activation; interrupted scripts must be safe to retry. Ordinary application
+activation; interrupted scripts must be safe to retry. A new installation
+records its baseline (`--baseline`, or the server's first start of an empty
+state root) so its current-format state is never replayed through history;
+existing state without a ledger is refused for inspection. Ordinary application
 reads and startup do not backfill old metadata. The first upgrade supplies a
 Vibe64-local login identity for existing Codex connections without changing
 native credentials or canonical project content. See `docs/state-upgrades.md`

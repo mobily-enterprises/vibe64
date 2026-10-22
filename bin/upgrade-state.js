@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { runStateUpgrades } from "@local/vibe64-core/server/stateUpgrades";
+import { recordStateUpgradeBaseline, runStateUpgrades } from "@local/vibe64-core/server/stateUpgrades";
 import { upgradeAssistantRouting } from "@local/vibe64-accounts/server/assistantRoutingUpgrade";
 import { upgradeAssistantHelpers } from "@local/vibe64-accounts/server/assistantHelperUpgrade";
 import { upgradeAssistantRoles } from "@local/vibe64-accounts/server/assistantRoleUpgrade";
@@ -25,13 +25,23 @@ try {
     "projects-root": { type: "string" },
     check: { type: "boolean" },
     apply: { type: "boolean" },
+    baseline: { type: "boolean" },
     "repair-colleague-retired-operation": { type: "boolean" },
     "repair-colleague-interactive-continuity": { type: "boolean" }
   } });
-  if (Boolean(values.check) === Boolean(values.apply)) {
-    throw new Error("Usage: node bin/upgrade-state.js --system-root=/absolute/state/path [--projects-root=/absolute/hosted/projects] (--check | --apply) [--repair-colleague-retired-operation | --repair-colleague-interactive-continuity]. Stop all writers before --apply.");
+  const actions = [values.check, values.apply, values.baseline].filter(Boolean).length;
+  const repair = values["repair-colleague-retired-operation"] || values["repair-colleague-interactive-continuity"];
+  if (actions !== 1 || (values.baseline && repair)) {
+    throw new Error("Usage: node bin/upgrade-state.js --system-root=/absolute/state/path [--projects-root=/absolute/hosted/projects] (--check | --apply | --baseline) [--repair-colleague-retired-operation | --repair-colleague-interactive-continuity]. Stop all writers before --apply. --baseline records this release's upgrades as complete only for a new, empty state directory.");
   }
-  await runStateUpgrades({
+  const report = (level, message) => {
+    const line = `[vibe64-upgrade] ${level.toUpperCase()}: ${message}`;
+    if (level === "warning") console.error(line);
+    else console.log(line);
+  };
+  if (values.baseline) {
+    await recordStateUpgradeBaseline({ systemRoot: values["system-root"], report });
+  } else await runStateUpgrades({
     systemRoot: values["system-root"],
     // Hosted sessions live in their catalogue namespace; local ones under the
     // managed source root, resolved as runtime resolves it.
@@ -64,11 +74,7 @@ try {
     upgradeClaudeRejectedInput,
     upgradeClaudeCommandMessages,
     upgradeIndependentProviderCredentials,
-    report: (level, message) => {
-      const line = `[vibe64-upgrade] ${level.toUpperCase()}: ${message}`;
-      if (level === "warning") console.error(line);
-      else console.log(line);
-    }
+    report
   });
 } catch (error) {
   console.error(`[vibe64-upgrade] ERROR: ${error.message}`);
