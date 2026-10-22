@@ -1,10 +1,10 @@
 import { readFile } from "node:fs/promises";
-import { createRenderer, effectScope, ref, ssrContextKey } from "vue";
+import { computed, createRenderer, effectScope, ref, ssrContextKey } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CURATED_CODEX_PROVIDERS } from "@local/vibe64-core/shared/curatedCodexProviders";
 
 const mocks = vi.hoisted(() => ({ route: null, accounts: null, curated: null, openCode: null, routing: null, colleague: null }));
-vi.mock("vue-router", () => ({ useRoute: () => mocks.route }));
+vi.mock("vue-router", () => ({ useRoute: () => mocks.route, useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock("vuetify", () => ({ useDisplay: () => ({ xs: ref(false) }) }));
 vi.mock("../../packages/vibe64-accounts/src/client/composables/useVibe64Accounts.js", () => ({ useVibe64Accounts: () => mocks.accounts }));
 vi.mock("../../packages/vibe64-accounts/src/client/composables/useCodexProviderConnections.js", () => ({
@@ -62,8 +62,10 @@ beforeEach(() => {
   mocks.accounts = { status: ref({ accounts: [{ id: "github", connected: true }, { id: "claude", connected: false }, { id: "codex", connected: false }] }),
     loadError: ref(""), statusResource: { reload: vi.fn().mockResolvedValue({}) } };
   mocks.curated = { resource: resource({ providers: CURATED_CODEX_PROVIDERS.map(({ id }) => ({ id, connected: false, claudeReady: false })) }),
-    loadError: ref("") };
-  mocks.openCode = { connections: ref([]), loadError: ref(""), isInitialLoading: ref(false), reload: vi.fn().mockResolvedValue({}) };
+    loadError: ref(""), busy: ref(false) };
+  mocks.curated.connections = computed(() => mocks.curated.resource.data.value?.providers || []);
+  mocks.openCode = { connections: ref([]), loadError: ref(""), isInitialLoading: ref(false), reload: vi.fn().mockResolvedValue({}),
+    removingProviderId: ref(""), savingProviderId: ref(""), updatingModelAccessProviderId: ref("") };
   const workflows = ref([]);
   const engines = ref([]);
   mocks.routing = { workflows: { resource: { reload: vi.fn().mockResolvedValue({}) }, workflows },
@@ -525,16 +527,56 @@ describe("flow", () => {
     expect([state.screen, state.wasSetUp, state.firstRun]).toEqual(["choose", true, false]);
   });
 
+  it("opens Manage on a configured card with only that card's connections", async () => {
+    mocks.curated.resource.data.value.providers.find(({ id }) => id === "deepseek")
+      .configuredEngines = ["codex", "claude"];
+    Object.assign(mocks.curated.resource.data.value.providers.find(({ id }) => id === "deepseek"), { connected: true, claudeReady: true });
+    mocks.openCode.connections.value = [FREE_GLM];
+    const { state } = await flow({ setUp: true });
+    const card = (id) => state.cards.find((item) => item.id === id);
+    expect(state.cardRows(card("deepseek")).map(({ kind, engineId }) => [kind, engineId]))
+      .toEqual([["codex-provider", "codex"], ["codex-provider", "claude"]]);
+    expect(state.cardRows(card("codex")).map(({ kind }) => kind)).toEqual(["codex"]);
+    expect([state.cardRows(card("glm")).length, state.cardRows(card("glm").free).map(({ id }) => id)]).toEqual([0, ["zai"]]);
+    expect(state.cardRows(card("claude"))).toEqual([]);
+    state.openManage(card("deepseek"));
+    expect([state.manageOpen, state.managedCard.id]).toEqual([true, "deepseek"]);
+  });
+
+  it("leads a configured setup with its cards, and asks to reconnect one that stopped working", async () => {
+    mocks.accounts.status.value.accounts[1] = { id: "claude", connected: false, status: "reconnect_required" };
+    const { state } = await flow({ setUp: true });
+    const claudeCard = state.cards.find(({ id }) => id === "claude");
+    expect(state.orderedCards.map(({ id }) => id)).toEqual(["claude", "codex", "deepseek", "glm"]);
+    expect([state.cardAction(claudeCard), state.cardNote(claudeCard), state.configured(claudeCard)]).toEqual(["reconnect", "", true]);
+    mocks.accounts.status.value.accounts[1] = { id: "claude", connected: false, status: "not_connected" };
+    mocks.curated.resource.data.value.providers.find(({ id }) => id === "deepseek")
+      .configuredEngines = ["codex"];
+    mocks.curated.resource.data.value.providers.find(({ id }) => id === "deepseek").connected = true;
+    expect(state.orderedCards.map(({ id }) => id)).toEqual(["codex", "deepseek", "claude", "glm"]);
+    expect(state.cardAction(state.cards.find(({ id }) => id === "claude"))).toBe("get");
+  });
+
   it("shows the owner-only notice to members", () => {
     const onboarding = effectScope().run(() => useAiOnboarding({ enabled: false }));
     expect(mount(AiSetup, { open: true, onboarding, canConfigure: false }).screen).toBe("owner");
   });
 
-  it("never offers removal and turns motion off for reduced-motion users", async () => {
+  it("never offers removal on the card face and turns motion off for reduced-motion users", async () => {
     for (const file of ["AiOnboarding.vue", "AiSetup.vue"]) {
       const source = await readFile(new URL(`../../packages/vibe64-accounts/src/client/onboarding/${file}`, import.meta.url), "utf8");
-      expect(source).not.toMatch(/removeConnection|Disconnect|logout/u);
+      expect(source).not.toMatch(/removeConnection|requestRemove|Disconnect|logout|>\s*Remove\s*</u);
       expect(source).toMatch(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*animation: none;[\s\S]*transform: none;/u);
     }
+  });
+
+  it("offers Remove only inside a card's Manage", async () => {
+    const studio = (file) => readFile(new URL(`../../packages/vibe64-accounts/src/client/studio/${file}`, import.meta.url), "utf8");
+    const [setup, manage, row] = await Promise.all([
+      readFile(new URL("../../packages/vibe64-accounts/src/client/onboarding/AiSetup.vue", import.meta.url), "utf8"),
+      studio("AiProviderManage.vue"), studio("AiConnectionRow.vue")]);
+    expect(setup).toMatch(/<AiProviderManage v-model="manageOpen" :card="managedCard"/u);
+    expect(manage).toMatch(/<AiConnectionRow v-for="row in rows"/u);
+    expect(row).toMatch(/@click="requestRemove\(account\)"[\s\S]*Remove/u);
   });
 });

@@ -3,21 +3,28 @@ import { computed, inject, nextTick, ref, unref, watch } from "vue";
 import { useDisplay } from "vuetify";
 import {
   mdiAlertCircleOutline, mdiArrowDown, mdiArrowLeft, mdiArrowRight, mdiCheck, mdiCheckCircle, mdiChevronDown,
-  mdiInformationOutline, mdiOpenInNew, mdiRobotHappyOutline, mdiShieldLockOutline
+  mdiInformationOutline, mdiOpenInNew, mdiRobotHappyOutline, mdiShieldLockOutline, mdiTuneVariant
 } from "@mdi/js";
 import AIAccountsSetup from "../studio/AIAccountsSetup.vue";
 import CliInstallNotice, { cliProblem } from "../studio/CliInstallNotice.vue";
 import ModelRoutingForm from "../studio/ModelRoutingForm.vue";
 import NativeProviderConnections from "../studio/NativeProviderConnections.vue";
+import AiConnectionDialogs from "../studio/AiConnectionDialogs.vue";
+import AiProviderManage from "../studio/AiProviderManage.vue";
+import { provideAiConnectionManager, useAiConnectionManager } from "../composables/useAiConnectionManager.js";
 import AiOnboardingKeyConnect from "./AiOnboardingKeyConnect.vue";
 import AiOnboardingMark from "./AiOnboardingMark.vue";
-import { usesProvider } from "./useAiOnboarding.js";
+import { aiOnboardingRows, usesProvider } from "./useAiOnboarding.js";
 import { VIBE64_LEARNING_KEY } from "/src/lib/vibe64AssistantHost.js";
 
 // The AI setup stage: choose a provider, connect it, settle routing and prove
-// it answers. The onboarding shell shows it after its Why screen.
+// it answers. The onboarding shell shows it after its Why screen. Each
+// configured card's Manage, and the dialogs behind it, act through one AI
+// connection manager.
 const props = defineProps({
   open: { type: Boolean, default: true },
+  // AI connections endpoint; standalone uses the default.
+  endpoint: { type: String, default: "" },
   // Opened from the user menu or AI Accounts to review an existing setup.
   redo: Boolean,
   onboarding: { type: Object, required: true },
@@ -25,7 +32,7 @@ const props = defineProps({
   // Hosted workspace: Personal-use connections serve only the owner.
   workspace: Boolean
 });
-const emit = defineEmits(["close"]);
+const emit = defineEmits(["close", "changed", "connected", "busy"]);
 const { xs } = useDisplay();
 
 const RATINGS = ["", "poor", "limited", "good", "very good", "excellent"];
@@ -64,13 +71,28 @@ const announcement = ref("");
 // Hover styling waits for real pointer movement, so a resting cursor stays still.
 const pointerMoved = ref(false);
 
-const busy = computed(() => setupBusy.value || routingBusy.value || verifying.value);
+const manager = provideAiConnectionManager(useAiConnectionManager({
+  ...(props.endpoint ? { endpoint: props.endpoint } : {}),
+  isOwner: computed(() => props.canConfigure),
+  emit: (event, value) => emit(event, value),
+  followRoute: false
+}));
+// Manage: the card whose connections are open, if any.
+const manageOpen = ref(false);
+const managedCard = ref(null);
+
+const busy = computed(() => setupBusy.value || routingBusy.value || verifying.value || manager.busy.value);
 const cards = computed(() => props.onboarding.cards.value);
 const loaded = computed(() => props.onboarding.loaded.value);
 const loadError = computed(() => props.onboarding.loadError.value);
 const featured = computed(() => cards.value.find((card) => card.crown));
 const others = computed(() => cards.value.filter((card) => !card.crown));
 const connectedCards = computed(() => cards.value.filter((card) => card.connected));
+// A configured setup leads with the cards it uses: connected or needing reconnection, then the rest by rank.
+const orderedCards = computed(() => {
+  const ranked = [featured.value, ...others.value];
+  return wasSetUp.value ? [...ranked.filter(configured), ...ranked.filter((card) => !configured(card))] : ranked;
+});
 const mainCard = computed(() => connectedCards.value.find((card) => usesProvider(props.onboarding.colleague.value, card)) || null);
 const nativeLogin = computed(() => ["anthropic", "openai"].includes(chosen.value?.connect.modelProviderId));
 // The chosen engine's CLI, when this computer lacks it or it did not start.
@@ -190,13 +212,35 @@ function keep(card) {
   return finish({ keep: true });
 }
 
+// The card's configured connections, working or not.
+function cardRows(card) {
+  return card ? aiOnboardingRows(card, manager.configuredAiRows.value) : [];
+}
+
+// Cards with connections of their own or of their free option.
+function configured(card) {
+  return card.connected || cardRows(card).length > 0 || cardRows(card.free).length > 0;
+}
+
+function openManage(card) {
+  managedCard.value = card;
+  manageOpen.value = true;
+}
+
+function cardClass(card) {
+  return { "aio-card--featured": card.crown, "aio-card--connected": card.connected,
+    "aio-card--reconnect": cardAction(card) === "reconnect", "aio-card--collapsed": !expanded(card) };
+}
+
 function cardAction(card) {
-  if (!card.connected || !wasSetUp.value) return "get";
+  if (!card.connected) return cardRows(card).length ? "reconnect" : "get";
+  if (!wasSetUp.value) return "get";
   return usesProvider(props.onboarding.colleague.value, card) ? "keep" : "main";
 }
 
 // Notes point the person to Claude; a connected card in a redo no longer sells itself.
 function cardNote(card) {
+  if (cardAction(card) === "reconnect") return "";
   if (wasSetUp.value && card.connected) return "";
   return card.crown && wasSetUp.value && connectedCards.value.length ? card.upgrade : card.note;
 }
@@ -282,12 +326,14 @@ function connectedLabel(card) {
 
 // Phone: lower-ranked cards collapse to a row, one open at a time; connected ones stay open.
 function collapsible(card) {
-  return xs.value && !card.crown && !card.connected;
+  return xs.value && !card.crown && !configured(card);
 }
 
 function expanded(card) {
   return !collapsible(card) || expandedId.value === card.id;
 }
+
+watch(busy, (value) => emit("busy", value));
 
 // The shell's top bar and phone dock follow the stage.
 defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("choose", true) });
@@ -334,13 +380,16 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
         <p v-if="verifying" class="d-sr-only" role="status">Checking…</p>
         <div class="ai-onboarding__cards">
           <article
-            v-for="(card, index) in [featured, ...others]" :key="card.id"
-            class="aio-card" :class="{ 'aio-card--featured': card.crown, 'aio-card--connected': card.connected, 'aio-card--collapsed': !expanded(card) }"
+            v-for="(card, index) in orderedCards" :key="card.id"
+            class="aio-card" :class="cardClass(card)"
             :style="{ '--aio-index': index }" :aria-labelledby="`aio-card-${card.id}`"
           >
             <span v-if="card.crown" class="aio-card__ribbon">Recommended</span>
             <span v-if="card.connected" class="aio-card__connected">
               <v-icon :icon="mdiCheckCircle" size="16" aria-hidden="true" />{{ connectedLabel(card) }}
+            </span>
+            <span v-else-if="cardAction(card) === 'reconnect'" class="aio-card__connected aio-card__connected--warn">
+              <v-icon :icon="mdiAlertCircleOutline" size="16" aria-hidden="true" />Reconnect required
             </span>
             <component
               :is="collapsible(card) ? 'button' : 'div'" class="aio-card__head"
@@ -390,9 +439,15 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
                 <div class="aio-card__ctas">
                   <v-btn
                     v-if="cardAction(card) === 'main'" color="primary" variant="tonal" size="large"
-                    :disabled="verifying" @click="makeMainAi(card)"
+                    :disabled="verifying" :aria-label="`Use ${card.name} as my main AI`" @click="makeMainAi(card)"
                   >
-                    Use {{ card.name }} as my main AI
+                    {{ card.crown ? `Use ${card.name} as my main AI` : "Use as main AI" }}
+                  </v-btn>
+                  <v-btn
+                    v-else-if="cardAction(card) === 'reconnect'" color="warning" variant="flat" size="large"
+                    :disabled="verifying" @click="connect(card, 'have')"
+                  >
+                    Reconnect {{ card.name }}
                   </v-btn>
                   <template v-else-if="cardAction(card) === 'get'">
                     <v-btn
@@ -404,8 +459,11 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
                     </v-btn>
                     <v-btn variant="text" color="primary" class="aio-card__link" @click="connect(card, 'have')">{{ card.have }}</v-btn>
                   </template>
-                  <v-btn v-if="cardAction(card) !== 'get'" variant="text" color="primary" class="aio-card__link" @click="close('manage', card)">
-                    Manage in AI Accounts
+                  <v-btn
+                    v-if="cardRows(card).length" variant="text" color="primary" class="aio-card__link" :prepend-icon="mdiTuneVariant"
+                    :aria-label="`Manage ${card.name}`" @click="openManage(card)"
+                  >
+                    Manage
                   </v-btn>
                 </div>
                 <div v-if="card.free" class="aio-card__free">
@@ -427,6 +485,12 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
                     @click="makeMainAi(card.free)"
                   >
                     Use the free option as my main AI
+                  </v-btn>
+                  <v-btn
+                    v-if="cardRows(card.free).length && !cardRows(card).length" variant="text" color="primary" class="aio-card__link"
+                    :prepend-icon="mdiTuneVariant" :aria-label="`Manage ${card.free.name}`" @click="openManage(card)"
+                  >
+                    Manage
                   </v-btn>
                 </div>
               </div>
@@ -615,6 +679,8 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
       </section>
     </Transition>
     <p class="d-sr-only" aria-live="polite">{{ announcement }}</p>
+    <AiProviderManage v-model="manageOpen" :card="managedCard" @connect="connect($event, 'have')" />
+    <AiConnectionDialogs />
   </div>
 </template>
 
@@ -626,11 +692,13 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
   --aio-type-body-sm: 400 0.8125rem/1.125rem var(--v64-font-family);
   --aio-stage-top: clamp(24px, 6vh, 72px);
   --v64-on-success-container: color-mix(in srgb, var(--v64-success) 55%, #000);
+  --aio-warn-ink: color-mix(in srgb, rgb(var(--v-theme-warning)) 45%, #000);
   color: var(--v64-on-surface);
   font-family: var(--v64-font-family);
 }
 .v-theme--dark .ai-setup {
   --aio-crown-strong: #f5c518;
+  --aio-warn-ink: color-mix(in srgb, rgb(var(--v-theme-warning)) 55%, #fff);
   --v64-on-success-container: color-mix(in srgb, var(--v64-success) 45%, #fff);
 }
 /* One button shape across the flow, embedded AI Accounts parts included. */
@@ -776,6 +844,7 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
   .aio-card:not(.aio-card--featured) .aio-card__free { grid-area: free; margin-top: var(--v64-space-1); }
 }
 .aio-card--connected { border: 2px solid var(--v64-success); }
+.aio-card--reconnect { border: 2px solid color-mix(in srgb, rgb(var(--v-theme-warning)) 70%, transparent); }
 /* Badges straddle the top border, so they never compete with the name for width. */
 .aio-card__ribbon,
 .aio-card__connected {
@@ -792,6 +861,7 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
 }
 .aio-card__ribbon { background: var(--aio-crown); color: var(--aio-crown-ink); right: var(--v64-space-6); }
 .aio-card__connected { background: var(--v64-success-container); color: var(--v64-on-success-container); left: var(--v64-space-5); }
+.aio-card__connected--warn { background: color-mix(in srgb, rgb(var(--v-theme-warning)) 22%, var(--v64-surface)); color: var(--aio-warn-ink); }
 .aio-card__head {
   align-items: center;
   background: none;

@@ -10,6 +10,8 @@ import AiSetup from "./AiSetup.vue";
 const props = defineProps({
   open: Boolean,
   start: { type: String, default: "why" },
+  // AI connections endpoint; standalone uses the default.
+  endpoint: { type: String, default: "" },
   // Opened from the user menu or AI Accounts to review an existing setup.
   redo: Boolean,
   onboarding: { type: Object, required: true },
@@ -144,7 +146,7 @@ function focusTitle() {
             </div>
           </section>
           <AiSetup
-            v-else key="setup" ref="setup" :open="open" :redo="redo" :onboarding="onboarding"
+            v-else key="setup" ref="setup" :open="open" :redo="redo" :onboarding="onboarding" :endpoint="endpoint"
             :can-configure="canConfigure" :workspace="workspace" @close="close"
           />
         </Transition>

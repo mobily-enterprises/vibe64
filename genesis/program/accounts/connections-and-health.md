@@ -61,6 +61,9 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-accounts/src/server/assistantProviderPolicy.js`
 - `packages/vibe64-accounts/src/server/zaiConnectionVerifier.js`
 - `packages/vibe64-accounts/src/client/studio/AiConnectionsSettings.vue`
+- `packages/vibe64-accounts/src/client/studio/AiConnectionDialogs.vue`
+- `packages/vibe64-accounts/src/client/studio/AiConnectionRow.vue`
+- `packages/vibe64-accounts/src/client/studio/AiProviderManage.vue`
 - `packages/vibe64-accounts/src/client/composables/useAiConnectionManager.js`
 - `packages/vibe64-accounts/src/client/composables/useAiConnections.js`
 
@@ -419,8 +422,15 @@ model in use, a plain "Use [provider] / Keep [current] for building" choice
 calls its exposed `applySuggested`, which saves every suggestion for that
 connection through the normal save; with none in use it applies the
 suggestions without asking. Its `plain` mode names roles and models by their
-display names. A connected card's **Manage in AI Accounts** closes the flow and
-requests the account connections dialog.
+display names. A card with configured connections (`aiOnboardingRows` matches the
+manager's rows to the card by native, curated and OpenCode ids) offers
+**Manage**: `AiSetup` creates one `useAiConnectionManager` (route following
+off), provides it, and opens `studio/AiProviderManage.vue` with that card's
+rows, each an `AiConnectionRow` (sign-in or key change, Model routing, Z.AI or
+Zen model access, Remove). The dialogs behind those actions are the moved
+`studio/AiConnectionDialogs.vue`, shared with AI Accounts. A card whose rows
+exist but no longer work shows Reconnect, which opens its connect step; cards
+with connections lead a configured setup.
 
 OpenCode connections retain the existing versioned file at
 `<systemRoot>/ai-connections/connections.json`. Native Codex and Claude login

@@ -55,6 +55,14 @@ function aiOnboardingConnections({ matches }, { accounts, curated, openCode }) {
   ])];
 }
 
+// The AI connection manager's rows (configured pairs, working or not) that
+// belong to a card, by the same matches that mark the card Connected.
+function aiOnboardingRows({ matches }, rows = []) {
+  return rows.filter(({ kind, id, modelProviderId }) => ["claude", "codex"].includes(kind) ? matches.native.includes(id)
+    : kind === "codex-provider" ? matches.curated.includes(id)
+      : kind === "opencode" && matches.opencode.includes(modelProviderId || id));
+}
+
 function useAiOnboarding({ endpoint = "", enabled = true } = {}) {
   const accounts = useVibe64Accounts();
   const curated = useCodexProviderConnections({ enabled });
@@ -134,4 +142,4 @@ function useAiOnboarding({ endpoint = "", enabled = true } = {}) {
     isSetUp, loadError, loaded, reload, revealColleague: colleague.reveal, sayHello, selectForColleague, verify };
 }
 
-export { aiIsSetUp, usesProvider, aiOnboardingConnections, aiOnboardingSnoozed, snoozeAiOnboarding, useAiOnboarding };
+export { aiIsSetUp, usesProvider, aiOnboardingConnections, aiOnboardingRows, aiOnboardingSnoozed, snoozeAiOnboarding, useAiOnboarding };

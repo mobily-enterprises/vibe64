@@ -7,7 +7,6 @@ let autoOpened = false;
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import AiOnboarding from "./AiOnboarding.vue";
-import { requestVibe64AccountConnectionsDialog } from "/src/lib/vibe64AccountConnectionsDialog.js";
 import { aiOnboardingAvailable, aiOnboardingNeeded, onVibe64AiOnboardingRequested } from "./aiOnboardingEvents.js";
 import { aiOnboardingSnoozed, snoozeAiOnboarding, useAiOnboarding } from "./useAiOnboarding.js";
 
@@ -53,13 +52,12 @@ onBeforeUnmount(() => {
   aiOnboardingAvailable.value = false;
 });
 
-// done continues in Colleague, which just said hello; manage opens the card's AI Accounts.
-async function close(reason, card = null) {
+// done continues in Colleague, which just said hello.
+async function close(reason) {
   if (reason === "later") snoozeAiOnboarding(props.actorKey);
   open.value = false;
   await nextTick();
   if (reason === "done" && onboarding.colleagueAvailable.value) await onboarding.revealColleague();
-  else if (reason === "manage") requestVibe64AccountConnectionsDialog({ providerId: card.connect.engineId, providerLabel: card.name });
   else {
     // The opener may have left with its menu or dialog; listeners name a stand-in.
     const target = request?.returnFocus || opener;
@@ -73,6 +71,6 @@ async function close(reason, card = null) {
 <template>
   <AiOnboarding
     :open="open" :start="start" :redo="redo" :onboarding="onboarding" :can-configure="canConfigure"
-    :workspace="Boolean(endpoint)" @close="close"
+    :workspace="Boolean(endpoint)" :endpoint="endpoint" @close="close"
   />
 </template>

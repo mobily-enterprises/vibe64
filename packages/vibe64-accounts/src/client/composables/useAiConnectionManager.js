@@ -1,4 +1,4 @@
-import { computed, nextTick, onBeforeUnmount, ref, unref, watch } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, provide, ref, unref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useModelRouting } from "./useModelRouting.js";
 import { cliProblem } from "../studio/CliInstallNotice.vue";
@@ -12,11 +12,13 @@ import { aiIsSetUp } from "../onboarding/useAiOnboarding.js";
 
 const PROVIDER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const PROVIDER_REVISION_PATTERN = /^sha256:[a-f0-9]{64}$/u;
+const AI_CONNECTION_MANAGER_KEY = Symbol("vibe64.aiConnectionManager");
 
 // Every AI connection the owner has, and the state behind adding, managing,
 // removing and routing them: the script of AI Accounts, moved as one piece so
-// the setup screen's Manage and Advanced share one instance.
-function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = false, emit = () => null } = {}) {
+// the setup screen's Manage and Advanced share one instance. followRoute: a
+// providerId/providerRevision in the route opens that provider's key editor.
+function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = false, emit = () => null, followRoute = true } = {}) {
   const owner = computed(() => Boolean(unref(isOwner)));
   const route = useRoute();
   const router = useRouter();
@@ -98,6 +100,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
   }
 
   const pendingProvider = computed(() => {
+    if (!followRoute) return null;
     const id = queryText(route.query.providerId);
     const providerRevision = queryText(route.query.providerRevision);
     if (!PROVIDER_ID_PATTERN.test(id) || !PROVIDER_REVISION_PATTERN.test(providerRevision)) {
@@ -811,11 +814,13 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     editorSaving,
     editorTitle,
     editorVerificationCopy,
+    emit,
     existingEditorConnection,
     filteredProviders,
     finishConnectionRouting,
     hasOwnAi,
     isInitialLoading,
+    isOwner: owner,
     loadError,
     manageConfiguredAi,
     missingTool,
@@ -892,4 +897,14 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
   };
 }
 
-export { useAiConnectionManager };
+// One manager per screen: its owner provides it, its parts inject it.
+function provideAiConnectionManager(manager) {
+  provide(AI_CONNECTION_MANAGER_KEY, manager);
+  return manager;
+}
+
+function injectAiConnectionManager() {
+  return inject(AI_CONNECTION_MANAGER_KEY);
+}
+
+export { injectAiConnectionManager, provideAiConnectionManager, useAiConnectionManager };

@@ -159,20 +159,40 @@ routing**; choose an available Senior there and save.
 **Your AI setup** starts with a strip of the connected providers' marks. When
 Colleague uses one of them it reads **Currently using · Main AI: [provider]**
 with the only **Keep using [provider]** button; otherwise it reads **Connected
-· [providers]** with **Choose a main AI below. We recommend Claude.** Connected
-cards have a green outline with a **Connected** badge (**Connected · in use**
-for the main AI; hosted adds **Workspace use** or **Personal use**), no plan or
-sign-up offer, and **Manage in AI Accounts**, which closes the flow and opens
-AI Accounts; on a phone they stay expanded. Claude's card adds **Upgrade your
-experience** when you use another AI. Choose **Use [provider] as my main AI**
-to switch, or **Get** another provider to add it. When switching would replace
-the model Vibe64 builds with, **Build with [provider]?** offers two choices:
-**Use [provider] for building** applies the suggested routing and moves
-Colleague; **Keep [current] for building** leaves routing as it is. **Show
-details** lists each change (Building, Quick tasks) with current and suggested
-models. When nothing is set for building yet, the suggestions apply without
-asking. Nothing is removed; remove a connection with **Manage** in AI
-Accounts.
+· [providers]** with **Choose a main AI below. We recommend Claude.** Cards you
+use come first. Connected cards have a green outline with a **Connected** badge
+(**Connected · in use** for the main AI; hosted adds **Workspace use** or
+**Personal use**), no plan or sign-up offer, and **Manage**; on a phone they
+stay expanded. A card whose sign-in or key stopped working has an amber outline,
+a **Reconnect required** badge and **Reconnect [provider]**, which opens its
+connect step. Claude's card adds **Upgrade your experience** when you use
+another AI. Choose **Use [provider] as my main AI** (on the other cards **Use as
+main AI**) to switch, or **Get** another provider to add it. When switching
+would replace the model Vibe64 builds with, **Build with [provider]?** offers
+two choices: **Use [provider] for building** applies the suggested routing and
+moves Colleague; **Keep [current] for building** leaves routing as it is.
+**Show details** lists each change (Building, Quick tasks) with current and
+suggested models. When nothing is set for building yet, the suggestions apply
+without asking. Nothing is removed from the card itself.
+
+### Manage a provider
+
+**Manage** opens a window (full screen on a phone) titled with the provider,
+saying which tools it is connected through, for example **Connected through
+Claude Code and Codex**, with **Billing & usage** when the provider has an
+account page. Each connection is a tile naming the tool (Claude Code, Codex or
+OpenCode), the account or billing, the model and the saved key's last
+characters, with **Default** on the one used by default. Its buttons:
+
+- **Manage sign-in** (Claude or Codex login) or **Replace key** (a provider
+  key); **Reconnect** when it stopped working.
+- **Model routing** to choose the models for that tool.
+- **Remove**, which asks for confirmation first.
+
+GLM's Manage lists the free Z.AI connection under **Free option**, with the
+**Free-only model access** switch (**Unlock all Z.AI models**); turning it on asks
+for confirmation because other Z.AI models can use API credit. Close the window
+with its close button or Escape; focus returns to **Manage**.
 
 ## Closing and recovery
 
