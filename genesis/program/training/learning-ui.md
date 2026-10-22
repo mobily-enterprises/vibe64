@@ -171,10 +171,11 @@ until the first `practice.list` read answers. The **Lesson finished**
 screen (`Vibe64LearningFinished.vue`) finishes its attempt once, then offers
 **Next lesson** (through `startLesson`) and **Back to courses**. The step bar
 (`Vibe64LearningStepBar.vue`, on the project page) shows the current lesson's
-step in Learn with Previous/Next/Open and a collapse toggle kept in the tab's
-session storage. `openLesson` also asks the page layout (`VIBE64_COLLEAGUE_LAYOUT_KEY`,
-passed to the controller as `layout`) to show the project side, so a phone's
-Open reveals the Lesson pane even when the address already names it. The project picker (`ProjectSelectionGate`) never lists
+step in Learn with Previous/Next and a collapse toggle kept in the tab's
+session storage; it has no Open button (the page's Lesson tab opens the
+lesson). `openLesson` also asks the page layout (`VIBE64_COLLEAGUE_LAYOUT_KEY`,
+passed to the controller as `layout`) to show the project side, so on a phone
+it reveals the Lesson pane even when the address already names it. The project picker (`ProjectSelectionGate`) never lists
 practice projects and, for a mode refusal, shows the server's message with
 **Switch to Develop/Learn**; a deleted practice project points to Courses →
 Archived.

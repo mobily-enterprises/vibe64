@@ -1,9 +1,8 @@
 <script setup>
-import { computed, inject, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { mdiBookOpenPageVariantOutline, mdiChevronDown, mdiChevronLeft, mdiChevronRight, mdiChevronUp, mdiMenu, mdiPause, mdiPlay } from "@mdi/js";
 import { aiOnboardingAvailable, aiOnboardingNeeded, requestVibe64AiOnboarding } from "@local/vibe64-accounts/client";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
-import { VIBE64_COLLEAGUE_LAYOUT_KEY } from "@/lib/vibe64AssistantHost.js";
 import Vibe64LearningStep from "./Vibe64LearningStep.vue";
 
 // The current lesson's step bar, at the top of the project page in Learn
@@ -12,16 +11,13 @@ import Vibe64LearningStep from "./Vibe64LearningStep.vue";
 // a time (dots show where), pointing at the real places; Back/Next move by
 // beat into the neighbouring steps, and after the last beat the step's own
 // verdict control and Next step appear. A step without beats shows its title
-// and status, with Show me when it declares a guide. Open shows the step in
-// the page's Lesson pane (hidden while that pane shows). ≡ Step drops the
+// and status, with Show me when it declares a guide. ≡ Step drops the
 // whole step (the reader's own step view, with every control) open under the
 // bar, in place. Courses, always on it, is the way out to the catalogue. It
 // collapses to its position and dots. While the lesson waits for the
 // learner's AI (its practice project could not be prepared without one), the
 // line says so instead and offers Set up your AI.
 const learning = useVibe64Learning();
-const layout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
-const lessonShown = computed(() => Boolean(layout?.value?.lessonVisible));
 const lesson = computed(() => learning?.lesson.value || null);
 const steps = computed(() => lesson.value?.steps || []);
 const step = computed(() => learning?.currentStep.value || null);
@@ -245,13 +241,6 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
           <span class="vibe64-learning-step-bar__step-text-label">Step</span>
           <v-icon class="vibe64-learning-step-bar__step-text-chevron" :icon="stepTextShown ? mdiChevronUp : mdiChevronDown" size="18" />
         </v-btn>
-        <v-btn
-          v-if="!lessonShown"
-          variant="tonal" rounded="pill" min-height="40" class="vibe64-learning-step-bar__open" data-test="learning-step-bar-open"
-          @click="learning.openLesson({ stepId: step.id })"
-        >
-          Open
-        </v-btn>
       </div>
       <v-btn
         variant="tonal" rounded="pill" min-height="40" min-width="40" :prepend-icon="mdiBookOpenPageVariantOutline"
@@ -358,8 +347,7 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
 /* A phone: line 1 is the position and controls, line 2 the beat and its one action. */
 @media (max-width: 600px) {
   .vibe64-learning-step-bar { column-gap: 4px; flex-wrap: wrap; row-gap: 0; }
-  /* Step (≡) holds the whole step here; Open stays on wider screens. */
-  .vibe64-learning-step-bar__open, .vibe64-learning-step-bar__step-text-chevron { display: none; }
+  .vibe64-learning-step-bar__step-text-chevron { display: none; }
   /* One action on the beat's line: I'm stuck stays in Step beside Do it for me. */
   .vibe64-learning-step-bar__stuck--beside { display: none; }
   .vibe64-learning-step-bar__lesson { display: none; }

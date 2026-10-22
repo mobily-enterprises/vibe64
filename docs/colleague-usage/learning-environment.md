@@ -68,8 +68,7 @@ Colleague, your teacher. The **Lesson** pane is the one place a lesson is read:
 the step list, the current step with its text, diagram, question or check,
 **Show me** and **Teach me** (see [Reading a lesson](#reading-a-lesson)), and
 the lesson's **Lesson finished** screen. Starting, continuing or resuming a
-lesson from Courses, the step bar's **Open**, and Colleague's **Step N/M**
-button all open it here, at the step you were reading.
+lesson from Courses and Colleague's **Step N/M** button both open it here, at the step you were reading.
 
 - **On the lesson's practice project** the project switches read **Preview**,
   **Dashboard** and **Lesson**. Select **Lesson** to read the lesson; Preview

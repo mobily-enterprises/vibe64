@@ -1,7 +1,7 @@
 # The lesson step bar
 
 The yellow lesson step bar above the project page plays the current lesson
-step: its position, beats, **Step**, **Open** and **Courses**. The rest of
+step: its position, beats, **Step** and **Courses**. The rest of
 Learn mode is in [The Learning environment](learning-environment.md).
 
 In Learn mode, while your lesson is loaded, a yellow bar above the project page
@@ -13,15 +13,13 @@ place, with everything the Lesson tab offers for it: its text, diagram and
 **Teach me** and **Previous step**/**Next step**. It covers the top of the page
 (at most about two thirds of the screen, scrolling inside); **Step** again or
 Escape closes it, and **Show me** closes it so the place it shows is in view.
-This tab remembers whether it is open. **Open** shows the step in the page's
-**Lesson** tab (see [The Lesson tab](learning-environment.md#the-lesson-tab)); **Open** is hidden while the Lesson tab is showing. **Courses**, at its right end (a book icon
+This tab remembers whether it is open. To read the step in the page's
+**Lesson** tab, select that tab (see [The Lesson tab](learning-environment.md#the-lesson-tab));
+the bar has no separate Open button. **Courses**, at its right end (a book icon
 on a phone), opens the Courses overlay to choose another lesson; it stays
 there when the bar is collapsed. The chevron at its left collapses it to one
 line (**Hide the lesson step**) and expands it again (**Show the lesson step**);
-this tab remembers the choice. On a phone the lesson name is hidden, and
-**Open** shows the project side of the page (instead of the chat) on the Lesson
-tab, also when the page is already on the Lesson tab, for example after
-pressing **L** twice or **Show chat**.
+this tab remembers the choice. On a phone the lesson name is hidden.
 
 ### Steps with beats
 
@@ -98,6 +96,5 @@ This tab remembers the beat and the pause; another tab or device starts the
 step at its first beat. Collapsing the bar leaves only the step position and
 its dots. On a phone the bar has two lines: the position and arrows above,
 the beat's line and its one button below; **Step** and **Courses** show only
-their icons, **Open** is left out (**Step** shows the whole step, and the
-**Lesson** tab is one tap away), and the open step fills the width. A step without beats shows its title
+their icons, and the open step fills the width. A step without beats shows its title
 and status as before, and **Show me** when it can point at a place.

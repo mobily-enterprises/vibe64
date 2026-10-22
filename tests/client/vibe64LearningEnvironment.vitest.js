@@ -1571,17 +1571,15 @@ const beatsLesson = () => {
 const STEP_BAR_ICONS = Object.freeze({ mdiBookOpenPageVariantOutline: "book", mdiChevronDown: "down", mdiChevronLeft: "left",
   mdiChevronRight: "right", mdiChevronUp: "up", mdiMenu: "menu", mdiPause: "pause", mdiPlay: "play" });
 // The step bar over a host layout; ≡ Step renders the reader's step view (stubbed: its title).
-function mountStepBar(learning, layout = Vue.shallowRef({ lessonVisible: false }), accounts = { aiOnboardingAvailable: Vue.ref(true),
+function mountStepBar(learning, accounts = { aiOnboardingAvailable: Vue.ref(true),
   aiOnboardingNeeded: Vue.ref(false), requestVibe64AiOnboarding: vi.fn(() => true) }) {
-  const LAYOUT = Symbol("layout");
   const step = { props: ["learning"], setup: props => () => Vue.h("div", { "data-test": "step-view" }, props.learning.currentStep.value?.title) };
   const bar = compiledUi(path.resolve("src/components/learning/Vibe64LearningStepBar.vue"), {
-    vue: Vue, "@mdi/js": STEP_BAR_ICONS, "@/lib/vibe64AssistantHost.js": { VIBE64_COLLEAGUE_LAYOUT_KEY: LAYOUT },
+    vue: Vue, "@mdi/js": STEP_BAR_ICONS,
     "@/composables/useVibe64Learning.js": { useVibe64Learning: () => learning }, "./Vibe64LearningStep.vue": { default: step },
     "@local/vibe64-accounts/client": accounts });
   const root = { children: [] };
   const app = uiRenderer().createApp({ render: () => Vue.h(bar) });
-  app.provide(LAYOUT, layout);
   for (const tag of WIDGETS) app.component(tag, widget);
   app.mount(root);
   return { root, app };
@@ -1701,13 +1699,12 @@ describe("Lesson step bar", () => {
     stop();
   });
 
-  it("shows the current lesson's step in Learn mode, moves through steps, opens the Lesson pane and collapses", async () => {
+  it("shows the current lesson's step in Learn mode, moves through steps and collapses", async () => {
     let on = true;
     const { learning } = controller({ mode: () => ({ ...LEARN, on }) });
     learning.setViewer("member");
     await flush();
-    const layout = Vue.shallowRef({ lessonVisible: false });
-    const { root, app } = mountStepBar(learning, layout);
+    const { root, app } = mountStepBar(learning);
     try {
       await flush();
       expect(textOf(byTest(root, "learning-step-bar"))).toContain("Step 1 of 4: Read");
@@ -1717,18 +1714,11 @@ describe("Lesson step bar", () => {
       await flush();
       expect(learning.stepId).toBe("quiz");
       expect(textOf(root)).toContain("Not checked yet");
-      await byTest(root, "learning-step-bar-open").props.onClick();
-      expect([learning.open, learning.stepId], "Open shows the step in the Lesson pane, not in Courses").toEqual([false, "quiz"]);
-      layout.value = { lessonVisible: true };
-      await flush();
-      expect(byTest(root, "learning-step-bar-open"), "no Open while the Lesson pane shows").toBeUndefined();
-      layout.value = { lessonVisible: false };
-      await flush();
+      expect(byTest(root, "learning-step-bar-open"), "the Lesson tab opens the lesson; the bar has no Open").toBeUndefined();
       byTest(root, "learning-step-bar-toggle").props.onClick();
       await flush();
       expect(learning.stepBarCollapsed).toBe(true);
       expect(textOf(root)).toContain("Step 2 of 4");
-      expect(byTest(root, "learning-step-bar-open"), "collapsed to one line").toBeUndefined();
       on = false;
       await learning.readLearningMode();
       await flush();
@@ -1782,7 +1772,7 @@ describe("Lesson step bar", () => {
     learning.setViewer("member");
     await flush();
     const accounts = { aiOnboardingAvailable: Vue.ref(true), aiOnboardingNeeded: Vue.ref(true), requestVibe64AiOnboarding: vi.fn(() => true) };
-    const { root, app } = mountStepBar(learning, undefined, accounts);
+    const { root, app } = mountStepBar(learning, accounts);
     try {
       await flush();
       expect(learning.aiRequired).toBe(true);

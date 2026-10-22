@@ -296,8 +296,8 @@ function useVibe64AppPage() {
   );
 
   watch(projectSlug, retryProjectRuntime, { flush: "sync" });
-  // A phone shows one surface: opening the Lesson pane (the step bar's Open,
-  // a started lesson, Colleague) shows the project side.
+  // A phone shows one surface: opening the Lesson pane (a started lesson,
+  // Colleague) shows the project side.
   watch(projectPane, pane => {
     if (pane === "lesson" && mobilePaneLayout.value) setChatCollapsed(true);
   });
