@@ -160,7 +160,8 @@ One beat per line: `<show|do|check> <target>[ <path>]: <text>`.
   most 500 characters). Only `file-opened` takes an argument, a relative
   practice project path without `..`. A do beat completes when the page shows
   its place, or when its activity happens in the lesson's practice project
-  after the beat began (`send-message`: a message accepted in the chat;
+  during its step, after the step's previous do beat was done; activity from
+  earlier in the step counts when the beat begins (`send-message`: a message accepted in the chat;
   `agent-finished`: the agent's turn ends; `file-opened`: that file opens in
   Files; `app-pressed`: the practice App's button; `colleague`, `save`,
   `reload-preview`: Colleague opens, a Save succeeds, the Preview reloads;

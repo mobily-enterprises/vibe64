@@ -89,8 +89,11 @@ guide overlay 3000 above L 2400 above Colleague.
   (`VIBE64_PAGE_FOCUS_KEY`, written by each host from its existing Colleague
   focus) shows its place (`trainingPlaceShown`), or when the page activity it
   names (`src/lib/vibe64PageActivity.js`, `VIBE64_PAGE_ACTIVITY_KEY`, names in
-  `TRAINING_BEAT_EVENTS`) arrives for the practice project while that beat is
-  current. Emitters: the session view's accepted send (`message-sent`), the
+  `TRAINING_BEAT_EVENTS`) arrives for the practice project during its step
+  after the step's previous do beat was done: the player keeps the step's
+  activity in order (in memory, reset with the step), so activity heard while
+  an earlier beat played completes the do beat when it begins (not when Back
+  returns to an already detected beat). Emitters: the session view's accepted send (`message-sent`), the
   agent turn ending (`agent-finished`), a successful Save (`saved`), Preview
   Reload (`preview-reloaded`), Files opening a file (`file-opened`), the
   practice App's orientation button (`app-pressed`), Colleague opening and

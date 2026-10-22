@@ -7,8 +7,10 @@ import { TRAINING_BEAT_ACTIONS, TRAINING_GUIDE_PLACES, trainingGuideSteps, train
 // step.beats) play in order: a show beat points at its place and moves on by
 // itself after a time set by its length; do and check beats wait for the
 // learner: a do beat is done when the page focus shows its place, or when the
-// page activity it names happens in the lesson's practice project after the
-// beat began; its confirmation shows briefly, then the next beat plays. Back
+// page activity it names happens in the lesson's practice project during its
+// step, after the step's previous do beat was done (so a message sent while
+// an earlier beat played, or an agent that finished before its beat began,
+// still counts); its confirmation shows briefly, then the next beat plays. Back
 // and Next move by beat and cross into the neighbouring step at either end. The beat index and the pause are this tab's place (the
 // controller's state, saved with it); nothing of the player is saved on the
 // server.
@@ -58,6 +60,16 @@ function createLessonPlayer({ state, steps, currentStep, active, selectStep, rem
   const local = reactive({ remaining: 0, duration: 0, held: false, ring: "", confirmed: "" });
   // The do beats detected in this tab (stepId:index); never saved.
   const detected = new Set();
+  // The current step's page activity in order, and the position of the one
+  // that completed its latest do beat; in memory only, reset with the step.
+  const heard = { stepId: "", events: [], used: -1 };
+  function stepActivity() {
+    const stepId = currentStep.value?.id || "";
+    if (heard.stepId !== stepId) Object.assign(heard, { stepId, events: [], used: -1 });
+    return heard;
+  }
+  const activityMatches = (value, event) => value?.kind === "do" && beatEvent(value) === event.name &&
+    (!value.path || event.path === value.path);
   const beats = computed(() => Array.isArray(currentStep.value?.beats) ? currentStep.value.beats : []);
   // A step whose last beat is its check ends on that beat; otherwise it ends
   // one past its last beat, where the bar shows the step's own verdict control.
@@ -130,6 +142,13 @@ function createLessonPlayer({ state, steps, currentStep, active, selectStep, rem
     if (!shown || !value) return;
     if (value.kind === "show") timer = setInterval(tick, TICK_MS);
     if (value.kind === "do" && placeShown(value)) return confirm(value, "✓ You're already here.");
+    // What the learner already did in this step completes a beat they have
+    // not yet done here (Back onto a done beat leaves it waiting).
+    if (value.kind === "do" && !detected.has(`${currentStep.value?.id}:${index.value}`)) {
+      const history = stepActivity();
+      const position = history.events.findIndex((event, at) => at > history.used && activityMatches(value, event));
+      if (position >= 0) return confirm(value, "✓ Done.", position);
+    }
     void point(value);
   }, { immediate: true });
 
@@ -139,10 +158,11 @@ function createLessonPlayer({ state, steps, currentStep, active, selectStep, rem
     return Boolean(current && !TRAINING_BEAT_ACTIONS[value.target] &&
       trainingPlaceShown(value.target, { ...current, learningOpen: state.open }) === true);
   }
-  function confirm(value, line = "✓ Done.") {
+  function confirm(value, line = "✓ Done.", position = -1) {
     const stepId = currentStep.value?.id;
     const at = index.value;
     detected.add(`${stepId}:${at}`);
+    if (position >= 0) stepActivity().used = position;
     if (local.ring) clearGuide(local.ring);
     local.ring = "";
     local.confirmed = line;
@@ -158,11 +178,12 @@ function createLessonPlayer({ state, steps, currentStep, active, selectStep, rem
     if (shown) confirm(beat.value);
   });
   activity?.subscribe(event => {
-    const value = beat.value;
-    if (value?.kind !== "do" || local.confirmed || !active() || beatEvent(value) !== event.name) return;
     if (practiceSlug() && event.projectSlug && event.projectSlug !== practiceSlug()) return;
-    if (value.path && event.path !== value.path) return;
-    confirm(value);
+    const history = stepActivity();
+    history.events.push(event);
+    const value = beat.value;
+    if (local.confirmed || !active() || !activityMatches(value, event)) return;
+    confirm(value, "✓ Done.", history.events.length - 1);
   });
   // A collapsed bar or open Courses takes the ring away with the beat's text.
   watch(() => state.stepBarCollapsed || state.open, covered => {

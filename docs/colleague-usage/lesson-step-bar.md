@@ -44,7 +44,11 @@ current one), then the beat's line:
   preview**, or press **L** (it counts once you are back in Learn). When the
   page sees you do it, the line says **✓ Done.** (or **✓ You're already here.**
   when you already are) and the next beat plays after a moment. **Next** skips
-  it. Only what you do after the line appears counts.
+  it. What you did earlier in this step counts too, in order: a message sent
+  while an earlier line played completes the send line, and an agent that
+  finished before its line appeared completes the wait line (what happened
+  before the step's previous *do* line was done does not count). Going **Back** onto a line you have
+  done leaves it waiting.
 - **Do it for me** on a *do* line does it through the page's own controls:
   it opens the place (or the file), reveals and focuses the coding chat, opens
   Courses or Colleague (without asking it anything), reloads the Preview, or

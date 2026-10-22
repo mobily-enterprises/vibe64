@@ -127,6 +127,52 @@ describe("lesson beat player", () => {
     expect([h.state.beat, h.player.confirmed, h.player.final]).toEqual([1, "", true]);
   });
 
+  it("completes do beats whose activity happened earlier in the step, in order, but not again after Back", async () => {
+    const steps = [{ id: "wait", beats: [{ kind: "show", target: "chat", text: "This is the chat." },
+      { kind: "do", target: "send-message", prompt: "Hi", text: "Ask it: \"Hi\"" },
+      { kind: "do", target: "agent-finished", text: "The agent is working." }, { kind: "check", target: "done", text: "Done?" }] }];
+    const h = harness({ steps, stepId: "wait" });
+    await settle();
+    h.activity.report("agent-finished", { projectSlug: "practice-1" });
+    h.activity.report("message-sent", { projectSlug: "practice-1" });
+    expect([h.state.beat, h.player.confirmed], "a show beat only records what happened").toEqual([0, ""]);
+    h.player.next();
+    await settle();
+    expect(h.player.confirmed, "the message sent while the show beat played counts").toBe("✓ Done.");
+    vi.advanceTimersByTime(1600);
+    await settle();
+    expect([h.state.beat, h.player.confirmed], "a turn that finished before the message does not count").toEqual([2, ""]);
+    h.activity.report("agent-finished", { projectSlug: "practice-1" });
+    expect(h.player.confirmed).toBe("✓ Done.");
+    expect(h.allDone).toHaveBeenCalledWith("wait");
+    vi.advanceTimersByTime(1600);
+    await settle();
+    expect(h.state.beat).toBe(3);
+    h.player.back();
+    await settle();
+    expect([h.state.beat, h.player.confirmed], "Back onto a done beat waits").toEqual([2, ""]);
+  });
+
+  it("completes the agent-finished beat when the turn finished during the send confirmation or after Next skipped ahead", async () => {
+    const steps = [{ id: "wait", beats: [{ kind: "do", target: "send-message", prompt: "Hi", text: "Ask it: \"Hi\"" },
+      { kind: "do", target: "agent-finished", text: "The agent is working." }] }];
+    const h = harness({ steps, stepId: "wait" });
+    await settle();
+    h.activity.report("message-sent", { projectSlug: "practice-1" });
+    h.activity.report("agent-finished", { projectSlug: "practice-1" });
+    vi.advanceTimersByTime(1600);
+    await settle();
+    expect([h.state.beat, h.player.confirmed]).toEqual([1, "✓ Done."]);
+    const skipped = harness({ steps, stepId: "wait" });
+    await settle();
+    skipped.activity.report("agent-finished", { projectSlug: "other-project" });
+    skipped.player.next();
+    await settle();
+    expect(skipped.player.confirmed, "another project's turn does not count").toBe("");
+    skipped.activity.report("agent-finished", { projectSlug: "practice-1" });
+    expect(skipped.player.confirmed, "a skipped send still lets the finished turn count").toBe("✓ Done.");
+  });
+
   it("completes a place do beat when the page shows it, at once when already there, and a file beat only for its path", async () => {
     const steps = [{ id: "go", check: { kind: "self" }, beats: [{ kind: "do", target: "files", text: "Open Files." },
       { kind: "do", target: "file-opened", path: "src/app.js", text: "Open src/app.js." }, { kind: "show", target: "chat", text: "Chat." }] }];
