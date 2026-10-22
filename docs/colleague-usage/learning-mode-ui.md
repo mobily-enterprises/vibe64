@@ -3,8 +3,10 @@
 The **L** button switches between **Develop** (your own projects) and
 **Learn** (lessons); see [The Learning environment (L)](learning-environment.md).
 In Learn mode the app bar turns yellow, and **Courses** in the project menu
-(the project name beside **L**) opens the Courses overlay. This guide describes its **Courses** tab. Its **In
-progress** and **Archived** tabs are described in
+(the project name beside **L**) opens the Courses overlay, the catalogue where
+lessons are chosen; a lesson itself is read in the page's **Lesson** tab. This
+guide describes the overlay's **Courses** tab. Its **In progress** and
+**Archived** tabs are described in
 [Practice projects](learning-practice-projects.md).
 
 ## Course cards
@@ -85,8 +87,9 @@ in progress, and **L** returns to it. When every required step has passed, the
 **Lesson finished** screen finishes the lesson, which archives it the same way
 (see [The Learning environment (L)](learning-environment.md)).
 
-The lesson's practice project opens with **Open practice project** in the lesson
-or **Open** under **In progress**. Setup repair there is ordinary project work
+Starting or continuing a lesson, or **Open** under **In progress**, closes
+Courses and opens the lesson in the **Lesson** tab of its practice project; its
+**Preview** and **Dashboard** tabs are beside it. Setup repair there is ordinary project work
 (ask that session's agent or use Workspace setup recovery); it is not a learner
 answer or a passed step.
 

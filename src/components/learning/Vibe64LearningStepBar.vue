@@ -16,8 +16,9 @@ const lesson = computed(() => learning?.lesson.value || null);
 const steps = computed(() => lesson.value?.steps || []);
 const step = computed(() => learning?.currentStep.value || null);
 const index = computed(() => steps.value.findIndex(value => value.id === step.value?.id));
-const visible = computed(() => Boolean(learning?.learnMode && learning.mode?.currentAttemptId &&
-  learning.state.attemptId === learning.mode.currentAttemptId && step.value));
+// The current lesson's step (not a finished lesson's screen).
+const visible = computed(() => Boolean(learning?.learnMode && !learning.finished && learning.lessonAttemptId &&
+  learning.state.attemptId === learning.lessonAttemptId && step.value));
 const collapsed = computed(() => Boolean(learning?.stepBarCollapsed));
 const statusLabel = Object.freeze({ passed: "Passed", "not-yet-passed": "Not yet passed", "not-started": "Not checked yet" });
 const status = computed(() => step.value ? learning.stepStatus(step.value.id) : "not-started");

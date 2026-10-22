@@ -63,11 +63,13 @@ tab.
 
 ## The Lesson tab
 
-In Learn mode the current lesson is also read on the project page itself,
-beside Colleague, your teacher. The **Lesson** pane holds the same lesson
-reader as the Courses overlay: the step list, the current step with its text,
-diagram, question or check, **Show me** and **Teach me** (see
-[Reading a lesson](#reading-a-lesson)).
+In Learn mode the current lesson is read on the project page itself, beside
+Colleague, your teacher. The **Lesson** pane is the one place a lesson is read:
+the step list, the current step with its text, diagram, question or check,
+**Show me** and **Teach me** (see [Reading a lesson](#reading-a-lesson)), and
+the lesson's **Lesson finished** screen. Starting, continuing or resuming a
+lesson from Courses, the step bar's **Open**, and Colleague's **Step N/M**
+button all open it here, at the step you were reading.
 
 - **On the lesson's practice project** the project switches read **Preview**,
   **Dashboard** and **Lesson**. Select **Lesson** to read the lesson; Preview
@@ -78,9 +80,16 @@ diagram, question or check, **Show me** and **Teach me** (see
   coding session, so there is no chat column: the Lesson pane fills the page,
   and the switches read **Lesson** and **Dashboard** (there is no Preview). The
   Dashboard keeps **Account settings** and the other sections.
-- The reader lays itself out by the width it has: in a narrow pane, for
-  example beside the chat column and an open Colleague, the step list becomes
-  the row of numbered circles described under the Courses overlay.
+- The reader lays itself out by the width it has: in a narrow pane (on a
+  phone, or beside the chat column and an open Colleague) the step list becomes
+  a row of numbered circles at the top (a tick for a passed step); the step
+  text scrolls below them. When there are more circles than fit, the row
+  scrolls sideways and follows the current step as you press **Next step** or
+  **Previous step**, or reopen the lesson, so the step you are reading always
+  stays in view.
+- Your reading place (step and scroll position) is saved for your account. A
+  reload in the same tab returns to it; in another browser the lesson opens at
+  the step you last read.
 - On a phone (and other narrow screens up to 980px wide) the page shows one
   side at a time: the chat or the project pane. The next-pane button at the top
   goes from **Lesson** to **Preview** to **Dashboard** and back to **Lesson**,
@@ -118,26 +127,22 @@ project page.
 
 ## The Courses overlay
 
-**Courses** in the project menu opens the Courses overlay above the page. It fills the
-screen, with a **Courses** tab, an **In progress** tab, an **Archived** tab and
-a tab named after your open lesson, and a close button (×, **Close Courses**)
-at the right.
+**Courses** in the project menu opens the Courses overlay above the page: the
+catalogue where you choose, start and manage lessons. It fills the screen, with
+a **Courses** tab, an **In progress** tab and an **Archived** tab, and a close
+button (×, **Close Courses**) at the right. A lesson is not read here: opening
+one closes Courses and shows it in the page's
+[Lesson tab](#the-lesson-tab).
 
 - Press × or Escape to close it. The page you were on, and Colleague, are
   visible again.
-- Press **Courses** again to come back to exactly where you were: the same tab,
-  lesson, step and scroll position.
-- Your place is also saved for your account. A reload in the same tab reopens
-  the overlay where it was; in another browser it opens on **Courses**, and
-  **Continue lesson** opens the lesson at the step you last read.
+- Press **Courses** again to come back to the same tab.
+- A reload of the page leaves Courses closed; this tab remembers which Courses
+  tab you were on for the next time you press **Courses**. In another browser it
+  opens on **Courses**.
 
-On a phone the overlay is a full-screen sheet; the tabs always show in full, a
-long lesson title is shortened, and the tab row scrolls sideways when it does
-not fit. The lesson's steps become a row of numbered circles at the top (a tick
-for a passed step); the step text scrolls below them. When there are more
-circles than fit, the row scrolls sideways and follows the current step as you
-press **Next step** or **Previous step**, or reopen the lesson, so the step you
-are reading always stays in view.
+On a phone the overlay is a full-screen sheet; the tabs always show in full,
+and the tab row scrolls sideways when it does not fit.
 
 ## Courses
 
@@ -146,19 +151,19 @@ catalogue** and, for the workspace owner, **New course**; see
 [Choosing lessons and courses](learning-mode-ui.md).
 
 - **Start**, **Start next lesson**, **Start lesson** or **Try preview** start
-  the lesson and open it, at its practice project, in the lesson tab. No chat
-  is created. Starting a lesson while a different one is in progress first asks
+  the lesson, close Courses and open it in the Lesson tab of its practice
+  project (or, without one, of the no-project page). No chat is created. Starting a lesson while a different one is in progress first asks
   **Archive your lesson in progress?**: **Archive and start** or **Keep it**.
-- **Continue lesson** opens your lesson in progress.
+- **Continue lesson** opens your lesson in progress in the Lesson tab.
 - If a start was not confirmed, **Retry lesson start** repeats the same request.
 - On hosted Vibe64 the workspace owner also sees **Author trial** with
-  **Resume author trial**, which opens the admitted draft snapshot in the same
-  reader (see the hosted author-trial guide).
+  **Resume author trial**, which opens the admitted draft snapshot in the
+  Lesson tab (see the hosted author-trial guide).
 
 ## In progress and Archived
 
 **In progress** shows your one lesson in progress with its practice project and
-**Open**, **Restart** and **Delete**. **Archived** lists the lessons you
+**Open** (which opens it in the Lesson tab), **Restart** and **Delete**. **Archived** lists the lessons you
 finished or archived, each with **Delete**. Deleting asks once more (**Delete
 for good**); see [Practice projects](learning-practice-projects.md).
 
@@ -191,9 +196,9 @@ title and **Passed**, **Not yet passed**, **Not checked yet** or **Optional**.
 Select a step to read it. Only this attempt's results count: after **Restart**
 or a redo every step starts again as not passed. When every required step has passed the list says
 **Every required step is passed. This lesson is complete.** with a **Lesson
-finished** button (on a phone one short row under the step circles: **✓ Lesson
-complete**, **Lesson finished** and **Practice**, which opens the practice
-project and closes the overlay). **Lesson finished** opens the lesson finished screen again.
+finished** button (in a narrow pane one short row under the step circles:
+**✓ Lesson complete** and **Lesson finished**). **Lesson finished** opens the
+lesson finished screen again.
 
 A step shows **Step N of M**, its title and its text. Depending on the step it
 also has:
@@ -210,11 +215,11 @@ also has:
   stay ticked, also after a reload or in another browser.
 - **Automatic check**: a step about an App interaction says "This step is
   checked automatically when you do it in your practice project", for example
-  by pressing a button in its Preview. For a button step, open the step in
-  the Courses overlay, then close it (**Show me** does this and opens the Preview)
-  and press the App's button yourself in the practice project's visible Preview.
-  Your press counts only for the lesson step Learning currently shows, in that
-  lesson's own practice session, while the overlay is not covering the app; the
+  by pressing a button in its Preview. For a button step, read the step in
+  the Lesson tab, then select **Preview** (**Show me** does this) and press the
+  App's button yourself in the practice project's visible Preview. Your press
+  counts only for the lesson step Learning currently shows, in that lesson's
+  own practice session, while Courses is not covering the app; the
   status updates when the check finishes. In a new browser tab, open the lesson
   once before pressing. Colleague cannot press for you, and Run or
   reloading the Preview is not a press. A code step names the file to change
@@ -232,7 +237,7 @@ also has:
   it. A step already passed (in this attempt or one before, for example when you
   retake a lesson) says **You already passed this step, so it does not need to
   be marked done again.** and **Done** stays disabled.
-- **Show me**: closes the overlay, opens the real place in the app (for example
+- **Show me**: closes Courses if it is open, opens the real place in the app (for example
   the practice project's Preview or a Dashboard section) and rings the control
   with a short caption. A step about one file opens that file in the practice
   project's **Dashboard → Files** editor. A step about the database (**ERD** or
@@ -241,12 +246,11 @@ also has:
   The ring stays for a few seconds, also on a phone while the practice
   project's page is still loading, and clears when you tap or click anywhere.
   Click the control yourself. If the place is not
-  available on the current page, the overlay comes back with the reason; open
-  your practice project and try again.
+  available on the current page, the step comes back in the Lesson tab with the
+  reason; open your practice project and try again.
 - **Teach me**: opens Colleague beside the step and sends it the message
-  "Teach me this step." for you. The step stays on screen (from the Courses
-  overlay, it moves to the page's Lesson tab); Colleague answers in its
-  conversation. On a phone Colleague's full-screen chat opens over the step.
+  "Teach me this step." for you. The step stays on screen in the Lesson tab;
+  Colleague answers in its conversation. On a phone Colleague's full-screen chat opens over the step.
   If Colleague is not connected yet, an error says so; press **Teach me** again.
   If no AI is connected yet (for example during Lesson 0), nothing is sent:
   Colleague opens and says **Colleague cannot teach this step yet: it has no
@@ -258,8 +262,6 @@ also has:
   **Next step**.
 - Links in a step or its notes that go to another website (for example Z.AI's
   key page) open in a new browser tab, so Vibe64 and your lesson stay open.
-- **Open practice project** (when the lesson has one) closes the overlay and
-  opens that project.
 
 Statuses come only from automatic checks, the answer comparison and your own
 **Done**. Colleague never decides a step's status and does not know the
@@ -267,9 +269,9 @@ correct answers of a question.
 
 ## Lesson finished
 
-When your own step result (in the Lesson tab, in the overlay, or an
-automatic check from your Preview press) completes the last required step, the
-overlay opens on the **Lesson finished** screen in the lesson tab: a check mark,
+When your own step result (in the Lesson tab, or an automatic check from your
+Preview press) completes the last required step, the Lesson tab opens on the
+**Lesson finished** screen: a check mark,
 **LESSON FINISHED**, the lesson title and "You completed every required step: X
 of Y steps passed." It finishes the lesson for you ("Finishing the lesson…"):
 the lesson is archived with its practice project and conversation under
@@ -279,7 +281,8 @@ to try again. You don't need an AI for this. Then choose:
 
 - **Next lesson: <title>** starts the next unfinished lesson of the same course
   (when there is one).
-- **Back to courses**.
+- **Back to courses** opens the Courses overlay; the Lesson tab goes away, since
+  no lesson is in progress.
 
 ## The current step in Colleague
 
@@ -309,8 +312,8 @@ attempt.
 - An error banner at the top of the lesson has **Retry**, which reads the
   lesson again. A failed **Check answer**, **Done** or **Check now** shows its
   message; press the same button again.
-- Signing out or switching account closes the overlay and clears the previous
-  person's place on this device.
+- Signing out or switching account closes Courses and the lesson and clears the
+  previous person's place on this device.
 
 ## What Colleague can do
 

@@ -4,9 +4,9 @@ import { revealCurrentStep } from "@/lib/vibe64Learning.js";
 import Vibe64LearningMarkdown from "./Vibe64LearningMarkdown.vue";
 import Vibe64LearningStep from "./Vibe64LearningStep.vue";
 
-// The lesson reader: the lesson's steps with their status, and the current
-// step (Vibe64LearningStep, shared with Colleague's current-step dialog). It
-// lays itself out by its own width, so a narrow pane gets the phone step row.
+// The lesson reader of the Learn page's Lesson pane: the lesson's steps with
+// their status, and the current step (Vibe64LearningStep). It lays itself out
+// by its own width, so a narrow pane gets the phone step row.
 // Verdicts come only from the Training actions (auto check, choice comparator,
 // self Done); this view displays the saved results.
 const props = defineProps({
@@ -57,9 +57,6 @@ watch([() => step.value?.id, () => props.visible], async ([, shown]) => {
   await nextTick();
   revealCurrentStep(stepList.value);
 }, { immediate: true });
-
-const practiceSlug = computed(() => lesson.value?.practiceProjectSlug || "");
-const openPractice = () => props.learning.openCurrent();
 </script>
 
 <template>
@@ -93,17 +90,13 @@ const openPractice = () => props.learning.openCurrent();
             </button>
           </li>
         </ol>
-        <div v-if="requiredDone || practiceSlug" class="vibe64-learning-reader__summary">
+        <div v-if="requiredDone" class="vibe64-learning-reader__summary">
           <p v-if="requiredDone" class="vibe64-learning-reader__complete" role="status">
             <span class="vibe64-learning-reader__complete-long">Every required step is passed. This lesson is complete.</span>
             <span class="vibe64-learning-reader__complete-short">✓ Lesson complete</span>
           </p>
-          <v-btn v-if="requiredDone" color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-finish"
+          <v-btn color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-finish"
             @click="learning.showFinished()">Lesson finished</v-btn>
-          <v-btn v-if="practiceSlug" variant="text" rounded="pill" min-height="48" aria-label="Open practice project" data-test="learning-open-practice" @click="openPractice">
-            <span class="vibe64-learning-reader__practice-long">Open practice project</span>
-            <span class="vibe64-learning-reader__practice-short">Practice</span>
-          </v-btn>
         </div>
       </nav>
 
@@ -164,7 +157,7 @@ const openPractice = () => props.learning.openCurrent();
 .vibe64-learning-reader__step-status { font-size: 0.75rem; color: var(--v64-on-surface-variant, inherit); }
 .vibe64-learning-reader__summary { display: grid; gap: var(--v64-space-2, 8px); justify-items: start; }
 .vibe64-learning-reader__complete { color: rgb(var(--v-theme-success)); font-weight: 600; margin: 0; }
-.vibe64-learning-reader__complete-short, .vibe64-learning-reader__practice-short { display: none; }
+.vibe64-learning-reader__complete-short { display: none; }
 .vibe64-learning-reader__body { min-height: 0; overflow-y: auto; padding: var(--v64-space-4, 16px) var(--v64-space-5, 24px) var(--v64-space-6, 32px); max-width: 52rem; width: 100%; }
 .vibe64-learning-reader__notes { margin-top: var(--v64-space-5, 24px); }
 .vibe64-learning-reader .v-btn { letter-spacing: 0; text-transform: none; }
@@ -179,8 +172,8 @@ const openPractice = () => props.learning.openCurrent();
   /* Phone: completion and its buttons share one short row. */
   .vibe64-learning-reader__summary { align-items: center; display: flex; flex-wrap: wrap; gap: 4px var(--v64-space-2, 8px); margin-top: var(--v64-space-2, 8px); }
   .vibe64-learning-reader__complete { font-size: 0.875rem; }
-  .vibe64-learning-reader__complete-long, .vibe64-learning-reader__practice-long { display: none; }
-  .vibe64-learning-reader__complete-short, .vibe64-learning-reader__practice-short { display: inline; }
+  .vibe64-learning-reader__complete-long { display: none; }
+  .vibe64-learning-reader__complete-short { display: inline; }
   .vibe64-learning-reader__body { padding: var(--v64-space-3, 12px) var(--v64-space-4, 16px) var(--v64-space-6, 32px); }
 }
 </style>

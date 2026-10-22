@@ -12,13 +12,12 @@ import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { useVibe64LearningCourses } from "@/composables/useVibe64LearningCourses.js";
 import Vibe64LearningAttempts from "./Vibe64LearningAttempts.vue";
 import Vibe64LearningCourses from "./Vibe64LearningCourses.vue";
-import Vibe64LearningFinished from "./Vibe64LearningFinished.vue";
-import Vibe64LearningReader from "./Vibe64LearningReader.vue";
 import Vibe64LearningTeacherNotes from "./Vibe64LearningTeacherNotes.vue";
 
-// The Courses overlay (Learn mode's Courses button), mounted once per host for
-// the signed-in viewer: public App.vue and hosted AuthGate's authenticated
-// content. It also keeps each address in its mode, colours the app bar in
+// The Courses overlay (Learn mode's Courses button), the catalogue where
+// lessons are chosen and started (the lesson itself is read in the Learn
+// page's Lesson pane), mounted once per host for the signed-in viewer: public
+// App.vue and hosted AuthGate's authenticated content. It also keeps each address in its mode, colours the app bar in
 // Learn mode, and mounts the one global teacher guide overlay of that host.
 const props = defineProps({
   // Owner-only author trial of draft lessons (hosted owner).
@@ -77,12 +76,10 @@ watch(open, async value => {
 
 const courses = useVibe64LearningCourses({ authorPreview: computed(() => toValue(props.authorPreview) === true), active: open });
 const surface = computed(() => learning?.state.surface || "courses");
-const lessonTitle = computed(() => learning?.lesson.value?.title || learning?.lesson.value?.code || "Lesson");
-const tabs = computed(() => [
+const tabs = Object.freeze([
   { id: "courses", label: "Courses" },
   { id: "progress", label: "In progress" },
-  { id: "archived", label: "Archived" },
-  ...(learning?.state.attemptId ? [{ id: "lesson", label: lessonTitle.value }] : [])
+  { id: "archived", label: "Archived" }
 ]);
 
 useRealtimeEvent({
@@ -127,7 +124,6 @@ function keydown(event) {
       <nav class="vibe64-learning__tabs" aria-label="Courses">
         <button
           v-for="tab in tabs" :key="tab.id" type="button" class="vibe64-learning__tab"
-          :class="{ 'vibe64-learning__tab--lesson': tab.id === 'lesson' }"
           :aria-current="surface === tab.id ? 'page' : undefined" :data-test="`learning-${tab.id}-tab`"
           @click="learning.show({ surface: tab.id })"
         >
@@ -145,14 +141,9 @@ function keydown(event) {
         <!-- The learner's own teacher notes (C7), below the courses. -->
         <Vibe64LearningTeacherNotes :learning="learning" />
       </div>
-      <div v-else-if="surface === 'progress' || surface === 'archived'" class="vibe64-learning__scroll">
+      <div v-else class="vibe64-learning__scroll">
         <Vibe64LearningAttempts :learning="learning" :archived="surface === 'archived'" />
       </div>
-      <!-- A completed lesson's "Lesson finished" screen (it finishes the attempt). -->
-      <div v-else-if="learning.state.finished && learning.lesson.value" class="vibe64-learning__scroll">
-        <Vibe64LearningFinished :learning="learning" :courses="courses" />
-      </div>
-      <Vibe64LearningReader v-else :learning="learning" :visible="open" @return="learning.show()" />
     </div>
   </div>
   <!-- Above Courses (2400) by style: Vuetify stacks a dialog 10 above the topmost
@@ -224,8 +215,6 @@ function keydown(event) {
   padding: 0 var(--v64-space-4, 16px);
   white-space: nowrap;
 }
-/* A long lesson title takes the remaining width. */
-.vibe64-learning__tab--lesson { flex: 0 1 auto; max-width: 22rem; overflow: hidden; text-overflow: ellipsis; }
 .vibe64-learning__tab[aria-current="page"] { background: var(--v64-learning-container, rgba(245, 197, 24, 0.24)); color: var(--v64-on-learning-container, inherit); font-weight: 700; }
 .vibe64-learning__tab:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
 .vibe64-learning:focus { outline: none; }
@@ -236,6 +225,5 @@ function keydown(event) {
 @media (max-width: 600px) {
   .vibe64-learning__bar { gap: 4px; padding-inline: var(--v64-space-2, 8px) 0; }
   .vibe64-learning__tab { padding: 0 var(--v64-space-3, 12px); }
-  .vibe64-learning__tab--lesson { max-width: 9rem; }
 }
 </style>

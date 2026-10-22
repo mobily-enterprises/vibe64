@@ -68,8 +68,9 @@ In Learn mode, **Courses** (in the project menu beside **L**) has an **In progre
 practice project's name (or **No practice project**). Without one it says
 **No lesson in progress. Start one from Courses.** The row has three buttons:
 
-- **Open** opens the lesson and its practice project (or, for a lesson
-  without one, the lesson with no project selected).
+- **Open** closes Courses and opens the lesson in the **Lesson** tab of its
+  practice project (or, for a lesson without one, of the page with no project
+  selected).
 - **Restart** archives this attempt and starts the same lesson again with a new
   practice project, a new teacher conversation and no step results.
 - **Delete** turns into **Delete for good**; press that to delete the lesson
@@ -91,8 +92,8 @@ only its record and conversation.
 
 ## Finishing a lesson
 
-When every required step has passed, the lesson's **Lesson finished** screen
-finishes it: the lesson counts as completed for good, and the attempt is
+When every required step has passed, the lesson's **Lesson finished** screen,
+in the page's **Lesson** tab, finishes it: the lesson counts as completed for good, and the attempt is
 archived as one bundle (its record, practice project and conversation). The
 screen then offers **Next lesson** and **Back to courses**. **Start lesson** on
 the course page starts a new attempt with a fresh project, teacher and results; the

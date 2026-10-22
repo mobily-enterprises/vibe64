@@ -1660,7 +1660,7 @@ test("Colleague guide commands point without navigating and show me through the 
 test("Colleague opening an app place minimises Learning, and a phone minimises its own dialog for guides and Learning", async t => {
   const acks = [];
   const calls = [];
-  const learning = vue.shallowRef(vue.reactive({ coursesOpen: true, surface: "lesson",
+  const learning = vue.shallowRef(vue.reactive({ coursesOpen: true, surface: "courses",
     mode: { on: true, currentAttemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }, stepId: "open-preview", lesson: null, results: [],
     show(input) { calls.push(["show", input]); this.coursesOpen = true; },
     minimise(by = "") { calls.push(["minimise", by]); this.coursesOpen = false; } }));

@@ -1003,6 +1003,7 @@ async function mountLearningSurface(read = lessonRead()) {
   const calls = [];
   const request = vi.fn(async (url, options = {}) => {
     calls.push({ url, method: options.method, body: options.body === undefined ? undefined : structuredClone(options.body) });
+    if (url.endsWith("/learning-mode")) return { ok: true, learningMode: { on: true, currentAttemptId: attemptId, practiceSlug: "practice" } };
     return options.method === "POST" ? { ok: true, stepId: "try-the-app", outcome: "passed", recorded: true } : structuredClone(read);
   });
   const learning = createVibe64Learning({ request });

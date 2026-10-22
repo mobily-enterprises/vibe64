@@ -3,7 +3,7 @@ import { computed, ref, toValue, watch } from "vue";
 import { mdiCheckCircle } from "@mdi/js";
 import { courseProgress } from "@local/vibe64-training/client/course-progress";
 
-// The "Lesson finished" screen (lesson surface): shown when the learner's own
+// The "Lesson finished" screen (in the Lesson pane): shown when the learner's own
 // step result completes the lesson, and again from the reader of a complete
 // lesson. It finishes the attempt once (lesson.finish archives its record,
 // practice project and conversation; Learn mode stays on), then offers the

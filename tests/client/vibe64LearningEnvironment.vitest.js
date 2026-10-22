@@ -60,18 +60,19 @@ function controller({ reads = () => lessonResult(), posts = () => ({ ok: true })
 const flush = async () => { for (let i = 0; i < 4; i += 1) { await Promise.resolve(); await Vue.nextTick(); } };
 
 describe("useVibe64Learning controller", () => {
-  it("opens nothing until the overlay binds a signed-in viewer, then opens the reader on the saved place", async () => {
+  it("opens nothing until the overlay binds a signed-in viewer, then opens the Lesson pane on the saved place", async () => {
     const { learning, calls } = controller({ reads: () => lessonResult({ reader: { attemptId: ATTEMPT, stepId: "quiz", scroll: 120 } }) });
     await expect(learning.show()).rejects.toThrow("Sign in");
+    await expect(learning.openLesson()).rejects.toThrow("Sign in");
     learning.setViewer("member");
     const focus = await learning.show({ attemptId: ATTEMPT });
     expect(calls[0]).toEqual({ url: VIBE64_LEARNING_ROUTES.lessonRead(ATTEMPT), method: "GET", body: undefined });
-    expect(learning.open).toBe(true);
-    expect(learning.surface).toBe("lesson");
+    expect(learning.open, "a lesson is read in the Lesson pane, never in Courses").toBe(false);
+    expect(learning.surface).toBe("courses");
     // No browser place yet: the learner's saved reader.json position is restored.
     expect(learning.stepId).toBe("quiz");
     expect(learning.scroll).toBe(120);
-    expect(focus).toEqual({ learningOpen: true, learningSurface: "lesson", learningAttemptId: ATTEMPT, learningStepId: "quiz" });
+    expect(focus).toEqual({ learningOpen: false, learningSurface: "courses", learningAttemptId: ATTEMPT, learningStepId: "quiz" });
     expect(learning.lesson.value.practiceProjectSlug).toBe("practice-one");
     expect(learning.lesson.value.steps.every(step => !Object.hasOwn(step.check || {}, "answer"))).toBe(true);
   });
@@ -116,7 +117,7 @@ describe("useVibe64Learning controller", () => {
   it("records whether the learner's own close or Escape hid Courses, for Colleague's phone return", async () => {
     const { learning } = controller();
     learning.setViewer("member");
-    await learning.show({ attemptId: ATTEMPT });
+    await learning.show();
     learning.minimise("learner");
     expect(learning.hiddenBy).toBe("learner");
     await learning.show();
@@ -298,10 +299,31 @@ describe("useVibe64Learning controller", () => {
     expect(start).toHaveBeenLastCalledWith({ ...selection, archiveCurrent: true });
     expect(outcome).toMatchObject({ attemptId: OTHER });
     expect(learning.confirmArchive).toBeNull();
-    expect(router.push, "the started lesson opens at its place").toHaveBeenLastCalledWith("/app/project/training-next");
-    expect([learning.open, learning.surface, learning.attemptId]).toEqual([true, "lesson", OTHER]);
+    expect(router.push, "the started lesson opens at its place, in its Lesson pane").toHaveBeenLastCalledWith("/app/project/training-next?pane=lesson");
+    expect([learning.open, learning.attemptId], "Courses closes").toEqual([false, OTHER]);
     await expect(learning.startLesson(selection, async () => { throw new Error("offline"); })).rejects.toThrow("offline");
     expect(learning.confirmArchive, "other failures are not a confirmation").toBeNull();
+  });
+
+  it("shows an author trial, which never becomes the mode's lesson, as this tab's current lesson in the Lesson pane", async () => {
+    const router = { currentRoute: { value: { fullPath: "/app/learning" } }, push: vi.fn(async path => { router.currentRoute.value.fullPath = path; }) };
+    const { learning } = controller({ router, mode: () => ({ ...LEARN, currentAttemptId: "", practiceSlug: "" }) });
+    learning.setViewer("member");
+    await flush();
+    await learning.opened({ attemptId: ATTEMPT, current: true });
+    expect(router.push).toHaveBeenLastCalledWith("/app/learning?pane=lesson");
+    expect([learning.attemptId, learning.lessonAttemptId, learning.open]).toEqual([ATTEMPT, ATTEMPT, false]);
+    await learning.readLearningMode();
+    expect(learning.lessonAttemptId, "a mode read keeps the trial").toBe(ATTEMPT);
+    // A reload of this tab keeps it.
+    const again = controller({ mode: () => ({ ...LEARN, currentAttemptId: "", practiceSlug: "" }) });
+    again.learning.setViewer("member");
+    await flush();
+    expect(again.learning.lessonAttemptId).toBe(ATTEMPT);
+    // Opening another attempt ends the trial here.
+    await learning.openLesson({ attemptId: OTHER });
+    await learning.readLearningMode();
+    expect([learning.attemptId, learning.lessonAttemptId]).toEqual(["", ""]);
   });
 
   it("restarts, finishes and deletes the lesson in progress through its actions, and lists it with the archived lessons", async () => {
@@ -333,25 +355,27 @@ describe("useVibe64Learning controller", () => {
     expect(LearningLib.normalizePractice({ ok: false })).toMatchObject({ current: null, archived: [], loaded: false });
   });
 
-  it("minimise keeps the place; closing and reopening Courses returns to the exact step", async () => {
+  it("keeps the Lesson pane's place and Courses' tab; closing and reopening Courses changes neither", async () => {
     vi.useFakeTimers();
     const { learning, calls } = controller();
     learning.setViewer("member");
     await learning.show({ attemptId: ATTEMPT });
     learning.selectStep("preview");
     learning.setScroll(48.4);
-    learning.minimise();
-    expect(learning.open).toBe(false);
-    expect(learning.minimised).toBe(true);
+    // The Lesson pane saves reader.json at once when it hides (last write wins); later timers add nothing new.
+    learning.flushReader();
     expect(learning.stepId).toBe("preview");
-    // Minimising saves reader.json at once (last write wins); later timers add nothing new.
     expect(calls.filter(call => call.method === "POST")).toEqual([
       { url: VIBE64_LEARNING_ROUTES.readerSave(ATTEMPT), method: "POST", body: { stepId: "preview", scroll: 48 } }]);
     vi.runAllTimers();
     expect(calls.filter(call => call.method === "POST")).toHaveLength(1);
+    await learning.show({ surface: "progress" });
+    expect(learning.open).toBe(true);
+    learning.minimise();
+    expect(learning.minimised).toBe(true);
     await learning.show();
     expect(learning.open).toBe(true);
-    expect(learning.surface).toBe("lesson");
+    expect(learning.surface, "Courses comes back on its tab").toBe("progress");
     expect(learning.stepId).toBe("preview");
     learning.closeCourses();
     expect(learning.open).toBe(false);
@@ -364,7 +388,7 @@ describe("useVibe64Learning controller", () => {
     const again = controller({ reads: () => lessonResult({ reader: { attemptId: ATTEMPT, stepId: "quiz", scroll: 7 } }) });
     again.learning.setViewer("member");
     expect(again.learning.attemptId).toBe(ATTEMPT);
-    await again.learning.show();
+    await again.learning.openLesson();
     expect(again.learning.stepId).toBe("preview");
     expect(again.learning.scroll).toBe(48);
     expect(again.calls[0].url).toBe(VIBE64_LEARNING_ROUTES.lessonRead(ATTEMPT));
@@ -413,16 +437,17 @@ describe("useVibe64Learning controller", () => {
     expect(learning.stepStatus("read")).toBe("not-started");
   });
 
-  it("Show me minimises L, then guides with the practice project's view; Teach me asks Colleague", async () => {
+  it("Show me closes Courses, then guides with the practice project's view; Teach me asks Colleague", async () => {
     const navigateBrowser = vi.fn();
     const view = { projectSlug: "practice-one", openFile: vi.fn() };
     const runGuide = vi.fn(async () => ({ guide: { shown: true, step: "preview" } }));
     const { learning } = controller({ browserNavigation: Vue.shallowRef(navigateBrowser), colleagueView: Vue.shallowRef(view), runGuide });
     learning.setViewer("member");
     await learning.show({ attemptId: ATTEMPT, stepId: "preview" });
+    await learning.show();
     const receipt = await learning.showMe("preview");
     expect(receipt).toEqual({ guide: { shown: true, step: "preview" } });
-    expect(learning.minimised).toBe(true);
+    expect([learning.open, learning.hiddenBy], "Courses gives way to the real place").toEqual([false, ""]);
     const [command, options] = runGuide.mock.calls[0];
     expect(command).toMatchObject({ projectSlug: "practice-one", pane: "preview",
       guide: { target: "preview", navigate: true, highlight: true, caption: "Your app runs here" } });
@@ -432,11 +457,10 @@ describe("useVibe64Learning controller", () => {
     view.openFile.mockReturnValue(true);
     expect(options.view.openFile("src/app.js")).toBe(true);
 
-    await learning.show();
     const request = learning.teachMe("quiz");
-    expect(learning.open, "Teach me from Courses moves the step to the Lesson pane, beside Colleague").toBe(false);
+    expect(learning.open, "Teach me leaves the step in the Lesson pane, beside Colleague").toBe(false);
     expect(request).toMatchObject({ kind: "teach", message: VIBE64_LEARNING_TEACH_MESSAGE, attemptId: ATTEMPT, stepId: "quiz" });
-    expect(learning.focus.value).toEqual({ learningOpen: false, learningSurface: "lesson", learningAttemptId: ATTEMPT, learningStepId: "quiz" });
+    expect(learning.focus.value).toEqual({ learningOpen: false, learningSurface: "courses", learningAttemptId: ATTEMPT, learningStepId: "quiz" });
     expect(learning.consumeColleagueRequest("other")).toBeNull();
     expect(learning.consumeColleagueRequest(request.id)).toBe(request);
     expect(learning.colleagueRequest.value).toBeNull();
@@ -932,8 +956,8 @@ describe("Learning reader", () => {
       await byTest(view.root, "learning-finish").props.onClick();
       await flush();
       expect(learning.finished).toBe(true);
-      expect(learning.surface).toBe("lesson");
-      expect(learning.open).toBe(true);
+      expect(learning.open, "the Finished screen shows in the Lesson pane, not in Courses").toBe(false);
+      expect(learning.lessonAttemptId, "the Lesson pane keeps the finished lesson").toBe(ATTEMPT);
       expect(calls.filter(call => call.method === "POST"), "the finished screen ends the lesson, not the reader").toEqual([]);
     } finally { view.app.unmount(); }
   });
@@ -948,7 +972,7 @@ describe("Learning reader", () => {
 });
 
 describe("Courses overlay", () => {
-  it("binds the signed-in viewer, keeps each address in its mode, opens Courses, In progress, Archived and the reader, and confirms an archiving start", async () => {
+  it("binds the signed-in viewer, keeps each address in its mode, opens the Courses, In progress and Archived catalogue, and confirms an archiving start", async () => {
     let mode = { ...LEARN, practiceSlug: "training-1111" };
     const router = { currentRoute: { get value() { return route; } }, push: vi.fn(async () => {}) };
     const { learning } = controller({ mode: () => mode, router });
@@ -975,8 +999,6 @@ describe("Courses overlay", () => {
       "@/composables/useVibe64LearningCourses.js": { useVibe64LearningCourses: options => { coursesOptions.push(options); return courses; } },
       "./Vibe64LearningCourses.vue": stub("courses"),
       "./Vibe64LearningAttempts.vue": stub("attempts"),
-      "./Vibe64LearningFinished.vue": stub("finished"),
-      "./Vibe64LearningReader.vue": stub("reader", "article"),
       "./Vibe64LearningTeacherNotes.vue": stub("teacher-notes", "aside")
     });
     const bodyClasses = new Set();
@@ -1024,25 +1046,23 @@ describe("Courses overlay", () => {
       expect(byTest(root, "courses").props.own, "the Courses surface reads its own courses adapter").toBe(true);
       expect(byTest(root, "teacher-notes").props.own).toBe(true);
       expect(nodes(root).filter(node => /^learning-.*-tab$/u.test(node.props?.["data-test"] || "")).map(node => textOf(node).trim()))
-        .toEqual(["Courses", "In progress", "Archived", "Orientation"]);
+        .toEqual(["Courses", "In progress", "Archived"], "the lesson itself is read in the Lesson pane, not in Courses");
       byTest(root, "learning-progress-tab").props.onClick();
       await flush();
       expect([learning.surface, byTest(root, "attempts").props.archived]).toEqual(["progress", false]);
       byTest(root, "learning-archived-tab").props.onClick();
       await flush();
       expect([learning.surface, byTest(root, "attempts").props.archived]).toEqual(["archived", true]);
-      byTest(root, "learning-lesson-tab").props.onClick();
-      await flush();
-      expect(byTest(root, "reader").props.own).toBe(true);
       byTest(root, "learning-hide").props.onClick();
       await flush();
       expect([learning.open, learning.minimised, learning.hiddenBy]).toEqual([false, true, "learner"]);
       await learning.openCourses("lesson");
       await flush();
+      expect(learning.surface, "the retired lesson tab is no Courses tab").toBe("archived");
       layer.props.onKeydown({ key: "Escape", defaultPrevented: false, stopPropagation() {} });
       await flush();
       expect([learning.open, learning.hiddenBy]).toEqual([false, "learner"]);
-      expect(byTest(root, "reader"), "kept mounted while hidden, so its place stays").toBeTruthy();
+      expect(byTest(root, "attempts"), "kept mounted while hidden, so its place stays").toBeTruthy();
 
       // A start refused by the lesson in progress asks once.
       const start = vi.fn(async input => {
@@ -1260,7 +1280,7 @@ describe("Phone step row", () => {
 describe("The current lesson's linear flow", () => {
   const passedAll = ["quiz", "preview", "tick"].map(stepId => ({ stepId, outcome: "passed" }));
 
-  it("opens L on the Lesson finished screen when the learner's own step result completes the lesson, only then", async () => {
+  it("opens the Lesson pane's Lesson finished screen when the learner's own step result completes the lesson, only then", async () => {
     let results = passedAll.slice(0, 2);
     const { learning } = controller({ reads: () => lessonResult({ results }),
       posts: () => { results = passedAll; return { ok: true, outcome: "passed" }; } });
@@ -1271,7 +1291,7 @@ describe("The current lesson's linear flow", () => {
     await learning.done("tick");
     await flush();
     expect(learning.complete).toBe(true);
-    expect([learning.open, learning.surface, learning.finished]).toEqual([true, "lesson", true]);
+    expect([learning.open, learning.finished, learning.lessonAttemptId]).toEqual([false, true, ATTEMPT]);
     // A later result on a lesson already complete opens nothing.
     await learning.show({ surface: "courses" });
     learning.minimise();
@@ -1287,6 +1307,8 @@ describe("The current lesson's linear flow", () => {
       "./Vibe64LearningMarkdown.vue": { default: { props: ["text"], setup: props => () => Vue.h("section", { "data-markdown": props.text }) } } });
     const pane = compiledUi(path.resolve("src/components/learning/Vibe64LearningLessonPane.vue"), {
       vue: Vue, "./Vibe64LearningReader.vue": { default: reader },
+      "./Vibe64LearningFinished.vue": { default: { props: ["learning", "courses"], setup: () => () => Vue.h("section", { "data-test": "finished" }) } },
+      "@/composables/useVibe64LearningCourses.js": { useVibe64LearningCourses: () => ({}) },
       "@/composables/useVibe64Learning.js": { useVibe64Learning: () => host } });
     const root = { children: [] };
     const app = uiRenderer().createApp({ render: () => Vue.h(pane) });
@@ -1372,7 +1394,7 @@ describe("Lesson finished screen", () => {
       await byTest(view.root, "learning-finished-next").props.onClick();
       await flush();
       expect(startLesson).toHaveBeenCalledWith({ courseId: COURSE.courseId, release: COURSE.release, lessonCode: "V64-START-02", expectedRevision: 4 });
-      expect([learning.state.attemptId, learning.surface, learning.finished]).toEqual([OTHER, "lesson", false]);
+      expect([learning.state.attemptId, learning.open, learning.finished], "the next lesson opens in the Lesson pane").toEqual([OTHER, false, false]);
     } finally { view.app.unmount(); }
   });
 
