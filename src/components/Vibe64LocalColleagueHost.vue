@@ -137,7 +137,9 @@ async function navigate(command = {}) {
 
   const suffix = command.pane && command.pane !== "preview" ? paneSuffix[command.pane] : "";
   if (command.pane && command.pane !== "preview" && !suffix) throw new Error("This project view is unavailable.");
-  const query = { ...route.query };
+  // The project view's own pane (the Learn page's ?pane=lesson) gives way
+  // to the requested one.
+  const { pane: _pane, ...query } = route.query;
   if (command.sessionId) query.session = command.sessionId;
   if (command.databaseView) query.databaseView = command.databaseView;
   if (command.pane === "integrations") {
