@@ -165,8 +165,9 @@ The L button switches mode; in Learn it is followed by a Courses button
 surfaces `courses`, `progress`, `archived` and `lesson`, and a close button
 (`closeCourses`, also Escape) that keeps its place. **In progress** and
 **Archived** (`Vibe64LearningAttempts.vue`) show the one current row with Open
-(`openCurrent`: the lesson's place, overlay closed), Restart and Delete (a
-second click confirms), and archived rows with Delete. The **Lesson finished**
+(`openCurrent`: the lesson's place, overlay closed), Restart and Delete (each
+confirmed by a second click), and archived rows with Delete; a loader stands in
+until the first `practice.list` read answers. The **Lesson finished**
 screen (`Vibe64LearningFinished.vue`) finishes its attempt once, then offers
 **Next lesson** (through `startLesson`) and **Back to courses**. The step bar
 (`Vibe64LearningStepBar.vue`, on the project page) shows the current lesson's

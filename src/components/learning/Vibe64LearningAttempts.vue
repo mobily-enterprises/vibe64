@@ -5,7 +5,8 @@ import { mdiDeleteOutline } from "@mdi/js";
 // Courses → In progress (the one lesson in progress: Open, Restart, Delete)
 // and Courses → Archived (finished and archived lessons: Delete). The rows
 // come from practice.list through the shared controller; every change is a
-// Training action. Deleting asks once more in the row.
+// Training action. Restarting and deleting ask once more in the row; until the
+// first practice.list read answers, the section shows a loader.
 const props = defineProps({
   learning: { type: Object, required: true },
   archived: Boolean
@@ -20,7 +21,7 @@ const dateLabel = value => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 };
-async function remove(key, action) {
+async function confirmThen(key, action) {
   if (confirming.value !== key) {
     confirming.value = key;
     return;
@@ -44,7 +45,11 @@ async function remove(key, action) {
     <v-alert v-if="learning.state.error" type="error" variant="tonal" density="compact" class="vibe64-learning-attempts__error"
       data-test="learning-attempts-error">{{ learning.state.error }}</v-alert>
 
-    <template v-if="!archived">
+    <div v-if="!practice.loaded && !learning.state.error" class="vibe64-learning-attempts__loading" role="status"
+      data-test="learning-attempts-loading">
+      <v-progress-circular indeterminate size="20" width="2" color="primary" />{{ archived ? "Loading archived lessons…" : "Loading your lesson…" }}
+    </div>
+    <template v-else-if="!archived">
       <p v-if="practice.loaded && !current" class="vibe64-learning-attempts__empty" data-test="learning-progress-empty">
         No lesson in progress. Start one from Courses.
       </p>
@@ -58,13 +63,15 @@ async function remove(key, action) {
         <template v-if="current.status !== 'deleting'">
           <v-btn variant="flat" color="primary" rounded="pill" min-height="48" :disabled="Boolean(busy)"
             data-test="learning-progress-open" @click="learning.openCurrent()">Open</v-btn>
-          <v-btn variant="tonal" rounded="pill" min-height="48" :disabled="Boolean(busy)" :loading="busy === 'restart'"
-            title="Archive this attempt and start the lesson again" data-test="learning-progress-restart" @click="learning.restart()">Restart</v-btn>
+          <v-btn :variant="confirming === 'restart' ? 'flat' : 'tonal'" :color="confirming === 'restart' ? 'warning' : undefined"
+            rounded="pill" min-height="48" :disabled="Boolean(busy)" :loading="busy === 'restart'"
+            title="Archive this attempt and start the lesson again" data-test="learning-progress-restart"
+            @click="confirmThen('restart', () => learning.restart())">{{ confirming === "restart" ? "Archive and restart" : "Restart" }}</v-btn>
         </template>
         <v-btn :variant="confirming === 'current' ? 'flat' : 'text'" :color="confirming === 'current' ? 'error' : undefined"
           rounded="pill" min-height="48" :disabled="Boolean(busy)" :loading="busy === 'delete'"
           :title="`Delete ${current.name}, its practice project and its conversation`" data-test="learning-progress-delete"
-          @click="remove('current', () => learning.deleteAttempt())">{{ confirming === "current" ? "Delete for good" : "Delete" }}</v-btn>
+          @click="confirmThen('current', () => learning.deleteAttempt())">{{ confirming === "current" ? "Delete for good" : "Delete" }}</v-btn>
       </div>
     </template>
 
@@ -81,10 +88,10 @@ async function remove(key, action) {
             </span>
           </div>
           <v-btn v-if="confirming === entry.attemptId" variant="flat" color="error" rounded="pill" min-height="48"
-            :disabled="Boolean(busy)" data-test="learning-archived-delete-confirm" @click="remove(entry.attemptId, () => learning.deleteArchived(entry.attemptId))">Delete for good</v-btn>
+            :disabled="Boolean(busy)" data-test="learning-archived-delete-confirm" @click="confirmThen(entry.attemptId, () => learning.deleteArchived(entry.attemptId))">Delete for good</v-btn>
           <v-btn v-else variant="text" :icon="mdiDeleteOutline" min-width="48" min-height="48" :aria-label="`Delete archived ${entry.name}`"
             :title="`Delete archived ${entry.name}`" :disabled="Boolean(busy)" :loading="busy === `archive-delete:${entry.attemptId}`"
-            data-test="learning-archived-delete" @click="remove(entry.attemptId, () => learning.deleteArchived(entry.attemptId))" />
+            data-test="learning-archived-delete" @click="confirmThen(entry.attemptId, () => learning.deleteArchived(entry.attemptId))" />
         </li>
       </ul>
     </template>
@@ -95,6 +102,7 @@ async function remove(key, action) {
 .vibe64-learning-attempts { margin: 0 auto; max-width: 48rem; padding: var(--v64-space-4, 16px); }
 .vibe64-learning-attempts__title { font: var(--v64-type-title-lg, 600 1.375rem/1.75rem system-ui, sans-serif); margin: 0 0 4px; }
 .vibe64-learning-attempts__intro, .vibe64-learning-attempts__empty { color: var(--v64-on-surface-variant, inherit); font-size: 0.875rem; margin: 0 0 var(--v64-space-3, 12px); }
+.vibe64-learning-attempts__loading { align-items: center; color: var(--v64-on-surface-variant, inherit); display: flex; font-size: 0.875rem; gap: var(--v64-space-2, 8px); min-height: 48px; }
 .vibe64-learning-attempts__error { margin-bottom: var(--v64-space-2, 8px); }
 .vibe64-learning-attempts__list { display: flex; flex-direction: column; gap: var(--v64-space-2, 8px); list-style: none; margin: 0; padding: 0; }
 .vibe64-learning-attempts__row {

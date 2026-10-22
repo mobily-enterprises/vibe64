@@ -69,7 +69,8 @@ creates in it is an ordinary session.
 ## In progress and Archived
 
 In Learn mode, **Courses** (on the lesson step bar, or in the project menu beside **L**) has an **In progress** list and an
-**Archived** list.
+**Archived** list. Until your lessons are read, each list shows **Loading your
+lesson…** or **Loading archived lessons…** instead of staying blank.
 
 **In progress** shows the lesson in progress, if any: its title and its
 practice project's name (or **No practice project**). Without one it says
@@ -78,8 +79,9 @@ practice project's name (or **No practice project**). Without one it says
 - **Open** closes Courses and opens the lesson in the **Lesson** tab of its
   practice project (or, for a lesson without one, of the page with no project
   selected).
-- **Restart** archives this attempt and starts the same lesson again with a new
-  practice project, a new teacher conversation and no step results.
+- **Restart** turns into **Archive and restart**; press that to archive this
+  attempt and start the same lesson again with a new practice project, a new
+  teacher conversation and no step results.
 - **Delete** turns into **Delete for good**; press that to delete the lesson
   in progress for good: its practice project (files, sessions and Preview) and
   its teacher conversation go, with no archive. A lesson you completed before

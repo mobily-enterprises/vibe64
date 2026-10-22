@@ -1240,7 +1240,7 @@ describe("Courses → In progress and Archived", () => {
       vue: Vue, "@mdi/js": { mdiDeleteOutline: "trash" } });
     const root = { children: [] };
     const app = uiRenderer().createApp({ render: () => Vue.h(panel, { learning, archived }) });
-    for (const tag of ["v-btn", "v-alert"]) app.component(tag, widget);
+    for (const tag of ["v-btn", "v-alert", "v-progress-circular"]) app.component(tag, widget);
     app.mount(root);
     await flush();
     return { app, root };
@@ -1248,7 +1248,7 @@ describe("Courses → In progress and Archived", () => {
   const list = { ok: true, current: { attemptId: ATTEMPT, lesson: { code: "V64-START-01", title: "Orientation" }, slug: "training-abc", status: "in-progress" },
     archived: [{ attemptId: OTHER, lesson: { code: "V64-START-00", title: "Set yourself up" }, reason: "archived", archivedAt: "2026-10-20T10:15:00.000Z", hasProject: true }] };
 
-  it("shows the one lesson in progress with Open, Restart and Delete, deleting only after a second click", async () => {
+  it("shows the one lesson in progress with Open, Restart and Delete, restarting and deleting only after a second click", async () => {
     const { learning } = controller({ practice: () => list });
     learning.setViewer("member");
     await learning.readPractice();
@@ -1258,14 +1258,28 @@ describe("Courses → In progress and Archived", () => {
       expect(textOf(view.root)).toContain("Orientation");
       expect(textOf(view.root)).toContain("Practice: Orientation");
       byTest(view.root, "learning-progress-open").props.onClick();
-      byTest(view.root, "learning-progress-restart").props.onClick();
-      expect([actions.openCurrent, actions.restart].map(fn => fn.mock.calls.length)).toEqual([1, 1]);
+      expect(actions.openCurrent).toHaveBeenCalledOnce();
+      await byTest(view.root, "learning-progress-restart").props.onClick();
+      await flush();
+      expect(actions.restart, "the first click asks").not.toHaveBeenCalled();
+      expect(textOf(byTest(view.root, "learning-progress-restart"))).toContain("Archive and restart");
+      await byTest(view.root, "learning-progress-restart").props.onClick();
+      expect(actions.restart).toHaveBeenCalledOnce();
       await byTest(view.root, "learning-progress-delete").props.onClick();
       await flush();
       expect(actions.deleteAttempt, "the first click asks").not.toHaveBeenCalled();
       expect(textOf(byTest(view.root, "learning-progress-delete"))).toContain("Delete for good");
       await byTest(view.root, "learning-progress-delete").props.onClick();
       expect(actions.deleteAttempt).toHaveBeenCalledOnce();
+    } finally { view.app.unmount(); }
+  });
+
+  it("shows a loader until the first read answers, never a blank section", async () => {
+    const { learning } = controller({ practice: () => list });
+    const view = await mountAttempts({ practice: learning.practice, state: learning.state, readPractice: vi.fn() }, false);
+    try {
+      expect(byTest(view.root, "learning-attempts-loading")).toBeTruthy();
+      expect(textOf(view.root)).toContain("Loading your lesson…");
     } finally { view.app.unmount(); }
   });
 
