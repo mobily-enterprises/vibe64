@@ -65,7 +65,12 @@ after a start settles unconfirmed; retrying passes that exact `startRetry` to
 `VIBE64_TRAINING_LESSON_IN_PROGRESS` refusal clears the retry. `resumeLesson`
 targets the requested attempt. All use the original Training HTTP actions; a
 confirmed result is opened by the shared controller (`learning.opened`: it
-rereads the mode, goes to the lesson's place and shows the lesson). No session
+uses the mode read already in flight or rereads it, goes to the lesson's place
+and shows the lesson). A start or resume given `onAdmitted` hands over as soon
+as the server confirms it, before the progress reread: the controller's
+`admitted` closes Courses (not as the learner's close) and opens the Lesson pane
+once the mode read of the start's realtime change names the attempt; after the
+hand-over only another person or revoked access makes the outcome not current. No session
 or conversation is created or selected by the client. `courseProgress` marks the
 lesson whose saved progress is `open` as `current`: the course page offers
 **Start lesson** on every other offered lesson, and the picker allows a start
@@ -160,7 +165,9 @@ screen (`Vibe64LearningFinished.vue`) finishes its attempt once, then offers
 **Next lesson** (through `startLesson`) and **Back to courses**. The step bar
 (`Vibe64LearningStepBar.vue`, on the project page) shows the current lesson's
 step in Learn with Previous/Next/Open and a collapse toggle kept in the tab's
-session storage. The project picker (`ProjectSelectionGate`) never lists
+session storage. `openLesson` also asks the page layout (`VIBE64_COLLEAGUE_LAYOUT_KEY`,
+passed to the controller as `layout`) to show the project side, so a phone's
+Open reveals the Lesson pane even when the address already names it. The project picker (`ProjectSelectionGate`) never lists
 practice projects and, for a mode refusal, shows the server's message with
 **Switch to Develop/Learn**; a deleted practice project points to Courses →
 Archived.

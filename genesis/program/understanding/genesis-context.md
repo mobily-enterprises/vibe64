@@ -84,7 +84,11 @@ synchronized through the same public operation as `genesis skills sync`, inside
 the existing agent-write and project-source mutation boundaries. Genesis chooses
 the source version, validates ownership, and preserves customized or unmanaged
 skills. Changed files are ordinary session work and trigger the normal
-session-change event.
+session-change event, except in a practice project (its context root is named
+by the reserved `training-<id>` slug): there `practiceAgentGuidance.js` first
+lists `.agents/`, `.claude/`, `.codex/` and `.opencode/` in the session clone's
+`.git/info/exclude`, so Vibe64's guidance stays out of the learner's Current
+changes and saved commits for every lesson; tracked files stay tracked.
 If Genesis reports a selected skill package unavailable, Vibe64 records a
 visible preparation-required diagnostic and lets provider delivery proceed.
 It preserves the installed project skills, leaves the declared package version
