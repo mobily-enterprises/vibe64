@@ -109,8 +109,9 @@ function bundleAssessments(lesson, document, include, checks) {
 }
 
 // Lesson format v2 step rules. Checks decide alone: auto runs a declared check,
-// choice compares with the authored answer, self is the learner's own tick and
-// none records nothing, so it can never be required.
+// choice compares with the authored answer, review asks the learner's own AI
+// to judge their practice work against the rubric, self is the learner's own
+// tick and none records nothing, so it can never be required.
 function validateSteps(lesson, visuals, checks, code) {
   const fail = message => { throw new Error(`Lesson ${code}: ${message}`); };
   if (!lesson.steps.length) fail("needs at least one step.");
@@ -143,7 +144,8 @@ function validateSteps(lesson, visuals, checks, code) {
       try { trainingGuideRequest(request); } catch (error) { fail(`${label} guide: ${error.message}`); }
     }
     const check = step.check;
-    const allowed = { auto: ["check", "files"], choice: ["question", "options", "answer"], self: [], none: [] }[check.kind];
+    const allowed = { auto: ["check", "files"], choice: ["question", "options", "answer"], review: ["rubric", "evidence"],
+      self: [], none: [] }[check.kind];
     const extra = Object.keys(check).filter(key => key !== "kind" && !allowed.includes(key));
     if (extra.length) fail(`${label} ${check.kind} check cannot declare ${extra.join(", ")}.`);
     if (check.kind === "none" && step.required) fail(`${label} has no check and cannot be required.`);
@@ -154,6 +156,14 @@ function validateSteps(lesson, visuals, checks, code) {
       const files = check.files || [];
       if (declared.kind === "code" ? files.length < 1 || files.length > 8 : files.length) {
         fail(`${label} ${declared.kind === "code" ? "code check needs 1-8 exercise files" : "names files, but only a code check edits files"}.`);
+      }
+    }
+    if (check.kind === "review") {
+      if (!check.rubric?.trim()) fail(`${label} review needs its rubric.`);
+      if (!lesson.exercise) fail(`${label} reviews practice work and needs the lesson's exercise.`);
+      const evidence = check.evidence || ["changes"];
+      if (evidence[0] !== "changes" || evidence.length > 2 || evidence.length === 2 && evidence[1] !== "conversation") {
+        fail(`${label} review evidence is ["changes"] or ["changes", "conversation"].`);
       }
     }
     if (check.kind === "choice") {

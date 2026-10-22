@@ -22,6 +22,8 @@
     "./server/installed-catalogue": "./src/server/installedCatalogue.js",
     "./server/routes": "./src/server/registerRoutes.js",
     "./server/step-checks": "./src/server/stepChecks.js",
+    "./server/step-evidence": "./src/server/stepEvidence.js",
+    "./server/step-review": "./src/server/stepReview.js",
     "./server/code-authorship": "./src/server/codeAuthorship.js",
     "./server/code-save-owner": "./src/server/codeEditorActions.js",
     "./server/step-actions": "./src/server/stepActions.js",

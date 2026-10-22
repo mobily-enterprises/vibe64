@@ -40,6 +40,8 @@ function registerTrainingRoutes(http) {
   actionRoute("POST", "/attempts/:attemptId/steps/check", "step.check.run");
   actionRoute("POST", "/attempts/:attemptId/steps/answer", "step.answer");
   actionRoute("POST", "/attempts/:attemptId/steps/done", "step.done");
+  // The learner's own "Check my work" on a review step.
+  actionRoute("POST", "/attempts/:attemptId/steps/review", "step.review.run");
   actionRoute("POST", "/attempts/:attemptId/reader", "reader.save");
   // The lesson in progress and the archived lessons (Rev 4 C2).
   actionRoute("GET", "/practice", "practice.list");

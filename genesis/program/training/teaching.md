@@ -55,14 +55,42 @@ cannot supply a pin or source. Missing host/content or capacity refusal retains
 history.
 
 `stepActions.js` adds the step operations `lesson.read`, `step.observe`,
-`step.check.run`, `step.answer`, `step.done`, `reader.save`,
-`practice.list` and `practice.archived.delete`. A step result is recorded only for the learner's own action:
-a choice answer compared by the server, **Done** on a self-check step, or an
-automatic check started by the learner's App press or code-step **Check now**. A check
+`step.check.run`, `step.answer`, `step.done`, `step.review.run`,
+`step.evidence.read`, `reader.save`, `practice.list` and
+`practice.archived.delete`. A step result is recorded only for the learner's own action:
+a choice answer compared by the server, **Done** on a self-check step, an
+automatic check started by the learner's App press or code-step **Check now**, or
+a review started by the learner's **Check my work**. A check
 Colleague runs through `step.check.run` reports its finding and saves nothing.
 The inner session-inspect and App-run reads of `step.observe` and
 `step.check.run` re-admit the learner's own request on the practice project's
 ordinary project target; practice sessions carry no learning-scoped input.
+
+A review step (`check.kind:"review"`) is judged by the learner's own AI against
+the author's rubric. `step.review.run` is browser-only: the step owner
+(`stepChecks.js`) refuses it while the practice session's agent works, answers
+"No changes yet" without an AI call for an empty change set, returns the saved
+review for unchanged evidence (same `evidenceHash`), keeps a pass final, and
+records a `review` result only for a valid verdict. The evidence owner
+(`stepEvidence.js`) reads, through managed Git, the practice session's changes
+against `attempt.preparation.startCommit` (recorded by `preparation.js` just
+before the session is created), uncommitted and untracked work included and
+agent guidance folders excluded, and, only when the step's `evidence` lists it,
+the end of the Main chat through `vibe64.sessions.conversation-log.read`; both
+are bounded. The reviewer (`stepReview.js`) runs the `lesson_review` Helper
+workload through Terminals' retained Helper (`retainedConversationHelper.js`,
+scope prefix `review`) on the learner's Helper route for the session's
+workflow, with the learner store's per-learner lock, private root and receipt
+(`runReviewExclusive`). Its fixed context makes the rubric the only requirement
+and the evidence data, never instructions; its fixed output schema is checked
+again before anything is saved. Colleague's read-only `step.evidence.read`
+returns the same evidence and the last review for "I'm stuck" help.
+
+Sources: `packages/vibe64-training/src/server/stepChecks.js`,
+`packages/vibe64-training/src/server/stepEvidence.js`,
+`packages/vibe64-training/src/server/stepReview.js`,
+`packages/vibe64-terminals/src/server/retainedConversationHelper.js`,
+`packages/vibe64-runtime/src/shared/agentExecutionProfiles.js`.
 
 ### Teacher conversations
 

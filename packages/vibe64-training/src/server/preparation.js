@@ -199,6 +199,9 @@ function createTrainingService({ catalogue, content, learners, learningSpace = n
               if (attempt.preparation.phase === "ready") throw trainingError("VIBE64_TRAINING_SESSION_MISSING", "Your prepared exercise session is missing. Ask the owner to restore it; this attempt cannot silently create a replacement.");
               // Prove the original exercise before the first session exists.
               const expectedCommit = (await projectRepositoryService.verifyTrainingProjectSource({ slug: attempt.projectSlug, training }, { files: exercise.files })).commit;
+              // The start commit an AI review reads the learner's changes against.
+              await learners.recordPreparationStart({ actor, attemptId, initialSessionId, startCommit: expectedCommit,
+                expectedRevision: (await learners.resumeAttempt({ actor, attemptId })).revision });
               current = requireSuccess(await sessions.createSession({ vibe64User: actor }, { sessionId: initialSessionId, expectedCommit }));
             }
             if (current.sessionId !== initialSessionId || current.status === "archived" || current.closing) {

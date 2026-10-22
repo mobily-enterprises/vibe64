@@ -78,6 +78,21 @@ A step passes only through your own action in the lesson:
   a diagnostic and is never saved. The step passes only when you press **Check
   now**; a response check first needs your own press of the App's control in this
   lesson's Preview.
+- **Review check**: the step shows its rubric, what your finished work must
+  show. Only your own **Check my work** asks your own AI (your Helper route in
+  **AI Accounts → Model routing**) to review your practice work against it;
+  Colleague never runs a review for you. A review answers **Passed** (final) or
+  **Not yet** with a comment and a hint. While the coding agent is still
+  working it says "Wait until the agent finishes"; with nothing changed yet it
+  says "No changes yet" without asking your AI; pressing again without new
+  work shows the same review. When the review cannot finish (no Helper route,
+  the provider failed, or the reply was unusable) nothing is recorded: fix the
+  cause and press it again.
+- **When you are stuck**: Colleague can read your practice work for the
+  current step (`step.evidence.read`): the files you changed since the lesson
+  started and their diff, the lesson's coding conversation when the step's
+  review uses it, the rubric and your last review. It uses this to help you
+  with the next move; reading it never passes a step.
 
 Colleague's feedback never changes a step's status. If Colleague says a step
 passed, ask it to read the lesson again: only a saved **passed** result counts.

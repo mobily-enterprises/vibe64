@@ -2,20 +2,25 @@ import { randomUUID } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
-import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
+import { VIBE64_AGENT_HELPER_WORKLOAD_LIMITS, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
+
+const DEFAULT_HELPER_TIMEOUT_MS = 120000;
 
 // The original Colleague retained Helper lifetime. The parent supplies its own
-// private root and durable receipt; native execution remains with Terminals.
-function createRetainedConversationHelper({ terminals, root, receipt, workflowEngineId }) {
+// private root, durable receipt and scope prefix (Colleague's summaries keep
+// "summary"); native execution remains with Terminals.
+function createRetainedConversationHelper({ terminals, root, receipt, workflowEngineId, scopePrefix = "summary" }) {
   if (!path.isAbsolute(root || "") || typeof receipt?.read !== "function" ||
-      typeof receipt?.write !== "function" || typeof workflowEngineId !== "function") {
-    throw new TypeError("A retained Helper requires its original parent root, receipt and workflow selection.");
+      typeof receipt?.write !== "function" || typeof workflowEngineId !== "function" ||
+      !/^[a-z][a-z0-9]{0,31}$/u.test(scopePrefix)) {
+    throw new TypeError("A retained Helper requires its original parent root, receipt, workflow selection and scope prefix.");
   }
+  const scopePattern = new RegExp(`^${scopePrefix}_[a-f0-9-]+$`, "u");
   async function cleanup(context) {
     const helper = await receipt.read();
     if (!helper) return;
     const helperRoot = path.join(root, helper.scope.id);
-    if (!/^summary_[a-f0-9-]+$/u.test(helper.scope.id) || helper.scope.workdir !== path.join(helperRoot, "workdir") || helper.scope.runtimeRoot !== path.join(helperRoot, "runtime")) throw new Error("The retained summary has invalid cleanup paths.");
+    if (!scopePattern.test(helper.scope.id) || helper.scope.workdir !== path.join(helperRoot, "workdir") || helper.scope.runtimeRoot !== path.join(helperRoot, "runtime")) throw new Error("The retained summary has invalid cleanup paths.");
     const result = await terminals.deleteEphemeralAgentConversation(helper.scope, {
       conversationId: helper.conversationId, cleanupExecutionId: helper.executionId,
       ...(helper.executionProfile ? { executionProfile: helper.executionProfile } : {})
@@ -40,14 +45,14 @@ function createRetainedConversationHelper({ terminals, root, receipt, workflowEn
     try {
       signal.throwIfAborted();
       const decision = await requireHelper(context, workloadId);
-      const id = `summary_${randomUUID()}`;
+      const id = `${scopePrefix}_${randomUUID()}`;
       const helperRoot = path.join(root, id);
       const helper = { scope: { id, workdir: path.join(helperRoot, "workdir"), runtimeRoot: path.join(helperRoot, "runtime"), environment: {},
         stableContext },
       selection: decision.effectiveSelection, connectionIdentity: decision.connectionIdentity, conversationId: "", runId: "", executionId: "" };
       await receipt.write(helper);
       const options = { assistantSelection: helper.selection, vibe64User: user, expectedConnectionIdentity: helper.connectionIdentity,
-        signal: AbortSignal.any([signal, AbortSignal.timeout(120000)]),
+        signal: AbortSignal.any([signal, AbortSignal.timeout(VIBE64_AGENT_HELPER_WORKLOAD_LIMITS[workloadId]?.timeoutMs || DEFAULT_HELPER_TIMEOUT_MS)]),
         async onEvent(event) {
           if (event.type === "thread") helper.conversationId = String(event.threadId || "");
           else if (event.type === "turn") helper.runId = String(event.turnId || "");

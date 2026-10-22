@@ -572,7 +572,7 @@ test("hosted Training Feature retains exact supplied owners and registers no sec
   const originalRoutes = registered;
   // Learning v2 adds the lesson reader, step, reader-position, lesson lifecycle
   // and archive routes, the learner's own teacher notes (contract C7) and Learn mode.
-  assert.equal(originalRoutes.length, 25);
+  assert.equal(originalRoutes.length, 26);
   assert.equal(registered.every(route => route.options.surface === "app"), true);
   assert.equal(registered.some(route => route.url.startsWith("/api/learning/")), false);
   assert.equal(new Set(registered.map(route => `${route.method} ${route.url}`)).size, registered.length);
@@ -585,7 +585,7 @@ test("hosted Training Feature retains exact supplied owners and registers no sec
     ["GET", "/api/vibe64/training/lesson"], ["GET", "/api/vibe64/training/attempts/:attemptId/lesson"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/steps/observe"], ["POST", "/api/vibe64/training/attempts/:attemptId/steps/check"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/steps/answer"], ["POST", "/api/vibe64/training/attempts/:attemptId/steps/done"],
-    ["POST", "/api/vibe64/training/attempts/:attemptId/reader"],
+    ["POST", "/api/vibe64/training/attempts/:attemptId/steps/review"], ["POST", "/api/vibe64/training/attempts/:attemptId/reader"],
     ["GET", "/api/vibe64/training/practice"], ["POST", "/api/vibe64/training/archives/:attemptId/delete"],
     ["GET", "/api/vibe64/training/learning-mode"], ["POST", "/api/vibe64/training/learning-mode"],
     ["GET", "/api/vibe64/training/teacher-notes"], ["POST", "/api/vibe64/training/teacher-notes"],

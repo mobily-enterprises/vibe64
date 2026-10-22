@@ -73,13 +73,14 @@ function requireLearnerChannel(context, what) {
 // Version 2 step results. Passes come only from: the automatic check runner
 // with learner-origin evidence (a browser-captured exercise interaction, or
 // learner-authored code per the authorship ledger) when the learner triggered
-// it, the choice comparator, or the learner's own Done on a self-check or
-// reading step. Results belong to the attempt in progress; a new attempt
-// (Redo, Restart) starts with none. A
-// check the assistant triggers returns diagnostics only and records nothing, so
-// Colleague can never use up the attempt's result budget.
-// Verdicts are final: there is no rubric and no AI grader.
-function createTrainingStepChecks({ learners, content, checks, authorship, actions } = {}) {
+// it, the choice comparator, a review check the learner pressed (their own AI
+// judging their practice work against the author's rubric), or the learner's
+// own Done on a self-check or reading step. Results belong to the attempt in
+// progress; a new attempt (Redo, Restart) starts with none. A check the
+// assistant triggers returns diagnostics only and records nothing, so
+// Colleague can never use up the attempt's result budget, and Colleague can
+// never run a review. Verdicts are final: a pass is never replaced.
+function createTrainingStepChecks({ learners, content, checks, authorship, actions, evidence = null, reviewer = null } = {}) {
   if (!learners?.readState || !learners?.readStepProgress || !learners?.updateStepProgress || !learners?.saveReader ||
       !content?.readLesson) {
     throw new TypeError("Step checks require the original learner state and installed content owners.");
@@ -124,7 +125,8 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     if (result.stepId !== stepId || !same(result)) {
       throw stepFailure("This request ID already recorded a different step result.", "VIBE64_TRAINING_REQUEST_CONFLICT");
     }
-    return { ok: true, stepId, outcome: result.outcome, recorded: true, replayed: true, ...(result.reason ? { reason: result.reason } : {}) };
+    return { ok: true, stepId, outcome: result.outcome, recorded: true, replayed: true, ...(result.reason ? { reason: result.reason } : {}),
+      ...(result.review ? { review: structuredClone(result.review) } : {}) };
   }
 
   // Append-only. A request ID replays its original result; a step that already
@@ -274,6 +276,67 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     return record({ actor, attemptId, requestId, lesson, result: { stepId, kind: step.check.kind === "none" ? "read" : "self", outcome: "passed", evidence: {}, origin: "learner" } });
   }
 
+  function requireEvidence() {
+    if (typeof evidence?.read !== "function") {
+      throw stepFailure("Reading practice work is unavailable in this installation.", "VIBE64_TRAINING_CHECK_UNDECLARED");
+    }
+    return evidence;
+  }
+
+  // The step's review evidence: changes always, the coding conversation only
+  // when the step's review declares it.
+  const reviewsConversation = step => step.check?.kind === "review" && (step.check.evidence || []).includes("conversation");
+
+  // Browser only: the learner's "Check my work". Their own AI reviews the
+  // practice work against the step's rubric. Nothing runs while the coding
+  // agent works or when there is nothing to review; the same evidence returns
+  // its saved review without asking again; a failed review records nothing.
+  async function review({ actor, attemptId, stepId, requestId, context = {} } = {}) {
+    requireLearnerChannel(context, "ask for a review of your work");
+    if (!requestPattern.test(requestId || "")) throw stepFailure("Ask for a review with a stable request ID.", "ACTION_VALIDATION_FAILED", 400);
+    const { attempt, lesson, step } = await openStep({ actor, attemptId, stepId });
+    if (step.check?.kind !== "review") throw stepFailure("This step has no review check.", "VIBE64_TRAINING_CHECK_UNDECLARED");
+    if (typeof reviewer?.review !== "function") throw stepFailure("Reviews are unavailable in this installation.", "VIBE64_TRAINING_CHECK_UNDECLARED");
+    const entry = await savedEntry(actor, attempt);
+    const previous = entry.results.find(value => value.requestId === requestId);
+    if (previous) return replayed(previous, stepId);
+    if (entry.results.some(value => value.stepId === stepId && value.outcome === "passed")) {
+      return { ok: true, stepId, outcome: "passed", recorded: false, replayed: false, alreadyPassed: true };
+    }
+    practiceTarget(attempt);
+    const read = await requireEvidence().read({ attempt, conversation: reviewsConversation(step), context });
+    if (read.session.agentWorking) {
+      throw stepFailure("Wait until the agent finishes, then check your work again.", "VIBE64_TRAINING_REVIEW_AGENT_WORKING");
+    }
+    if (read.empty) {
+      return { ok: true, stepId, outcome: "not-yet-passed", recorded: false, replayed: false,
+        reason: "No changes yet. Change your practice project first, then check your work again." };
+    }
+    const evidenceHash = sha256(canonicalJson({ lessonHash: lesson.hash, stepId, rubric: step.check.rubric, evidence: read.evidence }));
+    const same = entry.results.findLast(value => value.stepId === stepId && value.kind === "review" && value.evidence.evidenceHash === evidenceHash);
+    if (same) return replayed(same, stepId);
+    const verdict = await reviewer.review({ actor, lesson, step, evidence: read.evidence,
+      workflowEngineId: read.session.workflowEngineId, context });
+    const { passed, ...feedback } = verdict;
+    const saved = await record({ actor, attemptId, requestId, lesson,
+      result: { stepId, kind: "review", outcome: passed ? "passed" : "not-yet-passed", origin: "check",
+        evidence: { reviewId: randomUUID(), evidenceHash }, review: feedback } });
+    return saved.alreadyPassed ? saved : { ...saved, review: structuredClone(feedback) };
+  }
+
+  // Read-only, for Colleague's "I'm stuck" help: the same bounded evidence a
+  // review reads, and the step's last saved review. It never passes a step.
+  async function readEvidence({ actor, attemptId, stepId, context = {} } = {}) {
+    const { attempt, lesson, step } = await openStep({ actor, attemptId, stepId });
+    if (!lesson.lesson.exercise) throw stepFailure("This lesson has no practice project to read.", "VIBE64_TRAINING_CHECK_UNDECLARED");
+    practiceTarget(attempt);
+    const read = await requireEvidence().read({ attempt, conversation: reviewsConversation(step), context });
+    const last = (await savedEntry(actor, attempt)).results.findLast(value => value.stepId === stepId && value.kind === "review");
+    return { ok: true, stepId, agentWorking: read.session.agentWorking, empty: read.empty, evidence: read.evidence,
+      ...(step.check?.kind === "review" ? { rubric: step.check.rubric } : {}),
+      lastReview: last ? { outcome: last.outcome, recordedAt: last.recordedAt, ...structuredClone(last.review) } : null };
+  }
+
   // The saved step results of this attempt and the steps passed in them (which
   // is what completion counts). An ended attempt's results went with it.
   async function read({ actor, attemptId } = {}) {
@@ -311,7 +374,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     return { reader, baseline };
   }
 
-  return Object.freeze({ observe, runCheck, answer, done, read, enterStep, saveReader });
+  return Object.freeze({ observe, runCheck, answer, done, review, readEvidence, read, enterStep, saveReader });
 }
 
 export { createTrainingStepChecks };

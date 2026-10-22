@@ -246,7 +246,10 @@ Recommendation reviews and collaborator outcomes still name the complete model
 and thinking selection. On mobile, the controls may be stacked vertically.
 
 Senior and Junior share an orchestrator. Helper and Router have their own allowed
-choices. Shared Backup can supply a permitted alternative for collaborators.
+choices. Helper also reviews your work when you press **Check my work** on a
+lesson's review step: it uses the Helper of the practice session's workflow, on
+your own account. Without an available Helper the review says so and records
+nothing; choose one here, then press **Check my work** again. Shared Backup can supply a permitted alternative for collaborators.
 Changing routing applies to future work, not a running agent or Colleague's own
 model. Select Colleague's model through its own composer model picker; active work
 can prevent changing it until its turn stops.

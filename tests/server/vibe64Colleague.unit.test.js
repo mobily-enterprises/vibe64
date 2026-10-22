@@ -2108,6 +2108,9 @@ test("Colleague teaches through lessons, navigation, guides and checks, and neve
   assert.match(colleagueInstructions, /Before asking the person to press Done, answer a question or press Check now, look at that step's saved result in lesson\.read/u);
   assert.match(colleagueInstructions, /never ask them to repeat a passed step/u);
   assert.match(colleagueInstructions, /You never judge/u);
+  // I'm stuck reads the learner's work, helps with a next move and never passes or reviews.
+  assert.match(colleagueInstructions, /I'm stuck on this step\.[\s\S]*step\.evidence\.read[\s\S]*never say it passed, and never run a review/u);
+  assert.match(colleagueInstructions, /a review the person ran with Check my work/u);
   assert.match(colleagueInstructions, /Call a practice project what the app shows, Practice: followed by its lesson title/u);
   assert.match(colleagueInstructions, /Never reveal or hint which choice option is correct/u);
   assert.doesNotMatch(colleagueInstructions, /supervise lessons|Main conversation is its teacher|pilot lesson diagrams/u);

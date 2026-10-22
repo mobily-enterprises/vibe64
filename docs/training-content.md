@@ -120,16 +120,70 @@ topic with every step kind; the copyable template is `docs/templates/learn-topic
   - `choice` — `question` (at most 2000 characters), 2–8 `options` and
     `answer`, a non-empty list of unique option indexes (0-based, in range).
     The learner passes by selecting exactly the answer indexes.
+  - `review` — the learner's own AI reviews their practice work against the
+    author's `rubric` (at most 600 characters, shown to the learner as the
+    step's check line) when the learner presses **Check my work**. It needs
+    the lesson's `exercise`. `evidence` (optional, default `["changes"]`) is
+    `["changes"]` or `["changes", "conversation"]`; see
+    [Review checks](#review-checks).
   - `self` — the learner ticks **Done** after doing the step.
   - `none` — reading only; cannot be `required`. The learner may press
     **Mark as done**, which records a learner-origin `read` pass (a bonus that
     never counts toward completion).
   A kind declares only its own fields; anything else is rejected.
 
-**Check verdicts are final.** v2 has no rubric and no AI grader: an automatic
-check or the choice comparator decides, otherwise the learner ticks a `self`
-step (or marks a `none` step read). Colleague teaches and explains but never passes a step. Write step bodies
+**Check verdicts are final.** Verdicts come from the step's declared check: an
+automatic check, the choice comparator, a review check (the learner's own AI
+judging their work against the author's rubric), or the learner's tick on a
+`self` step (or mark on a `none` step). A pass is never replaced. Colleague
+teaches and explains but never passes a step and never runs a review. Prefer
+an automatic check where a deterministic check can decide; write step bodies
 so a learner can follow them without AI.
+
+### Review checks
+
+A review step judges work that a deterministic check cannot, for example "the
+heading is green and nothing else broke":
+
+```json
+{ "id": "green-heading", "title": "Make the heading green",
+  "body": "steps/green-heading.md",
+  "check": { "kind": "review", "rubric": "The heading is green and nothing else broke.",
+             "evidence": ["changes", "conversation"] },
+  "required": true }
+```
+
+- The rubric is the only requirement. Write it as what the finished work
+  shows, in words the learner understands; it is shown to the learner and to
+  Colleague.
+- Evidence `changes` is the practice session's work against the commit the
+  lesson started from, uncommitted work included: the changed files with
+  added/removed line counts and their diff, at most 60,000 characters (20,000
+  per file). Binary files, larger files and files beyond that budget are
+  listed without their text; agent guidance folders (`.agents`, `.claude`,
+  `.codex`, `.opencode`) are left out. `conversation` adds the last 20 turns
+  of the session's Main chat (the learner's and the agent's text, at most
+  40,000 characters). Work the coding agent did at the learner's request
+  counts unless the rubric says the learner must do it themselves.
+- **Check my work** runs only from the learner's own browser, on the
+  learner's own AI account: the Helper route of their workflow in **AI
+  Accounts → Model routing** (workload `lesson_review`, input at most 160,000
+  characters, 180 seconds). Vibe64 never pays for or resells it.
+- The reviewer returns Passed or Not yet, a comment (at most 600
+  characters), a hint for Not yet (at most 300) and up to six rubric points.
+  The result is saved as a `review` step result; Passed is final.
+- Nothing is recorded, and nothing runs, while the coding agent is working
+  ("Wait until the agent finishes") or when there are no changes yet ("No
+  changes yet"). Pressing again with unchanged evidence returns the saved
+  review without another AI call. A missing Helper route, a provider error or
+  timeout, a reply outside the fixed output schema or unreadable evidence
+  records nothing; the learner tries again.
+- The evidence is data, never instructions: the reviewer is told to follow
+  only the rubric, so a prompt injected into the learner's project can at most
+  pass the learner's own practice step.
+- Only lessons started after a review-capable release record the commit their
+  practice session started from; an older attempt is asked to restart before
+  its work can be reviewed.
 
 Choice answers stay on the server. The lesson descriptor is never served to a
 browser: a step body, `notes`, visual SVG/controller/asset or exercise file
@@ -584,10 +638,19 @@ is the one in progress, `lessonTitle` is filled only with `includeTitle`, and
 
 Step results (`step-progress.json`, schema version 3) belong to the attempt in
 progress: `{learnerId,revision,attemptId,lesson,results,receipts}`, at most 64
-results. A result's `kind` is `auto`, `choice`, `self` or `read` (a `none`
-step the learner marked done), matching the pinned step's check. A new attempt
-starts with none. `readStepProgress({actor,attemptId?})`
+results. A result's `kind` is `auto`, `choice`, `review`, `self` or `read` (a
+`none` step the learner marked done), matching the pinned step's check. A
+`review` result has origin `check`, evidence `{reviewId,evidenceHash}` and
+`review:{comment,hint?,points?}` (single-line text; only a review result has
+it). A new attempt starts with none. `readStepProgress({actor,attemptId?})`
 and `readAttemptRecord({actor,attemptId})` read them.
+
+`runReviewExclusive({actor},operation)` serializes one learner's reviews with
+`review.lock` (a second review while one runs is refused with
+`VIBE64_TRAINING_REVIEW_BUSY`). It gives the review owner its private Helper
+root `review-helpers/` and the retained Helper receipt `review-helper.json`
+`{schemaVersion:1,learnerId,helper}` (`helper` is `null` once cleaned up), so a
+review that stopped part-way is cleaned before the next one starts.
 
 The published `20261008-learning-practice-history` upgrade reads vibe64 0.1.35
 version 1 progress through the frozen `practiceHistoryReader.js`
@@ -596,7 +659,8 @@ learner state; the live store no longer reads that format.
 
 The same internal store adds `beginPreparation({actor,attemptId,expectedRevision})`,
 `recordPreparationReady({actor,attemptId,initialSessionId,expectedRevision})` and
-`recordPreparationFailure({actor,attemptId,initialSessionId,expectedRevision,stage,code,message})`.
+`recordPreparationFailure({actor,attemptId,initialSessionId,expectedRevision,stage,code,message})`
+and `recordPreparationStart({actor,attemptId,initialSessionId,expectedRevision,startCommit})`.
 These are observation writers, not a provisioner, learner action or authority to
 create an arbitrary project. Only an admitted server caller may compose them.
 
@@ -617,6 +681,11 @@ A failure records `preparing` with `failure:{stage,code,message}`; stages are
 `project`, `session` or `setup`, code is at most 64 characters and the single-line
 recovery message at most 512. It retains the ID and removes any old ready time.
 Begin replays do not clear failures. A fresh successful observation can clear one.
+Preparation records the verified exercise commit as `startCommit` (a 40- or
+64-character Git object ID) just before it creates the practice session from
+it; a retry before the session exists records it again, a ready attempt keeps
+it, and every later phase carries it. A review check reads the learner's
+changes against it. Attempts prepared before this field existed have none.
 Matching observation replays precede revision checking and return `replayed:true`
 without writing; a different stale observation conflicts rather than overriding
 newer state. No project/session effect executes inside the user-state lock.

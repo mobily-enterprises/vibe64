@@ -22,8 +22,8 @@ import { createTrainingService } from "../../packages/vibe64-training/src/server
 // (contract C1), the real learner store and step owner (contract C2). Only the
 // App check runner, inner session actions and the practice facility are stubs.
 const fixtureTopic = new URL("../fixtures/training/steps-v2/", import.meta.url);
-const BROWSER_ONLY = ["step.observe", "step.answer", "step.done", "reader.save"];
-const ASSISTANT = ["lesson.read", "step.check.run", "practice.list", "lesson.delete", "practice.archived.delete"];
+const BROWSER_ONLY = ["step.observe", "step.answer", "step.done", "step.review.run", "reader.save"];
+const ASSISTANT = ["lesson.read", "step.check.run", "step.evidence.read", "practice.list", "lesson.delete", "practice.archived.delete"];
 
 async function fixture(t, { contentWrapper = value => value, practice = true } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-step-actions-"));
@@ -117,7 +117,7 @@ test("browser-only step actions are api-only and absent from Colleague's tools; 
   }
   const attempt = await f.start();
   const inputs = { "step.observe": { observation: observation(attempt) }, "step.answer": { selected: [1], requestId: "r1" },
-    "step.done": { requestId: "r1" }, "reader.save": { scroll: 0 } };
+    "step.done": { requestId: "r1" }, "step.review.run": { requestId: "r1" }, "reader.save": { scroll: 0 } };
   for (const name of BROWSER_ONLY) {
     const stepId = { "step.observe": "open-preview", "step.answer": "which-side" }[name] || "reflect";
     await assert.rejects(f.execute(name, { attemptId: attempt.attemptId, stepId, ...inputs[name] }, "automation"),
@@ -426,6 +426,7 @@ test("HTTP routes map each v2 action to its attempt path without accepting a cal
     ["POST", "/api/vibe64/training/attempts/:attemptId/steps/check"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/steps/answer"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/steps/done"],
+    ["POST", "/api/vibe64/training/attempts/:attemptId/steps/review"],
     ["POST", "/api/vibe64/training/attempts/:attemptId/reader"],
     ["GET", "/api/vibe64/training/practice"],
     ["POST", "/api/vibe64/training/archives/:attemptId/delete"]
@@ -441,6 +442,9 @@ test("HTTP routes map each v2 action to its attempt path without accepting a cal
   assert.equal(inputs["/api/vibe64/training/attempts/:attemptId/lesson"].actionId, "vibe64.training.lesson.read");
   assert.deepEqual(inputs["/api/vibe64/training/attempts/:attemptId/steps/done"].input,
     { stepId: "reflect", requestId: "done-1", attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" });
+  assert.deepEqual(inputs["/api/vibe64/training/attempts/:attemptId/steps/review"],
+    { actionId: "vibe64.training.step.review.run", input: { stepId: "reflect", requestId: "done-1", attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" } },
+    "Check my work: the attempt from the path, step and request from the body");
   assert.deepEqual(Object.fromEntries(executed.filter(([url]) => /restart|finish|delete$/u.test(url))
     .map(([url, value]) => [url.replace("/api/vibe64/training", ""), value.actionId])), {
     "/attempts/:attemptId/restart": "vibe64.training.lesson.restart", "/attempts/:attemptId/finish": "vibe64.training.lesson.finish",

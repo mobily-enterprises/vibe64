@@ -43,7 +43,8 @@ const lessonSchema = createSchema({
   assessments: list(assessment, 32)
 });
 // Lesson format v2: ordered steps replace the teaching document and its
-// assessments. Check verdicts are final; v2 has no rubric and no AI grader.
+// assessments. Check verdicts are final. A review check is the learner's own
+// AI reviewing their practice work against the author's rubric.
 // Cross-field rules (per-kind fields, references, counts) live in the bundler.
 const stepSchema = createSchema({
   id, title: text, body: text, required: { type: "boolean", required: true },
@@ -58,12 +59,15 @@ const stepSchema = createSchema({
     filePath: { ...text, required: false, maxLength: 512 }, caption: { ...text, required: false }
   }) },
   check: { type: "object", required: true, schema: createSchema({
-    kind: { ...text, enum: ["auto", "choice", "self", "none"] },
+    kind: { ...text, enum: ["auto", "choice", "review", "self", "none"] },
     check: { ...id, required: false },
     files: { ...list(text, 8), required: false },
     question: { ...text, required: false, maxLength: 2000 },
     options: { ...list(text, 8), required: false },
-    answer: { ...list({ type: "integer", required: true, min: 0, max: 7 }, 8), required: false }
+    answer: { ...list({ type: "integer", required: true, min: 0, max: 7 }, 8), required: false },
+    // review: what the work must show, and what the reviewer reads.
+    rubric: { ...text, required: false, maxLength: 600 },
+    evidence: { ...list({ ...text, enum: ["changes", "conversation"] }, 2), required: false }
   }) }
 });
 const lessonSchemaV2 = createSchema({

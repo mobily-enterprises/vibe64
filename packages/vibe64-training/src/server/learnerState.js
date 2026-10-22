@@ -28,6 +28,7 @@ const MAX_NOTES_CHARS = 4000;
 const MAX_NOTES_BYTES = 32 * 1024;
 const MAX_NOTES_REQUESTS = 32;
 const MAX_MODE_BYTES = 1024;
+const MAX_REVIEW_HELPER_BYTES = 16 * 1024;
 const STEP_LOCK_WAIT_MS = 2000;
 // Browser receipts and Preview output starts hold the preparation barrier only
 // briefly. Wait this long before reporting a genuinely long operation as busy.
@@ -50,7 +51,10 @@ const preparationSchema = createSchema({
   phase: { ...text, enum: ["reserved", "preparing", "ready"] },
   initialSessionId: { ...text, required: false, maxLength: 128 },
   observedAt: { ...text, required: false, maxLength: 24 },
-  failure: { type: "object", required: false, schema: preparationFailureSchema }
+  failure: { type: "object", required: false, schema: preparationFailureSchema },
+  // The verified exercise commit the practice session started from (new
+  // preparations only): an AI review reads the learner's changes against it.
+  startCommit: { ...text, required: false, maxLength: 64 }
 });
 const lessonKeySchema = createSchema({ code: { ...text, maxLength: 64 }, hash: { ...text, maxLength: 64 } });
 const pinSchema = createSchema({
@@ -131,11 +135,17 @@ function validateCodeLedger(value) {
 // Step results: a separate append-only record of the attempt in progress, with
 // its own lock, so frequent step writes never advance the progress revision.
 // A new attempt's first result replaces it; ending the attempt removes it.
+// A review result also keeps the reviewer's feedback for the learner.
+const reviewFeedbackSchema = createSchema({
+  comment: { ...text, maxLength: 600 }, hint: { ...text, required: false, maxLength: 300 },
+  points: { ...list(createSchema({ text: { ...text, maxLength: 120 }, met: { type: "boolean", required: true } }), 6), required: false }
+});
 const stepResultSchema = createSchema({
-  stepId: { ...text, maxLength: 64 }, kind: { ...text, enum: ["auto", "choice", "self", "read"] },
+  stepId: { ...text, maxLength: 64 }, kind: { ...text, enum: ["auto", "choice", "review", "self", "read"] },
   outcome: { ...text, enum: ["passed", "not-yet-passed"] }, evidence: { type: "object", required: true },
   origin: { ...text, enum: ["learner", "check"] }, requestId: { ...text, maxLength: 64 },
-  recordedAt: { ...text, maxLength: 24 }, reason: { ...text, required: false }
+  recordedAt: { ...text, maxLength: 24 }, reason: { ...text, required: false },
+  review: { type: "object", required: false, schema: reviewFeedbackSchema }
 });
 // The latest learner-origin exercise interaction captured by the browser for a
 // step; a later check run re-verifies it against the same App run identities.
@@ -168,6 +178,10 @@ function validateStepEvidence(result) {
   const keys = Object.keys(evidence || {}).sort();
   if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) return false;
   if (kind === "self" || kind === "read") return keys.length === 0 && result.origin === "learner";
+  if (kind === "review") {
+    return result.origin === "check" && canonicalJson(keys) === canonicalJson(["evidenceHash", "reviewId"]) &&
+      uuidAnyPattern.test(evidence.reviewId || "") && sha256Pattern.test(evidence.evidenceHash || "");
+  }
   if (kind === "choice") {
     return result.origin === "learner" && canonicalJson(keys) === canonicalJson(["selected"]) && Array.isArray(evidence.selected) &&
       evidence.selected.length <= 8 && new Set(evidence.selected).size === evidence.selected.length &&
@@ -187,9 +201,10 @@ function validateStepEntry(entry) {
   const requestIds = new Set();
   for (const result of entry.results) {
     if (!idPattern.test(result.stepId) || !requestPattern.test(result.requestId) || requestIds.has(result.requestId) ||
-        !isoTime(result.recordedAt) || !validateStepEvidence(result) ||
-        // eslint-disable-next-line no-control-regex -- Deliberately reject control characters in saved reasons.
-        result.reason !== undefined && /[\u0000-\u001f\u007f]/u.test(result.reason)) {
+        !isoTime(result.recordedAt) || !validateStepEvidence(result) || (result.kind === "review") !== (result.review !== undefined) ||
+        [result.reason, result.review?.comment, result.review?.hint, ...(result.review?.points || []).map(point => point.text)]
+          // eslint-disable-next-line no-control-regex -- Deliberately reject control characters in saved reasons.
+          .some(value => value !== undefined && /[\u0000-\u001f\u007f]/u.test(value))) {
       throw new Error("Step results have an invalid step, request identity, evidence, origin or record time.");
     }
     requestIds.add(result.requestId);
@@ -299,6 +314,9 @@ function validatePreparation(preparation, attemptId) {
     }
   } else if (preparation.observedAt) {
     throw new Error("Pending preparation must not claim an observed ready time.");
+  }
+  if (preparation.startCommit !== undefined && !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u.test(preparation.startCommit)) {
+    throw new Error("Preparation must name its start commit as an exact Git object ID.");
   }
   if (preparation.failure && (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$/u.test(preparation.failure.code) ||
       preparation.failure.message.trim() !== preparation.failure.message ||
@@ -475,7 +493,10 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       reader: path.join(userRoot, "reader.json"),
       readerLock: path.join(userRoot, "reader.lock"),
       notes: path.join(userRoot, "teacher-notes.json"),
-      notesLock: path.join(userRoot, "teacher-notes.lock")
+      notesLock: path.join(userRoot, "teacher-notes.lock"),
+      reviewHelper: path.join(userRoot, "review-helper.json"),
+      reviewHelpers: path.join(userRoot, "review-helpers"),
+      reviewLock: path.join(userRoot, "review.lock")
     };
   }
 
@@ -920,15 +941,24 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       const sessionId = attemptSessionId(attemptId);
       if (observedFailure) validatePreparation({ phase: "preparing", initialSessionId: sessionId, failure: observedFailure }, attemptId);
       const current = attempt.preparation;
+      // The start commit, once recorded, stays with every later phase.
+      const start = current.startCommit ? { startCommit: current.startCommit } : {};
       let next;
       if (operation === "begin") {
         next = current.phase === "reserved" ? { phase: "preparing", initialSessionId: sessionId } : current;
       } else if (current.phase === "reserved") {
         throw failure("VIBE64_TRAINING_PREPARATION_CONFLICT", "Begin and save this attempt's exact session identity before project or session effects.", 409);
+      } else if (operation === "start") {
+        // Recorded before the practice session exists; a retry before it
+        // exists re-verifies the same exercise and may record again.
+        if (current.phase === "ready") {
+          throw failure("VIBE64_TRAINING_PREPARATION_CONFLICT", "A prepared lesson keeps the start commit it recorded.", 409);
+        }
+        next = { ...current, startCommit: input.startCommit };
       } else if (operation === "ready") {
-        next = current.phase === "ready" ? current : { phase: "ready", initialSessionId: sessionId, observedAt: new Date().toISOString() };
+        next = current.phase === "ready" ? current : { phase: "ready", initialSessionId: sessionId, observedAt: new Date().toISOString(), ...start };
       } else {
-        next = { phase: "preparing", initialSessionId: sessionId, failure: observedFailure };
+        next = { phase: "preparing", initialSessionId: sessionId, failure: observedFailure, ...start };
       }
       if (canonicalJson(current) === canonicalJson(next)) {
         const active = state.activeSummaryCurrent ? state.active : await saveActive(paths, state.progress);
@@ -1298,8 +1328,55 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     return writePreparation({ actor, attemptId, initialSessionId, expectedRevision }, "failure", { stage, code, message });
   }
 
+  // The verified exercise commit, recorded just before the practice session
+  // is created from it.
+  async function recordPreparationStart({ actor, attemptId, initialSessionId, expectedRevision, startCommit } = {}) {
+    if (typeof startCommit !== "string" || !/^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u.test(startCommit)) {
+      throw new Error("Record the practice session's start commit as an exact Git object ID.");
+    }
+    return writePreparation({ actor, attemptId, initialSessionId, expectedRevision, startCommit }, "start");
+  }
+
+  // One AI review at a time per learner. The review owner keeps its retained
+  // Helper below its own root, and the Helper's receipt in this learner's
+  // record, so a review that stopped part-way is cleaned before the next.
+  async function readReviewHelperRecord(paths) {
+    const value = await readRecord(paths.reviewHelper, MAX_REVIEW_HELPER_BYTES);
+    if (!value) return null;
+    if (value.schemaVersion !== 1 || value.learnerId !== paths.learner.id || Object.keys(value).sort().join() !== "helper,learnerId,schemaVersion" ||
+        value.helper !== null && (typeof value.helper !== "object" || Array.isArray(value.helper))) {
+      throw new Error("The review Helper receipt is invalid or belongs to another learner.");
+    }
+    return value.helper;
+  }
+
+  async function runReviewExclusive({ actor } = {}, operation) {
+    const paths = userPaths(actor);
+    if (typeof operation !== "function") throw new Error("Run a review with an admitted server operation.");
+    await createNamespace(paths);
+    const lock = await inspectPath(paths.reviewLock, false);
+    if (lock && lock.size !== 0) throw new Error("Learning state lock contains unexplained data; inspect it before retrying.");
+    const release = await tryAcquireExclusiveFileLock(paths.reviewLock);
+    if (!release) {
+      throw failure("VIBE64_TRAINING_REVIEW_BUSY", "A review of your work is already running. Wait for it to finish, then check again.", 409);
+    }
+    try {
+      const receipt = {
+        read: () => readReviewHelperRecord(paths),
+        async write(helper) {
+          const record = { schemaVersion: 1, learnerId: paths.learner.id, helper: helper ?? null };
+          if (byteSize(record) > MAX_REVIEW_HELPER_BYTES) throw new Error("The review Helper receipt exceeds its record limit.");
+          await writeJsonFileAtomic(paths.reviewHelper, record, { directoryMode: 0o700, fileMode: 0o600 });
+        }
+      };
+      return await operation({ root: paths.reviewHelpers, receipt });
+    } finally {
+      await release();
+    }
+  }
+
   return { readState, activeAttemptForProject, readAttemptRecord, reserveAttempt, endAttempt, resumeAttempt, runPreparationExclusive,
-    beginPreparation, recordPreparationReady, recordPreparationFailure,
+    beginPreparation, recordPreparationReady, recordPreparationFailure, recordPreparationStart, runReviewExclusive,
     readCodeLedger, updateCodeLedger, readStepProgress, updateStepProgress, readReader, saveReader,
     readTeacherNotes, saveTeacherNotes, readLearningMode, setLearningMode };
 }

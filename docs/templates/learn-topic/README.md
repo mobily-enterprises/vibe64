@@ -1,6 +1,6 @@
 # Copyable teaching topic template
 
-This is a complete directory template for an **incomplete draft topic**. It has one draft lesson in lesson format v2 (schemaVersion `2`): optional notes and three steps — a reading step (`none`), a multiple-choice step (`choice`) and a learner-ticked step (`self`) — with no exercise, automatic check or visual. Do not teach it or mark it published before human review. Check verdicts are final: there is no rubric or AI grader, and Colleague never passes a step.
+This is a complete directory template for an **incomplete draft topic**. It has one draft lesson in lesson format v2 (schemaVersion `2`): optional notes and three steps — a reading step (`none`), a multiple-choice step (`choice`) and a learner-ticked step (`self`) — with no exercise, automatic check or visual. Do not teach it or mark it published before human review. Check verdicts are final and come from each step's declared check (a lesson with an exercise may also use a `review` check, the learner's own AI judging their work against a rubric); Colleague never passes a step.
 
 ## Copy and adapt
 

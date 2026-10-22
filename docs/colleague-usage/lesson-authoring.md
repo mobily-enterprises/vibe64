@@ -102,9 +102,15 @@ notes and 1–32 ordered steps. Each step has a Markdown body a learner can read
 without AI, an optional diagram to play and an optional guide that points at a
 real Vibe64 place, and one check: `auto` (a declared check against the
 learner's own exercise work), `choice` (multiple choice with an answer kept on
-the server), `self` (the learner presses **Done**) or `none` (reading only, never
-required; the learner may still press **Mark as done**). Check verdicts are final: there is no rubric or AI grader, and
-Colleague never passes a step. Older v1 lessons (teaching document plus
+the server), `review` (the learner presses **Check my work** and their own AI
+reviews their practice work against the author's rubric; it needs the
+exercise, and `evidence` may add the lesson's coding conversation to the
+changes), `self` (the learner presses **Done**) or `none` (reading only, never
+required; the learner may still press **Mark as done**). Check verdicts come
+from the declared check and are final; a review may pass a required step.
+Prefer an `auto` check where a deterministic check can decide, and write the
+rubric as what the finished work shows. Colleague never passes a step and
+never runs a review. Older v1 lessons (teaching document plus
 assessments) still validate for history but cannot be started.
 The installed `docs/templates/learn-topic/` directory supplies a copyable whole
 topic. The author copies it to a new directory, follows its README to choose

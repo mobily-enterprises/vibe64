@@ -62,6 +62,8 @@ infrastructure or prove a delivered lesson.
 - `tests/server/vibe64TrainingStepProgress.unit.test.js`
 - `tests/server/vibe64TrainingLearnerNotes.unit.test.js`
 - `tests/server/vibe64TrainingPreparation.unit.test.js`
+- `tests/server/vibe64TrainingStepReview.unit.test.js`
+- `tests/server/vibe64TrainingStepEvidence.unit.test.js`
 - `tests/server/studioProjectContext.unit.test.js`
 - `tests/server/stateUpgrades.unit.test.js`
 - `tests/server/vibe64ManagedProject.unit.test.js`
@@ -438,6 +440,15 @@ its real counts. Code authorship ledgers belong to the attempt:
 ledgered only while that attempt is in progress in its practice project
 (`saveLearnerFile({actor,attemptId,input,save})`); otherwise they are the
 editor's plain save. Ending an attempt removes its step results and ledger.
+A `review` step result keeps `{reviewId,evidenceHash}` evidence and the
+reviewer's single-line `review:{comment,hint?,points?}`. One review runs at a
+time per learner (`review.lock`); its retained Helper lives under
+`review-helpers/` with its receipt in `review-helper.json`. A practice
+attempt's `preparation.startCommit` is the verified exercise commit its
+session started from, recorded before the session exists and carried by every
+later phase. These are new optional formats: only new topic releases declare
+review steps and only new preparations record a start commit, so no saved
+state needs an upgrade.
 
 Learn mode is the separate `learning-mode.json` `{schemaVersion:2,learnerId,on}`
 (absent means off), written by `setLearningMode({actor,on})`, which never ends

@@ -44,6 +44,10 @@ async function fixture(t, { enabled = true, courseStatus = "released", phase = "
       }
       return state();
     },
+    async recordPreparationStart(input) {
+      calls.push(["start-commit", input.startCommit, input.initialSessionId]);
+      attempt.preparation.startCommit = input.startCommit; revision++; return state();
+    },
     async recordPreparationReady() { calls.push(["ready"]); attempt.preparation.phase = "ready"; revision++; return state(); },
     async recordPreparationFailure(input) { failure = input; calls.push(["failure", input]); attempt.preparation.phase = "preparing"; revision++; return state(); }
   };
@@ -97,6 +101,11 @@ test("enabled course reserves exact approved pin before effects and pending setu
   assert.equal(creation[2].sessionId, `training-${attemptId}`);
   assert.equal(creation[2].expectedCommit, "d".repeat(40));
   assert.deepEqual(creation[1].vibe64User, actor);
+  // The verified start commit is saved before the session is created from it.
+  const names = f.calls.map(value => value[0]);
+  assert.deepEqual(f.calls.find(value => value[0] === "start-commit"), ["start-commit", "d".repeat(40), `training-${attemptId}`]);
+  assert.ok(names.indexOf("source-proof") < names.indexOf("start-commit") && names.indexOf("start-commit") < names.indexOf("session-create"));
+  assert.equal(result.attempt.preparation.startCommit, "d".repeat(40));
 });
 
 test("no-exercise start and resume retain their exact reservation without project, session or setup effects", async t => {

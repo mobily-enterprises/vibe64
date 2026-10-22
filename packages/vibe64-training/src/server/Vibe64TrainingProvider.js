@@ -1,6 +1,8 @@
 import { createTrainingDeclaredCheckOwner } from "./declaredCheck.js";
 import { createTrainingCodeAuthorship } from "./codeAuthorship.js";
 import { createTrainingStepChecks } from "./stepChecks.js";
+import { createTrainingStepEvidence } from "./stepEvidence.js";
+import { createTrainingStepReviewer } from "./stepReview.js";
 import { createTrainingCodeSaveOwner } from "./codeEditorActions.js";
 import { defineFeature } from "@jskit-ai/kernel/server/features";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
@@ -48,7 +50,8 @@ const Vibe64TrainingProvider = defineFeature({
     const codeAuthorship = createTrainingCodeAuthorship({ learners, content, project });
     const checks = createTrainingDeclaredCheckOwner({ learners, content, project, terminals });
     // Version 2 step results; the action layer supplies the action executor.
-    const steps = createTrainingStepChecks({ learners, content, checks, authorship: codeAuthorship, actions: actionCatalogue });
+    const steps = createTrainingStepChecks({ learners, content, checks, authorship: codeAuthorship, actions: actionCatalogue,
+      evidence: createTrainingStepEvidence({ project, actions: actionCatalogue }), reviewer: createTrainingStepReviewer({ learners, terminals }) });
     // A browser-supplied actor is never local authority. Retain the original
     // transport check without a host's signed-in-user alternative.
     const localActor = request => {

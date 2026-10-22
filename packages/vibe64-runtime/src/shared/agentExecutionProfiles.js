@@ -7,6 +7,7 @@ const VIBE64_AGENT_EXECUTION_WORKLOAD_IDS = Object.freeze({
   CONVERSATION_SUMMARY: "conversation_summary",
   VOICE_TURN: "voice_turn",
   DATABASE_ASSISTANT: "database_assistant",
+  LESSON_REVIEW: "lesson_review",
   PROMPT_HINT: "prompt_hint",
   REQUEST_ROUTING: "request_routing",
   SESSION_TITLE: "session_title",
@@ -30,6 +31,14 @@ const VIBE64_AGENT_HELPER_WORKLOAD_LIMITS = Object.freeze({
   [VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.DATABASE_ASSISTANT]: Object.freeze({
     maxInputCharacters: 500_000,
     maxOutputCharacters: 16_000,
+    timeoutMs: 180_000
+  }),
+  // One learner's work against a lesson step's rubric: bounded changes and
+  // conversation evidence in, one small verdict object out. The output limit
+  // covers the verdict schema's worst-case JSON escapes (about 10k).
+  [VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.LESSON_REVIEW]: Object.freeze({
+    maxInputCharacters: 160_000,
+    maxOutputCharacters: 12_000,
     timeoutMs: 180_000
   }),
   [VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.PROMPT_HINT]: Object.freeze({
