@@ -41,6 +41,7 @@ test("Claude subscription launch preserves native auth and makes helper tools un
   const mainArgs = claudeCodeArguments({ sessionId: "session", resume: true });
   const settings = JSON.parse(mainArgs[mainArgs.indexOf("--settings") + 1]);
   assert.equal(settings.includeGitInstructions, false);
+  assert.equal(settings.bashEditDiffEnabled, false, "native edit diffs cannot use managed Git and would watch the whole tree");
   assert.ok(settings.hooks.PreToolUse.length, "managed command admission remains installed");
 });
 

@@ -13,8 +13,11 @@ function claudeFlagSettings({ toolFree = false, effort = "", providerEnv } = {})
     command: [process.execPath, fileURLToPath(import.meta.resolve("@local/vibe64-runtime/server/agentSessionCommandHook"))].map(shellQuote).join(" ")
   };
   // Vibe64 supplies its Git workflow; avoid the native startup status snapshot.
+  // Native Bash edit diffs need private GIT_DIR snapshots, which managed Git
+  // cannot honour; when they fail Claude watches the whole tree, node_modules
+  // included, exhausting the workspace user's shared inotify budget.
   return { ...nativeClaudeFlagSettings({ effort, providerEnv,
-    ...(!toolFree ? { commandHook } : {}) }), includeGitInstructions: false };
+    ...(!toolFree ? { commandHook } : {}) }), includeGitInstructions: false, bashEditDiffEnabled: false };
 }
 
 function claudeCodeArguments(options = {}) {
