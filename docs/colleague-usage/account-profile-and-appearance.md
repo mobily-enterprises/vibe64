@@ -23,7 +23,7 @@ name** stays disabled.
 
 Under **Appearance** (This browser), choose **Light**, **Dark** or **System**.
 The whole app switches immediately, including the Learning environment (**L**),
-its lesson reader and the Learn page's Lesson tab. **System** follows your device's light or dark setting
+its lesson reader and the Learn page's Lesson pane. **System** follows your device's light or dark setting
 and changes when the device does. Light is the default.
 
 The choice is saved in this browser only. Another browser, another device or a

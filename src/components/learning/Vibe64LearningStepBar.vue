@@ -1,9 +1,8 @@
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from "vue";
-import { mdiBookOpenPageVariantOutline, mdiChevronDown, mdiChevronLeft, mdiChevronRight, mdiChevronUp, mdiMenu, mdiPause, mdiPlay } from "@mdi/js";
+import { computed, ref, watch } from "vue";
+import { mdiBookOpenPageVariantOutline, mdiChevronLeft, mdiChevronRight, mdiPause, mdiPlay, mdiSchoolOutline } from "@mdi/js";
 import { aiOnboardingAvailable, aiOnboardingNeeded, requestVibe64AiOnboarding } from "@local/vibe64-accounts/client";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
-import Vibe64LearningStep from "./Vibe64LearningStep.vue";
 
 // The current lesson's step bar, at the top of the project page in Learn
 // mode (also with no project selected): the lesson companion. It names the
@@ -11,9 +10,10 @@ import Vibe64LearningStep from "./Vibe64LearningStep.vue";
 // a time (dots show where), pointing at the real places; Back/Next move by
 // beat into the neighbouring steps, and after the last beat the step's own
 // verdict control and Next step appear. A step without beats shows its title
-// and status, with Show me when it declares a guide. ≡ Step drops the
-// whole step (the reader's own step view, with every control) open under the
-// bar, in place. Courses, always on it, is the way out to the catalogue. It
+// and status, with Show me when it declares a guide. Lesson shows the lesson
+// itself, at its current step with every control, in the project pane
+// (pressed while it shows; the header's Preview | Dash leave it). Courses,
+// always on it, is the way out to the catalogue. It
 // is always this one line (two on a phone); it does not collapse. While the lesson waits for the
 // learner's AI (its practice project could not be prepared without one), the
 // line says so instead and offers Set up your AI.
@@ -43,7 +43,7 @@ const verdict = computed(() => {
   if (kind.value === "none") return { label: "Mark as done", run: () => learning.done(stepId), busy: `done:${stepId}` };
   if (kind.value === "auto") return { label: "Check my work", run: check, busy: `check:${stepId}` };
   if (kind.value === "review") return { label: note.value ? "Check again" : "Check my work", run: checkReview, busy: `review:${stepId}` };
-  if (kind.value === "choice") return { label: "Answer in Step", run: () => learning.setStepText(true), busy: "" };
+  if (kind.value === "choice") return { label: "Answer in Lesson", run: () => learning.openLesson(), busy: "" };
   return null;
 });
 const beatText = computed(() => {
@@ -114,17 +114,6 @@ const go = offset => {
   const next = steps.value[index.value + offset];
   if (next) learning.selectStep(next.id);
 };
-// ≡ Step: the step open under the bar; Escape closes it.
-const stepTextShown = computed(() => Boolean(learning?.stepTextOpen));
-const stepError = ref("");
-function closeOnEscape(event) {
-  if (event.key === "Escape" && stepTextShown.value) learning.setStepText(false);
-}
-watch(stepTextShown, open => {
-  if (open) globalThis.document?.addEventListener("keydown", closeOnEscape);
-  else globalThis.document?.removeEventListener("keydown", closeOnEscape);
-}, { immediate: true });
-onBeforeUnmount(() => globalThis.document?.removeEventListener("keydown", closeOnEscape));
 const back = () => beats.value.length ? player.value.back() : go(-1);
 const forward = () => beats.value.length ? player.value.next() : go(1);
 </script>
@@ -225,15 +214,15 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
           :icon="mdiChevronRight" variant="text" size="small" min-width="40" min-height="40" :aria-label="beats.length ? 'Next' : 'Next step'"
           :disabled="beats.length ? player.atEnd : index >= steps.length - 1" data-test="learning-step-bar-next" @click="forward"
         />
-        <v-btn
-          variant="tonal" rounded="pill" min-height="40" min-width="40" :prepend-icon="mdiMenu"
-          class="vibe64-learning-step-bar__step-text" aria-controls="vibe64-learning-step-text" :aria-expanded="stepTextShown"
-          aria-label="Step" data-test="learning-step-bar-step" @click="learning.setStepText(!learning.stepTextOpen)"
-        >
-          <span class="vibe64-learning-step-bar__step-text-label">Step</span>
-          <v-icon class="vibe64-learning-step-bar__step-text-chevron" :icon="stepTextShown ? mdiChevronUp : mdiChevronDown" size="18" />
-        </v-btn>
       </div>
+      <v-btn
+        v-if="learning.lessonSwitchable" variant="tonal" rounded="pill" min-height="40" min-width="40" :prepend-icon="mdiSchoolOutline"
+        class="vibe64-learning-step-bar__lesson-pane" :class="{ 'is-pressed': learning.lessonShown }"
+        :aria-pressed="learning.lessonShown ? 'true' : 'false'" data-test="learning-step-bar-lesson" data-vibe64-guide="lesson"
+        @click="learning.openLesson()"
+      >
+        Lesson
+      </v-btn>
       <v-btn
         variant="tonal" rounded="pill" min-height="40" min-width="40" :prepend-icon="mdiBookOpenPageVariantOutline"
         class="vibe64-learning-step-bar__courses" aria-label="Courses" data-test="learning-step-bar-courses" data-vibe64-guide="courses"
@@ -246,32 +235,11 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
         :style="{ transform: `scaleX(${player.progress})` }"
       />
     </section>
-    <section
-      v-if="stepTextShown" id="vibe64-learning-step-text" class="vibe64-learning-step-bar__text-panel"
-      aria-label="Step text" data-test="learning-step-bar-text"
-    >
-      <Vibe64LearningStep v-model:error="stepError" :learning="learning" />
-    </section>
   </div>
 </template>
 
 <style scoped>
 .vibe64-learning-step-bar-host { flex: 0 0 auto; min-width: 0; position: relative; }
-.vibe64-learning-step-bar__text-panel {
-  background: rgb(var(--v-theme-surface));
-  border: 1px solid var(--v64-learning-strong, #f5c518);
-  border-radius: var(--v64-shape-md, 12px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
-  color: rgb(var(--v-theme-on-surface));
-  left: 0;
-  max-height: 60vh;
-  overflow-y: auto;
-  padding: var(--v64-space-4, 16px) var(--v64-space-5, 24px);
-  position: absolute;
-  right: 0;
-  top: calc(100% + 4px);
-  z-index: 20;
-}
 .vibe64-learning-step-bar {
   align-items: center;
   background: var(--v64-learning-container, rgba(245, 197, 24, 0.16));
@@ -317,6 +285,7 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
   transition: transform 100ms linear;
 }
 .vibe64-learning-step-bar .v-btn { letter-spacing: 0; text-transform: none; }
+.vibe64-learning-step-bar__lesson-pane.is-pressed { background: var(--v64-learning, #f5c518); color: var(--v64-on-learning, #2b2100); font-weight: 700; }
 
 @media (prefers-reduced-motion: reduce) {
   .vibe64-learning-step-bar__progress { transition: none; }
@@ -325,17 +294,15 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
 /* A phone: line 1 is the position and controls, line 2 the beat and its one action. */
 @media (max-width: 600px) {
   .vibe64-learning-step-bar { column-gap: 4px; flex-wrap: wrap; row-gap: 0; }
-  .vibe64-learning-step-bar__step-text-chevron { display: none; }
-  /* One action on the beat's line: I'm stuck stays in Step beside Do it for me. */
+  /* One action on the beat's line: I'm stuck stays in the Lesson pane's step beside Do it for me. */
   .vibe64-learning-step-bar__stuck--beside { display: none; }
   .vibe64-learning-step-bar__lesson { display: none; }
   .vibe64-learning-step-bar--beats .vibe64-learning-step-bar__position { flex: 1 1 auto; }
   .vibe64-learning-step-bar--beats .vibe64-learning-step-bar__line { flex-basis: 100%; order: 3; padding: 0 0 6px 8px; }
   .vibe64-learning-step-bar__courses { padding-inline: 0; }
+  .vibe64-learning-step-bar__lesson-pane { padding-inline: 8px; }
+  .vibe64-learning-step-bar__lesson-pane :deep(.v-btn__prepend) { margin-inline: 0 4px; }
   .vibe64-learning-step-bar__courses :deep(.v-btn__prepend) { margin-inline: 0; }
-  .vibe64-learning-step-bar__courses-label, .vibe64-learning-step-bar__step-text-label { display: none; }
-  .vibe64-learning-step-bar__step-text { padding-inline: 4px; }
-  .vibe64-learning-step-bar__step-text :deep(.v-btn__prepend) { margin-inline: 0; }
-  .vibe64-learning-step-bar__text-panel { padding: var(--v64-space-3, 12px); }
+  .vibe64-learning-step-bar__courses-label { display: none; }
 }
 </style>

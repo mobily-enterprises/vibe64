@@ -123,11 +123,11 @@ guide overlay 3000 above L 2400 above Colleague.
   ordinary Main chat send with `messageSource:"lesson"`, stored as turn
   metadata `source:"lesson"` and shown as **Sent by the lesson**). Save is
   pointed at only.
-- ≡ Step (`stepTextOpen`, `setStepText(open)`, this tab's place): the step bar
-  drops the current step open under itself, rendering the reader's own
-  `Vibe64LearningStep.vue` (max 60 % of the viewport, scrolling; ≡ or Escape
-  closes it). `showMe` closes it. A choice
-  step's final beat state offers **Answer in Step**, which opens it.
+- Lesson (`openLesson`, pressed from the layout owner's `lessonPane`): the step
+  bar shows the current step in the Lesson pane, whose reader renders
+  `Vibe64LearningStep.vue` with every step control; the bar has no step panel
+  of its own. A choice step's final beat state offers **Answer in Lesson**,
+  which opens it.
 - Learn mode (server): Vibe64 has two modes, Develop and Learn, with the same
   screens. Learn mode is a saved per-learner flag
   (`<sys>/training/users/<key>/learning-mode.json`, `{on}`), separate from any

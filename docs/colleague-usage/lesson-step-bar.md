@@ -1,21 +1,21 @@
 # The lesson step bar
 
 The yellow lesson step bar above the project page plays the current lesson
-step: its position, beats, **Step** and **Courses**. The rest of
+step: its position, beats, **Lesson** and **Courses**. The rest of
 Learn mode is in [The Learning environment](learning-environment.md).
 
 In Learn mode, while your lesson is loaded, a yellow bar above the project page
 names the lesson and shows **Step N of M** with the step's title and status.
 **Previous step** and **Next step** (arrow buttons) move through the steps.
-**Step** (the ≡ button) opens the whole current step right under the bar, in
-place, with everything the Lesson tab offers for it: its text, diagram and
-**Play**, **Done**, **Mark as done**, its question or **Check now**, **Show me**,
-**Teach me** and **Previous step**/**Next step**. It covers the top of the page
-(at most about two thirds of the screen, scrolling inside); **Step** again or
-Escape closes it, and **Show me** closes it so the place it shows is in view.
-This tab remembers whether it is open. To read the step in the page's
-**Lesson** tab, select that tab (see [The Lesson tab](learning-environment.md#the-lesson-tab));
-the bar has no separate Open button. **Courses**, at its right end (a book icon
+**Lesson** (a school-cap icon), on a lesson with a practice project, shows the
+lesson in the project pane at its current step, with everything for it: its
+text, diagram and **Play**, **Done**, **Mark as done**, its question or **Check
+now**, **Show me**, **Teach me**, **I'm stuck** and **Previous step**/**Next
+step** (see [The Lesson pane](learning-environment.md#the-lesson-pane)). It
+stays pressed while the lesson shows, and the header's **Preview** or **Dash**
+leaves it. On a lesson without a practice project the lesson is already the
+whole page, so the bar has no **Lesson** button.
+**Courses**, at its right end (a book icon
 on a phone), opens the Courses overlay to choose another lesson. The bar is
 always shown in full; it cannot be collapsed or hidden. On a phone the lesson
 name is hidden.
@@ -66,19 +66,19 @@ current one), then the beat's line:
   step at either end.
 - After the last beat the bar shows the step's own control: **Done**, **Mark as
   done**, **Check my work** (an automatic check, or a review; a check that does
-  not pass says why under the line) or **Answer in Step** for a question, which opens the
-  step under the bar. When the step has passed it shows **Next step**. **I'm stuck**
+  not pass says why under the line) or **Answer in Lesson** for a question, which shows the
+  step in the Lesson pane. When the step has passed it shows **Next step**. **I'm stuck**
   (on a *do* line, and after the last beat of a step that **Check my work**
-  decides, until the step passes; also in **Step** beside **Teach me**) opens
+  decides, until the step passes; also in the Lesson pane beside **Teach me**) opens
   Colleague and asks it for help with this step (see `learning-with-colleague`).
   On a phone a *do* line keeps only **Do it for me** on the bar; **I'm stuck**
-  is then in **Step**.
+  is then in the Lesson pane.
   A step never moves on by itself.
-- **Show me** on such a step (in the bar's step or the Lesson tab) plays its
+- **Show me** on such a step (in the Lesson pane) plays its
   beats again from the first one.
 
 **Check my work on a reviewed step.** Some steps are checked by a review of
-your work: the bar's line (and the step under **Step**) shows what the review
+your work: the bar's line (and the step in the Lesson pane) shows what the review
 looks for. **Check my work** uses your own AI (the Lesson review route in AI
 Accounts → Model routing) to look at the changes in your practice project
 (and, when the step says so, your coding chat); the line says **Checking your
@@ -93,6 +93,6 @@ runs a review or passes a step for you.
 
 This tab remembers the beat and the pause; another tab or device starts the
 step at its first beat. On a phone the bar has two lines: the position and arrows above,
-the beat's line and its one button below; **Step** and **Courses** show only
-their icons, and the open step fills the width. A step without beats shows its title
+the beat's line and its one button below; **Courses** shows only its icon
+and **Lesson** its icon and name. A step without beats shows its title
 and status as before, and **Show me** when it can point at a place.

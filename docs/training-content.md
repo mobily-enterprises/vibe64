@@ -178,7 +178,7 @@ One beat per line: `<show|do|check> <target>[ <path>]: <text>`.
   step's `check.rubric` from `lesson.json`, its single source.
 - Places: `preview`, `dashboard`, `database-erd`, `database-data`, `files`,
   `changes`, `git-log`, `session-info`, `architecture`, `learning` (the **L**
-  button), `lesson` (the Lesson tab), `chat` (the coding chat), `colleague`,
+  button), `lesson` (the step bar's **Lesson** button), `chat` (the coding chat), `colleague`,
   `courses`, `lesson-bar` (the bar itself), `save` and `reload-preview`.
   `dashboard` and `lesson-bar` can only be shown.
 - 1–8 beats. Only `lesson`, `lesson-bar`, `courses`, `learning`,
@@ -192,8 +192,8 @@ step's check kind, a second or non-final check, a block that is not closed or
 does not end the body, and beats together with a `guide`. Back and Next in the
 bar move by beat into the neighbouring steps; after the last beat the bar shows
 the step's own verdict control (Done, Mark as done, Check my work, or Answer in
-Step for a choice) and Next step. **Step** (≡) on the bar opens the whole step
-text under it in one click, so a beat never needs to repeat the body. Steps never advance by themselves.
+Lesson for a choice) and Next step. **Lesson** on the bar shows the whole step
+text in the Lesson pane in one click, so a beat never needs to repeat the body. Steps never advance by themselves.
 
 **Check verdicts are final.** Verdicts come from the step's declared check: an
 automatic check, the choice comparator, a review check (the learner's own AI

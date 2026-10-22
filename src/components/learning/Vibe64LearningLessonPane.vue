@@ -6,9 +6,10 @@ import Vibe64LearningFinished from "./Vibe64LearningFinished.vue";
 import Vibe64LearningReader from "./Vibe64LearningReader.vue";
 
 // The Lesson pane of the Learn page: the current lesson's reader, or its
-// "Lesson finished" screen, beside Colleague. It is the project page's Lesson
-// tab on the lesson's practice project, and the whole main area of a lesson
-// without one. Both hosts render it.
+// "Lesson finished" screen, beside Colleague. On the lesson's practice project
+// the step bar's Lesson button shows it in the project pane; it is the whole
+// main area of a lesson without one. Both hosts render it. Its Learning yellow
+// surface says "this is about learning", apart from the project's own panes.
 const props = defineProps({
   // The pane is on screen (the reader restores its scroll place when shown).
   visible: { type: Boolean, default: true }
@@ -38,7 +39,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .vibe64-learning-lesson-pane {
-  background: rgb(var(--v-theme-surface));
+  background: var(--v64-learning-container, rgb(var(--v-theme-surface)));
   color: rgb(var(--v-theme-on-surface));
   height: 100%;
   min-height: 0;

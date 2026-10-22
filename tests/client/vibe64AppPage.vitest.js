@@ -137,25 +137,22 @@ describe("Vibe64 app page", () => {
     })).toBe(false);
   });
 
-  it("adds the current lesson's Lesson pane: a tab on its practice project, the main pane without one", () => {
+  it("switches Preview and Dash in the header; the Lesson pane is the step bar's, and alone without a project", () => {
     const ids = tabs => tabs.map(tab => tab.id);
     expect(ids(projectPaneTabs({ projectSlug: "alpha" }))).toEqual(["preview", "dashboard"]);
     expect(ids(projectPaneTabs({ projectSlug: "" }))).toEqual(["preview", "dashboard"]);
-    expect(ids(projectPaneTabs({ projectSlug: "training-abc", lesson: true }))).toEqual(["preview", "dashboard", "lesson"]);
-    expect(ids(projectPaneTabs({ projectSlug: "", lesson: true })), "the lesson alone without a project").toEqual(["lesson"]);
-    expect(projectPaneTabs({ projectSlug: "", lesson: true })[0].label).toBe("Lesson");
+    expect(ids(projectPaneTabs({ projectSlug: "training-abc", lesson: true })), "no Lesson tab").toEqual(["preview", "dashboard"]);
+    expect(projectPaneTabs({ projectSlug: "", lesson: true }), "the lesson alone without a project: no switch").toEqual([]);
+    expect(projectPaneTabs({ projectSlug: "alpha" }).map(tab => [tab.label, tab.name]))
+      .toEqual([["Preview", "Preview"], ["Dash", "Dashboard"]]);
   });
 
-  it("cycles the phone's next-pane pill through the panes in tab order", () => {
+  it("cycles the phone's next-pane pill through the panes in tab order, and leaves the Lesson pane for Preview", () => {
     const practice = projectPaneTabs({ projectSlug: "training-abc", lesson: true });
     expect(nextProjectPane(practice, "lesson")).toMatchObject({ pane: "preview", label: "Preview", ariaLabel: "Go to preview" });
-    expect(nextProjectPane(practice, "preview")).toMatchObject({ pane: "dashboard", label: "Dashboard" });
-    expect(nextProjectPane(practice, "dashboard")).toMatchObject({ pane: "lesson", label: "Lesson", ariaLabel: "Go to lesson" });
-    const lessonOnly = projectPaneTabs({ projectSlug: "", lesson: true });
-    expect(nextProjectPane(lessonOnly, "lesson").pane).toBe("lesson");
-    const plain = projectPaneTabs({ projectSlug: "alpha" });
-    expect(nextProjectPane(plain, "preview")).toMatchObject({ pane: "dashboard", ariaLabel: "Go to dashboard" });
-    expect(nextProjectPane(plain, "dashboard")).toMatchObject({ pane: "preview", ariaLabel: "Go to preview" });
+    expect(nextProjectPane(practice, "preview")).toMatchObject({ pane: "dashboard", label: "Dash", name: "Dashboard", ariaLabel: "Go to dashboard" });
+    expect(nextProjectPane(practice, "dashboard")).toMatchObject({ pane: "preview", ariaLabel: "Go to preview" });
+    expect(nextProjectPane(projectPaneTabs({ projectSlug: "", lesson: true }), "lesson")).toBeNull();
   });
 
   it("returns dashboard navigation to the last dashboard route", () => {

@@ -35,7 +35,7 @@ space only (see [Practice projects](learning-practice-projects.md)):
   mode. Press L to go back to your projects."
 - With no lesson in progress the page shows **No project selected** (below).
   A lesson without a practice project shows the lesson
-  itself on that page (see [The Lesson tab](#the-lesson-tab)).
+  itself on that page (see [The Lesson pane](#the-lesson-pane)).
 - Nothing inside the lesson's practice project is limited: Preview, Files,
   Database, coding chats and Colleague all work. Account settings and AI
   Accounts stay available, so you can connect an AI during a lesson.
@@ -61,7 +61,7 @@ In Learn mode, while your lesson is loaded, a yellow bar above the project page
 names the lesson and plays its current step, beat by beat. How it works is in
 [The lesson step bar](lesson-step-bar.md).
 
-## The Lesson tab
+## The Lesson pane
 
 In Learn mode the current lesson is read on the project page itself, beside
 Colleague, your teacher. The **Lesson** pane is the one place a lesson is read:
@@ -70,11 +70,15 @@ the step list, the current step with its text, diagram, question or check,
 the lesson's **Lesson finished** screen. Starting, continuing or resuming a
 lesson from Courses and Colleague's **Step N/M** button both open it here, at the step you were reading.
 
-- **On the lesson's practice project** the project switches read **Preview**,
-  **Dashboard** and **Lesson**. Select **Lesson** to read the lesson; Preview
-  keeps running behind it, so its App is still there when you select
-  **Preview** again. The address ends in `?pane=lesson`, so a reload, or
-  **L** back to Learn, returns to the Lesson tab.
+- **On the lesson's practice project** the header switch reads **Preview** and
+  **Dash** (Dashboard), and the lesson step bar has a **Lesson** button. Press
+  **Lesson** to read the lesson: the button stays pressed and neither
+  **Preview** nor **Dash** is selected while it shows. Select **Preview** or
+  **Dash** to leave it; Preview keeps running behind the lesson, so its App is
+  still there. The address ends in `?pane=lesson`, so a reload, or **L** back
+  to Learn, returns to the Lesson pane.
+- The Lesson pane has a soft yellow background, the colour of the step bar and
+  the **L** button, so it is clearly the learning part of the page.
 - **On a lesson without a practice project** there is no
   coding session, so there is no chat column and no pane switches: the Lesson
   pane fills the page.
@@ -97,7 +101,7 @@ lesson from Courses and Colleague's **Step N/M** button both open it here, at th
 ## No project selected and `/app`
 
 `/app/learning` is Learn mode's page with no project selected: the usual
-project page with the chat column, the **Preview** and **Dashboard** switches
+project page with the chat column, the **Preview** and **Dash** switches
 (on a phone, the single switch button) and **Account settings**. The Dashboard
 still lists its sections, without opening them, and there is no **+** for
 sessions. It is used in two cases:
@@ -112,7 +116,7 @@ sessions. It is used in two cases:
 - **A lesson without a practice project**. The page shows
   the lesson in its Lesson pane, with no chat column, and a **Dashboard**
   switch whose page says **No project selected** (see
-  [The Lesson tab](#the-lesson-tab)). **L** only switches mode.
+  [The Lesson pane](#the-lesson-pane)). **L** only switches mode.
 
 A local Vibe64 has no Projects page. Its `/` and `/app` addresses open Develop's
 place, the project Vibe64 was started in, or in Learn mode Learn's place (the
@@ -132,7 +136,7 @@ a **Courses** tab, an **In progress** tab and an **Archived** tab, and at the
 right a blue **Back to editor** button and a close button (×, **Close
 Courses**). A lesson is not read here: opening
 one closes Courses and shows it in the page's
-[Lesson tab](#the-lesson-tab).
+[Lesson pane](#the-lesson-pane).
 
 - Press **Back to editor**, × or Escape to close it. The page you were on, and Colleague, are
   visible again.
@@ -151,20 +155,20 @@ catalogue** and, for the workspace owner, **New course**; see
 [Choosing lessons and courses](learning-mode-ui.md).
 
 - **Start lesson** or **Start next lesson** start
-  the lesson, close Courses and open it in the Lesson tab of its practice
+  the lesson, close Courses and open it in the Lesson pane of its practice
   project (or, without one, of the no-project page). No chat is created. Starting a lesson while a different one is in progress first asks
   **Archive your lesson in progress?**: **Archive and start** or **Keep it**.
-- **Continue lesson** opens your lesson in progress in the Lesson tab.
+- **Continue lesson** opens your lesson in progress in the Lesson pane.
 - If a start was not confirmed, **Retry lesson start** repeats the same request.
 - Without AI set up, a lesson waits for it: see `learning-mode-ui`.
 - On hosted Vibe64 the workspace owner also sees **Author trial** with
   **Resume author trial**, which opens the admitted draft snapshot in the
-  Lesson tab (see the hosted author-trial guide).
+  Lesson pane (see the hosted author-trial guide).
 
 ## In progress and Archived
 
 **In progress** shows your one lesson in progress with its practice project and
-**Open** (which opens it in the Lesson tab), **Restart** and **Delete**. **Archived** lists the lessons you
+**Open** (which opens it in the Lesson pane), **Restart** and **Delete**. **Archived** lists the lessons you
 finished or archived, each with **Delete**. Deleting asks once more (**Delete
 for good**); see [Practice projects](learning-practice-projects.md).
 
@@ -220,7 +224,7 @@ also has:
 - **Automatic check**: a step about an App interaction says "This step is
   checked automatically when you do it in your practice project", for example
   by pressing a button in its Preview. For a button step, read the step in
-  the Lesson tab, then select **Preview** (**Show me** does this) and press the
+  the Lesson pane, then select **Preview** (**Show me** does this) and press the
   App's button yourself in the practice project's visible Preview. Your press
   counts only for the lesson step Learning currently shows, in that lesson's
   own practice session, while Courses is not covering the app; the
@@ -255,10 +259,10 @@ also has:
   The ring stays for a few seconds, also on a phone while the practice
   project's page is still loading, and clears when you tap or click anywhere.
   Click the control yourself. If the place is not
-  available on the current page, the step comes back in the Lesson tab with the
+  available on the current page, the step comes back in the Lesson pane with the
   reason; open your practice project and try again.
 - **Teach me**: opens Colleague beside the step and sends it the message
-  "Teach me this step." for you. The step stays on screen in the Lesson tab;
+  "Teach me this step." for you. The step stays on screen in the Lesson pane;
   Colleague answers in its conversation. On a phone Colleague's full-screen chat opens over the step.
   If Colleague is not connected yet, an error says so; press **Teach me** again.
   If no AI is connected yet, nothing is sent:
@@ -278,8 +282,8 @@ correct answers of a question.
 
 ## Lesson finished
 
-When your own step result (in the Lesson tab, or an automatic check from your
-Preview press) completes the last required step, the Lesson tab opens on the
+When your own step result (in the Lesson pane, or an automatic check from your
+Preview press) completes the last required step, the Lesson pane opens on the
 **Lesson finished** screen: a check mark,
 **LESSON FINISHED**, the lesson title and "You completed every required step: X
 of Y steps passed." It finishes the lesson for you ("Finishing the lesson…"):
@@ -290,7 +294,7 @@ to try again. You don't need an AI for this. Then choose:
 
 - **Next lesson: <title>** starts the next unfinished lesson of the same course
   (when there is one).
-- **Back to courses** opens the Courses overlay; the Lesson tab goes away, since
+- **Back to courses** opens the Courses overlay; the Lesson pane goes away, since
   no lesson is in progress.
 
 ## The current step in Colleague
@@ -303,12 +307,12 @@ or a check once that step has passed. Its tooltip is **Current lesson step:
 
 Press it to see the current step in the page's **Lesson** tab (above), at that
 step, with Colleague still open beside it on a desktop. On a phone Colleague's
-full-screen chat minimises so the Lesson tab is visible; its avatar button
-brings Colleague back. The step bar, the Lesson tab, Courses and Colleague share
+full-screen chat minimises so the Lesson pane is visible; its avatar button
+brings Colleague back. The step bar, the Lesson pane, Courses and Colleague share
 one lesson state, so they and other tabs stay in step.
 
 On a phone, when Colleague shows a lesson step for you its full-screen chat
-minimises and the Lesson tab shows that step. When Colleague opens Courses for
+minimises and the Lesson pane shows that step. When Colleague opens Courses for
 you, closing Courses (× or Escape) returns you to Colleague's chat, not the page
 behind it. **Show me** still shows the app.
 
@@ -326,7 +330,7 @@ attempt.
 
 ## What Colleague can do
 
-Colleague can explain these controls, show your current step in the Lesson tab,
+Colleague can explain these controls, show your current step in the Lesson pane,
 open or close the Courses overlay, point at the L button, and teach a step when you press **Teach me** or
 ask. In Learn mode it opens and works only in the lesson's practice project;
 when you ask for another project it says you're in Learn mode and that **L**

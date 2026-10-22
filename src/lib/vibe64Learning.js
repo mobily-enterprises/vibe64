@@ -89,7 +89,7 @@ function writeJson(kind, key, value) {
 
 // This tab's place (sessionStorage): the Courses tab, and the Lesson pane's
 // attempt, step and scroll (trialAttemptId: an author trial opened here), and
-// the step bar's beat, pause and open step text.
+// the step bar's beat and pause.
 function readPlace(actorKey) {
   const value = readJson("sessionStorage", `${STORAGE_PREFIX}${actorKey}`);
   if (!value) return null;
@@ -97,8 +97,7 @@ function readPlace(actorKey) {
     attemptId: text(value.attemptId) ? value.attemptId : "", stepId: text(value.stepId) ? value.stepId : "",
     trialAttemptId: text(value.trialAttemptId) && value.trialAttemptId === value.attemptId ? value.trialAttemptId : "",
     scroll: Number.isSafeInteger(value.scroll) && value.scroll >= 0 ? value.scroll : 0,
-    beat: Number.isSafeInteger(value.beat) && value.beat >= 0 ? value.beat : 0, beatPaused: value.beatPaused === true,
-    stepTextOpen: value.stepTextOpen === true };
+    beat: Number.isSafeInteger(value.beat) && value.beat >= 0 ? value.beat : 0, beatPaused: value.beatPaused === true };
 }
 
 // Each mode's last place in this browser (localStorage): the full route,
@@ -226,7 +225,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   // unreadable).
   const state = reactive({ open: false, minimised: false, surface: "courses", attemptId: "", stepId: "", scroll: 0,
     loading: false, error: "", actorKey: "", busy: "", hiddenBy: "", finished: false, notice: "", modeBusy: "",
-    modeRead: false, trialAttemptId: "", beat: 0, beatPaused: false, stepTextOpen: false });
+    modeRead: false, trialAttemptId: "", beat: 0, beatPaused: false });
   const lesson = shallowRef(null);
   // The learner's mode (server-backed): null until read or when unreadable (Develop).
   const mode = shallowRef(null);
@@ -296,7 +295,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     if (!state.actorKey) return;
     writeJson("sessionStorage", `${STORAGE_PREFIX}${state.actorKey}`, { surface: state.surface, attemptId: state.attemptId,
       stepId: state.stepId, scroll: state.scroll, trialAttemptId: state.trialAttemptId,
-      beat: state.beat, beatPaused: state.beatPaused, stepTextOpen: state.stepTextOpen });
+      beat: state.beat, beatPaused: state.beatPaused });
   }
 
   // The signed-in viewer is supplied by the mounted overlay (hosted AuthGate
@@ -321,7 +320,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     Object.assign(notesState, { loading: false, saving: false, error: "" });
     Object.assign(state, { open: false, minimised: false, surface: "courses", attemptId: "", stepId: "", scroll: 0,
       loading: false, error: "", busy: "", hiddenBy: "", finished: false, notice: "", modeBusy: "", modeRead: false,
-      trialAttemptId: "", beat: 0, beatPaused: false, stepTextOpen: false, actorKey: next });
+      trialAttemptId: "", beat: 0, beatPaused: false, actorKey: next });
     finishRun = null;
     const place = next ? readPlace(next) : null;
     if (place) Object.assign(state, place);
@@ -552,12 +551,6 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
 
   const closeCourses = () => minimise("learner");
 
-  // ≡ Step: the current step's full text, open under the step bar.
-  function setStepText(open) {
-    state.stepTextOpen = open === true;
-    remember();
-  }
-
   // The "Lesson finished" screen of the current lesson, in the Lesson pane:
   // shown when this learner's own step action completes the lesson, and again
   // from the reader of a complete lesson. The screen finishes the attempt.
@@ -712,7 +705,6 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   // first one, so the lesson stays in view.
   async function showMe(stepId = currentStep.value?.id) {
     const step = steps.value.find(value => value.id === stepId);
-    if (state.stepTextOpen) setStepText(false);
     if (step?.beats?.length) {
       minimise();
       player.start(stepId);
@@ -1097,7 +1089,11 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     get lessonTitle() { return mode.value?.currentAttemptId ? mode.value.lessonTitle || mode.value.lessonCode || "" : ""; },
     get practice() { return practice.value; },
     get confirmArchive() { return confirmArchive.value; },
-    get stepTextOpen() { return state.stepTextOpen; },
+    // The step bar's Lesson button: offered beside a practice project's
+    // Preview and Dash (a lesson without one is its only pane), pressed while
+    // the project page shows the Lesson pane.
+    get lessonSwitchable() { return Boolean(layout?.value?.projectSlug); },
+    get lessonShown() { return Boolean(layout?.value?.lessonPane); },
     get notice() { return state.notice; },
     lesson, results, steps, currentStep, focus, colleagueRequest, notes, notesState: readonly(notesState), player,
     stepStatus: stepId => stepStatus(results.value, stepId, lesson.value?.passedStepIds || []),
@@ -1105,7 +1101,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     runCheck, answer, done, review, savedReview, reviewNote, showMe, teachMe, stuck, doItForMe, doItForMeKind, consumeColleagueRequest, learnerChanged,
     exerciseStep, beginExercise, exerciseCurrent, finishExercise, prepareExercise,
     readNotes, saveNotes, clearNotes,
-    readLearningMode, setMode, toggleMode, modePlace, openCurrent, setStepText, showNotice, clearNotice,
+    readLearningMode, setMode, toggleMode, modePlace, openCurrent, showNotice, clearNotice,
     startLesson, admitted, opened, confirmArchiveAndStart, cancelArchive, restart, finish, deleteAttempt, readPractice, deleteArchived
   });
 }

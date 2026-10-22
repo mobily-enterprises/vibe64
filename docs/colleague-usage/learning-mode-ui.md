@@ -56,7 +56,7 @@ with a newer release shows **Update available** and **Update** (see
 A lesson without a practice project opens on the Learn page (at `/app/learning`) with no project
 selected: the lesson's own **Lesson** pane fills the page beside Colleague,
 with no pane switches, no chat column and no sessions (see the shared guide's
-*The Lesson tab*). Your own projects stay hidden until you
+*The Lesson pane*). Your own projects stay hidden until you
 press **L** to go back to Develop. Its steps say which real screens it uses.
 
 ## Starting, continuing, archiving and finishing

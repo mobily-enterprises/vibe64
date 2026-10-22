@@ -66,7 +66,7 @@ passes the step for you:
 On a phone, Colleague's full-screen chat minimises itself when it opens Courses,
 shows a lesson step or rings a control, so you can see it; reopen Colleague with
 its avatar button. **Teach me** on a phone opens Colleague's full-screen chat
-over the Lesson tab, which stays underneath.
+over the Lesson pane, which stays underneath.
 
 ## Colleague never judges
 

@@ -146,7 +146,12 @@ watch([() => step.value?.id, () => props.visible], async ([, shown]) => {
   width: 100%;
 }
 .vibe64-learning-reader__step:hover { background: var(--v64-surface-container, rgba(0, 0, 0, 0.04)); }
-.vibe64-learning-reader__step.is-current { background: var(--v64-learning-container, rgba(245, 197, 24, 0.18)); color: var(--v64-on-learning-container, inherit); }
+/* The Lesson pane is Learning yellow: the current step lifts out of it as a surface card with the Learning stroke. */
+.vibe64-learning-reader__step.is-current {
+  background: rgb(var(--v-theme-surface));
+  box-shadow: inset 0 0 0 2px var(--v64-learning-strong, #c99a00);
+  color: rgb(var(--v-theme-on-surface));
+}
 .vibe64-learning-reader__step:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
 .vibe64-learning-reader__step-mark {
   align-items: center; border: 1.5px solid currentColor; border-radius: 50%; display: inline-flex; grid-row: span 2;

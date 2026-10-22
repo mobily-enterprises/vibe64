@@ -16,7 +16,7 @@ lesson's own caption. You then click it yourself.
   it may have to cover part of the bar. The caption is slightly see-through and
   clicks pass through it to whatever is underneath.
 - The ring is on the next step from where you are. On **Preview**, a path to the
-  ERD rings the **Dashboard** tab; once you are in **Dashboard → Database**, it
+  ERD rings the **Dash** (Dashboard) tab; once you are in **Dashboard → Database**, it
   rings the **ERD** button. When you are already at the place (for example
   Preview or **Dashboard → Files** is open), the ring goes around that open
   pane, with the caption inside its top edge when the pane fills the screen.
@@ -34,7 +34,7 @@ section the project does not show cannot be ringed.
 
 ## On a phone
 
-A phone shows the chat or one pane at a time, so the Preview/Dashboard tabs and
+A phone shows the chat or one pane at a time, so the Preview/Dash tabs and
 the Dashboard menu are hidden. Colleague's full-screen chat minimises itself
 first so the ring is visible. Then:
 
@@ -72,8 +72,8 @@ passes a lesson step. When a lesson asks you to find a place, click it yourself.
 
 ## Opening your lesson
 
-Colleague can show your current lesson step in the Learn page's **Lesson** tab,
+Colleague can show your current lesson step in the Learn page's **Lesson** pane,
 and open the **Courses** catalogue or close it so you can see the app, without
 ending the lesson. While the lesson is going, the **Step N/M** button in
-Colleague's header shows the current step in the Lesson tab (on a phone,
+Colleague's header shows the current step in the Lesson pane (on a phone,
 Colleague's chat minimises so the step is visible).

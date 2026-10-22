@@ -165,6 +165,8 @@ const {
               role="tab"
               type="button"
               :data-vibe64-guide="tab.id"
+              :aria-label="tab.name"
+              :title="tab.name"
               :aria-selected="projectPane === tab.id ? 'true' : 'false'"
               @click="selectProjectPane(tab.id)"
             >
@@ -182,7 +184,7 @@ const {
             data-vibe64-guide="pane-switch"
             type="button"
             :aria-label="mobileProjectAction.ariaLabel"
-            :title="mobileProjectAction.label"
+            :title="mobileProjectAction.name"
             @click="selectProjectPane(mobileProjectAction.pane)"
           >
             <v-icon class="studio-home-shell-project-mobile-action__icon" :icon="mobileProjectAction.icon" size="18" />

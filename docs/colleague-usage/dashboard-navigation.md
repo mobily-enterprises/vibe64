@@ -11,7 +11,8 @@ section's icon and title with a one-line description and its actions.
 
 On mobile, **Show project** reveals the project from chat. Use **Dashboard section**
 to choose a tool and **Back to dashboard** to return from its detail. **Show chat**
-returns to the coding conversation. Preview and Dashboard retain their own selected
+returns to the coding conversation. On a desktop the header's **Preview** and
+**Dash** (Dashboard) switch between the two panes. Preview and Dashboard retain their own selected
 state when hidden; leaving the preview does not stop its application.
 
 The left-arrow **Back to dashboard** control has the same appearance in

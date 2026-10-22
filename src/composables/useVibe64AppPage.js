@@ -5,7 +5,6 @@ import {
   mdiChevronDown,
   mdiChevronLeft,
   mdiChevronRight,
-  mdiSchoolOutline,
   mdiViewDashboardOutline
 } from "@mdi/js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
@@ -46,27 +45,26 @@ const SELF_TARGET_AUTO_SELECT_DELAY_MS = 3000;
 const PREVIEW_TOOLBAR_HOST_ID = "studio-home-shell-preview-toolbar";
 const PROJECT_RUNTIME_CLOSE_API_PATH = "/api/vibe64/project-runtime/close";
 const PROJECT_RUNTIME_OPEN_API_PATH = "/api/vibe64/project-runtime/open";
-// The project panes. Learn mode adds the current lesson's Lesson pane: a
-// tab on its practice project, and the main pane (instead of Preview) of a
-// lesson without one.
+// The project panes the header's Preview | Dash switch chooses between. Learn
+// mode's Lesson pane is not one of them: the lesson step bar's Lesson button
+// shows it, and while it shows neither of these is selected. A lesson without
+// a practice project is the lesson alone: no switch.
 const PROJECT_PANES = Object.freeze({
-  preview: Object.freeze({ id: "preview", label: "Preview", icon: mdiApplicationOutline }),
-  dashboard: Object.freeze({ id: "dashboard", label: "Dashboard", icon: mdiViewDashboardOutline }),
-  lesson: Object.freeze({ id: "lesson", label: "Lesson", icon: mdiSchoolOutline })
+  preview: Object.freeze({ id: "preview", label: "Preview", name: "Preview", icon: mdiApplicationOutline }),
+  dashboard: Object.freeze({ id: "dashboard", label: "Dash", name: "Dashboard", icon: mdiViewDashboardOutline })
 });
 
 function projectPaneTabs({ projectSlug = "", lesson = false } = {}) {
-  const { preview, dashboard, lesson: lessonPane } = PROJECT_PANES;
-  if (!lesson) return [preview, dashboard];
-  // A lesson without a practice project is the lesson alone: no tab switch.
-  return projectSlug ? [preview, dashboard, lessonPane] : [lessonPane];
+  const { preview, dashboard } = PROJECT_PANES;
+  return !projectSlug && lesson ? [] : [preview, dashboard];
 }
 
-// The phone's "next pane" pill: the pane after the shown one, in tab order.
+// The phone's "next pane" pill: the pane after the shown one, in tab order
+// (from the Lesson pane, the first).
 function nextProjectPane(tabs = [], pane = "") {
   const index = tabs.findIndex(tab => tab.id === pane);
   const next = tabs[(index + 1) % tabs.length] || null;
-  return next && { ariaLabel: `Go to ${next.label.toLowerCase()}`, icon: next.icon, label: next.label, pane: next.id };
+  return next && { ariaLabel: `Go to ${next.name.toLowerCase()}`, icon: next.icon, label: next.label, name: next.name, pane: next.id };
 }
 
 function useVibe64AppPage() {
@@ -160,7 +158,8 @@ function useVibe64AppPage() {
   const dashboardBasePath = computed(() => `${developmentBasePath.value}/dashboard`);
   const dashboardRouteActive = computed(() => normalizedPath(route.path).startsWith(`${dashboardBasePath.value}/`));
   // Learn mode's current lesson has a Lesson pane (?pane=lesson on the
-  // project's base path; the default pane without a project).
+  // project's base path, shown by the step bar's Lesson button; the only pane
+  // without a project).
   const lessonPaneAvailable = computed(() => Boolean(learning?.learnMode && learning.lessonAttemptId));
   // Without a project the panes are empty and switch in place; the pane and
   // the dashboard section live in the address, so Learn mode's place keeps them.
@@ -210,6 +209,8 @@ function useVibe64AppPage() {
     get projectVisible() { return projectVisible.value; },
     // The Lesson pane is on screen (Colleague's focus reports pane=lesson).
     get lessonVisible() { return projectVisible.value && projectPane.value === "lesson"; },
+    // The project side shows the Lesson pane (the step bar's Lesson button is pressed).
+    get lessonPane() { return projectPane.value === "lesson"; },
     get chatVisible() { return chatColumnVisible.value && !chatCollapsed.value; },
     showProject: showProjectPane,
     showChat() { setChatCollapsed(false); }
@@ -426,7 +427,8 @@ function useVibe64AppPage() {
   }
 
   function selectProjectPane(pane = "") {
-    const known = projectTabs.value.some(tab => tab.id === pane) ? pane : "preview";
+    const known = pane === "lesson" && lessonPaneAvailable.value ? pane
+      : projectTabs.value.some(tab => tab.id === pane) ? pane : "preview";
     if (!projectSlug.value) {
       void router.replace({ query: { ...route.query, pane: known } });
       return;

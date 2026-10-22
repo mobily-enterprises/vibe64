@@ -176,7 +176,15 @@ screen (`Vibe64LearningFinished.vue`) finishes its attempt once, then offers
 **Next lesson** (through `startLesson`) and **Back to courses**. The step bar
 (`Vibe64LearningStepBar.vue`, on the project page) shows the current lesson's
 step in Learn with Previous/Next, always in full (it has no collapse
-toggle, and no Open button: the page's Lesson tab opens the lesson). `openLesson` also asks the page layout (`VIBE64_COLLEAGUE_LAYOUT_KEY`,
+toggle). On a practice project its **Lesson** button (`openLesson`) shows the
+Lesson pane and stays pressed (`aria-pressed`, from the layout owner's
+`lessonPane`) while it shows; the header's Preview | Dash switch
+(`projectPaneTabs`: Preview and Dash, its accessible name Dashboard) has no
+Lesson tab, selects neither while the lesson shows, and leaves it. The Lesson
+pane (`Vibe64LearningLessonPane.vue`) wears the step bar's Learning yellow
+(`--v64-learning-container`) so it reads as learning, apart from the project's
+own panes; the reader's current step is a surface card with the
+`--v64-learning-strong` stroke on it. `openLesson` also asks the page layout (`VIBE64_COLLEAGUE_LAYOUT_KEY`,
 passed to the controller as `layout`) to show the project side, so on a phone
 it reveals the Lesson pane even when the address already names it. The project picker (`ProjectSelectionGate`) never lists
 practice projects and, for a mode refusal, shows the server's message with
@@ -216,7 +224,7 @@ closed product list of real places (`guideTargets.js`): `preview`, `dashboard`,
 `..`), `changes`, `git-log`, `session-info`, `architecture` and `learning`. The
 older `workspace-preview` and `workspace-erd` names remain aliases. Each place is
 a path of `data-vibe64-guide` ids on existing controls: the project page's
-Preview/Dashboard tabs, the L button, the real Dashboard section items
+Preview/Dash tabs, the step bar's Lesson button, the L button, the real Dashboard section items
 (`guideId` in `vibe64SessionToolDefinitions.js`), the Database
 Overview/ERD/Data toggle, and file-tree rows (`data-vibe64-guide-path`). Lessons
 supply no selectors. An open place's pane also carries

@@ -1574,15 +1574,14 @@ const beatsLesson = () => {
   return value;
 };
 
-const STEP_BAR_ICONS = Object.freeze({ mdiBookOpenPageVariantOutline: "book", mdiChevronDown: "down", mdiChevronLeft: "left",
-  mdiChevronRight: "right", mdiChevronUp: "up", mdiMenu: "menu", mdiPause: "pause", mdiPlay: "play" });
-// The step bar over a host layout; ≡ Step renders the reader's step view (stubbed: its title).
+const STEP_BAR_ICONS = Object.freeze({ mdiBookOpenPageVariantOutline: "book", mdiChevronLeft: "left",
+  mdiChevronRight: "right", mdiPause: "pause", mdiPlay: "play", mdiSchoolOutline: "school" });
+// The step bar over a host layout.
 function mountStepBar(learning, accounts = { aiOnboardingAvailable: Vue.ref(true),
   aiOnboardingNeeded: Vue.ref(false), requestVibe64AiOnboarding: vi.fn(() => true) }) {
-  const step = { props: ["learning"], setup: props => () => Vue.h("div", { "data-test": "step-view" }, props.learning.currentStep.value?.title) };
   const bar = compiledUi(path.resolve("src/components/learning/Vibe64LearningStepBar.vue"), {
     vue: Vue, "@mdi/js": STEP_BAR_ICONS,
-    "@/composables/useVibe64Learning.js": { useVibe64Learning: () => learning }, "./Vibe64LearningStep.vue": { default: step },
+    "@/composables/useVibe64Learning.js": { useVibe64Learning: () => learning },
     "@local/vibe64-accounts/client": accounts });
   const root = { children: [] };
   const app = uiRenderer().createApp({ render: () => Vue.h(bar) });
@@ -1720,13 +1719,36 @@ describe("Lesson step bar", () => {
       await flush();
       expect(learning.stepId).toBe("quiz");
       expect(textOf(root)).toContain("Not checked yet");
-      expect(byTest(root, "learning-step-bar-open"), "the Lesson tab opens the lesson; the bar has no Open").toBeUndefined();
+      expect(byTest(root, "learning-step-bar-open"), "the bar's Lesson button opens the lesson; it has no Open").toBeUndefined();
       expect([byTest(root, "learning-step-bar-toggle"), learning.toggleStepBar], "the bar is always its one line").toEqual([undefined, undefined]);
       expect(textOf(root)).toContain("Step 2 of 4: Quiz");
       on = false;
       await learning.readLearningMode();
       await flush();
       expect(byTest(root, "learning-step-bar"), "Develop shows no lesson").toBeUndefined();
+    } finally { app.unmount(); }
+  });
+
+  it("offers Lesson beside a practice project's panes, pressed while the Lesson pane shows, and opens the lesson", async () => {
+    const layout = Vue.shallowRef({ projectSlug: "practice-one", lessonPane: false, showProject: vi.fn() });
+    const router = { currentRoute: Vue.ref({ fullPath: "/app/project/practice-one" }), push: vi.fn(async () => {}) };
+    const { learning } = controller({ layout, router });
+    learning.setViewer("member");
+    await flush();
+    const { root, app } = mountStepBar(learning);
+    try {
+      await flush();
+      const lesson = () => byTest(root, "learning-step-bar-lesson");
+      expect([textOf(lesson()).trim(), lesson().props["aria-pressed"], lesson().props["data-vibe64-guide"]]).toEqual(["Lesson", "false", "lesson"]);
+      await lesson().props.onClick();
+      await flush();
+      expect(router.push, "Lesson opens the lesson's Lesson pane").toHaveBeenLastCalledWith("/app/project/practice-one?pane=lesson");
+      layout.value = { ...layout.value, lessonPane: true };
+      await flush();
+      expect(lesson().props["aria-pressed"], "pressed while the Lesson pane shows").toBe("true");
+      layout.value = { ...layout.value, projectSlug: "" };
+      await flush();
+      expect(lesson(), "a lesson without a practice project is its only pane").toBeUndefined();
     } finally { app.unmount(); }
   });
 
@@ -1821,38 +1843,7 @@ describe("Lesson step bar", () => {
         await flush();
         labels[stepId] = textOf(byTest(root, "learning-step-bar-verdict") || { text: "", children: [] }).trim();
       }
-      expect(labels).toEqual({ read: "Mark as done", quiz: "Answer in Step", preview: "Check my work", tick: "Done" });
-    } finally { app.unmount(); }
-  });
-
-  it("drops the whole step open under the bar with ≡ Step, in place, and closes it with ≡ or Escape", async () => {
-    const keys = new Map();
-    vi.stubGlobal("document", { addEventListener: (name, handler) => keys.set(name, handler),
-      removeEventListener: name => keys.delete(name) });
-    const { learning } = controller({ reads: () => beatsLesson() });
-    learning.setViewer("member");
-    await flush();
-    const { root, app } = mountStepBar(learning);
-    try {
-      await flush();
-      expect(byTest(root, "learning-step-bar-text")).toBeUndefined();
-      byTest(root, "learning-step-bar-step").props.onClick();
-      await flush();
-      expect(textOf(byTest(root, "learning-step-bar-text"))).toBe("Read");
-      expect(byTest(root, "learning-step-bar-step").props["aria-expanded"]).toBe(true);
-      expect(JSON.parse(saved.get("vibe64:learning-environment:v2:member")).stepTextOpen, "this tab remembers it").toBe(true);
-      learning.selectStep("quiz");
-      await flush();
-      expect(textOf(byTest(root, "learning-step-bar-text")), "it follows the current step").toBe("Quiz");
-      keys.get("keydown")({ key: "Escape" });
-      await flush();
-      expect([learning.stepTextOpen, byTest(root, "learning-step-bar-text")]).toEqual([false, undefined]);
-      learning.selectStep("tick");
-      await flush();
-      byTest(root, "learning-step-bar-step").props.onClick();
-      await flush();
-      await learning.showMe("read");
-      expect(learning.stepTextOpen, "Show me closes it so the place is in view").toBe(false);
+      expect(labels).toEqual({ read: "Mark as done", quiz: "Answer in Lesson", preview: "Check my work", tick: "Done" });
     } finally { app.unmount(); }
   });
 });

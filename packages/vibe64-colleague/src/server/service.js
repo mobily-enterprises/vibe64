@@ -1611,7 +1611,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     async navigate(input, context) {
       const state = await stateFor(context);
       if (input.learning && typeof input.learning.open === "boolean" && (input.learning.attemptId || input.learning.stepId)) {
-        return { ok: false, error: "open opens or closes the Courses catalogue only. To show a lesson step in the Lesson tab, send learning={attemptId, stepId} without open." };
+        return { ok: false, error: "open opens or closes the Courses catalogue only. To show a lesson step in the Lesson pane, send learning={attemptId, stepId} without open." };
       }
       if (input.learning?.stepId && !input.learning.attemptId) {
         return { ok: false, error: "Choose the exact lesson attempt before its step." };
