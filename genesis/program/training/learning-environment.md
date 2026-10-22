@@ -178,7 +178,12 @@ guide overlay 3000 above L 2400 above Colleague.
   (archive) or is removed (delete). A close that stops before the end leaves
   the attempt in progress (its project `deleting`); repeating it resumes, and
   a close of an ended attempt only finishes the thread step (restart and
-  finish retries do this too). Bundles:
+  finish retries do this too). Every archiving close, a repeat included, ends
+  with the disk limit: past the newest `keptArchivedProjects` archives with a
+  project (`KEPT_ARCHIVED_PROJECTS`, 3; a host passes its own number to
+  `createTrainingLearningSpace`), an archive's `project/` is removed and its
+  record and conversation stay. Only that learner's archive root is touched,
+  never the attempt in progress or a working project. Bundles:
   `<systemRoot>/training/practice-archives/<learnerKey>/<attemptId>/` with
   `attempt.json` (`{schemaVersion: 1, attemptId, learnerKey, pin, lessonTitle,
   reason: finished|archived, createdAt, archivedAt, stepProgress}`),

@@ -9,7 +9,7 @@ import { createProjectArchiveService } from "@local/vibe64-project/server/projec
 import { runTrainingCli } from "../../packages/vibe64-training/src/server/cli.js";
 import { createInstalledTrainingContent } from "../../packages/vibe64-training/src/server/installedContent.js";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
-import { createTrainingLearningSpace, MAX_ARCHIVES } from "../../packages/vibe64-training/src/server/learningSpace.js";
+import { createTrainingLearningSpace, KEPT_ARCHIVED_PROJECTS, MAX_ARCHIVES } from "../../packages/vibe64-training/src/server/learningSpace.js";
 
 // The attempt lifecycle in the learning space (Rev 4 C2) over the real
 // learner store, core learning space and shared project archive service.
@@ -42,7 +42,7 @@ async function installTopic(root, systemRoot) {
   return { practice: pin("STEPS-ONE"), zero: pin("STEPS-ZERO") };
 }
 
-async function fixture(t, { headroom = async () => {}, release = async () => {} } = {}) {
+async function fixture(t, { headroom = async () => {}, release = async () => {}, keptArchivedProjects } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-learning-space-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const released = [];
@@ -66,7 +66,7 @@ async function fixture(t, { headroom = async () => {}, release = async () => {} 
       closed.push(slug);
       return { ok: true };
     } });
-  const space = createTrainingLearningSpace({ learners: store, content, projectContext, projectArchive });
+  const space = createTrainingLearningSpace({ learners: store, content, projectContext, projectArchive, keptArchivedProjects });
 
   let starts = 0;
   // A lesson in progress as preparation leaves it: with its practice project
@@ -206,6 +206,34 @@ test(`a learner keeps at most ${MAX_ARCHIVES} archives; the refusal changes noth
   assert.equal((await f.space.list(ALICE)).archived.length, MAX_ARCHIVES);
   await f.space.deleteArchive({ actor: ALICE, attemptId: "00000000-0000-4000-8000-000000000000" });
   assert.equal((await f.space.closeAttempt({ actor: ALICE, attemptId: lesson.attemptId, archive: true, reason: "archived" })).closed, true);
+});
+
+test("only the newest archives keep their practice project; records, conversations and the lesson in progress stay", async t => {
+  assert.equal(KEPT_ARCHIVED_PROJECTS, 3);
+  const f = await fixture(t, { keptArchivedProjects: 1 });
+  // Another learner's archived project is never this learner's to remove.
+  const bobProject = path.join(f.bundle(BOB, "ffffffff-ffff-4fff-8fff-ffffffffffff"), "project", "kept");
+  await mkdir(bobProject, { recursive: true });
+  const archive = lesson => f.space.closeAttempt({ actor: ALICE, attemptId: lesson.attemptId, archive: true, reason: "archived" });
+  const projects = async () => (await f.space.list(ALICE)).archived.map(value => [value.attemptId, value.hasProject]);
+
+  const first = await f.start(ALICE);
+  await archive(first);
+  const zero = await f.start(ALICE, { pin: f.pins.zero });
+  await archive(zero);
+  assert.deepEqual(await projects(), [[zero.attemptId, false], [first.attemptId, true]], "an archive without a project takes no place");
+
+  const second = await f.start(ALICE);
+  await archive(second);
+  assert.deepEqual(await projects(), [[second.attemptId, true], [zero.attemptId, false], [first.attemptId, false]]);
+  assert.deepEqual((await readdir(f.bundle(ALICE, first.attemptId))).sort(), ["attempt.json", "conversation.json"],
+    "the oldest archive keeps its record and conversation");
+
+  const current = await f.start(ALICE);
+  assert.equal(await f.space.exists({ actor: ALICE, attemptId: current.attemptId }), true, "the lesson in progress keeps its project");
+  assert.equal((await stat(bobProject)).isDirectory(), true);
+  assert.throws(() => createTrainingLearningSpace({ learners: f.store, content: { readLesson() {} }, projectContext: f.projectContext,
+    projectArchive: { archiveProject() {}, removeProject() {} }, keptArchivedProjects: -1 }), TypeError);
 });
 
 test("a storage refusal comes before anything changes", async t => {

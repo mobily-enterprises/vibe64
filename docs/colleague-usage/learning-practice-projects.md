@@ -97,6 +97,14 @@ conversation and its practice project's source, sessions and state, but leaves
 out dependencies that can be rebuilt, such as `node_modules`. A lesson without
 a practice project keeps only its record and conversation.
 
+To limit disk use, only your 3 newest archived lessons with a practice project
+keep it (they show **with practice project** in the list). When archiving
+another lesson's project would make 4, the oldest of them loses its practice
+project, on its own; it keeps its record, step results and teacher
+conversation. Lessons without a practice project do not count. This never
+touches the lesson in progress, however long it stays paused, or your own
+projects.
+
 ## Finishing a lesson
 
 When every required step has passed, the lesson's **Lesson finished** screen,

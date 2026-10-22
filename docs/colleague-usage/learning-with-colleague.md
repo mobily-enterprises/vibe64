@@ -152,6 +152,11 @@ project, and your archived lessons with `practice.list`. When you ask:
 - **Delete an archived lesson** (`practice.archived.delete`): removes it for
   good.
 
+Only the 3 newest archived lessons with a practice project keep it; archiving
+another removes the oldest one's project and keeps its record and conversation
+(`hasProject` in `practice.list` says which still have one). Colleague says so
+when a finish, restart or archive will do this.
+
 Colleague restarts or deletes only after you confirm that exact lesson in the
 chat (`confirmed`); it names the lesson and says what is kept. A pinned session
 must be unpinned first; that refusal changes nothing. Colleague cannot see or

@@ -6,6 +6,9 @@ import { writeJsonFileAtomic } from "@local/vibe64-core/server/projectRecordMeta
 import { learnerIdentity } from "./learnerState.js";
 
 const MAX_ARCHIVES = 20;
+// Archives keep their record and conversation; only the newest few keep their
+// practice project, the one part that grows with the learner's work.
+const KEPT_ARCHIVED_PROJECTS = 3;
 const AUTHOR_PREVIEW_COURSE = "author-preview";
 const ARCHIVE_REASONS = Object.freeze(["finished", "archived"]);
 const PRIVATE = Object.freeze({ directoryMode: 0o700, fileMode: 0o600 });
@@ -22,15 +25,19 @@ const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a
 //     project/            the shared project archive (only with a project)
 // Admission and paths are core's (runWithPracticeProjectScope); the project
 // archive lifecycle is the shared archive service, the host's
-// (trainingHost.projectArchive) or a standalone one.
+// (trainingHost.projectArchive) or a standalone one. A host may keep a
+// different number of archived practice projects (keptArchivedProjects).
 function createTrainingLearningSpace({ learners, content, projectContext, projectArchive, systemRoot = projectContext?.systemRoot,
-  removePath = rm } = {}) {
+  keptArchivedProjects = KEPT_ARCHIVED_PROJECTS, removePath = rm } = {}) {
   if (typeof learners?.readState !== "function" || typeof learners?.endAttempt !== "function" ||
       typeof learners?.readAttemptRecord !== "function" || typeof learners?.runPreparationExclusive !== "function" ||
       typeof content?.readLesson !== "function" || typeof projectContext?.runWithPracticeProjectScope !== "function" ||
       typeof projectContext?.readLearningSpaceProject !== "function" ||
       typeof projectArchive?.archiveProject !== "function" || typeof projectArchive?.removeProject !== "function" || !systemRoot) {
     throw new TypeError("The learning space requires the learner, content, Project context and project archive owners.");
+  }
+  if (!Number.isSafeInteger(keptArchivedProjects) || keptArchivedProjects < 0) {
+    throw new TypeError("The learning space keeps a whole, non-negative number of archived practice projects.");
   }
   const archivesRoot = path.join(systemRoot, "training", "practice-archives");
   const learnerArchiveRoot = actor => path.join(archivesRoot, learnerIdentity(actor).key);
@@ -65,19 +72,36 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
       current = { attemptId: active.attemptId, lesson: { code: active.pin.lesson.code, title: await lessonTitle(content, active.pin) },
         ...(record ? { slug: record.slug } : {}), status: record?.deleting ? "deleting" : "in-progress" };
     }
-    const archived = [];
+    const archived = (await readArchives(actor, active?.attemptId)).map(({ record, hasProject }) => ({ attemptId: record.attemptId,
+      lesson: { code: record.pin.lesson.code, title: record.lessonTitle }, reason: record.reason, archivedAt: record.archivedAt,
+      hasProject }));
+    return { current, archived };
+  }
+
+  // This learner's archived attempts, newest first, without the attempt in
+  // progress: a close that stopped part-way keeps it in progress, not archived.
+  async function readArchives(actor, activeAttemptId) {
+    const archives = [];
     const root = learnerArchiveRoot(actor);
     for (const entry of await readdir(root, { withFileTypes: true }).catch(missingAsEmpty)) {
-      // A close that stopped part-way keeps its attempt in progress, not archived.
-      if (!entry.isDirectory() || entry.name === active?.attemptId) continue;
-      const record = await readBundle(path.join(root, entry.name), entry.name);
+      if (!entry.isDirectory() || entry.name === activeAttemptId) continue;
+      const directory = path.join(root, entry.name);
+      const record = await readBundle(directory, entry.name);
       if (!record) continue;
-      archived.push({ attemptId: record.attemptId, lesson: { code: record.pin.lesson.code, title: record.lessonTitle },
-        reason: record.reason, archivedAt: record.archivedAt,
-        hasProject: (await readdir(path.join(root, entry.name, "project")).catch(missingAsEmpty)).length > 0 });
+      archives.push({ directory, record, hasProject: (await readdir(path.join(directory, "project")).catch(missingAsEmpty)).length > 0 });
     }
-    archived.sort((left, right) => right.archivedAt.localeCompare(left.archivedAt));
-    return { current, archived };
+    return archives.sort((left, right) => right.record.archivedAt.localeCompare(left.record.archivedAt));
+  }
+
+  // The disk limit: past the newest keptArchivedProjects, an archive loses its
+  // practice project and keeps its record and conversation. Only this learner's
+  // archive root is touched, never the lesson in progress or a working project.
+  async function pruneArchivedProjects(actor) {
+    const { progress } = await learners.readState({ actor });
+    const withProject = (await readArchives(actor, progress.activeAttemptId)).filter(archive => archive.hasProject);
+    for (const { directory } of withProject.slice(keptArchivedProjects)) {
+      await removePath(path.join(directory, "project"), { recursive: true, force: true });
+    }
   }
 
   async function exists({ actor, attemptId } = {}) {
@@ -142,7 +166,8 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
   // so its refusals (a pinned session, storage) change nothing, and a removal
   // that stops leaves the attempt in progress with its project marked
   // deleting. Repeating the close resumes it, keyed by attemptId; for an
-  // attempt that has already ended it only finishes the thread step.
+  // attempt that has already ended it only finishes the thread step. Every
+  // archiving close ends with the disk limit, so a repeat also finishes it.
   async function closeAttempt({ actor, attemptId, archive, reason } = {}) {
     if (archive ? !ARCHIVE_REASONS.includes(reason) : reason !== "deleted") {
       throw new TypeError("Close an attempt as finished or archived with an archive, or as deleted without one.");
@@ -184,6 +209,7 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
     }
     const { ended } = await readAttempt(actor, attemptId);
     await closeThread(actor, attemptId, ended.reason !== "deleted");
+    if (ended.reason !== "deleted") await pruneArchivedProjects(actor);
     return { ok: true, attemptId, closed };
   }
 
@@ -230,4 +256,4 @@ function missingAsEmpty(error) {
   throw error;
 }
 
-export { createTrainingLearningSpace, lessonTitle, MAX_ARCHIVES };
+export { createTrainingLearningSpace, KEPT_ARCHIVED_PROJECTS, lessonTitle, MAX_ARCHIVES };
