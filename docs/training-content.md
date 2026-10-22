@@ -726,6 +726,14 @@ and `recordPreparationStart({actor,attemptId,initialSessionId,expectedRevision,s
 These are observation writers, not a provisioner, learner action or authority to
 create an arbitrary project. Only an admitted server caller may compose them.
 
+When the session owner refuses the practice session because the learner has no
+usable AI yet (`vibe64_assistant_workflow_unavailable` or
+`vibe64_assistant_role_unconfigured`), preparation records and throws
+`VIBE64_TRAINING_PRACTICE_AI_REQUIRED` (409) with learner wording that asks them
+to set up their AI and continue the same lesson. `lesson.read` and
+`learning.read` return the saved failure's `code` and `message`, so the step bar
+and Courses offer the AI setup instead of beats or a generic error.
+
 An untouched `{phase:"reserved"}` remains valid and contains no session identity.
 Explicit begin atomically saves `{phase:"preparing",initialSessionId}` before any
 external effects. The immutable ID is `training-<attempt-UUID>`, validated by the

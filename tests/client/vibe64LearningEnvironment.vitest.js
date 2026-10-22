@@ -1557,12 +1557,14 @@ const beatsLesson = () => {
 const STEP_BAR_ICONS = Object.freeze({ mdiBookOpenPageVariantOutline: "book", mdiChevronDown: "down", mdiChevronLeft: "left",
   mdiChevronRight: "right", mdiChevronUp: "up", mdiMenu: "menu", mdiPause: "pause", mdiPlay: "play" });
 // The step bar over a host layout; ≡ Step renders the reader's step view (stubbed: its title).
-function mountStepBar(learning, layout = Vue.shallowRef({ lessonVisible: false })) {
+function mountStepBar(learning, layout = Vue.shallowRef({ lessonVisible: false }), accounts = { aiOnboardingAvailable: Vue.ref(true),
+  aiOnboardingNeeded: Vue.ref(false), requestVibe64AiOnboarding: vi.fn(() => true) }) {
   const LAYOUT = Symbol("layout");
   const step = { props: ["learning"], setup: props => () => Vue.h("div", { "data-test": "step-view" }, props.learning.currentStep.value?.title) };
   const bar = compiledUi(path.resolve("src/components/learning/Vibe64LearningStepBar.vue"), {
     vue: Vue, "@mdi/js": STEP_BAR_ICONS, "@/lib/vibe64AssistantHost.js": { VIBE64_COLLEAGUE_LAYOUT_KEY: LAYOUT },
-    "@/composables/useVibe64Learning.js": { useVibe64Learning: () => learning }, "./Vibe64LearningStep.vue": { default: step } });
+    "@/composables/useVibe64Learning.js": { useVibe64Learning: () => learning }, "./Vibe64LearningStep.vue": { default: step },
+    "@local/vibe64-accounts/client": accounts });
   const root = { children: [] };
   const app = uiRenderer().createApp({ render: () => Vue.h(bar) });
   app.provide(LAYOUT, layout);
@@ -1750,6 +1752,51 @@ describe("Lesson step bar", () => {
       expect(await learning.showMe("read")).toEqual({ beats: true });
       await flush();
       expect([learning.stepId, learning.state.beat]).toEqual(["read", 0]);
+    } finally { app.unmount(); }
+  });
+
+  it("says a lesson waits for the learner's AI instead of playing beats, and a lesson message with no AI was not sent", async () => {
+    const waiting = "This lesson's practice project needs your AI, which isn't set up yet.";
+    let failure = { code: LearningLib.VIBE64_LEARNING_AI_REQUIRED_CODE, message: waiting };
+    const reads = () => {
+      const value = beatsLesson();
+      value.attempt = { ...value.attempt, preparation: { phase: "preparing", ...(failure ? { failure } : {}) } };
+      value.lesson.steps[1] = { ...value.lesson.steps[1], beats: [{ kind: "do", target: "send-message", prompt: "Make it green", text: "Ask it" }] };
+      return value;
+    };
+    const { learning } = controller({ reads });
+    learning.setViewer("member");
+    await flush();
+    const accounts = { aiOnboardingAvailable: Vue.ref(true), aiOnboardingNeeded: Vue.ref(true), requestVibe64AiOnboarding: vi.fn(() => true) };
+    const { root, app } = mountStepBar(learning, undefined, accounts);
+    try {
+      await flush();
+      expect(learning.aiRequired).toBe(true);
+      expect(textOf(byTest(root, "learning-step-bar-ai-required"))).toBe(waiting);
+      for (const id of ["learning-step-bar-beat", "learning-step-bar-pause", "learning-step-bar-verdict", "learning-step-bar-do-it"]) {
+        expect(byTest(root, id), id).toBeUndefined();
+      }
+      byTest(root, "learning-step-bar-set-up-ai").props.onClick();
+      expect(accounts.requestVibe64AiOnboarding).toHaveBeenCalledTimes(1);
+      // Prepared (or a different failure): the beats play again.
+      failure = { code: "VIBE64_TRAINING_SETUP_INCOMPLETE", message: "Setup is incomplete." };
+      await learning.loadLesson(ATTEMPT);
+      await flush();
+      expect(learning.aiRequired).toBe(false);
+      expect(textOf(byTest(root, "learning-step-bar-beat"))).toBe("This is your app.");
+      expect(byTest(root, "learning-step-bar-set-up-ai")).toBeUndefined();
+      // Do it for me on a lesson message, with no practice session view and no AI.
+      learning.selectStep("quiz", 0);
+      await flush();
+      await byTest(root, "learning-step-bar-do-it").props.onClick();
+      await flush();
+      expect(textOf(byTest(root, "learning-step-bar-note"))).toBe("No AI is connected yet, so nothing was sent. Set up your AI, or press Next.");
+      expect(byTest(root, "learning-step-bar-set-up-ai")).toBeDefined();
+      accounts.aiOnboardingNeeded.value = false;
+      await byTest(root, "learning-step-bar-do-it").props.onClick();
+      await flush();
+      expect(textOf(byTest(root, "learning-step-bar-note"))).toBe("That could not be sent here. Send it yourself, or press Next.");
+      expect(byTest(root, "learning-step-bar-set-up-ai")).toBeUndefined();
     } finally { app.unmount(); }
   });
 

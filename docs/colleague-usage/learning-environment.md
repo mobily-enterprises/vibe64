@@ -156,6 +156,7 @@ catalogue** and, for the workspace owner, **New course**; see
   **Archive your lesson in progress?**: **Archive and start** or **Keep it**.
 - **Continue lesson** opens your lesson in progress in the Lesson tab.
 - If a start was not confirmed, **Retry lesson start** repeats the same request.
+- Without AI set up, a lesson waits for it: see `learning-mode-ui`.
 - On hosted Vibe64 the workspace owner also sees **Author trial** with
   **Resume author trial**, which opens the admitted draft snapshot in the
   Lesson tab (see the hosted author-trial guide).

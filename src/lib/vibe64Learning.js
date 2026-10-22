@@ -52,6 +52,9 @@ const VIBE64_DEVELOP_MODE_NOTE = "This is a practice project. Press L to switch 
 const VIBE64_LEARNING_MODE_PROJECT_CODE = "vibe64_learning_mode_project";
 // lesson.start's refusal while a different lesson is in progress.
 const VIBE64_LESSON_IN_PROGRESS_CODE = "VIBE64_TRAINING_LESSON_IN_PROGRESS";
+// A lesson's practice project could not be prepared because the learner has
+// no usable AI yet (its saved preparation failure, and the start's refusal).
+const VIBE64_LEARNING_AI_REQUIRED_CODE = "VIBE64_TRAINING_PRACTICE_AI_REQUIRED";
 const VIBE64_LEARNING_NOTES_MAX = 4000;
 // The Courses catalogue's tabs. A stored "lesson" (the retired reader tab) reads as courses.
 const SURFACES = Object.freeze(["courses", "progress", "archived"]);
@@ -277,8 +280,11 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   // The step bar shows the current lesson's step (not a finished lesson's screen).
   const stepBarVisible = computed(() => Boolean(learnMode.value && !state.finished && lessonAttemptId.value &&
     state.attemptId === lessonAttemptId.value && currentStep.value));
+  // The lesson waits for the learner's AI: its practice project has none to prepare with.
+  const aiRequired = computed(() => !lesson.value?.attempt?.ended &&
+    lesson.value?.attempt?.preparation?.failure?.code === VIBE64_LEARNING_AI_REQUIRED_CODE);
   const player = createLessonPlayer({ state, steps, currentStep, selectStep: (...value) => selectStep(...value), remember: () => remember(),
-    active: () => stepBarVisible.value && !lesson.value?.attempt?.ended, activity: pageActivity,
+    active: () => stepBarVisible.value && !lesson.value?.attempt?.ended && !aiRequired.value, activity: pageActivity,
     focus: () => pageFocus?.value ? { ...pageFocus.value, chatVisible: Boolean(layout?.value?.chatVisible) } : null,
     practiceSlug: () => lesson.value?.practiceProjectSlug || "",
     // A self-checked step whose do beats were all detected is done.
@@ -1093,6 +1099,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     // Finished screen until it is left.
     get lessonAttemptId() { return lessonAttemptId.value; },
     get stepBarVisible() { return stepBarVisible.value; },
+    get aiRequired() { return aiRequired.value; },
     get lessonTitle() { return mode.value?.currentAttemptId ? mode.value.lessonTitle || mode.value.lessonCode || "" : ""; },
     get practice() { return practice.value; },
     get confirmArchive() { return confirmArchive.value; },
@@ -1138,4 +1145,4 @@ function revealCurrentStep(list) {
   return true;
 }
 
-export { VIBE64_DEVELOP_MODE_NOTE, VIBE64_LEARNING_MODE_NOTE, VIBE64_LEARNING_MODE_PROJECT_CODE, VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_PAGE_PATH, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_STUCK_MESSAGE, VIBE64_LEARNING_TEACH_MESSAGE, VIBE64_LESSON_IN_PROGRESS_CODE, createVibe64Learning, modeRedirect, normalizePractice, openLessonLink, reviewNote, revealCurrentStep, showMeCommand, stepStatus };
+export { VIBE64_DEVELOP_MODE_NOTE, VIBE64_LEARNING_AI_REQUIRED_CODE, VIBE64_LEARNING_MODE_NOTE, VIBE64_LEARNING_MODE_PROJECT_CODE, VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_PAGE_PATH, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_STUCK_MESSAGE, VIBE64_LEARNING_TEACH_MESSAGE, VIBE64_LESSON_IN_PROGRESS_CODE, createVibe64Learning, modeRedirect, normalizePractice, openLessonLink, reviewNote, revealCurrentStep, showMeCommand, stepStatus };

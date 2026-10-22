@@ -2,7 +2,9 @@
 import { computed, ref, toValue, watch } from "vue";
 import { useRoute } from "vue-router";
 import TrainingLessonPicker from "@local/vibe64-training/client/lesson-picker";
+import { aiOnboardingAvailable, aiOnboardingNeeded, requestVibe64AiOnboarding } from "@local/vibe64-accounts/client";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
+import { VIBE64_LEARNING_AI_REQUIRED_CODE } from "@/lib/vibe64Learning.js";
 
 // The Courses surface. `learning` is the Courses adapter
 // (useVibe64LearningCourses); a confirmed start or Continue lesson opens the
@@ -28,6 +30,14 @@ const trialResource = computed(() => props.learning.authorPreviewResource);
 const trialEnabled = computed(() => toValue(props.learning.authorPreviewEnabled) === true);
 const errorVisible = computed(() => Boolean(errorLearner.value && errorLearner.value === toValue(props.learning.learnerId)
   && toValue(props.learning.active)));
+// The lesson in progress waits for the learner's AI (its saved preparation
+// failure says why); before any lesson, a learner with no AI is told first.
+const aiFailure = computed(() => {
+  const failure = progress.value?.ok === true ? progress.value.active?.preparation?.failure : null;
+  return failure?.code === VIBE64_LEARNING_AI_REQUIRED_CODE ? failure : null;
+});
+const aiNotice = computed(() => aiFailure.value?.message ||
+  (aiOnboardingNeeded.value ? "Lessons use your AI: the coding agent in each practice project and Colleague, your teacher, both need it. Set up your AI before you start." : ""));
 const canRequest = computed(() => Boolean(toValue(props.learning.learnerId) && toValue(props.learning.active)));
 let feedbackGeneration = 0;
 watch(() => [toValue(props.learning.learnerId), toValue(props.learning.active), route.fullPath, trialEnabled.value], () => {
@@ -45,6 +55,11 @@ async function request(operation) {
   errorLearner.value = learner;
   try { return await operation(owner); }
   catch (cause) {
+    // The saved lesson now says it waits for the learner's AI (aiNotice).
+    if (cause?.code === VIBE64_LEARNING_AI_REQUIRED_CODE) {
+      await owner.learningResource.reload();
+      return null;
+    }
     if (props.learning === owner && generation === feedbackGeneration && learner === toValue(owner.learnerId) && target === route.fullPath) {
       error.value = String(cause?.message || "The lesson request was not confirmed. Read saved progress before trying again.");
     }
@@ -57,6 +72,12 @@ async function request(operation) {
   <div class="vibe64-learning-launcher">
     <v-alert v-if="error && errorVisible" type="error" variant="tonal" class="vibe64-learning-launcher__error">
       {{ error }}
+    </v-alert>
+    <v-alert v-if="aiNotice" type="warning" variant="tonal" class="vibe64-learning-launcher__error" data-test="learning-ai-notice">
+      <p>{{ aiNotice }}</p>
+      <v-btn v-if="aiOnboardingAvailable" color="primary" variant="flat" rounded="pill" min-height="40" class="vibe64-learning-launcher__ai" @click="requestVibe64AiOnboarding()">
+        Set up your AI
+      </v-btn>
     </v-alert>
     <v-btn v-if="retry" class="vibe64-learning-launcher__retry" variant="tonal" rounded="pill" min-height="48" :disabled="busy || !canRequest" @click="start(toValue(learning.startRetry))">
       Retry lesson start
@@ -128,4 +149,5 @@ async function request(operation) {
 .vibe64-learning-launcher__trial-eyebrow { font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif); letter-spacing: 0.08em; text-transform: uppercase; color: var(--v64-on-surface-variant, inherit); }
 .vibe64-learning-launcher__trial .v-btn { letter-spacing: 0; text-transform: none; }
 .vibe64-learning-launcher__error { flex: 0 0 auto; margin-block: 0 var(--v64-space-3, 12px); }
+.vibe64-learning-launcher__ai { margin-top: var(--v64-space-2, 8px); letter-spacing: 0; text-transform: none; }
 </style>

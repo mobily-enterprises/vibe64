@@ -297,6 +297,18 @@ test("a practice presence check that fails keeps that project listed without fai
   assert.equal((await f.execute("lesson.read", { attemptId: attempt.attemptId })).attempt.practiceSlug, attempt.projectSlug);
 });
 
+test("lesson.read says why a practice project is not prepared yet, so the step bar can ask for the learner's AI", async t => {
+  const f = await fixture(t);
+  const reserved = await f.learners.reserveAttempt({ actor: f.auth.user, expectedRevision: 0, requestId: "start", pin: f.pin });
+  const { attemptId } = reserved.attempt;
+  await f.learners.beginPreparation({ actor: f.auth.user, attemptId, expectedRevision: reserved.revision });
+  const failure = { code: "VIBE64_TRAINING_PRACTICE_AI_REQUIRED", message: "This lesson's practice project needs your AI, which isn't set up yet." };
+  await f.learners.recordPreparationFailure({ actor: f.auth.user, attemptId, initialSessionId: `training-${attemptId}`,
+    expectedRevision: reserved.revision + 1, stage: "session", ...failure });
+  const read = await f.execute("lesson.read", { attemptId });
+  assert.deepEqual(read.attempt.preparation, { phase: "preparing", failure });
+});
+
 test("a practice project no longer in the learning space is no longer offered for opening", async t => {
   const gone = new Set();
   const f = await fixture(t, { practice: { async exists({ attemptId }) { return !gone.has(attemptId); } } });

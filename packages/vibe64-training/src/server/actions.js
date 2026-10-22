@@ -118,10 +118,12 @@ async function practiceSlug({ attempt, actor, learningSpace }) {
 }
 
 function attemptSummary(attempt, slug = "") {
+  const failure = attempt.preparation?.failure;
   return {
     attemptId: attempt.attemptId,
     pin: pin(attempt.pin),
-    ...(attempt.preparation ? { preparation: pick(attempt.preparation, ["phase", "observedAt"]) } : {}),
+    ...(attempt.preparation ? { preparation: { ...pick(attempt.preparation, ["phase", "observedAt"]),
+      ...(failure ? { failure: pick(failure, ["code", "message"]) } : {}) } } : {}),
     ...(slug ? { practiceSlug: slug } : {}),
     ...(attempt.ended ? { ended: pick(attempt.ended, ["revision", "reason"]) } : {})
   };

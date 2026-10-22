@@ -71,6 +71,13 @@ continue afterwards and the lesson becomes ready when setup succeeds (see
 unavailable in this installation** appears only when the installation cannot
 start lessons. This looks the same on desktop and phone.
 
+A practice project needs the learner's AI. Without one, Courses says
+**Lessons use your AI** with **Set up your AI** before any start, and a start
+saves the lesson but stops at its practice project: Courses and the lesson
+step bar then say **This lesson's practice project needs your AI, which isn't
+set up yet.** with **Set up your AI** (the AI setup screen). Once AI is set up,
+**Continue lesson** prepares the same saved lesson.
+
 If a start is unconfirmed, Courses says **The last lesson start was not
 confirmed** and shows **Retry lesson start**, which repeats the same request,
 lesson and revision; do not substitute a different lesson. The retry is lost if

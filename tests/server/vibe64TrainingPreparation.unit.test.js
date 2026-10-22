@@ -243,6 +243,19 @@ test("session failures retain the same identity and original error when diagnosi
   assert.equal(f.attempt.preparation.initialSessionId, `training-${attemptId}`);
 });
 
+test("a practice session refused for lack of AI asks the learner to set up their AI and keeps the same saved attempt", async t => {
+  for (const code of ["vibe64_assistant_workflow_unavailable", "vibe64_assistant_role_unconfigured"]) {
+    const f = await fixture(t);
+    const original = Object.assign(new Error("No AI workflow is available."), { code, statusCode: 409 });
+    f.owners.sessions.createSession = async () => { throw original; };
+    await assert.rejects(f.service.prepareLesson({ actor, attemptId }), error => error.code === "VIBE64_TRAINING_PRACTICE_AI_REQUIRED" &&
+      error.statusCode === 409 && error.cause === original && /needs your AI.*Set up your AI.*Continue lesson/u.test(error.message));
+    assert.deepEqual({ stage: f.failure.stage, code: f.failure.code }, { stage: "session", code: "VIBE64_TRAINING_PRACTICE_AI_REQUIRED" });
+    assert.match(f.failure.message, /^This lesson's practice project needs your AI/u);
+    assert.equal(f.attempt.preparation.initialSessionId, `training-${attemptId}`);
+  }
+});
+
 test("a start whose Workspace setup is still running records ready through the original owner when that setup run finishes", async t => {
   const f = await fixture(t);
   const finished = Promise.withResolvers();

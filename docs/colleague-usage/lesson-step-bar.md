@@ -54,7 +54,11 @@ current one), then the beat's line:
   line about waiting for the agent, pressing the App's button, minimising
   Colleague or pressing **L** there is no Do it for me (for **L** it shows
   where the button is). If it cannot be done here (for example the chat cannot take a
-  message now), the bar says so; do it yourself or press **Next**.
+  message now), the bar says so; do it yourself or press **Next**, or, with
+  no AI connected, **Set up your AI**.
+- While the lesson waits for your AI (its practice project could not be
+  prepared without one), the bar plays no beats and says so instead, with
+  **Set up your AI**; see `learning-mode-ui`.
 - On a step you would finish with **Done**, doing every *do* line of it marks
   the step done by itself.
 - **Back** and **Next** (arrows) move one beat, and into the previous or next

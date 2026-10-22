@@ -14,6 +14,13 @@ const revisionConflict = () => trainingError("VIBE64_TRAINING_STATE_REVISION_CON
 const missingAttempt = () => Object.assign(trainingError("VIBE64_TRAINING_ATTEMPT_MISSING",
   "This is not your lesson in progress. Nothing was changed."), { statusCode: 404 });
 
+// The session owner's refusals for an actor with no usable AI yet (none
+// connected, or no model routed). A practice session needs one, so the lesson
+// asks the learner to set up their AI and continue the same saved lesson.
+const AI_UNAVAILABLE_CODES = new Set(["vibe64_assistant_workflow_unavailable", "vibe64_assistant_role_unconfigured"]);
+const AI_REQUIRED_MESSAGE = "This lesson's practice project needs your AI, which isn't set up yet. Set up your AI, then press Continue lesson: your lesson waits where it is.";
+const aiRequired = cause => Object.assign(trainingError("VIBE64_TRAINING_PRACTICE_AI_REQUIRED", AI_REQUIRED_MESSAGE), { cause });
+
 function requireSuccess(result) {
   if (result?.ok === false) {
     throw trainingError(result.code || "VIBE64_TRAINING_PREPARATION_FAILED", result.error || "Exercise preparation failed. Resume the same attempt.");
@@ -231,14 +238,15 @@ function createTrainingService({ catalogue, content, learners, learningSpace = n
           return { ...await learners.recordPreparationReady({ actor, attemptId, expectedRevision: current.revision, initialSessionId }), previewReady: false };
         };
         return await projectContext.runWithPracticeProjectScope({ actor, training, access: "create" }, prepareExercise);
-      } catch (error) {
+      } catch (cause) {
+        const error = AI_UNAVAILABLE_CODES.has(cause?.code) ? aiRequired(cause) : cause;
         // Preserve the original error even if recording its bounded diagnosis
         // fails. Retrying reads the same saved identities before any effect.
         try {
           const current = await learners.resumeAttempt({ actor, attemptId });
           if (attempt.preparation.phase !== "ready") await learners.recordPreparationFailure({ actor, attemptId, expectedRevision: current.revision, initialSessionId,
             stage, code: String(error.code || "VIBE64_TRAINING_PREPARATION_FAILED").slice(0, 64),
-            message: "Exercise preparation could not finish. Resume the same lesson; if it still fails, ask the owner to inspect the project, session and setup diagnostics." });
+            message: error === cause ? "Exercise preparation could not finish. Resume the same lesson; if it still fails, ask the owner to inspect the project, session and setup diagnostics." : error.message });
         } catch { /* Original failure remains authoritative. */ }
         setupRun = null;
         throw error;

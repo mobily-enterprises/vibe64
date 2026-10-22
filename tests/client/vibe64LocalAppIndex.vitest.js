@@ -44,7 +44,8 @@ function uiRenderer() {
 const uiWidget = { setup: (_props, { attrs, slots }) => () => Vue.h("div", attrs, slots.default?.()) };
 function nodes(root) { return [root, ...root.children.flatMap(nodes)]; }
 
-async function mountCourses({ authorTrial = null } = {}) {
+async function mountCourses({ authorTrial = null, accounts = { aiOnboardingAvailable: Vue.ref(true), aiOnboardingNeeded: Vue.ref(false),
+  requestVibe64AiOnboarding: vi.fn(() => true) } } = {}) {
   const route = Vue.reactive({ fullPath: "/app" });
   const calls = { pickerProps: null, opened: [] };
   const owner = { active: Vue.ref(true), learnerId: Vue.ref("learner"), busy: Vue.ref(false), startRetry: Vue.ref(null),
@@ -68,13 +69,14 @@ async function mountCourses({ authorTrial = null } = {}) {
   controller.startLesson = (selection, start) => start(selection).then(controller.opened);
   const component = compiledUi(path.resolve("src/components/learning/Vibe64LearningCourses.vue"), {
     vue: Vue, "vue-router": { useRoute: () => route }, "@local/vibe64-training/client/lesson-picker": { default: picker },
-    "@/composables/useVibe64Learning.js": { useVibe64Learning: () => controller }
+    "@/composables/useVibe64Learning.js": { useVibe64Learning: () => controller },
+    "@local/vibe64-accounts/client": accounts, "@/lib/vibe64Learning.js": LearningEnvironment
   });
   const root = { children: [] };
   const app = uiRenderer().createApp({ render: () => Vue.h(component, { learning: owner }) });
   for (const tag of ["v-btn", "v-alert", "v-skeleton-loader"]) app.component(tag, uiWidget);
   app.mount(root); await Vue.nextTick();
-  return { app, root, owner, calls, route };
+  return { app, root, owner, calls, route, accounts };
 }
 
 it("starts a lesson through the supplied courses owner and opens its actual returned attempt in the reader", async () => {
@@ -118,6 +120,38 @@ it("retires local lesson errors when Learning closes, the route or the learner c
     view.owner.learnerId.value = "another-learner"; await Vue.nextTick();
     expect(messages()).not.toContain("current operation");
     expect(view.calls.opened).toEqual([]);
+  } finally { view.app.unmount(); }
+});
+
+it("tells a learner with no AI to set it up, before a start and when a start's practice project waits for their AI", async () => {
+  const view = await mountCourses();
+  const notice = () => nodes(view.root).find(node => node.props?.["data-test"] === "learning-ai-notice");
+  const settle = async () => { for (let index = 0; index < 4; index += 1) await Vue.nextTick(); };
+  try {
+    expect(notice(), "nothing to say while AI is set up").toBeUndefined();
+    view.accounts.aiOnboardingNeeded.value = true; await Vue.nextTick();
+    expect(nodes(notice()).map(node => node.text || "").join(" ")).toContain("Lessons use your AI");
+    // The start reserved the lesson, then its practice project refused for lack of AI.
+    const waiting = "This lesson's practice project needs your AI, which isn't set up yet.";
+    let reloaded = 0;
+    view.owner.learningResource.reload = async () => {
+      reloaded += 1;
+      view.owner.learningResource.data.value = { ok: true, available: true, learnerId: "learner",
+        active: { attemptId: "attempt", preparation: { phase: "preparing", failure: { code: LearningEnvironment.VIBE64_LEARNING_AI_REQUIRED_CODE, message: waiting } } } };
+    };
+    view.owner.startLesson = async () => { throw Object.assign(new Error(waiting), { code: LearningEnvironment.VIBE64_LEARNING_AI_REQUIRED_CODE }); };
+    nodes(view.root).find(node => node.props?.["data-test"] === "start-lesson").props.onClick();
+    await settle();
+    view.route.fullPath = "/app/project/training-attempt"; await Vue.nextTick();
+    expect(reloaded, "the saved lesson is read again").toBe(1);
+    const texts = nodes(view.root).map(node => node.text || "").join(" ");
+    expect(texts, "the saved lesson's reason stays after the start's navigation").toContain(waiting);
+    expect(texts.split(waiting)).toHaveLength(2);
+    expect(texts).not.toContain("Lessons use your AI");
+    nodes(notice()).find(node => node.props?.onClick).props.onClick();
+    expect(view.accounts.requestVibe64AiOnboarding).toHaveBeenCalledTimes(1);
+    view.accounts.aiOnboardingAvailable.value = false; await Vue.nextTick();
+    expect(nodes(notice()).some(node => node.props?.onClick), "no Set up your AI for a viewer who cannot set it up").toBe(false);
   } finally { view.app.unmount(); }
 });
 

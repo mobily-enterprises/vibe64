@@ -1,6 +1,7 @@
 <script setup>
 import { computed, inject, onBeforeUnmount, ref, watch } from "vue";
 import { mdiBookOpenPageVariantOutline, mdiChevronDown, mdiChevronLeft, mdiChevronRight, mdiChevronUp, mdiMenu, mdiPause, mdiPlay } from "@mdi/js";
+import { aiOnboardingAvailable, aiOnboardingNeeded, requestVibe64AiOnboarding } from "@local/vibe64-accounts/client";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { VIBE64_COLLEAGUE_LAYOUT_KEY } from "@/lib/vibe64AssistantHost.js";
 import Vibe64LearningStep from "./Vibe64LearningStep.vue";
@@ -15,7 +16,9 @@ import Vibe64LearningStep from "./Vibe64LearningStep.vue";
 // the page's Lesson pane (hidden while that pane shows). ≡ Step drops the
 // whole step (the reader's own step view, with every control) open under the
 // bar, in place. Courses, always on it, is the way out to the catalogue. It
-// collapses to its position and dots.
+// collapses to its position and dots. While the lesson waits for the
+// learner's AI (its practice project could not be prepared without one), the
+// line says so instead and offers Set up your AI.
 const learning = useVibe64Learning();
 const layout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
 const lessonShown = computed(() => Boolean(layout?.value?.lessonVisible));
@@ -27,6 +30,7 @@ const index = computed(() => steps.value.findIndex(value => value.id === step.va
 const visible = computed(() => Boolean(learning?.stepBarVisible));
 const collapsed = computed(() => Boolean(learning?.stepBarCollapsed));
 const ended = computed(() => Boolean(lesson.value?.attempt?.ended));
+const aiRequired = computed(() => Boolean(learning?.aiRequired));
 const busy = computed(() => learning?.state.busy || "");
 const statusLabel = Object.freeze({ passed: "Passed", "not-yet-passed": "Not yet passed", "not-started": "Not checked yet" });
 const status = computed(() => step.value ? learning.stepStatus(step.value.id) : "not-started");
@@ -60,6 +64,9 @@ const beatText = computed(() => {
 // A check that did not pass, or a Show me that could not show, says why until the step changes.
 const note = ref("");
 watch(() => step.value?.id, () => { note.value = ""; });
+// A lesson message Do it for me could not send for lack of AI: Set up your AI shows beside it.
+const NOT_SENT_NO_AI = "No AI is connected yet, so nothing was sent. Set up your AI, or press Next.";
+const setUpAiOffered = computed(() => Boolean(aiOnboardingAvailable.value && (aiRequired.value || note.value === NOT_SENT_NO_AI)));
 async function check() {
   const stepId = step.value.id;
   note.value = "";
@@ -99,8 +106,9 @@ async function doItForMe() {
   doing.value = true;
   try {
     if (await learning.doItForMe() === false) {
-      note.value = beat.value?.target === "send-message" ? "That could not be sent here. Send it yourself, or press Next."
-        : "That could not be done here. Do it yourself, or press Next.";
+      const send = beat.value?.target === "send-message";
+      note.value = send && aiOnboardingNeeded.value ? NOT_SENT_NO_AI
+        : send ? "That could not be sent here. Send it yourself, or press Next." : "That could not be done here. Do it yourself, or press Next.";
     }
   } catch (cause) {
     note.value = String(cause?.message || "That could not be done here. Do it yourself, or press Next.");
@@ -162,7 +170,16 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
           />
         </span>
       </div>
-      <div v-if="!collapsed" class="vibe64-learning-step-bar__line">
+      <div v-if="!collapsed && aiRequired" class="vibe64-learning-step-bar__line">
+        <span class="vibe64-learning-step-bar__beat" role="status" data-test="learning-step-bar-ai-required">{{ lesson.attempt.preparation.failure.message }}</span>
+        <v-btn
+          v-if="setUpAiOffered" color="primary" variant="flat" rounded="pill" min-height="40" data-test="learning-step-bar-set-up-ai"
+          @click="requestVibe64AiOnboarding()"
+        >
+          Set up your AI
+        </v-btn>
+      </div>
+      <div v-else-if="!collapsed" class="vibe64-learning-step-bar__line">
         <span v-if="beats.length" class="vibe64-learning-step-bar__beat" aria-live="polite" data-test="learning-step-bar-beat">{{ beatText }}</span>
         <span v-else-if="step.required || status === 'passed'" class="vibe64-learning-step-bar__status" :class="`is-${status}`">
           {{ step.required ? statusLabel[status] : "Done" }}
@@ -200,10 +217,16 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
         </v-btn>
         <span v-if="reviewing && !beats.length" class="vibe64-learning-step-bar__note" role="status">Checking your work with your AI…</span>
         <span v-if="note" class="vibe64-learning-step-bar__note" role="status" data-test="learning-step-bar-note">{{ note }}</span>
+        <v-btn
+          v-if="setUpAiOffered" color="primary" variant="flat" rounded="pill" min-height="40" data-test="learning-step-bar-set-up-ai"
+          @click="requestVibe64AiOnboarding()"
+        >
+          Set up your AI
+        </v-btn>
       </div>
       <div v-if="!collapsed" class="vibe64-learning-step-bar__controls">
         <v-btn
-          v-if="beat?.kind === 'show'" :icon="player.paused ? mdiPlay : mdiPause" variant="text" size="small" min-width="40" min-height="40"
+          v-if="beat?.kind === 'show' && !aiRequired" :icon="player.paused ? mdiPlay : mdiPause" variant="text" size="small" min-width="40" min-height="40"
           :aria-label="player.paused ? 'Play' : 'Pause'" data-test="learning-step-bar-pause" @click="player.togglePause()"
         />
         <v-btn
@@ -238,7 +261,7 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
         <span class="vibe64-learning-step-bar__courses-label">Courses</span>
       </v-btn>
       <span
-        v-if="!collapsed && beat?.kind === 'show'" class="vibe64-learning-step-bar__progress" aria-hidden="true"
+        v-if="!collapsed && beat?.kind === 'show' && !aiRequired" class="vibe64-learning-step-bar__progress" aria-hidden="true"
         :style="{ transform: `scaleX(${player.progress})` }"
       />
     </section>
