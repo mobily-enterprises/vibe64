@@ -1,8 +1,9 @@
 <script setup>
-import { computed, inject, ref, watch } from "vue";
-import { mdiBookOpenPageVariantOutline, mdiChevronDown, mdiChevronLeft, mdiChevronRight, mdiChevronUp, mdiPause, mdiPlay } from "@mdi/js";
+import { computed, inject, onBeforeUnmount, ref, watch } from "vue";
+import { mdiBookOpenPageVariantOutline, mdiChevronDown, mdiChevronLeft, mdiChevronRight, mdiChevronUp, mdiMenu, mdiPause, mdiPlay } from "@mdi/js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { VIBE64_COLLEAGUE_LAYOUT_KEY } from "@/lib/vibe64AssistantHost.js";
+import Vibe64LearningStep from "./Vibe64LearningStep.vue";
 
 // The current lesson's step bar, at the top of the project page in Learn
 // mode (also with no project selected): the lesson companion. It names the
@@ -11,8 +12,10 @@ import { VIBE64_COLLEAGUE_LAYOUT_KEY } from "@/lib/vibe64AssistantHost.js";
 // beat into the neighbouring steps, and after the last beat the step's own
 // verdict control and Next step appear. A step without beats shows its title
 // and status, with Show me when it declares a guide. Open shows the step in
-// the page's Lesson pane (hidden while that pane shows). Courses, always on
-// it, is the way out to the catalogue. It collapses to its position and dots.
+// the page's Lesson pane (hidden while that pane shows). ≡ Step drops the
+// whole step (the reader's own step view, with every control) open under the
+// bar, in place. Courses, always on it, is the way out to the catalogue. It
+// collapses to its position and dots.
 const learning = useVibe64Learning();
 const layout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
 const lessonShown = computed(() => Boolean(layout?.value?.lessonVisible));
@@ -39,7 +42,7 @@ const verdict = computed(() => {
   if (kind.value === "self") return { label: "Done", run: () => learning.done(stepId), busy: `done:${stepId}` };
   if (kind.value === "none") return { label: "Mark as done", run: () => learning.done(stepId), busy: `done:${stepId}` };
   if (kind.value === "auto") return { label: "Check my work", run: check, busy: `check:${stepId}` };
-  if (kind.value === "choice") return { label: "Answer in the lesson", run: () => learning.openLesson({ stepId }), busy: "" };
+  if (kind.value === "choice") return { label: "Answer in Step", run: () => learning.setStepText(true), busy: "" };
   return null;
 });
 const beatText = computed(() => {
@@ -67,105 +70,149 @@ const go = offset => {
   const next = steps.value[index.value + offset];
   if (next) learning.selectStep(next.id);
 };
+// ≡ Step: open while the bar is expanded; Escape closes it.
+const stepTextShown = computed(() => Boolean(learning?.stepTextOpen && !collapsed.value));
+const stepError = ref("");
+function closeOnEscape(event) {
+  if (event.key === "Escape" && stepTextShown.value) learning.setStepText(false);
+}
+watch(stepTextShown, open => {
+  if (open) globalThis.document?.addEventListener("keydown", closeOnEscape);
+  else globalThis.document?.removeEventListener("keydown", closeOnEscape);
+}, { immediate: true });
+onBeforeUnmount(() => globalThis.document?.removeEventListener("keydown", closeOnEscape));
 const back = () => beats.value.length ? player.value.back() : go(-1);
 const forward = () => beats.value.length ? player.value.next() : go(1);
 </script>
 
 <template>
-  <section
-    v-if="visible"
-    class="vibe64-learning-step-bar"
-    :class="{ 'vibe64-learning-step-bar--collapsed': collapsed, 'vibe64-learning-step-bar--beats': beats.length }"
-    aria-label="Lesson steps"
-    data-test="learning-step-bar"
-    data-vibe64-guide="lesson-bar"
+  <div
+    v-if="visible" class="vibe64-learning-step-bar-host"
     @pointerenter="player?.hold(true)" @pointerleave="player?.hold(false)"
     @focusin="player?.hold(true)" @focusout="player?.hold(false)"
   >
-    <button
-      type="button" class="vibe64-learning-step-bar__toggle" :aria-expanded="!collapsed"
-      :aria-label="collapsed ? 'Show the lesson step' : 'Hide the lesson step'" data-test="learning-step-bar-toggle"
-      @click="learning.toggleStepBar()"
+    <section
+      class="vibe64-learning-step-bar"
+      :class="{ 'vibe64-learning-step-bar--collapsed': collapsed, 'vibe64-learning-step-bar--beats': beats.length }"
+      aria-label="Lesson steps"
+      data-test="learning-step-bar"
+      data-vibe64-guide="lesson-bar"
     >
-      <v-icon :icon="collapsed ? mdiChevronDown : mdiChevronUp" size="20" />
-    </button>
-    <div class="vibe64-learning-step-bar__position">
-      <span class="vibe64-learning-step-bar__lesson">{{ lesson.title || lesson.code }}</span>
-      <span class="vibe64-learning-step-bar__step">
-        <template v-if="beats.length">{{ index + 1 }}/{{ steps.length }}</template>
-        <template v-else>Step {{ index + 1 }} of {{ steps.length }}<template v-if="!collapsed">: {{ step.title }}</template></template>
-      </span>
-      <span
-        v-if="beats.length" class="vibe64-learning-step-bar__dots" role="img"
-        :aria-label="`Part ${Math.min(beatIndex + 1, beats.length)} of ${beats.length}`" data-test="learning-step-bar-dots"
+      <button
+        type="button" class="vibe64-learning-step-bar__toggle" :aria-expanded="!collapsed"
+        :aria-label="collapsed ? 'Show the lesson step' : 'Hide the lesson step'" data-test="learning-step-bar-toggle"
+        @click="learning.toggleStepBar()"
       >
+        <v-icon :icon="collapsed ? mdiChevronDown : mdiChevronUp" size="20" />
+      </button>
+      <div class="vibe64-learning-step-bar__position">
+        <span class="vibe64-learning-step-bar__lesson">{{ lesson.title || lesson.code }}</span>
+        <span class="vibe64-learning-step-bar__step">
+          <template v-if="beats.length">{{ index + 1 }}/{{ steps.length }}</template>
+          <template v-else>Step {{ index + 1 }} of {{ steps.length }}<template v-if="!collapsed">: {{ step.title }}</template></template>
+        </span>
         <span
-          v-for="(item, position) in beats" :key="position" class="vibe64-learning-step-bar__dot"
-          :class="{ 'is-done': position < beatIndex, 'is-current': position === beatIndex }"
+          v-if="beats.length" class="vibe64-learning-step-bar__dots" role="img"
+          :aria-label="`Part ${Math.min(beatIndex + 1, beats.length)} of ${beats.length}`" data-test="learning-step-bar-dots"
+        >
+          <span
+            v-for="(item, position) in beats" :key="position" class="vibe64-learning-step-bar__dot"
+            :class="{ 'is-done': position < beatIndex, 'is-current': position === beatIndex }"
+          />
+        </span>
+      </div>
+      <div v-if="!collapsed" class="vibe64-learning-step-bar__line">
+        <span v-if="beats.length" class="vibe64-learning-step-bar__beat" aria-live="polite" data-test="learning-step-bar-beat">{{ beatText }}</span>
+        <span v-else-if="step.required || status === 'passed'" class="vibe64-learning-step-bar__status" :class="`is-${status}`">
+          {{ step.required ? statusLabel[status] : "Done" }}
+        </span>
+        <v-btn
+          v-if="verdict" color="primary" variant="flat" rounded="pill" min-height="40" data-test="learning-step-bar-verdict"
+          :disabled="Boolean(busy)" :loading="Boolean(verdict.busy) && busy === verdict.busy" @click="verdict.run()"
+        >
+          {{ verdict.label }}
+        </v-btn>
+        <v-btn
+          v-else-if="final && index < steps.length - 1" color="primary" variant="tonal" rounded="pill" min-height="40"
+          data-test="learning-step-bar-next-step" @click="forward"
+        >
+          Next step
+        </v-btn>
+        <v-btn
+          v-if="!beats.length && step.guide && !ended" variant="tonal" rounded="pill" min-height="40"
+          data-test="learning-step-bar-show-me" @click="showMe"
+        >
+          Show me
+        </v-btn>
+        <span v-if="note" class="vibe64-learning-step-bar__note" role="status" data-test="learning-step-bar-note">{{ note }}</span>
+      </div>
+      <div v-if="!collapsed" class="vibe64-learning-step-bar__controls">
+        <v-btn
+          v-if="beat?.kind === 'show'" :icon="player.paused ? mdiPlay : mdiPause" variant="text" size="small" min-width="40" min-height="40"
+          :aria-label="player.paused ? 'Play' : 'Pause'" data-test="learning-step-bar-pause" @click="player.togglePause()"
         />
-      </span>
-    </div>
-    <div v-if="!collapsed" class="vibe64-learning-step-bar__line">
-      <span v-if="beats.length" class="vibe64-learning-step-bar__beat" aria-live="polite" data-test="learning-step-bar-beat">{{ beatText }}</span>
-      <span v-else-if="step.required || status === 'passed'" class="vibe64-learning-step-bar__status" :class="`is-${status}`">
-        {{ step.required ? statusLabel[status] : "Done" }}
-      </span>
+        <v-btn
+          :icon="mdiChevronLeft" variant="text" size="small" min-width="40" min-height="40" :aria-label="beats.length ? 'Back' : 'Previous step'"
+          :disabled="beats.length ? player.atStart : index <= 0" data-test="learning-step-bar-previous" @click="back"
+        />
+        <v-btn
+          :icon="mdiChevronRight" variant="text" size="small" min-width="40" min-height="40" :aria-label="beats.length ? 'Next' : 'Next step'"
+          :disabled="beats.length ? player.atEnd : index >= steps.length - 1" data-test="learning-step-bar-next" @click="forward"
+        />
+        <v-btn
+          variant="tonal" rounded="pill" min-height="40" min-width="40" :prepend-icon="mdiMenu"
+          class="vibe64-learning-step-bar__step-text" aria-controls="vibe64-learning-step-text" :aria-expanded="stepTextShown"
+          aria-label="Step" data-test="learning-step-bar-step" @click="learning.setStepText(!learning.stepTextOpen)"
+        >
+          <span class="vibe64-learning-step-bar__step-text-label">Step</span>
+          <v-icon :icon="stepTextShown ? mdiChevronUp : mdiChevronDown" size="18" />
+        </v-btn>
+        <v-btn
+          v-if="!lessonShown"
+          variant="tonal" rounded="pill" min-height="40" data-test="learning-step-bar-open"
+          @click="learning.openLesson({ stepId: step.id })"
+        >
+          Open
+        </v-btn>
+      </div>
       <v-btn
-        v-if="verdict" color="primary" variant="flat" rounded="pill" min-height="40" data-test="learning-step-bar-verdict"
-        :disabled="Boolean(busy)" :loading="Boolean(verdict.busy) && busy === verdict.busy" @click="verdict.run()"
+        variant="tonal" rounded="pill" min-height="40" min-width="40" :prepend-icon="mdiBookOpenPageVariantOutline"
+        class="vibe64-learning-step-bar__courses" aria-label="Courses" data-test="learning-step-bar-courses" data-vibe64-guide="courses"
+        @click="learning.openCourses('courses')"
       >
-        {{ verdict.label }}
+        <span class="vibe64-learning-step-bar__courses-label">Courses</span>
       </v-btn>
-      <v-btn
-        v-else-if="final && index < steps.length - 1" color="primary" variant="tonal" rounded="pill" min-height="40"
-        data-test="learning-step-bar-next-step" @click="forward"
-      >
-        Next step
-      </v-btn>
-      <v-btn
-        v-if="!beats.length && step.guide && !ended" variant="tonal" rounded="pill" min-height="40"
-        data-test="learning-step-bar-show-me" @click="showMe"
-      >
-        Show me
-      </v-btn>
-      <span v-if="note" class="vibe64-learning-step-bar__note" role="status" data-test="learning-step-bar-note">{{ note }}</span>
-    </div>
-    <div v-if="!collapsed" class="vibe64-learning-step-bar__controls">
-      <v-btn
-        v-if="beat?.kind === 'show'" :icon="player.paused ? mdiPlay : mdiPause" variant="text" size="small" min-width="40" min-height="40"
-        :aria-label="player.paused ? 'Play' : 'Pause'" data-test="learning-step-bar-pause" @click="player.togglePause()"
+      <span
+        v-if="!collapsed && beat?.kind === 'show'" class="vibe64-learning-step-bar__progress" aria-hidden="true"
+        :style="{ transform: `scaleX(${player.progress})` }"
       />
-      <v-btn
-        :icon="mdiChevronLeft" variant="text" size="small" min-width="40" min-height="40" :aria-label="beats.length ? 'Back' : 'Previous step'"
-        :disabled="beats.length ? player.atStart : index <= 0" data-test="learning-step-bar-previous" @click="back"
-      />
-      <v-btn
-        :icon="mdiChevronRight" variant="text" size="small" min-width="40" min-height="40" :aria-label="beats.length ? 'Next' : 'Next step'"
-        :disabled="beats.length ? player.atEnd : index >= steps.length - 1" data-test="learning-step-bar-next" @click="forward"
-      />
-      <v-btn
-        v-if="!lessonShown"
-        variant="tonal" rounded="pill" min-height="40" data-test="learning-step-bar-open"
-        @click="learning.openLesson({ stepId: step.id })"
-      >
-        Open
-      </v-btn>
-    </div>
-    <v-btn
-      variant="tonal" rounded="pill" min-height="40" min-width="40" :prepend-icon="mdiBookOpenPageVariantOutline"
-      class="vibe64-learning-step-bar__courses" aria-label="Courses" data-test="learning-step-bar-courses" data-vibe64-guide="courses"
-      @click="learning.openCourses('courses')"
+    </section>
+    <section
+      v-if="stepTextShown" id="vibe64-learning-step-text" class="vibe64-learning-step-bar__text-panel"
+      aria-label="Step text" data-test="learning-step-bar-text"
     >
-      <span class="vibe64-learning-step-bar__courses-label">Courses</span>
-    </v-btn>
-    <span
-      v-if="!collapsed && beat?.kind === 'show'" class="vibe64-learning-step-bar__progress" aria-hidden="true"
-      :style="{ transform: `scaleX(${player.progress})` }"
-    />
-  </section>
+      <Vibe64LearningStep v-model:error="stepError" :learning="learning" />
+    </section>
+  </div>
 </template>
 
 <style scoped>
+.vibe64-learning-step-bar-host { flex: 0 0 auto; min-width: 0; position: relative; }
+.vibe64-learning-step-bar__text-panel {
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid var(--v64-learning-strong, #f5c518);
+  border-radius: var(--v64-shape-md, 12px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  color: rgb(var(--v-theme-on-surface));
+  left: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: var(--v64-space-4, 16px) var(--v64-space-5, 24px);
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+}
 .vibe64-learning-step-bar {
   align-items: center;
   background: var(--v64-learning-container, rgba(245, 197, 24, 0.16));
@@ -238,6 +285,9 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
   .vibe64-learning-step-bar--beats .vibe64-learning-step-bar__line { flex-basis: 100%; order: 3; padding: 0 0 6px 8px; }
   .vibe64-learning-step-bar__courses { padding-inline: 0; }
   .vibe64-learning-step-bar__courses :deep(.v-btn__prepend) { margin-inline: 0; }
-  .vibe64-learning-step-bar__courses-label { display: none; }
+  .vibe64-learning-step-bar__courses-label, .vibe64-learning-step-bar__step-text-label { display: none; }
+  .vibe64-learning-step-bar__step-text { padding-inline: 4px; }
+  .vibe64-learning-step-bar__step-text :deep(.v-btn__prepend) { margin-inline: 0; }
+  .vibe64-learning-step-bar__text-panel { padding: var(--v64-space-3, 12px); }
 }
 </style>

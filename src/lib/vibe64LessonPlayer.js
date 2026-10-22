@@ -16,6 +16,7 @@ const SHOW_PER_CHARACTER_MS = 50;
 const TICK_MS = 100;
 // How long a do beat's ring stays (the learner may dismiss it at once).
 const DO_RING_MS = 15000;
+const POINT_SETTLE_MS = 1500;
 
 const showDuration = text => Math.min(SHOW_MAX_MS, Math.max(SHOW_MIN_MS, SHOW_MIN_MS + SHOW_PER_CHARACTER_MS * String(text || "").length));
 
@@ -121,7 +122,9 @@ function createLessonPlayer({ state, steps, currentStep, active, selectStep, rem
     const request = { target: place, ...(value.path ? { filePath: value.path } : {}) };
     const guideSteps = trainingGuideSteps(request);
     const receipt = await showGuide({ ...request, highlight: true, navigate: false, steps: guideSteps,
-      caption: guideSteps.map(item => item.label).join(" → ") }, { durationMs: value.kind === "show" ? local.duration : DO_RING_MS });
+      caption: guideSteps.map(item => item.label).join(" → ") },
+    // The bar and its places may still be rendering when a beat begins.
+    { settleMs: POINT_SETTLE_MS, durationMs: value.kind === "show" ? local.duration : DO_RING_MS });
     if (receipt?.shown) {
       // Only this player's own ring is taken away again.
       if (beat.value === value) local.ring = shownGuide();

@@ -177,7 +177,8 @@ step's check kind, a second or non-final check, a block that is not closed or
 does not end the body, and beats together with a `guide`. Back and Next in the
 bar move by beat into the neighbouring steps; after the last beat the bar shows
 the step's own verdict control (Done, Mark as done, Check my work, or Answer in
-the lesson for a choice) and Next step. Steps never advance by themselves.
+Step for a choice) and Next step. **Step** (≡) on the bar opens the whole step
+text under it in one click, so a beat never needs to repeat the body. Steps never advance by themselves.
 
 **Check verdicts are final.** Verdicts come from the step's declared check: an
 automatic check, the choice comparator, a review check (the learner's own AI

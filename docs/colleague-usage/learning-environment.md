@@ -59,9 +59,15 @@ switch is not confirmed, the page comes back and you can press **L** again.
 
 In Learn mode, while your lesson is loaded, a yellow bar above the project page
 names the lesson and shows **Step N of M** with the step's title and status.
-**Previous step** and **Next step** (arrow buttons) move through the steps, and
-**Open** shows the step in the page's **Lesson** tab (below); **Open** is hidden
-while the Lesson tab is showing. **Courses**, at its right end (a book icon
+**Previous step** and **Next step** (arrow buttons) move through the steps.
+**Step** (the ≡ button) opens the whole current step right under the bar, in
+place, with everything the Lesson tab offers for it: its text, diagram and
+**Play**, **Done**, **Mark as done**, its question or **Check now**, **Show me**,
+**Teach me** and **Previous step**/**Next step**. It covers the top of the page
+(at most about two thirds of the screen, scrolling inside); **Step** again or
+Escape closes it, and **Show me** closes it so the place it shows is in view.
+This tab remembers whether it is open. **Open** shows the step in the page's
+**Lesson** tab (below); **Open** is hidden while the Lesson tab is showing. **Courses**, at its right end (a book icon
 on a phone), opens the Courses overlay to choose another lesson; it stays
 there when the bar is collapsed. The chevron at its left collapses it to one
 line (**Hide the lesson step**) and expands it again (**Show the lesson step**);
@@ -89,8 +95,8 @@ current one), then the beat's line:
   step at either end.
 - After the last beat the bar shows the step's own control: **Done**, **Mark as
   done**, **Check my work** (an automatic check; a check that does not pass says
-  why under the line) or **Answer in the lesson** for a question, which opens
-  the Lesson tab at that step. When the step has passed it shows **Next step**.
+  why under the line) or **Answer in Step** for a question, which opens the
+  step under the bar. When the step has passed it shows **Next step**.
   A step never moves on by itself.
 - **Show me** on such a step (in the bar's step or the Lesson tab) plays its
   beats again from the first one.
@@ -98,7 +104,8 @@ current one), then the beat's line:
 This tab remembers the beat and the pause; another tab or device starts the
 step at its first beat. Collapsing the bar leaves only the step position and
 its dots. On a phone the bar has two lines: the position and arrows above,
-the beat's line and its one button below. A step without beats shows its title
+the beat's line and its one button below; **Step** and **Courses** show only
+their icons, and the open step fills the width. A step without beats shows its title
 and status as before, and **Show me** when it can point at a place.
 
 ## The Lesson tab

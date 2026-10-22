@@ -85,6 +85,11 @@ guide overlay 3000 above L 2400 above Colleague.
   control; steps never advance by themselves. `beat` and `beatPaused` are this
   tab's place (`sessionStorage`); nothing of the player is saved on the server.
   `showMe` on a step with beats restarts them (`player.start`).
+- ≡ Step (`stepTextOpen`, `setStepText(open)`, this tab's place): the step bar
+  drops the current step open under itself, rendering the reader's own
+  `Vibe64LearningStep.vue` (max 60 % of the viewport, scrolling; ≡ or Escape
+  closes it; hidden while the bar is collapsed). `showMe` closes it. A choice
+  step's final beat state offers **Answer in Step**, which opens it.
 - Learn mode (server): Vibe64 has two modes, Develop and Learn, with the same
   screens. Learn mode is a saved per-learner flag
   (`<sys>/training/users/<key>/learning-mode.json`, `{on}`), separate from any
