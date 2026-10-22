@@ -152,10 +152,10 @@
     "ws": "^8.20.1"
   },
   "devDependencies": {
-    "@jskit-ai/agent-docs": "0.1.238",
+    "@jskit-ai/agent-docs": "0.1.239",
     "@jskit-ai/config-eslint": "0.1.241",
-    "@jskit-ai/jskit-catalog": "0.1.291",
-    "@jskit-ai/release": "0.1.3",
+    "@jskit-ai/jskit-catalog": "0.1.292",
+    "@jskit-ai/release": "0.1.4",
     "@playwright/test": "1.61.1",
     "@vitejs/plugin-vue": "^6.0.9",
     "chokidar": "5.0.0",
