@@ -14,7 +14,7 @@ attempt. The attempt owns:
 - its step results,
 - its teacher conversation with Colleague,
 - its practice project, when the lesson needs a practice application.
-  Lesson 0 and other lessons without one have no project.
+  A lesson without one has no project.
 
 You have at most one lesson in progress. It stays in progress until you finish,
 restart or delete it. Switching to Develop, or opening another page, only
@@ -87,8 +87,8 @@ redo a lesson.
 
 An archive keeps the attempt's record and step results, its teacher
 conversation and its practice project's source, sessions and state, but leaves
-out dependencies that can be rebuilt, such as `node_modules`. Lesson 0 keeps
-only its record and conversation.
+out dependencies that can be rebuilt, such as `node_modules`. A lesson without
+a practice project keeps only its record and conversation.
 
 ## Finishing a lesson
 

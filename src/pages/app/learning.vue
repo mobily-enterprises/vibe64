@@ -12,7 +12,7 @@
 import ProjectPage from "./project/[slug].vue";
 
 // /app/learning (both hosts): Learn mode with no practice project selected
-// (no lesson, or a lesson without one such as Lesson 0) is the project page
+// (no lesson, or a lesson without one) is the project page
 // with no project selected.
 </script>
 

@@ -662,7 +662,7 @@ function waitForConversation(timeoutMs = 10000) {
   });
 }
 // Without a usable AI model Teach me sends nothing: the conversation opens and
-// says so, offering Open AI Accounts (Lesson 0 connects one).
+// says so, offering Open AI Accounts to connect one.
 const teachNeedsModel = ref(false);
 async function revealForLearning() {
   teachNeedsModel.value = false;
@@ -921,7 +921,7 @@ onBeforeUnmount(() => {
         <v-btn :disabled="Boolean(voiceSession?.hasUnsentSpeech.value)" @click="refresh({ allowRetarget: true })">Refresh conversation</v-btn>
       </v-alert>
       <v-alert v-if="product.modelSetupRequired" variant="tonal" type="warning" role="status">
-        <p v-if="teachNeedsModel" data-test="colleague-teach-needs-model">Colleague cannot teach this step yet: it has no usable AI model, so nothing was sent. Connect an AI in AI Accounts (Lesson 0 shows how), then press Teach me again.</p>
+        <p v-if="teachNeedsModel" data-test="colleague-teach-needs-model">Colleague cannot teach this step yet: it has no usable AI model, so nothing was sent. Connect an AI in AI Accounts, then press Teach me again.</p>
         <p v-else>Colleague has no usable AI model, so nothing is sent yet and your draft is kept. Connect an AI and configure an available Senior model, then return and press Send.</p>
         <v-btn variant="flat" color="primary" min-height="48" @click="requestVibe64AiOnboarding()">Set up your AI</v-btn>
         <v-btn variant="text" min-height="48" @click="openModelSetup">Open AI Accounts</v-btn>

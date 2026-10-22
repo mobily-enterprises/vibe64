@@ -34,7 +34,7 @@ space only (see [Practice projects](learning-practice-projects.md)):
   address) takes you to the practice project with the note "You're in Learn
   mode. Press L to go back to your projects."
 - With no lesson in progress the page shows **No project selected** (below).
-  A lesson without a practice project, such as Lesson 0, shows the lesson
+  A lesson without a practice project shows the lesson
   itself on that page (see [The Lesson tab](#the-lesson-tab)).
 - Nothing inside the lesson's practice project is limited: Preview, Files,
   Database, coding chats and Colleague all work. Account settings and AI
@@ -78,7 +78,7 @@ button all open it here, at the step you were reading.
   keeps running behind it, so its App is still there when you select
   **Preview** again. The address ends in `?pane=lesson`, so a reload, or
   **L** back to Learn, returns to the Lesson tab.
-- **On a lesson without a practice project** (such as Lesson 0) there is no
+- **On a lesson without a practice project** there is no
   coding session, so there is no chat column and no pane switches: the Lesson
   pane fills the page.
 - The reader lays itself out by the width it has: in a narrow pane (on a
@@ -112,7 +112,7 @@ sessions. It is used in two cases:
   is in the chat column, which a phone shows first; on a desktop the chat
   column says your teacher will chat there once a lesson starts. The
   Dashboard says **No lesson in progress** with the same button.
-- **A lesson without a practice project** (such as Lesson 0). The page shows
+- **A lesson without a practice project**. The page shows
   the lesson in its Lesson pane, with no chat column, and a **Dashboard**
   switch whose page says **No project selected** (see
   [The Lesson tab](#the-lesson-tab)). **L** only switches mode.
@@ -262,7 +262,7 @@ also has:
   "Teach me this step." for you. The step stays on screen in the Lesson tab;
   Colleague answers in its conversation. On a phone Colleague's full-screen chat opens over the step.
   If Colleague is not connected yet, an error says so; press **Teach me** again.
-  If no AI is connected yet (for example during Lesson 0), nothing is sent:
+  If no AI is connected yet, nothing is sent:
   Colleague opens and says **Colleague cannot teach this step yet: it has no
   usable AI model, so nothing was sent.** with **Open AI Accounts**. Connect an
   AI there, then press **Teach me** again; no Model routing step is needed,

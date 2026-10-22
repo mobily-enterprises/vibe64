@@ -270,26 +270,19 @@ ordered lesson identities. If a topic changes during generation, commit the
 intended content and retry. This command generates local release material only;
 it does not push Git, create a remote release, install content or enable a course.
 
-### Lesson 0 is supplied by each installation
+### Lesson 0 is the shared introduction
 
-Local and hosted Vibe64 are set up very differently, so an installation-specific
-setup lesson (Lesson 0) need not be part of the shared topic. An installation can
-supply its own Lesson 0 topic and list it first in the same course, followed by
-the shared, installation-agnostic topic. For example:
+The getting-started course starts with V64-START-00 **Introduction to Vibe64**,
+a tour of the editor on its own small practice project (the coding chat,
+Preview, Dashboard, Save and Git log, Colleague, the Lesson pane, Courses and
+**L**). It works the same way locally and on hosted Vibe64, and its coding-chat
+steps are optional so it can be finished before an AI is connected. Connecting
+an AI is not a lesson: it belongs to the AI setup screen (**Account settings →
+AI Accounts**), which the introduction only points to.
 
-```json
-{ "schemaVersion": 1, "courseId": "vibe64-getting-started-local", "title": "Getting started with local Vibe64",
-  "release": "0.1.0", "status": "preview",
-  "topics": [{ "topicId": "vibe64-local-setup", "release": "0.1.0" },
-             { "topicId": "vibe64-getting-started", "release": "0.1.12" }] }
-```
-
-Such a lesson might check the machine through the real **Dashboard → Health**
-checks and **Account settings**, which Colleague can also read for the person.
-The getting-started course currently starts with V64-START-00 **Connect your
-AI** (AI Accounts), which works on both hosts; Lesson 0 content will change. A
-hosted service keeps any Lesson 0 topic of its own in its own repository. Every
-later lesson stays in the shared topic and must work the same way on both.
+Every lesson stays in the shared topic and must work the same way on both
+hosts. Lessons without a practice project remain supported (the Lesson pane
+fills the page), but the shared course does not use one.
 
 ## Server reads of installed snapshots
 

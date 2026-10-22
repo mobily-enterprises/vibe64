@@ -9,7 +9,7 @@ import Vibe64LearningLessonPane from "@/components/learning/Vibe64LearningLesson
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 
 // No project selected: Learn mode without a practice project (/app/learning):
-// no lesson in progress, or a lesson without one (Lesson 0). A lesson without
+// no lesson in progress, or a lesson without one. A lesson without
 // one has no coding session, so no chat column: its Lesson pane (or the
 // Dashboard) fills the area, beside Colleague. With no lesson it is the
 // session area a project shows with no session open: Preview shows Learn's

@@ -92,7 +92,7 @@ nothing.
 ## Which projects Colleague opens
 
 Colleague opens only the projects of your mode. In **Learn** that is your
-practice project (none for Lesson 0 or a lesson without one); opening any of
+practice project (none for a lesson without one); opening any of
 your own projects is refused with "You're in Learn mode. Press L to go back to
 your projects." In **Develop** it opens your own projects, and a practice
 project is refused with "This is a practice project. Press L to switch to
