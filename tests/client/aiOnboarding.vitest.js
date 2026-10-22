@@ -28,6 +28,7 @@ import { aiIsSetUp, aiOnboardingConnections, aiOnboardingSnoozed, snoozeAiOnboar
   from "../../packages/vibe64-accounts/src/client/onboarding/useAiOnboarding.js";
 import AiOnboarding from "../../packages/vibe64-accounts/src/client/onboarding/AiOnboarding.vue";
 import AiOnboardingHost from "../../packages/vibe64-accounts/src/client/onboarding/AiOnboardingHost.vue";
+import AiSetup from "../../packages/vibe64-accounts/src/client/onboarding/AiSetup.vue";
 
 const empty = { accounts: [], curated: [], openCode: [] };
 const FREE_GLM = { id: "zai", modelProviderId: "zai", connected: true };
@@ -275,11 +276,38 @@ describe("embedded setup", () => {
   });
 });
 
+describe("shell", () => {
+  const shell = (props) => mount(AiOnboarding, { open: true, canConfigure: true,
+    onboarding: effectScope().run(() => useAiOnboarding({ enabled: true })), ...props });
+
+  it("opens first run on Why, and a redo, an existing setup or a member on the setup stage", () => {
+    expect(shell({ start: "why" }).view).toBe("why");
+    app.unmount();
+    expect(shell({ start: "choose" }).view).toBe("setup");
+    app.unmount();
+    expect(shell({ start: "why", redo: true }).view).toBe("setup");
+    app.unmount();
+    expect(shell({ start: "why", canConfigure: false }).view).toBe("setup");
+    app.unmount();
+    mocks.accounts.status.value.accounts[2].connected = true;
+    expect(shell({ start: "why" }).view).toBe("setup");
+  });
+
+  it("an automatic open leaves Why only once connections are read and show a setup", async () => {
+    mocks.openCode.isInitialLoading.value = true;
+    const state = shell({ start: "why" });
+    expect(state.view).toBe("why");
+    mocks.accounts.status.value.accounts[2].connected = true;
+    mocks.openCode.isInitialLoading.value = false;
+    await vi.waitFor(() => expect(state.view).toBe("setup"));
+  });
+});
+
 describe("flow", () => {
-  async function flow({ setUp = false, start = "why", redo = setUp, learnMode = false } = {}) {
+  async function flow({ setUp = false, redo = setUp, learnMode = false } = {}) {
     if (setUp) mocks.accounts.status.value.accounts[2].connected = true;
     const onboarding = effectScope().run(() => useAiOnboarding({ enabled: true }));
-    const state = mount(AiOnboarding, { open: true, start, redo, onboarding, canConfigure: true },
+    const state = mount(AiSetup, { open: true, redo, onboarding, canConfigure: true },
       [[VIBE64_LEARNING_KEY, { learnMode }]]);
     await vi.waitFor(() => expect(mocks.colleague.current).toHaveBeenCalled());
     await Promise.resolve();
@@ -300,9 +328,9 @@ describe("flow", () => {
     mocks.routing.configuration.engines.value = [{ engineId: "codex", roles: { senior } }];
   };
 
-  it("starts first-run at Why and routes a new person straight to success", async () => {
+  it("starts first-run at Choose and routes a new person straight to success", async () => {
     const { state } = await flow();
-    expect(state.screen).toBe("why");
+    expect([state.screen, state.firstRun]).toEqual(["choose", true]);
     state.connect(claude, "opened");
     expect([state.screen, state.signUp]).toEqual(["connect", "opened"]);
     connectClaude();
@@ -347,7 +375,7 @@ describe("flow", () => {
   it("without a Colleague here, success only points to its model menu", async () => {
     unregisterColleague();
     const onboarding = effectScope().run(() => useAiOnboarding({ enabled: true }));
-    const state = mount(AiOnboarding, { open: true, start: "choose", onboarding, canConfigure: true });
+    const state = mount(AiSetup, { open: true, onboarding, canConfigure: true });
     state.connect(claude, "have");
     connectClaude();
     await state.finish();
@@ -393,7 +421,7 @@ describe("flow", () => {
 
   it("redo opens at Choose with live state and keeps the current setup untouched", async () => {
     onCodexOpenAi();
-    const { state, onboarding } = await flow({ setUp: true, start: "why" });
+    const { state, onboarding } = await flow({ setUp: true });
     expect([state.screen, state.wasSetUp]).toEqual(["choose", true]);
     const codex = state.cards.find(({ id }) => id === "codex");
     expect(codex).toMatchObject({ connected: true, through: ["Codex"] });
@@ -412,7 +440,7 @@ describe("flow", () => {
 
   it("redo asks before routing changes and switches Colleague only when asked", async () => {
     onCodexOpenAi();
-    const { state } = await flow({ setUp: true, start: "choose" });
+    const { state } = await flow({ setUp: true });
     routeDeepSeek({ assignment: { engineId: "codex", modelProviderId: "openai", modelId: "gpt" },
       recommendation: { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } });
     state.connect(state.cards.find(({ id }) => id === "deepseek"));
@@ -431,7 +459,7 @@ describe("flow", () => {
 
   it("Yes on the plain routing question applies the suggestions and moves Colleague", async () => {
     onCodexOpenAi();
-    const { state } = await flow({ setUp: true, start: "choose" });
+    const { state } = await flow({ setUp: true });
     routeDeepSeek({ assignment: { engineId: "codex", modelProviderId: "openai", modelId: "gpt" },
       recommendation: { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } });
     state.connect(state.cards.find(({ id }) => id === "deepseek"));
@@ -450,7 +478,7 @@ describe("flow", () => {
 
   it("with no Senior model in use, a redo applies the suggestions without asking", async () => {
     onCodexOpenAi();
-    const { state } = await flow({ setUp: true, start: "choose" });
+    const { state } = await flow({ setUp: true });
     routeDeepSeek({ assignment: null, recommendation: { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } });
     state.connect(state.cards.find(({ id }) => id === "deepseek"));
     await state.finish();
@@ -467,7 +495,7 @@ describe("flow", () => {
 
   it("a redo keeps the upsell on Claude's card only and stops selling connected cards", async () => {
     onCodexOpenAi();
-    const { state } = await flow({ setUp: true, start: "choose" });
+    const { state } = await flow({ setUp: true });
     const card = (id) => state.cards.find((item) => item.id === id);
     expect(state.cardNote(card("codex"))).toBe("");
     expect(state.cardNote(card("claude"))).toBe(claude.upgrade);
@@ -477,7 +505,7 @@ describe("flow", () => {
   it("a redo opened before connections load never moves Colleague unasked", async () => {
     onCodexOpenAi();
     mocks.openCode.isInitialLoading.value = true;
-    const { state } = await flow({ setUp: true, start: "why", redo: true });
+    const { state } = await flow({ setUp: true, redo: true });
     expect([state.screen, state.wasSetUp, state.firstRun, state.skippable]).toEqual(["choose", true, false, false]);
     mocks.openCode.isInitialLoading.value = false;
     connectClaude();
@@ -489,22 +517,24 @@ describe("flow", () => {
 
   it("an automatic open settles first run only once connections are read", async () => {
     mocks.openCode.isInitialLoading.value = true;
-    const { state } = await flow({ start: "why" });
-    expect([state.screen, state.firstRun]).toEqual(["why", false]);
+    const { state } = await flow();
+    expect([state.wasSetUp, state.firstRun]).toEqual([false, false]);
     mocks.accounts.status.value.accounts[2].connected = true;
     mocks.openCode.isInitialLoading.value = false;
-    await vi.waitFor(() => expect(state.screen).toBe("choose"));
-    expect([state.wasSetUp, state.firstRun]).toEqual([true, false]);
+    await vi.waitFor(() => expect(state.wasSetUp).toBe(true));
+    expect([state.screen, state.wasSetUp, state.firstRun]).toEqual(["choose", true, false]);
   });
 
   it("shows the owner-only notice to members", () => {
     const onboarding = effectScope().run(() => useAiOnboarding({ enabled: false }));
-    expect(mount(AiOnboarding, { open: true, onboarding, canConfigure: false }).screen).toBe("owner");
+    expect(mount(AiSetup, { open: true, onboarding, canConfigure: false }).screen).toBe("owner");
   });
 
   it("never offers removal and turns motion off for reduced-motion users", async () => {
-    const source = await readFile(new URL("../../packages/vibe64-accounts/src/client/onboarding/AiOnboarding.vue", import.meta.url), "utf8");
-    expect(source).not.toMatch(/removeConnection|Disconnect|logout/u);
-    expect(source).toMatch(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*animation: none;[\s\S]*transform: none;/u);
+    for (const file of ["AiOnboarding.vue", "AiSetup.vue"]) {
+      const source = await readFile(new URL(`../../packages/vibe64-accounts/src/client/onboarding/${file}`, import.meta.url), "utf8");
+      expect(source).not.toMatch(/removeConnection|Disconnect|logout/u);
+      expect(source).toMatch(/@media \(prefers-reduced-motion: reduce\) \{[\s\S]*animation: none;[\s\S]*transform: none;/u);
+    }
   });
 });
