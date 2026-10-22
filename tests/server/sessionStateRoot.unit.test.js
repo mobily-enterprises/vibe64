@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { stat } from "node:fs/promises";
+import { access, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -10,7 +10,8 @@ import {
   codexAttachmentHostRoot,
   configureCodexAttachmentHostRoot
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
-import { prepareCodexGitCommand } from "@local/vibe64-terminals/server/codexGitCommand";
+import { prepareCodexGitCommand, removeCodexGitCommandSession } from "@local/vibe64-terminals/server/codexGitCommand";
+import { requestUnixJsonCommand } from "../../packages/vibe64-terminals/src/server/unixJsonCommand.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 async function withProcessRoot(value, operation) {
@@ -62,6 +63,46 @@ test("agent command helpers prepared with a curated environment use the process'
       assert.equal(prepared.ok, true);
       assert.equal(inside(prepared.hostWrapperDir, path.join(stateRoot, "codex-git-command")), true, prepared.hostWrapperDir);
       assert.equal((await stat(path.join(prepared.hostWrapperDir, "git"))).isFile(), true);
+    });
+  });
+});
+
+// Helper directories live in persistent state, so the session's final close
+// removes its own and stops its Git control; another session's stays.
+test("removing an ended session's command helpers deletes only its directory and stops its Git control", async () => {
+  await withTemporaryRoot(async (root) => {
+    const stateRoot = path.join(root, "daemon-state", "attachments");
+    await withProcessRoot(stateRoot, async () => {
+      const commandService = { run: async () => ({ ok: true }) };
+      const prepare = (sessionId) => prepareCodexGitCommand({
+        commandService, env: {}, sessionId, stateRoot: path.join(root, "project-runtime")
+      });
+      const ended = await prepare("session-ended");
+      const kept = await prepare("session-kept");
+      try {
+        assert.deepEqual(await removeCodexGitCommandSession({
+          env: {}, sessionId: "session-ended", stateRoot: path.join(root, "project-runtime")
+        }), { ok: true, removed: true });
+        await assert.rejects(access(ended.hostWrapperDir), { code: "ENOENT" });
+        await assert.rejects(access(ended.hostSocketPath), { code: "ENOENT" });
+        assert.equal((await stat(path.join(kept.hostWrapperDir, "git"))).isFile(), true);
+        const health = await requestUnixJsonCommand({
+          socketPath: kept.hostSocketPath,
+          path: "/codex-git-command/health",
+          body: {
+            generationId: kept.controlGenerationId,
+            sessionId: "session-kept",
+            token: kept.env.VIBE64_CODEX_GIT_COMMAND_TOKEN
+          }
+        });
+        assert.equal(health.statusCode, 200);
+        // Removing again is harmless (a retried archive repeats its stopping phase).
+        assert.equal((await removeCodexGitCommandSession({
+          env: {}, sessionId: "session-ended", stateRoot: path.join(root, "project-runtime")
+        })).ok, true);
+      } finally {
+        await removeCodexGitCommandSession({ env: {}, sessionId: "session-kept", stateRoot: path.join(root, "project-runtime") });
+      }
     });
   });
 });

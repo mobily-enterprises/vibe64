@@ -2666,6 +2666,10 @@ session state, not temporary files: an agent keeps their paths for its whole lif
 server fixes for the process at startup so every caller resolves the same root
 whatever environment it passes. Helpers are rewritten idempotently whenever an
 assistant starts or reconnects. Only the listening sockets stay in temporary space.
+A session's final close (its archive, in the stopping phase) removes its own
+`codex-git-command/<hash>/` directory and stops its Git control; renewal,
+changeover and project runtime closes keep both, because the same session
+reconnects and rewrites them.
 An unavailable AI connection is a separate account-attention state: it stops
 timed retries, explains that Codex needs sign-in (or that the selected account or
 model is unavailable), and offers Open AI Accounts through the existing account

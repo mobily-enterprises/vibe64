@@ -177,3 +177,14 @@ test("phase announcements follow durable progress before the next slow operation
   };
   assert.equal((await f.service().archiveSession("session-a")).ok, true);
 });
+
+test("the archive's stopping phase removes the session's command helpers with its runtime", async () => {
+  const f = fixture();
+  f.terminals.removeSessionCommandHelpers = async (sessionId, { runtime }) => {
+    assert.equal(sessionId, "session-a");
+    assert.equal(runtime, f.runtime);
+    f.calls.push("helpers");
+  };
+  assert.equal((await f.service().archiveSession("session-a")).ok, true);
+  assert.deepEqual(f.calls, ["stop", "helpers", "resources", "source"]);
+});

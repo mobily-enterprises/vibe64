@@ -1238,6 +1238,28 @@ async function prepareCodexGitCommand({
   };
 }
 
+// A session's final close (its archive) stops its Git control and removes its
+// helper directory, which holds every agent command wrapper of the session.
+// Renewal, changeover and project runtime closes keep both: the same session
+// reconnects and its helpers are rewritten in place.
+async function removeCodexGitCommandSession({
+  env = process.env,
+  sessionId = "",
+  stateRoot = ""
+} = {}) {
+  const normalizedSessionId = normalizeText(sessionId);
+  if (!normalizedSessionId) {
+    return { ok: false, removed: false };
+  }
+  const options = { env, sessionId: normalizedSessionId, stateRoot };
+  const socketPath = commandSocketHostPath(options);
+  await commandServerPreparations.get(socketPath)?.promise.catch(() => null);
+  await closeUnixJsonCommandServer(commandServers, socketPath, commandServers.get(socketPath), "session-closed");
+  await rm(socketPath, { force: true }).catch(() => null);
+  await rm(commandHostDir(options), { force: true, recursive: true });
+  return { ok: true, removed: true };
+}
+
 export {
   VIBE64_CODEX_GIT_COMMAND_GENERATION_ENV,
   VIBE64_CODEX_GIT_COMMAND_SESSION_ID_ENV,
@@ -1246,5 +1268,6 @@ export {
   VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV,
   createCodexGitCommandService,
   gitCommandActorFromSession,
-  prepareCodexGitCommand
+  prepareCodexGitCommand,
+  removeCodexGitCommandSession
 };

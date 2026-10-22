@@ -182,7 +182,7 @@ import { createAgentDatabaseCommandService } from "./agentDatabaseCommand.js";
 import { createAgentPreviewCommandService } from "./agentPreviewCommand.js";
 import { createAgentSessionCommandService } from "./agentSessionCommand.js";
 import { closeAgentSessionCommandEnvironment, prepareAgentSessionCommandEnvironment } from "./agentCommandEnvironment.js";
-import { createCodexGitCommandService } from "./codexGitCommand.js";
+import { createCodexGitCommandService, removeCodexGitCommandSession } from "./codexGitCommand.js";
 import {
   checkSessionUpdates as checkManagedSessionUpdates,
   inspectIncomingContributions as inspectManagedIncomingContributions,
@@ -4689,6 +4689,15 @@ function createService({
 
     removeOutputResultsForSession(sessionId) {
       return outputTarget.removeResultsForSession(sessionId);
+    },
+
+    // Only a session's final close (archive) calls this; see removeCodexGitCommandSession.
+    removeSessionCommandHelpers(sessionId, { runtime = null } = {}) {
+      return closeAgentSessionCommandEnvironment(sessionId, () => removeCodexGitCommandSession({
+        env,
+        sessionId,
+        stateRoot: String(runtime?.stateRoot || "").trim()
+      }));
     },
 
     selectPreviewIdentity(sessionId, input = {}, options = {}) {

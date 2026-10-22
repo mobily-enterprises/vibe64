@@ -896,6 +896,10 @@ function createService({
               if (typeof terminals.removeOutputResultsForSession === "function") {
                 await terminals.removeOutputResultsForSession(sessionId);
               }
+              // The final close: renewal and changeover never reach here.
+              if (typeof terminals.removeSessionCommandHelpers === "function") {
+                await terminals.removeSessionCommandHelpers(sessionId, { runtime });
+              }
             }
             if (prepareArchive) {
               const prepared = await prepareArchive({
