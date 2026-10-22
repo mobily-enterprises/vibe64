@@ -1,0 +1,7 @@
+[package]
+name = "connected-library"
+version = "1.0.0"
+edition = "2021"
+description = "Published dependency used by the connected-development fixture"
+license = "MIT"
+publish = true

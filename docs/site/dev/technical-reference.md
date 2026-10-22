@@ -61,7 +61,8 @@ The files have deliberately different jobs:
   project operating guide to OpenCode sessions and refreshes it after
   compaction.
 - `.genesis/machine-city.json` and `.genesis/program-city.json` are derived
-  navigation documents.
+  navigation documents rebuilt from the working tree. `genesis init` adds them
+  to `.gitignore`; they are not committed.
 - `.genesis/verification.json` is present only after declared checks pass. It
   records exact code and Stack hashes; it is evidence, not a correctness claim.
 

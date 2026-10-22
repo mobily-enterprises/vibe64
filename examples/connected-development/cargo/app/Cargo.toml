@@ -1,0 +1,8 @@
+[package]
+name = "connected-app"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+connected-library = "1.0.0"

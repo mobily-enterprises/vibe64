@@ -1,0 +1,3 @@
+# Derived build trees and connected-development state (never tracked).
+/build/
+/.development/

@@ -1,0 +1,12 @@
+[project]
+name = "acme-library"
+version = "1.0.0"
+description = "Tiny connected-development fixture library."
+requires-python = ">=3.11"
+
+# A dependency-free in-tree PEP 517/660 backend keeps this fixture offline.
+# Real libraries normally use setuptools, hatchling or flit; see README.
+[build-system]
+requires = []
+build-backend = "fixture_backend"
+backend-path = ["_build"]

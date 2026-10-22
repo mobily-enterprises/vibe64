@@ -1,0 +1,3 @@
+source "https://rubygems.org"
+
+gem "acme_library", "~> 1.0"

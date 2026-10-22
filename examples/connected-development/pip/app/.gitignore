@@ -1,0 +1,4 @@
+# Connected development: sources map and the untracked virtual environment.
+/.development/
+/.venv/
+__pycache__/

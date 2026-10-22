@@ -1,0 +1,6 @@
+# Build output
+/build/
+/.gradle/
+/.kotlin/
+# Connected development (written by tooling/Connected.java; never commit)
+/.development/

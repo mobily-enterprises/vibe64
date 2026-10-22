@@ -1,0 +1,7 @@
+# Connected development: sources map, derived Gemfile/lock and local Bundler
+# settings (which select the derived Gemfile).
+/.development/
+/Gemfile.connected
+/Gemfile.connected.lock
+/.bundle/
+/vendor/bundle/

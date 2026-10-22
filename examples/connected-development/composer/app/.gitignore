@@ -1,0 +1,6 @@
+# Installed dependencies.
+/vendor/
+# Connected development: sources map and derived Composer manifest/lock.
+/.development/
+/composer.connected.json
+/composer.connected.lock

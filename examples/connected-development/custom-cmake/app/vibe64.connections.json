@@ -1,0 +1,11 @@
+{
+  "projects": [
+    {
+      "name": "Example Library",
+      "repository": "https://github.com/acme/example-library",
+      "relationship": "dependency",
+      "type": "custom",
+      "script": "tooling/connected-cmake.sh"
+    }
+  ]
+}

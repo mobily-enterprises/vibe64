@@ -15,3 +15,5 @@ test-results/
 server.static.mjs
 server.bundle.mjs
 .jskit/static-server-provider-registry.mjs
+/.genesis/machine-city.json
+/.genesis/program-city.json

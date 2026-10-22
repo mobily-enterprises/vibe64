@@ -1,0 +1,9 @@
+{
+  "projects": [
+    {
+      "name": "Example Library",
+      "repository": "https://github.com/acme/example-library",
+      "relationship": "dependency"
+    }
+  ]
+}

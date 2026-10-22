@@ -1,0 +1,10 @@
+{
+    "name": "acme/app",
+    "description": "Tiny consumer of acme/library.",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.1",
+        "acme/library": "^1.0"
+    }
+}

@@ -159,6 +159,14 @@ type only records intent. Installed language runtimes alone
 do not establish connected-source support. A declaration alone does not prove
 that Preview or tests consume the dependency.
 
+`examples/connected-development/` holds a runnable reference proof for every
+package type (npm, composer, pip, bundler, gomod, cargo, maven, gradle, nuget
+and a custom CMake connection). Each one declares its own Prepare and Verify
+commands, leaves tracked files unchanged and shows Verify failing without the
+connection; `examples/connected-development/run-all.sh` runs every proof whose
+toolchain is installed. A proof shows the recipe works; each project still
+declares and verifies its own commands.
+
 For API clients, the explicit **Prepare connected sources** operation is
 `POST /api/app/:slug/vibe64/sessions/:sessionId/connected/prepare`. It uses the
 session's configured list and requires access to each registered receiving
