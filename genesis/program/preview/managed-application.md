@@ -413,13 +413,21 @@ Preview rewrites Host to the loopback target. On every HTTP and WebSocket
 request it drops any inbound `Forwarded` and `X-Forwarded-*` header except
 `X-Forwarded-For`, and sets `X-Forwarded-Host`, `X-Forwarded-Proto` and
 `X-Forwarded-Port` from its own browser-facing origin, never from client or edge
-headers. Applications that trust the loopback proxy therefore build absolute
-URLs on the Preview address and retain Secure cookies on HTTPS previews. A
-request carrying the browser's exact own Origin is presented on the loopback
-target instead: Origin becomes the loopback host with the browser-facing scheme,
-and the forwarded host and port are dropped, so a framework comparing Origin
-with its own (possibly forwarded) host sees one consistent origin and accepts
-same-origin writes. Such an application must also accept the loopback host.
+headers. On its TCP listener `X-Forwarded-For` is replaced by the proxy's own
+peer address, so a client-supplied chain never reaches the application; on its
+private Unix-socket listener, which only the host's ingress reaches, the
+ingress's `X-Forwarded-For` is kept. Applications that trust the loopback proxy
+therefore build absolute URLs on the Preview address and retain Secure cookies
+on HTTPS previews. A request carrying the browser's exact own Origin is
+presented on the loopback target instead: Origin becomes the loopback host with
+the browser-facing scheme, and the forwarded host and port are dropped, so a
+framework comparing Origin with its own (possibly forwarded) host sees one
+consistent origin and accepts same-origin writes. Such an application must also
+accept the loopback host. In the HTML page such a request returns, absolute URLs
+on the loopback target's origin (or its forwarded-scheme origin), including
+JSON-escaped ones, are translated to the preview origin like redirect Locations,
+so a page returned by a form post keeps its links and assets on the Preview
+address.
 Redirects from the target's ordinary origin or
 its forwarded-scheme origin stay on the preview origin. Foreign,
 opaque and absent origins are preserved so application origin checks still apply.

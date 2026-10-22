@@ -1457,6 +1457,7 @@ test("preview HTTP and WebSockets present their own origin on loopback and forwa
             "X-Forwarded-Host": "spoofed.invalid",
             "X-Forwarded-Port": "443",
             "X-Forwarded-Proto": "https",
+            "X-Forwarded-For": "203.0.113.9",
             ...(browserOrigin === undefined ? {} : { Origin: browserOrigin })
           };
           if (transport === "http") {
@@ -1476,12 +1477,42 @@ test("preview HTTP and WebSockets present their own origin on loopback and forwa
           assert.equal(forwarded.forwardedHost, browserOrigin === origin ? undefined : browserUrl.host);
           assert.equal(forwarded.forwardedPort, browserOrigin === origin ? undefined : browserUrl.port);
           assert.equal(forwarded.forwarded, undefined);
+          assert.equal(forwarded.forwardedFor, "127.0.0.1");
         }
       } finally {
         await registry.closeAll();
       }
     });
   }
+});
+
+test("a form post presented on loopback returns its page on the preview origin", async () => {
+  await withTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry();
+    try {
+      const preview = await registry.ensure("form-origin", `${target.origin}/form-page`);
+      const browserUrl = new URL(preview.href);
+      const page = async (origin) => {
+        const response = await fetch(browserUrl, {
+          body: "name=value",
+          headers: { "Content-Type": "application/x-www-form-urlencoded", Origin: origin },
+          method: "POST"
+        });
+        assert.equal(response.status, 200);
+        return response.text();
+      };
+      const own = await page(browserUrl.origin);
+      assert.equal(target.requests.at(-1).forwardedHost, undefined);
+      assert.match(own, new RegExp(`href="${browserUrl.origin}/app.css"`, "u"));
+      assert.match(own, new RegExp(`action="${browserUrl.origin}/form-page"`, "u"));
+      assert.ok(own.includes(`${browserUrl.origin.replaceAll("/", "\\/")}\\/home`));
+      assert.ok(own.includes(`href="${target.origin}0/other"`));
+      const foreign = await page("https://foreign.invalid");
+      assert.match(foreign, new RegExp(`href="${browserUrl.origin}/app.css"`, "u"));
+    } finally {
+      await registry.closeAll();
+    }
+  });
 });
 
 test("launch preview proxy forwards tokenized WebSocket upgrades without leaking token material", async () => {
@@ -1815,6 +1846,12 @@ async function withTargetServer(callback) {
       response.end();
       return;
     }
+    if (request.url === "/form-page") {
+      const origin = `${request.headers["x-forwarded-proto"] || "http"}://${request.headers["x-forwarded-host"] || request.headers.host}`;
+      response.writeHead(200, { "Content-Type": "text/html" });
+      response.end(`<html><head><link rel="stylesheet" href="${origin}/app.css"></head><body><form action="${origin}/form-page"></form><a href="http://${request.headers.host}0/other">port</a><script>const app = ${JSON.stringify({ url: `${origin}/home` }).replaceAll("/", "\\/")};</script></body></html>`);
+      return;
+    }
     if (request.url === "/api/ping") {
       response.writeHead(200, {
         "Content-Type": "application/json"
@@ -1941,6 +1978,7 @@ async function withWebSocketTargetServer(callback) {
       forwardedProto: request.headers["x-forwarded-proto"],
       forwardedHost: request.headers["x-forwarded-host"],
       forwardedPort: request.headers["x-forwarded-port"],
+      forwardedFor: request.headers["x-forwarded-for"],
       cookie: request.headers.cookie || "",
       url: request.url
     });

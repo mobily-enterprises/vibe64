@@ -86,6 +86,7 @@ function normalizePreviewTargetHref(value = "") {
 }
 
 function proxyRequestHeaders(headers = {}, targetUrl, {
+  clientAddress = "",
   freshDocument = false,
   previewAuth = null,
   proxyOrigin = "",
@@ -113,12 +114,13 @@ function proxyRequestHeaders(headers = {}, targetUrl, {
   }
   nextHeaders["accept-encoding"] = "identity";
   nextHeaders.host = targetHost || targetUrl.host;
-  forwardedHeaders(nextHeaders, proxyOrigin);
+  forwardedHeaders(nextHeaders, proxyOrigin, clientAddress);
   remapPreviewOrigin(nextHeaders, proxyOrigin);
   return nextHeaders;
 }
 
 function proxyUpgradeHeaders(headers = {}, targetUrl, {
+  clientAddress = "",
   previewAuth = null,
   proxyOrigin = "",
   targetHost = ""
@@ -135,19 +137,24 @@ function proxyUpgradeHeaders(headers = {}, targetUrl, {
     delete nextHeaders.cookie;
   }
   nextHeaders.host = targetHost || targetUrl.host;
-  forwardedHeaders(nextHeaders, proxyOrigin);
+  forwardedHeaders(nextHeaders, proxyOrigin, clientAddress);
   remapPreviewOrigin(nextHeaders, proxyOrigin);
   return nextHeaders;
 }
 
-function forwardedHeaders(headers, browserOrigin) {
+function forwardedHeaders(headers, browserOrigin, clientAddress = "") {
   // Host addresses the loopback app. Proxy-aware apps build absolute URLs and
   // secure cookies from these, so only the proxy's own origin supplies them.
-  // X-Forwarded-For keeps the edge's client address.
+  // X-Forwarded-For names the proxy's own TCP peer, never a value that peer
+  // sent. A private Unix-socket listener is reached only through the host's
+  // ingress, so its X-Forwarded-For chain is kept.
   for (const name of Object.keys(headers)) {
     if (name === "forwarded" || (name.startsWith("x-forwarded-") && name !== "x-forwarded-for")) {
       delete headers[name];
     }
+  }
+  if (clientAddress) {
+    headers["x-forwarded-for"] = clientAddress;
   }
   if (!browserOrigin) {
     return;
@@ -158,12 +165,16 @@ function forwardedHeaders(headers, browserOrigin) {
   headers["x-forwarded-port"] = url.port || (url.protocol === "https:" ? "443" : "80");
 }
 
+function presentsOnLoopbackOrigin(headers, proxyOrigin) {
+  return Boolean(proxyOrigin) && headers?.origin === proxyOrigin;
+}
+
 function remapPreviewOrigin(headers, proxyOrigin) {
   // Host addresses the loopback app. Translate only this preview's own browser
   // origin to match it; foreign and opaque origins must still fail app checks.
   // The forwarded host and port go too, so an app that trusts them compares
   // the same loopback origin; only the browser-facing scheme is kept.
-  if (proxyOrigin && headers.origin === proxyOrigin) {
+  if (presentsOnLoopbackOrigin(headers, proxyOrigin)) {
     const protocol = new URL(proxyOrigin).protocol;
     headers.origin = new URL(`${protocol}//${headers.host}`).origin;
     delete headers["x-forwarded-host"];
@@ -918,6 +929,25 @@ function proxiedLocation(location = "", {
   }
 }
 
+function proxiedLoopbackHtml(html = "", {
+  proxyOrigin = "",
+  targetOrigin = ""
+} = {}) {
+  // A write presented on the loopback origin carries no forwarded host, so a
+  // proxy-aware app names the loopback target in the page it returns. Translate
+  // those absolute URLs back exactly like redirect Locations.
+  const proxy = new URL(proxyOrigin);
+  const forwardedTarget = new URL(targetOrigin);
+  forwardedTarget.protocol = proxy.protocol;
+  let text = html;
+  for (const origin of new Set([targetOrigin, forwardedTarget.origin])) {
+    for (const [from, to] of [[origin, proxy.origin], [origin.replaceAll("/", "\\/"), proxy.origin.replaceAll("/", "\\/")]]) {
+      text = text.replace(new RegExp(`${from.replace(/[.*+?^${}()|[\]\\/]/gu, "\\$&")}(?![0-9])`, "gu"), () => to);
+    }
+  }
+  return text;
+}
+
 function targetRequestUrl(requestUrl = "/", targetOrigin = "") {
   const url = new URL(String(requestUrl || "/"), targetOrigin);
   if (url.origin !== targetOrigin) {
@@ -1040,6 +1070,7 @@ async function proxyPreviewRequest(request, response, {
     const method = String(request.method || "GET").toUpperCase();
     const fetchOptions = {
       headers: proxyRequestHeaders(request.headers, targetUrl, {
+        clientAddress: request.socket?.remoteAddress || "",
         freshDocument: requestIsBrowserDocumentNavigation(request),
         previewAuth,
         proxyOrigin,
@@ -1059,7 +1090,10 @@ async function proxyPreviewRequest(request, response, {
     const contentType = String(targetResponse.headers["content-type"] || "");
     if (HTML_CONTENT_TYPE_PATTERN.test(contentType)) {
       const html = await streamText(targetResponse);
-      const body = injectLaunchPreviewBridge(html, {
+      const page = presentsOnLoopbackOrigin(request.headers, proxyOrigin)
+        ? proxiedLoopbackHtml(html, { proxyOrigin, targetOrigin })
+        : html;
+      const body = injectLaunchPreviewBridge(page, {
         debug: previewProxyDebugEnabled(),
         targetOrigin
       });
@@ -1211,6 +1245,7 @@ function proxyPreviewUpgrade(request, socket, head, {
   const requestFactory = targetUrl.protocol === "https:" ? httpsRequest : httpRequest;
   const upstreamRequest = requestFactory(targetUrl, {
     headers: proxyUpgradeHeaders(request.headers, targetUrl, {
+      clientAddress: request.socket?.remoteAddress || "",
       previewAuth,
       proxyOrigin,
       targetHost
