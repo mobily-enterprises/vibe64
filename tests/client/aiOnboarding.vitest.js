@@ -64,6 +64,7 @@ beforeEach(() => {
   mocks.curated = { resource: resource({ providers: CURATED_CODEX_PROVIDERS.map(({ id }) => ({ id, connected: false, claudeReady: false })) }),
     loadError: ref(""), busy: ref(false) };
   mocks.curated.connections = computed(() => mocks.curated.resource.data.value?.providers || []);
+  mocks.curated.resource.isInitialLoading = ref(false);
   mocks.openCode = { connections: ref([]), loadError: ref(""), isInitialLoading: ref(false), reload: vi.fn().mockResolvedValue({}),
     removingProviderId: ref(""), savingProviderId: ref(""), updatingModelAccessProviderId: ref("") };
   const workflows = ref([]);
@@ -574,6 +575,57 @@ describe("flow", () => {
     const card = (id) => state.cards.find((item) => item.id === id);
     expect([state.neededTool(card("claude"))?.label, state.neededTool(card("codex")), state.neededTool(card("glm").free)?.label])
       .toEqual(["Claude Code", null, "opencode"]);
+  });
+
+  // Inline, as Account settings' AI Accounts: it reads its own setup state.
+  const inline = async (props = {}) => {
+    const state = mount(AiSetup, { inline: true, canConfigure: true, ...props });
+    await vi.waitFor(() => expect(mocks.colleague.current).toHaveBeenCalled());
+    await Promise.resolve();
+    return state;
+  };
+
+  it("inline with nothing configured shows the onboarding cards, also while the only AI needs reconnecting", async () => {
+    mocks.accounts.status.value.accounts[1] = { id: "claude", connected: false, status: "reconnect_required" };
+    const state = await inline();
+    expect([state.wasSetUp, state.skippable, state.cardAction(state.cards.find(({ id }) => id === "claude"))])
+      .toEqual([false, false, "reconnect"]);
+    app.unmount();
+    mocks.accounts.status.value.accounts[1] = { id: "claude", connected: true, status: "connected" };
+    expect((await inline()).wasSetUp).toBe(true);
+  });
+
+  it("inline, finishing returns to the overview instead of closing", async () => {
+    const onClose = vi.fn();
+    const state = await inline({ onClose });
+    state.connect(state.cards.find(({ id }) => id === "deepseek"), "have");
+    expect(state.screen).toBe("connect");
+    state.close("done");
+    expect([state.screen, state.chosen, onClose.mock.calls.length]).toEqual(["choose", null, 0]);
+  });
+
+  it("lands each deep link on the card's Manage, its connect step, or the key editor", async () => {
+    mocks.accounts.status.value.accounts[1] = { id: "claude", connected: true, status: "connected" };
+    const state = await inline();
+    state.manager.openProvider = vi.fn();
+    state.openProvider("claude");
+    expect([state.manageOpen, state.managedCard.id]).toEqual([true, "claude"]);
+    state.manageOpen = false;
+    state.openProvider("deepseek");
+    expect([state.screen, state.chosen.id, state.manageOpen]).toEqual(["connect", "deepseek", false]);
+    const revision = `sha256:${"a".repeat(64)}`;
+    state.openProvider("zai", { providerRevision: revision, providerLabel: "Z.AI" });
+    state.openProvider("opencode");
+    state.openProvider("mystery");
+    expect(state.manager.openProvider.mock.calls).toEqual([
+      ["zai", { providerRevision: revision, providerLabel: "Z.AI" }], ["opencode", {}], ["mystery", {}]
+    ]);
+  });
+
+  it("inline, opens the card a route names once connections are read", async () => {
+    mocks.route = { path: "/app/manage/accounts", query: { providerId: "deepseek", providerLabel: "DeepSeek" } };
+    const state = await inline();
+    expect([state.screen, state.chosen?.id]).toEqual(["connect", "deepseek"]);
   });
 
   it("shows the owner-only notice to members", () => {

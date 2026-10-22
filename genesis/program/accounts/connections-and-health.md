@@ -60,7 +60,6 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-accounts/src/server/aiConnectionRuntime.js`
 - `packages/vibe64-accounts/src/server/assistantProviderPolicy.js`
 - `packages/vibe64-accounts/src/server/zaiConnectionVerifier.js`
-- `packages/vibe64-accounts/src/client/studio/AiConnectionsSettings.vue`
 - `packages/vibe64-accounts/src/client/studio/AiConnectionDialogs.vue`
 - `packages/vibe64-accounts/src/client/studio/AiConnectionRow.vue`
 - `packages/vibe64-accounts/src/client/studio/AiProviderManage.vue`
@@ -176,8 +175,8 @@ an unrelated edit preserves unchanged unavailable references and their original
 recommendation provenance. Execution validates its actual destination again.
 The chat-mode menu also opens this same form in an owner-only overlay without
 navigating to AI Accounts. Both entry points open one named orchestrator with no
-internal orchestrator selector. AI Accounts places Configure routing beside each
-connected orchestrator heading; Main uses its saved workflow. The assignments
+internal orchestrator selector. AI Accounts opens it from Advanced → Model routing,
+one button per connected orchestrator, and from each connection tile; Main uses its saved workflow. The assignments
 remain shared across conversations. All five assignments belong to that workflow. Helper, Router and
 Shared backup can use another orchestrator without becoming global settings.
 The shared connected-model predicate feeds workflow choices, routing responses
@@ -341,11 +340,18 @@ or OpenCode credential fingerprint. OpenCode retains scope and identity when a
 particular model is disabled; model availability cannot change personal/shared
 classification. Unknown or removed credentials have no usable identity.
 
-Standalone and hosted editors compose the same AI Accounts screen, catalogue
+Standalone and hosted editors compose the same AI Accounts screen
+(`AiSetup` with `inline`, the onboarding stage itself), catalogue
 validation, provider policy, connection store and runtime wiring. The local
 account button opens a menu with Account settings and, while an onboarding host
 can open for this viewer, Redo onboarding. The Account settings dialog has You,
-AI Accounts and GitHub tabs. AI Accounts offers
+AI Accounts and GitHub tabs. Inline, `AiSetup` reads its own onboarding
+state, has its own Back and Done (finishing returns to the overview, not to
+Colleague), offers no Set up later, and its exposed `openProvider` sends a
+native or curated provider to its card's Manage (when configured) or connect
+step, and a catalogue provider with revision, `opencode` or an unknown id to the
+manager's key editor, picker or Add a connection; a route's `providerId`
+without revision does the same once connections are read. AI Accounts offers
 Codex, Claude Code and OpenCode, including GPT, DeepSeek and GLM through Codex,
 and Claude, DeepSeek and GLM through Claude Code,
 and the current OpenCode provider catalogue. An AI connection request opens the
@@ -355,14 +361,14 @@ provider operations.
 Connection setup describes available models and directs role choices to Model
 routing. Connecting GLM or a Zen key does not promise to replace saved defaults;
 recommendations and their application belong to the shared routing flow.
-Configured connections are grouped under Claude Code, Codex and OpenCode; empty
-orchestrator groups are omitted. A curated key verified for both native
+Advanced lists configured connections under Claude Code, Codex and OpenCode;
+empty orchestrator groups are omitted. A curated key verified for both native
 orchestrators has a separate row in each group. Manage opens that exact
 orchestrator/provider pair. Configured engine membership remains visible during
 a failed credential transition so reconnection opens the correct form. A
 Claude-only key remains absent from Codex's group and usable catalogue. Vibe64
 includes no AI: OpenCode Zen appears only with the person's own Zen key, as an
-ordinary removable connection. Add connection lists only
+ordinary removable connection. Add a connection lists only
 orchestrators with missing provider connections, then their unconfigured
 providers. Manage has no provider selector. Native expired/reconnecting
 accounts and configured external pairs remain in Manage. OpenCode availability
@@ -394,15 +400,15 @@ OpenCode connections loaded without error, no AI is set up, no dialog is open, t
 active. Set up later is a 24-hour per-browser snooze,
 `vibe64.aiOnboarding.snoozedUntil:<actorKey>`; there is no server state or state
 upgrade. The mounted host sets `aiOnboardingAvailable`; the local account
-menu's **Redo onboarding** and AI Accounts' **Redo onboarding** (owners only,
-disabled while busy) and **Set up your AI** card appear only then. The card
-uses the host's set-up rule (`aiIsSetUp`): Claude and Codex sign-ins and curated
+menu's **Redo onboarding** appears only then. AI Accounts, being the same
+screen, shows the onboarding cards while nothing is set up by the host's rule
+(`aiIsSetUp`): Claude and Codex sign-ins and curated
 keys count only while connected; an added OpenCode connection, including the
 free GLM-4.7 Flash option, counts while connected. The local Account settings
 dialog closes on a request and names its account button as `returnFocus`, where
 the host returns focus when the flow closes; while AI Accounts is busy it sets
 `aiOnboardingBlocked`, and requests are refused rather than stacked over it. Regular Z.AI stays
-reachable through Add connection → OpenCode as well. Success requires the chosen
+reachable through Advanced → Add a connection → OpenCode as well. Success requires the chosen
 provider connected and its orchestrator's workflow available. The Colleague
 model bridge, registered by the mounted Colleague, reads and switches
 Colleague's selection through the existing model selection; the exported

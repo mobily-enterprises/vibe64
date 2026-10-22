@@ -24,22 +24,20 @@ runs. Waiting retains the stage: use its stage-specific **Continue** action when
 resolved, or **Retry** for an uncertain message. Stop remains respected.
 See [plans and workflow recovery](plans.md) for the full steps.
 
-Open **AI Accounts** in Management, or in the local editor through **Account
-settings → AI Accounts**. No project or coding session is required.
-The local standalone editor does not require a hosted workspace login to open AI
-Accounts. To be guided to a good first AI, use [AI onboarding](ai-onboarding.md):
-**Redo onboarding** in the local account menu (next to **Account settings**) or
-at the top of AI Accounts, or **Set up your AI** in the **Give Vibe64 a
-brilliant mind** card shown while no AI is connected (accounts marked
-**Reconnect required** do not count). Vibe64 includes no AI of its own; the free
+Open **Account settings → AI Accounts** from the account menu. No project or
+coding session is required. AI Accounts is the same screen as
+[AI onboarding](ai-onboarding.md): while no AI is connected (accounts marked
+**Reconnect required** do not count) it shows **Pick the AI behind Vibe64** with
+the ranked provider cards; once one is, it shows **Your AI setup** with your
+cards first, each with **Manage**, and the collapsed **Advanced** panel below
+them. Finishing a connection there returns to that overview (**Done**). The
+guided flow with its **Why** screen opens from **Redo onboarding** in the account
+menu (next to **Account settings**). Vibe64 includes no AI of its own; the free
 option is GLM-4.7 Flash through a free Z.AI account (see below). OpenCode Zen is
 an ordinary keyed provider: add your own Zen key to use it. Its free Big Pickle
 model is not offered, and model routing or Colleague choices that named it were
 cleared by the release upgrade, so the next use recommends one of your connected
 AIs.
-Hosted connection changes require the workspace owner. A member's permitted models
-can differ from the owner's subscription models; account connection alone does not
-grant every collaborator use of it.
 
 ## Install Claude Code, Codex or opencode first
 
@@ -55,7 +53,7 @@ Before you pick a provider, its card in AI onboarding and **Your AI setup** says
 **Needs Claude Code on this computer** (or Codex, or opencode) under its buttons
 when that program is missing; the GLM free option says **Needs opencode on this
 computer**. When a program is missing, AI Accounts (and the matching step of AI onboarding) shows
-a warning instead of the sign-in button. In **Add connection**, an orchestrator whose
+a warning instead of the sign-in button. In **Advanced → Add a connection**, an orchestrator whose
 program is missing says **Not installed on this computer** under its name; choosing it
 (or **Choose provider** for OpenCode) opens the same warning, and the setup dialog's
 status chip reads **Not installed** or **Didn't start** instead of **Not connected**:
@@ -93,14 +91,13 @@ of these programs, none of these warnings or install commands appear.
 
 ## Advanced in Your AI setup
 
-Below the provider cards, **Your AI setup** (see [AI onboarding](ai-onboarding.md))
+Below the provider cards, AI Accounts (and **Your AI setup** in AI onboarding)
 has a collapsed **Advanced** panel once any AI is configured. Its summary counts
 the connections, for example **7 connections · 2 not on a card above**. Select it
 to open:
 
-- **Add a connection** opens the same orchestrator and provider pickers as **Add
-  connection** in AI Accounts (Claude Code, Codex, or OpenCode's provider catalog),
-  for an exact orchestrator and provider pair. **Refresh** rechecks every account.
+- **Add a connection** opens **Choose an orchestrator** (Claude Code, Codex, or
+  OpenCode's provider catalog) for an exact orchestrator and provider pair. **Refresh** rechecks every account.
 - **Model routing** has one button per connected orchestrator (**Claude Code**,
   **Codex**, **OpenCode**); each opens that orchestrator's routing form.
 - **Other connections** lists connected providers that have no card, such as
@@ -115,7 +112,10 @@ to open:
 
 If the connections cannot be read, Advanced shows **AI accounts could not load**
 with **Try again**. On a phone the buttons fill the width. The provider cards'
-own **Manage** covers the same actions for one provider.
+own **Manage** covers the same actions for one provider. The free Z.AI connection's **Free-only
+model access** switch (**Unlock all Z.AI models**, with a confirmation because
+other Z.AI models use API credit) is in the GLM card's **Manage**, under **Free
+option**.
 
 ## Connect and check accounts
 
@@ -125,7 +125,7 @@ authorization code. You perform provider consent and secret entry. Wait for the
 saved connected state, and use **Refresh** or **Check saved key** when offered.
 Do not reconnect or resend a key solely because a status request was interrupted.
 DeepSeek, regular GLM API and GLM Coding Plan connections belong to the
-orchestrator shown in that row. Use **Add connection**, choose **Claude Code**,
+orchestrator shown in that row. Use **Advanced → Add a connection**, choose **Claude Code**,
 **Codex** or **OpenCode**, then its provider. Enter a key and complete
 that row's verification. Each orchestrator can save a different key, or you can
 enter the same key independently for several orchestrators. Connecting or
@@ -139,8 +139,10 @@ assistant-workflow upgrade and preserves its recorded history; it clears saved p
 the provider. Reconnect the exact orchestrator/provider rows afterward. Colleague
 can explain this prerequisite; it cannot run the host upgrade or copy your keys.
 
-Use **Manage** on the exact row to check its saved key, replace it, or remove
-that connection. Replacement is checked before the working key is changed.
+Open the provider card's **Manage** (or find the row under **Advanced**) and use
+**Replace key** or **Manage sign-in** on the exact orchestrator's tile to check
+or replace its key, or **Remove** to remove that connection; removing asks for
+confirmation first. Replacement is checked before the working key is changed.
 Replacement and removal affect only that orchestrator/provider. If Codex reports
 another native subscriber, close the native terminal using that provider and retry.
 Claude Code also requires closing a terminal using the selected provider. If a
@@ -203,9 +205,11 @@ optional suggestions and **Configure Codex routing**, even if the key also works
 with Claude Code. Review **Current** and **Suggested**, select the changes you
 want, then use **Apply [number] changes**. **Keep current routing** leaves the
 connection ready without applying those suggestions. If no changes are suggested,
-use **Done** or the same orchestrator's Configure routing button.
+use **Done** or the same orchestrator's routing button under **Advanced → Model
+routing**.
 
-Open the orchestrator's **Configure routing** control to choose its supported
+Open **Advanced → Model routing** and choose the orchestrator (or **Model
+routing** on a connection's tile) to choose its supported
 **Senior**, **Junior**, **Helper** and **Router** destinations and thinking choices.
 The displayed routing form can also offer **Review recommendations**,
 **Confirm Helper** and **Save routing**. Follow any
@@ -254,14 +258,14 @@ workflow's recommended routing, as starting a session does, and uses its
 Senior model, trying Claude Code before Codex and then the other connected
 workflows. Saved choices are never replaced. Colleague says it has **no usable
 AI model** only when no connected workflow can supply a Senior model; connect an
-AI, or open **Configure routing** and choose an available Senior, then press
+AI, or open **Advanced → Model routing** and choose an available Senior, then press
 Send or **Teach me** again. That message clears by itself once an AI is usable.
 
 If the form says routing changed elsewhere, use **Reload current choices** and
 review your retained draft before saving. If no permitted model is usable, finish
 the real account/access setup before promising an AI answer. Vibe64 includes no
-AI of its own on any installation; **Set up your AI** connects one, including the
-free GLM-4.7 Flash option.
+AI of its own on any installation; AI Accounts or AI onboarding connects one,
+including the free GLM-4.7 Flash option.
 
 Colleague can explain these steps, inspect account/routing readiness, open AI
 Accounts and save supported routing changes when the owner explicitly asks. It
@@ -293,7 +297,8 @@ or change Colleague's model. Ask for the actual routing before changing only the
 requested future workflow role. A correct lesson answer establishes understanding,
 not successful account setup or model execution.
 
-To connect the regular Z.AI API, use **Add connection** → OpenCode's
+To connect the regular Z.AI API, use the GLM card's free option (**Start free**
+or **Already have a key? Connect**), or **Advanced → Add a connection** → OpenCode's
 **Choose provider**. Wait for the catalogue,
 search **Z.AI** in **Search OpenCode providers**, and choose **Z.AI** rather than
 **Z.AI Coding Plan**. This opens the same regular API key editor. That route has

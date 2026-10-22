@@ -1,4 +1,4 @@
-export { default as AiConnectionsSettings } from "./studio/AiConnectionsSettings.vue";
+export { default as AiSetup } from "./onboarding/AiSetup.vue";
 export { default as ModelRoutingForm } from "./studio/ModelRoutingForm.vue";
 export { useModelRouting } from "./composables/useModelRouting.js";
 export { default as NativeProviderConnections } from "./studio/NativeProviderConnections.vue";

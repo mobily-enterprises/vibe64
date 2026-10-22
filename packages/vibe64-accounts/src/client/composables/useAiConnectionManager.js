@@ -7,8 +7,6 @@ import { useVibe64Accounts } from "./useVibe64Accounts.js";
 import { AI_CONNECTIONS_ENDPOINT } from "../lib/accountsGateApi.js";
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { useAiConnections } from "./useAiConnections.js";
-import { requestVibe64AiOnboarding } from "../onboarding/aiOnboardingEvents.js";
-import { aiIsSetUp } from "../onboarding/useAiOnboarding.js";
 
 const PROVIDER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
 const PROVIDER_REVISION_PATTERN = /^sha256:[a-f0-9]{64}$/u;
@@ -180,7 +178,6 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
   }
   const configuredAiRows = computed(() => [
     ...(nativeAccountConfigured(codexAccount.value) ? [{
-      accessLabel: codexAccount.value?.ownerOnly === true ? "Personal use" : codexAccount.value?.ownerOnly === false ? "Workspace use" : "",
       ownerOnly: codexAccount.value?.ownerOnly,
       billingLabel: codexAccount.value?.username || "Codex account",
       engineId: "codex",
@@ -193,7 +190,6 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
       providerLabel: "GPT"
     }] : []),
     ...(nativeAccountConfigured(claudeAccount.value) ? [{
-      accessLabel: "Personal use",
       ownerOnly: true,
       billingLabel: claudeAccount.value?.username || "Claude account",
       engineId: "claude",
@@ -214,7 +210,6 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
         kind: "codex-provider",
         providerLabel: provider.label,
         billingLabel: provider.description,
-        accessLabel: provider.ownerOnly ? "Personal use" : "Workspace use",
         ownerOnly: Boolean(provider.ownerOnly),
         keyHint: (engineId === "claude" ? connection.claudeReady : connection.connected) ? "Connected" : "Reconnect required",
         modelLabel: provider.models.map(({ label }) => label).join(" · ")
@@ -238,11 +233,6 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     { id: "opencode", label: "OpenCode" }
   ].map((engine) => ({ ...engine, accounts: configuredAiRows.value.filter((account) => account.engineId === engine.id) }))
     .filter((engine) => engine.accounts.length));
-  const hasOwnAi = computed(() => aiIsSetUp({
-    accounts: nativeAccounts.status.value?.accounts || [],
-    curated: codexProviders.connections.value,
-    openCode: connections.value
-  }));
   const aiStatusLoaded = computed(() => Boolean(
     nativeAccounts.status.value && Array.isArray(nativeAccounts.status.value.accounts)
   ));
@@ -626,7 +616,6 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
   });
 
   function requestRemove(connection = {}) {
-    if (connection.removable === false) return;
     removeTarget.value = connection;
     removeOpen.value = true;
   }
@@ -757,10 +746,6 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
   const busy = computed(() => Boolean(routingSaving.value || editorSaving.value || removeRunning.value || modelAccessRunning.value || codexProviderSaving.value));
   watch(busy, (value) => emit("busy", value));
 
-  function openOnboarding(redo) {
-    requestVibe64AiOnboarding({ start: "choose", redo });
-  }
-
   return {
     accountsInitialLoading,
     addAiOpen,
@@ -821,7 +806,6 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     existingEditorConnection,
     filteredProviders,
     finishConnectionRouting,
-    hasOwnAi,
     isInitialLoading,
     isOwner: owner,
     loadError,
@@ -851,7 +835,6 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     nativeSetupRows,
     nativeSetupToolProblem,
     openCodeAddAvailable,
-    openOnboarding,
     openProvider,
     openProviderPicker,
     pendingProvider,

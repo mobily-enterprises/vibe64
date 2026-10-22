@@ -149,7 +149,7 @@ function openRouting() {
         {{ changeLabel }}
       </v-btn>
       <v-btn v-if="routable" variant="text" @click="openRouting">Model routing</v-btn>
-      <v-btn v-if="account.removable !== false" class="ai-row__remove" color="error" variant="text" @click="requestRemove(account)">
+      <v-btn class="ai-row__remove" color="error" variant="text" @click="requestRemove(account)">
         Remove
       </v-btn>
     </div>

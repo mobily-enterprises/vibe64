@@ -19,11 +19,11 @@ do not run, and Colleague shows **Set up your AI**.
 
 Open it again at any time from the account menu: select the account button at
 the top right (**Account menu**), then **Redo onboarding**. The same menu holds
-**Account settings**. **Redo onboarding** is also at the top of **Account
-settings → AI Accounts**. While no AI is connected (an expired
-sign-in or key that needs reconnecting does not count), AI Accounts also shows
-**Give Vibe64 a brilliant mind** with **Set up your AI**, Colleague shows a
-small crowned **Set up your AI** note, and the top bar shows a gold crowned
+**Account settings**, whose **AI Accounts** tab is this same screen without the
+**Why** step: the provider cards, **Manage** and **Advanced**, with its own
+**Back** and **Done** (Done returns to the overview). While no AI is connected
+(an expired sign-in or key that needs reconnecting does not count), AI Accounts
+shows **Pick the AI behind Vibe64**, Colleague shows a small crowned **Set up your AI** note, and the top bar shows a gold crowned
 **Set up AI** button beside the account button (smaller on a phone). While that
 button shows, the account button stays neutral.
 Each opens the flow at the provider choice, closing Account settings first; closing the flow returns focus to the
@@ -203,6 +203,9 @@ save runs, closing and **Back** wait for it to finish.
   connecting still works, but Connected badges are hidden until status loads.
 - Sign-in and key errors are the same messages as in AI Accounts (for example
   Z.AI overload or insufficient balance); retry the same step.
+- **Manage** stays on this screen: closing it (its close button or Escape)
+  returns to the cards with focus on the **Manage** button you used. While a
+  removal, key change or routing save runs, Manage cannot be closed.
 - Someone who may not connect AI sees **Only the Vibe64 owner can connect AI
   accounts.** with **Close**.
 
@@ -214,7 +217,9 @@ plan, buttons), with the GLM free option across the bottom of its row. On a phon
 everything is one column too: Claude is expanded, the other cards are compact rows you tap to expand, the top
 bar holds only the back arrow or wordmark, the step dots and close, and
 **Choose my AI**, **Set up later** and the "change it any time" note sit in a
-bar at the bottom of the first screen. Motion (the crown's glint, the card
+bar at the bottom of the first screen. **Manage** opens as a centred window on a
+desktop and fills the screen on a phone, with its tiles' buttons spread across
+the full width. Motion (the crown's glint, the card
 stack, the success glow) is turned off when your device asks for reduced
 motion.
 

@@ -1,6 +1,7 @@
 <script setup>
 import { computed, inject, nextTick, ref, unref, watch } from "vue";
 import { useDisplay } from "vuetify";
+import { useRoute } from "vue-router";
 import {
   mdiAlertCircleOutline, mdiArrowDown, mdiArrowLeft, mdiArrowRight, mdiCheck, mdiCheckCircle, mdiChevronDown,
   mdiInformationOutline, mdiLaptop, mdiOpenInNew, mdiRobotHappyOutline, mdiShieldLockOutline, mdiTuneVariant
@@ -15,20 +16,25 @@ import AiSetupAdvanced from "../studio/AiSetupAdvanced.vue";
 import { provideAiConnectionManager, useAiConnectionManager } from "../composables/useAiConnectionManager.js";
 import AiOnboardingKeyConnect from "./AiOnboardingKeyConnect.vue";
 import AiOnboardingMark from "./AiOnboardingMark.vue";
-import { aiOnboardingRows, usesProvider } from "./useAiOnboarding.js";
+import { aiOnboardingRows, useAiOnboarding, usesProvider } from "./useAiOnboarding.js";
 import { VIBE64_LEARNING_KEY } from "/src/lib/vibe64AssistantHost.js";
 
 // The AI setup stage: choose a provider, connect it, settle routing and prove
-// it answers. The onboarding shell shows it after its Why screen. Each
-// configured card's Manage, and the dialogs behind it, act through one AI
-// connection manager.
+// it answers. The onboarding shell shows it after its Why screen; Account
+// settings and other hosts show it inline as their AI Accounts. Each
+// configured card's Manage, Advanced, and the dialogs behind them act through
+// one AI connection manager.
 const props = defineProps({
   open: { type: Boolean, default: true },
   // AI connections endpoint; standalone uses the default.
   endpoint: { type: String, default: "" },
   // Opened from the user menu or AI Accounts to review an existing setup.
   redo: Boolean,
-  onboarding: { type: Object, required: true },
+  // The onboarding shell's state; an inline screen reads its own.
+  onboarding: { type: Object, default: null },
+  // Shown in a page or dialog rather than the onboarding shell: it has its own
+  // Back and done buttons, and finishing returns to the overview.
+  inline: Boolean,
   canConfigure: Boolean,
   // Shown to someone who may not configure AI.
   ownerNotice: { type: String, default: "Only the Vibe64 owner can connect AI accounts." },
@@ -39,6 +45,7 @@ const props = defineProps({
 // use a connection, on the card's Connected badge ("badge"), a connection's
 // tile ("row") and the success screen ("success").
 const emit = defineEmits(["close", "changed", "connected", "busy"]);
+const setup = props.onboarding || useAiOnboarding({ endpoint: props.endpoint, enabled: computed(() => props.canConfigure) });
 const { xs } = useDisplay();
 
 const RATINGS = ["", "poor", "limited", "good", "very good", "excellent"];
@@ -81,16 +88,17 @@ const manager = provideAiConnectionManager(useAiConnectionManager({
   ...(props.endpoint ? { endpoint: props.endpoint } : {}),
   isOwner: computed(() => props.canConfigure),
   emit: (event, value) => emit(event, value),
-  followRoute: false
+  // Inline, a route's providerId and providerRevision open that provider's key editor.
+  followRoute: props.inline
 }));
 // Manage: the card whose connections are open, if any.
 const manageOpen = ref(false);
 const managedCard = ref(null);
 
 const busy = computed(() => setupBusy.value || routingBusy.value || verifying.value || manager.busy.value);
-const cards = computed(() => props.onboarding.cards.value);
-const loaded = computed(() => props.onboarding.loaded.value);
-const loadError = computed(() => props.onboarding.loadError.value);
+const cards = computed(() => setup.cards.value);
+const loaded = computed(() => setup.loaded.value);
+const loadError = computed(() => setup.loadError.value);
 const featured = computed(() => cards.value.find((card) => card.crown));
 const others = computed(() => cards.value.filter((card) => !card.crown));
 const connectedCards = computed(() => cards.value.filter((card) => card.connected));
@@ -110,35 +118,37 @@ const currentMarks = computed(() => [...connectedCards.value, ...(otherConnected
 const currentNames = computed(() => [...connectedCards.value.map(({ name }) => name), ...otherConnected.value]);
 // Advanced appears once anything is configured.
 const showAdvanced = computed(() => props.canConfigure && (wasSetUp.value || manager.configuredAiRows.value.length > 0));
-const mainCard = computed(() => connectedCards.value.find((card) => usesProvider(props.onboarding.colleague.value, card)) || null);
+const mainCard = computed(() => connectedCards.value.find((card) => usesProvider(setup.colleague.value, card)) || null);
 const nativeLogin = computed(() => ["anthropic", "openai"].includes(chosen.value?.connect.modelProviderId));
 // The chosen engine's CLI, when this computer lacks it or it did not start.
 const missingTool = computed(() => {
   const id = chosen.value?.connect.engineId;
-  const status = props.onboarding.accounts?.status.value || {};
+  const status = setup.accounts?.status.value || {};
   return status.accounts?.find((account) => account.id === id && cliProblem(account)) ||
     status.missingTools?.find((tool) => tool.id === id) || null;
 });
 // Before anyone picks: the program a card connects through, when this computer lacks it.
 function neededTool(card) {
   if (!card || card.connected) return null;
-  const tools = props.onboarding.accounts?.status.value?.missingTools || [];
+  const tools = setup.accounts?.status.value?.missingTools || [];
   return tools.find((tool) => tool.id === card.connect.engineId) || null;
 }
 const checkingTools = ref(false);
 async function checkTools() {
   checkingTools.value = true;
   try {
-    await props.onboarding.accounts?.refresh();
+    await setup.accounts?.refresh();
   } finally {
     checkingTools.value = false;
   }
 }
-// Set up later snoozes first-run onboarding; a redo just closes.
-const skippable = computed(() => !wasSetUp.value && !["success", "owner"].includes(screen.value));
+// Set up later snoozes first-run onboarding; a redo just closes. Inline has nothing to put off.
+const skippable = computed(() => !props.inline && !wasSetUp.value && !["success", "owner"].includes(screen.value));
+// The shell supplies Back and Done on a phone; inline shows its own.
+const ownButtons = computed(() => props.inline || !xs.value);
 // Success says one thing about Colleague: it uses the choice, can switch to it, or isn't open here.
 const colleagueNote = computed(() => usesProvider(outcome.value.colleague, chosen.value) ? "uses"
-  : props.onboarding.colleagueAvailable.value ? "switch" : "menu");
+  : setup.colleagueAvailable.value ? "switch" : "menu");
 // In Learn mode Colleague's conversation is the teacher's: no hello goes into
 // it, and the teacher uses the choice from the next message. Develop is as ever.
 const learning = inject(VIBE64_LEARNING_KEY, null);
@@ -150,7 +160,7 @@ const proven = computed(() => colleagueNote.value !== "uses" || learn.value ||
   ["replied", "dismissed"].includes(hello.value.state));
 
 function readSetup() {
-  const { isSetUp, loaded: known } = props.onboarding;
+  const { isSetUp, loaded: known } = setup;
   wasSetUp.value = props.redo || isSetUp.value;
   firstRun.value = !props.redo && known.value && !isSetUp.value;
 }
@@ -158,7 +168,7 @@ function readSetup() {
 watch(() => props.open, (open) => {
   if (!open) return;
   readSetup();
-  props.onboarding.refreshColleague();
+  setup.refreshColleague();
   direction.value = "forward";
   screen.value = props.canConfigure ? "choose" : "owner";
   chosen.value = null;
@@ -168,7 +178,7 @@ watch(() => props.open, (open) => {
 }, { immediate: true });
 
 // Opened before the connections were read: settle once they are, before any choice.
-watch(() => props.onboarding.loaded.value, (known) => {
+watch(() => setup.loaded.value, (known) => {
   if (props.open && known && !chosen.value) readSetup();
 });
 
@@ -184,7 +194,7 @@ watch(routingForm, (form) => {
 
 async function sayHello() {
   hello.value = { state: "waiting", reply: "", error: "" };
-  const result = await props.onboarding.sayHello();
+  const result = await setup.sayHello();
   hello.value = result?.ok ? { state: "replied", reply: result.reply, error: "" }
     : { state: "failed", reply: "", error: result?.error || "No reply." };
   announcement.value = result?.ok ? `${chosen.value.name} is ready.` : `Colleague couldn't reach ${chosen.value.name}.`;
@@ -207,7 +217,31 @@ function go(next, back = false) {
 }
 
 function close(reason, card = null) {
-  if (!busy.value) emit("close", reason, card);
+  if (busy.value) return;
+  // Inline, finishing returns to the overview, which now shows the new setup.
+  if (props.inline && reason === "done") {
+    chosen.value = null;
+    readSetup();
+    go("choose", true);
+    return;
+  }
+  emit("close", reason, card);
+}
+
+// A request to show one provider (from a session, Colleague or a route): the
+// card's Manage when it has connections, else its connect step; a catalogue
+// provider with its revision, opencode or anything unknown goes to the key
+// editor, provider picker or Add a connection.
+function openProvider(providerId = "", options = {}) {
+  const id = String(providerId || "").trim();
+  const revision = Boolean(String(options.providerRevision || "").trim());
+  const card = revision ? null : cards.value.find((item) => item.matches.native.includes(id) || item.matches.curated.includes(id));
+  if (!card || !props.canConfigure) {
+    manager.openProvider(id, options);
+    return;
+  }
+  if (cardRows(card).length) openManage(card);
+  else connect(card, "have");
 }
 
 function focusTitle() {
@@ -263,7 +297,7 @@ function needsReconnect(card) {
 function cardAction(card) {
   if (!card.connected) return needsReconnect(card) ? "reconnect" : "get";
   if (!wasSetUp.value) return "get";
-  return usesProvider(props.onboarding.colleague.value, card) ? "keep" : "main";
+  return usesProvider(setup.colleague.value, card) ? "keep" : "main";
 }
 
 // Notes point the person to Claude; a connected card in a redo no longer sells itself.
@@ -281,7 +315,7 @@ async function finish({ keep: keeping = false } = {}) {
   warning.value = "";
   notReady.value = false;
   try {
-    const result = await props.onboarding.verify(card);
+    const result = await setup.verify(card);
     if (!result.connected) {
       warning.value = `${card.name} isn't connected yet. Finish the connection step, then try again.`;
       if (screen.value !== "connect") go("connect");
@@ -299,10 +333,10 @@ async function finish({ keep: keeping = false } = {}) {
       announcement.value = `${card.name} is connected, but no model is ready for Colleague yet.`;
       return;
     }
-    let colleague = await props.onboarding.refreshColleague();
+    let colleague = await setup.refreshColleague();
     let error = "";
     if ((firstRun.value || makeMain.value) && !usesProvider(colleague, card)) {
-      ({ selection: colleague = colleague, error = "" } = await props.onboarding.selectForColleague(card));
+      ({ selection: colleague = colleague, error = "" } = await setup.selectForColleague(card));
     }
     outcome.value = { routed: result.routed, colleague, error };
     go("success");
@@ -336,7 +370,7 @@ async function useAsMain() {
 async function switchColleague() {
   verifying.value = true;
   try {
-    const { selection = outcome.value.colleague, error = "" } = await props.onboarding.selectForColleague(chosen.value);
+    const { selection = outcome.value.colleague, error = "" } = await setup.selectForColleague(chosen.value);
     outcome.value = { ...outcome.value, colleague: selection, error };
   } finally {
     verifying.value = false;
@@ -362,14 +396,25 @@ function expanded(card) {
 
 watch(busy, (value) => emit("busy", value));
 
+// Inline, a route naming a provider without a catalogue revision opens its
+// card once connections are read (the manager opens revision-bearing ones).
+const route = useRoute();
+let routedProviderId = "";
+watch(() => [props.inline ? String(route?.query?.providerId || "") : "", String(route?.query?.providerRevision || ""),
+  manager.accountsInitialLoading.value], ([id, revision, loading]) => {
+  if (!id || revision || loading || id === routedProviderId) return;
+  routedProviderId = id;
+  openProvider(id, { providerLabel: String(route.query.providerLabel || "") });
+}, { immediate: true });
+
 // The shell's top bar and phone dock follow the stage.
-defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("choose", true) });
+defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("choose", true), openProvider });
 </script>
 
 
 <template>
   <div
-    ref="stage" class="ai-setup" :class="{ 'ai-setup--phone': xs, 'ai-setup--pointer': pointerMoved }"
+    ref="stage" class="ai-setup" :class="{ 'ai-setup--phone': xs, 'ai-setup--pointer': pointerMoved, 'ai-setup--inline': inline }"
     @pointermove.once="pointerMoved = true"
   >
     <Transition :name="`aio-${direction}`" mode="out-in" @after-enter="focusTitle">
@@ -402,7 +447,7 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
         </div>
         <v-alert v-if="loadError" type="error" variant="tonal" class="mb-6">
           We couldn't check your current AI connections.
-          <template #append><v-btn variant="text" @click="onboarding.reload()">Try again</v-btn></template>
+          <template #append><v-btn variant="text" @click="setup.reload()">Try again</v-btn></template>
         </v-alert>
         <p v-if="verifying" class="d-sr-only" role="status">Checking…</p>
         <div class="ai-onboarding__cards">
@@ -538,7 +583,7 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
       </section>
 
       <section v-else-if="screen === 'connect'" key="connect" class="ai-onboarding__connect">
-        <v-btn v-if="!xs" variant="text" class="aio-back" :prepend-icon="mdiArrowLeft" :disabled="busy" @click="go('choose', true)">Back</v-btn>
+        <v-btn v-if="ownButtons" variant="text" class="aio-back" :prepend-icon="mdiArrowLeft" :disabled="busy" @click="go('choose', true)">Back</v-btn>
         <header class="aio-chosen">
           <AiOnboardingMark :provider="chosen" :size="56" :settle-delay="chosen.crown ? 150 : -1" />
           <div class="aio-chosen__text">
@@ -602,7 +647,7 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
       </section>
 
       <section v-else-if="screen === 'routing'" key="routing" class="ai-onboarding__routing">
-        <v-btn v-if="!xs" variant="text" class="aio-back" :prepend-icon="mdiArrowLeft" :disabled="busy" @click="go('choose', true)">Back</v-btn>
+        <v-btn v-if="ownButtons" variant="text" class="aio-back" :prepend-icon="mdiArrowLeft" :disabled="busy" @click="go('choose', true)">Back</v-btn>
         <header class="ai-onboarding__intro">
           <AiOnboardingMark v-if="!fullRouting" :provider="chosen" :size="56" class="mb-5" />
           <p class="ai-onboarding__eyebrow">YOUR MAIN AI</p>
@@ -703,7 +748,7 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
           Your current models stay as they are. {{ chosen.name }} is ready in AI Accounts whenever you want it.
         </p>
         <slot name="connection-access" :card="chosen" place="success" />
-        <v-btn v-if="!xs" color="primary" variant="flat" size="large" :append-icon="mdiArrowRight" @click="close('done')">{{ doneLabel }}</v-btn>
+        <v-btn v-if="ownButtons" color="primary" variant="flat" size="large" :block="xs" :append-icon="mdiArrowRight" @click="close('done')">{{ inline ? "Done" : doneLabel }}</v-btn>
       </section>
 
       <section v-else key="owner" class="ai-onboarding__success">
@@ -766,6 +811,10 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
 .ai-setup > section { margin-inline: auto; max-width: 1040px; padding-top: var(--aio-stage-top); width: 100%; }
 .ai-setup > .ai-onboarding__choose { padding-top: var(--v64-space-3); }
 .ai-setup--phone > section { padding-top: var(--v64-space-4); }
+/* Inline: the page or dialog around it sets the spacing, not its type. */
+.ai-setup--inline { letter-spacing: normal; }
+.aio-card__facts :deep(.v-skeleton-loader) { background: transparent; }
+.ai-setup--inline > section, .ai-setup--inline > .ai-onboarding__choose { padding-top: 0; }
 .ai-onboarding__eyebrow {
   color: var(--v64-primary);
   font: var(--v64-type-label-lg);

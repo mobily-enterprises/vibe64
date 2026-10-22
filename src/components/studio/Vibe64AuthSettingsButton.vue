@@ -147,10 +147,11 @@
               System follows your device's light or dark setting.
             </p>
           </section>
-          <AiConnectionsSettings
+          <AiSetup
             v-if="selectedProviderId === 'ai'"
-            ref="aiConnectionsSettings"
-            is-owner
+            ref="aiSetup"
+            inline
+            can-configure
             @busy="aiConnectionsBusy = $event"
           />
           <ProviderAccountsSetup
@@ -188,7 +189,7 @@ import {
 import {
   accountRowsForStatus,
   ProviderAccountsSetup,
-  AiConnectionsSettings,
+  AiSetup,
   AiOnboardingSetUpPill,
   aiOnboardingAvailable,
   aiOnboardingBlocked,
@@ -241,7 +242,7 @@ function chooseAppearance(value) {
   writeAppearance(value);
 }
 const selectedProviderId = ref("ai");
-const aiConnectionsSettings = ref(null);
+const aiSetup = ref(null);
 const aiConnectionsBusy = ref(false);
 const accounts = useVibe64Accounts();
 const preferredNameField = ref(null);
@@ -314,7 +315,7 @@ async function openDialog(options = {}) {
   if (requestedProviderId) {
     selectedProviderId.value = requestedProviderId;
     await nextTick();
-    if (requestedProviderId === "ai" && requestedAi !== "ai") aiConnectionsSettings.value?.openProvider(requestedAi, options);
+    if (requestedProviderId === "ai" && requestedAi !== "ai") aiSetup.value?.openProvider(requestedAi, options);
     return;
   }
   selectedProviderId.value = "ai";

@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("vuetify", () => ({ useTheme: () => ({ change: vi.fn() }) }));
 vi.mock("@local/vibe64-accounts/client", async () => ({
   ...(await import("../../packages/vibe64-accounts/src/client/onboarding/aiOnboardingEvents.js")),
-  AiConnectionsSettings: {},
+  AiSetup: {},
   ProviderAccountsSetup: {},
   accountRowsForStatus: () => [],
   useVibe64Accounts: () => ({ status: ref(null), savePersonalAiProfileCommand: {}, refresh: vi.fn(), reloadLocalStatus: vi.fn() })
@@ -158,6 +158,26 @@ describe("standalone personal AI profile settings", () => {
     await Promise.resolve();
     expect(aiOnboardingBlocked.value).toBe(false);
     stop();
+    app.unmount();
+    vi.unstubAllGlobals();
+  });
+
+  it("opens AI Accounts on the requested provider through the setup screen", async () => {
+    vi.stubGlobal("window", new EventTarget());
+    const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+    const app = renderer.createApp({ ...Vibe64AuthSettingsButton, render: () => null });
+    app.provide(ssrContextKey, { modules: new Set() });
+    app.mount({});
+    const state = app._instance.setupState;
+    const openProvider = vi.fn();
+    state.aiSetup = { openProvider };
+    await state.openDialog({ refresh: false, providerId: "deepseek", providerLabel: "DeepSeek" });
+    expect([state.dialogOpen, state.selectedProviderId]).toEqual([true, "ai"]);
+    expect(openProvider).toHaveBeenCalledExactlyOnceWith("deepseek", { refresh: false, providerId: "deepseek", providerLabel: "DeepSeek" });
+    await state.openDialog({ refresh: false, providerId: "ai" });
+    expect(openProvider).toHaveBeenCalledTimes(1);
+    const component = await readFile(new URL("../../src/components/studio/Vibe64AuthSettingsButton.vue", import.meta.url), "utf8");
+    expect(component).toMatch(/<AiSetup\s+v-if="selectedProviderId === 'ai'"\s+ref="aiSetup"\s+inline\s+can-configure\s+@busy="aiConnectionsBusy = \$event"/u);
     app.unmount();
     vi.unstubAllGlobals();
   });

@@ -49,7 +49,7 @@ beforeEach(() => {
     resource: { isInitialLoading: ref(false), reload: vi.fn() }
   };
   mocks.connections = {
-    connections: ref([{ id: "opencode", builtIn: true, preferred: true, removable: false }]),
+    connections: ref([{ id: "opencode", preferred: true }]),
     catalogEngine: ref(null), catalogProvider: ref(null), catalogLoadError: ref(""),
     isInitialLoading: ref(false), loadError: ref(""), registryProviders: ref([]),
     registryIsInitialLoading: ref(false), registryIsFetching: ref(false), registryLoadError: ref(""),
@@ -62,14 +62,14 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it("groups configured pairs by orchestrator and retains the included default", () => {
+it("groups configured pairs by orchestrator", () => {
   const state = mount();
   expect(state.configuredAiGroups.map(group => [group.label, group.accounts.map(account => account.id)])).toEqual([
     ["Claude Code", ["claude", "deepseek", "zai-coding-plan", "zai"]],
     ["Codex", ["codex", "deepseek", "zai-coding-plan", "zai"]],
     ["OpenCode", ["opencode"]]
   ]);
-  expect(state.configuredAiGroups[2].accounts[0]).toMatchObject({ builtIn: true, preferred: true, removable: false });
+  expect(state.configuredAiGroups[2].accounts[0]).toMatchObject({ id: "opencode", preferred: true });
   expect(state.nativeChoices).toEqual([]);
   expect(state.canAddConnection).toBe(false);
 });
@@ -157,13 +157,13 @@ it("does not turn a stale Add choice into replacement of an existing OpenCode co
   expect(state.preparingProviderId).toBe("");
 });
 
-it("shows GPT's actual access scope and does not guess when it is unavailable", () => {
+it("carries GPT's actual access scope for the host and does not guess when it is unavailable", () => {
   const state = mount();
-  expect(engineGroup(state, "codex").accounts[0].accessLabel).toBe("Personal use");
+  expect(engineGroup(state, "codex").accounts[0].ownerOnly).toBe(true);
   mocks.accounts.status.value.accounts[0].ownerOnly = false;
-  expect(engineGroup(state, "codex").accounts[0].accessLabel).toBe("Workspace use");
+  expect(engineGroup(state, "codex").accounts[0].ownerOnly).toBe(false);
   delete mocks.accounts.status.value.accounts[0].ownerOnly;
-  expect(engineGroup(state, "codex").accounts[0].accessLabel).toBe("");
+  expect(engineGroup(state, "codex").accounts[0].ownerOnly).toBeUndefined();
 });
 
 it("shows a Claude-only provider without creating an empty Codex group", () => {
@@ -194,36 +194,6 @@ it("removes only the selected orchestrator key through its existing owner", asyn
   await state.confirmRemove();
   expect(mocks.providers.change).toHaveBeenCalledExactlyOnceWith({ engineId: "claude", modelProviderId: "deepseek", remove: true });
   expect(state.removeOpen).toBe(false);
-});
-
-it("offers onboarding instead of a free starter until an AI of the person's own is connected", () => {
-  mocks.accounts.status.value.accounts = [];
-  mocks.providers.connections.value = [];
-  const state = mount();
-  expect(state.configuredAiGroups.map(group => group.id)).toEqual(["opencode"]);
-  expect(state.hasOwnAi).toBe(false);
-  state.openOnboarding(false);
-  expect(mocks.requestOnboarding).toHaveBeenCalledExactlyOnceWith({ start: "choose", redo: false });
-  state.openOnboarding(true);
-  expect(mocks.requestOnboarding).toHaveBeenLastCalledWith({ start: "choose", redo: true });
-  mocks.providers.connections.value = [{ id: "deepseek", connected: true, configuredEngines: ["codex"] }];
-  expect(state.hasOwnAi).toBe(true);
-  expect(mocks.providers.change).not.toHaveBeenCalled();
-});
-
-it("keeps offering onboarding while the person's only AI needs reconnecting, like the onboarding host", () => {
-  mocks.accounts.status.value.accounts = [{ id: "claude", connected: false, status: "reconnect_required" }];
-  mocks.providers.connections.value = [{ id: "deepseek", connected: false, claudeReady: false, configuredEngines: ["codex", "claude"] }];
-  const state = mount();
-  expect(state.configuredAiRows.filter(account => !account.builtIn).map(account => [account.id, account.keyHint])).toEqual([
-    ["claude", "Reconnect required"], ["deepseek", "Reconnect required"], ["deepseek", "Reconnect required"]
-  ]);
-  expect(state.hasOwnAi).toBe(false);
-  mocks.providers.connections.value[0].claudeReady = true;
-  expect(state.hasOwnAi).toBe(true);
-  mocks.providers.connections.value = [];
-  mocks.connections.connections.value.push({ id: "openrouter", modelProviderId: "openrouter", builtIn: false, connected: true });
-  expect(state.hasOwnAi).toBe(true);
 });
 
 it("is idle with no provider id saving, removing or changing model access", () => {
