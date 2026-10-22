@@ -64,7 +64,7 @@
         <h2>What would you like to build with?</h2>
         <p>Choose a ready-made app, or describe your idea in the conversation.</p>
         <div v-for="group in groups" :key="group.technology" class="project-onboarding__group">
-          <h3>{{ technologyLabel(group.technology) }}</h3>
+          <h3>{{ group.label }}</h3>
           <div class="project-onboarding__choices">
             <button
               v-for="template in group.templates"
@@ -200,12 +200,16 @@ const groups = computed(() => {
     if (!grouped.has(template.technology)) grouped.set(template.technology, []);
     grouped.get(template.technology).push(template);
   }
-  return [...grouped].map(([technology, templates]) => ({ technology, templates }));
+  return [...grouped].map(([technology, templates]) => ({ technology, templates, label: technologyLabel(technology, templates) }));
 });
 const groupsHaveMultipleSources = computed(() => new Set((onboarding.value?.templates || []).map(({ namespace }) => namespace)).size > 1);
 
-function technologyLabel(technology) {
-  return technology === "jskit" ? "JSKIT" : technology;
+// Catalogue names read "<Technology> · <variant>"; a shared prefix is the
+// technology's display name, otherwise the catalogue identifier is shown.
+function technologyLabel(technology, templates) {
+  const prefixes = new Set(templates.map(({ name = "" }) => name.includes(" · ") ? name.split(" · ")[0].trim() : ""));
+  const [prefix] = prefixes;
+  return prefixes.size === 1 && prefix ? prefix : technology;
 }
 
 async function apply(template) {

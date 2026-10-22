@@ -1,12 +1,21 @@
 # Choose a starter with ready tests
 
-In an empty project's onboarding, choose the JSKIT starter that matches the app:
+In an empty project's onboarding, starters are grouped by technology. Choose
+the JSKIT starter that matches the app:
 
 - **Basic app**: responsive shell, server/client/browser tests, no database or login.
 - **Database app**: the same shell plus MySQL migrations and isolated database
   tests, without accounts.
 - **Accounts app**: sign-up, login, private pages and persisted profiles, plus
   account-persistence and browser tests.
+
+For another framework, each of Django, Rails, Spring Boot, Express and Next.js
+offers one **Basic app**: a home page whose notes form saves to SQLite
+(MySQL/MariaDB for Spring Boot), with unit and HTTP tests and the starter's own
+`docs/colleague-usage/starting-app.md`. Only Rails has sign-in, with the seeded
+development account `developer@example.com` / `developer`; for the others, ask
+the coding agent to add accounts. These starters do not declare **Browser test
+app**.
 
 The same choices appear on desktop and mobile. Applying a starter imports its
 source. Finish **Prepare workspace** to install dependencies and provision its
@@ -25,6 +34,6 @@ managed projects use the provided browser rather than installing another one.
 Colleague can explain the choices and offer coding-agent help. A how-to question
 alone does not authorize starter import, resource preparation or fixture reset.
 Applying to an existing application is unavailable; it does not replace authored
-source. These are three complete starters; optional packs are not part of this flow.
+source. These are complete starters; optional packs are not part of this flow.
 OpenCode's generated, ignored plugin-install files alone do not make a blank
 project an existing application. Custom OpenCode files still prevent import.

@@ -248,12 +248,13 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
   };
 }
 
-async function render(state, props = {}, environmentSetup = null) {
+async function render(state, props = {}, environmentSetup = null,
+  templates = [{ id: "official:jskit/public", technology: "jskit", name: "Public starter", description: "A public app." }]) {
   mocks.resource.data.value = state === null ? null : {
     ok: true, available: true, environmentSetup,
     inspection: { state, nextAction: "migrate", diagnostics: [{ message: "The project uses an older format." }] },
     // Deliberately retain stale offers: the presentation must still obey state.
-    templates: [{ id: "official:jskit/public", technology: "jskit", name: "Public starter", description: "A public app." }]
+    templates
   };
   const app = Vue.createSSRApp({
     render: () => Vue.h(Onboarding, { active: true, sessionId: "session-a", canAsk: true, requestTemporaryAi: async () => {}, ...props }, {
@@ -353,6 +354,17 @@ describe("Preview project onboarding", () => {
     const busy = await render("new", { busy: true });
     expect(busy).toMatch(/disabled[^>]*><strong[^>]*>Public starter/u);
     expect(mocks.query.readQuery.value).toEqual({ sessionId: "session-a" });
+  });
+  it("groups starters by technology in catalogue order, titled by their shared name prefix", async () => {
+    const starter = (technology, name) => ({ id: `official:${technology}/${name}`, technology, name, description: name });
+    const html = await render("new", {}, null, [
+      starter("jskit", "JSKIT · Basic app"), starter("jskit", "JSKIT · Accounts app"),
+      starter("django", "Django · Basic app"), starter("spring-boot", "Spring Boot · Basic app"),
+      starter("nextjs", "Next.js · Basic app"), starter("custom", "Plain starter")
+    ]);
+    const headings = [...html.matchAll(/<h3[^>]*>([^<]*)<\/h3>/gu)].map(([, text]) => text);
+    expect(headings).toEqual(["JSKIT", "Django", "Spring Boot", "Next.js", "custom"]);
+    expect(html.indexOf("JSKIT · Accounts app")).toBeLessThan(html.indexOf("Django · Basic app"));
   });
   it("asks an existing project's purpose and never renders stale seed offers", async () => {
     const html = await render("adoption");
