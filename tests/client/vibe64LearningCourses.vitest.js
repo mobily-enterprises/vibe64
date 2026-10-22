@@ -129,6 +129,28 @@ it.each(["closed", "actor"])("keeps an admitted start truthful but not current a
   expect(harness.command).toHaveBeenCalledTimes(1);
 });
 
+it("hands a confirmed start over before the progress reread, which only another person or revoked access then makes not current", async () => {
+  const order = [];
+  read.mockImplementation(async path => { if (path.endsWith("/learning")) order.push("reread"); return path.endsWith("/learning") ? progress("learner-owner") : { ok: true, courses: [] }; });
+  const onAdmitted = vi.fn(attemptId => { order.push(`admitted ${attemptId}`); open.value = false; });
+  const outcome = await courses.startLesson(selection, { onAdmitted });
+  expect(order).toEqual([`admitted ${A}`, "reread"]);
+  expect(outcome, "Courses closing for the start keeps it current").toMatchObject({ attemptId: A, current: true });
+  open.value = true; await flush();
+  read.mockRejectedValueOnce(Object.assign(new Error("revoked"), { status: 403 }));
+  expect(await courses.resumeLesson(A, { onAdmitted: () => { open.value = false; } })).toMatchObject({ attemptId: A, current: false });
+});
+
+it("does not hand over a start admitted after Learning closed", async () => {
+  const admitted = Promise.withResolvers(); harness.command.mockReturnValueOnce(admitted.promise);
+  const onAdmitted = vi.fn();
+  const pending = courses.startLesson(selection, { onAdmitted });
+  open.value = false;
+  admitted.resolve({ ok: true, available: true, active: { attemptId: A } });
+  expect(await pending).toMatchObject({ attemptId: A, current: false });
+  expect(onAdmitted).not.toHaveBeenCalled();
+});
+
 it("resumes only the exact requested attempt", async () => {
   const outcome = await courses.resumeLesson(A);
   expect(harness.command.mock.calls[0]).toEqual([`/api/vibe64/training/attempts/${A}/resume`, {}]);

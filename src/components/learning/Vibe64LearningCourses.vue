@@ -12,7 +12,7 @@ const props = defineProps({
   learning: { type: Object, required: true }
 });
 const controller = useVibe64Learning();
-const opened = operation => request(async owner => controller.opened(await operation(owner)));
+const opened = operation => request(async owner => controller.opened(await operation(owner, { onAdmitted: controller.admitted })));
 const start = selection => request(owner => controller.startLesson(selection, owner.startLesson));
 const route = useRoute();
 const error = ref("");
@@ -103,7 +103,7 @@ async function request(operation) {
       :start-unconfirmed="Boolean(retry)"
       @refresh="request(owner => owner.refresh())"
       @start="start"
-      @resume="opened(owner => owner.resumeLesson($event.attemptId))"
+      @resume="opened((owner, options) => owner.resumeLesson($event.attemptId, options))"
       @install="request(owner => owner.installCourse($event))"
     />
   </div>

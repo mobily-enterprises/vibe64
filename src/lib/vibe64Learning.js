@@ -1,4 +1,4 @@
-import { computed, reactive, readonly, shallowRef } from "vue";
+import { computed, nextTick, reactive, readonly, shallowRef } from "vue";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { runTrainingGuideCommand } from "@local/vibe64-training/client/guide";
 import { resolveStudioRequestUrl } from "@/lib/studioUrls.js";
@@ -194,7 +194,7 @@ function showMeCommand(guide, { projectSlug = "", sessionId = "" } = {}) {
 }
 
 function createVibe64Learning({ request: requestOverride = null, browserNavigation = null, colleagueView = null,
-  router = null, runGuide = null, now = () => Date.now() } = {}) {
+  layout = null, router = null, runGuide = null, now = () => Date.now() } = {}) {
   // open/minimised: the Courses overlay. hiddenBy: "learner" when the
   // learner's own close or Escape hid it (Colleague then returns a phone
   // learner to its conversation), else "". finished: the Lesson pane shows
@@ -221,6 +221,8 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   let viewer = 0;
   let reads = 0;
   let modeReads = 0;
+  // The latest mode read in flight.
+  let modeLoad = null;
   let practiceReads = 0;
   let saveTimer = null;
   let lastSaved = "";
@@ -308,12 +310,23 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     if (!state.actorKey) return null;
     const expected = ++modeReads;
     let value = null;
+    const load = request(VIBE64_LEARNING_ROUTES.learningMode, { method: "GET" });
+    modeLoad = load;
     try {
-      value = normalizeLearningMode(await request(VIBE64_LEARNING_ROUTES.learningMode, { method: "GET" }));
+      value = normalizeLearningMode(await load);
     } catch { value = null; }
+    finally { if (modeLoad === load) modeLoad = null; }
     if (expected !== modeReads) return mode.value;
     acceptMode(value);
     return value;
+  }
+
+  // The mode with this attempt in progress: the latest read (a start's
+  // realtime change usually reread it already), else a fresh read.
+  async function modeWith(attemptId) {
+    if (modeLoad) await modeLoad.catch(() => null);
+    await Promise.resolve();
+    return mode.value?.on && mode.value.currentAttemptId === attemptId ? mode.value : readLearningMode();
   }
 
   function currentPath() {
@@ -474,6 +487,10 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     remember();
     const target = `${learnHomePath(value)}?pane=lesson`;
     if (router && currentPath() !== target) await router.push(target);
+    // A phone shows one side: the project side, where the Lesson pane is,
+    // also when the address already names it (after L, or Show chat).
+    await nextTick();
+    layout?.value?.showProject?.();
     // A read already under way for this attempt (a restored or current lesson) is awaited, not repeated.
     if (changed || (!lesson.value && !state.loading)) await loadLesson();
     else if (!lesson.value) await lessonLoad;
@@ -718,11 +735,24 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   // current lesson.
   async function opened(outcome) {
     if (!outcome?.attemptId || outcome.current === false) return outcome;
-    const value = await readLearningMode();
+    const value = await modeWith(outcome.attemptId);
     state.trialAttemptId = value && value.currentAttemptId !== outcome.attemptId ? outcome.attemptId : "";
     await openLesson({ attemptId: outcome.attemptId });
     void readPractice();
     return outcome;
+  }
+
+  // The server confirmed a start or resume: Courses closes at once, before
+  // the progress reread that opened() waits for. When this tab reads that
+  // attempt as the lesson in progress (a start's realtime change rereads the
+  // mode), its Lesson pane shows as soon as that read is in.
+  function admitted(attemptId) {
+    minimise();
+    void (async () => {
+      if (modeLoad) await modeLoad.catch(() => null);
+      await Promise.resolve();
+      if (mode.value?.on && mode.value.currentAttemptId === attemptId) await openLesson({ attemptId });
+    })().catch(() => {});
   }
 
   // Start a lesson through Courses' start (useVibe64LearningCourses.startLesson).
@@ -731,7 +761,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   async function startLesson(selection, start) {
     confirmArchive.value = null;
     try {
-      return await opened(await start(selection));
+      return await opened(await start(selection, { onAdmitted: admitted }));
     } catch (cause) {
       if (cause?.code !== VIBE64_LESSON_IN_PROGRESS_CODE) throw cause;
       confirmArchive.value = Object.freeze({ next: selection, start, current: Object.freeze({
@@ -745,7 +775,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     const value = confirmArchive.value;
     if (!value) return null;
     confirmArchive.value = null;
-    return opened(await value.start({ ...value.next, archiveCurrent: true }));
+    return opened(await value.start({ ...value.next, archiveCurrent: true }, { onAdmitted: admitted }));
   }
 
   function cancelArchive() { confirmArchive.value = null; }
@@ -949,7 +979,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     exerciseStep, beginExercise, exerciseCurrent, finishExercise, prepareExercise,
     readNotes, saveNotes, clearNotes,
     readLearningMode, setMode, toggleMode, modePlace, openCurrent, toggleStepBar, showNotice, clearNotice,
-    startLesson, opened, confirmArchiveAndStart, cancelArchive, restart, finish, deleteAttempt, readPractice, deleteArchived
+    startLesson, admitted, opened, confirmArchiveAndStart, cancelArchive, restart, finish, deleteAttempt, readPractice, deleteArchived
   });
 }
 

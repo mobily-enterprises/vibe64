@@ -104,7 +104,11 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
       ...(authorPreviewResource ? [authorPreviewResource.reload()] : [])]);
   }
 
-  async function prepare(path, body, scope, { attemptId = "" } = {}) {
+  // onAdmitted(attemptId): called once the server confirms an attempt that is
+  // still current here, before the progress reread. The caller then closes
+  // Courses to show the lesson at once, so from that point only another person
+  // or revoked access (not Courses closing) makes the outcome not current.
+  async function prepare(path, body, scope, { attemptId = "", onAdmitted = null } = {}) {
     const result = await command.run({ path, body });
     if (!result || result.ok !== true || result.available !== true) {
       throw new Error("The lesson request did not return a confirmed saved attempt. Retry the same request.");
@@ -115,17 +119,22 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
     if (!admitted?.attemptId || (attemptId && admitted.attemptId !== attemptId)) {
       throw new Error("The lesson response did not confirm the requested attempt.");
     }
-    if (current(scope)) {
+    const handedOver = typeof onAdmitted === "function" && !admitted.ended && current(scope);
+    const stillCurrent = handedOver
+      ? () => scope.actor === actorKey.value && scope.learnerId === learnerId.value
+      : () => current(scope);
+    if (handedOver) onAdmitted(admitted.attemptId);
+    if (stillCurrent()) {
       await learningResource.reload();
       if (scope.authorPreviewAttemptId) await authorPreviewResource.reload();
     }
     return { result, attemptId: admitted.attemptId, learnerId: scope.learnerId,
-      ended: Boolean(admitted.ended), current: current(scope) };
+      ended: Boolean(admitted.ended), current: stillCurrent() };
   }
 
   // archiveCurrent: the learner confirmed archiving a different lesson in
   // progress, which refused the first start (VIBE64_TRAINING_LESSON_IN_PROGRESS).
-  async function startLesson(selection) {
+  async function startLesson(selection, { onAdmitted = null } = {}) {
     if (busy.value) return null;
     const scope = capture();
     const input = Object.freeze({ courseId: selection.courseId, release: selection.release,
@@ -144,7 +153,7 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
     starting.value = true;
     try {
       const outcome = await prepare(`${TRAINING_PATH}/lessons/start`,
-        { ...request.input, requestId: request.requestId }, scope);
+        { ...request.input, requestId: request.requestId }, scope, { onAdmitted });
       if (pendingStart.value === request) pendingStart.value = null;
       return { ...outcome, requestId: request.requestId };
     } catch (cause) {
@@ -154,12 +163,12 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
     } finally { busy.value = false; starting.value = false; }
   }
 
-  async function resumeLesson(attemptId) {
+  async function resumeLesson(attemptId, { onAdmitted = null } = {}) {
     if (busy.value) return null;
     const scope = capture();
     busy.value = true;
     try {
-      return await prepare(`${TRAINING_PATH}/attempts/${encodeURIComponent(attemptId)}/resume`, {}, scope, { attemptId });
+      return await prepare(`${TRAINING_PATH}/attempts/${encodeURIComponent(attemptId)}/resume`, {}, scope, { attemptId, onAdmitted });
     } finally { busy.value = false; }
   }
 

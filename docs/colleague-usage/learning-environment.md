@@ -61,7 +61,8 @@ there when the bar is collapsed. The chevron at its left collapses it to one
 line (**Hide the lesson step**) and expands it again (**Show the lesson step**);
 this tab remembers the choice. On a phone the lesson name is hidden, and
 **Open** shows the project side of the page (instead of the chat) on the Lesson
-tab.
+tab, also when the page is already on the Lesson tab, for example after
+pressing **L** twice or **Show chat**.
 
 ## The Lesson tab
 

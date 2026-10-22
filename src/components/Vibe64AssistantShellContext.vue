@@ -14,11 +14,12 @@ provide(VIBE64_COLLEAGUE_PREVIEW_KEY, shallowRef(null));
 provide(VIBE64_COLLEAGUE_INTEGRATIONS_KEY, shallowRef(null));
 provide(VIBE64_COLLEAGUE_DATABASE_KEY, shallowRef(null));
 provide(VIBE64_COLLEAGUE_PLAN_KEY, shallowRef(null));
-provide(VIBE64_COLLEAGUE_LAYOUT_KEY, shallowRef(null));
+const layout = shallowRef(null);
+provide(VIBE64_COLLEAGUE_LAYOUT_KEY, layout);
 const browserNavigation = shallowRef(null);
 provide(VIBE64_BROWSER_NAVIGATION_KEY, browserNavigation);
 // One Learn/Develop controller for both hosts; the overlay binds its signed-in viewer.
-provide(VIBE64_LEARNING_KEY, createVibe64Learning({ browserNavigation, colleagueView, router: useRouter() }));
+provide(VIBE64_LEARNING_KEY, createVibe64Learning({ browserNavigation, colleagueView, layout, router: useRouter() }));
 provide(VIBE64_COLLEAGUE_LAUNCHER_KEY, shallowRef(null));
 </script>
 

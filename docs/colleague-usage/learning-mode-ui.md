@@ -63,8 +63,9 @@ press **L** to go back to Develop. Its steps say which real screens it uses.
 
 While a start is in progress, Courses says **Starting the selected lesson and
 preparing its practice project. The lesson opens when this finishes.** Every
-start button stays disabled until the request settles; the lesson then opens by
-itself, at its practice project. A practice project's Workspace setup can
+start button stays disabled until the request settles. As soon as the start is
+confirmed, Courses closes by itself and the lesson opens in the **Lesson** tab
+of its practice project; you do not need **Continue lesson**. A practice project's Workspace setup can
 continue afterwards and the lesson becomes ready when setup succeeds (see
 [Practice projects](learning-practice-projects.md)). **Starting lessons is
 unavailable in this installation** appears only when the installation cannot

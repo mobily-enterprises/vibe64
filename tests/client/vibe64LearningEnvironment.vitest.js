@@ -296,13 +296,95 @@ describe("useVibe64Learning controller", () => {
     expect(start).toHaveBeenCalledTimes(1);
     await learning.startLesson(selection, start);
     const outcome = await learning.confirmArchiveAndStart();
-    expect(start).toHaveBeenLastCalledWith({ ...selection, archiveCurrent: true });
+    expect(start).toHaveBeenLastCalledWith({ ...selection, archiveCurrent: true }, { onAdmitted: learning.admitted });
     expect(outcome).toMatchObject({ attemptId: OTHER });
     expect(learning.confirmArchive).toBeNull();
     expect(router.push, "the started lesson opens at its place, in its Lesson pane").toHaveBeenLastCalledWith("/app/project/training-next?pane=lesson");
     expect([learning.open, learning.attemptId], "Courses closes").toEqual([false, OTHER]);
     await expect(learning.startLesson(selection, async () => { throw new Error("offline"); })).rejects.toThrow("offline");
     expect(learning.confirmArchive, "other failures are not a confirmation").toBeNull();
+  });
+
+  it("closes Courses as soon as the server confirms a start, before the rereads, and shows the Lesson pane", async () => {
+    const router = { currentRoute: { value: { fullPath: "/app/learning" } }, push: vi.fn(async path => { router.currentRoute.value.fullPath = path; }) };
+    let mode = { ...LEARN, currentAttemptId: "", practiceSlug: "" };
+    const { learning } = controller({ router, mode: () => mode });
+    learning.setViewer("member");
+    await flush();
+    await learning.show();
+    const reread = Promise.withResolvers();
+    let closedAtConfirmation;
+    // The Courses adapter calls onAdmitted once the server confirms, then rereads progress.
+    const start = vi.fn(async (_selection, { onAdmitted }) => {
+      onAdmitted(OTHER);
+      closedAtConfirmation = learning.open;
+      await reread.promise;
+      return { attemptId: OTHER, current: true };
+    });
+    const started = learning.startLesson({ lessonCode: "V64-START-02" }, start);
+    await flush();
+    expect(closedAtConfirmation, "Courses closes at confirmation").toBe(false);
+    expect(learning.hiddenBy, "not as the learner's own close").toBe("");
+    mode = { ...LEARN, currentAttemptId: OTHER, practiceSlug: "training-next" };
+    reread.resolve();
+    await started;
+    expect(router.push).toHaveBeenLastCalledWith("/app/project/training-next?pane=lesson");
+    expect([learning.open, learning.attemptId]).toEqual([false, OTHER]);
+
+    // When the realtime change already made it the lesson in progress here,
+    // its Lesson pane opens at confirmation too.
+    await learning.show();
+    router.currentRoute.value.fullPath = "/app/project/training-next";
+    router.push.mockClear();
+    const next = vi.fn(async (_selection, { onAdmitted }) => { onAdmitted(OTHER); await flush(); return { attemptId: OTHER, current: true }; });
+    await learning.startLesson({ lessonCode: "V64-START-02" }, next);
+    expect(router.push.mock.calls[0], "shown before the start's own open").toEqual(["/app/project/training-next?pane=lesson"]);
+    expect(learning.open).toBe(false);
+  });
+
+  it("shows a confirmed start's Lesson pane once the mode read its realtime change started is in", async () => {
+    const router = { currentRoute: { value: { fullPath: "/app/learning" } }, push: vi.fn(async path => { router.currentRoute.value.fullPath = path; }) };
+    let modeRead = null;
+    const request = vi.fn(async url => {
+      if (url.includes("/learning-mode")) {
+        const value = modeRead ? await modeRead.promise : { ...LEARN, currentAttemptId: "", practiceSlug: "" };
+        return { ok: true, available: true, learningMode: value };
+      }
+      if (url === VIBE64_LEARNING_ROUTES.practice) return { ok: true, current: null, archived: [] };
+      return lessonResult();
+    });
+    const learning = createVibe64Learning({ request, router });
+    learning.setViewer("member");
+    await flush();
+    await learning.show();
+    modeRead = Promise.withResolvers();
+    const reread = Promise.withResolvers();
+    const start = vi.fn(async (_selection, { onAdmitted }) => {
+      void learning.learnerChanged({ reason: "attempt" });
+      onAdmitted(ATTEMPT);
+      await reread.promise;
+      return { attemptId: ATTEMPT, current: true };
+    });
+    const started = learning.startLesson({ lessonCode: "V64-START-01" }, start);
+    await flush();
+    expect([learning.open, router.push.mock.calls.length]).toEqual([false, 0]);
+    modeRead.resolve(LEARN);
+    await flush();
+    expect(router.push, "before the start's progress reread is in").toHaveBeenCalledWith("/app/project/practice-one?pane=lesson");
+    reread.resolve();
+    await started;
+    expect(router.push).toHaveBeenCalledOnce();
+  });
+
+  it("shows the project side on a phone whenever a lesson opens, also when its address is already the Lesson pane", async () => {
+    const router = { currentRoute: { value: { fullPath: "/app/project/practice-one?pane=lesson" } }, push: vi.fn() };
+    const layout = Vue.shallowRef({ showProject: vi.fn() });
+    const { learning } = controller({ router, layout });
+    learning.setViewer("member");
+    await flush();
+    await learning.openLesson({ stepId: "quiz" });
+    expect(router.push, "the address already names the Lesson pane").not.toHaveBeenCalled();
+    expect(layout.value.showProject).toHaveBeenCalledOnce();
   });
 
   it("shows an author trial, which never becomes the mode's lesson, as this tab's current lesson in the Lesson pane", async () => {
@@ -1111,7 +1193,7 @@ describe("Courses overlay", () => {
       await flush();
       await byTest(root, "learning-archive-start").props.onClick();
       await flush();
-      expect(start).toHaveBeenLastCalledWith({ lessonCode: "V64-START-02", archiveCurrent: true });
+      expect(start).toHaveBeenLastCalledWith({ lessonCode: "V64-START-02", archiveCurrent: true }, { onAdmitted: learning.admitted });
 
       // Develop: the lesson's practice project is not shown; other projects open.
       mode = { ...mode, on: false };
@@ -1423,7 +1505,8 @@ describe("Lesson finished screen", () => {
       expect(textOf(byTest(view.root, "learning-finished-next"))).toContain("Next lesson: Your first change");
       await byTest(view.root, "learning-finished-next").props.onClick();
       await flush();
-      expect(startLesson).toHaveBeenCalledWith({ courseId: COURSE.courseId, release: COURSE.release, lessonCode: "V64-START-02", expectedRevision: 4 });
+      expect(startLesson).toHaveBeenCalledWith({ courseId: COURSE.courseId, release: COURSE.release, lessonCode: "V64-START-02", expectedRevision: 4 },
+        { onAdmitted: learning.admitted });
       expect([learning.state.attemptId, learning.open, learning.finished], "the next lesson opens in the Lesson pane").toEqual([OTHER, false, false]);
     } finally { view.app.unmount(); }
   });
