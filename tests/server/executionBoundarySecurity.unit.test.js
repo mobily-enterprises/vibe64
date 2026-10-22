@@ -142,6 +142,37 @@ test("the daemon's generic commands admit only exact private Colleague workspace
   assert.throws(() => resolveAllowedCwd(workspace, owner.username, { ...options, operation: "github-workflow-command" }));
 });
 
+test("the daemon's generic commands admit exact private Learn-mode Colleague workspaces", async (t) => {
+  // Colleague keeps each Learn thread's runtime beside its file:
+  // colleague/<learnerKey>/learn/<attemptId|lobby>/colleague_<scope>.
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-learn-colleague-path-security-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const home = path.join(root, "home");
+  const learn = path.join(home, ".local/state/vibe64/colleague", Buffer.from("1000").toString("base64url"), "learn");
+  const scopeId = `colleague_${"c".repeat(32)}`;
+  const attempt = path.join(learn, "8d074ed1-f737-46f0-8a45-c30d21370db2", scopeId);
+  const lobby = path.join(learn, "lobby", scopeId);
+  const refused = [
+    path.join(attempt, "nested"),
+    path.join(learn, "not-an-attempt", scopeId),
+    path.join(learn, "8D074ED1-F737-46F0-8A45-C30D21370DB2", scopeId),
+    path.join(path.dirname(learn), "teach", "lobby", scopeId),
+    path.join(learn, "lobby", "colleague_invalid")
+  ];
+  const outside = path.join(root, "outside");
+  for (const directory of [attempt, lobby, ...refused, path.join(outside, scopeId)]) await mkdir(directory, { recursive: true });
+  const escapingAttempt = path.join(learn, "11111111-2222-4333-8444-555555555555");
+  await symlink(outside, escapingAttempt);
+  const owner = { home, username: "v64d_workspace" };
+  const options = { operation: "vibe64-command", targetUser: owner };
+  assert.equal(resolveAllowedCwd(attempt, owner.username, options), attempt);
+  assert.equal(resolveAllowedCwd(lobby, owner.username, options), lobby);
+  for (const candidate of [...refused, path.dirname(attempt), learn, path.join(escapingAttempt, scopeId)]) {
+    assert.throws(() => resolveAllowedCwd(candidate, owner.username, options), undefined, candidate);
+  }
+  assert.throws(() => resolveAllowedCwd(attempt, owner.username, { ...options, operation: "github-workflow-command" }));
+});
+
 
 test("the daemon's generic commands admit only exact Learning source scratch directories", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-training-sources-security-"));

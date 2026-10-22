@@ -2172,7 +2172,12 @@ function resolveAllowedCwd(cwd = "", ownerUsername = "", {
     const ownerColleagueRoot = path.join(targetUser.home, ".local", "state", "vibe64", "colleague");
     if (existsSync(ownerColleagueRoot)) {
       const parts = relativePathParts(canonicalPath(ownerColleagueRoot), resolved);
-      if (parts.length === 2 && /^[A-Za-z0-9_-]+$/u.test(parts[0]) && /^colleague_[a-f0-9]{32}$/u.test(parts[1])) {
+      const scope = parts.at(-1) || "";
+      const learnThread = parts.length === 4 && parts[1] === "learn" &&
+        /^(lobby|[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/u.test(parts[2]);
+      // Develop: <learner>/<scope>. Learn threads keep their runtime beside
+      // their file: <learner>/learn/<attemptId|lobby>/<scope>.
+      if ((parts.length === 2 || learnThread) && /^[A-Za-z0-9_-]+$/u.test(parts[0]) && /^colleague_[a-f0-9]{32}$/u.test(scope)) {
         return resolved;
       }
     }
