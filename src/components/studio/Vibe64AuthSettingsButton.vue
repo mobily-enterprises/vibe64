@@ -36,11 +36,15 @@
 
     <v-dialog
       v-model="dialogOpen"
+      :fullscreen="smAndDown"
       :persistent="aiConnectionsBusy"
       max-width="1120"
       scrollable
     >
-      <v-card class="vibe64-auth-settings__dialog" rounded="lg">
+      <v-card
+        :class="['vibe64-auth-settings__dialog', { 'vibe64-auth-settings__dialog--fullscreen': smAndDown }]"
+        :rounded="smAndDown ? 0 : 'lg'"
+      >
         <v-card-title class="vibe64-auth-settings__dialog-title">
           <div>
             <h2>Account settings</h2>
@@ -62,7 +66,9 @@
           class="vibe64-auth-settings__provider-tabs"
           color="primary"
           density="comfortable"
-          show-arrows
+          :grow="xs"
+          :show-arrows="!xs"
+          :stacked="xs"
         >
           <v-tab
             v-for="provider in providerOptions"
@@ -173,7 +179,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { useTheme } from "vuetify";
+import { useDisplay, useTheme } from "vuetify";
 import { readAppearance, writeAppearance } from "@/lib/appearance.js";
 import {
   mdiAccountOutline,
@@ -228,6 +234,9 @@ const providerOptions = computed(() => [
 const dialogOpen = ref(false);
 const root = ref(null);
 const theme = useTheme();
+// Phones get the full screen, like the app's other dialogs, and equal tabs
+// with the icon above the label, so all three fit without scrolling.
+const { smAndDown, xs } = useDisplay();
 const appearance = ref(readAppearance());
 const appearanceChoices = Object.freeze([
   { icon: mdiWeatherSunny, label: "Light", value: "light" },
@@ -445,12 +454,18 @@ watch(
   overflow: hidden;
 }
 
+.vibe64-auth-settings__dialog--fullscreen {
+  max-height: none;
+}
+
 .vibe64-auth-settings__dialog-title {
   align-items: start;
   display: flex;
   gap: 1rem;
   justify-content: flex-end;
+  overflow: visible;
   padding: 1rem 1rem 0.75rem;
+  white-space: normal;
 }
 
 .vibe64-auth-settings__dialog-title > div {
@@ -578,6 +593,25 @@ watch(
 
   .vibe64-auth-settings__dialog-body {
     padding: 0.85rem;
+  }
+}
+
+/* Vuetify's xs breakpoint: the stacked, equal tabs share the width. */
+@media (max-width: 599.98px) {
+  .vibe64-auth-settings__provider-tabs {
+    padding-inline: 0;
+  }
+
+  .vibe64-auth-settings__provider-tab {
+    min-width: 0;
+    position: relative;
+  }
+
+  .vibe64-auth-settings__provider-attention {
+    left: calc(50% + 0.6rem);
+    margin: 0;
+    position: absolute;
+    top: 0.55rem;
   }
 }
 </style>

@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import { createRenderer, ref, ssrContextKey } from "vue";
 import { describe, expect, it, vi } from "vitest";
 
-vi.mock("vuetify", () => ({ useTheme: () => ({ change: vi.fn() }) }));
+vi.mock("vuetify", () => ({ useDisplay: () => ({ smAndDown: ref(false), xs: ref(false) }), useTheme: () => ({ change: vi.fn() }) }));
 vi.mock("@local/vibe64-accounts/client", async () => ({
   ...(await import("../../packages/vibe64-accounts/src/client/onboarding/aiOnboardingEvents.js")),
   AiSetup: {},
@@ -189,5 +189,13 @@ describe("standalone personal AI profile settings", () => {
     );
     expect(component).toContain('aria-label="Account menu"');
     expect(component).toMatch(/title="Account settings"[\s\S]*v-if="aiOnboardingAvailable"[\s\S]*title="Redo onboarding"/u);
+  });
+
+  it("fills a phone screen, wraps its subtitle and fits its tabs without sideways scrolling", async () => {
+    const component = await readFile(new URL("../../src/components/studio/Vibe64AuthSettingsButton.vue", import.meta.url), "utf8");
+    expect(component).toContain(':fullscreen="smAndDown"');
+    expect(component).toMatch(/:grow="xs"\s+:show-arrows="!xs"\s+:stacked="xs"/u);
+    expect(component).toMatch(/\.vibe64-auth-settings__dialog-title \{[^}]*white-space: normal;/u);
+    expect(component).toMatch(/@media \(max-width: 599\.98px\) \{[\s\S]*\.vibe64-auth-settings__provider-tab \{\s+min-width: 0;/u);
   });
 });

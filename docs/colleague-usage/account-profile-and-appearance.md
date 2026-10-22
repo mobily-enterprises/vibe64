@@ -4,6 +4,12 @@ Open **Account settings** with the person-and-gear button at the right of the
 app header, then choose the **You** tab. The dialog is the same in Working and
 Learning.
 
+On a phone (or a narrow window) **Account settings** fills the screen. Its
+three tabs, **You**, **AI Accounts** and **GitHub**, share the width with each
+icon above its label, so all of them show without scrolling sideways; a small
+amber dot on a tab means that connection needs attention. Close the dialog with
+the **X** at its top right. On a wider screen it opens as a centred dialog.
+
 ## Your name
 
 Under **Your profile** (You — all projects), type a name in **What should
