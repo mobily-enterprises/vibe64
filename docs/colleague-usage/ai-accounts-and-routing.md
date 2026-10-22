@@ -82,6 +82,32 @@ Vibe64. When Vibe64 starts, it prints one line for each program it can't find, a
 **Dashboard → Health** shows a check for each. Where the host provides pinned versions
 of these programs, none of these warnings or install commands appear.
 
+## Advanced in Your AI setup
+
+Below the provider cards, **Your AI setup** (see [AI onboarding](ai-onboarding.md))
+has a collapsed **Advanced** panel once any AI is configured. Its summary counts
+the connections, for example **7 connections · 2 not on a card above**. Select it
+to open:
+
+- **Add a connection** opens the same orchestrator and provider pickers as **Add
+  connection** in AI Accounts (Claude Code, Codex, or OpenCode's provider catalog),
+  for an exact orchestrator and provider pair. **Refresh** rechecks every account.
+- **Model routing** has one button per connected orchestrator (**Claude Code**,
+  **Codex**, **OpenCode**); each opens that orchestrator's routing form.
+- **Other connections** lists connected providers that have no card, such as
+  OpenCode Zen or another OpenCode catalog provider, each **through OpenCode**,
+  with **Replace key**, **Model routing** and **Remove**. OpenCode Zen's model
+  access controls (**Check & enable working models**, **Enable all current
+  models**, **Use the recommended model only**, **Cancel check**) are on its tile.
+  These providers also appear in the **Connected** or **Currently using** strip
+  at the top.
+- **By tool · Claude Code**, **· Codex** and **· OpenCode** list every connection
+  of that orchestrator, with the same buttons.
+
+If the connections cannot be read, Advanced shows **AI accounts could not load**
+with **Try again**. On a phone the buttons fill the width. The provider cards'
+own **Manage** covers the same actions for one provider.
+
 ## Connect and check accounts
 
 Use the provider's displayed setup flow. API-key connections offer key entry and

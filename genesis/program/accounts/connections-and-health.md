@@ -64,6 +64,7 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-accounts/src/client/studio/AiConnectionDialogs.vue`
 - `packages/vibe64-accounts/src/client/studio/AiConnectionRow.vue`
 - `packages/vibe64-accounts/src/client/studio/AiProviderManage.vue`
+- `packages/vibe64-accounts/src/client/studio/AiSetupAdvanced.vue`
 - `packages/vibe64-accounts/src/client/composables/useAiConnectionManager.js`
 - `packages/vibe64-accounts/src/client/composables/useAiConnections.js`
 
@@ -430,7 +431,11 @@ rows, each an `AiConnectionRow` (sign-in or key change, Model routing, Z.AI or
 Zen model access, Remove). The dialogs behind those actions are the moved
 `studio/AiConnectionDialogs.vue`, shared with AI Accounts. A card whose rows
 exist but no longer work shows Reconnect, which opens its connect step; cards
-with connections lead a configured setup.
+with connections lead a configured setup. Once anything is configured, the collapsed
+`studio/AiSetupAdvanced.vue` under the cards holds Add a connection, Refresh,
+routing per connected orchestrator, Other connections (rows no card or free
+option matches, such as OpenCode Zen, with their model access) and every row
+by orchestrator; those other rows also count in the Connected strip.
 
 OpenCode connections retain the existing versioned file at
 `<systemRoot>/ai-connections/connections.json`. Native Codex and Claude login

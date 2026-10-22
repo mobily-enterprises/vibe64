@@ -557,6 +557,17 @@ describe("flow", () => {
     expect(state.cardAction(state.cards.find(({ id }) => id === "claude"))).toBe("get");
   });
 
+  it("keeps connections no card shows: they count as connected and appear under Advanced", async () => {
+    const zen = { id: "opencode", modelProviderId: "opencode", connected: true, label: "OpenCode Zen" };
+    const groq = { id: "groq", modelProviderId: "groq", connected: true, label: "Groq" };
+    mocks.openCode.connections.value = [FREE_GLM, zen, groq];
+    const { state } = await flow({ setUp: true });
+    expect(state.otherRows.map(({ id }) => id)).toEqual(["opencode", "groq"]);
+    expect([state.currentMarks.map(({ id, mark }) => [id, mark]), state.currentNames])
+      .toEqual([[["codex", "O"], ["other", "+2"]], ["Codex", "OpenCode Zen", "Groq"]]);
+    expect(state.showAdvanced).toBe(true);
+  });
+
   it("shows the owner-only notice to members", () => {
     const onboarding = effectScope().run(() => useAiOnboarding({ enabled: false }));
     expect(mount(AiSetup, { open: true, onboarding, canConfigure: false }).screen).toBe("owner");

@@ -11,6 +11,7 @@ import ModelRoutingForm from "../studio/ModelRoutingForm.vue";
 import NativeProviderConnections from "../studio/NativeProviderConnections.vue";
 import AiConnectionDialogs from "../studio/AiConnectionDialogs.vue";
 import AiProviderManage from "../studio/AiProviderManage.vue";
+import AiSetupAdvanced from "../studio/AiSetupAdvanced.vue";
 import { provideAiConnectionManager, useAiConnectionManager } from "../composables/useAiConnectionManager.js";
 import AiOnboardingKeyConnect from "./AiOnboardingKeyConnect.vue";
 import AiOnboardingMark from "./AiOnboardingMark.vue";
@@ -93,6 +94,17 @@ const orderedCards = computed(() => {
   const ranked = [featured.value, ...others.value];
   return wasSetUp.value ? [...ranked.filter(configured), ...ranked.filter((card) => !configured(card))] : ranked;
 });
+// Configured connections no card shows (OpenCode Zen, other catalog providers):
+// they count as connected and are managed under Advanced.
+const otherRows = computed(() => manager.configuredAiRows.value
+  .filter((row) => !cards.value.some((card) => [card, card.free].some((item) => item && aiOnboardingRows(item, [row]).length))));
+const otherConnected = computed(() => [...new Set(otherRows.value.filter((row) => row.connected !== false).map((row) => row.providerLabel))]);
+// The strip names every connected provider; those without a card share one "+N" mark.
+const currentMarks = computed(() => [...connectedCards.value, ...(otherConnected.value.length
+  ? [{ id: "other", mark: `+${otherConnected.value.length}`, shape: "circle", tone: "neutral" }] : [])]);
+const currentNames = computed(() => [...connectedCards.value.map(({ name }) => name), ...otherConnected.value]);
+// Advanced appears once anything is configured.
+const showAdvanced = computed(() => props.canConfigure && (wasSetUp.value || manager.configuredAiRows.value.length > 0));
 const mainCard = computed(() => connectedCards.value.find((card) => usesProvider(props.onboarding.colleague.value, card)) || null);
 const nativeLogin = computed(() => ["anthropic", "openai"].includes(chosen.value?.connect.modelProviderId));
 // The chosen engine's CLI, when this computer lacks it or it did not start.
@@ -232,8 +244,14 @@ function cardClass(card) {
     "aio-card--reconnect": cardAction(card) === "reconnect", "aio-card--collapsed": !expanded(card) };
 }
 
+// Configured but none of its connections works any more.
+function needsReconnect(card) {
+  const rows = cardRows(card);
+  return rows.length > 0 && !rows.some((row) => row.kind === "opencode" ? row.connected !== false : row.connected === true);
+}
+
 function cardAction(card) {
-  if (!card.connected) return cardRows(card).length ? "reconnect" : "get";
+  if (!card.connected) return needsReconnect(card) ? "reconnect" : "get";
   if (!wasSetUp.value) return "get";
   return usesProvider(props.onboarding.colleague.value, card) ? "keep" : "main";
 }
@@ -354,14 +372,14 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
               : "Ranked by how good Vibe64 feels. Our honest advice: Claude." }}
           </p>
         </header>
-        <div v-if="wasSetUp && connectedCards.length" class="aio-current" role="group" aria-label="Currently using">
+        <div v-if="wasSetUp && currentMarks.length" class="aio-current" role="group" aria-label="Currently using">
           <span class="aio-current__marks">
-            <AiOnboardingMark v-for="card in connectedCards" :key="card.id" :provider="card" :size="36" />
+            <AiOnboardingMark v-for="card in currentMarks" :key="card.id" :provider="card" :size="36" />
           </span>
           <span class="aio-current__text">
             <span class="aio-current__label">{{ mainCard ? "Currently using" : "Connected" }}</span>
             <span class="aio-current__value">
-              {{ mainCard ? `Main AI: ${mainCard.name}` : connectedCards.map(({ name }) => name).join(", ") }}
+              {{ mainCard ? `Main AI: ${mainCard.name}` : currentNames.join(", ") }}
             </span>
           </span>
           <v-btn
@@ -497,6 +515,7 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
             </template>
           </article>
         </div>
+        <AiSetupAdvanced v-if="showAdvanced" :other-rows="otherRows" />
         <p class="ai-onboarding__footnote">Prices are set by each provider and can change. You pay them directly; Vibe64 never resells AI.</p>
         <v-btn v-if="xs && skippable" block variant="text" class="mt-4" @click="close('later')">Set up later</v-btn>
       </section>

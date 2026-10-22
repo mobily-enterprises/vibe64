@@ -11,8 +11,11 @@ import { injectAiConnectionManager } from "../composables/useAiConnectionManager
 const props = defineProps({
   account: { type: Object, required: true },
   // "engine" leads with the orchestrator (inside a provider's Manage),
-  // "provider" with the provider (in lists by orchestrator).
-  lead: { type: String, default: "engine" }
+  // "provider" with the provider (in lists by orchestrator), "pair" with the
+  // provider and the tool it runs through.
+  lead: { type: String, default: "engine" },
+  // Model access settings; lists that repeat a connection shown elsewhere leave them out.
+  details: { type: Boolean, default: true }
 });
 
 const ENGINES = { claude: "Claude Code", codex: "Codex", opencode: "OpenCode" };
@@ -22,7 +25,10 @@ const {
 } = injectAiConnectionManager();
 
 const working = computed(() => props.account.kind === "opencode" ? props.account.connected !== false : props.account.connected === true);
-const title = computed(() => props.lead === "engine" ? ENGINES[props.account.engineId] || props.account.engineId : props.account.providerLabel);
+const engine = computed(() => ENGINES[props.account.engineId] || props.account.engineId);
+const title = computed(() => props.lead === "engine" ? engine.value : props.account.providerLabel);
+const via = computed(() => props.lead === "pair" ? `through ${engine.value}`
+  : props.lead === "engine" && props.account.kind === "opencode" ? props.account.providerLabel : "");
 // Native rows name the signed-in account; key rows their billing.
 const detail = computed(() => props.account.billingLabel);
 const status = computed(() => {
@@ -50,9 +56,7 @@ function openRouting() {
       <div class="ai-row__identity">
         <span class="ai-row__title">
           <strong>{{ title }}</strong>
-          <span v-if="lead === 'engine' && account.kind === 'opencode' && account.providerLabel" class="ai-row__via">
-            {{ account.providerLabel }}
-          </span>
+          <span v-if="via" class="ai-row__via">{{ via }}</span>
         </span>
         <span v-if="detail" class="ai-row__detail">{{ detail }}</span>
         <span class="ai-row__meta" :class="{ 'ai-row__meta--warn': !working }">
@@ -65,7 +69,7 @@ function openRouting() {
       </div>
     </div>
 
-    <div v-if="account.id === 'opencode' && account.modelAccess" class="ai-row__panel" aria-live="polite">
+    <div v-if="details && account.id === 'opencode' && account.modelAccess" class="ai-row__panel" aria-live="polite">
       <div class="ai-row__panel-copy">
         <v-icon :icon="zenCheckIsRunning(account) ? mdiRefresh : mdiShieldCheckOutline" size="20" class="ai-row__panel-icon" />
         <span>
@@ -112,7 +116,7 @@ function openRouting() {
     </div>
 
     <div
-      v-if="account.id !== 'opencode' && account.modelAccess?.configurable" class="ai-row__panel ai-row__panel--switch"
+      v-if="details && account.id !== 'opencode' && account.modelAccess?.configurable" class="ai-row__panel ai-row__panel--switch"
       :class="{ 'ai-row__panel--paid': account.modelAccess.mode === 'all' }"
     >
       <div class="ai-row__panel-copy">
