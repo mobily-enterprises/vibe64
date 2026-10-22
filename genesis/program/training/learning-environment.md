@@ -98,6 +98,10 @@ guide overlay 3000 above L 2400 above Colleague.
   (`learn-toggled`, place `learning`). It shows a confirmation for 1.5 s, then moves on. The
   detected do beats are this tab's only; when all of a `self` step's do beats
   were detected the controller records `done`.
+- I'm stuck (`stuck(stepId)`): the bar offers it in the final state of an
+  unpassed `auto` or `review` step; it records a Colleague request of kind
+  `stuck` with the fixed `VIBE64_LEARNING_STUCK_MESSAGE` ("I'm stuck on this
+  step."), sent by `watchColleagueLearningRequests` like Teach me.
 - Do it for me (`doItForMe`, `doItForMeKind`): navigates through the same
   guide command as Show me, reveals the chat (`layout.showChat`), opens
   Courses, the Lesson pane or Colleague (a Colleague request of kind `open`,

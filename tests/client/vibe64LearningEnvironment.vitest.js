@@ -1614,6 +1614,24 @@ describe("Lesson step bar", () => {
     expect(sendLessonMessage).toHaveBeenCalledTimes(1);
   });
 
+  it("offers I'm stuck on a step its own check decides, and asks Colleague with the fixed message", async () => {
+    const { learning } = controller();
+    learning.setViewer("member");
+    await flush();
+    const { root, app } = mountStepBar(learning);
+    try {
+      learning.selectStep("tick");
+      await flush();
+      expect(byTest(root, "learning-step-bar-stuck"), "a self step is the learner's own verdict").toBeUndefined();
+      learning.selectStep("preview");
+      await flush();
+      byTest(root, "learning-step-bar-stuck").props.onClick();
+      expect(learning.colleagueRequest.value).toMatchObject({ kind: "stuck", message: LearningLib.VIBE64_LEARNING_STUCK_MESSAGE,
+        stepId: "preview", attemptId: ATTEMPT });
+      expect(LearningLib.VIBE64_LEARNING_STUCK_MESSAGE).toBe("I'm stuck on this step.");
+    } finally { app.unmount(); }
+  });
+
   it("opens Colleague for an open request without sending anything", async () => {
     const learning = { colleagueRequest: Vue.shallowRef(null), consumeColleagueRequest(id) {
       const value = this.colleagueRequest.value?.id === id ? this.colleagueRequest.value : null;

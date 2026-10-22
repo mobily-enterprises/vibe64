@@ -35,7 +35,11 @@ page itself, in its **Lesson** tab beside Colleague (see `learning-environment`)
 You can read lessons yourself without AI. Choose **Teach me** on a lesson step,
 or ask Colleague about your lesson, and Colleague teaches the current step.
 **Teach me** opens Colleague beside the step and sends "Teach me this step.";
-the step stays on screen, so Colleague refers to it rather than repeating it:
+the step stays on screen, so Colleague refers to it rather than repeating it.
+**I'm stuck** in the lesson step bar (on a step its own check decides, before
+it has passed) opens Colleague the same way and sends "I'm stuck on this
+step."; Colleague looks at where you are and helps you get unstuck. It never
+passes the step for you:
 
 - It reads your lesson with `lesson.read` (the steps in order with their text,
   diagram, guide and check kind, plus your saved results) and explains the step

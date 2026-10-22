@@ -62,6 +62,7 @@ const PROJECT_VIEW_WAIT_MS = 5000;
 const MAX_EXERCISE_OBSERVATIONS = 8;
 // Teach me sends this exact text; the step itself travels in Colleague's focus.
 const VIBE64_LEARNING_TEACH_MESSAGE = "Teach me this step.";
+const VIBE64_LEARNING_STUCK_MESSAGE = "I'm stuck on this step.";
 const EMPTY_PRACTICE = Object.freeze({ current: null, archived: Object.freeze([]), loaded: false });
 
 const text = value => typeof value === "string" && value.length > 0;
@@ -813,6 +814,15 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     return false;
   }
 
+  // I'm stuck: the same Colleague request as Teach me, with the stuck message;
+  // Colleague reads the learner's work on the step and helps without passing it.
+  function stuck(stepId = currentStep.value?.id) {
+    if (!state.attemptId || !stepId) throw new Error("Open a lesson step before asking Colleague for help.");
+    colleagueRequest.value = Object.freeze({ id: `stuck-${now()}-${Math.random().toString(36).slice(2, 8)}`,
+      kind: "stuck", message: VIBE64_LEARNING_STUCK_MESSAGE, actorKey: state.actorKey, attemptId: state.attemptId, stepId });
+    return colleagueRequest.value;
+  }
+
   function consumeColleagueRequest(id) {
     if (colleagueRequest.value?.id !== id) return null;
     const value = colleagueRequest.value;
@@ -1072,7 +1082,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     lesson, results, steps, currentStep, focus, colleagueRequest, notes, notesState: readonly(notesState), player,
     stepStatus: stepId => stepStatus(results.value, stepId, lesson.value?.passedStepIds || []),
     setViewer, show, openCourses, openLesson, closeCourses, showFinished, minimise, selectStep, setScroll, flushReader, loadLesson,
-    runCheck, answer, done, showMe, teachMe, doItForMe, doItForMeKind, consumeColleagueRequest, learnerChanged,
+    runCheck, answer, done, showMe, teachMe, stuck, doItForMe, doItForMeKind, consumeColleagueRequest, learnerChanged,
     exerciseStep, beginExercise, exerciseCurrent, finishExercise, prepareExercise,
     readNotes, saveNotes, clearNotes,
     readLearningMode, setMode, toggleMode, modePlace, openCurrent, toggleStepBar, setStepText, showNotice, clearNotice,
@@ -1108,4 +1118,4 @@ function revealCurrentStep(list) {
   return true;
 }
 
-export { VIBE64_DEVELOP_MODE_NOTE, VIBE64_LEARNING_MODE_NOTE, VIBE64_LEARNING_MODE_PROJECT_CODE, VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_PAGE_PATH, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_TEACH_MESSAGE, VIBE64_LESSON_IN_PROGRESS_CODE, createVibe64Learning, modeRedirect, normalizePractice, openLessonLink, revealCurrentStep, showMeCommand, stepStatus };
+export { VIBE64_DEVELOP_MODE_NOTE, VIBE64_LEARNING_MODE_NOTE, VIBE64_LEARNING_MODE_PROJECT_CODE, VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_PAGE_PATH, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_STUCK_MESSAGE, VIBE64_LEARNING_TEACH_MESSAGE, VIBE64_LESSON_IN_PROGRESS_CODE, createVibe64Learning, modeRedirect, normalizePractice, openLessonLink, revealCurrentStep, showMeCommand, stepStatus };

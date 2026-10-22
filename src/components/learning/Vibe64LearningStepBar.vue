@@ -68,6 +68,13 @@ async function showMe() {
     if (result?.guide && result.guide.shown === false) note.value = "That place is not visible on this page.";
   } catch (cause) { note.value = String(cause?.message || "That place could not be shown."); }
 }
+// I'm stuck: Colleague helps with a step its own check decides.
+const stuckOffered = computed(() => Boolean(final.value && !ended.value && status.value !== "passed" &&
+  ["auto", "review"].includes(kind.value)));
+function askStuck() {
+  note.value = "";
+  try { learning.stuck(step.value.id); } catch (cause) { note.value = String(cause?.message || "Colleague could not be asked."); }
+}
 // A do beat the page can do for the learner (not Save, which it only points at).
 const canDoIt = computed(() => Boolean(beat.value?.kind === "do" && !player.value?.confirmed && !ended.value &&
   learning.doItForMeKind(beat.value)));
@@ -158,7 +165,13 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
           {{ verdict.label }}
         </v-btn>
         <v-btn
-          v-else-if="final && index < steps.length - 1" color="primary" variant="tonal" rounded="pill" min-height="40"
+          v-if="stuckOffered" variant="tonal" rounded="pill" min-height="40" data-test="learning-step-bar-stuck"
+          @click="askStuck"
+        >
+          I'm stuck
+        </v-btn>
+        <v-btn
+          v-else-if="final && !verdict && index < steps.length - 1" color="primary" variant="tonal" rounded="pill" min-height="40"
           data-test="learning-step-bar-next-step" @click="forward"
         >
           Next step
