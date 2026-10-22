@@ -1589,3 +1589,73 @@ describe("Lesson step bar", () => {
     } finally { app.unmount(); }
   });
 });
+
+describe("Learning route hold", () => {
+  it("holds a practice page from the L press, cancels its requests in flight and drops a refusal from the mode it left", async () => {
+    const { QueryClient } = await import("@tanstack/vue-query");
+    const HostKeys = await import("../../src/lib/vibe64AssistantHost.js");
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const scope = slug => ["project", slug];
+    let on = true;
+    let answerSwitch = null;
+    const route = Vue.reactive({ path: "/app/project/training-1111", fullPath: "/app/project/training-1111", params: { slug: "training-1111" } });
+    const router = { currentRoute: { get value() { return route; } }, push: vi.fn(async () => {}) };
+    const { learning } = controller({ router, mode: (_url, method, body) => {
+      if (method === "POST") on = body.on;
+      return { ...LEARN, on, practiceSlug: "training-1111" };
+    } });
+    const hold = compiledUi(path.resolve("src/components/learning/Vibe64LearningRouteHold.vue"), {
+      vue: Vue,
+      "vue-router": { useRoute: () => route },
+      "@tanstack/vue-query": { useQueryClient: () => queryClient },
+      "@/lib/vibe64AssistantHost.js": HostKeys,
+      "@/lib/vibe64ProjectScope.js": { projectSlugFromRoute: value => String(value?.params?.slug || ""), vibe64ProjectQueryScope: scope },
+      "@/lib/vibe64Learning.js": LearningLib,
+      "@/composables/useVibe64Learning.js": { useVibe64Learning: () => learning }
+    });
+    vi.stubGlobal("window", { sessionStorage: { getItem: () => null, setItem() {} }, localStorage: { getItem: () => null, setItem() {} } });
+    const sessionsKey = ["vibe64", ...scope("training-1111"), "app", "public", "sessions"];
+    const refusedKey = ["vibe64", ...scope("training-1111"), "app", "public", "session", "s1", "detail"];
+    const otherKey = ["vibe64", ...scope("my-shop"), "app", "public", "sessions"];
+    queryClient.setQueryData(sessionsKey, { sessions: ["kept"] });
+    queryClient.setQueryData(otherKey, { sessions: ["other"] });
+    const viewer = Vue.ref({ actorKey: "member" });
+    const root = { children: [] };
+    const app = uiRenderer().createApp({ render: () => Vue.h(hold, null, { default: () => Vue.h("main", { "data-test": "page" }) }) });
+    app.provide(HostKeys.VIBE64_ASSISTANT_VIEWER_KEY, viewer);
+    app.mount(root);
+    try {
+      learning.setViewer("member");
+      await flush();
+      expect(byTest(root, "page"), "the practice page shows in Learn").toBeTruthy();
+      // A session-list refresh is in flight, and another tab's switch already had a detail refused.
+      let aborted = false;
+      const refresh = queryClient.fetchQuery({ queryKey: sessionsKey, staleTime: 0, queryFn: ({ signal }) => new Promise((_resolve, reject) => {
+        signal.addEventListener("abort", () => { aborted = true; reject(signal.reason); });
+      }) });
+      await queryClient.fetchQuery({ queryKey: refusedKey, queryFn: async () => {
+        throw Object.assign(new Error(LearningLib.VIBE64_DEVELOP_MODE_NOTE), { code: LearningLib.VIBE64_LEARNING_MODE_PROJECT_CODE });
+      } }).catch(() => null);
+      // L: the page goes at the press, before the server answers the switch.
+      router.push = vi.fn(() => new Promise(resolve => { answerSwitch = resolve; }));
+      const switching = learning.toggleMode();
+      await flush();
+      expect(learning.state.modeBusy).toBe("set");
+      expect(byTest(root, "page"), "held while L switches").toBeUndefined();
+      await refresh.catch(() => null);
+      expect(aborted, "the refresh in flight is cancelled").toBe(true);
+      expect(queryClient.getQueryState(sessionsKey)).toMatchObject({ data: { sessions: ["kept"] }, error: null, status: "success" });
+      expect(queryClient.getQueryState(refusedKey), "the refusal is not kept for the project's return").toBeUndefined();
+      expect(queryClient.getQueryData(otherKey), "other projects are untouched").toEqual({ sessions: ["other"] });
+      answerSwitch?.();
+      await switching;
+      await flush();
+      expect(learning.learnMode).toBe(false);
+      expect(byTest(root, "page"), "Develop never shows the practice project").toBeUndefined();
+      // Develop shows the learner's own projects.
+      Object.assign(route, { path: "/app/project/my-shop", fullPath: "/app/project/my-shop", params: { slug: "my-shop" } });
+      await flush();
+      expect(byTest(root, "page")).toBeTruthy();
+    } finally { app.unmount(); queryClient.clear(); }
+  });
+});

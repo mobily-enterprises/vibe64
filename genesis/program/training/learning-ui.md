@@ -136,7 +136,13 @@ is set, so it never cancels `setMode`'s own move to the saved place. It sets bod
 wraps each host's routed pages (public `App.vue`, hosted AuthGate's prepared
 content; locally also the AI onboarding host) and renders them only once the
 mode is read and no redirect applies, so a redirected page never sends requests
-the server would refuse.
+the server would refuse. It also holds a project page while `state.modeBusy` is
+`"set"`: L always leaves a project page, so the page goes at the press, before
+the server switches. When it starts holding a page it cancels that project's
+queries in flight (`["vibe64", ...vibe64ProjectQueryScope(slug)]`, which revert)
+and removes any that hold the `VIBE64_LEARNING_MODE_PROJECT_CODE` refusal (a
+switch made elsewhere can answer first), so a refresh issued during a switch
+never shows "Session data could not refresh" when the project opens again.
 
 Lesson actions: `startLesson(selection, start)` calls the Courses adapter's
 start; on `VIBE64_TRAINING_LESSON_IN_PROGRESS` it sets `confirmArchive`

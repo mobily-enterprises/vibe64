@@ -49,6 +49,12 @@ lesson's practice project is not shown; opening its address takes you to your
 projects with the note "This is a practice project. Press L to switch to
 Learn." The workspace owner works the same way.
 
+While a switch is being confirmed, the **L** button is disabled and the project
+page you are leaving clears at once (pressing **L** always leaves a project
+page), then the other mode's place opens. The page you left never shows an
+error from the mode you switched to, also when you return to it later. If the
+switch is not confirmed, the page comes back and you can press **L** again.
+
 ## The lesson step bar
 
 In Learn mode, while your lesson is loaded, a yellow bar above the project page
