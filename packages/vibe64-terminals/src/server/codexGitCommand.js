@@ -1238,8 +1238,9 @@ async function prepareCodexGitCommand({
   };
 }
 
-// A session's final close (its archive) stops its Git control and removes its
-// helper directory, which holds every agent command wrapper of the session.
+// A session's final close (its archive, or the discard of a renewal successor
+// that never went live) stops its Git control and removes its helper
+// directory, which holds every agent command wrapper of the session.
 // Renewal, changeover and project runtime closes keep both: the same session
 // reconnects and its helpers are rewritten in place.
 async function removeCodexGitCommandSession({

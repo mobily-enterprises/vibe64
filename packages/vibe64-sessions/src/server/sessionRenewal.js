@@ -1480,9 +1480,16 @@ function createSessionRenewalController({
     }
     await runSuccessorDiscardPhase(
       SESSION_RENEWAL_SUCCESSOR_DISCARD_PHASE.DISCARD,
-      () => runtime.discardRenewalSession(nextSessionId, {
-        renewalId: state.renewalId
-      })
+      async () => {
+        // A discarded successor never goes live, so this is its final close.
+        // Its helpers go first: once its record is gone a retry cannot find it.
+        if (typeof terminals.removeSessionCommandHelpers === "function") {
+          await terminals.removeSessionCommandHelpers(nextSessionId, { runtime });
+        }
+        return runtime.discardRenewalSession(nextSessionId, {
+          renewalId: state.renewalId
+        });
+      }
     );
     return true;
   }

@@ -105,7 +105,8 @@ A host that serves several owners passes explicit roots (`systemRoot`,
 Live session state stays below `systemRoot`, never in temporary space: running
 agents keep the paths of their command helpers for their whole life, and a host
 may age its temporary directory. Only control sockets use temporary space. Archiving a
-session removes its helper directory; renewal and changeover keep it.
+session, or discarding a renewal successor that never went live, removes its helper
+directory; renewal and changeover keep it.
 
 Sessions, runtime files, resolved Env values, secrets, domains, publish state,
 billing state, auth markers, terminal state, and UI preferences are Vibe64-owned

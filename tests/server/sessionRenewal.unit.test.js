@@ -264,6 +264,7 @@ function fixture({
     attachmentRelease: 0,
     close: 0,
     cleanupOrder: [],
+    commandHelpersRemoved: [],
     compact: 0,
     commitArchive: 0,
     commitSelection: 0,
@@ -975,6 +976,10 @@ function fixture({
         throw closeError;
       }
       calls.ordering.push("close-exited");
+    },
+    async removeSessionCommandHelpers(sessionId, options) {
+      calls.cleanupOrder.push("remove-command-helpers");
+      calls.commandHelpersRemoved.push({ runtime: options.runtime, sessionId });
     },
     async closeRenewalSuccessorSessionTerminals(session, options) {
       calls.cleanupOrder.push("close-terminals");
@@ -2877,8 +2882,15 @@ test("successor discard intent recovers an error thrown after the exact state wr
     "release-resources",
     "authorize-process-exit-proof-release",
     "release-process-exit-proof",
+    "remove-command-helpers",
     "discard-successor"
   ]);
+  // Only the discarded successor's helpers go; the live successor keeps its own.
+  assert.equal(context.calls.commandHelpersRemoved.length, 1);
+  const [removed] = context.calls.commandHelpersRemoved;
+  assert.equal(removed.runtime, context.runtime);
+  assert.notEqual(removed.sessionId, completed.successor.sessionId);
+  assert.equal(context.sessions.has(removed.sessionId), false);
 });
 
 test("repeated invalid successors leave no process runtime tombstones across restart", async () => {

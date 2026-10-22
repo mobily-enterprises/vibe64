@@ -4691,7 +4691,7 @@ function createService({
       return outputTarget.removeResultsForSession(sessionId);
     },
 
-    // Only a session's final close (archive) calls this; see removeCodexGitCommandSession.
+    // Only a session's final close (archive or renewal successor discard) calls this.
     removeSessionCommandHelpers(sessionId, { runtime = null } = {}) {
       return closeAgentSessionCommandEnvironment(sessionId, () => removeCodexGitCommandSession({
         env,
