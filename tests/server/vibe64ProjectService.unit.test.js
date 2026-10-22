@@ -1282,6 +1282,45 @@ test("Env is user-owned and reaches Genesis sessions without an adapter", async 
   });
 });
 
+test("Env keeps Stack defaults for resource bindings and asks only for the missing value", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const service = projectService(targetRoot, {
+      inspectEnvironment() {
+        return {
+          components: ["spring-boot-mysql"],
+          environmentDefaults: [
+            { name: "DB_HOST", value: "127.0.0.1" },
+            { name: "DB_NAME", value: "spring" }
+          ],
+          files: [],
+          resources: [{
+            component: "project",
+            resource: {
+              id: "database",
+              kind: "mysql",
+              environmentAlternatives: [{
+                allowEmpty: ["password"],
+                bindings: { database: "DB_NAME", host: "DB_HOST", password: "DB_PASSWORD" },
+                preferred: true
+              }]
+            }
+          }],
+          status: "ready"
+        };
+      }
+    });
+
+    const { records } = (await service.readEnv()).env;
+    const record = (key) => records.find((entry) => entry.key === key);
+    assert.equal(record("DB_HOST").source, "genesis-stack:default");
+    assert.equal(record("DB_HOST").value, "127.0.0.1");
+    assert.equal(record("DB_HOST").missing, false);
+    assert.equal(record("DB_NAME").value, "spring");
+    assert.equal(record("DB_PASSWORD").source, "genesis-stack:project:database");
+    assert.equal(record("DB_PASSWORD").secret, true);
+  });
+});
+
 test("Genesis Stack defaults remain editable fallbacks for project Env values", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     let fallback = ".host-config/public-source";

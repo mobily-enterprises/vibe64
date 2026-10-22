@@ -196,12 +196,14 @@ function requiredAlternative(resource = {}, environment = {}) {
     ))[0]?.alternative || preferredAlternative(resource);
 }
 
-function stackResourceRecords(resources = [], environment = {}) {
+function stackResourceRecords(resources = [], environment = {}, defaults = {}) {
   const records = new Map();
   for (const declaration of resources) {
     const alternative = requiredAlternative(declaration.resource, environment);
     for (const [semantic, key] of Object.entries(alternative?.bindings || {})) {
-      if (records.has(key)) {
+      // A Stack default already supplies this binding; its editable default
+      // record stays visible instead of an empty required one shadowing it.
+      if (records.has(key) || Object.hasOwn(defaults, key)) {
         continue;
       }
       records.set(key, {
@@ -586,7 +588,7 @@ function createService({
           source: "vibe64-host:managed-resource",
           sources: resolved.platformEnvironmentSources
         }),
-        ...stackResourceRecords(resolved.resources, resolved.effectiveEnvironment)
+        ...stackResourceRecords(resolved.resources, resolved.effectiveEnvironment, resolved.defaultEnvironment)
       ],
       source: resolved.source,
       warning: resolved.warning
