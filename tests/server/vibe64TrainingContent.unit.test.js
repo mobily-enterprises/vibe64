@@ -630,7 +630,7 @@ test("v2 step beats end the step body and validate their grammar, places and the
   delete noProject.checks;
   await f.write("lesson.json", noProject);
   await f.write("steps/reflect.md", beats(["show lesson-bar: This bar walks you through each step.", "do courses: Open Courses.",
-    "do colleague: Open Colleague.", "check done: Press Done."]));
+    "do colleague: Open Colleague.", "do colleague-minimised: Minimise it.", "do learning: Press L twice.", "check done: Press Done."]));
   assert.equal((await validateTopic(f.root)).bundles[0].lesson.steps.length, 3, "lesson places need no practice project");
   await f.write("steps/reflect.md", beats(["show preview: Look."]));
   await assert.rejects(() => validateTopic(f.root), /beat show preview needs the lesson's exercise/u);

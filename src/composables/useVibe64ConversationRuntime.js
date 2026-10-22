@@ -68,7 +68,7 @@ function createConversationApplication(conversation, { identity, viewer, summary
     // send/retry maps that payload to the declared product data schema.
     const body = agentTurnControlPayloadFromContext(authored);
     const data = Object.fromEntries(["agentSettings", "displayMessage", "displayAttachments", "genesisTask",
-      "planRevision", "reviewAction", "originId"].filter(key => Object.hasOwn(body, key)).map(key => [key, body[key]]));
+      "planRevision", "reviewAction", "originId", "messageSource"].filter(key => Object.hasOwn(body, key)).map(key => [key, body[key]]));
     return { ...authored, submissionKind, data, request: { text: String(authored.message || ""), data,
       ...(authored.attachmentIds?.length ? { attachmentIds: authored.attachmentIds } : {}),
       ...(submissionKind === "steer" ? { steer: true } : {}) } };

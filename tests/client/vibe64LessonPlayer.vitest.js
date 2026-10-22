@@ -1,6 +1,7 @@
 import { computed, nextTick, reactive, ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createLessonPlayer, showDuration } from "../../src/lib/vibe64LessonPlayer.js";
+import { createPageActivity } from "../../src/lib/vibe64PageActivity.js";
 
 // The lesson step bar's beat player: timing, pauses, moves across steps and
 // pointing, against the controller state it shares (no HTTP, no DOM).
@@ -11,9 +12,12 @@ const STEPS = [
     { kind: "check", target: "done", text: "Press Done." }] }
 ];
 
-function harness({ reduced = false, hidden = false } = {}) {
-  const state = reactive({ stepId: "intro", beat: 0, beatPaused: false, open: false, stepBarCollapsed: false });
-  const steps = ref(STEPS);
+function harness({ reduced = false, hidden = false, steps: lessonSteps = STEPS, stepId = "intro" } = {}) {
+  const state = reactive({ stepId, beat: 0, beatPaused: false, open: false, stepBarCollapsed: false });
+  const steps = ref(lessonSteps);
+  const focus = ref(null);
+  const activity = createPageActivity();
+  const allDone = vi.fn();
   const currentStep = computed(() => steps.value.find(step => step.id === state.stepId));
   const shown = ref(true);
   const guides = [];
@@ -21,11 +25,12 @@ function harness({ reduced = false, hidden = false } = {}) {
   const remember = vi.fn();
   const flags = { reduced, hidden };
   const player = createLessonPlayer({ state, steps, currentStep, active: () => shown.value, remember,
+    focus: () => focus.value, activity, practiceSlug: () => "practice-1", allDone,
     selectStep: (stepId, beat = 0) => Object.assign(state, { stepId, beat }),
     showGuide: async (guide, options) => { guides.push({ target: guide.target, filePath: guide.filePath, navigate: guide.navigate, ...options }); return { shown: true }; },
     clearGuide: id => cleared.push(id), shownGuide: () => `ring-${guides.length}`,
     motionReduced: () => flags.reduced, hidden: () => flags.hidden });
-  return { state, player, shown, guides, cleared, remember, flags };
+  return { state, player, shown, guides, cleared, remember, flags, focus, activity, allDone };
 }
 const settle = async () => { for (let i = 0; i < 3; i += 1) { await Promise.resolve(); await nextTick(); } };
 
@@ -105,6 +110,63 @@ describe("lesson beat player", () => {
     expect([h.state.stepId, h.state.beat]).toEqual(["plain", 0]);
     h.player.back();
     expect([h.state.stepId, h.state.beat], "Back enters the previous step at its end").toEqual(["intro", 2]);
+  });
+
+  it("completes a do beat from its page activity in the practice project after it began, confirms, then moves on", async () => {
+    const h = harness({ stepId: "ask" });
+    await settle();
+    h.activity.report("message-sent", { projectSlug: "other-project" });
+    h.activity.report("agent-finished", { projectSlug: "practice-1" });
+    expect([h.player.confirmed, h.state.beat], "another project or another activity does not count").toEqual(["", 0]);
+    expect(() => h.activity.report("made-up")).toThrow(/Unknown page activity/u);
+    h.activity.report("message-sent", { projectSlug: "practice-1", sessionId: "s1" });
+    expect(h.player.confirmed).toBe("✓ Done.");
+    expect(h.allDone, "every do beat of the step was detected").toHaveBeenCalledWith("ask");
+    vi.advanceTimersByTime(1600);
+    await settle();
+    expect([h.state.beat, h.player.confirmed, h.player.final]).toEqual([1, "", true]);
+  });
+
+  it("completes a place do beat when the page shows it, at once when already there, and a file beat only for its path", async () => {
+    const steps = [{ id: "go", check: { kind: "self" }, beats: [{ kind: "do", target: "files", text: "Open Files." },
+      { kind: "do", target: "file-opened", path: "src/app.js", text: "Open src/app.js." }, { kind: "show", target: "chat", text: "Chat." }] }];
+    const h = harness({ steps, stepId: "go" });
+    h.focus.value = { projectSlug: "practice-1", pane: "preview" };
+    await settle();
+    expect(h.player.confirmed).toBe("");
+    h.focus.value = { projectSlug: "practice-1", pane: "files" };
+    await settle();
+    expect(h.player.confirmed).toBe("✓ Done.");
+    vi.advanceTimersByTime(1600);
+    await settle();
+    expect(h.state.beat).toBe(1);
+    h.activity.report("file-opened", { projectSlug: "practice-1", path: "README.md" });
+    expect(h.player.confirmed).toBe("");
+    h.activity.report("file-opened", { projectSlug: "practice-1", path: "src/app.js" });
+    expect(h.allDone).toHaveBeenCalledWith("go");
+    vi.advanceTimersByTime(1600);
+    await settle();
+    expect(h.state.beat).toBe(2);
+    // Back onto the place beat while Files shows: already there.
+    h.player.back();
+    h.player.back();
+    await settle();
+    expect(h.player.confirmed).toBe("✓ You're already here.");
+  });
+
+  it("hears L and Colleague closing, from any page", async () => {
+    const steps = [{ id: "away", beats: [{ kind: "do", target: "learning", text: "Press L twice." },
+      { kind: "do", target: "colleague-minimised", text: "Minimise Colleague." }, { kind: "show", target: "chat", text: "Chat." }] }];
+    const h = harness({ steps, stepId: "away" });
+    await settle();
+    h.activity.report("learn-toggled", { projectSlug: "" });
+    vi.advanceTimersByTime(1600);
+    await settle();
+    expect(h.state.beat).toBe(1);
+    h.activity.report("colleague-opened", { projectSlug: "practice-1" });
+    expect(h.player.confirmed).toBe("");
+    h.activity.report("colleague-minimised", { projectSlug: "practice-1" });
+    expect(h.allDone).toHaveBeenCalledWith("away");
   });
 
   it("starts a step from its first beat for Show me", async () => {

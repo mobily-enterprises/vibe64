@@ -14,6 +14,7 @@ import {
 } from "@/lib/vibe64ChatMessage.js";
 import { unmatchedOptimisticMessages } from "@jskit-ai/assistant-core/client/conversation-delivery";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
+import { usePageActivity } from "@/lib/vibe64PageActivity.js";
 import { useAssistantQuestions } from "@jskit-ai/assistant-core/client/conversation-questions";
 import {
   latestAssistantMessageAwaitingUserReply
@@ -365,6 +366,8 @@ function useVibe64AutopilotView(props, emit, {
   const requestAgentSettings = computed(() => agentSettings.value?.requestSettings.value || null);
   const sessionId = computed(() => normalizedAgentTurnText(props.session?.sessionId));
   const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
+  // What the person did here, for a lesson's do beats.
+  const reportActivity = usePageActivity();
   const actorKey = computed(() => unref(viewer)?.actorKey || "");
   const assistantAccessConfigured = assistantCanUseAi !== null;
   const assistantAccessPending = computed(() => (
@@ -389,6 +392,9 @@ function useVibe64AutopilotView(props, emit, {
     return turn && typeof turn === "object" && !Array.isArray(turn) ? turn : {};
   });
   const agentActive = computed(() => activeAgentTurn.value.active === true);
+  watch(agentActive, (active, was) => {
+    if (was && !active) reportActivity("agent-finished", { projectSlug: projectSlug.value, sessionId: sessionId.value });
+  });
   const agentObservationLost = computed(() => activeAgentTurn.value.status === "observation_lost");
   // The only source of the chat's working indicator: the server's live native
   // turn. Routing, sending, uncertain delivery and connection states have their
@@ -1127,6 +1133,7 @@ function useVibe64AutopilotView(props, emit, {
       const accepted = response !== false && response?.ok !== false;
       if (accepted) {
         conversationFollowLatestKey.value += 1;
+        reportActivity("message-sent", { projectSlug: sendingProjectSlug, sessionId: sendingSessionId });
       }
       if (accepted && payload.attachmentIds?.length) {
         onAttachmentsAccepted?.(payload.attachmentIds);
@@ -1154,6 +1161,12 @@ function useVibe64AutopilotView(props, emit, {
         composerSubmissionKind.value = "";
       }
     }
+  }
+
+  // A lesson beat's Do it for me: its quoted prompt, sent as the learner's
+  // next Main chat message and stored as sent by the lesson.
+  function sendLessonMessage(text) {
+    return sendChatPayload({ message: String(text || ""), messageSource: "lesson" });
   }
 
   function retryContextFull() {
@@ -1642,6 +1655,7 @@ function useVibe64AutopilotView(props, emit, {
       }
       saveWorkAttempt.value = null;
       saveWorkConnectedResults.value = result?.connected || [];
+      if (result) reportActivity("saved", { projectSlug: savingProjectSlug, sessionId: savingSessionId });
       return result;
     } catch (error) {
       if (!requestIsCurrent()) {
@@ -2111,6 +2125,7 @@ function useVibe64AutopilotView(props, emit, {
 
   return {
     Vibe64OutputControls,
+    sendLessonMessage,
     assistantDirectAllowed,
     assistantJuniorAllowed,
     assistantSeniorAllowed,

@@ -156,18 +156,30 @@ One beat per line: `<show|do|check> <target>[ <path>]: <text>`.
   presses Next). Text is at most 160 characters.
 - `do <place|action>` waits for the learner: to be at a place, or to do an
   action (`send-message`, `agent-finished`, `file-opened <path>`,
-  `app-pressed`). `do send-message` text holds exactly one quoted prompt (at
+  `app-pressed`, `colleague-minimised`). `do send-message` text holds exactly one quoted prompt (at
   most 500 characters). Only `file-opened` takes an argument, a relative
-  practice project path without `..`.
+  practice project path without `..`. A do beat completes when the page shows
+  its place, or when its activity happens in the lesson's practice project
+  after the beat began (`send-message`: a message accepted in the chat;
+  `agent-finished`: the agent's turn ends; `file-opened`: that file opens in
+  Files; `app-pressed`: the practice App's button; `colleague`, `save`,
+  `reload-preview`: Colleague opens, a Save succeeds, the Preview reloads;
+  `learning`: the learner presses **L**, which counts when they are back in
+  Learn; `colleague-minimised`: Colleague closes or minimises).
+  **Do it for me** does it for the learner (sending a `send-message` prompt as
+  the learner's Main chat message, stored as sent by the lesson), except Save,
+  `agent-finished`, `app-pressed`, `colleague-minimised` and `learning` (which
+  it only points at). A `check done` step whose do beats were
+  all detected is recorded done without a press.
 - `check <auto|done>` is the step's own check (`auto` for `check.kind:"auto"`,
   `done` for `self`): at most one, and the last line.
 - Places: `preview`, `dashboard`, `database-erd`, `database-data`, `files`,
   `changes`, `git-log`, `session-info`, `architecture`, `learning` (the **L**
   button), `lesson` (the Lesson tab), `chat` (the coding chat), `colleague`,
   `courses`, `lesson-bar` (the bar itself), `save` and `reload-preview`.
-  `dashboard`, `learning` and `lesson-bar` can only be shown.
+  `dashboard` and `lesson-bar` can only be shown.
 - 1–8 beats. Only `lesson`, `lesson-bar`, `courses`, `learning`,
-  `colleague` and `check done` work in a lesson without an `exercise`; every
+  `colleague`, `colleague-minimised` and `check done` work in a lesson without an `exercise`; every
   other beat needs the practice project.
 - A step with beats has no `guide`; **Show me** plays its beats from the first.
 

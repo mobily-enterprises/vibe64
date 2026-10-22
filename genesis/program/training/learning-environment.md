@@ -85,6 +85,27 @@ guide overlay 3000 above L 2400 above Colleague.
   control; steps never advance by themselves. `beat` and `beatPaused` are this
   tab's place (`sessionStorage`); nothing of the player is saved on the server.
   `showMe` on a step with beats restarts them (`player.start`).
+- Do beats: the player completes the current do beat when the page focus
+  (`VIBE64_PAGE_FOCUS_KEY`, written by each host from its existing Colleague
+  focus) shows its place (`trainingPlaceShown`), or when the page activity it
+  names (`src/lib/vibe64PageActivity.js`, `VIBE64_PAGE_ACTIVITY_KEY`, names in
+  `TRAINING_BEAT_EVENTS`) arrives for the practice project while that beat is
+  current. Emitters: the session view's accepted send (`message-sent`), the
+  agent turn ending (`agent-finished`), a successful Save (`saved`), Preview
+  Reload (`preview-reloaded`), Files opening a file (`file-opened`), the
+  practice App's orientation button (`app-pressed`), Colleague opening and
+  closing (`colleague-opened`, `colleague-minimised`), the L switch
+  (`learn-toggled`, place `learning`). It shows a confirmation for 1.5 s, then moves on. The
+  detected do beats are this tab's only; when all of a `self` step's do beats
+  were detected the controller records `done`.
+- Do it for me (`doItForMe`, `doItForMeKind`): navigates through the same
+  guide command as Show me, reveals the chat (`layout.showChat`), opens
+  Courses, the Lesson pane or Colleague (a Colleague request of kind `open`,
+  which reveals and sends nothing), presses the Preview's Reload, or sends the
+  quoted prompt through the session view handle's `sendLessonMessage` (the
+  ordinary Main chat send with `messageSource:"lesson"`, stored as turn
+  metadata `source:"lesson"` and shown as **Sent by the lesson**). Save is
+  pointed at only.
 - ≡ Step (`stepTextOpen`, `setStepText(open)`, this tab's place): the step bar
   drops the current step open under itself, rendering the reader's own
   `Vibe64LearningStep.vue` (max 60 % of the viewport, scrolling; ≡ or Escape

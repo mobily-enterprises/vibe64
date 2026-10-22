@@ -2385,9 +2385,11 @@ function createService({
         messageId,
         sessionId
       });
+      const { messageSource, ...message } = input;
       try {
         const result = await terminals.sendAgentMessage(sessionId, {
-          ...input,
+          ...message,
+          ...(messageSource === "lesson" ? { turnMetadata: { source: "lesson" } } : {}),
           messageId,
           message: request
         }, {

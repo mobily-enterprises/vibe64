@@ -90,7 +90,26 @@ current one), then the beat's line:
   Courses is open, while the bar is collapsed or the tab is hidden. With
   reduced motion turned on in your system it never moves by itself: press
   **Next**.
-- A *do* line waits for you to do what it says; press **Next** to go on.
+- A *do* line waits for you to do what it says, in this lesson's practice
+  project: be at a place (for example open **Files**), send a message in the
+  coding chat, wait for the agent to finish, open a file, press the practice
+  App's button, open or minimise Colleague, press **Save** or **Reload
+  preview**, or press **L** (it counts once you are back in Learn). When the
+  page sees you do it, the line says **✓ Done.** (or **✓ You're already here.**
+  when you already are) and the next beat plays after a moment. **Next** skips
+  it. Only what you do after the line appears counts.
+- **Do it for me** on a *do* line does it through the page's own controls:
+  it opens the place (or the file), reveals and focuses the coding chat, opens
+  Courses or Colleague (without asking it anything), reloads the Preview, or
+  sends the line's quoted prompt as your next message in the practice
+  project's Main chat. That message shows a **Sent by the lesson** chip under
+  it. On a **Save** line it only points at **Save**: saving stays yours. On a
+  line about waiting for the agent, pressing the App's button, minimising
+  Colleague or pressing **L** there is no Do it for me (for **L** it shows
+  where the button is). If it cannot be done here (for example the chat cannot take a
+  message now), the bar says so; do it yourself or press **Next**.
+- On a step you would finish with **Done**, doing every *do* line of it marks
+  the step done by itself.
 - **Back** and **Next** (arrows) move one beat, and into the previous or next
   step at either end.
 - After the last beat the bar shows the step's own control: **Done**, **Mark as
@@ -105,7 +124,8 @@ This tab remembers the beat and the pause; another tab or device starts the
 step at its first beat. Collapsing the bar leaves only the step position and
 its dots. On a phone the bar has two lines: the position and arrows above,
 the beat's line and its one button below; **Step** and **Courses** show only
-their icons, and the open step fills the width. A step without beats shows its title
+their icons, **Open** is left out (**Step** shows the whole step, and the
+**Lesson** tab is one tap away), and the open step fills the width. A step without beats shows its title
 and status as before, and **Show me** when it can point at a place.
 
 ## The Lesson tab

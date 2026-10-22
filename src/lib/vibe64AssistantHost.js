@@ -29,3 +29,11 @@ export const VIBE64_ASSISTANT_VIEWER_KEY = Symbol("vibe64.assistant.viewer");
 // and results, and calls show({ attemptId, stepId }) and minimise(). Consumers
 // tolerate its absence.
 export const VIBE64_LEARNING_KEY = Symbol("vibe64.learning");
+
+// The page's focus as its host computes it (Colleague's focus shape), written
+// by each host and read by the lesson step bar's beat player.
+export const VIBE64_PAGE_FOCUS_KEY = Symbol("vibe64.page.focus");
+
+// This tab's page activity (src/lib/vibe64PageActivity.js): what the person
+// just did, for the lesson step bar's do beats.
+export const VIBE64_PAGE_ACTIVITY_KEY = Symbol("vibe64.page.activity");

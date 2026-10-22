@@ -5,6 +5,7 @@ import { compileScript, compileTemplate, parse } from "@vue/compiler-sfc";
 import { transformSync } from "esbuild";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as LearningLib from "../../src/lib/vibe64Learning.js";
+import { createPageActivity } from "../../src/lib/vibe64PageActivity.js";
 import { watchColleagueLearningRequests } from "../../packages/vibe64-colleague/src/client/colleagueLearningRequests.js";
 import { applyLearningNavigation, learningPanelFocus, learningPanelMatches } from "../../packages/vibe64-colleague/src/shared/learningFocus.js";
 
@@ -1571,6 +1572,63 @@ function mountStepBar(learning, layout = Vue.shallowRef({ lessonVisible: false }
 }
 
 describe("Lesson step bar", () => {
+  it("does a do beat for the learner, detects it in the practice project and records a self step done once all are detected", async () => {
+    const pageActivity = createPageActivity();
+    const sendLessonMessage = vi.fn(async () => true);
+    const colleagueView = Vue.shallowRef({ projectSlug: "practice-one", sessionId: "s1", sendLessonMessage });
+    const reads = () => {
+      const value = lessonResult();
+      value.lesson.steps[3] = { ...value.lesson.steps[3], beats: [
+        { kind: "do", target: "send-message", prompt: "Make it green", text: "Ask it: \"Make it green\"" },
+        { kind: "do", target: "colleague", text: "Open Colleague." }, { kind: "do", target: "save", text: "Save." },
+        { kind: "do", target: "agent-finished", text: "Wait for the agent." }] };
+      return value;
+    };
+    const { learning, calls } = controller({ reads, colleagueView, pageActivity, pageFocus: Vue.shallowRef(null) });
+    learning.setViewer("member");
+    await flush();
+    learning.selectStep("tick");
+    await flush();
+    expect(["send-message", "colleague", "save", "agent-finished"].map(target => learning.doItForMeKind({ kind: "do", target })))
+      .toEqual(["send", "colleague", "point", ""]);
+    expect(await learning.doItForMe()).toBe(true);
+    expect(sendLessonMessage).toHaveBeenCalledWith("Make it green");
+    pageActivity.report("message-sent", { projectSlug: "practice-one", sessionId: "s1" });
+    expect(learning.player.confirmed).toBe("✓ Done.");
+    learning.player.next();
+    expect(await learning.doItForMe()).toBe(true);
+    expect(learning.colleagueRequest.value, "Colleague opens and sends nothing").toMatchObject({ kind: "open", stepId: "tick" });
+    expect(learning.colleagueRequest.value.message).toBeUndefined();
+    pageActivity.report("colleague-opened", { projectSlug: "practice-one" });
+    learning.player.next();
+    pageActivity.report("saved", { projectSlug: "practice-one" });
+    learning.player.next();
+    expect(calls.some(call => call.url === VIBE64_LEARNING_ROUTES.stepDone(ATTEMPT)), "not before every do beat").toBe(false);
+    pageActivity.report("agent-finished", { projectSlug: "practice-one" });
+    await flush();
+    expect(calls.filter(call => call.method === "POST").at(-1)).toMatchObject({ url: VIBE64_LEARNING_ROUTES.stepDone(ATTEMPT), body: { stepId: "tick" } });
+    // Without the practice project's session view nothing is sent.
+    colleagueView.value = { projectSlug: "elsewhere", sendLessonMessage };
+    learning.selectStep("tick");
+    expect(await learning.doItForMe()).toBe(false);
+    expect(sendLessonMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("opens Colleague for an open request without sending anything", async () => {
+    const learning = { colleagueRequest: Vue.shallowRef(null), consumeColleagueRequest(id) {
+      const value = this.colleagueRequest.value?.id === id ? this.colleagueRequest.value : null;
+      this.colleagueRequest.value = null;
+      return value;
+    } };
+    const reveal = vi.fn(async () => true);
+    const send = vi.fn(async () => true);
+    const stop = watchColleagueLearningRequests({ learning, actorKey: () => "member", reveal, send, report: vi.fn() });
+    learning.colleagueRequest.value = { id: "open-1", kind: "open", actorKey: "member" };
+    await flush();
+    expect([reveal.mock.calls.length, send.mock.calls.length]).toEqual([1, 0]);
+    stop();
+  });
+
   it("shows the current lesson's step in Learn mode, moves through steps, opens the Lesson pane and collapses", async () => {
     let on = true;
     const { learning } = controller({ mode: () => ({ ...LEARN, on }) });
@@ -1636,6 +1694,23 @@ describe("Lesson step bar", () => {
       expect(await learning.showMe("read")).toEqual({ beats: true });
       await flush();
       expect([learning.stepId, learning.state.beat]).toEqual(["read", 0]);
+    } finally { app.unmount(); }
+  });
+
+  it("shows a step without beats with its own verdict control at once", async () => {
+    const { learning } = controller();
+    learning.setViewer("member");
+    await flush();
+    const { root, app } = mountStepBar(learning);
+    try {
+      await flush();
+      const labels = {};
+      for (const stepId of ["read", "quiz", "preview", "tick"]) {
+        learning.selectStep(stepId);
+        await flush();
+        labels[stepId] = textOf(byTest(root, "learning-step-bar-verdict") || { text: "", children: [] }).trim();
+      }
+      expect(labels).toEqual({ read: "Mark as done", quiz: "Answer in Step", preview: "Check my work", tick: "Done" });
     } finally { app.unmount(); }
   });
 

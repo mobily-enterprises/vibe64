@@ -18,7 +18,7 @@ const TRAINING_GUIDE_PLACES = Object.freeze({
   "session-info": Object.freeze({ pane: "session", steps: [DASHBOARD, step("session-info", "Session info")] }),
   architecture: Object.freeze({ pane: "system", steps: [DASHBOARD, step("architecture", "Architecture")] }),
   // The L button that switches between Develop and Learn (navigate also opens Courses).
-  learning: Object.freeze({ project: false, steps: [step("learning", "Learning")] }),
+  learning: Object.freeze({ project: false, event: "learn-toggled", steps: [step("learning", "Learning")] }),
   // Point-only places (a lesson step bar beat or a teacher's pointer; no view
   // to open). project: false also exists in a lesson without a practice
   // project; event names the page activity that completes a `do` beat there.
@@ -99,13 +99,14 @@ function trainingGuideCommand(request, { id, projectSlug = "", sessionId = "" })
 // The page activity a `do` beat can wait for (vibe64PageActivity reports only
 // these). Beats name a place or one of these actions, never an event directly.
 const TRAINING_BEAT_EVENTS = Object.freeze(["app-pressed", "message-sent", "agent-finished", "saved",
-  "preview-reloaded", "file-opened", "colleague-opened"]);
+  "preview-reloaded", "file-opened", "colleague-opened", "colleague-minimised", "learn-toggled"]);
 // `do` targets that are an action rather than a place, with the place to point at.
 const TRAINING_BEAT_ACTIONS = Object.freeze({
   "send-message": Object.freeze({ event: "message-sent", place: "chat" }),
   "agent-finished": Object.freeze({ event: "agent-finished" }),
   "file-opened": Object.freeze({ event: "file-opened", place: "files" }),
-  "app-pressed": Object.freeze({ event: "app-pressed", place: "preview" })
+  "app-pressed": Object.freeze({ event: "app-pressed", place: "preview" }),
+  "colleague-minimised": Object.freeze({ event: "colleague-minimised", place: "colleague" })
 });
 
 // The single matcher for "the learner is at this place now", from a host's

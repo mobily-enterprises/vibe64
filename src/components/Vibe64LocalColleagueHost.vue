@@ -16,7 +16,8 @@ import {
   VIBE64_COLLEAGUE_LAYOUT_KEY,
   VIBE64_COLLEAGUE_PLAN_KEY,
   VIBE64_COLLEAGUE_VIEW_KEY,
-  VIBE64_LEARNING_KEY
+  VIBE64_LEARNING_KEY,
+  VIBE64_PAGE_FOCUS_KEY
 } from "@/lib/vibe64AssistantHost.js";
 
 const view = inject(VIBE64_COLLEAGUE_VIEW_KEY);
@@ -62,6 +63,13 @@ const focus = computed(() => {
   if (displayedPlan?.open) result.planView = displayedPlan.view;
   return result;
 });
+
+// The lesson step bar's beat player reads this page focus.
+const pageFocus = inject(VIBE64_PAGE_FOCUS_KEY, null);
+if (pageFocus) {
+  watchEffect(() => { pageFocus.value = focus.value; });
+  onBeforeUnmount(() => { pageFocus.value = null; });
+}
 
 const request = (url, options) => getHttpWebClient().request(resolveStudioRequestUrl(url), options);
 

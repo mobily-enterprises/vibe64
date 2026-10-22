@@ -694,6 +694,18 @@ test("assistant messages use the plain message contract", async () => {
   assert.deepEqual(sessionReadOptions, [{ inspectSource: false }]);
 });
 
+test("a lesson-sent assistant message reaches the terminal owner as turn metadata", async () => {
+  const calls = [];
+  const runtime = { async getSession() { return { sessionId: "session-1" }; } };
+  const service = createService({
+    project: { async createRuntime() { return runtime; } },
+    async publishSessionChanged() {},
+    terminals: { async sendAgentMessage(...args) { calls.push(args); return { delivered: true, ok: true }; } }
+  });
+  await service.sendAgentMessage("session-1", { message: "Make it green", messageId: "message:lesson", messageSource: "lesson" });
+  assert.deepEqual(calls[0][1], { message: "Make it green", messageId: "message:lesson", turnMetadata: { source: "lesson" } });
+});
+
 test("empty assistant messages fail without starting a provider turn", async () => {
   const service = createService({
     project: {},

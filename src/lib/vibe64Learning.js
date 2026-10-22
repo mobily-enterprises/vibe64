@@ -198,7 +198,7 @@ function showMeCommand(guide, { projectSlug = "", sessionId = "" } = {}) {
 }
 
 function createVibe64Learning({ request: requestOverride = null, browserNavigation = null, colleagueView = null,
-  layout = null, router = null, runGuide = null, now = () => Date.now() } = {}) {
+  layout = null, pageFocus = null, pageActivity = null, router = null, runGuide = null, now = () => Date.now() } = {}) {
   // open/minimised: the Courses overlay. hiddenBy: "learner" when the
   // learner's own close or Escape hid it (Colleague then returns a phone
   // learner to its conversation), else "". finished: the Lesson pane shows
@@ -262,7 +262,14 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   const stepBarVisible = computed(() => Boolean(learnMode.value && !state.finished && lessonAttemptId.value &&
     state.attemptId === lessonAttemptId.value && currentStep.value));
   const player = createLessonPlayer({ state, steps, currentStep, selectStep: (...value) => selectStep(...value), remember: () => remember(),
-    active: () => stepBarVisible.value && !lesson.value?.attempt?.ended });
+    active: () => stepBarVisible.value && !lesson.value?.attempt?.ended, activity: pageActivity,
+    focus: () => pageFocus?.value ? { ...pageFocus.value, chatVisible: Boolean(layout?.value?.chatVisible) } : null,
+    practiceSlug: () => lesson.value?.practiceProjectSlug || "",
+    // A self-checked step whose do beats were all detected is done.
+    allDone: stepId => {
+      const step = steps.value.find(value => value.id === stepId);
+      if (step?.check?.kind === "self" && stepStatus(results.value, stepId, lesson.value?.passedStepIds) !== "passed") void done(stepId);
+    } });
 
   function remember() {
     if (!state.actorKey) return;
@@ -379,6 +386,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
       if (router && target !== path) await router.push(target);
       // Learn with no lesson in progress starts at the lesson picker.
       if (value.on && !value.currentAttemptId) void openCourses("courses");
+      pageActivity?.report("learn-toggled", { projectSlug: projectSlugFromPathname(currentPath()) });
       return value;
     } catch (cause) {
       if (expected === viewer) state.error = String(cause?.message || "The switch was not confirmed. Press L again.");
@@ -690,8 +698,14 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
       return { beats: true };
     }
     if (!step?.guide) throw new Error("This step has nothing to show.");
-    let command = showMeCommand(step.guide, { projectSlug: lesson.value?.practiceProjectSlug || "" });
     minimise();
+    return goTo(step.guide);
+  }
+
+  // Point at a place and, when the guide navigates, open it in the practice
+  // project (Show me, and a do beat's Do it for me).
+  async function goTo(guide) {
+    let command = showMeCommand(guide, { projectSlug: lesson.value?.practiceProjectSlug || "" });
     const navigator = browserNavigation?.value || null;
     // A Database view belongs to one session: both hosts open it only with that
     // exact sessionId. Use the practice project's selected session, opening the
@@ -745,6 +759,58 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     colleagueRequest.value = Object.freeze({ id: `teach-${now()}-${Math.random().toString(36).slice(2, 8)}`,
       kind: "teach", message: VIBE64_LEARNING_TEACH_MESSAGE, actorKey: state.actorKey, attemptId: state.attemptId, stepId });
     return colleagueRequest.value;
+  }
+
+  // Do it for me on the bar's current do beat: what the learner would do
+  // there, done through the page's own controls. Returns false when it could
+  // not be done (the bar then says so; Next still moves on).
+  function doItForMeKind(beat = player.beat.value) {
+    if (beat?.kind !== "do") return "";
+    if (beat.target === "send-message") return "send";
+    if (beat.target === "file-opened") return beat.path ? "navigate" : "";
+    // Waiting for the agent, the App's button, closing Colleague and L stay the learner's.
+    if (["agent-finished", "app-pressed", "colleague-minimised"].includes(beat.target)) return "";
+    if (beat.target === "learning") return "point";
+    if (["chat", "courses", "colleague", "lesson", "reload-preview"].includes(beat.target)) return beat.target;
+    const place = TRAINING_GUIDE_PLACES[beat.target];
+    return place && !place.pointOnly && place.project !== false ? "navigate" : "point";
+  }
+
+  async function doItForMe() {
+    const beat = player.beat.value;
+    const kind = doItForMeKind(beat);
+    const projectSlug = lesson.value?.practiceProjectSlug || "";
+    if (kind === "send") {
+      const view = colleagueView?.value;
+      if (!projectSlug || view?.projectSlug !== projectSlug || typeof view.sendLessonMessage !== "function") return false;
+      return await view.sendLessonMessage(beat.prompt) === true;
+    }
+    if (kind === "navigate") return goTo({ target: beat.target === "file-opened" ? "files" : beat.target, navigate: true,
+      ...(beat.path ? { filePath: beat.path } : {}) });
+    if (kind === "chat") {
+      layout?.value?.showChat?.();
+      await nextTick();
+      globalThis.document?.querySelector?.('[data-vibe64-guide="chat"] textarea')?.focus();
+      return true;
+    }
+    if (kind === "courses") return show();
+    if (kind === "lesson") return openLesson({ stepId: currentStep.value?.id });
+    if (kind === "colleague") {
+      colleagueRequest.value = Object.freeze({ id: `open-${now()}-${Math.random().toString(36).slice(2, 8)}`, kind: "open",
+        actorKey: state.actorKey, attemptId: state.attemptId, stepId: currentStep.value?.id || "" });
+      return true;
+    }
+    if (kind === "reload-preview") {
+      // The Preview's own Reload button, after opening the Preview.
+      await goTo({ target: "preview", navigate: true });
+      await nextTick();
+      const reload = globalThis.document?.querySelector?.('[data-vibe64-guide="reload-preview"]');
+      if (!reload) return false;
+      reload.click();
+      return true;
+    }
+    if (kind === "point") return player.point();
+    return false;
   }
 
   function consumeColleagueRequest(id) {
@@ -1006,7 +1072,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     lesson, results, steps, currentStep, focus, colleagueRequest, notes, notesState: readonly(notesState), player,
     stepStatus: stepId => stepStatus(results.value, stepId, lesson.value?.passedStepIds || []),
     setViewer, show, openCourses, openLesson, closeCourses, showFinished, minimise, selectStep, setScroll, flushReader, loadLesson,
-    runCheck, answer, done, showMe, teachMe, consumeColleagueRequest, learnerChanged,
+    runCheck, answer, done, showMe, teachMe, doItForMe, doItForMeKind, consumeColleagueRequest, learnerChanged,
     exerciseStep, beginExercise, exerciseCurrent, finishExercise, prepareExercise,
     readNotes, saveNotes, clearNotes,
     readLearningMode, setMode, toggleMode, modePlace, openCurrent, toggleStepBar, setStepText, showNotice, clearNotice,

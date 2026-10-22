@@ -415,6 +415,7 @@ const props = defineProps({
   // Opens one project file in this session's Dashboard → Files editor (a
   // Colleague "show me" guide); returns true only when that file opened.
   openFile: { type: Function, default: null },
+  sendLessonMessage: { type: Function, default: null },
   active: Boolean,
   sessionSelected: Boolean,
   assistantReady: Boolean,
@@ -923,6 +924,8 @@ const selectedView = {
   get conversationId() { return this.temporarySelected ? activeTask.value?.conversationId || "" : ""; },
   // A Learning "Show me" for a file opens it in the ordinary Working Files view.
   openFile(path) { return typeof props.openFile === "function" && props.openFile(path) === true; },
+  // A lesson beat's Do it for me sends its prompt to this session's Main chat.
+  async sendLessonMessage(text) { return typeof props.sendLessonMessage === "function" && await props.sendLessonMessage(text) === true; },
   async openConversation(conversationId, isCurrent = () => true) {
     if (!props.sessionSelected || !props.assistantReady || !isCurrent()) throw new Error("This session is no longer available.");
     if (!conversationId) {

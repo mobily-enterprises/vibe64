@@ -42,6 +42,11 @@
       <Vibe64ProjectMessage v-if="message.projectMessage" :details="message.projectMessage" :at="message.displayAt" />
       <Vibe64ConversationStatus v-else :message="message" @check-delivery="emit('resend-turn', $event)" @link-click="adapter.actions.openLink" />
     </template>
+    <template #user-message-actions="{ turn }">
+      <v-chip v-if="turn.metadata?.source === 'lesson'" size="x-small" variant="tonal" class="mt-1 align-self-start" data-test="lesson-sent-chip">
+        Sent by the lesson
+      </v-chip>
+    </template>
     <template #attachments="{ items }">
       <Vibe64ConversationAttachments :items="items" :session-id="sessionId" />
     </template>

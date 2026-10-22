@@ -649,6 +649,7 @@
         :can-review-update="Boolean(updateConflictRecovery)"
         :workspace-setup-status="workspaceSetupStatus"
         :open-file="openWorkingFile"
+        :send-lesson-message="sendLessonMessage"
         @check-update="checkTemporaryAiUpdate"
         @review-update="reviewResolvedUpdate"
         @select-main-chat="showMainChat"
@@ -1299,6 +1300,7 @@ const {
   saveWorkSending,
   saveWorkStage,
   saveWorkStatus,
+  sendLessonMessage,
   saveWorkTitle,
   saveWorkRequiresUpdate,
   saveWorkUnsaved,

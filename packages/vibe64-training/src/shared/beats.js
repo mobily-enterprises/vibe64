@@ -76,7 +76,7 @@ function splitStepBeats(markdown) {
 // A beat that only exists in a practice project (its places or its activity).
 function beatNeedsPracticeProject(beat) {
   if (beat.kind === "check") return beat.target !== "done";
-  const place = TRAINING_GUIDE_PLACES[beat.target];
+  const place = TRAINING_GUIDE_PLACES[TRAINING_BEAT_ACTIONS[beat.target]?.place || beat.target];
   return place ? place.project !== false : true;
 }
 

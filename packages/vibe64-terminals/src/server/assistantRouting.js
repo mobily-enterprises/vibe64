@@ -575,7 +575,8 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
             "message", "displayMessage", "attachmentIds", "displayAttachments", "genesisTask",
             "originId", "presentation", "promptLabel", "outputSchema", "planRevision"
           ].includes(name))),
-            ...(input.turnMetadata?.projectMessage ? { turnMetadata: { projectMessage: input.turnMetadata.projectMessage } } : {}) },
+            ...(input.turnMetadata?.projectMessage || input.turnMetadata?.source ? { turnMetadata: Object.fromEntries(
+              ["projectMessage", "source"].filter(name => input.turnMetadata[name]).map(name => [name, input.turnMetadata[name]])) } : {}) },
           mode,
           resolvedMode,
           ...(explicitDeslop ? { task: "deslop" } : {}),

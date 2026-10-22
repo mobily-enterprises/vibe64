@@ -27,6 +27,13 @@ test("project message attribution survives routing into native delivery", async 
   assert.deepEqual(f.sends[0].input.turnMetadata.projectMessage, projectMessage);
 });
 
+test("a lesson-sent message keeps its source through routing into native delivery", async t => {
+  const f = await fixture(t, { mode: "senior" });
+  await f.service.send("session-1", { ...request, turnMetadata: { source: "lesson" } }, f.context);
+  assert.equal(f.state().input.turnMetadata.source, "lesson");
+  assert.equal(f.sends[0].input.turnMetadata.source, "lesson");
+});
+
 function sharedOpenCode(f, modelProviderId = "opencode", modelId = "big-pickle") {
   const catalog = { ...structuredClone(f.catalog), engineId: "opencode", transportId: "opencode_server", label: "OpenCode",
     agents: [{ id: "build", mode: "primary" }], defaults: { agentId: "build", modelProviderId, modelId, variantId: "" },

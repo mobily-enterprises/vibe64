@@ -2,6 +2,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
+import { usePageActivity } from "@/lib/vibe64PageActivity.js";
 import {
   vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
@@ -650,6 +651,8 @@ function useVibe64SourceEditor({
   const currentSessionsApiPath = computed(() => String(readRefOrGetterValue(sessionsApiPath) || "").trim());
   const currentSessionId = computed(() => String(readRefOrGetterValue(sessionId) || "").trim());
   const currentProjectSlug = computed(() => String(readRefOrGetterValue(projectSlug) || "").trim());
+  // What the person did here, for a lesson's do beats.
+  const reportActivity = usePageActivity();
   const currentActive = computed(() => readRefOrGetterValue(active) !== false);
   const canLoad = computed(() => Boolean(currentSessionsApiPath.value && currentSessionId.value));
   const statusLabel = computed(() => {
@@ -1024,6 +1027,7 @@ function useVibe64SourceEditor({
       })) {
         return false;
       }
+      reportActivity("file-opened", { projectSlug: currentProjectSlug.value, sessionId: currentSessionId.value, path: normalizedPath });
       return true;
     } catch (error) {
       if (requestId === fileRequestId) {

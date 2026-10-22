@@ -33,7 +33,8 @@ const status = computed(() => step.value ? learning.stepStatus(step.value.id) : 
 const beats = computed(() => player.value?.beats.value || []);
 const beat = computed(() => player.value?.beat.value || null);
 const beatIndex = computed(() => player.value?.index.value || 0);
-const final = computed(() => Boolean(player.value?.final));
+// A step without beats is in its final state at once (its verdict control shows).
+const final = computed(() => beats.value.length ? Boolean(player.value?.final) : true);
 const kind = computed(() => step.value?.check?.kind || "none");
 // The step's own verdict control in its final beat state (its check beat, or after its last beat).
 const verdict = computed(() => {
@@ -46,7 +47,8 @@ const verdict = computed(() => {
   return null;
 });
 const beatText = computed(() => {
-  if (beat.value) return beat.value.text;
+  if (player.value?.confirmed) return player.value.confirmed;
+  if (beat.value && !(final.value && status.value === "passed")) return beat.value.text;
   if (status.value === "passed") return kind.value === "none" || kind.value === "self" ? "Done ✓" : "Passed ✓";
   return step.value?.title || "";
 });
@@ -66,6 +68,23 @@ async function showMe() {
     if (result?.guide && result.guide.shown === false) note.value = "That place is not visible on this page.";
   } catch (cause) { note.value = String(cause?.message || "That place could not be shown."); }
 }
+// A do beat the page can do for the learner (not Save, which it only points at).
+const canDoIt = computed(() => Boolean(beat.value?.kind === "do" && !player.value?.confirmed && !ended.value &&
+  learning.doItForMeKind(beat.value)));
+const doing = ref(false);
+async function doItForMe() {
+  note.value = "";
+  doing.value = true;
+  try {
+    if (await learning.doItForMe() === false) {
+      note.value = beat.value?.target === "send-message" ? "That could not be sent here. Send it yourself, or press Next."
+        : "That could not be done here. Do it yourself, or press Next.";
+    }
+  } catch (cause) {
+    note.value = String(cause?.message || "That could not be done here. Do it yourself, or press Next.");
+  } finally { doing.value = false; }
+}
+watch(beat, () => { note.value = ""; });
 const go = offset => {
   const next = steps.value[index.value + offset];
   if (next) learning.selectStep(next.id);
@@ -127,6 +146,12 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
           {{ step.required ? statusLabel[status] : "Done" }}
         </span>
         <v-btn
+          v-if="canDoIt" color="primary" variant="flat" rounded="pill" min-height="40" data-test="learning-step-bar-do-it"
+          :loading="doing" @click="doItForMe"
+        >
+          {{ learning.doItForMeKind(beat) === "point" ? "Show me" : "Do it for me" }}
+        </v-btn>
+        <v-btn
           v-if="verdict" color="primary" variant="flat" rounded="pill" min-height="40" data-test="learning-step-bar-verdict"
           :disabled="Boolean(busy)" :loading="Boolean(verdict.busy) && busy === verdict.busy" @click="verdict.run()"
         >
@@ -165,11 +190,11 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
           aria-label="Step" data-test="learning-step-bar-step" @click="learning.setStepText(!learning.stepTextOpen)"
         >
           <span class="vibe64-learning-step-bar__step-text-label">Step</span>
-          <v-icon :icon="stepTextShown ? mdiChevronUp : mdiChevronDown" size="18" />
+          <v-icon class="vibe64-learning-step-bar__step-text-chevron" :icon="stepTextShown ? mdiChevronUp : mdiChevronDown" size="18" />
         </v-btn>
         <v-btn
           v-if="!lessonShown"
-          variant="tonal" rounded="pill" min-height="40" data-test="learning-step-bar-open"
+          variant="tonal" rounded="pill" min-height="40" class="vibe64-learning-step-bar__open" data-test="learning-step-bar-open"
           @click="learning.openLesson({ stepId: step.id })"
         >
           Open
@@ -279,7 +304,9 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
 
 /* A phone: line 1 is the position and controls, line 2 the beat and its one action. */
 @media (max-width: 600px) {
-  .vibe64-learning-step-bar { flex-wrap: wrap; row-gap: 0; }
+  .vibe64-learning-step-bar { column-gap: 4px; flex-wrap: wrap; row-gap: 0; }
+  /* Step (≡) holds the whole step here; Open stays on wider screens. */
+  .vibe64-learning-step-bar__open, .vibe64-learning-step-bar__step-text-chevron { display: none; }
   .vibe64-learning-step-bar__lesson { display: none; }
   .vibe64-learning-step-bar--beats .vibe64-learning-step-bar__position { flex: 1 1 auto; }
   .vibe64-learning-step-bar--beats .vibe64-learning-step-bar__line { flex-basis: 100%; order: 3; padding: 0 0 6px 8px; }

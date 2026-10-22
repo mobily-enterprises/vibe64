@@ -41,6 +41,7 @@ import {
   previewRoutesForTarget
 } from "@/lib/vibe64PreviewRoutes.js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
+import { usePageActivity } from "@/lib/vibe64PageActivity.js";
 import { previewVisibleViewportRect } from "@/composables/useVibe64PreviewCapture.js";
 
 
@@ -681,6 +682,8 @@ function useVibe64OutputControlsSurface(props) {
   // The Learning environment's controller, which owns the learner-origin App
   // press receipt (step.observe) for its current lesson step.
   const learning = useVibe64Learning();
+  // What the person did here, for a lesson's do beats.
+  const reportActivity = usePageActivity();
   let orientation = null;
   const previewSuspended = ref(false);
   const previewBridgeVersion = ref(0);
@@ -1237,6 +1240,7 @@ function useVibe64OutputControlsSurface(props) {
     }
     if (input.type === "button" && orientationFields(input, [...common, "interactionId"]) && orientationUuid(input.interactionId)) {
       retireOrientationInteraction(channel);
+      reportActivity("app-pressed", { projectSlug: channel.projectSlug, sessionId: channel.sessionId });
       const owner = learningOwner();
       const ticket = owner?.beginExercise(channel.projectSlug);
       if (ticket) channel.pending = { owner, ticket, interactionId: input.interactionId, phase: "button" };
@@ -1458,13 +1462,12 @@ function useVibe64OutputControlsSurface(props) {
     const requestIdBeforeRefresh = previewFrameRequestId.value;
     await refreshOutputs();
     await nextTick();
-    if (previewFrameRequestId.value !== requestIdBeforeRefresh) {
-      return true;
-    }
-    return requestPreviewFrame({
+    const reloaded = previewFrameRequestId.value !== requestIdBeforeRefresh || await requestPreviewFrame({
       force: true,
       reason: "manual-reload"
     });
+    if (reloaded) reportActivity("preview-reloaded", { projectSlug: projectSlug.value, sessionId: props.session?.sessionId });
+    return reloaded;
   }
 
   async function retryLaunchStatus() {

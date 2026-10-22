@@ -19,6 +19,8 @@ function watchColleagueLearningRequests({ learning, actorKey, reveal, send, repo
       // reveal() returning false means Colleague cannot answer (no usable AI
       // model): it has said so in its conversation and nothing is sent.
       if (await reveal() === false) return;
+      // open: a lesson's Do it for me opens Colleague and sends nothing.
+      if (value.kind === "open") return;
       if (await send(value.message) === false) {
         throw new Error("Colleague could not receive Teach me. Open Colleague and ask it to teach this step.");
       }

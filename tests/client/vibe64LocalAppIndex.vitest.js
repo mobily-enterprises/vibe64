@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import * as Vue from "vue";
 import * as HostKeys from "../../src/lib/vibe64AssistantHost.js";
 import * as LearningEnvironment from "../../src/lib/vibe64Learning.js";
+import * as PageActivity from "../../src/lib/vibe64PageActivity.js";
 import { compileScript, compileTemplate, parse } from "@vue/compiler-sfc";
 import { transformSync } from "esbuild";
 import { readFileSync } from "node:fs";
@@ -136,7 +137,7 @@ it("adds one saved author-trial control beside the courses without released-cour
 const appSource = () => readFileSync(path.resolve("src/App.vue"), "utf8");
 it("shared original shell refs are per mount and only local composition supplies the established local display identity", () => {
   const context = compiledUi(path.resolve("src/components/Vibe64AssistantShellContext.vue"), { vue: Vue, "@/lib/vibe64AssistantHost.js": HostKeys,
-    "@/lib/vibe64Learning.js": LearningEnvironment, "vue-router": { useRouter: () => null } });
+    "@/lib/vibe64Learning.js": LearningEnvironment, "@/lib/vibe64PageActivity.js": PageActivity, "vue-router": { useRouter: () => null } });
   const mount = local => {
     let captured;
     const probe = { setup() { captured = Object.fromEntries(Object.entries(HostKeys).map(([name, key]) => [name, Vue.inject(key, null)])); return () => Vue.h("aside"); } };
@@ -147,10 +148,13 @@ it("shared original shell refs are per mount and only local composition supplies
   try {
     expect(local.captured.VIBE64_ASSISTANT_VIEWER_KEY).toEqual({ actorKey: "local" });
     expect(hosted.captured.VIBE64_ASSISTANT_VIEWER_KEY).toBeNull();
-    for (const key of ["VIBE64_COLLEAGUE_VIEW_KEY", "VIBE64_COLLEAGUE_LAYOUT_KEY", "VIBE64_COLLEAGUE_PREVIEW_KEY", "VIBE64_BROWSER_NAVIGATION_KEY"]) {
+    for (const key of ["VIBE64_COLLEAGUE_VIEW_KEY", "VIBE64_COLLEAGUE_LAYOUT_KEY", "VIBE64_COLLEAGUE_PREVIEW_KEY", "VIBE64_BROWSER_NAVIGATION_KEY", "VIBE64_PAGE_FOCUS_KEY"]) {
       expect(Vue.isRef(local.captured[key])).toBe(true); expect(local.captured[key].value).toBeNull();
       expect(local.captured[key]).not.toBe(hosted.captured[key]);
     }
+    // One page activity channel per shell for the lesson step bar's do beats.
+    expect(typeof local.captured.VIBE64_PAGE_ACTIVITY_KEY.report).toBe("function");
+    expect(local.captured.VIBE64_PAGE_ACTIVITY_KEY).not.toBe(hosted.captured.VIBE64_PAGE_ACTIVITY_KEY);
     // One Learning environment controller per shell, closed until the overlay binds a viewer.
     expect(local.captured.VIBE64_LEARNING_KEY.state.open).toBe(false);
     expect(local.captured.VIBE64_LEARNING_KEY.state.actorKey).toBe("");

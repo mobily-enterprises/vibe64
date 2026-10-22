@@ -4031,6 +4031,13 @@ the session-list query cache and refreshes names on rename/reconnect events.
 Missing or unavailable names fall back to the ID; stored messages and routing
 identities do not change.
 
+A Main chat send may carry `messageSource: "lesson"` (sessions agent message
+input): a lesson step bar's **Do it for me** sent it as the learner's own
+message. The sessions service turns it into turn metadata `source: "lesson"`,
+which routing keeps with the request (as it keeps `projectMessage`) and every
+engine binding stores on the user turn; the conversation log shows **Sent by
+the lesson** under it. It changes no admission, routing or ownership.
+
 `vibe64-helper session message-project <project> [--session <id>] <message> [message-id]` uses the
 existing bound session command socket. `agentSessionCommand.js` supplies the
 server-owned source project/session and admitted actor; `projectMessage.js`

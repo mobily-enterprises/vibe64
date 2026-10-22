@@ -8,7 +8,7 @@ import { computed, inject, nextTick, onBeforeUnmount, onMounted, ref, shallowRef
 import { useRealtimeEvent, useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
 import { mdiArrowTopRight, mdiCheck, mdiClose, mdiEyeOutline, mdiHeadset, mdiHistory, mdiMicrophone, mdiMinus, mdiSchoolOutline, mdiSend, mdiStop, mdiTuneVariant, mdiVolumeHigh } from "@mdi/js";
-import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_LEARNING_KEY } from "/src/lib/vibe64AssistantHost.js";
+import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_COLLEAGUE_LAUNCHER_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_LEARNING_KEY, VIBE64_PAGE_ACTIVITY_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { AssistantConversationElement, AssistantConversationStatus, AssistantPromptInput, AssistantTranscript } from "@jskit-ai/assistant-core/client/conversation";
 import { latestAssistantMessageAwaitingUserReply, mergeConversationLogPages, normalizeConversationLogPage } from "@jskit-ai/assistant-core/shared/conversation";
 import { createAssistantApi } from "@jskit-ai/assistant-core/client";
@@ -44,6 +44,11 @@ const listeningVoice = computed(() => Boolean(minimizedVoice.value && voice.cont
 const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
 const voiceTranscript = ref(null);
 const companionView = inject(VIBE64_COLLEAGUE_VIEW_KEY, null);
+// Opening Colleague is page activity a lesson's do beat can wait for.
+const pageActivity = inject(VIBE64_PAGE_ACTIVITY_KEY, null);
+watch(shown, (value, was) => {
+  if (value !== was) pageActivity?.report(value ? "colleague-opened" : "colleague-minimised", { projectSlug: props.focus?.projectSlug });
+});
 // The shared Learning controller (L and Courses), when this host provides one.
 const learningOwner = inject(VIBE64_LEARNING_KEY, null);
 const learningController = computed(() => unref(learningOwner) || null);

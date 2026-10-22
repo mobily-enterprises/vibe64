@@ -64,6 +64,10 @@ send that request. Desktop and mobile behave the same.
 
 ## Send, steer and stop
 
+A message that a lesson's **Do it for me** sent for you (in a practice
+project's Main chat) is your message like any other and shows a small **Sent
+by the lesson** chip under it.
+
 While **Send** is pending, Vibe64 prepares the selected assistant and waits for
 delivery acknowledgement. Codex reuses an already-ready project environment;
 missing resources or changed Env files still require preparation. Wait for
