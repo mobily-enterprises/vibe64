@@ -80,7 +80,11 @@ ordered topics and displayed catalogue revision to `courses.create`, then
 rereads courses. `installCourse` posts `{courseId, release}` to
 `course.install`, polling the catalogue for progress, then rereads courses and
 catalogue. The picker shows **New course** only when `courses.list` reports
-`canCreateCourses` and **Try preview** only when it reports `canTryPreviews`.
+`canCreateCourses` and start buttons on a preview course only when it reports
+`canTryPreviews`. While a start is in flight, the card or course page that
+requested it shows **Starting lesson…** on that lesson's button and
+`TrainingStartFeedback` (progress, or the host's `startError` on failure, or
+the unconfirmed-start note) in place; the host shows a start failure only there.
 
 The adapter serializes its UI operation only. Captured actor and L's open
 generation fence follow-up requests; closing L or changing account does not undo

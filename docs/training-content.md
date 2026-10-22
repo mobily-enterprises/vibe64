@@ -367,9 +367,9 @@ is rejected. A released course requires released topics with no required drafts.
 A preview course is for the workspace owner to review: `lesson.start` admits its
 published lessons only when the actor is the workspace owner (on local Vibe64,
 the OS user), and refuses everyone else with `VIBE64_TRAINING_COURSE_PREVIEW`.
-`courses.list` reports `canTryPreviews`, and Courses shows the owner **Try
-preview**. The started attempt is an ordinary saved lesson. Releasing the course
-offers **Start** to everyone; draft lessons and disabled courses stay refused.
+`courses.list` reports `canTryPreviews`, and Courses shows the owner the usual
+start buttons beside the **Preview course** chip. The started attempt is an
+ordinary saved lesson. Releasing the course offers **Start lesson** to everyone; draft lessons and disabled courses stay refused.
 
 Run `vibe64 training publish-manifest <course.json> <committed-topic-directory...>`
 with one canonical repository root for each selected topic. Each topic's package

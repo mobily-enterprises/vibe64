@@ -190,7 +190,7 @@ In supported hosted installations, ask Colleague to admit your exact clean
 committed snapshot from the authorized authoring session. Then open Learning with
 **L**; on its **Courses** tab the **Author trial** card shows the snapshot's lesson
 and release, and **Resume author trial** opens it in the ordinary lesson reader, the page's **Lesson** tab. This saved trial has isolated progress; it is not an
-enabled learner course. Ordinary **Start** still requires a published lesson in
+enabled learner course. Ordinary **Start lesson** still requires a published lesson in
 an enabled release. Local validation/bundling alone admits no trial. Do not change
 a draft's status to bypass that guard or report a trial as published progress.
 

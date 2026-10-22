@@ -8,7 +8,7 @@ restart or delete it.
 
 ## One lesson in progress
 
-Starting a lesson (**Courses**, then **Start**) begins one run of it, called an
+Starting a lesson (**Courses**, then **Start lesson**) begins one run of it, called an
 attempt. The attempt owns:
 
 - its step results,

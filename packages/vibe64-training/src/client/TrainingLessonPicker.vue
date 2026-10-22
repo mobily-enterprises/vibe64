@@ -5,6 +5,7 @@ import TrainingCoursePage from "./TrainingCoursePage.vue";
 import TrainingCourseArt from "./TrainingCourseArt.vue";
 import TrainingCourseCatalogue from "./TrainingCourseCatalogue.vue";
 import TrainingProgressRing from "./TrainingProgressRing.vue";
+import TrainingStartFeedback from "./TrainingStartFeedback.vue";
 import { courseProgress, courseStatusLabel, offered, previewCourse, previewNote } from "./courseProgress.js";
 import { trainingIcons as icons } from "./trainingIcons.js";
 
@@ -22,6 +23,8 @@ const props = defineProps({
   createCourse: { type: Function, default: null },
   starting: Boolean,
   startUnconfirmed: Boolean,
+  // The host's message when the last start requested here failed.
+  startError: { type: String, default: "" },
   // Optional official catalogue: supplied only where installation is composed.
   availableResult: { type: Object, default: null },
   availableLoading: Boolean,
@@ -114,8 +117,17 @@ function requestResume() {
 // Course Start selects one exact displayed lesson for the same original start.
 function startLesson(course, lesson) {
   selectionId.value = choiceId(course, lesson);
+  if (startEnabled.value) startedFrom.value = { key: courseKey(course), lesson: choiceId(course, lesson) };
   requestStart();
 }
+// Start feedback is shown on the course and lesson that requested it.
+const startedFrom = ref(null);
+const startFeedback = computed(() => !startedFrom.value ? null
+  : props.starting ? { phase: "starting" }
+    : props.startError ? { phase: "failed", message: props.startError }
+      : props.startUnconfirmed ? { phase: "unconfirmed" } : null);
+const feedbackFor = key => startedFrom.value?.key === key ? startFeedback.value : null;
+const startingHere = (course, lesson) => props.starting && startedFrom.value?.lesson === choiceId(course, lesson);
 
 const courseKey = course => JSON.stringify([course.courseId, course.release]);
 const lessonProgress = computed(() => !learningInvalid.value && props.learningResult?.ok === true &&
@@ -280,6 +292,8 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
       :start-allowed="startPossible"
       :can-try-previews="canTryPreviews"
       :resume-allowed="!!resumeEnabled"
+      :start-feedback="feedbackFor(openCourse.key)"
+      :starting-lesson="lesson => startingHere(openCourse.course, lesson)"
       @back="openCourseKey = ''"
       @start="startLesson(openCourse.course, $event)"
       @resume="requestResume"
@@ -314,12 +328,18 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
                 <p v-else-if="previewCourse(course) && !canTryPreviews && !progress.activeHere" class="tlp-card__next tlp-card__preview-note">{{ previewNote }}</p>
               </div>
             </div>
+            <TrainingStartFeedback v-if="feedbackFor(key)" :feedback="feedbackFor(key)" />
           </div>
           <div class="tlp-card__actions">
             <v-btn v-if="progress.activeHere" color="primary" variant="flat" rounded="pill" min-height="48" :prepend-icon="icons.play"
               :disabled="!resumeEnabled" @click="requestResume">Continue lesson</v-btn>
-            <v-btn v-else-if="progress.next" color="primary" variant="flat" rounded="pill" min-height="48" :prepend-icon="icons.play"
-              :disabled="!startPossible" @click="startLesson(course, progress.next)">{{ previewCourse(course) ? 'Try preview' : 'Start' }}</v-btn>
+            <v-btn v-else-if="progress.next" color="primary" variant="flat" rounded="pill" min-height="48"
+              :prepend-icon="startingHere(course, progress.next) ? undefined : icons.play"
+              :readonly="startingHere(course, progress.next)" :disabled="!startPossible && !startingHere(course, progress.next)"
+              @click="startLesson(course, progress.next)">
+              <template v-if="startingHere(course, progress.next)"><v-progress-circular indeterminate size="18" width="2" class="tlp-card__spinner" />Starting lesson…</template>
+              <template v-else>Start lesson</template>
+            </v-btn>
             <v-btn v-if="updateFor(course)" variant="tonal" rounded="pill" min-height="48" :prepend-icon="icons.update"
               :loading="installState?.phase === 'installing' && installState.courseId === course.courseId"
               :disabled="busy" @click="requestInstall({ courseId: course.courseId, release: updateFor(course).release })">Update</v-btn>
@@ -338,10 +358,9 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
         :available-error="availableError" :install-state="installState" :busy="busy"
         @install="requestInstall" @view="viewInstalled" @refresh="emit('refresh')" />
     </template>
-    <div v-if="courses.length && (savedAttempt || starting || startUnconfirmed || !canStart)" class="training-lesson-picker__start">
+    <div v-if="courses.length && (savedAttempt || (startUnconfirmed && !startFeedback) || !canStart)" class="training-lesson-picker__start">
       <p v-if="savedAttempt" class="tlp-note"><v-icon :icon="icons.info" size="20" /><span>A lesson is in progress. Starting a different one first asks to archive it.</span></p>
-      <p v-else-if="starting" class="tlp-note tlp-note--progress" role="status"><v-progress-circular indeterminate size="20" width="2" color="primary" /><span>Starting the selected lesson and preparing its practice project. The lesson opens when this finishes.</span></p>
-      <p v-else-if="startUnconfirmed" class="tlp-note tlp-note--warn"><v-icon :icon="icons.info" size="20" /><span>The last lesson start was not confirmed. Use Retry lesson start to repeat that same request.</span></p>
+      <p v-else-if="startUnconfirmed && !startFeedback" class="tlp-note tlp-note--warn"><v-icon :icon="icons.info" size="20" /><span>The last lesson start was not confirmed. Use Retry lesson start to repeat that same request.</span></p>
       <p v-else-if="!canStart" class="tlp-note"><v-icon :icon="icons.info" size="20" /><span>Starting lessons is unavailable in this installation.</span></p>
     </div>
 
@@ -414,7 +433,6 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
 }
 .tlp-note :deep(.v-icon), .tlp-note :deep(.v-progress-circular) { flex: none; margin-top: 1px; }
 .tlp-note--warn { background: var(--v64-learning-container); color: var(--v64-on-learning-container); }
-.tlp-note--progress { background: var(--v64-primary-container); color: var(--v64-on-primary-container); }
 
 /* Saved lesson hero */
 .tlp-saved {
@@ -508,6 +526,7 @@ details[open] > summary .tlp-chevron { transform: rotate(180deg); }
 .tlp-card__progress :deep(.training-progress-ring__content) { font: var(--v64-type-label-md); }
 .tlp-card__count { margin: 0; font: var(--v64-type-label-lg); }
 .tlp-card__next { margin: 2px 0 0; font: var(--v64-type-body-md); color: var(--v64-on-surface-variant); }
+.tlp-card__spinner { margin-right: var(--v64-space-2, 8px); }
 .tlp-card__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--v64-space-2, 8px); padding: var(--v64-space-2, 8px) var(--v64-space-4, 16px) var(--v64-space-4, 16px); }
 
 .tlp-new {

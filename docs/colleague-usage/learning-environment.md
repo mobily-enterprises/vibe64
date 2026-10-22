@@ -150,7 +150,7 @@ and the tab row scrolls sideways when it does not fit.
 catalogue** and, for the workspace owner, **New course**; see
 [Choosing lessons and courses](learning-mode-ui.md).
 
-- **Start**, **Start next lesson**, **Start lesson** or **Try preview** start
+- **Start lesson** or **Start next lesson** start
   the lesson, close Courses and open it in the Lesson tab of its practice
   project (or, without one, of the no-project page). No chat is created. Starting a lesson while a different one is in progress first asks
   **Archive your lesson in progress?**: **Archive and start** or **Keep it**.

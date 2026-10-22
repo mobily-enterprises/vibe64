@@ -15,10 +15,13 @@ const props = defineProps({
 });
 const controller = useVibe64Learning();
 const opened = operation => request(async owner => controller.opened(await operation(owner, { onAdmitted: controller.admitted })));
-const start = selection => request(owner => controller.startLesson(selection, owner.startLesson));
+// A Courses start reports failure on its card; Retry lesson start reports it here.
+const start = (selection, kind = "start") => request(owner => controller.startLesson(selection, owner.startLesson), kind);
 const route = useRoute();
 const error = ref("");
 const errorLearner = ref("");
+// A failed lesson start is shown on the course card that requested it.
+const errorKind = ref("");
 const courses = computed(() => toValue(props.learning.coursesResource.data));
 const progress = computed(() => toValue(props.learning.learningResource.data));
 const busy = computed(() => toValue(props.learning.busy));
@@ -46,13 +49,14 @@ watch(() => [toValue(props.learning.learnerId), toValue(props.learning.active), 
   errorLearner.value = "";
 }, { flush: "sync" });
 
-async function request(operation) {
+async function request(operation, kind = "") {
   const owner = props.learning;
   const learner = toValue(owner.learnerId);
   const target = route.fullPath;
   const generation = feedbackGeneration;
   error.value = "";
   errorLearner.value = learner;
+  errorKind.value = kind;
   try { return await operation(owner); }
   catch (cause) {
     // The saved lesson now says it waits for the learner's AI (aiNotice).
@@ -70,7 +74,7 @@ async function request(operation) {
 
 <template>
   <div class="vibe64-learning-launcher">
-    <v-alert v-if="error && errorVisible" type="error" variant="tonal" class="vibe64-learning-launcher__error">
+    <v-alert v-if="error && errorVisible && errorKind !== 'start'" type="error" variant="tonal" class="vibe64-learning-launcher__error">
       {{ error }}
     </v-alert>
     <v-alert v-if="aiNotice" type="warning" variant="tonal" class="vibe64-learning-launcher__error" data-test="learning-ai-notice">
@@ -79,7 +83,7 @@ async function request(operation) {
         Set up your AI
       </v-btn>
     </v-alert>
-    <v-btn v-if="retry" class="vibe64-learning-launcher__retry" variant="tonal" rounded="pill" min-height="48" :disabled="busy || !canRequest" @click="start(toValue(learning.startRetry))">
+    <v-btn v-if="retry" class="vibe64-learning-launcher__retry" variant="tonal" rounded="pill" min-height="48" :disabled="busy || !canRequest" @click="start(toValue(learning.startRetry), '')">
       Retry lesson start
     </v-btn>
     <section v-if="trialEnabled && trialResource" class="vibe64-learning-launcher__trial" aria-label="Saved author trial" :aria-busy="toValue(trialResource.isLoading)">
@@ -122,6 +126,7 @@ async function request(operation) {
       :install-state="installState"
       :starting="starting"
       :start-unconfirmed="Boolean(retry)"
+      :start-error="error && errorVisible && errorKind === 'start' ? error : ''"
       @refresh="request(owner => owner.refresh())"
       @start="start"
       @resume="opened((owner, options) => owner.resumeLesson($event.attemptId, options))"

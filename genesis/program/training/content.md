@@ -607,12 +607,12 @@ one course's topics and lesson statuses. `courseProgress.js` joins each displaye
 lesson's exact code/hash with `learning.read`'s `lessonProgress` (the learner
 store's per-lesson summary of the same verified passes): Completed, In progress
 (open attempt or some passes) or Not started. Course progress counts completed
-required lessons. Card **Start**, **Start next lesson** and per-lesson **Start
+required lessons. Card **Start lesson**, **Start next lesson** and per-lesson **Start
 lesson** select one exact displayed lesson and use the same start emit below
 (an archived lesson starts again as a new attempt; a different lesson in
 progress makes the server refuse once and the controller ask to archive it);
-on an enabled preview course they read **Try preview** and appear only when
-`courses.list` reports `canTryPreviews` (members see the preview note instead);
+on an enabled preview course they keep these labels (the **Preview course** chip
+says it is a preview) and appear only when `courses.list` reports `canTryPreviews` (members see the preview note instead);
 **Continue** is the original saved-attempt resume. `TrainingCourseCreator` lets
 the owner name a custom course and order whole topics from enabled released
 courses; the parent supplies `createCourse`, which calls the owner-only

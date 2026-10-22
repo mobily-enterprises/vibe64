@@ -89,6 +89,7 @@ import { afterEach, vi } from "vitest";
 import TrainingLessonPicker from "../../packages/vibe64-training/src/client/TrainingLessonPicker.vue";
 import TrainingCoursePage from "../../packages/vibe64-training/src/client/TrainingCoursePage.vue";
 import TrainingCourseCreator from "../../packages/vibe64-training/src/client/TrainingCourseCreator.vue";
+import TrainingStartFeedback from "../../packages/vibe64-training/src/client/TrainingStartFeedback.vue";
 import { courseProgress } from "../../packages/vibe64-training/src/client/courseProgress.js";
 
 const pickerHash = "c".repeat(64);
@@ -200,7 +201,7 @@ describe("Training lesson picker prerequisite", () => {
     expect(html).toContain(kind === "disabled" ? "Disabled for new lessons" : kind === "preview" ? "Preview course" : "Draft — unavailable for new lessons");
   });
 
-  it("offers Try preview on a preview course only when courses.list reports the person may try previews", async () => {
+  it("offers Start lesson on a preview course only when courses.list reports the person may try previews", async () => {
     const catalogue = pickerCatalogue();
     catalogue.courses[0].status = "preview";
     const owner = { ...catalogue, canTryPreviews: true };
@@ -209,25 +210,25 @@ describe("Training lesson picker prerequisite", () => {
     state.startLesson(owner.courses[0], owner.courses[0].lessons[0]);
     expect(start).toHaveBeenCalledExactlyOnceWith({ courseId: "getting-started", release: "0.1.7", lessonCode: "V64-START-00", expectedRevision: 9 });
     const ownerCard = await renderPicker({ catalogueResult: owner, learningResult: pickerLearning(), canStart: true });
-    expect(ownerCard).toContain("Try preview");
+    expect(ownerCard).toContain("Start lesson");
     expect(ownerCard).toContain("Preview course");
     expect(ownerCard).not.toContain("the workspace owner can try it");
     const ownerPage = await renderPicker({ course: owner.courses[0], canTryPreviews: true, startAllowed: true, resumeAllowed: true,
       progress: courseProgress(owner.courses[0], [], null, [], { canTryPreviews: true }) }, TrainingCoursePage);
-    expect(ownerPage).toContain("Try preview");
-    expect(ownerPage).not.toContain("Start lesson");
+    expect(ownerPage).toContain("Start next lesson");
+    expect(ownerPage).toContain("Start lesson");
 
     const memberCard = await renderPicker({ catalogueResult: catalogue, learningResult: pickerLearning(), canStart: true });
     expect(memberCard).toContain("Preview — the workspace owner can try it; it becomes startable when released.");
-    expect(memberCard).not.toContain("Try preview");
+    expect(memberCard).not.toContain("Start lesson");
     const memberPage = await renderCoursePage(catalogue.courses[0]);
     expect(memberPage).toContain("Preview — the workspace owner can try it; it becomes startable when released.");
-    expect(memberPage).not.toContain("Try preview");
     expect(memberPage).not.toContain("Start lesson");
+    expect(memberPage).not.toContain("Start next lesson");
 
     const released = await renderPicker({ catalogueResult: { ...pickerCatalogue(), canTryPreviews: true }, learningResult: pickerLearning(), canStart: true });
     expect(released).not.toContain("Try preview");
-    expect(released).toContain(">Start<");
+    expect(released).toContain("Start lesson");
   });
 
   it("resumes the exact saved attempt independently of disabled or missing current catalogue release", () => {
@@ -306,13 +307,45 @@ describe("Training lesson picker prerequisite", () => {
       pickerApp.unmount(); pickerApp = null;
     }
     const starting = await renderPicker({ catalogueResult: pickerCatalogue(), learningResult: pickerLearning(), canStart: true, busy: true, starting: true });
-    expect(starting).toContain("Starting the selected lesson");
     expect(starting).not.toContain("unavailable in this installation");
     const unconfirmed = await renderPicker({ catalogueResult: pickerCatalogue(), learningResult: pickerLearning(), canStart: true, startUnconfirmed: true });
     expect(unconfirmed).toContain("Use Retry lesson start");
     expect(unconfirmed).not.toContain("unavailable in this installation");
     expect(await renderPicker({ catalogueResult: pickerCatalogue(), learningResult: pickerLearning(), canStart: false }))
       .toContain("Starting lessons is unavailable in this installation.");
+  });
+
+  it("shows a start's progress and failure on the course and lesson that requested it", async () => {
+    const start = vi.fn();
+    const state = mountPicker({ onStart: start });
+    const [course] = state.courses;
+    const key = state.courseKey(course);
+    expect(state.feedbackFor(key)).toBeNull();
+    state.startLesson(course, course.lessons[0]);
+    expect(start).toHaveBeenCalledOnce();
+    const props = pickerApp._instance.props;
+    props.starting = true; props.busy = true;
+    await nextTick();
+    expect(state.feedbackFor(key)).toEqual({ phase: "starting" });
+    expect(state.feedbackFor("other")).toBeNull();
+    expect(state.startingHere(course, course.lessons[0])).toBe(true);
+    expect(state.startingHere(course, course.lessons[1])).toBe(false);
+    props.starting = false; props.busy = false; props.startError = "No practice project could be created.";
+    await nextTick();
+    expect(state.feedbackFor(key)).toEqual({ phase: "failed", message: "No practice project could be created." });
+    expect(state.startingHere(course, course.lessons[0])).toBe(false);
+
+    const progress = await renderPicker({ feedback: { phase: "starting" } }, TrainingStartFeedback);
+    expect(progress).toContain("Creating your practice project.");
+    expect(progress).toContain("the lesson opens by itself when it is ready");
+    expect(progress).toContain('role="status"');
+    const failed = await renderPicker({ feedback: { phase: "failed", message: "No practice project could be created." } }, TrainingStartFeedback);
+    expect(failed).toContain("The lesson did not start");
+    expect(failed).toContain('role="alert"');
+    const page = await renderCoursePage(undefined, { startAllowed: false, startFeedback: { phase: "starting" },
+      startingLesson: lesson => lesson.code === "V64-START-00" });
+    expect(page).toContain("Starting lesson…");
+    expect(page).toContain("Creating your practice project.");
   });
 
   it("retains displayed cached choices during refresh without admitting new work", async () => {
@@ -396,7 +429,7 @@ describe("Training courses", () => {
     expect(start).toHaveBeenCalledExactlyOnceWith({ courseId: "getting-started", release: "0.1.7", lessonCode: "V64-START-01", expectedRevision: 9 });
     const html = await renderPicker({ catalogueResult: pickerCatalogue(), learningResult: learning, canStart: true });
     expect(html).toContain("1 of 2 lessons complete");
-    expect(html).toContain(">Start<");
+    expect(html).toContain(">Start lesson<");
     expect(await renderCoursePage(undefined, { lessonProgress: learning.lessonProgress })).toContain("Completed");
   });
 

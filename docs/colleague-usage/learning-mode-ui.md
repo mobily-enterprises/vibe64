@@ -26,7 +26,7 @@ already saved; opening a course grades nothing. A lesson passed in one course
 counts in every course that contains the same lesson.
 
 On a card, **Continue lesson** reopens your lesson in progress when it belongs
-to that course. Otherwise **Start** starts the course's first published lesson
+to that course. Otherwise **Start lesson** starts the course's first published lesson
 that is not yet complete. **View course** opens the course page: a header with
 the cover and a ring of lessons complete, an **Up next** card, then its topics
 in order, each with its lessons, their title and code and a status of
@@ -61,9 +61,12 @@ press **L** to go back to Develop. Its steps say which real screens it uses.
 
 ## Starting, continuing, archiving and finishing
 
-While a start is in progress, Courses says **Starting the selected lesson and
-preparing its practice project. The lesson opens when this finishes.** Every
-start button stays disabled until the request settles. As soon as the start is
+While a start is in progress, the button you pressed reads **Starting lesson…**
+with a spinner, and the same course card (or course page) says **Starting your
+lesson: Creating your practice project. This can take a while; the lesson opens
+by itself when it is ready.** Other start buttons stay disabled until the
+request settles. If the start fails, the card says **The lesson did not start**
+with the reason. As soon as the start is
 confirmed, Courses closes by itself and the lesson opens in the **Lesson** tab
 of its practice project; you do not need **Continue lesson**. A practice project's Workspace setup can
 continue afterwards and the lesson becomes ready when setup succeeds (see
@@ -125,12 +128,12 @@ disable-course` (see `docs/training-content.md`) and create another one.
 ## Preview courses
 
 A **Preview course** is for the workspace owner to review before release. The
-owner (on local Vibe64, you) sees **Try preview** instead of **Start**, **Start
-next lesson** and **Start lesson**, on desktop and phone; it starts an ordinary
-saved lesson exactly like Start. Others see **Preview — the workspace owner can
+owner (on local Vibe64, you) sees the ordinary **Start lesson** and **Start next
+lesson** buttons beside the **Preview course** chip, on desktop and phone; they
+start an ordinary saved lesson. Others see **Preview — the workspace owner can
 try it; it becomes startable when released** and no start button, and the server
 refuses their start. Drafts and disabled courses stay unavailable to everyone.
-Once released, everyone gets **Start**.
+Once released, everyone gets **Start lesson**.
 
 ## What Colleague can do
 

@@ -55,10 +55,10 @@ A **Preview** course can be installed so that it is ready, and the row says
 **Preview course: it can be installed; until it is released, only the workspace
 owner can try its lessons from Courses.** Its installed card keeps the
 **Preview course** chip. The workspace owner (on local Vibe64, you) sees
-**Try preview**, which starts the lesson exactly like **Start**; everyone else
+the ordinary **Start lesson** button, which starts the lesson as usual; everyone else
 sees the course with the note **Preview — the workspace owner can try it; it
 becomes startable when released** and no start button. Installing does not change
-this; once the course is released, everyone gets **Start**.
+this; once the course is released, everyone gets **Start lesson**.
 
 ## Updating a course
 

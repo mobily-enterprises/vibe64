@@ -3,6 +3,7 @@ import { computed } from "vue";
 import { courseStatusLabel, earlierCompletionLabel, offered, previewCourse, previewNote, statusLabels } from "./courseProgress.js";
 import TrainingCourseArt from "./TrainingCourseArt.vue";
 import TrainingProgressRing from "./TrainingProgressRing.vue";
+import TrainingStartFeedback from "./TrainingStartFeedback.vue";
 
 // Presentational course page. The parent picker owns every start/resume gate
 // and emits only the original start and resume intents. Every mastery state,
@@ -13,7 +14,11 @@ const props = defineProps({
   startAllowed: Boolean,
   // Display only: whether courses.list reports this person may try preview courses.
   canTryPreviews: Boolean,
-  resumeAllowed: Boolean
+  resumeAllowed: Boolean,
+  // The picker's feedback for a start requested from this course, if any.
+  startFeedback: { type: Object, default: null },
+  // Whether the start of this exact lesson is in progress.
+  startingLesson: { type: Function, default: () => false }
 });
 const emit = defineEmits(["back", "start", "resume"]);
 
@@ -76,7 +81,11 @@ const path = computed(() => {
           <p class="training-course-page__next-label">Up next</p>
           <p class="training-course-page__next-title">{{ progress.next.title }} · {{ progress.next.code }}</p>
         </div>
-        <v-btn color="primary" variant="flat" min-height="48" rounded="pill" :disabled="!startAllowed" @click="emit('start', progress.next)">{{ preview ? 'Try preview' : 'Start next lesson' }}</v-btn>
+        <v-btn color="primary" variant="flat" min-height="48" rounded="pill" :readonly="startingLesson(progress.next)"
+          :disabled="!startAllowed && !startingLesson(progress.next)" @click="emit('start', progress.next)">
+          <template v-if="startingLesson(progress.next)"><v-progress-circular indeterminate size="18" width="2" class="training-course-page__spinner" />Starting lesson…</template>
+          <template v-else>Start next lesson</template>
+        </v-btn>
       </template>
       <div v-else-if="complete" class="training-course-page__next-text">
         <p class="training-course-page__next-label">All lessons done</p>
@@ -85,6 +94,7 @@ const path = computed(() => {
       <p v-else-if="preview && !canTryPreviews" class="training-course-page__next-title training-course-page__preview-note">{{ previewNote }}</p>
       <p v-else class="training-course-page__next-title">No lesson in this course can be started here.</p>
     </div>
+    <TrainingStartFeedback v-if="startFeedback" :feedback="startFeedback" />
 
     <ol class="training-course-page__topics">
       <li v-for="{ topic, index, done, lessons } in path" :key="JSON.stringify([topic.topicId, topic.release])" class="training-course-page__topic">
@@ -122,8 +132,9 @@ const path = computed(() => {
               <v-btn
                 v-if="offered(course, lesson, canTryPreviews) && !current"
                 :variant="next ? 'tonal' : 'text'" color="primary" min-height="48" rounded="pill"
-                class="training-course-page__start" :disabled="!startAllowed" @click="emit('start', lesson)"
-              >{{ preview ? 'Try preview' : 'Start lesson' }}</v-btn>
+                class="training-course-page__start" :readonly="startingLesson(lesson)" :disabled="!startAllowed && !startingLesson(lesson)"
+                @click="emit('start', lesson)"
+              ><template v-if="startingLesson(lesson)"><v-progress-circular indeterminate size="18" width="2" class="training-course-page__spinner" />Starting lesson…</template><template v-else>Start lesson</template></v-btn>
             </div>
           </li>
         </ol>
@@ -133,6 +144,7 @@ const path = computed(() => {
 </template>
 
 <style scoped>
+.training-course-page__spinner { margin-right: var(--v64-space-2, 8px); }
 .training-course-page__earlier { margin: 2px 0 0; font: var(--v64-type-body-sm, 400 0.8125rem/1.25rem system-ui, sans-serif); color: var(--v64-on-surface-variant); }
 .training-course-page {
   --tcp-node: 40px;
