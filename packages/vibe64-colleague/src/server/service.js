@@ -1610,11 +1610,14 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     },
     async navigate(input, context) {
       const state = await stateFor(context);
-      if (input.learning && input.learning.open !== true && (input.learning.attemptId || input.learning.stepId)) {
-        return { ok: false, error: "Minimising Learning cannot also select a lesson or step." };
+      if (input.learning && typeof input.learning.open === "boolean" && (input.learning.attemptId || input.learning.stepId)) {
+        return { ok: false, error: "open opens or closes the Courses catalogue only. To show a lesson step in the Lesson tab, send learning={attemptId, stepId} without open." };
       }
       if (input.learning?.stepId && !input.learning.attemptId) {
         return { ok: false, error: "Choose the exact lesson attempt before its step." };
+      }
+      if (input.learning && typeof input.learning.open !== "boolean" && !input.learning.attemptId) {
+        return { ok: false, error: "Send learning={open:true|false} for Courses, or learning={attemptId, stepId} for a lesson step." };
       }
       let guided = null;
       if (input.guide) {
@@ -1666,9 +1669,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         ...(input.databaseView ? { databaseView: input.databaseView } : {}),
         ...(input.databaseTable ? { databaseTable: input.databaseTable } : {}),
         ...(input.planView ? { planView: input.planView } : {}),
-        ...(input.learning ? { learning: { open: input.learning.open === true,
-          ...(input.learning.attemptId ? { attemptId: input.learning.attemptId } : {}),
-          ...(input.learning.stepId ? { stepId: input.learning.stepId } : {}) } } : {}),
+        ...(input.learning ? { learning: typeof input.learning.open === "boolean" ? { open: input.learning.open }
+          : { attemptId: input.learning.attemptId, ...(input.learning.stepId ? { stepId: input.learning.stepId } : {}) } } : {}),
         sessionId: input.sessionId || "", conversationId: input.conversationId || "", status: "pending" };
       return state.navigation.begin(connection, command);
     },

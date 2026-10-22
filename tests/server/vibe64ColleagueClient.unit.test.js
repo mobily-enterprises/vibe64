@@ -251,19 +251,13 @@ test("on a phone, the learner's own L hiding Learning opened from Colleague retu
   await flush();
   assert.equal(view.state.shown.value, false);
 
-  // The step dialog's Open in Learning behaves like Colleague's Learning command.
-  learning.mode = { on: true, currentAttemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" };
-  learning.stepId = "read";
-  learning.lesson = { title: "Lesson", steps: [{ id: "read", title: "Read" }] };
+  // A lesson step shown for Colleague (the Lesson pane) minimises the phone
+  // dialog without the Courses return.
   view.state.open.value = true;
   await flush();
-  view.state.openLearningStep();
+  await view.state.handleNavigation({ id: "phone-lesson", status: "pending", learning: { attemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", stepId: "read" } });
   await flush();
-  assert.equal(view.state.shown.value, false);
-  assert.equal(learning.coursesOpen, true);
-  learning.closeCourses();
-  await flush();
-  assert.equal(view.state.shown.value, true);
+  assert.equal(view.state.shown.value, false, "the phone dialog gives way to the Lesson pane");
 });
 
 test("operation receipts open their exact target and prepare recovery without replaying an effect", async t => {
@@ -994,7 +988,6 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     "@jskit-ai/assistant-core/client/conversation": { AssistantConversationElement: {}, AssistantConversationStatus: {}, AssistantPromptInput: {}, AssistantTranscript: {} },
     "@jskit-ai/assistant-core/shared/conversation": { conversationTurnsFromMessages, mergeConversationLogPages, normalizeConversationLogPage },
     "/src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue": { default: {} },
-    "/src/components/learning/Vibe64LearningStepDialog.vue": { default: {} },
     "/src/lib/vibe64AccountConnectionsDialog.js": {
       requestVibe64AccountConnectionsDialog: options => { events.push(["account-setup", options]); return true; }
     }
@@ -1702,11 +1695,11 @@ test("Colleague opening an app place minimises Learning, and a phone minimises i
   assert.equal(view.state.shown.value, true, "ordinary navigation keeps the original phone behaviour");
 });
 
-test("the header's current-step button follows the shared Learning controller and its dialog reopens the exact step in L", async t => {
+test("the header's current-step button follows the shared Learning controller and shows that exact step in the Lesson pane", async t => {
   const calls = [];
-  const controller = vue.reactive({ coursesOpen: false, surface: "lesson", mode: { on: true, currentAttemptId: "" }, stepId: "",
+  const controller = vue.reactive({ coursesOpen: false, surface: "courses", mode: { on: true, currentAttemptId: "" }, stepId: "",
     lesson: { title: "Your first change", steps: [{ id: "read", title: "Read the greeting" }, { id: "change", title: "Change the greeting" }] },
-    results: [], show(input) { calls.push(input); }, minimise() {} });
+    results: [], show() { throw new Error("the step button never opens Courses"); }, openLesson(input) { calls.push(input); }, minimise() {} });
   const view = mount(t, async () => ({ conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} }),
     undefined, null, null, null, { learning: controller });
   await flush();
@@ -1726,16 +1719,16 @@ test("the header's current-step button follows the shared Learning controller an
   controller.results = [...controller.results, { stepId: "change", outcome: "passed" }];
   await flush();
   assert.equal(view.state.learningStep.value.passed, true);
-  view.state.stepDialog.value = true;
-  view.state.openLearningStep();
-  assert.equal(view.state.stepDialog.value, false, "Open in Learning closes the step dialog");
-  assert.deepEqual(calls, [{ attemptId, stepId: "change" }]);
-  // On a phone the full-screen dialog would cover Learning: it minimises first.
-  view.state.xs.value = true;
   view.state.open.value = true;
+  view.state.showLearningStep();
+  await flush();
+  assert.deepEqual(calls, [{ attemptId, stepId: "change" }]);
+  assert.equal(view.state.shown.value, true, "on a desktop Colleague stays beside the Lesson pane");
+  // On a phone the full-screen dialog would cover the Lesson pane: it minimises first.
+  view.state.xs.value = true;
   await flush();
   assert.equal(view.state.shown.value, true);
-  view.state.openLearningStep();
+  view.state.showLearningStep();
   await flush();
   assert.equal(view.state.shown.value, false, "the phone dialog minimises so the lesson is visible");
   assert.deepEqual(calls.at(-1), { attemptId, stepId: "change" });
@@ -1746,61 +1739,14 @@ test("the header's current-step button follows the shared Learning controller an
   assert.equal(view.state.learningStep.value, null, "an unknown step shows no step button");
   controller.stepId = "change";
   await flush();
-  view.state.stepDialog.value = true;
   controller.lesson = { ...controller.lesson, attempt: { ended: { reason: "restart" } } };
   await flush();
   assert.equal(view.state.learningStep.value, null, "an ended lesson shows no step button");
-  assert.equal(view.state.stepDialog.value, false, "and closes its dialog");
   // Drawer and eager phone dialog both stay mounted: only the one in use carries the button.
   const template = descriptor.template.content;
   assert.match(template, /<v-btn v-if="learningStep && !xs" v-bind="stepButton"/u);
   assert.match(template, /<template v-if="learningStep && xs" #header-actions>/u);
   assert.equal(template.match(/v-bind="stepButton"/gu).length, 2);
-});
-
-test("the current-step dialog gives way to Show me, Teach me and L, and comes back when Show me cannot show its place", async t => {
-  const controller = vue.reactive({ coursesOpen: false, surface: "lesson", mode: { on: true, currentAttemptId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
-    stepId: "read", lesson: { title: "Lesson", steps: [{ id: "read", title: "Read" }] }, results: [],
-    openCourses() { controller.coursesOpen = true; controller.hiddenBy = ""; }, closeCourses() { controller.coursesOpen = false; controller.hiddenBy = "learner"; }, hiddenBy: "" });
-  const view = mount(t, async () => ({ conversationId: "conversation", messages: [], status: "ready", assistantSelection: {} }),
-    undefined, null, null, null, { learning: controller });
-  await flush();
-  // Desktop: Show me and Teach me only close the dialog; Colleague stays.
-  view.state.open.value = true;
-  view.state.stepDialog.value = true;
-  view.state.leaveStep("show-me");
-  await flush();
-  assert.equal(view.state.stepDialog.value, false);
-  assert.equal(view.state.shown.value, true);
-  view.state.returnToStep();
-  assert.equal(view.state.stepDialog.value, true, "an unshown place brings the step back");
-  view.state.leaveStep("teach-me");
-  assert.equal(view.state.stepDialog.value, false);
-  // Phone: Show me minimises Colleague's dialog so the place is visible; the
-  // reason brings both back, the step dialog above Colleague's.
-  view.state.xs.value = true;
-  view.state.stepDialog.value = true;
-  view.state.leaveStep("show-me");
-  await flush();
-  assert.equal(view.state.shown.value, false);
-  view.state.returnToStep();
-  await flush();
-  assert.equal(view.state.shown.value, true);
-  assert.equal(view.state.stepDialog.value, true);
-  // Teach me keeps Colleague's phone dialog: Colleague answers there.
-  view.state.leaveStep("teach-me");
-  await flush();
-  assert.equal(view.state.shown.value, true);
-  // L opening (a finished lesson's screen) closes the dialog; on a phone
-  // Colleague gives way and returns when the learner hides L.
-  view.state.stepDialog.value = true;
-  controller.openCourses();
-  await flush();
-  assert.equal(view.state.stepDialog.value, false);
-  assert.equal(view.state.shown.value, false);
-  controller.closeCourses();
-  await flush();
-  assert.equal(view.state.shown.value, true);
 });
 
 test("previous-conversation list offers explicit fresh recovery after a terminal provider failure without uncertain delivery", async t => {
@@ -2225,7 +2171,7 @@ test("the local Colleague host hands Colleague its own browser navigator", async
   assert.deepEqual(Object.keys(await received.navigate({ managementView: "accounts" })), ["route"]);
 });
 
-test("the local Colleague host reports the shared Learning state and opens its exact lesson step", async t => {
+test("the local Colleague host reports the shared Learning state, opens Courses and shows its exact lesson step in the Lesson pane", async t => {
   const hostKeys = await import("../../src/lib/vibe64AssistantHost.js");
   const hostFilename = new URL("../../src/components/Vibe64LocalColleagueHost.vue", import.meta.url);
   const { descriptor } = parse(await readFile(hostFilename, "utf8"), { filename: String(hostFilename) });
@@ -2252,10 +2198,13 @@ test("the local Colleague host reports the shared Learning state and opens its e
   const renderer = vue.createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
     setText() {}, setElementText() {}, patchProp() {}, insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
   const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
-  const controller = vue.reactive({ coursesOpen: false, surface: "lesson", mode: { on: true, currentAttemptId: attemptId }, stepId: "one",
-    async show({ attemptId: shownAttempt, stepId } = {}) {
+  const layout = vue.ref({ ready: true, projectSlug: "demo", projectVisible: true, lessonVisible: false, showProject() {} });
+  const controller = vue.reactive({ coursesOpen: false, surface: "courses", mode: { on: true, currentAttemptId: attemptId }, stepId: "one",
+    async show() { await Promise.resolve(); this.coursesOpen = true; },
+    async openLesson({ stepId } = {}) {
       await Promise.resolve();
-      Object.assign(this, { coursesOpen: true, surface: shownAttempt ? "lesson" : this.surface, ...(stepId ? { stepId } : {}) });
+      Object.assign(this, { coursesOpen: false, ...(stepId ? { stepId } : {}) });
+      layout.value = { ...layout.value, lessonVisible: true };
     },
     minimise() { this.coursesOpen = false; } });
   const navigation = vue.shallowRef(null);
@@ -2264,16 +2213,19 @@ test("the local Colleague host reports the shared Learning state and opens its e
   host.provide(hostKeys.VIBE64_BROWSER_NAVIGATION_KEY, navigation);
   host.provide(hostKeys.VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
   host.provide(hostKeys.VIBE64_LEARNING_KEY, vue.shallowRef(controller));
-  host.provide(hostKeys.VIBE64_COLLEAGUE_LAYOUT_KEY, vue.ref({ ready: true, projectSlug: "demo", projectVisible: true, showProject() {} }));
+  host.provide(hostKeys.VIBE64_COLLEAGUE_LAYOUT_KEY, layout);
   host.mount({}); t.after(() => host.unmount());
   await flush();
   assert.equal(received.focus.learningOpen, false);
+  assert.equal(received.focus.pane, "preview");
   assert.equal(received.focus.learningSurface, undefined, "closed Courses shows no surface");
   assert.equal(received.focus.learningAttemptId, attemptId, "the current step stays known while Courses is closed");
   assert.equal(received.focus.learningStepId, "one");
-  const opened = await navigation.value({ id: "learning", status: "pending", learning: { open: true, attemptId, stepId: "two" } });
-  assert.deepEqual([opened.learningOpen, opened.learningSurface, opened.learningAttemptId, opened.learningStepId],
-    [true, "lesson", attemptId, "two"]);
+  const courses = await navigation.value({ id: "courses", status: "pending", learning: { open: true } });
+  assert.deepEqual([courses.learningOpen, courses.learningSurface], [true, "courses"]);
+  const opened = await navigation.value({ id: "learning", status: "pending", learning: { attemptId, stepId: "two" } });
+  assert.deepEqual([opened.learningOpen, opened.pane, opened.learningAttemptId, opened.learningStepId],
+    [false, "lesson", attemptId, "two"], "the step shows in the Lesson pane, with Courses closed");
   const minimised = await navigation.value({ id: "minimise", status: "pending", learning: { open: false } });
   assert.equal(minimised.learningOpen, false);
 });

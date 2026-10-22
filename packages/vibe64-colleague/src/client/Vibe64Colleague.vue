@@ -15,7 +15,6 @@ import { createAssistantApi } from "@jskit-ai/assistant-core/client";
 import { useAssistantConversation } from "@jskit-ai/assistant-runtime/client";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import Vibe64SessionAssistantMenu from "/src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
-import Vibe64LearningStepDialog from "/src/components/learning/Vibe64LearningStepDialog.vue";
 import { requestVibe64AccountConnectionsDialog } from "/src/lib/vibe64AccountConnectionsDialog.js";
 import { AiOnboardingNudge, requestVibe64AiOnboarding } from "@local/vibe64-accounts/client";
 import { registerVibe64ColleagueModel } from "/src/lib/vibe64ColleagueModelBridge.js";
@@ -48,13 +47,13 @@ const companionView = inject(VIBE64_COLLEAGUE_VIEW_KEY, null);
 // The shared Learning controller (L and Courses), when this host provides one.
 const learningOwner = inject(VIBE64_LEARNING_KEY, null);
 const learningController = computed(() => unref(learningOwner) || null);
-// The header's current-step button reads only the Learning controller's client state;
-// it opens just that step in a dialog above Colleague (Vibe64LearningStepDialog).
+// The header's current-step button reads only the Learning controller's client
+// state; it shows that step in the Learn page's Lesson pane.
 const learningStep = computed(() => {
   const controller = learningController.value;
   // Only Learn mode teaches; Develop's Colleague shows no lesson step.
   const mode = unref(controller?.mode);
-  const attemptId = mode?.on === true ? mode.currentAttemptId : "";
+  const attemptId = mode?.on === true ? unref(controller.lessonAttemptId) ?? mode.currentAttemptId : "";
   const stepId = unref(controller?.stepId);
   const lesson = unref(controller?.lesson);
   const steps = Array.isArray(lesson?.steps) ? lesson.steps : [];
@@ -67,37 +66,23 @@ const learningStep = computed(() => {
   return { attemptId, stepId, lessonTitle: String(lesson.title || ""), title: String(steps[index].title || ""),
     position: index + 1, total: steps.length, passed };
 });
-const stepDialog = ref(false);
 // The same compact button in the drawer header (desktop) or the phone dialog
 // header; both stay mounted (the dialog is eager), so only one carries it.
 const stepButton = computed(() => learningStep.value && {
   class: ["vibe64-colleague__step-button", { "vibe64-colleague__step-button--passed": learningStep.value.passed }],
-  variant: "flat", rounded: "pill", height: 32, "data-test": "colleague-current-step", "aria-haspopup": "dialog",
-  "aria-expanded": stepDialog.value, "aria-label": `Current lesson step: ${learningStep.value.title}`,
+  variant: "flat", rounded: "pill", height: 32, "data-test": "colleague-current-step",
+  "aria-label": `Show the current lesson step: ${learningStep.value.title}`,
   title: `Current lesson step: ${learningStep.value.title}`
 });
-watch(learningStep, step => { if (!step) stepDialog.value = false; });
-// Show me hides the step (and, on a phone, Colleague's dialog) so the real
-// place is visible; Teach me only hides the step, Colleague answers below it.
-function leaveStep(kind) {
-  stepDialog.value = false;
-  if (kind === "show-me" && xs.value && shown.value) toggleConversation().catch(reportFailure);
-}
-// Show me could not show its place: the step comes back with the reason.
-function returnToStep() {
-  if (xs.value) reopenConversation();
-  stepDialog.value = true;
-}
-// Open in Learning: Courses at exactly this step, like Colleague's Courses command.
-function openLearningStep() {
+// Step N/M: the Lesson pane at this step. A phone shows one surface, so
+// Colleague's full-screen dialog minimises to show it (the avatar brings it back).
+function showLearningStep() {
   const step = learningStep.value;
   const controller = learningController.value;
-  stepDialog.value = false;
-  if (!step || typeof controller?.show !== "function") return;
-  const reopen = () => applyLearningNavigation(controller, { open: true, attemptId: step.attemptId, stepId: step.stepId });
-  // A phone shows one surface: minimise the dialog so Courses is visible.
-  if (xs.value && shown.value) leaveForLearning().then(reopen).catch(reportFailure);
-  else Promise.resolve(reopen()).catch(reportFailure);
+  if (!step || typeof controller?.openLesson !== "function") return;
+  const show = () => applyLearningNavigation(controller, { attemptId: step.attemptId, stepId: step.stepId });
+  if (xs.value && shown.value) toggleConversation().then(show).catch(reportFailure);
+  else Promise.resolve(show()).catch(reportFailure);
 }
 // A phone shows one surface. When Colleague's dialog gave way to Courses and
 // the learner then closes Courses themselves, the dialog comes back (not the
@@ -114,13 +99,8 @@ function reopenConversation() {
   else open.value = true;
 }
 watch(() => unref(learningController.value?.coursesOpen) === true, (learningOpen, wasOpen) => {
-  // Courses opening (Open in Learning, a finished lesson's screen) covers the
-  // step dialog; on a phone Colleague's dialog gives way too and comes back
-  // when the learner closes Courses.
-  if (learningOpen && !wasOpen && stepDialog.value) {
-    stepDialog.value = false;
-    if (xs.value && shown.value) leaveForLearning().catch(reportFailure);
-  }
+  // On a phone, Colleague's dialog comes back when the learner closes the
+  // Courses it gave way to.
   if (learningOpen || !wasOpen) return;
   const back = returnFromLearning && learningController.value?.hiddenBy === "learner";
   returnFromLearning = false;
@@ -280,8 +260,9 @@ const colleagueNavigation = createColleagueNavigation({
   scope: () => ({ mounted, actorKey: actorKey.value, clientId }),
   navigate: () => props.navigate ? navigateBrowser : null,
   beforeNavigate(command) {
-    // A phone shows one surface: reveal the app, Courses or the guide ring.
-    if (xs.value && shown.value && command.learning) return leaveForLearning();
+    // A phone shows one surface: reveal Courses, the Lesson pane, the app or the guide ring.
+    if (xs.value && shown.value && typeof command.learning?.open === "boolean") return leaveForLearning();
+    if (xs.value && shown.value && command.learning) return toggleConversation();
     if (xs.value && shown.value && command.guide) return toggleConversation();
   },
   acknowledge: body => requestColleague("/navigation/ack", { method: "POST", body }),
@@ -908,7 +889,7 @@ onBeforeUnmount(() => {
     <div class="vibe64-colleague__drawer">
       <header class="vibe64-colleague__drawer-header">
         <span class="text-title-large">{{ name }}</span>
-        <v-btn v-if="learningStep && !xs" v-bind="stepButton" @click="stepDialog = true">
+        <v-btn v-if="learningStep && !xs" v-bind="stepButton" @click="showLearningStep">
           <v-icon :icon="learningStep.passed ? mdiCheck : mdiSchoolOutline" size="18" start />Step {{ learningStep.position }}/{{ learningStep.total }}
         </v-btn>
         <v-btn :icon="mdiMinus" variant="text" aria-label="Minimize conversation" title="Minimize conversation" @click="toggleConversation($event).catch(reportFailure)" />
@@ -925,7 +906,7 @@ onBeforeUnmount(() => {
     @update:model-value="value => !value && closeText()" @minimize="toggleConversation($event).catch(reportFailure)"
   >
     <template v-if="learningStep && xs" #header-actions>
-      <v-btn v-bind="stepButton" @click="stepDialog = true">
+      <v-btn v-bind="stepButton" @click="showLearningStep">
         <v-icon :icon="learningStep.passed ? mdiCheck : mdiSchoolOutline" size="18" start />Step {{ learningStep.position }}/{{ learningStep.total }}
       </v-btn>
     </template>
@@ -1033,10 +1014,6 @@ onBeforeUnmount(() => {
       />
     </aside>
   </Teleport>
-  <Vibe64LearningStepDialog
-    v-if="learningStep" v-model="stepDialog" :learning="learningController" :fullscreen="xs"
-    @open-learning="openLearningStep" @leave="leaveStep" @return="returnToStep"
-  />
   <v-dialog v-model="watchDetails" :activator="watchButton?.$el || modelButton?.$el" :open-on-click="false" :fullscreen="xs" max-width="620" scrollable aria-label="Watches and assignments">
     <v-card class="vibe64-colleague__watch-dialog">
       <v-card-title class="vibe64-colleague__watch-title d-flex align-center text-title-large">

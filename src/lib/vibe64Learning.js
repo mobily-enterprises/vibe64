@@ -676,12 +676,13 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     while (!published(projectSlug) && now() < deadline) await new Promise(resolve => setTimeout(resolve, 50));
   }
 
-  // Teach me: minimise Courses and ask this host's Colleague, which opens and
-  // sends the fixed message (watchColleagueLearningRequests in vibe64-colleague).
+  // Teach me: ask this host's Colleague, which opens beside the step and sends
+  // the fixed message (watchColleagueLearningRequests in vibe64-colleague).
+  // The step stays visible; from Courses it moves to the Lesson pane.
   function teachMe(stepId = currentStep.value?.id) {
     if (!state.attemptId || !stepId) throw new Error("Open a lesson step before asking Colleague to teach it.");
     selectStep(stepId);
-    minimise();
+    if (state.open) void openLesson().catch(() => {});
     colleagueRequest.value = Object.freeze({ id: `teach-${now()}-${Math.random().toString(36).slice(2, 8)}`,
       kind: "teach", message: VIBE64_LEARNING_TEACH_MESSAGE, actorKey: state.actorKey, attemptId: state.attemptId, stepId });
     return colleagueRequest.value;

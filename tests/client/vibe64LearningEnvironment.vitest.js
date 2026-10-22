@@ -129,14 +129,22 @@ describe("useVibe64Learning controller", () => {
     expect(learning.minimised).toBe(true);
   });
 
-  it("opens Courses at Colleague's exact lesson step and closes it as app navigation, through the shared Colleague rule", async () => {
+  it("shows Colleague's exact lesson step in the Lesson pane, and opens and closes Courses, through the shared Colleague rule", async () => {
     const { learning } = controller();
     learning.setViewer("member");
     await vi.waitFor(() => expect(learning.mode?.currentAttemptId).toBe(ATTEMPT));
-    const command = { learning: { open: true, attemptId: ATTEMPT, stepId: "tick" } };
+    const courses = { learning: { open: true } };
+    await applyLearningNavigation(learning, courses.learning);
+    expect(learning.coursesOpen).toBe(true);
+    expect(learningPanelMatches(courses, learningPanelFocus(learning))).toBe(true);
+    const command = { learning: { attemptId: ATTEMPT, stepId: "tick" } };
     await applyLearningNavigation(learning, command.learning);
-    expect([learning.coursesOpen, learning.surface, learning.attemptId, learning.stepId]).toEqual([true, "lesson", ATTEMPT, "tick"]);
-    expect(learningPanelMatches(command, learningPanelFocus(learning)), "the acknowledgement Colleague waits for").toBe(true);
+    expect([learning.coursesOpen, learning.hiddenBy, learning.attemptId, learning.stepId], "the step shows in the Lesson pane, Courses closes")
+      .toEqual([false, "", ATTEMPT, "tick"]);
+    const focus = learningPanelFocus(learning);
+    expect(learningPanelMatches(command, { ...focus, pane: "lesson" }), "the acknowledgement Colleague waits for").toBe(true);
+    expect(learningPanelMatches(command, { ...focus, pane: "preview" }), "only while the Lesson pane shows").toBe(false);
+    expect(learningPanelMatches(command, { ...focus, pane: "lesson", learningStepId: "quiz" }), "at that exact step").toBe(false);
     await applyLearningNavigation(learning, { open: false });
     expect([learning.coursesOpen, learning.hiddenBy], "Colleague's close is not the learner's own").toEqual([false, ""]);
   });
@@ -426,7 +434,7 @@ describe("useVibe64Learning controller", () => {
 
     await learning.show();
     const request = learning.teachMe("quiz");
-    expect(learning.minimised).toBe(true);
+    expect(learning.open, "Teach me from Courses moves the step to the Lesson pane, beside Colleague").toBe(false);
     expect(request).toMatchObject({ kind: "teach", message: VIBE64_LEARNING_TEACH_MESSAGE, attemptId: ATTEMPT, stepId: "quiz" });
     expect(learning.focus.value).toEqual({ learningOpen: false, learningSurface: "lesson", learningAttemptId: ATTEMPT, learningStepId: "quiz" });
     expect(learning.consumeColleagueRequest("other")).toBeNull();
@@ -512,7 +520,7 @@ describe("useVibe64Learning controller", () => {
     try {
       learning.teachMe("quiz");
       await flush();
-      expect(learning.minimised).toBe(true);
+      expect(learning.open).toBe(false);
       expect(order).toEqual(["reveal", ["send", VIBE64_LEARNING_TEACH_MESSAGE]]);
       expect(learning.colleagueRequest.value).toBeNull();
       expect(report).not.toHaveBeenCalled();
@@ -645,7 +653,7 @@ const nodes = root => [root, ...root.children.flatMap(nodes)];
 const byTest = (root, id) => nodes(root).find(node => node.props?.["data-test"] === id);
 const textOf = node => [node.text || "", ...node.children.map(textOf)].join("");
 
-// The shared step view (reader and Colleague's step dialog) with a bounded diagram player.
+// The shared step view (the lesson reader) with a bounded diagram player.
 function stepUi(players) {
   const player = Vue.defineComponent({ props: ["resource", "attemptId"], setup(props, { expose }) {
     const instance = { restores: [], commands: [] };
@@ -710,7 +718,7 @@ describe("Learning reader", () => {
       expect(calls.filter(call => call.method === "POST").at(-1)).toMatchObject({ url: VIBE64_LEARNING_ROUTES.stepDone(ATTEMPT), body: { stepId: "tick" } });
       byTest(view.root, "learning-teach-me").props.onClick();
       expect(learning.colleagueRequest.value).toMatchObject({ stepId: "tick", message: VIBE64_LEARNING_TEACH_MESSAGE });
-      expect(learning.minimised).toBe(true);
+      expect(learning.open, "the step moves to the Lesson pane beside Colleague").toBe(false);
     } finally { view.app.unmount(); }
   });
 
@@ -1272,84 +1280,43 @@ describe("The current lesson's linear flow", () => {
     expect([learning.open, learning.finished]).toEqual([false, false]);
   });
 
-  async function mountDialog(learning) {
+  async function mountPane(learning, host = learning) {
     const players = [];
-    const dialog = compiledUi(path.resolve("src/components/learning/Vibe64LearningStepDialog.vue"), {
-      vue: Vue, "@mdi/js": { mdiClose: "close", mdiOpenInNew: "open" }, "./Vibe64LearningStep.vue": { default: stepUi(players) } });
-    const events = [];
+    const reader = compiledUi(path.resolve("src/components/learning/Vibe64LearningReader.vue"), {
+      vue: Vue, "@/lib/vibe64Learning.js": LearningLib, "./Vibe64LearningStep.vue": { default: stepUi(players) },
+      "./Vibe64LearningMarkdown.vue": { default: { props: ["text"], setup: props => () => Vue.h("section", { "data-markdown": props.text }) } } });
+    const pane = compiledUi(path.resolve("src/components/learning/Vibe64LearningLessonPane.vue"), {
+      vue: Vue, "./Vibe64LearningReader.vue": { default: reader },
+      "@/composables/useVibe64Learning.js": { useVibe64Learning: () => host } });
     const root = { children: [] };
-    const readVisual = vi.fn(async () => ({ id: "client-server", visual: { id: "client-server", initialState: "idle" } }));
-    const app = uiRenderer().createApp({ render: () => Vue.h(dialog, { modelValue: true, learning, readVisual,
-      "onUpdate:modelValue": value => events.push(["model", value]), onOpenLearning: () => events.push(["open-learning"]),
-      onLeave: kind => events.push(["leave", kind]), onReturn: () => events.push(["return"]) }) });
+    const app = uiRenderer().createApp({ render: () => Vue.h(pane) });
     for (const tag of WIDGETS) app.component(tag, widget);
     app.mount(root);
     await flush();
-    return { app, root, events };
+    return { app, root };
   }
 
-  it("shows only the current step, with Next once it is passed or optional, through the shared controller", async () => {
-    let results = [];
-    const { learning, calls } = controller({ reads: () => lessonResult({ results }),
-      posts: (_url, body) => { results = [...results, { stepId: body.stepId, outcome: "passed", kind: "choice", evidence: { selected: [1] } }]; return { ok: true }; } });
-    learning.setViewer("member");
-    await learning.show({ attemptId: ATTEMPT, stepId: "read" });
-    learning.minimise();
-    const view = await mountDialog(learning);
-    try {
-      expect(textOf(view.root)).toContain("Step 1 of 4");
-      expect(textOf(view.root)).toContain("Orientation");
-      expect(nodes(view.root).some(node => node.props?.["data-step-id"]), "no step list: that is L").toBe(false);
-      expect(byTest(view.root, "learning-next").props.disabled, "an optional step can be left").toBe(false);
-      byTest(view.root, "learning-next").props.onClick();
-      await flush();
-      expect(learning.stepId).toBe("quiz");
-      expect(byTest(view.root, "learning-next").props.disabled, "a required step is passed first").toBe(true);
-      nodes(view.root).filter(node => node.tag === "div" && node.props?.label)[1].props["onUpdate:modelValue"](true);
-      await flush();
-      await byTest(view.root, "learning-answer").props.onClick();
-      await flush();
-      expect(calls.filter(call => call.method === "POST").at(-1)).toMatchObject({ url: VIBE64_LEARNING_ROUTES.stepAnswer(ATTEMPT), body: { stepId: "quiz", selected: [1] } });
-      expect(byTest(view.root, "learning-next").props.disabled).toBe(false);
-      byTest(view.root, "learning-previous").props.onClick();
-      await flush();
-      expect(learning.stepId).toBe("read");
-      byTest(view.root, "learning-step-open-l").props.onClick();
-      expect(view.events).toContainEqual(["open-learning"]);
-    } finally { view.app.unmount(); }
-  });
-
-  it("hides for Show me and Teach me, and comes back with the reason when Show me cannot show its place", async () => {
+  it("keeps the step in the Lesson pane for Teach me, and shows it again with the reason when Show me cannot show its place", async () => {
     const runGuide = vi.fn(async () => ({ guide: { shown: false } }));
     const { learning } = controller({ runGuide });
     learning.setViewer("member");
-    await learning.show({ attemptId: ATTEMPT, stepId: "preview" });
-    learning.minimise();
-    const view = await mountDialog(learning);
+    await learning.openLesson({ attemptId: ATTEMPT, stepId: "preview" });
+    // The pane's own controller, with openLesson observed.
+    const openLesson = vi.fn(() => learning.openLesson());
+    const host = Object.defineProperty(Object.create(learning), "openLesson", { value: openLesson });
+    const view = await mountPane(learning, host);
     try {
+      expect(byTest(view.root, "learning-lesson-pane")).toBeTruthy();
+      expect(nodes(view.root).some(node => node.props?.["data-step-id"]), "the real reader, with its step list").toBe(true);
       await byTest(view.root, "learning-show-me").props.onClick();
       await flush();
       expect(runGuide).toHaveBeenCalledOnce();
-      expect(view.events).toEqual([["leave", "show-me"], ["return"]]);
       expect(textOf(view.root)).toContain("That place is not visible on this page.");
-      expect(learning.open, "Show me from the dialog does not open L").toBe(false);
+      expect(openLesson, "an unshown place selects the Lesson pane again").toHaveBeenCalled();
+      expect(learning.open, "Show me never opens Courses").toBe(false);
       byTest(view.root, "learning-teach-me").props.onClick();
-      expect(view.events.at(-1)).toEqual(["leave", "teach-me"]);
       expect(learning.colleagueRequest.value).toMatchObject({ stepId: "preview", message: VIBE64_LEARNING_TEACH_MESSAGE });
-    } finally { view.app.unmount(); }
-  });
-
-  it("offers Finish lesson on the last step of a complete lesson", async () => {
-    const { learning } = controller({ reads: () => lessonResult({ results: passedAll }) });
-    learning.setViewer("member");
-    await learning.show({ attemptId: ATTEMPT, stepId: "tick" });
-    learning.minimise();
-    const view = await mountDialog(learning);
-    try {
-      expect(byTest(view.root, "learning-next")).toBeUndefined();
-      await byTest(view.root, "learning-finish").props.onClick();
-      await flush();
-      expect([learning.open, learning.finished]).toEqual([true, true]);
+      expect([learning.open, learning.stepId], "Teach me leaves the step on screen").toEqual([false, "preview"]);
     } finally { view.app.unmount(); }
   });
 });

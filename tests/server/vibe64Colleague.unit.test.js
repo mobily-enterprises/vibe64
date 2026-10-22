@@ -2004,7 +2004,7 @@ test("Colleague guide points at a real control without navigating and reports on
   assert.deepEqual(f.observations.mutations, []);
 });
 
-test("Colleague opens or minimises Learning above the app until its initiating browser confirms the exact lesson step", async t => {
+test("Colleague shows a lesson step in the Lesson pane, or opens or closes Courses, until its initiating browser confirms it", async t => {
   const f = await fixture(t, [], { watching: true });
   await f.service.focus({ clientId: "tab-a", focus: {} }, f.context);
   const context = { ...f.context, colleague: { clientId: "tab-a" } };
@@ -2012,7 +2012,10 @@ test("Colleague opens or minimises Learning above the app until its initiating b
   const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   for (const input of [
     { learning: { open: false, attemptId } },
+    { learning: { open: true, attemptId } },
     { learning: { open: true, stepId: "one" } },
+    { learning: { stepId: "one" } },
+    { learning: {} },
     { learning: { open: true }, guide: { target: "learning" } }
   ]) {
     assert.equal((await execute(input)).ok, false, JSON.stringify(input));
@@ -2021,23 +2024,30 @@ test("Colleague opens or minimises Learning above the app until its initiating b
   await assert.rejects(execute({ learning: { open: true }, learningMode: true, learningView: "learning" }), { code: "ACTION_VALIDATION_FAILED" },
     "retired Learning mode fields cannot accompany Learning");
   assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null);
-  await assert.rejects(execute({ learning: { attemptId } }), { code: "ACTION_VALIDATION_FAILED" });
-  await assert.rejects(execute({ learning: { open: true, attemptId: "not-an-attempt" } }), { code: "ACTION_VALIDATION_FAILED" });
-  const opening = execute({ learning: { open: true, attemptId, stepId: "open-preview" } });
+  await assert.rejects(execute({ learning: { attemptId: "not-an-attempt" } }), { code: "ACTION_VALIDATION_FAILED" });
+  const opening = execute({ learning: { attemptId, stepId: "open-preview" } });
   const command = await pendingNavigation(f, "tab-a");
-  assert.deepEqual(command.learning, { open: true, attemptId, stepId: "open-preview" });
+  assert.deepEqual(command.learning, { attemptId, stepId: "open-preview" });
   assert.equal(command.learningMode, undefined);
-  const exact = { projectSlug: "", sessionId: "", conversationId: "", pane: "", learningOpen: true, learningSurface: "lesson",
+  const exact = { projectSlug: "", sessionId: "", conversationId: "", pane: "lesson", learningOpen: false,
     learningAttemptId: attemptId, learningStepId: "open-preview" };
-  const ack = focus => f.actions.execute({ actionId: "vibe64.colleague.navigation.acknowledge", context: f.context,
-    input: { clientId: "tab-a", commandId: command.id, ok: true, focus } });
-  for (const focus of [{ ...exact, learningOpen: false }, { ...exact, learningSurface: "courses" },
+  const ack = (focus, id = command.id) => f.actions.execute({ actionId: "vibe64.colleague.navigation.acknowledge", context: f.context,
+    input: { clientId: "tab-a", commandId: id, ok: true, focus } });
+  for (const focus of [{ ...exact, pane: "preview" }, { ...exact, learningOpen: true, learningSurface: "courses" },
     { ...exact, learningAttemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }, { ...exact, learningStepId: "other-step" }]) {
     assert.equal((await ack(focus)).ok, false, JSON.stringify(focus));
   }
   await assert.rejects(ack({ ...exact, learningSurface: "reader" }), { code: "ACTION_VALIDATION_FAILED" });
   assert.equal((await ack(exact)).ok, true);
-  assert.deepEqual(await opening, { ok: true, focus: exact });
+  assert.deepEqual(await opening, { ok: true, focus: exact }, "the step is shown in the Lesson pane");
+
+  const catalogue = execute({ learning: { open: true } });
+  const courses = await pendingNavigation(f, "tab-a", navigation => navigation.learning?.open === true);
+  assert.deepEqual(courses.learning, { open: true });
+  assert.equal((await ack({ ...exact, learningOpen: false }, courses.id)).ok, false, "Courses must be open");
+  const shownCourses = { ...exact, pane: "preview", learningOpen: true, learningSurface: "courses" };
+  assert.equal((await ack(shownCourses, courses.id)).ok, true);
+  assert.deepEqual(await catalogue, { ok: true, focus: shownCourses });
 
   const minimising = execute({ learning: { open: false } });
   const minimise = await pendingNavigation(f, "tab-a", navigation => navigation.learning?.open === false);
@@ -2075,6 +2085,10 @@ test("Colleague teaches through lessons, navigation, guides and checks, and neve
   assert.match(colleagueInstructions, /lesson\.read/u);
   assert.match(colleagueInstructions, /navigation\.open guide/u);
   assert.match(colleagueInstructions, /navigation\.open-learning/u);
+  // The lesson is read on the Learn page; Courses is its catalogue, and Teach me keeps the step on screen.
+  assert.match(colleagueInstructions, /Courses, in the project menu beside L, is the catalogue where lessons are chosen and started/u);
+  assert.match(colleagueInstructions, /Teach me leaves the step visible/u);
+  assert.match(colleagueInstructions, /show a step with navigation\.open-learning attemptId\/stepId/u);
   // Every navigation action the teacher text names is a real Colleague action.
   const actionIds = new Set(createColleagueActions({}).map(action => action.id));
   for (const [name] of colleagueInstructions.matchAll(/navigation\.[a-z-]+/gu)) {

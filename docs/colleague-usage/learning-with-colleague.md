@@ -29,9 +29,13 @@ each, and the one you see always follows the mode:
 
 ## Colleague as your teacher
 
-In Learn mode, **Courses** in the project menu beside **L** holds courses and lessons. You can read
-lessons yourself without AI. Choose **Teach me** on a lesson step, or ask
-Colleague about your lesson, and Colleague teaches the current step:
+In Learn mode, **Courses** in the project menu beside **L** is the catalogue
+where you choose and start lessons; your current lesson is read on the Learn
+page itself, in its **Lesson** tab beside Colleague (see `learning-environment`).
+You can read lessons yourself without AI. Choose **Teach me** on a lesson step,
+or ask Colleague about your lesson, and Colleague teaches the current step.
+**Teach me** opens Colleague beside the step and sends "Teach me this step.";
+the step stays on screen, so Colleague refers to it rather than repeating it:
 
 - It reads your lesson with `lesson.read` (the steps in order with their text,
   diagram, guide and check kind, plus your saved results) and explains the step
@@ -39,14 +43,15 @@ Colleague about your lesson, and Colleague teaches the current step:
   arrive in pages; Colleague reads every page before claiming a step's text is
   missing.
 - It points at, or with "show me" opens, the real Vibe64 places the step uses,
-  replays the step's diagram, and can open **Courses** at your current step or
-  close it so you see the app. Courses keeps its place while closed.
+  replays the step's diagram, can show your current step in the **Lesson** tab,
+  and can open **Courses** or close it so you see the app. Courses keeps its
+  place while closed.
 - In Learn mode with a lesson in progress, Colleague's header shows a small
-  yellow **Step N/M** button (a check once the step passed). It opens only the
-  current step in a dialog with its check, **Show me**, **Teach me**,
-  **Previous step**/**Next step** and **Open in Learning** (see
-  `learning-environment`). It appears on the desktop panel, the phone's
-  full-screen chat and during voice chat. Develop shows no step button.
+  yellow **Step N/M** button (a check once the step passed). Pressing it shows
+  that step in the page's **Lesson** tab (see `learning-environment`); on a
+  phone Colleague's full-screen chat also minimises so the step is visible, and
+  its avatar button brings Colleague back. It appears on the desktop panel, the
+  phone's full-screen chat and during voice chat. Develop shows no step button.
 - Before asking you to press **Done**, answer a question or press **Check now**,
   it looks at that step's saved result. A step that already passed is not asked
   for again: Colleague says it passed and moves on to the next unpassed step.
@@ -54,12 +59,14 @@ Colleague about your lesson, and Colleague teaches the current step:
   fields or IDs. If it could not open or point at a step's place (for example the
   control is hidden), it says so plainly and describes the path in words.
 
-On a phone, Colleague's full-screen chat minimises itself when it opens Courses
-or rings a control, so you can see it; reopen Colleague with its avatar button.
+On a phone, Colleague's full-screen chat minimises itself when it opens Courses,
+shows a lesson step or rings a control, so you can see it; reopen Colleague with
+its avatar button. **Teach me** on a phone opens Colleague's full-screen chat
+over the Lesson tab, which stays underneath.
 
 ## Colleague never judges
 
-A step passes only through your own action in the lesson or Colleague's step dialog:
+A step passes only through your own action in the lesson:
 
 - **Choice question**: only your own answer counts. Colleague never sees or
   reveals the correct option, sees only whether your answer passed (not which

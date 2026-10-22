@@ -243,8 +243,10 @@ also has:
   Click the control yourself. If the place is not
   available on the current page, the overlay comes back with the reason; open
   your practice project and try again.
-- **Teach me**: closes the overlay, opens Colleague and sends it the message
-  "Teach me this step." for you. Colleague answers in its conversation.
+- **Teach me**: opens Colleague beside the step and sends it the message
+  "Teach me this step." for you. The step stays on screen (from the Courses
+  overlay, it moves to the page's Lesson tab); Colleague answers in its
+  conversation. On a phone Colleague's full-screen chat opens over the step.
   If Colleague is not connected yet, an error says so; press **Teach me** again.
   If no AI is connected yet (for example during Lesson 0), nothing is sent:
   Colleague opens and says **Colleague cannot teach this step yet: it has no
@@ -265,7 +267,7 @@ correct answers of a question.
 
 ## Lesson finished
 
-When your own step result (in the overlay, in Colleague's step dialog, or an
+When your own step result (in the Lesson tab, in the overlay, or an
 automatic check from your Preview press) completes the last required step, the
 overlay opens on the **Lesson finished** screen in the lesson tab: a check mark,
 **LESSON FINISHED**, the lesson title and "You completed every required step: X
@@ -287,25 +289,16 @@ during voice chat) shows a small yellow **Step N/M** button with a school icon,
 or a check once that step has passed. Its tooltip is **Current lesson step:
 <step title>**. It is hidden while Colleague is minimised.
 
-Press it to see only the current step: a scrollable dialog above Colleague on a
-desktop, a full-screen dialog over Colleague's on a phone (× **Close current
-step**, Escape or back returns to Colleague). It shows the lesson code and title
-and the step exactly as here (**STEP 3 OF 9 · OPTIONAL**, text, diagram, check,
-status, **Show me**, **Teach me**). **Next step** is enabled once the step has
-passed or is not required; **Previous step** goes back. There is no step list or
-course browsing: use **Courses** for that. **Open in Learning** opens the
-Courses overlay at this step; on a phone Colleague's dialog gives way to the
-overlay and returns when you close it. **Show me** closes the dialog (on a phone also minimising Colleague) and
-shows the place; if it cannot, the dialog comes back with the reason. **Teach
-me** closes the dialog and asks Colleague. On the last step of a complete
-lesson, **Finish lesson** takes the place of **Next step** and opens the
-**Lesson finished** screen in the overlay. The dialog, the step bar and the
-overlay share one lesson state, so they, Colleague and other tabs stay in step.
+Press it to see the current step in the page's **Lesson** tab (above), at that
+step, with Colleague still open beside it on a desktop. On a phone Colleague's
+full-screen chat minimises so the Lesson tab is visible; its avatar button
+brings Colleague back. The step bar, the Lesson tab, Courses and Colleague share
+one lesson state, so they and other tabs stay in step.
 
-On a phone, when Colleague opens the lesson for you its full-screen chat
-minimises and shows the overlay at that step; closing the overlay (× or
-Escape) returns you to Colleague's chat, not the page behind it. **Show me** and
-**Open practice project** still show the app.
+On a phone, when Colleague shows a lesson step for you its full-screen chat
+minimises and the Lesson tab shows that step. When Colleague opens Courses for
+you, closing Courses (× or Escape) returns you to Colleague's chat, not the page
+behind it. **Show me** still shows the app.
 
 An ended lesson stays readable with the note **This lesson has ended.** and a
 **Go to Courses** button, where **Start lesson** starts it again as a new
@@ -321,8 +314,8 @@ attempt.
 
 ## What Colleague can do
 
-Colleague can explain these controls, open the Courses overlay on a lesson and
-step, point at the L button, and teach a step when you press **Teach me** or
+Colleague can explain these controls, show your current step in the Lesson tab,
+open or close the Courses overlay, point at the L button, and teach a step when you press **Teach me** or
 ask. In Learn mode it opens and works only in the lesson's practice project;
 when you ask for another project it says you're in Learn mode and that **L**
 goes back to your projects. It switches mode, restarts or archives a lesson
