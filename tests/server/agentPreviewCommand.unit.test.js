@@ -3,8 +3,8 @@ import { execFile, spawn } from "node:child_process";
 import crypto from "node:crypto";
 import http from "node:http";
 import { createRequire } from "node:module";
-import { readFileSync } from "node:fs";
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -17,6 +17,7 @@ import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/s
 import {
   agentPreviewBrowserWorkerSource,
   agentPreviewWrapperSource,
+  computerPlaywrightModulePath,
   configureVibe64Host
 } from "../../packages/vibe64-execution/src/server/index.js";
 import {
@@ -58,6 +59,39 @@ test("managed screenshot helpers inject dependencies across the serialized worke
   assert.doesNotMatch(metricsSource, /\binflateSync\b/u);
   assert.doesNotMatch(workerSource, /const pngPaethPredictor =/u);
   assert.match(workerSource, /pngVisualMetrics\(bytes, inflateSync\)/u);
+});
+
+test("a project without Playwright uses the Playwright command installed on this computer", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-computer-playwright-"));
+  try {
+    const moduleRoot = path.join(root, "lib", "node_modules", "playwright");
+    await mkdir(moduleRoot, { recursive: true });
+    await mkdir(path.join(root, "bin"));
+    await mkdir(path.join(root, "wrapper"));
+    await writeFile(path.join(moduleRoot, "package.json"), JSON.stringify({ name: "playwright", main: "index.js" }));
+    await writeFile(path.join(moduleRoot, "index.js"), "module.exports = { chromium: 'computer chromium', request: {} };\n");
+    await writeFile(path.join(moduleRoot, "cli.js"), "");
+    await symlink(path.join(moduleRoot, "cli.js"), path.join(root, "bin", "playwright"));
+    // A shell wrapper elsewhere on PATH does not name a Node module.
+    await writeFile(path.join(root, "wrapper", "playwright"), "#!/bin/sh\n");
+    const searchPath = [path.join(root, "missing"), path.join(root, "wrapper"), path.join(root, "bin")].join(path.delimiter);
+
+    assert.equal(computerPlaywrightModulePath(searchPath), realpathSync(moduleRoot));
+    assert.equal(computerPlaywrightModulePath(path.join(root, "wrapper")), "");
+    assert.equal(computerPlaywrightModulePath(""), "");
+
+    // The browser worker embeds the same lookup and loads that module when the
+    // project cannot resolve its own Playwright.
+    const workerSource = agentPreviewBrowserWorkerSource({ playwrightProjectRoot: path.join(root, "project") });
+    const embedded = workerSource.match(/const computerPlaywrightModulePath = ([\s\S]*?);\nfunction loadPlaywright/u)?.[1];
+    assert.ok(embedded);
+    assert.match(workerSource, /computerPlaywrightModulePath\(process\.env\.PATH, \{ existsSync, realpathSync \}, path\)/u);
+    const lookup = new Function(`return (${embedded});`)();
+    const found = lookup(searchPath, { existsSync, realpathSync }, path);
+    assert.equal(createRequire(import.meta.url)(found).chromium, "computer chromium");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("managed preview control leaves operation deadlines to the operation owner", () => {

@@ -1,3 +1,5 @@
+import { computerPlaywrightModulePath } from "./computerPlaywright.js";
+
 function documentReadyForScreenshot(browserDocument = globalThis.document) {
   return Boolean(
     browserDocument?.readyState === "complete" &&
@@ -192,7 +194,7 @@ import { execFileSync } from "node:child_process";
 import crypto from "node:crypto";
 import http from "node:http";
 import { createRequire } from "node:module";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -207,7 +209,8 @@ const controlGeneration = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_GENERA
 const sessionId = String(process.env.VIBE64_AGENT_PREVIEW_COMMAND_SESSION_ID || "").trim();
 const executionId = String(process.env.VIBE64_EXECUTION_ID || "").trim();
 const playwrightModulePath = ${JSON.stringify(String(playwrightModulePath || ""))};
-// Without a pinned Playwright module, the project's own Playwright is used.
+// Without a pinned Playwright module, the project's own Playwright is used,
+// or else the Playwright installed on this computer.
 const playwrightProjectRoot = ${JSON.stringify(String(playwrightProjectRoot || ""))};
 const identityControlPath = ${JSON.stringify(String(identityControlPath || ""))};
 const contractVersion = ${JSON.stringify(String(contractVersion || "1"))};
@@ -221,8 +224,19 @@ if (!socketPath || !metadataPath || !controlSocketPath || !workerToken || !contr
   process.exit(64);
 }
 
-const require = createRequire(playwrightModulePath ? import.meta.url : path.join(playwrightProjectRoot, "package.json"));
-const { chromium, request } = require(playwrightModulePath || "playwright");
+const computerPlaywrightModulePath = ${computerPlaywrightModulePath.toString()};
+function loadPlaywright() {
+  if (playwrightModulePath) return createRequire(import.meta.url)(playwrightModulePath);
+  try {
+    return createRequire(path.join(playwrightProjectRoot, "package.json"))("playwright");
+  } catch (error) {
+    const computerModule = error?.code === "MODULE_NOT_FOUND"
+      ? computerPlaywrightModulePath(process.env.PATH, { existsSync, realpathSync }, path) : "";
+    if (!computerModule) throw error;
+    return createRequire(import.meta.url)(computerModule);
+  }
+}
+const { chromium, request } = loadPlaywright();
 const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 const documentReadyForScreenshot = ${documentReadyForScreenshot.toString()};
 const pngVisualMetrics = ${pngVisualMetrics.toString()};

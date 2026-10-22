@@ -193,6 +193,9 @@ export {
   agentPreviewBrowserWorkerSource
 } from "./runtime/agentPreviewBrowserWorkerSource.js";
 export {
+  computerPlaywrightModulePath
+} from "./runtime/computerPlaywright.js";
+export {
   AGENT_PREVIEW_USAGE,
   agentPreviewWrapperSource
 } from "./runtime/agentPreviewWrapperSource.js";

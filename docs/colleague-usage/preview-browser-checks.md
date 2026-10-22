@@ -49,7 +49,11 @@ matching managed runtime. A version error is a test-runtime blocker; interactive
 checks can use the existing managed Preview browser. Report the exact required
 version to the platform operator instead of installing a separate browser.
 On a computer without managed browser runtimes, the agent runs the project's own
-Playwright (`npx playwright test`). If that browser is missing, the agent reports
+Playwright (`npx playwright test`). Interactive Preview checks (screenshot, eval)
+use the project's own Playwright, or else the `playwright` command installed on
+this computer, so a project in another language needs no Playwright package. If
+neither exists, the agent asks you to install Playwright on the computer rather
+than adding it to a non-Node.js project. If that browser is missing, the agent reports
 it and asks you before running `npx playwright install chromium`; installing it
 is your decision.
 

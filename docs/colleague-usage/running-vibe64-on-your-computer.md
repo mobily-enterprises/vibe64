@@ -27,7 +27,11 @@ the next time it runs a command.
 - **npm global installs** go wherever your own npm configuration puts them.
 - **Playwright** uses its own browser cache. If **Health** reports that
   Playwright or its Chromium is missing, install Playwright, then run
-  `playwright install chromium`.
+  `playwright install chromium`. The coding agent's Preview browser checks use
+  the project's own Playwright when it has one, otherwise the `playwright`
+  command installed on this computer (for example `npm install -g playwright`).
+  A Django, Rails or Spring Boot project therefore needs no Node.js packages
+  for these checks.
 
 ## Where Vibe64 keeps things
 

@@ -27,6 +27,7 @@ import {
   agentPlaywrightCommandSource,
   agentPreviewBrowserWorkerSource,
   agentPreviewWrapperSource,
+  computerPlaywrightModulePath,
   processGroupHasLiveMember,
   readProcessStart,
   runVibe64Command,
@@ -61,8 +62,9 @@ import {
 const AGENT_PREVIEW_COMMAND_NAME = "vibe64-preview";
 const AGENT_PLAYWRIGHT_COMMAND_NAME = "vibe64-playwright";
 const PROJECT_PLAYWRIGHT_MISSING_MESSAGE =
-  "Browser checks need Playwright in this project, and it does not declare it. Report this and ask the person before " +
-  "adding it (npm install -D playwright) or installing its browser (npx playwright install chromium).";
+  "Browser checks need Playwright, and neither this project nor this computer has it. Report this and ask the person " +
+  "to install it on this computer (npm install -g playwright, then playwright install chromium). Do not add Playwright " +
+  "to a project that is not already a Node.js project just for these checks.";
 const AGENT_PREVIEW_BROWSER_WORKER_NAME = "vibe64-preview-browser-worker";
 const AGENT_PREVIEW_BROWSER_SOCKET_NAME = "preview-browser.sock";
 const AGENT_PREVIEW_BROWSER_METADATA_NAME = "preview-browser.json";
@@ -1706,7 +1708,8 @@ async function startRegisteredBrowserWorker(sessionId = "", input = {}, {
     return registered.error;
   }
   const { cwd, descriptor } = registered;
-  if (!descriptor.runtimeRoot && !projectHasPlaywright(descriptor.worktreePath)) {
+  if (!descriptor.runtimeRoot && !projectHasPlaywright(descriptor.worktreePath) &&
+      !computerPlaywrightModulePath(process.env.PATH)) {
     return responseError(PROJECT_PLAYWRIGHT_MISSING_MESSAGE, "vibe64_preview_playwright_missing");
   }
   if (descriptor.startPromise) {
