@@ -23,7 +23,6 @@ import {
   targetRuntimeIdentity
 } from "@local/vibe64-core/server/projectRuntimeIdentity";
 import {
-  CODEX_ATTACHMENT_HOST_ROOT,
   VIBE64_CODEX_ATTACHMENTS_ROOT_ENV,
   codexAttachmentHostRoot,
   prepareCodexAttachmentRoot
@@ -1096,7 +1095,6 @@ async function storeCodexAttachment({
 }
 
 export {
-  CODEX_ATTACHMENT_HOST_ROOT,
   CODEX_ATTACHMENT_MAX_BYTES,
   CODEX_ATTACHMENT_REQUEST_BODY_LIMIT_BYTES,
   VIBE64_CODEX_ATTACHMENTS_ROOT_ENV,

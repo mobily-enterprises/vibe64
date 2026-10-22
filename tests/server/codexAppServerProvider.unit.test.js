@@ -40,7 +40,7 @@ import {
   stopCodexAppServerRuntime
 } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import {
-  CODEX_ATTACHMENT_HOST_ROOT,
+  codexAttachmentHostRoot,
   VIBE64_CODEX_ATTACHMENTS_ROOT_ENV
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import {
@@ -222,7 +222,7 @@ function metadataForRuntime(runtimeDir, {
 } = {}) {
   const socketPath = socketPathForRuntime(runtimeDir);
   return {
-    attachmentHostRoot: CODEX_ATTACHMENT_HOST_ROOT,
+    attachmentHostRoot: codexAttachmentHostRoot(),
     authStateSignature,
     endpoint: `unix://${socketPath}`,
     executionId: "11111111-1111-4111-8111-111111111112",
@@ -1225,7 +1225,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     const targetRoot = path.join(runtimeDir, "target");
     const toolHomeSource = path.join(runtimeDir, "homes", "owner");
     const workdir = path.join(targetRoot, ".vibe64", "sessions", "active", "session-1", "source");
-    const gitCommandWrapperHostDir = path.join(CODEX_ATTACHMENT_HOST_ROOT, "codex-git-command", "test-runtime");
+    const gitCommandWrapperHostDir = path.join(codexAttachmentHostRoot(), "codex-git-command", "test-runtime");
     const project = {
       workspace: "sas"
     };
@@ -1420,7 +1420,7 @@ test("codex provider starts one app-server and stores reusable runtime metadata"
     assert.match(lsRemoteProbe.stdout, /refs\/heads\/main/u);
 
     const stored = JSON.parse(await readFile(path.join(runtimeDir, "runtime.json"), "utf8"));
-    assert.equal(stored.attachmentHostRoot, CODEX_ATTACHMENT_HOST_ROOT);
+    assert.equal(stored.attachmentHostRoot, codexAttachmentHostRoot());
     assert.equal(stored.authStateSignature, "test-auth-state-signature");
     assert.equal(stored.executionContextHash, executionContextHash({
       project,

@@ -84,7 +84,6 @@ async function main() {
   process.env.VIBE64_SYSTEM_ROOT = path.join(developmentRoot, "state");
   process.env.VIBE64_SERVICE_DATA_ROOT = path.join(developmentRoot, "state", "services");
   process.env.VIBE64_SELF_TARGET_SYSTEM_ROOT = "1";
-  process.env.VIBE64_CODEX_ATTACHMENTS_ROOT = path.join(developmentRoot, "state", "attachments");
   if (!hostedStudioHost) {
     process.env.VIBE64_PREVIEW_PROXY_SOCKET_DIR ||= path.join(developmentRoot, "preview-sockets");
   }

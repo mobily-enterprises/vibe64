@@ -85,6 +85,7 @@ stored outside that source under the real OS user's state directory:
 
 ```text
 ~/.local/state/vibe64/
+  attachments/        # live session state: agent command helpers, pending uploads
   auth/
   projects/
     <slug>-<hash>/
@@ -99,6 +100,10 @@ stored outside that source under the real OS user's state directory:
 
 A host that serves several owners passes explicit roots (`systemRoot`,
 `projectsRoot`, `managedSourceRoot`) to `startServer` and owns their layout.
+
+Live session state stays below `systemRoot`, never in temporary space: running
+agents keep the paths of their command helpers for their whole life, and a host
+may age its temporary directory. Only control sockets use temporary space.
 
 Sessions, runtime files, resolved Env values, secrets, domains, publish state,
 billing state, auth markers, terminal state, and UI preferences are Vibe64-owned

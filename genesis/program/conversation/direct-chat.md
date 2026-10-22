@@ -2659,6 +2659,13 @@ include the full wrapper path and control kind, keeping projects and sessions
 separate without placing a long workspace path in the socket address. The shared
 path builder checks the OS byte limit before binding; an oversized configured
 temporary root reports `vibe64_agent_control_path_too_long` with a repair action.
+The command helpers those sockets serve (the session shell wrapper and runner,
+Git, Env, Preview, Playwright and Helper commands) and pending uploads are live
+session state, not temporary files: an agent keeps their paths for its whole life.
+`codexAttachmentPaths.js` owns their root, `<system root>/attachments`, which the
+server fixes for the process at startup so every caller resolves the same root
+whatever environment it passes. Helpers are rewritten idempotently whenever an
+assistant starts or reconnects. Only the listening sockets stay in temporary space.
 An unavailable AI connection is a separate account-attention state: it stops
 timed retries, explains that Codex needs sign-in (or that the selected account or
 model is unavailable), and offers Open AI Accounts through the existing account

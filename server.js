@@ -53,6 +53,7 @@ import {
   VIBE64_APP_ROOT_ENV,
   VIBE64_TARGET_ROOT_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
+import { configureCodexAttachmentHostRoot } from "@local/vibe64-runtime/server/codexAttachmentPaths";
 import {
   assertSafeLocalModeListenTarget,
   createVibe64RuntimeProfile
@@ -481,6 +482,9 @@ async function createServer(options = {}) {
   const projectsRoot = rootContract.projectsRoot;
   const managedSourceRoot = rootContract.managedSourceRoot;
   const systemRoot = rootContract.systemRoot;
+  // Live session state (agent command helpers, pending uploads) lives below the
+  // system root for the life of the process, so every caller resolves it alike.
+  configureCodexAttachmentHostRoot(systemRoot);
 
   const browserLifecycleMonitor = createBrowserLifecycleMonitor({
     logger: app.log,

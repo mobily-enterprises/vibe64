@@ -113,4 +113,7 @@ if (!globalThis[GUARDED]) {
     });
   }
   syncBuiltinESMExports();
+  // Nor the person's own live session state: a test that names no session
+  // state root keeps its agent helpers and uploads in a private temporary one.
+  process.env.VIBE64_CODEX_ATTACHMENTS_ROOT ||= path.join(os.tmpdir(), `vibe64-test-${process.pid}`, "attachments");
 }

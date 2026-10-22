@@ -1433,3 +1433,19 @@ only by an explicit settings save. Absence retains the existing one-session
 restriction for project database scope. Existing records and application data
 need no transformation or request-time backfill. Disabling the override changes
 future admission only; it never archives sessions or migrates database contents.
+
+## Session state root (no upgrade)
+
+Agent command helpers (`codex-git-command/<hash>/`: wrapper, runner, Git, Env,
+Preview, Playwright, Helper commands and their run directories) and pending
+uploads now live in `<system root>/attachments` instead of
+`<os.tmpdir()>/vibe64-<uid>/attachments`, because a host may age temporary
+space under a live agent. Nothing there is durable data: helpers are derived
+files that every assistant start or reconnect rewrites, and a sent attachment is
+already copied into its session's `artifacts/attachments/`. Only unsent uploads
+are left behind in the old temporary root; the person attaches them again. So no
+numbered upgrade moves anything and no request path repairs old locations.
+After the release restarts the server, each assistant gets its helpers at the
+new root when it next starts or reconnects; until then an assistant that is still
+running keeps its old paths, as after any server restart. Focused evidence:
+`sessionStateRoot.unit.test.js`.
