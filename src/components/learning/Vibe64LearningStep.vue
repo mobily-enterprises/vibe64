@@ -8,7 +8,7 @@ import Vibe64LearningMarkdown from "./Vibe64LearningMarkdown.vue";
 
 // One lesson step exactly as the reader shows it: label, title, Markdown body,
 // its diagram with Play, its check, Show me / Teach me and Previous/Next step.
-// Used by L's reader and by Colleague's current-step dialog. Verdicts come only
+// Used by the Lesson pane's reader. Verdicts come only
 // from the Training actions (auto check, choice comparator, self Done) through
 // the shared L controller, so every surface shows the same saved results.
 const MAX_COMMAND_IDS = 64;
@@ -17,16 +17,11 @@ const props = defineProps({
   // The step heading's id (the host labels its region with it).
   headingId: { type: String, default: "" },
   // Test seam for the visual resource read.
-  readVisual: { type: Function, default: null },
-  // The current lesson's linear flow (Colleague's step dialog): Next step is
-  // the primary action once this step is passed or optional; on the last step
-  // of a complete lesson, Finish lesson opens L's "Lesson finished" screen.
-  linear: Boolean
+  readVisual: { type: Function, default: null }
 });
-// "leave" (kind: show-me | teach-me): the step is about to show something
-// else, so a host that covers the app hides first. "return": Show me could not
-// show its place, so the host shows the step (and its reason) again.
-const emit = defineEmits(["leave", "return"]);
+// "return": Show me could not show its place, so the host shows the step (and
+// its reason) again.
+const emit = defineEmits(["return"]);
 // The Show me / Teach me failure; a host whose view unmounts while hidden keeps it.
 const actionError = defineModel("error", { type: String, default: "" });
 const lesson = computed(() => props.learning.lesson.value);
@@ -144,7 +139,6 @@ async function answer() {
 
 async function showMe() {
   actionError.value = "";
-  emit("leave", "show-me");
   let error = "";
   try {
     const result = await props.learning.showMe(step.value.id);
@@ -154,7 +148,7 @@ async function showMe() {
   } catch (cause) {
     error = String(cause?.message || "That place could not be shown.");
   }
-  // Show me hid the step; an unshown place brings the step back with the reason.
+  // Show me moved to another place; an unshown place brings the step back with the reason.
   if (error) {
     actionError.value = error;
     emit("return");
@@ -164,10 +158,8 @@ function teachMe() {
   actionError.value = "";
   try {
     props.learning.teachMe(step.value.id);
-    emit("leave", "teach-me");
   } catch (cause) { actionError.value = String(cause?.message || "Colleague could not be asked."); }
 }
-const canAdvance = computed(() => !step.value?.required || statusOf(step.value.id) === "passed");
 const last = computed(() => index.value >= steps.value.length - 1);
 const go = offset => {
   const next = steps.value[index.value + offset];
@@ -242,14 +234,7 @@ const go = offset => {
       <v-btn v-if="!ended" variant="tonal" rounded="pill" min-height="48" data-test="learning-teach-me" @click="teachMe">Teach me</v-btn>
     </div>
     <slot name="after-actions" />
-    <div v-if="linear" class="vibe64-learning-step__pager">
-      <v-btn variant="text" size="small" rounded="pill" min-height="40" data-test="learning-previous" :disabled="index <= 0" @click="go(-1)">Previous step</v-btn>
-      <v-btn v-if="last && learning.complete && !ended" color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-finish"
-        @click="learning.showFinished()">Finish lesson</v-btn>
-      <v-btn v-else color="primary" variant="flat" rounded="pill" min-height="48" data-test="learning-next"
-        :disabled="last || !canAdvance" @click="go(1)">Next step</v-btn>
-    </div>
-    <div v-else class="vibe64-learning-step__pager">
+    <div class="vibe64-learning-step__pager">
       <v-btn variant="text" rounded="pill" min-height="48" data-test="learning-previous" :disabled="index <= 0" @click="go(-1)">Previous step</v-btn>
       <v-btn variant="text" rounded="pill" min-height="48" data-test="learning-next" :disabled="last" @click="go(1)">Next step</v-btn>
     </div>

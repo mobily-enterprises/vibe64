@@ -29,7 +29,7 @@ export function learningPanelFocus(controller) {
   const stepId = read(controller.stepId);
   return {
     learningOpen,
-    ...(learningOpen && ["courses", "progress", "archived", "lesson"].includes(surface) ? { learningSurface: surface } : {}),
+    ...(learningOpen && ["courses", "progress", "archived"].includes(surface) ? { learningSurface: surface } : {}),
     ...(attemptId ? { learningAttemptId: attemptId, ...(stepId ? { learningStepId: stepId } : {}) } : {})
   };
 }

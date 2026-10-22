@@ -2037,7 +2037,9 @@ test("Colleague shows a lesson step in the Lesson pane, or opens or closes Cours
     { ...exact, learningAttemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" }, { ...exact, learningStepId: "other-step" }]) {
     assert.equal((await ack(focus)).ok, false, JSON.stringify(focus));
   }
-  await assert.rejects(ack({ ...exact, learningSurface: "reader" }), { code: "ACTION_VALIDATION_FAILED" });
+  for (const learningSurface of ["reader", "lesson"]) {
+    await assert.rejects(ack({ ...exact, learningSurface }), { code: "ACTION_VALIDATION_FAILED" }, "Courses has no lesson tab");
+  }
   assert.equal((await ack(exact)).ok, true);
   assert.deepEqual(await opening, { ok: true, focus: exact }, "the step is shown in the Lesson pane");
 
@@ -2053,7 +2055,7 @@ test("Colleague shows a lesson step in the Lesson pane, or opens or closes Cours
   const minimise = await pendingNavigation(f, "tab-a", navigation => navigation.learning?.open === false);
   const kept = { learningOpen: false, learningAttemptId: attemptId, learningStepId: "open-preview" };
   assert.equal((await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: minimise.id, ok: true,
-    focus: { ...kept, learningOpen: true, learningSurface: "lesson" } }, f.context)).ok, false);
+    focus: { ...kept, learningOpen: true, learningSurface: "courses" } }, f.context)).ok, false);
   assert.equal((await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: minimise.id, ok: true, focus: kept }, f.context)).ok, true);
   assert.deepEqual(await minimising, { ok: true, focus: kept }, "minimising keeps the current lesson step");
   assert.deepEqual(f.observations.starts, []);

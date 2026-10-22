@@ -16,7 +16,7 @@ const TRAINING_GUIDE_PLACES = Object.freeze({
   "git-log": Object.freeze({ pane: "repository", steps: [DASHBOARD, step("git-log", "Git log")] }),
   "session-info": Object.freeze({ pane: "session", steps: [DASHBOARD, step("session-info", "Session info")] }),
   architecture: Object.freeze({ pane: "system", steps: [DASHBOARD, step("architecture", "Architecture")] }),
-  // The L button that opens the Learning environment above the app.
+  // The L button that switches between Develop and Learn (navigate also opens Courses).
   learning: Object.freeze({ steps: [step("learning", "Learning")] })
 });
 // Earlier teacher targets keep their original "open the view" meaning.
