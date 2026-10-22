@@ -865,7 +865,7 @@ onBeforeUnmount(() => {
   <Teleport :to="launcherTarget || 'body'" :disabled="!launcherTarget">
     <v-btn
       ref="launcher" class="vibe64-colleague__launcher" :class="{ 'vibe64-colleague__launcher--floating': !launcherTarget, 'vibe64-colleague__launcher--listening': holdingAvatar }"
-      icon variant="text" width="48" height="48"
+      icon variant="text" width="48" height="48" data-vibe64-guide="colleague"
       :aria-label="shown ? `Minimize ${voice?.controller.state.binding?.label || name}` : minimizedVoice ? `Reopen ${voice.controller.state.binding.label || 'Assistant'} voice chat${listeningVoice ? ' · Listening' : ''}` : `Open ${name}`"
       :title="shown ? 'Minimize conversation' : listeningVoice ? 'Listening · Reopen voice chat' : minimizedVoice ? 'Reopen voice chat' : holdToTalk ? `${name} · Hold to talk` : name" aria-haspopup="dialog"
       :aria-expanded="shown"

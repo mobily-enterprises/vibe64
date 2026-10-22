@@ -99,8 +99,11 @@ repository. An exercise needs no `.gitignore` for Vibe64's agent guidance
 folders (`.agents`, `.claude`, `.codex`, `.opencode`): practice projects keep
 them out of the learner's changes by themselves. New lessons use lesson format v2 (`schemaVersion: 2`): optional
 notes and 1–32 ordered steps. Each step has a Markdown body a learner can read
-without AI, an optional diagram to play and an optional guide that points at a
-real Vibe64 place, and one check: `auto` (a declared check against the
+without AI, an optional diagram to play, and either an optional guide that
+points at a real Vibe64 place or a short `beats` block at the end of its text
+that the lesson step bar plays (show a place, wait for the learner to do
+something, offer the step's check; see "Beats" in `docs/training-content.md`),
+and one check: `auto` (a declared check against the
 learner's own exercise work), `choice` (multiple choice with an answer kept on
 the server), `review` (the learner presses **Check my work** and their own AI
 reviews their practice work against the author's rubric; it needs the

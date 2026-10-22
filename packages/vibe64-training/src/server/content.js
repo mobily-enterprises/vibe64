@@ -3,6 +3,7 @@ import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { topicSchema, visualSchema, validateContent, validateLesson } from "./contentSchemas.js";
 import { trainingGuideRequest } from "../shared/guideTargets.js";
+import { TRAINING_BEAT_CHECKS, beatNeedsPracticeProject, splitStepBeats } from "../shared/beats.js";
 
 const excludedExerciseEntries = new Set([".git", "node_modules", ".genesis"]);
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
@@ -112,7 +113,7 @@ function bundleAssessments(lesson, document, include, checks) {
 // choice compares with the authored answer, review asks the learner's own AI
 // to judge their practice work against the rubric, self is the learner's own
 // tick and none records nothing, so it can never be required.
-function validateSteps(lesson, visuals, checks, code) {
+function validateSteps(lesson, visuals, checks, code, bodies) {
   const fail = message => { throw new Error(`Lesson ${code}: ${message}`); };
   if (!lesson.steps.length) fail("needs at least one step.");
   uniqueIds(lesson.steps, "id", "Steps");
@@ -142,6 +143,17 @@ function validateSteps(lesson, visuals, checks, code) {
     if (step.guide) {
       const { caption, ...request } = step.guide;
       try { trainingGuideRequest(request); } catch (error) { fail(`${label} guide: ${error.message}`); }
+    }
+    let beats = null;
+    try { ({ beats } = splitStepBeats(bodies.get(step.body))); } catch (error) { fail(`${label} beats: ${error.message}`); }
+    if (beats) {
+      if (step.guide) fail(`${label} has both beats and a guide; its beats replace the guide.`);
+      const checkBeat = beats.find(beat => beat.kind === "check");
+      if (checkBeat && TRAINING_BEAT_CHECKS[checkBeat.target] !== step.check.kind) {
+        fail(`${label} beat check ${checkBeat.target} does not match its ${step.check.kind} check.`);
+      }
+      const needs = beats.find(beatNeedsPracticeProject);
+      if (needs && !lesson.exercise) fail(`${label} beat ${needs.kind} ${needs.target} needs the lesson's exercise (a practice project).`);
     }
     const check = step.check;
     const allowed = { auto: ["check", "files"], choice: ["question", "options", "answer"], review: ["rubric", "evidence"],
@@ -195,6 +207,8 @@ async function bundleLesson(reader, entry, { authoring }) {
   // files). validateTopic refuses any that is a lesson descriptor, so a v2
   // choice answer never reaches a browser projection.
   const served = new Set();
+  // v2 step bodies by reference, for their beats.
+  const bodies = new Map();
   uniqueIds(lesson.prerequisites, "code", "Lesson prerequisites");
   const checks = uniqueIds(lesson.checks || [], "id", "Checks");
   for (const check of lesson.checks || []) {
@@ -208,6 +222,7 @@ async function bundleLesson(reader, entry, { authoring }) {
       const file = await reader.read(reference, base);
       include(file);
       served.add(file.relative);
+      bodies.set(reference, file.bytes.toString("utf8"));
     }
   }
   if (lesson.appRoutes && !lesson.exercise) throw new Error(`Lesson ${entry.code} can declare app routes only with its exercise.`);
@@ -289,7 +304,7 @@ async function bundleLesson(reader, entry, { authoring }) {
       }
     }
   }
-  if (lesson.schemaVersion === 2) validateSteps(lesson, visuals, checks, entry.code);
+  if (lesson.schemaVersion === 2) validateSteps(lesson, visuals, checks, entry.code, bodies);
   const manifest = { schemaVersion: 1, code: lesson.code, files: [...files.values()].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0) };
   return { lesson, manifest, hash: hash(canonicalJson(manifest)), descriptorPath: descriptor.relative, served };
 }

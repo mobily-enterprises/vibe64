@@ -85,6 +85,7 @@ function stepProjection(step) {
     ...pick(step, ["id", "title", "required"]),
     ...(step.visual ? { visual: { id: step.visual.id, play: (step.visual.play || []).map(entry => pick(entry, ["name", "parameters"])) } } : {}),
     ...(step.guide ? { guide: pick(step.guide, ["target", "navigate", "filePath", "caption"]) } : {}),
+    ...(step.beats ? { beats: step.beats.map(beat => pick(beat, ["kind", "target", "path", "prompt", "text"])) } : {}),
     check: { kind: check.kind,
       ...(check.kind === "auto" ? pick(check, ["check", "files"]) : {}),
       ...(check.kind === "choice" ? pick(check, ["question", "options"]) : {}),
@@ -191,7 +192,7 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
   const lessonRead = definition("lesson.read", { attemptId: { ...attemptId, required: false },
     page: { type: "integer", required: false, min: 0, max: 31 } }, { kind: "query", idempotency: "none", output: lessonOutput,
     transformResult: assistantLessonResult,
-    description: "Read the learner's lesson as the reader shows it: its steps in order with their text, visual and guide, each step's check kind (automatic, choice, review, self-check or none; a review shows its rubric) and the learner's saved step results. Without attemptId this reads the active attempt; learning.read lists the others. Teach from this: explain the current step, open the real screens with navigation guides and replay the step's visual. A choice question never includes its answer; never guess or reveal one. Results are decided only by automatic checks, the learner's own answer, a review the learner ran with Check my work (their own AI judging their work against the rubric; you never run one) and the learner's own Done (on a self-check or reading step); never say a step passed unless a result here says passed. When page.count is above 1, read the other pages for the remaining step text." },
+    description: "Read the learner's lesson as the reader shows it: its steps in order with their text, visual, guide and beats (the short show/do/check lines the lesson step bar plays for a step; the bar plays them, never you), each step's check kind (automatic, choice, review, self-check or none; a review shows its rubric) and the learner's saved step results. Without attemptId this reads the active attempt; learning.read lists the others. Teach from this: explain the current step, open the real screens with navigation guides and replay the step's visual. A choice question never includes its answer; never guess or reveal one. Results are decided only by automatic checks, the learner's own answer, a review the learner ran with Check my work (their own AI judging their work against the rubric; you never run one) and the learner's own Done (on a self-check or reading step); never say a step passed unless a result here says passed. When page.count is above 1, read the other pages for the remaining step text." },
   async (input, actor) => {
     let attempt;
     if (input.attemptId) attempt = (await readAttempt(actor, input.attemptId)).attempt;

@@ -132,6 +132,53 @@ topic with every step kind; the copyable template is `docs/templates/learn-topic
     never counts toward completion).
   A kind declares only its own fields; anything else is rejected.
 
+### Beats: the step bar walks the learner through a step
+
+A step may end its body Markdown with a fenced `beats` block. The lesson step
+bar (yellow, above the page in Learn mode) plays the beats one line at a time
+while the learner stays where they are; the reader never shows the block.
+
+````md
+```beats
+show preview: This is your app, running.
+show chat: This is the coding chat. You ask for changes here.
+do send-message: Ask it: "Make the heading green"
+do agent-finished: Wait while the agent works.
+do reload-preview: Press Reload preview to see the change.
+check done: Press Done when the heading is green.
+```
+````
+
+One beat per line: `<show|do|check> <target>[ <path>]: <text>`.
+
+- `show <place>` points at a place and moves on by itself after 5–12 seconds
+  (longer text stays longer; never with reduced motion, where the learner
+  presses Next). Text is at most 160 characters.
+- `do <place|action>` waits for the learner: to be at a place, or to do an
+  action (`send-message`, `agent-finished`, `file-opened <path>`,
+  `app-pressed`). `do send-message` text holds exactly one quoted prompt (at
+  most 500 characters). Only `file-opened` takes an argument, a relative
+  practice project path without `..`.
+- `check <auto|done>` is the step's own check (`auto` for `check.kind:"auto"`,
+  `done` for `self`): at most one, and the last line.
+- Places: `preview`, `dashboard`, `database-erd`, `database-data`, `files`,
+  `changes`, `git-log`, `session-info`, `architecture`, `learning` (the **L**
+  button), `lesson` (the Lesson tab), `chat` (the coding chat), `colleague`,
+  `courses`, `lesson-bar` (the bar itself), `save` and `reload-preview`.
+  `dashboard`, `learning` and `lesson-bar` can only be shown.
+- 1–8 beats. Only `lesson`, `lesson-bar`, `courses`, `learning`,
+  `colleague` and `check done` work in a lesson without an `exercise`; every
+  other beat needs the practice project.
+- A step with beats has no `guide`; **Show me** plays its beats from the first.
+
+`vibe64 training validate` rejects an unknown kind, place or action, an
+argument other than a `file-opened` path, a check that does not match the
+step's check kind, a second or non-final check, a block that is not closed or
+does not end the body, and beats together with a `guide`. Back and Next in the
+bar move by beat into the neighbouring steps; after the last beat the bar shows
+the step's own verdict control (Done, Mark as done, Check my work, or Answer in
+the lesson for a choice) and Next step. Steps never advance by themselves.
+
 **Check verdicts are final.** Verdicts come from the step's declared check: an
 automatic check, the choice comparator, a review check (the learner's own AI
 judging their work against the author's rubric), or the learner's tick on a

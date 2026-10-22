@@ -153,6 +153,7 @@
               size="small"
               :disabled="previewSuspended"
               title="Reload preview"
+              data-vibe64-guide="reload-preview"
               type="button"
               variant="text"
               @click="reloadPreview"

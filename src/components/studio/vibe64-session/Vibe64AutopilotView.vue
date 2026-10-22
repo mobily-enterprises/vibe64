@@ -53,6 +53,7 @@
               :aria-label="saveWorkChecking ? 'Checking repository status' : saveWorkCheckAvailable ? 'Check for updates' : saveWorkHeaderAriaLabel"
               class="studio-autopilot__save-work"
               :class="{ 'studio-autopilot__save-work--check': saveWorkCheckAvailable }"
+              data-vibe64-guide="save"
               :color="saveWorkRequiresUpdate ? 'warning' : (saveWorkUnsaved ? 'error' : undefined)"
               :disabled="saveWorkChecking || (saveWorkDisabled && !saveWorkCheckAvailable) || temporaryAiWorkspace?.updateRepairTask?.busy"
               height="var(--session-action-size, 48px)"
@@ -469,6 +470,7 @@
         <template #composer="{ composerBlocked, setVoiceFeedbackTarget }">
           <div
             class="studio-autopilot__composer"
+            data-vibe64-guide="chat"
             @focusout="handleComposerRegionFocusOut"
           >
             <Vibe64RoutingNotice

@@ -70,6 +70,37 @@ this tab remembers the choice. On a phone the lesson name is hidden, and
 tab, also when the page is already on the Lesson tab, for example after
 pressing **L** twice or **Show chat**.
 
+### Steps with beats
+
+Some steps walk you through the real page from the bar itself, one short line
+(a *beat*) at a time, while the lesson stays where it is. The bar then shows
+the lesson name, **N/M** (the step) and a dot per beat (the filled dot is the
+current one), then the beat's line:
+
+- A *show* line rings the place it names (for example the **Preview** tab or the
+  coding chat) and moves on by itself after a few seconds; a thin line under
+  the bar shows the time left. **Pause** (and **Play**) stops and resumes it;
+  it also waits while your pointer or keyboard focus is on the bar, while
+  Courses is open, while the bar is collapsed or the tab is hidden. With
+  reduced motion turned on in your system it never moves by itself: press
+  **Next**.
+- A *do* line waits for you to do what it says; press **Next** to go on.
+- **Back** and **Next** (arrows) move one beat, and into the previous or next
+  step at either end.
+- After the last beat the bar shows the step's own control: **Done**, **Mark as
+  done**, **Check my work** (an automatic check; a check that does not pass says
+  why under the line) or **Answer in the lesson** for a question, which opens
+  the Lesson tab at that step. When the step has passed it shows **Next step**.
+  A step never moves on by itself.
+- **Show me** on such a step (in the bar's step or the Lesson tab) plays its
+  beats again from the first one.
+
+This tab remembers the beat and the pause; another tab or device starts the
+step at its first beat. Collapsing the bar leaves only the step position and
+its dots. On a phone the bar has two lines: the position and arrows above,
+the beat's line and its one button below. A step without beats shows its title
+and status as before, and **Show me** when it can point at a place.
+
 ## The Lesson tab
 
 In Learn mode the current lesson is read on the project page itself, beside

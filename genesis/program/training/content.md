@@ -114,6 +114,20 @@ identities. Released courses require
 released topics without required drafts. This is local authoring, with no Git
 push, remote release, installation or course enabling.
 
+A v2 step body may end with a fenced `beats` block, the lesson step bar's
+script for that step. One shared parser (`src/shared/beats.js`,
+`splitStepBeats`) owns the grammar `<show|do|check> <target>[ <path>]: <text>`
+over the closed vocabulary in `src/shared/guideTargets.js`
+(`TRAINING_GUIDE_PLACES`, `TRAINING_BEAT_ACTIONS`, `TRAINING_BEAT_EVENTS`):
+1–8 beats, show/do text ≤160 (a `do send-message` holds one quoted prompt
+≤500), only `do file-opened` takes a safe relative path, and at most one final
+`check auto|review|done` matching the step's check kind. The bundler rejects a
+block that does not end the body, beats together with a `guide`, and practice
+project beats in a lesson without an exercise (`beatNeedsPracticeProject`). The
+installed reader serves `step.beats` parsed and `bodyText` without the block;
+the bytes, and so the lesson hash, are unchanged. The browser never parses
+beats. Point-only places (`pointOnly`) refuse `navigate`.
+
 Practical descriptors name evidence producers/checks; this facility validates their
 references but does not manufacture observations, run checks or evaluate progress.
 Optional `appRoutes` (exercise lessons only, ≤16 unique `{method,path}` with

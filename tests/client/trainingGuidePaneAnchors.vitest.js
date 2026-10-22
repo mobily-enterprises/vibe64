@@ -64,6 +64,21 @@ describe("guide pane anchors", () => {
     expect(vibe64SessionToolGuideId("ai-terminal")).toBeUndefined();
   });
 
+  it("anchors every lesson companion place on its real control", () => {
+    const anchors = {
+      lesson: "src/pages/app/project/[slug].vue", chat: "src/components/studio/vibe64-session/Vibe64AutopilotView.vue",
+      save: "src/components/studio/vibe64-session/Vibe64AutopilotView.vue", "reload-preview": "src/components/studio/Vibe64OutputControls.vue",
+      colleague: "packages/vibe64-colleague/src/client/Vibe64Colleague.vue", courses: "src/components/learning/Vibe64LearningStepBar.vue",
+      "lesson-bar": "src/components/learning/Vibe64LearningStepBar.vue"
+    };
+    for (const [place, file] of Object.entries(anchors)) {
+      expect(TRAINING_GUIDE_PLACES[place]?.steps.at(-1).id, place).toBe(place);
+      const source = readFileSync(file, "utf8");
+      expect(source, `${place} in ${file}`).toMatch(place === "lesson" ? /:data-vibe64-guide="tab\.id"/u : new RegExp(`data-vibe64-guide="${place}"`, "u"));
+    }
+    expect(readFileSync("src/components/learning/Vibe64LearningCoursesItem.vue", "utf8")).toContain('data-vibe64-guide="courses"');
+  });
+
   it("marks each open project pane with its guide place", () => {
     const file = "src/components/studio/vibe64-session/Vibe64AutopilotView.vue";
     const source = readFileSync(file, "utf8");

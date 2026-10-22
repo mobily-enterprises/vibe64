@@ -71,8 +71,20 @@ guide overlay 3000 above L 2400 above Colleague.
   `restart()`, `finish()`, `deleteAttempt()`, `practice` (from
   `practice.list`, refreshed by `readPractice()`) and
   `deleteArchived(attemptId)`. The collapsible lesson step bar
-  (`stepBarCollapsed`, `toggleStepBar()`) shows the current lesson at the top
-  of its project.
+  (`stepBarCollapsed`, `toggleStepBar()`, `stepBarVisible`) shows the current
+  lesson at the top of its project.
+- Beat player (`src/lib/vibe64LessonPlayer.js`, `learning.player`): plays the
+  current step's `beats` in the step bar. A show beat rings its place
+  point-only (`showTrainingGuide`, its own ring cleared on change) and advances
+  after clamp(5 s + 50 ms per character, 5–12 s), held while paused
+  (`beatPaused`), while the pointer or focus is in the bar (`hold`), while
+  Courses is open, the bar is collapsed or the document hidden, and never
+  advancing under reduced motion. Back/Next move by beat and cross steps
+  (`selectStep(id, beat)`; Back enters a step at its end). A step ends on its
+  check beat, else one past its last beat, where the bar shows its own verdict
+  control; steps never advance by themselves. `beat` and `beatPaused` are this
+  tab's place (`sessionStorage`); nothing of the player is saved on the server.
+  `showMe` on a step with beats restarts them (`player.start`).
 - Learn mode (server): Vibe64 has two modes, Develop and Learn, with the same
   screens. Learn mode is a saved per-learner flag
   (`<sys>/training/users/<key>/learning-mode.json`, `{on}`), separate from any

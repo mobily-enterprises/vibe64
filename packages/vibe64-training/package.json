@@ -36,6 +36,7 @@
     "./shared/presentation-schemas": "./src/shared/presentationSchemas.js",
     "./shared/learning-guidance": "./src/shared/learningGuidance.js",
     "./shared/guide-targets": "./src/shared/guideTargets.js",
+    "./shared/beats": "./src/shared/beats.js",
     "./client/guide-overlay": "./src/client/TrainingGuideOverlay.vue",
     "./client/guide": "./src/client/trainingGuide.js",
     "./client/course-progress": "./src/client/courseProgress.js",

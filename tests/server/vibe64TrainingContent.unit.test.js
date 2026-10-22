@@ -583,6 +583,59 @@ test("v2 step rules reject invalid references, kinds, choices, guides and visual
   }
 });
 
+test("v2 step beats end the step body and validate their grammar, places and the step's own check", async t => {
+  const f = await stepsTopic(t);
+  const reflect = "# Say it in your words\n\nTick Done when you can.\n";
+  const beats = lines => `${reflect}\n\`\`\`beats\n${lines.join("\n")}\n\`\`\`\n`;
+  await f.write("steps/reflect.md", beats(["show preview: This is your app, running.", "show chat: You ask for changes here.",
+    "do send-message: Ask it: \"Make the heading green\"", "do file-opened public/index.html: Open the page file.",
+    "check done: Press Done when the heading is green."]));
+  assert.equal((await validateTopic(f.root)).bundles[0].lesson.steps[3].id, "reflect", "a valid beats block bundles");
+  const tooMany = Array.from({ length: 9 }, () => "show preview: Look.");
+  const cases = [
+    [["point preview: Look."], /beats: beat 1 must read/u],
+    [["show nowhere: Look."], /names an unknown place/u],
+    [["show preview:"], /needs its text/u],
+    [[`show preview: ${"x".repeat(161)}`], /longer than 160/u],
+    [["show preview extra: Look."], /takes no argument/u],
+    [["do file-opened ../escape.mjs: Open it."], /relative practice project file path/u],
+    [["do dashboard: Go there."], /nothing the learner can do or be at/u],
+    [["do send-message: Ask it to make the heading green."], /exactly one quoted prompt/u],
+    [["do send-message: \"One\" and \"two\""], /exactly one quoted prompt/u],
+    [["check grade: Done."], /check auto, review or done/u],
+    [["check done: Done.", "show preview: Look."], /at most one check beat, and it is the last/u],
+    [["check done: Done.", "check done: Again."], /at most one check beat/u],
+    [["check auto: Checked."], /does not match its self check/u],
+    [tooMany, /1 to 8 beats/u]
+  ];
+  for (const [lines, expected] of cases) {
+    await f.write("steps/reflect.md", beats(lines));
+    await assert.rejects(() => validateTopic(f.root), expected, lines.join(" | "));
+  }
+  await f.write("steps/reflect.md", `${reflect}\n\`\`\`beats\nshow preview: Look.\n`);
+  await assert.rejects(() => validateTopic(f.root), /not closed/u);
+  await f.write("steps/reflect.md", `\`\`\`beats\nshow preview: Look.\n\`\`\`\n\nMore text.\n`);
+  await assert.rejects(() => validateTopic(f.root), /must end the step text/u);
+  // Beats replace a guide; practice project places need the exercise.
+  await f.write("steps/reflect.md", reflect);
+  await f.write("steps/open-preview.md", beats(["show preview: Look."]));
+  await assert.rejects(() => validateTopic(f.root), /both beats and a guide/u);
+  const lesson = structuredClone(f.lesson);
+  delete lesson.steps[0].guide;
+  await f.write("lesson.json", lesson);
+  assert.equal((await validateTopic(f.root)).bundles[0].lesson.steps[0].id, "open-preview");
+  const noProject = structuredClone(f.lesson);
+  delete noProject.exercise;
+  noProject.steps = noProject.steps.filter(step => ["which-side", "reflect", "read-more"].includes(step.id));
+  delete noProject.checks;
+  await f.write("lesson.json", noProject);
+  await f.write("steps/reflect.md", beats(["show lesson-bar: This bar walks you through each step.", "do courses: Open Courses.",
+    "do colleague: Open Colleague.", "check done: Press Done."]));
+  assert.equal((await validateTopic(f.root)).bundles[0].lesson.steps.length, 3, "lesson places need no practice project");
+  await f.write("steps/reflect.md", beats(["show preview: Look."]));
+  await assert.rejects(() => validateTopic(f.root), /beat show preview needs the lesson's exercise/u);
+});
+
 test("a v2 lesson descriptor holding answers cannot be served as a body, notes, visual or exercise file", async t => {
   const f = await stepsTopic(t);
   const cases = [

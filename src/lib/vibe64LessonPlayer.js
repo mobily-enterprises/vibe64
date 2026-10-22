@@ -1,0 +1,146 @@
+import { computed, reactive, watch } from "vue";
+import { clearTrainingGuide, showTrainingGuide, trainingGuide } from "@local/vibe64-training/client/guide";
+import { TRAINING_BEAT_ACTIONS, trainingGuideSteps } from "@local/vibe64-training/shared/guide-targets";
+
+// The lesson step bar's beat player, owned by the Learning controller: one
+// deterministic player per host shell. A step's beats (lesson.read
+// step.beats) play in order: a show beat points at its place and moves on by
+// itself after a time set by its length; do and check beats wait for the
+// learner. Back and Next move by beat and cross into the neighbouring step at
+// either end. The beat index and the pause are this tab's place (the
+// controller's state, saved with it); nothing of the player is saved on the
+// server.
+const SHOW_MIN_MS = 5000;
+const SHOW_MAX_MS = 12000;
+const SHOW_PER_CHARACTER_MS = 50;
+const TICK_MS = 100;
+// How long a do beat's ring stays (the learner may dismiss it at once).
+const DO_RING_MS = 15000;
+
+const showDuration = text => Math.min(SHOW_MAX_MS, Math.max(SHOW_MIN_MS, SHOW_MIN_MS + SHOW_PER_CHARACTER_MS * String(text || "").length));
+
+function reducedMotion() {
+  try { return Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches); } catch { return false; }
+}
+
+function documentHidden() {
+  return globalThis.document?.visibilityState === "hidden";
+}
+
+// The place a beat points at, or "" (an action with no place, a check).
+function beatPlace(beat) {
+  if (!beat || beat.kind === "check") return "";
+  return TRAINING_BEAT_ACTIONS[beat.target] ? TRAINING_BEAT_ACTIONS[beat.target].place || "" : beat.target;
+}
+
+// state: the controller's reactive state (stepId, beat, beatPaused, open,
+// stepBarCollapsed); steps/currentStep: its computed lesson steps; active():
+// the step bar shows the current lesson's step; selectStep(id, beat) and
+// remember() are the controller's own.
+function createLessonPlayer({ state, steps, currentStep, active, selectStep, remember,
+  showGuide = showTrainingGuide, clearGuide = clearTrainingGuide, shownGuide = () => trainingGuide.value?.id || "",
+  motionReduced = reducedMotion, hidden = documentHidden } = {}) {
+  const local = reactive({ remaining: 0, duration: 0, held: false, ring: "" });
+  const beats = computed(() => Array.isArray(currentStep.value?.beats) ? currentStep.value.beats : []);
+  // A step whose last beat is its check ends on that beat; otherwise it ends
+  // one past its last beat, where the bar shows the step's own verdict control.
+  const end = computed(() => beats.value.length ? beats.value.length - (beats.value.at(-1).kind === "check" ? 1 : 0) : 0);
+  const index = computed(() => Math.max(0, Math.min(Number.isSafeInteger(state.beat) ? state.beat : 0, end.value)));
+  const beat = computed(() => beats.value[index.value] || null);
+  const stepIndex = computed(() => steps.value.findIndex(step => step.id === currentStep.value?.id));
+  // Everything that holds a show beat still except the document's visibility,
+  // which the tick reads.
+  const playing = computed(() => Boolean(active() && beat.value?.kind === "show" && !state.beatPaused && !local.held &&
+    !state.open && !state.stepBarCollapsed));
+
+  function moveTo(value) {
+    state.beat = value;
+    remember();
+  }
+
+  function next() {
+    if (index.value < end.value) return moveTo(index.value + 1);
+    const following = steps.value[stepIndex.value + 1];
+    if (following) selectStep(following.id, 0);
+  }
+
+  function back() {
+    if (index.value > 0) return moveTo(index.value - 1);
+    const previous = steps.value[stepIndex.value - 1];
+    if (!previous) return;
+    const previousBeats = Array.isArray(previous.beats) ? previous.beats : [];
+    selectStep(previous.id, previousBeats.length - (previousBeats.at(-1)?.kind === "check" ? 1 : 0));
+  }
+
+  // Show me on a step with beats: play it from its first beat.
+  function start(stepId = currentStep.value?.id) {
+    state.beatPaused = false;
+    if (stepId === currentStep.value?.id) moveTo(0);
+    else selectStep(stepId, 0);
+  }
+
+  function togglePause() {
+    state.beatPaused = !state.beatPaused;
+    remember();
+  }
+
+  // Pointer or keyboard focus inside the bar holds a show beat.
+  function hold(value) { local.held = value === true; }
+
+  // Each beat (re)starts its show timer and points at its place once.
+  let timer = null;
+  function stopTimer() {
+    clearInterval(timer);
+    timer = null;
+  }
+  function tick() {
+    if (!playing.value || hidden() || motionReduced()) return;
+    local.remaining = Math.max(0, local.remaining - TICK_MS);
+    if (local.remaining > 0) return;
+    stopTimer();
+    next();
+  }
+  watch(() => [active(), currentStep.value?.id, index.value, beat.value], ([shown, , , value]) => {
+    stopTimer();
+    if (local.ring) clearGuide(local.ring);
+    local.ring = "";
+    local.duration = value?.kind === "show" ? showDuration(value.text) : 0;
+    local.remaining = local.duration;
+    if (!shown || !value) return;
+    if (value.kind === "show") timer = setInterval(tick, TICK_MS);
+    void point(value);
+  }, { immediate: true });
+  // A collapsed bar or open Courses takes the ring away with the beat's text.
+  watch(() => state.stepBarCollapsed || state.open, covered => {
+    if (covered && local.ring) clearGuide(local.ring);
+  });
+
+  async function point(value) {
+    const place = beatPlace(value);
+    if (!place || state.stepBarCollapsed || state.open) return null;
+    const request = { target: place, ...(value.path ? { filePath: value.path } : {}) };
+    const guideSteps = trainingGuideSteps(request);
+    const receipt = await showGuide({ ...request, highlight: true, navigate: false, steps: guideSteps,
+      caption: guideSteps.map(item => item.label).join(" → ") }, { durationMs: value.kind === "show" ? local.duration : DO_RING_MS });
+    if (receipt?.shown) {
+      // Only this player's own ring is taken away again.
+      if (beat.value === value) local.ring = shownGuide();
+      else clearGuide(shownGuide());
+    }
+    return receipt;
+  }
+
+  return Object.freeze({
+    beats, beat, index, end,
+    // The step's verdict state: its check beat, or one past its last beat.
+    get final() { return Boolean(beats.value.length) && index.value === end.value; },
+    get paused() { return Boolean(state.beatPaused); },
+    get playing() { return playing.value && !motionReduced(); },
+    get progress() { return local.duration ? 1 - local.remaining / local.duration : 0; },
+    get atStart() { return index.value === 0 && stepIndex.value <= 0; },
+    get atEnd() { return index.value >= end.value && stepIndex.value >= steps.value.length - 1; },
+    next, back, start, togglePause, hold
+  });
+}
+
+export { createLessonPlayer, showDuration };

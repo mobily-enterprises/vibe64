@@ -8,6 +8,7 @@ import Vibe64LearningMarkdown from "./Vibe64LearningMarkdown.vue";
 
 // One lesson step exactly as the reader shows it: label, title, Markdown body,
 // its diagram with Play, its check, Show me / Teach me and Previous/Next step.
+// Show me on a step with beats plays them in the lesson step bar.
 // Used by the Lesson pane's reader. Verdicts come only
 // from the Training actions (auto check, choice comparator, self or reading
 // step Done) through
@@ -242,7 +243,7 @@ async function markRead() {
 
     <p v-if="actionError" class="vibe64-learning-step__error" role="alert">{{ actionError }}</p>
     <div class="vibe64-learning-step__actions">
-      <v-btn v-if="step.guide && !ended" variant="tonal" rounded="pill" min-height="48" data-test="learning-show-me" @click="showMe">Show me</v-btn>
+      <v-btn v-if="(step.guide || step.beats?.length) && !ended" variant="tonal" rounded="pill" min-height="48" data-test="learning-show-me" @click="showMe">Show me</v-btn>
       <v-btn v-if="!ended" variant="tonal" rounded="pill" min-height="48" data-test="learning-teach-me" @click="teachMe">Teach me</v-btn>
     </div>
     <slot name="after-actions" />

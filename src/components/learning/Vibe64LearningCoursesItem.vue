@@ -12,6 +12,7 @@ const learning = useVibe64Learning();
   <v-list-item
     v-if="learning?.learnMode"
     data-test="learning-courses"
+    data-vibe64-guide="courses"
     :prepend-icon="mdiSchoolOutline"
     subtitle="Start or continue a lesson"
     title="Courses"

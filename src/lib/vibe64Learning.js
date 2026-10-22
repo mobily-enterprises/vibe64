@@ -5,6 +5,7 @@ import { resolveStudioRequestUrl } from "@/lib/studioUrls.js";
 import { projectAppPath, projectSlugFromPathname } from "@/lib/vibe64ProjectScope.js";
 import { practiceProjectName } from "@/lib/vibe64PracticeProjectName.js";
 import { trainingGuideRequest, trainingGuideSteps, TRAINING_GUIDE_PLACES } from "@local/vibe64-training/shared/guide-targets";
+import { createLessonPlayer } from "@/lib/vibe64LessonPlayer.js";
 
 // Learn and Develop: one host shell, two modes. One controller per host shell
 // owns the mode (server-backed, per learner), each mode's place in this
@@ -81,7 +82,8 @@ function writeJson(kind, key, value) {
 }
 
 // This tab's place (sessionStorage): the Courses tab, and the Lesson pane's
-// attempt, step and scroll (trialAttemptId: an author trial opened here).
+// attempt, step and scroll (trialAttemptId: an author trial opened here), and
+// the step bar's beat and pause.
 function readPlace(actorKey) {
   const value = readJson("sessionStorage", `${STORAGE_PREFIX}${actorKey}`);
   if (!value) return null;
@@ -89,7 +91,8 @@ function readPlace(actorKey) {
     attemptId: text(value.attemptId) ? value.attemptId : "", stepId: text(value.stepId) ? value.stepId : "",
     trialAttemptId: text(value.trialAttemptId) && value.trialAttemptId === value.attemptId ? value.trialAttemptId : "",
     scroll: Number.isSafeInteger(value.scroll) && value.scroll >= 0 ? value.scroll : 0,
-    stepBarCollapsed: value.stepBarCollapsed === true };
+    stepBarCollapsed: value.stepBarCollapsed === true,
+    beat: Number.isSafeInteger(value.beat) && value.beat >= 0 ? value.beat : 0, beatPaused: value.beatPaused === true };
 }
 
 // Each mode's last place in this browser (localStorage): the full route,
@@ -204,7 +207,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   // unreadable).
   const state = reactive({ open: false, minimised: false, surface: "courses", attemptId: "", stepId: "", scroll: 0,
     loading: false, error: "", actorKey: "", busy: "", hiddenBy: "", finished: false, notice: "", modeBusy: "",
-    modeRead: false, stepBarCollapsed: false, trialAttemptId: "" });
+    modeRead: false, stepBarCollapsed: false, trialAttemptId: "", beat: 0, beatPaused: false });
   const lesson = shallowRef(null);
   // The learner's mode (server-backed): null until read or when unreadable (Develop).
   const mode = shallowRef(null);
@@ -253,11 +256,18 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   // Every required step of the read version 2 lesson is passed.
   const complete = computed(() => Boolean(lesson.value?.schemaVersion === 2 && steps.value.length &&
     steps.value.filter(step => step.required).every(step => stepStatus(results.value, step.id, lesson.value.passedStepIds) === "passed")));
+  const lessonAttemptId = computed(() => state.finished ? state.attemptId : state.trialAttemptId || mode.value?.currentAttemptId || "");
+  // The step bar shows the current lesson's step (not a finished lesson's screen).
+  const stepBarVisible = computed(() => Boolean(learnMode.value && !state.finished && lessonAttemptId.value &&
+    state.attemptId === lessonAttemptId.value && currentStep.value));
+  const player = createLessonPlayer({ state, steps, currentStep, selectStep: (...value) => selectStep(...value), remember: () => remember(),
+    active: () => stepBarVisible.value && !lesson.value?.attempt?.ended });
 
   function remember() {
     if (!state.actorKey) return;
     writeJson("sessionStorage", `${STORAGE_PREFIX}${state.actorKey}`, { surface: state.surface, attemptId: state.attemptId,
-      stepId: state.stepId, scroll: state.scroll, stepBarCollapsed: state.stepBarCollapsed, trialAttemptId: state.trialAttemptId });
+      stepId: state.stepId, scroll: state.scroll, stepBarCollapsed: state.stepBarCollapsed, trialAttemptId: state.trialAttemptId,
+      beat: state.beat, beatPaused: state.beatPaused });
   }
 
   // The signed-in viewer is supplied by the mounted overlay (hosted AuthGate
@@ -282,7 +292,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     Object.assign(notesState, { loading: false, saving: false, error: "" });
     Object.assign(state, { open: false, minimised: false, surface: "courses", attemptId: "", stepId: "", scroll: 0,
       loading: false, error: "", busy: "", hiddenBy: "", finished: false, notice: "", modeBusy: "", modeRead: false,
-      stepBarCollapsed: false, trialAttemptId: "", actorKey: next });
+      stepBarCollapsed: false, trialAttemptId: "", beat: 0, beatPaused: false, actorKey: next });
     finishRun = null;
     const place = next ? readPlace(next) : null;
     if (place) Object.assign(state, place);
@@ -384,6 +394,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     state.attemptId = attemptId;
     state.stepId = text(stepId) ? stepId : "";
     state.scroll = 0;
+    state.beat = 0;
     lastSaved = "";
   }
 
@@ -432,6 +443,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
         const unpassed = value.steps.some(passed) ? value.steps.find(step => step.required && !passed(step)) : null;
         state.stepId = saved && known(saved.stepId) ? saved.stepId : (unpassed || value.steps[0])?.id || "";
         state.scroll = saved && known(saved.stepId) && Number.isSafeInteger(saved.scroll) ? saved.scroll : 0;
+        state.beat = 0;
       }
       remember();
       return value;
@@ -482,7 +494,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
       selectAttempt(attemptId, stepId);
     } else if (text(stepId) && stepId !== state.stepId) {
       if (steps.value.length) selectStep(stepId);
-      else state.stepId = stepId;
+      else Object.assign(state, { stepId, beat: 0 });
     }
     remember();
     const target = `${learnHomePath(value)}?pane=lesson`;
@@ -529,10 +541,12 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     if (!before && complete.value && attemptId === state.attemptId) void showFinished().catch(() => {});
   }
 
-  function selectStep(stepId) {
+  // beat: where the step bar starts this step (Back enters a step at its end).
+  function selectStep(stepId, beat = 0) {
     if (!steps.value.some(step => step.id === stepId) || stepId === state.stepId) return;
     state.stepId = stepId;
     state.scroll = 0;
+    state.beat = beat;
     remember();
     scheduleReaderSave();
   }
@@ -657,9 +671,16 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     { selected: [...selected].map(Number).sort((left, right) => left - right) });
   const done = stepId => stepAction("done", VIBE64_LEARNING_ROUTES.stepDone, stepId);
 
-  // Show me: minimise Courses, then point at (and, when declared, open) the real place.
+  // Show me: minimise Courses, then point at (and, when declared, open) the
+  // real place. A step with beats instead plays them in the step bar from the
+  // first one, so the lesson stays in view.
   async function showMe(stepId = currentStep.value?.id) {
     const step = steps.value.find(value => value.id === stepId);
+    if (step?.beats?.length) {
+      minimise();
+      player.start(stepId);
+      return { beats: true };
+    }
     if (!step?.guide) throw new Error("This step has nothing to show.");
     let command = showMeCommand(step.guide, { projectSlug: lesson.value?.practiceProjectSlug || "" });
     minimise();
@@ -966,13 +987,14 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     // The lesson the Lesson pane shows: the current lesson (the mode's attempt
     // in progress, or this tab's author trial), or a just finished lesson's
     // Finished screen until it is left.
-    get lessonAttemptId() { return state.finished ? state.attemptId : state.trialAttemptId || mode.value?.currentAttemptId || ""; },
+    get lessonAttemptId() { return lessonAttemptId.value; },
+    get stepBarVisible() { return stepBarVisible.value; },
     get lessonTitle() { return mode.value?.currentAttemptId ? mode.value.lessonTitle || mode.value.lessonCode || "" : ""; },
     get practice() { return practice.value; },
     get confirmArchive() { return confirmArchive.value; },
     get stepBarCollapsed() { return state.stepBarCollapsed; },
     get notice() { return state.notice; },
-    lesson, results, steps, currentStep, focus, colleagueRequest, notes, notesState: readonly(notesState),
+    lesson, results, steps, currentStep, focus, colleagueRequest, notes, notesState: readonly(notesState), player,
     stepStatus: stepId => stepStatus(results.value, stepId, lesson.value?.passedStepIds || []),
     setViewer, show, openCourses, openLesson, closeCourses, showFinished, minimise, selectStep, setScroll, flushReader, loadLesson,
     runCheck, answer, done, showMe, teachMe, consumeColleagueRequest, learnerChanged,

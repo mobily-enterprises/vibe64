@@ -25,11 +25,12 @@ const fixtureTopic = new URL("../fixtures/training/steps-v2/", import.meta.url);
 const BROWSER_ONLY = ["step.observe", "step.answer", "step.done", "step.review.run", "reader.save"];
 const ASSISTANT = ["lesson.read", "step.check.run", "step.evidence.read", "practice.list", "lesson.delete", "practice.archived.delete"];
 
-async function fixture(t, { contentWrapper = value => value, practice = true } = {}) {
+async function fixture(t, { contentWrapper = value => value, practice = true, editTopic = null } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-step-actions-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const source = path.join(root, "topic");
   await cp(fixtureTopic, source, { recursive: true });
+  if (editTopic) await editTopic(source);
   const systemRoot = path.join(root, "system");
   const commit = "e".repeat(40), snapshotRoot = path.join(systemRoot, "training/content/steps", commit);
   await mkdir(path.dirname(snapshotRoot), { recursive: true });
@@ -124,6 +125,23 @@ test("browser-only step actions are api-only and absent from Colleague's tools; 
       { code: "ACTION_CHANNEL_FORBIDDEN" }, name);
   }
   assert.deepEqual(f.published, []);
+});
+
+test("lesson.read serves a step's beats parsed and its body without the beats block", async t => {
+  const f = await fixture(t, { editTopic: source => writeFile(path.join(source, "steps/reflect.md"),
+    "# Say it\n\nTick Done.\n\n```beats\nshow preview: This is your app.\ndo send-message: Ask it: \"Make the heading green\"\n" +
+    "do file-opened public/index.html: Open the page.\ncheck done: Press Done.\n```\n") });
+  const attempt = await f.start();
+  const api = await f.execute("lesson.read", { attemptId: attempt.attemptId });
+  const reflect = api.lesson.steps.find(step => step.id === "reflect");
+  assert.equal(reflect.bodyText, "# Say it\n\nTick Done.\n");
+  assert.deepEqual(reflect.beats, [
+    { kind: "show", target: "preview", text: "This is your app." },
+    { kind: "do", target: "send-message", prompt: "Make the heading green", text: "Ask it: \"Make the heading green\"" },
+    { kind: "do", target: "file-opened", path: "public/index.html", text: "Open the page." },
+    { kind: "check", target: "done", text: "Press Done." }]);
+  assert.ok(api.lesson.steps.filter(step => step.id !== "reflect").every(step => !Object.hasOwn(step, "beats")), "steps without a block are unchanged");
+  assert.deepEqual((await f.tool("lesson.read", { attemptId: attempt.attemptId })).result, api);
 });
 
 test("lesson.read projects steps, notes, visuals and results without the choice answer through API and tool alike", async t => {

@@ -4,6 +4,7 @@ import path from "node:path";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { bundleFiles, canonicalJson, validateTopic } from "./content.js";
 import { validateContent, validateLesson } from "./contentSchemas.js";
+import { splitStepBeats } from "../shared/beats.js";
 
 const idPattern = /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u;
 const commitPattern = /^[a-f0-9]{40}$/u;
@@ -264,9 +265,13 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
       visuals.push({ id: resource.id, descriptorPath: descriptor.path, visual: JSON.parse(descriptor.text) });
     }
     if (bundle.lesson.schemaVersion === 2) {
-      // v2 has no teaching document or rubrics: each step carries its body text.
+      // v2 has no teaching document: each step carries its body text, and its
+      // beats parsed out of it (the reader never shows the beats block).
       const steps = [];
-      for (const step of bundle.lesson.steps) steps.push({ ...step, bodyText: (await lessonText(step.body)).text });
+      for (const step of bundle.lesson.steps) {
+        const { body, beats } = splitStepBeats((await lessonText(step.body)).text);
+        steps.push({ ...step, bodyText: body, ...(beats ? { beats } : {}) });
+      }
       return { ...bundle, steps, ...bundle.lesson.notes === undefined ? {} : { notesText: (await lessonText(bundle.lesson.notes)).text }, visuals };
     }
     if (bundle.lesson.schemaVersion !== 1) throw new Error(`Lesson ${bundle.lesson.code} uses an unsupported format.`);

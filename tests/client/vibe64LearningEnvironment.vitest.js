@@ -1544,6 +1544,18 @@ describe("Lesson finished screen", () => {
   });
 });
 
+// A lesson whose first step plays beats and whose self step ends in its check beat.
+const beatsLesson = () => {
+  const value = lessonResult();
+  value.lesson.steps[0] = { ...value.lesson.steps[0], beats: [
+    { kind: "show", target: "preview", text: "This is your app." }, { kind: "show", target: "lesson-bar", text: "This bar guides you." }] };
+  value.lesson.steps[3] = { ...value.lesson.steps[3], beats: [{ kind: "check", target: "done", text: "Press Done when it is green." }] };
+  return value;
+};
+
+const STEP_BAR_ICONS = Object.freeze({ mdiBookOpenPageVariantOutline: "book", mdiChevronDown: "down", mdiChevronLeft: "left",
+  mdiChevronRight: "right", mdiChevronUp: "up", mdiPause: "pause", mdiPlay: "play" });
+
 describe("Lesson step bar", () => {
   it("shows the current lesson's step in Learn mode, moves through steps, opens the Lesson pane and collapses", async () => {
     let on = true;
@@ -1553,7 +1565,7 @@ describe("Lesson step bar", () => {
     const LAYOUT = Symbol("layout");
     const layout = Vue.shallowRef({ lessonVisible: false });
     const bar = compiledUi(path.resolve("src/components/learning/Vibe64LearningStepBar.vue"), {
-      vue: Vue, "@mdi/js": { mdiChevronDown: "down", mdiChevronLeft: "left", mdiChevronRight: "right", mdiChevronUp: "up" },
+      vue: Vue, "@mdi/js": STEP_BAR_ICONS,
       "@/lib/vibe64AssistantHost.js": { VIBE64_COLLEAGUE_LAYOUT_KEY: LAYOUT },
       "@/composables/useVibe64Learning.js": { useVibe64Learning: () => learning } });
     const root = { children: [] };
@@ -1586,6 +1598,47 @@ describe("Lesson step bar", () => {
       await learning.readLearningMode();
       await flush();
       expect(byTest(root, "learning-step-bar"), "Develop shows no lesson").toBeUndefined();
+    } finally { app.unmount(); }
+  });
+
+  it("plays a step's beats with dots, moves by beat, and ends on the step's own verdict control", async () => {
+    const { learning, calls } = controller({ reads: () => beatsLesson() });
+    learning.setViewer("member");
+    await flush();
+    const LAYOUT = Symbol("layout");
+    const bar = compiledUi(path.resolve("src/components/learning/Vibe64LearningStepBar.vue"), {
+      vue: Vue, "@mdi/js": STEP_BAR_ICONS, "@/lib/vibe64AssistantHost.js": { VIBE64_COLLEAGUE_LAYOUT_KEY: LAYOUT },
+      "@/composables/useVibe64Learning.js": { useVibe64Learning: () => learning } });
+    const root = { children: [] };
+    const app = uiRenderer().createApp({ render: () => Vue.h(bar) });
+    app.provide(LAYOUT, Vue.shallowRef({ lessonVisible: false }));
+    for (const tag of WIDGETS) app.component(tag, widget);
+    app.mount(root);
+    try {
+      await flush();
+      expect(textOf(byTest(root, "learning-step-bar-beat"))).toBe("This is your app.");
+      expect(textOf(root)).toContain("1/4");
+      expect(byTest(root, "learning-step-bar-dots").props["aria-label"]).toBe("Part 1 of 2");
+      expect(byTest(root, "learning-step-bar-pause")).toBeDefined();
+      expect(byTest(root, "learning-step-bar-previous").props.disabled).toBe(true);
+      byTest(root, "learning-step-bar-next").props.onClick();
+      await flush();
+      expect(textOf(byTest(root, "learning-step-bar-beat"))).toBe("This bar guides you.");
+      expect(JSON.parse(saved.get("vibe64:learning-environment:v2:member")).beat, "the beat is this tab's place").toBe(1);
+      byTest(root, "learning-step-bar-next").props.onClick();
+      await flush();
+      // A reading step after its last beat: its own Mark as done, then Next step once done.
+      expect(textOf(byTest(root, "learning-step-bar-verdict"))).toContain("Mark as done");
+      expect(byTest(root, "learning-step-bar-pause"), "nothing to pause after the beats").toBeUndefined();
+      learning.selectStep("tick");
+      await flush();
+      expect(textOf(byTest(root, "learning-step-bar-beat"))).toBe("Press Done when it is green.");
+      await byTest(root, "learning-step-bar-verdict").props.onClick();
+      expect(calls.some(call => call.url === VIBE64_LEARNING_ROUTES.stepDone(ATTEMPT) && call.body.stepId === "tick")).toBe(true);
+      // Show me on a step with beats plays it in the bar from its first beat.
+      expect(await learning.showMe("read")).toEqual({ beats: true });
+      await flush();
+      expect([learning.stepId, learning.state.beat]).toEqual(["read", 0]);
     } finally { app.unmount(); }
   });
 });
