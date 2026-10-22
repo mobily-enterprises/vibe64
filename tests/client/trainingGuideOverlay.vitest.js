@@ -162,7 +162,7 @@ describe("teacher guide overlay", () => {
     // The pane fills the screen, so the caption sits inside its top edge.
     const caption = find(node, child => String(child.props.class || "").includes("training-guide-overlay__caption "))[0];
     expect(String(caption.props.class)).toContain("training-guide-overlay__caption--inside");
-    expect(caption.props.style).toMatchObject({ top: "70px" });
+    expect(caption.props.style).toMatchObject({ top: "64px" });
 
     // A visible control for the same step wins over its pane (desktop tabs).
     previewTab.hidden = false;
@@ -246,6 +246,18 @@ describe("teacher guide overlay", () => {
     const files = trainingGuideCommand(trainingGuideRequest({ target: "files" }), { id: "files" }).guide;
     expect(await showTrainingGuide(files)).toEqual({ shown: true, step: "files" });
     expect(trainingGuide.value.element).toBe(filesPane);
+  });
+
+  it("places the caption beside a top bar control, clear of the lesson step bar", async () => {
+    vi.stubGlobal("innerWidth", 1280);
+    vi.stubGlobal("innerHeight", 800);
+    document.controls.push(control({ "data-vibe64-guide": "lesson-bar" }, { top: 64, left: 0, width: 1280, height: 56 }));
+    mountOverlay();
+    await showTrainingGuide(erd);
+    await Vue.nextTick();
+    const caption = find(overlay(), child => String(child.props.class || "").includes("training-guide-overlay__caption "))[0];
+    expect(String(caption.props.class)).toContain("training-guide-overlay__caption--right");
+    expect(caption.props.style).toMatchObject({ top: "8px", left: "120px", "--training-guide-arrow": "20px" });
   });
 
   it("clears after its time limit", async () => {

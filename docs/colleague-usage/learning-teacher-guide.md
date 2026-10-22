@@ -10,6 +10,11 @@ lesson's own caption. You then click it yourself.
 - The rest of the screen dims slightly, and a ring with a gentle ripple sits on
   one real tab, Dashboard section or button. A caption points at it; a thin bar
   on the caption shows the time left.
+- The caption sits beside the control when there is room (right, else left),
+  otherwise below or above it. It stays off the yellow lesson step bar whenever
+  another place fits, so the step text stays readable; on a narrow phone screen
+  it may have to cover part of the bar. The caption is slightly see-through and
+  clicks pass through it to whatever is underneath.
 - The ring is on the next step from where you are. On **Preview**, a path to the
   ERD rings the **Dashboard** tab; once you are in **Dashboard → Database**, it
   rings the **ERD** button. When you are already at the place (for example

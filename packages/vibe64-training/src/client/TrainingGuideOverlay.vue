@@ -1,12 +1,17 @@
 <script setup>
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { clearTrainingGuide, currentTrainingGuideElement, registerTrainingGuideOverlay, trainingGuide } from "./trainingGuide.js";
+import { placeGuideCaption } from "./guideCaptionPlacement.js";
 
 // A coach mark over one real Vibe64 control: a soft spotlight, a ring with a
 // ripple and a short caption pointing at it. It never takes input: the
-// learner clicks the control underneath themselves.
+// learner clicks the control underneath themselves, also through the
+// translucent caption.
 const unregister = registerTrainingGuideOverlay();
 const rect = ref(null);
+const caption = ref(null);
+const captionSize = ref(null);
+const keepClear = ref([]);
 const lifetime = ref(0);
 const reducedMotion = ref(Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches));
 let frame = 0;
@@ -24,6 +29,12 @@ function stop() {
 function dismiss() {
   clearTrainingGuide(trainingGuide.value?.id);
 }
+// The caption stays off the lesson step bar the learner is reading.
+const KEEP_CLEAR_SELECTOR = '[data-vibe64-guide="lesson-bar"]';
+function box(target) {
+  const { top, left, width, height } = target.getBoundingClientRect();
+  return { top, left, width, height };
+}
 function measure() {
   const guide = trainingGuide.value;
   if (!guide) return;
@@ -33,8 +44,9 @@ function measure() {
     clearTrainingGuide(guide.id);
     return;
   }
-  const box = element.getBoundingClientRect();
-  rect.value = { top: box.top, left: box.left, width: box.width, height: box.height };
+  rect.value = box(element);
+  keepClear.value = [...(globalThis.document?.querySelectorAll?.(KEEP_CLEAR_SELECTOR) || [])].map(box);
+  captionSize.value = caption.value?.getBoundingClientRect ? box(caption.value) : null;
   if (globalThis.requestAnimationFrame) frame = globalThis.requestAnimationFrame(measure);
 }
 watch(trainingGuide, guide => {
@@ -56,36 +68,25 @@ onBeforeUnmount(() => {
 const pad = 6;
 const gap = 14;
 const captionMaxWidth = 352;
-const ringStyle = computed(() => rect.value && {
-  top: `${rect.value.top - pad}px`, left: `${rect.value.left - pad}px`,
-  width: `${rect.value.width + pad * 2}px`, height: `${rect.value.height + pad * 2}px`
+const ring = computed(() => rect.value && {
+  top: rect.value.top - pad, left: rect.value.left - pad,
+  width: rect.value.width + pad * 2, height: rect.value.height + pad * 2
 });
-// The caption sits below the control, or above it where the viewport ends;
-// its pointer tracks the control's centre even when the caption is clamped.
-// A ringed pane that fills a phone screen leaves no room outside it, so the
-// caption then sits inside the pane's top edge without a pointer.
-const captionRoom = 60;
-const captionPlacement = computed(() => {
-  if (!rect.value) return "below";
-  const viewport = globalThis.innerHeight || 0;
-  const below = rect.value.top + rect.value.height + pad + gap;
-  if (!viewport || below + captionRoom <= viewport) return "below";
-  return rect.value.top - pad - gap - captionRoom >= 0 ? "above" : "inside";
+const ringStyle = computed(() => ring.value && {
+  top: `${ring.value.top}px`, left: `${ring.value.left}px`, width: `${ring.value.width}px`, height: `${ring.value.height}px`
 });
-const captionStyle = computed(() => {
-  if (!rect.value) return null;
-  const viewportWidth = globalThis.innerWidth || 0;
-  const width = viewportWidth ? Math.min(captionMaxWidth, viewportWidth - 16) : captionMaxWidth;
-  const preferred = Math.max(8, rect.value.left - pad);
-  const left = viewportWidth ? Math.max(8, Math.min(preferred, viewportWidth - 8 - width)) : preferred;
-  const arrow = Math.max(20, Math.min(rect.value.left + rect.value.width / 2 - left, width - 20));
-  const vertical = {
-    above: { bottom: `${Math.max(8, (globalThis.innerHeight || 0) - (rect.value.top - pad - gap))}px` },
-    below: { top: `${rect.value.top + rect.value.height + pad + gap}px` },
-    inside: { top: `${Math.max(8, rect.value.top) + gap}px` }
-  }[captionPlacement.value];
-  return { ...vertical, left: `${left}px`, maxWidth: `${width}px`,
-    "--training-guide-arrow": `${arrow}px`, "--training-guide-lifetime": `${lifetime.value}ms` };
+// Until the caption has rendered once, its size is estimated at full width.
+const captionWidth = computed(() => Math.min(captionMaxWidth, (globalThis.innerWidth || captionMaxWidth + 16) - 16));
+const placement = computed(() => ring.value && placeGuideCaption({
+  ring: ring.value,
+  caption: captionSize.value || { width: captionWidth.value, height: 56 },
+  viewport: { width: globalThis.innerWidth || 0, height: globalThis.innerHeight || 0 },
+  avoid: keepClear.value,
+  gap
+}));
+const captionStyle = computed(() => placement.value && {
+  top: `${placement.value.top}px`, left: `${placement.value.left}px`, maxWidth: `${captionWidth.value}px`,
+  "--training-guide-arrow": `${placement.value.arrow}px`, "--training-guide-lifetime": `${lifetime.value}ms`
 });
 </script>
 
@@ -102,8 +103,9 @@ const captionStyle = computed(() => {
       <div class="training-guide-overlay__ring" :style="ringStyle" />
       <div
         v-if="trainingGuide.caption"
+        ref="caption"
         class="training-guide-overlay__caption"
-        :class="`training-guide-overlay__caption--${captionPlacement}`"
+        :class="`training-guide-overlay__caption--${placement.side}`"
         :style="captionStyle"
       >
         <svg class="training-guide-overlay__caption-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -163,11 +165,12 @@ const captionStyle = computed(() => {
   animation-delay: calc(var(--training-guide-enter) + 1s);
 }
 
-/* The coach-mark caption: a filled M3 rich tooltip with a pointer. */
+/* The coach-mark caption: a filled M3 rich tooltip with a pointer, slightly
+   translucent because clicks pass through it to the controls underneath. */
 .training-guide-overlay__caption {
   align-items: center;
   animation: training-guide-caption-below var(--training-guide-enter) var(--training-guide-ease) 90ms both;
-  background: var(--training-guide-accent);
+  background: rgba(var(--training-guide-accent-rgb), 0.88);
   border-radius: var(--training-guide-radius);
   box-shadow: var(--v64-elevation-3, 0 4px 8px 3px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.12)),
     0 10px 28px rgba(var(--training-guide-accent-rgb), 0.28);
@@ -185,20 +188,43 @@ const captionStyle = computed(() => {
 .training-guide-overlay__caption--above {
   animation-name: training-guide-caption-above;
 }
+.training-guide-overlay__caption--right {
+  animation-name: training-guide-caption-right;
+}
+.training-guide-overlay__caption--left {
+  animation-name: training-guide-caption-left;
+}
+/* The pointer sits on the edge facing the ring, at --training-guide-arrow.
+   Only its outer half is drawn, so the translucent fills never double up. */
 .training-guide-overlay__caption::before {
   background: inherit;
   border-radius: 2px;
+  clip-path: polygon(0 0, 100% 0, 0 100%);
   content: "";
   height: 12px;
   left: calc(var(--training-guide-arrow, 24px) - 6px);
   position: absolute;
-  top: -5px;
+  top: -6px;
   transform: rotate(45deg);
   width: 12px;
 }
 .training-guide-overlay__caption--above::before {
-  bottom: -5px;
+  bottom: -6px;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
   top: auto;
+}
+.training-guide-overlay__caption--right::before,
+.training-guide-overlay__caption--left::before {
+  top: calc(var(--training-guide-arrow, 24px) - 6px);
+}
+.training-guide-overlay__caption--right::before {
+  clip-path: polygon(0 0, 100% 100%, 0 100%);
+  left: -6px;
+}
+.training-guide-overlay__caption--left::before {
+  clip-path: polygon(0 0, 100% 0, 100% 100%);
+  left: auto;
+  right: -6px;
 }
 .training-guide-overlay__caption--inside::before {
   display: none;
@@ -257,6 +283,12 @@ const captionStyle = computed(() => {
 }
 @keyframes training-guide-caption-above {
   from { opacity: 0; transform: translateY(10px) scale(0.94); }
+}
+@keyframes training-guide-caption-right {
+  from { opacity: 0; transform: translateX(-10px) scale(0.94); }
+}
+@keyframes training-guide-caption-left {
+  from { opacity: 0; transform: translateX(10px) scale(0.94); }
 }
 @keyframes training-guide-timer {
   from { transform: scaleX(1); }
