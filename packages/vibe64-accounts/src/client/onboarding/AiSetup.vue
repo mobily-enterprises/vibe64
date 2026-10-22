@@ -505,7 +505,7 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
                 <div v-if="cardAction(card) === 'get'" class="aio-plan">
                   <span class="aio-plan__name">{{ card.plan.name }}</span>
                   <span class="aio-plan__price">{{ card.plan.price }}</span>
-                  <span class="aio-plan__budget">{{ card.plan.budget }}</span>
+                  <span v-if="card.plan.budget" class="aio-plan__budget">{{ card.plan.budget }}</span>
                   <span v-if="card.plan.more" class="aio-plan__more">{{ card.plan.more }}</span>
                 </div>
                 <div class="aio-card__ctas">
@@ -601,7 +601,7 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
                 {{ signUp === "have" ? chosen.haveTitle : "Get a plan" }}<span v-if="signUp === 'opened'" class="d-sr-only"> (done)</span>
               </h2>
               <p class="aio-checklist__body">
-                {{ signUp === "have" ? "Go straight to the next step. Need one after all? Open the sign-up page." : `${chosen.signUp.step} ${chosen.plan.budget}` }}
+                {{ signUp === "have" ? "Go straight to the next step. Need one after all? Open the sign-up page." : [chosen.signUp.step, chosen.plan.budget].filter(Boolean).join(" ") }}
               </p>
               <v-btn
                 variant="tonal" color="primary" :href="chosen.signUp.url" target="_blank" rel="noopener noreferrer"

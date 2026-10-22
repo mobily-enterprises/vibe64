@@ -105,10 +105,12 @@ describe("provider data", () => {
   });
 
   it("leads with each plan's official name and price, the spending advice beneath", () => {
+    // No budget figure under Claude's $20 headline; the comparisons quote that $20.
     expect(claude).toMatchObject({ crown: true, plan: { name: "Claude Pro", price: "$20/month",
-      budget: "Budget about $30/month: Pro plus extra usage when you need it.", more: "Coding a lot? Max · $100/month" } });
+      budget: "", more: "Coding a lot? Max · $100/month" } });
     expect(glm.plan.budget).toContain("$30/month");
-    expect(glm.note).toContain("There's no point in getting it if you can get Claude for the same price.");
+    expect(glm.note).toContain("There's no point in getting it when Claude Pro is $20/month.");
+    expect(deepseek.note).toContain("For $20 a month, Claude Pro gives a far better experience.");
     expect(AI_ONBOARDING_PROVIDERS.filter(({ crown }) => crown)).toHaveLength(1);
     // "Recommended" belongs to Claude's ribbon alone, and only Claude rates 5 on quota.
     expect(JSON.stringify(AI_ONBOARDING_PROVIDERS)).not.toMatch(/Recommended:/u);

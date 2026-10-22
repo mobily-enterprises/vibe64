@@ -47,22 +47,21 @@ the step (1 of 3).
 first with a wide gold crown on its tile. Every card shows three facts with a
 five-segment meter (low ratings in a warning tone; hover a meter for its
 rating), then the plan: its official name and price first, our budget advice
-beneath:
+beneath where it differs from the price (Claude and Codex have none):
 
 1. **Claude** (crown, gold **Recommended** ribbon): very high intelligence, very
-   generous quota, very high speed. **Claude Pro, $20/month**; budget about
-   $30/month: Pro plus extra usage when you need it. **Coding a lot? Max ·
-   $100/month.**
+   generous quota, very high speed. **Claude Pro, $20/month.** **Coding a lot?
+   Max · $100/month.**
 2. **Codex** (OpenAI): very good intelligence, with quota and speed issues; hits
-   limits on long sessions. **ChatGPT Pro, $100/month**; budget about $100/month
-   for basic coding. **Heavy use: $200/month.**
+   limits on long sessions. **ChatGPT Pro, $100/month.** **Coding a lot?
+   $200/month.**
 3. **DeepSeek**: cheap, pay as you go (cost grows with work), weaker on long
    coding tasks. **Prepaid API credit, pay as you go**; budget about $20 to
-   start. It works, but you will notice the gap: spending $20 a month, Claude
-   gives a far better experience for about the same.
-4. **GLM** (Z.ai): a budget subscription. **GLM Coding Plan, from $18/month**;
+   start. It works, but you will notice the gap: for $20 a month, Claude Pro
+   gives a far better experience.
+4. **GLM** (Z.AI): a budget subscription. **GLM Coding Plan, from $18/month**;
    budget about $30/month for daily coding. It works, but there is no point in
-   getting it if you can get Claude for the same price. Below the plan the card
+   getting it when Claude Pro is $20/month. Below the plan the card
    shows **Free option: GLM-4.7 Flash with a free Z.AI account**: Z.AI's regular API
    serves GLM-4.7 Flash free of charge (no plan or credit). It is good for
    trying Vibe64; expect slower, simpler work than the paid plans.
@@ -83,7 +82,7 @@ main AI**.
 ## Screen 3: connect
 
 **Connect [provider]** shows the chosen mark with the plan name and price, in
-one column with two steps. Step 1, **Get a plan**, repeats the budget advice
+one column with two steps. Step 1, **Get a plan**, repeats any budget advice
 with the **Open [site]** button (**Already subscribed** or, for DeepSeek,
 **Already have credit** if you came from the Connect link). Step 2 holds the
 normal AI Accounts setup directly:
@@ -94,7 +93,7 @@ normal AI Accounts setup directly:
   **Enable device code authorization for Codex**, then sign in and enter the
   short code.
 - **DeepSeek**: **Paste your DeepSeek API key**, then **Check and connect**.
-- **GLM**: **Paste your Z.ai Coding Plan key** (create it on Z.ai under Personal
+- **GLM**: **Paste your Z.AI Coding Plan key** (create it on Z.AI under Personal
   Coding Plan → Plan Overview), then **Check and connect**.
 - **GLM-4.7 Flash (free)**: **Paste your Z.AI API key** (Z.AI's API Keys page),
   then **Connect**. Vibe64 checks it with one tiny free GLM-4.7 Flash request

@@ -382,7 +382,7 @@ AI onboarding is owned by the client `onboarding/` module of
 `packages/vibe64-accounts` and composes these same setup components in their
 embedded mode; it has no connection implementation of its own.
 `aiOnboardingProviders.js` is the only place for provider ranks, copy, each
-plan's official name and price with the product's budget advice beneath it,
+plan's official name and price with any budget advice beneath it,
 the monogram shape, sign-up URLs, the orchestrator and provider id each card connects
 through, and which saved connections count as that provider. DeepSeek and GLM
 connect as curated Codex providers (`deepseek`, `zai-coding-plan`). The GLM card
