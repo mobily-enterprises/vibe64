@@ -102,8 +102,9 @@ normal AI Accounts setup directly:
 
 Each choice runs through a program installed on this computer: Claude through
 **Claude Code**, Codex, DeepSeek and GLM through **Codex**, and the free GLM-4.7
-Flash through **opencode**. If that program is missing, Step 2 shows a warning
-instead of the sign-in or key form:
+Flash through **opencode**. A card whose program is missing says **Needs
+[program] on this computer** under its buttons before you choose it. If that
+program is missing, Step 2 shows a warning instead of the sign-in or key form:
 
 - **[Claude Code, Codex or opencode] isn't installed on this computer**, with its
   official one-line install command, a **Copy** button and **Other ways to install**.

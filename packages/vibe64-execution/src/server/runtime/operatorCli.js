@@ -5,15 +5,18 @@ import process from "node:process";
 
 import { runtimePackRoot } from "./runtimePacks.js";
 
-// Official one-line installers, checked 2026-10-21. Only someone using their
-// own tools is shown them; a host with runtime packs installs its own.
+// Official one-line installers, checked 2026-10-22: a macOS/Linux shell line
+// and a Windows PowerShell line (opencode publishes no PowerShell installer,
+// so Windows uses its official npm package). Only someone using their own
+// tools is shown them; a host with runtime packs installs its own.
 const OPERATOR_CLIS = Object.freeze({
-  claude: Object.freeze({ name: "Claude Code", provider: "Claude",
-    install: "curl -fsSL https://claude.ai/install.sh | bash", guideUrl: "https://code.claude.com/docs/en/setup" }),
-  codex: Object.freeze({ name: "Codex", provider: "ChatGPT",
-    install: "curl -fsSL https://chatgpt.com/codex/install.sh | sh", guideUrl: "https://github.com/openai/codex" }),
-  opencode: Object.freeze({ name: "opencode", provider: "your API-key providers",
-    install: "curl -fsSL https://opencode.ai/install | bash", guideUrl: "https://opencode.ai/docs/" })
+  claude: Object.freeze({ name: "Claude Code", provider: "Claude", guideUrl: "https://code.claude.com/docs/en/setup",
+    install: Object.freeze({ unix: "curl -fsSL https://claude.ai/install.sh | bash", win32: "irm https://claude.ai/install.ps1 | iex" }) }),
+  codex: Object.freeze({ name: "Codex", provider: "ChatGPT", guideUrl: "https://github.com/openai/codex",
+    install: Object.freeze({ unix: "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
+      win32: "powershell -ExecutionPolicy ByPass -c \"irm https://chatgpt.com/codex/install.ps1 | iex\"" }) }),
+  opencode: Object.freeze({ name: "opencode", provider: "your API-key providers", guideUrl: "https://opencode.ai/docs/",
+    install: Object.freeze({ unix: "curl -fsSL https://opencode.ai/install | bash", win32: "npm install -g opencode-ai" }) })
 });
 
 function executable(file = "") {
@@ -71,12 +74,20 @@ function operatorCliCommand(tool = "", options = {}) {
   return resolveOperatorCli(tool, options).command;
 }
 
+// The official install line for this server's operating system.
+function operatorCliInstall(tool = "", platform = process.platform) {
+  return OPERATOR_CLIS[tool].install[platform === "win32" ? "win32" : "unix"];
+}
+
 /**
- * Plain wording for a person's own CLI that is missing or did not start. A
- * host with runtime packs always has its CLIs, so this never applies there.
+ * Plain wording for a person's own CLI that is missing or did not start, with
+ * the install line for the computer this server runs on (where the CLI runs,
+ * whatever the browser's). A host with runtime packs always has its CLIs, so
+ * this never applies there.
  */
-function operatorCliProblem(tool = "", { installed = false } = {}) {
-  const { name, provider, install, guideUrl } = OPERATOR_CLIS[tool];
+function operatorCliProblem(tool = "", { installed = false, platform = process.platform } = {}) {
+  const { name, provider, guideUrl } = OPERATOR_CLIS[tool];
+  const install = operatorCliInstall(tool, platform);
   const problem = installed
     ? { code: "vibe64_cli_unavailable", status: "unavailable", title: `${name} didn't start`,
         detail: `${name} is installed but didn't start. Choose Check again; if it keeps failing, reinstall it.` }
@@ -90,6 +101,7 @@ function operatorCliProblem(tool = "", { installed = false } = {}) {
 export {
   OPERATOR_CLIS,
   operatorCliCommand,
+  operatorCliInstall,
   operatorCliProblem,
   operatorCliStartFailed,
   resolveOperatorCli

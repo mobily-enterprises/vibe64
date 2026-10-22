@@ -114,6 +114,13 @@ test("a missing or failing CLI is described plainly, with its official installer
   });
   assert.equal(operatorCliProblem("codex").install.command, "curl -fsSL https://chatgpt.com/codex/install.sh | sh");
   assert.equal(operatorCliProblem("opencode").install.command, "curl -fsSL https://opencode.ai/install | bash");
+  // The CLI runs on the server's computer, so its operating system picks the line.
+  assert.equal(operatorCliProblem("claude", { platform: "darwin" }).install.command, "curl -fsSL https://claude.ai/install.sh | bash");
+  assert.deepEqual(["claude", "codex", "opencode"].map((tool) => operatorCliProblem(tool, { platform: "win32" }).install.command), [
+    "irm https://claude.ai/install.ps1 | iex",
+    "powershell -ExecutionPolicy ByPass -c \"irm https://chatgpt.com/codex/install.ps1 | iex\"",
+    "npm install -g opencode-ai"
+  ]);
   const failed = operatorCliProblem("codex", { installed: true });
   assert.equal(failed.code, "vibe64_cli_unavailable");
   assert.equal(failed.status, "unavailable");

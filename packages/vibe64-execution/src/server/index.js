@@ -203,6 +203,7 @@ export { createVibe64ConversationExecution } from "./conversationExecution.js";
 export {
   OPERATOR_CLIS,
   operatorCliCommand,
+  operatorCliInstall,
   operatorCliProblem,
   operatorCliStartFailed,
   resolveOperatorCli

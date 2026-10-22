@@ -16,6 +16,7 @@ import {
 } from "./service.js";
 import {
   OPERATOR_CLIS,
+  operatorCliInstall,
   resolveOperatorCli
 } from "@local/vibe64-execution/server";
 import {
@@ -112,9 +113,9 @@ function createConnections({ accounts, project, listAssistantCapabilities = null
 
 // One plain line per AI tool this computer lacks.
 function warnMissingOperatorClis(logger) {
-  for (const [tool, { name, install }] of Object.entries(OPERATOR_CLIS)) {
+  for (const [tool, { name }] of Object.entries(OPERATOR_CLIS)) {
     if (!resolveOperatorCli(tool).installed) {
-      logger.warn(`${name} isn't installed on this computer, so Vibe64 can't use it. To install it, run: ${install}`);
+      logger.warn(`${name} isn't installed on this computer, so Vibe64 can't use it. To install it, run: ${operatorCliInstall(tool)}`);
     }
   }
 }

@@ -3,6 +3,7 @@ import path from "node:path";
 
 import {
   OPERATOR_CLIS,
+  operatorCliInstall,
   isValidPlaywrightBrowserLaunchOutput,
   isValidPlaywrightRuntimeOutput,
   playwrightBrowserLaunchCommandArgs,
@@ -119,7 +120,8 @@ async function requiredNodeMajor(studioRoot) {
 }
 
 async function operatorCliCheck(tool, { env, runCommand, studioRoot }) {
-  const { name, install } = OPERATOR_CLIS[tool];
+  const { name } = OPERATOR_CLIS[tool];
+  const install = operatorCliInstall(tool);
   const cli = resolveOperatorCli(tool, { env });
   const check = {
     id: tool,

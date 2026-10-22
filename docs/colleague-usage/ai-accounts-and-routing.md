@@ -51,7 +51,10 @@ logins in your home folder, so a login made in a terminal works in Vibe64 too).
 opencode is different: Vibe64 runs your installed opencode program but signs it in with
 the keys you add in AI Accounts, not with opencode's own login.
 
-When a program is missing, AI Accounts (and the matching step of AI onboarding) shows
+Before you pick a provider, its card in AI onboarding and **Your AI setup** says
+**Needs Claude Code on this computer** (or Codex, or opencode) under its buttons
+when that program is missing; the GLM free option says **Needs opencode on this
+computer**. When a program is missing, AI Accounts (and the matching step of AI onboarding) shows
 a warning instead of the sign-in button. In **Add connection**, an orchestrator whose
 program is missing says **Not installed on this computer** under its name; choosing it
 (or **Choose provider** for OpenCode) opens the same warning, and the setup dialog's
@@ -62,9 +65,15 @@ status chip reads **Not installed** or **Didn't start** instead of **Not connect
   **Other ways to install** it. Open a terminal on this computer, paste the command,
   press Enter, then choose **Check again**. You run the command yourself; Colleague
   can explain it but cannot run it for you.
+  The command matches the computer Vibe64 runs on. On macOS and Linux:
   - Claude Code: `curl -fsSL https://claude.ai/install.sh | bash`
   - Codex: `curl -fsSL https://chatgpt.com/codex/install.sh | sh`
   - opencode: `curl -fsSL https://opencode.ai/install | bash`
+
+  On Windows, in PowerShell (opencode uses its npm package, which needs Node.js):
+  - Claude Code: `irm https://claude.ai/install.ps1 | iex`
+  - Codex: `powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"`
+  - opencode: `npm install -g opencode-ai`
 - **Codex didn't start** means the program is installed but could not be run at all.
   Choose **Check again**; if it keeps failing, reinstall it with the same command. The
   program's own error output is under **Details**, collapsed.

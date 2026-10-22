@@ -3,7 +3,7 @@ import { computed, inject, nextTick, ref, unref, watch } from "vue";
 import { useDisplay } from "vuetify";
 import {
   mdiAlertCircleOutline, mdiArrowDown, mdiArrowLeft, mdiArrowRight, mdiCheck, mdiCheckCircle, mdiChevronDown,
-  mdiInformationOutline, mdiOpenInNew, mdiRobotHappyOutline, mdiShieldLockOutline, mdiTuneVariant
+  mdiInformationOutline, mdiLaptop, mdiOpenInNew, mdiRobotHappyOutline, mdiShieldLockOutline, mdiTuneVariant
 } from "@mdi/js";
 import AIAccountsSetup from "../studio/AIAccountsSetup.vue";
 import CliInstallNotice, { cliProblem } from "../studio/CliInstallNotice.vue";
@@ -119,6 +119,12 @@ const missingTool = computed(() => {
   return status.accounts?.find((account) => account.id === id && cliProblem(account)) ||
     status.missingTools?.find((tool) => tool.id === id) || null;
 });
+// Before anyone picks: the program a card connects through, when this computer lacks it.
+function neededTool(card) {
+  if (!card || card.connected) return null;
+  const tools = props.onboarding.accounts?.status.value?.missingTools || [];
+  return tools.find((tool) => tool.id === card.connect.engineId) || null;
+}
 const checkingTools = ref(false);
 async function checkTools() {
   checkingTools.value = true;
@@ -487,10 +493,16 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
                     Manage
                   </v-btn>
                 </div>
+                <p v-if="neededTool(card)" class="aio-card__needs">
+                  <v-icon :icon="mdiLaptop" size="18" aria-hidden="true" />Needs {{ neededTool(card).label }} on this computer
+                </p>
                 <div v-if="card.free" class="aio-card__free">
                   <p class="aio-card__free-label">
                     <strong>{{ card.free.label }}</strong>
                     <span>{{ card.free.connected ? "Connected." : card.free.detail }}</span>
+                    <span v-if="neededTool(card.free)" class="aio-card__needs">
+                      <v-icon :icon="mdiLaptop" size="18" aria-hidden="true" />Needs {{ neededTool(card.free).label }} on this computer
+                    </span>
                   </p>
                   <v-btn
                     v-if="!card.free.connected" variant="outlined" color="primary" :href="card.free.signUp.url" target="_blank"
@@ -929,6 +941,16 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
 .aio-card__note { color: var(--v64-on-surface-variant); display: flex; font: var(--v64-type-body-md); gap: var(--v64-space-2); margin: 0; }
 .aio-card__note .v-icon { flex: none; margin-top: 1px; }
 .aio-card__offer { display: grid; gap: var(--v64-space-3); }
+.aio-card__needs {
+  align-items: center;
+  color: var(--v64-on-surface-variant);
+  display: flex;
+  font: var(--v64-type-body-md);
+  gap: var(--v64-space-2);
+  justify-content: center;
+  margin: 0;
+}
+.aio-card__free .aio-card__needs { justify-content: flex-start; margin-top: var(--v64-space-1); }
 .aio-card__note-row:empty { display: none; }
 
 /* The plan: official name and price first, the budget advice beneath. */

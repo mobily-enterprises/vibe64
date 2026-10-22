@@ -568,6 +568,14 @@ describe("flow", () => {
     expect(state.showAdvanced).toBe(true);
   });
 
+  it("says which program a card needs on this computer before anyone picks it", async () => {
+    mocks.accounts.status.value.missingTools = [{ id: "claude", label: "Claude Code" }, { id: "opencode", label: "opencode" }];
+    const { state } = await flow();
+    const card = (id) => state.cards.find((item) => item.id === id);
+    expect([state.neededTool(card("claude"))?.label, state.neededTool(card("codex")), state.neededTool(card("glm").free)?.label])
+      .toEqual(["Claude Code", null, "opencode"]);
+  });
+
   it("shows the owner-only notice to members", () => {
     const onboarding = effectScope().run(() => useAiOnboarding({ enabled: false }));
     expect(mount(AiSetup, { open: true, onboarding, canConfigure: false }).screen).toBe("owner");

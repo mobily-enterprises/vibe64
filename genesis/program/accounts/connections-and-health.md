@@ -610,7 +610,12 @@ Each Claude Code, Codex or opencode process resolves its program when it starts,
 so a program installed after Vibe64 started is used after **Check again** without
 a restart. AI Accounts reads the status's `missingTools` list to mark a missing
 orchestrator in Add connection and to show the install warning before the
-OpenCode provider catalog would try to start a missing program.
+OpenCode provider catalog would try to start a missing program; the setup
+cards read it too and say "Needs [program] on this computer" before a choice.
+`operatorCliInstall` picks each official install line by the server's
+`process.platform` (the CLI runs there): the shell installers on macOS and
+Linux, PowerShell installers for Claude Code and Codex on Windows and
+`npm install -g opencode-ai` for opencode, which has no PowerShell installer.
 
 Account sign-in completion arrives through actor-scoped realtime refresh hints
 when available. The hint contains only the session identity and status version;
