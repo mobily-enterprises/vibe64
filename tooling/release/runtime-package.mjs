@@ -7,8 +7,9 @@ import { ASSISTANT_SQL_RUNTIME_ENTRIES, buildNodeBundle, buildServerBundle, SERV
 const GENESIS_BOUNDARY = "@local/vibe64-genesis/server";
 // The boundary keeps every Genesis server export out of the server bundle, so
 // each one ships as its own runtime entry; a new export cannot be left behind.
+// Read the installed package: Online's composed app has no packages/ directory.
 const GENESIS_SERVER_ENTRIES = Object.entries(JSON.parse(readFileSync(
-  new URL("../../packages/vibe64-genesis/package.json", import.meta.url), "utf8")).exports)
+  new URL("../../node_modules/@local/vibe64-genesis/package.json", import.meta.url), "utf8")).exports)
   .filter(([subpath]) => subpath === "./server" || subpath.startsWith("./server/"))
   .map(([, target]) => `node_modules/@local/vibe64-genesis/${target.replace(/^\.\//u, "")}`);
 const RELEASE_DOCS = ["docs/colleague-usage", "docs/training-content.md", "docs/templates/learn-topic"];
