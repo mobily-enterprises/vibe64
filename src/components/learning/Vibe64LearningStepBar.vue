@@ -48,7 +48,9 @@ const go = offset => {
       <span class="vibe64-learning-step-bar__step">
         Step {{ index + 1 }} of {{ steps.length }}<template v-if="!collapsed">: {{ step.title }}</template>
       </span>
-      <span v-if="!collapsed && step.required" class="vibe64-learning-step-bar__status" :class="`is-${status}`">{{ statusLabel[status] }}</span>
+      <span v-if="!collapsed && (step.required || status === 'passed')" class="vibe64-learning-step-bar__status" :class="`is-${status}`">
+        {{ step.required ? statusLabel[status] : "Done" }}
+      </span>
     </div>
     <template v-if="!collapsed">
       <v-btn

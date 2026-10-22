@@ -72,6 +72,7 @@ A step passes only through your own action in the lesson:
   reveals the correct option, sees only whether your answer passed (not which
   options you chose), and cannot answer for you; it helps you reason instead.
 - **Self-check**: only your own **Done** records it.
+- **Reading step**: optional; only your own **Mark as done** records it.
 - **Automatic check**: when you say you have done a task, Colleague may run the
   step's check (`step.check.run`) and tell you its actual result, but that run is
   a diagnostic and is never saved. The step passes only when you press **Check

@@ -101,7 +101,7 @@ without AI, an optional diagram to play and an optional guide that points at a
 real Vibe64 place, and one check: `auto` (a declared check against the
 learner's own exercise work), `choice` (multiple choice with an answer kept on
 the server), `self` (the learner presses **Done**) or `none` (reading only, never
-required). Check verdicts are final: there is no rubric or AI grader, and
+required; the learner may still press **Mark as done**). Check verdicts are final: there is no rubric or AI grader, and
 Colleague never passes a step. Older v1 lessons (teaching document plus
 assessments) still validate for history but cannot be started.
 The installed `docs/templates/learn-topic/` directory supplies a copyable whole

@@ -944,6 +944,36 @@ describe("Learning reader", () => {
     } finally { again.app.unmount(); }
   });
 
+  it("marks a reading step done with Mark as done, moves on, and then shows it Done in the step list", async () => {
+    const { learning, calls } = controller();
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT, stepId: "read" });
+    const view = await mountReader(learning);
+    const listStatus = root => nodes(root).filter(node => node.props?.class === "vibe64-learning-reader__step-status").map(textOf);
+    try {
+      expect(listStatus(view.root)[0]).toBe("Optional");
+      expect(byTest(view.root, "learning-mark-read-kept")).toBeUndefined();
+      byTest(view.root, "learning-mark-read").props.onClick();
+      await flush();
+      expect(calls.filter(call => call.method === "POST").at(-1)).toMatchObject({ url: VIBE64_LEARNING_ROUTES.stepDone(ATTEMPT), body: { stepId: "read" } });
+      expect(learning.currentStep.value.id, "Mark as done moves to the next step").toBe("quiz");
+      await flush();
+      expect(byTest(view.root, "learning-mark-read"), "checked steps are proven by their checks, never marked by hand").toBeUndefined();
+    } finally { view.app.unmount(); }
+
+    const marked = controller({ reads: () => lessonResult({ passedStepIds: ["read"] }) });
+    marked.learning.setViewer("member");
+    await marked.learning.show({ attemptId: ATTEMPT, stepId: "read" });
+    const again = await mountReader(marked.learning);
+    try {
+      expect(listStatus(again.root)[0]).toBe("Done");
+      expect(textOf(byTest(again.root, "learning-step-status"))).toBe("Done");
+      expect(textOf(byTest(again.root, "learning-mark-read-kept"))).toContain("You marked this step done");
+      expect(byTest(again.root, "learning-mark-read")).toBeUndefined();
+      expect(marked.learning.complete, "an optional step never completes the lesson").toBe(false);
+    } finally { again.app.unmount(); }
+  });
+
   it("opens the Lesson finished screen again from a complete lesson's reader", async () => {
     const passed = ["quiz", "preview", "tick"].map(stepId => ({ stepId, outcome: "passed" }));
     const { learning, calls } = controller({ reads: () => lessonResult({ results: passed }) });

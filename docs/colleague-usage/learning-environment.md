@@ -194,7 +194,10 @@ as instructions, so they cannot change its teaching or judging rules.
 ## Reading a lesson
 
 The left column (top row on a phone) lists the steps in order. Each shows its
-title and **Passed**, **Not yet passed**, **Not checked yet** or **Optional**.
+title and **Passed**, **Not yet passed**, **Not checked yet** or **Optional**
+(an optional step you have passed or marked done says **Done**). A passed step
+shows a check mark instead of its number, so marking every step done leaves an
+unbroken row of green check marks.
 Select a step to read it. Only this attempt's results count: after **Restart**
 or a redo every step starts again as not passed. When every required step has passed the list says
 **Every required step is passed. This lesson is complete.** with a **Lesson
@@ -239,6 +242,11 @@ also has:
   it. A step already passed (in this attempt or one before, for example when you
   retake a lesson) says **You already passed this step, so it does not need to
   be marked done again.** and **Done** stays disabled.
+- **Mark as done**: a step you only read (no question, check or **Done**) has
+  a quieter **Mark as done** button beside **Next step**. Pressing it records
+  the step as done and moves to the next step. The step then says **Done** and
+  **You marked this step done.**, and the button no longer appears. These
+  reading steps are optional: marking them is not needed to finish the lesson.
 - **Show me**: closes Courses if it is open, opens the real place in the app (for example
   the practice project's Preview or a Dashboard section) and rings the control
   with a short caption. A step about one file opens that file in the practice
@@ -266,7 +274,7 @@ also has:
   key page) open in a new browser tab, so Vibe64 and your lesson stay open.
 
 Statuses come only from automatic checks, the answer comparison and your own
-**Done**. Colleague never decides a step's status and does not know the
+**Done** or **Mark as done**. Colleague never decides a step's status and does not know the
 correct answers of a question.
 
 ## Lesson finished

@@ -37,7 +37,8 @@ steps) cannot be started.
 ## Step results
 
 Step results belong to the attempt in progress: a choice answer, **Done** on a
-self-check step, or an automatic check result. A lesson is complete when every
+self-check step, **Mark as done** on a reading step, or an automatic check
+result. A lesson is complete when every
 required step has passed in that attempt. A new attempt (**Restart**, or
 starting a lesson again after finishing it) begins with no results.
 

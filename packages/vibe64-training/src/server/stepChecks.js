@@ -73,8 +73,9 @@ function requireLearnerChannel(context, what) {
 // Version 2 step results. Passes come only from: the automatic check runner
 // with learner-origin evidence (a browser-captured exercise interaction, or
 // learner-authored code per the authorship ledger) when the learner triggered
-// it, the choice comparator, or the learner's own self-check. Results belong to
-// the attempt in progress; a new attempt (Redo, Restart) starts with none. A
+// it, the choice comparator, or the learner's own Done on a self-check or
+// reading step. Results belong to the attempt in progress; a new attempt
+// (Redo, Restart) starts with none. A
 // check the assistant triggers returns diagnostics only and records nothing, so
 // Colleague can never use up the attempt's result budget.
 // Verdicts are final: there is no rubric and no AI grader.
@@ -128,11 +129,11 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
 
   // Append-only. A request ID replays its original result; a step that already
   // passed in this attempt keeps that pass and records nothing further.
-  // Capacity for one pass of every checkable step not yet passed is always
+  // Capacity for one pass of every step not yet passed is always
   // reserved: a not-yet-passed result that would eat into it is returned but
   // not saved, so retries never block the learner's real pass.
   async function record({ actor, attemptId, requestId, result, receipt, same, lesson }) {
-    const checkable = (lessonSteps(lesson) || []).filter(step => step.check?.kind && step.check.kind !== "none").map(step => step.id);
+    const checkable = (lessonSteps(lesson) || []).map(step => step.id);
     const { value } = await learners.updateStepProgress({ actor, attemptId }, async entry => {
       const existing = entry.results.find(saved => saved.requestId === requestId);
       if (existing) return { value: replayed(existing, result.stepId, same) };
@@ -260,13 +261,17 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
       result: { stepId, kind: "choice", outcome, evidence: { selected: chosen }, origin: "learner" } });
   }
 
-  // The learner's own self-check.
+  // The learner's own self-check, or their "read" mark on a reading step
+  // (check "none"): a learner-origin pass. Automatic and choice steps are
+  // proven only by their checks.
   async function done({ actor, attemptId, stepId, requestId, context = {} } = {}) {
     requireLearnerChannel(context, "mark a step done");
     if (!requestPattern.test(requestId || "")) throw stepFailure("Mark a step done with a stable request ID.", "ACTION_VALIDATION_FAILED", 400);
     const { lesson, step } = await openStep({ actor, attemptId, stepId });
-    if (step.check?.kind !== "self") throw stepFailure("Only a self-check step can be marked done.", "VIBE64_TRAINING_CHECK_UNDECLARED");
-    return record({ actor, attemptId, requestId, lesson, result: { stepId, kind: "self", outcome: "passed", evidence: {}, origin: "learner" } });
+    if (!["self", "none"].includes(step.check?.kind)) {
+      throw stepFailure("Only a self-check or reading step can be marked done.", "VIBE64_TRAINING_CHECK_UNDECLARED");
+    }
+    return record({ actor, attemptId, requestId, lesson, result: { stepId, kind: step.check.kind === "none" ? "read" : "self", outcome: "passed", evidence: {}, origin: "learner" } });
   }
 
   // The saved step results of this attempt and the steps passed in them (which

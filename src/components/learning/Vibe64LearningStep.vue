@@ -9,7 +9,8 @@ import Vibe64LearningMarkdown from "./Vibe64LearningMarkdown.vue";
 // One lesson step exactly as the reader shows it: label, title, Markdown body,
 // its diagram with Play, its check, Show me / Teach me and Previous/Next step.
 // Used by the Lesson pane's reader. Verdicts come only
-// from the Training actions (auto check, choice comparator, self Done) through
+// from the Training actions (auto check, choice comparator, self or reading
+// step Done) through
 // the shared L controller, so every surface shows the same saved results.
 const MAX_COMMAND_IDS = 64;
 const props = defineProps({
@@ -165,6 +166,13 @@ const go = offset => {
   const next = steps.value[index.value + offset];
   if (next) props.learning.selectStep(next.id);
 };
+// A reading step (no check) can be marked done too; marking it moves on.
+const readingDone = computed(() => kind.value === "none" && statusOf(step.value?.id) === "passed");
+async function markRead() {
+  const stepId = step.value.id;
+  const result = await props.learning.done(stepId);
+  if (result && step.value?.id === stepId) go(1);
+}
 </script>
 
 <template>
@@ -227,6 +235,10 @@ const go = offset => {
     <p v-if="kind !== 'none'" class="vibe64-learning-step__status" :class="`is-${statusOf(step.id)}`" role="status" data-test="learning-step-status">
       {{ statusLabel[statusOf(step.id)] }}
     </p>
+    <template v-else-if="readingDone">
+      <p class="vibe64-learning-step__status is-passed" role="status" data-test="learning-step-status">Done</p>
+      <p class="vibe64-learning-step__hint" data-test="learning-mark-read-kept">You marked this step done.</p>
+    </template>
 
     <p v-if="actionError" class="vibe64-learning-step__error" role="alert">{{ actionError }}</p>
     <div class="vibe64-learning-step__actions">
@@ -236,7 +248,11 @@ const go = offset => {
     <slot name="after-actions" />
     <div class="vibe64-learning-step__pager">
       <v-btn variant="text" rounded="pill" min-height="48" data-test="learning-previous" :disabled="index <= 0" @click="go(-1)">Previous step</v-btn>
-      <v-btn variant="text" rounded="pill" min-height="48" data-test="learning-next" :disabled="last" @click="go(1)">Next step</v-btn>
+      <span class="vibe64-learning-step__pager-end">
+        <v-btn v-if="!ended && kind === 'none' && !readingDone" color="primary" variant="tonal" rounded="pill" min-height="48"
+          data-test="learning-mark-read" :disabled="Boolean(busy)" :loading="busy === `done:${step.id}`" @click="markRead">Mark as done</v-btn>
+        <v-btn variant="text" rounded="pill" min-height="48" data-test="learning-next" :disabled="last" @click="go(1)">Next step</v-btn>
+      </span>
     </div>
   </div>
 </template>
@@ -254,5 +270,6 @@ const go = offset => {
 .vibe64-learning-step__error { color: rgb(var(--v-theme-error)); }
 .vibe64-learning-step__actions, .vibe64-learning-step__pager { display: flex; flex-wrap: wrap; gap: var(--v64-space-2, 8px); margin-top: var(--v64-space-4, 16px); }
 .vibe64-learning-step__pager { align-items: center; justify-content: space-between; }
+.vibe64-learning-step__pager-end { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--v64-space-2, 8px); margin-inline-start: auto; }
 .vibe64-learning-step .v-btn { letter-spacing: 0; text-transform: none; }
 </style>

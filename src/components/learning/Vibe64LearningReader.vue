@@ -86,7 +86,7 @@ watch([() => step.value?.id, () => props.visible], async ([, shown]) => {
             >
               <span class="vibe64-learning-reader__step-mark" aria-hidden="true">{{ statusOf(value.id) === 'passed' ? '✓' : position + 1 }}</span>
               <span class="vibe64-learning-reader__step-title">{{ value.title }}</span>
-              <span class="vibe64-learning-reader__step-status">{{ value.required ? statusLabel[statusOf(value.id)] : 'Optional' }}</span>
+              <span class="vibe64-learning-reader__step-status">{{ value.required ? statusLabel[statusOf(value.id)] : statusOf(value.id) === 'passed' ? 'Done' : 'Optional' }}</span>
             </button>
           </li>
         </ol>

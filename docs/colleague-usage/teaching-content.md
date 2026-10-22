@@ -121,7 +121,8 @@ the owner deliberately retries. It is not evidence that enablement changed.
 
 The private lesson record retains step results, the reader position and, for
 earlier-format lessons, their assessment results for the saved lesson version. Colleague has no grading tool. A pass requires the
-learner's own step action: a choice answer, **Done** on a self-check step or an
+learner's own step action: a choice answer, **Done** on a self-check step,
+**Mark as done** on a reading step or an
 automatic check tied to that learner's practice project. An assistant
 paraphrase, demonstration or animation is not evidence of a learner pass. Completion
 requires every required pinned step (or, for an earlier lesson, assessment) to

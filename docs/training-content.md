@@ -121,12 +121,14 @@ topic with every step kind; the copyable template is `docs/templates/learn-topic
     `answer`, a non-empty list of unique option indexes (0-based, in range).
     The learner passes by selecting exactly the answer indexes.
   - `self` — the learner ticks **Done** after doing the step.
-  - `none` — reading only; records nothing and cannot be `required`.
+  - `none` — reading only; cannot be `required`. The learner may press
+    **Mark as done**, which records a learner-origin `read` pass (a bonus that
+    never counts toward completion).
   A kind declares only its own fields; anything else is rejected.
 
 **Check verdicts are final.** v2 has no rubric and no AI grader: an automatic
 check or the choice comparator decides, otherwise the learner ticks a `self`
-step. Colleague teaches and explains but never passes a step. Write step bodies
+step (or marks a `none` step read). Colleague teaches and explains but never passes a step. Write step bodies
 so a learner can follow them without AI.
 
 Choice answers stay on the server. The lesson descriptor is never served to a
@@ -589,7 +591,9 @@ is the one in progress, `lessonTitle` is filled only with `includeTitle`, and
 
 Step results (`step-progress.json`, schema version 3) belong to the attempt in
 progress: `{learnerId,revision,attemptId,lesson,results,receipts}`, at most 64
-results. A new attempt starts with none. `readStepProgress({actor,attemptId?})`
+results. A result's `kind` is `auto`, `choice`, `self` or `read` (a `none`
+step the learner marked done), matching the pinned step's check. A new attempt
+starts with none. `readStepProgress({actor,attemptId?})`
 and `readAttemptRecord({actor,attemptId})` read them.
 
 The published `20261008-learning-practice-history` upgrade reads vibe64 0.1.35

@@ -132,7 +132,7 @@ function validateCodeLedger(value) {
 // its own lock, so frequent step writes never advance the progress revision.
 // A new attempt's first result replaces it; ending the attempt removes it.
 const stepResultSchema = createSchema({
-  stepId: { ...text, maxLength: 64 }, kind: { ...text, enum: ["auto", "choice", "self"] },
+  stepId: { ...text, maxLength: 64 }, kind: { ...text, enum: ["auto", "choice", "self", "read"] },
   outcome: { ...text, enum: ["passed", "not-yet-passed"] }, evidence: { type: "object", required: true },
   origin: { ...text, enum: ["learner", "check"] }, requestId: { ...text, maxLength: 64 },
   recordedAt: { ...text, maxLength: 24 }, reason: { ...text, required: false }
@@ -167,7 +167,7 @@ function validateStepEvidence(result) {
   const { kind, evidence } = result;
   const keys = Object.keys(evidence || {}).sort();
   if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) return false;
-  if (kind === "self") return keys.length === 0 && result.origin === "learner";
+  if (kind === "self" || kind === "read") return keys.length === 0 && result.origin === "learner";
   if (kind === "choice") {
     return result.origin === "learner" && canonicalJson(keys) === canonicalJson(["selected"]) && Array.isArray(evidence.selected) &&
       evidence.selected.length <= 8 && new Set(evidence.selected).size === evidence.selected.length &&
@@ -226,13 +226,17 @@ function lessonSteps(lesson) {
   return lesson.lesson.schemaVersion === 2 && Array.isArray(lesson.lesson.steps) ? lesson.lesson.steps : null;
 }
 
+// The result kind a step's declared check records: a reading step (check
+// "none") records the learner's own "read" mark.
+const resultKind = step => step.check?.kind === "none" ? "read" : step.check?.kind;
+
 // Saved step results must match the exact pinned version 2 lesson.
 function validateLessonStepResults(entry, lesson) {
   const steps = lessonSteps(lesson);
   if (!steps) throw new Error("Step results belong only to a version 2 lesson.");
   for (const result of entry.results) {
     const step = steps.find(value => value.id === result.stepId);
-    if (!step || step.check?.kind !== result.kind || result.kind === "auto" && result.evidence.checkId !== step.check.check) {
+    if (!step || resultKind(step) !== result.kind || result.kind === "auto" && result.evidence.checkId !== step.check.check) {
       throw new Error("Saved step results must match the exact pinned lesson step and its declared check.");
     }
   }
