@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { createRequire } from "node:module";
 import { promisify } from "node:util";
 import { createRuntimePackage, RUNTIME_ENTRIES } from "../../tooling/release/runtime-package.mjs";
 import { ASSISTANT_SQL_RUNTIME_ENTRIES, buildNodeBundle, SERVER_BUNDLE_EXTERNALS } from "../../tooling/release/server-build.mjs";
@@ -240,6 +241,10 @@ test("runtime release relocates, runs native and browser services, and packs wit
     const templateValidation = await execute(process.execPath, [path.join(installed, "bin/run.js"), "training", "validate", authorTemplate]);
     assert.equal(JSON.parse(templateValidation.stdout).lessons[0].status, "draft");
     await execute(process.execPath, [path.join(installed, "bin/sqlite-proof.js"), path.join(root, "proof.sqlite")]);
+    // Hosts load the public host profile by its package export before any entry point.
+    const hostProfile = await import(pathToFileURL(createRequire(path.join(installed, "bin/upgrade-state.js"))
+      .resolve("@local/vibe64-execution/server/hostProfile")).href);
+    assert.equal(typeof hostProfile.configureVibe64Host, "function");
     await assert.rejects(execute(process.execPath, [
       path.join(installed, "node_modules/@local/vibe64-execution/src/host/execHelper.js")
     ]), error => error.code === 2 && /Usage: vibe64-exec-helper execute/u.test(error.stderr));

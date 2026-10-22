@@ -18,6 +18,8 @@ const RUNTIME_ENTRIES = [
   "bin/server.js",
   "bin/upgrade-state.js",
   "node_modules/@local/vibe64-execution/src/host/execHelper.js",
+  // Hosts configure public Vibe64 before loading it, from outside the bundle.
+  "node_modules/@local/vibe64-execution/src/server/hostProfile.js",
   "node_modules/@local/vibe64-database-tools/src/server/sqliteWorker.js",
   "node_modules/@local/vibe64-source-editor/src/server/searchIndexWorker.js",
   ...GENESIS_SERVER_ENTRIES,
