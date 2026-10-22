@@ -8,7 +8,8 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
-  GENESIS_BLUEPRINT_PATH
+  GENESIS_BLUEPRINT_PATH,
+  GENESIS_SUBSYSTEMS_PATH
 } from "@local/vibe64-genesis/server";
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
@@ -34,7 +35,7 @@ import {
   terminalWorktreePath
 } from "./terminalShared.js";
 
-const PROMPT_HINT_CONTEXT_VERSION = "vibe64.prompt-hints.context.v2";
+const PROMPT_HINT_CONTEXT_VERSION = "vibe64.prompt-hints.context.v3";
 const PROMPT_HINT_TASK_DIRECTORY = "assistant/prompt-hint-tasks";
 const SHARED_PROMPT_HINTS_ARTIFACT = "assistant/shared-prompt-hints.json";
 const PROMPT_HINT_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -43,6 +44,7 @@ const PROMPT_HINT_RECENT_TURN_LIMIT = 8;
 const PROMPT_HINT_MESSAGE_MAX_CHARACTERS = 1_500;
 const PROMPT_HINT_CONVERSATION_MAX_CHARACTERS = 12_000;
 const PROMPT_HINT_BLUEPRINT_MAX_CHARACTERS = 4_000;
+const PROMPT_HINT_SUBSYSTEMS_MAX_CHARACTERS = 3_000;
 const PROMPT_HINT_OPERATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u;
 const PROMPT_HINT_ORIGIN_ID_MAX_CHARACTERS = 128;
 const PROMPT_HINT_ACTIVE_TASK_IDS = Object.freeze([
@@ -168,6 +170,7 @@ function promptHintBasis(context = {}, draft = "") {
   const conversation = visibleConversation(context.conversation);
   const settings = normalizedPromptHints(context.promptHints);
   const blueprint = boundedText(context.blueprint, PROMPT_HINT_BLUEPRINT_MAX_CHARACTERS);
+  const subsystems = boundedText(context.subsystems, PROMPT_HINT_SUBSYSTEMS_MAX_CHARACTERS);
   const currentDraft = normalizedPromptHintDraft(draft);
   return {
     basis: {
@@ -181,10 +184,12 @@ function promptHintBasis(context = {}, draft = "") {
         visible: conversation
       }),
       promptHints: settings.promptHints,
-      sessionRevision: canonicalHash(context.sessionState)
+      sessionRevision: canonicalHash(context.sessionState),
+      subsystemsRevision: canonicalHash(subsystems)
     },
     blueprint,
     conversation,
+    subsystems,
     draft: currentDraft
   };
 }
@@ -236,7 +241,8 @@ function promptHintPrompt({
   blueprint = "",
   conversation = [],
   draft = "",
-  sessionState = {}
+  sessionState = {},
+  subsystems = ""
 } = {}) {
   return [
     "Suggest exactly three useful next prompts for the person in this product-building chat.",
@@ -244,6 +250,7 @@ function promptHintPrompt({
     "When a draft is present, all three suggestions must help express or develop that intent, including unfinished sentences. Preserve its direction and constraints; do not switch to unrelated project work.",
     "When there is no draft, use the latest conversation's unresolved request or concrete next step. Newer user corrections override older plans and Blueprint assumptions.",
     "Use the Blueprint to ground suggestions in this project's purpose and users, including when the conversation is empty; do not invent requirements or progress.",
+    "The Blueprint describes the product, not progress. The subsystems map lists source the project already has: when it names subsystems, treat what they own as built (for example by an applied starter) and suggest extending, checking or changing it, never creating it again. An empty map means nothing is built yet.",
     "Suggest messages the person could send, not answers to them. Avoid generic tours, reviews, tests, commits, or deployment unless the current context specifically calls for them.",
     "Do not repeat work the conversation says is finished, rejected, or already underway. Each suggestion should offer a distinct, specific way forward, not three paraphrases or a repetition of the draft.",
     "Each suggestion must contain a label and a prompt.",
@@ -260,7 +267,8 @@ function promptHintPrompt({
       session: {
         status: sessionState.status,
         workspaceSetupStatus: sessionState.workspaceSetupStatus
-      }
+      },
+      subsystems
     }),
     "</context>"
   ].join("\n");
@@ -327,12 +335,22 @@ function promptHintBlueprintError(message = "Prompt hint Blueprint path is unsaf
 }
 
 async function readPromptHintBlueprint(sourceRoot = "") {
+  return readPromptHintGenesisFile(sourceRoot, GENESIS_BLUEPRINT_PATH, PROMPT_HINT_BLUEPRINT_MAX_CHARACTERS);
+}
+
+async function readPromptHintSubsystems(sourceRoot = "") {
+  return readPromptHintGenesisFile(sourceRoot, GENESIS_SUBSYSTEMS_PATH, PROMPT_HINT_SUBSYSTEMS_MAX_CHARACTERS);
+}
+
+// Reads one bounded Genesis document from the session source without following
+// links out of it. Blueprint safety errors also cover the subsystems map.
+async function readPromptHintGenesisFile(sourceRoot = "", relativePath = "", maxCharacters = 0) {
   const normalizedSourceRoot = normalizeText(sourceRoot);
   if (!normalizedSourceRoot) {
     return "";
   }
   const resolvedSourceRoot = path.resolve(normalizedSourceRoot);
-  const blueprintPath = path.resolve(resolvedSourceRoot, GENESIS_BLUEPRINT_PATH);
+  const blueprintPath = path.resolve(resolvedSourceRoot, relativePath);
   if (!pathInsideOrEqual(resolvedSourceRoot, blueprintPath)) {
     throw promptHintBlueprintError("Prompt hint Blueprint path escapes the session source.");
   }
@@ -373,10 +391,7 @@ async function readPromptHintBlueprint(sourceRoot = "") {
     }
     const buffer = Buffer.alloc(16_384);
     const { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
-    return boundedText(
-      buffer.subarray(0, bytesRead).toString("utf8"),
-      PROMPT_HINT_BLUEPRINT_MAX_CHARACTERS
-    );
+    return boundedText(buffer.subarray(0, bytesRead).toString("utf8"), maxCharacters);
   } finally {
     await handle?.close();
   }
@@ -391,6 +406,7 @@ function createSessionPromptHintsService({
   projectService,
   publishSessionChanged = async () => {},
   readBlueprintText = readPromptHintBlueprint,
+  readSubsystemsText = readPromptHintSubsystems,
   sessionSourcePath = terminalWorktreePath
 } = {}) {
   if (!projectService || typeof projectService.createRuntime !== "function") {
@@ -448,9 +464,9 @@ function createSessionPromptHintsService({
     }
   }
 
-  async function readBlueprint(sourceRoot = "") {
+  async function readGenesisText(reader, sourceRoot = "") {
     try {
-      return await readBlueprintText(sourceRoot);
+      return await reader(sourceRoot);
     } catch (error) {
       if (isMissingPathError(error)) {
         return "";
@@ -466,7 +482,7 @@ function createSessionPromptHintsService({
     const runtime = await projectService.createRuntime({ inspectSource: false });
     const session = await runtime.getSession(sessionId, { inspectSource: false });
     const sourceRoot = normalizeText(sessionSourcePath(session));
-    const [promptHintsResult, conversation, repositoryTasks, blueprint] = await Promise.all([
+    const [promptHintsResult, conversation, repositoryTasks, blueprint, subsystems] = await Promise.all([
       projectService.readPromptHints(),
       runtime.readConversationLogPage(sessionId, {
         limit: PROMPT_HINT_RECENT_TURN_LIMIT
@@ -476,7 +492,8 @@ function createSessionPromptHintsService({
             runtime.store.readBackgroundTask(sessionId, taskId)
           )))
         : [],
-      sourceRoot ? readBlueprint(sourceRoot) : ""
+      sourceRoot ? readGenesisText(readBlueprintText, sourceRoot) : "",
+      sourceRoot ? readGenesisText(readSubsystemsText, sourceRoot) : ""
     ]);
     if (promptHintsResult?.ok === false) {
       throw new Error(promptHintsResult.error || "Project prompt-hint settings could not be read.");
@@ -495,7 +512,8 @@ function createSessionPromptHintsService({
       runtime,
       session,
       sessionState,
-      sourceRoot
+      sourceRoot,
+      subsystems
     };
   }
 
@@ -673,7 +691,8 @@ function createSessionPromptHintsService({
         blueprint: job.snapshot.blueprint,
         conversation: job.snapshot.conversation,
         draft: job.snapshot.draft,
-        sessionState: job.context.sessionState
+        sessionState: job.context.sessionState,
+        subsystems: job.snapshot.subsystems
       });
       if (Array.from(prompt).length > profile.limits.maxInputCharacters) {
         throw new Error("Prompt hint context exceeds the selected helper profile limit.");
@@ -1077,5 +1096,6 @@ export {
   promptHintBasis,
   promptHintPrompt,
   readPromptHintBlueprint,
+  readPromptHintSubsystems,
   visibleConversation
 };

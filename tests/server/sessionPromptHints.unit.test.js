@@ -9,6 +9,7 @@ import {
   createSessionPromptHintsService,
   parsePromptHintSuggestions,
   readPromptHintBlueprint,
+  readPromptHintSubsystems,
   visibleConversation
 } from "../../packages/vibe64-terminals/src/server/sessionPromptHints.js";
 import {
@@ -193,6 +194,7 @@ function createFixture({
   promptHints = projectPromptHints(),
   resolvePurpose = null,
   readBlueprintText = null,
+  readSubsystemsText = async () => "",
   resolveExecutionProfile = null,
   runAgentTurn = null,
   sessionSourcePath = () => "/managed/project/sessions/active/session-1/source"
@@ -289,6 +291,7 @@ function createFixture({
         "PRIVATE PATH /home/example/must/not/be-invented"
       ].join("\n");
     }),
+    readSubsystemsText,
     agent: {
       async resolveAssistantPurpose(input, options) {
         const sessionId = options.session.sessionId;
@@ -565,6 +568,27 @@ test("an empty conversation uses its Blueprint or draft instead of generic start
       assert.equal(fixture.calls.purpose.length, 2);
     });
   }
+});
+
+test("the subsystems map tells hints what an applied starter already built", async () => {
+  await withTemporaryDirectory(async (temporaryRoot) => {
+    const sourceRoot = path.join(temporaryRoot, "source");
+    await mkdir(path.join(sourceRoot, "genesis"), { recursive: true });
+    await writeFile(path.join(sourceRoot, "genesis", "subsystems.md"),
+      "# Subsystems\n\n## `notes` Notes application\n\nOwns the note form and its SQLite table.\n");
+    const fixture = createFixture({
+      conversation: { conversationLog: [] },
+      readSubsystemsText: readPromptHintSubsystems,
+      sessionSourcePath: () => sourceRoot
+    });
+    const result = await fixture.service.generateSessionPromptHints("session-1", generateInput("hint:starter-built"));
+    assert.equal(result.status, "ready");
+    assert.equal(typeof result.basis.subsystemsRevision, "string");
+    const prompt = fixture.calls.run[0].input.prompt;
+    assert.match(prompt, /treat what they own as built/u);
+    const context = JSON.parse(prompt.split("<context>\n")[1].split("\n</context>")[0]);
+    assert.match(context.subsystems, /Owns the note form and its SQLite table/u);
+  });
 });
 
 test("draft intent is primary and participates in cache identity without entering diagnostics", async () => {

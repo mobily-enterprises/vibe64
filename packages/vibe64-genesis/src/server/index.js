@@ -117,6 +117,7 @@ const {
 } = genesisCompiler;
 
 const GENESIS_BLUEPRINT_PATH = "genesis/blueprint.md";
+const GENESIS_SUBSYSTEMS_PATH = "genesis/subsystems.md";
 const VIBE64_POSTGRESQL_NEW_PROJECT_AVAILABLE = false;
 const VIBE64_HIDDEN_ONBOARDING_STACK_PIECES = Object.freeze([
   "vue",
@@ -521,6 +522,7 @@ export {
   parseVibe64IntegrationSetupLines,
   genesisParserEnvironment,
   GENESIS_BLUEPRINT_PATH,
+  GENESIS_SUBSYSTEMS_PATH,
   GENESIS_DERIVED_ARTIFACT_PATHS,
   GENESIS_MACHINE_CITY_PATH,
   GENESIS_PROGRAM_CITY_PATH,

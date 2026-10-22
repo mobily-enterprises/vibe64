@@ -203,7 +203,9 @@ Prompt suggestions wait for five seconds without draft changes, and start no
 more than once every thirty seconds in the current view. Refocusing does not
 regenerate dismissed suggestions. Changing the draft can request new suggestions
 after those limits; unchanged input does not poll. You can keep writing and send
-without waiting for suggestions.
+without waiting for suggestions. Suggestions read the project's Blueprint and its
+subsystems map, so after a starter is applied they propose changes to the app it
+built instead of building it again.
 
 An unconfirmed message shows small red error text and **Retry** inside
 its own bubble. The notice belongs to
