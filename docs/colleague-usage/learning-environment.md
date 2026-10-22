@@ -55,7 +55,9 @@ In Learn mode, while your lesson is loaded, a yellow bar above the project page
 names the lesson and shows **Step N of M** with the step's title and status.
 **Previous step** and **Next step** (arrow buttons) move through the steps, and
 **Open** shows the step in the page's **Lesson** tab (below); **Open** is hidden
-while the Lesson tab is showing. The chevron at its left collapses it to one
+while the Lesson tab is showing. **Courses**, at its right end (a book icon
+on a phone), opens the Courses overlay to choose another lesson; it stays
+there when the bar is collapsed. The chevron at its left collapses it to one
 line (**Hide the lesson step**) and expands it again (**Show the lesson step**);
 this tab remembers the choice. On a phone the lesson name is hidden, and
 **Open** shows the project side of the page (instead of the chat) on the Lesson
@@ -77,9 +79,8 @@ button all open it here, at the step you were reading.
   **Preview** again. The address ends in `?pane=lesson`, so a reload, or
   **L** back to Learn, returns to the Lesson tab.
 - **On a lesson without a practice project** (such as Lesson 0) there is no
-  coding session, so there is no chat column: the Lesson pane fills the page,
-  and the switches read **Lesson** and **Dashboard** (there is no Preview). The
-  Dashboard keeps **Account settings** and the other sections.
+  coding session, so there is no chat column and no pane switches: the Lesson
+  pane fills the page.
 - The reader lays itself out by the width it has: in a narrow pane (on a
   phone, or beside the chat column and an open Colleague) the step list becomes
   a row of numbered circles at the top (a tick for a passed step); the step
@@ -93,8 +94,8 @@ button all open it here, at the step you were reading.
 - On a phone (and other narrow screens up to 980px wide) the page shows one
   side at a time: the chat or the project pane. The next-pane button at the top
   goes from **Lesson** to **Preview** to **Dashboard** and back to **Lesson**,
-  showing the next pane's name; without a practice project it switches between
-  **Lesson** and **Dashboard**, and the page opens on the Lesson pane.
+  showing the next pane's name; without a practice project there is only the
+  Lesson pane, so the button is not shown.
 
 ## No project selected and `/app`
 
@@ -127,7 +128,8 @@ project page.
 
 ## The Courses overlay
 
-**Courses** in the project menu opens the Courses overlay above the page: the
+**Courses** on the lesson step bar, or in the project menu beside **L**, opens
+the Courses overlay above the page: the
 catalogue where you choose, start and manage lessons. It fills the screen, with
 a **Courses** tab, an **In progress** tab and an **Archived** tab, and a close
 button (×, **Close Courses**) at the right. A lesson is not read here: opening

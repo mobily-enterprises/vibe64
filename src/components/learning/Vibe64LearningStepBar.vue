@@ -1,14 +1,14 @@
 <script setup>
 import { computed, inject } from "vue";
-import { mdiChevronDown, mdiChevronLeft, mdiChevronRight, mdiChevronUp } from "@mdi/js";
+import { mdiBookOpenPageVariantOutline, mdiChevronDown, mdiChevronLeft, mdiChevronRight, mdiChevronUp } from "@mdi/js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { VIBE64_COLLEAGUE_LAYOUT_KEY } from "@/lib/vibe64AssistantHost.js";
 
 // The current lesson's step bar, at the top of the project page in Learn
 // mode (also with no project selected). It names the lesson and its current
 // step with its status; Previous/Next move through the steps and Open shows
-// the step in the page's Lesson pane (hidden while that pane shows). It
-// collapses to one line.
+// the step in the page's Lesson pane (hidden while that pane shows). Courses,
+// always on it, is the way out to the catalogue. It collapses to one line.
 const learning = useVibe64Learning();
 const layout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
 const lessonShown = computed(() => Boolean(layout?.value?.lessonVisible));
@@ -67,6 +67,13 @@ const go = offset => {
         Open
       </v-btn>
     </template>
+    <v-btn
+      variant="tonal" rounded="pill" min-height="40" min-width="40" :prepend-icon="mdiBookOpenPageVariantOutline"
+      class="vibe64-learning-step-bar__courses" aria-label="Courses" data-test="learning-step-bar-courses"
+      @click="learning.openCourses('courses')"
+    >
+      <span class="vibe64-learning-step-bar__courses-label">Courses</span>
+    </v-btn>
   </section>
 </template>
 
@@ -113,5 +120,8 @@ const go = offset => {
 
 @media (max-width: 600px) {
   .vibe64-learning-step-bar__lesson { display: none; }
+  .vibe64-learning-step-bar__courses { padding-inline: 0; }
+  .vibe64-learning-step-bar__courses :deep(.v-btn__prepend) { margin-inline: 0; }
+  .vibe64-learning-step-bar__courses-label { display: none; }
 }
 </style>

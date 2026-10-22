@@ -35,18 +35,7 @@ const lesson = computed(() => Boolean(learning?.learnMode && learning.lessonAtte
     data-test="no-project-pane"
   >
     <div v-if="lesson" class="studio-screen__lesson-layout">
-      <Vibe64LearningLessonPane v-if="projectPane === 'lesson'" />
-      <div v-else class="studio-screen__lesson-dashboard">
-        <Vibe64DashboardShell
-          no-project
-          :section="section"
-          @select="$emit('select', $event)"
-        >
-          <div class="studio-screen__no-project-text">
-            <p>No project selected</p>
-          </div>
-        </Vibe64DashboardShell>
-      </div>
+      <Vibe64LearningLessonPane />
     </div>
     <Vibe64EmptySessionLayout
       v-else
@@ -104,15 +93,6 @@ const lesson = computed(() => Boolean(learning?.learnMode && learning.lessonAtte
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-}
-
-.studio-screen__lesson-dashboard {
-  background: rgb(var(--v-theme-surface));
-  display: grid;
-  height: 100%;
-  min-height: 0;
-  overflow-y: auto;
-  padding: 0.85rem;
 }
 
 .studio-screen__no-project-text {

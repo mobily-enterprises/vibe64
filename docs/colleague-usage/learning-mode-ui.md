@@ -2,8 +2,8 @@
 
 The **L** button switches between **Develop** (your own projects) and
 **Learn** (lessons); see [The Learning environment (L)](learning-environment.md).
-In Learn mode the app bar turns yellow, and **Courses** in the project menu
-(the project name beside **L**) opens the Courses overlay, the catalogue where
+In Learn mode the app bar turns yellow, and **Courses** (at the right of the
+lesson step bar, or in the project menu beside **L**) opens the Courses overlay, the catalogue where
 lessons are chosen; a lesson itself is read in the page's **Lesson** tab. This
 guide describes the overlay's **Courses** tab. Its **In progress** and
 **Archived** tabs are described in
@@ -56,9 +56,8 @@ with a newer release shows **Update available** and **Update** (see
 A lesson without a practice project, such as a course's first setup lesson
 (Lesson 0), opens on the Learn page (at `/app/learning`) with no project
 selected: the lesson's own **Lesson** pane fills the page beside Colleague,
-with **Lesson** and **Dashboard** switches, no chat column and no sessions (see
-the shared guide's *The Lesson tab*). The Dashboard still lists its sections
-and says **No project selected**. Your own projects stay hidden until you
+with no pane switches, no chat column and no sessions (see the shared guide's
+*The Lesson tab*). Your own projects stay hidden until you
 press **L** to go back to Develop. Its steps say which real screens it uses, for
 example **Account settings → AI Accounts** to connect an AI.
 

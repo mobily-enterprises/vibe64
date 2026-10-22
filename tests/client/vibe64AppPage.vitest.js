@@ -142,7 +142,7 @@ describe("Vibe64 app page", () => {
     expect(ids(projectPaneTabs({ projectSlug: "alpha" }))).toEqual(["preview", "dashboard"]);
     expect(ids(projectPaneTabs({ projectSlug: "" }))).toEqual(["preview", "dashboard"]);
     expect(ids(projectPaneTabs({ projectSlug: "training-abc", lesson: true }))).toEqual(["preview", "dashboard", "lesson"]);
-    expect(ids(projectPaneTabs({ projectSlug: "", lesson: true })), "no Preview without a project").toEqual(["lesson", "dashboard"]);
+    expect(ids(projectPaneTabs({ projectSlug: "", lesson: true })), "the lesson alone without a project").toEqual(["lesson"]);
     expect(projectPaneTabs({ projectSlug: "", lesson: true })[0].label).toBe("Lesson");
   });
 
@@ -152,8 +152,7 @@ describe("Vibe64 app page", () => {
     expect(nextProjectPane(practice, "preview")).toMatchObject({ pane: "dashboard", label: "Dashboard" });
     expect(nextProjectPane(practice, "dashboard")).toMatchObject({ pane: "lesson", label: "Lesson", ariaLabel: "Go to lesson" });
     const lessonOnly = projectPaneTabs({ projectSlug: "", lesson: true });
-    expect(nextProjectPane(lessonOnly, "lesson").pane).toBe("dashboard");
-    expect(nextProjectPane(lessonOnly, "dashboard").pane).toBe("lesson");
+    expect(nextProjectPane(lessonOnly, "lesson").pane).toBe("lesson");
     const plain = projectPaneTabs({ projectSlug: "alpha" });
     expect(nextProjectPane(plain, "preview")).toMatchObject({ pane: "dashboard", ariaLabel: "Go to dashboard" });
     expect(nextProjectPane(plain, "dashboard")).toMatchObject({ pane: "preview", ariaLabel: "Go to preview" });

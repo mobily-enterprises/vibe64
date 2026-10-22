@@ -2088,7 +2088,7 @@ test("Colleague teaches through lessons, navigation, guides and checks, and neve
   assert.match(colleagueInstructions, /navigation\.open guide/u);
   assert.match(colleagueInstructions, /navigation\.open-learning/u);
   // The lesson is read on the Learn page; Courses is its catalogue, and Teach me keeps the step on screen.
-  assert.match(colleagueInstructions, /Courses, in the project menu beside L, is the catalogue where lessons are chosen and started/u);
+  assert.match(colleagueInstructions, /Courses, the button at the right of the lesson step bar \(also in the project menu beside L\), is the catalogue where lessons are chosen and started/u);
   assert.match(colleagueInstructions, /Teach me leaves the step visible/u);
   assert.match(colleagueInstructions, /show a step with navigation\.open-learning attemptId\/stepId/u);
   // Every navigation action the teacher text names is a real Colleague action.

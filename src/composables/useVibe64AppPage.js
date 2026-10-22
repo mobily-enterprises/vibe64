@@ -58,7 +58,8 @@ const PROJECT_PANES = Object.freeze({
 function projectPaneTabs({ projectSlug = "", lesson = false } = {}) {
   const { preview, dashboard, lesson: lessonPane } = PROJECT_PANES;
   if (!lesson) return [preview, dashboard];
-  return projectSlug ? [preview, dashboard, lessonPane] : [lessonPane, dashboard];
+  // A lesson without a practice project is the lesson alone: no tab switch.
+  return projectSlug ? [preview, dashboard, lessonPane] : [lessonPane];
 }
 
 // The phone's "next pane" pill: the pane after the shown one, in tab order.
@@ -163,8 +164,8 @@ function useVibe64AppPage() {
   const lessonPaneAvailable = computed(() => Boolean(learning?.learnMode && learning.lessonAttemptId));
   // Without a project the panes are empty and switch in place; the pane and
   // the dashboard section live in the address, so Learn mode's place keeps them.
-  const emptyPane = computed(() => route.query?.pane === "dashboard" ? "dashboard"
-    : lessonPaneAvailable.value ? "lesson" : "preview");
+  const emptyPane = computed(() => lessonPaneAvailable.value ? "lesson"
+    : route.query?.pane === "dashboard" ? "dashboard" : "preview");
   const emptySection = computed(() => typeof route.query?.section === "string" ? route.query.section : "");
   const projectPane = computed(() => !projectSlug.value ? emptyPane.value
     : dashboardRouteActive.value ? "dashboard"
@@ -192,11 +193,11 @@ function useVibe64AppPage() {
     return chatCollapsed.value ? "Show chat" : "Collapse chat";
   });
   const mobileProjectAction = computed(() => nextProjectPane(projectTabs.value, projectPane.value));
-  const projectPaneNavigationVisible = computed(() => !projectSlug.value || projectPaneNavigationReady({
+  const projectPaneNavigationVisible = computed(() => projectTabs.value.length > 1 && (!projectSlug.value || projectPaneNavigationReady({
     selectionReady: projectSelectionReady.value,
     projectSlug: projectSlug.value,
     readyProjectSlug: projectPaneNavigationReadySlug.value
-  }));
+  })));
   const mobileProjectActionVisible = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value &&
     (chatCollapsed.value || !chatColumnVisible.value));
   const mobilePaneSwipeEnabled = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value &&

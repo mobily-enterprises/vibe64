@@ -29,7 +29,7 @@ each, and the one you see always follows the mode:
 
 ## Colleague as your teacher
 
-In Learn mode, **Courses** in the project menu beside **L** is the catalogue
+In Learn mode, **Courses** (on the lesson step bar, or in the project menu beside **L**) is the catalogue
 where you choose and start lessons; your current lesson is read on the Learn
 page itself, in its **Lesson** tab beside Colleague (see `learning-environment`).
 You can read lessons yourself without AI. Choose **Teach me** on a lesson step,

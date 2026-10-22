@@ -1,4 +1,4 @@
-// Courses (from the project menu beside L) is the catalogue above the app in
+// Courses (from the lesson step bar or the project menu beside L) is the catalogue above the app in
 // Learn mode; the current lesson is read in the Learn page's Lesson pane. A
 // command { open } that opens or closes Courses is confirmed only by the
 // browser's reported Courses state; a command { attemptId, stepId? } (no open)
