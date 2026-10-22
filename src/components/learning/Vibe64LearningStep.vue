@@ -156,6 +156,15 @@ async function showMe() {
     emit("return");
   }
 }
+// I'm stuck: on a step with something to do or check that has not passed.
+const stuckOffered = computed(() => Boolean(!ended.value && statusOf(step.value?.id) !== "passed" &&
+  (["auto", "review"].includes(kind.value) || step.value?.beats?.some(beat => beat.kind === "do"))));
+function askStuck() {
+  actionError.value = "";
+  try {
+    props.learning.stuck(step.value.id);
+  } catch (cause) { actionError.value = String(cause?.message || "Colleague could not be asked."); }
+}
 function teachMe() {
   actionError.value = "";
   try {
@@ -245,6 +254,7 @@ async function markRead() {
     <div class="vibe64-learning-step__actions">
       <v-btn v-if="(step.guide || step.beats?.length) && !ended" variant="tonal" rounded="pill" min-height="48" data-test="learning-show-me" @click="showMe">Show me</v-btn>
       <v-btn v-if="!ended" variant="tonal" rounded="pill" min-height="48" data-test="learning-teach-me" @click="teachMe">Teach me</v-btn>
+      <v-btn v-if="stuckOffered" variant="tonal" rounded="pill" min-height="48" data-test="learning-stuck" @click="askStuck">I'm stuck</v-btn>
     </div>
     <slot name="after-actions" />
     <div class="vibe64-learning-step__pager">

@@ -68,9 +68,9 @@ async function showMe() {
     if (result?.guide && result.guide.shown === false) note.value = "That place is not visible on this page.";
   } catch (cause) { note.value = String(cause?.message || "That place could not be shown."); }
 }
-// I'm stuck: Colleague helps with a step its own check decides.
-const stuckOffered = computed(() => Boolean(final.value && !ended.value && status.value !== "passed" &&
-  ["auto", "review"].includes(kind.value)));
+// I'm stuck: Colleague helps on a do beat, or with a step its own check decides.
+const stuckOffered = computed(() => Boolean(!ended.value && status.value !== "passed" && !player.value?.confirmed &&
+  (beat.value?.kind === "do" || (final.value && ["auto", "review"].includes(kind.value)))));
 function askStuck() {
   note.value = "";
   try { learning.stuck(step.value.id); } catch (cause) { note.value = String(cause?.message || "Colleague could not be asked."); }
@@ -166,6 +166,7 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
         </v-btn>
         <v-btn
           v-if="stuckOffered" variant="tonal" rounded="pill" min-height="40" data-test="learning-step-bar-stuck"
+          :class="{ 'vibe64-learning-step-bar__stuck--beside': canDoIt }"
           @click="askStuck"
         >
           I'm stuck
@@ -320,6 +321,8 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
   .vibe64-learning-step-bar { column-gap: 4px; flex-wrap: wrap; row-gap: 0; }
   /* Step (≡) holds the whole step here; Open stays on wider screens. */
   .vibe64-learning-step-bar__open, .vibe64-learning-step-bar__step-text-chevron { display: none; }
+  /* One action on the beat's line: I'm stuck stays in Step beside Do it for me. */
+  .vibe64-learning-step-bar__stuck--beside { display: none; }
   .vibe64-learning-step-bar__lesson { display: none; }
   .vibe64-learning-step-bar--beats .vibe64-learning-step-bar__position { flex: 1 1 auto; }
   .vibe64-learning-step-bar--beats .vibe64-learning-step-bar__line { flex-basis: 100%; order: 3; padding: 0 0 6px 8px; }

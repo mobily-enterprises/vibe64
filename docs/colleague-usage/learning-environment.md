@@ -115,9 +115,12 @@ current one), then the beat's line:
 - After the last beat the bar shows the step's own control: **Done**, **Mark as
   done**, **Check my work** (an automatic check; a check that does not pass says
   why under the line) or **Answer in Step** for a question, which opens the
-  step under the bar. When the step has passed it shows **Next step**. A step
-  that **Check my work** decides also offers **I'm stuck**, which opens
+  step under the bar. When the step has passed it shows **Next step**. **I'm stuck**
+  (on a *do* line, and after the last beat of a step that **Check my work**
+  decides, until the step passes; also in **Step** beside **Teach me**) opens
   Colleague and asks it for help with this step (see `learning-with-colleague`).
+  On a phone a *do* line keeps only **Do it for me** on the bar; **I'm stuck**
+  is then in **Step**.
   A step never moves on by itself.
 - **Show me** on such a step (in the bar's step or the Lesson tab) plays its
   beats again from the first one.

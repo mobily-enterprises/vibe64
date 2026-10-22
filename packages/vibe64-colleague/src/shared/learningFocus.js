@@ -27,10 +27,13 @@ export function learningPanelFocus(controller) {
   const surface = read(controller.surface);
   const attemptId = read(controller.lessonAttemptId) ?? read(controller.mode)?.currentAttemptId;
   const stepId = read(controller.stepId);
+  // The step bar's beat, on a step with beats (so I'm stuck knows where they are).
+  const beat = read(controller.player?.beats)?.length ? read(controller.player.index) : undefined;
   return {
     learningOpen,
     ...(learningOpen && ["courses", "progress", "archived"].includes(surface) ? { learningSurface: surface } : {}),
-    ...(attemptId ? { learningAttemptId: attemptId, ...(stepId ? { learningStepId: stepId } : {}) } : {})
+    ...(attemptId ? { learningAttemptId: attemptId, ...(stepId ? { learningStepId: stepId,
+      ...(Number.isSafeInteger(beat) ? { learningBeat: beat } : {}) } : {}) } : {})
   };
 }
 

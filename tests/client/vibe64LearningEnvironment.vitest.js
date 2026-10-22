@@ -1622,7 +1622,7 @@ describe("Lesson step bar", () => {
     try {
       learning.selectStep("tick");
       await flush();
-      expect(byTest(root, "learning-step-bar-stuck"), "a self step is the learner's own verdict").toBeUndefined();
+      expect(byTest(root, "learning-step-bar-stuck"), "a self step without do beats is the learner's own verdict").toBeUndefined();
       learning.selectStep("preview");
       await flush();
       byTest(root, "learning-step-bar-stuck").props.onClick();
