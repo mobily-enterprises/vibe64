@@ -16,7 +16,7 @@ function createColleagueUsageKnowledge({ directory = path.join(resolveStudioAppR
       const stat = await file.stat();
       if (!stat.isFile() || stat.size > maxGuideBytes) throw new Error("This usage guide is too large or is not a regular file. Ask for another topic.");
       const text = await file.readFile("utf8");
-      if (Array.from(text).length > maxGuideCharacters) throw new Error("This usage guide needs to be split into smaller topics in the application release.");
+      if (Array.from(text).length > maxGuideCharacters) throw new Error(`The ${topicId} usage guide needs to be split into smaller topics in the application release.`);
       const title = text.match(/^# ([^\n]+)$/mu)?.[1]?.trim();
       if (!title) throw new Error("This usage guide has no title. Its release documentation needs correction.");
       const summary = text.replace(/^# [^\n]+\n/u, "").trim().split(/\n\s*\n/u)[0].replace(/\s+/gu, " ").slice(0, 400);

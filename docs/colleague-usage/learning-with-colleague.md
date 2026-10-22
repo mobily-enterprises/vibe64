@@ -36,7 +36,7 @@ You can read lessons yourself without AI. Choose **Teach me** on a lesson step,
 or ask Colleague about your lesson, and Colleague teaches the current step.
 **Teach me** opens Colleague beside the step and sends "Teach me this step.";
 the step stays on screen, so Colleague refers to it rather than repeating it.
-**I'm stuck** (in the lesson step bar on a *do* line or a step its own check
+**I'm stuck** (in the lesson step bar, see `lesson-step-bar`, on a *do* line or a step its own check
 decides, and in the step beside **Teach me**, until the step passes) opens Colleague the same way and sends "I'm stuck on this
 step."; Colleague looks at where you are and helps you get unstuck. It never
 passes the step for you:
