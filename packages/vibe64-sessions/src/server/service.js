@@ -109,6 +109,16 @@ function sessionResult(operation, fallbackMessage = "Vibe64 session request fail
   });
 }
 
+function requiredIncomingSessionId(value = "") {
+  const sessionId = text(value);
+  if (!sessionId) {
+    const error = new Error("Select a session before reviewing incoming changes.");
+    error.code = "vibe64_incoming_changes_session_required";
+    throw error;
+  }
+  return sessionId;
+}
+
 // Project history is readable without a session; a given session pins it to that session's base.
 async function optionalRepositorySession(project, value = "") {
   const sessionId = text(value);
@@ -1794,14 +1804,14 @@ function createService({
     },
 
     async inspectIncomingContributions(sessionId, input = {}) {
-      return sessionResult(() => terminals.inspectIncomingContributions(requiredRepositorySessionId(sessionId), {
+      return sessionResult(() => terminals.inspectIncomingContributions(requiredIncomingSessionId(sessionId), {
         ...input, vibe64User: trustedAssistantUser(input)
       }), "Incoming changes could not be read. Refresh before acting.");
     },
 
     async changeIncomingContribution(sessionId, input = {}) {
       return sessionResult(async () => {
-        const result = await terminals.changeIncomingContribution(requiredRepositorySessionId(sessionId), {
+        const result = await terminals.changeIncomingContribution(requiredIncomingSessionId(sessionId), {
           ...input, vibe64User: trustedAssistantUser(input)
         });
         // The Git result is confirmed. A failed UI notification must not turn

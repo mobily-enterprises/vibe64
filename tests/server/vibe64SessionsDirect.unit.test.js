@@ -4481,3 +4481,31 @@ test("source pin works during assistant preparation and retains closing and rene
     assert.equal(await store.readPinnedSessionId(), "");
   });
 });
+
+test("incoming change facades require a session before reaching Git", async () => {
+  const calls = [];
+  const service = createService({
+    project: {},
+    terminals: {
+      async inspectIncomingContributions(sessionId) {
+        calls.push(["inspect", sessionId]);
+        return { ok: true };
+      },
+      async changeIncomingContribution(sessionId) {
+        calls.push(["change", sessionId]);
+        return { ok: true, status: "repair-review" };
+      }
+    }
+  });
+
+  for (const operation of ["inspectIncomingContributions", "changeIncomingContribution"]) {
+    const missing = await service[operation]("", {});
+    assert.equal(missing.ok, false);
+    assert.equal(missing.code, "vibe64_incoming_changes_session_required");
+  }
+  assert.deepEqual(calls, []);
+
+  assert.equal((await service.inspectIncomingContributions("session-a", {})).ok, true);
+  assert.equal((await service.changeIncomingContribution("session-a", {})).ok, true);
+  assert.deepEqual(calls, [["inspect", "session-a"], ["change", "session-a"]]);
+});
