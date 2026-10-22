@@ -180,7 +180,8 @@ function createLessonPlayer({ state, steps, currentStep, active, selectStep, rem
     { settleMs: POINT_SETTLE_MS, durationMs: value.kind === "show" ? local.duration : DO_RING_MS });
     if (receipt?.shown) {
       // Only this player's own ring is taken away again.
-      if (beat.value === value) local.ring = shownGuide();
+      // A ring drawn after its beat moved on, or after Courses or a collapse covered it, goes at once.
+      if (beat.value === value && !state.open && !state.stepBarCollapsed) local.ring = shownGuide();
       else clearGuide(shownGuide());
     }
     return receipt;

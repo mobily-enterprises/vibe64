@@ -169,6 +169,13 @@ describe("lesson beat player", () => {
     expect(h.allDone).toHaveBeenCalledWith("away");
   });
 
+  it("takes away a ring that is drawn only after Courses opened", async () => {
+    const h = harness();
+    h.state.open = true;
+    await settle();
+    expect(h.cleared, "the late ring goes at once").toContain("ring-1");
+  });
+
   it("starts a step from its first beat for Show me", async () => {
     const h = harness();
     h.state.beatPaused = true;
