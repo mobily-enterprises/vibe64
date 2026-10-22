@@ -11,10 +11,13 @@ import { aiOnboardingAvailable, aiOnboardingNeeded, onVibe64AiOnboardingRequeste
 import { aiOnboardingSnoozed, snoozeAiOnboarding, useAiOnboarding } from "./useAiOnboarding.js";
 
 const props = defineProps({
-  // Hosted AI connections endpoint; standalone uses the default.
+  // AI connections endpoint; standalone uses the default.
   endpoint: { type: String, default: "" },
   canConfigure: Boolean,
-  actorKey: { type: String, default: "local" }
+  actorKey: { type: String, default: "local" },
+  // Passed to the setup screen, with its connection-access slot.
+  ownerNotice: { type: String, default: undefined },
+  changeWhere: { type: String, default: undefined }
 });
 const route = useRoute();
 const onboarding = useAiOnboarding({ endpoint: props.endpoint, enabled: computed(() => props.canConfigure) });
@@ -71,6 +74,8 @@ async function close(reason) {
 <template>
   <AiOnboarding
     :open="open" :start="start" :redo="redo" :onboarding="onboarding" :can-configure="canConfigure"
-    :workspace="Boolean(endpoint)" :endpoint="endpoint" @close="close"
-  />
+    :endpoint="endpoint" :owner-notice="ownerNotice" :change-where="changeWhere" @close="close"
+  >
+    <template v-for="(_, name) in $slots" #[name]="scope"><slot :name="name" v-bind="scope || {}" /></template>
+  </AiOnboarding>
 </template>

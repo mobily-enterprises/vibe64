@@ -30,9 +30,14 @@ const props = defineProps({
   redo: Boolean,
   onboarding: { type: Object, required: true },
   canConfigure: Boolean,
-  // Hosted workspace: Personal-use connections serve only the owner.
-  workspace: Boolean
+  // Shown to someone who may not configure AI.
+  ownerNotice: { type: String, default: "Only the Vibe64 owner can connect AI accounts." },
+  // Where the setup can be changed later.
+  changeWhere: { type: String, default: "Account settings → AI Accounts" }
 });
+// Slot connection-access ({ connection, card, place }): a host's note on who may
+// use a connection, on the card's Connected badge ("badge"), a connection's
+// tile ("row") and the success screen ("success").
 const emit = defineEmits(["close", "changed", "connected", "busy"]);
 const { xs } = useDisplay();
 
@@ -123,7 +128,6 @@ async function checkTools() {
     checkingTools.value = false;
   }
 }
-const changeWhere = computed(() => props.workspace ? "your account menu" : "Account settings → AI Accounts");
 // Set up later snoozes first-run onboarding; a redo just closes.
 const skippable = computed(() => !wasSetUp.value && !["success", "owner"].includes(screen.value));
 // Success says one thing about Colleague: it uses the choice, can switch to it, or isn't open here.
@@ -338,8 +342,7 @@ function meterLabel([aspect, rating]) {
 }
 
 function connectedLabel(card) {
-  const label = cardAction(card) === "keep" ? "Connected · in use" : "Connected";
-  return props.workspace ? `${label} · ${card.connect.access === "workspace" ? "Workspace" : "Personal"} use` : label;
+  return cardAction(card) === "keep" ? "Connected · in use" : "Connected";
 }
 
 // Phone: lower-ranked cards collapse to a row, one open at a time; connected ones stay open.
@@ -404,7 +407,7 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
           >
             <span v-if="card.crown" class="aio-card__ribbon">Recommended</span>
             <span v-if="card.connected" class="aio-card__connected">
-              <v-icon :icon="mdiCheckCircle" size="16" aria-hidden="true" />{{ connectedLabel(card) }}
+              <v-icon :icon="mdiCheckCircle" size="16" aria-hidden="true" />{{ connectedLabel(card) }}<slot name="connection-access" :card="card" place="badge" />
             </span>
             <span v-else-if="cardAction(card) === 'reconnect'" class="aio-card__connected aio-card__connected--warn">
               <v-icon :icon="mdiAlertCircleOutline" size="16" aria-hidden="true" />Reconnect required
@@ -515,7 +518,9 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
             </template>
           </article>
         </div>
-        <AiSetupAdvanced v-if="showAdvanced" :other-rows="otherRows" />
+        <AiSetupAdvanced v-if="showAdvanced" :other-rows="otherRows">
+          <template #connection-access="scope"><slot name="connection-access" v-bind="scope" /></template>
+        </AiSetupAdvanced>
         <p class="ai-onboarding__footnote">Prices are set by each provider and can change. You pay them directly; Vibe64 never resells AI.</p>
         <v-btn v-if="xs && skippable" block variant="text" class="mt-4" @click="close('later')">Set up later</v-btn>
       </section>
@@ -685,20 +690,20 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
         <p v-if="!outcome.routed" class="ai-onboarding__note">
           Your current models stay as they are. {{ chosen.name }} is ready in AI Accounts whenever you want it.
         </p>
-        <p v-if="workspace && chosen.connect.access === 'personal'" class="ai-onboarding__note">
-          This subscription serves only you. Workspace members need a Workspace-use connection, such as DeepSeek or an OpenAI API key.
-        </p>
+        <slot name="connection-access" :card="chosen" place="success" />
         <v-btn v-if="!xs" color="primary" variant="flat" size="large" :append-icon="mdiArrowRight" @click="close('done')">{{ doneLabel }}</v-btn>
       </section>
 
       <section v-else key="owner" class="ai-onboarding__success">
         <v-icon :icon="mdiAlertCircleOutline" size="48" color="primary" aria-hidden="true" />
-        <h1 id="ai-onboarding-title" tabindex="-1" class="ai-onboarding__headline">Only the workspace owner can connect AI accounts.</h1>
+        <h1 id="ai-onboarding-title" tabindex="-1" class="ai-onboarding__headline">{{ ownerNotice }}</h1>
         <v-btn color="primary" variant="flat" size="large" @click="close('dismiss')">Close</v-btn>
       </section>
     </Transition>
     <p class="d-sr-only" aria-live="polite">{{ announcement }}</p>
-    <AiProviderManage v-model="manageOpen" :card="managedCard" @connect="connect($event, 'have')" />
+    <AiProviderManage v-model="manageOpen" :card="managedCard" @connect="connect($event, 'have')">
+      <template #connection-access="scope"><slot name="connection-access" v-bind="scope" /></template>
+    </AiProviderManage>
     <AiConnectionDialogs />
   </div>
 </template>

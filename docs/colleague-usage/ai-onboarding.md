@@ -15,8 +15,7 @@ do not run, and Colleague shows **Set up your AI**.
 - It opens by itself at most once per page load, and not when AI status could
   not load, another dialog is open, you are in Learning, or you chose
   **Set up later** in this browser within the last 24 hours.
-- In a hosted workspace only the owner sees it, because only the owner can
-  connect AI.
+- Only someone who may connect AI sees it.
 
 Open it again at any time from the account menu: select the account button at
 the top right (**Account menu**), then **Redo onboarding**. The same menu holds
@@ -120,7 +119,7 @@ Both warnings also offer **Choose another AI**. See
 for the install commands and where Vibe64 looks for these programs.
 
 DeepSeek and the GLM Coding Plan connect through Codex; the free GLM-4.7 Flash
-option connects through OpenCode and serves the whole workspace. Use **Back** (above the header on a
+option connects through OpenCode. Use **Back** (above the header on a
 desktop, the arrow at the top left on a phone) to return to the provider list.
 Keys are stored privately outside your projects and never shown again.
 
@@ -138,7 +137,7 @@ the card says **Colleague couldn't reach [provider]** with the reason and
 **Retry**, **Check connection** (back to Connect) or **Continue anyway**; the
 check appears only after a reply or **Continue anyway**. Below it **Main AI:
 [provider] · [model]** and **Change it any time in Account settings → AI
-Accounts** (hosted: **your account menu**). Otherwise the screen shows
+Accounts**. Otherwise the screen shows
 **Colleague: still using [model]** with **Use [provider] for Colleague**.
 Choose **Start building** (the bottom bar on a phone) to close; Colleague opens
 with its message box ready so you can ask it to build your first page.
@@ -146,9 +145,7 @@ with its message box ready so you can ask it to build your first page.
 In Learn mode Colleague's conversation is your teacher's, so setup sends no
 hello there: the card says **Your teacher uses [provider] from your next
 message**, the check appears at once, and the close button reads **Back to the
-lesson** (or **Back to Learn** with no lesson in progress). In a hosted workspace, a personal subscription (Claude, Codex, GLM)
-serves only the owner; members need a Workspace-use connection such as
-DeepSeek.
+lesson** (or **Back to Learn** with no lesson in progress).
 
 If the provider connected but no model is ready yet, Connect shows **[Provider]
 is connected, but no model is ready for Colleague yet.** with **Review model
@@ -161,8 +158,7 @@ Colleague uses one of them it reads **Currently using · Main AI: [provider]**
 with the only **Keep using [provider]** button; otherwise it reads **Connected
 · [providers]** with **Choose a main AI below. We recommend Claude.** Cards you
 use come first. Connected cards have a green outline with a **Connected** badge
-(**Connected · in use** for the main AI; hosted adds **Workspace use** or
-**Personal use**), no plan or sign-up offer, and **Manage**; on a phone they
+(**Connected · in use** for the main AI), no plan or sign-up offer, and **Manage**; on a phone they
 stay expanded. A card whose sign-in or key stopped working has an amber outline,
 a **Reconnect required** badge and **Reconnect [provider]**, which opens its
 connect step. Claude's card adds **Upgrade your experience** when you use
@@ -206,8 +202,8 @@ save runs, closing and **Back** wait for it to finish.
   connecting still works, but Connected badges are hidden until status loads.
 - Sign-in and key errors are the same messages as in AI Accounts (for example
   Z.AI overload or insufficient balance); retry the same step.
-- A hosted member who reaches the flow sees **Only the workspace owner can
-  connect AI accounts.** with **Close**.
+- Someone who may not connect AI sees **Only the Vibe64 owner can connect AI
+  accounts.** with **Close**.
 
 ## Desktop and phone
 

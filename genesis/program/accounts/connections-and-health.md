@@ -435,7 +435,12 @@ with connections lead a configured setup. Once anything is configured, the colla
 `studio/AiSetupAdvanced.vue` under the cards holds Add a connection, Refresh,
 routing per connected orchestrator, Other connections (rows no card or free
 option matches, such as OpenCode Zen, with their model access) and every row
-by orchestrator; those other rows also count in the Connected strip.
+by orchestrator; those other rows also count in the Connected strip. Who may
+use a connection is left to the host: `AiSetup` takes `owner-notice` and
+`change-where` props (generic local defaults) and a `connection-access` slot
+(`{ connection, card, place }`, place `badge`, `row` or `success`) that the
+onboarding shell and host forward; Manage, Advanced and each row pass it on.
+Manager rows carry the neutral `ownerOnly` for it.
 
 OpenCode connections retain the existing versioned file at
 `<systemRoot>/ai-connections/connections.json`. Native Codex and Claude login

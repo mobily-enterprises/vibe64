@@ -64,7 +64,7 @@ function openRouting() {
         </span>
       </div>
       <div class="ai-row__chips">
-        <slot name="access" :connection="account" />
+        <slot name="connection-access" :connection="account" place="row" />
         <span v-if="account.preferred" class="ai-row__chip">Default</span>
       </div>
     </div>

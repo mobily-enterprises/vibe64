@@ -581,6 +581,18 @@ describe("flow", () => {
     }
   });
 
+  it("leaves who may use a connection to the host, through the connection-access slot", async () => {
+    const read = (file) => readFile(new URL(`../../packages/vibe64-accounts/src/client/${file}`, import.meta.url), "utf8");
+    const files = ["onboarding/AiOnboarding.vue", "onboarding/AiSetup.vue", "onboarding/AiOnboardingHost.vue",
+      "studio/AiProviderManage.vue", "studio/AiConnectionRow.vue", "studio/AiSetupAdvanced.vue"];
+    const sources = await Promise.all(files.map(read));
+    for (const source of sources) expect(source).not.toMatch(/Workspace use|Personal use|Workspace members|workspace owner|your account menu|[Hh]osted/u);
+    const [, setup, , manage, row, advanced] = sources;
+    expect(setup.match(/<slot name="connection-access" :card="(?:card|chosen)" place="(?:badge|success)" \/>/gu)).toHaveLength(2);
+    expect(row).toMatch(/<slot name="connection-access" :connection="account" place="row" \/>/u);
+    for (const source of [setup, manage, advanced]) expect(source).toMatch(/#connection-access="scope"><slot name="connection-access" v-bind="scope" \/>/u);
+  });
+
   it("offers Remove only inside a card's Manage", async () => {
     const studio = (file) => readFile(new URL(`../../packages/vibe64-accounts/src/client/studio/${file}`, import.meta.url), "utf8");
     const [setup, manage, row] = await Promise.all([

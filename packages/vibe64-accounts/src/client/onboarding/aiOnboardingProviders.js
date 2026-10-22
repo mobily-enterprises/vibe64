@@ -5,7 +5,7 @@
 // heavier-use plan. bullets: [aspect, rating 1-5, label]; 5 is reserved for
 // Claude-level, 1-2 read as a warning. mark/shape: the provider's monogram tile.
 // connect: the existing AI Accounts route. access: "personal" serves only the
-// owner in a hosted workspace. matches: which connections show it as Connected.
+// owner where several people share one Vibe64. matches: which connections show it as Connected.
 // free: the one free option (GLM-4.7 Flash costs nothing on Z.AI's regular API,
 // docs.z.ai/guides/overview/pricing); it connects as its own card.
 const AI_ONBOARDING_PROVIDERS = Object.freeze([

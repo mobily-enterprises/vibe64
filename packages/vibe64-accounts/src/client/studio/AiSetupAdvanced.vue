@@ -90,7 +90,7 @@ function openRouting(engineId) {
             <h3 id="ai-advanced-other" class="ai-advanced__group-title">Other connections</h3>
             <p class="ai-advanced__group-note">Connected providers that have no card above.</p>
             <AiConnectionRow v-for="row in otherRows" :key="`${row.kind}:${row.engineId}:${row.id}`" :account="row" lead="pair">
-              <template #access="slot"><slot name="connection-access" v-bind="slot" /></template>
+              <template #connection-access="scope"><slot name="connection-access" v-bind="scope" /></template>
             </AiConnectionRow>
           </section>
 
@@ -99,7 +99,7 @@ function openRouting(engineId) {
             <AiConnectionRow
               v-for="row in group.accounts" :key="`${row.kind}:${row.id}`" :account="row" lead="provider" :details="false"
             >
-              <template #access="slot"><slot name="connection-access" v-bind="slot" /></template>
+              <template #connection-access="scope"><slot name="connection-access" v-bind="scope" /></template>
             </AiConnectionRow>
           </section>
         </template>

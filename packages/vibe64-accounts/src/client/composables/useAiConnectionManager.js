@@ -181,6 +181,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
   const configuredAiRows = computed(() => [
     ...(nativeAccountConfigured(codexAccount.value) ? [{
       accessLabel: codexAccount.value?.ownerOnly === true ? "Personal use" : codexAccount.value?.ownerOnly === false ? "Workspace use" : "",
+      ownerOnly: codexAccount.value?.ownerOnly,
       billingLabel: codexAccount.value?.username || "Codex account",
       engineId: "codex",
       id: "codex",
@@ -193,6 +194,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     }] : []),
     ...(nativeAccountConfigured(claudeAccount.value) ? [{
       accessLabel: "Personal use",
+      ownerOnly: true,
       billingLabel: claudeAccount.value?.username || "Claude account",
       engineId: "claude",
       id: "claude",
@@ -213,6 +215,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
         providerLabel: provider.label,
         billingLabel: provider.description,
         accessLabel: provider.ownerOnly ? "Personal use" : "Workspace use",
+        ownerOnly: Boolean(provider.ownerOnly),
         keyHint: (engineId === "claude" ? connection.claudeReady : connection.connected) ? "Connected" : "Reconnect required",
         modelLabel: provider.models.map(({ label }) => label).join(" · ")
       }));

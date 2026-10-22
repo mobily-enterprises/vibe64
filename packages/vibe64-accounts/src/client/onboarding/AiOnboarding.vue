@@ -16,8 +16,10 @@ const props = defineProps({
   redo: Boolean,
   onboarding: { type: Object, required: true },
   canConfigure: Boolean,
-  // Hosted workspace: Personal-use connections serve only the owner.
-  workspace: Boolean
+  // Shown to someone who may not configure AI.
+  ownerNotice: { type: String, default: undefined },
+  // Where the setup can be changed later.
+  changeWhere: { type: String, default: "Account settings → AI Accounts" }
 });
 const emit = defineEmits(["close"]);
 const { xs } = useDisplay();
@@ -41,7 +43,6 @@ const screen = computed(() => view.value === "why" ? "why" : setup.value?.screen
 const wasSetUp = computed(() => view.value === "setup" && Boolean(setup.value?.wasSetUp));
 const busy = computed(() => Boolean(setup.value?.busy));
 const cards = computed(() => props.onboarding.cards.value);
-const changeWhere = computed(() => props.workspace ? "your account menu" : "Account settings → AI Accounts");
 // Set up later snoozes first-run onboarding; a redo just closes.
 const skippable = computed(() => view.value === "why" || Boolean(setup.value?.skippable));
 const dock = computed(() => xs.value && (screen.value === "success" || screen.value === "why" && skippable.value));
@@ -147,8 +148,10 @@ function focusTitle() {
           </section>
           <AiSetup
             v-else key="setup" ref="setup" :open="open" :redo="redo" :onboarding="onboarding" :endpoint="endpoint"
-            :can-configure="canConfigure" :workspace="workspace" @close="close"
-          />
+            :can-configure="canConfigure" :owner-notice="ownerNotice" :change-where="changeWhere" @close="close"
+          >
+            <template v-for="(_, name) in $slots" #[name]="scope"><slot :name="name" v-bind="scope || {}" /></template>
+          </AiSetup>
         </Transition>
       </main>
 

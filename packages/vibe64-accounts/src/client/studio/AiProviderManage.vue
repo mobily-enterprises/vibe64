@@ -75,13 +75,17 @@ function connectAgain() {
 
       <v-card-text class="ai-manage__body">
         <section v-if="rows.length" class="ai-manage__group" :aria-label="`${card.name} connections`">
-          <AiConnectionRow v-for="row in rows" :key="`${row.kind}:${row.engineId}:${row.id}`" :account="row" />
+          <AiConnectionRow v-for="row in rows" :key="`${row.kind}:${row.engineId}:${row.id}`" :account="row">
+            <template #connection-access="scope"><slot name="connection-access" v-bind="scope" /></template>
+          </AiConnectionRow>
         </section>
         <section v-if="freeRows.length" class="ai-manage__group" aria-labelledby="ai-manage-free">
           <h3 id="ai-manage-free" class="ai-manage__group-title">
             Free option<span>{{ card.free.name }}</span>
           </h3>
-          <AiConnectionRow v-for="row in freeRows" :key="`${row.kind}:${row.engineId}:${row.id}`" :account="row" />
+          <AiConnectionRow v-for="row in freeRows" :key="`${row.kind}:${row.engineId}:${row.id}`" :account="row">
+            <template #connection-access="scope"><slot name="connection-access" v-bind="scope" /></template>
+          </AiConnectionRow>
         </section>
         <div v-if="!allRows.length" class="ai-manage__empty">
           <p>{{ card.name }} isn't connected any more.</p>
@@ -89,7 +93,7 @@ function connectAgain() {
         </div>
         <p class="ai-manage__note">
           <v-icon :icon="mdiLockOutline" size="18" aria-hidden="true" />
-          <span>Provider keys are redacted after saving. Sign-ins and keys can be managed only by the Vibe64 owner.</span>
+          <span>Provider keys are redacted after saving. Only the Vibe64 owner can change sign-ins and keys.</span>
         </p>
       </v-card-text>
     </v-card>

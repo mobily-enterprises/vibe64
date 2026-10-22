@@ -25,7 +25,8 @@ const props = defineProps({
   isOwner: {
     default: false,
     type: Boolean
-  }
+  },
+  ownerNotice: { type: String, default: "Only the Vibe64 owner can add, change, or remove AI accounts." }
 });
 
 const emit = defineEmits(["changed", "connected", "busy"]);
@@ -108,7 +109,7 @@ defineExpose({ openProvider: manager.openProvider });
 
     <v-alert
       v-if="!isOwner"
-      text="Only the Vibe64 owner can add, change, or remove AI accounts. Workspace members can use connections marked Workspace use."
+      :text="ownerNotice"
       title="Owner required"
       type="info"
       variant="tonal"
