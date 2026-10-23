@@ -118,15 +118,22 @@ describe("approval cards", () => {
     html = await render(state);
     expect(html).toContain("Sending…");
     expect(html).not.toContain("Couldn't send");
+    state.pending["approval-1"] = undefined;
+    state.open[0].status = "sending";
+    html = await render(state);
+    expect(html).toContain("Send again");
+    expect(html).toMatch(/<button[^>]*disabled[^>]*>.*?Edit then send/u);
   });
 
   it("keeps decided messages as one-line rows with the decline note", async () => {
     const entries = [
       waiting({ id: "sent-1", status: "sent", decidedBy: tony, decidedAt: decidedAt(), originalText: "Can you add a toggel?" }),
       waiting({ id: "declined-1", status: "declined", decidedBy: tony, decidedAt: decidedAt(), note: "Not now, I'm deploying." }),
-      waiting({ id: "withdrawn-1", status: "withdrawn", decidedBy: ana, decidedAt: decidedAt() })
+      waiting({ id: "withdrawn-1", status: "withdrawn", decidedBy: ana, decidedAt: decidedAt(), text: "Rename the header" })
     ];
     const html = await render(approvalsState({ entries }));
+    expect(html).toMatch(/<p class="vibe64-approvals__excerpt[^>]*>Can you add a dark mode toggle\?<\/p>/u);
+    expect(html).toMatch(/<summary[^>]*aria-label="Message: Rename the header"[^>]*>Rename the header<\/summary>/u);
     expect(html).toMatch(/Sent by Tony · [^·]+ · Edited by Tony/u);
     expect(html).toContain("Show in chat");
     expect(html).toMatch(/Declined by Tony · /u);

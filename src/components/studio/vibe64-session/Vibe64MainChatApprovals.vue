@@ -112,10 +112,13 @@
               >
                 {{ entry.status === "sending" && !approvals.pending[entry.id] ? "Send again" : "Approve & send" }}
               </v-btn>
-              <v-btn variant="tonal" :block="phone" :disabled="busy(entry)" :prepend-icon="mdiPencilOutline" @click="openDraft(entry, 'approve')">
+              <v-btn
+                variant="tonal" :block="phone" :disabled="busy(entry) || entry.status === 'sending'" :prepend-icon="mdiPencilOutline"
+                @click="openDraft(entry, 'approve')"
+              >
                 Edit then send
               </v-btn>
-              <v-btn variant="text" :block="phone" :disabled="busy(entry)" @click="openDraft(entry, 'decline')">
+              <v-btn variant="text" :block="phone" :disabled="busy(entry) || entry.status === 'sending'" @click="openDraft(entry, 'decline')">
                 Decline
               </v-btn>
             </div>
@@ -144,6 +147,10 @@
                   Show in chat
                 </v-btn>
               </div>
+              <p v-if="entry.status === 'sent'" class="vibe64-approvals__excerpt text-body-small">{{ entry.text }}</p>
+              <details v-else class="vibe64-approvals__excerpt text-body-small">
+                <summary :aria-label="`Message: ${entry.text}`">{{ entry.text }}</summary>
+              </details>
               <blockquote v-if="entry.status === 'declined' && entry.note" class="vibe64-approvals__quote text-body-small">
                 “{{ entry.note }}”
               </blockquote>
@@ -344,6 +351,27 @@ defineExpose({ open: () => { sheetOpen.value = true; } });
 }
 .vibe64-approvals__show {
   flex-shrink: 0;
+}
+/* Which message a decided row was: one line, and a declined or withdrawn
+   one opens to its whole text to rework and send again. */
+.vibe64-approvals__excerpt {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  margin: 0 0 0.25rem 1.625rem;
+  min-width: 0;
+}
+p.vibe64-approvals__excerpt,
+.vibe64-approvals__excerpt summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vibe64-approvals__excerpt summary {
+  cursor: pointer;
+  display: block;
+}
+.vibe64-approvals__excerpt[open] summary {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 .vibe64-approvals__quote {
   border-inline-start: 3px solid rgba(var(--v-theme-error), 0.5);

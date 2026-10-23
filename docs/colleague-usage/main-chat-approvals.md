@@ -54,6 +54,10 @@ message" or "{owner} declined your message". The card becomes a one-line row:
 - **Declined by {owner} · time**, with the owner's note quoted underneath when
   they wrote one.
 
+Under each row is the start of the message on one line. On a declined or
+withdrawn row, select it to show the whole text, to copy, rework and send it
+again.
+
 The delivered message appears in Main chat as an ordinary user message with the
 line "{sender} · approved by {owner}" under its text. The assistant's reply is
 visible to everyone with access to the project.
