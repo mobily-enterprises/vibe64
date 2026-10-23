@@ -94,8 +94,9 @@ lessons use that only some installations provide, in optional `places`,
 `activities` and `facts` lists in `topic.json`. A step whose places, activities
 and facts are all available here, and whose places this person may open, is
 shown; the others are left out of the lesson, and completion counts only the
-required steps shown. A course may name its `orientation`, one of its
-published lessons.
+required steps shown. A lesson with a required step left out is left out of
+Courses here (and cannot start), as is a topic left without lessons. A course
+may name its `orientation`, one of its published lessons.
 
 ### Lesson format v2: steps
 

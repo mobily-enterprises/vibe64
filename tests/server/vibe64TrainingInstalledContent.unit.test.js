@@ -740,9 +740,9 @@ async function titleCatalogue(f, extra = {}) {
   await catalogue.enableCourse({ course, lock, expectedRevision: 0 });
   return { catalogue, course, lock };
 }
-function titleActions(f, catalogue) {
+function titleActions(f, catalogue, content = null) {
   const actions = createActionCatalogue();
-  actions.register({ contributorId: "title-fixture", domain: "training", actions: createTrainingActions({ catalogue,
+  actions.register({ contributorId: "title-fixture", domain: "training", actions: createTrainingActions({ catalogue, content,
     learners: createTrainingLearnerState({ systemRoot: f.systemRoot })
   }).map(definition => ({ ...definition, channels: ["api", "automation"], surfaces: ["app"] })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => ({ uid: 42, username: "reader", role: "member" }),
@@ -810,6 +810,30 @@ test("courses.list names a course's orientation lesson, and a course without one
   const plain = await fixture(t);
   const { catalogue: without } = await titleCatalogue(plain);
   assert.equal(Object.hasOwn((await titleActions(plain, without).execute()).courses[0], "orientation"), false);
+});
+
+test("courses.list leaves out lessons this person cannot take here, and a topic left without lessons", async t => {
+  const f = await fixture(t);
+  const { catalogue } = await titleCatalogue(f);
+  const reads = [];
+  // LESSON-01 needs a place no provider registered here (a host's screen); LESSON-02 only built-in ones.
+  const content = { async readLesson(input) {
+    reads.push(input);
+    assert.deepEqual(Object.keys(input).sort(), ["commit", "lessonCode", "lessonHash", "topicHash", "topicId"]);
+    return { steps: [{ id: "one", required: true, check: { kind: "self" },
+      beats: [{ kind: "show", target: input.lessonCode === "LESSON-01" ? "listing-unregistered-place" : "preview", text: "Look." }] }] };
+  } };
+  const { execute } = titleActions(f, catalogue, content);
+  const listed = await execute();
+  assert.deepEqual(listed.courses[0].lessons.map(lesson => lesson.code), ["LESSON-02"]);
+  assert.deepEqual(listed.courses[0].topics.map(topic => topic.topicId), ["installed-topic"]);
+  await execute();
+  assert.equal(reads.length, 2, "a pinned lesson's steps are read once");
+  content.readLesson = async () => ({ steps: [{ id: "one", required: true, check: { kind: "self" },
+    beats: [{ kind: "show", target: "listing-unregistered-place", text: "Look." }] }] });
+  const { execute: hostOnly } = titleActions(f, catalogue, content);
+  const empty = await hostOnly();
+  assert.deepEqual([empty.courses[0].lessons, empty.courses[0].topics], [[], []], "a topic of host lessons only is absent");
 });
 
 test("title projection ignores edited live source and refuses a tampered exact installed descriptor without repair", async t => {

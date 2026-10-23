@@ -160,7 +160,9 @@ and the tab row scrolls sideways when it does not fit.
 
 **Courses** shows course cards with progress, course pages, the **Course
 catalogue** and, for the workspace owner, **New course**; see
-[Choosing lessons and courses](learning-mode-ui.md).
+[Choosing lessons and courses](learning-mode-ui.md). A course lists only the
+lessons you can take on this Vibe64: a lesson about screens this installation
+doesn't have is simply not there.
 
 - **Start lesson** or **Start next lesson** start
   the lesson, close Courses and open it in the Lesson pane of its practice

@@ -1,5 +1,6 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { lessonAvailableTo } from "./lessonAvailability.js";
 
 const MAX_RESULT_BYTES = 128 * 1024;
 const text = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 256 };
@@ -143,10 +144,25 @@ const prepared = result => {
 };
 
 // Composition supplies the original readers and one exercise preparation owner.
-function createTrainingActions({ catalogue, learners, exercises = null, courseInstaller = null, learningSpace = null,
+function createTrainingActions({ catalogue, learners, content = null, exercises = null, courseInstaller = null, learningSpace = null,
   publishLearnerChanged = null } = {}) {
   if (typeof catalogue?.readCatalogue !== "function" || typeof learners?.readState !== "function") {
     throw new TypeError("Training actions require the installed catalogue and learner state owners.");
+  }
+  // A pinned lesson's steps never change, so each is read once; who may take
+  // them is decided per read (lessonAvailability.js). Without the installed
+  // reader (actions composed for catalogue reads only) every lesson is listed.
+  const pinnedSteps = new Map();
+  async function lessonListedFor(actor, topic, lesson) {
+    if (typeof content?.readLesson !== "function") return true;
+    const key = JSON.stringify([topic.topicId, topic.commit, topic.manifestHash, lesson.code, lesson.hash]);
+    if (!pinnedSteps.has(key)) {
+      pinnedSteps.set(key, content.readLesson({ topicId: topic.topicId, commit: topic.commit, topicHash: topic.manifestHash,
+        lessonCode: lesson.code, lessonHash: lesson.hash }).then(read => read.steps || [], () => null));
+    }
+    const steps = await pinnedSteps.get(key);
+    // A lesson that cannot be read here (a draft, a retired format) stays listed; starting it explains.
+    return steps === null || lessonAvailableTo({ steps }, actor);
   }
   const definition = (name, fields, description, execute) => withVibe64ActionContext({
     id: `vibe64.training.${name}`, version: 1,
@@ -210,16 +226,27 @@ function createTrainingActions({ catalogue, learners, exercises = null, courseIn
   };
 
   return Object.freeze([
-    definition("courses.list", {}, "Read installed course releases, their ordered topics and exact lesson choices. Read this again before a new start; earlier conversation results may name a now-disabled release. This is read-only; it does not enable a course, start a lesson or prepare a practice project. Drafts and disabled releases cannot be started. A course with status preview can be started only by the workspace owner; canTryPreviews reports whether this person may start lessons of enabled preview courses. Topic IDs identify pinned content, not usage-guide topics. canCreateCourses reports whether this person may create a custom course. orientation, when set, is the course's studio lesson that Take the tour starts.", async (_input, actor) => {
+    definition("courses.list", {}, "Read installed course releases, their ordered topics and exact lesson choices. Read this again before a new start; earlier conversation results may name a now-disabled release. This is read-only; it does not enable a course, start a lesson or prepare a practice project. Drafts and disabled releases cannot be started. A course with status preview can be started only by the workspace owner; canTryPreviews reports whether this person may start lessons of enabled preview courses. Topic IDs identify pinned content, not usage-guide topics. canCreateCourses reports whether this person may create a custom course. orientation, when set, is the course's studio lesson that Take the tour starts. Lessons this person cannot take here (they need screens this installation does not have, or not for them) are left out, as is a topic left without lessons.", async (_input, actor) => {
       const result = await catalogue.readCatalogue({ includeLessonTitles: true });
+      const courses = [];
+      for (const entry of result.courses) {
+        // A lesson this person cannot take here (its places are not this
+        // installation's, or not open to them) is left out, as is a topic left empty.
+        const lessons = [];
+        for (const topic of entry.lock.topics) {
+          for (const lesson of topic.lessons) if (await lessonListedFor(actor, topic, lesson)) lessons.push({ topic, lesson });
+        }
+        const topics = entry.lock.topics.filter(topic => lessons.some(item => item.topic === topic));
+        courses.push({ entry, topics, lessons });
+      }
       return { ok: true, available: true, revision: result.revision,
         canCreateCourses: actor?.role === "owner" && typeof catalogue.createCourse === "function",
         canTryPreviews: actor?.role === "owner",
-        courses: result.courses.map(entry => ({
+        courses: courses.map(({ entry, topics, lessons }) => ({
         ...pick(entry.course, ["courseId", "release", "title", "status", "orientation"]), enabled: entry.enabled,
-        topics: entry.lock.topics.map(topic => ({ topicId: topic.topicId, release: topic.release,
+        topics: topics.map(topic => ({ topicId: topic.topicId, release: topic.release,
           title: (entry.topicTitles || []).find(value => value.topicId === topic.topicId && value.release === topic.release)?.title || topic.topicId })),
-        lessons: entry.lock.topics.flatMap(topic => topic.lessons.map(lesson => {
+        lessons: lessons.map(({ topic, lesson }) => {
           const matches = (entry.lessonTitles || []).filter(value => value.topicId === topic.topicId &&
             value.topicRelease === topic.release && value.code === lesson.code && value.hash === lesson.hash);
           const title = matches[0]?.title;
@@ -228,7 +255,7 @@ function createTrainingActions({ catalogue, learners, exercises = null, courseIn
           }
           return { ...pick(lesson, ["code", "hash", "status", "required"]),
             title, topicId: topic.topicId, topicRelease: topic.release };
-        }))
+        })
       })) };
     }),
     definition("available.list", {}, "Read the official course catalogue this server can install from: its topics (catalogue domains) and their courses, each with release, status, lesson count and whether it is installed and enabled here. When updateFrom is set, this listed release is a newer release of a course installed here at that release; course.install of it is the Update. This is read-only and installs nothing. A course that is not installed cannot be started until it is installed.", async () => {
