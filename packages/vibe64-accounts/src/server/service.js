@@ -1,6 +1,6 @@
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { createAssistantRoutingStore, validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/assistantRoutingStore";
-import { ASSISTANT_SETUP_ROLES } from "@local/vibe64-runtime/shared/assistantRouting";
+import { ASSISTANT_SETUP_ROLES, isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
 import { readWorkspaceTeam } from "@local/vibe64-core/server/workspaceTeam";
 import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { watch } from "node:fs";
@@ -2305,9 +2305,11 @@ function createService({
 
   // Internal setup used after connection setup, explicit session creation and
   // the team card. It accepts no values: it fills only the setup's absent roles
-  // from recommendations; user-directed changes stay on owner-only Save.
+  // from recommendations; user-directed changes stay on owner-only Save. Only
+  // the owner's own actions fill a setup; a team member's never writes.
   async function initializeModelRouting(input = {}) {
     return accountsResult(async () => {
+      if (!isAssistantRoutingOwner(input.vibe64User)) return { ok: true, initialized: [] };
       const setup = input.setup || "owner";
       const preferProvider = input.preferProvider || null;
       if (!ASSISTANT_SETUP_ROLES[setup] || preferProvider && (typeof preferProvider.modelProviderId !== "string" ||

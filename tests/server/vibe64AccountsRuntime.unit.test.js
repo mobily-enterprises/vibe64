@@ -2263,9 +2263,12 @@ test("model routing setup initializes missing roles once and preserves deliberat
     assert.equal(preview.viewer.senior.approvalRequired, true);
     assert.equal(preview.setups.owner.setupPreview.senior.available, true);
     assert.equal((await f.store.read()).revision, 0);
-    // Internal setup can be triggered by the first collaborator; it accepts no
-    // values and fills only absent roles.
-    const first = await f.service.initializeModelRouting({ vibe64User: f.member });
+    // A team member's actions never write either setup.
+    assert.deepEqual(await f.service.initializeModelRouting({ vibe64User: f.member }), { ok: true, initialized: [] });
+    assert.deepEqual(await f.service.initializeModelRouting({ setup: "nonOwner", vibe64User: f.member }), { ok: true, initialized: [] });
+    assert.equal((await f.store.read()).revision, 0, "a team member does not initialize routing");
+    // The owner's internal setup accepts no values and fills only absent roles.
+    const first = await f.service.initializeModelRouting({ vibe64User: f.owner });
     assert.equal(first.ok, true, first.error);
     assert.equal(first.initialized.length, 7);
     const saved = await f.store.read();
@@ -2401,7 +2404,7 @@ test("first-session setup offers included OpenCode for chat and managed Router a
     assert.equal(before.setups.owner.setupPreview.auto.available, true);
     assert.equal(before.setups.owner.setupPreview.senior.available, true);
     assert.equal((await f.store.read()).revision, 0);
-    const initialized = await f.service.initializeModelRouting({ vibe64User: f.member });
+    const initialized = await f.service.initializeModelRouting({ vibe64User: f.owner });
     assert.equal(initialized.ok, true, initialized.error);
     const saved = await f.store.read();
     for (const role of ["senior", "junior", "router", "quickHelper"]) assert.equal(saved.owner[role].modelId, "big-pickle", role);
