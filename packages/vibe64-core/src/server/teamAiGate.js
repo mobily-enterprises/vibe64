@@ -25,9 +25,10 @@ async function readTeamAiReady({ actor = null } = {}) {
   return !readiness || await readiness({ actor }) === true;
 }
 
-// A person's request carries headers; internal work does not.
-async function assertTeamAiAllowsProject({ actor = null, request = null } = {}) {
-  if (!request?.headers || !isTeamMember(actor) || await readTeamAiReady({ actor })) return;
+// Callers apply it to a person's own work only (a request with headers, or
+// their Colleague); internal work is never gated.
+async function assertTeamAiAllowsProject({ actor = null } = {}) {
+  if (!isTeamMember(actor) || await readTeamAiReady({ actor })) return;
   const { ownerName } = await readWorkspaceTeam();
   throw Object.assign(new Error(`Ask ${ownerName || "the workspace owner"} to set up AI for team members.`), {
     code: TEAM_AI_REQUIRED_CODE, statusCode: 403, ownerName, details: { ownerName }

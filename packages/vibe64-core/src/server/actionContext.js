@@ -8,6 +8,7 @@ import { getStudioProjectContext, normalizeProjectSlug } from "./studioProjectCo
 import { isLocalStudioRequest } from "./localStudioRequest.js";
 import { logOperationalEvent } from "./logging.js";
 import { assertLearningModeAllowsProject } from "./learningMode.js";
+import { assertTeamAiAllowsProject } from "./teamAiGate.js";
 
 function actionContextError(code, message, statusCode = 403) {
   return Object.assign(new Error(message), { code, statusCode });
@@ -80,9 +81,11 @@ function withVibe64ActionContext(definition, { projectScoped = true, ownerRequir
       // practice project; Develop: never it), checked before resolving so it
       // can relay the exact reason. The request keeps that thread's mode for
       // the resolution below. A host contributor that resolved the project
-      // already applied this through its authorizeProject.
+      // already applied this through its authorizeProject, and the team AI
+      // gate itself.
       if (context.colleague && !resolved) {
         await assertLearningModeAllowsProject({ actor: user, slug, request: projectRequest, thread: context.colleague.thread });
+        await assertTeamAiAllowsProject({ actor: user });
       }
       const current = currentProjectRequestContext();
       const project = resolved || (current?.slug === slug ? current
@@ -135,7 +138,12 @@ function registerVibe64ActionContext(actions, { projectContext, resolveUser, aut
         let project = null;
         if (scope.projectScoped) {
           const slug = actionProjectSlug(input, context);
-          await measure("project-access", () => authorizeProject({ slug, user, definition, input, context }));
+          await measure("project-access", async () => {
+            await authorizeProject({ slug, user, definition, input, context });
+            // A person's own request or Colleague opens a project only once
+            // team AI allows it; the project is resolved below without headers.
+            if (context.requestMeta?.request?.headers || context.colleague) await assertTeamAiAllowsProject({ actor: user });
+          });
           project = await measure("project-context", () => resolveProjectRequestContext({
             projectContext,
             request: { params: { slug }, vibe64User: user, allowDeleting: scope.allowDeleting === true }

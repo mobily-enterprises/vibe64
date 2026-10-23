@@ -54,7 +54,7 @@ async function resolveProjectRequestContext({
   const assertMode = async isPractice => {
     if (!request?.headers) return;
     await assertLearningModeAllowsProject({ actor: vibe64User, slug, request, practice: isPractice });
-    await assertTeamAiAllowsProject({ actor: vibe64User, request });
+    await assertTeamAiAllowsProject({ actor: vibe64User });
   };
   const practice = resolvedProjectContext.currentPracticeProjectScope?.();
   if (practice) {

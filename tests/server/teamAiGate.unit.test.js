@@ -14,6 +14,9 @@ import { registerWorkspaceTeamReader } from "../../packages/vibe64-core/src/serv
 import { createTeamAiReadiness } from "../../packages/vibe64-accounts/src/server/teamAiReadiness.js";
 import { createService as createProjectService } from "../../packages/vibe64-project/src/server/service.js";
 import { createVibe64FeatureRoutes } from "../../packages/vibe64-core/src/server/featureRoutes.js";
+import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
+import { createSchema } from "@jskit-ai/kernel/shared/validators";
+import { registerVibe64ActionContext, withVibe64ActionContext } from "../../packages/vibe64-core/src/server/actionContext.js";
 import { routeProjectParams, testReply, testRouteApp, withLocalRequestBypass, withRouteProject } from "./vibe64RouteTestHelpers.js";
 
 const OWNER = Object.freeze({ uid: 1, username: "tony", role: "owner" });
@@ -198,4 +201,27 @@ test("a project route answers a gated team member with the refusal and the owner
     assert.deepEqual(reply.payload, { ok: false, code: "vibe64_team_ai_required", details: { ownerName: "Tony" },
       errors: [{ code: "vibe64_team_ai_required", message: "Ask Tony to set up AI for team members." }] });
   }));
+});
+
+test("a host action contributor gates a team member's own operations, not internal work", async (t) => {
+  const ready = { value: false };
+  const { context } = await withWorkspace(t, ready);
+  let actor = MEMBER;
+  const actions = createActionCatalogue();
+  actions.register({ contributorId: "unit", domain: "unit", actions: [withVibe64ActionContext({
+    id: "unit.project.read", kind: "query", channels: ["api", "automation", "internal"], surfaces: ["app"],
+    permission: { require: "authenticated" }, idempotency: "none",
+    input: { schema: createSchema({}) }, output: null,
+    async execute() { return { ok: true }; } })] });
+  registerVibe64ActionContext(actions, { projectContext: context, resolveUser: async () => actor, authorizeProject: async () => {} });
+  const run = (channel, extra = {}) => actions.execute({ actionId: "unit.project.read", input: { projectSlug: "hello-node" },
+    context: { channel, surface: "app", ...extra } });
+  await assert.rejects(run("api", { requestMeta: { request: { headers, params: {} } } }), { code: "vibe64_team_ai_required" });
+  await assert.rejects(run("automation", { colleague: { thread: { kind: "develop" } } }), { code: "vibe64_team_ai_required" });
+  assert.equal((await run("internal")).ok, true, "internal work is not gated");
+  actor = OWNER;
+  assert.equal((await run("api", { requestMeta: { request: { headers, params: {} } } })).ok, true, "the owner is never gated");
+  actor = MEMBER;
+  ready.value = true;
+  assert.equal((await run("api", { requestMeta: { request: { headers, params: {} } } })).ok, true);
 });
