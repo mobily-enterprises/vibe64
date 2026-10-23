@@ -15,7 +15,6 @@ import { createAssistantApi } from "@jskit-ai/assistant-core/client";
 import { useAssistantConversation } from "@jskit-ai/assistant-runtime/client";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import Vibe64SessionAssistantMenu from "/src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
-import { requestVibe64AccountConnectionsDialog } from "/src/lib/vibe64AccountConnectionsDialog.js";
 import { AiOnboardingNudge, requestVibe64AiOnboarding } from "@local/vibe64-accounts/client";
 import { registerVibe64ColleagueModel } from "/src/lib/vibe64ColleagueModelBridge.js";
 import { selectionLabels } from "./colleagueSelectionLabels.js";
@@ -690,6 +689,8 @@ onBeforeUnmount(stopLearningRequests);
 async function submit() {
   if (freshOperation.value || freshBusy.value || voiceSession.value?.composerBlocked.value) return;
   const target = conversation.runtime.value;
+  // Without an AI the banner already says what to do; the draft stays put.
+  if (product.value.modelSetupRequired) return;
   if (!target?.canSubmit.value) {
     if (draft.value.trim() && connectionError.value) reportFailure(connectionError.value);
     return;
@@ -697,7 +698,9 @@ async function submit() {
   const result = await adapter.value.actions.submit();
   if ((result === false || result?.ok === false) && target.current.value) {
     const failure = target.delivery.find(target.draftMessageId.value)?.error || target.error.value;
-    if (failure) reportFailure(failure);
+    // A missing AI shows once, as the banner, not again as a snackbar.
+    await refresh();
+    if (failure && !product.value.modelSetupRequired) reportFailure(failure);
   }
 }
 async function stop() {
@@ -777,18 +780,6 @@ const colleagueModel = {
   }
 };
 let unregisterModel = null;
-async function openModelSetup() {
-  modelMenu.value = false;
-  if (props.navigate) {
-    try {
-      await props.navigate({ managementView: "accounts" });
-      return true;
-    } catch (error) { reportFailure(error); return false; }
-  }
-  if (requestVibe64AccountConnectionsDialog({ section: "ai" })) return true;
-  reportFailure("Open AI Accounts to connect an AI and configure an available Senior model.");
-  return false;
-}
 async function changeWatch(item, operation) {
   try {
     const watch = typeof item === "string" ? watches.value.find(value => value.watchId === item) || { watchId: item } : item;
@@ -925,10 +916,9 @@ onBeforeUnmount(() => {
         <v-btn :disabled="Boolean(voiceSession?.hasUnsentSpeech.value)" @click="refresh({ allowRetarget: true })">Refresh conversation</v-btn>
       </v-alert>
       <v-alert v-if="product.modelSetupRequired" variant="tonal" type="warning" role="status">
-        <p v-if="teachNeedsModel" data-test="colleague-teach-needs-model">Colleague cannot teach this step yet: it has no usable AI model, so nothing was sent. Connect an AI in AI Accounts, then press Teach me again.</p>
-        <p v-else>Colleague has no usable AI model, so nothing is sent yet and your draft is kept. Connect an AI and configure an available Senior model, then return and press Send.</p>
+        <p v-if="teachNeedsModel" data-test="colleague-teach-needs-model">Connect an AI first, then press Teach me again. Nothing was sent.</p>
+        <p v-else>Connect an AI first. Your message stays here until you do.</p>
         <v-btn variant="flat" color="primary" min-height="48" @click="requestVibe64AiOnboarding()">Set up your AI</v-btn>
-        <v-btn variant="text" min-height="48" @click="openModelSetup">Open AI Accounts</v-btn>
       </v-alert>
       <div class="vibe64-colleague__conversation">
         <AssistantConversationElement :adapter="adapter" :label="`${name} conversation`" v-model:avatar-size="avatarSize">

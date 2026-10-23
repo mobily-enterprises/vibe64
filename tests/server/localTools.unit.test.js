@@ -117,3 +117,16 @@ test("the tool PATH puts ~/.local/bin and mise shims before the inherited PATH",
   assert.doesNotMatch(resolveRuntimePath({ inheritedPath: "/usr/bin" }), /\.local/u, "packs keep their own PATH");
   assert.deepEqual(await checkLocalTools(["python"], { cwd: home }), { ok: true, managed: true, tools: [] });
 });
+
+test("the terminal stays quiet when an AI tool is there; one plain message when none is", async (t) => {
+  const home = await withHome(t);
+  const { warnMissingOperatorClis } = await import("../../packages/vibe64-accounts/src/server/Vibe64AccountsFeature.js");
+  const lines = [];
+  configureVibe64Host({ runtimePackRoot: path.join(home, "packs") });
+  warnMissingOperatorClis((text) => lines.push(text));
+  assert.deepEqual(lines, [], "a host with packs always has its tools");
+  configureVibe64Host(null);
+  await tool(path.join(home, ".local/bin"), "claude", "echo 2.1.0");
+  warnMissingOperatorClis((text) => lines.push(text));
+  assert.deepEqual(lines, [], "Claude alone is enough: no nagging about Codex or opencode");
+});

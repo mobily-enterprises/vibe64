@@ -114,13 +114,15 @@ function createConnections({ accounts, project, listAssistantCapabilities = null
   });
 }
 
-// One plain line per AI tool this computer lacks.
-function warnMissingOperatorClis(logger) {
-  for (const [tool, { name }] of Object.entries(OPERATOR_CLIS)) {
-    if (!resolveOperatorCli(tool).installed) {
-      logger.warn(`${name} isn't installed on this computer, so Vibe64 can't use it. To install it, run: ${operatorCliInstall(tool)}`);
-    }
-  }
+// Plain words in the terminal, and only when no AI tool runs Vibe64 at all:
+// one tool is enough, so a missing second one is not worth a warning.
+function warnMissingOperatorClis(write = (line) => process.stderr.write(`${line}\n`)) {
+  if (Object.keys(OPERATOR_CLIS).some((tool) => resolveOperatorCli(tool).installed)) return;
+  write([
+    "No AI tool is installed on this computer yet. Vibe64 needs one.",
+    `To install Claude Code, run: ${operatorCliInstall("claude")}`,
+    "Codex and opencode work too: open Vibe64 and choose AI setup."
+  ].join("\n"));
 }
 
 const Vibe64AccountsFeature = defineFeature({
@@ -146,8 +148,8 @@ const Vibe64AccountsFeature = defineFeature({
     channels: ["api", "automation", "internal"],
     surfaces: ["app"]
   },
-  setup({ accountRuntime, env, events, fastify, http, logger, project, terminals }, { actionCatalogue }) {
-    warnMissingOperatorClis(logger || console);
+  setup({ accountRuntime, env, events, fastify, http, project, terminals }, { actionCatalogue }) {
+    warnMissingOperatorClis();
     const systemRoot = String(env[VIBE64_SYSTEM_ROOT_ENV] || "");
     const targetRoot = String(env[VIBE64_TARGET_ROOT_ENV] || "");
     const projectContext = getStudioProjectContext();
@@ -264,5 +266,6 @@ const Vibe64AccountsFeature = defineFeature({
 export {
   Vibe64AccountsFeature,
   createConnections,
-  createDefaultAccountRuntime
+  createDefaultAccountRuntime,
+  warnMissingOperatorClis
 };

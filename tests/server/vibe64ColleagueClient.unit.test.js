@@ -688,24 +688,17 @@ test("Colleague model selection uses its canonical identity and the existing pro
   assert.equal(view.requests.some(({ url }) => url === "/api/vibe64/colleague/model"), false);
 });
 
-test("no usable Colleague model keeps the draft and opens the real account setup owner", async t => {
+test("no usable Colleague model keeps the draft and says so once", async t => {
   const props = vue.reactive({ name: "Colleague" });
   const view = mount(t, async () => ({ ok: true, conversationId: "same-person", messages: [], status: "failed",
-    error: "Connect an AI and configure an available Senior model in AI Accounts before using Colleague.",
+    error: "Connect an AI and choose an available Colleague model in AI setup before using Colleague.",
     modelSetupRequired: true }), props);
   await flush();
   view.state.draft.value = "Keep this unsent request";
-  const targets = [];
-  props.navigate = async target => { targets.push(target); return {}; };
-  assert.equal(await view.state.openModelSetup(), true);
-  assert.deepEqual(targets, [{ managementView: "accounts" }]);
+  await view.state.submit();
+  assert.equal(nonFocusPosts(view.requests).length, 0, "Send waits for an AI instead of failing");
+  assert.equal(view.notices.length, 0, "the banner is the only message; no snackbar repeats it");
   assert.equal(view.state.draft.value, "Keep this unsent request");
-  assert.equal(nonFocusPosts(view.requests).length, 0, "opening setup neither sends nor promises an assistant response");
-
-  props.navigate = null;
-  assert.equal(await view.state.openModelSetup(), true);
-  assert.deepEqual(view.events.at(-1), ["account-setup", { section: "ai" }],
-    "standalone Vibe64 reuses its existing Account settings dialog owner");
 });
 
 test("Colleague signals a local message submission before its delayed admission", async (t) => {

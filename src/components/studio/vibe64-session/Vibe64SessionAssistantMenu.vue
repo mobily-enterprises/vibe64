@@ -19,7 +19,8 @@
         <template v-else>
           <v-autocomplete
             label="Model" :items="modelRows" item-title="label" item-value="key"
-            :model-value="modelKey" :disabled="changesDisabled || saving" hide-details variant="outlined"
+            :model-value="selectedModel ? modelKey : null" :disabled="changesDisabled || saving" hide-details variant="outlined"
+            no-data-text="No model is available yet" persistent-placeholder placeholder="None"
             @update:model-value="selectModel"
           />
           <v-select

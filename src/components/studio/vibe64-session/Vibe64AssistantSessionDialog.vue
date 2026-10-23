@@ -33,9 +33,9 @@
           <v-btn variant="text" size="small" @click="openConnectionSettings">Change</v-btn>
         </p>
         <div v-else class="d-flex flex-column ga-2">
-          <strong>No AI is set up</strong>
-          <span class="text-body-small">Connect an AI account, then come back to start a session.</span>
-          <v-btn color="primary" variant="tonal" class="align-self-start" @click="openConnectionSettings">Manage AI accounts</v-btn>
+          <strong>No AI is set up yet</strong>
+          <span class="text-body-small">Set up your AI, then come back to start a session.</span>
+          <v-btn color="primary" variant="flat" class="align-self-start" @click="setUpAi">Set up your AI</v-btn>
         </div>
         <template v-if="branchSelectionAvailable">
           <v-select
@@ -112,7 +112,7 @@ import { computed, nextTick, ref, watch } from "vue";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import { mdiClose } from "@mdi/js";
-import { useModelRouting } from "@local/vibe64-accounts/client";
+import { requestVibe64AiOnboarding, useModelRouting } from "@local/vibe64-accounts/client";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";
 const props = defineProps({ modelValue: Boolean, toolbar: { type: Object, default: () => ({}) } });
@@ -122,6 +122,11 @@ const routing = useModelRouting({ enabled: computed(() => props.modelValue) });
 const mainSelection = computed(() => routing.setups.value?.owner?.roles?.senior?.effective ||
   routing.setups.value?.owner?.roles?.senior?.recommendation || null);
 const openConnectionSettings = () => requestVibe64AccountConnectionsDialog({ section: "ai" });
+// The guided setup also explains installing an AI tool; it closes this dialog first.
+function setUpAi() {
+  close();
+  requestVibe64AiOnboarding();
+}
 const submitButton = ref(null);
 const submitting = computed(() => props.toolbar.createSessionRunning === true);
 const branchMode = ref("project");
