@@ -30,6 +30,15 @@ function closeLesson() {
   void router.replace({ path: route.path, query });
 }
 
+// The docked Lesson pane stays docked while the learner moves between the
+// views this frame shows (a tab, a place a step or Colleague opens) until
+// they close it. A phone shows the page they moved to instead; a page without
+// this frame (a project) has its own panes.
+watch(() => [route.path, route.query?.pane], ([path, pane], [previousPath, previousPane] = []) => {
+  if (path === previousPath || previousPane !== "lesson" || pane === "lesson" || !available.value || smAndDown.value) return;
+  void router.replace({ path, query: { ...route.query, pane: "lesson" } });
+}, { flush: "post" });
+
 // A studio page owns the Learn layout while it shows: no project, no chat
 // column, the page (or the docked Lesson pane) always visible.
 const layout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
