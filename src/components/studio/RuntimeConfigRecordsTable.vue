@@ -404,6 +404,7 @@ async function copyKey(key = "") {
   .runtime-config-records-table :deep(table),
   .runtime-config-records-table :deep(tbody) {
     display: block;
+    min-width: 0;
   }
 
   .runtime-config-records-table :deep(colgroup),
