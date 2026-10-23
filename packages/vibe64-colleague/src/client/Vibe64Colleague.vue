@@ -249,7 +249,7 @@ function apply(result, expectedRevision, expectedActor, allowRetarget = false) {
 // control after any "show me" navigation, reporting only what it drew.
 async function navigateBrowser(command) {
   const controller = learningController.value;
-  const appPlace = command.projectSlug || command.managementView || (command.guide && command.guide.target !== "learning");
+  const appPlace = command.projectSlug || command.route || (command.guide && command.guide.target !== "learning");
   if (appPlace && !command.learning && unref(controller?.coursesOpen) && typeof controller.minimise === "function") {
     await applyLearningNavigation(controller, { open: false });
   }

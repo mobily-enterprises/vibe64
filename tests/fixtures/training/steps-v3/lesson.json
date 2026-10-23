@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2, "code": "STEPS-ONE", "title": "Steps in a real app", "notes": "notes.md",
+  "schemaVersion": 3, "code": "STEPS-ONE", "title": "Steps in a real app", "stage": "project", "notes": "notes.md",
   "prerequisites": [], "estimatedMinutes": 15,
   "visuals": [{ "id": "flow", "descriptor": "visuals/flow/visual.json" }],
   "exercise": { "kind": "bundled", "source": "app", "reuse": "attempt" },

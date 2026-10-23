@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
+import { lessonHasSteps } from "./contentSchemas.js";
 
 const MAX_FILE_BYTES = 1024 * 1024;
 // Code steps share one save log per attempt (the ledger holds 256);
@@ -73,10 +74,10 @@ function trackedPaths(ledger) {
   return new Set(ledger.steps.flatMap(step => step.baseline).map(file => file.path));
 }
 
-// The code step of a v2 lesson: an automatic step whose declared check is a
+// The code step of a step lesson: an automatic step whose declared check is a
 // code check. Its files are the step's declared exercise-relative files.
 function codeStepOf(lesson, stepId) {
-  if (lesson?.lesson?.schemaVersion !== 2) return null;
+  if (!lessonHasSteps(lesson?.lesson)) return null;
   const step = lesson.lesson.steps?.find(value => value.id === stepId);
   const check = step?.check?.kind === "auto" ? lesson.lesson.checks?.find(value => value.id === step.check.check) : null;
   if (check?.kind !== "code" || !step.check.files?.length) return null;

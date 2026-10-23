@@ -26,6 +26,7 @@ import { createTrainingLearningSpace } from "./learningSpace.js";
 import { registerTrainingRoutes } from "./registerRoutes.js";
 import { createTrainingVisualResourceActions } from "./visualResourceActions.js";
 import { registerTrainingVisualResourceRoutes } from "./visualResourceRoutes.js";
+import { aiReadyFact, registerLearningFact } from "./learningFacts.js";
 
 const Vibe64TrainingProvider = defineFeature({
   id: "vibe64.training", domain: "vibe64-training",
@@ -36,6 +37,8 @@ const Vibe64TrainingProvider = defineFeature({
   setup({ env, logger, http, project, sessions, terminals, trainingHost, sourceEditor, events }, { actionCatalogue }) {
     registerTrainingRoutes(http);
     registerTrainingVisualResourceRoutes(http);
+    // Built-in fact readers, for every host (a host adds its own by composition).
+    registerLearningFact(aiReadyFact({ terminals }));
     if (trainingHost) return { training: trainingHost };
 
     const projectContext = getStudioProjectContext();

@@ -1,16 +1,16 @@
 import { inject } from "vue";
-import { TRAINING_BEAT_EVENTS } from "@local/vibe64-training/shared/guide-targets";
+import { learningVocabulary } from "@local/vibe64-training/shared/learning-vocabulary";
 import { VIBE64_PAGE_ACTIVITY_KEY } from "@/lib/vibe64AssistantHost.js";
 
-// This tab's page activity: a fixed set of things the person just did
-// (TRAINING_BEAT_EVENTS), reported by the views that do them and heard by the
+// This tab's page activity: the things the person just did that the learning
+// vocabulary names (its activity and place events), reported by the views that do them and heard by the
 // lesson step bar's beat player. In memory only; nothing is sent or saved.
 // detail: { projectSlug, sessionId?, path? }.
 function createPageActivity() {
   const listeners = new Set();
   return Object.freeze({
     report(name, detail = {}) {
-      if (!TRAINING_BEAT_EVENTS.includes(name)) throw new TypeError(`Unknown page activity: ${name}`);
+      if (!learningVocabulary.events().has(name)) throw new TypeError(`Unknown page activity: ${name}`);
       const event = Object.freeze({ name, projectSlug: String(detail.projectSlug || ""),
         sessionId: String(detail.sessionId || ""), path: String(detail.path || "") });
       for (const listener of [...listeners]) listener(event);

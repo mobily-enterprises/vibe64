@@ -486,8 +486,8 @@ test("operator CLI refuses malformed revisions aliases dirty sources and changed
   assert.equal(await readFile(cataloguePath, "utf8"), "{broken", "a read never repairs invalid operator state");
 });
 
-// Lesson format v2 (steps). The fixture is a complete topic with every check kind.
-const stepsFixture = path.resolve(import.meta.dirname, "../fixtures/training/steps-v2");
+// Lesson format v3 (steps and a stage). The fixture is a complete topic with every check kind.
+const stepsFixture = path.resolve(import.meta.dirname, "../fixtures/training/steps-v3");
 
 async function stepsTopic(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-training-steps-"));
@@ -501,10 +501,11 @@ async function stepsTopic(t) {
   return { root, lesson, write };
 }
 
-test("a v2 lesson bundles its steps, notes and step bodies into lesson identity", async t => {
+test("a v3 lesson bundles its steps, notes and step bodies into lesson identity", async t => {
   const f = await stepsTopic(t);
   const first = (await validateTopic(f.root)).bundles[0];
-  assert.equal(first.lesson.schemaVersion, 2);
+  assert.equal(first.lesson.schemaVersion, 3);
+  assert.equal(first.lesson.stage, "project");
   assert.deepEqual(first.lesson.steps.map(step => [step.id, step.check.kind, step.required]),
     [["open-preview", "auto", true], ["which-side", "choice", true], ["require-title", "auto", true],
       ["reflect", "self", false], ["read-more", "none", false]]);
@@ -529,7 +530,7 @@ test("a v2 lesson bundles its steps, notes and step bodies into lesson identity"
   assert.equal(sharedBundle.manifest.files.filter(file => file.path === "steps/reflect.md").length, 1);
 });
 
-test("v2 step rules reject invalid references, kinds, choices, guides and visual commands", async t => {
+test("v3 step rules reject invalid references, kinds, choices, guides and visual commands", async t => {
   const f = await stepsTopic(t);
   const step = index => lesson => lesson.steps[index];
   const cases = [
@@ -546,7 +547,7 @@ test("v2 step rules reject invalid references, kinds, choices, guides and visual
     [lesson => { step(0)(lesson).visual.play[0].parameters.colour = "red"; }, /undeclared parameter/u],
     [lesson => { step(0)(lesson).visual.play[0].parameters.label = 1; }, /noncanonical|validation|string/iu],
     [lesson => { step(0)(lesson).visual.play = Array.from({ length: 17 }, () => step(0)(lesson).visual.play[0]); }, /validation/iu],
-    [lesson => { step(0)(lesson).guide.target = "nowhere"; }, /guide: Use one of the declared/u],
+    [lesson => { step(0)(lesson).guide.target = "nowhere"; }, /guide: Use one of this installation's guide places/u],
     [lesson => { step(0)(lesson).guide.filePath = "notes.mjs"; }, /filePath is only for the files place/u],
     [lesson => { step(2)(lesson).guide.filePath = "../escape.mjs"; }, /guide: Use a relative/u],
     [lesson => { step(0)(lesson).guide.caption = "x".repeat(257); }, /validation/iu],
@@ -559,7 +560,7 @@ test("v2 step rules reject invalid references, kinds, choices, guides and visual
     [lesson => { step(2)(lesson).check.files = ["missing.mjs"]; }, /outside its bundled exercise/u],
     [lesson => { step(2)(lesson).check.files = ["../lesson.json"]; }, /outside its bundled exercise/u],
     [lesson => { step(2)(lesson).check.files = ["notes.mjs", "notes.mjs"]; }, /repeats a declared file/u],
-    [lesson => { delete lesson.exercise; }, /needs the lesson's exercise/u],
+    [lesson => { delete lesson.exercise; lesson.stage = "studio"; }, /needs the lesson's exercise/u],
     [lesson => { step(1)(lesson).check.options = ["Only one"]; }, /2-8 options/u],
     [lesson => { step(1)(lesson).check.answer = [3]; }, /option indexes within its options/u],
     [lesson => { step(1)(lesson).check.answer = [1, 1]; }, /unique option indexes/u],
@@ -572,7 +573,14 @@ test("v2 step rules reject invalid references, kinds, choices, guides and visual
     [lesson => { lesson.document = "notes.md"; }, /validation/iu],
     [lesson => { lesson.assessments = []; }, /validation/iu],
     [lesson => { step(0)(lesson).rubric = "steps/open-preview.md"; }, /validation/iu],
-    [lesson => { lesson.schemaVersion = 3; }, /validation/iu],
+    [lesson => { lesson.schemaVersion = 4; }, /validation/iu],
+    [lesson => { delete lesson.stage; }, /validation/iu],
+    [lesson => { lesson.stage = "garden"; }, /validation/iu],
+    [lesson => { delete lesson.exercise; lesson.steps = lesson.steps.filter(value => value.id === "which-side"); delete lesson.checks; },
+      /a project lesson needs its exercise/u],
+    [lesson => { step(3)(lesson).check = { kind: "fact", fact: "deployment-live" }; }, /checks an unknown fact/u],
+    [lesson => { step(3)(lesson).check = { kind: "fact" }; }, /checks an unknown fact/u],
+    [lesson => { step(3)(lesson).check = { kind: "fact", fact: "ai-ready", rubric: "x" }; }, /fact check cannot declare rubric/u],
     [lesson => { step(0)(lesson).body = "steps/missing.md"; }, /ENOENT/u],
     [lesson => { lesson.notes = "../../outside.md"; }, /escapes topic/u]
   ];
@@ -584,7 +592,7 @@ test("v2 step rules reject invalid references, kinds, choices, guides and visual
   }
 });
 
-test("v2 step beats end the step body and validate their grammar, places and the step's own check", async t => {
+test("v3 step beats end the step body and validate their grammar, places and the step's own check", async t => {
   const f = await stepsTopic(t);
   const reflect = "# Say it in your words\n\nTick Done when you can.\n";
   const beats = lines => `${reflect}\n\`\`\`beats\n${lines.join("\n")}\n\`\`\`\n`;
@@ -603,7 +611,7 @@ test("v2 step beats end the step body and validate their grammar, places and the
     [["do dashboard: Go there."], /nothing the learner can do or be at/u],
     [["do send-message: Ask it to make the heading green."], /exactly one quoted prompt/u],
     [["do send-message: \"One\" and \"two\""], /exactly one quoted prompt/u],
-    [["check grade: Done."], /check auto, review or done/u],
+    [["check grade: Done."], /check auto, review, done or fact/u],
     [["check done: Done.", "show preview: Look."], /at most one check beat, and it is the last/u],
     [["check done: Done.", "check done: Again."], /at most one check beat/u],
     [["check auto: Checked."], /does not match its self check/u],
@@ -626,6 +634,7 @@ test("v2 step beats end the step body and validate their grammar, places and the
   await f.write("lesson.json", lesson);
   assert.equal((await validateTopic(f.root)).bundles[0].lesson.steps[0].id, "open-preview");
   const noProject = structuredClone(f.lesson);
+  noProject.stage = "studio";
   delete noProject.exercise;
   noProject.steps = noProject.steps.filter(step => ["which-side", "reflect", "read-more"].includes(step.id));
   delete noProject.checks;
@@ -637,7 +646,7 @@ test("v2 step beats end the step body and validate their grammar, places and the
   await assert.rejects(() => validateTopic(f.root), /beat show preview needs the lesson's exercise/u);
 });
 
-test("a v2 lesson descriptor holding answers cannot be served as a body, notes, visual or exercise file", async t => {
+test("a step lesson descriptor holding answers cannot be served as a body, notes, visual or exercise file", async t => {
   const f = await stepsTopic(t);
   const cases = [
     lesson => { lesson.steps[3].body = "lesson.json"; },
@@ -656,23 +665,23 @@ test("a v2 lesson descriptor holding answers cannot be served as a body, notes, 
   await assert.rejects(() => validateTopic(f.root), /descriptor cannot also be/u);
 });
 
-test("one topic may mix v1 history lessons with v2 step lessons", async t => {
+test("one topic may mix v1 history lessons with v3 step lessons", async t => {
   const f = await stepsTopic(t);
   const metadata = JSON.parse(await readFile(path.join(f.root, "package.json"), "utf8"));
   await cp(path.resolve(import.meta.dirname, "../fixtures/training/code-practical"), path.join(f.root, "v1"), { recursive: true });
   metadata.vibe64Training.lessons.unshift({ code: "CODE-ONE", descriptor: "v1/lesson.json", status: "published", required: false });
   await f.write("package.json", metadata);
   const result = await validateTopic(f.root);
-  assert.deepEqual(result.bundles.map(bundle => [bundle.lesson.code, bundle.lesson.schemaVersion]), [["CODE-ONE", 1], ["STEPS-ONE", 2]]);
+  assert.deepEqual(result.bundles.map(bundle => [bundle.lesson.code, bundle.lesson.schemaVersion]), [["CODE-ONE", 1], ["STEPS-ONE", 3]]);
   assert.ok(result.bundles[0].lesson.assessments);
   assert.equal(result.bundles[1].lesson.assessments, undefined);
 });
 
-test("authoring CLI validates, bundles and publishes a course lock for a v2 topic", async t => {
+test("authoring CLI validates, bundles and publishes a course lock for a v3 topic", async t => {
   const f = await stepsTopic(t);
   const messages = [];
   await runTrainingCli(["validate", f.root], { write: text => messages.push(JSON.parse(text)) });
-  assert.deepEqual(messages[0].lessons.map(lesson => [lesson.code, lesson.schemaVersion, lesson.steps]), [["STEPS-ONE", 2, 5]]);
+  assert.deepEqual(messages[0].lessons.map(lesson => [lesson.code, lesson.schemaVersion, lesson.stage, lesson.steps]), [["STEPS-ONE", 3, "project", 5]]);
   const output = `${f.root}-bundle`;
   t.after(() => rm(output, { recursive: true, force: true }));
   await runTrainingCli(["bundle", f.root, output], { write() {} });
@@ -682,7 +691,7 @@ test("authoring CLI validates, bundles and publishes a course lock for a v2 topi
     await readFile(path.join(f.root, "steps/which-side.md"), "utf8"));
   const git = (...args) => execFileSync("git", ["-C", f.root, ...args], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }).trim();
   git("init", "--initial-branch=main"); git("add", ".");
-  git("-c", "user.name=Training fixture", "-c", "user.email=training@example.invalid", "commit", "-m", "v2 topic");
+  git("-c", "user.name=Training fixture", "-c", "user.email=training@example.invalid", "commit", "-m", "v3 topic");
   const catalogue = await mkdtemp(path.join(os.tmpdir(), "vibe64-training-catalogue-"));
   t.after(() => rm(catalogue, { recursive: true, force: true }));
   const course = { schemaVersion: 1, courseId: "steps-course", title: "Steps", release: "0.1.0", status: "preview", topics: [{ topicId: "steps", release: "0.1.0" }] };
@@ -690,6 +699,61 @@ test("authoring CLI validates, bundles and publishes a course lock for a v2 topi
   await runTrainingCli(["publish-manifest", path.join(catalogue, "course.json"), f.root], { write() {} });
   const lock = JSON.parse(await readFile(path.join(catalogue, "course.lock.json"), "utf8"));
   assert.deepEqual(lock.topics[0].lessons.map(lesson => [lesson.code, lesson.hash]), [["STEPS-ONE", messages[0].lessons[0].hash]]);
+});
+
+test("authoring refuses retired lesson formats; installed v2 snapshots still validate", async t => {
+  const f = await stepsTopic(t);
+  const retired = structuredClone(f.lesson);
+  retired.schemaVersion = 2;
+  delete retired.stage;
+  await f.write("lesson.json", retired);
+  assert.equal((await validateTopic(f.root)).bundles[0].lesson.schemaVersion, 2, "an installed v2 snapshot still verifies");
+  await assert.rejects(() => validateTopic(f.root, { authoring: true }), /retired lesson format 2\. Author it in format 3/u);
+  retired.steps[3].check = { kind: "fact", fact: "ai-ready" };
+  await f.write("lesson.json", retired);
+  await assert.rejects(() => validateTopic(f.root), /fact check needs lesson format 3/u);
+});
+
+test("a studio lesson checks facts and names host places its topic declares", async t => {
+  const f = await stepsTopic(t);
+  const studio = { schemaVersion: 3, code: "STEPS-ONE", title: "Your workspace", stage: "studio", prerequisites: [],
+    estimatedMinutes: 5, visuals: [], steps: [
+      { id: "ai", title: "Your AI", body: "steps/reflect.md", check: { kind: "fact", fact: "ai-ready" }, required: true },
+      { id: "users", title: "People", body: "steps/read-more.md", check: { kind: "self" }, required: false }] };
+  await f.write("lesson.json", studio);
+  const beats = (body, lines) => `${body}\n\n\`\`\`beats\n${lines.join("\n")}\n\`\`\`\n`;
+  await f.write("steps/reflect.md", beats("# Your AI", ["show account-menu: Your AI lives here.", "check fact: Press Check when your AI is set up."]));
+  await f.write("steps/read-more.md", beats("# People", ["show manage-users: Add the people you work with.", "do app-deployed: Deploy it.", "check done: Done."]));
+  await assert.rejects(() => validateTopic(f.root), /show manage-users\) names an unknown place/u);
+  const metadata = JSON.parse(await readFile(path.join(f.root, "package.json"), "utf8"));
+  await f.write("package.json", { ...metadata, vibe64Training: { ...metadata.vibe64Training, places: ["manage-users"] } });
+  await assert.rejects(() => validateTopic(f.root), /do app-deployed\) names nothing the learner can do/u);
+  await f.write("package.json", { ...metadata, vibe64Training: { ...metadata.vibe64Training, places: ["manage-users"],
+    activities: ["app-deployed"], facts: ["deployment-live"] } });
+  const lesson = (await validateTopic(f.root)).bundles[0].lesson;
+  assert.deepEqual(lesson.steps.map(step => step.check.kind), ["fact", "self"]);
+  studio.steps[1].check = { kind: "fact", fact: "deployment-live" };
+  await f.write("lesson.json", studio);
+  await f.write("steps/read-more.md", "# People\n");
+  assert.equal((await validateTopic(f.root)).bundles[0].lesson.steps[1].check.fact, "deployment-live", "a declared host fact");
+  // A studio lesson without a practice project cannot use project places or project checks.
+  await f.write("steps/read-more.md", beats("# People", ["show preview: Your app.", "check fact: Check."]));
+  await assert.rejects(() => validateTopic(f.root), /beat show preview needs the lesson's exercise/u);
+  studio.steps[1].check = { kind: "review", rubric: "It works." };
+  await f.write("lesson.json", studio);
+  await f.write("steps/read-more.md", "# People\n");
+  await assert.rejects(() => validateTopic(f.root), /reviews practice work and needs the lesson's exercise/u);
+});
+
+test("a course orientation names one of its published lessons", async t => {
+  const f = await stepsTopic(t);
+  const result = await validateTopic(f.root);
+  const resolved = { topicId: "steps", release: "0.1.0", repository: "examples/learn-steps-fixture", commit: "a".repeat(40),
+    topicManifest: result.topicManifest, topicHash: result.topicHash };
+  const course = { schemaVersion: 1, courseId: "steps-course", title: "Steps", release: "0.1.0", status: "preview",
+    topics: [{ topicId: "steps", release: "0.1.0" }] };
+  assert.equal(createCourseLock({ ...course, orientation: "STEPS-ONE" }, [resolved]).courseId, "steps-course");
+  assert.throws(() => createCourseLock({ ...course, orientation: "MISSING" }, [resolved]), /orientation MISSING must be a published lesson/u);
 });
 
 test("a check review beat takes no text: the bar shows the step's rubric", () => {

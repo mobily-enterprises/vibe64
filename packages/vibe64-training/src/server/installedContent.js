@@ -3,8 +3,9 @@ import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { bundleFiles, canonicalJson, validateTopic } from "./content.js";
-import { validateContent, validateLesson } from "./contentSchemas.js";
+import { lessonHasSteps, validateContent, validateLesson } from "./contentSchemas.js";
 import { splitStepBeats } from "../shared/beats.js";
+import { declaredLearningVocabulary } from "../shared/learningVocabulary.js";
 
 const idPattern = /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u;
 const commitPattern = /^[a-f0-9]{40}$/u;
@@ -21,10 +22,10 @@ const pinSchema = createSchema({
 });
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 
-// A v2 choice answer is read only by the server comparator. Every other
+// A choice answer is read only by the server comparator. Every other
 // projection of a lesson descriptor goes through this.
 function withoutAnswers(lesson) {
-  if (lesson?.schemaVersion !== 2) return lesson;
+  if (!lessonHasSteps(lesson)) return lesson;
   return { ...lesson, steps: lesson.steps.map(step => {
     if (step.check.kind !== "choice") return step;
     const { answer, ...check } = step.check;
@@ -248,8 +249,10 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
     if (!bundle) throw new Error(`Lesson ${lessonCode} is not declared in this pinned topic.`);
     if (bundle.status !== "published" && !allowDraftLessons) throw new Error(`Lesson ${lessonCode} is draft and cannot be taught. Choose a published lesson.`);
     if (bundle.hash !== lessonHash) throw new Error(`Lesson ${lessonCode} content hash changed. Resume its exact pinned revision or explicitly start a new attempt.`);
+    // The topic's declared vocabulary: its beats name host places by these names.
+    const declarations = Object.fromEntries(["places", "activities", "facts"].map(key => [key, [...topic.topic[key] || []]]));
     return { pin: topic.pin, lesson: bundle.lesson, manifest: bundle.manifest,
-      hash: bundle.hash, descriptorPath: bundle.descriptorPath };
+      hash: bundle.hash, descriptorPath: bundle.descriptorPath, declarations };
   }
 
   async function readLesson(input = {}) {
@@ -264,12 +267,13 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
       const descriptor = await lessonText(resource.descriptor);
       visuals.push({ id: resource.id, descriptorPath: descriptor.path, visual: JSON.parse(descriptor.text) });
     }
-    if (bundle.lesson.schemaVersion === 2) {
-      // v2 has no teaching document: each step carries its body text, and its
-      // beats parsed out of it (the reader never shows the beats block).
+    if (lessonHasSteps(bundle.lesson)) {
+      // Steps have no teaching document: each step carries its body text, and
+      // its beats parsed out of it (the reader never shows the beats block).
+      const vocabulary = declaredLearningVocabulary(bundle.declarations);
       const steps = [];
       for (const step of bundle.lesson.steps) {
-        const { body, beats } = splitStepBeats((await lessonText(step.body)).text);
+        const { body, beats } = splitStepBeats((await lessonText(step.body)).text, vocabulary);
         steps.push({ ...step, bodyText: body, ...(beats ? { beats } : {}) });
       }
       return { ...bundle, steps, ...bundle.lesson.notes === undefined ? {} : { notesText: (await lessonText(bundle.lesson.notes)).text }, visuals };
@@ -301,7 +305,7 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
   async function readChoiceAnswer({ stepId, ...input } = {}) {
     if (typeof stepId !== "string" || !idPattern.test(stepId)) throw new Error("Choose a declared step ID.");
     const { pin, lesson, hash } = await readVerifiedLessonIdentity(input);
-    if (lesson.schemaVersion !== 2) throw new Error(`Lesson ${lesson.code} has no steps.`);
+    if (!lessonHasSteps(lesson)) throw new Error(`Lesson ${lesson.code} has no steps.`);
     const step = lesson.steps.find(item => item.id === stepId);
     if (!step) throw new Error(`Step ${stepId} is not declared in this pinned lesson.`);
     if (step.check.kind !== "choice") throw new Error(`Step ${stepId} is not a choice step.`);

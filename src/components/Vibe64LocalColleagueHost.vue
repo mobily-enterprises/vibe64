@@ -8,7 +8,6 @@ import { useVibe64LocalAvatarPreferences } from "@/composables/useVibe64LocalAva
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { projectAppPath, projectSlugFromRoute } from "@/lib/vibe64ProjectScope.js";
 import { resolveStudioRequestUrl } from "@/lib/studioUrls.js";
-import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";
 import {
   VIBE64_BROWSER_NAVIGATION_KEY,
   VIBE64_COLLEAGUE_DATABASE_KEY,
@@ -42,7 +41,7 @@ const focus = computed(() => {
       : route.path.split("/dashboard/")[1]?.split("/")[0] || "preview"
     : "";
   const result = { projectSlug, sessionId: current?.sessionId || "", conversationId: current?.conversationId || "", pane,
-    ...learningPanelFocus(learningController.value) };
+    route: route.path, ...learningPanelFocus(learningController.value) };
   const displayedDatabase = pane === "database" && database.value?.projectSlug === projectSlug &&
     database.value.sessionId === result.sessionId ? database.value : null;
   if (displayedDatabase) {
@@ -126,11 +125,11 @@ function focusMatches(command, value) {
 async function navigate(command = {}) {
   const generation = ++navigationGeneration;
   const isCurrent = () => generation === navigationGeneration;
-  if (command.managementView) {
-    if (command.managementView !== "accounts" || !requestVibe64AccountConnectionsDialog({ section: "ai" })) {
-      throw new Error("This management view is unavailable in standalone Vibe64.");
-    }
-    return { route: route.fullPath };
+  // A studio place (navigation.guide): the page at its route.
+  if (command.route) {
+    await router.push({ path: command.route });
+    await waitForNavigation(() => route.path === command.route, isCurrent, "The page did not open.");
+    return { ...focus.value };
   }
   if (command.learning) {
     await applyLearningNavigation(learningController.value, command.learning);

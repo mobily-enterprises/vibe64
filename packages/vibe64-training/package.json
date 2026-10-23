@@ -35,7 +35,7 @@
     "./server/visual-resource-routes": "./src/server/visualResourceRoutes.js",
     "./shared/presentation-schemas": "./src/shared/presentationSchemas.js",
     "./shared/learning-guidance": "./src/shared/learningGuidance.js",
-    "./shared/guide-targets": "./src/shared/guideTargets.js",
+    "./shared/learning-vocabulary": "./src/shared/learningVocabulary.js",
     "./shared/beats": "./src/shared/beats.js",
     "./client/guide-overlay": "./src/client/TrainingGuideOverlay.vue",
     "./client/guide": "./src/client/trainingGuide.js",

@@ -54,7 +54,7 @@ async function fixture(t, { enabled = true, courseStatus = "released", phase = "
   const owners = {
     catalogue: { async readCatalogue() { return { courses: [{ enabled, course: { ...pin.course, status: courseStatus }, lock: { topics: [{ ...pin.topic, manifestHash: pin.topic.topicHash, lessons: [{ ...pin.lesson, status: "published" }] }] } }] }; } },
     content: {
-      async readLesson(input) { calls.push(["lesson", input]); return { lesson: { exercise: { kind: "bundled" } } }; },
+      async readLesson(input) { calls.push(["lesson", input]); return { lesson: { schemaVersion: 3, stage: "project", exercise: { kind: "bundled" } }, steps: [] }; },
       async readExercise(input) { calls.push(["exercise", input]); return { sourcePath: "training/exercises/orientation-app", files }; }
     },
     learners,
@@ -90,9 +90,10 @@ async function fixture(t, { enabled = true, courseStatus = "released", phase = "
 test("enabled course reserves exact approved pin before effects and pending setup is not ready", async t => {
   const f = await fixture(t);
   const result = await f.service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "start-1" });
-  assert.deepEqual(f.calls[0], ["reserve", { actor, expectedRevision: 0, requestId: "start-1", pin }]);
-  assert.deepEqual(f.calls.slice(0, 6).map(value => value[0]), ["reserve", "mode", "lock", "lesson", "begin", "exercise"]);
-  assert.equal(f.calls[1][1], true, "a start switches the learner to Learn mode");
+  // The lesson is read first: only a current-format lesson available here starts.
+  assert.deepEqual(f.calls[1], ["reserve", { actor, expectedRevision: 0, requestId: "start-1", pin }]);
+  assert.deepEqual(f.calls.slice(0, 7).map(value => value[0]), ["lesson", "reserve", "mode", "lock", "lesson", "begin", "exercise"]);
+  assert.equal(f.calls[2][1], true, "a start switches the learner to Learn mode");
   assert.equal(result.attempt.preparation.phase, "preparing");
   assert.equal(result.previewReady, false);
   assert.equal(f.calls.some(value => value[0] === "ready"), false);
@@ -115,7 +116,7 @@ test("no-exercise start and resume retain their exact reservation without projec
   f.owners.content.readLesson = async input => {
     assert.deepEqual(input, { ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash });
     f.calls.push(["lesson", input]);
-    return { lesson: { assessments: [{ id: "setup", kind: "answer" }] } };
+    return { lesson: { schemaVersion: 3, stage: "studio" }, steps: [] };
   };
   const started = await f.service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "start-one" });
   const resumed = await f.service.prepareLesson({ actor, attemptId });
@@ -123,7 +124,7 @@ test("no-exercise start and resume retain their exact reservation without projec
   assert.equal(Object.hasOwn(resumed.attempt, "preparation") || Object.hasOwn(resumed.attempt, "projectSlug"), false);
   assert.equal(resumed.revision, 1);
   assert.equal(resumed.previewReady, false);
-  assert.deepEqual(f.calls.map(([name]) => name), ["reserve", "mode", "lock", "lesson", "lock", "lesson"]);
+  assert.deepEqual(f.calls.map(([name]) => name), ["lesson", "reserve", "mode", "lock", "lesson", "lock", "lesson"]);
   await assert.rejects(readFile(path.join(f.sourceRoot, "genesis/stack.md")), { code: "ENOENT" });
 });
 
@@ -160,7 +161,7 @@ test("a preview course admits a new start only for the workspace owner; released
   for (const role of ["member", "admin", "owner"]) {
     const f = await fixture(t);
     await f.service.startLesson({ actor: { ...actor, role }, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "start-1" });
-    assert.equal(f.calls[0][0], "reserve");
+    assert.equal(f.calls[1][0], "reserve");
   }
   for (const enabled of [false, true]) {
     const f = await fixture(t, { enabled, courseStatus: "preview" });
@@ -309,7 +310,7 @@ test("an ended reservation replay is returned without preparing or reactivating 
   const result = await f.service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, requestId: "original-start", expectedRevision: 0 });
   assert.equal(result.attempt.ended.reason, "finished");
   assert.equal(result.previewReady, false);
-  assert.deepEqual(f.calls.map(([name]) => name), ["reserve"]);
+  assert.deepEqual(f.calls.map(([name]) => name), ["lesson", "reserve"]);
 });
 
 test("missing exercise provisioner refuses before preparation effects while retaining the original reservation", async t => {
@@ -319,12 +320,12 @@ test("missing exercise provisioner refuses before preparation effects while reta
     const service = createTrainingService(f.owners);
     await assert.rejects(service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "local-start" }),
       { code: "VIBE64_TRAINING_EXERCISE_UNAVAILABLE", statusCode: 409 });
-    assert.deepEqual(f.calls.map(([name]) => name), ["reserve", "mode", "lock", "lesson"]);
+    assert.deepEqual(f.calls.map(([name]) => name), ["lesson", "reserve", "mode", "lock", "lesson"]);
     assert.equal(f.attempt.preparation.phase, "reserved");
     assert.equal(f.failure, null);
     assert.equal(f.state().revision, 1);
     await assert.rejects(service.prepareLesson({ actor, attemptId }), { code: "VIBE64_TRAINING_EXERCISE_UNAVAILABLE" });
-    assert.deepEqual(f.calls.map(([name]) => name), ["reserve", "mode", "lock", "lesson", "lock", "lesson"]);
+    assert.deepEqual(f.calls.map(([name]) => name), ["lesson", "reserve", "mode", "lock", "lesson", "lock", "lesson"]);
     await assert.rejects(readFile(path.join(f.sourceRoot, "genesis/stack.md")), { code: "ENOENT" });
   }
 });
@@ -332,7 +333,7 @@ test("missing exercise provisioner refuses before preparation effects while reta
 test("no-exercise preparation does not require an exercise provisioner", async t => {
   const f = await fixture(t);
   f.owners.projectRepositoryService = undefined;
-  f.owners.content.readLesson = async () => ({ lesson: {} });
+  f.owners.content.readLesson = async () => ({ lesson: { schemaVersion: 3, stage: "studio" }, steps: [] });
   const service = createTrainingService(f.owners);
   const started = await service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "local-quiz" });
   const resumed = await service.prepareLesson({ actor, attemptId });
@@ -471,7 +472,7 @@ test("another lesson in progress refuses a start once with its title; archiveCur
   const f = await fixture(t);
   f.owners.content.readLesson = async input => {
     f.calls.push(["lesson", input]);
-    return { lesson: { title: input.lessonCode === "V64-START-02" ? "Your second lesson" : "First", exercise: { kind: "bundled" } } };
+    return { lesson: { schemaVersion: 3, stage: "project", title: input.lessonCode === "V64-START-02" ? "Your second lesson" : "First", exercise: { kind: "bundled" } }, steps: [] };
   };
   inProgress(f, { attemptId: otherId, pin: otherPin, requestIds: ["other"] });
   const service = createTrainingService(f.owners);
@@ -514,7 +515,8 @@ test("restart archives the attempt, then prepares a new attempt of the same less
     { code: "VIBE64_TRAINING_ATTEMPT_MISSING", statusCode: 404 });
   assert.deepEqual(f.calls, []);
   const result = await service.restartLesson({ actor, attemptId: otherId, requestId: "restart-1", expectedRevision: 5 });
-  assert.deepEqual(f.calls.slice(0, 3), [["close", { actor, attemptId: otherId, archive: true, reason: "archived" }],
+  assert.deepEqual(f.calls.slice(0, 4), [["lesson", { ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash }],
+    ["close", { actor, attemptId: otherId, archive: true, reason: "archived" }],
     ["reserve", { actor, requestId: "restart-1", expectedRevision: 5, pin }], ["mode", true]]);
   assert.equal(result.attempt.attemptId, attemptId);
   assert.equal(f.calls.find(([name]) => name === "project")[1].training.practiceId, attemptId, "the marker names the new attempt");
@@ -548,4 +550,17 @@ test("finish is refused until every required step passed, then archives the atte
     ["close", { actor, attemptId, archive: false, reason: "deleted" }]]);
   const service = createTrainingService({ ...f.owners, learningSpace: null });
   await assert.rejects(service.deleteLesson({ actor, attemptId }), { code: "VIBE64_TRAINING_PRACTICE_UNAVAILABLE" });
+});
+
+test("a lesson in a retired format, or needing screens this person lacks here, refuses to start with nothing changed", async t => {
+  const f = await fixture(t);
+  f.owners.content.readLesson = async () => ({ lesson: { schemaVersion: 2, exercise: { kind: "bundled" } }, steps: [] });
+  await assert.rejects(f.service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "old" }),
+    { code: "VIBE64_TRAINING_LESSON_RETIRED", message: /needs an update/u });
+  const hostStep = { id: "people", required: true, check: { kind: "self" },
+    beats: [{ kind: "show", target: "preparation-unregistered-place", text: "Add people." }] };
+  f.owners.content.readLesson = async () => ({ lesson: { schemaVersion: 3, stage: "studio" }, steps: [hostStep] });
+  await assert.rejects(f.service.startLesson({ actor, ...pin.course, lessonCode: pin.lesson.code, expectedRevision: 0, requestId: "host-step" }),
+    { code: "VIBE64_TRAINING_LESSON_UNAVAILABLE_HERE", statusCode: 422 });
+  assert.deepEqual(f.calls.filter(([name]) => name !== "lesson"), [], "no reservation, mode or project effect");
 });

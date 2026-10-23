@@ -92,6 +92,9 @@ function createCourseLock(input, resolvedTopics) {
       lessons: manifest.lessons.map(lesson => ({ ...lesson }))
     };
   });
+  if (course.orientation !== undefined && !topics.some(topic => topic.lessons.some(lesson => lesson.code === course.orientation && lesson.status === "published"))) {
+    throw new Error(`Course orientation ${course.orientation} must be a published lesson of the course.`);
+  }
   return { schemaVersion: 1, courseId: course.courseId, release: course.release, status: course.status, topics };
 }
 

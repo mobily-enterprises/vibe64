@@ -5,7 +5,7 @@ import test from "node:test";
 import * as vue from "vue";
 import { createColleagueNavigation } from "../../packages/vibe64-colleague/src/client/colleagueNavigation.js";
 import * as trainingGuideModule from "../../packages/vibe64-training/src/client/trainingGuide.js";
-import { trainingGuideCommand, trainingGuideRequest } from "../../packages/vibe64-training/src/shared/guideTargets.js";
+import { trainingGuideCommand, trainingGuideRequest } from "../../packages/vibe64-training/src/shared/learningVocabulary.js";
 import { routeLocationKey } from "vue-router";
 import * as mdi from "@mdi/js";
 import { compileScript, parse } from "@vue/compiler-sfc";
@@ -2137,7 +2137,7 @@ test("the local Colleague host hands Colleague its own browser navigator", async
   await flush();
   assert.equal(typeof received?.navigate, "function", "Colleague must receive a callable navigator");
   assert.equal(received.navigate, navigation.value);
-  assert.deepEqual(Object.keys(await received.navigate({ managementView: "accounts" })), ["route"]);
+  assert.ok(Object.keys(await received.navigate({ route: "/app/manage/accounts" })).includes("route"));
 });
 
 test("the local Colleague host reports the shared Learning state, opens Courses and shows its exact lesson step in the Lesson pane", async t => {

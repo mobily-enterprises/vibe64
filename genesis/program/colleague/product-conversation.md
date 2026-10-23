@@ -129,9 +129,8 @@ goes to the lesson's Learn thread) and sends the fixed text "Teach me this
 step." through the ordinary send. When that read reports `modelSetupRequired`,
 nothing is sent: the setup warning says Colleague cannot teach the step yet and
 offers **Open AI Accounts**. `navigation.open-learning` (no project) opens
-Courses at an attempt/step, closes it, or points at a real place or the Courses
-button; `navigation.open` with `guide.navigate=true` is the project-scoped
-"show me". Both acknowledge truthfully with the guide receipt
+Courses at an attempt/step or closes it; `navigation.guide` points at a real
+place or opens it ("show me"). Both acknowledge truthfully with the guide receipt
 `{shown, step?, reason?}`. On a phone the dialog minimises itself before
 opening Courses or ringing a control; after it gave way to Courses (a Courses
 command or **Open in Learning**), the learner's own hiding of Courses
@@ -829,14 +828,15 @@ unrelated work and its native agents alone. Linked completed records remain reta
 them, and link/wait/send identities survive the same authenticated restart path.
 
 
-Global Management navigation uses `vibe64.colleague.navigation.open-management`
-with an enumerated page, independently of project access. The initiating browser
-must acknowledge the exact pending command before Colleague reports it opened.
-The host maps these page identities to its real routes; arbitrary URLs are not
-accepted. Project/session navigation retains its separate project-authorized
+Pointing at or opening a named place uses `vibe64.colleague.navigation.guide`
+with a place of the learning vocabulary: public's built-in places plus those
+the host registered (for example its own studio pages, opened at their route).
+Arbitrary URLs are not accepted, and an owner-only place is refused to anyone
+else. A project place opens in the project and session the initiating browser
+already has open. The initiating browser must acknowledge the exact pending
+command (its settled focus and what it highlighted) before Colleague reports
+it. Project/session navigation retains its separate project-authorized
 action. Opening a settings page does not authorize changing its settings.
-The System repair destination opens an available host's existing confirmation UI;
-navigation never confirms a repair. Public Colleague does not own host repair.
 
 Project navigation accepts an enumerated project/dashboard pane. Session views
 and temporary conversations require an exact session ID. When a session is

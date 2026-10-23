@@ -29,7 +29,7 @@ async function fixture(t, { presentation = false, released = false } = {}) {
     vibe64Training: { schemaVersion: 1, topicId: "action-fixture", domainId: "vibe64", title: "Action fixture", status: released ? "released" : "preview", outline: "training/outline.md", prerequisites: [],
       lessons: [{ code: "USE-ONE", descriptor: "training/lessons/USE-ONE/lesson.json", status: "published", required: true }] } });
   await write(source, "training/outline.md", "# One lesson\nTry the application.\n");
-  await write(source, "training/lessons/USE-ONE/lesson.json", { schemaVersion: 2, code: "USE-ONE", title: "Try the application", prerequisites: [], estimatedMinutes: 5,
+  await write(source, "training/lessons/USE-ONE/lesson.json", { schemaVersion: 3, code: "USE-ONE", title: "Try the application", stage: "studio", prerequisites: [], estimatedMinutes: 5,
     visuals: [{ id: "request", descriptor: "../../visuals/request/visual.json" }],
     steps: [{ id: "explain", title: "Explain it", body: "explain.md", check: { kind: "self" }, required: true }] });
   await write(source, "training/lessons/USE-ONE/explain.md", "Explain what you tried in your own words.\n");

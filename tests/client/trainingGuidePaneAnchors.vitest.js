@@ -6,7 +6,7 @@ import { createMemoryHistory, createRouter } from "vue-router";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import SectionContainerShell from "../../src/components/SectionContainerShell.vue";
 import { VIBE64_SESSION_TOOL_DEFINITIONS, vibe64SessionToolGuideId } from "../../src/lib/vibe64SessionToolDefinitions.js";
-import { TRAINING_GUIDE_PLACES } from "../../packages/vibe64-training/src/shared/guideTargets.js";
+import { learningVocabulary } from "../../packages/vibe64-training/src/shared/learningVocabulary.js";
 
 // "Show me" rings the open pane when the learner is already at the place. On a
 // phone the header tabs and the Dashboard menu are hidden, so the open panes
@@ -55,7 +55,7 @@ describe("guide pane anchors", () => {
   });
 
   it("names every guided session tool pane by its declared guide place", () => {
-    const places = new Set(Object.values(TRAINING_GUIDE_PLACES).flatMap(place => place.steps.map(step => step.id)));
+    const places = new Set(learningVocabulary.places().flatMap(place => place.steps.map(step => step.id)));
     for (const tool of VIBE64_SESSION_TOOL_DEFINITIONS) {
       expect(vibe64SessionToolGuideId(tool.id)).toBe(tool.guideId);
       if (tool.guideId) expect(places.has(tool.guideId)).toBe(true);
@@ -72,7 +72,7 @@ describe("guide pane anchors", () => {
       "lesson-bar": "src/components/learning/Vibe64LearningStepBar.vue"
     };
     for (const [place, file] of Object.entries(anchors)) {
-      expect(TRAINING_GUIDE_PLACES[place]?.steps.at(-1).id, place).toBe(place);
+      expect(learningVocabulary.place(place)?.steps.at(-1).id, place).toBe(place);
       const source = readFileSync(file, "utf8");
       expect(source, `${place} in ${file}`).toMatch(new RegExp(`data-vibe64-guide="${place}"`, "u"));
     }

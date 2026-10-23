@@ -4,7 +4,7 @@ import { runTrainingGuideCommand } from "@local/vibe64-training/client/guide";
 import { resolveStudioRequestUrl } from "@/lib/studioUrls.js";
 import { projectAppPath, projectSlugFromPathname } from "@/lib/vibe64ProjectScope.js";
 import { practiceProjectName } from "@/lib/vibe64PracticeProjectName.js";
-import { trainingGuideRequest, trainingGuideSteps, TRAINING_GUIDE_PLACES } from "@local/vibe64-training/shared/guide-targets";
+import { learningVocabulary, trainingGuideRequest, trainingGuideSteps } from "@local/vibe64-training/shared/learning-vocabulary";
 import { createLessonPlayer } from "@/lib/vibe64LessonPlayer.js";
 
 // Learn and Develop: one host shell, two modes. One controller per host shell
@@ -113,6 +113,7 @@ function normalizeLesson(result) {
   const attempt = result.attempt || null;
   return Object.freeze({
     schemaVersion: lesson.schemaVersion ?? (steps.length ? 2 : 1),
+    stage: lesson.stage === "studio" || lesson.stage === "project" ? lesson.stage : "",
     code: lesson.code || attempt?.pin?.lesson?.code || "",
     title: lesson.title || "",
     notesText: text(lesson.notesText) ? lesson.notesText : "",
@@ -133,7 +134,8 @@ function normalizeLearningMode(result) {
   if (!mode || typeof mode !== "object") return null;
   const value = key => text(mode[key]) ? mode[key] : "";
   return Object.freeze({ on: mode.on === true, currentAttemptId: value("currentAttemptId"),
-    lessonCode: value("lessonCode"), lessonTitle: value("lessonTitle"), practiceSlug: value("practiceSlug") });
+    lessonCode: value("lessonCode"), lessonTitle: value("lessonTitle"), practiceSlug: value("practiceSlug"),
+    lessonStage: ["studio", "project"].includes(mode.lessonStage) ? mode.lessonStage : "" });
 }
 
 // practice.list as Courses → In progress / Archived shows it: the lesson in
@@ -154,23 +156,33 @@ function normalizePractice(result) {
   return Object.freeze({ current, archived: Object.freeze(archived), loaded: true });
 }
 
-// Where Learn mode lives: the current lesson's practice project, else the
-// project page with no project selected.
+// The studio home: where Learn mode lives outside any project. Public's is
+// /app/learning (the project page with no project selected); a host whose
+// studio has its own pages sets its own at startup.
+let studioHome = VIBE64_LEARNING_PAGE_PATH;
+function setLearningStudioHome(path) {
+  if (typeof path !== "string" || !/^\/app(\/[a-z0-9-]+)*$/u.test(path)) throw new TypeError(`Studio home ${path} is not an /app page.`);
+  studioHome = path;
+}
+
+// Where Learn mode lives: a project lesson's practice project, else (a studio
+// lesson, or no lesson) the studio home. The lesson's stage decides.
 function learnHomePath(mode) {
-  return mode?.practiceSlug ? projectAppPath(mode.practiceSlug) : VIBE64_LEARNING_PAGE_PATH;
+  return mode?.lessonStage === "project" && mode.practiceSlug ? projectAppPath(mode.practiceSlug) : studioHome;
 }
 
 // The move an address needs in the current mode, or null when it may stay.
-// Learn allows only the current lesson's practice project (or, without one,
-// the no-project page); Develop allows everything but that practice project
-// and the no-project page. The server decides any other practice project.
+// Learn allows the current lesson's practice project and the studio pages
+// outside any project (a project lesson leaves /app/learning for its
+// project); Develop allows everything but that practice project and
+// /app/learning. The server decides any other practice project.
 // An unread or unreadable mode (null) moves nothing.
 function modeRedirect({ mode = null, slug = "", path = "" } = {}) {
   if (!mode) return null;
   const projectSlug = String(slug || "").trim();
   const atLearnPage = String(path || "").replace(/\/+$/u, "") === VIBE64_LEARNING_PAGE_PATH;
   if (mode.on) {
-    if (projectSlug ? projectSlug === mode.practiceSlug : !(atLearnPage && mode.practiceSlug)) return null;
+    if (projectSlug ? projectSlug === mode.practiceSlug : !(atLearnPage && learnHomePath(mode) !== VIBE64_LEARNING_PAGE_PATH)) return null;
     return Object.freeze({ path: learnHomePath(mode), note: projectSlug ? VIBE64_LEARNING_MODE_NOTE : "" });
   }
   if (atLearnPage) return Object.freeze({ path: DEVELOP_HOME_PATH, note: "" });
@@ -198,20 +210,22 @@ function stepStatus(results, stepId, passedStepIds = []) {
   return own.length ? own.at(-1).outcome || "not-yet-passed" : "not-started";
 }
 
-// The browser guide command for one step's declared guide. A step without a
-// practice project (or a guide at the L button) only points.
+// The browser guide command for one step's declared guide: a studio page
+// opens by its route, a project view only in the practice project; anything
+// else (the L button, a project place without a practice project) only points.
 function showMeCommand(guide, { projectSlug = "", sessionId = "" } = {}) {
   const request = trainingGuideRequest({ target: guide?.target,
     ...(guide?.navigate !== undefined ? { navigate: guide.navigate } : {}),
     ...(guide?.filePath !== undefined ? { filePath: guide.filePath } : {}) });
   const steps = trainingGuideSteps(request);
   const caption = text(guide?.caption) ? guide.caption.slice(0, 256) : steps.map(value => value.label).join(" → ");
-  const navigate = request.navigate && request.target !== "learning" && Boolean(projectSlug);
+  const open = learningVocabulary.place(request.target).open;
+  const navigate = request.navigate && Boolean(open?.route || open?.pane && projectSlug);
   const command = { guide: { ...request, navigate, highlight: true, steps, caption } };
   if (!navigate) return command;
-  const place = TRAINING_GUIDE_PLACES[request.target];
-  return { ...command, projectSlug, ...(text(sessionId) ? { sessionId } : {}), ...(place.pane ? { pane: place.pane } : {}),
-    ...(place.databaseView ? { databaseView: place.databaseView } : {}) };
+  if (open.route) return { ...command, route: open.route };
+  return { ...command, projectSlug, ...(text(sessionId) ? { sessionId } : {}), pane: open.pane,
+    ...(open.databaseView ? { databaseView: open.databaseView } : {}) };
 }
 
 function createVibe64Learning({ request: requestOverride = null, browserNavigation = null, colleagueView = null,
@@ -526,7 +540,10 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
       else Object.assign(state, { stepId, beat: 0 });
     }
     remember();
-    const target = `${learnHomePath(value)}?pane=lesson`;
+    // A studio lesson docks its Lesson pane on the studio page showing a
+    // stage frame; anything else goes to the lesson's home.
+    const here = String(router?.currentRoute?.value?.path || "");
+    const target = `${value.lessonStage !== "project" && layout?.value?.studio && here ? here : learnHomePath(value)}?pane=lesson`;
     if (router && currentPath() !== target) await router.push(target);
     // A phone shows one side: the project side, where the Lesson pane is,
     // also when the address already names it (after L, or Show chat).
@@ -785,8 +802,8 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     if (["agent-finished", "app-pressed", "colleague-minimised"].includes(beat.target)) return "";
     if (beat.target === "learning") return "point";
     if (["chat", "courses", "colleague", "lesson", "reload-preview"].includes(beat.target)) return beat.target;
-    const place = TRAINING_GUIDE_PLACES[beat.target];
-    return place && !place.pointOnly && place.project !== false ? "navigate" : "point";
+    const open = learningVocabulary.place(beat.target)?.open;
+    return open?.pane || open?.route ? "navigate" : "point";
   }
 
   async function doItForMe() {
@@ -1092,7 +1109,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     // The step bar's Lesson button: offered beside a practice project's
     // Preview and Dash (a lesson without one is its only pane), pressed while
     // the project page shows the Lesson pane.
-    get lessonSwitchable() { return Boolean(layout?.value?.projectSlug); },
+    get lessonSwitchable() { return Boolean(layout?.value?.projectSlug || layout?.value?.studio); },
     get lessonShown() { return Boolean(layout?.value?.lessonPane); },
     get notice() { return state.notice; },
     lesson, results, steps, currentStep, focus, colleagueRequest, notes, notesState: readonly(notesState), player,
@@ -1134,4 +1151,4 @@ function revealCurrentStep(list) {
   return true;
 }
 
-export { VIBE64_DEVELOP_MODE_NOTE, VIBE64_LEARNING_AI_REQUIRED_CODE, VIBE64_LEARNING_MODE_NOTE, VIBE64_LEARNING_MODE_PROJECT_CODE, VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_PAGE_PATH, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_STUCK_MESSAGE, VIBE64_LEARNING_TEACH_MESSAGE, VIBE64_LESSON_IN_PROGRESS_CODE, createVibe64Learning, modeRedirect, normalizePractice, openLessonLink, reviewNote, revealCurrentStep, showMeCommand, stepStatus };
+export { VIBE64_DEVELOP_MODE_NOTE, VIBE64_LEARNING_AI_REQUIRED_CODE, VIBE64_LEARNING_MODE_NOTE, VIBE64_LEARNING_MODE_PROJECT_CODE, VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_PAGE_PATH, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_STUCK_MESSAGE, VIBE64_LEARNING_TEACH_MESSAGE, VIBE64_LESSON_IN_PROGRESS_CODE, createVibe64Learning, modeRedirect, normalizePractice, openLessonLink, reviewNote, revealCurrentStep, setLearningStudioHome, showMeCommand, stepStatus };

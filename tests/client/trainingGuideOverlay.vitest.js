@@ -6,7 +6,7 @@ import * as Vue from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TrainingGuideOverlay from "../../packages/vibe64-training/src/client/TrainingGuideOverlay.vue";
 import { clearTrainingGuide, runTrainingGuideCommand, showTrainingGuide, trainingGuide } from "../../packages/vibe64-training/src/client/trainingGuide.js";
-import { trainingGuideCommand, trainingGuideRequest } from "../../packages/vibe64-training/src/shared/guideTargets.js";
+import { trainingGuideCommand, trainingGuideRequest } from "../../packages/vibe64-training/src/shared/learningVocabulary.js";
 
 const overlayFile = path.resolve("packages/vibe64-training/src/client/TrainingGuideOverlay.vue");
 {

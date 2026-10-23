@@ -5,6 +5,8 @@ import { compareChoiceAnswer } from "./installedContent.js";
 import { validateContent } from "./contentSchemas.js";
 import { lessonSteps, MAX_STEP_RESULTS } from "./learnerState.js";
 import { trainingStepObservationSchema } from "../shared/practicalSchemas.js";
+import { readLearningFact } from "./learningFacts.js";
+import { availableStepIds } from "./lessonAvailability.js";
 
 const idPattern = /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u;
 const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
@@ -194,6 +196,22 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
       receipt: { stepId, checkId: check.id, observationId, ...input.exercise, sessionId: target.sessionId, observedAt: new Date().toISOString() } });
   }
 
+  // A fact check: its registered reader answers for this learner (and the
+  // attempt's practice project). Recorded like an automatic result.
+  async function runFactCheck({ actor, attempt, lesson, step, requestId, trigger }) {
+    const previous = (await savedEntry(actor, attempt)).results.find(value => value.requestId === requestId);
+    if (previous) return replayed(previous, step.id);
+    const fact = await readLearningFact(step.check.fact, { actor, projectSlug: attempt.projectSlug || "" });
+    const outcome = fact.holds ? "passed" : "not-yet-passed";
+    const reason = boundedReason(fact.reason);
+    if (trigger !== "learner") {
+      return { ok: true, stepId: step.id, outcome, recorded: false, replayed: false, ...(reason ? { reason } : {}),
+        diagnostic: "Diagnostic only: a check Colleague runs is never saved in the learner's results." };
+    }
+    return record({ actor, attemptId: attempt.attemptId, requestId, lesson,
+      result: { stepId: step.id, kind: "fact", outcome, evidence: { fact: step.check.fact }, origin: "check", ...(reason ? { reason } : {}) } });
+  }
+
   // Runs the step's declared check. The trigger is derived from the admitted
   // action channel: the learner's own browser press, or anything else
   // (Colleague included), which only ever gets a diagnostic.
@@ -203,6 +221,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
       throw stepFailure("Run a step check with a stable request ID.", "ACTION_VALIDATION_FAILED", 400);
     }
     const { attempt, lesson, step } = await openStep({ actor, attemptId, stepId });
+    if (step.check?.kind === "fact") return runFactCheck({ actor, attempt, lesson, step, requestId, trigger });
     const check = declaredCheck(lesson, step);
     const entry = await savedEntry(actor, attempt);
     const previous = entry.results.find(value => value.requestId === requestId);
@@ -346,7 +365,8 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     if (!steps) throw stepFailure("This lesson uses assessments, not steps.", "VIBE64_TRAINING_LESSON_VERSION");
     const results = entry.results.map(result => structuredClone(result));
     const passed = new Set(results.filter(result => result.outcome === "passed").map(result => result.stepId));
-    const required = steps.filter(step => step.required).map(step => step.id);
+    const available = availableStepIds(lesson, actor);
+    const required = steps.filter(step => step.required && available.has(step.id)).map(step => step.id);
     return { attemptId, revision, results, passedStepIds: steps.map(step => step.id).filter(id => passed.has(id)),
       completion: { lessonCode: lesson.lesson.code, lessonHash: lesson.hash, required: required.length,
         passed: required.filter(id => passed.has(id)).length, completed: required.every(id => passed.has(id)) } };

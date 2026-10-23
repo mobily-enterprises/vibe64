@@ -856,7 +856,7 @@ async function stepsFixture(t, { status = "published" } = {}) {
   t.after(() => rm(root, { recursive: true, force: true }));
   const source = path.join(root, "source");
   const systemRoot = path.join(root, "system");
-  await cp(path.resolve(import.meta.dirname, "../fixtures/training/steps-v2"), source, { recursive: true });
+  await cp(path.resolve(import.meta.dirname, "../fixtures/training/steps-v3"), source, { recursive: true });
   await mkdir(systemRoot);
   const metadata = JSON.parse(await readFile(path.join(source, "package.json"), "utf8"));
   metadata.vibe64Training.lessons[0].status = status;

@@ -59,8 +59,10 @@ const stepSchema = createSchema({
     filePath: { ...text, required: false, maxLength: 512 }, caption: { ...text, required: false }
   }) },
   check: { type: "object", required: true, schema: createSchema({
-    kind: { ...text, enum: ["auto", "choice", "review", "self", "none"] },
+    kind: { ...text, enum: ["auto", "choice", "review", "self", "fact", "none"] },
     check: { ...id, required: false },
+    // fact: the name of a server fact reader (learningFacts.js).
+    fact: { ...id, required: false },
     files: { ...list(text, 8), required: false },
     question: { ...text, required: false, maxLength: 2000 },
     options: { ...list(text, 8), required: false },
@@ -70,12 +72,19 @@ const stepSchema = createSchema({
     evidence: { ...list({ ...text, enum: ["changes", "conversation"] }, 2), required: false }
   }) }
 });
-const lessonSchemaV2 = createSchema({
-  schemaVersion: { type: "integer", required: true, enum: [2] }, ...lessonFields,
-  notes: { ...text, required: false },
-  steps: list(stepSchema, 32)
-});
-const lessonSchemas = new Map([[1, lessonSchema], [2, lessonSchemaV2]]);
+// Lesson format v2 (retired like v1: authoring refuses it, installed
+// snapshots still validate, and its lessons cannot be started).
+const stepFields = { ...lessonFields, notes: { ...text, required: false }, steps: list(stepSchema, 32) };
+const lessonSchemaV2 = createSchema({ schemaVersion: { type: "integer", required: true, enum: [2] }, ...stepFields });
+// Lesson format v3: v2 plus its required stage, where the lesson runs:
+// "studio" on the screens outside any project, "project" in its practice
+// project (which then needs its exercise).
+const lessonSchemaV3 = createSchema({ schemaVersion: { type: "integer", required: true, enum: [3] }, ...stepFields,
+  stage: { ...text, enum: ["studio", "project"] } });
+const lessonSchemas = new Map([[1, lessonSchema], [2, lessonSchemaV2], [3, lessonSchemaV3]]);
+
+// Formats 2 and 3 are made of steps (v3 adds the lesson's stage).
+const lessonHasSteps = lesson => lesson?.schemaVersion === 2 || lesson?.schemaVersion === 3;
 
 // Select the authored lesson format by its declared version before validating.
 function validateLesson(value, label) {
@@ -86,12 +95,20 @@ const topicSchema = createSchema({
   schemaVersion: version, topicId: id, domainId: id, title: text,
   status: { ...text, enum: ["preview", "released"] }, outline: text, prerequisites: list(createSchema({ topicId: id }), 24),
   lessons: list(createSchema({ code: id, descriptor: text,
-    status: { ...text, enum: ["draft", "published"] }, required: { type: "boolean", required: true } }), 64)
+    status: { ...text, enum: ["draft", "published"] }, required: { type: "boolean", required: true } }), 64),
+  // The learning vocabulary this topic uses beyond public's built-ins: names a
+  // host registers (its places, activities and facts). The bundler accepts
+  // them by name; the host's own drift test proves it registers each one.
+  places: { ...list(id, 64), required: false },
+  activities: { ...list(id, 64), required: false },
+  facts: { ...list(id, 64), required: false }
 });
 const courseSchema = createSchema({
   schemaVersion: version, courseId: id, title: text, release: text,
   status: { ...text, enum: ["preview", "released"] },
-  topics: list(createSchema({ topicId: id, release: text }), 32)
+  topics: list(createSchema({ topicId: id, release: text }), 32),
+  // The studio lesson "Take the tour" and the end of AI setup start.
+  orientation: { ...id, required: false }
 });
 const visualSchema = createSchema({
   schemaVersion: version, id, title: text, svg: text, controller: text,
@@ -109,4 +126,4 @@ function validateContent(schema, value, label) {
   return validated;
 }
 
-export { courseSchema, id, list, text, topicSchema, visualSchema, validateContent, validateLesson };
+export { courseSchema, id, lessonHasSteps, list, text, topicSchema, visualSchema, validateContent, validateLesson };

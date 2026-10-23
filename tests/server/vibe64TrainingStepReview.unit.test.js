@@ -18,7 +18,7 @@ import { createTrainingStepReviewer } from "../../packages/vibe64-training/src/s
 // The review check end to end over the real bundler, installed content,
 // learner store, step owner, actions and retained Helper. Only the evidence
 // owner (its own test proves it on real Git) and native Terminals are stubs.
-const fixtureTopic = new URL("../fixtures/training/steps-v2/", import.meta.url);
+const fixtureTopic = new URL("../fixtures/training/steps-v3/", import.meta.url);
 const RUBRIC = "The heading is green and nothing else broke.";
 const reviewStep = (check = {}) => ({ id: "green-heading", title: "Make the heading green", body: "steps/green-heading.md",
   check: { kind: "review", rubric: RUBRIC, evidence: ["changes", "conversation"], ...check }, required: true });
@@ -130,7 +130,7 @@ test("the bundler accepts a review check with its rubric and refuses every incom
   await assert.rejects(bundle(lesson => lesson.steps.push(reviewStep({ check: "app-response" }))), /review check cannot declare check/u);
   await assert.rejects(bundle(lesson => {
     lesson.steps.push(reviewStep());
-    delete lesson.exercise;
+    delete lesson.exercise; lesson.stage = "studio";
     lesson.steps = lesson.steps.filter(step => step.check.kind !== "auto");
   }), /reviews practice work and needs the lesson's exercise/u);
 });

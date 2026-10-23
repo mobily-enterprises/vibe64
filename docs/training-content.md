@@ -36,11 +36,13 @@ entry declares `code`, `descriptor`, `status` (`draft` or `published`) and
 `required`. A released topic cannot contain required draft lessons. Draft content
 is validated but remains unavailable for teaching until published and installed.
 
-Lessons use lesson format v2 (see **Lesson format v2: steps** below). Format 1
-is retired: `vibe64-training validate` and `publish-manifest` refuse a v1 lesson
-("Lesson X uses retired lesson format 1. Author it in format 2 with steps."), so
-no new course release can contain one. Installed v1 lessons, and `bundle`, which
-the installer uses, still read and verify them so earlier results stay valid.
+Lessons use lesson format v3: format v2 (see **Lesson format v2: steps**
+below) plus a required `stage` (see **Lesson format v3: stage and facts**).
+Formats 1 and 2 are retired: `vibe64-training validate` and `publish-manifest`
+refuse them ("Lesson X uses retired lesson format N. Author it in format 3 with
+steps and its stage."), so no new course release can contain one, and a lesson
+in a retired format cannot be started. Installed older lessons, and `bundle`,
+which the installer uses, still read and verify them.
 The topic manifest itself stays schema version 1.
 
 For reading existing content, a v1 lesson descriptor declares schema version 1, `code`, `title`, `document`,
@@ -76,13 +78,32 @@ lesson but no current reader consumes them (they labelled the retired Learning
 watch's hints); they never grade, and a lesson without an exercise cannot
 declare them.
 
+### Lesson format v3: stage and facts
+
+A v3 `lesson.json` declares `schemaVersion: 3` and everything v2 has, plus
+`stage`: `"project"` for a lesson taught in its practice project (it needs its
+`exercise`), or `"studio"` for one taught on the screens outside any project
+(its Lesson pane docks beside the page). Learn mode opens a lesson where its
+stage says.
+
+A step may check a fact: `"check": { "kind": "fact", "fact": "ai-ready" }`,
+with a final `check fact` beat when the step has beats. The installation reads
+the fact for the learner when they press **Check now**; built in, `ai-ready`
+holds once their AI is set up for Colleague. A topic may declare names its
+lessons use that only some installations provide, in optional `places`,
+`activities` and `facts` lists in `topic.json`. A step whose places, activities
+and facts are all available here, and whose places this person may open, is
+shown; the others are left out of the lesson, and completion counts only the
+required steps shown. A course may name its `orientation`, one of its
+published lessons.
+
 ### Lesson format v2: steps
 
 A v2 `lesson.json` declares `schemaVersion: 2` and keeps `code`, `title`,
 `prerequisites`, `estimatedMinutes`, `visuals`, `exercise`, `checks` and
 `appRoutes` exactly as above. It has no `document` and no `assessments`:
 an optional `notes` file (background reading) and 1–32 ordered `steps` replace
-them. The fixture `tests/fixtures/training/steps-v2/` is a complete, validating
+them. The fixture `tests/fixtures/training/steps-v3/` is a complete, validating
 topic with every step kind; the copyable template is `docs/templates/learn-topic/`.
 
 ```json
@@ -258,7 +279,7 @@ cannot be any v2 lesson descriptor of the topic (for example, an exercise
 
 A code question is an `auto` step whose `check` names a code check and whose
 `files` name the exercise files the learner edits (the fixture
-`tests/fixtures/training/steps-v2/` contains one):
+`tests/fixtures/training/steps-v3/` contains one):
 
 ```json
 "exercise": { "kind": "bundled", "source": "app", "reuse": "attempt" },

@@ -114,19 +114,29 @@ identities. Released courses require
 released topics without required drafts. This is local authoring, with no Git
 push, remote release, installation or course enabling.
 
-A v2 step body may end with a fenced `beats` block, the lesson step bar's
+Lessons are authored in format 3: format 2's steps plus a required `stage`
+(`project` or `studio`); a project lesson needs its exercise. Formats 1 and 2
+are retired for authoring and starting, and still validate as installed
+snapshots. A step may check a `fact` (`check.kind: "fact"` naming a fact
+reader such as the built-in `ai-ready`); a host registers its own readers with
+`registerLearningFact`, and a topic declares the host names its lessons use in
+its optional `places`, `activities` and `facts` lists. A course may name its
+`orientation`, which must be one of its published lessons.
+
+A step body may end with a fenced `beats` block, the lesson step bar's
 script for that step. One shared parser (`src/shared/beats.js`,
 `splitStepBeats`) owns the grammar `<show|do|check> <target>[ <path>]: <text>`
-over the closed vocabulary in `src/shared/guideTargets.js`
-(`TRAINING_GUIDE_PLACES`, `TRAINING_BEAT_ACTIONS`, `TRAINING_BEAT_EVENTS`):
+over the learning vocabulary (`src/shared/learningVocabulary.js`: built-in
+places and activities plus the topic's declared names):
 1–8 beats, show/do text ≤160 (a `do send-message` holds one quoted prompt
 ≤500), only `do file-opened` takes a safe relative path, and at most one final
-`check auto|review|done` matching the step's check kind. The bundler rejects a
+`check auto|review|done|fact` matching the step's check kind. The bundler rejects a
 block that does not end the body, beats together with a `guide`, and practice
-project beats in a lesson without an exercise (`beatNeedsPracticeProject`). The
+project beats in a lesson without an exercise (`beatNeedsPracticeProject`: a
+project-scoped place, or an auto/review check). The
 installed reader serves `step.beats` parsed and `bodyText` without the block;
 the bytes, and so the lesson hash, are unchanged. The browser never parses
-beats. Point-only places (`pointOnly`) refuse `navigate`.
+beats. Point-only places (no `open`) refuse `navigate`.
 
 Practical descriptors name evidence producers/checks; this facility validates their
 references but does not manufacture observations, run checks or evaluate progress.

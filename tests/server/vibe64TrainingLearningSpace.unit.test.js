@@ -14,7 +14,7 @@ import { createTrainingLearningSpace, KEPT_ARCHIVED_PROJECTS, MAX_ARCHIVES } fro
 // The attempt lifecycle in the learning space (Rev 4 C2) over the real
 // learner store, core learning space and shared project archive service.
 // Only the runtime close and Colleague's thread releaser are stubs.
-const fixtureTopic = new URL("../fixtures/training/steps-v2/", import.meta.url);
+const fixtureTopic = new URL("../fixtures/training/steps-v3/", import.meta.url);
 const ALICE = { uid: 42, username: "alice", role: "member" };
 const BOB = { uid: 43, username: "bob", role: "member" };
 const key = actor => Buffer.from(String(actor.uid)).toString("base64url");
@@ -25,7 +25,7 @@ async function installTopic(root, systemRoot) {
   const source = path.join(root, "topic");
   await cp(fixtureTopic, source, { recursive: true });
   const descriptor = JSON.parse(await readFile(path.join(source, "lesson.json"), "utf8"));
-  await writeFile(path.join(source, "zero.json"), JSON.stringify({ ...descriptor, code: "STEPS-ZERO", title: "Set yourself up",
+  await writeFile(path.join(source, "zero.json"), JSON.stringify({ ...descriptor, code: "STEPS-ZERO", title: "Set yourself up", stage: "studio",
     visuals: [], exercise: undefined, checks: [], steps: descriptor.steps.filter(step => ["reflect", "read-more"].includes(step.id))
       .map(step => ({ ...step, required: step.id === "reflect" })) }));
   const manifest = JSON.parse(await readFile(path.join(source, "package.json"), "utf8"));

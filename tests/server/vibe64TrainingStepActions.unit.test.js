@@ -17,11 +17,13 @@ import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "../../packages/vibe64-tra
 import { registerTrainingRoutes } from "../../packages/vibe64-training/src/server/registerRoutes.js";
 import { createTrainingActions } from "../../packages/vibe64-training/src/server/actions.js";
 import { createTrainingService } from "../../packages/vibe64-training/src/server/preparation.js";
+import { registerLearningFact } from "../../packages/vibe64-training/src/server/learningFacts.js";
+import { registerLearningVocabulary } from "../../packages/vibe64-training/src/shared/learningVocabulary.js";
 
 // Learning v2 actions (contract C3) over the real installed v2 fixture
 // (contract C1), the real learner store and step owner (contract C2). Only the
 // App check runner, inner session actions and the practice facility are stubs.
-const fixtureTopic = new URL("../fixtures/training/steps-v2/", import.meta.url);
+const fixtureTopic = new URL("../fixtures/training/steps-v3/", import.meta.url);
 const BROWSER_ONLY = ["step.observe", "step.answer", "step.done", "step.review.run", "reader.save"];
 const ASSISTANT = ["lesson.read", "step.check.run", "step.evidence.read", "practice.list", "lesson.delete", "practice.archived.delete"];
 
@@ -156,7 +158,8 @@ test("lesson.read projects steps, notes, visuals and results without the choice 
   assert.doesNotMatch(JSON.stringify(api), /"answer"|descriptorPath|controller\.js|diagram\.svg|requestId/u);
   assert.equal(api.attempt.attemptId, attempt.attemptId);
   assert.equal(api.attempt.practiceSlug, attempt.projectSlug);
-  assert.equal(api.lesson.schemaVersion, 2);
+  assert.equal(api.lesson.schemaVersion, 3);
+  assert.equal(api.lesson.stage, "project");
   assert.equal(api.lesson.exercise, true);
   assert.match(api.lesson.notesText, /\S/u);
   assert.deepEqual(api.lesson.steps.map(step => [step.id, step.check.kind, step.required]), [
@@ -505,4 +508,45 @@ test("the plain visual route reads a diagram of any retained attempt, including 
   f.auth.user = { uid: 43, username: "bob", role: "member" };
   await assert.rejects(actions.execute({ actionId: TRAINING_VISUAL_RESOURCE_ACTION, input: { attemptId: attempt.attemptId, visualId: "flow" },
     context: { channel: "api", surface: "app" } }), { code: "VIBE64_TRAINING_ATTEMPT_MISSING" });
+});
+
+test("a fact step passes by its reader; steps this learner cannot take here are absent and do not count", async t => {
+  let live = false;
+  registerLearningFact({ id: "step-actions-live", read: async ({ actor, projectSlug }) => ({ holds: live && actor.username === "alice" && Boolean(projectSlug),
+    ...(live ? {} : { reason: "Not live yet." }) }) });
+  const f = await fixture(t, { editTopic: async source => {
+    const metadata = JSON.parse(await readFile(path.join(source, "package.json"), "utf8"));
+    metadata.vibe64Training.places = ["step-actions-owner-place", "step-actions-missing-place"];
+    metadata.vibe64Training.facts = ["step-actions-live"];
+    await writeFile(path.join(source, "package.json"), JSON.stringify(metadata));
+    const lesson = JSON.parse(await readFile(path.join(source, "lesson.json"), "utf8"));
+    lesson.steps.push({ id: "live", title: "It is live", body: "steps/live.md", check: { kind: "fact", fact: "step-actions-live" }, required: true },
+      { id: "owner-only", title: "People", body: "steps/owner.md", check: { kind: "self" }, required: true },
+      { id: "elsewhere", title: "Elsewhere", body: "steps/elsewhere.md", check: { kind: "self" }, required: false });
+    await writeFile(path.join(source, "lesson.json"), JSON.stringify(lesson));
+    await writeFile(path.join(source, "steps/live.md"), "# It is live\n\n```beats\ncheck fact: Press Check when it is live.\n```\n");
+    await writeFile(path.join(source, "steps/owner.md"), "# People\n\n```beats\nshow step-actions-owner-place: Add people.\ncheck done: Done.\n```\n");
+    await writeFile(path.join(source, "steps/elsewhere.md"), "# Elsewhere\n\n```beats\nshow step-actions-missing-place: Not here.\ncheck done: Done.\n```\n");
+  } });
+  registerLearningVocabulary({ places: [{ id: "step-actions-owner-place", label: "People", scope: "studio", who: "owner",
+    open: { route: "/app/manage/step-actions" }, steps: [{ id: "step-actions-owner-place", label: "People" }] }] });
+  const attempt = await f.start();
+  const read = await f.execute("lesson.read", { attemptId: attempt.attemptId });
+  assert.deepEqual(read.lesson.steps.map(step => step.id), ["open-preview", "which-side", "require-title", "reflect", "read-more", "live"],
+    "a member does not see the owner's step; no installation has the missing place");
+  assert.deepEqual(read.lesson.steps.at(-1).check, { kind: "fact", fact: "step-actions-live" });
+  assert.equal(read.completion.required, 4, "completion counts the available required steps only");
+  const base = { attemptId: attempt.attemptId, stepId: "live" };
+  assert.deepEqual(await f.execute("step.check.run", { ...base, requestId: "fact-1" }),
+    { ok: true, stepId: "live", outcome: "not-yet-passed", recorded: true, replayed: false, reason: "Not live yet." });
+  live = true;
+  const colleague = await f.tool("step.check.run", { ...base, requestId: "fact-colleague" });
+  assert.equal(colleague.ok, true);
+  assert.equal(colleague.result?.recorded ?? colleague.recorded, false, "Colleague's check is a diagnostic");
+  assert.deepEqual(await f.execute("step.check.run", { ...base, requestId: "fact-2" }),
+    { ok: true, stepId: "live", outcome: "passed", recorded: true, replayed: false });
+  const after = await f.execute("lesson.read", { attemptId: attempt.attemptId });
+  assert.ok(after.passedStepIds.includes("live"));
+  assert.deepEqual(after.results.filter(value => value.stepId === "live").map(value => [value.kind, value.outcome, value.evidence]),
+    [["fact", "not-yet-passed", { fact: "step-actions-live" }], ["fact", "passed", { fact: "step-actions-live" }]]);
 });

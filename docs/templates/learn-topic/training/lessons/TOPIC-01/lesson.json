@@ -1,7 +1,8 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "code": "TOPIC-01",
   "title": "Replace with the learner task",
+  "stage": "studio",
   "notes": "notes.md",
   "prerequisites": [],
   "estimatedMinutes": 15,

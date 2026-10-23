@@ -4,6 +4,7 @@ import { isDeepStrictEqual } from "node:util";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { practiceLearnerKey } from "@local/vibe64-core/server/learningSpace";
 import { lessonTitle } from "./learningSpace.js";
+import { lessonAvailableTo } from "./lessonAvailability.js";
 
 function trainingError(code, message) {
   return Object.assign(new Error(message), { code, statusCode: 409 });
@@ -32,6 +33,19 @@ function requireSuccess(result) {
 // actions admit actors and pins; neither model input nor HTTP selects paths,
 // initializers, session identities or shell commands here.
 function createTrainingService({ catalogue, content, learners, learningSpace = null, projectContext, projectRepositoryService, project, sessions, terminals } = {}) {
+  // A lesson starts only in the current lesson format and when this learner
+  // can take every required step here (its places exist and are open to them).
+  async function requireStartable(actor, pin) {
+    const taught = await content.readLesson({ ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash });
+    if (taught.lesson.schemaVersion !== 3) {
+      throw trainingError("VIBE64_TRAINING_LESSON_RETIRED", "This lesson's course needs an update before it can start. Update the course in Courses, then start the lesson again.");
+    }
+    if (!lessonAvailableTo(taught, actor)) {
+      throw Object.assign(trainingError("VIBE64_TRAINING_LESSON_UNAVAILABLE_HERE",
+        "This lesson needs screens this Vibe64 does not have for you, so it cannot start here. Nothing was changed."), { statusCode: 422 });
+    }
+  }
+
   // Rev 4 (H4): one lesson in progress at a time. A different lesson in
   // progress refuses once with its title (the client's one confirmation);
   // archiveCurrent archives it first, under the same admitted revision.
@@ -56,6 +70,7 @@ function createTrainingService({ catalogue, content, learners, learningSpace = n
     };
     let revision = expectedRevision;
     const saved = await learners.readState({ actor });
+    if (!saved.progress.attempts.some(value => value.requestIds?.includes(requestId))) await requireStartable(actor, pin);
     const current = saved.progress.attempts.find(value => value.attemptId === saved.progress.activeAttemptId);
     // The same lesson in progress, or a replayed start, is the learner store's.
     const replay = saved.progress.attempts.some(value => value.requestIds?.includes(requestId));
@@ -93,6 +108,7 @@ function createTrainingService({ catalogue, content, learners, learningSpace = n
         !saved.progress.attempts.some(value => value.attemptId === saved.progress.activeAttemptId && value.requestIds?.includes(requestId)))) {
       throw missingAttempt();
     }
+    if (!attempt.ended) await requireStartable(actor, attempt.pin);
     // For an attempt already archived this finishes a close that stopped part-way.
     await requireCloser().closeAttempt({ actor, attemptId, archive: true, reason: "archived" });
     return reserveAndPrepare({ actor, requestId, expectedRevision: (await learners.readState({ actor })).revision, pin: attempt.pin });

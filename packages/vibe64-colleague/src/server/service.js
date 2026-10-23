@@ -1,4 +1,4 @@
-import { trainingGuideCommand, trainingGuideRequest } from "@local/vibe64-training/shared/guide-targets";
+import { learningPlaceOpenTo, learningVocabulary, trainingGuideCommand, trainingGuideRequest } from "@local/vibe64-training/shared/learning-vocabulary";
 import { createColleagueNavigationCoordination } from "./navigationCoordination.js";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
@@ -1603,25 +1603,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       if (input.learning && typeof input.learning.open !== "boolean" && !input.learning.attemptId) {
         return { ok: false, error: "Send learning={open:true|false} for Courses, or learning={attemptId, stepId} for a lesson step." };
       }
-      let guided = null;
-      if (input.guide) {
-        try { guided = trainingGuideRequest(input.guide); }
-        catch (error) { return { ok: false, error: error.message }; }
-        if (input.learning || input.pane || input.planView || input.databaseView || input.databaseTable ||
-            input.integrationId || input.integrationEnvironment || input.conversationId) {
-          return { ok: false, error: "A guide derives its own view. Supply only the guide, with projectSlug and sessionId when it opens a project place." };
-        }
-        if (!guided.navigate || guided.target === "learning") {
-          if (input.projectSlug || input.sessionId) {
-            return { ok: false, error: guided.navigate ? "The learning guide opens Learning, not a project; omit projectSlug and sessionId."
-              : "A point-only guide changes no view; omit projectSlug and sessionId." };
-          }
-        } else if (!input.projectSlug) {
-          return { ok: false, error: "Choose the exact project whose place this guide opens." };
-        } else if (trainingGuideCommand(guided, { id: "" }).pane !== "preview" && !input.sessionId) {
-          return { ok: false, error: "Choose the exact session before opening this guided session view." };
-        }
-      }
       if (input.planView && (!input.sessionId || input.pane || input.conversationId)) {
         return { ok: false, error: "Choose the exact session's Main chat, without another pane or conversation, to open its plan viewer." };
       }
@@ -1641,12 +1622,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const connection = state.connections.get(context.colleague?.clientId);
       if (!connection) return { ok: false, error: "The initiating browser is no longer connected." };
       if (connection.navigation?.status === "pending") return { ok: false, error: "The browser is still opening the previous view." };
-      if (guided) {
-        return state.navigation.begin(connection, trainingGuideCommand(guided, { id: randomUUID(),
-          projectSlug: input.projectSlug || "", sessionId: input.sessionId || "" }));
-      }
       const command = { id: randomUUID(), projectSlug: input.projectSlug,
-        ...(input.managementView ? { managementView: input.managementView } : {}),
         ...(input.pane ? { pane: input.pane } : {}),
         ...(input.integrationId ? { integrationId: input.integrationId } : {}),
         ...(input.integrationEnvironment ? { integrationEnvironment: input.integrationEnvironment } : {}),
@@ -1657,6 +1633,32 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           : { attemptId: input.learning.attemptId, ...(input.learning.stepId ? { stepId: input.learning.stepId } : {}) } } : {}),
         sessionId: input.sessionId || "", conversationId: input.conversationId || "", status: "pending" };
       return state.navigation.begin(connection, command);
+    },
+    // Point at one place of this installation's vocabulary, or open it first:
+    // a studio page by its route, Courses, or a project view in the project
+    // and session the person has open (the browser's own focus).
+    async guide(input, context) {
+      const state = await stateFor(context);
+      let guided;
+      try { guided = trainingGuideRequest(input); }
+      catch (error) { return { ok: false, error: error.message }; }
+      const place = learningVocabulary.place(guided.target);
+      const user = authenticatedVibe64User(context);
+      if (!learningPlaceOpenTo(place, { owner: !user || user.role === "owner" })) {
+        return { ok: false, error: `${place.label} is only for the workspace owner, so it cannot be shown to this person.` };
+      }
+      const connection = state.connections.get(context.colleague?.clientId);
+      if (!connection) return { ok: false, error: "The initiating browser is no longer connected." };
+      if (connection.navigation?.status === "pending") return { ok: false, error: "The browser is still opening the previous view." };
+      const focus = connection.focus || {};
+      if (guided.navigate && place.open.pane) {
+        if (!focus.projectSlug) return { ok: false, error: `${place.label} is in a project. Open the project with navigation.open first, then guide again.` };
+        if (place.open.pane !== "preview" && !focus.sessionId) {
+          return { ok: false, error: `${place.label} belongs to a session. Open one of the project's sessions first, then guide again.` };
+        }
+      }
+      const project = guided.navigate && place.open.pane ? { projectSlug: focus.projectSlug, sessionId: focus.sessionId || "" } : {};
+      return state.navigation.begin(connection, trainingGuideCommand(guided, { id: randomUUID(), ...project }));
     },
     async acknowledgeNavigation(input, context) {
       const state = await stateFor(context);

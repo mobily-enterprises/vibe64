@@ -133,7 +133,7 @@ test("a lesson without an exercise reserves no practice project, and only that l
   const { attemptId } = reserved.attempt;
   assert.deepEqual((await f.state.readState({ actor: f.actor, includeCompletion: true })).progress.attempts, [reserved.attempt]);
   assert.deepEqual(await f.state.readLearningMode({ actor: f.actor }),
-    { on: false, currentAttemptId: attemptId, lessonCode: "INTRO-01", lessonTitle: "", practiceSlug: "" });
+    { on: false, currentAttemptId: attemptId, lessonCode: "INTRO-01", lessonTitle: "", lessonStage: "", practiceSlug: "" });
   await assert.rejects(() => f.state.beginPreparation({ actor: f.actor, attemptId, expectedRevision: 1 }), { code: "VIBE64_TRAINING_EXERCISE_MISSING" });
   await f.state.endAttempt({ actor: f.actor, attemptId, requestId: "end-1", expectedRevision: 1, reason: "archived" });
 
@@ -1596,7 +1596,7 @@ test("explicit end retains the pinned attempt and fresh reserve creates new proj
 
 test("Learn mode is a saved per-learner flag and switching it never ends or changes the lesson in progress", async t => {
   const f = await fixture(t);
-  const develop = { on: false, currentAttemptId: "", lessonCode: "", lessonTitle: "", practiceSlug: "" };
+  const develop = { on: false, currentAttemptId: "", lessonCode: "", lessonTitle: "", lessonStage: "", practiceSlug: "" };
   assert.deepEqual(await f.state.readLearningMode({ actor: f.actor }), develop, "absent means Develop");
   await assert.rejects(() => fs.lstat(f.paths.root), { code: "ENOENT" }, "reading creates nothing");
   assert.deepEqual(await f.state.setLearningMode({ actor: f.actor, on: true }), { ...develop, on: true }, "Learn mode with no lesson is normal");
@@ -1605,9 +1605,9 @@ test("Learn mode is a saved per-learner flag and switching it never ends or chan
   const first = await f.reserve();
   const attemptId = first.attempt.attemptId;
   assert.deepEqual(await f.state.readLearningMode({ actor: f.actor }),
-    { on: true, currentAttemptId: attemptId, lessonCode: "INTRO-01", lessonTitle: "", practiceSlug: "" }, "no practice project before preparation");
+    { on: true, currentAttemptId: attemptId, lessonCode: "INTRO-01", lessonTitle: "", lessonStage: "", practiceSlug: "" }, "no practice project before preparation");
   const prepared = await f.state.beginPreparation({ actor: f.actor, attemptId, expectedRevision: first.revision });
-  const learn = { on: true, currentAttemptId: attemptId, lessonCode: "INTRO-01", lessonTitle: "Try the practice app", practiceSlug: first.attempt.projectSlug };
+  const learn = { on: true, currentAttemptId: attemptId, lessonCode: "INTRO-01", lessonTitle: "Try the practice app", lessonStage: "", practiceSlug: first.attempt.projectSlug };
   assert.deepEqual(await f.state.readLearningMode({ actor: f.actor, includeTitle: true }), learn);
   assert.deepEqual(await f.state.activeAttemptForProject({ actor: f.actor, attemptId }), prepared.attempt);
   const progress = await fs.readFile(f.paths.progress);

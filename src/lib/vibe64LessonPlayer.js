@@ -1,6 +1,7 @@
 import { computed, reactive, watch } from "vue";
 import { clearTrainingGuide, showTrainingGuide, trainingGuide } from "@local/vibe64-training/client/guide";
-import { TRAINING_BEAT_ACTIONS, TRAINING_GUIDE_PLACES, trainingGuideSteps, trainingPlaceShown } from "@local/vibe64-training/shared/guide-targets";
+import { learningVocabulary, trainingGuideSteps, trainingPlaceShown } from "@local/vibe64-training/shared/learning-vocabulary";
+import { beatPlace } from "@local/vibe64-training/shared/beats";
 
 // The lesson step bar's beat player, owned by the Learning controller: one
 // deterministic player per host shell. A step's beats (lesson.read
@@ -36,13 +37,7 @@ function documentHidden() {
 
 // The page activity that completes a do beat, or "".
 function beatEvent(beat) {
-  return TRAINING_BEAT_ACTIONS[beat.target]?.event || TRAINING_GUIDE_PLACES[beat.target]?.event || "";
-}
-
-// The place a beat points at, or "" (an action with no place, a check).
-function beatPlace(beat) {
-  if (!beat || beat.kind === "check") return "";
-  return TRAINING_BEAT_ACTIONS[beat.target] ? TRAINING_BEAT_ACTIONS[beat.target].place || "" : beat.target;
+  return learningVocabulary.activity(beat.target)?.event || learningVocabulary.place(beat.target)?.event || "";
 }
 
 // state: the controller's reactive state (stepId, beat, beatPaused, open);
@@ -155,7 +150,7 @@ function createLessonPlayer({ state, steps, currentStep, active, selectStep, rem
   // Do beats: the place shown, or the page activity it names.
   function placeShown(value) {
     const current = focus();
-    return Boolean(current && !TRAINING_BEAT_ACTIONS[value.target] &&
+    return Boolean(current && !learningVocabulary.activity(value.target) &&
       trainingPlaceShown(value.target, { ...current, learningOpen: state.open }) === true);
   }
   function confirm(value, line = "✓ Done.", position = -1) {
@@ -192,7 +187,7 @@ function createLessonPlayer({ state, steps, currentStep, active, selectStep, rem
 
   async function point(value) {
     const place = beatPlace(value);
-    if (!place || state.open) return null;
+    if (!place || !learningVocabulary.place(place) || state.open) return null;
     const request = { target: place, ...(value.path ? { filePath: value.path } : {}) };
     const guideSteps = trainingGuideSteps(request);
     const receipt = await showGuide({ ...request, highlight: true, navigate: false, steps: guideSteps,

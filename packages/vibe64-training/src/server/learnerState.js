@@ -7,8 +7,9 @@ import { practiceSlug } from "@local/vibe64-core/server/learningSpace";
 import { writeJsonFileAtomic } from "@local/vibe64-core/server/projectRecordMetadata";
 import { assertValidVibe64SessionId } from "@local/vibe64-runtime/server/sessionStore";
 import { canonicalJson } from "./content.js";
-import { list, validateContent } from "./contentSchemas.js";
+import { lessonHasSteps, list, validateContent } from "./contentSchemas.js";
 import { createInstalledTrainingContent, validateInstalledTopicPin } from "./installedContent.js";
+import { availableStepIds } from "./lessonAvailability.js";
 
 // One learner's Learning state (Rev 4 contract C1). An attempt is one run of a
 // lesson; at most one is in progress (the last one, named by activeAttemptId).
@@ -141,7 +142,7 @@ const reviewFeedbackSchema = createSchema({
   points: { ...list(createSchema({ text: { ...text, maxLength: 120 }, met: { type: "boolean", required: true } }), 6), required: false }
 });
 const stepResultSchema = createSchema({
-  stepId: { ...text, maxLength: 64 }, kind: { ...text, enum: ["auto", "choice", "review", "self", "read"] },
+  stepId: { ...text, maxLength: 64 }, kind: { ...text, enum: ["auto", "choice", "review", "self", "read", "fact"] },
   outcome: { ...text, enum: ["passed", "not-yet-passed"] }, evidence: { type: "object", required: true },
   origin: { ...text, enum: ["learner", "check"] }, requestId: { ...text, maxLength: 64 },
   recordedAt: { ...text, maxLength: 24 }, reason: { ...text, required: false },
@@ -178,6 +179,8 @@ function validateStepEvidence(result) {
   const keys = Object.keys(evidence || {}).sort();
   if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) return false;
   if (kind === "self" || kind === "read") return keys.length === 0 && result.origin === "learner";
+  // A fact check's answer, read by its registered reader when the learner asked.
+  if (kind === "fact") return result.origin === "check" && canonicalJson(keys) === canonicalJson(["fact"]) && idPattern.test(evidence.fact || "");
   if (kind === "review") {
     return result.origin === "check" && canonicalJson(keys) === canonicalJson(["evidenceHash", "reviewId"]) &&
       uuidAnyPattern.test(evidence.reviewId || "") && sha256Pattern.test(evidence.evidenceHash || "");
@@ -238,7 +241,7 @@ function validSessionId(sessionId) {
 }
 
 function lessonSteps(lesson) {
-  return lesson.lesson.schemaVersion === 2 && Array.isArray(lesson.lesson.steps) ? lesson.lesson.steps : null;
+  return lessonHasSteps(lesson.lesson) && Array.isArray(lesson.lesson.steps) ? lesson.lesson.steps : null;
 }
 
 // The result kind a step's declared check records: a reading step (check
@@ -251,7 +254,8 @@ function validateLessonStepResults(entry, lesson) {
   if (!steps) throw new Error("Step results belong only to a version 2 lesson.");
   for (const result of entry.results) {
     const step = steps.find(value => value.id === result.stepId);
-    if (!step || resultKind(step) !== result.kind || result.kind === "auto" && result.evidence.checkId !== step.check.check) {
+    if (!step || resultKind(step) !== result.kind || result.kind === "auto" && result.evidence.checkId !== step.check.check ||
+        result.kind === "fact" && result.evidence.fact !== step.check.fact) {
       throw new Error("Saved step results must match the exact pinned lesson step and its declared check.");
     }
   }
@@ -448,11 +452,12 @@ function attemptStepEntry(record, attempt) {
     : { lesson: { code: attempt.pin.lesson.code, hash: attempt.pin.lesson.hash }, results: [], receipts: [] };
 }
 
-// A version 2 lesson completes when every required step has passed in this attempt.
-function lessonCompletion(lesson, entry) {
+// A step lesson completes when every required step available to the learner
+// here (lessonAvailability.js) has passed in this attempt.
+function lessonCompletion(lesson, entry, available) {
   const steps = lessonSteps(lesson);
   if (!steps) throw new Error(`Lesson ${lesson.lesson.code} uses an unsupported format.`);
-  const required = steps.filter(value => value.required).map(value => value.id);
+  const required = steps.filter(value => value.required && available.has(value.id)).map(value => value.id);
   const passed = required.filter(id => entry.results.some(result => result.stepId === id && result.outcome === "passed"));
   return { lessonCode: lesson.lesson.code, lessonHash: lesson.hash, required: required.length, passed: passed.length,
     completed: passed.length === required.length };
@@ -679,8 +684,9 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     if (includeCompletion !== true) return state;
     const lessons = await verifyProgressLessons(state.progress);
     const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
+    const lesson = attempt ? lessons.get(attempt.attemptId) : null;
     const completion = attempt
-      ? lessonCompletion(lessons.get(attempt.attemptId), await readAttemptSteps(paths, attempt, lessons.get(attempt.attemptId))) : null;
+      ? lessonCompletion(lesson, await readAttemptSteps(paths, attempt, lesson), availableStepIds(lesson, actor)) : null;
     const completed = new Set(state.progress.completedLessons.map(lesson => canonicalJson({ code: lesson.code, hash: lesson.hash })));
     const lessonCompletions = state.progress.completedLessons.map(lesson => ({ lessonCode: lesson.code, lessonHash: lesson.hash,
       required: 0, passed: 0, completed: true, open: false }));
@@ -813,7 +819,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
         let { completedLessons } = state.progress;
         if (reason === "finished") {
           const lesson = lessons.get(attemptId);
-          if (!lessonCompletion(lesson, await readAttemptSteps(paths, previous, lesson)).completed) {
+          if (!lessonCompletion(lesson, await readAttemptSteps(paths, previous, lesson), availableStepIds(lesson, actor)).completed) {
             throw failure("VIBE64_TRAINING_LESSON_INCOMPLETE", "Pass every required step before finishing this lesson.", 409);
           }
           const key = canonicalJson(previous.pin.lesson);
@@ -869,7 +875,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
       const lessons = await verifyProgressLessons(state.progress);
       const lesson = lessons.get(attempt.attemptId);
-      const completion = lessonCompletion(lesson, await readAttemptSteps(paths, attempt, lesson));
+      const completion = lessonCompletion(lesson, await readAttemptSteps(paths, attempt, lesson), availableStepIds(lesson, actor));
       const active = state.activeSummaryCurrent ? state.active : await saveActive(paths, state.progress);
       return { revision: state.revision, attempt, active, completion };
     } finally {
@@ -1294,10 +1300,16 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       throw failure("VIBE64_TRAINING_STATE_INVALID", `Learning mode is invalid: ${cause.message} Keep the file and ask the owner to inspect it.`, null, { cause });
     }
     const attempt = progress.attempts.find(value => value.attemptId === progress.activeAttemptId);
+    // lessonStage: where the lesson runs (format 3), read with its title; ""
+    // for a retired format, which has none.
     const mode = { on, currentAttemptId: attempt?.attemptId || "", lessonCode: attempt?.pin.lesson.code || "", lessonTitle: "",
-      practiceSlug: attempt?.preparation && attempt.preparation.phase !== "reserved" ? attempt.projectSlug : "" };
+      lessonStage: "", practiceSlug: attempt?.preparation && attempt.preparation.phase !== "reserved" ? attempt.projectSlug : "" };
     if (attempt && includeTitle) {
-      try { mode.lessonTitle = String((await verifyInstalled(attempt.pin)).lesson?.title || ""); } catch { /* The code names it. */ }
+      try {
+        const { lesson } = await verifyInstalled(attempt.pin);
+        mode.lessonTitle = String(lesson?.title || "");
+        mode.lessonStage = lesson?.schemaVersion === 3 ? lesson.stage : "";
+      } catch { /* The code names it. */ }
       mode.lessonTitle ||= mode.lessonCode;
     }
     return Object.freeze(mode);

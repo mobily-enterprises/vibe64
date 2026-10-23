@@ -26,6 +26,7 @@ import { registerColleagueFocus } from "../../packages/vibe64-colleague/src/serv
 import { createColleagueFocusBinding } from "../../packages/vibe64-colleague/src/client/colleagueFocusBinding.js";
 import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../../packages/vibe64-colleague/src/shared/focusRealtime.js";
 import { createControlledColleagueNativeCommands } from "../fixtures/colleagueNativeCommands.js";
+import { registerLearningVocabulary } from "../../packages/vibe64-training/src/shared/learningVocabulary.js";
 
 const fixtureResources = new WeakMap();
 
@@ -1937,38 +1938,35 @@ test("Colleague guide points at a real control without navigating and reports on
   const f = await fixture(t, [], { watching: true });
   await f.service.focus({ clientId: "tab-a", focus: {} }, f.context);
   const context = { ...f.context, colleague: { clientId: "tab-a" } };
-  const execute = input => f.actions.execute({ actionId: "vibe64.colleague.navigation.open", input, context });
-  const learningAction = input => f.actions.execute({ actionId: "vibe64.colleague.navigation.open-learning", input, context });
+  const guide = input => f.actions.execute({ actionId: "vibe64.colleague.navigation.guide", input, context });
   for (const [input, error] of [
-    [{ guide: { target: "dashboard", navigate: true }, projectSlug: "alpha", sessionId: "session-1" }, /Dashboard has no single view/u],
-    [{ guide: { target: "preview", navigate: false, highlight: false } }, /neither|does neither/u],
-    [{ guide: { target: "preview", filePath: "src/app.js" } }, /filePath is only for the files place/u],
-    [{ guide: { target: "files", filePath: "../outside.js" } }, /without '\.\.'/u],
-    [{ guide: { target: "preview" }, projectSlug: "alpha" }, /point-only guide changes no view/u],
-    [{ guide: { target: "preview", navigate: true } }, /exact project/u],
-    [{ guide: { target: "files", navigate: true }, projectSlug: "alpha" }, /exact session/u],
-    [{ guide: { target: "learning", navigate: true }, projectSlug: "alpha" }, /opens Learning, not a project/u],
-    [{ guide: { target: "preview" }, pane: "settings", projectSlug: "alpha" }, /derives its own view/u]
+    [{ target: "dashboard", navigate: true }, /Dashboard has no single view/u],
+    [{ target: "preview", navigate: false, highlight: false }, /neither|does neither/u],
+    [{ target: "preview", filePath: "src/app.js" }, /filePath is only for the files place/u],
+    [{ target: "files", filePath: "../outside.js" }, /without '\.\.'/u],
+    [{ target: "preview", navigate: true }, /Preview is in a project\. Open the project with navigation\.open first/u],
+    [{ target: "elsewhere" }, /this installation's guide places: preview, .*ai-setup\./u],
+    [{ target: "account-menu", navigate: true }, /has no view to open; point at it instead/u]
   ]) {
-    const result = await (input.projectSlug ? execute : learningAction)(input);
+    const result = await guide(input);
     assert.equal(result.ok, false, JSON.stringify(input));
     assert.match(result.error, error);
     assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null);
   }
-  await assert.rejects(learningAction({ guide: { target: "elsewhere" } }), { code: "ACTION_VALIDATION_FAILED" });
-  await assert.rejects(learningAction({ guide: { target: "preview", caption: "x".repeat(257) } }), { code: "ACTION_VALIDATION_FAILED" });
-  await assert.rejects(learningAction({ guide: { target: "preview" }, projectSlug: "alpha" }), { code: "ACTION_VALIDATION_FAILED" },
-    "the project-less action accepts no project");
-  await assert.rejects(execute({ learning: { open: true }, projectSlug: "alpha" }), { code: "ACTION_VALIDATION_FAILED" },
-    "Learning is opened through the project-less action");
-  await assert.rejects(execute({ guide: { target: "preview" }, learningMode: true, learningView: "learning", projectSlug: "alpha" }),
-    { code: "ACTION_VALIDATION_FAILED" }, "the retired Learning mode is no navigation field");
+  await assert.rejects(guide({ target: "preview", caption: "x".repeat(257) }), { code: "ACTION_VALIDATION_FAILED" });
+  await assert.rejects(guide({ target: "preview", projectSlug: "alpha" }), { code: "ACTION_VALIDATION_FAILED" },
+    "a guide opens in the person's own project, never a named one");
+  await assert.rejects(f.actions.execute({ actionId: "vibe64.colleague.navigation.open", context,
+    input: { guide: { target: "preview" }, projectSlug: "alpha" } }), { code: "ACTION_VALIDATION_FAILED" }, "navigation.open no longer guides");
+  await assert.rejects(f.actions.execute({ actionId: "vibe64.colleague.navigation.open-learning", context,
+    input: { guide: { target: "learning" } } }), { code: "ACTION_VALIDATION_FAILED" }, "navigation.open-learning no longer guides");
+  await assert.rejects(f.actions.execute({ actionId: "vibe64.colleague.navigation.open-management", context, input: { managementView: "accounts" } }),
+    { code: "ACTION_NOT_FOUND" }, "studio pages open through navigation.guide");
   assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null);
 
-  const pointed = learningAction({ guide: { target: "learning", caption: "Open Learning here" } });
+  const pointed = guide({ target: "learning", caption: "Open Learning here" });
   const command = await pendingNavigation(f, "tab-a");
-  assert.equal(command.learningMode, undefined, "point-only changes no view");
-  assert.equal(command.pane, undefined);
+  assert.equal(command.pane, undefined, "point-only changes no view");
   assert.equal(command.learning, undefined);
   assert.deepEqual(command.guide, { target: "learning", navigate: false, highlight: true, caption: "Open Learning here",
     steps: [{ id: "learning", label: "Learning" }] });
@@ -1981,20 +1979,22 @@ test("Colleague guide points at a real control without navigating and reports on
   assert.equal((await ack(command, { guide: { shown: false, reason: "target-hidden" } })).ok, true);
   assert.deepEqual(await pointed, { ok: true, guide: { shown: false, reason: "target-hidden" } });
 
-  const shown = execute({ guide: { target: "database-erd", navigate: true }, projectSlug: "alpha", sessionId: "session-1" });
+  // A project place opens in the project and session the browser has open.
+  const focus = { projectSlug: "alpha", sessionId: "session-1", conversationId: "", pane: "preview" };
+  await f.service.focus({ clientId: "tab-a", focus }, f.context);
+  const shown = guide({ target: "database-erd", navigate: true });
   const opened = await pendingNavigation(f, "tab-a");
   assert.deepEqual({ ...opened, id: "" }, { id: "", projectSlug: "alpha", sessionId: "session-1", conversationId: "", pane: "database",
     databaseView: "erd", status: "pending", guide: { target: "database-erd", navigate: true, highlight: true, caption: "Dashboard → Database → ERD",
       steps: [{ id: "dashboard", label: "Dashboard" }, { id: "database", label: "Database" }, { id: "database-erd", label: "ERD" }] } });
-  assert.equal(Object.hasOwn(opened, "learningMode"), false, "show me no longer selects a Learning mode");
-  const focus = { projectSlug: "alpha", sessionId: "session-1", conversationId: "", pane: "database", databaseScreen: "workspace", databaseView: "erd" };
-  assert.equal((await ack(opened, { focus: { ...focus, databaseView: "overview" }, guide: { shown: true, step: "database-erd" } })).ok, false,
+  const settled = { ...focus, pane: "database", databaseScreen: "workspace", databaseView: "erd" };
+  assert.equal((await ack(opened, { focus: { ...settled, databaseView: "overview" }, guide: { shown: true, step: "database-erd" } })).ok, false,
     "the guided place must be the one the browser settled on");
-  assert.equal((await ack(opened, { focus: { ...focus, pane: "preview" }, guide: { shown: true, step: "database-erd" } })).ok, false);
-  assert.equal((await ack(opened, { focus, guide: { shown: true, step: "database-erd" } })).ok, true);
-  assert.deepEqual(await shown, { ok: true, focus, guide: { shown: true, step: "database-erd" } });
+  assert.equal((await ack(opened, { focus: { ...settled, pane: "preview" }, guide: { shown: true, step: "database-erd" } })).ok, false);
+  assert.equal((await ack(opened, { focus: settled, guide: { shown: true, step: "database-erd" } })).ok, true);
+  assert.deepEqual(await shown, { ok: true, focus: settled, guide: { shown: true, step: "database-erd" } });
 
-  const learning = learningAction({ guide: { target: "learning", navigate: true } });
+  const learning = guide({ target: "learning", navigate: true });
   const showLearning = await pendingNavigation(f, "tab-a");
   assert.deepEqual(showLearning.learning, { open: true });
   assert.equal(showLearning.projectSlug, undefined);
@@ -2004,6 +2004,32 @@ test("Colleague guide points at a real control without navigating and reports on
   assert.deepEqual(await learning, { ok: true, focus: { learningOpen: true, learningSurface: "courses" }, guide: { shown: true, step: "learning" } });
   assert.deepEqual(f.observations.starts, []);
   assert.deepEqual(f.observations.mutations, []);
+});
+
+test("Colleague opens a host's studio pages through navigation.guide, owner pages only for the owner", async t => {
+  registerLearningVocabulary({ places: [
+    { id: "colleague-test-users", label: "Users", scope: "studio", who: "owner", open: { route: "/app/manage/colleague-test-users" },
+      steps: [{ id: "colleague-test-users", label: "Users" }] }] });
+  const f = await fixture(t, [], { watching: true });
+  await f.service.focus({ clientId: "tab-a", focus: {} }, f.context);
+  const context = { ...f.context, colleague: { clientId: "tab-a" } };
+  const guide = input => f.actions.execute({ actionId: "vibe64.colleague.navigation.guide", input, context });
+  f.observations.projectAllowed = false;
+  assert.deepEqual(await guide({ target: "colleague-test-users", navigate: true }),
+    { ok: false, error: "Users is only for the workspace owner, so it cannot be shown to this person." });
+  f.context.requestMeta.request.vibe64User.role = "owner";
+  const opening = guide({ target: "colleague-test-users", navigate: true });
+  const command = await pendingNavigation(f, "tab-a");
+  assert.deepEqual({ ...command, id: "" }, { id: "", route: "/app/manage/colleague-test-users", status: "pending",
+    guide: { target: "colleague-test-users", navigate: true, highlight: true, caption: "Users", steps: [{ id: "colleague-test-users", label: "Users" }] } });
+  const ack = input => f.actions.execute({ actionId: "vibe64.colleague.navigation.acknowledge", context: f.context,
+    input: { clientId: "tab-a", commandId: command.id, ok: true, ...input } });
+  assert.equal((await ack({ focus: { route: "/app/manage/projects" }, guide: { shown: true, step: "colleague-test-users" } })).ok, false,
+    "the browser must settle on the page's route");
+  assert.equal((await ack({ focus: { route: "/app/manage/colleague-test-users" }, guide: { shown: true, step: "colleague-test-users" } })).ok, true);
+  assert.deepEqual(await opening, { ok: true, focus: { route: "/app/manage/colleague-test-users" }, guide: { shown: true, step: "colleague-test-users" } });
+  f.observations.allow = false;
+  await assert.rejects(guide({ target: "colleague-test-users" }), { statusCode: 401 });
 });
 
 test("Colleague shows a lesson step in the Lesson pane, or opens or closes Courses, until its initiating browser confirms it", async t => {
@@ -2017,14 +2043,15 @@ test("Colleague shows a lesson step in the Lesson pane, or opens or closes Cours
     { learning: { open: true, attemptId } },
     { learning: { open: true, stepId: "one" } },
     { learning: { stepId: "one" } },
-    { learning: {} },
-    { learning: { open: true }, guide: { target: "learning" } }
+    { learning: {} }
   ]) {
     assert.equal((await execute(input)).ok, false, JSON.stringify(input));
     assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null);
   }
   await assert.rejects(execute({ learning: { open: true }, learningMode: true, learningView: "learning" }), { code: "ACTION_VALIDATION_FAILED" },
     "retired Learning mode fields cannot accompany Learning");
+  await assert.rejects(execute({ learning: { open: true }, guide: { target: "learning" } }), { code: "ACTION_VALIDATION_FAILED" },
+    "guides go through navigation.guide");
   assert.equal((await f.service.read({ clientId: "tab-a" }, f.context)).navigation, null);
   await assert.rejects(execute({ learning: { attemptId: "not-an-attempt" } }), { code: "ACTION_VALIDATION_FAILED" });
   const opening = execute({ learning: { attemptId, stepId: "open-preview" } });
@@ -2087,7 +2114,7 @@ test("moved navigation coordination fails an unacknowledged command after its or
 test("Colleague teaches through lessons, navigation, guides and checks, and never judges or reveals answers", () => {
   const colleagueInstructions = learnInstructions;
   assert.match(colleagueInstructions, /lesson\.read/u);
-  assert.match(colleagueInstructions, /navigation\.open guide/u);
+  assert.match(colleagueInstructions, /navigation\.guide/u);
   assert.match(colleagueInstructions, /navigation\.open-learning/u);
   // The lesson is read on the Learn page; Courses is its catalogue, and Teach me keeps the step on screen.
   assert.match(colleagueInstructions, /Courses, the button at the right of the lesson step bar \(also in the project menu beside L\), is the catalogue where lessons are chosen and started/u);
@@ -2180,33 +2207,6 @@ test("failed or disconnected plan-viewer navigation cannot report success", asyn
   }
   assert.deepEqual(f.observations.starts, []);
   assert.deepEqual(f.observations.mutations, []);
-});
-
-test("global Management navigation works without project access and cannot accept arbitrary destinations", async (t) => {
-  const f = await fixture(t, []);
-  await f.service.focus({ clientId: "tab-a", focus: {} }, f.context);
-  const context = { ...f.context, colleague: { clientId: "tab-a" } };
-  const execute = (input) => f.actions.execute({ actionId: "vibe64.colleague.navigation.open-management", input, context });
-  f.observations.projectAllowed = false;
-  for (const managementView of ["accounts", "system-repair"]) {
-    const pending = execute({ managementView });
-    let state;
-    for (let index = 0; index < 20; index += 1) {
-      state = await f.service.read({ clientId: "tab-a" }, f.context);
-      if (state.navigation?.managementView === managementView && state.navigation.status === "pending") break;
-      await new Promise((resolve) => setImmediate(resolve));
-    }
-    assert.equal(state.navigation.managementView, managementView);
-    assert.equal(state.navigation.projectSlug, undefined);
-    const focus = { projectSlug: "", sessionId: "", route: `/app/manage/${managementView}` };
-    await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: state.navigation.id, ok: true, focus }, f.context);
-    assert.deepEqual(await pending, { ok: true, focus });
-  }
-  for (const input of [{ managementView: "https://external.example" }, { managementView: "accounts", projectSlug: "alpha" }, {}]) {
-    await assert.rejects(execute(input), { code: "ACTION_VALIDATION_FAILED" });
-  }
-  f.observations.allow = false;
-  await assert.rejects(execute({ managementView: "projects" }), { statusCode: 401 });
 });
 
 test("integration navigation needs the exact session and pane and retains the panel's acknowledged selection", async (t) => {

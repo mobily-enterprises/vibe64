@@ -2,6 +2,7 @@ import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { trainingStepObservationSchema } from "../shared/practicalSchemas.js";
 import { attemptId, attemptSummary, id, operationError, pick as pickPresent, practiceSlug, requestId, text } from "./actions.js";
+import { availableStepIds } from "./lessonAvailability.js";
 
 // Learning v2 (Rev 4 C2): the lesson reader, step results, reader position,
 // the lesson in progress and the archived lessons. Admission is the existing
@@ -88,6 +89,7 @@ function stepProjection(step) {
     ...(step.beats ? { beats: step.beats.map(beat => pick(beat, ["kind", "target", "path", "prompt", "text"])) } : {}),
     check: { kind: check.kind,
       ...(check.kind === "auto" ? pick(check, ["check", "files"]) : {}),
+      ...(check.kind === "fact" ? pick(check, ["fact"]) : {}),
       ...(check.kind === "choice" ? pick(check, ["question", "options"]) : {}),
       ...(check.kind === "review" ? { rubric: check.rubric, evidence: check.evidence || ["changes"] } : {}) }
   };
@@ -192,7 +194,7 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
   const lessonRead = definition("lesson.read", { attemptId: { ...attemptId, required: false },
     page: { type: "integer", required: false, min: 0, max: 31 } }, { kind: "query", idempotency: "none", output: lessonOutput,
     transformResult: assistantLessonResult,
-    description: "Read the learner's lesson as the reader shows it: its steps in order with their text, visual, guide and beats (the short show/do/check lines the lesson step bar plays for a step; the bar plays them, never you), each step's check kind (automatic, choice, review, self-check or none; a review shows its rubric) and the learner's saved step results. Without attemptId this reads the active attempt; learning.read lists the others. Teach from this: explain the current step, open the real screens with navigation guides and replay the step's visual. A choice question never includes its answer; never guess or reveal one. Results are decided only by automatic checks, the learner's own answer, a review the learner ran with Check my work (their own AI judging their work against the rubric; you never run one) and the learner's own Done (on a self-check or reading step); never say a step passed unless a result here says passed. When page.count is above 1, read the other pages for the remaining step text." },
+    description: "Read the learner's lesson as the reader shows it: its steps in order with their text, visual, guide and beats (the short show/do/check lines the lesson step bar plays for a step; the bar plays them, never you), its stage (studio: taught on the screens outside any project; project: in its practice project), each step's check kind (automatic, choice, review, fact, self-check or none; a review shows its rubric, a fact names what is checked) and the learner's saved step results. Without attemptId this reads the active attempt; learning.read lists the others. Teach from this: explain the current step, open the real screens with navigation guides and replay the step's visual. A choice question never includes its answer; never guess or reveal one. Steps this person cannot take here are left out. Results are decided only by automatic and fact checks, the learner's own answer, a review the learner ran with Check my work (their own AI judging their work against the rubric; you never run one) and the learner's own Done (on a self-check or reading step); never say a step passed unless a result here says passed. When page.count is above 1, read the other pages for the remaining step text." },
   async (input, actor) => {
     let attempt;
     if (input.attemptId) attempt = (await readAttempt(actor, input.attemptId)).attempt;
@@ -201,7 +203,10 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
     const slug = await practiceSlug({ attempt, actor, learningSpace });
     const lesson = await content.readLesson({ ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
     const summary = attemptSummary(attempt, slug);
-    const projected = lesson.steps.map(step => ({ ...stepProjection(step), bodyText: step.bodyText }));
+    // Steps this learner cannot take here (a place this installation does not
+    // have, or one only the owner sees) are simply absent.
+    const available = availableStepIds(lesson, actor);
+    const projected = lesson.steps.filter(step => available.has(step.id)).map(step => ({ ...stepProjection(step), bodyText: step.bodyText }));
     const count = pageBodies(projected, lesson.notesText);
     const index = input.page ?? 0;
     if (index >= count) throw failure(`This lesson has ${count} page(s).`, "ACTION_VALIDATION_FAILED", 400);
@@ -212,8 +217,10 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
     return {
       ok: true, available: true, attempt: summary,
       lesson: {
-        schemaVersion: 2, code: lesson.lesson.code, hash: lesson.hash, title: lesson.lesson.title,
+        schemaVersion: lesson.lesson.schemaVersion, code: lesson.lesson.code, hash: lesson.hash, title: lesson.lesson.title,
         ...pick(lesson.lesson, ["estimatedMinutes"]), exercise: Boolean(lesson.lesson.exercise),
+        // Where the lesson runs (format 3): studio or project; null for a retired format.
+        stage: lesson.lesson.schemaVersion === 3 ? lesson.lesson.stage : null,
         ...(lesson.notesText !== undefined && index === 0 ? { notesText: lesson.notesText } : {}),
         visuals: lesson.visuals.map(visualProjection), steps: projected
       },

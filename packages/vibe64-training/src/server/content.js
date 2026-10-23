@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { lstat, readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
-import { topicSchema, visualSchema, validateContent, validateLesson } from "./contentSchemas.js";
-import { trainingGuideRequest } from "../shared/guideTargets.js";
+import { lessonHasSteps, topicSchema, visualSchema, validateContent, validateLesson } from "./contentSchemas.js";
+import { declaredLearningVocabulary, trainingGuideRequest } from "../shared/learningVocabulary.js";
 import { TRAINING_BEAT_CHECKS, beatNeedsPracticeProject, splitStepBeats } from "../shared/beats.js";
 
 const excludedExerciseEntries = new Set([".git", "node_modules", ".genesis"]);
@@ -109,12 +109,15 @@ function bundleAssessments(lesson, document, include, checks) {
   }
 }
 
-// Lesson format v2 step rules. Checks decide alone: auto runs a declared check,
-// choice compares with the authored answer, review asks the learner's own AI
-// to judge their practice work against the rubric, self is the learner's own
-// tick and none records nothing, so it can never be required.
-function validateSteps(lesson, visuals, checks, code, bodies) {
+// Lesson format v2/v3 step rules. Checks decide alone: auto runs a declared
+// check, choice compares with the authored answer, review asks the learner's
+// own AI to judge their practice work against the rubric, fact asks a
+// registered fact reader (v3), self is the learner's own tick and none
+// records nothing, so it can never be required. Places, activities and facts
+// are the topic's vocabulary: public's built-ins plus the names it declares.
+function validateSteps(lesson, visuals, checks, code, bodies, vocabulary) {
   const fail = message => { throw new Error(`Lesson ${code}: ${message}`); };
+  if (lesson.schemaVersion === 3 && lesson.stage === "project" && !lesson.exercise) fail("a project lesson needs its exercise (a practice project).");
   if (!lesson.steps.length) fail("needs at least one step.");
   uniqueIds(lesson.steps, "id", "Steps");
   if (!lesson.steps.some(step => step.required)) fail("needs a required step.");
@@ -142,25 +145,29 @@ function validateSteps(lesson, visuals, checks, code, bodies) {
     }
     if (step.guide) {
       const { caption, ...request } = step.guide;
-      try { trainingGuideRequest(request); } catch (error) { fail(`${label} guide: ${error.message}`); }
+      try { trainingGuideRequest(request, vocabulary); } catch (error) { fail(`${label} guide: ${error.message}`); }
     }
     let beats = null;
-    try { ({ beats } = splitStepBeats(bodies.get(step.body))); } catch (error) { fail(`${label} beats: ${error.message}`); }
+    try { ({ beats } = splitStepBeats(bodies.get(step.body), vocabulary)); } catch (error) { fail(`${label} beats: ${error.message}`); }
     if (beats) {
       if (step.guide) fail(`${label} has both beats and a guide; its beats replace the guide.`);
       const checkBeat = beats.find(beat => beat.kind === "check");
       if (checkBeat && TRAINING_BEAT_CHECKS[checkBeat.target] !== step.check.kind) {
         fail(`${label} beat check ${checkBeat.target} does not match its ${step.check.kind} check.`);
       }
-      const needs = beats.find(beatNeedsPracticeProject);
+      const needs = beats.find(beat => beatNeedsPracticeProject(beat, vocabulary));
       if (needs && !lesson.exercise) fail(`${label} beat ${needs.kind} ${needs.target} needs the lesson's exercise (a practice project).`);
     }
     const check = step.check;
     const allowed = { auto: ["check", "files"], choice: ["question", "options", "answer"], review: ["rubric", "evidence"],
-      self: [], none: [] }[check.kind];
+      fact: ["fact"], self: [], none: [] }[check.kind];
     const extra = Object.keys(check).filter(key => key !== "kind" && !allowed.includes(key));
     if (extra.length) fail(`${label} ${check.kind} check cannot declare ${extra.join(", ")}.`);
     if (check.kind === "none" && step.required) fail(`${label} has no check and cannot be required.`);
+    if (check.kind === "fact") {
+      if (lesson.schemaVersion !== 3) fail(`${label} fact check needs lesson format 3.`);
+      if (!check.fact || !vocabulary.hasFact(check.fact)) fail(`${label} checks an unknown fact; declare a host's fact in the topic's facts.`);
+    }
     if (check.kind === "auto") {
       if (!check.check || !checks.has(check.check)) fail(`${label} names an unknown check.`);
       if (!lesson.exercise) fail(`${label} runs a declared check and needs the lesson's exercise.`);
@@ -189,12 +196,12 @@ function validateSteps(lesson, visuals, checks, code, bodies) {
   }
 }
 
-async function bundleLesson(reader, entry, { authoring }) {
+async function bundleLesson(reader, entry, { authoring, vocabulary }) {
   const descriptor = await reader.json(entry.descriptor);
   const lesson = validateLesson(descriptor.value, entry.code);
   if (lesson.code !== entry.code) throw new Error(`Lesson code mismatch: ${entry.code}.`);
-  if (authoring && lesson.schemaVersion === 1) {
-    throw new Error(`Lesson ${entry.code} uses retired lesson format 1. Author it in format 2 with steps.`);
+  if (authoring && lesson.schemaVersion !== 3) {
+    throw new Error(`Lesson ${entry.code} uses retired lesson format ${lesson.schemaVersion}. Author it in format 3 with steps and its stage.`);
   }
   const base = path.dirname(descriptor.filename);
   const files = new Map();
@@ -216,7 +223,7 @@ async function bundleLesson(reader, entry, { authoring }) {
     for (const asset of check.assets || []) include(await reader.read(asset, base));
   }
   if (lesson.schemaVersion === 1) bundleAssessments(lesson, await reader.read(lesson.document, base), include, checks);
-  if (lesson.schemaVersion === 2) {
+  if (lessonHasSteps(lesson)) {
     for (const reference of [lesson.notes, ...new Set(lesson.steps.map(step => step.body))]) {
       if (reference === undefined) continue;
       const file = await reader.read(reference, base);
@@ -304,7 +311,7 @@ async function bundleLesson(reader, entry, { authoring }) {
       }
     }
   }
-  if (lesson.schemaVersion === 2) validateSteps(lesson, visuals, checks, entry.code, bodies);
+  if (lessonHasSteps(lesson)) validateSteps(lesson, visuals, checks, entry.code, bodies, vocabulary);
   const manifest = { schemaVersion: 1, code: lesson.code, files: [...files.values()].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0) };
   return { lesson, manifest, hash: hash(canonicalJson(manifest)), descriptorPath: descriptor.relative, served };
 }
@@ -322,17 +329,18 @@ async function validateTopic(directory, { authoring = false } = {}) {
   uniqueIds(topic.prerequisites, "topicId", "Topic prerequisites");
   if (!topic.lessons.length) throw new Error("A topic needs lessons.");
   if (topic.status === "released" && topic.lessons.some(entry => entry.required && entry.status !== "published")) throw new Error("A released topic contains required draft lessons.");
+  const vocabulary = declaredLearningVocabulary(topic);
   const bundles = [];
   const served = new Set();
   for (const entry of topic.lessons) {
     // Draft descriptors are validated too; draft status never grants permission to teach them.
-    const { served: lessonServed, ...bundle } = await bundleLesson(reader, entry, { authoring });
+    const { served: lessonServed, ...bundle } = await bundleLesson(reader, entry, { authoring, vocabulary });
     for (const file of lessonServed) served.add(file);
     bundles.push({ ...bundle, status: entry.status, required: entry.required });
   }
-  // A v2 lesson descriptor holds choice answers; no learner-readable file may be one.
+  // A step lesson's descriptor holds choice answers; no learner-readable file may be one.
   for (const { descriptorPath, lesson } of bundles) {
-    if (lesson.schemaVersion === 2 && served.has(descriptorPath)) {
+    if (lessonHasSteps(lesson) && served.has(descriptorPath)) {
       throw new Error(`Lesson ${lesson.code} descriptor cannot also be a step body, notes, visual or exercise file.`);
     }
   }

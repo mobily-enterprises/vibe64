@@ -15,7 +15,7 @@ import { createTrainingLearnerChangedPublisher } from "../../packages/vibe64-tra
 // separate from any lesson. L switches between Learn and Develop; switching
 // never ends, archives or changes the lesson in progress. The core
 // Learn/Develop project rule (C4) is tested with its owner.
-const fixtureTopic = new URL("../fixtures/training/steps-v2/", import.meta.url);
+const fixtureTopic = new URL("../fixtures/training/steps-v3/", import.meta.url);
 const ALICE = { uid: 42, username: "alice", role: "member" };
 const BOB = { uid: 43, username: "bob", role: "member" };
 const OWNER = { uid: 1, username: "owner", role: "owner" };
@@ -63,7 +63,7 @@ function actionsFixture(f, { exercises = null } = {}) {
 
 test("Learn mode is a saved flag of its own: off by default, on with no lesson, and per learner", async t => {
   const f = await fixture(t);
-  const off = { on: false, currentAttemptId: "", lessonCode: "", lessonTitle: "", practiceSlug: "" };
+  const off = { on: false, currentAttemptId: "", lessonCode: "", lessonTitle: "", lessonStage: "", practiceSlug: "" };
   assert.deepEqual(await f.learners.readLearningMode({ actor: ALICE, includeTitle: true }), off, "absent means Develop");
   await f.learners.setLearningMode({ actor: ALICE, on: true });
   assert.deepEqual(await f.learners.readLearningMode({ actor: ALICE, includeTitle: true }), { ...off, on: true },
@@ -71,7 +71,7 @@ test("Learn mode is a saved flag of its own: off by default, on with no lesson, 
   assert.deepEqual(await f.learners.readLearningMode({ actor: BOB, includeTitle: true }), off, "another learner is unaffected");
   const lesson = await f.start(ALICE);
   assert.deepEqual(await f.learners.readLearningMode({ actor: ALICE, includeTitle: true }), { on: true,
-    currentAttemptId: lesson.attemptId, lessonCode: "STEPS-ONE", lessonTitle: f.title, practiceSlug: lesson.projectSlug });
+    currentAttemptId: lesson.attemptId, lessonCode: "STEPS-ONE", lessonTitle: f.title, lessonStage: "project", practiceSlug: lesson.projectSlug });
 });
 
 test("a lesson whose practice project is not prepared yet has no practice slug", async t => {
@@ -89,7 +89,7 @@ test("L switches Learn and Develop for the signed-in learner, notifies every tab
   await f.learners.setLearningMode({ actor: ALICE, on: true });
   const read = await a.execute("learning-mode.read");
   assert.deepEqual(read, { ok: true, available: true, learningMode: { on: true, currentAttemptId: attempt.attemptId,
-    lessonCode: "STEPS-ONE", lessonTitle: f.title, practiceSlug: attempt.projectSlug } });
+    lessonCode: "STEPS-ONE", lessonTitle: f.title, lessonStage: "project", practiceSlug: attempt.projectSlug } });
   assert.equal((await a.execute("learning.read")).learningMode.on, true, "learning.read carries the mode for L");
   const before = await f.learners.readState({ actor: ALICE });
 

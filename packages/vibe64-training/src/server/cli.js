@@ -2,6 +2,7 @@ import { mkdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promis
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { bundleFiles, canonicalJson, validateTopic } from "./content.js";
+import { lessonHasSteps } from "./contentSchemas.js";
 import { createCourseLock, readPinnedTopic } from "./catalogue.js";
 import { createTrainingContentInstaller } from "./contentInstaller.js";
 import { createInstalledTrainingCatalogue } from "./installedCatalogue.js";
@@ -103,7 +104,7 @@ async function runTrainingCli(args, { write = text => console.log(text) } = {}) 
   }
   write(JSON.stringify({ ok: true, topicId: result.topic.topicId, status: result.topic.status,
     lessons: result.bundles.map(({ lesson, hash, status }) => ({ code: lesson.code, hash, status, schemaVersion: lesson.schemaVersion,
-      ...lesson.schemaVersion === 2 ? { steps: lesson.steps.length } : {} })) }, null, 2));
+      ...lesson.stage ? { stage: lesson.stage } : {}, ...lessonHasSteps(lesson) ? { steps: lesson.steps.length } : {} })) }, null, 2));
   return 0;
 }
 

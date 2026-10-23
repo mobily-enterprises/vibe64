@@ -191,7 +191,7 @@ function createTrainingActions({ catalogue, learners, exercises = null, courseIn
   // Colleague read it; every tab of this learner rereads it on
   // vibe64.training.learner.changed.
   const modeAvailable = typeof learners.readLearningMode === "function";
-  const learningModeView = mode => mode ? pick(mode, ["on", "currentAttemptId", "lessonCode", "lessonTitle", "practiceSlug"]) : { on: false };
+  const learningModeView = mode => mode ? pick(mode, ["on", "currentAttemptId", "lessonCode", "lessonTitle", "lessonStage", "practiceSlug"]) : { on: false };
   const notifyLearner = async (actor, attemptId, reason = "lesson") => {
     if (typeof publishLearnerChanged === "function") await publishLearnerChanged({ actor, attemptId, reason });
   };
@@ -266,7 +266,7 @@ function createTrainingActions({ catalogue, learners, exercises = null, courseIn
         ...(modeAvailable ? await learners.readLearningMode({ actor, includeTitle: true })
           .then(mode => ({ learningMode: learningModeView(mode) }), () => ({})) : {}) };
     }),
-    definition("learning-mode.read", {}, "Read whether this signed-in person is in Learn mode or Develop mode. Vibe64 has two modes with the same screens: Develop works on the person's real projects; Learn works only on their practice projects, with Colleague as the teacher. on is true in Learn mode; currentAttemptId, lessonCode and lessonTitle name the lesson in progress (empty when there is none, which is normal in Learn mode) and practiceSlug its practice project (empty while it is being prepared or when the lesson has none). Switching mode never ends or changes a lesson. This is read-only.", async (_input, actor) => {
+    definition("learning-mode.read", {}, "Read whether this signed-in person is in Learn mode or Develop mode. Vibe64 has two modes with the same screens: Develop works on the person's real projects; Learn works only on their practice projects, with Colleague as the teacher. on is true in Learn mode; currentAttemptId, lessonCode and lessonTitle name the lesson in progress (empty when there is none, which is normal in Learn mode), lessonStage where it runs (studio: the screens outside any project; project: its practice project) and practiceSlug its practice project (empty while it is being prepared or when the lesson has none). Switching mode never ends or changes a lesson. This is read-only.", async (_input, actor) => {
       if (!modeAvailable) return { ok: false, available: false, error: "Learn mode is unavailable in this installation." };
       return { ok: true, available: true, learningMode: learningModeView(await learners.readLearningMode({ actor, includeTitle: true })) };
     }),

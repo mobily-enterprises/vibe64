@@ -5,7 +5,7 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { createHash } from "node:crypto";
 import { canonicalJson } from "./content.js";
-import { validateContent } from "./contentSchemas.js";
+import { lessonHasSteps, validateContent } from "./contentSchemas.js";
 import { codeStepOf, readDeclaredFiles, verifyStepAuthorship } from "./codeAuthorship.js";
 
 const identity = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 128,
@@ -165,7 +165,7 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
   // A version 2 step's automatic response check: an exercise interaction check
   // (not a code check) declared by the exact pinned lesson.
   function responseStepCheck(lesson, id) {
-    const step = lesson.lesson.schemaVersion === 2 ? lesson.lesson.steps?.find(value => value.id === id) : null;
+    const step = lessonHasSteps(lesson.lesson) ? lesson.lesson.steps?.find(value => value.id === id) : null;
     const check = step?.check?.kind === "auto" ? lesson.lesson.checks?.find(value => value.id === step.check.check) : null;
     if (!check || check.kind === "code") {
       throw failure("VIBE64_TRAINING_CHECK_UNDECLARED", "This lesson step does not declare an exercise response check.");

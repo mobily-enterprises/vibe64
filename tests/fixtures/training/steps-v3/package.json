@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "repository": { "type": "git", "url": "https://github.com/examples/learn-steps-fixture.git" },
   "vibe64Training": {
-    "schemaVersion": 1, "topicId": "steps", "domainId": "vibe64", "title": "Lesson format v2 fixture",
+    "schemaVersion": 1, "topicId": "steps", "domainId": "vibe64", "title": "Lesson format v3 fixture",
     "status": "preview", "outline": "outline.md", "prerequisites": [],
     "lessons": [{ "code": "STEPS-ONE", "descriptor": "lesson.json", "status": "published", "required": true }]
   }
