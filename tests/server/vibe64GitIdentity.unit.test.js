@@ -153,16 +153,19 @@ test("Git failures a person can fix read as one plain sentence", async (t) => {
   const aptBin = path.join(root, "apt-bin");
   await mkdir(aptBin);
   await writeFile(path.join(aptBin, "apt-get"), "#!/bin/sh\n", { mode: 0o755 });
-  const apt = { env: { PATH: aptBin }, platform: "linux" };
+  const apt = { env: { PATH: aptBin }, platform: "linux", systemPath: "" };
 
   assert.equal(gitInstallCommand({ env: { PATH: "" }, platform: "darwin" }), "xcode-select --install");
   assert.equal(gitInstallCommand(apt), "sudo apt install git");
-  assert.equal(gitInstallCommand({ env: { PATH: path.join(root, "none") }, platform: "linux" }), "");
+  assert.equal(gitInstallCommand({ env: { PATH: path.join(root, "none") }, platform: "linux", systemPath: "" }), "");
+  // Git runs with the system folders after PATH, so apt-get is found there too.
+  assert.equal(gitInstallCommand({ env: { PATH: "" }, platform: "linux", systemPath: aptBin }), "sudo apt install git");
 
   const missing = describeGitFailure({ error: "Command failed with ENOENT: git init\nspawn git ENOENT" }, apt);
   assert.equal(missing.code, "vibe64_git_missing");
   assert.equal(missing.message, "Git isn't installed on this computer. Install it with: sudo apt install git");
   assert.equal(describeGitFailure({ stderr: "bash: line 1: git: command not found\n" }, apt).code, "vibe64_git_missing");
+  assert.equal(describeGitFailure({ error: "Error: spawnSync git ENOENT" }, apt).code, "vibe64_git_missing");
 
   const old = describeGitFailure({ stderr: "error: unknown option `initial-branch=main'\nusage: git init" }, apt);
   assert.equal(old.code, "vibe64_git_too_old");
