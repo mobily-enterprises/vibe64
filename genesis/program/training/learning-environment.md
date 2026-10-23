@@ -100,7 +100,13 @@ guide overlay 3000 above L 2400 above Colleague.
   closing (`colleague-opened`, `colleague-minimised`), the L switch
   (`learn-toggled`, place `learning`). It shows a confirmation for 1.5 s, then moves on. The
   detected do beats are this tab's only; when all of a `self` step's do beats
-  were detected the controller records `done`.
+  were detected the controller records `done`. A step already passed
+  (`passed(stepId)`) confirms its do beats at once. Beats are identified by
+  their content, so a lesson re-read after a step result (new step objects)
+  leaves the current beat playing as it was.
+- Fact checks (`check fact`) offer **Check now** in the bar and the Lesson
+  pane; Courses (`courses.list`) lists only the lessons this person can take
+  here.
 - Review check (`review(stepId)`, `savedReview`, `reviewNote`): Check my work
   on a `check.kind:"review"` step posts `step.review.run` (route
   `/attempts/:attemptId/steps/review`) through the same step action path as
