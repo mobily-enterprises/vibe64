@@ -346,7 +346,7 @@ test("launch preview proxy preserves the canonical target host when using an alt
 test("launch preview proxy can expose previews through a Caddy-compatible Unix socket origin", async () => {
   const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-sockets-"));
   await withTargetServer(async (target) => {
-    const publicOrigin = "https://v64preview-abcd1234--workspace.vibe64.dev";
+    const publicOrigin = "https://v64preview-abcd1234ef56.workspace.users.vibe64.dev";
     const registry = createLaunchPreviewProxyRegistry({
       env: {
         VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
@@ -366,20 +366,20 @@ test("launch preview proxy can expose previews through a Caddy-compatible Unix s
         previewPublicSocketPath(publicOrigin, {
           VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
         }),
-        path.join(socketDir, "v64preview-abcd1234--workspace.sock")
+        path.join(socketDir, "v64preview-abcd1234ef56--workspace.sock")
       );
       assert.equal((await stat(socketDir)).mode & 0o777, 0o700);
       assert.equal(
-        (await stat(path.join(socketDir, "v64preview-abcd1234--workspace.sock"))).mode & 0o777,
+        (await stat(path.join(socketDir, "v64preview-abcd1234ef56--workspace.sock"))).mode & 0o777,
         0o600
       );
 
       const response = await requestUnixSocket({
         headers: {
-          Host: "v64preview-abcd1234--workspace.vibe64.dev"
+          Host: "v64preview-abcd1234ef56.workspace.users.vibe64.dev"
         },
         path: `${new URL(preview.href).pathname}${new URL(preview.href).search}`,
-        socketPath: path.join(socketDir, "v64preview-abcd1234--workspace.sock")
+        socketPath: path.join(socketDir, "v64preview-abcd1234ef56--workspace.sock")
       });
       assert.equal(response.statusCode, 200);
       assert.match(response.body, /Target home/u);
@@ -397,7 +397,7 @@ test("launch preview proxy can expose previews through a Caddy-compatible Unix s
 test("HTTPS preview preserves secure cookies and redirects from a proxy-aware HTTP app", async () => {
   const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-https-"));
   await withTargetServer(async (target) => {
-    const publicOrigin = "https://v64preview-abcd1234--workspace.vibe64.dev";
+    const publicOrigin = "https://v64preview-abcd1234ef56.workspace.users.vibe64.dev";
     const env = { VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir };
     const registry = createLaunchPreviewProxyRegistry({ env });
     try {
@@ -457,7 +457,7 @@ test("HTTPS preview preserves secure cookies and redirects from a proxy-aware HT
 test("launch preview proxy republishes a public socket removed outside its registry", async () => {
   const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-republish-"));
   await withTargetServer(async (target) => {
-    const publicOrigin = "https://v64preview-deadbeef1234--workspace.vibe64.dev";
+    const publicOrigin = "https://v64preview-deadbeef1234.workspace.users.vibe64.dev";
     const env = {
       VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
     };
@@ -508,7 +508,7 @@ test("launch preview proxy republishes a public socket removed outside its regis
 test("launch preview proxy inherits the host XDG runtime directory when scoped env omits it", async () => {
   const runtimeDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-runtime-"));
   await withTargetServer(async (target) => {
-    const publicOrigin = "https://v64preview-feedface1234--workspace.vibe64.dev";
+    const publicOrigin = "https://v64preview-feedface1234.workspace.users.vibe64.dev";
     const socketPath = previewPublicSocketPath(publicOrigin, {
       XDG_RUNTIME_DIR: runtimeDir
     });
@@ -542,16 +542,16 @@ test("launch preview public socket path isolates localhost HTTP origins by port"
   const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-sockets-"));
   try {
     assert.equal(
-      previewPublicSocketPath("http://v64preview-abcd1234--workspace.localhost:3000", {
+      previewPublicSocketPath("http://v64preview-abcd1234ef56.workspace.users.localhost:3000", {
         VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
       }),
-      path.join(socketDir, "v64preview-abcd1234--workspace--p3000.sock")
+      path.join(socketDir, "v64preview-abcd1234ef56--workspace--p3000.sock")
     );
     assert.equal(
-      previewPublicSocketPath("http://v64preview-abcd1234--workspace.localhost:3001", {
+      previewPublicSocketPath("http://v64preview-abcd1234ef56.workspace.users.localhost:3001", {
         VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
       }),
-      path.join(socketDir, "v64preview-abcd1234--workspace--p3001.sock")
+      path.join(socketDir, "v64preview-abcd1234ef56--workspace--p3001.sock")
     );
   } finally {
     await rm(socketDir, {
@@ -563,25 +563,25 @@ test("launch preview public socket path isolates localhost HTTP origins by port"
 
 test("launch preview public socket path defaults under XDG runtime dir", () => {
   assert.equal(
-    previewPublicSocketPath("https://v64preview-abcd1234--workspace.vibe64.dev", {
+    previewPublicSocketPath("https://v64preview-abcd1234ef56.workspace.users.vibe64.dev", {
       XDG_RUNTIME_DIR: "/run/user/1000"
     }),
-    "/run/user/1000/vibe64/apps/v64preview-abcd1234--workspace.sock"
+    "/run/user/1000/vibe64/apps/v64preview-abcd1234ef56--workspace.sock"
   );
   assert.equal(
-    previewPublicSocketPath("https://v64preview-abcd1234--workspace.vibe64.dev", {
+    previewPublicSocketPath("https://v64preview-abcd1234ef56.workspace.users.vibe64.dev", {
       VIBE64_PREVIEW_PROXY_SOCKET_DIR: "/srv/preview-sockets",
       XDG_RUNTIME_DIR: "/run/user/1000"
     }),
-    "/srv/preview-sockets/v64preview-abcd1234--workspace.sock"
+    "/srv/preview-sockets/v64preview-abcd1234ef56--workspace.sock"
   );
 });
 
 test("launch preview public socket path falls back to a per-user temporary dir", () => {
   const base = process.platform === "darwin" ? "/tmp" : os.tmpdir();
   assert.equal(
-    previewPublicSocketPath("https://v64preview-abcd1234--workspace.vibe64.dev", {}),
-    path.join(base, `vibe64-${process.getuid()}`, "apps", "v64preview-abcd1234--workspace.sock")
+    previewPublicSocketPath("https://v64preview-abcd1234ef56.workspace.users.vibe64.dev", {}),
+    path.join(base, `vibe64-${process.getuid()}`, "apps", "v64preview-abcd1234ef56--workspace.sock")
   );
 });
 
@@ -655,7 +655,7 @@ test("launch preview proxy prunes only stale sockets that match its managed name
 test("launch preview proxy reuses an in-flight public Unix socket start", async () => {
   const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-sockets-"));
   await withTargetServer(async (target) => {
-    const publicOrigin = "https://v64preview-concurrent--workspace.vibe64.dev";
+    const publicOrigin = "https://v64preview-concurrent12.workspace.users.vibe64.dev";
     const socketPath = previewPublicSocketPath(publicOrigin, {
       VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
     });
@@ -699,7 +699,7 @@ test("launch preview proxy reuses an in-flight public Unix socket start", async 
 test("launch preview restarts keep their origin and rotate their bearer token", async () => {
   const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-restart-"));
   await withTargetServer(async (target) => {
-    const publicOrigin = "https://v64preview-123456abcdef--workspace.vibe64.dev";
+    const publicOrigin = "https://v64preview-123456abcdef.workspace.users.vibe64.dev";
     const env = {
       VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
     };
@@ -754,7 +754,7 @@ test("launch preview restarts keep their origin and rotate their bearer token", 
 test("launch preview proxy does not unlink a live public Unix socket owned outside the registry", async () => {
   const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-sockets-"));
   await withTargetServer(async (target) => {
-    const publicOrigin = "https://v64preview-liveowned--workspace.vibe64.dev";
+    const publicOrigin = "https://v64preview-liveowned123.workspace.users.vibe64.dev";
     const socketPath = previewPublicSocketPath(publicOrigin, {
       VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
     });
@@ -815,7 +815,7 @@ test("launch preview proxy does not unlink a live public Unix socket owned outsi
 test("launch preview proxy keeps public tokens valid after local status ensures", async () => {
   const socketDir = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-sockets-"));
   await withTargetServer(async (target) => {
-    const publicOrigin = "https://v64preview-tokenstable--workspace.vibe64.dev";
+    const publicOrigin = "https://v64preview-tokenstable1.workspace.users.vibe64.dev";
     const registry = createLaunchPreviewProxyRegistry({
       env: {
         VIBE64_PREVIEW_PROXY_SOCKET_DIR: socketDir
@@ -1674,11 +1674,11 @@ test("launch preview proxy rewrites same-origin redirects to the proxy origin", 
 test("launch preview proxy keeps target redirects on clean proxy URLs", () => {
   assert.equal(
     proxiedLocation("/auth/login?returnTo=/home%3Fmode%3Ddev", {
-      proxyOrigin: "https://v64preview-abcd--workspace.vibe64.dev",
+      proxyOrigin: "https://v64preview-abcd1234ef56.workspace.users.vibe64.dev",
       targetOrigin: "http://127.0.0.1:4100",
       token: "preview-token"
     }),
-    "https://v64preview-abcd--workspace.vibe64.dev/auth/login?returnTo=/home%3Fmode%3Ddev"
+    "https://v64preview-abcd1234ef56.workspace.users.vibe64.dev/auth/login?returnTo=/home%3Fmode%3Ddev"
   );
 });
 

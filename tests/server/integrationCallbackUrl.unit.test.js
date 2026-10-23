@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { integrationCallbackUrl } from "../../src/lib/integrationCallbackUrl.js";
 
 test("callback suggestion uses the assigned app origin and declared callback path", () => {
-  assert.equal(integrationCallbackUrl("https://sas-dogandgroom.hosting.vibe64.dev", "/integrations/google/callback"),
-    "https://sas-dogandgroom.hosting.vibe64.dev/integrations/google/callback");
+  assert.equal(integrationCallbackUrl("https://my-app.example.com", "/integrations/google/callback"),
+    "https://my-app.example.com/integrations/google/callback");
   assert.equal(integrationCallbackUrl("http://localhost:8080", "/integrations/google/callback"),
     "http://localhost:8080/integrations/google/callback");
 });

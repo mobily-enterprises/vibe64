@@ -2107,13 +2107,10 @@ function previewPublicSocketPath(publicOrigin = "", env = process.env) {
   const origin = normalizePreviewPublicOrigin(publicOrigin);
   const url = new URL(origin);
   const host = url.hostname;
-  // <preview>.<workspace>.<domain> nests a Preview under its editor host;
-  // <preview>--<workspace>.<domain> is the flat form. Both name one socket.
-  const label = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
-  const match = new RegExp(`^(${label})--(${label})(?:\\.|$)`, "u").exec(host) ||
-    new RegExp(`^(v64preview-[a-z0-9]{12})\\.(${label})\\.`, "u").exec(host);
+  // A Preview nests under its editor host: <preview>.<workspace>.<domain>.
+  const match = /^(v64preview-[a-z0-9]{12})\.([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)\./u.exec(host);
   if (!match) {
-    throw new Error("Launch preview public origin must use the <preview>.<workspace> or <preview>--<workspace> host format.");
+    throw new Error("Launch preview public origin must use the <preview>.<workspace> host format.");
   }
   const socketDir = previewProxySocketDir(env);
   const portSuffix = url.port ? `--p${url.port}` : "";
