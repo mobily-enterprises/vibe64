@@ -32,7 +32,11 @@
     </header>
 
     <v-expand-transition>
-      <div v-if="!connected(database) || editing" class="db-server__body">
+      <div
+        v-if="!connected(database) || editing"
+        class="db-server__body"
+        :class="{ 'db-server__body--start-first': !showFields(database) }"
+      >
         <p
           class="db-server__status"
           :class="{ 'db-server__status--fresh': fresh }"
@@ -43,8 +47,20 @@
         </p>
 
         <form class="db-server__form" @submit.prevent="saveAndCheck(database)">
+          <p v-if="!showFields(database)" class="db-server__looking">
+            <span>Looking for it at <code>{{ where(database) }}</code></span>
+            <v-btn
+              class="db-server__change"
+              color="primary"
+              density="comfortable"
+              variant="text"
+              @click="editing = true"
+            >
+              Change
+            </v-btn>
+          </p>
           <v-text-field
-            v-for="field in database.fields"
+            v-for="field in (showFields(database) ? database.fields : [])"
             :key="field.name"
             v-model="form[field.name]"
             :autocomplete="field.secret ? 'new-password' : 'off'"
@@ -83,7 +99,7 @@
             >
               {{ dirty ? "Save and check" : "Check again" }}
             </v-btn>
-            <span class="db-server__saved-where">Kept in this project's Env.</span>
+            <span v-if="showFields(database)" class="db-server__saved-where">Kept in this project's Env.</span>
           </div>
         </form>
 
@@ -268,6 +284,12 @@ function where(database) {
   return `${value(database, "host")}:${value(database, "port")} · database ${value(database, "database")} · user ${value(database, "username")}`;
 }
 
+// While nothing answers, the next step is starting the server, not editing
+// settings: they fold into one line until the person chooses Change.
+function showFields(database) {
+  return editing.value || dirty.value || database.connectsWith === "url" || database.check?.state !== "not-running";
+}
+
 function statusText(database) {
   if (connected(database)) return `Connected as ${value(database, "username") || "the saved user"}. Choose Retry above to finish preparing.`;
   if (database.check?.state === "incomplete") {
@@ -434,6 +456,31 @@ async function saveAndCheck(database) {
   display: grid;
   gap: var(--v64-space-3, 12px);
 }
+
+.db-server__body--start-first .db-server__status { order: -2; }
+.db-server__body--start-first .db-server__help { order: -1; }
+
+.db-server__looking {
+  align-items: center;
+  color: var(--v64-on-surface-variant);
+  display: flex;
+  flex-wrap: wrap;
+  font: var(--v64-type-body-md);
+  gap: 0 var(--v64-space-2, 8px);
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.db-server__looking code {
+  background: none;
+  color: var(--v64-on-surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  overflow-wrap: anywhere;
+  padding: 0;
+}
+
+.db-server__change { margin-inline-start: -8px; }
 
 .db-server__status {
   align-items: start;
