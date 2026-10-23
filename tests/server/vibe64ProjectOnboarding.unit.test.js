@@ -73,8 +73,12 @@ test("an empty session offers starters and applies only the configured selection
     assert.deepEqual((await service.readOnboarding({ sessionId, templateId: choice.id })).templates, [choice]);
     assert.deepEqual((await service.readOnboarding({ sessionId, templateId: "missing:starter" })).templates, []);
     assert.deepEqual((await service.readOnboarding({ sessionId, templateOffset: before.templates.length })).templates, []);
+    const observed = [];
+    service.setTemplateApplicationObserver((input) => { observed.push(input); });
     const result = await service.applyTemplate({ sessionId, templateId: choice.id, repository: "/untrusted-browser-input", branch: "wrong" });
     assert.equal(result.ok, true, JSON.stringify(result));
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(observed, [{ sessionId }], "an applied starter hands its session to workspace preparation");
     assert.equal((await service.readOnboarding({ sessionId })).inspection.state, "ready");
     assert.equal(result.application.template.id, choice.id);
     assert.deepEqual(result.application.source, { repository: templateRoot, branch: "public", revision: templateCommit });
@@ -84,6 +88,9 @@ test("an empty session offers starters and applies only the configured selection
     assert.equal(await readFile(path.join(root, "app.js"), "utf8"), "console.log('ready');\n");
     await assert.rejects(readFile(path.join(targetRoot, "app.js")), { code: "ENOENT" });
     assert.equal((await service.applyTemplate({ sessionId, templateId: "test:nodejs/public" })).ok, false);
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(observed.length, 1, "a refused starter does not prepare the workspace");
+    assert.throws(() => service.setTemplateApplicationObserver({}), TypeError);
   });
 });
 

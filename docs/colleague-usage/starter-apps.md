@@ -25,8 +25,9 @@ outside the project (or the MySQL/MariaDB details) and **Save**; preparation
 then continues and the app starts.
 
 The same choices appear on desktop and mobile. Applying a starter imports its
-source. Finish **Prepare workspace** to install dependencies and provision its
-declared resources and migrations; a failed preparation offers **Retry**.
+source and starts **Prepare workspace** at once: it installs dependencies,
+provisions the declared resources (an installation that supplies the database
+does so here) and runs migrations; a failed preparation offers **Retry**.
 The coding agent can then follow the first feature request using the existing
 test commands documented in the starter's `docs/colleague-usage/testing.md`.
 

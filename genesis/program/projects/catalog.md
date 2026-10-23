@@ -178,6 +178,10 @@ Starter catalogues are owned by Genesis and map a namespace-qualified choice to
 one technology repository and branch. Applying a choice uses the ordinary
 session and project source-write locks, preserves Git history and existing
 bootstrap preferences, and leaves the added source for the normal Save flow.
+After the locks are released, Project hands the session to its owner, which
+starts ordinary workspace preparation (dependencies and host-managed resources
+such as a managed database); otherwise a declared managed resource would keep
+the outputs unavailable with nothing left to prepare it.
 Selection waits up to ten seconds for brief source-lock contention, then
 rechecks the active session and assistant work before importing.
 The browser sends only the selected catalogue ID. Neither session startup nor

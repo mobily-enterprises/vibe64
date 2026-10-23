@@ -312,6 +312,7 @@ function createService({
   targetRoot = ""
 } = {}) {
   let resourceEnvironmentProvider = null;
+  let templateApplicationObserver = null;
   const studioProjectContext = projectContext || (String(targetRoot || "").trim()
     ? createStudioProjectContext({
         explicitTargetRoot: targetRoot
@@ -1272,8 +1273,16 @@ function createService({
       return projectResult(() => projectOnboardingState(input));
     },
 
-    applyTemplate(input = {}) {
-      return projectResult(() => applyProjectTemplateState(input));
+    async applyTemplate(input = {}) {
+      const result = await projectResult(() => applyProjectTemplateState(input));
+      // The starter changed the Stack after the source locks were released; the
+      // session owner prepares its workspace (dependencies, managed resources).
+      if (result?.ok === true && templateApplicationObserver) {
+        void Promise.resolve()
+          .then(() => templateApplicationObserver({ sessionId: String(input.sessionId || "").trim() }))
+          .catch((error) => logger?.warn?.({ error: error?.message }, "Workspace preparation after a starter could not start."));
+      }
+      return result;
     },
     get selectedProject() {
       return studioProjectContext.selectedProject;
@@ -1671,6 +1680,13 @@ function createService({
         operation,
         options
       );
+    },
+
+    setTemplateApplicationObserver(observer = null) {
+      if (observer !== null && typeof observer !== "function") {
+        throw new TypeError("Vibe64 template application observer must be a function or null.");
+      }
+      templateApplicationObserver = observer;
     },
 
     setResourceEnvironmentProvider(provider = null) {

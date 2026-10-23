@@ -2358,6 +2358,23 @@ function createService({
       }, "Vibe64 could not retry workspace preparation.");
     },
 
+    // A starter replaces the Stack of a session that was prepared as empty;
+    // prepare it now so the Preview does not wait for host-managed resources.
+    async prepareStarterWorkspace(sessionId) {
+      if (setupRunner.isRunning(sessionId)) return;
+      const runtime = await project.createRuntime({ inspectSource: false });
+      const session = await runtime.getSession(sessionId, { inspectSource: false });
+      if (session.status !== "active") return;
+      const setup = await setupRunner.start({ runtime, session });
+      if (setup?.ok === false) return;
+      await publishSessionChanged(sessionId, {
+        operation: "updated",
+        reason: "workspace-setup-started",
+        session: await runtime.getSession(sessionId, { inspectSource: false })
+      });
+      observeWorkspaceSetup(sessionId, setup?.completion);
+    },
+
     async inspectAssistantAccess(sessionId, input = {}) {
       return sessionResult(async () => {
         const vibe64User = trustedAssistantUser(input);

@@ -113,6 +113,7 @@ function createVibe64SessionsFeature() {
         sourceEditor,
         terminals
       });
+      project.setTemplateApplicationObserver(({ sessionId }) => sessions.prepareStarterWorkspace(sessionId));
       registerRoutes(http, {
         routeRelativePath: "vibe64",
         routeSurface: "app"

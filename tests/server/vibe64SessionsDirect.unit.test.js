@@ -3847,6 +3847,45 @@ test("new sessions publish running workspace preparation and its eventual result
   assert.equal(publications[1][1].session.workspaceSetup.status, "succeeded");
 });
 
+test("an applied starter prepares the session workspace once and publishes its progress", async () => {
+  let running = false;
+  let status = "unconfigured";
+  const starts = [];
+  const publications = [];
+  let finishSetup;
+  const completion = new Promise((resolve) => { finishSetup = resolve; });
+  const session = () => ({ sessionId: "session-1", status: "active", workspaceSetup: { status } });
+  const service = createService({
+    project: { async createRuntime() { return { async getSession() { return session(); } }; } },
+    publishSessionChanged: async (...args) => { publications.push(args); },
+    terminals: {},
+    workspaceSetupRunner: {
+      isRunning: () => running,
+      async start(input) {
+        starts.push(input.session.sessionId);
+        status = "running";
+        return { completion, state: { status } };
+      },
+      wait: () => null
+    }
+  });
+
+  await service.prepareStarterWorkspace("session-1");
+  assert.deepEqual(starts, ["session-1"]);
+  assert.equal(publications[0][0], "session-1");
+  assert.equal(publications[0][1].reason, "workspace-setup-started");
+  assert.equal(publications[0][1].session.workspaceSetup.status, "running");
+  status = "succeeded";
+  finishSetup({ status });
+  await completion;
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(publications[1][1].reason, "workspace-setup-completed");
+
+  running = true;
+  await service.prepareStarterWorkspace("session-1");
+  assert.equal(starts.length, 1, "a running preparation is not started twice");
+});
+
 test("workspace preparation explicitly reruns succeeded recipes and retains retry admission", async () => {
   let admissionBlocked = false;
   let status = "succeeded";
