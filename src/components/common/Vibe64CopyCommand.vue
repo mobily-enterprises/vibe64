@@ -53,7 +53,9 @@ onScopeDispose(() => clearTimeout(timer));
   border-radius: var(--v64-shape-sm, 8px);
   display: flex;
   gap: 4px;
+  max-width: 100%;
   min-height: 44px;
+  min-width: 0;
   padding: 6px 4px 6px 12px;
 }
 
@@ -65,9 +67,10 @@ onScopeDispose(() => clearTimeout(timer));
   font-size: 0.8125rem;
   line-height: 1.6;
   min-width: 0;
-  overflow-x: auto;
+  overflow-wrap: anywhere;
   padding: 0;
-  white-space: pre;
+  /* Long lines wrap: on a phone the row never scrolls sideways or widens its card. */
+  white-space: pre-wrap;
 }
 
 .v64-copy-command__button {

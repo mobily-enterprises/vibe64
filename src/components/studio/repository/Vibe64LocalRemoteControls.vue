@@ -64,6 +64,7 @@
         <v-btn
           class="mt-4"
           block
+          color="primary"
           height="48"
           variant="tonal"
           :loading="busy === 'fetch'"
