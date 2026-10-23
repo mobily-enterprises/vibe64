@@ -13,9 +13,9 @@ import { publishError } from "../errors.js";
 const run = promisify(execFile);
 const COMMIT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 
-async function git(projectRoot, args, env = {}) {
+async function git(projectRoot, args, env = {}, { workTree = null } = {}) {
   try {
-    const { stdout } = await run("git", ["-C", projectRoot, ...args], {
+    const { stdout } = await run("git", ["-C", projectRoot, ...(workTree ? [`--work-tree=${workTree}`] : []), ...args], {
       env: { ...process.env, GIT_TERMINAL_PROMPT: "0", ...env },
       maxBuffer: 16 * 1024 * 1024
     });
@@ -56,7 +56,8 @@ async function exportSavedCommit({ projectRoot, commit, directory } = {}) {
   try {
     const env = { GIT_INDEX_FILE: path.join(indexHome, "index") };
     await git(projectRoot, ["read-tree", commit], env);
-    await git(projectRoot, ["checkout-index", "--all", "--force", `--prefix=${directory}${path.sep}`], env);
+    // The export folder is the work tree, so a bare canonical repository exports too.
+    await git(projectRoot, ["checkout-index", "--all", "--force", `--prefix=${directory}${path.sep}`], env, { workTree: directory });
   } finally {
     await rm(indexHome, { recursive: true, force: true });
   }
