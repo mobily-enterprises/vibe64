@@ -272,15 +272,16 @@ async function copyKey(key = "") {
 }
 
 .runtime-config-records-table__key-column {
-  width: 30%;
+  width: 26%;
 }
 
+/* Wide enough for a linked value's provenance on two lines. */
 .runtime-config-records-table__value-column {
-  width: 25%;
+  width: 34%;
 }
 
 .runtime-config-records-table__actions-column {
-  width: 45%;
+  width: 40%;
 }
 
 .runtime-config-records-table th,
@@ -413,6 +414,7 @@ async function copyKey(key = "") {
   .runtime-config-records-table :deep(tbody > tr) {
     display: grid;
     gap: 4px;
+    grid-template-columns: minmax(0, 1fr);
     padding: 10px 12px;
   }
 
@@ -423,6 +425,7 @@ async function copyKey(key = "") {
   .runtime-config-records-table :deep(tbody > tr > td) {
     border: 0 !important;
     height: auto !important;
+    min-width: 0;
     padding: 0 !important;
   }
 }
