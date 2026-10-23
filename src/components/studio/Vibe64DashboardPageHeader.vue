@@ -60,7 +60,7 @@ defineProps({
    instead of squeezing the description to one word per line. */
 .vibe64-dashboard-page-header__copy {
   display: grid;
-  flex: 1 1 16rem;
+  flex: 1 1 12rem;
   gap: 2px;
   min-width: 0;
 }
