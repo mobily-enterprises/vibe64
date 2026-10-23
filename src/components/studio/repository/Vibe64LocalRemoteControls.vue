@@ -57,7 +57,13 @@
           </v-avatar>
           <div class="min-w-0">
             <p class="text-body-large font-weight-medium ma-0">{{ gitUnavailable.title }}</p>
-            <p class="text-body-medium text-medium-emphasis mt-1 mb-0">{{ gitUnavailable.hint }}</p>
+            <p
+              class="local-remotes__hint text-body-medium mt-1 mb-0"
+              :class="stillMissing ? 'text-high-emphasis' : 'text-medium-emphasis'"
+              aria-live="polite"
+            >
+              {{ stillMissing ? "Still not found. Did the command finish without errors? Then check again." : gitUnavailable.hint }}
+            </p>
           </div>
         </div>
         <Vibe64CopyCommand v-if="installCommand" class="mt-4" :command="installCommand" label="Copy the install command" />
@@ -74,9 +80,6 @@
         >
           Check again
         </v-btn>
-        <p class="local-remotes__recheck text-body-small text-medium-emphasis mt-2 mb-0" aria-live="polite">
-          {{ stillMissing ? 'Still not found. Install it, then check again.' : '' }}
-        </p>
       </v-sheet>
       <v-sheet v-else-if="notRepository" class="pa-4" rounded="lg" elevation="3">
         <div class="text-label-large mb-3">Version control</div>
@@ -85,7 +88,7 @@
             <v-icon :icon="mdiSourceRepository" />
           </v-avatar>
           <div class="min-w-0">
-            <p class="text-body-large font-weight-medium ma-0">This folder isn’t using Git yet.</p>
+            <p class="text-body-large font-weight-medium ma-0">This folder isn't using Git yet.</p>
             <p class="text-body-medium text-medium-emphasis mt-1 mb-0">
               Git keeps a history of every change, so sessions can save work and you can go back.
             </p>
@@ -284,7 +287,7 @@ const remoteError = computed(() => error.value || state.value?.error || "");
 const notRepository = computed(() => !error.value && state.value?.repository === false);
 // Git itself missing or too old: the menu becomes the install step.
 const gitUnavailable = computed(() => ({
-  vibe64_git_missing: { chip: "Git needed", title: "Git isn’t installed on this computer.", hint: "Vibe64 uses Git to keep the history of your project. Install it, then check again." },
+  vibe64_git_missing: { chip: "Git needed", title: "Git isn't installed on this computer.", hint: "Vibe64 uses Git to keep the history of your project. Install it, then check again." },
   vibe64_git_too_old: { chip: "Update Git", title: "This Git is too old for Vibe64.", hint: "Vibe64 needs Git 2.28 or newer. Update it, then check again." }
 })[errorCode.value] || null);
 const chipLabel = computed(() => gitUnavailable.value?.chip || (notRepository.value ? "No Git yet"
@@ -430,5 +433,4 @@ onScopeDispose(() => {
 .local-remotes__details dt { color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
 .local-remotes__details dd, .local-remotes__message { margin: 0; overflow-wrap: anywhere; }
 .local-remotes__url { overflow-wrap: anywhere; }
-.local-remotes__recheck { min-height: 1.25rem; }
 </style>
