@@ -54,6 +54,9 @@ function createActions({ studioHealth } = {}) {
     kind: "query",
     input: studioToolsQueryInputValidator,
     output: null,
+    extensions: { assistant: {
+      description: "Check now whether named tools run on the person's own computer, for example ids \"ruby,cpp\" (Stack runtime ids such as python, ruby, java, php, go, rust, cpp, or node, git, gh, ripgrep, claude, codex, opencode). A tool counts only when it starts and reports its version through the same PATH projects use. Each result says ready, missing or broken, the version and folder found, and for a missing tool the one install command for this computer with any password note. Use it when the person asks whether something is installed, or after they ran an install command, instead of guessing. It only reads: never run the install command for them, and never use sudo. A host that supplies its own tools answers managed with no rows."
+    } },
     idempotency: "none",
     audit: { actionName: ACTION_CHECK_STUDIO_TOOLS },
     observability: {},

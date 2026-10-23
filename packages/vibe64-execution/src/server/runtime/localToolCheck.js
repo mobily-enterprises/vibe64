@@ -8,6 +8,7 @@ import {
   LOCAL_TOOLS,
   localToolFamily,
   localToolId,
+  localToolGuideUrl,
   localToolInstall
 } from "./localTools.js";
 import { RUNTIME_PACKS, runtimePackRoot } from "./runtimePacks.js";
@@ -108,7 +109,7 @@ async function checkLocalTools(ids = [], {
       version: status === "ready" ? main.version : "",
       detail: tool.detail || "",
       install: status === "ready" ? null : localToolInstall(id, { family, mise, xcode }),
-      guideUrl: tool.guideUrl
+      guideUrl: localToolGuideUrl(id, { platform })
     };
   }));
   return { ok: true, managed: false, tools };

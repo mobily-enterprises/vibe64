@@ -269,7 +269,8 @@ test("Health prioritizes a failed execution's reason ahead of incidental browser
 test("assistants read a bounded Health summary through the same action", async () => {
   const { createActions } = await import("../../packages/studio-health/src/server/actions.js");
   const [action, tools] = createActions({ studioHealth: { inspect: async () => ({}), checkTools: async () => ({}) } });
-  assert.equal(tools.extensions?.assistant, undefined, "the row check is for screens only");
+  assert.match(tools.extensions.assistant.description, /never run the install command for them/u,
+    "Colleague may check named tools, as rows do, but never installs them");
   const assistant = action.extensions.assistant;
   assert.equal(assistant.exclude, undefined);
   assert.match(assistant.description, /Health checks/u);

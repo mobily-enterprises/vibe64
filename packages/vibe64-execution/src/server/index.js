@@ -216,6 +216,7 @@ export {
   LOCAL_TOOLS,
   SUDO_NOTE,
   localToolFamily,
+  localToolGuideUrl,
   localToolIds,
   localToolInstall
 } from "./runtime/localTools.js";

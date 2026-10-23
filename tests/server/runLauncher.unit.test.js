@@ -198,10 +198,14 @@ test("run launcher shell script preserves failed server output until enter", () 
 });
 
 test("run launcher stops with plain words on Windows and on the wrong Node.js", () => {
-  assert.match(launcherProblem({ platform: "win32", nodeVersion: "26.1.0", requiredMajor: "26" }), /^Vibe64 runs on Windows inside WSL2/u);
+  const windows = launcherProblem({ platform: "win32", nodeVersion: "26.1.0", requiredMajor: "26" });
+  assert.match(windows, /^Vibe64 runs on Windows inside WSL2/u);
+  assert.match(windows, /docs\/colleague-usage\/set-up-windows\.md$/u);
   const old = launcherProblem({ platform: "linux", nodeVersion: "24.22.1", requiredMajor: "26" });
   assert.match(old, /^Vibe64 needs Node\.js 26; this is Node\.js 24\.22\.1\./u);
-  assert.match(old, /mise use -g node@26/u);
+  assert.match(old, /curl -fsSL https:\/\/mise\.run \| sh && ~\/\.local\/bin\/mise use -g node@26/u);
+  assert.match(old, /set-up-linux\.md#nodejs-and-mise$/u);
+  assert.match(launcherProblem({ platform: "darwin", nodeVersion: "24.1.0", requiredMajor: "26" }), /set-up-macos\.md#nodejs-and-mise$/u);
   assert.equal(launcherProblem({ platform: "darwin", nodeVersion: "26.12.1", requiredMajor: "26" }), "");
   assert.equal(launcherProblem({ platform: "linux", nodeVersion: "26.0.0" }), "", "this package declares Node.js 26");
 });

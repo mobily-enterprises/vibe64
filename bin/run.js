@@ -359,6 +359,11 @@ function requiredNodeMajor(packagePath = path.join(MODULE_DIR, "..", "package.js
   }
 }
 
+function setupGuideUrl(platform = process.platform) {
+  const guide = platform === "darwin" ? "set-up-macos" : "set-up-linux";
+  return `https://github.com/mobily-enterprises/vibe64/blob/main/docs/colleague-usage/${guide}.md`;
+}
+
 /**
  * Why Vibe64 cannot start here, in plain words, or "". Vibe64 runs commands
  * through a POSIX shell, so Windows uses it inside WSL2; and it needs the
@@ -372,16 +377,16 @@ function launcherProblem({
   if (platform === "win32") {
     return [
       "Vibe64 runs on Windows inside WSL2 (Ubuntu), not in PowerShell or Command Prompt.",
-      "Install WSL2: https://learn.microsoft.com/en-us/windows/wsl/install",
-      "Then open Ubuntu, install Node.js there and run npx vibe64 inside it."
+      "Step by step: https://github.com/mobily-enterprises/vibe64/blob/main/docs/colleague-usage/set-up-windows.md"
     ].join("\n");
   }
   const major = String(nodeVersion || "").split(".")[0];
   if (requiredMajor && major !== requiredMajor) {
     return [
       `Vibe64 needs Node.js ${requiredMajor}; this is Node.js ${nodeVersion}.`,
-      `To install it with mise, run: curl https://mise.run | sh && ~/.local/bin/mise use -g node@${requiredMajor}`,
-      "Then open a new terminal and run npx vibe64 again."
+      `To install it with mise, run: curl -fsSL https://mise.run | sh && ~/.local/bin/mise use -g node@${requiredMajor}`,
+      "Then add mise to your shell, open a new terminal and run npx vibe64 again:",
+      `${setupGuideUrl(platform)}#nodejs-and-mise`
     ].join("\n");
   }
   return "";

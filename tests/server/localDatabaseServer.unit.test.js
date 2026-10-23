@@ -153,9 +153,13 @@ test("commands: per computer, never for an administrator, quoted safely", () => 
   assert.equal(brew.install.command, "brew install mariadb && brew services start mariadb");
   assert.match(brew.create.command, /^mariadb <<'SQL'\n/u);
   assert.equal(brew.create.note, "");
-  const other = databaseServerGuide({ kind: "mysql", family: "" });
+  assert.match(brew.guideUrl, /set-up-macos\.md#databases$/u);
+  const other = databaseServerGuide({ kind: "mysql", family: "", database: "shop", username: "shop", password: "pw" });
   assert.equal(other.install, null);
-  assert.ok(other.guideUrl);
+  assert.match(other.guideUrl, /set-up-linux\.md#databases$/u, "Fedora and Arch lines live in the Linux guide");
+  assert.match(other.create.command, /^sudo mariadb <<'SQL'\n/u, "root signs in through the system account");
+  assert.match(databaseServerGuide({ kind: "postgresql", family: "", database: "a", username: "a", password: "p" }).create.command,
+    /^sudo -u postgres psql <<'SQL'\n/u);
 
   assert.equal(isAdminUser("root"), true);
   assert.equal(databaseServerGuide({ kind: "mysql", family: "apt", database: "d", username: "root", password: "p" }).create, null);

@@ -10,6 +10,7 @@ import {
   checkLocalTools,
   configureVibe64Host,
   localToolFamily,
+  localToolGuideUrl,
   localToolIds,
   localToolInstall,
   operatorCliInstall
@@ -51,20 +52,28 @@ test("Stack runtime ids map to rows only for tools the person supplies", () => {
 
 test("each computer gets one command: apt, Homebrew or mise, sudo lines say so", () => {
   assert.deepEqual(localToolInstall("cpp", { family: "apt" }), {
-    command: "sudo apt install build-essential pkg-config libyaml-dev libssl-dev zlib1g-dev libpq-dev default-libmysqlclient-dev",
+    command: "sudo apt install build-essential pkg-config libyaml-dev libssl-dev zlib1g-dev libpq-dev default-libmysqlclient-dev libgmp-dev",
     sudo: true, note: SUDO_NOTE
   });
-  assert.equal(localToolInstall("cpp", { family: "brew" }).command, "brew install pkg-config libyaml openssl@3");
+  assert.equal(localToolInstall("cpp", { family: "brew" }).command, "brew install pkg-config libyaml openssl@3 gmp");
   assert.equal(localToolInstall("cpp", { family: "" }), null, "other systems use Other ways");
   // Without Apple's command line tools, compilers and Git come from them first.
   assert.equal(localToolInstall("git", { family: "brew", xcode: false }).command, "xcode-select --install");
   // Language runtimes use mise, with -g so nothing is written into the project.
   assert.equal(localToolInstall("python", { family: "apt", mise: true }).command, "mise use -g python@3.13");
   assert.equal(localToolInstall("ruby", { family: "brew", mise: false }).command,
-    "curl https://mise.run | sh && ~/.local/bin/mise use -g ruby@3.4");
+    "curl -fsSL https://mise.run | sh && ~/.local/bin/mise use -g ruby@3.4");
   assert.equal(localToolInstall("composer", { family: "apt" }).command, localToolInstall("php", { family: "apt" }).command);
   assert.equal(localToolInstall("playwright", { family: "apt" }).sudo, true, "--with-deps asks for the password");
   assert.equal(localToolInstall("missing-tool"), null);
+});
+
+test("Other ways opens this computer's setup guide where it covers the tool", () => {
+  assert.match(localToolGuideUrl("cpp", { platform: "linux" }), /docs\/colleague-usage\/set-up-linux\.md#build-tools$/u);
+  assert.match(localToolGuideUrl("composer", { platform: "darwin" }), /set-up-macos\.md#project-languages$/u);
+  assert.match(localToolGuideUrl("node", { platform: "linux" }), /set-up-linux\.md#nodejs-and-mise$/u);
+  assert.equal(localToolGuideUrl("claude"), "https://code.claude.com/docs/en/setup", "AI tools keep their own page");
+  assert.equal(localToolGuideUrl("missing-tool"), "");
 });
 
 test("AI tools keep one shell line and no Windows lines", () => {

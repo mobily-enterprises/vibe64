@@ -63,6 +63,7 @@ function createDatabaseActions({ databaseTools } = {}) {
       execute: (input) => databaseTools.checkServer(input),
       id: ACTION_DATABASE_SERVER_CHECK,
       input: databaseStateInputValidator,
+      assistant: { description: "Check the MySQL/MariaDB or PostgreSQL server this session's project needs and the person runs on their own computer: the exact Env names the Stack declares, the values that apply now (Env over Stack defaults; a password only as set or not) and a real sign-in with a few seconds' timeout. check.state is connected, not-running, unreachable, wrong-login, login-method, database-missing, no-access, incomplete, invalid or failed, with one plain sentence. Use it after the person started their server, created a login or saved connection values, instead of guessing. It changes nothing: it never starts a server or creates users or databases. Save non-secret values the person gives through the Env save action; never ask for, repeat or save a password in chat, and send them to the database server panel's password field instead. managed means the host supplies the database." },
       kind: "query"
     }),
     action({
