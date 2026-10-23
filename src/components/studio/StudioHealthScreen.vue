@@ -70,7 +70,7 @@
                 <small v-if="check.explanation">{{ check.explanation }}</small>
                 <Vibe64CopyCommand v-if="check.command" class="mt-1" :command="check.command" />
                 <v-btn
-                  v-if="check.id === 'ai-auth' && check.status !== 'pass'"
+                  v-if="check.id === aiSetupCheckId"
                   class="studio-health__action"
                   color="primary"
                   rounded="pill"
@@ -153,6 +153,10 @@ const sections = computed(() => [
   ...section,
   checks: checks.value.filter((check) => (check.need || "needed") === section.need)
 })).filter((section) => section.checks.length));
+
+// AI setup explains installing and connecting: offered once, on the first AI row that needs it.
+const aiSetupCheckId = computed(() => checks.value
+  .find((check) => ["ai-tool", "ai-auth"].includes(check.id) && check.status !== "pass")?.id || "");
 
 function iconColor(check) {
   if (check.status === "pass") return "success";
