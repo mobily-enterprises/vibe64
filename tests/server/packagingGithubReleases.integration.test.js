@@ -27,6 +27,10 @@ const STACK = `# Stack
 
 - \`nodejs\`
 
+## Connected development
+
+- Nothing.
+
 ## Packaging
 
 ### Package \`sdk\`: Canary SDK
