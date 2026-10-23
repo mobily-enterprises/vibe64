@@ -18,6 +18,7 @@ import {
 import {
   canonicalRepositoryInitializeScript,
   canonicalRepositoryInstallRefScript,
+  gitFailureError,
   runVibe64Command
 } from "@local/vibe64-execution/server";
 import {
@@ -56,6 +57,8 @@ async function runGit(args = [], {
     timeout: 60_000
   });
   if (result?.ok !== true) {
+    const gitFailure = gitFailureError(result);
+    if (gitFailure) throw gitFailure;
     throw initialProjectError(result, "Git failed while materializing the initial project.");
   }
   return normalizeText(result.stdout || result.output);

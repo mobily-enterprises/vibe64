@@ -26,6 +26,7 @@ import {
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
   GITHUB_ACCOUNT_MODE_LOCAL,
+  gitFailureError,
   VIBE64_GITHUB_ACCOUNT_MODE_ENV,
   githubMirrorRefreshInvocation,
   githubCredentialContext,
@@ -68,6 +69,8 @@ async function runSourceCommand(command = "", args = [], {
     ...(userKey ? { userKey } : {})
   });
   if (result?.ok !== true) {
+    const gitFailure = command === "git" ? gitFailureError(result) : null;
+    if (gitFailure) throw gitFailure;
     throw sourceError(
       normalizeText(result?.stderr || result?.output || result?.error) || "A source command failed while creating the session source.",
       normalizeText(result?.code) || "vibe64_session_source_git_failed"

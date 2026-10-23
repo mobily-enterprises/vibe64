@@ -475,3 +475,26 @@ test("shared managed repository owner provisions and clones a real private pract
     await assert.rejects(() => core.readWorkspaceProject({ slug }), { code: "vibe64_project_catalog_unavailable" });
   });
 });
+
+test("creating a project without a usable Git says so in one plain sentence", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-initial-project-git-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const projectRuntimeRoot = path.join(root, "runtime");
+  await mkdir(projectRuntimeRoot);
+  const create = (runCommand) => materializeInitialProject({ projectRuntimeRoot, publish: async () => ({}), runCommand });
+
+  const missingGit = (request) => directCommand({ ...request, command: `${request.command}-missing` })
+    .then((result) => ({ ...result, stderr: "", error: `Command failed with ENOENT: git ${request.args.join(" ")}\nspawn git ENOENT` }));
+  await assert.rejects(create(missingGit), (error) => error.code === "vibe64_git_missing" &&
+    error.message.startsWith("Git isn't installed on this computer."));
+
+  const oldGit = async (request) => request.args[0] === "init"
+    ? { ok: false, exitCode: 129, stderr: "error: unknown option `initial-branch=main'\nusage: git init [-q | --quiet]" }
+    : directCommand(request);
+  await assert.rejects(create(oldGit), { code: "vibe64_git_too_old" });
+
+  const signingGit = (request) => directCommand({ ...request,
+    args: ["-c", "commit.gpgsign=true", "-c", "gpg.program=false", ...request.args] });
+  await assert.rejects(create(signingGit), { code: "vibe64_git_signing_failed" });
+  assert.deepEqual(await readdir(path.join(projectRuntimeRoot, "tmp")), []);
+});

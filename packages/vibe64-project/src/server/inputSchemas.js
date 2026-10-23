@@ -20,7 +20,7 @@ function inputSchema(fields) {
 }
 
 const projectRemoteInputValidator = inputSchema({
-  action: { type: "string", enum: ["status", "fetch", "pull", "push", "configure", "switch", "create"] },
+  action: { type: "string", enum: ["status", "fetch", "pull", "push", "configure", "switch", "create", "init"] },
   branch: { type: "string", maxLength: 255 },
   background: { type: "boolean" },
   merge: { type: "boolean" },

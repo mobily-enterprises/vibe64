@@ -128,9 +128,16 @@ export {
   fallbackGitIdentity,
   gitIdentityEnv,
   gitIdentityReadiness,
+  isFallbackGitIdentityEmail,
+  personGitConfigIdentity,
   resolveGitIdentity,
   sanitizeEmailLabel
 } from "./env/gitIdentityEnv.js";
+export {
+  describeGitFailure,
+  gitFailureError,
+  gitInstallCommand
+} from "./gitFailure.js";
 export {
   shellQuote,
   stableHash

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 import { access } from "node:fs/promises";
-import { runVibe64Command } from "@local/vibe64-execution/server";
+import { gitFailureError, runVibe64Command } from "@local/vibe64-execution/server";
 import { runProjectSourceExclusive } from "./projectSourceMutationLock.js";
 
 // Freshness is only a transport observation. Git owns the configuration and refs.
@@ -30,23 +30,37 @@ async function localRepositoryRemote(project, input = {}, {
     if (action === "status") return { ok: true, supported: false };
     throw failure("Remote controls are available only for an opened local folder.", "vibe64_remote_local_only");
   }
-  if (!["status", "fetch", "pull", "push", "configure", "switch", "create"].includes(action)) {
+  if (!["status", "fetch", "pull", "push", "configure", "switch", "create", "init"].includes(action)) {
     throw failure("Unknown remote operation.");
   }
   const root = project.sourceRoot;
   const operationId = randomUUID();
-  async function git(args, { optional = false } = {}) {
-    const result = await runCommand({
+  function runGit(args) {
+    return runCommand({
       actor: "daemon", allowedRoots: [root], command: "git", args, cwd: root,
       envPolicy: "project", gitSafeDirectories: [root], inheritProcessEnv: true,
       mode: "capture", purpose: "source", runtimes: ["git"],
       timeout: 60_000, maxBuffer: 2 * 1024 * 1024
     });
+  }
+  async function git(args, { optional = false } = {}) {
+    const result = await runGit(args);
     if (result?.ok !== true) {
+      const gitFailure = gitFailureError(result);
+      if (gitFailure) throw gitFailure;
       if (optional) return null;
       throw failure(safeText(result?.stderr || result?.error || "Git could not complete the remote operation."));
     }
     return String(result.stdout ?? result.output ?? "").trim();
+  }
+  // A folder that isn't a Git repository yet is a normal state, not an error.
+  async function isRepository() {
+    const result = await runGit(["rev-parse", "--git-dir"]);
+    if (result?.ok === true) return true;
+    const gitFailure = gitFailureError(result);
+    if (gitFailure) throw gitFailure;
+    if (/not a git repository/iu.test(String(result?.stderr || result?.output || ""))) return false;
+    throw failure(safeText(result?.stderr || result?.error || "Git could not read this folder."));
   }
   async function readConfig(key) {
     return await git(["config", "--get", key], { optional: true }) || "";
@@ -196,6 +210,18 @@ async function localRepositoryRemote(project, input = {}, {
     observations.delete(root);
   }
   return runExclusive(project.projectRuntimeRoot, async () => {
+    if (!await isRepository()) {
+      if (action !== "init") {
+        if (["status", "fetch"].includes(action)) return { ok: true, supported: true, repository: false };
+        throw failure("This folder isn't using Git yet. Start version control here first.", "vibe64_remote_not_repository");
+      }
+      // Only on the person's click: Vibe64 never starts version control by itself.
+      await git(["init", "--initial-branch=main"]);
+      observations.delete(root);
+      logger?.info?.({ event: "vibe64.remote.initialized", operationId, project: project.slug }, "Version control started in the opened folder.");
+      return { ...await publicState(await readRepository()), operationId, remoteChanged: true };
+    }
+    if (action === "init") throw failure("This folder already uses Git.", "vibe64_remote_already_repository");
     const state = await readRepository();
     if (action === "status") return publicState(state);
     logger?.info?.({ event: "vibe64.remote.started", operationId, action, project: project.slug, branch: state.branch }, "Git remote operation started.");
@@ -241,7 +267,14 @@ async function localRepositoryRemote(project, input = {}, {
                 const preview = await git(["merge-tree", "--write-tree", state.head, commit], { optional: true });
                 if (preview === null) throw failure("The remote changes conflict with the local project. Resolve the merge in the project folder, then refresh Vibe64. No working files were changed.", "vibe64_remote_merge_conflict");
               }
-              await git(["merge", fastForward ? "--ff-only" : "--no-ff", "--no-edit", commit]);
+              try {
+                await git(["merge", fastForward ? "--ff-only" : "--no-ff", "--no-edit", commit]);
+              } catch (error) {
+                // The folder was clean; a merge that could not finish (for example
+                // because commit signing failed) leaves it as it was.
+                if (!fastForward) await git(["merge", "--abort"], { optional: true });
+                throw error;
+              }
             }
           } else {
             if (commit && await git(["merge-base", "--is-ancestor", commit, state.head], { optional: true }) === null) {

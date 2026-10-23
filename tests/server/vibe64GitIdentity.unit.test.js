@@ -146,3 +146,30 @@ test("connecting GitHub keeps the person's Git identity and never writes empty v
   assert.equal(await read("user.name"), "Ana Diaz");
   assert.equal(await read("user.email"), "ana@example.test");
 });
+
+test("Git failures a person can fix read as one plain sentence", async (t) => {
+  const { describeGitFailure, gitInstallCommand } = await import("../../packages/vibe64-execution/src/server/gitFailure.js");
+  const { root } = await freshHome(t);
+  const aptBin = path.join(root, "apt-bin");
+  await mkdir(aptBin);
+  await writeFile(path.join(aptBin, "apt-get"), "#!/bin/sh\n", { mode: 0o755 });
+  const apt = { env: { PATH: aptBin }, platform: "linux" };
+
+  assert.equal(gitInstallCommand({ env: { PATH: "" }, platform: "darwin" }), "xcode-select --install");
+  assert.equal(gitInstallCommand(apt), "sudo apt install git");
+  assert.equal(gitInstallCommand({ env: { PATH: path.join(root, "none") }, platform: "linux" }), "");
+
+  const missing = describeGitFailure({ error: "Command failed with ENOENT: git init\nspawn git ENOENT" }, apt);
+  assert.equal(missing.code, "vibe64_git_missing");
+  assert.equal(missing.message, "Git isn't installed on this computer. Install it with: sudo apt install git");
+  assert.equal(describeGitFailure({ stderr: "bash: line 1: git: command not found\n" }, apt).code, "vibe64_git_missing");
+
+  const old = describeGitFailure({ stderr: "error: unknown option `initial-branch=main'\nusage: git init" }, apt);
+  assert.equal(old.code, "vibe64_git_too_old");
+  assert.doesNotMatch(old.message, /usage|unknown option/u);
+
+  const signing = describeGitFailure({ stderr: "error: gpg failed to sign the data\nfatal: failed to write commit object" });
+  assert.equal(signing.code, "vibe64_git_signing_failed");
+
+  assert.equal(describeGitFailure({ stderr: "fatal: refusing to merge unrelated histories" }), null);
+});
