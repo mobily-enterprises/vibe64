@@ -486,17 +486,11 @@ function createService({
     const source = await sourceForInput(input);
     const sourceRoot = source.sourceRoot;
     const savedRecords = await savedEnvRecords(input);
-    const userEnvironment = runtimeConfigEnv(userRecords, {
-      scope: input.environment || input.scope || RUNTIME_CONFIG_SCOPES.DEV,
-      target: input.target
-    });
-    const savedEnvironment = runtimeConfigEnv(savedRecords, {
-      scope: input.environment || input.scope || RUNTIME_CONFIG_SCOPES.DEV,
-      target: input.target
-    });
+    const envOptions = { scope: input.environment || input.scope || RUNTIME_CONFIG_SCOPES.DEV, target: input.target };
+    // Typed values, then linked saved values over them.
     const personEnvironment = {
-      ...userEnvironment,
-      ...savedEnvironment
+      ...runtimeConfigEnv(userRecords, envOptions),
+      ...runtimeConfigEnv(savedRecords, envOptions)
     };
     if (!sourceRoot) {
       return {

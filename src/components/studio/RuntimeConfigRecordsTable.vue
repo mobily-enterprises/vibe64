@@ -28,7 +28,7 @@
         </td>
         <td>
           <div
-            v-if="savedRecord(record)"
+            v-if="recordIsSavedEnvValue(record)"
             class="runtime-config-records-table__linked"
             :title="record.label"
           >
@@ -58,7 +58,7 @@
           </template>
         </td>
         <td v-if="showActions">
-          <div v-if="savedRecord(record)" class="runtime-config-records-table__saved-actions">
+          <div v-if="recordIsSavedEnvValue(record)" class="runtime-config-records-table__saved-actions">
             <component
               :is="savedValues.component"
               v-if="savedValues"
@@ -175,10 +175,6 @@ const props = defineProps({
 const draftValues = ref({});
 const projectSlug = useVibe64ProjectSlug();
 const savedValues = useVibe64SavedEnvValues();
-
-function savedRecord(record = {}) {
-  return recordIsSavedEnvValue(record);
-}
 
 function recordKey(record = {}) {
   return `${record.scope || props.environmentLabel}:${record.key || ""}`;

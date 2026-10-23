@@ -829,18 +829,10 @@ function createAgentEnvCommandService({
   }
 
   async function savedResult(parsed = {}, sessionId = "", binding = {}) {
-    if (!savedValueProvider) {
-      const payload = { entries: [], ok: true };
-      return {
-        exitCode: 0,
-        ok: true,
-        stdout: parsed.json ? `${JSON.stringify(payload, null, 2)}\n` : "This workspace offers no saved values.\n"
-      };
-    }
-    const result = assertOperationResult(
+    const result = savedValueProvider ? assertOperationResult(
       await savedValueProvider.list(savedValueRequest(binding, sessionId)),
       "Saved values could not be read."
-    );
+    ) : null;
     const entries = (Array.isArray(result?.entries) ? result.entries : []).map((entry) => ({
       description: normalizeText(entry?.description),
       environments: Array.isArray(entry?.environments) ? entry.environments.map(normalizeText).filter(Boolean) : [],
@@ -852,11 +844,13 @@ function createAgentEnvCommandService({
       id: normalizeText(entry?.id),
       label: normalizeText(entry?.label)
     })).filter((entry) => entry.id);
-    const payload = { entries, ok: true, provider: savedValueProvider.label };
-    const lines = entries.length === 0
-      ? [`${savedValueProvider.label} has nothing you can use here yet.`]
-      : entries.map((entry) => `${entry.id} ${entry.label}${entry.description ? ` — ${entry.description}` : ""}` +
-          ` (fields: ${entry.fields.map((field) => `${field.id}${field.secret ? "*" : ""}`).join(", ")})`);
+    const payload = { entries, ok: true, ...(savedValueProvider ? { provider: savedValueProvider.label } : {}) };
+    const lines = !savedValueProvider
+      ? ["This workspace offers no saved values."]
+      : entries.length === 0
+        ? [`${savedValueProvider.label} has nothing you can use here yet.`]
+        : entries.map((entry) => `${entry.id} ${entry.label}${entry.description ? ` — ${entry.description}` : ""}` +
+            ` (fields: ${entry.fields.map((field) => `${field.id}${field.secret ? "*" : ""}`).join(", ")})`);
     return {
       exitCode: 0,
       ok: true,
