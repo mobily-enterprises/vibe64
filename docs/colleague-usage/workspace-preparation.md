@@ -119,7 +119,9 @@ password field keeps it. Env values always win over the Stack's defaults, and a
 variable exported in the shell that started Vibe64 does not count.
 
 **Install or start** shows the command for this computer (Debian, Ubuntu and
-WSL, or macOS with Homebrew; other systems get a link). **Create a login and
+WSL, or macOS with Homebrew); its link opens the Databases step of the setup
+guide, which also has the Fedora and Arch lines ([Linux](set-up-linux.md#databases),
+[macOS](set-up-macos.md#databases)). **Create a login and
 database** shows one command that creates a project user, its database and,
 for PostgreSQL, the right to create test databases. **Suggest a user and
 password** fills in a project user and a strong password first; the command
@@ -127,8 +129,11 @@ shows the password as dots but copies the real one. The person runs these
 commands in their own terminal; Vibe64 never starts a database server or runs
 them. When the panel says connected, choose **Retry** on the failed step.
 
-Colleague can explain the panel and each message. It must not ask for or repeat
-a password, and it never runs `sudo` or creates databases itself.
+Colleague can explain the panel and each message. When asked, it can check the
+server again with the current values and save the non-secret ones the person
+gives (host, port, database name, user name) in Env. It must not ask for,
+repeat or save a password, and it never runs `sudo` or creates databases
+itself; the password goes in the panel's password field.
 
 ## Resource recovery after a daemon restart
 

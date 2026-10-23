@@ -12,6 +12,12 @@ run `PORT=3001 npx vibe64 --no-open` and open `http://127.0.0.1:3001` yourself.
 
 Nothing needs configuring. Vibe64 runs as you, with your own tools and folders.
 
+Setting up a computer for the first time? Follow the step-by-step guide for
+yours: [Linux](set-up-linux.md) (Ubuntu, Debian, Fedora, Arch),
+[macOS](set-up-macos.md) or [Windows](set-up-windows.md) (through WSL). Each
+covers Node.js, Git, an AI tool, project languages, build tools and database
+servers, and the **Other ways** links on tool rows open the matching section.
+
 ## Tools Vibe64 uses
 
 Vibe64 runs the tools already installed on your computer: the ones your
@@ -32,9 +38,10 @@ example after **Preparing workspace** fails (see
 [Project language tools](project-language-tools.md)).
 
 On native Windows, `npx vibe64` stops and explains that Vibe64 runs on Windows
-inside WSL2 (Ubuntu): install WSL2, open Ubuntu, install Node.js there and run
-`npx vibe64` inside it. With the wrong Node.js
-version it stops and shows the mise command that installs the right one.
+inside WSL2 (Ubuntu), with a link to [Set up Windows](set-up-windows.md). With
+the wrong Node.js version it stops and shows the mise command that installs the
+right one, with a link to the guide's Node.js step: mise must also be added to
+your shell before a new terminal finds the new Node.js.
 
 - **AI agents.** Claude Code, Codex and opencode are used through their own
   commands, so each must be installed on this computer before you can use it.
@@ -94,6 +101,9 @@ itself. To keep using the old location instead, start Vibe64 with
 
 ## Colleague
 
-Colleague can explain where Vibe64 keeps things and which tools it uses, and can
-open **Health** to check them. Installing tools, moving folders and restarting
-Vibe64 happen in your own terminal; Colleague cannot run them for you.
+Colleague can explain where Vibe64 keeps things, which tools it uses and every
+step of the setup guides. It can run **Health**, check whether a named tool runs
+now, check a project's database server and save non-secret connection values
+in **Env** when you ask. Installing tools, editing shell files, moving folders
+and restarting Vibe64 happen in your own terminal; Colleague cannot run them for
+you and never uses `sudo`.

@@ -27,7 +27,9 @@ computer with a copy button, **Check again** and **Other ways**. Language
 runtimes install with mise (`mise use -g ruby@3.4`, `mise use -g python@3.13`,
 `mise use -g java@temurin-25`), which needs no administrator password; build
 tools and libraries for native packages (`cpp`) use `sudo apt install …` on
-Debian/Ubuntu or `brew install …` on macOS. Coming back to the tab checks again. If Preview cannot start, use **Show run output**. On mobile,
+Debian/Ubuntu or `brew install …` on macOS. **Other ways** opens the setup
+guide for this computer ([Linux](set-up-linux.md), including Fedora and Arch,
+or [macOS](set-up-macos.md)), which also explains adding mise to your shell. Coming back to the tab checks again. If Preview cannot start, use **Show run output**. On mobile,
 open **Show project** first. A missing runtime needs installation by the host
 administrator; changing the declaration to `shell` does not supply the missing
 tool. Standalone users install/configure the missing tool in their own environment
@@ -43,5 +45,6 @@ to the tool row's command. It never runs `sudo` and never installs a runtime int
 the project folder (for example with `mise use` without `-g`).
 
 Colleague can explain preparation errors and offer its supported status/retry
-actions. These instructions do not give it shell access or permission to install
+actions. On your own computer it can also check whether a named tool runs now,
+for example after you ran an install command. These instructions do not give it shell access or permission to install
 host software. The coding agent can repair project commands after being asked.

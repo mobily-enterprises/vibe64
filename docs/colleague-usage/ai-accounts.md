@@ -64,15 +64,14 @@ status chip reads **Not installed** or **Didn't start** instead of **Not connect
   **Other ways to install** it. Open a terminal on this computer, paste the command,
   press Enter, then choose **Check again**. You run the command yourself; Colleague
   can explain it but cannot run it for you.
-  The command matches the computer Vibe64 runs on. On macOS and Linux:
+  The same commands work on macOS, Linux and Windows inside WSL (Vibe64 runs on
+  Windows only inside WSL, so install them in the Ubuntu terminal, not PowerShell):
   - Claude Code: `curl -fsSL https://claude.ai/install.sh | bash`
   - Codex: `curl -fsSL https://chatgpt.com/codex/install.sh | sh`
   - opencode: `curl -fsSL https://opencode.ai/install | bash`
 
-  On Windows, in PowerShell (opencode uses its npm package, which needs Node.js):
-  - Claude Code: `irm https://claude.ai/install.ps1 | iex`
-  - Codex: `powershell -ExecutionPolicy ByPass -c "irm https://chatgpt.com/codex/install.ps1 | iex"`
-  - opencode: `npm install -g opencode-ai`
+  The setup guides walk through the whole computer: [Linux](set-up-linux.md),
+  [macOS](set-up-macos.md), [Windows](set-up-windows.md).
 - **Codex didn't start** means the program is installed but could not be run at all.
   Choose **Check again**; if it keeps failing, reinstall it with the same command. The
   program's own error output is under **Details**, collapsed.

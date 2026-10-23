@@ -28,7 +28,10 @@ version and where it was found, so a wrong pick is easy to spot.
 
 A missing tool shows one sentence, the install command for this computer (Debian,
 Ubuntu or WSL; macOS with Homebrew; otherwise mise) with a copy button, **Check
-again** and **Other ways**. Commands that need `sudo` say: "You'll be asked for
+again** and **Other ways**. For Node.js, Git, GitHub CLI, ripgrep, languages and
+build tools, **Other ways** opens this computer's setup guide
+([Linux](set-up-linux.md), with Fedora and Arch lines, or [macOS](set-up-macos.md));
+for AI tools and the Playwright browser it opens the tool's own page. Commands that need `sudo` say: "You'll be asked for
 your computer password. Nothing shows while you type." **Check again** spins, then
 either turns the row green or says "Still not found. Did the command finish
 without errors?" No restart is needed.
@@ -56,8 +59,9 @@ a pass is not proof that a particular project builds.
 ## Ask Colleague
 
 Ask Colleague "check my setup" (or similar). Colleague runs the same Health checks
-and tells you which ones fail and what to do next for your system. It can open
-**Account settings** for you. Installing programs, signing in to GitHub or an AI
+and tells you which ones fail and what to do next for your system. It can also
+check single tools on request (“is Ruby installed?”), explain each step of the
+setup guides, and open **Account settings** for you. Installing programs, signing in to GitHub or an AI
 provider, and entering keys are things you do yourself; never paste a key or
 password into chat. Long command output stays on the Health page; Colleague sees a
 short summary of each check.
