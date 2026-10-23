@@ -84,13 +84,23 @@ const githubRepositoryMatches = definePreflightCheck({
 const LOCAL_CHECKS = Object.freeze([keysUnlocked, sideloadKeyReady, githubRepositoryMatches]);
 const RELEASE_CHECKS = uniqueChecks(VIBE64_PREFLIGHT_CHECKS, VIBE64_REGISTRY_PREFLIGHT_CHECKS, VIBE64_ANDROID_PREFLIGHT_CHECKS, LOCAL_CHECKS);
 
+// The part of a long tool output that says why: tools such as npm name the
+// problem first and then print usage, while others such as Gradle sum up at
+// the end, so a long output keeps its start and its end.
+function outputExcerpt(output, limit = 1800) {
+  if (output.length <= limit) return output;
+  const head = output.slice(0, Math.floor(limit / 3)).replace(/\n[^\n]*$/u, "");
+  const rest = output.slice(-(limit - head.length - 3));
+  return `${head}\n…\n${rest.replace(/^[^\n]*\n/u, "")}`;
+}
+
 // A failure's log lines: the message, then the tool's own output (builds run
 // without credentials; upload output is already redacted) so the person can
 // see why, with the home folder shortened.
 function failureLog(targetId, error, at) {
   const lines = [{ at, level: "error", message: `${targetId ? `${targetId}: ` : ""}${String(error?.message || error).slice(0, 1000)}` }];
   const output = String(error?.details?.output || "").trim();
-  if (output) lines.push({ at, level: "error", message: output.slice(-1800).replaceAll(os.homedir(), "~") });
+  if (output) lines.push({ at, level: "error", message: outputExcerpt(output.replaceAll(os.homedir(), "~")) });
   return lines;
 }
 
@@ -690,4 +700,4 @@ function createReleaseOrchestrator({
   });
 }
 
-export { changelogSection, createReleaseOrchestrator };
+export { changelogSection, createReleaseOrchestrator, outputExcerpt };

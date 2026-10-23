@@ -11,7 +11,7 @@ import test from "node:test";
 
 import { vibe64PackagingInspection } from "../../packages/vibe64-genesis/src/server/packaging.js";
 import { createConfirmationService } from "../../packages/vibe64-publishing/src/server/confirmationService.js";
-import { changelogSection, createReleaseOrchestrator } from "../../packages/vibe64-publishing/src/server/releaseOrchestrator.js";
+import { changelogSection, createReleaseOrchestrator, outputExcerpt } from "../../packages/vibe64-publishing/src/server/releaseOrchestrator.js";
 import { createBuilderMap } from "../../packages/vibe64-publishing/src/server/state/builderMap.js";
 import { createReleaseHistoryStore } from "../../packages/vibe64-publishing/src/server/state/releaseHistoryStore.js";
 import { createTargetsStore } from "../../packages/vibe64-publishing/src/server/state/targetsStore.js";
@@ -234,4 +234,15 @@ test("a build that fails stops before tagging, so the next try is not blocked by
   assert.deepEqual(calls.publishes, []);
   assert.ok(record.steps.findIndex(({ id }) => id.startsWith("build:")) < record.steps.findIndex(({ id }) => id.startsWith("tag:")), "builds come before tags");
   assert.ok(record.steps.filter(({ id }) => id.startsWith("tag:")).every(({ status }) => status === "pending"), JSON.stringify(record.steps));
+});
+
+test("a long failure output keeps where tools say why: its first lines and its last", () => {
+  const usage = Array.from({ length: 200 }, (_, index) => `npm error   --option-${index}  explains an option`).join("\n");
+  const output = `npm error \`npm ci\` can only install packages when package.json and package-lock.json are in sync.\n${usage}\nnpm error A complete log of this run can be found in: ~/debug.log`;
+  const excerpt = outputExcerpt(output);
+  assert.ok(excerpt.length <= 1800, String(excerpt.length));
+  assert.match(excerpt, /^npm error `npm ci` can only install packages/u);
+  assert.match(excerpt, /\n…\n/u);
+  assert.match(excerpt, /A complete log of this run can be found in: ~\/debug\.log$/u);
+  assert.equal(outputExcerpt("short"), "short");
 });
