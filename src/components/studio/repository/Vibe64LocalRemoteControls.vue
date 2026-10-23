@@ -24,7 +24,7 @@
     >
       <template #activator="{ props: menuProps }">
         <v-badge
-          :model-value="Boolean(remoteError) || state?.incoming > 0 || state?.outgoing > 0"
+          :model-value="!notRepository && !gitUnavailable && (Boolean(remoteError) || state?.incoming > 0 || state?.outgoing > 0)"
           :content="remoteError ? '!' : (state?.incoming || 0) + (state?.outgoing || 0)"
           :color="remoteError ? 'error' : 'primary'"
           max="99"
@@ -45,11 +45,67 @@
             :title="`${state?.branch || 'Git details'} · ${syncStatus.label}`"
           >
             <v-icon v-if="xs" :icon="mdiSourceBranch" />
-            <span v-else class="local-remotes__branch-name">{{ state?.branch || (state ? 'No branch' : 'Repository') }}</span>
+            <span v-else class="local-remotes__branch-name">{{ chipLabel }}</span>
           </v-btn>
         </v-badge>
       </template>
-      <v-sheet class="pa-4" rounded="lg" elevation="3">
+      <v-sheet v-if="gitUnavailable" class="pa-4" rounded="lg" elevation="3">
+        <div class="text-label-large mb-3">Version control</div>
+        <div class="d-flex ga-3 align-start">
+          <v-avatar color="warning" variant="tonal" size="40" rounded="lg">
+            <v-icon :icon="mdiSourceRepository" />
+          </v-avatar>
+          <div class="min-w-0">
+            <p class="text-body-large font-weight-medium ma-0">{{ gitUnavailable.title }}</p>
+            <p class="text-body-medium text-medium-emphasis mt-1 mb-0">{{ gitUnavailable.hint }}</p>
+          </div>
+        </div>
+        <Vibe64CopyCommand v-if="installCommand" class="mt-4" :command="installCommand" label="Copy the install command" />
+        <v-btn
+          class="mt-4"
+          block
+          height="48"
+          variant="tonal"
+          :loading="busy === 'fetch'"
+          :disabled="isBusy"
+          :prepend-icon="mdiRefresh"
+          @click="checkAgain"
+        >
+          Check again
+        </v-btn>
+        <p class="local-remotes__recheck text-body-small text-medium-emphasis mt-2 mb-0" aria-live="polite">
+          {{ stillMissing ? 'Still not found. Install it, then check again.' : '' }}
+        </p>
+      </v-sheet>
+      <v-sheet v-else-if="notRepository" class="pa-4" rounded="lg" elevation="3">
+        <div class="text-label-large mb-3">Version control</div>
+        <div class="d-flex ga-3 align-start">
+          <v-avatar color="primary" variant="tonal" size="40" rounded="lg">
+            <v-icon :icon="mdiSourceRepository" />
+          </v-avatar>
+          <div class="min-w-0">
+            <p class="text-body-large font-weight-medium ma-0">This folder isn’t using Git yet.</p>
+            <p class="text-body-medium text-medium-emphasis mt-1 mb-0">
+              Git keeps a history of every change, so sessions can save work and you can go back.
+            </p>
+          </div>
+        </div>
+        <v-btn
+          class="mt-4"
+          block
+          color="primary"
+          height="48"
+          variant="flat"
+          :loading="busy === 'init'"
+          :disabled="isBusy"
+          :prepend-icon="mdiSourceBranchPlus"
+          @click="startVersionControl"
+        >
+          Start version control here
+        </v-btn>
+        <p class="text-body-small text-medium-emphasis mt-2 mb-0">Nothing is uploaded. You can connect GitHub later.</p>
+      </v-sheet>
+      <v-sheet v-else class="pa-4" rounded="lg" elevation="3">
         <div class="text-label-large mb-2">Local repository</div>
         <div class="local-remotes__status text-body-small mb-3" role="status" aria-live="polite">
           <v-icon :icon="syncStatus.icon" :color="syncStatus.color" size="18" />
@@ -193,18 +249,22 @@ import { useDisplay } from "vuetify";
 import {
   mdiAlertCircleOutline, mdiArrowDown, mdiArrowUp, mdiCheckCircleOutline,
   mdiChevronDown, mdiCogOutline, mdiHelpCircleOutline, mdiLinkVariantOff,
-  mdiRefresh, mdiSourceBranch, mdiSwapVertical
+  mdiRefresh, mdiSourceBranch, mdiSourceBranchPlus, mdiSourceRepository, mdiSwapVertical
 } from "@mdi/js";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { scopedDevelopmentApiUrl, studioApiPath } from "@/lib/studioUrls.js";
-import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
+import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
+import Vibe64CopyCommand from "@/components/common/Vibe64CopyCommand.vue";
 
 const props = defineProps({ project: { type: Object, required: true } });
 const { xs } = useDisplay();
 const state = ref(null);
 const busy = ref("");
 const error = ref("");
+const installCommand = ref("");
+const errorCode = ref("");
+const stillMissing = ref(false);
 const isBusy = computed(() => Boolean(busy.value));
 const detailsOpen = ref(false);
 const settingsOpen = ref(false);
@@ -219,9 +279,20 @@ const endpoint = computed(() => scopedDevelopmentApiUrl(studioApiPath("vibe64/re
 let generation = 0;
 let timer;
 const remoteError = computed(() => error.value || state.value?.error || "");
+// A folder without Git is a normal starting point, not a failure.
+const notRepository = computed(() => !error.value && state.value?.repository === false);
+// Git itself missing or too old: the menu becomes the install step.
+const gitUnavailable = computed(() => ({
+  vibe64_git_missing: { chip: "Git needed", title: "Git isn’t installed on this computer.", hint: "Vibe64 uses Git to keep the history of your project. Install it, then check again." },
+  vibe64_git_too_old: { chip: "Update Git", title: "This Git is too old for Vibe64.", hint: "Vibe64 needs Git 2.28 or newer. Update it, then check again." }
+})[errorCode.value] || null);
+const chipLabel = computed(() => gitUnavailable.value?.chip || (notRepository.value ? "No Git yet"
+  : state.value?.branch || (state.value ? "No branch" : "Repository")));
 const syncStatus = computed(() => {
   const current = state.value;
+  if (gitUnavailable.value) return { label: gitUnavailable.value.chip, icon: mdiAlertCircleOutline, color: "warning" };
   if (remoteError.value) return { label: "Check failed", icon: mdiAlertCircleOutline, color: "error" };
+  if (notRepository.value) return { label: "No Git yet", icon: mdiSourceRepository };
   if (!current) return { label: "Not checked", icon: mdiHelpCircleOutline };
   if (!current.upstream && !current.push) return { label: current.remotes.length ? "Setup needed" : "Local only", icon: mdiLinkVariantOff };
   const changes = [];
@@ -237,7 +308,7 @@ function snapshot(value) { return JSON.parse(JSON.stringify(value)); }
 
 async function request(body) {
   const result = await getHttpWebClient().request(endpoint.value, { method: "POST", body });
-  if (result?.ok === false) throw new Error(vibe64ApiResponseError(result, "The Git operation failed."));
+  if (result?.ok === false) throw vibe64ApiError(result, "The Git operation failed.");
   return result;
 }
 async function refresh(background = true) {
@@ -249,10 +320,14 @@ async function refresh(background = true) {
     if (current !== generation) return;
     state.value = result;
     error.value = "";
+    errorCode.value = "";
+    installCommand.value = "";
   } catch (cause) {
     if (current === generation) {
       error.value = cause.message;
-      if (!background) feedback.error(cause, "Could not fetch remote changes.");
+      errorCode.value = String(cause.code || "");
+      installCommand.value = String(cause.details?.installCommand || "");
+      if (!background && !gitUnavailable.value) feedback.error(cause, "Could not fetch remote changes.");
     }
   } finally {
     if (current === generation) busy.value = "";
@@ -302,6 +377,15 @@ async function execute(body) {
     if (current === generation) busy.value = "";
   }
 }
+async function startVersionControl() {
+  await execute({ action: "init" });
+  if (state.value?.repository !== false && !error.value) feedback.success("Version control is on for this folder.");
+}
+async function checkAgain() {
+  stillMissing.value = false;
+  await refresh(false);
+  stillMissing.value = Boolean(gitUnavailable.value);
+}
 async function saveSettings() {
   await execute({ action: "configure", review: settingsReview.value, settings: { ...settings } });
   if (!settingsOpen.value) await refresh(false);
@@ -345,4 +429,5 @@ onScopeDispose(() => {
 .local-remotes__details dt { color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
 .local-remotes__details dd, .local-remotes__message { margin: 0; overflow-wrap: anywhere; }
 .local-remotes__url { overflow-wrap: anywhere; }
+.local-remotes__recheck { min-height: 1.25rem; }
 </style>
