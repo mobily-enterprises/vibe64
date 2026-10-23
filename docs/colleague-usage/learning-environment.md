@@ -94,9 +94,10 @@ lesson from Courses and Colleague's **Step N/M** button both open it here, at th
   the step you last read.
 - On a phone (and other narrow screens up to 980px wide) the page shows one
   side at a time: the chat or the project pane. The next-pane button at the top
-  goes from **Lesson** to **Preview** to **Dashboard** and back to **Lesson**,
-  showing the next pane's name; without a practice project there is only the
-  Lesson pane, so the button is not shown.
+  goes from **Preview** to **Dash** and back, showing the next pane's name; from
+  the Lesson pane it goes to **Preview**, and **Lesson** on the yellow step bar
+  brings the lesson back. Without a practice project there is only the Lesson
+  pane, so the button is not shown.
 
 ## No project selected and `/app`
 
@@ -305,7 +306,7 @@ during voice chat) shows a small yellow **Step N/M** button with a school icon,
 or a check once that step has passed. Its tooltip is **Current lesson step:
 <step title>**. It is hidden while Colleague is minimised.
 
-Press it to see the current step in the page's **Lesson** tab (above), at that
+Press it to see the current step in the page's **Lesson** pane (above), at that
 step, with Colleague still open beside it on a desktop. On a phone Colleague's
 full-screen chat minimises so the Lesson pane is visible; its avatar button
 brings Colleague back. The step bar, the Lesson pane, Courses and Colleague share
