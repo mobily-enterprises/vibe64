@@ -247,6 +247,17 @@ describe("useVibe64Learning controller", () => {
     expect(studio.learning.lessonSwitchable, "a studio stage frame offers Lesson").toBe(true);
     await studio.learning.openLesson();
     expect(studioRouter.push).toHaveBeenLastCalledWith("/app/studio-page?pane=lesson");
+    // In its practice project (no stage frame there) a studio lesson shows the
+    // project's Lesson pane instead of leaving the project for the studio home.
+    const deployRoute = { path: "/app/project/training-abc/dashboard/deploy", fullPath: "/app/project/training-abc/dashboard/deploy" };
+    const deployRouter = { currentRoute: { value: deployRoute }, push: vi.fn(async target => { deployRoute.fullPath = target; }) };
+    const projectLayout = Vue.shallowRef({ studio: false, projectSlug: "training-abc", lessonPane: false });
+    const practice = controller({ router: deployRouter, layout: projectLayout,
+      mode: () => ({ ...LEARN, practiceSlug: "training-abc", lessonStage: "studio" }) });
+    practice.learning.setViewer("member");
+    await flush();
+    await practice.learning.openLesson();
+    expect(deployRouter.push).toHaveBeenLastCalledWith("/app/project/training-abc?pane=lesson");
   });
 
   it("opens Courses on its lesson picker when L switches to Learn with no lesson in progress", async () => {

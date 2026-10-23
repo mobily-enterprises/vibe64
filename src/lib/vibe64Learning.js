@@ -542,9 +542,13 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     }
     remember();
     // A studio lesson docks its Lesson pane on the studio page showing a
-    // stage frame; anything else goes to the lesson's home.
+    // stage frame, and shows it as a project pane while the learner is in its
+    // practice project; anything else goes to the lesson's home.
     const here = String(router?.currentRoute?.value?.path || "");
-    const target = `${value.lessonStage !== "project" && layout?.value?.studio && here ? here : learnHomePath(value)}?pane=lesson`;
+    const inPractice = Boolean(value.practiceSlug) && projectSlugFromPathname(here) === value.practiceSlug;
+    const home = value.lessonStage === "project" ? learnHomePath(value)
+      : layout?.value?.studio && here ? here : inPractice ? projectAppPath(value.practiceSlug) : learnHomePath(value);
+    const target = `${home}?pane=lesson`;
     if (router && currentPath() !== target) await router.push(target);
     // A phone shows one side: the project side, where the Lesson pane is,
     // also when the address already names it (after L, or Show chat).
