@@ -245,8 +245,8 @@ function createReleaseOrchestrator({
     const baseline = await repository.baseline();
     const release = await savedRelease(baseline);
     if (!release || release.packaging.status !== "ready") return { packages: [], notes: "" };
-    const lastRelease = (await history.list({ limit: 50 })).find((record) => record.kind === "release" && record.status === "succeeded");
-    const lastTag = lastRelease?.tags?.[0] || null;
+    const releases = (await history.list({ limit: 50 })).filter((record) => record.kind === "release" && record.status === "succeeded");
+    const lastTag = releases[0]?.tags?.[0] || null;
     const subjects = await repository.subjectsSince(baseline.repositoryRoot, baseline.commit, lastTag);
     return {
       packages: release.packaging.packages.filter((entry) => entry.versionFrom).map((entry) => ({
@@ -254,6 +254,8 @@ function createReleaseOrchestrator({
         label: entry.label || entry.id,
         current: release.versions[entry.id] ?? null,
         external: entry.versionFrom === "external",
+        // A saved version no release has published yet can go out as it is.
+        released: releases.some((record) => record.versions?.[entry.id] === release.versions[entry.id]),
         suggestions: ["patch", "minor", "major"].map((kind) => ({ kind, version: bumpVersion(release.versions[entry.id], kind) }))
       })),
       notes: subjects.filter((subject) => !/^release\b/iu.test(subject)).slice(0, 12).map((subject) => `- ${subject}`).join("\n")
@@ -446,9 +448,10 @@ function createReleaseOrchestrator({
   }
 
   function stepsFor(publishPlan, kind) {
+    // Build first: a build that fails leaves no tag behind to block the next try.
     return [
-      ...(kind === "release" ? publishPlan.tags.map((tag) => ({ id: `tag:${tag}`, status: "pending", message: "" })) : []),
       ...publishPlan.packages.map((entry) => ({ id: `build:${entry.id}`, status: "pending", message: "" })),
+      ...(kind === "release" ? publishPlan.tags.map((tag) => ({ id: `tag:${tag}`, status: "pending", message: "" })) : []),
       ...publishPlan.targets.map((target) => ({ id: `${kind === "release" ? "publish" : "dry-run"}:${target.id}`, status: "pending", message: "" }))
     ];
   }
@@ -600,6 +603,7 @@ function createReleaseOrchestrator({
 
   async function runRelease(current, recordId) {
     const facts = { ...current.baseline, projectRuntimeRoot };
+    const built = await buildAll(current, recordId);
     if (current.plan.tags.length) {
       for (const tag of current.plan.tags) await step(recordId, `tag:${tag}`, "running");
       const tagged = await repository.createTags(facts, { commit: current.plan.savedCommit, tags: current.plan.tags });
@@ -608,7 +612,6 @@ function createReleaseOrchestrator({
       if (pushed.pushed.length) await history.appendLog(recordId, `Pushed ${pushed.pushed.join(", ")} to ${facts.remote.name}.`);
       for (const tag of current.plan.tags) await step(recordId, `tag:${tag}`, "done", pushed.pushed.includes(tag) ? `Pushed to ${facts.remote.name}` : "In the project");
     }
-    const built = await buildAll(current, recordId);
     const record = await history.read(recordId);
     let proven = 0;
     for (const planTarget of current.plan.targets) {

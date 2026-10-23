@@ -32,7 +32,7 @@ const PACKAGING = vibe64PackagingInspection({
   ] }
 });
 
-async function fixture(t, { failing = new Set(), verification = "passed" } = {}) {
+async function fixture(t, { failing = new Set(), failingBuilds = new Set(), verification = "passed" } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-publishing-orchestrator-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const runtimeRoot = path.join(root, "publishing");
@@ -68,6 +68,7 @@ async function fixture(t, { failing = new Set(), verification = "passed" } = {})
     gatherAndroidFacts: async () => null,
     buildPackage: async ({ packageId, version, planHash }) => {
       calls.builds.push(packageId);
+      if (failingBuilds.has(packageId)) throw Object.assign(new Error("Build failed with exit code 1."), { code: "VIBE64_PUBLISH_BUILD_FAILED" });
       return { artifacts: { digest: `sha256:${packageId}-${version}`, manifest: { planHash, files: [{ path: `${packageId}-${version}.tgz`, size: 100, sha256: `sha256:${packageId}` }] }, reused: false } };
     }
   };
@@ -107,6 +108,7 @@ test("one confirmed plan builds each package once, fans out to every target and 
   const suggestion = await orchestrator.suggestRelease();
   assert.deepEqual(suggestion.packages.find(({ id }) => id === "sdk").suggestions.map(({ version }) => version), ["1.2.1", "1.3.0", "2.0.0"]);
   assert.equal(suggestion.notes, "- Add offline drafts");
+  assert.equal(suggestion.packages.find(({ id }) => id === "sdk").released, false, "the saved version can go out as it is");
 
   const plan = await orchestrator.plan();
   assert.equal(plan.preflight.ready, true, JSON.stringify(plan.preflight.checks.filter(({ ok }) => !ok)));
@@ -138,6 +140,7 @@ test("one confirmed plan builds each package once, fans out to every target and 
 
   const state = await orchestrator.readState();
   assert.equal(state.targets.find(({ id }) => id === "sdk-npm").latest.version, "1.2.0");
+  assert.equal((await orchestrator.suggestRelease()).packages.find(({ id }) => id === "sdk").released, true);
   assert.equal(state.releases[0].id, started.releaseId);
   assert.ok(runtimeRoot);
 });
@@ -218,4 +221,17 @@ test("prepare writes the version change into the session; release notes come fro
   await assert.rejects(orchestrator.prepareRelease({ sessionId: "s1", versions: { sdk: "next" }, notes: "x" }), { code: "vibe64_publishing_prepare_invalid" });
   assert.equal(changelogSection("## 2.0.0 - d\n\n- B\n\n## 1.0.0 - d\n\n- A\n", "1.0.0"), "- A");
   assert.equal(changelogSection("# Changelog\n", "1.0.0"), null);
+});
+
+test("a build that fails stops before tagging, so the next try is not blocked by its tags", async (t) => {
+  const { orchestrator, calls } = await fixture(t, { failingBuilds: new Set(["py"]) });
+  const plan = await orchestrator.plan();
+  const started = await confirm(orchestrator, plan);
+  const record = await orchestrator.readRelease(started.releaseId);
+  assert.equal(record.status, "failed");
+  assert.deepEqual(calls.tags, [], "no tag was created");
+  assert.deepEqual(calls.pushes, [], "no tag was pushed");
+  assert.deepEqual(calls.publishes, []);
+  assert.ok(record.steps.findIndex(({ id }) => id.startsWith("build:")) < record.steps.findIndex(({ id }) => id.startsWith("tag:")), "builds come before tags");
+  assert.ok(record.steps.filter(({ id }) => id.startsWith("tag:")).every(({ status }) => status === "pending"), JSON.stringify(record.steps));
 });
