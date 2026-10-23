@@ -149,8 +149,9 @@ visible while an earlier request awaits admission. Main enables deferWhileWorkin
 on the original shared conversation binding. Its steering predicate requires the
 canonical steering capability as well as the original native turn and connection
 checks. Busy nonsteerable Main requests retain their IDs, text and application data
-through the shared delivery owner, which waits for canonical readiness and sends
-followers in order. Main's application facade also exposes the original canSubmit
+through the shared delivery owner. It holds them only while the working turn
+cannot take steering, labelled "Pending: Waiting for the assistant to finish this
+step", steers them as soon as that turn can, or sends them when ready, in order. Main's application facade also exposes the original canSubmit
 and queueWhileSending refs. Its existing typed composer uses those refs and the
 same canonical steering predicate for admission and Send/Steer presentation,
 retaining its native readiness, routing, attachment, access and repository gates.
