@@ -438,7 +438,8 @@ back), publishing targets and release history kept as local project state, and
 the person's publishing keys, recovery kit and toolchain licence acceptance in
 their own Vibe64 folder. Assistants may read, prepare, plan, dry-run and ask;
 only the person's page request confirms. It composes the host-neutral building
-blocks in `packages/vibe64-packaging` (including the passphrase key store) and
+blocks in `packages/vibe64-packaging` (including the passphrase key store and
+recovery kit) and
 the Packaging contract owned by the Genesis boundary.
 
 ### Source
@@ -466,7 +467,8 @@ and always removed afterwards, read-back proof, release tags on the saved
 commit under the project source lock, one-shot person-only confirmation
 tokens, preflight checks, the packer and destination registries, the
 passphrase-locked publishing key store (an age file in a private folder its
-caller chooses, unlocked only in memory), and the standalone `vibe64-publish`
+caller chooses, unlocked only in memory, and its recovery kit: every key in one
+file under a second passphrase), and the standalone `vibe64-publish`
 command. It holds no state, history, custody policy or UI of its own; its
 callers own those and choose where the keys live.
 

@@ -22,9 +22,8 @@ import {
 } from "@local/vibe64-packaging/server";
 import { VIBE64_REGISTRY_PREFLIGHT_CHECKS } from "@local/vibe64-packaging/server/preflight/registries";
 import { VIBE64_ANDROID_PREFLIGHT_CHECKS } from "@local/vibe64-packaging/server/preflight/android";
-import { publishingKeysUnlocked } from "@local/vibe64-packaging/server/keys";
+import { publishingKeysUnlocked, recoveryKitCovers } from "@local/vibe64-packaging/server/keys";
 
-import { recoveryKitCovers } from "./credentials/recoveryKit.js";
 import { sideloadKeyEntryId } from "./credentialBroker.js";
 
 const SEMVER = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;

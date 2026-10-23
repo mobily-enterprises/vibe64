@@ -5,7 +5,7 @@
 // has been downloaded.
 import { createHash } from "node:crypto";
 
-import { ageDecrypt, ageEncrypt } from "@local/vibe64-packaging/server/keys";
+import { ageDecrypt, ageEncrypt } from "./age.js";
 
 const KIT_CONTRACT = "vibe64.publishing-recovery-kit.v1";
 
