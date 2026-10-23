@@ -87,6 +87,8 @@ function clearTrainingGuide(id) {
 
 // Draw one guide. settleMs waits briefly for a navigated view to render its
 // final control; the receipt names the step actually ringed, never a guess.
+// durationMs: Infinity keeps the guide, without a time limit or dismissal on
+// input, until clearTrainingGuide or the next guide replaces it.
 async function showTrainingGuide(guide, { settleMs = 0, durationMs = TRAINING_GUIDE_DURATION_MS } = {}) {
   if (!guide?.highlight) return { shown: false, reason: "highlight-off" };
   if (overlays === 0) return { shown: false, reason: "overlay-unavailable" };

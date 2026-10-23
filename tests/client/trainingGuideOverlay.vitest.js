@@ -5,7 +5,7 @@ import { compileScript, parse } from "@vue/compiler-sfc";
 import * as Vue from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import TrainingGuideOverlay from "../../packages/vibe64-training/src/client/TrainingGuideOverlay.vue";
-import { runTrainingGuideCommand, showTrainingGuide, trainingGuide } from "../../packages/vibe64-training/src/client/trainingGuide.js";
+import { clearTrainingGuide, runTrainingGuideCommand, showTrainingGuide, trainingGuide } from "../../packages/vibe64-training/src/client/trainingGuide.js";
 import { trainingGuideCommand, trainingGuideRequest } from "../../packages/vibe64-training/src/shared/guideTargets.js";
 
 const overlayFile = path.resolve("packages/vibe64-training/src/client/TrainingGuideOverlay.vue");
@@ -282,6 +282,22 @@ describe("teacher guide overlay", () => {
     expect(trainingGuide.value).toBeNull();
     expect(overlay()).toBeUndefined();
     expect(document.listeners.has("pointerdown")).toBe(false);
+  });
+
+  it("keeps a guide without a time limit through clicks and time until it is cleared", async () => {
+    mountOverlay();
+    const receipt = await showTrainingGuide(erd, { durationMs: Infinity });
+    await Vue.nextTick();
+    expect(receipt).toEqual({ shown: true, step: "dashboard" });
+    expect(document.listeners.has("pointerdown")).toBe(false);
+    expect(document.listeners.has("keydown")).toBe(false);
+    vi.advanceTimersByTime(60 * 60 * 1000);
+    await Vue.nextTick();
+    expect(overlay()).toBeDefined();
+    expect(find(overlay(), node => node.props.class === "training-guide-overlay__timer")).toHaveLength(0);
+    clearTrainingGuide(trainingGuide.value.id);
+    await Vue.nextTick();
+    expect(overlay()).toBeUndefined();
   });
 
   it("holds the ring still for reduced motion", async () => {
