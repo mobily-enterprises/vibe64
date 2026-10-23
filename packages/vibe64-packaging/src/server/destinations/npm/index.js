@@ -239,7 +239,13 @@ async function verifyCredential({ target, credentials }) {
   if (!token) return { ok: false, message: "The npm sign-in has no token for this registry." };
   const response = await httpJson(new URL("-/whoami", registry).href, { headers: { authorization: `Bearer ${token}` } });
   if (!response.ok || typeof response.json?.username !== "string") {
-    return { ok: false, message: `The npm registry did not accept the sign-in (${response.status}).` };
+    const refused = [401, 403].includes(response.status);
+    return {
+      ok: false,
+      message: refused
+        ? `npm refused this sign-in (HTTP ${response.status}): its token may have expired or cannot publish.`
+        : `npm could not confirm who this sign-in belongs to (HTTP ${response.status}); its token may not be valid here.`
+    };
   }
   return { ok: true, account: response.json.username, message: `Signed in to npm as ${response.json.username}.` };
 }
