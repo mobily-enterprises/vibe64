@@ -222,6 +222,20 @@ test("lightweight mode previews cannot bypass model validation at dispatch", asy
   assert.match(admitted.message, /available/);
 });
 
+test("team members' model catalogue leaves out personal plans", async () => {
+  const manager = createSessionAgentManager({
+    readAssistantAccess: async ({ modelProviderId }) => ({ available: true, ownerOnly: modelProviderId === "anthropic", connectionIdentity: "c" }),
+    providers: [{ id: "claude", transportId: "claude_cli", async capabilities() {
+      return { engineId: "claude", transportId: "claude_cli", revision: catalogRevision, agents: [],
+        modelProviders: ["anthropic", "deepseek", "zai"].map((id) => ({ id, connected: id !== "zai", models: [{ id: `${id}-model`, status: "available", variants: [] }] })),
+        page: { hasMore: false, nextCursor: "" } };
+    } }] });
+  const providers = async (vibe64User) => (await manager.listCapabilities({ engineId: "claude", allConnectedModels: "true" }, { vibe64User }))
+    .engines[0].modelProviders.map(({ id }) => id);
+  assert.deepEqual(await providers({ username: "ana", role: "member" }), ["deepseek", "zai"]);
+  assert.deepEqual(await providers({ username: "tony", role: "owner" }), ["anthropic", "deepseek", "zai"]);
+});
+
 test("routing preview loads every connected OpenCode model page and refuses mixed catalogue revisions", async () => {
   const calls = [];
   let changed = false;

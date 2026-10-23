@@ -66,7 +66,7 @@ test("a member's main-chat message is queued; the owner's and internal sends go 
   const [entry] = entries();
   assert.deepEqual({ ...entry, createdAt: "", updatedAt: "" }, {
     id: "message-0001", sender: { id: "ana", username: "ana", displayName: "Ana" }, text: "Add dark mode",
-    steer: true, status: "waiting", revision: 1, createdAt: "", updatedAt: "", messageId: "approval:message-0001", error: ""
+    steer: true, status: "waiting", revision: 1, createdAt: "", updatedAt: "", error: ""
   });
   assert.deepEqual(sessionEvents, ["main-chat-approval-queued"]);
   assert.deepEqual(projectEvents, ["main-chat-approvals"]);
@@ -143,7 +143,8 @@ test("approval sends the message as the owner with its sender, keeping an edited
   assert.equal(result.status, "sent");
   assert.equal(sent.length, 1);
   assert.equal(sent[0].input.message, "Add a toggle");
-  assert.equal(sent[0].input.messageId, "approval:message-0004:2", "an edited text is its own delivery");
+  assert.equal(sent[0].input.messageId, "approval_message-0004_2", "an edited text is its own delivery");
+  assert.match(sent[0].input.messageId, /^[\w-]{1,128}$/u, "conversations accept only word-character message ids");
   assert.equal(sent[0].input.vibe64User, owner);
   assert.equal(sent[0].options.vibe64User, owner);
   assert.equal(sent[0].options.browserAuthority, browserAuthority);
@@ -176,7 +177,7 @@ test("a failed approval returns to waiting with its error and retries with the s
     { statusCode: 409, code: "vibe64_main_chat_approval_sending" });
   assert.equal(entries()[0].text, "Fix the header");
   assert.equal((await service.approveMainChatApproval("s1", "message-0005", { expectedRevision: 1, vibe64User: owner })).ok, true);
-  assert.deepEqual(sent.map(({ input }) => input.messageId), ["approval:message-0005:1", "approval:message-0005:1"]);
+  assert.deepEqual(sent.map(({ input }) => input.messageId), ["approval_message-0005_1", "approval_message-0005_1"]);
   assert.equal(entries()[0].status, "sent");
   assert.equal(entries()[0].error, "");
 });

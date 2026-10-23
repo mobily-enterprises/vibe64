@@ -13,7 +13,8 @@ const MAIN_CHAT_APPROVALS_METADATA = "main_chat_approvals";
 const WAITING_PER_SENDER = 5;
 const KEPT_ENTRIES = 200;
 const NOTE_MAX_LENGTH = 500;
-const ENTRY_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/u;
+// Leaves room for the delivery id, which conversations limit to 128 word characters.
+const ENTRY_ID_PATTERN = /^[A-Za-z0-9_-]{8,100}$/u;
 
 function text(value = "") {
   return String(value || "").trim();
@@ -157,7 +158,7 @@ function createMainChatApprovals({
         }
         const now = new Date().toISOString();
         approvals.entries.push({ id, sender, text: message, steer, status: "waiting",
-          revision: 1, createdAt: now, updatedAt: now, messageId: `approval:${id}`, error: "" });
+          revision: 1, createdAt: now, updatedAt: now, error: "" });
         return { ok: true, queued: true, approvalId: id, status: "waiting" };
       }, { approvalId: id, approvalSender: sender.displayName });
     },
@@ -221,7 +222,7 @@ function createMainChatApprovals({
       let result;
       try {
         result = await deliver(sessionId, {
-          message: entry.text, messageId: `${entry.messageId}:${entry.revision}`, vibe64User,
+          message: entry.text, messageId: `approval_${entry.id}_${entry.revision}`, vibe64User,
           turnMetadata: { sender: { id: entry.sender.id, displayName: entry.sender.displayName,
             approvalId: entry.id, approvedBy: entry.decidedBy.displayName } }
         }, browserAuthority ? { browserAuthority } : {});

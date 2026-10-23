@@ -1362,11 +1362,17 @@ function createSessionAgentManager({
       const providersToInspect = requestedEngineId
         ? [providerFor({ engineId: requestedEngineId })]
         : [...providerById.values()];
+      const actor = await resolveAssistantUser(assistantUser(options));
       return Object.freeze({
-        engines: Object.freeze(await Promise.all(providersToInspect.map((provider) => (
-          input.allConnectedModels === "true" ? connectedProviderCatalog(provider, options)
-            : providerCapabilities(provider, input, options)
-        )))),
+        engines: Object.freeze(await Promise.all(providersToInspect.map(async (provider) => {
+          const catalog = input.allConnectedModels === "true" ? await connectedProviderCatalog(provider, options)
+            : await providerCapabilities(provider, input, options);
+          if (isAssistantRoutingOwner(actor)) return catalog;
+          // Team members never see a personal plan's models as choices.
+          const personal = await Promise.all(catalog.modelProviders.map(async ({ id, connected }) => connected &&
+            (await routingSelectionAccess({ engineId: provider.id, modelProviderId: id }, { ...options, vibe64User: actor })).ownerOnly !== false));
+          return { ...catalog, modelProviders: catalog.modelProviders.filter((row, index) => !personal[index]) };
+        }))),
         ok: true
       });
     },
