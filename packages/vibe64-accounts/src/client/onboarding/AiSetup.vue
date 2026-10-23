@@ -554,7 +554,7 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
         </header>
         <div v-if="wasSetUp && currentMarks.length" class="aio-current" role="group" aria-label="Currently using">
           <span class="aio-current__marks">
-            <AiOnboardingMark v-for="card in currentMarks" :key="card.id" :provider="card" :size="36" />
+            <AiOnboardingMark v-for="card in currentMarks" :key="card.id" :provider="{ ...card, crown: false }" :size="36" />
           </span>
           <span class="aio-current__text">
             <span class="aio-current__label">{{ mainCard ? "Currently using" : "Connected" }}</span>
