@@ -28,7 +28,23 @@
         </td>
         <td>
           <div
-            v-if="record.secret"
+            v-if="savedRecord(record)"
+            class="runtime-config-records-table__linked"
+          >
+            <v-chip
+              class="runtime-config-records-table__linked-chip"
+              color="primary"
+              label
+              :prepend-icon="mdiLinkVariant"
+              size="x-small"
+              variant="tonal"
+            >
+              Linked
+            </v-chip>
+            <span class="runtime-config-records-table__linked-label" :title="record.label">{{ record.label }}</span>
+          </div>
+          <div
+            v-else-if="record.secret"
             class="runtime-config-records-table__secret-value"
           >
             <code>{{ recordValueLabel(record) }}</code>
@@ -50,7 +66,23 @@
           </template>
         </td>
         <td v-if="showActions">
-          <div class="runtime-config-records-table__edit">
+          <div v-if="savedRecord(record)" class="runtime-config-records-table__saved-actions">
+            <component
+              :is="savedValues.component"
+              v-if="savedValues"
+              :environment="savedValueEnvironment(environmentLabel)"
+              placement="env-row"
+              :project-slug="projectSlug"
+              :secret="record.secret === true"
+              :variable="record.key"
+              @changed="$emit('saved-value-changed')"
+            />
+          </div>
+          <div
+            v-else
+            class="runtime-config-records-table__edit"
+            :class="{ 'runtime-config-records-table__edit--saved-values': savedValues }"
+          >
             <v-text-field
               :model-value="draftValue(record)"
               :type="record.secret ? 'password' : 'text'"
@@ -80,6 +112,16 @@
             >
               Remove
             </v-btn>
+            <component
+              :is="savedValues.component"
+              v-if="savedValues"
+              :environment="savedValueEnvironment(environmentLabel)"
+              placement="env-row"
+              :project-slug="projectSlug"
+              :secret="record.secret === true"
+              :variable="record.key"
+              @changed="$emit('saved-value-changed')"
+            />
           </div>
         </td>
       </tr>
@@ -89,12 +131,20 @@
 
 <script setup>
 import { ref } from "vue";
+import { mdiLinkVariant } from "@mdi/js";
+import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
+import {
+  recordIsSavedEnvValue,
+  savedEnvValueEnvironment as savedValueEnvironment,
+  useVibe64SavedEnvValues
+} from "@/lib/vibe64SavedEnvValues.js";
 
 const emit = defineEmits([
   "hide-secret",
   "remove-record",
   "reveal-secret",
-  "save-record"
+  "save-record",
+  "saved-value-changed"
 ]);
 
 const props = defineProps({
@@ -129,6 +179,12 @@ const props = defineProps({
 });
 
 const draftValues = ref({});
+const projectSlug = useVibe64ProjectSlug();
+const savedValues = useVibe64SavedEnvValues();
+
+function savedRecord(record = {}) {
+  return recordIsSavedEnvValue(record);
+}
 
 function recordKey(record = {}) {
   return `${record.scope || props.environmentLabel}:${record.key || ""}`;
@@ -284,6 +340,38 @@ async function copyKey(key = "") {
   display: grid;
   gap: 0.5rem;
   grid-template-columns: minmax(7rem, 1fr) auto auto;
+  min-width: 0;
+}
+
+.runtime-config-records-table__edit--saved-values {
+  grid-template-columns: minmax(7rem, 1fr) auto auto auto;
+}
+
+.runtime-config-records-table__linked {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.runtime-config-records-table__linked-chip {
+  flex: 0 0 auto;
+}
+
+.runtime-config-records-table__linked-label {
+  color: var(--v64-on-surface-variant, rgba(0, 0, 0, 0.62));
+  font: var(--v64-type-body-sm, 400 0.8125rem/1.125rem system-ui, sans-serif);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runtime-config-records-table__saved-actions {
+  align-items: center;
+  display: flex;
+  justify-content: flex-end;
+  min-height: 40px;
   min-width: 0;
 }
 

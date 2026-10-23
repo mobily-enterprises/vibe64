@@ -11,6 +11,7 @@ import { integrationCallbackUrl } from "@/lib/integrationCallbackUrl.js";
 import { readLocalStorageJson, writeLocalStorageJson } from "@/lib/browserLocalStorage.js";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
 import { VIBE64_COLLEAGUE_INTEGRATIONS_KEY } from "@/lib/vibe64AssistantHost.js";
+import { useVibe64SavedEnvValues } from "@/lib/vibe64SavedEnvValues.js";
 import GoogleAdsSearchPanel from "@/components/studio/GoogleAdsSearchPanel.vue";
 import googleAdsSearchGuide from "@local/vibe64-source-editor/docs/application-google-ads.md?raw";
 import PaymentConfigurationPanel from "@/components/studio/PaymentConfigurationPanel.vue";
@@ -170,6 +171,9 @@ const credentials = computed(() => {
     ? registration.value?.clientSecretRef : selected.value?.authentication.secretRef;
   const primaryKey = /^env:([A-Z_][A-Z0-9_]*)$/u.exec(reference || "")?.[1];
   const entries = primaryKey ? [{ key: primaryKey, label: "Application credential", public: false }] : [];
+  // A shared account connected outside the app arrives as a refresh token in Env.
+  const refreshTokenKey = /^env:([A-Z_][A-Z0-9_]*)$/u.exec(selected.value?.authentication.refreshTokenRef || "")?.[1];
+  if (refreshTokenKey) entries.push({ key: refreshTokenKey, label: "Connected account", public: false });
   for (const field of provider.value?.settingsFields || []) {
     if (!field.environmentCredential) continue;
     const key = /^env:([A-Z_][A-Z0-9_]*)$/u.exec(selected.value?.settings?.[field.name] || "")?.[1];
@@ -177,6 +181,15 @@ const credentials = computed(() => {
   }
   return entries;
 });
+const savedValues = useVibe64SavedEnvValues();
+// Variables the host reports as filled from a saved value, per environment.
+const linkedCredentials = ref({});
+function credentialLinked(key) {
+  return linkedCredentials.value[`${environment.value}:${key}`] === true;
+}
+function setCredentialLinked(key, linked) {
+  linkedCredentials.value = { ...linkedCredentials.value, [`${environment.value}:${key}`]: linked === true };
+}
 const callbackKey = computed(() => /^env:([A-Z_][A-Z0-9_]*)$/u.exec(registration.value?.callbackUrlRef || "")?.[1] || "");
 const callbackUrl = computed({
   get: () => callbackOverride.value ?? integrationCallbackUrl(props.dashboardContext.applicationPublicUrl,
@@ -486,10 +499,16 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
               <p>Save the credential as {{ credential.key }} in {{ environment }} Env. Your application receives it through Env.</p>
               <p v-if="credential.public">Your application may expose this key in its frontend. Use a key restricted to data those users may read.</p>
               <p v-if="dirty">Save configuration first, then enter the credential.</p>
-              <v-btn height="48" variant="text" :disabled="dirty || disabled" :to="{
-                path: projectAppPath(projectSlug, production ? '/dashboard/deploy' : '/dashboard/env'),
-                query: { prefillKey: credential.key, prefillSecret: 'true' }
-              }">{{ production ? 'Open production Env' : 'Set credential in Env' }}</v-btn>
+              <div class="integrations-panel__credential-actions">
+                <v-btn v-if="!credentialLinked(credential.key)" height="48" variant="text" :disabled="dirty || disabled" :to="{
+                  path: projectAppPath(projectSlug, production ? '/dashboard/deploy' : '/dashboard/env'),
+                  query: { prefillKey: credential.key, prefillSecret: 'true' }
+                }">{{ production ? 'Open production Env' : 'Set credential in Env' }}</v-btn>
+                <component :is="savedValues.component" v-if="savedValues && !dirty" :key="`${environment}:${credential.key}`"
+                  :environment="environment" placement="integration-credential" :project-slug="projectSlug"
+                  :secret="!credential.public" :variable="credential.key"
+                  @linked="setCredentialLinked(credential.key, $event)" />
+              </div>
             </section>
             <section v-if="callbackKey" aria-label="Callback setup" class="mt-4">
               <h3 class="text-title-medium">Application callback</h3>
@@ -601,6 +620,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
 .integrations-panel__catalogue :deep(.v-list-item__append) { align-self: start; }
 .integrations-panel__footer { border-top: 1px solid rgba(var(--v-border-color), var(--v-border-opacity)); padding-top: 16px; flex-wrap: wrap; }
 .integrations-panel__footer p { flex: 1 1 280px; }
+.integrations-panel__credential-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; min-height: 48px; }
 .integrations-panel__instructions { padding-inline-start: 20px; display: grid; gap: 12px; overflow-wrap: anywhere; }
 @media (max-width: 480px) { .integrations-panel { padding: 8px; } .integrations-panel__actions { width: 100%; flex-wrap: wrap; } }
 </style>

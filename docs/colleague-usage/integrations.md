@@ -14,7 +14,9 @@ detail to its configuration and **Application connection** controls.
    integration preselects no model: choose one in **AI model**, then enter its
    key reference (for example `env:APP_AI_API_KEY`) before **Save configuration**.
 3. Enter credentials through the indicated Env flow. Use the exact variable names
-   shown by that provider; do not put secrets into a conversation.
+   shown by that provider; do not put secrets into a conversation. When the host
+   offers saved values, the credential step can link one instead of entering a
+   value.
 4. Use **Check connection** or the displayed connect action. If consent is pending,
    select **Continue with provider** and finish the provider's own browser flow.
 5. Return and check connection status. A callback or successful transport alone

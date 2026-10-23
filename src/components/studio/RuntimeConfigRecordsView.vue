@@ -21,6 +21,7 @@
         @remove-record="$emit('remove-record', $event)"
         @reveal-secret="$emit('reveal-secret', $event)"
         @save-record="$emit('save-record', $event)"
+        @saved-value-changed="$emit('saved-value-changed')"
       />
       <p v-else class="runtime-config-records__empty">
         {{ editableEmptyText }}
@@ -60,12 +61,14 @@
 <script setup>
 import { computed } from "vue";
 import RuntimeConfigRecordsTable from "@/components/studio/RuntimeConfigRecordsTable.vue";
+import { recordIsSavedEnvValue } from "@/lib/vibe64SavedEnvValues.js";
 
 defineEmits([
   "hide-secret",
   "remove-record",
   "reveal-secret",
-  "save-record"
+  "save-record",
+  "saved-value-changed"
 ]);
 
 const props = defineProps({
@@ -111,8 +114,9 @@ const records = computed(() => Array.isArray(props.records) ? props.records : []
 const editableRecords = computed(() => records.value.filter(recordEditable));
 const systemRecords = computed(() => records.value.filter((record) => !recordEditable(record)));
 
+// Rows the person filled, typed here or linked to a saved value, form the main list.
 function recordEditable(record = {}) {
-  return record.editable === true;
+  return record.editable === true || recordIsSavedEnvValue(record);
 }
 </script>
 

@@ -101,7 +101,7 @@
       <v-alert v-if="existingNewValue" type="info" variant="tonal">
         {{ newValue.key }} already has a value. Saving replaces this value in development; other Env values stay unchanged.
       </v-alert>
-      <section class="env-panel__add">
+      <section class="env-panel__add" :class="{ 'env-panel__add--saved-values': savedValues }">
         <v-text-field
           v-model="newValue.key"
           density="compact"
@@ -135,6 +135,16 @@
         >
           {{ existingNewValue ? 'Replace value' : 'Add' }}
         </v-btn>
+        <component
+          :is="savedValues.component"
+          v-if="savedValues"
+          :environment="savedValueEnvironment(environmentLabel)"
+          placement="env-add"
+          :project-slug="projectSlug"
+          :secret="newValue.secret === true"
+          :variable="String(newValue.key || '').trim()"
+          @changed="savedValueChanged"
+        />
       </section>
 
       <RuntimeConfigRecordsView
@@ -151,6 +161,7 @@
         @remove-record="requestRemoveRecord"
         @reveal-secret="revealSecret"
         @save-record="saveRecord"
+        @saved-value-changed="refresh"
       />
     </template>
     <slot
@@ -206,6 +217,10 @@ import Vibe64DashboardPageHeader from "@/components/studio/Vibe64DashboardPageHe
 import RuntimeConfigRecordsView from "@/components/studio/RuntimeConfigRecordsView.vue";
 import { useRuntimeConfigSecretReveal } from "@/composables/useRuntimeConfigSecretReveal.js";
 import {
+  savedEnvValueEnvironment as savedValueEnvironment,
+  useVibe64SavedEnvValues
+} from "@/lib/vibe64SavedEnvValues.js";
+import {
   VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
 import {
@@ -234,6 +249,7 @@ const PROJECT_ENVIRONMENT = "dev";
 const PROJECT_ENVIRONMENT_LABEL = "development";
 
 const activeTab = ref(PROJECT_ENV_TAB);
+const savedValues = useVibe64SavedEnvValues();
 const newValue = ref(emptyNewValue());
 const route = useRoute();
 watch(() => [route.query.prefillKey, route.query.prefillValue, route.query.prefillSecret], ([key, value, secret]) => {
@@ -452,6 +468,11 @@ async function saveValues(values = {}) {
   await envResource.reload();
 }
 
+async function savedValueChanged() {
+  newValue.value = emptyNewValue();
+  await refresh();
+}
+
 function reloadPage() {
   if (typeof window !== "undefined") {
     window.location.reload();
@@ -499,6 +520,10 @@ function reloadPage() {
   padding: var(--v64-space-4, 16px);
 }
 
+.env-panel__add--saved-values {
+  grid-template-columns: minmax(10rem, 1.1fr) minmax(12rem, 1.4fr) auto auto auto;
+}
+
 .env-panel__add :deep(.v-field) {
   background: var(--v64-surface);
   border-radius: var(--v64-shape-sm, 8px);
@@ -544,7 +569,8 @@ function reloadPage() {
 }
 
 @media (max-width: 900px) {
-  .env-panel__add {
+  .env-panel__add,
+  .env-panel__add--saved-values {
     grid-template-columns: 1fr;
   }
 }
