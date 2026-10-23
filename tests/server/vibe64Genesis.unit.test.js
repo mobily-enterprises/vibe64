@@ -246,6 +246,7 @@ test("the Vibe64 driver contributes stable session rules and no turn context", (
   assert.match(session, /vibe64-helper --help/u);
   assert.doesNotMatch(session, /vibe64-(?:preview|playwright|env|database|github)\b/u);
   assert.match(session, /vibe64-helper env status/u);
+  assert.match(session, /refers to a saved key, account or accounts hub, run `vibe64-helper env saved`/u);
   assert.match(session, /vibe64-helper database refresh/u);
   assert.match(session, /vibe64-helper github refresh/u);
   assert.match(session, /vibe64-helper github issue-link <number>/u);
