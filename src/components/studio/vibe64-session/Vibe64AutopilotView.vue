@@ -2042,6 +2042,11 @@ onBeforeUnmount(() => {
   max-height: min(60dvh, 34rem);
 }
 
+/* The stand-in Git name notice shows both commands in full, never cut off. */
+.studio-autopilot__activity:has(.git-stand-in) {
+  max-height: min(60dvh, 26rem);
+}
+
 .studio-autopilot__activity:empty {
   display: none;
   padding: 0;
