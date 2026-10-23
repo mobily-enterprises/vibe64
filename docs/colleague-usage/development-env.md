@@ -24,7 +24,9 @@ Saved development values are available to the coding agent, its managed browser,
 and managed Playwright commands. For an authorized external site, tell the coding
 agent which variable names contain its URL and credentials. Values need not be
 pasted into chat or copied into source. Presence in Env confirms configuration,
-not a successful login.
+not a successful login. Because the coding agent receives every Development
+value, use test credentials there (for example Stripe test or restricted keys);
+production credentials do not belong in Development Env.
 
 When the application needs a generated secret, such as an application key, the
 coding agent generates it with the framework's own command and stores it as a
