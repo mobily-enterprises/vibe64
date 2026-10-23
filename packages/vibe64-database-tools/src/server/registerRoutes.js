@@ -14,7 +14,8 @@ import {
   ACTION_DATABASE_OVERVIEW_SAVE,
   ACTION_DATABASE_SNIPPET_SAVE,
   ACTION_DATABASE_SNIPPET_DELETE,
-  ACTION_DATABASE_ASSISTANT_ASK
+  ACTION_DATABASE_ASSISTANT_ASK,
+  ACTION_DATABASE_SERVER_CHECK
 } from "./actions.js";
 import { ERD_LAYOUT_MAX_BYTES } from "../shared/erdModel.js";
 
@@ -80,6 +81,10 @@ function registerRoutes(http, {
 
   route("GET", "", ACTION_DATABASE_STATE_READ, {
     summary: "Read the selected session database workspace and current refreshed schema."
+  }, (request) => withSession(request));
+
+  route("GET", "/server", ACTION_DATABASE_SERVER_CHECK, {
+    summary: "Sign in to the database server the session's project needs, with the values from its Env."
   }, (request) => withSession(request));
 
   route("POST", "/schema/refresh", ACTION_DATABASE_SCHEMA_REFRESH, {

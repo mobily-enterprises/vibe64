@@ -397,6 +397,68 @@ function normalizeResourceEnvironment(resources = [], provided = {}, {
   };
 }
 
+const LOCAL_DATABASE_SERVER_KINDS = new Set(["mysql", "postgresql"]);
+const LOCAL_DATABASE_FIELD_ORDER = ["host", "port", "database", "username", "password"];
+
+function trimmedValue(environment = {}, name = "") {
+  return typeof environment[name] === "string" ? environment[name].trim() : "";
+}
+
+/**
+ * The database servers a Stack declares that the person runs themselves, as
+ * the preferred Env names with the values that apply now. Secret values never
+ * appear, only whether they are set. `endpoint` (server-side only) is what a
+ * connection check uses: null until every required name has a value.
+ */
+function localDatabaseServerDeclarations(resources = [], { environment = {} } = {}) {
+  return (Array.isArray(resources) ? resources : [])
+    .filter(({ resource }) => LOCAL_DATABASE_SERVER_KINDS.has(resource?.kind))
+    .map(({ component, resource }) => {
+      const preferred = preferredAlternative(resource);
+      const allowEmpty = Array.isArray(preferred.allowEmpty) ? preferred.allowEmpty : [];
+      const fields = Object.entries(preferred.bindings)
+        .filter(([semantic]) => LOCAL_DATABASE_FIELD_ORDER.includes(semantic))
+        .sort(([left], [right]) => LOCAL_DATABASE_FIELD_ORDER.indexOf(left) - LOCAL_DATABASE_FIELD_ORDER.indexOf(right))
+        .map(([semantic, name]) => {
+          const secret = SECRET_RESOURCE_SEMANTICS.has(semantic);
+          const value = trimmedValue(environment, name);
+          return {
+            name,
+            optional: allowEmpty.includes(semantic),
+            secret,
+            semantic,
+            set: Boolean(value),
+            ...(secret ? {} : { value })
+          };
+        });
+      const missing = fields.filter((field) => !field.set && !field.optional).map((field) => field.name);
+      // A name that may be empty (a password) may also be absent.
+      const satisfied = satisfiedAlternative(resource, environment) || (missing.length ? null : preferred);
+      const values = satisfied
+        ? Object.fromEntries(Object.entries(satisfied.bindings).map(([semantic, name]) => [semantic, String(environment[name] ?? "")]))
+        : null;
+      const testName = text(objectRecord(resource.optionalBindings)?.testDatabase);
+      return {
+        component: text(component),
+        connectsWith: !values ? "" : values.url ? "url" : "fields",
+        endpoint: !values ? null
+          : values.url ? { url: values.url.trim() }
+          : {
+              database: text(values.database),
+              host: text(values.host),
+              password: values.password ?? "",
+              port: Number(values.port),
+              username: text(values.username)
+            },
+        fields,
+        id: text(resource.id),
+        kind: resource.kind,
+        missing,
+        ...(testName ? { testDatabase: { name: testName, value: trimmedValue(environment, testName) } } : {})
+      };
+    });
+}
+
 function applicationDatabaseToolEnvironment(resources = [], environment = {}, sourceRoot = "") {
   const databases = (Array.isArray(resources) ? resources : []).filter(({ resource }) => (
     DATABASE_RESOURCE_KINDS.has(resource?.kind)
@@ -462,6 +524,7 @@ export {
   DATABASE_TOOL_ENVIRONMENT_CONTRACT,
   RESOURCE_ENVIRONMENT_CONTRACT,
   applicationDatabaseToolEnvironment,
+  localDatabaseServerDeclarations,
   normalizeDatabaseToolEnvironment,
   normalizeResourceEnvironment,
   preferredAlternative,

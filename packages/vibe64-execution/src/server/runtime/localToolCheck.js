@@ -39,6 +39,11 @@ function aptGetOnPath(env = process.env) {
     .some((directory) => path.isAbsolute(directory) && existsSync(path.join(directory, "apt-get")));
 }
 
+/** This computer's install-line family: "apt", "brew" or "". */
+function thisComputerToolFamily({ env = process.env, platform = process.platform } = {}) {
+  return localToolFamily({ platform, aptGet: platform !== "darwin" && aptGetOnPath(env) });
+}
+
 function versionText(output = "") {
   const text = String(output || "");
   return /\d+\.\d+(?:\.\d+)?/u.exec(text)?.[0] || "";
@@ -76,7 +81,7 @@ async function checkLocalTools(ids = [], {
   const wanted = [...new Set((Array.isArray(ids) ? ids : []).map(localToolId))]
     .filter((id) => LOCAL_TOOLS[id]?.run);
   if (runtimePackRoot()) return { ok: true, managed: true, tools: [] };
-  const family = localToolFamily({ platform, aptGet: platform !== "darwin" && aptGetOnPath(env) });
+  const family = thisComputerToolFamily({ env, platform });
   const options = { cwd, runCommand };
   const needsMise = wanted.some((id) => LOCAL_TOOLS[id].mise && !LOCAL_TOOLS[id].any && !LOCAL_TOOLS[id][family]);
   const [xcode, mise] = await Promise.all([
@@ -110,5 +115,6 @@ async function checkLocalTools(ids = [], {
 }
 
 export {
-  checkLocalTools
+  checkLocalTools,
+  thisComputerToolFamily
 };

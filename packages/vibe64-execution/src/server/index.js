@@ -219,7 +219,7 @@ export {
   localToolIds,
   localToolInstall
 } from "./runtime/localTools.js";
-export { checkLocalTools } from "./runtime/localToolCheck.js";
+export { checkLocalTools, thisComputerToolFamily } from "./runtime/localToolCheck.js";
 export {
   OPERATOR_CLIS,
   operatorCliCommand,

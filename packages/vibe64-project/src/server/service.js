@@ -94,6 +94,7 @@ import {
 } from "./projectEnvironmentFiles.js";
 import {
   applicationDatabaseToolEnvironment,
+  localDatabaseServerDeclarations,
   normalizeResourceEnvironment,
   preferredAlternative,
   satisfiedAlternative
@@ -1410,7 +1411,9 @@ function createService({
       const resources = resolved.resources.map(({ resource }) => ({
         id: resource.id,
         kind: resource.kind,
-        configured: Boolean(satisfiedAlternative(resource, resolved.effectiveEnvironment))
+        // Only the values processes really get count: an exported shell
+        // variable never reaches Workspace setup, so it cannot make this ready.
+        configured: Boolean(satisfiedAlternative(resource, resolved.projectEnvironment))
       }));
       return {
         ...(Object.hasOwn(resolved, "resourcePreparation") ? { resourcePreparation: resolved.resourcePreparation } : {}),
@@ -1421,6 +1424,22 @@ function createService({
         keys: Object.keys(resolved.projectEnvironment).sort(),
         resources,
         ...(resolved.warning ? { diagnostic: "Project environment declarations could not be read. Correct their configuration and retry." } : {})
+      };
+    },
+
+    // The MySQL/MariaDB or PostgreSQL servers this project's Stack declares
+    // and the person runs themselves: the exact Env names, the values that
+    // apply now (Env over Stack defaults; never the shell), and the endpoint
+    // the connection check uses. Secrets leave only as "set or not". A host
+    // that supplies its own databases answers `managed` with nothing to do.
+    async localDatabaseServers(input = {}) {
+      if (resourceEnvironmentProvider) return { managed: true, databases: [] };
+      const resolved = await resolvedProjectEnvironment(input, await userEnvRecords());
+      return {
+        managed: false,
+        databases: localDatabaseServerDeclarations(resolved.resources, {
+          environment: resolved.projectEnvironment
+        })
       };
     },
 

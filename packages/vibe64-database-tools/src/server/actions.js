@@ -29,6 +29,7 @@ const ACTION_DATABASE_LAYOUT_SAVE = "vibe64.database.layout.save";
 const ACTION_DATABASE_SNIPPET_SAVE = "vibe64.database.snippet.save";
 const ACTION_DATABASE_SNIPPET_DELETE = "vibe64.database.snippet.delete";
 const ACTION_DATABASE_ASSISTANT_ASK = "vibe64.database.assistant.ask";
+const ACTION_DATABASE_SERVER_CHECK = "vibe64.database.server.check";
 
 function action({ execute, id, input, kind = "command", assistant }) {
   return withVibe64ActionContext({
@@ -57,6 +58,12 @@ function createDatabaseActions({ databaseTools } = {}) {
       execute: (input) => databaseTools.saveOverview(input),
       id: ACTION_DATABASE_OVERVIEW_SAVE,
       input: databaseOverviewInputValidator
+    }),
+    action({
+      execute: (input) => databaseTools.checkServer(input),
+      id: ACTION_DATABASE_SERVER_CHECK,
+      input: databaseStateInputValidator,
+      kind: "query"
     }),
     action({
       execute: (input) => databaseTools.readState(input),
@@ -137,6 +144,7 @@ export {
   ACTION_DATABASE_ROW_DELETE,
   ACTION_DATABASE_ROW_INSERT,
   ACTION_DATABASE_SCHEMA_REFRESH,
+  ACTION_DATABASE_SERVER_CHECK,
   ACTION_DATABASE_SNIPPET_DELETE,
   ACTION_DATABASE_SNIPPET_SAVE,
   ACTION_DATABASE_STATE_READ,

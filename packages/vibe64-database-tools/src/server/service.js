@@ -53,6 +53,8 @@ import {
 import {
   quoteQualifiedTable
 } from "./sqlPolicy.js";
+import { checkDatabaseServer } from "./serverCheck.js";
+import { thisComputerToolFamily } from "@local/vibe64-execution/server";
 import { dataOverviewDefinition, dataOverviewReference, readDataOverview } from "./dataOverview.js";
 import { inspectErdLayout, moveErdTables } from "./erdLayout.js";
 import { DATA_OVERVIEW_INSTRUCTIONS, DATA_OVERVIEW_MAX_BYTES, DATA_OVERVIEW_PATH, dataOverviewCoverage, validateDataOverview } from "../shared/dataOverview.js";
@@ -356,7 +358,31 @@ function createService({
     }
   }
 
+  // The database server this session's project needs and the person runs:
+  // its Env names, current values, a real sign-in check and the commands for
+  // this computer. Nothing when the Stack declares none or the host supplies it.
+  async function checkServer(input = {}) {
+    const sessionId = normalizeText(input.sessionId);
+    if (!sessionId || typeof projectService.localDatabaseServers !== "function") {
+      return { ok: true, managed: true, databases: [] };
+    }
+    const store = await projectService.createSessionStore();
+    const session = await store.readSession(sessionId);
+    const servers = await projectService.localDatabaseServers({ session, sessionId });
+    if (servers.managed) return { ok: true, managed: true, databases: [] };
+    const family = thisComputerToolFamily();
+    const databases = await Promise.all(servers.databases.map(async ({ endpoint, ...database }) => ({
+      ...database,
+      check: await checkDatabaseServer({ endpoint, kind: database.kind })
+    })));
+    return { ok: true, managed: false, family, databases };
+  }
+
   return Object.freeze({
+    checkServer(input = {}) {
+      return databaseResult(() => checkServer(input));
+    },
+
     async readOverview(input = {}) {
       return databaseResult(async () => {
         const context = await sessionContext(input);
