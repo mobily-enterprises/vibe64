@@ -1273,7 +1273,8 @@ test("team members' temporary chats and every repair chat use Fix it with AI", a
     const f = await temporaryChangeoverFixture(root, { role: "member", username: "member" });
     await f.store.writeMetadataValue("one", "assistant_routing", JSON.stringify({ mode: "auto", review: true }));
     await assert.rejects(f.service.createTemporaryConversation("one", { conversationId: "generated",
-      assistantRouting: { mode: "junior", review: false } }, f.options), /Senior and Junior are for the workspace owner/);
+      assistantRouting: { mode: "junior", review: false } }, f.options),
+    { message: /Senior and Junior are for the workspace owner/, statusCode: 403, code: "vibe64_assistant_owner_required" });
     for (const input of [{ conversationId: "generated" }, { conversationId: "repair", presentation: { recoveryOperation: "update" } }]) {
       const created = await f.service.createTemporaryConversation("one", input, f.options);
       assert.deepEqual(JSON.parse(created.routingMetadata.assistant_routing), { mode: "fix", review: false });

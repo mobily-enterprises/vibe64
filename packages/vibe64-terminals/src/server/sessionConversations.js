@@ -119,7 +119,8 @@ function requireSuccess(result) {
 
 // Session storage owns discovery and the transcript. Existing provider adapters
 // own native turns. Only explicit Close removes a user-facing temporary chat.
-const TEAM_TEMPORARY_MODES = "Senior and Junior are for the workspace owner. Choose Fix it with AI or Custom.";
+const teamTemporaryModesRefusal = () => Object.assign(new Error("Senior and Junior are for the workspace owner. Choose Fix it with AI or Custom."),
+  { code: "vibe64_assistant_owner_required", statusCode: 403 });
 
 function createSessionConversations({
   sessionAgent,
@@ -673,7 +674,7 @@ function createSessionConversations({
         const requestedPreferences = input.presentation?.recoveryOperation === "update" ? { mode: "fix" }
           : input.assistantRouting || inheritedPreferences;
         if (requestedPreferences.mode === "auto") throw new Error("Temporary chats use Senior or Junior. Auto is available in Main chat only.");
-        if (!owner && ["senior", "junior"].includes(requestedPreferences.mode)) throw new Error(TEAM_TEMPORARY_MODES);
+        if (!owner && ["senior", "junior"].includes(requestedPreferences.mode)) throw teamTemporaryModesRefusal();
         const preferences = assistantRoutingPreferences({ ...requestedPreferences, review: false });
         const initialPresentation = presentation(input.presentation);
         const recentContext = input.includeRecentChatContext === true
@@ -785,7 +786,7 @@ function createSessionConversations({
           if (record.recoveryOperation === "update" && !["fix", "custom"].includes(requested.mode)) {
             throw new Error("Repair chats use Fix it with AI. Choose Custom to pick a different model.");
           }
-          if (!isAssistantRoutingOwner(input.vibe64User || options.vibe64User) && ["senior", "junior"].includes(requested.mode)) throw new Error(TEAM_TEMPORARY_MODES);
+          if (!isAssistantRoutingOwner(input.vibe64User || options.vibe64User) && ["senior", "junior"].includes(requested.mode)) throw teamTemporaryModesRefusal();
           const selectingModel = requested.mode === "custom";
           const override = selectingModel
             ? await sessionAgent.resolveSelection(requested.override, ctx) : requested.override;
