@@ -17,7 +17,10 @@
     "./server/destinations": "./src/server/destinations/index.js",
     "./server/preflight": "./src/server/preflight/index.js",
     "./server/preflight/registries": "./src/server/preflight/registries.js",
-    "./server/release": "./src/server/release/index.js"
+    "./server/release": "./src/server/release/index.js",
+    "./server/preflight/android": "./src/server/preflight/android.js",
+    "./server/toolchains": "./src/server/toolchains/index.js",
+    "./shared/qr": "./src/shared/qr.js"
   },
   "jskit": {
     "kind": "runtime",
@@ -39,6 +42,10 @@
           {
             "subpath": "./server",
             "summary": "Builds deterministic publish plans, runs credential-free builds into an immutable result store, and signs, uploads and reads back with credentials its caller supplies. Holds no state, history, custody policy or UI."
+          },
+          {
+            "subpath": "./shared/qr",
+            "summary": "Renders a download address as a QR code SVG for installing an app on a phone; no dependencies, server or browser."
           }
         ]
       }

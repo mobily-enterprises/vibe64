@@ -39,3 +39,20 @@ export { exportSavedCommit, resolveCommit } from "./release/exportCommit.js";
 export { applyReleaseChange, prepareReleaseChange, readSourceVersion } from "./release/prepareChange.js";
 export { compareSemver, isSemver, pep440FromSemver } from "./release/version.js";
 export { npmLoginArgv, npmTokenUserconfig } from "./destinations/npm/index.js";
+export {
+  ANDROID_SIDELOAD_KEYSTORE,
+  ANDROID_SIDELOAD_KEY_PASSWORD,
+  generateSideloadKey,
+  nextVersionCode
+} from "./destinations/androidSideload/index.js";
+export { CAPACITOR_SHELL_TEMPLATE } from "./packers/capacitor/shellTemplate/index.js";
+export { ANDROID_PERMISSION_IDS } from "./packers/capacitor/permissions.js";
+export { VIBE64_ANDROID_PREFLIGHT_CHECKS, gatherAndroidFacts } from "./preflight/android.js";
+export {
+  ANDROID_TERMS_URL,
+  androidSdkLicence,
+  describeAndroidSdk,
+  findAndroidSdk,
+  installAndroidSdk
+} from "./toolchains/androidSdk.js";
+export { describeJdk, findJdk, installJdk } from "./toolchains/jdk.js";
