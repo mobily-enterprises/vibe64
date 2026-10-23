@@ -1525,3 +1525,19 @@ After the release restarts the server, each assistant gets its helpers at the
 new root when it next starts or reconnects; until then an assistant that is still
 running keeps its old paths, as after any server restart. Focused evidence:
 `sessionStateRoot.unit.test.js`.
+
+## Retired tour preference (`20261023-retired-tour-preference`)
+
+The Welcome tour that remembered `welcomeTourDone` in personal Colleague
+preferences is retired: Take the tour now starts the course's orientation
+lesson, whose own progress replaces the flag. This upgrade follows
+`20261023-owner-team-ai-setups`. For each `assistant-preferences/<person>/colleague.json`
+that holds `welcomeTourDone`, it removes that one field and keeps every other
+preference as saved; profiles without it and every `coding.json` are not
+touched. It uses the backed-up publisher (backups under
+`upgrades/backups/20261023-retired-tour-preference/`); check is read-only, a
+profile that is not a JSON object with `settings` stops the upgrade without
+changes, and a retry after success changes nothing. Personal preference readers
+refuse unknown fields, so a profile still holding the flag is unreadable until
+this upgrade runs. Focused evidence: `retiredTourPreferenceUpgrade.unit.test.js`
+and `stateUpgrades.unit.test.js`.
