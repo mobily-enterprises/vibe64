@@ -4,6 +4,12 @@
 import { ARCHITECTURE_OBSERVATIONS_SCHEMA } from "genesis-compiler";
 
 import { DEPLOYMENT_ENTRY_FORMS, DEPLOYMENT_STEP_ROLES } from "./applicationDeployment.js";
+import {
+  PACKAGING_ENTRY_FORMS,
+  PACKAGING_HEADING_FORM,
+  VIBE64_PACKAGING_CONTRACT,
+  VIBE64_PACKAGING_PACKERS
+} from "./packaging.js";
 import { ARCHITECTURE_INSPECTOR_FIELDS } from "./architectureInspection.js";
 import { ARCHITECTURE_LAYOUT_KINDS } from "./architectureLayout.js";
 import { CONNECTED_DEVELOPMENT_ENTRY_FORMS } from "./connectedDevelopment.js";
@@ -203,6 +209,55 @@ ${list(DEPLOYMENT_ENTRY_FORMS)}
 - Migrate \`Migrate\`: \`npm\` \`run\` \`db:migrate\`
 - Serve \`Serve\`: \`node\` \`server.js\`
 - Ready when: \`GET\` \`/health\` returns \`200\`
+`
+  }),
+  sectionSpec({
+    name: "packaging",
+    title: "Packaging",
+    section: "Packaging",
+    contract: VIBE64_PACKAGING_CONTRACT,
+    summary: "Source facts Vibe64 needs to turn this project into distributable packages: registry packages, static web bundles and generated mobile app shells. Where each package is published (targets, channels, builders) is Vibe64 project state, never this section.",
+    body: `
+Headings: \`\` ${PACKAGING_HEADING_FORM} \`\`, each followed by entries:
+${list(PACKAGING_ENTRY_FORMS)}
+
+- Packers (closed set): ${VIBE64_PACKAGING_PACKERS.map((packer) => `\`${packer}\``).join(", ")}. Package ids are unique lowercase ids with single hyphens.
+- \`npm\`: Version from \`package.json\` or \`external\`; Vibe64 runs \`npm pack\` in Workdir after the optional Prepare and Build steps.
+- \`python-dist\`: Build (for example \`python\` \`-m\` \`build\`), Output (for example \`dist\`) and Version from \`pyproject.toml\` or \`external\` are required.
+- \`web-bundle\`: a static client build used as Content by app packers. Build and Output are required; it has no version of its own.
+- \`capacitor\`: Content, Platforms (only \`android\` today), Id, Name, Icon and Version from are required. Content names a \`web-bundle\` package. Id is permanent once published. Icon is a 1024x1024 PNG without alpha. Write one Permission per native capability with the reason people will read. There is no Plugin list: the generated shell installs the Content package's native plugins at its lockfile versions. Native projects are generated per build and are never committed.
+- Deep link scheme from and App link domains from name variables declared in \`## Environment defaults\` (for example \`APP_URL_SCHEME\`, \`APP_LINK_DOMAINS\` as a comma-separated list), so the server and the app shell read one value.
+- Environment entries are build-time, non-secret values for that package only; credential-shaped names are rejected. Nothing takes placeholders. \`external\` means a release tool such as Changesets owns the version and Vibe64 only reads it. Build numbers are never in source.
+- Write this section only when the person adds a first publishing target, from the selected Stack pieces' packaging recipe and the project's actual scripts and manifests.
+`,
+    example: `
+### Package \`web-mobile\`: Mobile web client
+
+- Packer: \`web-bundle\`
+- Runtimes: \`nodejs\`
+- Prepare \`Install dependencies\`: \`npm\` \`ci\`
+- Build \`Build bundled client\`: \`npm\` \`run\` \`build\`
+- Environment \`VITE_API_BASE_URL\`: \`https://notes.example.com\`
+- Output: \`dist\`
+
+### Package \`app\`: Notes
+
+- Packer: \`capacitor\`
+- Content: package \`web-mobile\`
+- Platforms: \`android\`
+- Id: \`com.example.notes\`
+- Name: \`Notes\`
+- Icon: \`assets/icon-1024.png\`
+- Version from: \`package.json\`
+- Deep link scheme from: \`APP_URL_SCHEME\`
+- Permission \`camera\`: Take photos to attach to notes.
+
+### Package \`sdk\`: Notes SDK
+
+- Packer: \`npm\`
+- Workdir: \`packages/notes-sdk\`
+- Runtimes: \`nodejs\`
+- Version from: \`package.json\`
 `
   }),
   sectionSpec({

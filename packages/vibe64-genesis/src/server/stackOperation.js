@@ -15,6 +15,7 @@ const SPEC_BY_ERROR_CODE = Object.freeze({
   VIBE64_WORKSPACE_SETUP_INVALID: "workspace-setup",
   VIBE64_OUTPUTS_INVALID: "outputs",
   VIBE64_DEPLOYMENT_INVALID: "deployment",
+  VIBE64_PACKAGING_INVALID: "packaging",
   VIBE64_RESOURCE_ESTIMATES_INVALID: "resource-estimates",
   VIBE64_CONNECTED_DEVELOPMENT_INVALID: "connected-development",
   VIBE64_PROJECT_SERVICES_INVALID: "project-services",

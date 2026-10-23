@@ -11,6 +11,7 @@ import {
 } from "../../packages/vibe64-genesis/src/server/connectedDevelopment.js";
 import { parseVibe64IntegrationSetupLines } from "../../packages/vibe64-genesis/src/server/integrationSetup.js";
 import { OUTPUTS_ENTRY_FORMS, parseVibe64OutputsLines } from "../../packages/vibe64-genesis/src/server/outputs.js";
+import { PACKAGING_ENTRY_FORMS, parseVibe64PackagingLines } from "../../packages/vibe64-genesis/src/server/packaging.js";
 import { parseVibe64ProjectServicesLines } from "../../packages/vibe64-genesis/src/server/projectServices.js";
 import {
   VIBE64_RESOURCE_ESTIMATE_FIELDS,
@@ -26,6 +27,7 @@ const SECTION_PARSERS = {
   "workspace-setup": (lines) => parseVibe64WorkspaceSetupLines(lines),
   outputs: (lines) => parseVibe64OutputsLines(lines),
   deployment: (lines) => parseVibe64DeploymentLines(lines),
+  packaging: (lines) => parseVibe64PackagingLines(lines),
   "resource-estimates": (lines) => parseVibe64ResourceEstimatesLines(lines, {
     targets: [{ id: "app", mode: "interactive" }],
     hasWorkspaceSetup: true
@@ -101,6 +103,12 @@ test("printed entry forms are the parsers' own tables, and unknown entries list 
     () => parseVibe64DeploymentLines(["- Restart `x`: `y`"]),
     (error) => DEPLOYMENT_ENTRY_FORMS.every((form) => error.message.includes(form))
   );
+  const packaging = (await cli(["packaging"])).stdout;
+  for (const form of PACKAGING_ENTRY_FORMS) assert.ok(packaging.includes(form), form);
+  assert.throws(
+    () => parseVibe64PackagingLines(["### Package `x`: X", "- Signing key: `k`"]),
+    (error) => PACKAGING_ENTRY_FORMS.every((form) => error.message.includes(form))
+  );
   const connected = (await cli(["connected-development"])).stdout;
   for (const form of CONNECTED_DEVELOPMENT_ENTRY_FORMS) assert.ok(connected.includes(form), form);
   const estimates = (await cli(["resource-estimates"])).stdout;
@@ -134,6 +142,7 @@ test("every Vibe64 section error points to its listed spec, including wrapped er
     "workspace-setup": () => parseVibe64WorkspaceSetupLines(["- Run `x`"]),
     outputs: () => parseVibe64OutputsLines(["- Mode: `interactive`"]),
     deployment: () => parseVibe64DeploymentLines(["- Unknown."]),
+    packaging: () => parseVibe64PackagingLines(["- Packer: `npm`"]),
     "resource-estimates": () => parseVibe64ResourceEstimatesLines(["- Typical MiB: `1`"]),
     "connected-development": () => vibe64ConnectedDevelopmentInspection({
       status: "ready",

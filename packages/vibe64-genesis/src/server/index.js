@@ -21,6 +21,13 @@ import {
   vibe64DeploymentInspection
 } from "./applicationDeployment.js";
 import {
+  VIBE64_PACKAGING_CONTRACT,
+  VIBE64_PACKAGING_SECTION,
+  parseVibe64PackagingLines,
+  resolveVibe64PackagingEnvironment,
+  vibe64PackagingInspection
+} from "./packaging.js";
+import {
   VIBE64_OUTPUTS_CONTRACT,
   VIBE64_OUTPUTS_SECTION,
   VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL,
@@ -357,6 +364,14 @@ async function inspectVibe64Deployment(options = {}) {
   return vibe64DeploymentInspection({ environment, section });
 }
 
+async function inspectVibe64Packaging(options = {}) {
+  const [section, environment] = await Promise.all([
+    inspectGenesisStackSection(VIBE64_PACKAGING_SECTION, options),
+    exactGenesisInspection(inspectEnvironment, GENESIS_CONTRACTS.environment, options)
+  ]);
+  return vibe64PackagingInspection({ environment, section });
+}
+
 function inspectGenesisEnvironment(options = {}) {
   return exactGenesisInspection(inspectEnvironment, GENESIS_CONTRACTS.environment, options);
 }
@@ -530,6 +545,8 @@ export {
   HOST_CONTEXT_RESOLVER_ENV,
   VIBE64_APPLICATION_DEPLOYMENT_CONTRACT,
   VIBE64_APPLICATION_DEPLOYMENT_SECTION,
+  VIBE64_PACKAGING_CONTRACT,
+  VIBE64_PACKAGING_SECTION,
   VIBE64_OUTPUTS_CONTRACT,
   VIBE64_OUTPUTS_SECTION,
   VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL,
@@ -556,6 +573,7 @@ export {
   inspectGenesisStackSection,
   inspectGenesisStackComponents,
   inspectVibe64Deployment,
+  inspectVibe64Packaging,
   inspectGenesisEnvironment,
   inspectVibe64Outputs,
   inspectVibe64ResourceEstimates,
@@ -564,6 +582,8 @@ export {
   resolveVibe64OutputParameters,
   parseVibe64ResourceEstimatesLines,
   parseVibe64DeploymentLines,
+  parseVibe64PackagingLines,
+  resolveVibe64PackagingEnvironment,
   parseVibe64WorkspaceSetupLines,
   refreshGenesisCities,
   inspectVibe64ArchitectureInspection,
