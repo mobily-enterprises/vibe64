@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -148,50 +148,77 @@ test("Studio Health reports unavailable checks without inventing readiness", asy
   assert.match(result.checks.find((check) => check.id === "genesis").observed, /Runtime pack unavailable/u);
 });
 
-test("without runtime packs Health checks the person's own tools and names missing AI tools", async () => {
+// The shared tool check runs `sh -c <probe> probe <skip> <version> <commands...>`:
+// a found tool prints its path, then its version output.
+function probeResult(args = [], versions = {}) {
+  const name = args.slice(5).find((command) => Object.hasOwn(versions, command));
+  if (!name) return { ok: false, exitCode: 127, output: "" };
+  const version = versions[name];
+  return version === null
+    ? { ok: false, exitCode: 1, output: `/usr/bin/${name}\nbroken` }
+    : { ok: true, output: `/usr/bin/${name}\n${version}` };
+}
+
+function isProbe(command, args = []) {
+  return command === "sh" && args[2] === "probe";
+}
+
+test("without runtime packs Health counts only what is needed; one AI tool is enough", async () => {
   const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-own-"));
   await writeFile(path.join(studioRoot, "package.json"), JSON.stringify({ engines: { node: "26.x" } }), "utf8");
-  const claude = path.join(studioRoot, "home", ".local", "bin", "claude");
-  await mkdir(path.dirname(claude), { recursive: true });
-  await writeFile(claude, "#!/bin/sh\n", "utf8");
-  await chmod(claude, 0o755);
-  const commands = [];
+  const versions = { node: "v26.12.1", git: "git version 2.53.0", codex: "codex-cli 0.163.0" };
   const service = createService({
-    connectionsService: { getStatus: async () => ({ ok: true, connections: [{ connected: true, id: "ai", status: "connected" }] }) },
-    env: { HOME: path.join(studioRoot, "home"), PATH: path.join(studioRoot, "empty") },
+    connectionsService: { getStatus: async () => ({ ok: true, connections: [
+      { connected: true, id: "ai", status: "connected" },
+      { connected: false, required: false, id: "github", status: "signed_out" }
+    ] }) },
     projectService: { listProjects: async () => ({ ok: true, projects: [] }) },
     async runCommand({ args, command }) {
-      commands.push(command);
-      return command === "node" ? { ok: true, output: "v24.1.0" } : successfulCommandResult(command, args);
+      if (isProbe(command, args)) return probeResult(args, versions);
+      return args.join(" ").includes("playwright_command")
+        ? { ok: false, error: "Command failed with exit code 1: bash", output: "Playwright is not installed." }
+        : successfulCommandResult(command, args);
     },
     studioRoot
   });
 
-  const { checks } = await service.inspect();
-  const byId = Object.fromEntries(checks.map((check) => [check.id, check]));
-  assert.equal(byId.toolchain.observed, "Using your installed tools.");
-  assert.equal(byId.node.status, "fail");
-  assert.equal(byId.node.expected, "Node.js 26 is installed.");
-  assert.equal(byId.claude.status, "pass");
-  assert.ok(commands.includes(claude));
-  // Machine-wide folders are searched too, so only assert the shape of a missing tool.
-  for (const tool of ["codex", "opencode"].filter((id) => byId[id].status === "warn")) {
-    assert.match(byId[tool].observed, /isn't installed on this computer\.$/u);
-    assert.match(byId[tool].explanation, /^To use it, install it with: curl -fsSL https:\/\//u);
-  }
+  const result = await service.inspect();
+  const byId = Object.fromEntries(result.checks.map((check) => [check.id, check]));
+  assert.equal(byId.toolchain, undefined);
+  assert.equal(result.healthy, true, "Codex alone is enough; the rest is optional");
+  assert.deepEqual(result.checks.filter((check) => check.need === "needed").map((check) => check.id),
+    ["workspace", "ai-auth", "node", "git", "ai-tool", "genesis"]);
+  assert.equal(result.summary.failed, 0);
+  assert.equal(result.summary.total, 6);
+  assert.equal(result.summary.optionalMissing, 6, "Claude, opencode, GitHub CLI, ripgrep and both Playwright rows");
+  assert.equal(byId["ai-tool"].observed, "Codex 0.163.0");
+  assert.equal(byId.node.observed, "Node.js 26.12.1 · /usr/bin/node");
+  assert.equal(byId.claude.status, "warn");
+  assert.equal(byId.claude.observed, "Claude Code isn't installed on this computer.");
+  assert.equal(byId.claude.tool.install.command, "curl -fsSL https://claude.ai/install.sh | bash");
+  assert.equal(byId["playwright-browser"].status, "warn");
+  assert.match(byId["playwright-browser"].tool.install.command, /^npx playwright install/u);
+
+  versions.node = "v24.1.0";
+  delete versions.codex;
+  const outdated = await service.inspect();
+  const after = Object.fromEntries(outdated.checks.map((check) => [check.id, check]));
+  assert.equal(outdated.healthy, false);
+  assert.equal(outdated.summary.failed, 2);
+  assert.equal(after.node.observed, "Node.js 24.1.0 is installed; Vibe64 needs Node.js 26.");
+  assert.match(after.node.tool.install.command, /mise use -g node@26$/u);
+  assert.equal(after["ai-tool"].observed, "No AI tool is installed on this computer yet.");
 });
 
-test("without runtime packs a failed tool check shows the tool's words, not its command line", async () => {
+test("without runtime packs a tool that is there but fails is not counted as installed", async () => {
   const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-plain-"));
   await writeFile(path.join(studioRoot, "package.json"), JSON.stringify({ engines: { node: "26.x" } }), "utf8");
-  const missing = "Playwright is not installed on this computer. See https://playwright.dev/docs/intro to install it.";
   const service = createService({
     connectionsService: { getStatus: async () => ({ ok: true, connections: [] }) },
-    env: { HOME: path.join(studioRoot, "home"), PATH: path.join(studioRoot, "empty") },
     projectService: { listProjects: async () => ({ ok: true, projects: [] }) },
     async runCommand({ args, command }) {
-      return args.join(" ").includes("playwright_command")
-        ? { ok: false, error: `Command failed with exit code 1: bash -c 'set -euo pipefail ...'`, output: missing }
+      return isProbe(command, args)
+        ? probeResult(args, { node: "v26.1.0", git: null, claude: "2.1.0 (Claude Code)" })
         : successfulCommandResult(command, args);
     },
     studioRoot
@@ -199,11 +226,8 @@ test("without runtime packs a failed tool check shows the tool's words, not its 
 
   const { checks } = await service.inspect();
   const byId = Object.fromEntries(checks.map((check) => [check.id, check]));
-  for (const id of ["playwright", "playwright-browser"]) {
-    assert.equal(byId[id].status, "fail");
-    assert.equal(byId[id].observed, missing);
-  }
-  assert.equal(byId["playwright-browser"].label, "Playwright browser");
+  assert.equal(byId.git.status, "fail");
+  assert.equal(byId.git.observed, "Git is at /usr/bin/git but didn't start.");
   assert.doesNotMatch(byId["github-cli"].explanation, /pinned/u);
 });
 
@@ -243,14 +267,15 @@ test("Health prioritizes a failed execution's reason ahead of incidental browser
 
 test("assistants read a bounded Health summary through the same action", async () => {
   const { createActions } = await import("../../packages/studio-health/src/server/actions.js");
-  const [action] = createActions({ studioHealth: { inspect: async () => ({}) } });
+  const [action, tools] = createActions({ studioHealth: { inspect: async () => ({}), checkTools: async () => ({}) } });
+  assert.equal(tools.extensions?.assistant, undefined, "the row check is for screens only");
   const assistant = action.extensions.assistant;
   assert.equal(assistant.exclude, undefined);
   assert.match(assistant.description, /Health checks/u);
   const summary = assistant.transformResult({ ok: true, healthy: false, summary: { total: 1 }, updatedAt: "now",
     checks: [{ id: "playwright", label: "Playwright", group: "Tools", status: "fail", expected: "Installed.",
       observed: "x".repeat(5000), explanation: "Long detail stays on the Health page." }] });
-  assert.deepEqual(Object.keys(summary.checks[0]).sort(), ["expected", "group", "id", "label", "observed", "status"]);
+  assert.deepEqual(Object.keys(summary.checks[0]).sort(), ["expected", "group", "id", "label", "need", "observed", "status"]);
   assert.equal(summary.checks[0].observed.length, 300);
   assert.deepEqual(assistant.transformResult({ ok: false, error: "Down" }), { ok: false, error: "Down" });
 });

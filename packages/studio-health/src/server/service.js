@@ -2,15 +2,14 @@ import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  checkLocalTools,
   GIT_IDENTITY_COMMANDS,
   isFallbackGitIdentityEmail,
-  OPERATOR_CLIS,
-  operatorCliInstall,
   isValidPlaywrightBrowserLaunchOutput,
   isValidPlaywrightRuntimeOutput,
   playwrightBrowserLaunchCommandArgs,
   playwrightRuntimeVersionCommandArgs,
-  resolveOperatorCli,
+  localToolInstall,
   runtimePackRoot,
   runVibe64Command,
   summarizePlaywrightBrowserLaunchOutput,
@@ -99,18 +98,6 @@ async function commandCheck({
     : failedCheck(check);
 }
 
-// Without runtime packs, the person keeps their own tools up to date.
-function ownToolsCheck() {
-  return passedCheck({
-    id: "toolchain",
-    label: "Tools",
-    group: "Runtime",
-    expected: "Vibe64 runs the tools installed on this computer.",
-    observed: "Using your installed tools.",
-    explanation: "Node.js, Git and the AI tools are the ones on this computer; install or update them yourself."
-  });
-}
-
 // The Node.js major version Vibe64 declares in its package.json engines field.
 async function requiredNodeMajor(studioRoot) {
   try {
@@ -121,35 +108,69 @@ async function requiredNodeMajor(studioRoot) {
   }
 }
 
-async function operatorCliCheck(tool, { env, runCommand, studioRoot }) {
-  const { name } = OPERATOR_CLIS[tool];
-  const install = operatorCliInstall(tool);
-  const cli = resolveOperatorCli(tool, { env });
-  const check = {
-    id: tool,
-    label: name,
-    group: "AI tools",
-    expected: `${name} is installed on this computer.`,
-    explanation: `Vibe64 runs ${name} for conversations that use it.`
+const AI_TOOLS = ["claude", "codex", "opencode"];
+// Without packs these help but are never required; signing in to GitHub too.
+const OPTIONAL_CHECKS = new Set(["git-identity", "github-auth", "playwright", "playwright-browser"]);
+const LOCAL_TOOL_CHECKS = Object.freeze({
+  node: { need: "needed", explanation: "Vibe64 and your projects run on it." },
+  git: { need: "needed", explanation: "Vibe64 keeps every change in Git." },
+  gh: { id: "github-cli", need: "optional", explanation: "Only needed for projects on GitHub." },
+  ripgrep: { need: "optional", explanation: "Makes searching your code faster." }
+});
+
+function playwrightTool() {
+  return { name: "Playwright browser", status: "missing", guideUrl: "https://playwright.dev/docs/browsers",
+    install: localToolInstall("playwright", { family: process.platform === "darwin" ? "brew" : "apt" }) };
+}
+
+function plural(name = "") {
+  return /s$/u.test(name) ? "aren't" : "isn't";
+}
+
+// A tool from the shared check, as a Health row: what was found, or one
+// sentence and the command that installs it.
+function localToolRow(tool, { group, id = tool.id, need, explanation }) {
+  const found = [tool.version && `${tool.name} ${tool.version}`, tool.path].filter(Boolean).join(" · ");
+  const observed = {
+    ready: found,
+    broken: `${tool.name} is at ${tool.path} but didn't start.`,
+    missing: `${tool.name} ${plural(tool.name)} installed on this computer.`
+  }[tool.status];
+  return {
+    id, label: tool.name, group, need, explanation,
+    expected: `${tool.name} runs on this computer.`,
+    observed,
+    status: tool.status === "ready" ? "pass" : need === "needed" ? "fail" : "warn",
+    tool
   };
-  if (!cli.installed) {
-    return {
-      ...check,
-      observed: `${name} isn't installed on this computer.`,
-      explanation: `To use it, install it with: ${install}`,
-      status: "warn"
-    };
+}
+
+// Without packs: Node, Git and one AI tool are needed; everything else is optional.
+async function inspectLocalTools({ nodeMajor, runCommand, studioRoot }) {
+  const { tools } = await checkLocalTools(["node", "git", ...AI_TOOLS, "gh", "ripgrep"], { cwd: studioRoot, runCommand });
+  const byId = Object.fromEntries(tools.map((tool) => [tool.id, tool]));
+  const rows = Object.entries(LOCAL_TOOL_CHECKS).map(([id, options]) => localToolRow(byId[id], { group: "Tools", ...options }));
+  const node = rows[0];
+  if (node.status === "pass" && nodeMajor && !String(byId.node.version).startsWith(`${nodeMajor}.`)) {
+    Object.assign(node, {
+      status: "fail",
+      observed: `Node.js ${byId.node.version} is installed; Vibe64 needs Node.js ${nodeMajor}.`,
+      tool: { ...byId.node, status: "broken", install: localToolInstall("node", { family: "", mise: false }) }
+    });
   }
-  return commandCheck({
-    ...check,
-    plainExit: true,
-    command: cli.command,
-    args: ["--version"],
-    runtimes: ["operator-clis", "node26"],
-    runCommand,
-    studioRoot,
-    isValid: (output) => /\d+\.\d+/u.test(compactOutput(output))
-  });
+  const ai = AI_TOOLS.map((id) => byId[id]);
+  const ready = ai.filter((tool) => tool.status === "ready");
+  const aiRow = {
+    id: "ai-tool", label: "An AI tool", group: "AI tools", need: "needed",
+    expected: "At least one of Claude Code, Codex or opencode runs on this computer.",
+    explanation: "One is enough. Choose and connect it in AI setup.",
+    observed: ready.length ? ready.map((tool) => `${tool.name} ${tool.version}`.trim()).join(", ")
+      : "No AI tool is installed on this computer yet.",
+    status: ready.length ? "pass" : "fail"
+  };
+  const aiRows = ai.map((tool) => localToolRow(tool, { group: "AI tools", need: "optional",
+    explanation: `Another AI tool Vibe64 can use.` }));
+  return [...rows.slice(0, 2), aiRow, ...rows.slice(2), ...aiRows];
 }
 
 // The name and email commits actually get here: git reports the identity the
@@ -169,7 +190,7 @@ async function gitIdentityCheck({ runCommand, studioRoot }) {
   const match = /^(.*?) <([^>]*)>/u.exec(String(result?.stdout || result?.output || "").trim());
   if (result?.ok !== true || !match) return null;
   const [, name, email] = match;
-  const check = { id: "git-identity", label: "Your name in Git", group: "Runtime" };
+  const check = { id: "git-identity", label: "Your name in Git", group: "Tools" };
   if (!isFallbackGitIdentityEmail(email)) {
     return passedCheck({
       ...check,
@@ -244,7 +265,6 @@ async function inspectAccounts({ connectionsService, input }) {
 
 function createService({
   connectionsService,
-  env = process.env,
   projectService,
   runCommand = runVibe64Command,
   studioRoot
@@ -258,7 +278,11 @@ function createService({
       const packs = Boolean(runtimePackRoot());
       const nodeMajor = packs ? "26" : await requiredNodeMajor(studioRoot);
       const check = (definition) => commandCheck({ plainExit: !packs, ...definition });
+      // With packs every row is needed, exactly as before; without them the
+      // person's own tools come from the shared check.
       const commandChecks = [
+        ...(packs ? [] : [gitIdentityCheck({ runCommand, studioRoot })]),
+        ...(packs ? [
         check({
           id: "node",
           label: "Node.js",
@@ -283,7 +307,6 @@ function createService({
           isValid: (output) => /^git version\s+/u.test(compactOutput(output)),
           explanation: "Vibe64 owns Git credentials and repository operations."
         }),
-        ...(packs ? [] : [gitIdentityCheck({ runCommand, studioRoot })]),
         check({
           id: "github-cli",
           label: "GitHub CLI",
@@ -309,8 +332,7 @@ function createService({
           isValid: (output) => /^ripgrep\s+/u.test(compactOutput(output)),
           explanation: "Codex uses ripgrep for fast local source discovery."
         }),
-        ...(packs
-          ? [check({
+        check({
               id: "codex",
               label: "Codex CLI",
               command: "codex",
@@ -321,8 +343,8 @@ function createService({
               expected: "The managed operator CLI pack exposes Codex.",
               isValid: (output) => /codex/iu.test(compactOutput(output)),
               explanation: "Direct chat delegates project work to the pinned Codex command."
-            })]
-          : Object.keys(OPERATOR_CLIS).map((tool) => operatorCliCheck(tool, { env, runCommand, studioRoot }))),
+            })
+        ] : []),
         check({
           id: "genesis",
           label: "Genesis",
@@ -334,7 +356,8 @@ function createService({
           studioRoot,
           expected: "The installed genesis-compiler package exposes the Genesis CLI.",
           explanation: "Genesis supplies project context, prompts, Stack guidance, Program descriptions, and Cities.",
-          isValid: (output) => compactOutput(output).startsWith("Usage:")
+          isValid: (output) => compactOutput(output).startsWith("Usage:"),
+          summarize: () => "Genesis is ready."
         }),
         check({
           id: "playwright",
@@ -369,24 +392,43 @@ function createService({
         })
       ];
 
-      const [workspace, accounts, commands] = await Promise.all([
+      const [workspace, accounts, local, commands] = await Promise.all([
         inspectWorkspace({ projectService, studioRoot }),
         inspectAccounts({ connectionsService, input }),
+        packs ? [] : inspectLocalTools({ nodeMajor, runCommand, studioRoot }),
         Promise.all(commandChecks)
       ]);
-      const checks = [workspace, ...(packs ? [] : [ownToolsCheck()]), ...accounts, ...commands.filter(Boolean)];
-      const failed = checks.filter((check) => check.status !== "pass").length;
+      const checks = [workspace, ...accounts, ...local, ...commands.filter(Boolean)].map((entry) => {
+        if (packs) return { ...entry, need: "needed" };
+        const need = entry.need || (OPTIONAL_CHECKS.has(entry.id) ? "optional" : "needed");
+        const optionalMiss = need === "optional" && entry.status === "fail";
+        return {
+          ...entry,
+          need,
+          status: optionalMiss ? "warn" : entry.status,
+          ...(optionalMiss && entry.id.startsWith("playwright") ? { tool: playwrightTool() } : {})
+        };
+      });
+      const needed = checks.filter((entry) => entry.need === "needed");
+      const failed = needed.filter((entry) => entry.status !== "pass").length;
       return {
         ok: true,
         healthy: failed === 0,
         checks,
         summary: {
           failed,
-          passed: checks.length - failed,
-          total: checks.length
+          passed: needed.length - failed,
+          total: needed.length,
+          optionalMissing: checks.filter((entry) => entry.need === "optional" && entry.status !== "pass").length
         },
         updatedAt: new Date().toISOString()
       };
+    },
+
+    // The rows a screen shows for named tools: run now, nothing remembered.
+    async checkTools(input = {}) {
+      const ids = String(input.ids || "").split(",").map((id) => id.trim()).filter(Boolean);
+      return checkLocalTools(ids, { cwd: studioRoot, runCommand });
     }
   });
 }

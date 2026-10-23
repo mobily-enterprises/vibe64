@@ -21,6 +21,7 @@ const LOCAL_TOOLS = Object.freeze({
     any: "curl -fsSL https://chatgpt.com/codex/install.sh | sh" },
   opencode: { name: "opencode", run: [["opencode"]], guideUrl: "https://opencode.ai/docs/",
     any: "curl -fsSL https://opencode.ai/install | bash" },
+  node: { name: "Node.js", run: [["node"]], guideUrl: "https://nodejs.org/en/download", mise: "node@26" },
   git: { name: "Git", run: [["git"]], guideUrl: "https://git-scm.com/downloads",
     apt: "sudo apt install git", brew: "xcode-select --install" },
   gh: { name: "GitHub CLI", run: [["gh"]], guideUrl: "https://github.com/cli/cli#installation",
