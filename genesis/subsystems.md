@@ -431,11 +431,15 @@ Conversation identity, message admission and native inference stay with the conv
 
 ## `packages-vibe64-publishing` Publishing
 
-Provides the local publishing experience: the project's Publish page and, as it
-grows, release orchestration, publishing targets and release history kept as
-local project state, and the person's own confirmation of each release. It
-composes the host-neutral building blocks in `packages/vibe64-packaging` and the
-Packaging contract owned by the Genesis boundary.
+Provides the local publishing experience: the project's Publish page, release
+orchestration (prepare a version change for Save, plan, preflight, dry run,
+the person's own confirmation, tag the saved commit, build once, fan out, read
+back), publishing targets and release history kept as local project state, and
+the person's publishing keys, recovery kit and toolchain licence acceptance in
+their own Vibe64 folder. Assistants may read, prepare, plan, dry-run and ask;
+only the person's page request confirms. It composes the host-neutral building
+blocks in `packages/vibe64-packaging` and the Packaging contract owned by the
+Genesis boundary.
 
 ### Source
 - Directory `packages/vibe64-publishing`
@@ -444,10 +448,14 @@ Packaging contract owned by the Genesis boundary.
 - Nothing.
 
 ### Data owned
-- Nothing.
+- Project runtime `publishing/`: targets, builder map, release history,
+  confirmations, verification results and build results.
+- Personal `publishing/` folder: the age-encrypted keys file and its index,
+  and licence acceptances.
 
 ### Data used
-- Nothing.
+- The project's saved Git commit and Packaging section; session source through
+  the source editor for prepared version changes.
 
 ## `packages-vibe64-packaging` Packaging building blocks
 
