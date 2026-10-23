@@ -7,6 +7,7 @@ import {
   mdiFileCogOutline,
   mdiHeartPulse,
   mdiHistory,
+  mdiPackageVariantClosed,
   mdiSourceMerge,
   mdiGithub
 } from "@mdi/js";
@@ -228,6 +229,22 @@ addPlacement({
     surface: "app",
     scopedSuffix: "/project/[slug]/dashboard/access",
     unscopedSuffix: "/project/[slug]/dashboard/access",
+    to: ""
+  }
+});
+addPlacement({
+  id: "vibe64.publishing.link",
+  target: "page.section-nav",
+  owner: "app-dashboard",
+  kind: "link",
+  surfaces: ["app"],
+  order: 500,
+  props: {
+    label: "Publish",
+    icon: mdiPackageVariantClosed,
+    surface: "app",
+    scopedSuffix: "/project/[slug]/dashboard/publish",
+    unscopedSuffix: "/project/[slug]/dashboard/publish",
     to: ""
   }
 });

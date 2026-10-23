@@ -122,6 +122,8 @@
 - Subsystem: `packages/vibe64-system-graph`
 - Subsystem: `packages/vibe64-database-tools`
 - Subsystem: `packages/vibe64-voice`
+- Subsystem: `packages/vibe64-publishing`
+- Subsystem: `packages/vibe64-packaging`
 
 ### Group `workspace`: Workspace services
 - Kind: `layer`

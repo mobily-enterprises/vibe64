@@ -1,0 +1,59 @@
+{
+  "name": "@local/vibe64-publishing",
+  "version": "0.1.0",
+  "description": "The local publishing experience: release orchestration, local targets and history, and the Publish page.",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./client/publish-page": "./src/client/PublishPage.vue"
+  },
+  "jskit": {
+    "kind": "runtime",
+    "capabilities": {
+      "provides": [
+        "vibe64.publishing"
+      ],
+      "requires": [
+        "vibe64.project"
+      ]
+    },
+    "runtime": {
+      "server": {
+        "providers": [
+          {
+            "entrypoint": "src/server/Vibe64PublishingProvider.js",
+            "export": "Vibe64PublishingProvider"
+          }
+        ],
+        "capabilities": [
+          "vibe64.publishing"
+        ]
+      },
+      "client": {
+        "providers": []
+      }
+    },
+    "metadata": {
+      "apiSummary": {
+        "surfaces": [
+          {
+            "subpath": "./client/publish-page",
+            "summary": "Renders the project's Publish page."
+          }
+        ],
+        "capabilities": [
+          "vibe64.publishing"
+        ]
+      }
+    }
+  },
+  "dependencies": {
+    "@jskit-ai/kernel": "0.1.244",
+    "@local/vibe64-genesis": "0.1.0",
+    "@local/vibe64-packaging": "0.1.0",
+    "@local/vibe64-project": "0.1.0",
+    "@mdi/js": "^7.4.47",
+    "vue": "^3.5.44",
+    "vuetify": "^4.0.0"
+  }
+}

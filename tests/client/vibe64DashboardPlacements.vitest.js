@@ -6,7 +6,8 @@ import {
   mdiFileCogOutline,
   mdiHeartPulse,
   mdiHistory,
-  mdiGithub
+  mdiGithub,
+  mdiPackageVariantClosed
 } from "@mdi/js";
 
 import getPlacements, {
@@ -29,7 +30,7 @@ describe("Vibe64 dashboard placements", () => {
       ));
 
     const labels = dashboardLinks.map((placement) => placement.props.label);
-    expect(labels).toHaveLength(9);
+    expect(labels).toHaveLength(10);
     expect(labels).toEqual(expect.arrayContaining([
       "App access",
       "Env",
@@ -39,13 +40,13 @@ describe("Vibe64 dashboard placements", () => {
       "Project settings",
       "Git log",
       "Incoming changes",
+      "Publish",
       "Session History"
     ]));
     expect(labels).not.toContain("Configure");
     expect(labels).not.toContain("Github repository");
     expect(labels).not.toContain("Run");
     expect(labels).not.toContain("Session info");
-    expect(labels).not.toContain("Publish");
     expect(dashboardLinks.map((placement) => [placement.props.label, placement.props.icon])).toEqual(expect.arrayContaining([
       ["App access", mdiAccountKeyOutline],
       ["Env", mdiFileCogOutline],
@@ -53,7 +54,8 @@ describe("Vibe64 dashboard placements", () => {
       ["Integrations", mdiConnection],
       ["Project settings", mdiCogOutline],
       ["Session History", mdiHistory],
-      ["Issues/PR", mdiGithub]
+      ["Issues/PR", mdiGithub],
+      ["Publish", mdiPackageVariantClosed]
     ]));
     for (const placement of dashboardLinks) {
       expect(placement.props.scopedSuffix).toMatch(/^\/project\/\[slug\]\/dashboard\//u);

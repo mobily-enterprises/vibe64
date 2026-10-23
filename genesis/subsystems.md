@@ -429,6 +429,49 @@ Conversation identity, message admission and native inference stay with the conv
 ### Data used
 - Nothing.
 
+## `packages-vibe64-publishing` Publishing
+
+Provides the local publishing experience: the project's Publish page and, as it
+grows, release orchestration, publishing targets and release history kept as
+local project state, and the person's own confirmation of each release. It
+composes the host-neutral building blocks in `packages/vibe64-packaging` and the
+Packaging contract owned by the Genesis boundary.
+
+### Source
+- Directory `packages/vibe64-publishing`
+
+### Program
+- Nothing.
+
+### Data owned
+- Nothing.
+
+### Data used
+- Nothing.
+
+## `packages-vibe64-packaging` Packaging building blocks
+
+Provides host-neutral application distribution primitives: deterministic
+publish plans and their hash, the credential-free build stage that snapshots
+checksummed artifacts, sign and upload with credentials supplied by the caller
+and always removed afterwards, read-back proof, release tags on the saved
+commit under the project source lock, one-shot person-only confirmation
+tokens, preflight checks, the packer and destination registries, and the
+standalone `vibe64-publish` command. It holds no state, history, custody policy
+or UI; its callers own those.
+
+### Source
+- Directory `packages/vibe64-packaging`
+
+### Program
+- Nothing.
+
+### Data owned
+- Nothing.
+
+### Data used
+- Nothing.
+
 ## `packages-vibe64-project` Projects
 
 Owns project discovery, the portable collaboration, engineering and deployment
@@ -917,7 +960,7 @@ Terminal orchestration supplies workspace preparation policy; Genesis supplies d
 
 ## `packages-vibe64-genesis` Genesis boundary
 
-Provides the sole Vibe64 boundary to Genesis’s project contracts, prompts and inspection results. It transports the canonical subsystem and Program facts and interprets Vibe64-owned operation sections such as workspace preparation, outputs and deployment.
+Provides the sole Vibe64 boundary to Genesis’s project contracts, prompts and inspection results. It transports the canonical subsystem and Program facts and interprets Vibe64-owned operation sections such as workspace preparation, outputs, deployment and packaging.
 
 Genesis owns the portable explanation grammar, explicit directory ownership, Program membership and required main source. This package does not generate a competing subsystem list. Execution and application services implement the operation recipes; Genesis descriptions are explanatory evidence rather than runtime instructions.
 Its agent specs (`./server/agentSpecs`) print each section's grammar from the
