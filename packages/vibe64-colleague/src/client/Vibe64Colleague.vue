@@ -915,7 +915,7 @@ onBeforeUnmount(() => {
         <p>{{ pointerNotice }}</p>
         <v-btn :disabled="Boolean(voiceSession?.hasUnsentSpeech.value)" @click="refresh({ allowRetarget: true })">Refresh conversation</v-btn>
       </v-alert>
-      <v-alert v-if="product.modelSetupRequired" variant="tonal" type="warning" role="status">
+      <v-alert v-if="product.modelSetupRequired" class="vibe64-colleague__notice" variant="tonal" type="warning" role="status">
         <p v-if="teachNeedsModel" data-test="colleague-teach-needs-model">Connect an AI first, then press Teach me again. Nothing was sent.</p>
         <p v-else>Connect an AI first. Your message stays here until you do.</p>
         <v-btn variant="flat" color="primary" min-height="48" @click="requestVibe64AiOnboarding()">Set up your AI</v-btn>
@@ -1120,6 +1120,8 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .vibe64-colleague { position: relative; display: flex; flex-direction: column; width: 100%; height: 100%; overflow: hidden; background: rgb(var(--v-theme-surface)); color: rgb(var(--v-theme-on-surface)); }
+.vibe64-colleague__notice { flex: 0 0 auto; margin: 12px 12px 0; }
+.vibe64-colleague__notice p { margin-bottom: 12px; }
 .vibe64-colleague__nudge { flex: 0 0 auto; padding: 12px 12px 0; }
 .vibe64-colleague__nudge:empty { display: none; }
 .vibe64-colleague__conversation { flex: 1; min-height: 0; display: flex; padding: 12px; }
