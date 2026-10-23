@@ -101,7 +101,7 @@
       <v-alert v-if="existingNewValue" type="info" variant="tonal">
         {{ newValue.key }} already has a value. Saving replaces this value in development; other Env values stay unchanged.
       </v-alert>
-      <section class="env-panel__add" :class="{ 'env-panel__add--saved-values': savedValues }">
+      <section class="env-panel__add">
         <v-text-field
           v-model="newValue.key"
           density="compact"
@@ -513,16 +513,25 @@ function reloadPage() {
   border-radius: var(--v64-shape-lg, 16px);
 }
 
+/* Wraps by the pane's width, not the window's: the Dashboard pane is narrow beside the chat. */
 .env-panel__add {
   align-items: center;
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--v64-space-3, 12px);
-  grid-template-columns: minmax(10rem, 1.1fr) minmax(12rem, 1.4fr) auto auto;
   padding: var(--v64-space-4, 16px);
 }
 
-.env-panel__add--saved-values {
-  grid-template-columns: minmax(10rem, 1.1fr) minmax(12rem, 1.4fr) auto auto auto;
+.env-panel__add > .v-text-field:nth-child(1) {
+  flex: 1.1 1 10rem;
+}
+
+.env-panel__add > .v-text-field:nth-child(2) {
+  flex: 1.4 1 12rem;
+}
+
+.env-panel__add > .v-checkbox {
+  flex: 0 0 auto;
 }
 
 .env-panel__add :deep(.v-field) {
@@ -570,9 +579,13 @@ function reloadPage() {
 }
 
 @media (max-width: 900px) {
-  .env-panel__add,
-  .env-panel__add--saved-values {
-    grid-template-columns: 1fr;
+  .env-panel__add {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .env-panel__add > .v-text-field:nth-child(n) {
+    flex: 0 0 auto;
   }
 }
 </style>

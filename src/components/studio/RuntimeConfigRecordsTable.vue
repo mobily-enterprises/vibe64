@@ -81,7 +81,6 @@
           <div
             v-else
             class="runtime-config-records-table__edit"
-            :class="{ 'runtime-config-records-table__edit--saved-values': savedValues }"
           >
             <v-text-field
               :model-value="draftValue(record)"
@@ -336,23 +335,27 @@ async function copyKey(key = "") {
   white-space: nowrap;
 }
 
+/* Wraps within its cell, so the actions never spill past a narrow pane. */
 .runtime-config-records-table__edit {
   align-items: center;
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.5rem;
-  grid-template-columns: minmax(7rem, 1fr) auto auto;
   min-width: 0;
+  padding-block: 4px;
 }
 
-.runtime-config-records-table__edit--saved-values {
-  grid-template-columns: minmax(7rem, 1fr) auto auto auto;
+.runtime-config-records-table__edit > .v-input {
+  flex: 1 1 7rem;
 }
 
 .runtime-config-records-table__linked {
-  align-items: center;
+  align-items: flex-start;
   display: flex;
-  gap: 0.5rem;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
+  padding-block: 6px;
 }
 
 .runtime-config-records-table__linked-chip {
@@ -363,9 +366,7 @@ async function copyKey(key = "") {
   color: var(--v64-on-surface-variant, rgba(0, 0, 0, 0.62));
   font: var(--v64-type-body-sm, 400 0.8125rem/1.125rem system-ui, sans-serif);
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .runtime-config-records-table__saved-actions {
@@ -381,13 +382,8 @@ async function copyKey(key = "") {
 }
 
 @media (max-width: 900px) {
-  .runtime-config-records-table__edit {
-    align-items: stretch;
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .runtime-config-records-table__edit :deep(.v-input) {
-    grid-column: 1 / -1;
+  .runtime-config-records-table__edit > .v-input {
+    flex-basis: 100%;
   }
 }
 </style>

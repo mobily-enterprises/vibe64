@@ -61,7 +61,8 @@ describe("Env panel", () => {
     expect(source).not.toContain("<th>Source</th>");
     expect(source).not.toContain("<th>Status</th>");
     expect(source).toMatch(/table-layout:\s*fixed/u);
-    expect(source).toMatch(/grid-template-columns:\s*minmax\(7rem, 1fr\) auto auto/u);
+    expect(source).toMatch(/runtime-config-records-table__edit \{[^}]*flex-wrap:\s*wrap/u);
+    expect(source).toMatch(/runtime-config-records-table__linked-label \{[^}]*overflow-wrap:\s*anywhere/u);
   });
 
   it("reveals every present secret through the shared record view with row loading", () => {
