@@ -35,12 +35,16 @@ function requireResult(result) {
 function publicWatch({ cursor, ...watch }) {
   return structuredClone(watch);
 }
+// The system notice before an autonomous reply to a watch (a conversation or a
+// deployment). Turns saved before it was worded for every watch keep theirs.
+const WATCH_UPDATE_NOTICE = "An update from what you asked Colleague to watch.";
+const WATCH_UPDATE_NOTICES = new Set([WATCH_UPDATE_NOTICE, "An update from your watched conversations."]);
 function colleagueHistoryMessages(turn) {
   const runtime = turn.metadata?.runtime;
   if (runtime?.origin === "application" && runtime.completedEnvelope === true) return [];
   return turn.messages.flatMap(message => {
     if (message.role === "system") {
-      if (message.text !== "An update from your watched conversations." || (runtime
+      if (!WATCH_UPDATE_NOTICES.has(message.text) || (runtime
         ? runtime.origin !== "application" || runtime.status !== "complete"
         : !turn.messages.some(item => item.role === "assistant" && item.text?.trim()))) return [];
       // The original notice is presentation, never the wake's private data.
@@ -790,7 +794,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     try {
       const receipt = await conversation[autonomous ? "wake" : "send"]({
         ...(message ? { messageId: message.messageId, text: message.text }
-          : { messageId, text: "An update from your watched conversations." }), data
+          : { messageId, text: WATCH_UPDATE_NOTICE }), data
       });
       admission.resolve(receipt);
       const result = await conversation.wait();
@@ -971,7 +975,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
             return "use";
           }
           if (autonomous) {
-            const turn = await transcript.writeConversationSystemMessage(state.record.runtimeId, { text: "An update from your watched conversations." });
+            const turn = await transcript.writeConversationSystemMessage(state.record.runtimeId, { text: WATCH_UPDATE_NOTICE });
             replyTurnId = turn.turnId;
           }
           const turn = await prepared.publishReply({ turnId: replyTurnId });

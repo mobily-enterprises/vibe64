@@ -184,7 +184,7 @@ If no progress sentence is available when the first action starts, Colleague say
 including when you reopen the conversation, until the answer replaces it.
 Background monitoring does not speak an interactive lookup acknowledgement.
 Its completed notification can still be spoken when sound is on. A saved notice,
-“An update from your watched conversations.”, appears before the completed answer,
+“An update from what you asked Colleague to watch.”, appears before the completed answer,
 including after reopening. Internal watch instructions and tool arguments stay hidden.
 
 For response watches, watching more than conversations (such as a

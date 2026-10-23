@@ -1376,7 +1376,7 @@ test("autonomous watch tools do not speak interactive progress", async (t) => {
   assert.equal(completed.conversationLog.at(-1).assistant.text, "The watched work finished.");
   assert.equal(completed.conversationLog.at(-1).metadata.runtime.origin, "application");
   const notice = completed.conversationLog.at(-1).system;
-  assert.equal(notice.text, "An update from your watched conversations.");
+  assert.equal(notice.text, "An update from what you asked Colleague to watch.");
   assert.equal(notice.data, undefined, "The visible notice must not expose the private wake data");
   assert.deepEqual(completed.conversationLog.at(-1).messages.filter(message => message.role === "system"), [notice]);
   assert.equal(browserEvents.some(event => event.role === "assistant" && event.status === "complete" &&
@@ -3422,7 +3422,7 @@ test("a completed goal commentary wakes the original native Colleague once witho
   assert.equal(result.watches[0].status, "delivered");
   assert.equal(result.status, "ready", result.error);
   assert.deepEqual(result.messages.filter(message => ["user", "system", "assistant"].includes(message.role)).map(({ role, text }) => [role, text]), [
-    ["system", "An update from your watched conversations."],
+    ["system", "An update from what you asked Colleague to watch."],
     ["assistant", "The estimate is 30–70 hours; the agent continues working."]
   ]);
   const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
