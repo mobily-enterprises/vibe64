@@ -174,7 +174,7 @@ it("lets a saved version nobody has published go out as it is, without a session
   const suggestion = { ok: true, notes: "- Fix", packages: [{ id: "sdk", label: "SDK", current: "1.2.0", released: false, external: false,
     suggestions: [{ kind: "patch", version: "1.2.1" }, { kind: "minor", version: "1.3.0" }, { kind: "major", version: "2.0.0" }] }] };
   const calls = [];
-  const call = vi.fn(async (suffix, options = {}) => {
+  const call = vi.fn(async (suffix) => {
     calls.push(suffix);
     if (suffix === "/release/suggestion") return suggestion;
     if (suffix === "/plan") return { ok: true, plan: PLAN };
