@@ -512,8 +512,12 @@ test("the plain visual route reads a diagram of any retained attempt, including 
 
 test("a fact step passes by its reader; steps this learner cannot take here are absent and do not count", async t => {
   let live = false;
-  registerLearningFact({ id: "step-actions-live", read: async ({ actor, projectSlug }) => ({ holds: live && actor.username === "alice" && Boolean(projectSlug),
-    ...(live ? {} : { reason: "Not live yet." }) }) });
+  const channels = [];
+  // A reader reads through ordinary actions with the check's own context.
+  registerLearningFact({ id: "step-actions-live", read: async ({ actor, projectSlug, context }) => {
+    channels.push(context?.channel);
+    return { holds: live && actor.username === "alice" && Boolean(projectSlug), ...(live ? {} : { reason: "Not live yet." }) };
+  } });
   const f = await fixture(t, { editTopic: async source => {
     const metadata = JSON.parse(await readFile(path.join(source, "package.json"), "utf8"));
     metadata.vibe64Training.places = ["step-actions-owner-place", "step-actions-missing-place"];
@@ -547,6 +551,7 @@ test("a fact step passes by its reader; steps this learner cannot take here are 
     { ok: true, stepId: "live", outcome: "passed", recorded: true, replayed: false });
   const after = await f.execute("lesson.read", { attemptId: attempt.attemptId });
   assert.ok(after.passedStepIds.includes("live"));
+  assert.ok(channels.length >= 3 && channels.every(Boolean), "every reading carries the check's action context");
   assert.deepEqual(after.results.filter(value => value.stepId === "live").map(value => [value.kind, value.outcome, value.evidence]),
     [["fact", "not-yet-passed", { fact: "step-actions-live" }], ["fact", "passed", { fact: "step-actions-live" }]]);
 });

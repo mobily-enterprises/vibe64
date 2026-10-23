@@ -119,7 +119,10 @@ Lessons are authored in format 3: format 2's steps plus a required `stage`
 are retired for authoring and starting, and still validate as installed
 snapshots. A step may check a `fact` (`check.kind: "fact"` naming a fact
 reader such as the built-in `ai-ready`); a host registers its own readers with
-`registerLearningFact`, and a topic declares the host names its lessons use in
+`registerLearningFact` (`./server/learning-facts`). A reader gets `{ actor,
+projectSlug, context }` and reads through ordinary actions with that check's
+action `context`, so the learner's access and Learn rule apply; an owner
+usually shares one reader with its Colleague watch source, and a topic declares the host names its lessons use in
 its optional `places`, `activities` and `facts` lists. A course may name its
 `orientation`, which must be one of its published lessons.
 

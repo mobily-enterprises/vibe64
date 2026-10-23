@@ -198,10 +198,10 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
 
   // A fact check: its registered reader answers for this learner (and the
   // attempt's practice project). Recorded like an automatic result.
-  async function runFactCheck({ actor, attempt, lesson, step, requestId, trigger }) {
+  async function runFactCheck({ actor, attempt, lesson, step, requestId, trigger, context }) {
     const previous = (await savedEntry(actor, attempt)).results.find(value => value.requestId === requestId);
     if (previous) return replayed(previous, step.id);
-    const fact = await readLearningFact(step.check.fact, { actor, projectSlug: attempt.projectSlug || "" });
+    const fact = await readLearningFact(step.check.fact, { actor, projectSlug: attempt.projectSlug || "", context });
     const outcome = fact.holds ? "passed" : "not-yet-passed";
     const reason = boundedReason(fact.reason);
     if (trigger !== "learner") {
@@ -221,7 +221,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
       throw stepFailure("Run a step check with a stable request ID.", "ACTION_VALIDATION_FAILED", 400);
     }
     const { attempt, lesson, step } = await openStep({ actor, attemptId, stepId });
-    if (step.check?.kind === "fact") return runFactCheck({ actor, attempt, lesson, step, requestId, trigger });
+    if (step.check?.kind === "fact") return runFactCheck({ actor, attempt, lesson, step, requestId, trigger, context });
     const check = declaredCheck(lesson, step);
     const entry = await savedEntry(actor, attempt);
     const previous = entry.results.find(value => value.requestId === requestId);

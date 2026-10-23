@@ -29,6 +29,7 @@
     "./server/step-actions": "./src/server/stepActions.js",
     "./server/learner-notes-actions": "./src/server/learnerNotesActions.js",
     "./server/learner-events": "./src/server/learnerEvents.js",
+    "./server/learning-facts": "./src/server/learningFacts.js",
     "./shared/learner-events": "./src/shared/learnerEvents.js",
     "./shared/practical-schemas": "./src/shared/practicalSchemas.js",
     "./server/visual-resource-actions": "./src/server/visualResourceActions.js",
