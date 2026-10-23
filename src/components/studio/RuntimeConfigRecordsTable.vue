@@ -116,6 +116,7 @@
               :is="savedValues.component"
               v-if="savedValues"
               :environment="savedValueEnvironment(environmentLabel)"
+              :has-value="record.valuePresent === true"
               placement="env-row"
               :project-slug="projectSlug"
               :secret="record.secret === true"

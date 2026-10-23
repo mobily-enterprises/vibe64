@@ -139,6 +139,7 @@
           :is="savedValues.component"
           v-if="savedValues"
           :environment="savedValueEnvironment(environmentLabel)"
+          :has-value="existingNewValue"
           placement="env-add"
           :project-slug="projectSlug"
           :secret="newValue.secret === true"

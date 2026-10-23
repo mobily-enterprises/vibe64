@@ -505,7 +505,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                   query: { prefillKey: credential.key, prefillSecret: 'true' }
                 }">{{ production ? 'Open production Env' : 'Set credential in Env' }}</v-btn>
                 <component :is="savedValues.component" v-if="savedValues && !dirty" :key="`${environment}:${credential.key}`"
-                  :environment="environment" placement="integration-credential" :project-slug="projectSlug"
+                  :environment="environment" placement="integration-credential" :project-slug="projectSlug" :provider="selected?.provider || ''"
                   :secret="!credential.public" :variable="credential.key"
                   @linked="setCredentialLinked(credential.key, $event)" />
               </div>
