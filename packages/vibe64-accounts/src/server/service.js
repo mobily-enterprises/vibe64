@@ -321,9 +321,18 @@ function ghLoginCommandArgs(gitIdentity = {}) {
       `  printf '\\n' | ${ghLoginCommandOnlyArgs().map(shellQuote).join(" ")}`,
       "fi",
       "gh auth setup-git --hostname github.com --force",
-      ...ghGitIdentityCommandLines(gitIdentity)
+      ...ghGitIdentityWhenUnsetCommandLines(gitIdentity)
     ].join("\n")
   ];
+}
+
+// Signing in to GitHub never replaces a name or email the person already gave
+// Git, and never writes an empty one.
+function ghGitIdentityWhenUnsetCommandLines(gitIdentity = {}) {
+  return [["user.name", gitIdentity.name], ["user.email", gitIdentity.email]]
+    .map(([key, value]) => [key, String(value || "").trim()])
+    .filter(([, value]) => value)
+    .map(([key, value]) => `[ -n "$(git config --global --get ${key} 2>/dev/null)" ] || git config --global ${key} ${shellQuote(value)}`);
 }
 
 function ghLoginCommandOnlyArgs() {

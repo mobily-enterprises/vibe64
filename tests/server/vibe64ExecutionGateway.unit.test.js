@@ -64,6 +64,17 @@ function usePackRoot(t, runtimePackRoot) {
 
 const execFileAsync = promisify(execFile);
 
+// Commands read the person's Git identity with the git on their PATH. These
+// tests describe a person without one, so the pack's git ignores the
+// developer's own global and system Git config.
+const REAL_GIT = (await execFileAsync("sh", ["-c", "command -v git"], { encoding: "utf8" })).stdout.trim();
+await mkdir(path.join(RUNTIME_PACKS, "policy-bin"), { recursive: true });
+await writeFile(
+  path.join(RUNTIME_PACKS, "policy-bin", "git"),
+  `#!/bin/sh\nGIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 exec ${REAL_GIT} "$@"\n`,
+  { mode: 0o755 }
+);
+
 async function git(cwd, args, options = {}) {
   return execFileAsync("git", args, {
     cwd,

@@ -134,13 +134,6 @@ function resolveCommandEnv({
     ...databaseEnv(...databaseEnvRecordsForPolicy(baseEnv, request)),
     ...commandProjectEnv(request),
     ...gitEnv({ actor, request }),
-    ...gitIdentityEnv({
-      actor,
-      env: baseEnv,
-      project: request.project,
-      session: request.session,
-      userKey: request.userKey
-    }),
     ...callerEnv,
     ...credentialEnv({ actor, request }),
     ...sharedEnv
@@ -150,7 +143,7 @@ function resolveCommandEnv({
     ...npmToolEnv({ env }),
     VIBE64_DECLARED_RUNTIMES: declaredRuntimes
   };
-  return {
+  const commandEnv = {
     ...finalEnv,
     PATH: resolveRuntimePath({
       env: finalEnv,
@@ -161,6 +154,19 @@ function resolveCommandEnv({
       ].filter(Boolean).join(":"),
       runtimes: request.runtimes,
       shimDirs: request.shimDirs || []
+    })
+  };
+  // Resolved last, so the person's Git config is read with the HOME, XDG
+  // folders and PATH this command will actually run with.
+  return {
+    ...commandEnv,
+    ...gitIdentityEnv({
+      actor,
+      env: baseEnv,
+      gitConfig: { cwd: request.cwd, env: commandEnv },
+      project: request.project,
+      session: request.session,
+      userKey: request.userKey
     })
   };
 }
