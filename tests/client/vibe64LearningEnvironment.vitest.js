@@ -1579,9 +1579,10 @@ describe("Lesson finished screen", () => {
 
   it("finishes (archives) the lesson once, then starts the next lesson or returns to Courses", async () => {
     let current = ATTEMPT;
+    let results = passed;
     const { learning, calls } = controller({
       mode: () => ({ ...LEARN, currentAttemptId: current }),
-      reads: () => lessonResult({ results: passed, attempt: { attemptId: ATTEMPT, ended: false, practiceSlug: "training-1111", pin } }),
+      reads: () => lessonResult({ results, attempt: { attemptId: ATTEMPT, ended: false, practiceSlug: "training-1111", pin } }),
       posts: url => { if (url === VIBE64_LEARNING_ROUTES.lessonFinish(ATTEMPT)) current = ""; return { ok: true, available: true }; } });
     learning.setViewer("member");
     await flush();
@@ -1605,6 +1606,16 @@ describe("Lesson finished screen", () => {
       expect(["learning-finished-keep", "learning-finished-archive", "learning-finished-delete", "learning-finished-read"]
         .map(id => byTest(view.root, id))).toEqual([undefined, undefined, undefined, undefined]);
       expect(textOf(byTest(view.root, "learning-finished-next"))).toContain("Next lesson: Your first change");
+      // A screen that mounts again after the archive cleared the attempt's
+      // results (leaving the archived practice project) keeps what it held.
+      results = [];
+      await learning.loadLesson();
+      const again = await mountFinished(learning, courses);
+      try {
+        expect(textOf(again.root)).toContain("3 of 4 steps passed");
+        expect(textOf(again.root)).toContain("its practice project and conversation");
+      } finally { again.app.unmount(); }
+      expect(calls.filter(call => call.method === "POST" && call.url === VIBE64_LEARNING_ROUTES.lessonFinish(ATTEMPT))).toHaveLength(1);
       await byTest(view.root, "learning-finished-next").props.onClick();
       await flush();
       expect(startLesson).toHaveBeenCalledWith({ courseId: COURSE.courseId, release: COURSE.release, lessonCode: "V64-START-02", expectedRevision: 4 },

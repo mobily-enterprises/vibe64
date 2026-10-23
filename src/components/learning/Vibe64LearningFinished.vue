@@ -31,8 +31,9 @@ let finishingFor = "";
 async function finish() {
   if (finished.value || busy.value) return;
   finishError.value = "";
-  summary.value ||= { passed: passedNow.value, practice: Boolean(lesson.value?.practiceProjectSlug) };
-  if (await props.learning.finish()) {
+  summary.value ||= props.learning.finishSummary?.() ||
+    { passed: passedNow.value, practice: Boolean(lesson.value?.practiceProjectSlug) };
+  if (await props.learning.finish(summary.value)) {
     finished.value = true;
     void props.courses.learningResource.reload();
   } else finishError.value = props.learning.state.error || "Finishing the lesson was not confirmed. Try again.";

@@ -962,12 +962,15 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   // practice project and conversation); Learn mode stays on with no lesson.
   // One confirmed finish per attempt: the Finished screen remounts when the
   // archived practice project's page gives way to the Learn page.
-  function finish() {
+  // summary: what the attempt held when its Finished screen first finished it
+  // (finishSummary), so a screen that remounts after the archive (which
+  // clears the attempt's results) still shows it.
+  function finish(summary = null) {
     const attemptId = state.attemptId;
     if (!attemptId) return Promise.resolve(null);
     if (finishRun?.attemptId === attemptId) return finishRun.promise;
     // A retry of the same attempt resumes its close; no request identity.
-    const run = { attemptId, promise: attemptAction("finish", VIBE64_LEARNING_ROUTES.lessonFinish(attemptId),
+    const run = { attemptId, summary, promise: attemptAction("finish", VIBE64_LEARNING_ROUTES.lessonFinish(attemptId),
       async () => ({ expectedRevision: await readRevision() }), "Finishing the lesson was not confirmed. Try again.")
       .then(result => {
         if (finishRun === run && !result) finishRun = null;
@@ -977,6 +980,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     finishRun = run;
     return run.promise;
   }
+  const finishSummary = () => finishRun?.attemptId && finishRun.attemptId === state.attemptId ? finishRun.summary : null;
 
   // Restart: archive the lesson in progress and start it again (a fresh
   // practice project, teacher conversation and results), then open it.
@@ -1130,7 +1134,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     get orientationRequested() { return state.orientationRequested; },
     lesson, results, steps, currentStep, focus, colleagueRequest, notes, notesState: readonly(notesState), player,
     stepStatus: stepId => stepStatus(results.value, stepId, lesson.value?.passedStepIds || []),
-    setViewer, show, openCourses, openLesson, closeCourses, showFinished, minimise, selectStep, setScroll, flushReader, loadLesson,
+    setViewer, show, openCourses, openLesson, closeCourses, showFinished, finishSummary, minimise, selectStep, setScroll, flushReader, loadLesson,
     runCheck, answer, done, review, savedReview, reviewNote, showMe, teachMe, stuck, doItForMe, doItForMeKind, consumeColleagueRequest, learnerChanged,
     exerciseStep, beginExercise, exerciseCurrent, finishExercise, prepareExercise,
     readNotes, saveNotes, clearNotes,
