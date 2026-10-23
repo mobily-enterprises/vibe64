@@ -55,7 +55,7 @@ const credentialsValid = definePreflightCheck({
 const VIBE64_REGISTRY_PREFLIGHT_CHECKS = Object.freeze([...VIBE64_PREFLIGHT_CHECKS, releaseTagsFree, verificationPassed, credentialsValid]);
 
 // targets: the plan's targets with their settings; obtainCredential as for Stage 2.
-async function gatherCredentialFacts({ targets = [], obtainCredential, tempRoot } = {}) {
+async function gatherCredentialFacts({ targets = [], obtainCredential, tempRoot, toolchains = {} } = {}) {
   const facts = {};
   for (const target of targets) {
     const destination = vibe64Destination(target.destination);
@@ -65,7 +65,7 @@ async function gatherCredentialFacts({ targets = [], obtainCredential, tempRoot 
     }
     const specs = typeof destination.credentials === "function" ? destination.credentials(target) : destination.credentials || [];
     try {
-      facts[target.id] = await withStageCredentials({ credentials: specs, obtainCredential, tempRoot }, (credentials) => destination.verifyCredential({ target, credentials }));
+      facts[target.id] = await withStageCredentials({ credentials: specs, obtainCredential, tempRoot }, (credentials) => destination.verifyCredential({ target, credentials, toolchains }));
     } catch (error) {
       facts[target.id] = { ok: false, message: error?.message || `${destination.label} sign-in could not be checked.` };
     }

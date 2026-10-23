@@ -18,19 +18,28 @@ Commands:
   publish            Build every planned package once, then check (--dry-run) or
                      upload each target and read it back. A real publish asks you
                      to type the plan id in this terminal; nothing else confirms it.
-  sign               Sign built artifacts (Android APK).
+  keygen <package>   Create the app's sideload distribution key (for
+                     "install on my phone") in --out, readable only by you.
+                     Keep a copy: phones accept updates only with this key.
 
 Options:
   --project <path>              Project root (default: the current directory).
   --commit <revision>           Saved commit to release (default: HEAD).
   --target <id>=<destination>:<package>[:<channel>]
   --version <package>=<x.y.z>   Release version of a package.
+  --build-number <package>=<n>  Android build number (versionCode) of an app
+                                package; always higher than the last one.
   --setting <target>.<name>=<value>
                                 Target setting, such as sdk.registry=https://...
   --credential <id>=<file>      Read credential <id> (such as npm-userconfig,
                                 pypi-token, github-token) from a private file.
   --result-store <path>         Where built files are kept
                                 (default: ~/.cache/vibe64/publish-results).
+  --cache <path>                Build caches such as Gradle's
+                                (default: ~/.cache/vibe64/publish-cache).
+  --java-home <path>            JDK 21 for app builds (default: JAVA_HOME).
+  --android-home <path>         Android SDK for app builds (default: ANDROID_HOME).
+  --out <path>                  Folder for keygen's key files.
   --dry-run                     Check every target without publishing.
   --json                        Print machine-readable JSON.
   -h, --help                    Show this help.
@@ -47,9 +56,14 @@ function parseArguments(argv) {
     commit: "HEAD",
     targets: [],
     versions: {},
+    buildNumbers: {},
     settings: {},
     credentials: {},
     resultStore: path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache"), "vibe64", "publish-results"),
+    cache: path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache"), "vibe64", "publish-cache"),
+    javaHome: process.env.JAVA_HOME ? path.resolve(process.env.JAVA_HOME) : null,
+    androidHome: process.env.ANDROID_HOME ? path.resolve(process.env.ANDROID_HOME) : null,
+    out: null,
     positional: []
   };
   for (let index = 0; index < argv.length; index += 1) {
@@ -63,6 +77,15 @@ function parseArguments(argv) {
     if (argument === "--project") options.project = path.resolve(value());
     else if (argument === "--commit") options.commit = value();
     else if (argument === "--result-store") options.resultStore = path.resolve(value());
+    else if (argument === "--cache") options.cache = path.resolve(value());
+    else if (argument === "--java-home") options.javaHome = path.resolve(value());
+    else if (argument === "--android-home") options.androidHome = path.resolve(value());
+    else if (argument === "--out") options.out = path.resolve(value());
+    else if (argument === "--build-number") {
+      const match = /^([^=]+)=(\d+)$/u.exec(value());
+      if (!match) throw new Error("--build-number takes <package>=<whole number>.");
+      options.buildNumbers[match[1]] = Number(match[2]);
+    }
     else if (argument === "--target") {
       const match = /^([^=]+)=([^:]+):([^:]+)(?::(.+))?$/u.exec(value());
       if (!match) throw new Error("--target takes <id>=<destination>:<package>[:<channel>].");
@@ -116,6 +139,7 @@ function planInput(options, commit, packaging) {
     savedCommit: commit,
     packaging,
     versions: options.versions,
+    buildNumbers: options.buildNumbers,
     targets: options.targets.map((target) => ({ ...target, settings: options.settings[target.id] }))
   };
 }
@@ -140,7 +164,10 @@ async function build(options, packageId) {
     packaging,
     packageId,
     version: options.versions[packageId] || null,
-    resultStore: options.resultStore
+    versionCode: options.buildNumbers[packageId] ?? null,
+    resultStore: options.resultStore,
+    cacheDirectory: options.cache,
+    toolchains: toolchains(options)
   });
   print(options, {
     package: packageId,
@@ -151,6 +178,42 @@ async function build(options, packageId) {
     digest: result.artifacts.digest,
     files: result.artifacts.manifest.files
   }, `Built ${packageId} from ${commit.slice(0, 7)}${result.artifacts.reused ? " (already built)" : ""}:\n${filesText(result.artifacts)}`);
+}
+
+function toolchains(options) {
+  return { javaHome: options.javaHome, androidHome: options.androidHome };
+}
+
+// Writes the key store and its password as two private files the person keeps
+// (and backs up); the CLI passes them back with --credential when publishing.
+async function keygen(options, packageId) {
+  const [{ generateSideloadKey }, { mkdir, writeFile }] = await Promise.all([
+    import("../src/server/destinations/androidSideload/key.js"),
+    import("node:fs/promises")
+  ]);
+  if (!options.out) throw new Error("keygen needs --out <folder>.");
+  const { packaging } = await loadProject(options);
+  const entry = packaging.packages.find((candidate) => candidate.id === packageId && candidate.packer === "capacitor");
+  if (!entry) throw new Error(`Packaging declares no app package ${packageId}.`);
+  await mkdir(options.out, { recursive: true, mode: 0o700 });
+  const keystore = path.join(options.out, `${packageId}-sideload.p12`);
+  const password = path.join(options.out, `${packageId}-sideload.password`);
+  const result = await generateSideloadKey({
+    javaHome: options.javaHome,
+    commonName: entry.application.name,
+    sink: async (key) => {
+      await writeFile(keystore, key.keystore, { mode: 0o600, flag: "wx" });
+      await writeFile(password, key.password, { mode: 0o600, flag: "wx" });
+    }
+  });
+  print(options, { package: packageId, keystore, password, alias: result.alias, certificateSha256: result.certificateSha256 }, [
+    `Created the sideload key for ${entry.application.name}:`,
+    `  ${keystore}`,
+    `  ${password}`,
+    `  certificate SHA-256 ${result.certificateSha256}`,
+    "Back up both files now: phones accept updates of this app only with this key.",
+    `Publish with --credential android-sideload-keystore=${keystore} --credential android-sideload-key-password=${password}`
+  ].join("\n"));
 }
 
 async function confirmInTerminal(displayId, summary) {
@@ -188,8 +251,11 @@ async function publish(options) {
       packaging,
       packageId: entry.id,
       version: entry.version,
+      versionCode: entry.buildNumber ?? null,
       planHash,
-      resultStore: options.resultStore
+      resultStore: options.resultStore,
+      cacheDirectory: options.cache,
+      toolchains: toolchains(options)
     }));
   }
   const targets = releasePlan.targets.map((target) => {
@@ -207,7 +273,8 @@ async function publish(options) {
           target,
           version: entry.version,
           artifacts: built.get(entry.id).artifacts,
-          credentials
+          credentials,
+          toolchains: toolchains(options)
         }))
       });
     }
@@ -222,7 +289,14 @@ async function publish(options) {
   }
   const results = [];
   for (const { target, entry, destination } of targets) {
-    results.push(await publishTarget({ destination, target, version: entry.version, artifacts: built.get(entry.id).artifacts, obtainCredential }));
+    results.push(await publishTarget({
+      destination,
+      target,
+      version: entry.version,
+      artifacts: built.get(entry.id).artifacts,
+      obtainCredential,
+      toolchains: toolchains(options)
+    }));
   }
   print(options, { planHash, results }, results.map((result) => `${result.target}: published ${result.version} and read back.`).join("\n"));
 }
@@ -244,10 +318,7 @@ async function main(argv) {
   if (command === "plan" && rest.length === 0) return plan(options);
   if (command === "build" && rest.length === 1) return build(options, rest[0]);
   if (command === "publish" && rest.length === 0) return publish(options);
-  if (command === "sign") {
-    fail("vibe64-publish sign is not available yet.", 3);
-    return;
-  }
+  if (command === "keygen" && rest.length === 1) return keygen(options, rest[0]);
   fail(`Unknown command ${[command, ...rest].join(" ")}.\n\n${USAGE}`);
 }
 
