@@ -1,12 +1,14 @@
 // Verified toolchain downloads: a pinned URL, a pinned checksum, a size cap, and
-// an atomic rename only after the bytes match. Archives are unpacked with the
-// system `unzip`/`tar` into a staging folder that is renamed into place.
+// an atomic rename only after the bytes match. Archives are unpacked into a
+// staging folder that is renamed into place: tarballs with the system `tar`,
+// zips here in Node, since many hosts have no `unzip`.
 import { createHash, randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { mkdir, rename, rm, stat } from "node:fs/promises";
+import { chmod, mkdir, readFile, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { inflateRawSync } from "node:zlib";
 
 import { publishError } from "../errors.js";
 import { BUILD_ENVIRONMENT_PASSTHROUGH, spawnCommand } from "../stages.js";
@@ -79,6 +81,51 @@ async function runOrFail(argv, { cwd, env, label, runCommand = spawnCommand }) {
   return result;
 }
 
+// Extracts a (non-zip64) zip into `directory`, keeping Unix file modes and
+// relative symlinks. Entries that would land outside `directory` are refused.
+async function extractZip(archiveFile, directory) {
+  const zip = await readFile(archiveFile);
+  const name = path.basename(archiveFile);
+  const end = zip.lastIndexOf(Buffer.from([0x50, 0x4b, 0x05, 0x06]));
+  if (end < 0) throw toolchainError(`${name} is not a zip archive.`);
+  const count = zip.readUInt16LE(end + 10);
+  let offset = zip.readUInt32LE(end + 16);
+  const root = path.resolve(directory);
+  const inside = (target) => target === root || target.startsWith(`${root}${path.sep}`);
+  for (let index = 0; index < count; index += 1) {
+    if (zip.readUInt32LE(offset) !== 0x02014b50) throw toolchainError(`${name} has a damaged central directory.`);
+    const method = zip.readUInt16LE(offset + 10);
+    const compressedSize = zip.readUInt32LE(offset + 20);
+    const nameLength = zip.readUInt16LE(offset + 28);
+    const extraLength = zip.readUInt16LE(offset + 30);
+    const commentLength = zip.readUInt16LE(offset + 32);
+    const mode = zip.readUInt32LE(offset + 38) >>> 16;
+    const localOffset = zip.readUInt32LE(offset + 42);
+    const entryName = zip.toString("utf8", offset + 46, offset + 46 + nameLength);
+    offset += 46 + nameLength + extraLength + commentLength;
+
+    const target = path.resolve(root, entryName);
+    if (path.isAbsolute(entryName) || !inside(target)) throw toolchainError(`${name} has an entry outside its folder: ${entryName}`);
+    if (entryName.endsWith("/")) {
+      await mkdir(target, { recursive: true });
+      continue;
+    }
+    const start = localOffset + 30 + zip.readUInt16LE(localOffset + 26) + zip.readUInt16LE(localOffset + 28);
+    const stored = zip.subarray(start, start + compressedSize);
+    if (method !== 0 && method !== 8) throw toolchainError(`${name} uses an unsupported compression for ${entryName}.`);
+    const bytes = method === 8 ? inflateRawSync(stored) : stored;
+    await mkdir(path.dirname(target), { recursive: true });
+    if ((mode & 0o170000) === 0o120000) {
+      const link = bytes.toString("utf8");
+      if (path.isAbsolute(link) || !inside(path.resolve(path.dirname(target), link))) throw toolchainError(`${name} has a link outside its folder: ${entryName}`);
+      await symlink(link, target);
+      continue;
+    }
+    await writeFile(target, bytes);
+    if (mode & 0o777) await chmod(target, mode & 0o777);
+  }
+}
+
 // Unpacks an archive into `<destination>` atomically; `inner` names the one top
 // folder of the archive whose contents become the destination.
 async function unpackInto(archiveFile, destination, { inner, kind, baseEnvironment, runCommand } = {}) {
@@ -86,11 +133,12 @@ async function unpackInto(archiveFile, destination, { inner, kind, baseEnvironme
   const staging = `${destination}.staging-${randomUUID()}`;
   await mkdir(staging, { recursive: true });
   try {
-    const env = toolEnvironment(baseEnvironment, { HOME: staging });
-    const argv = kind === "zip"
-      ? ["unzip", "-q", archiveFile, "-d", staging]
-      : ["tar", "-xzf", archiveFile, "-C", staging, "--no-same-owner"];
-    await runOrFail(argv, { cwd: staging, env, label: `Unpacking ${path.basename(archiveFile)}`, runCommand });
+    if (kind === "zip") {
+      await extractZip(archiveFile, staging);
+    } else {
+      const env = toolEnvironment(baseEnvironment, { HOME: staging });
+      await runOrFail(["tar", "-xzf", archiveFile, "-C", staging, "--no-same-owner"], { cwd: staging, env, label: `Unpacking ${path.basename(archiveFile)}`, runCommand });
+    }
     const source = path.join(staging, inner);
     if (!await exists(source)) throw toolchainError(`${path.basename(archiveFile)} has no ${inner} folder.`);
     await mkdir(path.dirname(destination), { recursive: true });
@@ -101,4 +149,4 @@ async function unpackInto(archiveFile, destination, { inner, kind, baseEnvironme
   }
 }
 
-export { downloadVerified, exists, runOrFail, toolEnvironment, toolchainError, unpackInto };
+export { downloadVerified, exists, extractZip, runOrFail, toolEnvironment, toolchainError, unpackInto };

@@ -3,9 +3,10 @@
 // downloads keep nothing that fails its pinned checksum.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readdir, stat } from "node:fs/promises";
+import { readFile, readdir, readlink, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
+import { deflateRawSync } from "node:zlib";
 
 import {
   androidSdkLicence,
@@ -13,7 +14,7 @@ import {
   installAndroidSdk,
   licenceFromRepository
 } from "../../packages/vibe64-packaging/src/server/toolchains/androidSdk.js";
-import { downloadVerified } from "../../packages/vibe64-packaging/src/server/toolchains/download.js";
+import { downloadVerified, extractZip } from "../../packages/vibe64-packaging/src/server/toolchains/download.js";
 import { describeJdk, findJdk } from "../../packages/vibe64-packaging/src/server/toolchains/jdk.js";
 import { fakeToolchains } from "./packagingAndroidTestTools.js";
 import { temporaryFolder } from "./packagingRegistryTestTools.js";
@@ -94,4 +95,65 @@ test("toolchain descriptions say what is missing", async (t) => {
   assert.equal((await describeAndroidSdk({ androidHome })).ok, true);
   const empty = await describeAndroidSdk({ androidHome: path.join(androidHome, "none") });
   assert.deepEqual(empty.missing, ["platforms;android-36", "build-tools;35.0.0"]);
+});
+
+// A minimal zip writer: [{ name, data, mode }] with deflate, as Google's archives use.
+function zipOf(entries) {
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+  for (const { name, data = "", mode = 0o100644 } of entries) {
+    const nameBytes = Buffer.from(name);
+    const raw = Buffer.from(data);
+    const body = name.endsWith("/") ? Buffer.alloc(0) : deflateRawSync(raw);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(8, 8);
+    local.writeUInt32LE(body.length, 18);
+    local.writeUInt32LE(raw.length, 22);
+    local.writeUInt16LE(nameBytes.length, 26);
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(0x0314, 4);
+    central.writeUInt16LE(8, 10);
+    central.writeUInt32LE(body.length, 20);
+    central.writeUInt32LE(raw.length, 24);
+    central.writeUInt16LE(nameBytes.length, 28);
+    central.writeUInt32LE((mode << 16) >>> 0, 38);
+    central.writeUInt32LE(offset, 42);
+    locals.push(local, nameBytes, body);
+    centrals.push(central, nameBytes);
+    offset += 30 + nameBytes.length + body.length;
+  }
+  const directory = Buffer.concat(centrals);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(directory.length, 12);
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, directory, end]);
+}
+
+test("zips unpack without a system unzip, keeping executable bits and inner links, and never outside", async (t) => {
+  const root = await temporaryFolder(t, "vibe64-zip-");
+  const archive = path.join(root, "tools.zip");
+  await writeFile(archive, zipOf([
+    { name: "cmdline-tools/", mode: 0o040755 },
+    { name: "cmdline-tools/bin/sdkmanager", data: "#!/bin/sh\necho sdk\n", mode: 0o100755 },
+    { name: "cmdline-tools/lib/README", data: "x".repeat(5000) },
+    { name: "cmdline-tools/bin/current", data: "sdkmanager", mode: 0o120777 }
+  ]));
+  const out = path.join(root, "out");
+  await extractZip(archive, out);
+  assert.equal(await readFile(path.join(out, "cmdline-tools", "bin", "sdkmanager"), "utf8"), "#!/bin/sh\necho sdk\n");
+  assert.equal((await stat(path.join(out, "cmdline-tools", "bin", "sdkmanager"))).mode & 0o777, 0o755);
+  assert.equal((await readFile(path.join(out, "cmdline-tools", "lib", "README"), "utf8")).length, 5000);
+  assert.equal(await readlink(path.join(out, "cmdline-tools", "bin", "current")), "sdkmanager");
+
+  for (const [name, entry] of [["escape.zip", { name: "../evil", data: "x" }], ["link.zip", { name: "evil", data: "/etc/passwd", mode: 0o120777 }]]) {
+    await writeFile(path.join(root, name), zipOf([entry]));
+    await assert.rejects(extractZip(path.join(root, name), path.join(root, `out-${name}`)), (error) => error.code === "VIBE64_PUBLISH_TOOLCHAIN_FAILED");
+  }
+  assert.equal(await stat(path.join(root, "evil")).catch(() => null), null);
 });
