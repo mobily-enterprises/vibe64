@@ -372,6 +372,11 @@ async function inspectVibe64Packaging(options = {}) {
   return vibe64PackagingInspection({ environment, section });
 }
 
+// Runs the project's own `## Verification` commands in projectRoot (a Git checkout).
+function verifyGenesisProject(options = {}) {
+  return runGenesisOperation(genesisCompiler.verify, options);
+}
+
 function inspectGenesisEnvironment(options = {}) {
   return exactGenesisInspection(inspectEnvironment, GENESIS_CONTRACTS.environment, options);
 }
@@ -574,6 +579,7 @@ export {
   inspectGenesisStackComponents,
   inspectVibe64Deployment,
   inspectVibe64Packaging,
+  verifyGenesisProject,
   inspectGenesisEnvironment,
   inspectVibe64Outputs,
   inspectVibe64ResourceEstimates,
