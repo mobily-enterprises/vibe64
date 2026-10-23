@@ -543,9 +543,10 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     remember();
     // A studio lesson docks its Lesson pane on the studio page showing a
     // stage frame, and shows it as a project pane while the learner is in its
-    // practice project; anything else goes to the lesson's home.
+    // practice project (not its Lesson finished screen: finishing archives
+    // that project); anything else goes to the lesson's home.
     const here = String(router?.currentRoute?.value?.path || "");
-    const inPractice = Boolean(value.practiceSlug) && projectSlugFromPathname(here) === value.practiceSlug;
+    const inPractice = !state.finished && Boolean(value.practiceSlug) && projectSlugFromPathname(here) === value.practiceSlug;
     const home = value.lessonStage === "project" ? learnHomePath(value)
       : layout?.value?.studio && here ? here : inPractice ? projectAppPath(value.practiceSlug) : learnHomePath(value);
     const target = `${home}?pane=lesson`;

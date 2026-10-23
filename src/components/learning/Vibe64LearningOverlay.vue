@@ -50,7 +50,9 @@ watch(() => [learning?.mode, route?.fullPath, learning?.state.modeBusy], (_value
   if (!target || target.path === route.path) return;
   const modeChanged = Boolean(previous?.[0]) && previous[0] !== learning.mode;
   if (target.note && !modeChanged) learning.showNotice(target.note);
-  void router.replace(target.path);
+  // A Lesson finished screen whose practice project it just archived goes on
+  // in the Lesson pane of the mode's home.
+  void router.replace(learning.state.finished && learning.mode?.on ? `${target.path}?pane=lesson` : target.path);
 }, { immediate: true });
 // A mode's note goes when L switches to the other mode.
 watch(() => learning?.mode?.on, (_on, wasOn) => {

@@ -258,6 +258,16 @@ describe("useVibe64Learning controller", () => {
     await flush();
     await practice.learning.openLesson();
     expect(deployRouter.push).toHaveBeenLastCalledWith("/app/project/training-abc?pane=lesson");
+    // Its Lesson finished screen, which archives that project, shows on the studio home instead.
+    const passed = ["quiz", "preview", "tick"].map(stepId => ({ stepId, outcome: "passed" }));
+    deployRoute.fullPath = deployRoute.path;
+    const done = controller({ router: deployRouter, layout: projectLayout, reads: () => lessonResult({ results: passed }),
+      mode: () => ({ ...LEARN, practiceSlug: "training-abc", lessonStage: "studio" }) });
+    done.learning.setViewer("member");
+    await flush();
+    await done.learning.showFinished();
+    expect(done.learning.finished).toBe(true);
+    expect(deployRouter.push).toHaveBeenLastCalledWith(`${LearningLib.VIBE64_LEARNING_PAGE_PATH}?pane=lesson`);
   });
 
   it("opens Courses on its lesson picker when L switches to Learn with no lesson in progress", async () => {
