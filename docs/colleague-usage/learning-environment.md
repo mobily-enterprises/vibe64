@@ -8,14 +8,11 @@ exactly the page you last had open in the other mode, also after a reload.
 ## Where the L button is
 
 - Home and project pages: the first button at the left of the header.
-- Hosted management pages (Projects, Users, AI Accounts and the other
-  management screens): the first control in the header, after the menu button.
 - It is the same size as the other header icon buttons (40px on a phone) and
   the first keyboard stop in the header; Enter or Space presses it.
 - Tooltips: **Switch to Learn** in Develop, **Back to Develop (your projects)**
   in Learn, where the L is solid yellow.
-- It appears only for a signed-in person. Hosted Vibe64 shows it after the
-  account prerequisites are complete.
+- It appears only for a signed-in person.
 
 ## Learn mode
 
@@ -29,8 +26,7 @@ which opens the Courses overlay, and your lesson's practice project.
 You have at most one lesson in progress. In Learn mode you are in your learning
 space only (see [Practice projects](learning-practice-projects.md)):
 
-- The lesson's practice project is the one project you can open. Hosted
-  project lists are empty. Opening any other project (for example from a saved
+- The lesson's practice project is the one project you can open. Opening any other project (for example from a saved
   address) takes you to the practice project with the note "You're in Learn
   mode. Press L to go back to your projects."
 - With no lesson in progress the page shows **No project selected** (below).
@@ -130,7 +126,6 @@ A local Vibe64 has no Projects page. Its `/` and `/app` addresses open Develop's
 place, the project Vibe64 was started in, or in Learn mode Learn's place (the
 lesson's practice project, or no project selected). `/app` does this without
 reloading the page. If no project was started, it says so with **Try again**.
-On hosted Vibe64 `/app` is the Projects page.
 
 An old `?mode=learning` address from the retired Learning mode opens the ordinary
 project page.
@@ -171,9 +166,6 @@ doesn't have is simply not there.
 - **Continue lesson** opens your lesson in progress in the Lesson pane.
 - If a start was not confirmed, **Retry lesson start** repeats the same request.
 - Without AI set up, a lesson waits for it: see `learning-mode-ui`.
-- On hosted Vibe64 the workspace owner also sees **Author trial** with
-  **Resume author trial**, which opens the admitted draft snapshot in the
-  Lesson pane (see the hosted author-trial guide).
 
 ## In progress and Archived
 
