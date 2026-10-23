@@ -41,6 +41,14 @@
       </v-btn>
     </v-sheet>
 
+    <Vibe64TeamAiGate
+      v-else-if="teamAiBlocked"
+      :checking="recovering"
+      :owner-name="teamAiOwnerName"
+      :projects-path="projectsPath"
+      @check="retryProject"
+    />
+
     <StudioErrorNotice
       v-else-if="displayError"
       title="Project could not load"
@@ -61,7 +69,7 @@
     </StudioErrorNotice>
 
     <v-skeleton-loader
-      v-if="!displayError && (selectionInitialLoading || !runtimeReady)"
+      v-if="!teamAiBlocked && !displayError && (selectionInitialLoading || !runtimeReady)"
       aria-label="Loading project"
       class="project-selection-gate__loading"
       type="article"
@@ -105,6 +113,27 @@
       </div>
 
       <div
+        v-if="teamAiOwnerPrompt"
+        class="project-selection-gate__team-ai"
+        role="status"
+        data-test="team-ai-owner-prompt"
+      >
+        <div class="project-selection-gate__team-ai-text">
+          <strong>Team members can't open projects yet</strong>
+          <span>Set up AI for team members so they can work here.</span>
+        </div>
+        <v-btn
+          color="primary"
+          variant="flat"
+          min-height="48"
+          data-test="team-ai-owner-setup"
+          @click="openTeamAiSetup"
+        >
+          Set up team AI
+        </v-btn>
+      </div>
+
+      <div
         v-if="projects.length"
         class="project-selection-gate__list"
       >
@@ -117,7 +146,18 @@
           variant="tonal"
           @click="handleSelectProject(project.slug)"
         >
-          <span>{{ project.slug }}</span>
+          <span class="project-selection-gate__project-name">
+            {{ project.slug }}
+            <v-chip
+              v-if="project.approvalsWaiting > 0"
+              color="warning"
+              size="small"
+              variant="tonal"
+              data-test="project-approvals-waiting"
+            >
+              {{ project.approvalsWaiting }} waiting
+            </v-chip>
+          </span>
           <span class="project-selection-gate__project-path">{{ project.path }}</span>
         </v-btn>
       </div>
@@ -153,6 +193,8 @@
 import { computed, onBeforeUnmount, ref } from "vue";
 import { useRouter } from "vue-router";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
+import Vibe64TeamAiGate from "@/components/studio/Vibe64TeamAiGate.vue";
+import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";
 import { useProjectSelectionGate } from "@/composables/useProjectSelectionGate.js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { VIBE64_LEARNING_MODE_NOTE } from "@/lib/vibe64Learning.js";
@@ -187,6 +229,7 @@ const props = defineProps({
   }
 });
 
+const PROJECTS_PATH = "/app/manage/projects";
 const emit = defineEmits(["missing", "ready", "error", "deleted", "retry-runtime"]);
 const router = useRouter();
 // Learn/Develop and Courses, where the deleted practice project's lesson remains (null without a host shell).
@@ -217,15 +260,25 @@ const {
   selectProject,
   selectingSlug,
   selectionInitialLoading,
-  selectionReady
+  selectionReady,
+  teamAiBlocked,
+  teamAiOwnerName,
+  teamAiOwnerPrompt
 } = useProjectSelectionGate(emit, {
   scopeSelectionToCurrentProject: props.scopeSelectionToCurrentProject
 });
 
 const learningModeNote = VIBE64_LEARNING_MODE_NOTE;
 const displayError = computed(() => recoveryError.value || errorMessage.value || props.runtimeError);
-const selectedSlotVisible = computed(() => hasSelection.value && !props.forcePicker && !practiceDeleted.value);
-const pickerVisible = computed(() => !practiceDeleted.value && !learningModeBlocked.value && selectionReady.value && (props.forcePicker || !hasSelection.value));
+const selectedSlotVisible = computed(() => hasSelection.value && !props.forcePicker && !practiceDeleted.value && !teamAiBlocked.value);
+const pickerVisible = computed(() => !practiceDeleted.value && !learningModeBlocked.value && !teamAiBlocked.value &&
+  selectionReady.value && (props.forcePicker || !hasSelection.value));
+// The host's project list, where it has one.
+const projectsPath = router.resolve(PROJECTS_PATH).matched.length ? PROJECTS_PATH : "";
+
+function openTeamAiSetup() {
+  requestVibe64AccountConnectionsDialog({ providerId: "ai", section: "team" });
+}
 
 function openCourses() {
   return learning?.openCourses();
@@ -243,7 +296,7 @@ async function retryProject() {
       return;
     }
     await loadProjectSelection();
-    if (!disposed && !errorMessage.value && !props.runtimeReady) {
+    if (!disposed && !errorMessage.value && !teamAiBlocked.value && !props.runtimeReady) {
       emit("retry-runtime");
     }
   } catch (error) {
@@ -297,6 +350,35 @@ async function handleCreateProject() {
   gap: 0.5rem 0.75rem;
   justify-content: space-between;
   padding: 0.5rem 0.75rem;
+}
+
+.project-selection-gate__team-ai {
+  align-items: center;
+  background: rgb(var(--v-theme-warning-container));
+  border: 1px solid rgba(var(--v-theme-warning), 0.35);
+  border-radius: 0.5rem;
+  color: rgb(var(--v-theme-on-warning-container));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+}
+
+.project-selection-gate__team-ai-text {
+  display: grid;
+  gap: 0.15rem;
+  min-width: min(100%, 16rem);
+}
+
+.project-selection-gate__team-ai-text span {
+  opacity: 0.8;
+}
+
+.project-selection-gate__project-name {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.5rem;
 }
 
 .project-selection-gate__deleted-text {
@@ -388,6 +470,10 @@ async function handleCreateProject() {
 @media (max-width: 640px) {
   .project-selection-gate__create {
     grid-template-columns: 1fr;
+  }
+
+  .project-selection-gate__team-ai .v-btn {
+    width: 100%;
   }
 }
 </style>

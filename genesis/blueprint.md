@@ -1136,6 +1136,12 @@ Codex account shows its ChatGPT email when available; API-key access
 does not invent an account identity. Connected accounts offer Disconnect.
 Account setup keeps its title, connection status and Refresh action in one
 wrapping header row.
+Team members work on the owner's team setup, never on a personal plan, so a
+team member opens no project (practice projects included) until that setup has
+a Workspace-use model. They see "Team AI isn't set up yet" naming the owner,
+with Check again; the owner, who is never blocked, sees "Team members can't
+open projects yet" with Set up team AI in their project list. Local Vibe64 has
+only its owner and never shows either.
 Codex connections remain usable when a successful native login omits OpenAI's
 account identifier. Vibe64 tracks each successful sign-in separately, preserves
 that local identity across restarts and token refreshes, and retires earlier

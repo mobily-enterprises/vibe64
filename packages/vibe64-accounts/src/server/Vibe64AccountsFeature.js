@@ -9,6 +9,7 @@ import {
 import { registerRoutes } from "./registerRoutes.js";
 import { createAiConnectionRuntime, configureAiConnectionRuntime } from "./aiConnectionRuntime.js";
 import { createAiConnectionService } from "./aiConnectionService.js";
+import { createTeamAiReadiness } from "./teamAiReadiness.js";
 import {
   createAccountsRuntime,
   createService,
@@ -32,6 +33,8 @@ import {
 import {
   getStudioProjectContext
 } from "@local/vibe64-core/server/studioProjectContext";
+import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
+import { registerTeamAiReadiness } from "@local/vibe64-core/server/teamAiGate";
 
 function createDefaultAccountRuntime({
   accountRuntime = null,
@@ -177,6 +180,20 @@ const Vibe64AccountsFeature = defineFeature({
       accounts, project,
       listAssistantCapabilities
     });
+
+    // Project admission's team AI gate reads the team setup through live access.
+    if (resolvedAccountRuntime.systemRoot && typeof terminals?.requireAssistantSelectionAccess === "function") {
+      const teamAi = createTeamAiReadiness({
+        readRoutingConfiguration: () => createAssistantRoutingStore({ systemRoot: resolvedAccountRuntime.systemRoot }).read(),
+        readSelectionAccess: (selection, options) => terminals.requireAssistantSelectionAccess(selection, options)
+      });
+      registerTeamAiReadiness(teamAi.ready);
+      events.register({
+        id: "vibe64.accounts.team-ai-readiness",
+        matches: (event) => event?.source === "vibe64" && ["account", "connection"].includes(event.entity),
+        handle: () => teamAi.invalidate()
+      });
+    }
 
     if (typeof terminals?.configureAssistantRuntime === "function") {
       terminals.configureAssistantRuntime({

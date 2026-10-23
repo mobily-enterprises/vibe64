@@ -27,6 +27,8 @@ import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 const cachedProjectSelections = new Map();
 // The server's not-found code for a practice project deleted while its page is open.
 const PRACTICE_PROJECT_DELETED_CODE = "vibe64_practice_project_deleted";
+// The server's refusal for a team member while the team AI setup has no Workspace-use model.
+const TEAM_AI_REQUIRED_CODE = "vibe64_team_ai_required";
 
 function useProjectSelectionGate(emit, {
   scopeSelectionToCurrentProject = false
@@ -127,11 +129,22 @@ function useProjectSelectionGate(emit, {
   const learningModeMessage = computed(() => learningModeBlocked.value
     ? String(selectionResource.query.error.value.message || "") : "");
 
+  // A team member's project waits for the owner's team AI setup.
+  const teamAiBlocked = computed(() =>
+    selectionResource.query?.error?.value?.code === TEAM_AI_REQUIRED_CODE);
+  const teamAiOwnerName = computed(() => teamAiBlocked.value
+    ? String(selectionResource.query.error.value.details?.ownerName || "") : "");
+
   const cachedProjectSelection = computed(() => cachedProjectSelections.get(projectSlug.value) || null);
   const projectSelection = computed(() => projectSelectionView.record || cachedProjectSelection.value || {});
   const projects = computed(() => Array.isArray(projectSelection.value.projects) ? projectSelection.value.projects : []);
   const projectsRoot = computed(() => String(projectSelection.value.projectsRoot || "~/vibe64"));
   const hasSelection = computed(() => projectSelection.value.hasSelection === true);
+  // The owner's list: team members exist and cannot open projects yet.
+  const teamAiOwnerPrompt = computed(() => {
+    const teamAi = projectSelection.value.teamAi;
+    return teamAi?.available === true && teamAi.memberCount > 0 && teamAi.ready !== true;
+  });
   const selectionReady = computed(() => Boolean(projectSelectionView.record || cachedProjectSelection.value));
   const selectionInitialLoading = computed(() => Boolean(
     projectSelectionView.isInitialLoading && !selectionReady.value
@@ -147,15 +160,15 @@ function useProjectSelectionGate(emit, {
     return "";
   });
   const errorMessage = computed(() => String(
-    (learningModeBlocked.value ? "" : projectSelectionView.loadError) ||
+    (learningModeBlocked.value || teamAiBlocked.value ? "" : projectSelectionView.loadError) ||
     saveError.value ||
     ""
   ));
   const practiceDeleted = computed(() => scopeSelectionToCurrentProject &&
     selectionResource.query?.error?.value?.code === PRACTICE_PROJECT_DELETED_CODE);
 
-  watch([projectSelection, errorMessage, practiceDeleted, learningModeBlocked], ([selection, error, deleted, blocked]) => {
-    if (blocked) return;
+  watch([projectSelection, errorMessage, practiceDeleted, learningModeBlocked, teamAiBlocked], ([selection, error, deleted, blocked, teamBlocked]) => {
+    if (blocked || teamBlocked) return;
     if (deleted) {
       // The open practice project was deleted: no cached selection reopens it.
       cachedProjectSelections.delete(projectSlug.value);
@@ -197,7 +210,10 @@ function useProjectSelectionGate(emit, {
     selectProject,
     selectingSlug,
     selectionInitialLoading,
-    selectionReady
+    selectionReady,
+    teamAiBlocked,
+    teamAiOwnerName,
+    teamAiOwnerPrompt
   };
 
   // Any other request of the open page (sessions, chat, files) that is refused
@@ -288,6 +304,7 @@ function projectSelectionGateQueryKey({
 
 export {
   PRACTICE_PROJECT_DELETED_CODE,
+  TEAM_AI_REQUIRED_CODE,
   isPracticeNoticeForProject,
   projectSelectionGateEndpoint,
   projectSelectionGateQueryKey,

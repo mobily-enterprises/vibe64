@@ -8,6 +8,8 @@ import { githubPullRequests, pullRequestSessionSource, preparePullRequestSource,
 import { localRepositoryRemote } from "./localRepositoryRemote.js";
 import { repositoryBranches } from "./repositoryBranches.js";
 import { readProjectRepositoryWorkflow, saveProjectRepositoryWorkflow } from "@local/vibe64-core/server/projectRepository";
+import { readTeamAiReady } from "@local/vibe64-core/server/teamAiGate";
+import { readWorkspaceTeam } from "@local/vibe64-core/server/workspaceTeam";
 
 import {
   Vibe64SessionRuntime
@@ -1346,8 +1348,14 @@ function createService({
       return currentDevelopmentDatabasePolicy(input);
     },
 
-    async listProjects() {
-      return projectResult(() => listProjectsState());
+    async listProjects({ actor = null } = {}) {
+      return projectResult(async () => {
+        const listed = await listProjectsState();
+        if (actor?.role !== "owner") return listed;
+        // The owner's list says when team members are waiting for team AI.
+        const team = await readWorkspaceTeam();
+        return { ...listed, teamAi: { ...team, ready: team.available && await readTeamAiReady({ actor }) } };
+      });
     },
 
     async managedDevelopmentDatabaseDefaults(input = {}) {

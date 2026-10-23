@@ -32,6 +32,12 @@ workspace.
 - `packages/vibe64-core/src/server/projectRequestContext.js`
 - `packages/vibe64-core/src/server/actionContext.js`
 - `packages/vibe64-core/src/server/learningMode.js`
+- `packages/vibe64-core/src/server/teamAiGate.js`
+- `packages/vibe64-accounts/src/server/teamAiReadiness.js`
+- `src/components/studio/Vibe64TeamAiGate.vue`
+- `tests/server/teamAiGate.unit.test.js`
+- `tests/client/projectSelectionGate.vitest.js`
+- `docs/colleague-usage/team-ai-access.md`
 - `tests/server/vibe64ActionContext.unit.test.js`
 - `tests/server/vibe64ProjectActions.unit.test.js`
 - `packages/vibe64-training/src/server/learnerState.js`
@@ -317,6 +323,28 @@ Develop; without a registered reader nothing is limited; internal work is never
 limited. Callers without admission (Colleague's pre-check, `projects.select`)
 treat only the mode's current `practiceSlug` as practice. In Learn,
 `vibe64.project.projects.create` is refused with the Learn reason.
+
+A team member also needs team AI: after the mode, `resolveProjectRequestContext`
+calls core `teamAiGate.js` (`assertTeamAiAllowsProject`) for both the practice
+and catalogue paths, the one project-admission check. A person's request from a
+non-owner is refused with `vibe64_team_ai_required` (403, "Ask {owner} to set up
+AI for team members.", `ownerName` and `details.ownerName` from the host's
+workspace team reader, "the workspace owner" without a name) until the team
+setup has a Workspace-use model. Accounts registers the one readiness reader
+(`teamAiReadiness.js`): some team role, after one level of Same as, is a
+selection whose live access (the terminals selection-access reader) is
+available and not personal; the answer is kept per routing revision until an
+accounts or connections change event. The owner, local mode (no person), internal
+work and hosts without a registered reader are never gated. Feature routes carry
+the code and `details`. The owner's `projects.list` adds `teamAi`
+(`available`, `ownerName`, `memberCount`, `ready`). `useProjectSelectionGate`
+exposes `teamAiBlocked`, `teamAiOwnerName` and `teamAiOwnerPrompt`;
+`ProjectSelectionGate.vue` shows `Vibe64TeamAiGate.vue` ("Team AI isn't set up
+yet", Check again re-reads the selection, Back to projects only where the host
+routes `/app/manage/projects`) in place of the project and of a load error, the
+owner prompt "Team members can't open projects yet" with Set up team AI (opens
+AI Accounts at `section: "team"`) above the picker's list, and a project row's
+`approvalsWaiting` as "N waiting".
 
 People see a practice project by its lesson, never its `training-<practice ID>`
 slug, which stays the address. The client `vibe64PracticeProjectName.js`

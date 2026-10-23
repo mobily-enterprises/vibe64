@@ -16,6 +16,7 @@ import {
   practiceProjectDeletedError
 } from "./learningSpace.js";
 import { assertLearningModeAllowsProject, LEARNING_MODE_PROJECT_CODE } from "./learningMode.js";
+import { assertTeamAiAllowsProject, TEAM_AI_REQUIRED_CODE } from "./teamAiGate.js";
 
 const VIBE64_PROJECT_ROUTE_BASE = "/app/:slug";
 const projectContextStorage = new AsyncLocalStorage();
@@ -48,9 +49,13 @@ async function resolveProjectRequestContext({
   // A person's own page or session request (HTTP or WebSocket, which carry
   // headers) opens only the projects of their mode, once admission has said
   // whether the slug is one of their practice projects: Learn opens only
-  // those, Develop refuses them. Internal work is never limited.
-  const assertMode = isPractice => request?.headers
-    ? assertLearningModeAllowsProject({ actor: vibe64User, slug, request, practice: isPractice }) : null;
+  // those, Develop refuses them. A team member also needs the team AI setup.
+  // Internal work is never limited.
+  const assertMode = async isPractice => {
+    if (!request?.headers) return;
+    await assertLearningModeAllowsProject({ actor: vibe64User, slug, request, practice: isPractice });
+    await assertTeamAiAllowsProject({ actor: vibe64User, request });
+  };
   const practice = resolvedProjectContext.currentPracticeProjectScope?.();
   if (practice) {
     if (slug !== practice.slug) {
@@ -325,7 +330,7 @@ function projectRequestErrorStatusCode(error = {}) {
   if (error?.code === "vibe64_project_route_unavailable") {
     return 404;
   }
-  if (error?.code === LEARNING_MODE_PROJECT_CODE) {
+  if (error?.code === LEARNING_MODE_PROJECT_CODE || error?.code === TEAM_AI_REQUIRED_CODE) {
     return 403;
   }
   if (error?.code === "vibe64_project_path_not_accessible" || error?.code === PRACTICE_PROJECT_DELETED_CODE) {

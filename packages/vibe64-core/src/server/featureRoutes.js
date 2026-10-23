@@ -13,6 +13,7 @@ import {
 } from "./projectRequestContext.js";
 import { PRACTICE_PROJECT_DELETED_CODE } from "./learningSpace.js";
 import { LEARNING_MODE_PROJECT_CODE } from "./learningMode.js";
+import { TEAM_AI_REQUIRED_CODE } from "./teamAiGate.js";
 
 function createVibe64FeatureRoutes(
   http,
@@ -79,6 +80,7 @@ function createVibe64FeatureRoutes(
             return reply.code(projectRequestErrorStatusCode(error)).send({
               ok: false,
               code: error?.code || "vibe64_project_request_failed",
+              ...(error?.details && typeof error.details === "object" ? { details: error.details } : {}),
               errors: [
                 {
                   code: error?.code || "vibe64_project_request_failed",
@@ -114,6 +116,7 @@ function isProjectRequestError(error = {}) {
     "vibe64_project_path_not_accessible",
     PRACTICE_PROJECT_DELETED_CODE,
     LEARNING_MODE_PROJECT_CODE,
+    TEAM_AI_REQUIRED_CODE,
     "vibe64_project_path_not_directory",
     "vibe64_project_path_symlink"
   ].includes(error?.code);

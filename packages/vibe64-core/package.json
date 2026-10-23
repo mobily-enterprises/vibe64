@@ -48,6 +48,7 @@
     "./shared": "./src/shared/index.js",
     "./server/assistantRoutingStore": "./src/server/assistantRoutingStore.js",
     "./server/workspaceTeam": "./src/server/workspaceTeam.js",
+    "./server/teamAiGate": "./src/server/teamAiGate.js",
     "./shared/curatedCodexProviders": "./src/shared/curatedCodexProviders.js",
     "./server/codexProviderConnections": "./src/server/codexProviderConnections.js",
     "./server/stateUpgrades/routingV2Format": "./src/server/stateUpgrades/routingV2Format.js",

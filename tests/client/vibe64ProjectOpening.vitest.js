@@ -36,7 +36,7 @@ vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
 vi.mock("@/composables/useProjectSelectionGate.js", () => ({
   useProjectSelectionGate: () => ({
     busy: Vue.ref(false), creating: Vue.ref(false), errorMessage: Vue.ref(""),
-    hasSelection: Vue.ref(true), practiceDeleted: Vue.ref(false), projectSelection: Vue.ref({ hasSelection: true }),
+    hasSelection: Vue.ref(true), practiceDeleted: Vue.ref(false), teamAiBlocked: Vue.ref(false), projectSelection: Vue.ref({ hasSelection: true }),
     projects: Vue.ref([]), projectsRoot: Vue.ref("/projects"), newProjectName: Vue.ref(""),
     selectingSlug: Vue.ref(""), selectionInitialLoading: Vue.ref(false), selectionReady: Vue.ref(true),
     loadProjectSelection: mocks.selectionReload
