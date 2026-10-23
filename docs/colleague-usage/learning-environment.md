@@ -124,8 +124,7 @@ sessions. It is used in two cases:
 AI, Colleague, **L**). It starts like any other lesson: it switches you to
 Learn, the lesson already in progress just opens, and another lesson in
 progress asks **Archive your lesson in progress?** first. With no installed
-course naming one, Courses opens instead with "There is no tour to take here
-yet." The end of first-time AI setup offers the same tour once.
+course naming one that you may start, Courses opens instead. The end of first-time AI setup offers the same tour once.
 
 A local Vibe64 has no Projects page. Its `/` and `/app` addresses open Develop's
 place, the project Vibe64 was started in, or in Learn mode Learn's place (the

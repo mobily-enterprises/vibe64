@@ -97,7 +97,7 @@ useRealtimeEvent({
 
 // Take the tour: read the courses and saved lessons afresh, then start the
 // orientation lesson through the ordinary start; with none to start here,
-// Courses opens instead, where a course can be installed.
+// Courses opens instead, where a course can be installed or started.
 let orientationRun = false;
 watch(orientationRequested, value => { if (value) void takeOrientation(); }, { immediate: true });
 async function takeOrientation() {
@@ -106,11 +106,9 @@ async function takeOrientation() {
   try {
     await courses.refresh();
     const selection = orientationSelection(courses.coursesResource.data.value, courses.learningResource.data.value);
+    // Courses itself says what can be installed or started (its notices sit below it).
     if (selection) await learning.startLesson(selection, courses.startLesson);
-    else {
-      learning.show({ surface: "courses" });
-      learning.showNotice("There is no tour to take here yet. Courses shows the courses you can install or start.");
-    }
+    else await learning.show({ surface: "courses" });
   } catch (cause) {
     learning.showNotice(String(cause?.message || "The tour did not start. Try again from Courses."));
   } finally {

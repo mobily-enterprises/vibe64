@@ -320,5 +320,5 @@ picks the start with `orientationSelection` (an enabled course this person may
 start whose orientation is published, released courses first) and starts it
 through `startLesson`, so the lesson in progress opens as it is and another
 one asks to be archived first; the request lasts until that confirmation is
-answered. With nothing to start, Courses opens with a notice. Nothing
+answered. With nothing to start, Courses opens instead. Nothing
 records that a tour was taken beyond the lesson's own progress.
