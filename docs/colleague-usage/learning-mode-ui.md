@@ -53,7 +53,7 @@ official catalogue's topics and courses with **Install**; an installed course
 with a newer release shows **Update available** and **Update** (see
 [Installing and updating Learning courses](learning-course-catalogue.md)).
 
-A lesson without a practice project opens on the Learn page (at `/app/learning`) with no project
+A studio lesson (taught outside any project) opens on the Learn page (at `/app/learning`) with no project
 selected: the lesson's own **Lesson** pane fills the page beside Colleague,
 with no pane switches, no chat column and no sessions (see the shared guide's
 *The Lesson pane*). Your own projects stay hidden until you

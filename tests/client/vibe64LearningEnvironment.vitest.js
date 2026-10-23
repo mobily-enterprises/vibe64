@@ -41,7 +41,7 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 // Mode, saved-progress and practice-list requests are answered apart; mode requests are recorded in modeCalls.
-const LEARN = Object.freeze({ on: true, currentAttemptId: ATTEMPT, lessonCode: "V64-START-01", lessonTitle: "Orientation", practiceSlug: "practice-one" });
+const LEARN = Object.freeze({ on: true, currentAttemptId: ATTEMPT, lessonCode: "V64-START-01", lessonTitle: "Orientation", practiceSlug: "practice-one", lessonStage: "project" });
 function controller({ reads = () => lessonResult(), posts = () => ({ ok: true }), mode = () => LEARN,
   practice = () => ({ ok: true, current: null, archived: [] }), ...options } = {}) {
   const calls = [];
@@ -237,6 +237,16 @@ describe("useVibe64Learning controller", () => {
     await flush();
     await plain.learning.openLesson();
     expect(router.push).toHaveBeenLastCalledWith(`${LearningLib.VIBE64_LEARNING_PAGE_PATH}?pane=lesson`);
+    // A studio lesson docks its Lesson pane on the studio page showing a stage frame.
+    const studioRoute = { path: "/app/studio-page", fullPath: "/app/studio-page" };
+    const studioRouter = { currentRoute: { value: studioRoute }, push: vi.fn(async target => { studioRoute.fullPath = target; }) };
+    const layout = Vue.shallowRef({ studio: true, projectSlug: "", lessonPane: false });
+    const studio = controller({ router: studioRouter, layout, mode: () => ({ ...LEARN, practiceSlug: "", lessonStage: "studio" }) });
+    studio.learning.setViewer("member");
+    await flush();
+    expect(studio.learning.lessonSwitchable, "a studio stage frame offers Lesson").toBe(true);
+    await studio.learning.openLesson();
+    expect(studioRouter.push).toHaveBeenLastCalledWith("/app/studio-page?pane=lesson");
   });
 
   it("opens Courses on its lesson picker when L switches to Learn with no lesson in progress", async () => {
@@ -279,6 +289,18 @@ describe("useVibe64Learning controller", () => {
     expect(modeRedirect({ mode: develop, slug: "training-0123" }), "the server decides any other training project").toBeNull();
     expect(modeRedirect({ mode: develop, path: `${VIBE64_LEARNING_PAGE_PATH}/` })).toEqual({ path: "/app", note: "" });
     expect(modeRedirect({ mode: null, slug: "my-shop" })).toBeNull();
+    // The lesson's stage, not the presence of a practice project, decides its home.
+    const studio = { ...learn, lessonStage: "studio" };
+    expect(modeRedirect({ mode: studio, path: VIBE64_LEARNING_PAGE_PATH }), "a studio lesson stays on the studio home").toBeNull();
+    expect(modeRedirect({ mode: studio, slug: "my-shop" })).toEqual({ path: VIBE64_LEARNING_PAGE_PATH, note: VIBE64_LEARNING_MODE_NOTE });
+    // A host with its own studio pages sets its studio home; /app/learning then sends Learn there.
+    LearningLib.setLearningStudioHome("/app/studio-test");
+    try {
+      expect(modeRedirect({ mode: studio, path: VIBE64_LEARNING_PAGE_PATH })).toEqual({ path: "/app/studio-test", note: "" });
+      expect(modeRedirect({ mode: studio, path: "/app/studio-test/other" })).toBeNull();
+      expect(modeRedirect({ mode: noProject, slug: "my-shop" })).toEqual({ path: "/app/studio-test", note: VIBE64_LEARNING_MODE_NOTE });
+    } finally { LearningLib.setLearningStudioHome(VIBE64_LEARNING_PAGE_PATH); }
+    expect(() => LearningLib.setLearningStudioHome("https://example.com")).toThrow("not an /app page");
   });
 
   it("asks once before a start archives a different lesson in progress: confirm starts with archiveCurrent, cancel keeps it", async () => {
@@ -659,7 +681,7 @@ describe("useVibe64Learning controller", () => {
     expect(showMeCommand({ target: "learning", navigate: true }, { projectSlug: "practice-one" }).projectSlug).toBeUndefined();
     expect(showMeCommand({ target: "files", navigate: true, filePath: "src/app.js" }, { projectSlug: "p" })).toMatchObject({
       projectSlug: "p", pane: "files", guide: { filePath: "src/app.js", caption: "Dashboard → Files → src/app.js" } });
-    expect(() => showMeCommand({ target: "nowhere" })).toThrow("declared Vibe64 guide places");
+    expect(() => showMeCommand({ target: "nowhere" })).toThrow("this installation's guide places");
   });
 
   it("reads, saves and clears the learner's teacher notes against the shown revision, keeping a retry's request ID", async () => {
@@ -1142,7 +1164,7 @@ describe("Courses overlay", () => {
       expect(byTest(root, "learning-mode-notice").props["model-value"]).toBe(true);
       // A move after a mode change gets no note.
       learning.clearNotice();
-      mode = { on: false, currentAttemptId: ATTEMPT, lessonCode: "V64-START-01", lessonTitle: "Orientation", practiceSlug: "training-1111" };
+      mode = { on: false, currentAttemptId: ATTEMPT, lessonCode: "V64-START-01", lessonTitle: "Orientation", practiceSlug: "training-1111", lessonStage: "project" };
       await learning.readLearningMode();
       await flush();
       expect(replace).toHaveBeenLastCalledWith("/app");

@@ -15,7 +15,7 @@ import ProjectSelectionGate from "@/components/studio/ProjectSelectionGate.vue";
 import Vibe64AuthSettingsButton from "@/components/studio/Vibe64AuthSettingsButton.vue";
 import Vibe64LocalRemoteControls from "@/components/studio/repository/Vibe64LocalRemoteControls.vue";
 import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
-import Vibe64LearningStepBar from "@/components/learning/Vibe64LearningStepBar.vue";
+import Vibe64LearningStage from "@/components/learning/Vibe64LearningStage.vue";
 import Vibe64NoProjectPane from "@/components/learning/Vibe64NoProjectPane.vue";
 import Vibe64LearningCoursesItem from "@/components/learning/Vibe64LearningCoursesItem.vue";
 import { useVibe64AppPage } from "@/composables/useVibe64AppPage.js";
@@ -209,7 +209,7 @@ const {
       </v-alert>
 
       <!-- The current lesson's steps, in Learn mode. -->
-      <Vibe64LearningStepBar />
+      <Vibe64LearningStage />
       <!-- No slug: Learn mode without a practice project (/app/learning). -->
       <Vibe64NoProjectPane
         v-if="!projectSlug"

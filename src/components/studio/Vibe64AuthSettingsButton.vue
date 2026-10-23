@@ -16,12 +16,14 @@
           type="button"
           variant="tonal"
           aria-label="Account menu"
+          data-vibe64-guide="account-menu"
         />
       </template>
       <v-list class="vibe64-auth-settings__menu" density="comfortable">
         <v-list-item
           :prepend-icon="mdiAccountCogOutline"
           title="Account settings"
+          data-vibe64-guide="account-settings"
           @click="openDialog()"
         />
         <v-list-item

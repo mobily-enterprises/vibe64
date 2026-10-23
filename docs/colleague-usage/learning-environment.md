@@ -34,8 +34,8 @@ space only (see [Practice projects](learning-practice-projects.md)):
   address) takes you to the practice project with the note "You're in Learn
   mode. Press L to go back to your projects."
 - With no lesson in progress the page shows **No project selected** (below).
-  A lesson without a practice project shows the lesson
-  itself on that page (see [The Lesson pane](#the-lesson-pane)).
+  A studio lesson (one taught outside any project, with no practice project)
+  shows the lesson itself on that page (see [The Lesson pane](#the-lesson-pane)).
 - Nothing inside the lesson's practice project is limited: Preview, Files,
   Database, coding chats and Colleague all work. Account settings and AI
   Accounts stay available, so you can connect an AI during a lesson.
@@ -114,7 +114,7 @@ sessions. It is used in two cases:
   is in the chat column, which a phone shows first; on a desktop the chat
   column says your teacher will chat there once a lesson starts. The
   Dashboard says **No lesson in progress** with the same button.
-- **A lesson without a practice project**. The page shows
+- **A studio lesson**, taught outside any project. The page shows
   the lesson in its Lesson pane, with no chat column, and a **Dashboard**
   switch whose page says **No project selected** (see
   [The Lesson pane](#the-lesson-pane)). **L** only switches mode.
@@ -332,7 +332,8 @@ attempt.
 ## What Colleague can do
 
 Colleague can explain these controls, show your current step in the Lesson pane,
-open or close the Courses overlay, point at the L button, and teach a step when you press **Teach me** or
+open or close the Courses overlay, point at or open a real place (the L button,
+a Dashboard section, your account menu and more), and teach a step when you press **Teach me** or
 ask. In Learn mode it opens and works only in the lesson's practice project;
 when you ask for another project it says you're in Learn mode and that **L**
 goes back to your projects. It switches mode, restarts or archives a lesson

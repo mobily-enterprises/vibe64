@@ -31,7 +31,8 @@ controller itself is described in [Learning environment (L)](learning-environmen
 - Main: `packages/vibe64-training/src/client/TrainingLessonPicker.vue`
 - `packages/vibe64-training/src/client/trainingGuide.js`
 - `packages/vibe64-training/src/client/TrainingGuideOverlay.vue`
-- `packages/vibe64-training/src/shared/guideTargets.js`
+- `packages/vibe64-training/src/shared/learningVocabulary.js`
+- `src/components/learning/Vibe64LearningStage.vue`
 - `packages/vibe64-training/src/server/visualResourceActions.js`
 - `packages/vibe64-training/src/server/visualResourceRoutes.js`
 - `packages/vibe64-training/src/server/registerRoutes.js`
@@ -218,11 +219,20 @@ learner's.
 
 ## Teacher guide overlay
 
-Colleague's `navigation.open` and `navigation.open-learning` guides use one
-closed product list of real places (`guideTargets.js`): `preview`, `dashboard`,
-`database-erd`, `database-data`, `files` (optional relative `filePath` without
-`..`), `changes`, `git-log`, `session-info`, `architecture` and `learning`. The
-older `workspace-preview` and `workspace-erd` names remain aliases. Each place is
+Colleague's one `navigation.guide` action points at, or opens, a place of the
+learning vocabulary (`learningVocabulary.js`). Its built-in places are public's
+own: project places (`preview`, `dashboard`, `database-erd`, `database-data`,
+`files` with an optional relative `filePath` without `..`, `changes`,
+`git-log`, `session-info`, `architecture`, `chat`, `save`, `reload-preview`)
+and studio places (`learning`, `lesson`, `lesson-bar`, `courses`, `colleague`,
+`account-menu`, `account-settings`, `ai-setup`). Each place has a `scope`
+(`project` or `studio`), how it `open`s (a project pane, a host route,
+Learning, or not at all: point-only), how the page focus shows it, and `who`
+may be shown it (`everyone` or the workspace `owner`). A host registers its
+own places, activities and fact names with `registerLearningVocabulary`; a
+name keeps one meaning. A project place opens in the project and session the
+initiating browser has open; a route place opens at its route, acknowledged by
+the browser's focus `route`. Each place is
 a path of `data-vibe64-guide` ids on existing controls: the project page's
 Preview/Dash tabs, the step bar's Lesson button, the L button, the real Dashboard section items
 (`guideId` in `vibe64SessionToolDefinitions.js`), the Database
@@ -281,3 +291,21 @@ Evidence: `tests/server/vibe64LearningDashboardRoutes.unit.test.js` (no Dashboar
 action declares lesson access; no lesson URLs), `vibe64TrainingCodePracticals`
 (ledgered save through the owner) and `vibe64TrainingLearnerState` (ordinary
 practice session after the lesson ends).
+
+## Lesson stage
+
+A format-3 lesson declares its `stage`: `project` (in its practice project)
+or `studio` (on the screens outside any project). Learn mode's home follows
+it (`learnHomePath`): a project lesson's practice project, else the host's
+studio home, `/app/learning` here; a host with its own studio pages sets its
+own with `setLearningStudioHome`. The learning-mode read carries the current
+lesson's `lessonStage`. `Vibe64LearningStage.vue` is the one stage frame: a
+project shell mounts it bare (the step bar; its Lesson pane is a project
+pane), and a studio page wraps its content in it with `studio`, so the step
+bar's Lesson button docks the same Lesson pane beside the page
+(`?pane=lesson`, over it on a phone) with a close button, and the frame owns
+the Colleague layout while it shows. A step is available here when every
+place, activity and fact it names is registered and its places are open to
+the viewer; lesson.read leaves the others out and completion counts only the
+available required steps. Starting a lesson needs format 3 and at least its
+available required steps.
