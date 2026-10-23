@@ -1071,9 +1071,16 @@ is owner-only, its compatible shared fallback supplies chat, Auto, review and
 helpers, including database and source explanations and prompt hints. Each
 operation resolves access for its requesting person before using credentials.
 Model capability and connection failures remain specific to that operation.
-Non-owners cannot steer an active turn using an owner-only connection. The
-composer becomes available when that turn finishes, preserving its draft and
-attachments. There is no prompt-proposal queue or owner-approval interface.
+Main chat always runs on the owner's setup, so a team member's Main chat
+message waits in Messages for approval above the composer instead of being sent:
+text only, at most five waiting per person per chat. The sender can edit or
+withdraw it; the owner approves it, optionally edited, or declines it with an
+optional note. An approved message is delivered exactly as the owner's own send:
+a new request when idle, guidance for a running turn that accepts it, otherwise
+back to waiting with the error. The delivered message names its sender and
+approver. Owners see a waiting count on the chat header, the browser title and
+project rows, and a snackbar with Review for each new message. Approving,
+declining, editing and withdrawing are human-only.
 A migrated AI request with no recorded submitter cannot borrow the current
 viewer's identity on Retry; cancel it and send a new request.
 Prompt hints use the actor's effective Helper independently of the connection

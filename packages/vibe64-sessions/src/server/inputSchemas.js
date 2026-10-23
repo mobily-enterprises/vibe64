@@ -162,6 +162,19 @@ const agentMessageActionInputValidator = requiredInputSchema({
   }
 });
 
+const mainChatApprovalFields = {
+  expectedRevision: { type: "integer", min: 1, required: true },
+  text: { ...agentMessageFields.message, required: false },
+  note: { type: "string", noTrim: false, maxLength: 500, required: false }
+};
+const mainChatApprovalInputValidator = patchSchema(mainChatApprovalFields);
+const mainChatApprovalActionInputValidator = requiredInputSchema({
+  ...mainChatApprovalFields,
+  ...optionalUser,
+  sessionId: { type: "string", noTrim: false, minLength: 1, required: true },
+  approvalId: { type: "string", noTrim: false, minLength: 8, maxLength: 128, pattern: /^[A-Za-z0-9_-]+$/u, required: true }
+});
+
 const assistantAccessActionInputValidator = patchSchema({
   ...optionalUser,
   sessionId: {
@@ -689,6 +702,8 @@ export {
   SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS,
   agentMessageActionInputValidator,
   agentMessageInputValidator,
+  mainChatApprovalActionInputValidator,
+  mainChatApprovalInputValidator,
   assistantCapabilitiesInputValidator,
   assistantModelAccessUpdateActionInputValidator,
   assistantModelAccessUpdateInputValidator,

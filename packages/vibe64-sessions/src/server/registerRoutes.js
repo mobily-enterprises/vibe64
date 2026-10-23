@@ -1,4 +1,9 @@
 import {
+  ACTION_APPROVE_MAIN_CHAT_APPROVAL,
+  ACTION_DECLINE_MAIN_CHAT_APPROVAL,
+  ACTION_EDIT_MAIN_CHAT_APPROVAL,
+  ACTION_READ_MAIN_CHAT_APPROVALS,
+  ACTION_WITHDRAW_MAIN_CHAT_APPROVAL,
   ACTION_INSPECT_INCOMING,
   ACTION_REVIEW_INCOMING,
   ACTION_CHANGE_INCOMING,
@@ -44,6 +49,7 @@ import {
   sessionPinInputValidator,
   integrationSetupRequestInputValidator,
   agentMessageInputValidator,
+  mainChatApprovalInputValidator,
   agentTurnInterruptInputValidator,
   assistantModelAccessUpdateInputValidator,
   assistantSelectionUpdateInputValidator,
@@ -409,6 +415,30 @@ function registerRoutes(http, {
     }),
     summary: "Send a message to the Vibe64 assistant."
   });
+
+  routes.actionRoute("GET", "/sessions/:sessionId/main-chat-approvals", {
+    actionId: ACTION_READ_MAIN_CHAT_APPROVALS,
+    buildInput: (request) => withoutVibe64User({ sessionId: request.params.sessionId }),
+    summary: "Read the team members' main-chat messages waiting for the owner's approval."
+  });
+
+  for (const [method, suffix, actionId, summary] of [
+    ["PATCH", "", ACTION_EDIT_MAIN_CHAT_APPROVAL, "Edit your own main-chat message while it waits for approval."],
+    ["POST", "/withdraw", ACTION_WITHDRAW_MAIN_CHAT_APPROVAL, "Withdraw your own main-chat message while it waits for approval."],
+    ["POST", "/approve", ACTION_APPROVE_MAIN_CHAT_APPROVAL, "Approve and send a team member's main-chat message."],
+    ["POST", "/decline", ACTION_DECLINE_MAIN_CHAT_APPROVAL, "Decline a team member's main-chat message."]
+  ]) {
+    routes.actionRoute(method, `/sessions/:sessionId/main-chat-approvals/:approvalId${suffix}`, {
+      actionId,
+      body: mainChatApprovalInputValidator,
+      buildInput: (request) => ({
+        ...withoutVibe64User(routes.requestBody(request)),
+        sessionId: request.params.sessionId,
+        approvalId: request.params.approvalId
+      }),
+      summary
+    });
+  }
 
   routes.actionRoute("GET", "/sessions/:sessionId/assistant-access", {
     actionId: ACTION_INSPECT_ASSISTANT_ACCESS,

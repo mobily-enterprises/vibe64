@@ -68,6 +68,14 @@ import {
 const DEFAULT_HOSTED_REPOSITORY_BRANCH = "main";
 
 let configuredContext = null;
+// Sessions registers how many main-chat messages wait for the owner's approval.
+let approvalCountReader = null;
+
+function registerApprovalCountReader(reader) {
+  if (typeof reader !== "function") throw new TypeError("An approval count reader must be a function.");
+  approvalCountReader = reader;
+  return () => { if (approvalCountReader === reader) approvalCountReader = null; };
+}
 
 function normalizeRoot(value, fallbackRoot = process.cwd()) {
   return path.resolve(String(value || "").trim() || fallbackRoot);
@@ -1160,7 +1168,9 @@ function createStudioProjectContext({
       .sort((left, right) => left.slug.localeCompare(right.slug));
     return {
       ok: true,
-      projects,
+      projects: approvalCountReader ? await Promise.all(projects.map(async (project) => ({
+        ...project, approvalsWaiting: await approvalCountReader(project)
+      }))) : projects,
       projectsRoot
     };
   }
@@ -1592,6 +1602,7 @@ export {
   normalizeProjectSlug,
   pathInsideOrEqual,
   projectSlugFromName,
+  registerApprovalCountReader,
   resolveStudioProjectsRoot,
   resolveProjectContextRoot,
   assertProjectDirectoryUsable

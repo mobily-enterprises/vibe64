@@ -7,6 +7,9 @@ import {
 
 import { createSessionActions } from "./actions.js";
 import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
+import { registerApprovalCountReader } from "@local/vibe64-core/server/studioProjectContext";
+import { createVibe64ProjectChangedPublisher } from "@local/vibe64-project/server/actions";
+import { countWaitingMainChatApprovals } from "./mainChatApprovals.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { createService } from "./service.js";
 import {
@@ -107,11 +110,13 @@ function createVibe64SessionsFeature() {
         actions: actionCatalogue,
         initializeModelRouting: (input) => accounts.initializeModelRouting(input),
         project,
+        publishProjectChanged: createVibe64ProjectChangedPublisher({ events }),
         publishSessionChanged: createSessionChangedPublisher(events),
         sessionPresence,
         sourceEditor,
         terminals
       });
+      registerApprovalCountReader(countWaitingMainChatApprovals);
       project.setTemplateApplicationObserver(({ sessionId }) => sessions.prepareStarterWorkspace(sessionId));
       registerRoutes(http, {
         routeRelativePath: "vibe64",

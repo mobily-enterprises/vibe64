@@ -43,6 +43,14 @@
       <Vibe64ConversationStatus v-else :message="message" @check-delivery="emit('resend-turn', $event)" @link-click="adapter.actions.openLink" />
     </template>
     <template #user-message-actions="{ turn }">
+      <div
+        v-if="turn.metadata?.sender"
+        class="vibe64-conversation-log__sender text-label-small"
+        :data-approval-id="turn.metadata.sender.approvalId"
+      >
+        <v-icon :icon="mdiAccountCheckOutline" size="14" />
+        {{ turn.metadata.sender.displayName }} · approved by {{ turn.metadata.sender.approvedBy }}
+      </div>
       <v-chip v-if="turn.metadata?.source === 'lesson'" size="x-small" variant="tonal" class="mt-1 align-self-start" data-test="lesson-sent-chip">
         Sent by the lesson
       </v-chip>
@@ -148,7 +156,7 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { AssistantConversationElement } from "@jskit-ai/assistant-core/client/conversation";
 import { VoiceAvatar, VoiceConversationControls, VoiceConversationHost, VoiceConversationSettings, useVoiceLauncher } from "@jskit-ai/assistant-voice/client";
 import { createProjectVoiceBinding, useVibe64Voice } from "@local/vibe64-voice/client";
-import { mdiMicrophone, mdiMicrophoneOff, mdiVolumeHigh, mdiVolumeOff } from "@mdi/js";
+import { mdiAccountCheckOutline, mdiMicrophone, mdiMicrophoneOff, mdiVolumeHigh, mdiVolumeOff } from "@mdi/js";
 import Vibe64ConversationStatus from "./Vibe64ConversationStatus.vue";
 import Vibe64ProjectMessage from "./Vibe64ProjectMessage.vue";
 import Vibe64ConversationAttachments from "./Vibe64ConversationAttachments.vue";
@@ -506,6 +514,15 @@ const adapter = computed(() => ({
 </script>
 
 <style scoped>
+.vibe64-conversation-log__sender {
+  align-items: center;
+  align-self: flex-end;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  display: inline-flex;
+  gap: 0.25rem;
+  margin-top: 0.25rem;
+  overflow-wrap: anywhere;
+}
 /* Chat bubbles follow the M3 chat shape: a tighter corner at the author side. */
 :deep(.assistant-transcript__message-row--assistant) { max-width: min(30rem, 92%); }
 :deep(.assistant-transcript__message--assistant) {

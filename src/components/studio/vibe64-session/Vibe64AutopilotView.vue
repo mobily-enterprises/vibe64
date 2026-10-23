@@ -75,6 +75,18 @@
           </template>
           <span role="status">Checking…</span>
         </v-tooltip>
+        <v-chip
+          v-if="mainChatApprovals.isOwner && mainChatApprovals.waitingCount"
+          class="studio-autopilot__approvals-chip"
+          color="secondary"
+          variant="tonal"
+          size="small"
+          :prepend-icon="mdiClockOutline"
+          :aria-label="`${mainChatApprovals.waitingCount} ${mainChatApprovals.waitingCount === 1 ? 'message' : 'messages'} waiting for your approval`"
+          @click="revealApprovals"
+        >
+          {{ mainChatApprovals.waitingCount }} waiting
+        </v-chip>
         <Vibe64SessionPin
           v-if="props.session?.sourceReady && !props.sessionSelectionArchived"
           :key="`${readRefOrGetterValue(props.sessionsApiPath)}:${sessionId}`"
@@ -468,6 +480,12 @@
             data-vibe64-guide="chat"
             @focusout="handleComposerRegionFocusOut"
           >
+            <Vibe64MainChatApprovals
+              ref="approvalsPanel"
+              :approvals="mainChatApprovals"
+              :phone="phoneLayout"
+              @show-in-chat="showApprovedMessage"
+            />
             <Vibe64RoutingNotice
               :request="routingRequest"
               :selection="props.session?.assistantSelection"
@@ -611,7 +629,19 @@
                     :sessions-api-path="props.sessionsApiPath"
                     @saved="props.refreshSessionData?.(); reloadAssistantAccess()"
                   />
-                  <Vibe64ComposerDelivery ref="composerSendButton"
+                  <v-btn
+                    v-if="approvalMode" ref="composerSendButton"
+                    class="studio-autopilot__approval-send"
+                    color="primary" variant="flat" size="small"
+                    :aria-label="composerSubmitAriaLabel" :title="composerSubmitTitle"
+                    :disabled="!composerCanSubmit || composerBlocked"
+                    :loading="composerSubmitMode === 'approval-sending'"
+                    :append-icon="mdiSend"
+                    @click="sendComposerMessage"
+                  >
+                    Send for approval
+                  </v-btn>
+                  <Vibe64ComposerDelivery v-else ref="composerSendButton"
                     :stop-visible="agentStopVisible" :stop-enabled="agentStopEnabled" :stopping="interrupting"
                     :can-submit="composerCanSubmit && !composerBlocked && attachmentState.canSubmit"
                     :sending="composerSending" :submit-mode="composerSubmitMode"
@@ -992,6 +1022,8 @@ import {
   mdiSourcePull,
   mdiSourceBranchSync,
   mdiWrenchOutline,
+  mdiClockOutline,
+  mdiSend,
 } from "@mdi/js";
 import { vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
 import Vibe64CreatePullRequestDialog from "@/components/studio/vibe64-session/Vibe64CreatePullRequestDialog.vue";
@@ -1016,6 +1048,10 @@ import Vibe64SessionSourceEditor from "@/components/studio/vibe64-session/Vibe64
 import Vibe64SessionFiles from "@/components/studio/vibe64-session/Vibe64SessionFiles.vue";
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import Vibe64ComposerDelivery from "./Vibe64ComposerDelivery.vue";
+import Vibe64MainChatApprovals from "./Vibe64MainChatApprovals.vue";
+import { useVibe64MainChatApprovals } from "@/composables/useVibe64MainChatApprovals.js";
+import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
+import { useDisplay } from "vuetify";
 import Vibe64TemporaryAiWorkspace from "@/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue";
 import Vibe64DashboardShell from "@/components/studio/Vibe64DashboardShell.vue";
 import Vibe64LearningLessonPane from "@/components/learning/Vibe64LearningLessonPane.vue";
@@ -1086,6 +1122,8 @@ const composerSendButton = ref(null);
 const composerSettingsOpen = ref(false);
 const composerSettingsButton = ref(null);
 const mainChat = ref(null);
+const approvalsPanel = ref(null);
+const { xs: phoneLayout } = useDisplay();
 const sessionActionsTrigger = ref(null);
 const temporaryAiWorkspace = ref(null);
 const workPlanViewer = ref(null);
@@ -1176,10 +1214,25 @@ const assistantCanUseNative = computed(() => props.conversationRuntime.access.ca
 const assistantPurposes = computed(() => props.conversationRuntime.access.purposes.value);
 const assistantAccessScopeKey = computed(() => props.conversationRuntime.access.scopeKey.value);
 const assistantAccessLoading = computed(() => props.conversationRuntime.access.initialAccessLoading.value);
-const assistantRestrictionMessage = computed(() => props.conversationRuntime.access.restrictionMessage.value);
+// A team member's main-chat restriction is the approval queue, which the composer hint explains.
+const assistantRestrictionMessage = computed(() => mainChatApprovals.memberMode ? ""
+  : props.conversationRuntime.access.restrictionMessage.value);
 const assistantCanUsePurpose = purpose => props.conversationRuntime.access.canUsePurpose(purpose);
 const reloadAssistantAccess = () => props.conversationRuntime.access.reload();
 
+// A team member's main-chat messages go to the owner for approval.
+const mainChatApprovals = reactive(useVibe64MainChatApprovals({
+  active: () => props.active && !props.sessionSelectionArchived,
+  projectSlug: useVibe64ProjectSlug(),
+  sessionId: selectedAssistantSessionId,
+  sessionsApiPath: () => readRefOrGetterValue(props.sessionsApiPath),
+  onReview(reviewedSessionId) {
+    if (reviewedSessionId && reviewedSessionId !== selectedAssistantSessionId.value) {
+      props.sessionToolbar?.selectSession?.(reviewedSessionId);
+    }
+    void nextTick(revealApprovals);
+  }
+}));
 
 const {
   Vibe64OutputControls,
@@ -1209,6 +1262,7 @@ const {
   checkpointFailureReason,
   checkpointFailureVisible,
   dismissCheckpointFailure,
+  approvalMode,
   composerKey,
   composerAttachments,
   composerAttachmentsEnabled,
@@ -1341,6 +1395,7 @@ const {
   assistantCanUseFix: computed(() => assistantCanUsePurpose("fix")),
   assistantCanUseNative,
   assistantProgressLabel: openCodeProgressLabel,
+  mainChatApprovals,
   onAttachmentsAccepted: (attachmentIds) => composerInput.value?.clearAttachments?.({ attachmentIds }),
   requestTemporaryAi: startTemporaryAiTask
 });
@@ -1367,6 +1422,17 @@ const composerAssistantLabel = computed(() => {
   if (props.conversationLog?.error) return "";
   return assistantRestrictionMessage.value || thinkingLabel.value;
 });
+function revealApprovals() {
+  if (phoneLayout.value) {
+    approvalsPanel.value?.open();
+    return;
+  }
+  mainChat.value?.querySelector(".vibe64-approvals")?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+}
+function showApprovedMessage(entry) {
+  mainChat.value?.querySelector(`.vibe64-conversation-log [data-approval-id="${CSS.escape(entry.id)}"]`)
+    ?.scrollIntoView({ block: "center", behavior: "smooth" });
+}
 watch(agentActive, (active) => {
   if (!active) {
     openCodeProgressLabel.value = "";
@@ -1522,7 +1588,7 @@ async function continueConversation() {
 }
 
 function focusComposerSendButton() {
-  composerSendButton.value?.focus();
+  composerSendButton.value?.focus?.() ?? composerSendButton.value?.$el?.focus?.();
 }
 
 function updateComposerAttachmentState(state = {}) {
@@ -1994,6 +2060,20 @@ onBeforeUnmount(() => {
 .studio-autopilot__composer-actions {
   column-gap: clamp(0rem, calc(4% - 1.25rem), 0.5rem);
   width: 100%;
+}
+
+.studio-autopilot__approval-send {
+  flex-shrink: 0;
+  margin-inline-start: auto;
+}
+
+@media (pointer: coarse) {
+  .studio-autopilot__approval-send { min-height: 3rem; }
+}
+
+.studio-autopilot__approvals-chip {
+  align-self: center;
+  flex-shrink: 0;
 }
 
 .studio-autopilot__settings-access {

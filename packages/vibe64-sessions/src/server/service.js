@@ -48,6 +48,7 @@ import {
 import { readSessionRenewalState, SESSION_RENEWAL_STATUS } from "./sessionRenewalState.js";
 import { createSessionRenewalController } from "./sessionRenewal.js";
 import { presenceActor } from "./sessionPresence.js";
+import { createMainChatApprovals } from "./mainChatApprovals.js";
 
 function text(value = "") {
   return String(value || "").trim();
@@ -237,6 +238,7 @@ function createService({
   actions = null,
   initializeModelRouting,
   project,
+  publishProjectChanged = async () => null,
   publishSessionChanged = async () => null,
   renewalActorResolver = null,
   sessionPresence = null,
@@ -283,6 +285,10 @@ function createService({
   const activeRepositoryUpdateChecks = new Map();
   const activeWorkInspections = new Map();
   let archivePreparation = null;
+  const mainChatApprovals = createMainChatApprovals({
+    project, terminals, publishSessionChanged, publishProjectChanged,
+    deliver: (sessionId, input, options) => service.sendAgentMessage(sessionId, input, options)
+  });
   let configuredRenewalActorResolver = renewalActorResolver;
   async function resolveRenewalActor(actor = {}, context = {}) {
     if (typeof configuredRenewalActorResolver !== "function") {
@@ -2383,6 +2389,11 @@ function createService({
           ok: false
         };
       }
+      // A team member's main-chat message waits for the owner's approval.
+      if (input.vibe64User && !isAssistantRoutingOwner(input.vibe64User)) {
+        return { ...await mainChatApprovals.enqueue(sessionId, { message: request, messageId: text(input.messageId),
+          attachmentIds: input.attachmentIds || [] }, { vibe64User: input.vibe64User }), sessionId };
+      }
       const startedAt = Date.now();
       await setupRunner.wait(sessionId);
       const runtime = await project.createRuntime({ inspectSource: false });
@@ -2427,6 +2438,28 @@ function createService({
         });
         throw error;
       }
+    },
+
+    readMainChatApprovals(sessionId, input = {}) {
+      return mainChatApprovals.read(sessionId, { vibe64User: input.vibe64User || null });
+    },
+
+    editMainChatApproval(sessionId, approvalId, input = {}) {
+      return mainChatApprovals.edit(sessionId, approvalId, input, { vibe64User: input.vibe64User || null });
+    },
+
+    withdrawMainChatApproval(sessionId, approvalId, input = {}) {
+      return mainChatApprovals.withdraw(sessionId, approvalId, input, { vibe64User: input.vibe64User || null });
+    },
+
+    declineMainChatApproval(sessionId, approvalId, input = {}) {
+      return mainChatApprovals.decline(sessionId, approvalId, input, { vibe64User: input.vibe64User || null });
+    },
+
+    approveMainChatApproval(sessionId, approvalId, input = {}, options = {}) {
+      return mainChatApprovals.approve(sessionId, approvalId, input, {
+        vibe64User: input.vibe64User || null, browserAuthority: options.browserAuthority || null
+      });
     },
 
     async updateAssistantSelection(sessionId, input = {}) {

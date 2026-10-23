@@ -345,6 +345,7 @@ function useVibe64AutopilotView(props, emit, {
   assistantCanUseFix = null,
   assistantCanUseNative = null,
   assistantProgressLabel = null,
+  mainChatApprovals = null,
   onAttachmentsAccepted = null,
   requestTemporaryAi = null
 } = {}) {
@@ -413,6 +414,11 @@ function useVibe64AutopilotView(props, emit, {
   const sessionToolbarVisible = computed(() => Boolean(
     Array.isArray(props.sessionToolbar?.sessions) && props.sessionToolbar.sessions.length
   ));
+
+  // A team member's main-chat messages go to the owner for approval.
+  const approvalMode = computed(() => mainChatApprovals?.memberMode === true);
+  const approvalOwner = computed(() => mainChatApprovals?.ownerName || "the owner");
+  const approvalOwnerSentence = computed(() => approvalOwner.value.charAt(0).toUpperCase() + approvalOwner.value.slice(1));
 
   const composerKey = computed(() => JSON.stringify([actorKey.value, projectSlug.value, sessionId.value]));
   const composerDraft = computed({
@@ -560,9 +566,10 @@ function useVibe64AutopilotView(props, emit, {
   ));
   const composerDisabled = computed(() => Boolean(
     sessionInteractionDisabled.value ||
-    !assistantDirectAllowed.value
+    !approvalMode.value && !assistantDirectAllowed.value
   ));
-  const composerAttachmentsSupported = computed(() => true);
+  // Messages for approval are text only.
+  const composerAttachmentsSupported = computed(() => !approvalMode.value);
   const composerAttachmentsEnabled = computed(() => Boolean(
     composerAttachmentsSupported.value &&
     !composerDisabled.value &&
@@ -573,6 +580,7 @@ function useVibe64AutopilotView(props, emit, {
   ));
   const composerRetryMatchesDraft = computed(() => props.conversationRuntime?.draftRetryMatches.value === true);
   const composerSubmitMode = computed(() => {
+    if (approvalMode.value) return mainChatApprovals.sending ? "approval-sending" : "approval";
     if (assistantAccountUnavailable.value) {
       return "unavailable";
     }
@@ -598,6 +606,8 @@ function useVibe64AutopilotView(props, emit, {
     return composerRetryMatchesDraft.value ? "retry" : "send";
   });
   const composerSubmitLabel = computed(() => ({
+    approval: "Send for approval",
+    "approval-sending": "Sending…",
     routing: "Routing…",
     failed: "Unavailable",
     unavailable: "Connect AI",
@@ -610,6 +620,8 @@ function useVibe64AutopilotView(props, emit, {
     waiting: "Waiting…"
   })[composerSubmitMode.value] || "");
   const composerSubmitAriaLabel = computed(() => ({
+    approval: `Send to ${approvalOwner.value} for approval`,
+    "approval-sending": `Sending to ${approvalOwner.value} for approval`,
     routing: "Preparing the message recipient",
     failed: "Assistant unavailable",
     unavailable: "Connect your AI account to send messages",
@@ -622,6 +634,8 @@ function useVibe64AutopilotView(props, emit, {
     waiting: "Waiting for the assistant to accept guidance"
   })[composerSubmitMode.value] || "Send message");
   const composerSubmitTitle = computed(() => ({
+    approval: `${approvalOwnerSentence.value} approves each message before it reaches main chat`,
+    "approval-sending": "Keep typing while this message is sent for approval",
     routing: "Keep typing while this request is routed",
     failed: "Resolve the assistant startup error, then retry. Your draft is kept.",
     unavailable: "Open AI Accounts to connect your assistant. Your draft is kept.",
@@ -634,6 +648,7 @@ function useVibe64AutopilotView(props, emit, {
     waiting: "Keep typing while the assistant becomes ready"
   })[composerSubmitMode.value] || "Send message");
   const composerCanSubmit = computed(() => {
+    if (approvalMode.value) return !composerDisabled.value && !mainChatApprovals.sending && Boolean(composerDraft.value.trim());
     if (!props.conversationRuntime?.canSubmit.value || composerDisabled.value ||
         routingBusy.value && !agentSteerable.value && !composerRoutingQueueing.value) return false;
     if (
@@ -691,7 +706,8 @@ function useVibe64AutopilotView(props, emit, {
     (agentActive.value ? "Assistant is working..." : "") ||
     (composerSending.value ? "Sending to assistant..." : "")
   ));
-  const composerHint = computed(() => (
+  const composerHint = computed(() => approvalMode.value
+    ? `Main chat runs on ${approvalOwner.value}'s AI. ${approvalOwnerSentence.value} approves each message.` : (
     agentObservationLost.value
       ? agentActive.value
         ? "The stop is not yet confirmed. Your draft is kept; you can retry Stop."
@@ -700,7 +716,8 @@ function useVibe64AutopilotView(props, emit, {
       ? "Answer the assistant, then send one combined reply."
       : ""
   ));
-  const composerPlaceholder = computed(() => (
+  const composerPlaceholder = computed(() => approvalMode.value
+    ? `Message main chat — ${approvalOwner.value} approves before it's sent` : (
     numberedQuestions.value.length
       ? "Optional additional context…"
       : answerChoices.value.length
@@ -1174,6 +1191,12 @@ function useVibe64AutopilotView(props, emit, {
 
   async function submitComposerMessage() {
     if (!composerCanSubmit.value) return false;
+    if (approvalMode.value) {
+      const message = composerDraft.value;
+      if (!await mainChatApprovals.send(message)) return false;
+      if (composerDraft.value === message) composerDraft.value = "";
+      return true;
+    }
     const retry = composerRetryMatchesDraft.value ? composerRetrySubmission.value : null;
     const draftSnapshot = retry?.draftSnapshot || composerDraft.value;
     const { message, questionText } = questionState.capture(draftSnapshot);
@@ -2149,6 +2172,7 @@ function useVibe64AutopilotView(props, emit, {
     checkpointFailureReason,
     checkpointFailureVisible,
     dismissCheckpointFailure,
+    approvalMode,
     composerKey,
     composerAttachments,
     composerAttachmentsEnabled,

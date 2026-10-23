@@ -1069,7 +1069,40 @@ it reads current resource readiness and declared setup without a new message
 injection lane, secret values or preparation side effects. Re-reading after
 resource edits refreshes facts without restarting the native conversation.
 
+## Main-chat approval queue
+
+Main chat runs on the owner's setup. `sessions.sendAgentMessage` intercepts a
+request whose `vibe64User` is not the owner before any dispatch and enqueues it
+in session metadata `main_chat_approvals` (`schemaVersion` 1), written only in
+`mutateSession` with per-entry revisions. Project messages and internal sends
+carry no person and are never queued. An entry moves `waiting` -> `sending` ->
+`sent`, or to `declined` / `withdrawn`; a failed send returns to `waiting` with
+its error. A client `messageId` becomes the entry id, so a retried enqueue is
+idempotent; five waiting entries per sender, 200 kept, attachments refused.
+
+Approve calls the ordinary `sendAgentMessage` as the owner with the owner's
+browser authority, a stable `messageId` `approval:<id>` and
+`turnMetadata.sender`. It passes no submission kind: routing steers a running
+turn or starts a request at delivery time, so no separate decision races the
+turn. Routing keeps `sender` in turn metadata and the log shows
+"{sender} · approved by {owner}" under the delivered message.
+
+`GET /sessions/:id/main-chat-approvals` returns the entries with the viewer's
+role and the owner's name. Edit, withdraw (sender), approve and decline (owner)
+are human-only actions without assistant tools. Every change publishes a
+session change with a `main-chat-approval-*` reason and a project change;
+`listWorkspaceProjects` adds `approvalsWaiting` through the registered approval
+count reader. The client reader `useVibe64MainChatApprovals` drives the member
+composer (Send for approval), the `Vibe64MainChatApprovals` stack or phone
+sheet, the owner's header chip, title count and Review snackbar.
+
 ## Sources
+
+- `packages/vibe64-sessions/src/server/mainChatApprovals.js`
+- `src/composables/useVibe64MainChatApprovals.js`
+- `src/components/studio/vibe64-session/Vibe64MainChatApprovals.vue`
+- `tests/server/mainChatApprovals.unit.test.js`
+- `tests/client/vibe64MainChatApprovals.vitest.js`
 
 - `packages/vibe64-sessions/src/server/actions.js`
 - `tests/server/vibe64ConversationActionDispatch.unit.test.js`

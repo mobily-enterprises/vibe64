@@ -14,6 +14,7 @@ import {
   sessionRenameActionInputValidator,
   integrationSetupRequestActionInputValidator,
   agentMessageActionInputValidator,
+  mainChatApprovalActionInputValidator,
   agentTurnInterruptActionInputValidator,
   assistantAccessActionInputValidator,
   assistantCapabilitiesInputValidator,
@@ -78,6 +79,11 @@ const ACTION_RETRY_WORKSPACE_SETUP = "vibe64.sessions.workspace-setup.retry";
 const ACTION_ARCHIVE_SESSION = "vibe64.sessions.archive";
 const ACTION_SEND_AGENT_MESSAGE = "vibe64.sessions.agent-message.send";
 const ACTION_INSPECT_ASSISTANT_ACCESS = "vibe64.sessions.assistant-access.inspect";
+const ACTION_READ_MAIN_CHAT_APPROVALS = "vibe64.sessions.main-chat-approvals.read";
+const ACTION_EDIT_MAIN_CHAT_APPROVAL = "vibe64.sessions.main-chat-approvals.edit";
+const ACTION_WITHDRAW_MAIN_CHAT_APPROVAL = "vibe64.sessions.main-chat-approvals.withdraw";
+const ACTION_APPROVE_MAIN_CHAT_APPROVAL = "vibe64.sessions.main-chat-approvals.approve";
+const ACTION_DECLINE_MAIN_CHAT_APPROVAL = "vibe64.sessions.main-chat-approvals.decline";
 const ACTION_INTERRUPT_AGENT_TURN = "vibe64.sessions.agent-turn.interrupt";
 const ACTION_BROADCAST_SESSION_PREVIEW_STATE = "vibe64.sessions.preview-state.broadcast";
 const ACTION_UPDATE_SESSION_PRESENCE = "vibe64.sessions.presence.update";
@@ -485,12 +491,50 @@ function createSessionActions({ sessions } = {}) {
     }),
     action({
       id: ACTION_SEND_AGENT_MESSAGE,
-      assistant: conversationOperationTool("Send an agreed request or steering to Main chat in the exact selected project/session. For new work, supply a unique messageId and reuse it unchanged on a delivery retry. When the person explicitly asks to continue a waiting Auto workflow or check its uncertain delivery, read the saved routing request and use reviewAction=retry with that request's original messageId and message; do not invent a new message identity. submissionKind=steer requires a running turn; send requires a new turn. A delivery receipt is not a completed answer: read the conversation or create a watch. Plan creation, changes, reopening, archival and execution are ordinary chat requests routed by intent. An optional planRevision checks the referenced current document without bypassing Router. Never send merely because a watch recommends more work."),
+      assistant: conversationOperationTool("Send an agreed request or steering to Main chat in the exact selected project/session. For new work, supply a unique messageId and reuse it unchanged on a delivery retry. When the person explicitly asks to continue a waiting Auto workflow or check its uncertain delivery, read the saved routing request and use reviewAction=retry with that request's original messageId and message; do not invent a new message identity. submissionKind=steer requires a running turn; send requires a new turn. A delivery receipt is not a completed answer: read the conversation or create a watch. Plan creation, changes, reopening, archival and execution are ordinary chat requests routed by intent. An optional planRevision checks the referenced current document without bypassing Router. Never send merely because a watch recommends more work. For a team member this queues the message for the owner's approval; it is not delivered until approved."),
       kind: "command",
       input: agentMessageActionInputValidator,
       execute(input, context) {
         const grant = conversationContextGrant(input, context);
         return sessions.sendAgentMessage(input.sessionId, withoutSessionId(input), {
+          browserAuthority: { sessionId: input.sessionId, projectSlug: grant.project.slug,
+            actorId: grant.actor.id, requestContext: mainConversationRequestContext(context) }
+        });
+      }
+    }),
+    // Approvals are people's decisions: they have no assistant tool projection.
+    action({
+      id: ACTION_READ_MAIN_CHAT_APPROVALS,
+      kind: "query",
+      input: sessionIdInputValidator,
+      execute: (input) => sessions.readMainChatApprovals(input.sessionId, withoutSessionId(input))
+    }),
+    action({
+      id: ACTION_EDIT_MAIN_CHAT_APPROVAL,
+      kind: "command",
+      input: mainChatApprovalActionInputValidator,
+      execute: (input) => sessions.editMainChatApproval(input.sessionId, input.approvalId, withoutSessionId(input))
+    }),
+    action({
+      id: ACTION_WITHDRAW_MAIN_CHAT_APPROVAL,
+      kind: "command",
+      input: mainChatApprovalActionInputValidator,
+      execute: (input) => sessions.withdrawMainChatApproval(input.sessionId, input.approvalId, withoutSessionId(input))
+    }),
+    action({
+      id: ACTION_DECLINE_MAIN_CHAT_APPROVAL,
+      kind: "command",
+      input: mainChatApprovalActionInputValidator,
+      execute: (input) => sessions.declineMainChatApproval(input.sessionId, input.approvalId, withoutSessionId(input))
+    }),
+    action({
+      id: ACTION_APPROVE_MAIN_CHAT_APPROVAL,
+      kind: "command",
+      input: mainChatApprovalActionInputValidator,
+      execute(input, context) {
+        // The approved message is the owner's own main-chat send.
+        const grant = conversationContextGrant(input, context);
+        return sessions.approveMainChatApproval(input.sessionId, input.approvalId, withoutSessionId(input), {
           browserAuthority: { sessionId: input.sessionId, projectSlug: grant.project.slug,
             actorId: grant.actor.id, requestContext: mainConversationRequestContext(context) }
         });
@@ -533,6 +577,11 @@ function createSessionActions({ sessions } = {}) {
 }
 
 export {
+  ACTION_APPROVE_MAIN_CHAT_APPROVAL,
+  ACTION_DECLINE_MAIN_CHAT_APPROVAL,
+  ACTION_EDIT_MAIN_CHAT_APPROVAL,
+  ACTION_READ_MAIN_CHAT_APPROVALS,
+  ACTION_WITHDRAW_MAIN_CHAT_APPROVAL,
   ACTION_INSPECT_INCOMING,
   ACTION_REVIEW_INCOMING,
   ACTION_CHANGE_INCOMING,
