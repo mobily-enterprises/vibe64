@@ -299,6 +299,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     active: () => stepBarVisible.value && !lesson.value?.attempt?.ended && !aiRequired.value, activity: pageActivity,
     focus: () => pageFocus?.value ? { ...pageFocus.value, chatVisible: Boolean(layout?.value?.chatVisible) } : null,
     practiceSlug: () => lesson.value?.practiceProjectSlug || "",
+    passed: stepId => stepStatus(results.value, stepId, lesson.value?.passedStepIds) === "passed",
     // A self-checked step whose do beats were all detected is done.
     allDone: stepId => {
       const step = steps.value.find(value => value.id === stepId);

@@ -12,7 +12,7 @@ const STEPS = [
     { kind: "check", target: "done", text: "Press Done." }] }
 ];
 
-function harness({ reduced = false, hidden = false, steps: lessonSteps = STEPS, stepId = "intro" } = {}) {
+function harness({ reduced = false, hidden = false, steps: lessonSteps = STEPS, stepId = "intro", passed = () => false } = {}) {
   const state = reactive({ stepId, beat: 0, beatPaused: false, open: false });
   const steps = ref(lessonSteps);
   const focus = ref(null);
@@ -25,7 +25,7 @@ function harness({ reduced = false, hidden = false, steps: lessonSteps = STEPS, 
   const remember = vi.fn();
   const flags = { reduced, hidden };
   const player = createLessonPlayer({ state, steps, currentStep, active: () => shown.value, remember,
-    focus: () => focus.value, activity, practiceSlug: () => "practice-1", allDone,
+    focus: () => focus.value, activity, practiceSlug: () => "practice-1", allDone, passed,
     selectStep: (stepId, beat = 0) => Object.assign(state, { stepId, beat }),
     showGuide: async (guide, options) => { guides.push({ target: guide.target, filePath: guide.filePath, navigate: guide.navigate, ...options }); return { shown: true }; },
     clearGuide: id => cleared.push(id), shownGuide: () => `ring-${guides.length}`,
@@ -124,6 +124,15 @@ describe("lesson beat player", () => {
     vi.advanceTimersByTime(1600);
     await settle();
     expect([h.state.beat, h.player.confirmed, h.player.final]).toEqual([1, "", true]);
+  });
+
+  it("asks nothing again on a do beat of a step that has passed", async () => {
+    const h = harness({ stepId: "ask", passed: stepId => stepId === "ask" });
+    await settle();
+    expect([h.player.confirmed, h.guides]).toEqual(["✓ Done.", []]);
+    vi.advanceTimersByTime(1600);
+    await settle();
+    expect([h.state.beat, h.player.final]).toEqual([1, true]);
   });
 
   it("moves on from a confirmed do beat after the step's result re-read the lesson", async () => {

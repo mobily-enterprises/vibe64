@@ -51,9 +51,10 @@ function beatEvent(beat) {
 // remember() are the controller's own. focus(): the page focus (null when the
 // host has none); activity: the page activity channel; practiceSlug(): the
 // lesson's practice project; allDone(stepId): every do beat of that step was
-// detected (the controller then records a self-checked step as done).
+// detected (the controller then records a self-checked step as done);
+// passed(stepId): that step has passed, so its do beats need nothing more.
 function createLessonPlayer({ state, steps, currentStep, active, selectStep, remember,
-  focus = () => null, activity = null, practiceSlug = () => "", allDone = () => {},
+  focus = () => null, activity = null, practiceSlug = () => "", allDone = () => {}, passed = () => false,
   showGuide = showTrainingGuide, clearGuide = clearTrainingGuide, shownGuide = () => trainingGuide.value?.id || "",
   motionReduced = reducedMotion, hidden = documentHidden } = {}) {
   // confirmed: the do beat's confirmation line while it shows.
@@ -144,6 +145,8 @@ function createLessonPlayer({ state, steps, currentStep, active, selectStep, rem
     if (!shown || !value) return;
     if (value.kind === "show") timer = setInterval(tick, TICK_MS);
     if (value.kind === "do" && placeShown(value)) return confirm(value, "✓ You're already here.");
+    // A step already passed (revisited, or replayed with Show me) asks for nothing again.
+    if (value.kind === "do" && passed(currentStep.value?.id)) return confirm(value, "✓ Done.");
     // What the learner already did in this step completes a beat they have
     // not yet done here (Back onto a done beat leaves it waiting).
     if (value.kind === "do" && !detected.has(`${currentStep.value?.id}:${index.value}`)) {
