@@ -3,21 +3,14 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
+import { LOCAL_TOOLS } from "./localTools.js";
 import { runtimePackRoot } from "./runtimePacks.js";
 
-// Official one-line installers, checked 2026-10-22: a macOS/Linux shell line
-// and a Windows PowerShell line (opencode publishes no PowerShell installer,
-// so Windows uses its official npm package). Only someone using their own
-// tools is shown them; a host with runtime packs installs its own.
-const OPERATOR_CLIS = Object.freeze({
-  claude: Object.freeze({ name: "Claude Code", provider: "Claude", guideUrl: "https://code.claude.com/docs/en/setup",
-    install: Object.freeze({ unix: "curl -fsSL https://claude.ai/install.sh | bash", win32: "irm https://claude.ai/install.ps1 | iex" }) }),
-  codex: Object.freeze({ name: "Codex", provider: "ChatGPT", guideUrl: "https://github.com/openai/codex",
-    install: Object.freeze({ unix: "curl -fsSL https://chatgpt.com/codex/install.sh | sh",
-      win32: "powershell -ExecutionPolicy ByPass -c \"irm https://chatgpt.com/codex/install.ps1 | iex\"" }) }),
-  opencode: Object.freeze({ name: "opencode", provider: "your API-key providers", guideUrl: "https://opencode.ai/docs/",
-    install: Object.freeze({ unix: "curl -fsSL https://opencode.ai/install | bash", win32: "npm install -g opencode-ai" }) })
-});
+// The AI tools Vibe64 runs, with their install lines from the shared table.
+const OPERATOR_CLIS = Object.freeze(Object.fromEntries(["claude", "codex", "opencode"].map((tool) => {
+  const { name, guideUrl, any } = LOCAL_TOOLS[tool];
+  return [tool, Object.freeze({ name, guideUrl, install: any })];
+})));
 
 function executable(file = "") {
   try {
@@ -74,28 +67,29 @@ function operatorCliCommand(tool = "", options = {}) {
   return resolveOperatorCli(tool, options).command;
 }
 
-// The official install line for this server's operating system.
-function operatorCliInstall(tool = "", platform = process.platform) {
-  return OPERATOR_CLIS[tool].install[platform === "win32" ? "win32" : "unix"];
+// The official install line. Vibe64 runs on macOS and Linux (Windows through
+// WSL), so one shell line serves every computer it runs on.
+function operatorCliInstall(tool = "") {
+  return OPERATOR_CLIS[tool].install;
 }
 
 /**
  * Plain wording for a person's own CLI that is missing or did not start, with
- * the install line for the computer this server runs on (where the CLI runs,
- * whatever the browser's). A host with runtime packs always has its CLIs, so
- * this never applies there.
+ * its install line. `purpose` names what the caller uses it for ("DeepSeek");
+ * without it the sentence stays general. A host with runtime packs always has
+ * its CLIs, so this never applies there.
  */
-function operatorCliProblem(tool = "", { installed = false, platform = process.platform } = {}) {
-  const { name, provider, guideUrl } = OPERATOR_CLIS[tool];
-  const install = operatorCliInstall(tool, platform);
+function operatorCliProblem(tool = "", { installed = false, purpose = "" } = {}) {
+  const { name, guideUrl } = OPERATOR_CLIS[tool];
+  const use = purpose ? `Vibe64 uses it to work with ${purpose}.` : "Vibe64 uses it to run your AI.";
   const problem = installed
     ? { code: "vibe64_cli_unavailable", status: "unavailable", title: `${name} didn't start`,
         detail: `${name} is installed but didn't start. Choose Check again; if it keeps failing, reinstall it.` }
     : { code: "vibe64_cli_not_installed", status: "not_installed", title: `${name} isn't installed on this computer`,
-        detail: `Vibe64 uses it to work with ${provider}. Install it, then choose Check again.` };
+        detail: `${use} Install it, then choose Check again.` };
   // `message` reads on its own; the install notice shows `title` above `detail`.
   return { ...problem, message: installed ? problem.detail : `${problem.title}. ${problem.detail}`,
-    install: { command: install, guideUrl } };
+    install: { command: operatorCliInstall(tool), guideUrl } };
 }
 
 export {

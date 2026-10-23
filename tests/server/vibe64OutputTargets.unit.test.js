@@ -556,6 +556,8 @@ test("terminal outputs use a generic PTY spec and exact declared runtimes", asyn
   assert.equal(spec.metadata.outputPresentationKind, "terminal");
   assert.equal(spec.reuseRunning, true);
   assert.match(spec.args[1], /exec \.\/build\/example/u);
+  // A login shell can reorder PATH; the script restores the tool PATH Vibe64 resolved.
+  assert.equal(spec.args[1].split("\n")[1], "if [ -n \"${VIBE64_TOOL_PATH:-}\" ]; then export PATH=\"$VIBE64_TOOL_PATH\"; fi");
 });
 
 for (const kind of ["terminal", "web"]) {

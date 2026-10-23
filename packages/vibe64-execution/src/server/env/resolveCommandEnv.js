@@ -38,6 +38,7 @@ import {
 import {
   resolveRuntimePath
 } from "../runtime/resolveRuntimePath.js";
+import { runtimePackRoot } from "../runtime/runtimePacks.js";
 import {
   envRecord
 } from "../normalize.js";
@@ -143,19 +144,19 @@ function resolveCommandEnv({
     ...npmToolEnv({ env }),
     VIBE64_DECLARED_RUNTIMES: declaredRuntimes
   };
-  const commandEnv = {
-    ...finalEnv,
-    PATH: resolveRuntimePath({
-      env: finalEnv,
-      existingPath: [
-        ...npmToolBinDirs({ env: finalEnv }),
-        finalEnv.PATH,
-        localPath
-      ].filter(Boolean).join(":"),
-      runtimes: request.runtimes,
-      shimDirs: request.shimDirs || []
-    })
-  };
+  const PATH = resolveRuntimePath({
+    env: finalEnv,
+    existingPath: [
+      ...npmToolBinDirs({ env: finalEnv }),
+      finalEnv.PATH
+    ].filter(Boolean).join(":"),
+    inheritedPath: localPath,
+    runtimes: request.runtimes,
+    shimDirs: request.shimDirs || []
+  });
+  // A login shell (Launch runs `bash -lc`) may reorder PATH; with the person's
+  // own tools its script restores this one, so Launch finds what setup found.
+  const commandEnv = { ...finalEnv, PATH, ...(runtimePackRoot() ? {} : { VIBE64_TOOL_PATH: PATH }) };
   // Resolved last, so the person's Git config is read with the HOME, XDG
   // folders and PATH this command will actually run with.
   return {

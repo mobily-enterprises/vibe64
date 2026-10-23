@@ -212,6 +212,15 @@ export {
 } from "./runtime/agentEnvWrapperSource.js";
 export { createVibe64ConversationExecution } from "./conversationExecution.js";
 export {
+  CHECKED_ON,
+  LOCAL_TOOLS,
+  SUDO_NOTE,
+  localToolFamily,
+  localToolIds,
+  localToolInstall
+} from "./runtime/localTools.js";
+export { checkLocalTools } from "./runtime/localToolCheck.js";
+export {
   OPERATOR_CLIS,
   operatorCliCommand,
   operatorCliInstall,

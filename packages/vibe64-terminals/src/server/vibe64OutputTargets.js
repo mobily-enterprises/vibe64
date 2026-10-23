@@ -237,7 +237,9 @@ function vibe64WebOutputDescriptor(target = {}, {
 
 function genericOutputStartupScript(target = {}, marker = "") {
   const steps = Array.isArray(target.steps) ? target.steps : [];
-  const lines = ["set -e"];
+  // The login shell may have reordered PATH (macOS path_helper); restore the
+  // tool PATH Vibe64 resolved when it provides one.
+  const lines = ["set -e", "if [ -n \"${VIBE64_TOOL_PATH:-}\" ]; then export PATH=\"$VIBE64_TOOL_PATH\"; fi"];
   for (const step of steps) {
     if (step.role === "run") {
       continue;

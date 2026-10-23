@@ -108,19 +108,15 @@ test("a missing or failing CLI is described plainly, with its official installer
     code: "vibe64_cli_not_installed",
     status: "not_installed",
     title: "Claude Code isn't installed on this computer",
-    detail: "Vibe64 uses it to work with Claude. Install it, then choose Check again.",
-    message: "Claude Code isn't installed on this computer. Vibe64 uses it to work with Claude. Install it, then choose Check again.",
+    detail: "Vibe64 uses it to run your AI. Install it, then choose Check again.",
+    message: "Claude Code isn't installed on this computer. Vibe64 uses it to run your AI. Install it, then choose Check again.",
     install: { command: "curl -fsSL https://claude.ai/install.sh | bash", guideUrl: "https://code.claude.com/docs/en/setup" }
   });
   assert.equal(operatorCliProblem("codex").install.command, "curl -fsSL https://chatgpt.com/codex/install.sh | sh");
   assert.equal(operatorCliProblem("opencode").install.command, "curl -fsSL https://opencode.ai/install | bash");
-  // The CLI runs on the server's computer, so its operating system picks the line.
-  assert.equal(operatorCliProblem("claude", { platform: "darwin" }).install.command, "curl -fsSL https://claude.ai/install.sh | bash");
-  assert.deepEqual(["claude", "codex", "opencode"].map((tool) => operatorCliProblem(tool, { platform: "win32" }).install.command), [
-    "irm https://claude.ai/install.ps1 | iex",
-    "powershell -ExecutionPolicy ByPass -c \"irm https://chatgpt.com/codex/install.ps1 | iex\"",
-    "npm install -g opencode-ai"
-  ]);
+  // The card names what it uses the tool for, so DeepSeek never reads "ChatGPT".
+  assert.equal(operatorCliProblem("codex", { purpose: "DeepSeek" }).detail,
+    "Vibe64 uses it to work with DeepSeek. Install it, then choose Check again.");
   const failed = operatorCliProblem("codex", { installed: true });
   assert.equal(failed.code, "vibe64_cli_unavailable");
   assert.equal(failed.status, "unavailable");
