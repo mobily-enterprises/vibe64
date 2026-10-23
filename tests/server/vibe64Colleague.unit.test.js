@@ -3490,22 +3490,14 @@ test("Colleague requires explicit Stop before model selection after native provi
   }
 });
 
-test("Colleague selects the routed Colleague only when it uses the expected provider", async t => {
+test("Colleague model selection takes an exact selection only", async t => {
   const f = await fixture(t, []);
   const select = input => f.actions.execute({ actionId: "vibe64.colleague.model.select", input, context: f.context });
-  await assert.rejects(select({ workflowEngineId: "codex", modelProviderId: "deepseek" }),
-    /Colleague's model in AI setup uses a different AI\. Review AI setup\./);
-  assert.equal((await f.service.read({}, f.context)).assistantSelection, null);
-  const selected = await select({ workflowEngineId: "codex", modelProviderId: "openai" });
-  assert.deepEqual(selected.assistantSelection, selection);
-  assert.equal(f.observations.routingInitialized.length, 2, "routing fills unset roles before resolving Colleague");
-  const resolvePurpose = f.terminals.resolveAssistantPurpose;
-  t.mock.method(f.terminals, "resolveAssistantPurpose", async function (...args) {
-    return args[0].purpose === "colleague" ? { available: false } : resolvePurpose.apply(this, args);
-  });
-  await assert.rejects(select({ workflowEngineId: "claude" }), /Colleague has no model ready yet\. Review AI setup\./);
   await assert.rejects(select({}), /Choose a model for Colleague\./);
-  assert.deepEqual((await f.service.read({}, f.context)).assistantSelection, selection, "a refused change keeps the saved model");
+  await assert.rejects(select({ workflowEngineId: "codex", modelProviderId: "openai" }));
+  assert.equal((await f.service.read({}, f.context)).assistantSelection, null, "a refused change saves nothing");
+  const selected = await select({ assistantSelection: selection });
+  assert.equal(selected.assistantSelection.modelId, selection.modelId);
 });
 
 test("an unchanged settled Colleague model retains its exact native thread without another request", async t => {

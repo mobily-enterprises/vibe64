@@ -537,16 +537,16 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   }
 
   // The person's routed Colleague: the owner's or the team setup's Colleague
-  // role, saving recommendations first as session creation does, so an AI
-  // connected outside the in-app sign-in is usable without a manual Save.
+  // role. For the owner, recommendations are saved first as session creation
+  // does, so an AI connected outside the in-app sign-in is usable without a
+  // manual Save; a team member's send never writes a setup.
   async function routedColleague(user) {
     await accounts.initializeModelRouting?.({ vibe64User: user });
     return terminals.resolveAssistantPurpose({ purpose: "colleague" }, { vibe64User: user });
   }
 
-  // An exact selection, or the routed Colleague; with modelProviderId the
-  // routed Colleague must use that provider.
-  async function chooseSelection(context, selection, routed = null) {
+  // An exact selection, or the routed Colleague.
+  async function chooseSelection(context, selection) {
     const user = authenticatedVibe64User(context);
     if (selection) {
       const resolved = await terminals.resolveAssistantSelection(selection, { vibe64User: user });
@@ -554,13 +554,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       return resolved;
     }
     const decision = await routedColleague(user);
-    if (!decision.available) {
-      if (routed) throw failure("Colleague has no model ready yet. Review AI setup.", "vibe64_colleague_model_unavailable");
-      throw failure(COLLEAGUE_MODEL_UNAVAILABLE, "vibe64_colleague_model_unavailable");
-    }
-    if (routed?.modelProviderId && decision.effectiveSelection.modelProviderId !== routed.modelProviderId) {
-      throw failure("Colleague's model in AI setup uses a different AI. Review AI setup.", "vibe64_colleague_senior_elsewhere");
-    }
+    if (!decision.available) throw failure(COLLEAGUE_MODEL_UNAVAILABLE, "vibe64_colleague_model_unavailable");
     return decision.effectiveSelection;
   }
 
@@ -1508,9 +1502,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const selecting = state.admission.then(async () => {
         assertCurrentConversation(state, expected);
         if (closed || state.stopping || state.running) throw failure("Finish or stop Colleague's current turn before changing its model.");
-        if (!input.assistantSelection && !input.workflowEngineId) throw failure("Choose a model for Colleague.");
-        const selected = await chooseSelection(context, input.assistantSelection, input.assistantSelection ? null
-          : { modelProviderId: input.modelProviderId || "" });
+        if (!input.assistantSelection) throw failure("Choose a model for Colleague.");
+        const selected = await chooseSelection(context, input.assistantSelection);
         const settings = await terminals.resolveConversationConfiguration(selected, promptFor(state), { vibe64User: authenticatedVibe64User(context) });
         const changed = ["engineId", "modelProviderId", "modelId", "agentId", "variantId"]
           .some(key => (state.record.assistantSelection?.[key] || "") !== (selected[key] || ""));

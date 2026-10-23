@@ -688,30 +688,6 @@ test("Colleague model selection uses its canonical identity and the existing pro
   assert.equal(view.requests.some(({ url }) => url === "/api/vibe64/colleague/model"), false);
 });
 
-test("AI onboarding switches Colleague to a workflow's routed Senior without Colleague's own alerts", async t => {
-  const senior = { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-chat", agentId: "codex", variantId: "" };
-  let refuse = false;
-  const view = mount(t, async url => {
-    if (url.startsWith("/api/vibe64/colleague/models?")) return { ok: true, engines: [{ engineId: "codex", label: "Codex",
-      modelProviders: [{ id: "deepseek", models: [{ id: "deepseek-chat", label: "DeepSeek V3" }] }] }] };
-    if (url.endsWith("/selection") && refuse) return { ok: false, error: "This workflow's Senior uses a different AI. Review its model routing in AI Accounts." };
-    return { ok: true, conversationId: "same-person", messages: [], status: "ready",
-      ...(url.endsWith("/selection") ? { assistantSelection: senior } : {}) };
-  });
-  await flush();
-  const result = await view.state.colleagueModel.selectForWorkflow({ engineId: "codex", modelProviderId: "deepseek" });
-  assert.deepEqual(result, { ok: true, selection: senior, engineLabel: "Codex", modelLabel: "DeepSeek V3" });
-  const changes = nonFocusPosts(view.requests);
-  assert.equal(changes.length, 1);
-  assert.deepEqual(changes[0].options.body, { selection: { workflowEngineId: "codex", modelProviderId: "deepseek" } });
-  assert.deepEqual(await view.state.colleagueModel.current(), { selection: senior, engineLabel: "Codex", modelLabel: "DeepSeek V3" });
-
-  refuse = true;
-  assert.deepEqual(await view.state.colleagueModel.selectForWorkflow({ engineId: "codex", modelProviderId: "deepseek" }),
-    { ok: false, error: "This workflow's Senior uses a different AI. Review its model routing in AI Accounts." });
-  assert.equal(view.notices.length, 0, "onboarding shows its own error instead of Colleague's alert");
-});
-
 test("no usable Colleague model keeps the draft and opens the real account setup owner", async t => {
   const props = vue.reactive({ name: "Colleague" });
   const view = mount(t, async () => ({ ok: true, conversationId: "same-person", messages: [], status: "failed",
