@@ -50,10 +50,10 @@ logins in your home folder, so a login made in a terminal works in Vibe64 too).
 opencode is different: Vibe64 runs your installed opencode program but signs it in with
 the keys you add in AI Accounts, not with opencode's own login.
 
-Before you pick a provider, its card in AI onboarding and **Your AI setup** says
-**Needs Claude Code on this computer** (or Codex, or opencode) under its buttons
-when that program is missing; the GLM free option says **Needs opencode on this
-computer**. When a program is missing, AI Accounts (and the matching step of AI onboarding) shows
+Before you pick a provider, a card in AI onboarding and **Your AI setup** whose program is missing is
+greyed and leads with **Install Claude Code first** (or Codex, or opencode), which
+opens the install row inside the card; a card whose program runs says **Ready on
+this computer** (see [AI onboarding](ai-onboarding.md)). When a program is missing, AI Accounts (and the matching step of AI onboarding) shows
 a warning instead of the sign-in button. In **Advanced → Add a connection**, an orchestrator whose
 program is missing says **Not installed on this computer** under its name; choosing it
 (or **Choose provider** for OpenCode) opens the same warning, and the setup dialog's

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CURATED_CODEX_PROVIDERS } from "@local/vibe64-core/shared/curatedCodexProviders";
 
 const mocks = vi.hoisted(() => ({ route: null, accounts: null, curated: null, openCode: null, routing: null, colleague: null,
-  request: null, preferred: null }));
+  request: null, preferred: null, tools: null }));
 vi.mock("vue-router", () => ({ useRoute: () => mocks.route, useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock("vuetify", () => ({ useDisplay: () => ({ xs: ref(false) }) }));
 vi.mock("../../packages/vibe64-accounts/src/client/composables/useVibe64Accounts.js", () => ({ useVibe64Accounts: () => mocks.accounts }));
@@ -17,6 +17,7 @@ vi.mock("@jskit-ai/http-web/client/lib/httpClient", async (importOriginal) => ({
   ...await importOriginal(), getHttpWebClient: () => ({ request: (...args) => mocks.request(...args) })
 }));
 vi.mock("../../packages/vibe64-accounts/src/client/studio/AIAccountsSetup.vue", () => ({ default: {} }));
+vi.mock("../../src/composables/useLocalToolRows.js", () => ({ useLocalToolRows: (ids, options) => Object.assign(mocks.tools, { ids, options }) }));
 vi.mock("../../packages/vibe64-accounts/src/client/studio/ModelRoutingForm.vue", () => ({ default: {} }));
 vi.mock("../../packages/vibe64-accounts/src/client/studio/NativeProviderConnections.vue", () => ({ default: {} }));
 
@@ -80,6 +81,7 @@ beforeEach(() => {
   mocks.routing = { resource: { reload: vi.fn().mockResolvedValue({}), data: ref({ revision: 4 }) }, setups: ref(null), viewerDecisions: ref({}),
     team: ref({ available: false, ownerName: "", memberCount: 0 }) };
   mocks.preferred = {};
+  mocks.tools = { tools: ref([]), checking: ref(false), check: vi.fn().mockResolvedValue({}) };
   mocks.request = vi.fn(async () => ({ ok: true, setups: { owner: { roles: mocks.preferred } } }));
   // A mounted Colleague as the real bridge sees it: it saves exactly the model it is given, or refuses.
   const selection = ref(null);
@@ -762,6 +764,46 @@ describe("flow", () => {
     const card = (id) => state.cards.find((item) => item.id === id);
     expect([state.neededTool(card("claude"))?.label, state.neededTool(card("codex")), state.neededTool(card("glm").free)?.label])
       .toEqual(["Claude Code", null, "opencode"]);
+  });
+
+  const toolRow = (id, name, status) => ({ id, name, status, path: status === "ready" ? `~/.local/bin/${id}` : "",
+    install: status === "ready" ? null : { command: `install ${id}` }, guideUrl: `https://example.test/${id}` });
+
+  it("greys cards whose tool is missing and leads them with installing it, then subscribing, then signing in", async () => {
+    mocks.accounts.status.value.missingTools = [{ id: "claude", label: "Claude Code" }, { id: "opencode", label: "opencode" }];
+    mocks.tools.tools.value = [toolRow("claude", "Claude Code", "missing"), toolRow("codex", "Codex", "ready"),
+      toolRow("opencode", "opencode", "missing")];
+    const { state } = await flow();
+    const card = (id) => state.cards.find((item) => item.id === id);
+    expect([...mocks.tools.ids].sort()).toEqual(["claude", "codex", "opencode"]);
+    expect(mocks.tools.options.enabled.value).toBe(true);
+    expect(["claude", "codex", "deepseek", "glm"].map((id) => [id, state.installFirst(card(id))?.name || "", state.toolReady(card(id))]))
+      .toEqual([["claude", "Claude Code", false], ["codex", "", true], ["deepseek", "Claude Code", false], ["glm", "", true]]);
+    expect(state.installFirst(card("glm").free)?.name).toBe("opencode");
+    expect(state.cardClass(card("claude"))["aio-card--needs-tool"]).toBe(true);
+    expect(state.cardClass(card("codex"))["aio-card--needs-tool"]).toBe(false);
+    // Only Codex runs here: one line offers it above the recommended card, which still needs installing.
+    expect([state.readyHere?.id, state.noToolHere]).toEqual(["codex", false]);
+    state.toggleInstall(card("claude"));
+    expect([state.installOpen, state.cardClass(card("claude"))["aio-card--installing"]]).toEqual(["claude", true]);
+    mocks.accounts.refresh = vi.fn().mockResolvedValue({});
+    await state.checkTools();
+    expect([mocks.accounts.refresh.mock.calls.length, mocks.tools.check.mock.calls.length]).toEqual([1, 1]);
+  });
+
+  it("with no AI tool, every card leads with installing; a host that supplies its tools changes nothing", async () => {
+    mocks.accounts.status.value.missingTools = ["claude", "codex", "opencode"].map((id) => ({ id, label: id }));
+    mocks.tools.tools.value = [toolRow("claude", "Claude Code", "missing"), toolRow("codex", "Codex", "missing"),
+      toolRow("opencode", "opencode", "missing")];
+    let { state } = await flow();
+    expect(state.cards.every((card) => state.installFirst(card))).toBe(true);
+    expect([state.noToolHere, state.readyHere]).toEqual([true, null]);
+    app.unmount();
+    mocks.accounts.status.value.missingTools = [];
+    ({ state } = await flow());
+    expect(mocks.tools.options.enabled.value).toBe(false);
+    expect(state.cards.map((card) => [state.cardTool(card), state.cardClass(card)["aio-card--needs-tool"]]))
+      .toEqual(state.cards.map(() => [null, false]));
   });
 
   // Inline, as Account settings' AI Accounts: it reads its own setup state.

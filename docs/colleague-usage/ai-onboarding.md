@@ -102,9 +102,27 @@ normal AI Accounts setup directly:
 Each choice runs through a program installed on this computer: Claude through
 **Claude Code**, Codex and GLM through **Codex**, DeepSeek through **Claude
 Code**, and the free GLM-4.7
-Flash through **opencode**. A card whose program is missing says **Needs
-[program] on this computer** under its buttons before you choose it. If that
-program is missing, Step 2 shows a warning instead of the sign-in or key form:
+Flash through **opencode**. When any of these programs is missing, Vibe64 checks
+each one by running it, and the cards show the result before you choose:
+
+- A card whose program runs here says **Ready on this computer** under its buttons.
+- A card whose program is missing is greyed. Its main button is **Install
+  [program] first**, which opens the install row inside the card: one sentence,
+  the install command with a copy button, **Check again** and **Other ways**.
+  **Get [provider]** (the subscription page) and **Already subscribed? Connect**
+  stay below it as links. The order is install, then subscribe, then sign in.
+  Once **Check again** finds the program, the card returns to full colour. The
+  free GLM option has its own **Install opencode first** button.
+- When the recommended Claude card still needs installing but another card's
+  program runs here, a line above the cards says **Ready on this computer:
+  [program]** with **Use [provider]**, which opens that card's connect step.
+- When no AI program is on this computer at all, every card is greyed with
+  **Install [program] first**, and the heading adds **No AI tool is on this
+  computer yet. Install the one your AI needs first.**
+
+When every program is installed (or the computer's programs are provided for
+you), the cards look as usual with no install rows. If you connect anyway while
+the program is missing, Step 2 shows a warning instead of the sign-in or key form:
 
 - **[Claude Code, Codex or opencode] isn't installed on this computer**, with its
   official one-line install command, a **Copy** button and **Other ways to install**.

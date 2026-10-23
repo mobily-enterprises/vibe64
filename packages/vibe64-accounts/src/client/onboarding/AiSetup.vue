@@ -22,6 +22,8 @@ import { aiOnboardingRows, aiTeamSetupSnoozed, snoozeAiTeamSetup, useAiOnboardin
 import { routingSelectionText } from "../studio/ModelRoutingRow.vue";
 import { ASSISTANT_SETUP_ROLES } from "@local/vibe64-runtime/shared/assistantRouting";
 import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_LEARNING_KEY } from "/src/lib/vibe64AssistantHost.js";
+import ToolInstallRow from "/src/components/studio/ToolInstallRow.vue";
+import { useLocalToolRows } from "/src/composables/useLocalToolRows.js";
 
 // The AI setup stage: choose a provider, connect it, settle routing and prove
 // it answers. The onboarding shell shows it after its Why screen; Account
@@ -153,11 +155,42 @@ function neededTool(card) {
   const tools = setup.accounts?.status.value?.missingTools || [];
   return tools.find((tool) => tool.id === card.connect.engineId) || null;
 }
+// Where an AI tool is missing, each card's tool is checked by running it, so a
+// card can say it is ready here or lead with installing it. A host that
+// supplies its own tools reports none missing, and its cards stay as they are.
+const someToolMissing = computed(() => (setup.accounts?.status.value?.missingTools || []).length > 0);
+const toolCheck = useLocalToolRows(["claude", "codex", "opencode"], {
+  enabled: computed(() => props.open && props.canConfigure && someToolMissing.value)
+});
+// The tool row for a card or its free option, while it still needs connecting.
+function cardTool(item) {
+  if (!item || item.connected || !someToolMissing.value) return null;
+  const id = item.connect.engineId;
+  const checked = toolCheck.tools.value.find((tool) => tool.id === id);
+  if (checked) return checked;
+  const missing = neededTool(item);
+  return missing && { id, name: missing.label, status: "missing", install: missing.install, guideUrl: missing.install?.guideUrl };
+}
+// Cards whose tool is missing are greyed and lead with installing it, then subscribing, then signing in.
+function installFirst(item) {
+  const tool = cardTool(item);
+  return tool && tool.status !== "ready" && !needsReconnect(item) ? tool : null;
+}
+const toolReady = (item) => cardTool(item)?.status === "ready";
+const noToolHere = computed(() => !wasSetUp.value && cards.value.every((card) => installFirst(card)));
+// The best card whose tool is ready, when the recommended one still needs installing.
+const readyHere = computed(() => !wasSetUp.value && installFirst(featured.value)
+  ? orderedCards.value.find((card) => toolReady(card) && cardAction(card) === "get") || null : null);
+// The install row open in a card, by card or free option id.
+const installOpen = ref("");
+function toggleInstall(item) {
+  installOpen.value = installOpen.value === item.id ? "" : item.id;
+}
 const checkingTools = ref(false);
 async function checkTools() {
   checkingTools.value = true;
   try {
-    await setup.accounts?.refresh();
+    await Promise.all([setup.accounts?.refresh(), someToolMissing.value && toolCheck.check()]);
   } finally {
     checkingTools.value = false;
   }
@@ -321,7 +354,8 @@ function openManage(card) {
 
 function cardClass(card) {
   return { "aio-card--featured": card.crown, "aio-card--connected": card.connected,
-    "aio-card--reconnect": cardAction(card) === "reconnect", "aio-card--collapsed": !expanded(card) };
+    "aio-card--reconnect": cardAction(card) === "reconnect", "aio-card--collapsed": !expanded(card),
+    "aio-card--needs-tool": cardAction(card) === "get" && Boolean(installFirst(card)), "aio-card--installing": installOpen.value === card.id };
 }
 
 // Configured but none of its connections works any more.
@@ -561,6 +595,7 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
             {{ wasSetUp ? "Keep what you have, switch your main AI, or add another. Nothing is removed."
               : "Ranked by how good Vibe64 feels. Our honest advice: Claude." }}
           </p>
+          <p v-if="noToolHere" class="ai-onboarding__lede">No AI tool is on this computer yet. Install the one your AI needs first.</p>
         </header>
         <div v-if="wasSetUp && currentMarks.length" class="aio-current" role="group" aria-label="Currently using">
           <span class="aio-current__marks">
@@ -591,6 +626,16 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
           <template #append><v-btn variant="text" @click="setup.reload()">Try again</v-btn></template>
         </v-alert>
         <AiWaitStatus :active="verifying" :label="verifyLabel" class="mb-6" />
+        <div v-if="readyHere" class="aio-current aio-ready-here" role="group" aria-label="Ready on this computer">
+          <v-icon :icon="mdiCheckCircle" class="aio-ready-here__icon" aria-hidden="true" />
+          <span class="aio-current__text">
+            <span class="aio-current__label">Ready on this computer</span>
+            <span class="aio-current__value">{{ cardTool(readyHere).name }}</span>
+          </span>
+          <v-btn color="primary" variant="tonal" size="large" :append-icon="mdiArrowRight" class="aio-current__keep" @click="connect(readyHere)">
+            Use {{ readyHere.name }}
+          </v-btn>
+        </div>
         <div class="ai-onboarding__cards">
           <article
             v-for="(card, index) in orderedCards" :key="card.id"
@@ -663,6 +708,21 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
                   >
                     Reconnect {{ card.name }}
                   </v-btn>
+                  <template v-else-if="cardAction(card) === 'get' && installFirst(card)">
+                    <v-btn
+                      color="primary" :variant="CTA_VARIANT[card.rank - 1]" size="large" :aria-expanded="String(installOpen === card.id)"
+                      :aria-controls="`aio-install-${card.id}`" @click="toggleInstall(card)"
+                    >
+                      Install {{ installFirst(card).name }} first
+                    </v-btn>
+                    <v-btn
+                      variant="text" color="primary" class="aio-card__link" :href="card.signUp.url" target="_blank" rel="noopener noreferrer"
+                      :append-icon="mdiOpenInNew" @click="connect(card, 'opened')"
+                    >
+                      Get {{ card.name }}<span class="d-sr-only"> (opens in a new tab)</span>
+                    </v-btn>
+                    <v-btn variant="text" color="primary" class="aio-card__link" @click="connect(card, 'have')">{{ card.have }}</v-btn>
+                  </template>
                   <template v-else-if="cardAction(card) === 'get'">
                     <v-btn
                       color="primary" :variant="CTA_VARIANT[card.rank - 1]" size="large"
@@ -680,19 +740,35 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
                     Manage
                   </v-btn>
                 </div>
-                <p v-if="neededTool(card)" class="aio-card__needs">
+                <p v-if="toolReady(card)" class="aio-card__needs aio-card__needs--ready" :title="cardTool(card).path">
+                  <v-icon :icon="mdiCheckCircle" size="18" aria-hidden="true" />Ready on this computer
+                </p>
+                <p v-else-if="neededTool(card) && !installFirst(card)" class="aio-card__needs">
                   <v-icon :icon="mdiLaptop" size="18" aria-hidden="true" />Needs {{ neededTool(card).label }} on this computer
                 </p>
+                <ToolInstallRow
+                  v-if="installOpen === card.id && cardTool(card)" :id="`aio-install-${card.id}`" class="aio-card__install"
+                  :tool="cardTool(card)" :checking="checkingTools" @check="checkTools"
+                />
                 <div v-if="card.free" class="aio-card__free">
                   <p class="aio-card__free-label">
                     <strong>{{ card.free.label }}</strong>
                     <span>{{ card.free.connected ? "Connected." : card.free.detail }}</span>
-                    <span v-if="neededTool(card.free)" class="aio-card__needs">
+                    <span v-if="toolReady(card.free)" class="aio-card__needs aio-card__needs--ready" :title="cardTool(card.free).path">
+                      <v-icon :icon="mdiCheckCircle" size="18" aria-hidden="true" />Ready on this computer
+                    </span>
+                    <span v-else-if="neededTool(card.free) && !installFirst(card.free)" class="aio-card__needs">
                       <v-icon :icon="mdiLaptop" size="18" aria-hidden="true" />Needs {{ neededTool(card.free).label }} on this computer
                     </span>
                   </p>
                   <v-btn
-                    v-if="!card.free.connected" variant="outlined" color="primary" :href="card.free.signUp.url" target="_blank"
+                    v-if="installFirst(card.free)" variant="outlined" color="primary" :aria-expanded="String(installOpen === card.free.id)"
+                    :aria-controls="`aio-install-${card.free.id}`" @click="toggleInstall(card.free)"
+                  >
+                    Install {{ installFirst(card.free).name }} first
+                  </v-btn>
+                  <v-btn
+                    v-if="!card.free.connected" :variant="installFirst(card.free) ? 'text' : 'outlined'" color="primary" :href="card.free.signUp.url" target="_blank"
                     rel="noopener noreferrer" :append-icon="mdiOpenInNew" @click="connect(card.free, 'opened')"
                   >
                     Start free<span class="d-sr-only"> (opens Z.AI in a new tab)</span>
@@ -712,6 +788,10 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
                   >
                     Manage
                   </v-btn>
+                  <ToolInstallRow
+                    v-if="installOpen === card.free.id && cardTool(card.free)" :id="`aio-install-${card.free.id}`" class="aio-card__install"
+                    :tool="cardTool(card.free)" :checking="checkingTools" @check="checkTools"
+                  />
                 </div>
               </div>
             </template>
@@ -1114,6 +1194,11 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
   .aio-card:not(.aio-card--featured) .aio-plan__more { border: 0; margin: 0; padding: 0; }
   .aio-card:not(.aio-card--featured) .aio-card__ctas { align-content: start; grid-area: ctas; }
   .aio-card:not(.aio-card--featured) .aio-card__free { grid-area: free; margin-top: var(--v64-space-1); }
+  .aio-card--installing:not(.aio-card--featured) {
+    grid-template-areas: "head facts plan ctas" "head note plan ctas" "install install install install" "free free free free";
+    grid-template-rows: auto 1fr auto auto;
+  }
+  .aio-card:not(.aio-card--featured) .aio-card__install { grid-area: install; margin-top: var(--v64-space-2); }
 }
 .aio-card--connected { border: 2px solid var(--v64-success); }
 .aio-card--reconnect { border: 2px solid color-mix(in srgb, rgb(var(--v-theme-warning)) 70%, transparent); }
@@ -1187,6 +1272,16 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
   margin: 0;
 }
 .aio-card__free .aio-card__needs { justify-content: flex-start; margin-top: var(--v64-space-1); }
+.aio-card__needs--ready .v-icon { color: var(--v64-success); }
+.aio-card__free .aio-card__install { flex: 1 1 100%; }
+/* A card whose tool is missing is greyed until it is installed; its actions and install row keep their colour. */
+.aio-card--needs-tool,
+.aio-card--needs-tool.aio-card--featured { background: var(--v64-surface-container-low); border-color: var(--v64-outline-variant); box-shadow: none; }
+.ai-setup .aio-card--needs-tool:hover { box-shadow: none; }
+.aio-card--needs-tool :is(.aio-card__head, .aio-card__facts, .aio-card__note-row, .aio-plan, .aio-card__ribbon) { filter: grayscale(1); opacity: 0.7; }
+.aio-card--needs-tool .aio-plan { border-left-color: var(--v64-outline-variant); }
+.aio-ready-here { margin-top: 0; }
+.aio-ready-here__icon { color: var(--v64-success); }
 .aio-card__note-row:empty { display: none; }
 
 /* The plan: official name and price first, the budget advice beneath. */
