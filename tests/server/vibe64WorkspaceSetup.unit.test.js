@@ -607,6 +607,13 @@ test("unchanged setup provisions newly declared resources before reusing a succe
   });
 });
 
+test("a failed preparation keeps the Stack runtimes it used, so its panel can check them", () => {
+  assert.deepEqual(workspaceSetupState({ status: "failed", runtimes: ["ruby", "cpp", "ruby", "../x", " python "] }).runtimes,
+    ["ruby", "cpp", "python"]);
+  assert.equal(Object.hasOwn(workspaceSetupState({ status: "succeeded", runtimes: ["ruby"] }), "runtimes"), false);
+  assert.equal(Object.hasOwn(workspaceSetupState({ status: "failed", runtimes: [] }), "runtimes"), false);
+});
+
 test("resource identity is retained only on valid successful setup state", () => {
   const resourceIdentity = "a".repeat(64);
   assert.equal(workspaceSetupState({ status: "succeeded", resourceIdentity }).resourceIdentity, resourceIdentity);

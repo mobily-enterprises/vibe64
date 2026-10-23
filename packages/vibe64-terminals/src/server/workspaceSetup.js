@@ -236,6 +236,7 @@ function createWorkspaceSetupRunner({
     redactionSecrets = [],
     resourceAdmissionId = "",
     renewal = false,
+    runtimes = [],
     startedAt = "",
     transcript = ""
   } = {}) {
@@ -247,6 +248,7 @@ function createWorkspaceSetupRunner({
       finishedAt: stateTimestamp(clock),
       recipeHash,
       resourceAdmissionId,
+      runtimes,
       startedAt,
       status: "failed",
       transcript: appendWorkspaceSetupTranscript(
@@ -353,6 +355,7 @@ function createWorkspaceSetupRunner({
             recipeHash: recipe.recipeHash,
             redactionSecrets,
             renewal: context.renewal,
+            runtimes: recipe.runtimes,
             startedAt,
             transcript: context.transcript
           });

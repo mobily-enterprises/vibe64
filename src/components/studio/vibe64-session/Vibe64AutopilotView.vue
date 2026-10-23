@@ -418,6 +418,11 @@
             />
           </template>
         </Vibe64TemporaryActionTerminal>
+        <WorkspaceSetupToolRows
+          v-if="workspaceSetupStatus === 'failed' && !workspaceSetupDismissed"
+          :active="workspaceSetupStatus === 'failed'"
+          :runtimes="props.session?.workspaceSetup?.runtimes || []"
+        />
       </div>
 
       <Vibe64ConversationLog
@@ -1043,6 +1048,7 @@ import { useVibe64StarredFiles } from "@/composables/useVibe64StarredFiles.js";
 import Vibe64AutopilotPromptTextarea from "@/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue";
 import { AssistantQuestionInputs, AssistantComposerSupport } from "@jskit-ai/assistant-core/client/conversation";
 import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64ConversationLog.vue";
+import WorkspaceSetupToolRows from "@/components/studio/vibe64-session/WorkspaceSetupToolRows.vue";
 import Vibe64TemporaryActionTerminal from "@/components/studio/Vibe64TemporaryActionTerminal.vue";
 import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFixAction.vue";
 import Vibe64ConnectedReplacement from "@/components/studio/vibe64-session/Vibe64ConnectedReplacement.vue";

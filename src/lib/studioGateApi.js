@@ -21,6 +21,7 @@ const VIBE64_PROJECT_CHANGED_EVENT = "vibe64.project.changed";
 
 const TARGET_PROJECT_ENDPOINT = studioApiPath("studio/current-app");
 const STUDIO_HEALTH_ENDPOINT = studioApiPath("studio/health");
+const STUDIO_TOOLS_ENDPOINT = studioApiPath("studio/health/tools");
 const VIBE64_ENDPOINT = studioApiPath("vibe64");
 const PROJECT_SELECTION_ENDPOINT = `${VIBE64_ENDPOINT}/projects`;
 const ENV_ENDPOINT = `${VIBE64_ENDPOINT}/env`;
@@ -101,6 +102,7 @@ export {
   TARGET_PROJECT_API_SUFFIX,
   TARGET_PROJECT_ENDPOINT,
   STUDIO_HEALTH_ENDPOINT,
+  STUDIO_TOOLS_ENDPOINT,
   projectSelectionQueryKey,
   envQueryKey,
   engineeringSettingsQueryKey,
