@@ -8,6 +8,7 @@ import { defineVibe64AssistantSelection, vibe64AssistantSelectionLabel, VIBE64_A
 import { ASSISTANT_ROUTING_ASSIGNMENTS, ASSISTANT_ROUTING_ROLE_DEFINITIONS } from "@local/vibe64-runtime/shared/assistantRouting";
 import { useModelRouting } from "../composables/useModelRouting.js";
 import { ACCOUNTS_ENDPOINT } from "../lib/accountsGateApi.js";
+import AiPersonalUse from "./AiPersonalUse.vue";
 
 const props = defineProps({ connectionId: { type: String, default: "" }, connectionLabel: { type: String, default: "" },
   setupError: { type: String, default: "" },
@@ -165,9 +166,10 @@ function items(role) {
     const agent = VIBE64_AGENT_PROVIDERS.find(({ id }) => id === choice.engineId)?.label || choice.engineId;
     const status = choice.compatibilityError ? "Compatibility pending" : !choice.available ? "Unavailable"
       : ["junior", "sharedBackup"].includes(role) && choice.capabilities?.toolcall === false ? "Tools unavailable" : "";
-    return { id: choiceId(choice), engineId: choice.engineId, agent, label: choice.label || choice.modelId, status,
-      recommended: !status && choiceId(choice) === choiceId(engine.value.roles[role].recommendation),
-      props: { subtitle: `${choice.providerLabel} · ${choice.accessLabel}`, disabled: Boolean(status) } };
+    const personal = choice.available === true && choice.ownerOnly !== false;
+    return { id: choiceId(choice), engineId: choice.engineId, agent, label: choice.label || choice.modelId, status, personal,
+      access: choice.accessLabel, recommended: !status && choiceId(choice) === choiceId(engine.value.roles[role].recommendation),
+      props: { subtitle: personal ? choice.providerLabel : `${choice.providerLabel} · ${choice.accessLabel}`, disabled: Boolean(status) } };
   });
   if (current && !choices.some(({ id }) => id === choiceId(current))) {
     const agent = VIBE64_AGENT_PROVIDERS.find(({ id }) => id === current.engineId)?.label || current.engineId;
@@ -180,6 +182,11 @@ function items(role) {
   });
   return [{ id: "", label: role === "sharedBackup" ? "No shared backup" : "Choose a model" }, ...groups];
 }
+// Each personal provider the draft routes to, explained once above the roles.
+const personalProviders = computed(() => [...new Set(roles.flatMap(({ id }) => {
+  const choice = choiceFor(draft.value[selectedEngine.value]?.[id], id);
+  return choice?.available === true && choice.ownerOnly !== false ? [choice.modelProviderId] : [];
+}))]);
 function choose(role, id) {
   const choice = engine.value.roles[role].choices.find((item) => choiceId(item) === id);
   draft.value[selectedEngine.value][role] = choice ? { ...defineVibe64AssistantSelection(choice), selectionSource: "explicit" } : null;
@@ -295,6 +302,7 @@ async function reload() {
           <v-alert v-if="engine?.error" type="warning" variant="tonal" class="mb-4">{{ engine.error }}</v-alert>
           <v-btn v-if="canEdit && recommendedChanges.length" variant="outlined" color="primary" size="small" min-height="36" class="mb-4" :disabled="saving || stale" @click="reviewRecommendations">Review recommendations</v-btn>
           <p v-else-if="canEdit" class="text-body-small mb-4" role="status">No recommended changes.</p>
+          <AiPersonalUse v-for="providerId in personalProviders" :key="providerId" :provider-id="providerId" variant="note" class="model-routing__personal mb-4" />
           <v-alert v-if="otherModelsRequested && otherModels.loadError.value" type="warning" variant="tonal" class="mb-4">
             Additional model choices could not load. {{ otherModels.loadError.value }}
             <v-btn variant="text" @click="otherModels.resource.reload()">Retry</v-btn>
@@ -304,18 +312,19 @@ async function reload() {
             <div class="model-routing__role mb-4" :class="{ 'model-routing__role--compact': smAndDown }">
               <v-autocomplete
                 :ref="field => roleFields[role.id] = field" :model-value="choiceId(draft[selectedEngine]?.[role.id])" :items="items(role.id)" item-title="label" item-value="id" :label="role.label" variant="outlined" :disabled="saving || !canEdit" :hint="roleHint(role)" persistent-hint :error-messages="roleError(role.id)"
-                :filter-keys="['title', 'raw.agent', 'props.subtitle']" no-data-text="No matching models" class="model-routing__model"
+                :filter-keys="['title', 'raw.agent', 'raw.access', 'props.subtitle']" no-data-text="No matching models" class="model-routing__model"
                 :loading="otherModelsRequested && role.crossOrchestrator && otherModels.resource.isInitialLoading.value"
                 @update:menu="open => { if (open && role.crossOrchestrator) otherModelsRequested = true; }"
                 @update:model-value="choose(role.id, $event)"
               >
                 <template #subheader="{ props: group }"><v-list-subheader class="model-routing__group">{{ group.label }}</v-list-subheader></template>
                 <template #item="{ props: itemProps, item }">
-                  <v-list-item v-bind="itemProps" role="option" :aria-label="[item.agent, item.label, item.props?.subtitle, item.status, item.recommended ? 'Recommended' : ''].filter(Boolean).join(' · ')" class="model-routing__option" :class="{ 'model-routing__option--model': item.id }" :min-height="item.id ? 68 : 44">
+                  <v-list-item v-bind="itemProps" role="option" :aria-label="[item.agent, item.label, item.props?.subtitle, item.personal ? 'Personal use' : '', item.status, item.recommended ? 'Recommended' : ''].filter(Boolean).join(' · ')" class="model-routing__option" :class="{ 'model-routing__option--model': item.id }" :min-height="item.id ? 68 : 44">
                     <template #title>
                       <div class="model-routing__option-title">
                         <span class="model-routing__model-name">{{ item.label }}</span>
                         <v-chip v-if="item.recommended" size="x-small" color="primary" variant="tonal">Recommended</v-chip>
+                        <AiPersonalUse v-if="item.personal" variant="badge" />
                         <span v-if="item.status" class="text-body-small">{{ item.status }}</span>
                       </div>
                     </template>
@@ -325,7 +334,7 @@ async function reload() {
                 <template #selection="{ item }">
                   <span class="model-routing__selection">
                     <span class="model-routing__model-name">{{ item.label }}</span>
-                    <span v-if="item.agent" class="text-body-small model-routing__selection-detail">{{ item.agent }}<template v-if="item.props.subtitle"> · {{ item.props.subtitle }}</template></span>
+                    <span v-if="item.agent" class="text-body-small model-routing__selection-detail">{{ item.agent }}<template v-if="item.props.subtitle"> · {{ item.props.subtitle }}</template><template v-if="item.personal"> · <strong>Personal use</strong></template></span>
                   </span>
                 </template>
               </v-autocomplete>
@@ -381,5 +390,6 @@ async function reload() {
 .model-routing__option :deep(.v-list-item-subtitle) { margin-top: 4px; line-height: 1.4; opacity: .75; color: rgb(var(--v-theme-on-surface)); }
 .model-routing__selection { display: flex; flex-direction: column; min-width: 0; padding-block: 2px; }
 .model-routing__selection-detail { opacity: .75; }
+.model-routing__personal { background: rgba(var(--v-theme-warning), .12); border-radius: 12px; padding: 10px 12px; }
 .model-routing__model :deep(.v-autocomplete__selection) { max-width: 100%; }
 </style>

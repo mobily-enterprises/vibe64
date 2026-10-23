@@ -183,6 +183,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
       engineId: "codex",
       id: "codex",
       kind: "codex",
+      modelProviderId: "openai",
       connected: codexConnected.value,
       keyHint: codexConnected.value ? "Connected" : "Reconnect required",
       managementUrl: "",
@@ -195,6 +196,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
       engineId: "claude",
       id: "claude",
       kind: "claude",
+      modelProviderId: "anthropic",
       connected: claudeConnected.value,
       keyHint: claudeConnected.value ? "Connected" : "Reconnect required",
       managementUrl: "https://claude.ai/settings/billing",
@@ -208,6 +210,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
         engineId,
         connected: engineId === "claude" ? connection.claudeReady : connection.connected,
         kind: "codex-provider",
+        modelProviderId: connection.id,
         providerLabel: provider.label,
         billingLabel: provider.description,
         ownerOnly: Boolean(provider.ownerOnly),
@@ -219,6 +222,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
       ...connection,
       engineId: "opencode",
       kind: "opencode",
+      modelProviderId: connection.id,
       modelLabel: connection.id === "zai"
           ? "GLM-4.7 Flash is ready for new sessions"
           : connection.id === "opencode"

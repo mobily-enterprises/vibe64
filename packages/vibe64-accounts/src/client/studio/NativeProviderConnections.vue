@@ -5,6 +5,7 @@ import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "@local/vibe64-cor
 import { useCodexProviderConnections } from "../composables/useCodexProviderConnections.js";
 import CliInstallNotice, { cliProblem } from "./CliInstallNotice.vue";
 import ModelRoutingForm from "./ModelRoutingForm.vue";
+import AiPersonalUse from "./AiPersonalUse.vue";
 import AiWaitStatus from "./AiWaitStatus.vue";
 
 const props = defineProps({
@@ -143,7 +144,7 @@ async function save({ remove = false, useSavedKey = false } = {}) {
           class="mt-3" :active="busy"
           :label="confirmRemove ? `Disconnecting ${provider.label}…` : `Checking the key with ${provider.label}. This can take up to a minute.`"
         />
-        <p v-if="provider.ownerOnly" class="text-body-small mt-3">This plan connection is available to the workspace owner.</p>
+        <AiPersonalUse v-if="provider.ownerOnly" :provider-id="providerId" variant="note" class="text-body-small mt-3" />
         <v-alert v-if="confirmRemove" variant="tonal" class="mt-3">
           Disconnect {{ provider.label }} from {{ engineLabel }}? Work using this connection will stop. Your conversations and files remain.
           <div class="d-flex ga-2 mt-2">

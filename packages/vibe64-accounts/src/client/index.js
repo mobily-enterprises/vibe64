@@ -2,6 +2,7 @@ export { default as AiSetup } from "./onboarding/AiSetup.vue";
 export { default as ModelRoutingForm } from "./studio/ModelRoutingForm.vue";
 export { useModelRouting } from "./composables/useModelRouting.js";
 export { default as NativeProviderConnections } from "./studio/NativeProviderConnections.vue";
+export { default as AiPersonalUse, personalUsePlan } from "./studio/AiPersonalUse.vue";
 export { useCodexProviderConnections } from "./composables/useCodexProviderConnections.js";
 export { default as AiOnboardingHost } from "./onboarding/AiOnboardingHost.vue";
 export { default as AiOnboardingNudge } from "./onboarding/AiOnboardingNudge.vue";

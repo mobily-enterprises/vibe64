@@ -43,8 +43,9 @@ const props = defineProps({
   changeWhere: { type: String, default: "Account settings → AI Accounts" }
 });
 // Slot connection-access ({ connection, card, place }): a host's note on who may
-// use a connection, on the card's Connected badge ("badge"), a connection's
-// tile ("row") and the success screen ("success").
+// use a connection, on the card's Connected badge ("badge"), below a connected
+// card's name ("card"), a connection's tile ("row") and the success screen
+// ("success").
 const emit = defineEmits(["close", "changed", "connected", "busy"]);
 const setup = props.onboarding || useAiOnboarding({ endpoint: props.endpoint, enabled: computed(() => props.canConfigure) });
 const { xs } = useDisplay();
@@ -486,6 +487,7 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
               </span>
               <v-icon v-if="collapsible(card)" :icon="mdiChevronDown" class="aio-card__chevron" aria-hidden="true" />
             </component>
+            <slot v-if="card.connected" name="connection-access" :card="card" place="card" />
             <template v-if="expanded(card)">
               <div class="aio-card__facts">
                 <v-skeleton-loader v-if="!loaded && !loadError" type="chip" width="120" height="24" />

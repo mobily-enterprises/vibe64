@@ -446,9 +446,20 @@ option matches, such as OpenCode Zen, with their model access) and every row
 by orchestrator; those other rows also count in the Connected strip. Who may
 use a connection is left to the host: `AiSetup` takes `owner-notice` and
 `change-where` props (generic local defaults) and a `connection-access` slot
-(`{ connection, card, place }`, place `badge`, `row` or `success`) that the
-onboarding shell and host forward; Manage, Advanced and each row pass it on.
-Manager rows carry the neutral `ownerOnly` for it.
+(`{ connection, card, place }`, place `badge`, `card` below a connected card's
+name, `row` or `success`) that the onboarding shell and host forward; Manage,
+Advanced and each row pass it on. Manager rows carry the neutral `ownerOnly` and
+`modelProviderId` for it.
+
+`AiPersonalUse` (exported with `personalUsePlan`) is the single explanation of a
+personal-use plan. It maps `anthropic`, `openai` and `zai-coding-plan` to the
+plan and the provider whose terms make it personal, and renders an amber
+lock-icon **Personal use** chip (`chip`, or `badge` without a link inside list
+options), a `note` sentence, or a bare `link`; each link opens the same
+explanation dialog. Model routing marks available `ownerOnly` choices with the
+badge, adds Personal use to the selected field, and shows one note per personal
+provider the draft routes to. The provider key editor and the GLM Coding Plan
+form use it too; hosts reuse it in the `connection-access` slot.
 
 OpenCode connections retain the existing versioned file at
 `<systemRoot>/ai-connections/connections.json`. Native Codex and Claude login

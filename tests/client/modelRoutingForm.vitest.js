@@ -26,7 +26,7 @@ const foreign = selection("opencode", "deepseek", "deepseek-flash");
 const pickle = selection("opencode", "opencode", "big-pickle");
 function resourceData() {
   const choices = [astra, deepseek, foreign, pickle].map((item) => ({ ...item, label: item.modelId, engineLabel: item.engineId,
-    providerLabel: item.modelProviderId, accessLabel: item === astra ? "Personal use" : "Workspace use", available: true, variants: [] }));
+    providerLabel: item.modelProviderId, accessLabel: item === astra ? "Personal use" : "Workspace use", ownerOnly: item === astra, available: true, variants: [] }));
   return { ok: true, revision: 3, canConfigure: true, engines: [{ engineId: "codex", label: "Codex", connected: true,
     roles: Object.fromEntries(["senior", "junior", "helper", "router", "sharedBackup"].map((role) => [role, {
       assignment: role === "senior" ? astra : role === "junior" ? { ...astra, selectionSource: "explicit" } : pickle,
@@ -71,6 +71,11 @@ it("groups model choices by agent without thinking and keeps thinking in its sep
   expect(options.filter(item => item.type === "subheader").map(item => item.label)).toEqual(["Codex", "OpenCode"]);
   expect(options.find(item => item.id === state.choiceId(deepseek))).toMatchObject({ recommended: true, props: { subtitle: "deepseek · Workspace use", disabled: false } });
   expect(options.find(item => item.id === state.choiceId(foreign))).toMatchObject({ recommended: false });
+  // Personal choices carry the marked Personal use badge instead of plain subtitle text.
+  expect(options.find(item => item.id === state.choiceId(astra))).toMatchObject({ personal: true, access: "Personal use", props: { subtitle: "openai" } });
+  expect(options.find(item => item.id === state.choiceId(deepseek))).toMatchObject({ personal: false });
+  // Senior and Junior both route to the personal plan: it is explained once.
+  expect(state.personalProviders).toEqual(["openai"]);
   expect(labels).toContain("gpt-6-astra");
   expect(labels).toContain("deepseek-flash");
   expect(state.items("router").filter(item => item.label === "deepseek-flash").map(item => item.agent)).toEqual(["Codex", "OpenCode"]);

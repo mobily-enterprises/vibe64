@@ -12,6 +12,7 @@ import {
   mdiMagnify,
   mdiRobotOutline
 } from "@mdi/js";
+import AiPersonalUse from "./AiPersonalUse.vue";
 import AiWaitStatus from "./AiWaitStatus.vue";
 import CliInstallNotice from "./CliInstallNotice.vue";
 import ModelRoutingForm from "./ModelRoutingForm.vue";
@@ -416,13 +417,10 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
           <v-sheet v-else-if="editorConnectionPolicy" class="vibe64-provider-editor__route" rounded="lg">
             <span>
               <strong>{{ editorConnectionPolicy.routeLabel || editorConnectionPolicy.productLabel }}</strong>
-              <v-chip
-                :color="editorConnectionPolicy.accessLabel === 'Workspace use' ? 'primary' : 'warning'"
-                size="x-small"
-                variant="tonal"
-              >
+              <v-chip v-if="editorConnectionPolicy.accessLabel === 'Workspace use'" color="primary" size="x-small" variant="tonal">
                 {{ editorConnectionPolicy.accessLabel }}
               </v-chip>
+              <AiPersonalUse v-else :provider-id="editorProviderId" />
             </span>
             <p>{{ editorRouteExplanation }}</p>
           </v-sheet>

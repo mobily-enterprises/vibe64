@@ -243,7 +243,9 @@ then **Save routing**. Connecting or reconnecting does not overwrite saved roles
 
 The model dropdown groups choices under orchestrator headings such as **Codex**,
 **Claude Code** and **OpenCode**. Choose an indented model beneath its heading;
-the second line identifies its provider and personal or workspace access.
+the second line identifies its provider, and **Workspace use** or an amber
+**Personal use** chip shows who may use it (see
+[personal-use subscriptions](ai-personal-use.md)).
 **Recommended** marks the suggested model for that role. Unavailable choices
 show their reason and cannot be selected. Type to search by model, orchestrator,
 provider or access; only matching groups remain visible. The selected field
