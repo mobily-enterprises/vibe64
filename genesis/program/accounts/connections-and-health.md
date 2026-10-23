@@ -163,9 +163,14 @@ reports that review is required without clearing it on the person's behalf.
 Models (the routing file) is a shared Accounts surface with two setups. The
 owner setup has Senior, Junior, Router, Colleague, Fix it with AI, Explain &
 check and Quick helper; the team setup (`nonOwner`) has only the four helpers.
-Main chat (Auto, Senior, Junior, review, Deslop) always resolves through the
-owner setup, whose Senior and Junior share one tool; a non-owner's helpers
-resolve through the team setup. Each role holds an exact selection, `null`
+Main chat (Auto, Senior, Junior, review, Deslop) resolves through the owner
+setup, whose Senior and Junior share one tool; a non-owner's helpers resolve
+through the team setup. The one exception is a non-owner in their own practice
+project (a lesson is private to its learner): `assistantRoutingSetupValues`
+resolves main chat through the team setup, with Colleague as Senior and Junior
+and Quick helper as Router, so a personal plan is never reached. Dispatch knows
+the lesson from the practice request scope or the practice runtime, never from
+input. Each role holds an exact selection, `null`
 (off), `{ follows: role }`, or nothing. Saves are atomic and revision-checked in
 private installation state at `ai-connections/routing.json` (schema 5);
 unreadable settings are preserved for recovery and older formats require the

@@ -2,8 +2,8 @@ import path from "node:path";
 import { listTerminalSessions } from "@local/vibe64-execution/server/terminalSessions";
 import { openMainConversation } from "../mainConversationBinding.js";
 import { requireCompletedConversationRewind, requireCompletedNativeConversationReplacement } from "../assistantChangeover.js";
-import { ASSISTANT_PURPOSE_ROLES, ASSISTANT_ROLE_PURPOSES, ASSISTANT_SETUP_ROLES, assistantRoutingSetupFor, assistantSetupRoleValue,
-  isAssistantRoutingOwner, isMainChatPurpose, recommendedRoutingAssignments, routingAssignmentSelection, routingModelChoices,
+import { ASSISTANT_PURPOSE_ROLES, ASSISTANT_ROLE_PURPOSES, ASSISTANT_SETUP_ROLES, assistantRoutingSetupValues, assistantSetupRoleValue,
+  isAssistantRoutingOwner, needsMainChatApproval, recommendedRoutingAssignments, routingAssignmentSelection, routingModelChoices,
   resolveAssistantPurpose, hasConnectedAssistantModels } from "@local/vibe64-runtime/shared/assistantRouting";
 
 import {
@@ -27,8 +27,10 @@ import {
   normalizeText
 } from "@local/vibe64-core/server/core";
 import {
-  currentProjectVibe64User
+  currentProjectVibe64User,
+  currentRequestIsPracticeProject
 } from "@local/vibe64-core/server/projectRequestContext";
+import { isPracticeProjectRuntime } from "../practiceAgentGuidance.js";
 
 const SESSION_AGENT_PROVIDER_BINDING_CONFLICT_CODE = "vibe64_agent_provider_binding_conflict";
 const EXECUTION_PROFILE_RESOLUTION_FIELDS = new Set([
@@ -834,10 +836,12 @@ function createSessionAgentManager({
     options = { ...options, vibe64User: actor };
     const configuration = structuredClone(options.configuration || await readRoutingConfiguration?.());
     const { purpose, override, requirements, reviewEnabled, temporaryChat = false } = input;
-    const values = configuration?.[assistantRoutingSetupFor(purpose, actor, { temporaryChat })] || {};
+    // A lesson is private to its learner; the server decides, never the input.
+    const practice = isPracticeProjectRuntime(options.runtime) || currentRequestIsPracticeProject();
+    const values = assistantRoutingSetupValues(configuration, purpose, actor, { temporaryChat, practice });
     const role = ASSISTANT_PURPOSE_ROLES[purpose];
     // Team members never reach main chat's models; the resolver says why.
-    const roles = isMainChatPurpose(purpose, { temporaryChat }) && !isAssistantRoutingOwner(actor) ? []
+    const roles = needsMainChatApproval(purpose, actor, { temporaryChat, practice }) ? []
       : purpose === "auto" ? ["senior", "junior", "router"]
         : ["senior", "junior"].includes(role) ? ["senior", "junior"] : role ? [role] : [];
     const selections = roles.map((key) => override?.role === key && purpose !== "auto"
@@ -854,7 +858,7 @@ function createSessionAgentManager({
       const fact = await readSelectionAccess(selection);
       if (canUseVibe64Assistant(fact, actor)) accessible.push(selection);
     }
-    const resolution = { purpose, actor, configuration, connectionAccess, override, requirements, reviewEnabled, temporaryChat };
+    const resolution = { purpose, actor, configuration, connectionAccess, override, requirements, reviewEnabled, temporaryChat, practice };
     // Access and missing roles need no native discovery.
     // An eligible destination still requires the current catalogue before dispatch.
     const preflight = resolveAssistantPurpose({ ...resolution, validateModels: false });

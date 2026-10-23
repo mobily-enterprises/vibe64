@@ -50,8 +50,8 @@ current one), then the beat's line:
   it opens the place (or the file), reveals and focuses the coding chat, opens
   Courses or Colleague (without asking it anything), reloads the Preview, or
   sends the line's quoted prompt as your next message in the practice
-  project's Main chat. That message shows a **Sent by the lesson** chip under
-  it. On a **Save** line it only points at **Save**: saving stays yours. On a
+  project's Main chat (for a team member, on the team AI, with no owner
+  approval). That message shows a **Sent by the lesson** chip under it. On a **Save** line it only points at **Save**: saving stays yours. On a
   line about waiting for the agent, pressing the App's button, minimising
   Colleague or pressing **L** there is no Do it for me (for **L** it shows
   where the button is). If it cannot be done here (for example the chat cannot take a

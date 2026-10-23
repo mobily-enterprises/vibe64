@@ -55,8 +55,10 @@ function useVibe64MainChatApprovals({
   const view = computed(() => resource.data.value?.ok === false ? null : resource.data.value || null);
   const loaded = computed(() => Boolean(view.value));
   const isOwner = computed(() => view.value?.owner !== false);
+  // A team member's own lesson runs on the team AI and is never queued.
+  const lessonTeamAi = computed(() => loaded.value && !isOwner.value && view.value?.practice === true);
   // Before the read arrives the composer keeps its ordinary owner behaviour.
-  const memberMode = computed(() => loaded.value && !isOwner.value);
+  const memberMode = computed(() => loaded.value && !isOwner.value && !lessonTeamAi.value);
   const ownerName = computed(() => view.value?.ownerName || "the owner");
   const viewerId = computed(() => view.value?.viewer?.id || "");
   const entries = computed(() => Array.isArray(view.value?.entries) ? view.value.entries : []);
@@ -169,7 +171,7 @@ function useVibe64MainChatApprovals({
     if (typeof document !== "undefined") document.title = titleWithoutCount(document.title);
   });
 
-  return { loaded, isOwner, memberMode, ownerName, viewerId, entries, open, waitingCount, recentDecided, earlierDecided,
+  return { loaded, isOwner, memberMode, lessonTeamAi, ownerName, viewerId, entries, open, waitingCount, recentDecided, earlierDecided,
     pending, sending, own, send, edit, withdraw, decline, approve, loadError: resource.loadError };
 }
 

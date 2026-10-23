@@ -19,6 +19,7 @@ import {
   countWaitingMainChatApprovals
 } from "../../packages/vibe64-sessions/src/server/mainChatApprovals.js";
 import { registerWorkspaceTeamReader } from "../../packages/vibe64-core/src/server/workspaceTeam.js";
+import { runWithPracticeProjectContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 
 const owner = Object.freeze({ username: "tony", role: "owner", preferredName: "Tony" });
 const ana = Object.freeze({ username: "ana", role: "member", preferredName: "Ana" });
@@ -79,6 +80,21 @@ test("a member's main-chat message is queued; the owner's and internal sends go 
   await service.sendAgentMessage("s1", { message: "Local message", messageId: "m-local" });
   assert.deepEqual(sent.map(({ input }) => input.message), ["Owner message", "Local message"]);
   assert.equal(entries().length, 1);
+});
+
+test("a member's own lesson goes straight to main chat on the team AI; the read says so", async () => {
+  const { service, sent, entries } = harness();
+  const lesson = { slug: `training-${"a".repeat(32)}`, vibe64User: ana };
+  await runWithPracticeProjectContext("lesson-test", lesson, async () => {
+    await service.sendAgentMessage("s1", { message: "Add a title", messageId: "lesson-0001", messageSource: "lesson", vibe64User: ana });
+    const read = await service.readMainChatApprovals("s1", { vibe64User: ana });
+    assert.deepEqual([read.owner, read.practice], [false, true]);
+  });
+  assert.deepEqual(sent.map(({ input, options }) => [input.message, options.vibe64User.username]), [["Add a title", "ana"]]);
+  assert.equal(entries().length, 0);
+  assert.equal((await service.readMainChatApprovals("s1", { vibe64User: ana })).practice, false);
+  await service.sendAgentMessage("s1", { message: "Outside a lesson", vibe64User: ana });
+  assert.equal(entries().length, 1, "an ordinary project still queues");
 });
 
 test("queued messages are text only and limited to five waiting per sender", async () => {

@@ -265,6 +265,12 @@ function assertProjectEffectAdmission() {
   }
 }
 
+// Work in a learner's own practice project. Admission opens one only to its
+// learner, so any person acting here is that learner.
+function currentRequestIsPracticeProject() {
+  return Boolean(currentProjectRequestContext()?.[practiceScopeKey]);
+}
+
 function currentProjectTargetRoot() {
   return String(currentProjectRequestContext()?.targetRoot || "").trim();
 }
@@ -355,6 +361,7 @@ export {
   currentProjectRecordPath,
   currentProjectActionRequestMeta,
   currentProjectRequestContext,
+  currentRequestIsPracticeProject,
   currentProjectRuntimeRoot,
   currentProjectSessionSourceRoot,
   currentProjectScopeKey,

@@ -201,6 +201,13 @@ describe("approval queue reader", () => {
     scope.stop();
   });
 
+  it("never queues a member's own lesson, which runs on the team AI", () => {
+    mocks.data.value = { ok: true, owner: false, practice: true, viewer: ana, ownerName: "Tony", entries: [] };
+    const { value, scope } = reader();
+    expect([value.memberMode.value, value.lessonTeamAi.value]).toEqual([false, true]);
+    scope.stop();
+  });
+
   it("acts on an entry at its revision", async () => {
     const { value, scope } = reader();
     const entry = waiting({ revision: 3 });
@@ -280,6 +287,26 @@ describe("member composer", () => {
     expect(approvals.send).toHaveBeenCalledWith("Add dark mode");
     expect(view.composerDraft.value).toBe("");
     expect(props.sendAgentMessage).toBeUndefined();
+    scope.stop();
+  });
+
+  it("sends a member's lesson message straight to its team AI and names that AI", async () => {
+    const { useVibe64AutopilotView } = await import("../../src/composables/useVibe64AutopilotView.js");
+    const approvals = reactive({ ...approvalsState(), memberMode: false, lessonTeamAi: true });
+    const assistantSelection = { schema: "vibe64.assistant-selection.v1", engineId: "claude", modelProviderId: "deepseek",
+      modelId: "deepseek-v4-pro", agentId: "claude", variantId: "high", modelLabel: "DeepSeek V4 Pro" };
+    const props = reactive({ active: true, agentConnectionStatus: "connected", conversationLog: { turns: [] }, page: {},
+      projectContext: {}, projectPane: "dashboard", session: { agentSession: { turn: { active: false } }, metadata: {}, sessionId: "session-1", assistantSelection },
+      sessionArchive: {}, sessionSelectionArchived: false, sessionsApiPath: "/api/sessions", sessionToolbar: {}, workState: {} });
+    const scope = effectScope();
+    const view = createApp({}).runWithContext(() => scope.run(() => {
+      attachConversationRuntime(props);
+      return useVibe64AutopilotView(props, vi.fn(), { mainChatApprovals: approvals, assistantCanUseAi: ref(true) });
+    }));
+    expect(view.composerSubmitMode.value).not.toBe("approval");
+    expect(view.composerAttachmentsSupported.value).toBe(true);
+    expect(view.composerPlaceholder.value).toMatch(/^Message your lesson's AI — .*deepseek.* \(team AI\)$/iu);
+    expect(view.composerHint.value).toMatch(/^This lesson runs on the team AI: .*deepseek.*\. Only you see this chat\.$/iu);
     scope.stop();
   });
 

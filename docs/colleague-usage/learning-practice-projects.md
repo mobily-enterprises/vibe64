@@ -69,6 +69,14 @@ A practice project is a complete project. Its chat, **Preview**, **Dashboard**
 and sessions work as in any project. The session that lesson preparation
 creates in it is an ordinary session.
 
+Which AI the practice project's chat uses depends on who you are. The workspace
+owner's lessons (and yours on Vibe64 on your own computer) run on the owner's
+main AI, as in any project. A team member's lesson runs on the team setup's
+Workspace-use models and their messages are sent straight away, without the
+owner's approval: the composer reads "Message your lesson's AI — *model* (team
+AI)". A personal plan is never used for a team member's lesson; see
+**Lessons** in [Team AI access](team-ai-access.md).
+
 ## In progress and Archived
 
 In Learn mode, **Courses** (on the lesson step bar, or in the project menu beside **L**) has an **In progress** list and an

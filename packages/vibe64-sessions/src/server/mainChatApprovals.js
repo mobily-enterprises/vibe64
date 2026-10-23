@@ -4,11 +4,12 @@ import path from "node:path";
 import { isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
 import { resolveVibe64SessionPaths } from "@local/vibe64-runtime/server/sessionStore";
 import { readWorkspaceTeam } from "@local/vibe64-core/server/workspaceTeam";
-import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { currentProjectRequestContext, currentRequestIsPracticeProject } from "@local/vibe64-core/server/projectRequestContext";
 
 // A team member's main-chat messages wait here, in the chat's own state, until
-// the workspace owner approves, edits or declines them. Main chat always runs
-// on the owner's setup, so an approved message is sent as the owner's.
+// the workspace owner approves, edits or declines them. Main chat runs on the
+// owner's setup, so an approved message is sent as the owner's. A lesson is the
+// exception: a learner's own practice project runs on the team setup unqueued.
 const MAIN_CHAT_APPROVALS_METADATA = "main_chat_approvals";
 const WAITING_PER_SENDER = 5;
 const KEPT_ENTRIES = 200;
@@ -131,7 +132,7 @@ function createMainChatApprovals({
       const runtime = await project.createRuntime({ inspectSource: false });
       const approvals = parseApprovals(await runtime.store.readMetadataValue(sessionId, MAIN_CHAT_APPROVALS_METADATA));
       const team = await readWorkspaceTeam();
-      return { ok: true, sessionId, owner: isAssistantRoutingOwner(vibe64User), viewer: person(vibe64User),
+      return { ok: true, sessionId, owner: isAssistantRoutingOwner(vibe64User), practice: currentRequestIsPracticeProject(), viewer: person(vibe64User),
         ownerName: team.ownerName, entries: approvals.entries };
     },
 

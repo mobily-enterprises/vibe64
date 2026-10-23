@@ -7,6 +7,7 @@ import test from "node:test";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { createService } from "@local/vibe64-accounts/server/service";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
+import { runWithPracticeProjectContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { assistantModePrompt, assistantGoalManagementMessage, assistantRoutingPrompt, assistantWorkflowInstructions, parseRoutingDecision, recommendedRoutingAssignments,
   routingAssignmentSelection, routingModelChoices, routingModelScore, routingRunsInChoices, resolveAssistantPurpose, assistantRoutingPreferences,
@@ -456,6 +457,56 @@ test("team members never reach main chat models; their messages need the owner's
     assert.equal(owner.setup, "owner");
   }
   assert.equal(f.resolve("custom", { override: { role: "custom", selection: f.zen } }).approvalRequired, true);
+});
+
+test("a team member's lesson runs main chat on the team setup without approval, never on a personal plan", () => {
+  const f = routingFixture();
+  const lesson = { practice: true };
+  for (const purpose of MAIN_CHAT_PURPOSES.filter((purpose) => purpose !== "custom")) {
+    assert.equal(assistantRoutingSetupFor(purpose, { role: "member" }, lesson), "nonOwner", purpose);
+    assert.equal(assistantRoutingSetupFor(purpose, { role: "owner" }, lesson), "owner", `${purpose}: owner lessons are unchanged`);
+    const member = f.resolve(purpose, { ...lesson, reviewEnabled: purpose === "auto" });
+    assert.equal(member.available, true, `${purpose}: ${member.message}`);
+    assert.equal(member.setup, "nonOwner");
+    assert.equal(member.approvalRequired, undefined);
+  }
+  const senior = f.resolve("senior", lesson);
+  assert.deepEqual([senior.effectiveSelection.modelId, senior.connectionIdentity], ["zen-model", "workspace-zen"], "Senior is the team Colleague");
+  assert.deepEqual(Object.values(senior.seniorJuniorPair).map(({ effectiveSelection }) => effectiveSelection.modelId), ["zen-model", "zen-model"]);
+  const auto = f.resolve("auto", { ...lesson, reviewEnabled: true });
+  assert.deepEqual([auto.seniorJuniorPair.junior.effectiveSelection.modelId, auto.router.modelId], ["zen-model", "deepseek-flash"],
+    "Router is the team Quick helper");
+  assert.equal(f.resolve("custom", { ...lesson, override: { role: "custom", selection: f.zen } }).available, true,
+    "the learner may choose any team model");
+  const personal = f.resolve("custom", { ...lesson, override: { role: "custom", selection: f.roles.senior } });
+  assert.deepEqual([personal.available, personal.reasonCode], [false, "vibe64_assistant_owner_required"]);
+  // The owner's personal Senior is never reached, even when the team Colleague is missing.
+  delete f.input.configuration.nonOwner.colleague;
+  for (const purpose of ["senior", "junior", "auto"]) {
+    const missing = f.resolve(purpose, lesson);
+    assert.deepEqual([missing.available, missing.reasonCode, missing.message], [false, "vibe64_team_ai_role_unconfigured",
+      "The workspace owner hasn't chosen a Colleague model for team members yet."], purpose);
+  }
+  f.input.configuration.nonOwner.colleague = f.roles.senior;
+  assert.equal(f.resolve("senior", lesson).reasonCode, "vibe64_assistant_owner_required");
+  assert.equal(f.resolve("senior").approvalRequired, true, "outside a lesson members still wait for approval");
+});
+
+test("dispatch knows a lesson from its practice project, never from its input", async () => {
+  const f = routingFixture();
+  const manager = createSessionAgentManager({
+    providers: [{ id: "codex", transportId: "codex_app_server" }, { id: "opencode", transportId: "opencode_server" }],
+    readAssistantAccess: async ({ engineId, modelProviderId }) => f.input.connectionAccess
+      .find((fact) => fact.engineId === engineId && fact.modelProviderId === modelProviderId)
+  });
+  const member = { vibe64User: f.input.actor, configuration: f.input.configuration };
+  const inspect = () => manager.inspectAssistantPurposes({ practice: true }, member);
+  assert.equal((await inspect()).senior.approvalRequired, true);
+  const lesson = await runWithPracticeProjectContext("lesson-test", { slug: `training-${"b".repeat(32)}` }, inspect);
+  assert.deepEqual([lesson.senior.available, lesson.senior.setup, lesson.senior.effectiveSelection.modelId], [true, "nonOwner", "zen-model"]);
+  const practiceRuntime = { projectContextRoot: `/projects/training-${"c".repeat(32)}` };
+  const followup = await manager.inspectAssistantPurposes({}, { ...member, runtime: practiceRuntime });
+  assert.equal(followup.auto.available, true, "work after the request still knows its lesson");
 });
 
 test("Same as follows one role of the same setup and names the followed role", () => {

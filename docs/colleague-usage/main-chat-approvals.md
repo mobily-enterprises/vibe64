@@ -6,7 +6,14 @@ away: it waits in **Messages for approval** until the owner approves, edits or
 declines it. The owner's own messages are sent as usual and never wait.
 
 Temporary chats, Colleague and the other assistants a member uses run on that
-member's own team setup; only Main chat waits for approval. Messages sent by
+member's own team setup; only Main chat waits for approval.
+
+A team member's own lesson is the exception. A practice project is private to
+its learner, so its Main chat runs on the team setup and the member's messages
+(and the lesson's **Do it for me** prompts) are sent straight away, with no
+approval. The composer then reads "Message your lesson's AI — *model* (team
+AI)". See **Lessons** in [Team AI access](team-ai-access.md). The owner's own
+lessons are unchanged. Messages sent by
 another session (project messages) are not person requests and never wait.
 
 ## Send a message as a team member
@@ -127,7 +134,8 @@ sheet with its close button or by tapping outside it.
 
 Colleague can explain all of this. When a team member asks Colleague to send a
 message to Main chat, it goes through the same queue and waits for the owner;
-Colleague must say so rather than claim it was delivered. Approving, editing,
+Colleague must say so rather than claim it was delivered. In the member's own
+lesson there is no queue: the message is sent to the lesson's team AI. Approving, editing,
 declining and withdrawing are human-only: Colleague cannot do them, so it should
 point the person to the buttons above.
 

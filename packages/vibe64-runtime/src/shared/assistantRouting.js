@@ -86,8 +86,23 @@ const isAssistantRoutingOwner = (actor) => !actor || actor.role === "owner";
 const isMainChatPurpose = (purpose, { temporaryChat = false } = {}) =>
   MAIN_CHAT_PURPOSES.includes(purpose) && !(temporaryChat && purpose === "custom");
 
+// A team member's main chat waits for the owner, except in their own lesson:
+// a practice project is private to its learner, so it runs on the team setup.
+const needsMainChatApproval = (purpose, actor, { practice = false, ...options } = {}) =>
+  isMainChatPurpose(purpose, options) && !isAssistantRoutingOwner(actor) && !practice;
+
 function assistantRoutingSetupFor(purpose, actor, options = {}) {
-  return isMainChatPurpose(purpose, options) || isAssistantRoutingOwner(actor) ? "owner" : "nonOwner";
+  return isAssistantRoutingOwner(actor) || needsMainChatApproval(purpose, actor, options) ? "owner" : "nonOwner";
+}
+
+// The values a purpose resolves against. A lesson's main chat on the team
+// setup uses Colleague as Senior and Junior, and Quick helper as Router.
+function assistantRoutingSetupValues(configuration, purpose, actor, options = {}) {
+  const setup = assistantRoutingSetupFor(purpose, actor, options);
+  const values = configuration?.[setup] || {};
+  if (setup !== "nonOwner" || !isMainChatPurpose(purpose, options)) return values;
+  return { ...values, colleague: assistantSetupRoleValue(values, "colleague").value,
+    senior: { follows: "colleague" }, junior: { follows: "colleague" }, router: { follows: "quickHelper" } };
 }
 
 // A role's saved value after one level of "Same as".
@@ -233,29 +248,34 @@ function joinedLabels(labels) {
 }
 
 function resolveAssistantPurpose({ purpose, actor, configuration, catalogs = [], connectionAccess = [],
-  override, requirements = {}, reviewEnabled = false, validateModels = true, temporaryChat = false } = {}) {
+  override, requirements = {}, reviewEnabled = false, validateModels = true, temporaryChat = false, practice = false } = {}) {
   const role = ASSISTANT_PURPOSE_ROLES[purpose];
-  const setup = assistantRoutingSetupFor(purpose, actor, { temporaryChat });
+  const setup = assistantRoutingSetupFor(purpose, actor, { temporaryChat, practice });
   const result = { available: false, reasonCode: "", message: "", role: role || purpose, setup, followedRole: "",
     settingsRevision: configuration?.revision, configuredSelection: null, effectiveSelection: null,
     connectionIdentity: "", instructionPurpose: purpose, executionProfileRequest: null };
   try {
     if (actor === undefined) throw routingError("The requesting user is required to resolve model routing.");
     if (configuration && (configuration.orchestrators || !configuration.owner)) throw upgradeRequired();
-    if (isMainChatPurpose(purpose, { temporaryChat }) && !isAssistantRoutingOwner(actor)) {
+    if (needsMainChatApproval(purpose, actor, { temporaryChat, practice })) {
       return { ...result, reasonCode: "vibe64_main_chat_approval_required", approvalRequired: true,
         message: "Main chat runs on the owner's AI. Your messages wait for their approval." };
     }
-    const values = configuration?.[setup] || {};
+    const values = assistantRoutingSetupValues(configuration, purpose, actor, { temporaryChat, practice });
     if (purpose === "auto") {
-      const missingRoles = ["senior", "junior", "router"].filter((name) => !isRoutingSelection(values[name]));
+      const missingRoles = ["senior", "junior", "router"].filter((name) => !isRoutingSelection(assistantSetupRoleValue(values, name).value));
+      if (missingRoles.length && setup === "nonOwner") {
+        const names = joinedLabels([...new Set(missingRoles.map((name) => assistantModeLabel(values[name].follows)))]);
+        return { ...result, reasonCode: "vibe64_team_ai_role_unconfigured", missingRoles,
+          message: `The workspace owner hasn't chosen a ${names} model for team members yet.` };
+      }
       if (missingRoles.length) {
         const names = joinedLabels(missingRoles.map(assistantModeLabel));
         return { ...result, reasonCode: "vibe64_assistant_role_unconfigured", missingRoles,
           message: missingRoles.length === 1 ? `Auto needs a ${names} model. Choose one in AI setup.`
             : `Auto needs models for ${names}. Choose them in AI setup.` };
       }
-      const input = { actor, configuration, catalogs, connectionAccess, validateModels };
+      const input = { actor, configuration, catalogs, connectionAccess, validateModels, practice };
       const junior = resolveAssistantPurpose({ ...input, purpose: "junior", requirements, reviewEnabled: true });
       const router = resolveAssistantPurpose({ ...input, purpose: "request_routing" });
       const unavailable = [junior, router].find((decision) => !decision.available);
@@ -551,8 +571,8 @@ function assistantWorkflowUpgradeChanges({ metadata = {}, conversations = [] }) 
 
 export { ASSISTANT_MODES, ASSISTANT_FIX_MODE, ASSISTANT_ROUTING_METADATA, ASSISTANT_SETUP_ROLES, ASSISTANT_FOLLOWING_ROLES,
   ASSISTANT_ROUTING_ROLE_DEFINITIONS, ASSISTANT_ROLE_DEFAULT_FOLLOWS, ASSISTANT_PURPOSE_ROLES, ASSISTANT_ROLE_PURPOSES, MAIN_CHAT_PURPOSES, ROUTING_REASONS,
-  routingModelScore, resolveAssistantPurpose, assistantRoutingPreferences, assistantRoutingSetupFor, assistantSetupRoleValue,
-  isAssistantRoutingOwner, isMainChatPurpose, routingRunsInChoices,
+  routingModelScore, resolveAssistantPurpose, assistantRoutingPreferences, assistantRoutingSetupFor, assistantRoutingSetupValues, assistantSetupRoleValue,
+  isAssistantRoutingOwner, isMainChatPurpose, needsMainChatApproval, routingRunsInChoices,
   assistantRoutingFromMetadata, hasConnectedAssistantModels, routingModelChoices, recommendedRoutingAssignments, routingAssignmentSelection,
   parseRoutingDecision, assistantRoutingPrompt, assistantWorkflowInstructions,
   assistantModeLabel, assistantModePrompt, assistantGoalObjective, assistantGoalManagementMessage, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel,

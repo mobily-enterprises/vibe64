@@ -10,6 +10,7 @@ import {
   assertProjectEffectAdmission,
   captureProjectRequestContext,
   currentProjectRequestContext,
+  currentRequestIsPracticeProject,
   currentProjectActionRequestMeta,
   currentProjectVibe64User,
   runWithProjectRequestContext
@@ -481,11 +482,12 @@ function createService({
     return legacyCodexAssistantSelection();
   }
 
-  // Main chat starts on the owner's setup. A renewal keeps the chat mode; a
-  // chosen model that isn't main chat's own makes the chat Custom.
+  // Main chat starts on the owner's setup (a team member's lesson: the team
+  // setup). A renewal keeps the chat mode; a chosen model that isn't main
+  // chat's own makes the chat Custom.
   async function resolveSessionStart(input = {}, { session = null, vibe64User = null, mode = "senior" } = {}) {
-    const owner = isAssistantRoutingOwner(vibe64User);
-    if (!owner && Object.keys(input.assistantSelection || {}).length) {
+    const direct = isAssistantRoutingOwner(vibe64User) || currentRequestIsPracticeProject();
+    if (!direct && Object.keys(input.assistantSelection || {}).length) {
       throw Object.assign(new Error("Main chat runs on the workspace owner's AI. Team members can't choose its model."), {
         code: "vibe64_main_chat_approval_required", statusCode: 403 });
     }
@@ -499,14 +501,14 @@ function createService({
       : { mode: startMode, review: true });
     const routingSetup = await initializeModelRouting({ vibe64User });
     if (routingSetup?.ok === false) throw Object.assign(new Error(routingSetup.error), { code: routingSetup.code, statusCode: routingSetup.statusCode });
-    // A team member's session records main chat's starting model only; their
-    // messages wait for the owner, so nothing runs as them here.
+    // Outside a lesson, a team member's session records main chat's starting
+    // model only; their messages wait for the owner, so nothing runs as them here.
     const purpose = preferences.mode === "auto" ? "senior" : preferences.mode;
     const decision = await terminals.resolveAssistantPurpose({ purpose,
       ...(explicitSelection ? { override: { role: "custom", selection: explicitSelection } } : {}) },
-    { vibe64User: owner ? vibe64User : { role: "owner" } }, owner ? undefined : { validateModels: false });
+    { vibe64User: direct ? vibe64User : { role: "owner" } }, direct ? undefined : { validateModels: false });
     if (!decision.available) throw Object.assign(new Error(decision.message), { code: decision.reasonCode, statusCode: 403 });
-    if (owner) {
+    if (direct) {
       await terminals.requireAssistantSelectionAccess(decision.effectiveSelection, {
         vibe64User, expectedConnectionIdentity: decision.connectionIdentity
       });
@@ -2389,8 +2391,9 @@ function createService({
           ok: false
         };
       }
-      // A team member's main-chat message waits for the owner's approval.
-      if (input.vibe64User && !isAssistantRoutingOwner(input.vibe64User)) {
+      // A team member's main-chat message waits for the owner's approval,
+      // except in their own lesson, which runs on the team setup.
+      if (input.vibe64User && !isAssistantRoutingOwner(input.vibe64User) && !currentRequestIsPracticeProject()) {
         return { ...await mainChatApprovals.enqueue(sessionId, { message: request, messageId: text(input.messageId),
           attachmentIds: input.attachmentIds || [] }, { vibe64User: input.vibe64User }), sessionId };
       }

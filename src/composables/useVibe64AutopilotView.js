@@ -1,6 +1,7 @@
 import { chatTurnsWithRouting, routedChatMessage } from "@/lib/vibe64ChatDelivery.js";
 import { assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
 import { computed, inject, nextTick, reactive, ref, unref, watch } from "vue";
+import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { useRoute, useRouter } from "vue-router";
 import {
   VIBE64_DEFAULT_AGENT_PROVIDER_ID
@@ -420,6 +421,9 @@ function useVibe64AutopilotView(props, emit, {
   const approvalMode = computed(() => mainChatApprovals?.memberMode === true);
   const approvalOwner = computed(() => mainChatApprovals?.ownerName || "the owner");
   const approvalOwnerSentence = computed(() => approvalOwner.value.charAt(0).toUpperCase() + approvalOwner.value.slice(1));
+  // A team member's lesson runs on a team AI, never the owner's personal plan.
+  const lessonTeamAiLabel = computed(() => mainChatApprovals?.lessonTeamAi === true && props.session?.assistantSelection
+    ? vibe64AssistantSelectionLabel(props.session.assistantSelection) : "");
 
   const composerKey = computed(() => JSON.stringify([actorKey.value, projectSlug.value, sessionId.value]));
   const composerDraft = computed({
@@ -711,6 +715,7 @@ function useVibe64AutopilotView(props, emit, {
   ));
   const composerHint = computed(() => approvalMode.value
     ? `Main chat runs on ${approvalOwner.value}'s AI. ${approvalOwnerSentence.value} approves each message.` : (
+    lessonTeamAiLabel.value ? `This lesson runs on the team AI: ${lessonTeamAiLabel.value}. Only you see this chat.` :
     agentObservationLost.value
       ? agentActive.value
         ? "The stop is not yet confirmed. Your draft is kept; you can retry Stop."
@@ -721,6 +726,7 @@ function useVibe64AutopilotView(props, emit, {
   ));
   const composerPlaceholder = computed(() => approvalMode.value
     ? `Message main chat — ${approvalOwner.value} approves before it's sent` : (
+    lessonTeamAiLabel.value ? `Message your lesson's AI — ${lessonTeamAiLabel.value} (team AI)` :
     numberedQuestions.value.length
       ? "Optional additional context…"
       : answerChoices.value.length

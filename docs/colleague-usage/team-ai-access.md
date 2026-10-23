@@ -1,10 +1,12 @@
 # Team AI access: when team members can open projects
 
 A workspace can have one owner and other people (team members). Team members
-never use the owner's AI directly: main chat always runs on the owner's setup,
-and everything else a team member does with AI (their Colleague, Fix it with
-AI, Explain & check and the quick helpers) runs on the **team setup**, the
-second setup in AI setup. The team setup may use only **Workspace-use** models,
+never use the owner's AI directly: main chat runs on the owner's setup (a team
+member's messages wait for approval), and everything else a team member does
+with AI (their Colleague, Fix it with AI, Explain & check and the quick
+helpers) runs on the **team setup**, the second setup in AI setup. A team
+member's own lesson is the one place where main chat runs on the team setup
+too; see **Lessons** below. The team setup may use only **Workspace-use** models,
 never a personal plan such as the owner's Claude or ChatGPT subscription (see
 [Personal-use AI subscriptions](ai-personal-use.md)).
 
@@ -68,9 +70,31 @@ sent to main chat that wait for the owner's approval.
 ## Inside a project
 
 Once a team member is in, their AI work uses the team setup, and their messages
-to main chat wait for the owner's approval before they are sent. If the owner
+to main chat wait for the owner's approval before they are sent (see
+[Main chat messages that wait for the owner's approval](main-chat-approvals.md)). If the owner
 later removes the last Workspace-use model, the team member's next project
 open shows the waiting screen again.
+
+## Lessons
+
+A lesson's practice project is private to its learner, so a team member's
+lesson does not wait for the owner. In their own practice project, a team
+member's main chat runs on the team setup and their messages go straight to it:
+
+- **Senior** and **Junior** use the team **Colleague** model, and Auto's Router
+  uses the team **Quick helper** model. **Custom** in **Chat mode** lists only
+  Workspace-use models, so the member may choose any of them for the lesson.
+- The composer says which AI it is: the placeholder "Message your lesson's AI —
+  *model* (team AI)" and, in **Chat mode**, "This lesson runs on the team AI:
+  *model*. Only you see this chat."
+- **Do it for me** (which sends a line's prompt to the lesson's main chat),
+  Check my work reviews and the lesson's Colleague use the same team setup.
+- A personal plan, such as the owner's Claude or ChatGPT subscription, is never
+  used, even when the team setup has no Colleague model. Then main chat says
+  "The workspace owner hasn't chosen a Colleague model for team members yet."
+  and the owner adds one in AI setup.
+- The owner's own lessons run on the owner's setup as before. Main chat in
+  every ordinary project still waits for the owner's approval.
 
 ## What Colleague can do
 

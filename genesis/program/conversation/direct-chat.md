@@ -1072,7 +1072,8 @@ resource edits refreshes facts without restarting the native conversation.
 ## Main-chat approval queue
 
 Main chat runs on the owner's setup. `sessions.sendAgentMessage` intercepts a
-request whose `vibe64User` is not the owner before any dispatch and enqueues it
+request whose `vibe64User` is not the owner, outside that person's own practice
+project (`currentRequestIsPracticeProject`), before any dispatch and enqueues it
 in session metadata `main_chat_approvals` (`schemaVersion` 1), written only in
 `mutateSession` with per-entry revisions. Project messages and internal sends
 carry no person and are never queued. An entry moves `waiting` -> `sending` ->
@@ -1088,7 +1089,8 @@ turn. Routing keeps `sender` in turn metadata and the log shows
 "{sender} · approved by {owner}" under the delivered message.
 
 `GET /sessions/:id/main-chat-approvals` returns the entries with the viewer's
-role and the owner's name. Edit, withdraw (sender), approve and decline (owner)
+role, `practice` and the owner's name. In a member's lesson (`practice`) the
+composer sends directly and names the team AI it runs on. Edit, withdraw (sender), approve and decline (owner)
 are human-only actions without assistant tools. Every change publishes a
 session change with a `main-chat-approval-*` reason and a project change;
 `listWorkspaceProjects` adds `approvalsWaiting` through the registered approval
