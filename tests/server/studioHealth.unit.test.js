@@ -187,17 +187,18 @@ test("without runtime packs Health counts only what is needed; one AI tool is en
   assert.equal(byId.toolchain, undefined);
   assert.equal(result.healthy, true, "Codex alone is enough; the rest is optional");
   assert.deepEqual(result.checks.filter((check) => check.need === "needed").map((check) => check.id),
-    ["workspace", "ai-auth", "node", "git", "ai-tool", "genesis"]);
+    ["node", "git", "ai-tool", "ai-auth", "workspace", "genesis"]);
   assert.equal(result.summary.failed, 0);
   assert.equal(result.summary.total, 6);
-  assert.equal(result.summary.optionalMissing, 6, "Claude, opencode, GitHub CLI, ripgrep and both Playwright rows");
+  assert.equal(result.summary.optionalMissing, 5, "Claude, opencode, GitHub CLI, ripgrep and one Playwright row");
   assert.equal(byId["ai-tool"].observed, "Codex 0.163.0");
   assert.equal(byId.node.observed, "Node.js 26.12.1 · /usr/bin/node");
   assert.equal(byId.claude.status, "warn");
   assert.equal(byId.claude.observed, "Claude Code isn't installed on this computer.");
   assert.equal(byId.claude.tool.install.command, "curl -fsSL https://claude.ai/install.sh | bash");
-  assert.equal(byId["playwright-browser"].status, "warn");
-  assert.match(byId["playwright-browser"].tool.install.command, /^npx playwright install/u);
+  assert.equal(byId["playwright-browser"], undefined, "no second row for the browser Playwright would install");
+  assert.equal(byId.playwright.status, "warn");
+  assert.match(byId.playwright.tool.install.command, /^npx playwright install/u);
 
   versions.node = "v24.1.0";
   delete versions.codex;

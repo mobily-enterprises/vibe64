@@ -1,7 +1,7 @@
 <template>
   <article
     class="tool-row"
-    :class="[`tool-row--${state}`, { 'tool-row--flat': flat }]"
+    :class="[`tool-row--${state}`, { 'tool-row--flat': flat, 'tool-row--optional': optional }]"
     :data-tool-row="tool.id || tool.name"
   >
     <div class="tool-row__icon" aria-hidden="true">
@@ -17,23 +17,9 @@
 
       <v-expand-transition>
         <div v-if="state !== 'ready'" class="tool-row__fix">
-          <p class="tool-row__sentence">{{ sentence }}</p>
+          <p class="tool-row__sentence" :class="{ 'tool-row__sentence--feedback': feedback }" aria-live="polite">{{ feedback || sentence }}</p>
 
-          <div v-if="command" class="tool-row__command">
-            <code><span class="tool-row__prompt" aria-hidden="true">$</span>{{ command }}</code>
-            <v-btn
-              :aria-label="copied ? 'Copied' : `Copy the command that installs ${tool.name}`"
-              class="tool-row__copy"
-              :color="copied ? 'success' : undefined"
-              density="comfortable"
-              :prepend-icon="copied ? mdiCheck : mdiContentCopy"
-              size="small"
-              variant="text"
-              @click="copy"
-            >
-              {{ copied ? "Copied" : "Copy" }}
-            </v-btn>
-          </div>
+          <Vibe64CopyCommand v-if="command" :command="command" :label="`Copy the command that installs ${tool.name}`" />
           <p v-if="tool.install?.note" class="tool-row__note">
             <v-icon :icon="mdiLockOutline" size="14" />
             {{ tool.install.note }}
@@ -42,6 +28,7 @@
           <div class="tool-row__actions">
             <v-btn
               class="tool-row__check"
+              color="primary"
               :loading="checking"
               :prepend-icon="mdiRefresh"
               rounded="pill"
@@ -55,7 +42,6 @@
               Other ways
               <v-icon :icon="mdiOpenInNew" size="13" />
             </a>
-            <span class="tool-row__feedback" aria-live="polite">{{ feedback }}</span>
           </div>
         </div>
       </v-expand-transition>
@@ -70,20 +56,22 @@
 import { computed, ref, watch } from "vue";
 import {
   mdiAlertCircleOutline,
-  mdiCheck,
   mdiCheckCircle,
-  mdiContentCopy,
   mdiLockOutline,
+  mdiMinusCircleOutline,
   mdiOpenInNew,
   mdiRefresh
 } from "@mdi/js";
+import Vibe64CopyCommand from "@/components/common/Vibe64CopyCommand.vue";
 
 const props = defineProps({
   // { id, name, status: "ready" | "missing" | "broken", path, version, detail, install: { command, note }, guideUrl }
   tool: { type: Object, required: true },
   checking: Boolean,
   // Inside a list that already draws its own surface.
-  flat: Boolean
+  flat: Boolean,
+  // Nice to have: a missing tool reads as calm, not as a problem.
+  optional: Boolean
 });
 const emit = defineEmits(["check"]);
 
@@ -106,7 +94,10 @@ const sentence = computed(() => {
     : "Install it the way that suits your computer, then choose Check again.";
   return [lead, how].filter(Boolean).join(" ");
 });
-const icon = computed(() => (state.value === "ready" ? mdiCheckCircle : mdiAlertCircleOutline));
+const icon = computed(() => {
+  if (state.value === "ready") return mdiCheckCircle;
+  return props.optional && state.value === "missing" ? mdiMinusCircleOutline : mdiAlertCircleOutline;
+});
 
 // "Check again" always answers: either the row turns ready, or it says so here.
 const feedback = ref("");
@@ -121,20 +112,6 @@ watch(() => props.checking, (now, before) => {
   asked.value = false;
   feedback.value = state.value === "ready" ? "" : "Still not found. Did the command finish without errors?";
 });
-
-const copied = ref(false);
-let copiedTimer = 0;
-watch(command, () => { copied.value = false; });
-async function copy() {
-  try {
-    await navigator.clipboard.writeText(command.value);
-    copied.value = true;
-    clearTimeout(copiedTimer);
-    copiedTimer = setTimeout(() => { copied.value = false; }, 2000);
-  } catch {
-    copied.value = false;
-  }
-}
 </script>
 
 <style scoped>
@@ -223,37 +200,6 @@ async function copy() {
   gap: 6px;
 }
 
-.tool-row__command {
-  align-items: center;
-  background: var(--v64-surface-container-highest);
-  border-radius: var(--v64-shape-sm, 8px);
-  display: flex;
-  gap: var(--v64-space-2, 8px);
-  padding: 6px 6px 6px 12px;
-}
-
-.tool-row__command code {
-  background: none;
-  color: var(--v64-on-surface);
-  flex: 1;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 0.8125rem;
-  line-height: 1.45;
-  min-width: 0;
-  overflow-wrap: anywhere;
-  padding: 0;
-  user-select: all;
-  white-space: pre-wrap;
-}
-
-.tool-row__prompt {
-  color: var(--v64-on-surface-variant);
-  margin-right: 0.6em;
-  user-select: none;
-}
-
-.tool-row__copy { flex: none; }
-
 .tool-row__actions {
   align-items: center;
   display: flex;
@@ -273,8 +219,7 @@ async function copy() {
 
 .tool-row__other:hover { text-decoration: underline; }
 
-.tool-row__feedback {
-  color: var(--v64-on-surface-variant);
-  font-size: 0.8125rem;
-}
+.tool-row__sentence--feedback { color: var(--v64-on-surface); }
+
+.tool-row--optional.tool-row--missing .tool-row__icon { color: var(--v64-on-surface-variant); }
 </style>

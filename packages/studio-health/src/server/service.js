@@ -209,7 +209,7 @@ async function gitIdentityCheck({ runCommand, studioRoot }) {
   };
 }
 
-async function inspectWorkspace({ projectService, studioRoot }) {
+async function inspectWorkspace({ packs = true, projectService, studioRoot }) {
   try {
     await access(path.join(studioRoot, "package.json"));
     const catalog = await projectService.listProjects();
@@ -217,6 +217,16 @@ async function inspectWorkspace({ projectService, studioRoot }) {
       throw new Error(catalog.error || catalog.errors?.[0]?.message || "Project catalog is unavailable.");
     }
     const projectCount = Array.isArray(catalog?.projects) ? catalog.projects.length : 0;
+    if (!packs) {
+      return passedCheck({
+        id: "workspace",
+        label: "Vibe64",
+        group: "Studio",
+        expected: "Vibe64 can read its own files and your projects.",
+        observed: `Ready, with ${projectCount} project${projectCount === 1 ? "" : "s"}.`,
+        explanation: ""
+      });
+    }
     return passedCheck({
       id: "workspace",
       label: "Workspace services",
@@ -237,7 +247,13 @@ async function inspectWorkspace({ projectService, studioRoot }) {
   }
 }
 
-async function inspectAccounts({ connectionsService, input }) {
+// Without packs the person fixes these themselves, so each says where.
+const LOCAL_ACCOUNT_HINTS = Object.freeze({
+  github: "Only needed for projects on GitHub. Connect it in Account settings.",
+  default: ""
+});
+
+async function inspectAccounts({ connectionsService, input, packs = true }) {
   try {
     const result = await connectionsService.getStatus(input);
     if (result?.ok === false) throw new Error(result.error || result.blockedReason || "Account status could not be read.");
@@ -249,7 +265,8 @@ async function inspectAccounts({ connectionsService, input }) {
         id: `${account.id}-auth`, label, group: "Credentials",
         expected: `${label} is connected.`,
         observed: account.message || account.observed || account.status || "No status was returned.",
-        explanation: "Account readiness is inspected by the account service; Studio Health does not attempt a repair."
+        explanation: packs ? "Account readiness is inspected by the account service; Studio Health does not attempt a repair."
+          : LOCAL_ACCOUNT_HINTS[account.id] || LOCAL_ACCOUNT_HINTS.default
       };
       return account.connected === true || account.required === false ? passedCheck(check) : failedCheck(check);
     });
@@ -355,7 +372,8 @@ function createService({
           runCommand,
           studioRoot,
           expected: "The installed genesis-compiler package exposes the Genesis CLI.",
-          explanation: "Genesis supplies project context, prompts, Stack guidance, Program descriptions, and Cities.",
+          explanation: packs ? "Genesis supplies project context, prompts, Stack guidance, Program descriptions, and Cities."
+            : "Part of Vibe64: it helps the AI understand how your projects are built.",
           isValid: (output) => compactOutput(output).startsWith("Usage:"),
           summarize: () => "Genesis is ready."
         }),
@@ -393,12 +411,16 @@ function createService({
       ];
 
       const [workspace, accounts, local, commands] = await Promise.all([
-        inspectWorkspace({ projectService, studioRoot }),
-        inspectAccounts({ connectionsService, input }),
+        inspectWorkspace({ packs, projectService, studioRoot }),
+        inspectAccounts({ connectionsService, input, packs }),
         packs ? [] : inspectLocalTools({ nodeMajor, runCommand, studioRoot }),
         Promise.all(commandChecks)
       ]);
-      const checks = [workspace, ...accounts, ...local, ...commands.filter(Boolean)].map((entry) => {
+      // Without packs the person's own tools lead; Vibe64's own parts follow.
+      const ordered = packs ? [workspace, ...accounts, ...commands] : [...local, ...accounts, workspace, ...commands];
+      // One Playwright row is enough: the browser can't run without Playwright.
+      const playwrightMissing = !packs && ordered.some((entry) => entry?.id === "playwright" && entry.status !== "pass");
+      const checks = ordered.filter((entry) => entry && !(playwrightMissing && entry.id === "playwright-browser")).map((entry) => {
         if (packs) return { ...entry, need: "needed" };
         const need = entry.need || (OPTIONAL_CHECKS.has(entry.id) ? "optional" : "needed");
         const optionalMiss = need === "optional" && entry.status === "fail";

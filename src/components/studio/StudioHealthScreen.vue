@@ -55,6 +55,7 @@
               v-if="check.tool && check.status !== 'pass'"
               :checking="isFetching"
               flat
+              :optional="check.need === 'optional'"
               :tool="check.tool"
               class="studio-health__check studio-health__check--tool"
               @check="reload"
@@ -68,6 +69,17 @@
                 </div>
                 <small v-if="check.explanation">{{ check.explanation }}</small>
                 <Vibe64CopyCommand v-if="check.command" class="mt-1" :command="check.command" />
+                <v-btn
+                  v-if="check.id === 'ai-auth' && check.status !== 'pass'"
+                  class="studio-health__action"
+                  color="primary"
+                  rounded="pill"
+                  size="small"
+                  variant="flat"
+                  @click="requestVibe64AiOnboarding()"
+                >
+                  Set up your AI
+                </v-btn>
               </div>
             </article>
           </template>
@@ -87,6 +99,7 @@ import {
   mdiHeartPulse,
   mdiRefresh
 } from "@mdi/js";
+import { requestVibe64AiOnboarding } from "@local/vibe64-accounts/client";
 import Vibe64CopyCommand from "@/components/common/Vibe64CopyCommand.vue";
 import ToolInstallRow from "@/components/studio/ToolInstallRow.vue";
 import Vibe64DashboardPageHeader from "@/components/studio/Vibe64DashboardPageHeader.vue";
@@ -229,6 +242,8 @@ function iconColor(check) {
   overflow-wrap: anywhere;
   white-space: pre-line;
 }
+
+.studio-health__action { justify-self: start; margin-top: var(--v64-space-2, 8px); }
 
 .studio-health__check-copy small {
   color: var(--v64-on-surface-variant);

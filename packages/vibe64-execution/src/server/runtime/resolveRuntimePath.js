@@ -43,15 +43,17 @@ function versionedEntries(directory = "", pattern = /^$/u) {
 }
 
 // Without packs, the person's own installs come first: ~/.local/bin, mise's
-// shims and rustup's cargo folder, so `mise use -g python@3.13` beats the
-// system's /usr/bin/python3 even when no shell profile activated them.
+// shims and the folders the Claude Code, opencode, rustup and Bun installers
+// use, so `mise use -g python@3.13` beats the system's /usr/bin/python3 and a
+// fresh install is found even when no shell profile activated it yet.
 function installedToolFront(env = process.env) {
   if (runtimePackRoot()) return [];
   const home = String(env.HOME || os.homedir() || "");
   if (!path.isAbsolute(home)) return [];
   const xdgData = path.isAbsolute(String(env.XDG_DATA_HOME || "")) ? env.XDG_DATA_HOME : path.join(home, ".local/share");
   const miseData = path.isAbsolute(String(env.MISE_DATA_DIR || "")) ? env.MISE_DATA_DIR : path.join(xdgData, "mise");
-  return existingDirectories([path.join(home, ".local/bin"), path.join(miseData, "shims"), path.join(home, ".cargo/bin")]);
+  return existingDirectories([path.join(home, ".local/bin"), path.join(miseData, "shims"),
+    ...[".claude/local", ".opencode/bin", ".cargo/bin", ".bun/bin"].map((folder) => path.join(home, folder))]);
 }
 
 // Without packs, commands come from the tools installed for the person running

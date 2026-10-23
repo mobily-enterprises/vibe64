@@ -112,6 +112,9 @@ test("the tool PATH puts ~/.local/bin and mise shims before the inherited PATH",
   assert.deepEqual(parts.slice(0, 4),
     ["/caller/bin", path.join(home, ".local/bin"), path.join(home, ".local/share/mise/shims"), "/usr/bin"],
     "a caller's own entries stay first; the person's installs beat the inherited PATH");
+  await mkdir(path.join(home, ".opencode/bin"), { recursive: true });
+  assert.ok(resolveRuntimePath({ inheritedPath: "/usr/bin" }).split(":").includes(path.join(home, ".opencode/bin")),
+    "a fresh opencode install is found without a new shell");
 
   configureVibe64Host({ runtimePackRoot: path.join(home, "packs") });
   assert.doesNotMatch(resolveRuntimePath({ inheritedPath: "/usr/bin" }), /\.local/u, "packs keep their own PATH");
