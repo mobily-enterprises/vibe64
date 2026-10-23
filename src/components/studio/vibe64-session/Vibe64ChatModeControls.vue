@@ -9,6 +9,7 @@ import { vibe64SessionPath, VIBE64_SESSIONS_API_SUFFIX, VIBE64_SURFACE_ID } from
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
+import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";
 
 const props = defineProps({ session: { type: Object, default: null }, goal: { type: Object, default: null }, sessionsApiPath: { type: [String, Object, Function], default: "" }, purposes: { type: Object, default: null }, savePreferences: { type: Function, default: null }, requiredMode: { type: String, default: "" }, temporary: Boolean, disabled: Boolean, active: Boolean, connecting: Boolean, canConfigure: Boolean, loading: Boolean, loadError: { type: String, default: "" } });
 const emit = defineEmits(["saved", "reload", "custom"]);
@@ -23,6 +24,11 @@ const saveError = ref("");
 const detailsOpen = ref(false);
 const modeMenu = ref(null);
 const routingOpen = ref(false);
+// The Models dialog's team key and other-tool steps live in AI setup.
+function openAccountConnections(request) {
+  routingOpen.value = false;
+  requestVibe64AccountConnectionsDialog(request);
+}
 const routingFocusRole = ref("");
 const routingSaving = ref(false);
 const modeIcons = { custom: mdiTuneVariant, senior: mdiAccountStarOutline, junior: mdiAccountOutline, auto: mdiAutoFix, fix: mdiWrenchOutline };
@@ -196,10 +202,12 @@ function configure() {
       </v-card-actions>
     </v-card>
   </v-dialog>
-  <v-dialog v-if="canConfigure" v-model="routingOpen" max-width="38rem" :persistent="routingSaving" scrollable aria-label="Model routing" @after-enter="routingFocusRole = decisions.auto?.missingRoles?.[0] || ''" @after-leave="modeMenu?.activatorEl?.focus()">
+  <v-dialog v-if="canConfigure" v-model="routingOpen" max-width="38rem" :persistent="routingSaving" scrollable aria-label="Models" @after-enter="routingFocusRole = decisions.auto?.missingRoles?.[0] || ''" @after-leave="modeMenu?.activatorEl?.focus()">
     <v-card>
       <v-card-text>
-        <ModelRoutingForm v-if="routingOpen" :focus-role="routingFocusRole" @busy="routingSaving = $event" @close="routingOpen = false" @saved="routingSaving = false; routingOpen = false" />
+        <ModelRoutingForm v-if="routingOpen" :focus-role="routingFocusRole" @busy="routingSaving = $event" @close="routingOpen = false" @saved="routingSaving = false; routingOpen = false"
+          @add-team-key="openAccountConnections({ providerId: 'ai', section: 'team' })" @connect-provider="openAccountConnections({ providerId: $event })"
+        />
       </v-card-text>
     </v-card>
   </v-dialog>

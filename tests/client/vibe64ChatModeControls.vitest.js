@@ -1,7 +1,8 @@
 import { createRenderer, nextTick, ssrContextKey } from "vue";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ save: vi.fn() }));
+const mocks = vi.hoisted(() => ({ save: vi.fn(), openAccounts: vi.fn() }));
+vi.mock("@/lib/vibe64AccountConnectionsDialog.js", () => ({ requestVibe64AccountConnectionsDialog: mocks.openAccounts }));
 vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
   useCommand: (options) => ({ run: () => mocks.save(options.buildRawPayload().assistantRouting) })
 }));
@@ -161,4 +162,13 @@ it("uses the shared native goal rather than stale session and routing snapshots"
   app._instance.props.goal = null;
   await nextTick();
   expect(state.hasGoal).toBe(false);
+});
+
+it("the Models dialog hands its team key and other-tool steps to AI setup", () => {
+  const state = mount();
+  state.routingOpen = true;
+  state.openAccountConnections({ providerId: "ai", section: "team" });
+  expect(state.routingOpen).toBe(false);
+  state.openAccountConnections({ providerId: "deepseek" });
+  expect(mocks.openAccounts.mock.calls).toEqual([[{ providerId: "ai", section: "team" }], [{ providerId: "deepseek" }]]);
 });

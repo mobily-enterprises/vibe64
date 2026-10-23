@@ -75,19 +75,23 @@ beforeEach(() => {
 afterEach(() => { app?.unmount(); app = null; vi.useRealTimers(); });
 
 describe("setups", () => {
-  it("hydrates both setups, keeps absent roles absent and sends only edited roles", () => {
+  it("hydrates both setups, shows absent following roles as their default Same as and sends only edited roles", () => {
     const owner = { ...GOLD };
     delete owner.explain;
     mocks.resource.data.value = resourceData({ owner });
     const state = mount(ModelRoutingForm);
     expect(state.baseRevision).toBe(3);
-    expect(Object.hasOwn(state.draft.owner, "explain")).toBe(false);
-    expect(state.draft.nonOwner).toEqual({});
+    expect(state.draft.owner.explain).toEqual({ follows: "quickHelper" });
+    expect(state.draft.nonOwner).toEqual({ fix: { follows: "colleague" }, explain: { follows: "quickHelper" } });
+    expect(state.showSwitch).toBe(false, "a default Same as is not a team model");
     expect(mocks.command.buildRawPayload()).toEqual({ revision: 3 });
-    state.update("owner", "quickHelper", { ...flash, selectionSource: "explicit" });
     state.update("nonOwner", "fix", { follows: "colleague" });
+    expect(mocks.command.buildRawPayload()).toEqual({ revision: 3 }, "choosing the default again changes nothing");
+    state.update("owner", "quickHelper", { ...flash, selectionSource: "explicit" });
+    state.update("nonOwner", "colleague", { ...flash, selectionSource: "explicit" });
     expect(mocks.command.buildRawPayload()).toEqual({ revision: 3,
-      owner: { quickHelper: { ...flash, selectionSource: "explicit" } }, nonOwner: { fix: { follows: "colleague" } } });
+      owner: { quickHelper: { ...flash, selectionSource: "explicit" }, explain: { follows: "quickHelper" } },
+      nonOwner: { colleague: { ...flash, selectionSource: "explicit" }, fix: { follows: "colleague" }, explain: { follows: "quickHelper" } } });
   });
 
   it("groups the owner setup into Main chat and Helpers, with quiet Same as rows", async () => {
@@ -142,9 +146,17 @@ describe("setups", () => {
   });
 
   it("offers an empty team setup's DeepSeek key, and tells a member to ask the owner", async () => {
-    const owner = await render(ModelRoutingForm, { initialSetup: "nonOwner" });
+    const owner = await render(ModelRoutingForm, { initialSetup: "nonOwner", onAddTeamKey: () => {} });
     expect(owner).toContain("No team AI yet. Team members can't open projects until you add one.");
+    expect(owner).toContain("Or choose a Workspace-use model you already connected below.");
     expect(owner).toContain("Add a DeepSeek key");
+    expect(owner).toContain("Same as Colleague · Not chosen yet");
+    expect(owner).toContain("Same as Quick helper · Not chosen yet");
+    expect(owner).toMatch(/>Colleague model</u);
+    expect(owner).not.toMatch(/>Fix it with AI model</u, "no blank picker for a default Same as role");
+    expect(owner).not.toMatch(/Review recommendations|No recommended changes/u);
+    expect(await render(ModelRoutingForm, { initialSetup: "nonOwner" })).not.toContain("Add a DeepSeek key",
+      "no button where the host can't open the team key step");
     mocks.resource.data.value = resourceData({ canConfigure: false });
     const member = await render(ModelRoutingForm, { readonly: true });
     expect(member).toContain("No team AI yet. Ask Tony to set up AI for team members.");
@@ -158,7 +170,7 @@ describe("setups", () => {
     const state = mount(ModelRoutingForm);
     expect(state.recommendedChanges).toEqual([]);
     state.activeSetup = "nonOwner";
-    expect(state.recommendedChanges.map(({ role }) => role)).toEqual(["colleague", "fix", "explain", "quickHelper"]);
+    expect(state.recommendedChanges.map(({ role }) => role)).toEqual(["colleague", "quickHelper"], "Same as roles already follow");
     state.reviewRecommendations();
     state.useRecommendations();
     expect(state.draft.nonOwner).toMatchObject({ colleague: proClaude, fix: { follows: "colleague" }, quickHelper: flash });

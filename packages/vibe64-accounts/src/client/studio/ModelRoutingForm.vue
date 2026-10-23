@@ -21,8 +21,11 @@ const props = defineProps({ connectionId: { type: String, default: "" }, connect
   // Opens on Team members, such as from the team setup card.
   initialSetup: { type: String, default: "owner" },
   // Inside onboarding: model display names and plain role names, no heading.
-  plain: Boolean });
-const emit = defineEmits(["close", "saved", "busy", "add-team-key", "connect-provider"]);
+  plain: Boolean,
+  // Listeners as props, so "Add a DeepSeek key" and "Connect … in another tool"
+  // appear only where the host can open those steps.
+  onAddTeamKey: { type: Function, default: null }, onConnectProvider: { type: Function, default: null } });
+const emit = defineEmits(["close", "saved", "busy"]);
 const SETUPS = [{ id: "owner", label: "Owner (you)" }, { id: "nonOwner", label: "Team members" }];
 const GROUPS = [{ id: "main", label: "Main chat" }, { id: "helpers", label: "Helpers" }];
 const MAIN_AI_ROLES = ["senior", "junior", "router", "quickHelper"];
@@ -57,7 +60,8 @@ const setup = computed(() => owner.value ? activeSetup.value : "nonOwner");
 const connected = computed(() => engines.value.some((engine) => engine.connected));
 const ownerName = computed(() => team.value?.ownerName || "the workspace owner");
 const roleState = (setupId, role, data = resource.data.value) => data?.setups?.[setupId]?.roles?.[role];
-const teamConfigured = computed(() => ASSISTANT_SETUP_ROLES.nonOwner.some((role) => roleState("nonOwner", role)?.configured || Object.hasOwn(draft.value.nonOwner, role)));
+const teamConfigured = computed(() => ASSISTANT_SETUP_ROLES.nonOwner.some((role) => roleState("nonOwner", role)?.configured ||
+  Object.hasOwn(draft.value.nonOwner, role) && !implicitFollows("nonOwner", role, draft.value.nonOwner[role])));
 const showSwitch = computed(() => owner.value && (teamConfigured.value || props.initialSetup === "nonOwner"));
 // No team model yet: no team role resolves to a model.
 const teamEmpty = computed(() => !ASSISTANT_SETUP_ROLES.nonOwner.some((role) => assistantSetupRoleValue(draft.value.nonOwner, role).value?.schema));
@@ -106,14 +110,21 @@ const suggestedChanges = computed(() => !connected.value ? [] : (preferred.value
   if (!recommendation?.schema || recommendation.modelProviderId !== props.connectionId || sameValue(value, recommendation)) return [];
   return [{ id: `owner:${role}`, setup: "owner", role, label: assistantModeLabel(role), previous: value?.schema ? value : null, proposed: recommendation }];
 }));
+// An unsaved following role shows its default "Same as"; it is saved with its
+// setup's first real change.
+function implicitFollows(setupId, role, value) {
+  return !Object.hasOwn(savedValues[setupId], role) && Boolean(value?.follows) && value.follows === ASSISTANT_ROLE_DEFAULT_FOLLOWS[setupId][role];
+}
 function payload() {
   const values = JSON.parse(JSON.stringify(draft.value));
   if (proposalMode.value) for (const proposal of suggestedChanges.value) {
     if (proposals.value.includes(proposal.id)) values[proposal.setup][proposal.role] = proposal.proposed;
   }
-  const changes = Object.fromEntries(SETUPS.map(({ id: setupId }) => [setupId, Object.fromEntries(Object.entries(values[setupId])
-    .filter(([role, value]) => !sameValue(value, savedValues[setupId][role]) || (value === null) !== (savedValues[setupId][role] === null)))])
-    .filter(([, roles]) => Object.keys(roles).length));
+  const changes = Object.fromEntries(SETUPS.map(({ id: setupId }) => {
+    const changed = Object.entries(values[setupId])
+      .filter(([role, value]) => !sameValue(value, savedValues[setupId][role]) || (value === null) !== (savedValues[setupId][role] === null));
+    return [setupId, changed.some(([role, value]) => !implicitFollows(setupId, role, value)) ? Object.fromEntries(changed) : {}];
+  }).filter(([, roles]) => Object.keys(roles).length));
   return { revision: baseRevision.value, ...changes };
 }
 // A preferred preview proposes everything it moves; otherwise a deliberate choice stays unchecked.
@@ -127,6 +138,9 @@ function hydrate(data) {
     .filter((role) => roleState(setupId, role, data)?.configured).map((role) => [role, roleState(setupId, role, data).value]))]));
   fieldErrors.value = {};
   savedValues = JSON.parse(JSON.stringify(draft.value));
+  for (const { id: setupId } of SETUPS) for (const [role, follows] of Object.entries(ASSISTANT_ROLE_DEFAULT_FOLLOWS[setupId])) {
+    if (!Object.hasOwn(draft.value[setupId], role)) draft.value[setupId][role] = { follows };
+  }
   savedPayload = JSON.stringify({ revision: data.revision });
   proposals.value = defaultProposals();
   preview.value = data;
@@ -301,10 +315,11 @@ async function reload() {
           </div>
           <div v-if="setup === 'nonOwner' && teamEmpty" class="model-routing__empty" role="status">
             <p>No team AI yet. {{ owner ? "Team members can't open projects until you add one." : `Ask ${ownerName} to set up AI for team members.` }}</p>
-            <v-btn v-if="canEdit" color="primary" variant="flat" :disabled="saving" @click="emit('add-team-key')">Add a DeepSeek key</v-btn>
+            <p v-if="canEdit && teamChoices">Or choose a Workspace-use model you already connected below.</p>
+            <v-btn v-if="canEdit && onAddTeamKey" color="primary" variant="flat" :disabled="saving" @click="onAddTeamKey()">Add a DeepSeek key</v-btn>
           </div>
           <template v-if="setup === 'owner' || teamChoices || !teamEmpty">
-            <div v-if="canEdit" class="model-routing__tools">
+            <div v-if="canEdit && !(setup === 'nonOwner' && teamEmpty)" class="model-routing__tools">
               <v-btn v-if="recommendedChanges.length" variant="outlined" color="primary" size="small" min-height="36" :disabled="saving || stale" @click="reviewRecommendations">Review recommendations</v-btn>
               <p v-else class="text-body-small" role="status">No recommended changes.</p>
             </div>
@@ -320,7 +335,7 @@ async function reload() {
                 :recommendation="roleState(setup, role.id)?.recommendation" :error="roleError(setup, role.id)"
                 :disabled="saving" :readonly="!canEdit"
                 @update="update(setup, role.id, $event)" @change="changeFollowing(setup, role.id)"
-                @connect-provider="emit('connect-provider', $event)"
+                :connectable="Boolean(onConnectProvider)" @connect-provider="onConnectProvider($event)"
               />
             </section>
           </template>

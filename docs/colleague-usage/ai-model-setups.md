@@ -51,7 +51,11 @@ can't use personal plans. Choose a Workspace-use model.**
 
 With nothing chosen yet it shows **No team AI yet. Team members can't open
 projects until you add one.** and **Add a DeepSeek key** (see
-[team AI access](team-ai-access.md)).
+[team AI access](team-ai-access.md)); from chat's Models it opens AI setup on
+the team step. When a Workspace-use model is already connected it adds **Or
+choose a Workspace-use model you already connected below.** with the Colleague
+and Quick helper pickers; Fix it with AI and Explain & check show their default
+**Same as** lines, saved with the first choice.
 
 ## Same as
 
@@ -88,7 +92,8 @@ there is something to see:
   OpenAI key and the GLM Coding Plan, OpenCode for the free GLM option, an
   Anthropic key and other OpenCode providers.
 - When the provider's key is connected in only some tools, **Connect [provider]
-  in another tool** opens **Add a connection**.
+  in another tool** opens **Add a connection** (from chat's Models, AI setup
+  on that provider).
 
 Choosing another model keeps the row's tool when the new model runs there, and
 otherwise uses the new model's usual tool.
@@ -144,7 +149,7 @@ nothing.
 
 On a desktop each row has its label on the left and its pickers on the right. On
 a phone (under 600 px) rows stack label, description, model, thinking and
-Advanced; the switch fills the width and Save/Cancel stay at the bottom.
+Advanced, and Save/Cancel stay at the bottom.
 
 ## What Colleague can do
 

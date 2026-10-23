@@ -70,9 +70,8 @@ If no usable model is connected yet, Colleague shows a warning as soon as you
 open it (or after your first request) that nothing is sent and your draft is
 kept. Choose **Set up your AI** to open the guided AI setup, which recommends a
 provider, opens its sign-up page and connects it, then switches Colleague to that
-AI's Senior model. Or choose **Open AI Accounts**: hosted Vibe64
-opens Management → AI Accounts; standalone Vibe64 opens its existing Account
-settings on **AI Accounts**. Connect an AI and configure an available Senior
+AI's Senior model. Or choose **Open AI Accounts** to open the AI Accounts
+settings. Connect an AI and configure an available Senior
 model, then return and press **Send**. Opening setup does not send the draft or
 promise a response from an unavailable model. Credential entry and provider
 consent remain your actions.
