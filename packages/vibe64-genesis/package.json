@@ -7,6 +7,7 @@
   "exports": {
     "./server": "./src/server/index.js",
     "./server/agentSpecs": "./src/server/agentSpecs.js",
+    "./server/packaging": "./src/server/packaging.js",
     "./server/promptContext": "./src/server/promptContext.js",
     "./shared/connectedPackageTypes": "./src/shared/connectedPackageTypes.js"
   },
@@ -30,6 +31,10 @@
           {
             "subpath": "./server",
             "summary": "Uses Genesis transport while Vibe64 owns workspace setup, Outputs, preview identity, application deployment, and packaging contracts."
+          },
+          {
+            "subpath": "./server/packaging",
+            "summary": "Owns the strict vibe64.packaging.v1 parser, normalized model and Environment-defaults resolution for the opaque Packaging section."
           },
           {
             "subpath": "./server/agentSpecs",

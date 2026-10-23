@@ -54,10 +54,6 @@ const ENVIRONMENT_DEFAULTS = [
   { name: "APP_LINK_DOMAINS", value: "notes.example.com, www.notes.example.com" }
 ];
 
-function lines(text) {
-  return text.trim().split("\n");
-}
-
 function withPackage(entries, { heading = "### Package `pkg`: Package" } = {}) {
   return [heading, ...entries];
 }
