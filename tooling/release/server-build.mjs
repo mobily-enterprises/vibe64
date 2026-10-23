@@ -16,7 +16,9 @@ const SERVER_BUNDLE_EXTERNALS = [
   "@fastify/ajv-compiler", "@fastify/fast-json-stringify-compiler",
   "@vue/compiler-sfc", "@vue/compiler-sfc/*", "fast-json-stringify", "fast-json-stringify/*",
   "genesis-compiler", "genesis-compiler/*", "knex", "knex/*",
-  "node-pty", "node-pty/*", "ts-morph", "ts-morph/*"
+  // Database drivers ship as runtime dependencies; bundling them would turn their
+  // undeclared optional requires (mysql2's cardinal) into required externals.
+  "mysql2", "mysql2/*", "node-pty", "node-pty/*", "pg", "pg/*", "ts-morph", "ts-morph/*"
 ];
 
 function sortStrings(values = []) {
