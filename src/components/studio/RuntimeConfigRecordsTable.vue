@@ -30,18 +30,10 @@
           <div
             v-if="savedRecord(record)"
             class="runtime-config-records-table__linked"
+            :title="record.label"
           >
-            <v-chip
-              class="runtime-config-records-table__linked-chip"
-              color="primary"
-              label
-              :prepend-icon="mdiLinkVariant"
-              size="x-small"
-              variant="tonal"
-            >
-              Linked
-            </v-chip>
-            <span class="runtime-config-records-table__linked-label" :title="record.label">{{ record.label }}</span>
+            <v-icon class="runtime-config-records-table__linked-icon" :icon="mdiLinkVariant" size="16" />
+            <span class="runtime-config-records-table__linked-label">{{ record.label || "Linked" }}</span>
           </div>
           <div
             v-else-if="record.secret"
@@ -92,36 +84,38 @@
               variant="outlined"
               @update:model-value="setDraftValue(record, $event)"
             />
-            <v-btn
-              :disabled="!draftTouched(record)"
-              :loading="saveBusy"
-              size="small"
-              type="button"
-              variant="tonal"
-              @click="saveRecord(record)"
-            >
-              Save
-            </v-btn>
-            <v-btn
-              :loading="saveBusy"
-              size="small"
-              type="button"
-              variant="text"
-              @click="removeRecord(record)"
-            >
-              Remove
-            </v-btn>
-            <component
-              :is="savedValues.component"
-              v-if="savedValues"
-              :environment="savedValueEnvironment(environmentLabel)"
-              :has-value="record.valuePresent === true"
-              placement="env-row"
-              :project-slug="projectSlug"
-              :secret="record.secret === true"
-              :variable="record.key"
-              @changed="$emit('saved-value-changed')"
-            />
+            <span class="runtime-config-records-table__edit-actions">
+              <component
+                :is="savedValues.component"
+                v-if="savedValues"
+                :environment="savedValueEnvironment(environmentLabel)"
+                :has-value="record.valuePresent === true"
+                placement="env-row"
+                :project-slug="projectSlug"
+                :secret="record.secret === true"
+                :variable="record.key"
+                @changed="$emit('saved-value-changed')"
+              />
+              <v-btn
+                :disabled="!draftTouched(record)"
+                :loading="saveBusy"
+                size="small"
+                type="button"
+                variant="tonal"
+                @click="saveRecord(record)"
+              >
+                Save
+              </v-btn>
+              <v-btn
+                :loading="saveBusy"
+                size="small"
+                type="button"
+                variant="text"
+                @click="removeRecord(record)"
+              >
+                Remove
+              </v-btn>
+            </span>
           </div>
         </td>
       </tr>
@@ -349,24 +343,41 @@ async function copyKey(key = "") {
   flex: 1 1 7rem;
 }
 
+/* A linked value reads as one quiet line: where the value comes from. */
 .runtime-config-records-table__linked {
-  align-items: flex-start;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  background: var(--v64-surface-container, rgba(var(--v-theme-on-surface), 0.05));
+  border-radius: var(--v64-shape-sm, 8px);
+  color: var(--v64-on-surface-variant, rgba(0, 0, 0, 0.62));
+  display: inline-flex;
+  gap: 6px;
+  margin-block: 6px;
+  max-width: 100%;
   min-width: 0;
-  padding-block: 6px;
+  padding: 4px 10px 4px 8px;
 }
 
-.runtime-config-records-table__linked-chip {
+.runtime-config-records-table__linked-icon {
+  color: var(--v64-primary, rgb(var(--v-theme-primary)));
   flex: 0 0 auto;
 }
 
 .runtime-config-records-table__linked-label {
-  color: var(--v64-on-surface-variant, rgba(0, 0, 0, 0.62));
-  font: var(--v64-type-body-sm, 400 0.8125rem/1.125rem system-ui, sans-serif);
+  -webkit-box-orient: vertical;
+  display: -webkit-box;
+  font: var(--v64-type-label-lg, 500 0.875rem/1.25rem system-ui, sans-serif);
+  -webkit-line-clamp: 2;
   min-width: 0;
+  overflow: hidden;
   overflow-wrap: anywhere;
+}
+
+.runtime-config-records-table__edit-actions {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 0.25rem;
+  margin-inline-start: auto;
 }
 
 .runtime-config-records-table__saved-actions {
@@ -384,6 +395,35 @@ async function copyKey(key = "") {
 @media (max-width: 900px) {
   .runtime-config-records-table__edit > .v-input {
     flex-basis: 100%;
+  }
+}
+
+/* On a phone each variable becomes a small card: key, value, then actions. */
+@media (max-width: 600px) {
+  .runtime-config-records-table :deep(table),
+  .runtime-config-records-table :deep(tbody) {
+    display: block;
+  }
+
+  .runtime-config-records-table :deep(colgroup),
+  .runtime-config-records-table :deep(thead) {
+    display: none;
+  }
+
+  .runtime-config-records-table :deep(tbody > tr) {
+    display: grid;
+    gap: 4px;
+    padding: 10px 12px;
+  }
+
+  .runtime-config-records-table :deep(tbody > tr + tr) {
+    border-top: thin solid rgba(var(--v-border-color), var(--v-border-opacity));
+  }
+
+  .runtime-config-records-table :deep(tbody > tr > td) {
+    border: 0 !important;
+    height: auto !important;
+    padding: 0 !important;
   }
 }
 </style>
