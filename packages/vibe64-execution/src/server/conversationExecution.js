@@ -14,6 +14,9 @@ const bridgePath = fileURLToPath(new URL("./engines/stdioBridge.js", import.meta
 // Each inspection starts a privileged host helper. While the observed process
 // ID still exists, rely on that local check and inspect only this often.
 const INSPECTION_FALLBACK_MS = 30_000;
+// A host probe can time out under heavy I/O pressure. While the local process ID
+// still exists, that is not an exit: retry a bounded number of times first.
+const INSPECTION_FAILURE_LIMIT = 3;
 
 function processExists(pid) {
   if (!Number.isSafeInteger(pid) || pid <= 0) return false;
@@ -56,14 +59,21 @@ export function createVibe64ConversationExecution({
     return stopping;
   }
   async function observe(id, entry) {
+    let failures = 0;
     try {
       while (entry.running) {
-        const status = await inspectExecution(id);
-        if (entry.observation.signal.aborted) return;
-        if (status?.ok !== true || typeof status.running !== "boolean") {
-          throw new Error("The execution host could not observe the native process.");
+        let status;
+        try {
+          status = await inspectExecution(id);
+          if (status?.ok !== true || typeof status.running !== "boolean") {
+            throw new Error("The execution host could not observe the native process.");
+          }
+          failures = 0;
+        } catch (error) {
+          if (++failures >= INSPECTION_FAILURE_LIMIT || !processExists(entry.pid)) throw error;
         }
-        if (!status.running) {
+        if (entry.observation.signal.aborted) return;
+        if (status && !status.running) {
           entry.running = false;
           entry.exit.resolve({ code: status.exitCode ?? null, signal: status.signal || null,
             ...(status.taskLimit ? { taskLimit: status.taskLimit } : {}) });

@@ -213,6 +213,31 @@ test("failed cleanup retains the execution and its files until the host proves t
   await assert.rejects(stat(directory), { code: "ENOENT" });
 });
 
+test("a slow host probe does not end a native process that still exists locally", { timeout: 10_000 }, async t => {
+  let inspections = 0;
+  const f = await fixture(t, {
+    commandRunner: async () => ({ ok: true, pid: process.pid, execution: { id: "observation-transient" } }),
+    inspectExecution: async () => {
+      inspections += 1;
+      if (inspections === 1) return { ok: true, running: true };
+      if (inspections === 2) throw new Error("Command timed out after 30000 milliseconds");
+      return { ok: true, running: false, exitCode: 0 };
+    },
+    stopExecution: async () => ({ scopeEmpty: true })
+  });
+  const native = await f.start();
+  // The waits between probes see the process gone so the test re-inspects
+  // promptly; the check made after the failed probe still finds it alive.
+  const kill = process.kill;
+  let localChecks = 0;
+  t.mock.method(process, "kill", (pid, signal) => {
+    if (pid === process.pid && signal === 0 && ++localChecks !== 2) throw Object.assign(new Error("gone"), { code: "ESRCH" });
+    return kill.call(process, pid, signal);
+  });
+  assert.deepEqual(await native.exited, { code: 0, signal: null });
+  assert.equal(inspections, 3, "the timed-out probe was retried instead of ending the process");
+});
+
 test("an unavailable observation rejects exit evidence without acknowledging cleanup", async t => {
   let stopped = 0;
   const f = await fixture(t, {
