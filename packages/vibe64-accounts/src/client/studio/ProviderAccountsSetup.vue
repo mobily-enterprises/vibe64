@@ -179,11 +179,13 @@
               class="accounts-setup__pending-action"
               color="primary"
               :variant="apiKeyFormVisible(account) ? 'text' : 'flat'"
-              :disabled="!accountsReadyForActions || accountLoginDisabled(account)"
+              :disabled="!accountsReadyForActions || (accountLoginDisabled(account) && !primaryAuthPending(account))"
+              :loading="primaryAuthPending(account)"
               @click="startAccountAuth(account)"
             >
               {{ primaryAuthLabel(account) }}
             </v-btn>
+            <AiWaitStatus class="accounts-setup__wait" :active="primaryAuthPending(account)" :label="primaryAuthWaitLabel(account)" />
             <v-btn
               v-if="account.connected && !embedded"
               :aria-busy="logoutAccountId === account.id ? 'true' : undefined"
@@ -224,9 +226,10 @@
                 color="primary"
                 variant="flat"
                 :disabled="!accountsReadyForActions || apiKeyLoginDisabled(account)"
+                :loading="primaryAuthPending(account)"
                 @click="startAccountApiKeyAuth(account)"
               >
-                {{ primaryAuthPending(account) ? "Starting login…" : "Login with API key" }}
+                Login with API key
               </v-btn>
             </div>
           </div>
@@ -325,13 +328,19 @@
                 <v-btn
                   class="accounts-setup__authorize-action"
                   color="primary"
-                  :disabled="!accountsReadyForActions || !session.authUrl"
+                  :disabled="!accountsReadyForActions"
                   :append-icon="mdiOpenInNew"
+                  :loading="!session.authUrl"
                   variant="flat"
                   @click="openAuthUrl(session)"
                 >
-                  {{ session.authUrl ? "Continue to Claude" : "Preparing sign-in…" }}
+                  Continue to Claude
                 </v-btn>
+                <AiWaitStatus :active="!session.authUrl" :label="statusMessage">
+                  <template #slow>
+                    <v-btn variant="text" color="primary" :disabled="authStartBusy" @click="retryAccountAuth(account, session)">Start again</v-btn>
+                  </template>
+                </AiWaitStatus>
                 <p class="text-body-medium ma-0">2. Copy the authorization code from Claude and paste it here.</p>
                 <form class="d-flex flex-column ga-3" @submit.prevent="submitClaudeCode(session)">
                   <v-text-field
@@ -351,14 +360,19 @@
                     color="primary"
                     type="submit"
                     variant="flat"
-                    :aria-busy="claudeCodeChecking ? 'true' : undefined"
-                    :disabled="!accountsReadyForActions || !claudeCode.trim() || claudeCodeChecking"
+                    :disabled="!accountsReadyForActions || (!claudeCode.trim() && !claudeCodeChecking)"
+                    :loading="claudeCodeChecking"
                   >
-                    {{ claudeCodeChecking ? "Checking sign-in…" : "Connect Claude" }}
+                    Connect Claude
                   </v-btn>
+                  <AiWaitStatus :active="Boolean(session.authUrl) && claudeCodeChecking" :label="statusMessage">
+                    <template #slow>
+                      <v-btn variant="text" color="primary" :disabled="authStartBusy" @click="retryAccountAuth(account, session)">Start again</v-btn>
+                    </template>
+                  </AiWaitStatus>
                 </form>
               </template>
-              <p class="text-body-medium text-medium-emphasis ma-0" role="status">{{ statusMessage }}</p>
+              <p v-if="!sessionWaiting(session)" class="text-body-medium text-medium-emphasis ma-0" role="status">{{ statusMessage }}</p>
               <v-btn
                 v-if="session.status === 'failed'"
                 class="align-self-start"
@@ -410,14 +424,20 @@
                 v-if="authorizeStep || session?.authUrl"
                 class="accounts-setup__authorize-action"
                 color="primary"
-                :disabled="!accountsReadyForActions || !session?.authUrl || (authorizeStep && !userCode)"
+                :disabled="!accountsReadyForActions || (!sessionWaiting(session) && (!session?.authUrl || (authorizeStep && !userCode)))"
                 :append-icon="mdiOpenInNew"
+                :loading="sessionWaiting(session)"
                 variant="flat"
                 @click="openAuthUrl(session)"
               >
                 {{ authorizeStep ? "Continue to ChatGPT" : "Continue in browser" }}
               </v-btn>
-              <p v-if="statusMessage" class="text-body-medium text-medium-emphasis ma-0" role="status">
+              <AiWaitStatus :active="sessionWaiting(session)" :label="statusMessage">
+                <template #slow>
+                  <v-btn variant="text" color="primary" :disabled="authStartBusy" @click="retryAccountAuth(account, session)">Start again</v-btn>
+                </template>
+              </AiWaitStatus>
+              <p v-if="statusMessage && !sessionWaiting(session)" class="text-body-medium text-medium-emphasis ma-0" role="status">
                 {{ statusMessage }}
               </p>
               <v-expansion-panels
@@ -483,6 +503,7 @@ import {
 import codexDeviceAuthorizeImage from "/src/assets/codex-device-code-authorize.png";
 import codexDeviceSettingsImage from "/src/assets/codex-device-code-settings.png";
 import Vibe64Terminal from "/src/components/studio/Vibe64Terminal.vue";
+import AiWaitStatus from "./AiWaitStatus.vue";
 import CliInstallNotice, { cliProblem } from "./CliInstallNotice.vue";
 import {
   useProviderAccountsSetup
@@ -578,10 +599,12 @@ const {
   openAuthUrl,
   primaryAuthLabel,
   primaryAuthPending,
+  primaryAuthWaitLabel,
   requiresGitIdentity,
   refreshStatus,
   retryAccountAuth,
   sessionStatusMessage,
+  sessionWaiting,
   setCodexAuthStep,
   startAccountApiKeyAuth,
   startAccountAuth,
@@ -755,6 +778,10 @@ const setupRows = computed(() => accountRows.value.map((account) => {
 
 .accounts-setup__terminal {
   min-width: 0;
+}
+
+.accounts-setup__wait {
+  flex-basis: 100%;
 }
 
 .accounts-setup__pending-action {

@@ -349,6 +349,21 @@ describe("flow", () => {
     expect(state.proven).toBe(true);
   });
 
+  it("says what finishing does and reads routing alongside the new connection", async () => {
+    const { state } = await flow();
+    state.connect(claude, "have");
+    connectClaude();
+    let accountsRead;
+    mocks.accounts.statusResource.reload.mockReturnValueOnce(new Promise((resolve) => { accountsRead = resolve; }));
+    const finishing = state.finish();
+    await vi.waitFor(() => expect(mocks.routing.configuration.resource.reload).toHaveBeenCalled());
+    expect(mocks.routing.workflows.resource.reload).toHaveBeenCalled();
+    expect([state.verifying, state.verifyLabel]).toEqual([true, "Setting up Claude as your main AI…"]);
+    accountsRead({});
+    await finishing;
+    expect([state.screen, state.verifying]).toEqual(["success", false]);
+  });
+
   it("in Learn mode sends no hello into the lesson's teacher thread", async () => {
     const { state } = await flow({ learnMode: true });
     state.connect(claude, "have");

@@ -1931,12 +1931,13 @@ test("Codex creates a new local identity once per successful sign-in and preserv
     const published = [];
     let exitCode = 0;
     let invalidations = 0;
+    let statusProbes = 0;
     const service = createService({
       accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "daemon"), systemRoot }),
       projectService: { currentTargetRoot: () => root },
       invalidateAgentRuntimes: async () => { invalidations += 1; return { ok: true }; },
       inspectRoutingConfiguration: async () => { throw new Error("Routing catalogue is temporarily unavailable."); },
-      runHostToolCommand: async () => ({ ok: true, output: "Logged in using ChatGPT" }),
+      runHostToolCommand: async () => { statusProbes += 1; return { ok: true, output: "Logged in using ChatGPT" }; },
       publishAuthSessionChanged: async (session) => { published.push(session); },
       runAuthTerminalCommand: (input) => startGatewayAuthTestTerminal(input, {
         args: ["-e", `process.exit(${exitCode});`],
@@ -1954,7 +1955,9 @@ test("Codex creates a new local identity once per successful sign-in and preserv
     const loginId = await readCodexLoginId(systemRoot);
     assert.notEqual(loginId, initialId);
     assert.equal(invalidations, 1);
+    const probesAtFinish = statusProbes;
     const completed = await service.readAuthSession({ sessionId: successful.id });
+    assert.equal(statusProbes, probesAtFinish, "Reading a finished sign-in reuses the status found when it finished");
     assert.equal(completed.status, "connected", "Routing setup failure does not undo successful authentication");
     assert.equal(completed.account.routing.ok, false);
     assert.equal(completed.account.routing.error, "Routing catalogue is temporarily unavailable.");
@@ -2154,6 +2157,38 @@ test("Claude login receives its browser link as JSON and accepts code input only
       assert.equal(launches, 2);
     } finally {
       await service.cancelAuthSession({ sessionId: restarted.id, vibe64User: owner });
+    }
+  });
+});
+
+test("Claude login announces its browser link when it lands, after the CLI's last output", async () => {
+  await withTempDir(async (root) => {
+    const published = [];
+    const service = createService({
+      daemonHome: path.join(root, "home"), systemRoot: path.join(root, "system"),
+      publishAuthSessionChanged: async (session) => { published.push(session); },
+      // Like the real CLI: print the prompt, then run BROWSER, then wait silently.
+      runAuthTerminalCommand: (input) => startGatewayAuthTestTerminal(input, {
+        command: process.execPath,
+        args: ["--input-type=module", "-e", `
+          import { execFileSync } from 'node:child_process';
+          process.stdout.write('Opening browser to sign in.');
+          await new Promise((resolve) => setTimeout(resolve, 50));
+          execFileSync(process.env.BROWSER, ['https://claude.com/cai/oauth/authorize?code=true&state=fixture'], { env: process.env });
+          process.stdin.resume();
+        `]
+      })
+    });
+    const owner = { role: "owner", username: "owner" };
+    const started = await service.startAuth({ accountId: "claude", vibe64User: owner });
+    assert.equal(started.ok, true);
+    try {
+      await waitForAccountRuntimeCondition(
+        () => published.some((session) => session.id === started.id && session.authUrl),
+        "The Claude sign-in link was not published without a read."
+      );
+    } finally {
+      await service.cancelAuthSession({ sessionId: started.id, vibe64User: owner });
     }
   });
 });

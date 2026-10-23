@@ -22,8 +22,8 @@
       <pre>{{ account.observed }}</pre>
     </details>
     <div class="d-flex flex-wrap ga-2 mt-3">
-      <v-btn variant="flat" color="warning" :disabled="checking" :prepend-icon="mdiRefresh" @click="emit('check')">
-        {{ checking ? "Checking…" : "Check again" }}
+      <v-btn variant="flat" color="warning" :loading="checking" :prepend-icon="mdiRefresh" @click="emit('check')">
+        Check again
       </v-btn>
       <slot />
     </div>

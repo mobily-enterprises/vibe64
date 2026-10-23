@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, ref } from "vue";
 import { useAiConnections } from "../composables/useAiConnections.js";
+import AiWaitStatus from "../studio/AiWaitStatus.vue";
 
 // Connects one OpenCode provider key in onboarding through the AI Accounts
 // connection route: the live catalogue supplies the provider revision and the
@@ -59,6 +60,7 @@ async function save() {
       :error-messages="error ? [error] : []" :disabled="saving"
     />
     <v-btn type="submit" color="primary" variant="flat" size="large" :loading="saving">Connect</v-btn>
+    <AiWaitStatus :active="saving" :label="`Checking the key with ${label || 'the provider'}. This can take up to a minute.`" />
   </form>
 </template>
 

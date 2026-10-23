@@ -114,15 +114,14 @@ function useAiOnboarding({ endpoint = "", enabled = true } = {}) {
     return colleague.sayHello(HELLO).catch((error) => ({ ok: false, error: error?.message || "No reply." }));
   }
 
-  // Re-reads the chosen provider's connection, then its orchestrator's routing.
+  // Re-reads the chosen provider's connection and, at the same time, its orchestrator's routing.
   async function verify(provider) {
     const { connect } = provider;
-    await reload();
-    if (!aiOnboardingConnections(provider, lists.value).length) return { connected: false };
     routingEngineId.value = connect.engineId;
     routingEnabled.value = true;
     await nextTick();
-    await Promise.all([workflows.resource.reload(), routing.resource.reload()]);
+    await Promise.all([reload(), workflows.resource.reload(), routing.resource.reload()]);
+    if (!aiOnboardingConnections(provider, lists.value).length) return { connected: false };
     const workflow = workflows.workflows.value.find(({ engineId }) => engineId === connect.engineId);
     const engine = routing.engines.value.find(({ engineId }) => engineId === connect.engineId);
     const senior = engine?.roles?.senior || {};

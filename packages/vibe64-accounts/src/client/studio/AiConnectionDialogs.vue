@@ -12,6 +12,7 @@ import {
   mdiMagnify,
   mdiRobotOutline
 } from "@mdi/js";
+import AiWaitStatus from "./AiWaitStatus.vue";
 import CliInstallNotice from "./CliInstallNotice.vue";
 import ModelRoutingForm from "./ModelRoutingForm.vue";
 import NativeProviderConnections from "./NativeProviderConnections.vue";
@@ -450,7 +451,8 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
             </template>
           </v-text-field>
 
-          <div aria-live="polite" class="vibe64-provider-editor__security">
+          <AiWaitStatus :active="editorPreparing || editorSaving" :label="editorVerificationCopy" />
+          <div v-if="!editorPreparing && !editorSaving" aria-live="polite" class="vibe64-provider-editor__security">
             <v-icon :icon="mdiLockOutline" size="18" />
             <span>{{ editorVerificationCopy }}</span>
           </div>
@@ -468,12 +470,13 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
           <v-btn
             :aria-busy="editorPreparing || editorSaving ? 'true' : undefined"
             color="primary"
-            :disabled="!editorCanSave"
+            :disabled="!editorCanSave && !editorPreparing && !editorSaving"
+            :loading="editorPreparing || editorSaving"
             type="button"
             variant="flat"
             @click="saveEditor"
           >
-            {{ editorPreparing ? "Loading provider details…" : "Verify and connect" }}
+            Verify and connect
           </v-btn>
         </v-card-actions>
       </template>

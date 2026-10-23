@@ -13,6 +13,7 @@ import NativeProviderConnections from "../studio/NativeProviderConnections.vue";
 import AiConnectionDialogs from "../studio/AiConnectionDialogs.vue";
 import AiProviderManage from "../studio/AiProviderManage.vue";
 import AiSetupAdvanced from "../studio/AiSetupAdvanced.vue";
+import AiWaitStatus from "../studio/AiWaitStatus.vue";
 import { provideAiConnectionManager, useAiConnectionManager } from "../composables/useAiConnectionManager.js";
 import AiOnboardingKeyConnect from "./AiOnboardingKeyConnect.vue";
 import AiOnboardingMark from "./AiOnboardingMark.vue";
@@ -158,6 +159,10 @@ const doneLabel = computed(() => inLesson.value ? "Back to the lesson" : learn.v
 // The check waits for Colleague's hello when there is one to wait for.
 const proven = computed(() => colleagueNote.value !== "uses" || learn.value ||
   ["replied", "dismissed"].includes(hello.value.state));
+
+// What finishing is doing while it checks the chosen provider.
+const verifyLabel = computed(() => !chosen.value ? "" : firstRun.value || makeMain.value
+  ? `Setting up ${chosen.value.name} as your main AI…` : `Checking ${chosen.value.name}…`);
 
 function readSetup() {
   const { isSetUp, loaded: known } = setup;
@@ -315,7 +320,7 @@ async function finish({ keep: keeping = false } = {}) {
   warning.value = "";
   notReady.value = false;
   try {
-    const result = await setup.verify(card);
+    const [result, current] = await Promise.all([setup.verify(card), setup.refreshColleague()]);
     if (!result.connected) {
       warning.value = `${card.name} isn't connected yet. Finish the connection step, then try again.`;
       if (screen.value !== "connect") go("connect");
@@ -333,7 +338,7 @@ async function finish({ keep: keeping = false } = {}) {
       announcement.value = `${card.name} is connected, but no model is ready for Colleague yet.`;
       return;
     }
-    let colleague = await setup.refreshColleague();
+    let colleague = current;
     let error = "";
     if ((firstRun.value || makeMain.value) && !usesProvider(colleague, card)) {
       ({ selection: colleague = colleague, error = "" } = await setup.selectForColleague(card));
@@ -437,7 +442,8 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
             </span>
           </span>
           <v-btn
-            v-if="mainCard" color="primary" variant="flat" size="large" :disabled="verifying" class="aio-current__keep" @click="keep(mainCard)"
+            v-if="mainCard" color="primary" variant="flat" size="large" :disabled="verifying && chosen?.id !== mainCard.id" :loading="verifying && chosen?.id === mainCard.id"
+            class="aio-current__keep" @click="keep(mainCard)"
           >
             Keep using {{ mainCard.name }}
           </v-btn>
@@ -449,7 +455,7 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
           We couldn't check your current AI connections.
           <template #append><v-btn variant="text" @click="setup.reload()">Try again</v-btn></template>
         </v-alert>
-        <p v-if="verifying" class="d-sr-only" role="status">Checking…</p>
+        <AiWaitStatus :active="verifying" :label="verifyLabel" class="mb-6" />
         <div class="ai-onboarding__cards">
           <article
             v-for="(card, index) in orderedCards" :key="card.id"
@@ -631,7 +637,11 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
                 v-else embedded adding :select-provider="false" :engine-id="chosen.connect.engineId"
                 :model-value="chosen.connect.modelProviderId" @busy="setupBusy = $event" @close="finish()"
               />
-              <v-alert v-if="warning" type="warning" variant="tonal" class="mt-4">{{ warning }}</v-alert>
+              <AiWaitStatus :active="verifying" :label="verifyLabel" class="mt-4" />
+              <v-alert v-if="warning" type="warning" variant="tonal" class="mt-4">
+                {{ warning }}
+                <template #append><v-btn variant="text" :disabled="busy" @click="finish()">Try again</v-btn></template>
+              </v-alert>
               <v-alert v-if="notReady" type="warning" variant="tonal" class="mt-4">
                 {{ chosen.name }} is connected, but no model is ready for Colleague yet.
                 <template #append><v-btn variant="text" @click="reviewRouting">Review model routing</v-btn></template>

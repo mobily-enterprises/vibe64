@@ -226,15 +226,15 @@ function useProviderAccountsSetup(props, { onConnected } = {}) {
     }
   }
 
+  // What the pending primary action is doing, under its spinner.
+  function primaryAuthWaitLabel(account = {}) {
+    if (requiresGitIdentity(account) && account.connected === true) return "Saving your Git identity…";
+    return authStartAccountId.value === String(account.id || "")
+      ? `Starting ${account.label || "the"} sign-in. This can take up to a minute.`
+      : "Sign-in in progress…";
+  }
+
   function primaryAuthLabel(account = {}) {
-    if (primaryAuthPending(account)) {
-      if (requiresGitIdentity(account) && account.connected === true) {
-        return "Saving identity…";
-      }
-      return authStartAccountId.value === String(account.id || "")
-        ? "Starting login…"
-        : "Login in progress";
-    }
     if (requiresGitIdentity(account) && account.connected === true) {
       return "Save Git identity";
     }
@@ -433,8 +433,9 @@ function useProviderAccountsSetup(props, { onConnected } = {}) {
     }
     if (session.account?.id === "claude") {
       if (session.status === "failed") return "Claude sign-in did not finish. Try again, or open the login terminal for details.";
-      if (claudeCodeSubmitted.value) return "Checking your sign-in. This screen will update when Claude confirms the connection.";
-      return session.authUrl ? "Sign in in the browser, then return here to finish connecting." : "Preparing your Claude sign-in link…";
+      if (claudeCodeSubmitted.value) return "Checking your code with Claude. This can take up to a minute.";
+      return session.authUrl ? "Sign in in the browser, then return here to finish connecting."
+        : "Starting Claude's sign-in. This can take up to a minute.";
     }
     if (authSessionNeedsTerminalAttention(session)) {
       return "Codex needs attention in the terminal. Review the terminal output and respond there.";
@@ -443,21 +444,27 @@ function useProviderAccountsSetup(props, { onConnected } = {}) {
       return "Login did not finish cleanly. Review the logs and try again.";
     }
     if (session.mode === "api_key") {
-      return "Signing in with the OpenAI API key. Open the terminal if Vibe64 needs more details.";
+      return "Signing in with the OpenAI API key. This can take up to a minute.";
     }
     if (session.mode === "device" && authSessionUserCode(session)) {
-      return "";
-    }
-    if (session.mode === "device" && session.authUrl) {
-      return "Waiting for Codex to print the one-time code.";
+      return "Enter the code in ChatGPT. This screen continues by itself once you approve it.";
     }
     if (session.mode === "device") {
-      return "Starting code login and waiting for Codex to print a device code.";
+      return "Starting the sign-in and getting your one-time code. This can take up to a minute.";
     }
     if (session.authUrl) {
       return "Browser login is open. Complete authorization there, then Studio will continue.";
     }
-    return "Starting login and waiting for the browser URL.";
+    return "Starting the sign-in and getting its browser link. This can take up to a minute.";
+  }
+
+  // Waiting on Vibe64 or the provider rather than on the person.
+  function sessionWaiting(session = {}) {
+    if (session.status === "failed" || session.status === "connected") return false;
+    if (session.account?.id === "claude") return !session.authUrl || claudeCodeSubmitted.value;
+    if (authSessionNeedsTerminalAttention(session)) return false;
+    if (session.mode === "api_key") return true;
+    return session.mode === "device" ? !authSessionUserCode(session) : !session.authUrl;
   }
 
   onBeforeUnmount(() => {
@@ -577,10 +584,12 @@ function useProviderAccountsSetup(props, { onConnected } = {}) {
     openAuthUrl,
     primaryAuthLabel,
     primaryAuthPending,
+    primaryAuthWaitLabel,
     requiresGitIdentity,
     refreshStatus,
     retryAccountAuth,
     sessionStatusMessage,
+    sessionWaiting,
     setCodexAuthStep,
     startAccountApiKeyAuth,
     startAccountAuth,

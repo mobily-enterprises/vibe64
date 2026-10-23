@@ -2,6 +2,7 @@ import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/co
 import { createAssistantRoutingStore, validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/assistantRoutingStore";
 import { ASSISTANT_ROUTING_ASSIGNMENTS } from "@local/vibe64-runtime/shared/assistantRouting";
 import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerProvider";
+import { watch } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import os from "node:os";
@@ -1933,7 +1934,7 @@ function createService({
       ? rotateCodexMarkerForFinalizedAuthSession(sessionId, metadata, terminal.exitCode)
       : false;
     const account = terminal.status === "exited"
-      ? await accountStatus(metadata.accountId, {
+      ? metadata.account || await accountStatus(metadata.accountId, {
           codexMarkerReason: finalizedCodexAuthSession ? "auth-session-exited" : "auth-session-status",
           githubContext: metadata.githubContext || null,
           previousGithub: previousGithubForInput(input),
@@ -1953,7 +1954,6 @@ function createService({
       sessionId,
       terminalStatus: terminal.status
     });
-    if (account.connected && metadata.routing) account.routing = metadata.routing;
 
     return publicAuthSession({
       account,
@@ -2082,9 +2082,10 @@ function createService({
       });
       if (["codex", "claude"].includes(accountId) && account?.connected === true && exitCode === 0) {
         account.routing = await initializeModelRouting({ engineIds: [accountId], vibe64User });
-        const metadata = authMetadata(id);
-        if (metadata) metadata.routing = account.routing;
       }
+      // Reads of the finished session reuse this status instead of asking the CLI again.
+      const finishedMetadata = authMetadata(id);
+      if (finishedMetadata) finishedMetadata.account = account;
       authDebug("server.auth.account_changed.publish.start", {
         account: accountDebugSummary(account),
         accountId,
@@ -2158,7 +2159,18 @@ function createService({
     const credentialHome = authTerminalCredentialHome(providerContext);
     const browserRoot = accountId === "claude" ? await mkdtemp(path.join(os.tmpdir(), "v64-claude-auth-")) : "";
     const browserFile = browserRoot ? path.join(browserRoot, "handoff.json") : "";
+    // Claude prints its sign-in prompt before it runs BROWSER, so no later
+    // output announces the link: publish the session when the link lands.
+    let browserSessionId = "";
+    const browserWatcher = browserRoot ? watch(browserRoot, (_event, name) => {
+      const terminal = name === path.basename(browserFile) && browserSessionId
+        ? readTerminalSession(browserSessionId, { namespace: ACCOUNT_AUTH_NAMESPACE }) : null;
+      if (terminal && terminal.ok !== false) {
+        publishAuthTerminalOutput({ metadata: authTerminalMetadata(accountId, mode, githubContext, actorId), terminal });
+      }
+    }) : null;
     const cleanupBrowser = async () => {
+      browserWatcher?.close();
       if (browserRoot) await rm(browserRoot, { recursive: true, force: true });
     };
     authDebug("server.auth.terminal.start", {
@@ -2233,7 +2245,10 @@ function createService({
 
     if (browserFile) {
       if (authSessions.has(terminal.id)) await cleanupBrowser();
-      else claudeBrowserFiles.set(terminal.id, browserFile);
+      else {
+        claudeBrowserFiles.set(terminal.id, browserFile);
+        browserSessionId = terminal.id;
+      }
     }
 
     if (!authSessions.has(terminal.id)) {

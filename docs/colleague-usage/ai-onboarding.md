@@ -118,6 +118,21 @@ Both warnings also offer **Choose another AI**. See
 [AI accounts](ai-accounts-and-routing.md#install-claude-code-codex-or-opencode-first)
 for the install commands and where Vibe64 looks for these programs.
 
+### While it works
+
+Every wait in Step 2 shows a spinner on the button you pressed and a line
+under it saying what is happening, for example **Starting Claude's sign-in.
+This can take up to a minute.** (until **Continue to Claude** is ready),
+**Checking your code with Claude.** after **Connect Claude**, **Starting the
+sign-in and getting your one-time code.** for Codex, or **Checking the key with
+[provider].** for a key. A wait that runs past about 20 seconds adds **Still
+working. This is taking longer than usual.**; a sign-in also offers **Start
+again** there. After a sign-in is accepted, Step 2 shows **Signed in to
+[provider]** with **Setting up [provider] as your main AI…** until the success
+screen opens (on a redo, **Checking [provider]…**). If that check fails, its
+warning has **Try again**. Waiting for you (open ChatGPT and enter the code)
+shows plain text, not a spinner.
+
 DeepSeek and the GLM Coding Plan connect through Codex; the free GLM-4.7 Flash
 option connects through OpenCode. Use **Back** (above the header on a
 desktop, the arrow at the top left on a phone) to return to the provider list.
