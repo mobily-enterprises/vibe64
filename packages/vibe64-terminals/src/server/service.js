@@ -3037,7 +3037,20 @@ function createService({
         };
       }
       const projects = openProjectRuntimeRecords(listed);
+      // Practice projects are outside the catalogue but run Preview and agents
+      // like any project; the dormant close reads each one's own open state.
       const results = [];
+      const listedSlugs = new Set(projects.map((project) => project.slug));
+      try {
+        for (const slug of await projectService.listPracticeProjectSlugs?.() || []) {
+          if (!listedSlugs.has(slug)) projects.push({ slug });
+        }
+      } catch (error) {
+        results.push({
+          error: error instanceof Error ? error.message : String(error || "Practice projects could not be listed."),
+          ok: false
+        });
+      }
       for (const project of projects) {
         try {
           results.push(await closeDormantListedProjectRuntime(project, input));

@@ -545,6 +545,37 @@ test("original dormancy owner supplies internal close authority while an explici
   });
 });
 
+test("the dormant sweep closes an idle practice project outside the catalogue", async () => {
+  await withTemporaryRoot(async root => {
+    const runtimeRoot = path.join(root, "runtime"), targetRoot = path.join(root, "project");
+    await mkdir(targetRoot, { recursive: true });
+    const contexts = [];
+    const project = {
+      createSessionStore() { return {}; },
+      async createRuntime() { return { store: { withUnpinnedProject: operation => operation() }, adapter: {}, projectConfig: {}, stateRoot: runtimeRoot, async listSessions() { return []; } }; },
+      currentProjectRuntimeRoot() { return runtimeRoot; }, currentTargetRoot() { return targetRoot; },
+      async listProjects() { return { ok: true, projects: [] }; },
+      async listPracticeProjectSlugs() { return ["training-0123abcd"]; },
+      async readCurrentProject() { return { slug: "training-0123abcd" }; },
+      async readEnv() { return { env: { records: [] }, ok: true }; },
+      runInProjectContext(slug, operation) { contexts.push(slug); return operation(); },
+      async saveEnvUserValues() { return { ok: true }; }
+    };
+    const dependencies = featureDependencies({ env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") }, project, published: [] });
+    const feature = createVibe64TerminalsFeature(), outputs = await feature.setup(dependencies, { profile: "test" });
+    try {
+      await outputs.terminals.openProjectRuntime();
+      const fresh = await outputs.terminals.closeDormantProjectRuntimes({});
+      assert.equal(fresh.closedCount, 0);
+      assert.equal(fresh.results[0].reason, "not-dormant");
+      const swept = await outputs.terminals.closeDormantProjectRuntimes({ nowMs: Date.now() + 31 * 60 * 1000 });
+      assert.equal(swept.ok, true); assert.equal(swept.closedCount, 1);
+      assert.deepEqual(contexts, ["training-0123abcd", "training-0123abcd"]);
+      assert.equal((await readProjectRuntimeOpenState({ projectRuntimeRoot: runtimeRoot })).open, false);
+    } finally { await feature.shutdown(dependencies, { outputs, profile: "test" }); }
+  });
+});
+
 test("a partial project close restores Preview service admission after services drain", async () => {
   await withTemporaryRoot(async (root) => {
     const runtimeRoot = path.join(root, "runtime");

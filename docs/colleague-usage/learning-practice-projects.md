@@ -19,7 +19,10 @@ attempt. The attempt owns:
 You have at most one lesson in progress. It stays in progress until you finish,
 restart or delete it. Switching to Develop, or opening another page, only
 pauses it: its project, results and conversation are all kept, for as long as
-you like. Press **L** to come back to it.
+you like. Press **L** to come back to it. Like any project, a practice project
+left without activity for about 30 minutes is closed by idle cleanup: its
+Preview and assistant stop, while its files, results and conversation stay.
+Coming back to the lesson opens it again; start Preview again if you need it.
 
 If you start a different lesson while one is in progress, Vibe64 asks once
 whether to archive the current lesson first. Confirming archives it (see

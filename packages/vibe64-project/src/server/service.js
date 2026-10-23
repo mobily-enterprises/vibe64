@@ -1348,6 +1348,13 @@ function createService({
       return currentDevelopmentDatabasePolicy(input);
     },
 
+    // Every learner's practice project slug. Practice projects live in the
+    // learning space, outside the catalogue that listProjects reads.
+    async listPracticeProjectSlugs() {
+      if (typeof studioProjectContext.listLearningSpaceProjects !== "function") return [];
+      return (await studioProjectContext.listLearningSpaceProjects()).map(project => project.slug);
+    },
+
     async listProjects({ actor = null } = {}) {
       return projectResult(async () => {
         const listed = await listProjectsState();
