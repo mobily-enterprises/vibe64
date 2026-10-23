@@ -3,7 +3,7 @@
 Vibe64 works best with a frontier model. AI onboarding is a short full-screen
 flow that explains why and helps you connect one: Claude (recommended), Codex,
 DeepSeek or GLM, or the free option, GLM-4.7 Flash with a free Z.AI account.
-It uses the same sign-in, key and Model routing steps as **AI Accounts**; it
+It uses the same sign-in, key and model steps as **AI Accounts**; it
 never disconnects anything. Vibe64 includes no AI of its own: without a
 connected AI, Colleague, sessions and background helpers (prompt hints, titles)
 do not run, and Colleague shows **Set up your AI**.
@@ -100,7 +100,8 @@ normal AI Accounts setup directly:
   before saving it. This key is a regular Z.AI API key, not a Coding Plan key.
 
 Each choice runs through a program installed on this computer: Claude through
-**Claude Code**, Codex, DeepSeek and GLM through **Codex**, and the free GLM-4.7
+**Claude Code**, Codex and GLM through **Codex**, DeepSeek through **Claude
+Code**, and the free GLM-4.7
 Flash through **opencode**. A card whose program is missing says **Needs
 [program] on this computer** under its buttons before you choose it. If that
 program is missing, Step 2 shows a warning instead of the sign-in or key form:
@@ -115,7 +116,7 @@ program is missing, Step 2 shows a warning instead of the sign-in or key form:
   the usual sign-in button.
 
 Both warnings also offer **Choose another AI**. See
-[AI accounts](ai-accounts-and-routing.md#install-claude-code-codex-or-opencode-first)
+[AI accounts](ai-accounts.md#install-claude-code-codex-or-opencode-first)
 for the install commands and where Vibe64 looks for these programs.
 
 ### While it works
@@ -133,8 +134,9 @@ screen opens (on a redo, **Checking [provider]…**). If that check fails, its
 warning has **Try again**. Waiting for you (open ChatGPT and enter the code)
 shows plain text, not a spinner.
 
-DeepSeek and the GLM Coding Plan connect through Codex; the free GLM-4.7 Flash
-option connects through OpenCode. Use **Back** (above the header on a
+DeepSeek connects inside Claude Code (other tools are under **Advanced**), the
+GLM Coding Plan through Codex, and the free GLM-4.7 Flash option through
+OpenCode. Use **Back** (above the header on a
 desktop, the arrow at the top left on a phone) to return to the provider list.
 Keys are stored privately outside your projects and never shown again.
 
@@ -151,7 +153,8 @@ conversation. If Colleague cannot reach the provider within about 15 seconds
 the card says **Colleague couldn't reach [provider]** with the reason and
 **Retry**, **Check connection** (back to Connect) or **Continue anyway**; the
 check appears only after a reply or **Continue anyway**. Below it **Main AI:
-[provider] · [model]** and **Change it any time in Account settings → AI
+[provider] · [model]** (with the tool when it is not the provider's own, for
+example **DeepSeek, via Claude Code**) and **Change it any time in Account settings → AI
 Accounts**. Otherwise the screen shows
 **Colleague: still using [model]** with **Use [provider] for Colleague**.
 Choose **Start building** (the bottom bar on a phone) to close; Colleague opens
@@ -163,14 +166,16 @@ message**, the check appears at once, and the close button reads **Back to the
 lesson** (or **Back to Learn** with no lesson in progress).
 
 If the provider connected but no model is ready yet, Connect shows **[Provider]
-is connected, but no model is ready for Colleague yet.** with **Review model
-routing**; choose an available Senior there and save.
+is connected, but no model is ready for Colleague yet.** with **Review
+models**; choose an available Senior there and save.
 
 ## Redo with an existing setup
 
-**Your AI setup** starts with a strip of the connected providers' marks. When
-Colleague uses one of them it reads **Currently using · Main AI: [provider]**
-with the only **Keep using [provider]** button; otherwise it reads **Connected
+**Your AI setup** starts with a strip of the connected providers' marks. Main
+AI is the provider behind your Senior model. When it is one of them the strip
+reads **Currently using · Main AI: [provider]**, adding the tool when it is not
+the provider's own (**Main AI: DeepSeek, via Claude Code**), with the only
+**Keep using [provider]** button; otherwise it reads **Connected
 · [providers]** with **Choose a main AI below. We recommend Claude.** Cards you
 use come first. Connected cards have a green outline with a **Connected** badge
 (**Connected · in use** for the main AI), no plan or sign-up offer, and **Manage**; on a phone they
@@ -180,11 +185,41 @@ connect step. Claude's card adds **Upgrade your experience** when you use
 another AI. Choose **Use [provider] as my main AI** (on the other cards **Use as
 main AI**) to switch, or **Get** another provider to add it. When switching
 would replace the model Vibe64 builds with, **Build with [provider]?** offers
-two choices: **Use [provider] for building** applies the suggested routing and
-moves Colleague; **Keep [current] for building** leaves routing as it is.
+two choices: **Use [provider] for building** applies the suggested models in the
+tool the provider is connected through and moves Colleague; **Keep [current]
+for building** leaves the models as they are.
 **Show details** lists each change (Building, Quick tasks) with current and
 suggested models. When nothing is set for building yet, the suggestions apply
-without asking. Nothing is removed from the card itself.
+without asking. Nothing is removed from the card itself. The crown and
+**Recommended** ribbon always stay on Claude's card; they never mean "in use".
+
+Below the cards, **Models** sums up **Senior**, **Junior** and, with a team,
+**Team members**; **Review models** opens Models (see
+[AI model setups](ai-model-setups.md)).
+
+### Team setup card
+
+In a workspace with team members, once Claude is your connected main AI and the
+team setup has no model yet, a card appears above the provider cards: **Let your
+team use this workspace**. Your Claude plan is for you only. Add a DeepSeek key
+(runs inside Claude Code) and team members get Colleague, Fix it with AI and
+helpers. You still approve what they send to main chat.
+
+- **Add a DeepSeek key** opens DeepSeek's connect step, inside Claude Code
+  (titled **For team members · runs inside Claude Code**). When the key is
+  connected, the team setup fills with recommended DeepSeek models.
+- When DeepSeek already works in Claude Code the button reads **Use DeepSeek for
+  team members** and fills the team setup at once.
+- **Not now** hides the card for 7 days in this browser. **Set up team AI** (on
+  the project list) shows it again.
+- Afterwards it reads **Team AI is ready**, for example **Team members use
+  DeepSeek V4 Pro for Colleague and Fix it with AI, and DeepSeek V4.1 Flash for
+  helpers.**, with **Review team models**, which opens Models on **Team
+  members**.
+
+If filling fails the card shows the reason; choose the button again. Opening
+**Set up team AI** when there is no card to offer opens Models on **Team
+members** directly.
 
 ### Manage a provider
 
@@ -197,7 +232,6 @@ characters, with **Default** on the one used by default. Its buttons:
 
 - **Manage sign-in** (Claude or Codex login) or **Replace key** (a provider
   key); **Reconnect** when it stopped working.
-- **Model routing** to choose the models for that tool.
 - **Remove**, which asks for confirmation first.
 
 GLM's Manage lists the free Z.AI connection under **Free option**, with the
@@ -210,7 +244,7 @@ with its close button or Escape; focus returns to **Manage**.
 **Set up later** (next to **Choose my AI** on the first screen, then at the top
 right; on a phone in the bottom bar of the first screen, then below the cards
 and below the connect steps) closes the flow and keeps it from opening by itself in this browser for 24 hours. The
-close button or Escape just closes it. While a sign-in, key check or routing
+close button or Escape just closes it. While a sign-in, key check or model
 save runs, closing and **Back** wait for it to finish.
 
 - **We couldn't check your current AI connections.** Use **Try again**;
@@ -219,7 +253,7 @@ save runs, closing and **Back** wait for it to finish.
   Z.AI overload or insufficient balance); retry the same step.
 - **Manage** stays on this screen: closing it (its close button or Escape)
   returns to the cards with focus on the **Manage** button you used. While a
-  removal, key change or routing save runs, Manage cannot be closed.
+  removal, key change or model save runs, Manage cannot be closed.
 - Someone who may not connect AI sees **Only the Vibe64 owner can connect AI
   accounts.** with **Close**.
 
@@ -241,4 +275,4 @@ motion.
 
 Colleague can explain these screens, compare the providers and offer to open
 the flow. Choosing a plan, paying, signing in, entering a key and approving
-routing remain your steps; never paste a key into chat.
+model changes remain your steps; never paste a key into chat.

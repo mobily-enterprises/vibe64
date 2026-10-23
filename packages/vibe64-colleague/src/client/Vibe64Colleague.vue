@@ -704,8 +704,7 @@ async function stop() {
   const target = conversation.runtime.value;
   if (await target?.cancel() === false && target.current.value && target.error.value) reportFailure(target.error.value);
 }
-// `selection` is { assistantSelection } or { workflowEngineId, modelProviderId }
-// (that workflow's routed Senior). Only the model menu reports failures here.
+// `selection` is { assistantSelection }. Only the model menu reports failures here.
 async function saveSelection(selection, { report = true } = {}) {
   if (freshOperation.value || freshBusy.value) return { ok: false, error: "Colleague is busy; try again in a moment." };
   const expectedRevision = ++revision;
@@ -742,9 +741,9 @@ const colleagueModel = {
     await conversationReady();
     return product.value.assistantSelection ? withLabels(product.value.assistantSelection) : null;
   },
-  async selectForWorkflow({ engineId, modelProviderId = "" } = {}) {
+  async select(assistantSelection) {
     if (!await conversationReady()) return { ok: false, error: productError.value || "Colleague is not ready yet; try again in a moment." };
-    const result = await saveSelection({ workflowEngineId: engineId, modelProviderId }, { report: false });
+    const result = await saveSelection({ assistantSelection }, { report: false });
     const selection = result?.ok === false ? null : result?.assistantSelection;
     if (!selection) return { ok: false, error: result?.error || "Colleague could not switch to this AI." };
     return { ok: true, ...await withLabels(selection) };

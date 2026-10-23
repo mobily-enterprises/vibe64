@@ -630,26 +630,22 @@ orchestrator, model and thinking level for that chat while keeping its Senior
 role, repair instructions and history. Bounded background tasks use Helper.
 There is no temporary-chat default setting.
 Temporary chats never run Auto, working plans or automatic review.
-Model routing opens for one named orchestrator and edits only its assignments,
-without an orchestrator selector inside the dialog. AI Accounts offers Configure
-routing beside each orchestrator with connected models; chat opens routing for
-its selected orchestrator through a cog beside the Orchestrator selector. Custom
-and temporary chats keep the cog in the menu header. An X closes the menu.
-These settings are shared by chats using that orchestrator. Unconnected
-orchestrators are omitted from configuration choices.
-The dialog loads the selected orchestrator and its assigned models first; other
-model choices load when needed. Auto names any
-missing model assignments, and the routing cog brings the first missing
-assignment into view.
-Router is the first model assignment, directly below the compact Review
-recommendations button. That button lists only changes from the current form's
-models and thinking choices, showing only the proposed values. When there are
-none, the form says No recommended changes. Apply to form accepts the list;
-Save routing saves the assignments. Cancelling the review leaves the form unchanged.
-Helper choices must support restricted background requests; chat-only models are
-disabled for that role and an incompatible saved choice explains the problem.
-An older Helper settings conflict has a separate Confirm Helper action. It names
-the need to confirm future background tasks and is resolved when routing is saved.
+Models is one screen with two setups: the owner's (Senior, Junior and Router
+for main chat, then the helpers Colleague, Fix it with AI, Explain & check and
+Quick helper) and the team members' (helpers only, Workspace-use models only).
+Main chat always runs on the owner's setup, in the Senior's tool. Each row
+shows its model and thinking, such as "Opus 5.5 · High", and names the tool
+only when it is not the model's usual one. A helper that follows another role
+reads "Same as Senior · Opus 5.5 · High" with Change. A row's Advanced appears
+only when there is something to see: a subscription's required tool, or a Runs
+in choice among the tools a key is connected in. Only the owner sees the
+Owner (you) | Team members switch, and only once the team setup has a model or
+the screen was opened for the team; a solo owner never sees team wording.
+Team members see their setup read-only and change their own Colleague from
+Colleague's model menu. Review recommendations lists only the differing roles;
+Apply to form fills the draft and Save saves it. AI Accounts opens Models from
+its Models summary; chat opens it through the routing cog, and Auto's missing
+roles bring the first one into view. Advanced keeps only connection plumbing.
 Main session creation and renewal share a workflow picker that lists
 Claude Code before Codex and OpenCode and
 previews the user's effective Senior and Junior models, including Shared backup.
@@ -1132,6 +1128,14 @@ that browser, with no server state. **Redo onboarding**, in the local account
 menu beside Account settings, in the hosted account menu, and in AI Accounts, reruns it at any time,
 showing what is connected; it can add a provider or change the main AI through
 the normal routing review, and never removes a connection.
+The main AI is the provider behind the owner's Senior, named with its tool when
+that is not the provider's own ("DeepSeek, via Claude Code"); the crown stays
+on Claude's card as a recommendation, never a status. DeepSeek connects inside
+Claude Code. In a workspace with a team, once Claude is the main AI and the
+team setup is empty, a card offers to let the team use the workspace with one
+DeepSeek key running inside Claude Code; it fills the team setup with
+recommended DeepSeek models, then says Team AI is ready with a link to the
+team's models. Not now hides it for a week in that browser.
 
 The chat selector stays focused on choosing among AIs that are already
 configured and connected. With no connected AI, the session picker directs

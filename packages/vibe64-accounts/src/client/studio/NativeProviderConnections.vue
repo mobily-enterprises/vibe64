@@ -104,7 +104,7 @@ async function save({ remove = false, useSavedKey = false } = {}) {
         <p v-if="!embedded" class="text-body-medium mb-3">{{ provider.description }}.</p>
         <p v-if="provider.setupNote" class="text-body-small mb-3">{{ provider.setupNote }}</p>
         <p v-if="connectionStatus === 'connected' && !embedded" class="text-body-small mb-3">
-          Saved for {{ engineLabel }} only. Each orchestrator has its own connection.
+          Saved for {{ engineLabel }} only. Each tool has its own connection.
         </p>
         <div v-if="!embedded" class="d-flex flex-wrap ga-1 mb-4" aria-label="Available models">
           <v-chip v-for="model in provider.models" :key="model.id" size="small" variant="tonal">{{ model.label }}</v-chip>

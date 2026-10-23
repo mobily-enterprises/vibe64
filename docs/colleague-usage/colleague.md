@@ -76,6 +76,12 @@ settings on **AI Accounts**. Connect an AI and configure an available Senior
 model, then return and press **Send**. Opening setup does not send the draft or
 promise a response from an unavailable model. Credential entry and provider
 consent remain your actions.
+Colleague starts on the Colleague model of your setup in **Models** (see
+[AI model setups](ai-model-setups.md)): the owner's follows Senior unless the
+owner chose another; team members start on the team setup's Colleague model.
+Each person can pick their own model from Colleague's model menu, which lists
+only models they may use (team members never see personal plans). Your pick is
+yours alone and does not change Models or anyone else's Colleague.
 Model changes keep saved messages and replies, including between native and API.
 A changed engine, provider, model, agent or effort prepares the next conversation;
 the same selection retains it. Applying starts no model work.

@@ -3,7 +3,8 @@ import { computed, createRenderer, effectScope, ref, ssrContextKey } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CURATED_CODEX_PROVIDERS } from "@local/vibe64-core/shared/curatedCodexProviders";
 
-const mocks = vi.hoisted(() => ({ route: null, accounts: null, curated: null, openCode: null, routing: null, colleague: null }));
+const mocks = vi.hoisted(() => ({ route: null, accounts: null, curated: null, openCode: null, routing: null, colleague: null,
+  request: null, preferred: null }));
 vi.mock("vue-router", () => ({ useRoute: () => mocks.route, useRouter: () => ({ replace: vi.fn() }) }));
 vi.mock("vuetify", () => ({ useDisplay: () => ({ xs: ref(false) }) }));
 vi.mock("../../packages/vibe64-accounts/src/client/composables/useVibe64Accounts.js", () => ({ useVibe64Accounts: () => mocks.accounts }));
@@ -11,9 +12,9 @@ vi.mock("../../packages/vibe64-accounts/src/client/composables/useCodexProviderC
   useCodexProviderConnections: () => mocks.curated
 }));
 vi.mock("../../packages/vibe64-accounts/src/client/composables/useAiConnections.js", () => ({ useAiConnections: () => mocks.openCode }));
-vi.mock("../../packages/vibe64-accounts/src/client/composables/useModelRouting.js", async (importOriginal) => ({
-  routingSuggestsChanges: (await importOriginal()).routingSuggestsChanges,
-  useModelRouting: () => mocks.routing
+vi.mock("../../packages/vibe64-accounts/src/client/composables/useModelRouting.js", () => ({ useModelRouting: () => mocks.routing }));
+vi.mock("@jskit-ai/http-web/client/lib/httpClient", async (importOriginal) => ({
+  ...await importOriginal(), getHttpWebClient: () => ({ request: (...args) => mocks.request(...args) })
 }));
 vi.mock("../../packages/vibe64-accounts/src/client/studio/AIAccountsSetup.vue", () => ({ default: {} }));
 vi.mock("../../packages/vibe64-accounts/src/client/studio/ModelRoutingForm.vue", () => ({ default: {} }));
@@ -24,8 +25,8 @@ import { VIBE64_LEARNING_KEY } from "../../src/lib/vibe64AssistantHost.js";
 import { AI_ONBOARDING_PROVIDERS } from "../../packages/vibe64-accounts/src/client/onboarding/aiOnboardingProviders.js";
 import { aiOnboardingAvailable, aiOnboardingBlocked, aiOnboardingNeeded, onVibe64AiOnboardingRequested, requestVibe64AiOnboarding }
   from "../../packages/vibe64-accounts/src/client/onboarding/aiOnboardingEvents.js";
-import { aiIsSetUp, aiOnboardingConnections, aiOnboardingSnoozed, snoozeAiOnboarding, useAiOnboarding }
-  from "../../packages/vibe64-accounts/src/client/onboarding/useAiOnboarding.js";
+import { aiIsSetUp, aiOnboardingConnections, aiOnboardingMainAi, aiOnboardingSnoozed, aiTeamSetupSnoozed, connectedEngine,
+  snoozeAiOnboarding, snoozeAiTeamSetup, teamSummary, useAiOnboarding } from "../../packages/vibe64-accounts/src/client/onboarding/useAiOnboarding.js";
 import AiOnboarding from "../../packages/vibe64-accounts/src/client/onboarding/AiOnboarding.vue";
 import AiOnboardingHost from "../../packages/vibe64-accounts/src/client/onboarding/AiOnboardingHost.vue";
 import AiSetup from "../../packages/vibe64-accounts/src/client/onboarding/AiSetup.vue";
@@ -36,7 +37,8 @@ const claude = AI_ONBOARDING_PROVIDERS.find(({ id }) => id === "claude");
 const deepseek = AI_ONBOARDING_PROVIDERS.find(({ id }) => id === "deepseek");
 const glm = AI_ONBOARDING_PROVIDERS.find(({ id }) => id === "glm");
 const ENGINE_LABELS = { claude: "Claude Code", codex: "Codex" };
-const SENIOR_PROVIDERS = { claude: "anthropic", codex: "openai" };
+const pick = (selection) => selection && { schema: "vibe64.assistant-selection.v1", agentId: selection.engineId, variantId: "high",
+  catalogRevision: `sha256:${"a".repeat(64)}`, ...selection };
 let unregisterColleague = () => null;
 
 let app;
@@ -51,12 +53,13 @@ function mount(component, props, provides = []) {
 }
 const resource = (data) => ({ data: ref(data), reload: vi.fn().mockResolvedValue({}) });
 
-// The owner's Senior as the AI setup read shows it, and whether it is usable now.
-function routeSenior({ assignment = null, recommendation = null, available = true } = {}) {
-  const pick = (selection) => selection && { schema: "vibe64.assistant-selection.v1", ...selection };
-  mocks.routing.setups.value = { owner: { roles: { senior: { value: pick(assignment), effective: pick(assignment),
-    recommendation: pick(recommendation) } } } };
+// The owner's Senior as the AI setup read shows it (Colleague follows it), whether
+// it is usable now, and the Senior a "Use as main AI" preview would bring.
+function routeSenior({ assignment = null, recommendation = null, available = true, nonOwner = {} } = {}) {
+  mocks.routing.setups.value = { owner: { roles: { senior: { value: pick(assignment), effective: pick(assignment) },
+    colleague: { value: { follows: "senior" }, effective: pick(assignment) } } }, nonOwner: { roles: nonOwner } };
   mocks.routing.viewerDecisions.value = { senior: { available } };
+  mocks.preferred = { senior: { recommendation: pick(recommendation) } };
 }
 beforeEach(() => {
   storage = new Map();
@@ -74,17 +77,19 @@ beforeEach(() => {
   mocks.curated.resource.isInitialLoading = ref(false);
   mocks.openCode = { connections: ref([]), loadError: ref(""), isInitialLoading: ref(false), reload: vi.fn().mockResolvedValue({}),
     removingProviderId: ref(""), savingProviderId: ref(""), updatingModelAccessProviderId: ref("") };
-  mocks.routing = { resource: { reload: vi.fn().mockResolvedValue({}) }, setups: ref(null), viewerDecisions: ref({}) };
-  // A mounted Colleague as the real bridge sees it: the workflow's routed Senior,
-  // refused when that Senior uses another provider.
+  mocks.routing = { resource: { reload: vi.fn().mockResolvedValue({}), data: ref({ revision: 4 }) }, setups: ref(null), viewerDecisions: ref({}),
+    team: ref({ available: false, ownerName: "", memberCount: 0 }) };
+  mocks.preferred = {};
+  mocks.request = vi.fn(async () => ({ ok: true, setups: { owner: { roles: mocks.preferred } } }));
+  // A mounted Colleague as the real bridge sees it: it saves exactly the model it is given, or refuses.
   const selection = ref(null);
   const labelled = () => ({ selection: selection.value, engineLabel: ENGINE_LABELS[selection.value.engineId],
     modelLabel: selection.value.modelId });
-  mocks.colleague = { selection, seniorProviders: { ...SENIOR_PROVIDERS },
+  mocks.colleague = { selection, refusal: "",
     current: vi.fn(async () => selection.value ? labelled() : null),
-    selectForWorkflow: vi.fn(async ({ engineId, modelProviderId }) => {
-      if (mocks.colleague.seniorProviders[engineId] !== modelProviderId) return { ok: false, error: "Its Senior uses another provider." };
-      selection.value = { engineId, modelProviderId, modelId: `${engineId}-model` };
+    select: vi.fn(async (assistantSelection) => {
+      if (mocks.colleague.refusal) return { ok: false, error: mocks.colleague.refusal };
+      selection.value = assistantSelection;
       return { ok: true, ...labelled() };
     }),
     sayHello: vi.fn(async () => ({ ok: true, reply: "Hello there!" })) };
@@ -129,6 +134,49 @@ describe("provider data", () => {
   });
 });
 
+describe("main AI", () => {
+  const senior = (engineId, modelProviderId, modelId) => pick({ engineId, modelProviderId, modelId });
+
+  it("connects DeepSeek through Claude Code and keeps the crown a static mark of Claude's card", () => {
+    expect(deepseek.connect).toEqual({ engineId: "claude", modelProviderId: "deepseek", access: "workspace" });
+    expect(AI_ONBOARDING_PROVIDERS.filter(({ crown }) => crown).map(({ id }) => id)).toEqual(["claude"]);
+  });
+
+  it("names the owner's Senior by its card, with the tool when it is not the provider's own sign-in", () => {
+    const label = (selection) => aiOnboardingMainAi(AI_ONBOARDING_PROVIDERS, selection)?.label;
+    expect(label(senior("claude", "anthropic", "opus"))).toBe("Claude");
+    expect(label(senior("codex", "openai", "gpt-6-astra"))).toBe("Codex");
+    expect(label(senior("claude", "deepseek", "deepseek-v4-pro"))).toBe("DeepSeek, via Claude Code");
+    expect(label(senior("codex", "deepseek", "deepseek-v4-pro"))).toBe("DeepSeek, via Codex");
+    expect(label(senior("opencode", "zai", "glm-4.7-flash"))).toBe("GLM-4.7 Flash, via OpenCode");
+    expect(label(null)).toBeUndefined();
+  });
+
+  it("finds the tool a card's provider is actually connected through", () => {
+    const lists = (row) => ({ ...empty, curated: [{ id: "deepseek", connected: false, claudeReady: false, ...row }] });
+    expect(connectedEngine(deepseek, lists({ claudeReady: true }))).toBe("claude");
+    expect(connectedEngine(deepseek, lists({ connected: true }))).toBe("codex");
+    expect(connectedEngine(deepseek, lists({ connected: true, claudeReady: true }))).toBe("claude");
+    expect(connectedEngine(deepseek, lists({}))).toBe("");
+  });
+
+  it("summarises the team setup by its models", () => {
+    const role = (modelId, label) => ({ effective: pick({ engineId: "claude", modelProviderId: "deepseek", modelId }),
+      choices: [{ engineId: "claude", modelProviderId: "deepseek", modelId, label }] });
+    expect(teamSummary({ colleague: role("deepseek-v4-pro", "DeepSeek V4 Pro"), quickHelper: role("deepseek-flash", "DeepSeek V4.1 Flash") }))
+      .toBe("Team members use DeepSeek V4 Pro for Colleague and Fix it with AI, and DeepSeek V4.1 Flash for helpers.");
+    expect(teamSummary({ colleague: role("deepseek-v4-pro", "DeepSeek V4 Pro"), quickHelper: role("deepseek-v4-pro", "DeepSeek V4 Pro") }))
+      .toBe("Team members use DeepSeek V4 Pro for Colleague, Fix it with AI and helpers.");
+  });
+
+  it("snoozes the team card for seven days per viewer", () => {
+    snoozeAiTeamSetup("owner-1", 1_000);
+    expect(aiTeamSetupSnoozed("owner-1", 1_000 + 6 * 86_400_000)).toBe(true);
+    expect(aiTeamSetupSnoozed("owner-1", 1_000 + 8 * 86_400_000)).toBe(false);
+    expect(aiTeamSetupSnoozed("owner-2", 1_000)).toBe(false);
+  });
+});
+
 describe("set-up rule", () => {
   it("does not count nothing, non-AI accounts or a failed connection as set up", () => {
     expect(aiIsSetUp(empty)).toBe(false);
@@ -146,12 +194,12 @@ describe("set-up rule", () => {
   it("marks a card connected through each orchestrator that serves it", () => {
     const lists = { accounts: [{ id: "claude", connected: true }], curated: [{ id: "deepseek", connected: true, claudeReady: true }],
       openCode: [FREE_GLM] };
-    expect(aiOnboardingConnections(claude, lists)).toEqual(["Claude Code"]);
-    expect(aiOnboardingConnections(deepseek, lists)).toEqual(["Codex", "Claude Code"]);
+    expect(aiOnboardingConnections(claude, lists)).toEqual(["claude"]);
+    expect(aiOnboardingConnections(deepseek, lists)).toEqual(["codex", "claude"]);
     expect(aiOnboardingConnections(glm, lists)).toEqual([]);
-    expect(aiOnboardingConnections(glm.free, lists)).toEqual(["OpenCode"]);
+    expect(aiOnboardingConnections(glm.free, lists)).toEqual(["opencode"]);
     expect(aiOnboardingConnections(glm, { ...lists, curated: [{ id: "zai", connected: true }] })).toEqual([]);
-    expect(aiOnboardingConnections(glm, { ...lists, curated: [{ id: "zai-coding-plan", connected: true }] })).toEqual(["Codex"]);
+    expect(aiOnboardingConnections(glm, { ...lists, curated: [{ id: "zai-coding-plan", connected: true }] })).toEqual(["codex"]);
     expect(aiOnboardingConnections(AI_ONBOARDING_PROVIDERS[1], lists)).toEqual([]);
   });
 });
@@ -342,9 +390,10 @@ describe("flow", () => {
     connectClaude();
     await state.finish();
     expect(state.screen).toBe("success");
-    expect(mocks.colleague.selectForWorkflow).toHaveBeenCalledExactlyOnceWith({ engineId: "claude", modelProviderId: "anthropic" });
+    expect(mocks.colleague.select).toHaveBeenCalledOnce();
+    expect(mocks.colleague.select.mock.calls[0][0]).toMatchObject({ engineId: "claude", modelProviderId: "anthropic", modelId: "opus", variantId: "high" });
     expect(state.outcome).toMatchObject({ routed: true, error: "",
-      colleague: { engineId: "claude", modelProviderId: "anthropic", label: "claude-model" } });
+      colleague: { engineId: "claude", modelProviderId: "anthropic", label: "opus" } });
     expect(state.colleagueNote).toBe("uses");
     await vi.waitFor(() => expect(state.hello).toEqual({ state: "replied", reply: "Hello there!", error: "" }));
     expect(state.proven).toBe(true);
@@ -409,6 +458,7 @@ describe("flow", () => {
   });
 
   it("shows Colleague's refusal instead of claiming the switch", async () => {
+    mocks.colleague.refusal = "Its Senior uses another provider.";
     const { state } = await flow();
     state.connect(deepseek);
     routeDeepSeek({ assignment: { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } });
@@ -428,7 +478,7 @@ describe("flow", () => {
     routeSenior({ available: false });
     await state.finish();
     expect([state.screen, state.notReady]).toEqual(["connect", true]);
-    expect(mocks.colleague.selectForWorkflow).not.toHaveBeenCalled();
+    expect(mocks.colleague.select).not.toHaveBeenCalled();
   });
 
   it("is not ready when the workflow's Senior is another provider", async () => {
@@ -444,7 +494,7 @@ describe("flow", () => {
     const { state, onboarding } = await flow({ setUp: true });
     expect([state.screen, state.wasSetUp]).toEqual(["choose", true]);
     const codex = state.cards.find(({ id }) => id === "codex");
-    expect(codex).toMatchObject({ connected: true, through: ["Codex"] });
+    expect(codex).toMatchObject({ connected: true, through: ["codex"] });
     expect(state.cardAction(codex)).toBe("keep");
     expect(state.cardAction(state.cards.find(({ id }) => id === "claude"))).toBe("get");
     mocks.curated.resource.data.value.providers.find(({ id }) => id === "deepseek").connected = true;
@@ -453,7 +503,7 @@ describe("flow", () => {
     routeSenior({ assignment: { engineId: "codex", modelProviderId: "openai", modelId: "gpt" } });
     await state.keep(codex);
     expect(state.screen).toBe("success");
-    expect(mocks.colleague.selectForWorkflow).not.toHaveBeenCalled();
+    expect(mocks.colleague.select).not.toHaveBeenCalled();
   });
 
   it("redo asks before routing changes and switches Colleague only when asked", async () => {
@@ -467,11 +517,10 @@ describe("flow", () => {
     state.routingDone();
     await vi.waitFor(() => expect(state.screen).toBe("success"));
     expect(state.outcome.routed).toBe(false);
-    expect(mocks.colleague.selectForWorkflow).not.toHaveBeenCalled();
+    expect(mocks.colleague.select).not.toHaveBeenCalled();
     expect(state.colleagueNote).toBe("switch");
-    mocks.colleague.seniorProviders.codex = "deepseek";
     await state.switchColleague();
-    expect(mocks.colleague.selectForWorkflow).toHaveBeenCalledExactlyOnceWith({ engineId: "codex", modelProviderId: "deepseek" });
+    expect(mocks.colleague.select).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" }));
     expect(state.colleagueNote).toBe("uses");
   });
 
@@ -483,14 +532,13 @@ describe("flow", () => {
     state.connect(state.cards.find(({ id }) => id === "deepseek"));
     await state.finish();
     expect([state.screen, state.autoRouting, state.currentSenior?.name]).toEqual(["routing", false, "Codex"]);
-    mocks.colleague.seniorProviders.codex = "deepseek";
     state.routingForm = { applySuggested: vi.fn(async () => {
       routeSenior({ assignment: { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } });
       await state.routingDone();
     }) };
     await state.useAsMain();
     expect([state.screen, state.routingDetails]).toEqual(["success", false]);
-    expect(mocks.colleague.selectForWorkflow).toHaveBeenCalledExactlyOnceWith({ engineId: "codex", modelProviderId: "deepseek" });
+    expect(mocks.colleague.select).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ engineId: "codex", modelProviderId: "deepseek" }));
   });
 
   it("with no Senior model in use, a redo applies the suggestions without asking", async () => {
@@ -500,13 +548,120 @@ describe("flow", () => {
     state.connect(state.cards.find(({ id }) => id === "deepseek"));
     await state.finish();
     expect([state.screen, state.autoRouting, state.currentSenior]).toEqual(["routing", true, null]);
-    mocks.colleague.seniorProviders.codex = "deepseek";
     state.routingForm = { applySuggested: vi.fn(async () => {
       routeSenior({ assignment: { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } });
       await state.routingDone();
     }) };
     await vi.waitFor(() => expect(state.screen).toBe("success"));
-    expect(mocks.colleague.selectForWorkflow).toHaveBeenCalledExactlyOnceWith({ engineId: "codex", modelProviderId: "deepseek" });
+    expect(mocks.colleague.select).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ engineId: "codex", modelProviderId: "deepseek" }));
+  });
+
+  it("takes Main AI from the owner's Senior, not Colleague's model", async () => {
+    onCodexOpenAi();
+    mocks.curated.resource.data.value.providers.find(({ id }) => id === "deepseek").claudeReady = true;
+    const { state } = await flow({ setUp: true });
+    routeSenior({ assignment: { engineId: "claude", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } });
+    const card = (id) => state.cards.find((item) => item.id === id);
+    expect([state.mainAi.label, state.mainCard.id]).toEqual(["DeepSeek, via Claude Code", "deepseek"]);
+    expect([state.cardAction(card("deepseek")), state.cardAction(card("codex"))]).toEqual(["keep", "main"]);
+  });
+
+  it("checks and routes a DeepSeek key connected only in Claude Code as Claude Code, not Codex", async () => {
+    onCodexOpenAi();
+    const { state } = await flow({ setUp: true });
+    mocks.curated.resource.data.value.providers.find(({ id }) => id === "deepseek").claudeReady = true;
+    routeSenior({ assignment: { engineId: "codex", modelProviderId: "openai", modelId: "gpt" },
+      recommendation: { engineId: "claude", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } });
+    state.makeMainAi(state.cards.find(({ id }) => id === "deepseek"));
+    await vi.waitFor(() => expect(state.screen).toBe("routing"));
+    expect(mocks.request).toHaveBeenCalledWith("/api/vibe64/accounts/model-routing/preview", { method: "POST",
+      body: { revision: 4, preferProvider: { setup: "owner", modelProviderId: "deepseek", engineId: "claude" } } });
+    expect(state.chosenEngine).toBe("claude");
+  });
+
+  describe("team setup card", () => {
+    const deepseekRow = () => mocks.curated.resource.data.value.providers.find(({ id }) => id === "deepseek");
+    async function ownerOnClaude(props = {}) {
+      mocks.accounts.status.value.accounts[1].connected = true;
+      mocks.routing.team.value = { available: true, ownerName: "Tony", memberCount: 1 };
+      const onboarding = effectScope().run(() => useAiOnboarding({ enabled: true }));
+      const state = mount(AiSetup, { open: true, redo: true, onboarding, canConfigure: true, ...props });
+      await vi.waitFor(() => expect(mocks.colleague.current).toHaveBeenCalled());
+      routeSenior({ assignment: { engineId: "claude", modelProviderId: "anthropic", modelId: "opus" },
+        nonOwner: { colleague: { configured: false }, fix: { configured: false }, explain: { configured: false }, quickHelper: { configured: false } } });
+      return state;
+    }
+    const teamRole = (modelId, label) => ({ configured: true, effective: pick({ engineId: "claude", modelProviderId: "deepseek", modelId }),
+      choices: [{ engineId: "claude", modelProviderId: "deepseek", modelId, label }] });
+    function answerTeam() {
+      const pro = pick({ engineId: "claude", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" });
+      const flash = pick({ engineId: "claude", modelProviderId: "deepseek", modelId: "deepseek-flash", variantId: "low" });
+      mocks.request.mockImplementation(async (url, { method, body }) => method === "PATCH"
+        ? { ok: true, setups: { nonOwner: { roles: { colleague: teamRole("deepseek-v4-pro", "DeepSeek V4 Pro"),
+          quickHelper: teamRole("deepseek-flash", "DeepSeek V4.1 Flash") } } } }
+        : { ok: true, setups: { nonOwner: { roles: Object.fromEntries(["colleague", "fix", "explain", "quickHelper"].map((role) => [role, { configured: false }])),
+          setupValues: { colleague: pro, fix: { follows: "colleague" }, explain: { follows: "quickHelper" }, quickHelper: flash } } } });
+      return { pro, flash };
+    }
+
+    it("offers the team step to an owner on Claude with team members and no team model, until Not now", async () => {
+      const state = await ownerOnClaude();
+      expect([state.teamCardState, state.deepseekInClaude]).toEqual(["offer", false]);
+      state.snoozeTeam();
+      expect([state.teamCardState, aiTeamSetupSnoozed("local")]).toEqual(["", true]);
+      app.unmount();
+      expect((await ownerOnClaude({ focus: "team" })).teamCardState).toBe("offer");
+    });
+
+    it("stays hidden without a team, without Claude as main AI, or once the team setup has a model", async () => {
+      const state = await ownerOnClaude();
+      mocks.routing.team.value = { available: false, ownerName: "", memberCount: 0 };
+      expect(state.teamCardState).toBe("");
+      mocks.routing.team.value = { available: true, ownerName: "Tony", memberCount: 1 };
+      routeSenior({ assignment: { engineId: "claude", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } });
+      expect(state.teamCardState).toBe("");
+      routeSenior({ assignment: { engineId: "claude", modelProviderId: "anthropic", modelId: "opus" }, nonOwner: { colleague: { configured: true } } });
+      expect(state.teamCardState).toBe("");
+    });
+
+    it("Set up team AI with no card to offer opens Models on the team members' setup", async () => {
+      const state = await ownerOnClaude({ focus: "team" });
+      expect([state.teamCardState, state.manager.routingOpen.value]).toEqual(["offer", false]);
+      app.unmount();
+      mocks.accounts.status.value.accounts[1].connected = true;
+      const onboarding = effectScope().run(() => useAiOnboarding({ enabled: true }));
+      routeSenior({ assignment: { engineId: "claude", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } });
+      const other = mount(AiSetup, { open: true, redo: true, onboarding, canConfigure: true, focus: "team" });
+      await vi.waitFor(() => expect(other.manager.routingOpen.value).toBe(true));
+      expect(other.manager.routingSetup.value).toBe("nonOwner");
+    });
+
+    it("Add a DeepSeek key connects DeepSeek in Claude Code, then fills the team setup and says it is ready", async () => {
+      const state = await ownerOnClaude();
+      const { pro, flash } = answerTeam();
+      state.startTeamSetup();
+      expect([state.screen, state.chosen.id, state.chosen.connect.engineId, state.teamFlow]).toEqual(["connect", "deepseek", "claude", true]);
+      deepseekRow().claudeReady = true;
+      await state.finish();
+      const patch = mocks.request.mock.calls.find(([, options]) => options.method === "PATCH")[1];
+      expect(patch.body).toEqual({ revision: 4, preferProvider: { setup: "nonOwner", modelProviderId: "deepseek", engineId: "claude" },
+        nonOwner: { colleague: pro, fix: { follows: "colleague" }, explain: { follows: "quickHelper" }, quickHelper: flash } });
+      expect([state.screen, state.teamFlow, state.teamCardState]).toEqual(["choose", false, "ready"]);
+      expect(state.teamSummary).toBe("Team members use DeepSeek V4 Pro for Colleague and Fix it with AI, and DeepSeek V4.1 Flash for helpers.");
+      expect(mocks.colleague.select).not.toHaveBeenCalled();
+    });
+
+    it("uses DeepSeek already in Claude Code without a key step, and shows a failure on the card", async () => {
+      deepseekRow().claudeReady = true;
+      const state = await ownerOnClaude();
+      expect(state.deepseekInClaude).toBe(true);
+      mocks.request.mockResolvedValueOnce({ ok: false, error: "Model routing changed in another tab." });
+      await state.startTeamSetup();
+      expect([state.screen, state.teamError, state.teamCardState]).toEqual(["choose", "Model routing changed in another tab.", "offer"]);
+      answerTeam();
+      await state.startTeamSetup();
+      expect([state.screen, state.teamError, state.teamCardState]).toEqual(["choose", "", "ready"]);
+    });
   });
 
   it("a redo keeps the upsell on Claude's card only and stops selling connected cards", async () => {
@@ -528,7 +683,7 @@ describe("flow", () => {
     state.connect(claude);
     await state.finish();
     expect(state.screen).toBe("success");
-    expect(mocks.colleague.selectForWorkflow).not.toHaveBeenCalled();
+    expect(mocks.colleague.select).not.toHaveBeenCalled();
   });
 
   it("an automatic open settles first run only once connections are read", async () => {

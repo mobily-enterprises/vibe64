@@ -158,6 +158,7 @@
             ref="aiSetup"
             inline
             can-configure
+            :focus="aiFocus"
             @busy="aiConnectionsBusy = $event"
           />
           <ProviderAccountsSetup
@@ -252,6 +253,8 @@ function chooseAppearance(value) {
 }
 const selectedProviderId = ref("ai");
 const aiSetup = ref(null);
+// "team" when opened by Set up team AI: AI setup leads with the team setup.
+const aiFocus = ref("");
 const aiConnectionsBusy = ref(false);
 const accounts = useVibe64Accounts();
 const preferredNameField = ref(null);
@@ -305,6 +308,7 @@ async function openDialog(options = {}) {
   const profileRequested = String(options.section || "").trim() === "profile";
   const requestedAi = options.codexReconnectRequired === true ? "codex" : String(options.providerId || "").trim();
   const requestedProviderId = normalizeProviderId(requestedAi) || (requestedAi ? "ai" : "");
+  aiFocus.value = "";
   if (requestedProviderId) {
     selectedProviderId.value = requestedProviderId;
   }
@@ -324,6 +328,7 @@ async function openDialog(options = {}) {
   if (requestedProviderId) {
     selectedProviderId.value = requestedProviderId;
     await nextTick();
+    if (requestedProviderId === "ai" && String(options.section || "") === "team") aiFocus.value = "team";
     if (requestedProviderId === "ai" && requestedAi !== "ai") aiSetup.value?.openProvider(requestedAi, options);
     return;
   }

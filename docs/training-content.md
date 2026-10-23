@@ -229,8 +229,8 @@ heading is green and nothing else broke":
   40,000 characters). Work the coding agent did at the learner's request
   counts unless the rubric says the learner must do it themselves.
 - **Check my work** runs only from the learner's own browser, on the
-  learner's own AI account: the Helper route of their workflow in **AI
-  Accounts → Model routing** (workload `lesson_review`, input at most 160,000
+  learner's own AI account: their **Explain & check** model in **AI
+  Accounts → Models** (workload `lesson_review`, input at most 160,000
   characters, 180 seconds). Vibe64 never pays for or resells it.
 - The reviewer returns Passed or Not yet, a comment (at most 600
   characters), a hint for Not yet (at most 300) and up to six rubric points.

@@ -1,26 +1,34 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from "vue";
-import { useDisplay } from "vuetify";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { defineVibe64AssistantSelection, vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
-import { ASSISTANT_FOLLOWING_ROLES, ASSISTANT_ROLE_PURPOSES, ASSISTANT_ROUTING_ROLE_DEFINITIONS, ASSISTANT_SETUP_ROLES,
-  assistantModeLabel } from "@local/vibe64-runtime/shared/assistantRouting";
+import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
+import { ASSISTANT_FOLLOWING_ROLES, ASSISTANT_ROLE_DEFAULT_FOLLOWS, ASSISTANT_ROLE_PURPOSES, ASSISTANT_ROUTING_ROLE_DEFINITIONS,
+  ASSISTANT_SETUP_ROLES, assistantModeLabel, assistantSetupRoleValue } from "@local/vibe64-runtime/shared/assistantRouting";
 import { useModelRouting } from "../composables/useModelRouting.js";
 import { ACCOUNTS_ENDPOINT } from "../lib/accountsGateApi.js";
 import AiPersonalUse from "./AiPersonalUse.vue";
+import ModelRoutingRow, { routeKey, routingSelectionText } from "./ModelRoutingRow.vue";
 
+// The AI setup's models: the owner's setup (main chat and helpers) and, for the
+// owner, the team members' setup. After a connection it instead proposes the
+// owner roles that move onto it.
 const props = defineProps({ connectionId: { type: String, default: "" }, connectionLabel: { type: String, default: "" },
+  // With connectionId: propose making that provider, in this tool, the main AI ("Use as main AI").
+  preferEngineId: { type: String, default: "" },
   setupError: { type: String, default: "" }, focusRole: { type: String, default: "" }, readonly: Boolean,
+  // Opens on Team members, such as from the team setup card.
+  initialSetup: { type: String, default: "owner" },
   // Inside onboarding: model display names and plain role names, no heading.
   plain: Boolean });
-const emit = defineEmits(["close", "saved", "busy"]);
-const { smAndDown } = useDisplay();
-const SETUPS = [{ id: "owner", label: "Your AI setup", audience: "You" }, { id: "nonOwner", label: "Team members", audience: "Team members" }];
+const emit = defineEmits(["close", "saved", "busy", "add-team-key", "connect-provider"]);
+const SETUPS = [{ id: "owner", label: "Owner (you)" }, { id: "nonOwner", label: "Team members" }];
+const GROUPS = [{ id: "main", label: "Main chat" }, { id: "helpers", label: "Helpers" }];
+const MAIN_AI_ROLES = ["senior", "junior", "router", "quickHelper"];
 const customizing = ref(false);
 const proposalMode = computed(() => Boolean(props.connectionId) && !customizing.value);
-const { resource, engines, setups, scopeKey, loadError: resourceError } = useModelRouting();
+const { resource, engines, scopeKey, team, loadError: resourceError } = useModelRouting();
 const refreshError = ref("");
 const loadError = computed(() => resourceError.value || refreshError.value);
 // draft[setup][role]: a selection, null (off) or { follows }; absent roles stay absent.
@@ -28,6 +36,8 @@ const draft = ref({ owner: {}, nonOwner: {} });
 const baseRevision = ref(null);
 const recommendationReview = ref(null);
 const proposals = ref([]);
+// Owner role states from a preview that prefers the connection (Use as main AI).
+const preferred = ref(null);
 const saving = ref(false);
 const fieldErrors = ref({});
 const preview = ref(null);
@@ -35,48 +45,64 @@ const previewPending = ref(false);
 const previewError = ref("");
 const retryPreview = ref(0);
 const refreshingConnection = ref(Boolean(props.connectionId));
+const activeSetup = ref(props.initialSetup === "nonOwner" ? "nonOwner" : "owner");
 let savedPayload = "";
 let savedValues = { owner: {}, nonOwner: {} };
 let hydratedDraft = "";
 const draftSnapshot = () => JSON.stringify({ draft: draft.value, proposals: proposals.value, customizing: customizing.value });
-const canEdit = computed(() => !props.readonly && resource.data.value?.canConfigure === true);
+const owner = computed(() => resource.data.value?.canConfigure === true);
+const canEdit = computed(() => !props.readonly && owner.value);
+// Team members see their own setup, read only; the owner switches between both.
+const setup = computed(() => owner.value ? activeSetup.value : "nonOwner");
 const connected = computed(() => engines.value.some((engine) => engine.connected));
-const roleFields = ref({});
-watch([setups, () => props.focusRole], async () => {
+const ownerName = computed(() => team.value?.ownerName || "the workspace owner");
+const roleState = (setupId, role, data = resource.data.value) => data?.setups?.[setupId]?.roles?.[role];
+const teamConfigured = computed(() => ASSISTANT_SETUP_ROLES.nonOwner.some((role) => roleState("nonOwner", role)?.configured || Object.hasOwn(draft.value.nonOwner, role)));
+const showSwitch = computed(() => owner.value && (teamConfigured.value || props.initialSetup === "nonOwner"));
+// No team model yet: no team role resolves to a model.
+const teamEmpty = computed(() => !ASSISTANT_SETUP_ROLES.nonOwner.some((role) => assistantSetupRoleValue(draft.value.nonOwner, role).value?.schema));
+const teamChoices = computed(() => (roleState("nonOwner", "colleague")?.choices || []).length > 0);
+const rowRefs = ref({});
+watch([() => resource.data.value?.setups, () => props.focusRole], async () => {
   if (!props.focusRole) return;
   await nextTick();
-  const field = roleFields.value[`owner.${props.focusRole}`]?.$el;
-  field?.scrollIntoView({ block: "center" });
-  field?.querySelector('input[role="combobox"]')?.focus({ preventScroll: true });
+  const row = rowRefs.value[`${setup.value}.${props.focusRole}`]?.$el;
+  row?.scrollIntoView?.({ block: "center" });
+  row?.querySelector?.('input[role="combobox"]')?.focus({ preventScroll: true });
 }, { immediate: true });
 const stale = computed(() => baseRevision.value !== null && resource.data.value?.revision !== baseRevision.value);
-const rolesFor = (setup) => ASSISTANT_ROUTING_ROLE_DEFINITIONS.filter(({ id }) => ASSISTANT_SETUP_ROLES[setup].includes(id));
-const visibleSetups = computed(() => SETUPS.filter(({ id }) => id === "owner" || canEdit.value));
-function choiceId(value) {
-  if (value?.follows) return `follows:${value.follows}`;
-  return value?.schema ? JSON.stringify([value.engineId, value.modelProviderId, value.modelId]) : "";
-}
+const rolesFor = (setupId, group) => ASSISTANT_ROUTING_ROLE_DEFINITIONS.filter(({ id, group: roleGroup }) =>
+  ASSISTANT_SETUP_ROLES[setupId].includes(id) && (!group || roleGroup === group));
+const groupsFor = (setupId) => GROUPS.filter(({ id }) => rolesFor(setupId, id).length);
 function sameValue(left, right) {
-  return choiceId(left) === choiceId(right) && left?.variantId === right?.variantId && left?.agentId === right?.agentId;
+  if (left?.follows || right?.follows) return left?.follows === right?.follows;
+  return routeKey(left) === routeKey(right) && left?.variantId === right?.variantId && left?.agentId === right?.agentId;
 }
-const roleState = (setup, role, data = resource.data.value) => data?.setups?.[setup]?.roles?.[role];
-function choiceFor(setup, role, selection) {
-  return (roleState(setup, role)?.choices || []).find((item) => choiceId(item) === choiceId(selection));
+function choiceFor(setupId, role, selection) {
+  return (roleState(setupId, role)?.choices || []).find((item) => routeKey(item) === routeKey(selection));
 }
+const followedLabel = (setupId, role) => {
+  const target = draft.value[setupId][role]?.follows;
+  return target ? routingSelectionText(roleState(setupId, target)?.choices, draft.value[setupId][target]) : "";
+};
+// An explicit following role can return to its default "Same as".
+const defaultFollows = (setupId, role) => ASSISTANT_FOLLOWING_ROLES.includes(role) && !draft.value[setupId][role]?.follows
+  ? ASSISTANT_ROLE_DEFAULT_FOLLOWS[setupId][role] || "" : "";
 const PLAIN_ROLES = { senior: "Building", junior: "Quick tasks", quickHelper: "Background helpers", router: "Request routing" };
-function selectionLabel(setup, role, value) {
+function selectionLabel(setupId, role, value) {
   if (value?.follows) return `Same as ${assistantModeLabel(value.follows)}`;
   if (!value) return "No model selected";
-  return props.plain ? choiceFor(setup, role, value)?.label || value.modelId : vibe64AssistantSelectionLabel(value);
+  return props.plain ? choiceFor(setupId, role, value)?.label || value.modelId : vibe64AssistantSelectionLabel(value);
 }
-const recommendedChanges = computed(() => visibleSetups.value.flatMap(({ id: setup }) => rolesFor(setup).flatMap(({ id, label }) => {
-  const proposed = roleState(setup, id)?.recommendation;
-  if (!proposed || sameValue(draft.value[setup][id], proposed)) return [];
-  return [{ setup, role: id, label, proposed, description: selectionLabel(setup, id, proposed) }];
-})));
+const recommendedChanges = computed(() => rolesFor(setup.value).flatMap(({ id, label }) => {
+  const proposed = roleState(setup.value, id)?.recommendation;
+  if (!proposed || sameValue(draft.value[setup.value][id], proposed)) return [];
+  return [{ setup: setup.value, role: id, label, proposed, description: selectionLabel(setup.value, id, proposed) }];
+}));
 // Onboarding proposals: owner roles whose recommendation moves onto this connection.
-const suggestedChanges = computed(() => !connected.value ? [] : ASSISTANT_SETUP_ROLES.owner.flatMap((role) => {
-  const { value, recommendation } = roleState("owner", role) || {};
+const suggestedChanges = computed(() => !connected.value ? [] : (preferred.value ? MAIN_AI_ROLES : ASSISTANT_SETUP_ROLES.owner).flatMap((role) => {
+  const value = roleState("owner", role)?.value;
+  const recommendation = (preferred.value || resource.data.value?.setups?.owner?.roles)?.[role]?.recommendation;
   if (!recommendation?.schema || recommendation.modelProviderId !== props.connectionId || sameValue(value, recommendation)) return [];
   return [{ id: `owner:${role}`, setup: "owner", role, label: assistantModeLabel(role), previous: value?.schema ? value : null, proposed: recommendation }];
 }));
@@ -85,21 +111,24 @@ function payload() {
   if (proposalMode.value) for (const proposal of suggestedChanges.value) {
     if (proposals.value.includes(proposal.id)) values[proposal.setup][proposal.role] = proposal.proposed;
   }
-  const changes = Object.fromEntries(SETUPS.map(({ id: setup }) => [setup, Object.fromEntries(Object.entries(values[setup])
-    .filter(([role, value]) => !sameValue(value, savedValues[setup][role]) || (value === null) !== (savedValues[setup][role] === null)))])
+  const changes = Object.fromEntries(SETUPS.map(({ id: setupId }) => [setupId, Object.fromEntries(Object.entries(values[setupId])
+    .filter(([role, value]) => !sameValue(value, savedValues[setupId][role]) || (value === null) !== (savedValues[setupId][role] === null)))])
     .filter(([, roles]) => Object.keys(roles).length));
   return { revision: baseRevision.value, ...changes };
 }
+// A preferred preview proposes everything it moves; otherwise a deliberate choice stays unchecked.
+const defaultProposals = () => suggestedChanges.value
+  .filter(({ previous }) => preferred.value || !previous || previous.selectionSource === "recommended").map(({ id }) => id);
 function hydrate(data) {
   if (!data?.ok) return;
   recommendationReview.value = null;
   baseRevision.value = data.revision;
-  draft.value = Object.fromEntries(SETUPS.map(({ id: setup }) => [setup, Object.fromEntries(ASSISTANT_SETUP_ROLES[setup]
-    .filter((role) => roleState(setup, role, data)?.configured).map((role) => [role, roleState(setup, role, data).value]))]));
+  draft.value = Object.fromEntries(SETUPS.map(({ id: setupId }) => [setupId, Object.fromEntries(ASSISTANT_SETUP_ROLES[setupId]
+    .filter((role) => roleState(setupId, role, data)?.configured).map((role) => [role, roleState(setupId, role, data).value]))]));
   fieldErrors.value = {};
   savedValues = JSON.parse(JSON.stringify(draft.value));
   savedPayload = JSON.stringify({ revision: data.revision });
-  proposals.value = suggestedChanges.value.filter(({ previous }) => !previous || previous.selectionSource === "recommended").map(({ id }) => id);
+  proposals.value = defaultProposals();
   preview.value = data;
   hydratedDraft = draftSnapshot();
 }
@@ -108,6 +137,7 @@ watch(scopeKey, () => {
   draft.value = { owner: {}, nonOwner: {} };
   savedValues = { owner: {}, nonOwner: {} };
   proposals.value = [];
+  preferred.value = null;
   preview.value = null;
   fieldErrors.value = {};
   customizing.value = false;
@@ -116,9 +146,22 @@ watch(scopeKey, () => {
 watch(() => resource.data.value, (data) => {
   if (!refreshingConnection.value && !saving.value && (baseRevision.value === null || draftSnapshot() === hydratedDraft)) hydrate(data);
 }, { immediate: true });
+async function routingPreview(body, signal) {
+  const result = await getHttpWebClient().request(`${ACCOUNTS_ENDPOINT}/model-routing/preview`, { method: "POST", body, signal });
+  if (result?.ok !== true) throw new Error(result?.error || "Routing preview could not be loaded.");
+  return result;
+}
 onMounted(async () => {
   if (!refreshingConnection.value) return;
   await reload();
+  if (props.preferEngineId && baseRevision.value !== null && !loadError.value) {
+    try {
+      preferred.value = (await routingPreview({ revision: baseRevision.value,
+        preferProvider: { setup: "owner", modelProviderId: props.connectionId, engineId: props.preferEngineId } })).setups.owner.roles;
+      proposals.value = defaultProposals();
+      hydratedDraft = draftSnapshot();
+    } catch (error) { refreshError.value = error.message; }
+  }
   refreshingConnection.value = false;
 });
 watch(saving, (value) => emit("busy", value));
@@ -133,71 +176,34 @@ watch([previewPayload, retryPreview, canEdit, stale], ([serialized], _previous, 
   previewPending.value = true;
   const timer = setTimeout(async () => {
     try {
-      const result = await getHttpWebClient().request(`${ACCOUNTS_ENDPOINT}/model-routing/preview`, {
-        method: "POST", body: JSON.parse(serialized), signal: controller.signal
-      });
-      if (result?.ok !== true) throw new Error(result?.error || "Routing preview could not be loaded.");
+      const result = await routingPreview(JSON.parse(serialized), controller.signal);
       if (current) preview.value = result;
     } catch (error) { if (current) previewError.value = error.message; }
     finally { if (current) previewPending.value = false; }
   }, 250);
   cleanup(() => { current = false; clearTimeout(timer); controller.abort(); });
 }, { immediate: true });
-function items(setup, role) {
-  const current = draft.value[setup][role];
-  const state = roleState(setup, role);
-  const choices = (state?.choices || []).map((choice) => {
-    const status = choice.compatibilityError ? "Compatibility pending" : !choice.available ? "Unavailable"
-      : ["junior", "fix"].includes(role) && choice.capabilities?.toolcall === false ? "Tools unavailable" : "";
-    const personal = choice.available === true && choice.ownerOnly !== false;
-    return { id: choiceId(choice), engineId: choice.engineId, agent: choice.engineLabel || choice.engineId, label: choice.label || choice.modelId, status, personal,
-      access: choice.accessLabel, recommended: !status && choiceId(choice) === choiceId(state.recommendation),
-      props: { subtitle: personal ? choice.providerLabel : `${choice.providerLabel} · ${choice.accessLabel}`, disabled: Boolean(status) } };
-  });
-  if (current?.schema && !choices.some(({ id }) => id === choiceId(current))) {
-    choices.unshift({ id: choiceId(current), engineId: current.engineId, agent: current.engineId, label: current.modelId,
-      status: "Unavailable saved choice", props: { disabled: true } });
-  }
-  // "Same as" another role of this setup that is itself a model choice.
-  const follows = ASSISTANT_FOLLOWING_ROLES.includes(role) ? ASSISTANT_SETUP_ROLES[setup]
-    .filter((target) => target !== role && !draft.value[setup][target]?.follows)
-    .map((target) => ({ id: `follows:${target}`, label: `Same as ${assistantModeLabel(target)}`,
-      recommended: state?.recommendation?.follows === target, props: {} })) : [];
-  const groups = [...new Set(choices.map((choice) => choice.engineId))].flatMap((engineId) => {
-    const models = choices.filter((choice) => choice.engineId === engineId);
-    return [{ type: "subheader", id: `group:${engineId}`, label: models[0].agent }, ...models];
-  });
-  return [{ id: "", label: "Choose a model" }, ...follows, ...groups];
-}
 // Each personal provider the owner draft routes to, explained once above the roles.
 const personalProviders = computed(() => [...new Set(ASSISTANT_SETUP_ROLES.owner.flatMap((role) => {
   const choice = choiceFor("owner", role, draft.value.owner[role]);
   return choice?.available === true && choice.ownerOnly !== false ? [choice.modelProviderId] : [];
 }))]);
-function choose(setup, role, id) {
-  const choice = (roleState(setup, role)?.choices || []).find((item) => choiceId(item) === id);
-  draft.value[setup][role] = id.startsWith("follows:") ? { follows: id.slice("follows:".length) }
-    : choice ? { ...defineVibe64AssistantSelection(choice), selectionSource: "explicit" } : null;
-  delete fieldErrors.value[`${setup}.${role}`];
+function update(setupId, role, value) {
+  draft.value[setupId][role] = value;
+  delete fieldErrors.value[`${setupId}.${role}`];
 }
-function changeEffort(setup, role, variantId) {
-  draft.value[setup][role] = { ...draft.value[setup][role], variantId, selectionSource: "explicit" };
-  delete fieldErrors.value[`${setup}.${role}`];
+// Change on a "Same as" row: its pickers open on the followed model, and saving makes it a choice of its own.
+function changeFollowing(setupId, role) {
+  const target = draft.value[setupId][draft.value[setupId][role].follows];
+  update(setupId, role, target?.schema ? { ...target, selectionSource: "explicit" } : null);
 }
-function variants(setup, role) { return choiceFor(setup, role, draft.value[setup][role])?.variants || []; }
-function roleHint(setup, role) {
-  if (stale.value) return "Reload current choices to check access.";
-  if (previewPending.value) return "Checking access…";
-  if (previewError.value) return "Access could not be checked.";
-  const decision = preview.value?.setups?.[setup]?.preview?.[ASSISTANT_ROLE_PURPOSES[role]];
-  if (!decision) return "";
-  const result = decision.available ? vibe64AssistantSelectionLabel(decision.effectiveSelection) : decision.message || "Unavailable";
-  return `${SETUPS.find(({ id }) => id === setup).audience}: ${result}`;
-}
-function roleError(setup, role) {
-  if (fieldErrors.value[`${setup}.${role}`]) return fieldErrors.value[`${setup}.${role}`];
-  const state = preview.value?.setups?.[setup]?.roles?.[role];
-  return !previewPending.value && sameValue(state?.value, draft.value[setup][role]) ? state?.error || "" : "";
+function roleError(setupId, role) {
+  if (fieldErrors.value[`${setupId}.${role}`]) return fieldErrors.value[`${setupId}.${role}`];
+  if (previewPending.value || stale.value) return "";
+  const state = preview.value?.setups?.[setupId]?.roles?.[role];
+  if (sameValue(state?.value, draft.value[setupId][role]) && state?.error) return state.error;
+  const decision = preview.value?.setups?.[setupId]?.preview?.[ASSISTANT_ROLE_PURPOSES[role]];
+  return draft.value[setupId][role]?.schema && decision && !decision.available ? decision.message || "Unavailable" : "";
 }
 function reviewRecommendations() {
   if (!canEdit.value || saving.value || stale.value || !recommendedChanges.value.length) return;
@@ -205,15 +211,12 @@ function reviewRecommendations() {
 }
 function useRecommendations() {
   if (!recommendationReview.value || !canEdit.value || saving.value || stale.value) return;
-  for (const { setup, role, proposed } of recommendationReview.value.changes) {
-    draft.value[setup][role] = proposed;
-    delete fieldErrors.value[`${setup}.${role}`];
-  }
+  for (const { setup: setupId, role, proposed } of recommendationReview.value.changes) update(setupId, role, proposed);
   recommendationReview.value = null;
 }
 function customize() {
   const changes = payload();
-  for (const { id: setup } of SETUPS) if (changes[setup]) Object.assign(draft.value[setup], changes[setup]);
+  for (const { id: setupId } of SETUPS) if (changes[setupId]) Object.assign(draft.value[setupId], changes[setupId]);
   customizing.value = true;
 }
 const command = useCommand({
@@ -221,7 +224,7 @@ const command = useCommand({
   buildCommandOptions: () => ({ method: "PATCH", path: `${ACCOUNTS_ENDPOINT}/model-routing` }), buildRawPayload: payload,
   onRunSuccess(response) {
     fieldErrors.value = response?.fieldErrors || {};
-    if (response?.ok !== true) throw new Error(response?.error || "Model routing was not saved.");
+    if (response?.ok !== true) throw new Error(response?.error || "Models were not saved.");
   },
   messages: { success: "AI setup saved. New requests will use these models.", error: "AI setup was not saved." },
   fallbackRunError: "AI setup was not saved.", ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
@@ -253,23 +256,22 @@ defineExpose({ applySuggested });
 async function reload() {
   refreshError.value = "";
   try { await resource.reload(); if (!resourceError.value) hydrate(resource.data.value); }
-  catch (error) { refreshError.value = error.message || "Model routing could not be loaded."; }
+  catch (error) { refreshError.value = error.message || "Models could not be loaded."; }
 }
 </script>
 
 <template>
-  <section class="model-routing" aria-label="Model routing">
+  <section class="model-routing" aria-label="Models">
     <div class="model-routing__body">
       <template v-if="!plain">
-        <p class="text-title-large mb-2">{{ proposalMode ? `${connectionLabel || connectionId} connected` : "AI setup" }}</p>
+        <h2 class="model-routing__title">{{ proposalMode ? `${connectionLabel || connectionId} connected` : "Models" }}</h2>
         <p v-if="proposalMode" class="text-body-medium mb-4">Your connection is ready. Model changes are optional.</p>
-        <p v-else class="text-body-small mb-4">Main chat always runs on the owner's setup.</p>
       </template>
-      <v-alert v-if="setupError" type="warning" variant="tonal" class="mb-4">Your AI is connected, but its routing defaults could not be saved. {{ setupError }} Review the choices below to finish setup.</v-alert>
+      <v-alert v-if="setupError" type="warning" variant="tonal" class="mb-4">Your AI is connected, but its model defaults could not be saved. {{ setupError }} Review the choices below to finish setup.</v-alert>
       <v-skeleton-loader v-if="resource.isInitialLoading.value || baseRevision === null && !loadError" type="list-item-two-line@5, actions" />
       <v-alert v-else-if="loadError" type="error" variant="tonal">{{ loadError }} <v-btn variant="text" @click="reload">Retry</v-btn></v-alert>
       <template v-else-if="connected">
-        <v-alert v-if="stale" type="warning" variant="tonal" class="mb-4">Routing changed in another tab. Your draft is retained. <v-btn variant="text" @click="reload">Reload current choices</v-btn></v-alert>
+        <v-alert v-if="stale" type="warning" variant="tonal" class="mb-4">Models changed in another tab. Your draft is retained. <v-btn variant="text" @click="reload">Reload current choices</v-btn></v-alert>
         <template v-if="proposalMode">
           <template v-if="suggestedChanges.length">
             <p v-if="!suggestedChanges.some(change => change.role === 'senior')" class="text-body-small">{{ plain ? "Building" : "Senior" }} stays {{ selectionLabel('owner', 'senior', draft.owner.senior) }}.</p>
@@ -280,58 +282,62 @@ async function reload() {
           <p v-if="!suggestedChanges.length" class="text-body-medium">No model changes are suggested.</p>
           <v-btn v-if="canEdit" variant="text" class="my-3" :disabled="saving" @click="customize">Configure AI setup</v-btn>
         </template>
-        <template v-if="!proposalMode">
-          <v-btn v-if="canEdit && recommendedChanges.length" variant="outlined" color="primary" size="small" min-height="36" class="mb-4" :disabled="saving || stale" @click="reviewRecommendations">Review recommendations</v-btn>
-          <p v-else-if="canEdit" class="text-body-small mb-4" role="status">No recommended changes.</p>
-          <AiPersonalUse v-for="providerId in personalProviders" :key="providerId" :provider-id="providerId" variant="note" class="model-routing__personal mb-4" />
-          <template v-for="setup in visibleSetups" :key="setup.id">
-            <h2 v-if="visibleSetups.length > 1" class="text-title-medium mb-3">{{ setup.label }}</h2>
-            <template v-for="role in rolesFor(setup.id)" :key="`${setup.id}-${role.id}`">
-              <h3 class="text-title-small mb-3">{{ role.label }}</h3>
-              <div class="model-routing__role mb-4" :class="{ 'model-routing__role--compact': smAndDown }">
-                <v-autocomplete
-                  :ref="field => roleFields[`${setup.id}.${role.id}`] = field" :model-value="choiceId(draft[setup.id][role.id])" :items="items(setup.id, role.id)" item-title="label" item-value="id" :label="role.label" variant="outlined" :disabled="saving || !canEdit" :hint="roleHint(setup.id, role.id)" persistent-hint :error-messages="roleError(setup.id, role.id)"
-                  :filter-keys="['title', 'raw.agent', 'raw.access', 'props.subtitle']" no-data-text="No matching models" class="model-routing__model"
-                  @update:model-value="choose(setup.id, role.id, $event || '')"
-                >
-                  <template #subheader="{ props: group }"><v-list-subheader class="model-routing__group">{{ group.label }}</v-list-subheader></template>
-                  <template #item="{ props: itemProps, item }">
-                    <v-list-item v-bind="itemProps" role="option" :aria-label="[item.agent, item.label, item.props?.subtitle, item.personal ? 'Personal use' : '', item.status, item.recommended ? 'Recommended' : ''].filter(Boolean).join(' · ')" class="model-routing__option" :class="{ 'model-routing__option--model': item.engineId }" :min-height="item.engineId ? 68 : 44">
-                      <template #title>
-                        <div class="model-routing__option-title">
-                          <span class="model-routing__model-name">{{ item.label }}</span>
-                          <v-chip v-if="item.recommended" size="x-small" color="primary" variant="tonal">Recommended</v-chip>
-                          <AiPersonalUse v-if="item.personal" variant="badge" />
-                          <span v-if="item.status" class="text-body-small">{{ item.status }}</span>
-                        </div>
-                      </template>
-                      <template #append="{ isSelected }"><v-icon v-if="isSelected" icon="$complete" color="primary" size="small" aria-hidden="true" /></template>
-                    </v-list-item>
-                  </template>
-                  <template #selection="{ item }">
-                    <span class="model-routing__selection">
-                      <span class="model-routing__model-name">{{ item.label }}</span>
-                      <span v-if="item.agent" class="text-body-small model-routing__selection-detail">{{ item.agent }}<template v-if="item.props.subtitle"> · {{ item.props.subtitle }}</template><template v-if="item.personal"> · <strong>Personal use</strong></template></span>
-                    </span>
-                  </template>
-                </v-autocomplete>
-                <v-select v-if="variants(setup.id, role.id).length" :model-value="draft[setup.id][role.id]?.variantId || ''" :items="[{ id: '', label: 'Default' }, ...variants(setup.id, role.id)]" item-title="label" item-value="id" :label="`${role.label} thinking`" variant="outlined" hide-details :disabled="saving || !canEdit" @update:model-value="changeEffort(setup.id, role.id, $event)" />
-              </div>
+        <template v-else>
+          <v-btn-toggle
+            v-if="showSwitch" v-model="activeSetup" mandatory divided variant="outlined" color="primary" density="comfortable"
+            class="model-routing__switch" aria-label="Which setup"
+          >
+            <v-btn v-for="item in SETUPS" :key="item.id" :value="item.id" :disabled="saving">{{ item.label }}</v-btn>
+          </v-btn-toggle>
+          <div v-if="setup === 'nonOwner'" class="model-routing__intro">
+            <template v-if="owner">
+              <p>Team members' Colleague, Fix it with AI, Explain &amp; check and Quick helper use these models. Main chat always runs on your setup, and you approve what team members send to it.</p>
+              <p>Personal plans, like your Claude plan, can't be used by team members.</p>
             </template>
+            <template v-else>
+              <p>{{ ownerName[0].toUpperCase() + ownerName.slice(1) }} chose these models for team members. Main chat runs on {{ ownerName }}'s setup.</p>
+              <p>Change your own Colleague's model from Colleague's menu.</p>
+            </template>
+          </div>
+          <div v-if="setup === 'nonOwner' && teamEmpty" class="model-routing__empty" role="status">
+            <p>No team AI yet. {{ owner ? "Team members can't open projects until you add one." : `Ask ${ownerName} to set up AI for team members.` }}</p>
+            <v-btn v-if="canEdit" color="primary" variant="flat" :disabled="saving" @click="emit('add-team-key')">Add a DeepSeek key</v-btn>
+          </div>
+          <template v-if="setup === 'owner' || teamChoices || !teamEmpty">
+            <div v-if="canEdit" class="model-routing__tools">
+              <v-btn v-if="recommendedChanges.length" variant="outlined" color="primary" size="small" min-height="36" :disabled="saving || stale" @click="reviewRecommendations">Review recommendations</v-btn>
+              <p v-else class="text-body-small" role="status">No recommended changes.</p>
+            </div>
+            <template v-if="setup === 'owner'">
+              <AiPersonalUse v-for="providerId in personalProviders" :key="providerId" :provider-id="providerId" variant="note" class="model-routing__personal mb-4" />
+            </template>
+            <section v-for="group in groupsFor(setup)" :key="`${setup}-${group.id}`" class="model-routing__group" :aria-labelledby="`routing-group-${setup}-${group.id}`">
+              <h3 :id="`routing-group-${setup}-${group.id}`" class="model-routing__group-title">{{ group.label }}</h3>
+              <ModelRoutingRow
+                v-for="role in rolesFor(setup, group.id)" :key="`${setup}-${role.id}`" :ref="row => rowRefs[`${setup}.${role.id}`] = row"
+                :role="role" :value="draft[setup][role.id]" :followed-label="followedLabel(setup, role.id)"
+                :default-follows="defaultFollows(setup, role.id)" :choices="roleState(setup, role.id)?.choices || []"
+                :recommendation="roleState(setup, role.id)?.recommendation" :error="roleError(setup, role.id)"
+                :disabled="saving" :readonly="!canEdit"
+                @update="update(setup, role.id, $event)" @change="changeFollowing(setup, role.id)"
+                @connect-provider="emit('connect-provider', $event)"
+              />
+            </section>
           </template>
         </template>
-        <v-alert v-if="previewError" type="warning" variant="tonal">{{ previewError }} <v-btn variant="text" @click="retryPreview++">Retry preview</v-btn></v-alert>
+        <v-alert v-if="previewError" type="warning" variant="tonal" class="mt-3">{{ previewError }} <v-btn variant="text" @click="retryPreview++">Retry preview</v-btn></v-alert>
       </template>
-      <p v-else class="text-body-medium">Connect an AI to configure its models.</p>
+      <p v-else class="text-body-medium">Connect an AI to choose its models.</p>
     </div>
-    <div class="d-flex justify-end flex-wrap ga-2 pt-4">
-      <v-btn variant="text" :disabled="saving" @click="emit('close')">{{ proposalMode ? suggestedChanges.length ? 'Keep current routing' : 'Done' : 'Cancel' }}</v-btn>
-      <v-btn v-if="canEdit && (proposalMode ? suggestedChanges.length : connected)" variant="flat" color="primary" :disabled="saving || stale || previewPending || Boolean(loadError) || baseRevision === null || Boolean(proposalMode && !proposals.length)" @click="save">{{ saving ? 'Saving…' : proposalMode ? `Apply ${proposals.length} ${proposals.length === 1 ? 'change' : 'changes'}` : 'Save routing' }}</v-btn>
+    <div class="model-routing__actions">
+      <span v-if="previewPending && !proposalMode" class="model-routing__checking" role="status">Checking access…</span>
+      <v-btn variant="text" :disabled="saving" @click="emit('close')">{{ proposalMode ? suggestedChanges.length ? 'Keep current models' : 'Done' : canEdit ? 'Cancel' : 'Close' }}</v-btn>
+      <v-btn v-if="canEdit && (proposalMode ? suggestedChanges.length : connected)" variant="flat" color="primary" :disabled="saving || stale || previewPending || Boolean(loadError) || baseRevision === null || Boolean(proposalMode && !proposals.length)" @click="save">{{ saving ? 'Saving…' : proposalMode ? `Apply ${proposals.length} ${proposals.length === 1 ? 'change' : 'changes'}` : 'Save' }}</v-btn>
     </div>
     <v-dialog v-if="canEdit" :model-value="Boolean(recommendationReview)" max-width="36rem" scrollable aria-label="Recommended model changes" @update:model-value="!$event && (recommendationReview = null)">
       <v-card v-if="recommendationReview" rounded="xl" title="Recommended changes">
         <v-card-text>
-          <v-alert v-if="stale" type="warning" variant="tonal" class="mb-4">Routing changed. Close this review and reload current choices.</v-alert>
+          <v-alert v-if="stale" type="warning" variant="tonal" class="mb-4">Models changed. Close this review and reload current choices.</v-alert>
           <ul class="model-routing__changes pl-4">
             <li v-for="change in recommendationReview.changes" :key="`${change.setup}.${change.role}`" class="text-body-medium py-1"><strong>{{ change.label }}</strong> → {{ change.description }}</li>
           </ul>
@@ -349,18 +355,43 @@ async function reload() {
 <style scoped>
 .model-routing { min-width: 0; display: flex; flex-direction: column; max-height: calc(100dvh - 96px); }
 .model-routing__body { overflow-y: auto; min-height: 0; padding-top: 4px; }
-.model-routing__role { display: grid; grid-template-columns: minmax(0, 1fr) minmax(120px, .4fr); gap: 12px; align-items: start; }
-.model-routing__role--compact { grid-template-columns: minmax(0, 1fr); }
+.model-routing__title { font: var(--v64-type-title-lg); margin: 0 0 var(--v64-space-3); }
+.model-routing__switch { margin-bottom: var(--v64-space-4); max-width: 100%; }
+.model-routing__switch .v-btn { letter-spacing: 0; text-transform: none; }
+.model-routing__intro { color: var(--v64-on-surface-variant); font: var(--v64-type-body-md); margin-bottom: var(--v64-space-4); }
+.model-routing__intro p { margin: 0 0 var(--v64-space-2); max-width: 62ch; }
+.model-routing__empty {
+  align-items: center;
+  background: var(--v64-surface-container-low);
+  border: 1px dashed var(--v64-outline);
+  border-radius: var(--v64-shape-md);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--v64-space-3);
+  justify-content: space-between;
+  margin-bottom: var(--v64-space-4);
+  padding: var(--v64-space-4);
+}
+.model-routing__empty p { font: var(--v64-type-body-md); margin: 0; max-width: 40ch; }
+.model-routing__tools { align-items: center; display: flex; margin-bottom: var(--v64-space-3); min-height: 36px; }
+.model-routing__tools p { color: var(--v64-on-surface-variant); margin: 0; }
+.model-routing__group + .model-routing__group { margin-top: var(--v64-space-4); }
+.model-routing__group-title {
+  color: var(--v64-on-surface-variant);
+  font: var(--v64-type-label-md);
+  letter-spacing: 0.08em;
+  margin: 0 0 var(--v64-space-1);
+  text-transform: uppercase;
+}
+.model-routing__actions { align-items: center; display: flex; flex-wrap: wrap; gap: var(--v64-space-2); justify-content: flex-end; padding-top: var(--v64-space-4); }
+.model-routing__checking { color: var(--v64-on-surface-variant); font: 400 0.8125rem/1.125rem var(--v64-font-family); margin-inline-end: auto; }
 .model-routing__changes { overflow-wrap: anywhere; }
 .model-routing__proposal { margin-block: 6px; }
 .model-routing__proposal :deep(.v-selection-control) { align-items: flex-start; }
-.model-routing__group { font-weight: 600; color: rgb(var(--v-theme-on-surface)); background: rgba(var(--v-theme-on-surface), .04); }
-.model-routing__option--model { padding-inline-start: 32px; }
-.model-routing__option-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; white-space: normal; }
-.model-routing__model-name { font-weight: 500; overflow-wrap: anywhere; }
-.model-routing__option :deep(.v-list-item-subtitle) { margin-top: 4px; line-height: 1.4; opacity: .75; color: rgb(var(--v-theme-on-surface)); }
-.model-routing__selection { display: flex; flex-direction: column; min-width: 0; padding-block: 2px; }
-.model-routing__selection-detail { opacity: .75; }
 .model-routing__personal { background: rgba(var(--v-theme-warning), .12); border-radius: 12px; padding: 10px 12px; }
-.model-routing__model :deep(.v-autocomplete__selection) { max-width: 100%; }
+@media (max-width: 599.98px) {
+  .model-routing__switch { display: flex; width: 100%; }
+  .model-routing__switch .v-btn { flex: 1 1 0; min-height: 48px; }
+  .model-routing__empty .v-btn { width: 100%; }
+}
 </style>

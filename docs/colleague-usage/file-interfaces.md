@@ -90,7 +90,7 @@ source, person, project/session, verified Helper profile and prompt revision.
 Source changes mark the text out of date. It remains informational and is not
 supplied to coding agents. Generating or updating starts only on an explicit
 button press. A missing Helper disables generation, but saved text and Code stay
-readable. Configure the Helper in **Model routing** and connect its account in
+readable. Choose the **Explain & check** model in **Models** and connect its account in
 **AI Accounts** if necessary.
 
 While generating, the field shows **Generating explanation…**, **Stop**, and any

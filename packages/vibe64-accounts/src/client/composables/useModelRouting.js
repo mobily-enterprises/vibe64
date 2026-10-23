@@ -3,7 +3,6 @@ import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEn
 import { ACCOUNTS_ENDPOINT, VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT } from "../lib/accountsGateApi.js";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { vibe64ProjectQueryScope } from "/src/lib/vibe64ProjectScope.js";
-import { ASSISTANT_SETUP_ROLES } from "@local/vibe64-runtime/shared/assistantRouting";
 
 // The workspace AI setup: the owner's and the team setup, with every
 // connected tool's choices and illustrative decisions.
@@ -16,7 +15,7 @@ function useModelRouting({ enabled = true } = {}) {
     path: `${ACCOUNTS_ENDPOINT}/model-routing`,
     queryKey, realtime: { events: [VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT] },
     queryOptions: { refetchOnMount: true, staleTime: 30_000, retry: false },
-    fallbackLoadError: "Model routing could not be loaded.", requestRecoveryLabel: "Model routing"
+    fallbackLoadError: "Models could not be loaded.", requestRecoveryLabel: "Models"
   });
   const engines = computed(() => resource.data.value?.engines || []);
   return { resource, scopeKey: computed(() => JSON.stringify(queryKey.value)), engines,
@@ -27,16 +26,4 @@ function useModelRouting({ enabled = true } = {}) {
     loadError: computed(() => resource.loadError.value || (resource.data.value?.ok === false ? resource.data.value.error : "")) };
 }
 
-const routingChoiceKey = (selection) => JSON.stringify(["engineId", "agentId", "modelProviderId", "modelId", "variantId"]
-  .map((key) => selection?.[key] || ""));
-
-// True when the owner setup's recommendations would move a role onto this connection.
-function routingSuggestsChanges(setups, connectionId) {
-  return ASSISTANT_SETUP_ROLES.owner.some((role) => {
-    const { value, recommendation } = setups?.owner?.roles?.[role] || {};
-    return recommendation?.schema && recommendation.modelProviderId === connectionId &&
-      routingChoiceKey(value) !== routingChoiceKey(recommendation);
-  });
-}
-
-export { routingSuggestsChanges, useModelRouting };
+export { useModelRouting };

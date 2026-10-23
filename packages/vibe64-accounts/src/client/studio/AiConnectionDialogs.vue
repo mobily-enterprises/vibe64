@@ -95,9 +95,10 @@ const {
   removeRunning,
   removeTarget,
   retryPreparedProvider,
-  routingEngineId,
   routingOpen,
+  routingSetup,
   routingSaving,
+  teamKeyRequests,
   saveEditor
 } = injectAiConnectionManager();
 const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDown.value }]);
@@ -481,10 +482,14 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
     </v-card>
   </v-dialog>
 
-  <v-dialog v-model="routingOpen" max-width="38rem" :fullscreen="smAndDown" :persistent="routingSaving" scrollable>
+  <v-dialog v-model="routingOpen" max-width="44rem" :fullscreen="smAndDown" :persistent="routingSaving" scrollable>
     <v-card :class="dialogClass" :rounded="smAndDown ? 0 : 'xl'">
       <v-card-text>
-        <ModelRoutingForm v-if="routingOpen" :readonly="!isOwner" @busy="routingSaving = $event" @close="routingOpen = false" @saved="routingOpen = false; emit('changed')" />
+        <ModelRoutingForm
+          v-if="routingOpen" :readonly="!isOwner" :initial-setup="routingSetup" @busy="routingSaving = $event" @close="routingOpen = false"
+          @saved="routingOpen = false; emit('changed')" @add-team-key="routingOpen = false; teamKeyRequests++"
+          @connect-provider="routingOpen = false; addAiOpen = true"
+        />
       </v-card-text>
     </v-card>
   </v-dialog>

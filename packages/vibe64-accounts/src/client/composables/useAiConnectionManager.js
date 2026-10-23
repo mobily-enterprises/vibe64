@@ -1,6 +1,5 @@
 import { computed, inject, nextTick, onBeforeUnmount, provide, ref, unref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { useModelRouting } from "./useModelRouting.js";
 import { cliProblem } from "../studio/CliInstallNotice.vue";
 import { useCodexProviderConnections } from "./useCodexProviderConnections.js";
 import { useVibe64Accounts } from "./useVibe64Accounts.js";
@@ -36,9 +35,11 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
   const preparingProviderId = ref("");
   const catalogPreparationError = ref("");
   const editorOpen = ref(false);
+  // The Models screen and the setup it opens on; a team-key request asks the
+  // setup screen to start its team DeepSeek step.
   const routingOpen = ref(false);
-  const routingEngineId = ref("");
-  const { connectedEngines: connectedWorkflows } = useModelRouting({ enabled: owner });
+  const routingSetup = ref("owner");
+  const teamKeyRequests = ref(0);
   const routingSaving = ref(false);
   const editorRoutingPending = ref(false);
   const editorRoutingSetupError = ref("");
@@ -200,7 +201,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
       connected: claudeConnected.value,
       keyHint: claudeConnected.value ? "Connected" : "Reconnect required",
       managementUrl: "https://claude.ai/settings/billing",
-      modelLabel: "Choose model roles in Model routing",
+      modelLabel: "Choose its models in Models",
       providerLabel: "Anthropic"
     }] : []),
     ...codexProviders.connections.value.flatMap((connection) => {
@@ -227,7 +228,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
           ? "GLM-4.7 Flash is ready for new sessions"
           : connection.id === "opencode"
             ? "Zen key ready; choose model access below"
-          : "Choose model roles in Model routing",
+          : "Choose its models in Models",
       providerLabel: connection.productLabel || connection.label
     }))
   ]);
@@ -783,7 +784,6 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     configuredProviderIds,
     confirmModelAccessUnlock,
     confirmRemove,
-    connectedWorkflows,
     connections,
     editorActivator,
     editorApiKey,
@@ -869,13 +869,14 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     requestRemove,
     resetEditor,
     retryPreparedProvider,
-    routingEngineId,
     routingOpen,
+    routingSetup,
     routingSaving,
     saveConnection,
     saveEditor,
     savingProviderId,
     scheduleZenProgressRefresh,
+    teamKeyRequests,
     updateModelAccess,
     updatingModelAccessProviderId,
     zenAccessTitle,

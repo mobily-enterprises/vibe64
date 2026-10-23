@@ -22,7 +22,7 @@ the next time it runs a command.
 
 - **AI agents.** Claude Code, Codex and opencode are used through their own
   commands, so each must be installed on this computer before you can use it.
-  See [AI accounts](ai-accounts-and-routing.md) for what to install and how to
+  See [AI accounts](ai-accounts.md) for what to install and how to
   check again.
 - **npm global installs** go wherever your own npm configuration puts them.
 - **Playwright** uses its own browser cache. If **Health** reports that

@@ -17,8 +17,11 @@ import AiWaitStatus from "../studio/AiWaitStatus.vue";
 import { provideAiConnectionManager, useAiConnectionManager } from "../composables/useAiConnectionManager.js";
 import AiOnboardingKeyConnect from "./AiOnboardingKeyConnect.vue";
 import AiOnboardingMark from "./AiOnboardingMark.vue";
-import { aiOnboardingRows, useAiOnboarding, usesProvider } from "./useAiOnboarding.js";
-import { VIBE64_LEARNING_KEY } from "/src/lib/vibe64AssistantHost.js";
+import AiTeamSetupCard from "./AiTeamSetupCard.vue";
+import { aiOnboardingRows, aiTeamSetupSnoozed, snoozeAiTeamSetup, useAiOnboarding, usesProvider } from "./useAiOnboarding.js";
+import { routingSelectionText } from "../studio/ModelRoutingRow.vue";
+import { ASSISTANT_SETUP_ROLES } from "@local/vibe64-runtime/shared/assistantRouting";
+import { VIBE64_ASSISTANT_VIEWER_KEY, VIBE64_LEARNING_KEY } from "/src/lib/vibe64AssistantHost.js";
 
 // The AI setup stage: choose a provider, connect it, settle routing and prove
 // it answers. The onboarding shell shows it after its Why screen; Account
@@ -40,7 +43,9 @@ const props = defineProps({
   // Shown to someone who may not configure AI.
   ownerNotice: { type: String, default: "Only the Vibe64 owner can connect AI accounts." },
   // Where the setup can be changed later.
-  changeWhere: { type: String, default: "Account settings → AI Accounts" }
+  changeWhere: { type: String, default: "Account settings → AI Accounts" },
+  // "team": opened to set up AI for team members; the team card leads, even when snoozed.
+  focus: { type: String, default: "" }
 });
 // Slot connection-access ({ connection, card, place }): a host's note on who may
 // use a connection, on the card's Connected badge ("badge"), below a connected
@@ -78,6 +83,15 @@ const fullRouting = ref(false);
 const routingDetails = ref(false);
 // The Senior model in use when routing would change; none means apply without asking.
 const currentSenior = ref(null);
+// The tool the chosen provider is connected through, which "Use as main AI" keeps.
+const chosenEngine = ref("");
+// The team card: snoozed, connecting DeepSeek for the team, filling the team setup, and its outcome.
+const teamSnoozed = ref(false);
+const teamFlow = ref(false);
+const teamBusy = ref(false);
+const teamError = ref("");
+const teamSummary = ref("");
+const teamCard = ref(null);
 const autoRouting = ref(false);
 const outcome = ref({ routed: true, colleague: null, error: "" });
 // Success proof: Colleague's reply to a hello ("", "waiting", "replied", "failed" or "dismissed").
@@ -120,7 +134,11 @@ const currentMarks = computed(() => [...connectedCards.value, ...(otherConnected
 const currentNames = computed(() => [...connectedCards.value.map(({ name }) => name), ...otherConnected.value]);
 // Advanced appears once anything is configured.
 const showAdvanced = computed(() => props.canConfigure && (wasSetUp.value || manager.configuredAiRows.value.length > 0));
-const mainCard = computed(() => connectedCards.value.find((card) => usesProvider(setup.colleague.value, card)) || null);
+// Main AI: the card of the owner's Senior; before the AI setup is read, Colleague's model stands in.
+const ownerRoles = computed(() => setup.routing?.setups.value?.owner?.roles || null);
+const ownerSenior = computed(() => ownerRoles.value ? ownerRoles.value.senior?.effective || null : setup.colleague.value);
+const mainAi = computed(() => setup.mainAi?.value?.card.connected ? setup.mainAi.value : null);
+const mainCard = computed(() => mainAi.value?.card || null);
 const nativeLogin = computed(() => ["anthropic", "openai"].includes(chosen.value?.connect.modelProviderId));
 // The chosen engine's CLI, when this computer lacks it or it did not start.
 const missingTool = computed(() => {
@@ -207,7 +225,9 @@ async function sayHello() {
 }
 
 function resetAttempt() {
+  teamFlow.value = false;
   warning.value = "";
+  chosenEngine.value = "";
   notReady.value = false;
   makeMain.value = false;
   routingReviewed.value = false;
@@ -303,7 +323,7 @@ function needsReconnect(card) {
 function cardAction(card) {
   if (!card.connected) return needsReconnect(card) ? "reconnect" : "get";
   if (!wasSetUp.value) return "get";
-  return usesProvider(setup.colleague.value, card) ? "keep" : "main";
+  return usesProvider(ownerSenior.value, card) ? "keep" : "main";
 }
 
 // Notes point the person to Claude; a connected card in a redo no longer sells itself.
@@ -316,6 +336,7 @@ function cardNote(card) {
 // Success needs the provider connected, a Senior model of it ready and, on a
 // known first setup or an explicit switch, Colleague moved onto that provider.
 async function finish({ keep: keeping = false } = {}) {
+  if (teamFlow.value) return finishTeam();
   const card = chosen.value;
   verifying.value = true;
   warning.value = "";
@@ -327,6 +348,7 @@ async function finish({ keep: keeping = false } = {}) {
       if (screen.value !== "connect") go("connect");
       return;
     }
+    chosenEngine.value = result.engineId;
     if (wasSetUp.value && !keeping && !routingReviewed.value && result.routingWouldChange) {
       currentSenior.value = result.currentSenior;
       autoRouting.value = !result.currentSenior;
@@ -352,6 +374,104 @@ async function finish({ keep: keeping = false } = {}) {
     verifying.value = false;
   }
 }
+
+// Team setup: shown to the owner of a workspace with a team, once Claude is the
+// connected main AI and the team setup has no model yet; Not now waits a week.
+const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
+const team = computed(() => setup.routing?.team.value || { available: false });
+const deepseekCard = computed(() => cards.value.find(({ id }) => id === "deepseek"));
+const deepseekInClaude = computed(() => Boolean(deepseekCard.value?.through.includes("claude")));
+const teamUnset = computed(() => Boolean(ownerRoles.value) &&
+  ASSISTANT_SETUP_ROLES.nonOwner.every((role) => !setup.routing.setups.value.nonOwner?.roles?.[role]?.configured));
+const claudeMain = computed(() => ownerSenior.value?.engineId === "claude" && ownerSenior.value.modelProviderId === "anthropic" &&
+  setup.routing?.viewerDecisions.value.senior?.available === true);
+const teamCardState = computed(() => {
+  if (!props.canConfigure || !wasSetUp.value) return "";
+  if (teamSummary.value) return "ready";
+  return team.value.available && claudeMain.value && teamUnset.value && (!teamSnoozed.value || props.focus === "team") ? "offer" : "";
+});
+watch(() => unref(viewer)?.actorKey, (actorKey) => { teamSnoozed.value = aiTeamSetupSnoozed(actorKey); }, { immediate: true });
+// Opened for the team ("Set up team AI"): lead with the team card, or open the
+// team members' models when there is no card to offer. Once per opening.
+let teamFocusHandled = false;
+watch(() => props.focus, () => { teamFocusHandled = false; });
+watch([() => props.focus, teamCardState, () => Boolean(ownerRoles.value)], async ([focus, state, loaded]) => {
+  if (focus !== "team" || !loaded || teamFocusHandled) return;
+  teamFocusHandled = true;
+  if (!state) {
+    if (props.canConfigure) openModels("nonOwner");
+    return;
+  }
+  await nextTick();
+  teamCard.value?.$el?.scrollIntoView?.({ block: "center" });
+  teamCard.value?.$el?.focus?.({ preventScroll: true });
+}, { immediate: true });
+
+function snoozeTeam() {
+  snoozeAiTeamSetup(unref(viewer)?.actorKey);
+  teamSnoozed.value = true;
+}
+
+// Add a DeepSeek key: the DeepSeek connect step (inside Claude Code), then the
+// team setup fills; with DeepSeek already in Claude Code it fills at once.
+function startTeamSetup() {
+  teamError.value = "";
+  if (deepseekInClaude.value) return fillTeam();
+  connect(deepseekCard.value, "have");
+  teamFlow.value = true;
+}
+
+async function fillTeam() {
+  teamBusy.value = true;
+  try {
+    const result = await setup.fillTeamSetup({ modelProviderId: "deepseek", engineId: "claude" });
+    teamSummary.value = result.ok ? result.summary : "";
+    teamError.value = result.ok ? "" : result.error;
+    if (result.ok) announcement.value = "Team AI is ready.";
+    return result;
+  } finally {
+    teamBusy.value = false;
+  }
+}
+
+async function finishTeam() {
+  verifying.value = true;
+  warning.value = "";
+  try {
+    await setup.reload();
+    if (!deepseekInClaude.value) {
+      warning.value = "DeepSeek isn't connected in Claude Code yet. Finish the connection step, then try again.";
+      return;
+    }
+    const result = await fillTeam();
+    if (!result.ok) {
+      warning.value = result.error;
+      return;
+    }
+    teamFlow.value = false;
+    chosen.value = null;
+    go("choose", true);
+  } finally {
+    verifying.value = false;
+  }
+}
+
+// Models: the setup screen with both setups; Team members opens on theirs.
+function openModels(initialSetup = "owner") {
+  manager.routingSetup.value = initialSetup;
+  manager.routingOpen.value = true;
+}
+watch(() => manager.teamKeyRequests.value, startTeamSetup);
+// The overview's one-line Models summary: main chat's Senior and Junior, and the team's Colleague.
+const modelsSummary = computed(() => {
+  const text = (setupId, role) => {
+    const state = setup.routing?.setups.value?.[setupId]?.roles?.[role];
+    return state ? routingSelectionText(state.choices, state.effective) : "";
+  };
+  return [["Senior", text("owner", "senior")], ["Junior", text("owner", "junior")],
+    ...(team.value.available ? [["Team members", text("nonOwner", "colleague") || "Not set up"]] : [])]
+    .filter(([, value]) => value);
+});
 
 function reviewRouting() {
   fullRouting.value = true;
@@ -439,7 +559,7 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
           <span class="aio-current__text">
             <span class="aio-current__label">{{ mainCard ? "Currently using" : "Connected" }}</span>
             <span class="aio-current__value">
-              {{ mainCard ? `Main AI: ${mainCard.name}` : currentNames.join(", ") }}
+              {{ mainAi ? `Main AI: ${mainAi.label}` : currentNames.join(", ") }}
             </span>
           </span>
           <v-btn
@@ -452,6 +572,10 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
             <v-icon :icon="mdiArrowDown" size="18" aria-hidden="true" />Choose a main AI below. We recommend Claude.
           </span>
         </div>
+        <AiTeamSetupCard
+          v-if="teamCardState" ref="teamCard" :state="teamCardState" :key-connected="deepseekInClaude" :busy="teamBusy"
+          :error="teamError" :summary="teamSummary" @add="startTeamSetup" @snooze="snoozeTeam" @review="openModels('nonOwner')"
+        />
         <v-alert v-if="loadError" type="error" variant="tonal" class="mb-6">
           We couldn't check your current AI connections.
           <template #append><v-btn variant="text" @click="setup.reload()">Try again</v-btn></template>
@@ -583,6 +707,15 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
             </template>
           </article>
         </div>
+        <section v-if="canConfigure && wasSetUp && modelsSummary.length" class="aio-models" aria-labelledby="aio-models-title">
+          <div class="aio-models__text">
+            <h2 id="aio-models-title" class="aio-models__title">Models</h2>
+            <dl class="aio-models__list">
+              <div v-for="[label, value] in modelsSummary" :key="label"><dt>{{ label }}</dt><dd>{{ value }}</dd></div>
+            </dl>
+          </div>
+          <v-btn color="primary" variant="tonal" :prepend-icon="mdiTuneVariant" class="aio-models__open" @click="openModels()">Review models</v-btn>
+        </section>
         <AiSetupAdvanced v-if="showAdvanced" :other-rows="otherRows">
           <template #connection-access="scope"><slot name="connection-access" v-bind="scope" /></template>
         </AiSetupAdvanced>
@@ -596,7 +729,10 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
           <AiOnboardingMark :provider="chosen" :size="56" :settle-delay="chosen.crown ? 150 : -1" />
           <div class="aio-chosen__text">
             <h1 id="ai-onboarding-title" tabindex="-1" class="aio-chosen__title">Connect {{ chosen.name }}</h1>
-            <p class="aio-chosen__plan">{{ chosen.plan.name }} · <span class="aio-tabular">{{ chosen.plan.price }}</span></p>
+            <p class="aio-chosen__plan">
+              <template v-if="teamFlow">For team members · runs inside Claude Code</template>
+              <template v-else>{{ chosen.plan.name }} · <span class="aio-tabular">{{ chosen.plan.price }}</span></template>
+            </p>
           </div>
         </header>
         <ol class="aio-checklist">
@@ -646,7 +782,7 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
               </v-alert>
               <v-alert v-if="notReady" type="warning" variant="tonal" class="mt-4">
                 {{ chosen.name }} is connected, but no model is ready for Colleague yet.
-                <template #append><v-btn variant="text" @click="reviewRouting">Review model routing</v-btn></template>
+                <template #append><v-btn variant="text" @click="reviewRouting">Review models</v-btn></template>
               </v-alert>
               <p v-if="nativeLogin" class="ai-onboarding__security">
                 <v-icon :icon="mdiShieldLockOutline" size="18" aria-hidden="true" />
@@ -664,7 +800,7 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
           <AiOnboardingMark v-if="!fullRouting" :provider="chosen" :size="56" class="mb-5" />
           <p class="ai-onboarding__eyebrow">YOUR MAIN AI</p>
           <h1 id="ai-onboarding-title" tabindex="-1" class="ai-onboarding__headline">
-            {{ fullRouting ? "Review model routing" : autoRouting ? `Setting up ${chosen.name}…` : `Build with ${chosen.name}?` }}
+            {{ fullRouting ? "Review models" : autoRouting ? `Setting up ${chosen.name}…` : `Build with ${chosen.name}?` }}
           </h1>
           <p v-if="!fullRouting && !autoRouting" class="ai-onboarding__lede">{{ chosen.name }} is connected. Choose what Vibe64 builds with.</p>
         </header>
@@ -694,6 +830,7 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
             :plain="!fullRouting"
             :connection-id="fullRouting ? '' : chosen.connect.modelProviderId"
             :connection-label="fullRouting ? '' : chosen.name"
+            :prefer-engine-id="fullRouting ? '' : chosenEngine"
             @busy="routingBusy = $event" @saved="routingDone" @close="routingDone"
           />
         </div>
@@ -752,7 +889,7 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
         </v-alert>
         <dl v-if="colleagueNote === 'uses'" class="aio-recap">
           <dt>Main AI</dt>
-          <dd>{{ chosen.name }}<span v-if="outcome.colleague?.label"> · {{ outcome.colleague.label }}</span></dd>
+          <dd>{{ mainAi?.card.id === chosen.id ? mainAi.label : chosen.name }}<span v-if="outcome.colleague?.label"> · {{ outcome.colleague.label }}</span></dd>
         </dl>
         <p class="ai-onboarding__note">Change it any time in {{ changeWhere }}.</p>
         <p v-if="!outcome.routed" class="ai-onboarding__note">
@@ -765,6 +902,7 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
       <section v-else key="owner" class="ai-onboarding__success">
         <v-icon :icon="mdiAlertCircleOutline" size="48" color="primary" aria-hidden="true" />
         <h1 id="ai-onboarding-title" tabindex="-1" class="ai-onboarding__headline">{{ ownerNotice }}</h1>
+        <v-btn variant="tonal" color="primary" size="large" @click="openModels('nonOwner')">See team members' models</v-btn>
         <v-btn color="primary" variant="flat" size="large" @click="close('dismiss')">Close</v-btn>
       </section>
     </Transition>
@@ -878,6 +1016,26 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
 .aio-current__label { color: var(--v64-on-surface-variant); font: var(--v64-type-label-md); letter-spacing: 0.06em; text-transform: uppercase; }
 .aio-current__value { font: var(--v64-type-title-md); }
 .aio-current__hint { align-items: center; color: var(--v64-primary); display: inline-flex; font: var(--v64-type-label-lg); gap: var(--v64-space-1); }
+
+/* Models: the overview's one-line summary of the AI setup. */
+.aio-models {
+  align-items: center;
+  background: var(--v64-surface-container-low);
+  border: 1px solid var(--v64-outline-variant);
+  border-radius: var(--v64-shape-lg);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--v64-space-3) var(--v64-space-5);
+  margin-top: var(--v64-space-6);
+  padding: var(--v64-space-4) var(--v64-space-5);
+}
+.aio-models__text { display: grid; flex: 1 1 18rem; gap: var(--v64-space-1); min-width: 0; }
+.aio-models__title { font: var(--v64-type-title-md); margin: 0; }
+.aio-models__list { display: flex; flex-wrap: wrap; font: var(--v64-type-body-md); gap: var(--v64-space-1) var(--v64-space-5); margin: 0; }
+.aio-models__list div { display: flex; gap: var(--v64-space-2); min-width: 0; }
+.aio-models__list dt { color: var(--v64-on-surface-variant); }
+.aio-models__list dd { margin: 0; overflow-wrap: anywhere; }
+.aio-models__open { min-height: 44px; }
 
 /* Provider cards: one column, Claude first. On desktop each card is one row:
    Claude's offer sits beside its facts; the others run head, facts, plan, actions. */
@@ -1230,6 +1388,8 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
   .aio-card--featured .aio-plan__price { font: var(--v64-type-headline-sm); }
   .aio-current { padding: var(--v64-space-3) var(--v64-space-4); }
   .aio-current__keep { width: 100%; }
+  .aio-models { padding: var(--v64-space-4); }
+  .aio-models__open { width: 100%; }
   .aio-chosen__title { font: var(--v64-type-headline-sm); }
   .ai-onboarding__panel { padding: var(--v64-space-4); }
   .ai-setup > .ai-onboarding__success { padding-top: var(--v64-space-6); }

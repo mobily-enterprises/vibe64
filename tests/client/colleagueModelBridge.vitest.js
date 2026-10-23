@@ -5,30 +5,30 @@ import { selectionLabels } from "../../packages/vibe64-colleague/src/client/coll
 describe("Colleague model bridge", () => {
   it("reaches the newest mounted Colleague and removes only the unmounted one", async () => {
     const bridge = useVibe64ColleagueModel();
-    const target = { engineId: "codex", modelProviderId: "deepseek" };
+    const target = { schema: "vibe64.assistant-selection.v1", engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" };
     expect(bridge.available.value).toBe(false);
     await expect(bridge.current()).resolves.toBeNull();
-    await expect(bridge.selectForWorkflow(target)).resolves.toEqual({ ok: false, error: "Colleague is not open in this browser view." });
+    await expect(bridge.select(target)).resolves.toEqual({ ok: false, error: "Colleague is not open in this browser view." });
     await expect(bridge.sayHello("Hi")).resolves.toEqual({ ok: false, error: "Colleague is not open in this browser view." });
 
-    const first = { current: async () => ({ selection: { engineId: "codex" } }), selectForWorkflow: vi.fn(async () => ({ ok: true, from: "first" })) };
-    const second = { current: async () => null, selectForWorkflow: vi.fn(async () => ({ ok: true, from: "second" })) };
+    const first = { current: async () => ({ selection: { engineId: "codex" } }), select: vi.fn(async () => ({ ok: true, from: "first" })) };
+    const second = { current: async () => null, select: vi.fn(async () => ({ ok: true, from: "second" })) };
     const unregisterFirst = registerVibe64ColleagueModel(first);
     expect(bridge.available.value).toBe(true);
     await expect(bridge.current()).resolves.toEqual({ selection: { engineId: "codex" } });
     const unregisterSecond = registerVibe64ColleagueModel(second);
     await expect(bridge.current()).resolves.toBeNull();
-    await expect(bridge.selectForWorkflow(target)).resolves.toEqual({ ok: true, from: "second" });
-    expect(second.selectForWorkflow).toHaveBeenCalledWith(target);
+    await expect(bridge.select(target)).resolves.toEqual({ ok: true, from: "second" });
+    expect(second.select).toHaveBeenCalledWith(target);
     second.sayHello = vi.fn(async () => ({ ok: true, reply: "Hello!" }));
     await expect(bridge.sayHello("Hi")).resolves.toEqual({ ok: true, reply: "Hello!" });
     expect(second.sayHello).toHaveBeenCalledWith("Hi");
 
     unregisterFirst();
-    await expect(bridge.selectForWorkflow(target)).resolves.toMatchObject({ from: "second" });
+    await expect(bridge.select(target)).resolves.toMatchObject({ from: "second" });
     unregisterSecond();
     expect(bridge.available.value).toBe(false);
-    expect(first.selectForWorkflow).not.toHaveBeenCalled();
+    expect(first.select).not.toHaveBeenCalled();
   });
 });
 

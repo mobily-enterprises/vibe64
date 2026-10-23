@@ -1,4 +1,4 @@
-# Connect AI accounts and choose Model routing
+# Connect AI accounts
 
 ## Try an app while verification continues
 
@@ -29,13 +29,14 @@ coding session is required. AI Accounts is the same screen as
 [AI onboarding](ai-onboarding.md): while no AI is connected (accounts marked
 **Reconnect required** do not count) it shows **Pick the AI behind Vibe64** with
 the ranked provider cards; once one is, it shows **Your AI setup** with your
-cards first, each with **Manage**, and the collapsed **Advanced** panel below
-them. Finishing a connection there returns to that overview (**Done**). The
+cards first, each with **Manage**, a **Models** summary and the collapsed
+**Advanced** panel below them. Which model does which job is explained in
+[AI model setups](ai-model-setups.md). Finishing a connection there returns to that overview (**Done**). The
 guided flow with its **Why** screen opens from **Redo onboarding** in the account
 menu (next to **Account settings**). Vibe64 includes no AI of its own; the free
 option is GLM-4.7 Flash through a free Z.AI account (see below). OpenCode Zen is
 an ordinary keyed provider: add your own Zen key to use it. Its free Big Pickle
-model is not offered, and model routing or Colleague choices that named it were
+model is not offered, and model or Colleague choices that named it were
 cleared by the release upgrade, so the next use recommends one of your connected
 AIs.
 
@@ -92,17 +93,16 @@ of these programs, none of these warnings or install commands appear.
 ## Advanced in Your AI setup
 
 Below the provider cards, AI Accounts (and **Your AI setup** in AI onboarding)
-has a collapsed **Advanced** panel once any AI is configured. Its summary counts
-the connections, for example **7 connections · 2 not on a card above**. Select it
-to open:
+has a collapsed **Advanced** panel once any AI is configured. It holds only the connection
+plumbing; models are chosen in **Models** (see
+[AI model setups](ai-model-setups.md)). Its summary counts the connections, for
+example **7 connections · 2 not on a card above**. Select it to open:
 
 - **Add a connection** opens **Choose an orchestrator** (Claude Code, Codex, or
   OpenCode's provider catalog) for an exact orchestrator and provider pair. **Refresh** rechecks every account.
-- **Model routing** has one button per connected orchestrator (**Claude Code**,
-  **Codex**, **OpenCode**); each opens that orchestrator's routing form.
 - **Other connections** lists connected providers that have no card, such as
   OpenCode Zen or another OpenCode catalog provider, each **through OpenCode**,
-  with **Replace key**, **Model routing** and **Remove**. OpenCode Zen's model
+  with **Replace key** and **Remove**. OpenCode Zen's model
   access controls (**Check & enable working models**, **Enable all current
   models**, **Use the recommended model only**, **Cancel check**) are on its tile.
   These providers also appear in the **Connected** or **Currently using** strip
@@ -125,8 +125,9 @@ authorization code. You perform provider consent and secret entry. Wait for the
 saved connected state, and use **Refresh** or **Check saved key** when offered.
 Do not reconnect or resend a key solely because a status request was interrupted.
 DeepSeek, regular GLM API and GLM Coding Plan connections belong to the
-orchestrator shown in that row. Use **Advanced → Add a connection**, choose **Claude Code**,
-**Codex** or **OpenCode**, then its provider. Enter a key and complete
+orchestrator shown in that row. The DeepSeek card connects DeepSeek inside
+**Claude Code**; to connect it in another tool as well, use **Advanced → Add a
+connection**, choose **Claude Code**, **Codex** or **OpenCode**, then its provider. Enter a key and complete
 that row's verification. Each orchestrator can save a different key, or you can
 enter the same key independently for several orchestrators. Connecting or
 checking one row does not connect, check or copy a key to another. Regular GLM
@@ -151,17 +152,11 @@ known terminals using another provider keep running. Refusal preserves the saved
 key and connection status.
 OpenCode may require you to close its native terminals, other-provider chats and
 Colleague conversations before changing a key. If it refuses, the saved key stays
-unchanged and those conversations keep running; close the named users and retry. Saved routing can still name a disconnected
-provider; reconnect the exact row or deliberately choose a different route.
-**Start an AI session** lists only orchestrators you can use: one whose account
-was removed disappears until you connect it again, while its saved routing is
-kept. A connected orchestrator with a routing problem stays visible but greyed
-out with its reason; fix it with **Configure model routing**. An existing chat
-whose orchestrator is no longer connected shows **Open AI Accounts** and, when
-another orchestrator is available, **Switch to** that orchestrator (for example
-**Switch to Claude Code**). Switching keeps the chat's Senior, Junior or Auto
-mode (Custom becomes Senior), keeps the chat's **Deslop** choice (on for a Custom
-chat), and keeps your draft.
+unchanged and those conversations keep running; close the named users and retry.
+Removing a connection keeps the saved model choices that name it; reconnect the
+exact row or deliberately choose other models in **Models**. Main chat always
+runs in your Senior's tool, so a removed Senior connection stops main chat until
+you reconnect it or choose another Senior.
 The controls and results are the same on desktop and mobile. Colleague can
 inspect redacted readiness and explain these steps; secret entry and connection
 consent remain your interaction in **AI Accounts**.
@@ -202,90 +197,6 @@ change models or resend the pending words until cleanup and delivery are resolve
 Colleague can explain the error and inspect readiness, but cannot repair the
 host's process service. These recovery steps apply on desktop and mobile.
 
-After connecting, the **[provider] connected** screen names the orchestrator you
-selected. For example, connecting DeepSeek through Codex shows only Codex's
-optional suggestions and **Configure Codex routing**, even if the key also works
-with Claude Code. Review **Current** and **Suggested**, select the changes you
-want, then use **Apply [number] changes**. **Keep current routing** leaves the
-connection ready without applying those suggestions. If no changes are suggested,
-use **Done** or the same orchestrator's routing button under **Advanced → Model
-routing**.
-
-Open **Advanced → Model routing** and choose the orchestrator (or **Model
-routing** on a connection's tile) to choose its supported
-**Senior**, **Junior**, **Helper** and **Router** destinations and thinking choices.
-The displayed routing form can also offer **Review recommendations**,
-**Confirm Helper** and **Save routing**. Follow any
-required review, then Save routing. On mobile, scroll the same dialog to its controls.
-Disabled models are unavailable or incompatible; they must not be invented.
-
-The workflow picker checks access to your saved Senior, Junior and shared backup
-choices. It offers recommendations for roles that have not been configured;
-opening the picker does not replace saved choices or deliberately empty roles.
-First-time setup loads models for the chosen workflow and any other orchestrator
-already assigned to one of its roles. Choosing Codex or Claude Code does not
-require OpenCode model discovery unless one of those saved roles uses OpenCode.
-
-Recommendations prefer **Claude → Codex/OpenAI → DeepSeek → GLM** among models
-connected and permitted for each role. Within the chosen provider, Senior uses
-Opus/Astra, Junior uses Opus with **Medium** thinking on Claude Code and Sol on
-Codex, and Helper/Router use Haiku/Luna when offered. Senior and Junior otherwise
-recommend **High** thinking, Helper and Router **Low**. When a recommendation
-changes in a release, saved routes keep their models: the routing form then shows
-**Review recommendations** for the roles that differ, for example Junior moving
-from Sonnet with High thinking to Opus with Medium thinking.
-Senior and Junior stay in the selected orchestrator; independent roles can use
-other permitted orchestrators. Personal connections cannot supply a shared
-backup. **No recommended changes** means the current choices already match the
-available recommendations. To review different recommendations for saved
-routes, select **Review recommendations**, inspect them, select **Apply to form**,
-then **Save routing**. Connecting or reconnecting does not overwrite saved roles.
-
-The model dropdown groups choices under orchestrator headings such as **Codex**,
-**Claude Code** and **OpenCode**. Choose an indented model beneath its heading;
-the second line identifies its provider, and **Workspace use** or an amber
-**Personal use** chip shows who may use it (see
-[personal-use subscriptions](ai-personal-use.md)).
-**Recommended** marks the suggested model for that role. Unavailable choices
-show their reason and cannot be selected. Type to search by model, orchestrator,
-provider or access; only matching groups remain visible. The selected field
-shows the model and its orchestrator/access details, without a thinking level.
-Use the separate **[role] thinking** control beside it to inspect or change
-thinking after selecting a model; the chosen level is included in Save routing.
-Recommendation reviews and collaborator outcomes still name the complete model
-and thinking selection. On mobile, the controls may be stacked vertically.
-
-Senior and Junior share an orchestrator. Helper and Router have their own allowed
-choices. Helper also reviews your work when you press **Check my work** on a
-lesson's review step: it uses the Helper of the practice session's workflow, on
-your own account. Without an available Helper the review says so and records
-nothing; choose one here, then press **Check my work** again. Shared Backup can supply a permitted alternative for collaborators.
-Changing routing applies to future work, not a running agent or Colleague's own
-model. Select Colleague's model through its own composer model picker; active work
-can prevent changing it until its turn stops.
-
-Colleague needs no Model routing step of its own. If an AI shows **Connected**
-but its roles were never saved (for example a Codex login that existed before
-Vibe64 was installed), Colleague's first message or **Teach me** saves that
-workflow's recommended routing, as starting a session does, and uses its
-Senior model, trying Claude Code before Codex and then the other connected
-workflows. Saved choices are never replaced. Colleague says it has **no usable
-AI model** only when no connected workflow can supply a Senior model; connect an
-AI, or open **Advanced → Model routing** and choose an available Senior, then press
-Send or **Teach me** again. That message clears by itself once an AI is usable.
-
-If the form says routing changed elsewhere, use **Reload current choices** and
-review your retained draft before saving. If no permitted model is usable, finish
-the real account/access setup before promising an AI answer. Vibe64 includes no
-AI of its own on any installation; AI Accounts or AI onboarding connects one,
-including the free GLM-4.7 Flash option.
-
-Colleague can explain these steps, inspect account/routing readiness, open AI
-Accounts and save supported routing changes when the owner explicitly asks. It
-offers assistance without changing anything for a how-to question. Connection,
-consent and model-access operations that are not exposed to it must be completed
-in the actual account UI; it should recheck status after the person finishes.
-
 For regular Z.AI setup, ask Colleague “Is my regular Z.AI connection saved?”
 The workspace owner can get a fresh, read-only check without opening a project.
 It reports the saved connection, preferred provider, default model and whether
@@ -305,9 +216,9 @@ If it reports insufficient balance or no resource package, check the provider's
 billing and quota before retrying. A failed replacement keeps the existing saved
 key. These messages and steps apply on desktop and mobile. Colleague can explain
 the reason; key entry remains your step in **AI Accounts**.
-The preferred provider/default-model badge does not prove future Senior routing
-or change Colleague's model. Ask for the actual routing before changing only the
-requested future workflow role. A correct lesson answer establishes understanding,
+The preferred provider/default-model badge does not prove which models Vibe64
+uses or change Colleague's model. Ask for the actual choices in **Models** before
+changing only the requested role. A correct lesson answer establishes understanding,
 not successful account setup or model execution.
 
 To connect the regular Z.AI API, use the GLM card's free option (**Start free**
@@ -334,9 +245,16 @@ If those choices changed while the dialog was open, press **Cancel**, reopen
 Claude Code uses its selected provider for background model calls as well.
 
 If an administrator's stopped-service upgrade reports an unsupported saved
-routing request even though the conversation uses current Senior, Junior, Auto
+model request even though the conversation uses current Senior, Junior, Auto
 or Custom, use the corrected candidate release's read-only upgrade preflight.
 Valid current choices and pending delivery receipts are preserved by the explicit
 upgrade. Do not reset the conversation or change its model to work around that
 error. Unknown or corrupt routing still needs administrator inspection before
 apply; Colleague can explain the recovery but cannot perform the host upgrade.
+
+Colleague can explain these steps, inspect account readiness and open AI
+Accounts. It offers help without changing anything for a how-to question.
+Connection, consent and model-access steps it cannot perform must be completed
+in the actual account screens; it rechecks status after you finish. Vibe64
+includes no AI of its own on any installation; AI Accounts or AI onboarding
+connects one, including the free GLM-4.7 Flash option.

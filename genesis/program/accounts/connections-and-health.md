@@ -54,6 +54,7 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-runtime/src/shared/assistantLabels.js`
 - `packages/vibe64-accounts/src/client/composables/useModelRouting.js`
 - `packages/vibe64-accounts/src/client/studio/ModelRoutingForm.vue`
+- `packages/vibe64-accounts/src/client/studio/ModelRoutingRow.vue`
 
 - `packages/vibe64-accounts/src/server/aiConnectionStore.js`
 - `packages/vibe64-accounts/src/server/aiConnectionService.js`
@@ -78,6 +79,7 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-accounts/src/client/onboarding/useAiOnboarding.js`
 - `packages/vibe64-accounts/src/client/onboarding/AiOnboarding.vue`
 - `packages/vibe64-accounts/src/client/onboarding/AiSetup.vue`
+- `packages/vibe64-accounts/src/client/onboarding/AiTeamSetupCard.vue`
 - `packages/vibe64-accounts/src/client/onboarding/AiOnboardingHost.vue`
 - `packages/vibe64-accounts/src/client/onboarding/AiOnboardingMark.vue`
 - `packages/vibe64-accounts/src/client/onboarding/AiOnboardingSetUpPill.vue`
@@ -158,151 +160,79 @@ future workflow decisions; it does not retarget active agents, session chat mode
 or Colleague's own model. Historical Helper review remains explicit; Colleague
 reports that review is required without clearing it on the person's behalf.
 
-Model routing is a shared Accounts surface. Each workflow keeps Senior and Junior
-in one orchestrator, with independent Helper and Router choices and a shared
-Backup across connected orchestrators. Thinking choices and Personal/Workspace
-scope appear with each exact route. Saves are atomic and revision-checked in private installation state at
-`ai-connections/routing.json`; unreadable settings are preserved for recovery.
-First-use setup reads full model catalogues only for each requested workflow and
-its already assigned destination orchestrators. Unrelated orchestrators use the
-existing configured-account overview; already complete workflows need no setup.
-The store's version-4 format keeps independent Router and shared Backup fields
-and helper-conflict evidence alongside those choices. Senior/Junior assignments
-must belong to their workflow engine. Old-format files require the explicit
-stopped-service upgrade; ordinary reads do not change them.
-The server validates changed assignments against their destination catalogue;
-an unrelated edit preserves unchanged unavailable references and their original
-recommendation provenance. Execution validates its actual destination again.
-The chat-mode menu also opens this same form in an owner-only overlay without
-navigating to AI Accounts. Both entry points open one named orchestrator with no
-internal orchestrator selector. AI Accounts opens it from Advanced → Model routing,
-one button per connected orchestrator, and from each connection tile; Main uses its saved workflow. The assignments
-remain shared across conversations. All five assignments belong to that workflow. Helper, Router and
-Shared backup can use another orchestrator without becoming global settings.
-The shared connected-model predicate feeds workflow choices, routing responses
-and configuration entry points. An orchestrator needs at least one connected
-model, independently of role assignments. A dialog whose connection disappears
-retains its named scope and asks to connect a model; it never selects another
-orchestrator. Retained saved assignments remain stored for reconnection.
-Catalogue failure after a connection has been observed retains its error; an
-unconnected, unconfigured catalogue does not create a selectable workflow.
-Workflow responses keep a disconnected orchestrator with `connected: false` so
-saved routing survives; the new-session dialog, like Chat mode, offers it only
-when it is connected or still available (for example through Shared backup), and
-greys out a connected but unavailable choice with its reason.
-Auto identifies missing Senior, Junior or Router assignments. Opening configuration
-from its disabled state brings the first missing assignment into view.
-User-created temporary chats inherit Main instead of using a workspace default.
-The retired optional `temporaryChatRole` field is ignored in older settings;
-reads do not rewrite those files. New explicit routing saves omit it. Existing
-conversation records need no format change or historical conversion.
+Models (the routing file) is a shared Accounts surface with two setups. The
+owner setup has Senior, Junior, Router, Colleague, Fix it with AI, Explain &
+check and Quick helper; the team setup (`nonOwner`) has only the four helpers.
+Main chat (Auto, Senior, Junior, review, Deslop) always resolves through the
+owner setup, whose Senior and Junior share one tool; a non-owner's helpers
+resolve through the team setup. Each role holds an exact selection, `null`
+(off), `{ follows: role }`, or nothing. Saves are atomic and revision-checked in
+private installation state at `ai-connections/routing.json` (schema 5);
+unreadable settings are preserved for recovery and older formats require the
+explicit stopped-service upgrade. Only the owner saves either setup; the team
+setup refuses personal (`ownerOnly`) selections per field. The server validates
+changed assignments against their destination catalogue; an unrelated edit
+preserves unchanged unavailable references and their recommendation
+provenance. Execution validates its actual destination again. A save changes
+future work only; it does not retarget active agents or a person's own
+Colleague choice.
 
-After connecting an account, the form retains the orchestrator selected during
-setup. It shows only that workflow's optional suggestions through the connected
-provider and selected orchestrator, with separate Current and Suggested model
-lines and access scope. A shared native key being ready for another orchestrator
-does not expand this scope. Keep current routing leaves the connection available.
-Apply saves only selected changes within the named orchestrator; reads, previews
-and saves all carry that scope. One Configure routing action opens the same
-workflow's editor, including when no changes are suggested. Cross-orchestrator
-model choices load on demand when customizing Helper, Router or Shared backup.
-The connection-result view has no workflow selector or audience preview. Native
-login completion names Codex login or Claude login explicitly.
+The read view returns, per setup and role, the saved value, whether it is
+configured, the effective selection (following `follows`), the followed role,
+the recommendation, the choices with access and tool, and any error, plus the
+host's `team` facts (`available`, `ownerName`, `memberCount`) and the viewer's
+decisions. Preview evaluates a draft for both setups without writing.
+`preferProvider: { setup, modelProviderId, engineId }` restricts that setup's
+recommendations to one provider in one tool when it offers a valid choice; AI
+onboarding's Use as main AI and the team card use it. Successful sign-in, key
+setup and session creation fill absent owner roles from recommendations;
+repeating setup preserves every saved choice, including an explicit off role.
 
-Accounts delegates saved and unsaved previews to the central terminal runtime,
-using the same connection facts and purpose resolver as Send. Each assignment
-shows "Collaborators" with the effective model, shared backup or access
-restriction. There is no separate audience preview or explanatory role copy.
-Member reads expose their own result and cannot save
-or evaluate drafts. A foreign Backup moves both effective Senior and Junior even
-without review. Review uses effective Senior; Auto resolves Router, Senior and
-Junior through the same collaborator fallback policy, validating each purpose.
-Connection identities never enter this response.
-Scoped reads accept `engineId`; they discover catalogues only for that engine
-and the destinations of its saved assignments. Other engines contribute their
-configured model snapshots. Opening a cross-orchestrator model picker loads
-`includeOtherModels` in a separate query, preserving the visible form and draft.
-Caches distinguish orchestrator, expanded choices, project and actor. Scoped
-preview and Save reject edits or Helper acknowledgements for another orchestrator.
-OpenCode catalogue refreshes always use the clean catalogue process, including
-when a managed chat process is running; runtime output limits and defaults must
-not invalidate a verified provider connection. Pages are combined only at one revision, including models
-outside the default provider page. A catalogue failure stays visible and does
-not erase saved choices. Neither reading nor previewing persists configuration.
-Lightweight workflow inspection checks current access to saved pairs and backups.
-It checks the full recommendation candidates only when a successfully read
-catalogue has an unconfigured Senior or Junior role. Explicit empty roles are
-configured choices; access results are reused only within that inspection.
-Successful native sign-in, API-key setup and explicit new-session creation
-initialize missing roles for usable orchestrators from the same recommendations.
-The read-only setup preview shows exactly those proposed assignments. First
-creation can be initiated by a collaborator using included OpenCode; this internal
-initialization accepts workflow IDs, never user assignments. Editing or disabling
-roles remains owner-only. Repeating setup
-preserves every saved choice, including an explicit empty role. A workflow needs
-usable Senior and Junior before initialization; a disconnected engine does not get
-a profile merely because independent helpers are available elsewhere. Routing
-setup failures are reported separately from a successfully connected key.
-Native Codex and Claude authentication retain that routing result in the current
-auth session, so the protected completion read includes it after the terminal
-closes. The login component emits the confirmed account to its existing parent,
-which opens the routing proposal and carries any setup warning. Immediate login
-completion uses the same path as realtime or polling completion. Overlapping or
-cancelled login reads cannot reopen the proposal, and refreshing ordinary account
-status does not imply a new successful login. This adds no saved account format.
+`ModelRoutingForm` renders Models wherever it is opened: AI setup's Models
+summary and Review models, the connection dialogs, and the owner-only chat-mode
+overlay. Rows (`ModelRoutingRow`) are grouped Main chat and Helpers, each with
+the role's exact purpose copy, a model picker and a separate thinking picker;
+the team setup shows Helpers only and lists no personal choices. A following
+role is one line ("Same as Senior · Opus 5.5 · High") with Change; an explicit
+row of a following role offers "Use Senior's model". The tool appears in the
+selection only when it differs from the model's default (`routingRunsInChoices`
+groups choices by provider, model and billing). A per-row Advanced opens only
+for a subscription model, which states its fixed tool ("Runs in Claude Code —
+required by your Claude plan."), or for a key model connected in several tools,
+which offers Runs in radios with Recommended on the default: the card's own tool
+when it can run the model, else OpenCode. Changing model keeps the row's tool
+when the new model runs there. The Owner (you) | Team members switch appears only
+to the owner, when the team setup has a value or the screen opened on it; the
+team view explains that main chat runs on the owner's setup with owner
+approval, and an empty team setup offers Add a DeepSeek key. Non-owners read the
+team setup with a note pointing to Colleague's own model menu.
+Review recommendations lists differing roles for the visible setup as one
+compact line each; Apply to form changes only the draft and Save persists.
+Unsaved edits refresh a cancellable preview ("Checking access…"); stale replies
+are ignored, a conflicting revision keeps the draft with Reload current
+choices, and viewer changes discard open reviews. Response caches include the
+host's actor, role and project identity.
 
-The form lists Router, Senior, Junior, Helper, then collaborator backup, with
-separate role headings. Shared backup is labelled "Fallback for personal models";
-accessible shared assignments retain their models when the backup changes.
-Unsaved edits refresh cancellable access checks beneath each assignment;
-stale replies are ignored. Conflicting saves preserve the draft. Migrated helper
-conflicts show a separate Confirm Helper action for the selected Helper;
-changing that model or thinking clears the pending acknowledgement. Save validates
-the Helper before removing the existing migration marker. These conflicts require
-the owner's explicit acknowledgement of a valid Helper choice;
-an unrelated edit keeps the migration evidence. Helper and Router assignments
-replace the former per-account Helper model controls and endpoints. Native
-helpers receive the central resolver's exact model; they do not read the retired
-preferences or select an implicit model. Only the stopped-service upgrade reads
-old helper choices and removes them after backup. Connection mutations reject
-unupgraded helper settings rather than erasing that evidence.
-Router appears first, below the outlined Review recommendations button. Its
-review lists changed selections against the current draft for the selected
-workflow, as `Orchestrator (model thinking)` in one compact line per role.
-Unchanged roles are omitted; No recommended changes replaces the button when
-there are no differences. Apply to form uses the reviewed recommendations without
-saving; Cancel preserves the draft. Save routing remains the persistence action.
-A routing reload or workflow/viewer change discards an open recommendation review;
-a conflicting revision prevents applying it.
-Late setup defaults refresh an untouched form, while edited roles or proposal
-checkboxes remain intact. Routing response caches include the host's actor,
-role and project identity; logout and actor switches cannot reuse another
-person's preview or configuration access. The standalone editor uses its local
-identity through the same optional public host injection.
+After connecting an account, the form opens in proposal mode with one checkbox
+per changed owner role (Current and Suggested lines with access); custom
+assignments start unchecked, Keep current models closes without saving and
+Configure AI setup opens the full form. Proposals come from global
+recommendations, or, for AI setup's Use as main AI, from a preview preferring
+that provider in the tool it is connected through. Saves submit only actual
+edits, so untouched absent roles stay absent.
 
 Recommendation values live in the checked-in `assistantRoutingScores.json`,
-keyed by exact orchestrator/provider/model route and role. The shared routing
-policy filters eligible choices before applying those scores. Every role prefers
-Claude/Anthropic, then Codex/OpenAI, then DeepSeek, then GLM. Scores remain integers
-from 1 to 10: Claude occupies 8–10, OpenAI 5–7, DeepSeek 4 and GLM 3. Within the
-native providers, Opus/Astra lead Senior, Opus/Sol lead Junior and Haiku/Luna
-lead Helper/Router. A score row may name a role's recommended thinking (Claude
-Code's Opus row recommends Medium for Junior); otherwise Senior and Junior
-recommend High and the background roles Low. Unlisted models use their provider's lowest tier, so versioned
-native names retain that priority; unknown providers use the JSON default 2,
-and OpenCode Zen's free Big Pickle has no score because it is never offered. Shared Backup uses Helper scores after
-excluding personal or unavailable connections. Score ties prefer
-the orchestrator being configured, then saved eligible choices; exact route
-ordering makes remaining ties stable. Recommendations never change saved
-assignments or execution destinations without an explicit save.
-Routing model dropdowns group indented model names beneath non-selectable
-orchestrator headings. Secondary text shows provider/access; Recommended marks
-the role recommendation, and disabled choices state their reason. The selected
-field retains its orchestrator identity. Vuetify's existing subheader filtering
-keeps only groups with matching models when searching model, orchestrator,
-provider or access. Dropdowns omit thinking; the adjacent role thinking control
-owns that selection. Recommendation reviews and effective collaborator labels retain
-the complete model/thinking identity.
+keyed by exact orchestrator/provider/model route and the scored roles Senior,
+Junior, Router and Quick helper. Colleague, Fix it with AI and Explain & check
+recommend following another role, except the team's Colleague, scored as
+Senior. Every role prefers Claude/Anthropic, then Codex/OpenAI, then DeepSeek,
+then GLM; ties prefer Claude Code, then the saved value, then the stable route
+key. A score row may name a role's thinking (Claude Code's Opus recommends
+Medium for Junior); otherwise Router and Quick helper recommend Low and the
+others High. Unlisted models use their provider's lowest tier; unknown
+providers use the JSON default 2, and OpenCode Zen's free Big Pickle is never
+offered. Recommendations never change saved assignments without an explicit
+save.
 These priorities apply only to qualified routing choices. Codex currently admits
 native OpenAI models, DeepSeek Flash, and GLM 5.3 through Z.AI Coding Plan. Both
 external routes passed managed Astra → coding model → Astra tool-history and
@@ -312,14 +242,6 @@ cross-model history is verified. A saved
 unqualified route reports an actionable error and is never silently replaced.
 Credential connectivity and Claude's protocol check do not establish Codex
 round-trip history compatibility.
-New-credential success refreshes the catalogue and opens one proposal with
-independent checkboxes for each affected workflow/role. Native login and API-key
-setup identify the actual connected engines; credentials are never copied.
-Proposals include only workflows with eligible Senior and Junior models.
-Changes to custom assignments start unchecked. Saves submit only actual edits,
-so untouched absent roles do not become deliberately disabled. Customize carries only selected
-proposals into the normal form; Keep current routing closes without saving.
-Adding a lower-priority provider does not replace a better choice.
 
 Curated external keys are independently saved and checked against Responses for
 Codex and Messages for Claude Code. Setup validates only the selected
@@ -435,13 +357,13 @@ display names. A card with configured connections (`aiOnboardingRows` matches th
 manager's rows to the card by native, curated and OpenCode ids) offers
 **Manage**: `AiSetup` creates one `useAiConnectionManager` (route following
 off), provides it, and opens `studio/AiProviderManage.vue` with that card's
-rows, each an `AiConnectionRow` (sign-in or key change, Model routing, Z.AI or
-Zen model access, Remove). The dialogs behind those actions are the moved
+rows, each an `AiConnectionRow` (sign-in or key change, Z.AI or Zen model
+access, Remove). The dialogs behind those actions are the moved
 `studio/AiConnectionDialogs.vue`, shared with AI Accounts. A card whose rows
 exist but no longer work shows Reconnect, which opens its connect step; cards
 with connections lead a configured setup. Once anything is configured, the collapsed
-`studio/AiSetupAdvanced.vue` under the cards holds Add a connection, Refresh,
-routing per connected orchestrator, Other connections (rows no card or free
+`studio/AiSetupAdvanced.vue` under the cards holds only plumbing: Add a
+connection, Refresh, Other connections (rows no card or free
 option matches, such as OpenCode Zen, with their model access) and every row
 by orchestrator; those other rows also count in the Connected strip. Who may
 use a connection is left to the host: `AiSetup` takes `owner-notice` and
@@ -451,14 +373,36 @@ name, `row` or `success`) that the onboarding shell and host forward; Manage,
 Advanced and each row pass it on. Manager rows carry the neutral `ownerOnly` and
 `modelProviderId` for it.
 
+Main AI is the card whose provider matches the owner setup's effective Senior;
+`aiOnboardingMainAi` labels it "DeepSeek, via Claude Code" when the Senior's
+tool is not one of the card's native tools. The crown stays the static mark of
+Claude's card. `connectedEngine` finds the tool a card's provider is actually
+connected through (the card's own tool first, then Claude Code, Codex,
+OpenCode); verification, Use as main AI (a `preferProvider` preview for that
+provider and tool, saving Senior, Junior, Router and Quick helper) and
+Colleague's switch use it. Colleague's switch passes the exact owner Colleague
+selection to the bridge's `select(assistantSelection)`. The DeepSeek card
+connects through Claude Code.
+
+`AiTeamSetupCard` appears in the overview for the owner when the host reports a
+team, the owner Senior is a connected Claude subscription model and the team
+setup has no configured role; Not now snoozes it per viewer for seven days in
+browser storage, and a `focus="team"` opening (the project list's Set up team AI
+via the account dialog's `section: "team"`) shows it regardless, or opens Models
+on Team members when there is no card to offer. Add a DeepSeek key runs the
+DeepSeek connect step inside Claude Code and, once DeepSeek works there,
+`fillTeamSetup` previews the team setup with `preferProvider` DeepSeek in Claude
+Code and saves its absent roles; the card then reads Team AI is ready with a
+one-line summary and Review team models. The overview's Models summary lists
+Senior, Junior and, with a team, Team members' Colleague, with Review models.
+
 `AiPersonalUse` (exported with `personalUsePlan`) is the single explanation of a
 personal-use plan. It maps `anthropic`, `openai` and `zai-coding-plan` to the
 plan and the provider whose terms make it personal, and renders an amber
 lock-icon **Personal use** chip (`chip`, or `badge` without a link inside list
 options), a `note` sentence, or a bare `link`; each link opens the same
-explanation dialog. Model routing marks available `ownerOnly` choices with the
-badge, adds Personal use to the selected field, and shows one note per personal
-provider the draft routes to. The provider key editor and the GLM Coding Plan
+explanation dialog. Models marks available `ownerOnly` choices with the badge
+and shows one note per personal provider the owner draft routes to. The provider key editor and the GLM Coding Plan
 form use it too; hosts reuse it in the `connection-access` slot.
 
 OpenCode connections retain the existing versioned file at

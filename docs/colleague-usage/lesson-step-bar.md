@@ -79,8 +79,8 @@ current one), then the beat's line:
 
 **Check my work on a reviewed step.** Some steps are checked by a review of
 your work: the bar's line (and the step in the Lesson pane) shows what the review
-looks for. **Check my work** uses your own AI (the Lesson review route in AI
-Accounts → Model routing) to look at the changes in your practice project
+looks for. **Check my work** uses your own AI (the **Explain & check** model in
+AI Accounts → Models) to look at the changes in your practice project
 (and, when the step says so, your coding chat); the line says **Checking your
 work with your AI…** for up to about a minute, without a Cancel. **Passed ✓**
 with the reviewer's comment passes the step for good. **Not yet:** says what

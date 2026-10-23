@@ -49,7 +49,7 @@ const plan = computed(() => personalUsePlan(props.providerId));
         <v-card-text>
           <p class="mb-3">This {{ plan.plan }} is a personal plan. Under {{ plan.provider }}'s terms only the person who subscribed may use it, so Vibe64 lets only the workspace owner work with it.</p>
           <p class="mb-3">Other people in this workspace cannot use it, even in the owner's projects. For them, the owner can connect a Workspace-use account, such as an API key billed by use.</p>
-          <p>In Model routing, <strong>Fallback for personal models</strong> chooses the Workspace-use model that serves them wherever routing names a personal one.</p>
+          <p>In Models, the <strong>Team members</strong> setup chooses the Workspace-use models they use.</p>
         </v-card-text>
         <v-card-actions>
           <v-spacer />

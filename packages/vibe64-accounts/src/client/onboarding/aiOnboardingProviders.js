@@ -5,7 +5,9 @@
 // heavier-use plan. budget is optional, given only where the advice differs
 // from the headline price (never above Claude's, which it would contradict). bullets: [aspect, rating 1-5, label]; 5
 // is reserved for Claude-level, 1-2 read as a warning. mark/shape: the provider's monogram tile.
-// connect: the existing AI Accounts route. access: "personal" serves only the
+// connect: the existing AI Accounts route, through the gold-standard tool (DeepSeek
+// runs inside Claude Code; Codex and OpenCode stay under a model's Advanced
+// "Runs in"). access: "personal" serves only the
 // owner where several people share one Vibe64. matches: which connections show it as Connected.
 // free: the one free option (GLM-4.7 Flash costs nothing on Z.AI's regular API,
 // docs.z.ai/guides/overview/pricing); it connects as its own card.
@@ -50,7 +52,7 @@ const AI_ONBOARDING_PROVIDERS = Object.freeze([
       step: "Top up your DeepSeek balance. Come back here when it shows credit." },
     haveTitle: "Already have credit", have: "Already have a key? Connect",
     connectStep: { title: "Paste your DeepSeek API key", body: "Create an API key on DeepSeek, then paste it here." },
-    connect: { engineId: "codex", modelProviderId: "deepseek", access: "workspace" },
+    connect: { engineId: "claude", modelProviderId: "deepseek", access: "workspace" },
     matches: { native: [], curated: ["deepseek"], opencode: ["deepseek"] }
   }),
   Object.freeze({

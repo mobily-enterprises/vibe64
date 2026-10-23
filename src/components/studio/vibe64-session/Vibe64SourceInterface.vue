@@ -13,7 +13,7 @@
       <div class="source-interface__explanation" :class="{ 'source-interface__explanation--empty': !fileInterpretation && !activeFileInterpretation }">
         <slot v-if="activeFileInterpretation" name="explanation" :saved-body="fileInterpretation?.body || ''" />
         <LongTextPreviewBlocks v-else-if="fileInterpretation" :blocks="parseLongTextReviewBlocks(fileInterpretation.body)" @link-click="openProgramLink" />
-        <p v-else class="source-interface__hint">{{ !assistantAvailable ? 'Choose a Helper in Model routing to generate an explanation.' : 'No explanation yet.' }}</p>
+        <p v-else class="source-interface__hint">{{ !assistantAvailable ? 'Choose an Explain & check model in Models to generate an explanation.' : 'No explanation yet.' }}</p>
       </div>
     </section>
     <nav v-if="programs.length" class="source-interface__membership" aria-label="Program membership">

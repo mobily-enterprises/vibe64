@@ -1,10 +1,13 @@
-import { computed, createRenderer, nextTick, ref, ssrContextKey } from "vue";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { computed, createRenderer, createSSRApp, nextTick, ref, ssrContextKey } from "vue";
+import { renderToString } from "@vue/server-renderer";
+import { createVuetify } from "vuetify";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ resource: null, scopeKey: null, request: vi.fn(), command: null }));
 vi.mock("../../packages/vibe64-accounts/src/client/composables/useModelRouting.js", () => ({
   useModelRouting: () => ({ resource: mocks.resource, scopeKey: mocks.scopeKey,
     engines: computed(() => mocks.resource.data.value?.engines || []),
+    team: computed(() => mocks.resource.data.value?.team || { available: false, ownerName: "", memberCount: 0 }),
     setups: computed(() => mocks.resource.data.value?.setups || null), loadError: ref("") })
 }));
 vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
@@ -12,42 +15,56 @@ vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
 }));
 vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({ getHttpWebClient: () => ({ request: mocks.request }) }));
 vi.mock("../../packages/vibe64-accounts/src/client/lib/accountsGateApi.js", () => ({ ACCOUNTS_ENDPOINT: "/api/accounts" }));
-vi.mock("vuetify", () => ({ useDisplay: () => ({ smAndDown: ref(false) }) }));
 import ModelRoutingForm from "../../packages/vibe64-accounts/src/client/studio/ModelRoutingForm.vue";
+import ModelRoutingRow from "../../packages/vibe64-accounts/src/client/studio/ModelRoutingRow.vue";
 
-const selection = (engineId, provider, modelId, selectionSource = "recommended") => ({
+const VARIANTS = [{ id: "low", label: "Low" }, { id: "medium", label: "Medium" }, { id: "high", label: "High" }];
+const selection = (engineId, provider, modelId, variantId = "high", selectionSource = "recommended") => ({
   schema: "vibe64.assistant-selection.v1", engineId, modelProviderId: provider, modelId,
-  agentId: engineId, variantId: "", catalogRevision: `sha256:${"a".repeat(64)}`, selectionSource
+  agentId: engineId, variantId, catalogRevision: `sha256:${"a".repeat(64)}`, selectionSource
 });
-const astra = selection("codex", "openai", "gpt-6-astra");
-const deepseek = selection("codex", "deepseek", "deepseek-flash");
-const foreign = selection("opencode", "deepseek", "deepseek-flash");
-const pickle = selection("opencode", "opencode", "big-pickle");
+const LABELS = { opus: "Opus 5.5", haiku: "Haiku 5.5", "deepseek-v4-pro": "DeepSeek V4 Pro", "deepseek-flash": "DeepSeek V4.1 Flash" };
+const opus = selection("claude", "anthropic", "opus");
+const opusMedium = selection("claude", "anthropic", "opus", "medium");
+const haiku = selection("claude", "anthropic", "haiku", "low");
+const proClaude = selection("claude", "deepseek", "deepseek-v4-pro");
+const proCodex = selection("codex", "deepseek", "deepseek-v4-pro");
+const flash = selection("claude", "deepseek", "deepseek-flash", "low");
+const choice = (item) => ({ ...item, label: LABELS[item.modelId], engineLabel: item.engineId === "claude" ? "Claude Code" : "Codex",
+  providerLabel: item.modelProviderId === "anthropic" ? "Anthropic" : "DeepSeek", variants: VARIANTS, available: true,
+  ownerOnly: item.modelProviderId === "anthropic", endpointCode: item.modelProviderId === "anthropic" ? "claude_subscription" : "",
+  accessLabel: item.modelProviderId === "anthropic" ? "Personal use" : "Workspace use", capabilities: { toolcall: true } });
+const OWNER_CHOICES = [opus, haiku, proClaude, proCodex, flash].map(choice);
+const TEAM_CHOICES = OWNER_CHOICES.filter(({ ownerOnly }) => !ownerOnly);
 const OWNER_ROLES = ["senior", "junior", "router", "colleague", "fix", "explain", "quickHelper"];
 const TEAM_ROLES = ["colleague", "fix", "explain", "quickHelper"];
-const ownerRecommendations = { senior: astra, colleague: { follows: "senior" }, fix: { follows: "junior" }, explain: { follows: "quickHelper" } };
-const teamRecommendations = { fix: { follows: "colleague" }, explain: { follows: "quickHelper" } };
-function resourceData() {
-  const choices = [astra, deepseek, foreign, pickle].map((item) => ({ ...item, label: item.modelId, engineLabel: item.engineId,
-    providerLabel: item.modelProviderId, accessLabel: item === astra ? "Personal use" : "Workspace use", ownerOnly: item === astra, available: true, variants: [] }));
-  const owner = { senior: astra, junior: { ...astra, selectionSource: "explicit" }, router: pickle, quickHelper: pickle,
-    colleague: { follows: "senior" }, fix: { follows: "junior" } };
-  const role = (values, name, recommendation) => ({ value: values[name] ?? null, configured: Object.hasOwn(values, name),
+const GOLD = { senior: opus, junior: opusMedium, router: haiku, quickHelper: haiku,
+  colleague: { follows: "senior" }, fix: { follows: "junior" }, explain: { follows: "quickHelper" } };
+const TEAM_RECOMMENDED = { colleague: proClaude, fix: { follows: "colleague" }, explain: { follows: "quickHelper" }, quickHelper: flash };
+function resourceData({ owner = GOLD, nonOwner = {}, canConfigure = true } = {}) {
+  const role = (values, name, recommendation, choices) => ({ value: values[name] ?? null, configured: Object.hasOwn(values, name),
     recommendation, choices, error: "" });
-  return { ok: true, revision: 3, canConfigure: true, team: { available: true, ownerName: "Owner", memberCount: 2 },
-    engines: [{ engineId: "codex", label: "Codex", connected: true }],
+  return { ok: true, revision: 3, canConfigure, team: { available: true, ownerName: "Tony", memberCount: 2 },
+    engines: [{ engineId: "claude", label: "Claude Code", connected: true }, { engineId: "codex", label: "Codex", connected: true }],
     setups: {
-      owner: { roles: Object.fromEntries(OWNER_ROLES.map((name) => [name, role(owner, name, ownerRecommendations[name] || deepseek)])), preview: {} },
-      nonOwner: { roles: Object.fromEntries(TEAM_ROLES.map((name) => [name, role({ colleague: pickle }, name, teamRecommendations[name] || pickle)])), preview: {} }
+      owner: { roles: Object.fromEntries(OWNER_ROLES.map((name) => [name, role(owner, name, GOLD[name], OWNER_CHOICES)])), preview: {} },
+      nonOwner: { roles: Object.fromEntries(TEAM_ROLES.map((name) => [name, role(nonOwner, name, TEAM_RECOMMENDED[name], TEAM_CHOICES)])), preview: {} }
     } };
 }
 let app;
-function mount(props = {}) {
+function mount(component, props = {}) {
   const renderer = createRenderer({ createComment: (text) => ({ text }), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
-  app = renderer.createApp({ ...ModelRoutingForm, render: () => null }, props);
+  const events = [];
+  app = renderer.createApp({ ...component, render: () => null }, { ...props, onUpdate: (value) => events.push(["update", value]),
+    onAddTeamKey: () => events.push(["add-team-key"]), onConnectProvider: (id) => events.push(["connect-provider", id]) });
   app.provide(ssrContextKey, { modules: new Set() });
   app.mount({});
-  return app._instance.setupState;
+  return Object.assign(app._instance.setupState, { events });
+}
+async function render(component, props = {}) {
+  const view = createSSRApp(component, props);
+  view.use(createVuetify({ ssr: true }));
+  return (await renderToString(view)).replace(/<!--.*?-->/gu, "").replace(/&#39;/gu, "'").replace(/\s+/gu, " ");
 }
 beforeEach(() => {
   vi.useFakeTimers();
@@ -55,113 +72,207 @@ beforeEach(() => {
   mocks.resource = { data: ref(resourceData()), isInitialLoading: ref(false), loadError: ref(""), reload: vi.fn(async () => {}) };
   mocks.request.mockReset();
 });
-afterEach(() => { app?.unmount(); vi.useRealTimers(); });
+afterEach(() => { app?.unmount(); app = null; vi.useRealTimers(); });
 
-it("hydrates both setups, keeps absent roles absent and sends only edited roles", () => {
-  const state = mount();
-  expect(state.baseRevision).toBe(3);
-  expect(state.draft.owner.router.modelId).toBe("big-pickle");
-  expect(Object.hasOwn(state.draft.owner, "explain")).toBe(false);
-  expect(state.draft.nonOwner).toEqual({ colleague: pickle });
-  expect(state.choiceId(deepseek)).not.toBe(state.choiceId(foreign));
-  expect(mocks.command.buildRawPayload()).toEqual({ revision: 3 });
-  state.choose("owner", "quickHelper", state.choiceId(foreign));
-  state.choose("nonOwner", "fix", "follows:colleague");
-  expect(mocks.command.buildRawPayload()).toEqual({ revision: 3,
-    owner: { quickHelper: { ...foreign, selectionSource: "explicit" } }, nonOwner: { fix: { follows: "colleague" } } });
+describe("setups", () => {
+  it("hydrates both setups, keeps absent roles absent and sends only edited roles", () => {
+    const owner = { ...GOLD };
+    delete owner.explain;
+    mocks.resource.data.value = resourceData({ owner });
+    const state = mount(ModelRoutingForm);
+    expect(state.baseRevision).toBe(3);
+    expect(Object.hasOwn(state.draft.owner, "explain")).toBe(false);
+    expect(state.draft.nonOwner).toEqual({});
+    expect(mocks.command.buildRawPayload()).toEqual({ revision: 3 });
+    state.update("owner", "quickHelper", { ...flash, selectionSource: "explicit" });
+    state.update("nonOwner", "fix", { follows: "colleague" });
+    expect(mocks.command.buildRawPayload()).toEqual({ revision: 3,
+      owner: { quickHelper: { ...flash, selectionSource: "explicit" } }, nonOwner: { fix: { follows: "colleague" } } });
+  });
+
+  it("groups the owner setup into Main chat and Helpers, with quiet Same as rows", async () => {
+    const html = await render(ModelRoutingForm);
+    expect(html).toContain("Models");
+    expect(html.indexOf("Main chat")).toBeLessThan(html.indexOf("Helpers"));
+    for (const [role, line] of [["Colleague", "Same as Senior · Opus 5.5 · High"], ["Fix it with AI", "Same as Junior · Opus 5.5 · Medium"],
+      ["Explain &amp; check", "Same as Quick helper · Haiku 5.5 · Low"]]) {
+      expect(html).toContain(role);
+      expect(html).toContain(line);
+    }
+    expect(html).toContain("Plans, reviews and Deslop in main chat. Your most capable model.");
+    expect(html).toContain("Titles, commit messages, prompt hints and summaries.");
+    expect(html).not.toContain("Team members");
+  });
+
+  it("Change gives a Same as row its followed model; an explicit row returns with Use Senior's model", () => {
+    const state = mount(ModelRoutingForm);
+    expect(state.followedLabel("owner", "colleague")).toBe("Opus 5.5 · High");
+    expect(state.defaultFollows("owner", "colleague")).toBe("");
+    state.changeFollowing("owner", "colleague");
+    expect(state.draft.owner.colleague).toEqual({ ...opus, selectionSource: "explicit" });
+    expect(state.defaultFollows("owner", "colleague")).toBe("senior");
+    expect(state.defaultFollows("owner", "senior")).toBe("");
+    expect(state.defaultFollows("nonOwner", "colleague")).toBe("");
+    state.update("owner", "colleague", { follows: "senior" });
+    expect(mocks.command.buildRawPayload()).toEqual({ revision: 3 });
+  });
+
+  it("shows Owner | Team members only to the owner once a team model exists or from the team card", () => {
+    expect(mount(ModelRoutingForm).showSwitch).toBe(false);
+    app.unmount();
+    expect(mount(ModelRoutingForm, { initialSetup: "nonOwner" })).toMatchObject({ showSwitch: true, setup: "nonOwner", teamEmpty: true });
+    app.unmount();
+    mocks.resource.data.value = resourceData({ nonOwner: { colleague: proClaude } });
+    expect(mount(ModelRoutingForm)).toMatchObject({ showSwitch: true, setup: "owner", teamEmpty: false });
+    app.unmount();
+    mocks.resource.data.value = resourceData({ nonOwner: { colleague: proClaude }, canConfigure: false });
+    expect(mount(ModelRoutingForm, { readonly: true })).toMatchObject({ showSwitch: false, setup: "nonOwner", canEdit: false });
+  });
+
+  it("explains the team setup to the owner and lists only team-usable models", async () => {
+    mocks.resource.data.value = resourceData({ nonOwner: { colleague: proClaude, fix: { follows: "colleague" }, explain: { follows: "quickHelper" }, quickHelper: flash } });
+    const html = await render(ModelRoutingForm, { initialSetup: "nonOwner" });
+    expect(html).toContain("Owner (you)");
+    expect(html).toContain("Team members' Colleague, Fix it with AI, Explain &amp; check and Quick helper use these models. Main chat always runs on your setup, and you approve what team members send to it.");
+    expect(html).toContain("Personal plans, like your Claude plan, can't be used by team members.");
+    expect(html).toContain("Same as Colleague · DeepSeek V4 Pro · High");
+    expect(html).toContain("Same as Quick helper · DeepSeek V4.1 Flash · Low");
+    expect(html).not.toContain("Main chat</h3>");
+    expect(html).not.toContain("Personal use");
+  });
+
+  it("offers an empty team setup's DeepSeek key, and tells a member to ask the owner", async () => {
+    const owner = await render(ModelRoutingForm, { initialSetup: "nonOwner" });
+    expect(owner).toContain("No team AI yet. Team members can't open projects until you add one.");
+    expect(owner).toContain("Add a DeepSeek key");
+    mocks.resource.data.value = resourceData({ canConfigure: false });
+    const member = await render(ModelRoutingForm, { readonly: true });
+    expect(member).toContain("No team AI yet. Ask Tony to set up AI for team members.");
+    expect(member).toContain("Change your own Colleague's model from Colleague's menu.");
+    expect(member).not.toContain("Add a DeepSeek key");
+    expect(member).not.toContain(">Save<");
+  });
+
+  it("reviews the active setup's recommended changes before applying them to the form", () => {
+    mocks.resource.data.value = resourceData({ nonOwner: { colleague: proCodex } });
+    const state = mount(ModelRoutingForm);
+    expect(state.recommendedChanges).toEqual([]);
+    state.activeSetup = "nonOwner";
+    expect(state.recommendedChanges.map(({ role }) => role)).toEqual(["colleague", "fix", "explain", "quickHelper"]);
+    state.reviewRecommendations();
+    state.useRecommendations();
+    expect(state.draft.nonOwner).toMatchObject({ colleague: proClaude, fix: { follows: "colleague" }, quickHelper: flash });
+  });
+
+  it("ignores superseded draft previews and preserves edits when the saved revision changes", async () => {
+    const first = Promise.withResolvers();
+    const second = Promise.withResolvers();
+    mocks.request.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const state = mount(ModelRoutingForm);
+    state.update("owner", "quickHelper", flash);
+    await nextTick();
+    await vi.advanceTimersByTimeAsync(250);
+    expect(state.previewPending).toBe(true);
+    expect(mocks.request.mock.calls[0][0]).toBe("/api/accounts/model-routing/preview");
+    state.update("owner", "quickHelper", { ...flash, variantId: "high" });
+    await nextTick();
+    await vi.advanceTimersByTimeAsync(250);
+    expect(mocks.request.mock.calls[0][1].signal.aborted).toBe(true);
+    second.resolve({ ...resourceData(), marker: "current" });
+    await nextTick();
+    await nextTick();
+    first.resolve({ ...resourceData(), marker: "stale" });
+    await nextTick();
+    await nextTick();
+    expect(state.preview.marker).toBe("current");
+    mocks.resource.data.value = { ...resourceData(), revision: 4 };
+    await nextTick();
+    expect(state.stale).toBe(true);
+    expect(state.draft.owner.quickHelper.variantId).toBe("high");
+  });
+
+  it("drops an unsaved draft immediately when the active viewer changes", async () => {
+    const state = mount(ModelRoutingForm);
+    state.update("owner", "quickHelper", flash);
+    mocks.scopeKey.value = "member:first";
+    expect(state.baseRevision).toBe(null);
+    expect(state.draft).toEqual({ owner: {}, nonOwner: {} });
+    mocks.resource.data.value = { ...resourceData(), canConfigure: false };
+    await nextTick();
+    expect(state.draft.owner.quickHelper.modelId).toBe("haiku");
+  });
 });
 
-it("offers Same as only to following roles and groups model choices by tool", () => {
-  const state = mount();
-  const fix = state.items("owner", "fix");
-  expect(fix.filter((item) => item.id.startsWith("follows:")).map((item) => item.label))
-    .toEqual(["Same as Senior", "Same as Junior", "Same as Router", "Same as Explain & check", "Same as Quick helper"]);
-  expect(state.items("owner", "senior").some((item) => item.id.startsWith("follows:"))).toBe(false);
-  expect(fix.filter((item) => item.type === "subheader").map((item) => item.label)).toEqual(["codex", "opencode"]);
-  expect(fix.find((item) => item.id === state.choiceId(astra))).toMatchObject({ personal: true, props: { subtitle: "openai" } });
-  expect(state.personalProviders).toEqual(["openai"]);
-  expect(state.selectionLabel("owner", "colleague", { follows: "senior" })).toBe("Same as Senior");
+describe("proposals after a connection", () => {
+  it("proposes owner roles whose global recommendation moves onto the connection", async () => {
+    mocks.resource.data.value.setups.owner.roles.router.recommendation = flash;
+    const state = mount(ModelRoutingForm, { connectionId: "deepseek" });
+    expect(state.baseRevision).toBe(null);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state.suggestedChanges.map(({ id }) => id)).toEqual(["owner:router"]);
+    expect(state.proposals).toEqual(["owner:router"]);
+    expect(mocks.command.buildRawPayload().owner).toEqual({ router: flash });
+  });
+
+  it("Use as main AI proposes Senior, Junior, Router and Quick helper on that provider and tool, even deliberate ones", async () => {
+    const preferred = Object.fromEntries(Object.entries({ senior: proClaude, junior: { ...proClaude, variantId: "medium" }, router: flash,
+      quickHelper: flash, colleague: { follows: "senior" } }).map(([role, recommendation]) => [role, { recommendation }]));
+    mocks.request.mockResolvedValueOnce({ ok: true, setups: { owner: { roles: preferred } } });
+    mocks.resource.data.value.setups.owner.roles.senior.value = { ...opus, selectionSource: "explicit" };
+    const state = mount(ModelRoutingForm, { connectionId: "deepseek", preferEngineId: "claude" });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.request).toHaveBeenCalledWith("/api/accounts/model-routing/preview", { method: "POST", signal: undefined,
+      body: { revision: 3, preferProvider: { setup: "owner", modelProviderId: "deepseek", engineId: "claude" } } });
+    expect(state.proposals).toEqual(["owner:senior", "owner:junior", "owner:router", "owner:quickHelper"]);
+    expect(Object.keys(mocks.command.buildRawPayload().owner)).toEqual(["senior", "junior", "router", "quickHelper"]);
+  });
 });
 
-it("shows the team setup only to the owner and never previews for a reader", async () => {
-  expect(mount().visibleSetups.map(({ id }) => id)).toEqual(["owner", "nonOwner"]);
-  app.unmount();
-  mocks.resource.data.value.canConfigure = false;
-  const state = mount({ readonly: true });
-  expect(state.canEdit).toBe(false);
-  expect(state.visibleSetups.map(({ id }) => id)).toEqual(["owner"]);
-  await vi.advanceTimersByTimeAsync(300);
-  expect(mocks.request).not.toHaveBeenCalled();
-});
+describe("rows", () => {
+  const role = (id) => ({ id, label: id, description: `${id} description` });
 
-it("reviews recommended changes across both setups before applying them to the form", () => {
-  const state = mount();
-  expect(state.recommendedChanges.map(({ setup, role }) => `${setup}.${role}`)).toEqual([
-    "owner.junior", "owner.router", "owner.explain", "owner.quickHelper", "nonOwner.fix", "nonOwner.explain", "nonOwner.quickHelper"]);
-  state.reviewRecommendations();
-  state.useRecommendations();
-  expect(state.draft.owner.junior.modelId).toBe("deepseek-flash");
-  expect(state.draft.nonOwner.quickHelper.modelId).toBe("big-pickle");
-  expect(state.draft.nonOwner.fix).toEqual({ follows: "colleague" });
-  expect(state.recommendationReview).toBe(null);
-});
+  it("shows a subscription's fixed tool under Advanced and no tool suffix", () => {
+    const row = mount(ModelRoutingRow, { role: role("senior"), value: opus, choices: OWNER_CHOICES });
+    expect([row.hasAdvanced, row.offDefault, row.fixedLine]).toEqual([true, false, "Runs in Claude Code — required by your Claude plan."]);
+    expect(row.items.find(({ id }) => id === row.pickerValue)).toMatchObject({ label: "Opus 5.5", personal: true, providerLabel: "Anthropic" });
+  });
 
-it("ignores superseded draft previews and preserves edits when the saved revision changes", async () => {
-  const first = Promise.withResolvers();
-  const second = Promise.withResolvers();
-  mocks.request.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
-  const state = mount();
-  state.choose("owner", "quickHelper", state.choiceId(deepseek));
-  await nextTick();
-  await vi.advanceTimersByTimeAsync(250);
-  expect(state.previewPending).toBe(true);
-  expect(mocks.request.mock.calls[0][0]).toBe("/api/accounts/model-routing/preview");
-  state.choose("owner", "quickHelper", state.choiceId(foreign));
-  await nextTick();
-  await vi.advanceTimersByTimeAsync(250);
-  expect(mocks.request.mock.calls[0][1].signal.aborted).toBe(true);
-  second.resolve({ ...resourceData(), marker: "current" });
-  await nextTick();
-  await nextTick();
-  first.resolve({ ...resourceData(), marker: "stale" });
-  await nextTick();
-  await nextTick();
-  expect(state.preview.marker).toBe("current");
-  mocks.resource.data.value = { ...resourceData(), revision: 4 };
-  await nextTick();
-  expect(state.stale).toBe(true);
-  expect(state.baseRevision).toBe(3);
-  expect(state.draft.owner.quickHelper.engineId).toBe("opencode");
-});
+  it("lists each model once, with Runs in only where a real choice exists, defaulting DeepSeek to Claude Code", () => {
+    const row = mount(ModelRoutingRow, { role: role("junior"), value: proClaude, choices: OWNER_CHOICES, recommendation: proClaude });
+    expect(row.items.map(({ label }) => label)).toEqual(["Opus 5.5", "Haiku 5.5", "DeepSeek V4 Pro", "DeepSeek V4.1 Flash"]);
+    expect(row.items.find(({ label }) => label === "DeepSeek V4 Pro")).toMatchObject({ recommended: true, defaultEngineId: "claude" });
+    expect([row.hasAdvanced, row.runsIn, row.offDefault, row.fixedLine]).toEqual([true, ["claude", "codex"], false, ""]);
+    row.chooseRunsIn("codex");
+    expect(row.events.at(-1)).toEqual(["update", { ...proCodex, selectionSource: "explicit" }]);
+    app.unmount();
+    const onCodex = mount(ModelRoutingRow, { role: role("junior"), value: proCodex, choices: OWNER_CHOICES });
+    expect(onCodex.offDefault).toBe(true);
+    // Choosing another model takes its default tool and keeps the thinking it offers.
+    onCodex.chooseModel(onCodex.items.find(({ label }) => label === "DeepSeek V4.1 Flash").id);
+    expect(onCodex.events.at(-1)).toEqual(["update", { ...flash, variantId: "high", selectionSource: "explicit" }]);
+    app.unmount();
+    const single = mount(ModelRoutingRow, { role: role("quickHelper"), value: flash, choices: OWNER_CHOICES });
+    expect([single.hasAdvanced, single.elsewhere]).toEqual([false, ["codex", "opencode"]]);
+  });
 
-it("refreshes post-connection choices and proposes owner roles that move onto the connection", async () => {
-  const refreshed = Promise.withResolvers();
-  mocks.resource.reload.mockImplementation(async () => refreshed.promise);
-  const state = mount({ connectionId: "deepseek" });
-  expect(state.baseRevision).toBe(null);
-  expect(mocks.resource.reload).toHaveBeenCalledOnce();
-  refreshed.resolve();
-  await vi.advanceTimersByTimeAsync(0);
-  expect(state.baseRevision).toBe(3);
-  expect(state.suggestedChanges.map(({ id }) => id)).toEqual(["owner:junior", "owner:router", "owner:quickHelper"]);
-  // A deliberately chosen Junior stays unchecked.
-  expect(state.proposals).toEqual(["owner:router", "owner:quickHelper"]);
-  const payload = mocks.command.buildRawPayload();
-  expect(payload.owner.junior).toBeUndefined();
-  expect(payload.owner.router.modelId).toBe("deepseek-flash");
-  expect(payload.nonOwner).toBeUndefined();
-  state.customize();
-  expect(state.draft.owner.router.modelId).toBe("deepseek-flash");
-  expect(state.proposalMode).toBe(false);
-});
+  it("keeps an unavailable saved choice visible and disabled", () => {
+    const gone = selection("codex", "openai", "gpt-6-astra");
+    const row = mount(ModelRoutingRow, { role: role("senior"), value: gone, choices: OWNER_CHOICES });
+    expect(row.pickerValue).toBe("saved");
+    expect(row.items[0]).toMatchObject({ label: "gpt-6-astra", status: "Unavailable saved choice", props: { disabled: true } });
+    expect(row.hasAdvanced).toBe(false);
+  });
 
-it("drops an unsaved draft immediately when the active viewer changes", async () => {
-  const state = mount();
-  state.choose("owner", "quickHelper", state.choiceId(deepseek));
-  mocks.scopeKey.value = "member:first";
-  expect(state.baseRevision).toBe(null);
-  expect(state.draft).toEqual({ owner: {}, nonOwner: {} });
-  mocks.resource.data.value = { ...resourceData(), canConfigure: false };
-  await nextTick();
-  expect(state.draft.owner.quickHelper.modelId).toBe("big-pickle");
+  it("renders the tool beside the model only off its default, and Use Senior's model on an explicit following role", async () => {
+    const offDefault = await render(ModelRoutingRow, { role: role("junior"), value: proCodex, choices: OWNER_CHOICES });
+    expect(offDefault).toContain("runs in Codex");
+    expect(offDefault).toContain("Advanced");
+    const explicit = await render(ModelRoutingRow, { role: role("colleague"), value: proClaude, choices: OWNER_CHOICES, defaultFollows: "senior" });
+    expect(explicit).not.toContain("runs in");
+    expect(explicit).toContain("Use Senior's model");
+    const follows = await render(ModelRoutingRow, { role: role("fix"), value: { follows: "junior" }, followedLabel: "Opus 5.5 · Medium", choices: OWNER_CHOICES });
+    expect(follows).toContain("Same as Junior · Opus 5.5 · Medium");
+    expect(follows).toContain("Change");
+    expect(follows).not.toContain("Advanced");
+  });
 });

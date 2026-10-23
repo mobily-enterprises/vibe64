@@ -20,8 +20,7 @@ const props = defineProps({
 
 const ENGINES = { claude: "Claude Code", codex: "Codex", opencode: "OpenCode" };
 const {
-  applyZenModelAccess, connectedWorkflows, manageConfiguredAi, requestModelAccess, requestRemove, routingEngineId,
-  routingOpen, updatingModelAccessProviderId, zenAccessTitle, zenCheck, zenCheckIsRunning, zenCheckProgress, zenCheckSummary
+  applyZenModelAccess, manageConfiguredAi, requestModelAccess, requestRemove, updatingModelAccessProviderId, zenAccessTitle, zenCheck, zenCheckIsRunning, zenCheckProgress, zenCheckSummary
 } = injectAiConnectionManager();
 
 const working = computed(() => props.account.kind === "opencode" ? props.account.connected !== false : props.account.connected === true);
@@ -39,12 +38,6 @@ const status = computed(() => {
 const keyHint = computed(() => working.value && props.account.kind === "opencode" ? props.account.keyHint : "");
 const native = computed(() => ["claude", "codex"].includes(props.account.kind));
 const changeLabel = computed(() => !working.value ? "Reconnect" : native.value ? "Manage sign-in" : "Replace key");
-const routable = computed(() => working.value && (connectedWorkflows.value || []).some(({ engineId }) => engineId === props.account.engineId));
-
-function openRouting() {
-  routingEngineId.value = props.account.engineId;
-  routingOpen.value = true;
-}
 </script>
 
 <template>
@@ -148,7 +141,6 @@ function openRouting() {
       <v-btn :color="working ? undefined : 'warning'" :variant="working ? 'tonal' : 'flat'" @click="manageConfiguredAi(account)">
         {{ changeLabel }}
       </v-btn>
-      <v-btn v-if="routable" variant="text" @click="openRouting">Model routing</v-btn>
       <v-btn class="ai-row__remove" color="error" variant="text" @click="requestRemove(account)">
         Remove
       </v-btn>

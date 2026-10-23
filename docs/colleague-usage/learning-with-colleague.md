@@ -83,8 +83,8 @@ A step passes only through your own action in the lesson:
   now**; a response check first needs your own press of the App's control in this
   lesson's Preview.
 - **Review check**: the step shows its rubric, what your finished work must
-  show. Only your own **Check my work** asks your own AI (your Helper route in
-  **AI Accounts → Model routing**) to review your practice work against it;
+  show. Only your own **Check my work** asks your own AI (your **Explain &
+  check** model in **AI Accounts → Models**) to review your practice work against it;
   Colleague never runs a review for you. A review answers **Passed** (final) or
   **Not yet** with a comment and a hint. While the coding agent is still
   working it says "Wait until the agent finishes"; with nothing changed yet it
