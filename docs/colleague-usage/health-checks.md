@@ -19,7 +19,9 @@ missing, and how many optional extras aren't set up. Only **Needed** checks coun
 
 **Optional** (nice to have; nothing depends on them): GitHub CLI, ripgrep, the AI
 tools you don't use, **Your name in Git** and the Playwright browser for automated
-browser checks.
+browser checks. **Your name in Git** comes first when it needs you; an extra that
+simply isn't installed folds to one line, "Not installed", with **How to install**
+to open its install command.
 
 A tool counts as there only when it actually runs: Vibe64 starts it and asks for
 its version (a few seconds at most), using the same `PATH` your projects use. A file

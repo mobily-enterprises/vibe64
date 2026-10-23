@@ -99,6 +99,16 @@ Colleague can explain this recovery; installing a local tool and restarting the
 local editor require the person to use their terminal.
 
 
+## A tool the step needs
+
+When a step fails because a program it runs isn't installed, the failed step
+says so in one sentence ("Vibe64 couldn't find bundle on this computer, so this
+step couldn't run.") and **This step needs a tool that isn't working** lists the
+missing runtime with its install command, **Check again** and **Other ways**.
+A long failure (a stack trace) shows as three lines; **Expand** shows all of it.
+The database server panel below waits until no tool is missing, so there is one
+thing to fix at a time.
+
 ## A database server you run
 
 When the project's Stack declares a MySQL/MariaDB or PostgreSQL database and
@@ -127,7 +137,10 @@ for PostgreSQL, the right to create test databases. **Suggest a user and
 password** fills in a project user and a strong password first; the command
 shows the password as dots but copies the real one. The person runs these
 commands in their own terminal; Vibe64 never starts a database server or runs
-them. When the panel says connected, choose **Retry** on the failed step.
+them. While nothing answers, the panel leads with **Install or start** and
+folds the settings into one line, "Looking for it at host:port · database ·
+user", with **Change** to edit them. When the panel says connected, choose
+**Finish preparing** on it (or **Retry** on the failed step).
 
 Colleague can explain the panel and each message. When asked, it can check the
 server again with the current values and save the non-secret ones the person
