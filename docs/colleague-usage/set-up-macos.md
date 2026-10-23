@@ -1,7 +1,7 @@
 # Set up a Mac for Vibe64
 
-A step-by-step setup for running Vibe64 on your own Mac. Do the first five
-steps once. The project steps only matter when a project needs them, and
+A step-by-step setup for running Vibe64 on your own Mac. Do the steps up to
+**An AI tool** once. The project steps only matter when a project needs them, and
 Vibe64 tells you when: a row with the exact command appears where the work
 needs the tool.
 

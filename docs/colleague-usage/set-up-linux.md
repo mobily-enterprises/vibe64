@@ -1,7 +1,7 @@
 # Set up Linux for Vibe64
 
 A step-by-step setup for running Vibe64 on your own Linux computer: Ubuntu and
-Debian (also inside WSL on Windows), Fedora and Arch. Do the first four steps
+Debian (also inside WSL on Windows), Fedora and Arch. Do the steps up to **An AI tool**
 once. The project steps only matter when a project needs them, and Vibe64 tells
 you when: a row with the exact command appears where the work needs the tool.
 
@@ -127,11 +127,23 @@ Some packages compile native code (Rails gems such as `psych`, `pg` and
 `mysql2`, Python's `mysqlclient`), so they need a compiler and a few
 libraries. The row is called **Build tools**.
 
-| System | Command |
-|---|---|
-| Ubuntu, Debian, WSL | `sudo apt install build-essential pkg-config libyaml-dev libssl-dev zlib1g-dev libpq-dev default-libmysqlclient-dev libgmp-dev` |
-| Fedora | `sudo dnf install gcc gcc-c++ make pkgconf-pkg-config libyaml-devel openssl-devel zlib-ng-compat-devel gmp-devel libpq-devel mariadb-connector-c-devel` |
-| Arch | `sudo pacman -S --needed base-devel libyaml openssl zlib gmp postgresql-libs mariadb-libs` |
+Ubuntu, Debian, WSL:
+
+```sh
+sudo apt install build-essential pkg-config libyaml-dev libssl-dev zlib1g-dev libpq-dev default-libmysqlclient-dev libgmp-dev
+```
+
+Fedora:
+
+```sh
+sudo dnf install gcc gcc-c++ make pkgconf-pkg-config libyaml-devel openssl-devel zlib-ng-compat-devel gmp-devel libpq-devel mariadb-connector-c-devel
+```
+
+Arch:
+
+```sh
+sudo pacman -S --needed base-devel libyaml openssl zlib gmp postgresql-libs mariadb-libs
+```
 
 ## Databases
 
@@ -139,13 +151,43 @@ Only when a project uses MySQL or PostgreSQL. SQLite needs nothing. You run the
 database server yourself; one you already have is fine. Vibe64 never starts it
 for you.
 
-**Install and start it**, once:
+**Install and start it**, once. For MySQL projects, use MariaDB, the
+MySQL-compatible server Linux systems ship.
 
-| System | MySQL-compatible (MariaDB) | PostgreSQL |
+| | MariaDB (for MySQL projects) | PostgreSQL |
 |---|---|---|
 | Ubuntu, Debian, WSL | `sudo apt install mariadb-server` | `sudo apt install postgresql` |
-| Fedora | `sudo dnf install mariadb-server && sudo systemctl enable --now mariadb` | `sudo dnf install postgresql-server && sudo env PGSETUP_INITDB_OPTIONS="--auth-host=scram-sha-256" postgresql-setup --initdb && sudo systemctl enable --now postgresql` |
-| Arch | `sudo pacman -S mariadb && sudo mariadb-install-db --user=mysql --basedir=/usr --datadir=/var/lib/mysql && sudo systemctl enable --now mariadb` | `sudo pacman -S postgresql && sudo -iu postgres initdb -D /var/lib/postgres/data --auth-local=peer --auth-host=scram-sha-256 && sudo systemctl enable --now postgresql` |
+
+Fedora, MariaDB:
+
+```sh
+sudo dnf install mariadb-server
+sudo systemctl enable --now mariadb
+```
+
+Fedora, PostgreSQL:
+
+```sh
+sudo dnf install postgresql-server
+sudo env PGSETUP_INITDB_OPTIONS="--auth-host=scram-sha-256" postgresql-setup --initdb
+sudo systemctl enable --now postgresql
+```
+
+Arch, MariaDB:
+
+```sh
+sudo pacman -S mariadb
+sudo mariadb-install-db --user=mysql --basedir=/usr --datadir=/var/lib/mysql
+sudo systemctl enable --now mariadb
+```
+
+Arch, PostgreSQL:
+
+```sh
+sudo pacman -S postgresql
+sudo -iu postgres initdb -D /var/lib/postgres/data --auth-local=peer --auth-host=scram-sha-256
+sudo systemctl enable --now postgresql
+```
 
 On Ubuntu and Debian the server starts by itself. If it is stopped later, start
 it with `sudo service mariadb start` or `sudo service postgresql start`.
