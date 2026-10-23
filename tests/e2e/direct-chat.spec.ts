@@ -37,7 +37,7 @@ const REPOSITORY_RECOVERY_GIT_BOUNDARY = [
   "Vibe64—not Temporary AI—owns every repository operation. The failed operation has already been rolled back.",
   "You may inspect Git read-only and edit ordinary working-tree files in this session. Do not change HEAD, branches, refs, the index, stashes, remotes, commits, checkpoints, or repository configuration.",
   "Do not run git add, commit, checkout, switch, restore, reset, clean, stash, merge, rebase, cherry-pick, revert, pull, push, fetch, or update-ref. Do not create a recovery ref or stash; Vibe64 already owns durable recovery.",
-  "Record the initial HEAD and index with read-only commands, leave both byte-for-byte unchanged, and do not publish. Resolve only by editing the conflicting working-tree files; Vibe64 owns applying and verifying the repository operation.",
+  "Record the initial HEAD and index with read-only commands, leave both byte-for-byte unchanged, and do not push. Resolve only by editing the conflicting working-tree files; Vibe64 owns applying and verifying the repository operation.",
   "Preserve the intended behavior of both the latest saved work and this session. Do not hand-edit generated Genesis maps; Vibe64 regenerates its derived artifacts. A clean index after rollback is not proof that the conflict is resolved."
 ].join("\n");
 
@@ -1478,19 +1478,19 @@ test.describe("direct chat", () => {
       action: "Save",
       code: "vibe64_session_save_history_diverged",
       operationKey: "operation",
-      promptLead: "Help resolve this Vibe64 Save problem. Inspect the current session and canonical repository state, preserve all work, and do not publish until the conflict is understood:"
+      promptLead: "Help resolve this Vibe64 Save problem. Inspect the current session and canonical repository state, preserve all work, and do not push until the conflict is understood:"
     },
     {
       action: "Update",
       code: "vibe64_session_update_conflict",
       operationKey: "updateOperation",
-      promptLead: "Help resolve this Vibe64 Update problem. Inspect the current session and canonical repository state, preserve all work, and do not publish until the conflict is understood:"
+      promptLead: "Help resolve this Vibe64 Update problem. Inspect the current session and canonical repository state, preserve all work, and do not push until the conflict is understood:"
     },
     {
       action: "Update",
       code: "vibe64_session_update_history_diverged",
       operationKey: "updateOperation",
-      promptLead: "Help resolve this Vibe64 Update problem. Inspect the current session and canonical repository state, preserve all work, and do not publish until the conflict is understood:"
+      promptLead: "Help resolve this Vibe64 Update problem. Inspect the current session and canonical repository state, preserve all work, and do not push until the conflict is understood:"
     }
   ]) {
     test(`routes chat ${recovery.code} recovery through Temporary AI`, async ({ page }) => {

@@ -1376,7 +1376,7 @@ describe("useVibe64TemporaryAi", () => {
 
   it("adds one system message after a verified repair and keeps it in the conversation", async () => {
     const { task, temporary } = await temporaryAiWithDraft();
-    const message = "Session updated. Your changes were preserved. Nothing was published.";
+    const message = "Session updated. Your changes were preserved. Nothing was pushed.";
     temporary.reportRecoveryOutcome(task.id, { status: "checking" });
     temporary.reportRecoveryOutcome(task.id, { status: "failed", message: "Still needs review." });
     expect(temporary.activeTask.value.messages).toHaveLength(0);

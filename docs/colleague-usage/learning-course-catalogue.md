@@ -47,7 +47,7 @@ installs nothing new for that topic and enables nothing.
 Any signed-in person can install official catalogue courses. The catalogue
 location is fixed by the server, so the page can only install the courses it
 lists. Courses from other sources remain an owner/operator task (see
-[Author a lesson and publish its source](lesson-authoring.md)).
+[Author a lesson and save its source](lesson-authoring.md)).
 
 ### Preview courses
 

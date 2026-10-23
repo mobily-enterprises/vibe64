@@ -52,6 +52,7 @@ import {
   VIBE64_WELCOME_NAME_KEY
 } from "@/lib/vibe64WelcomeName.js";
 
+const SAVE_WORK_STAGE_LABELS = Object.freeze({ published: "pushed", publishing: "pushing" });
 const DIRECT_SESSION_TOOL_IDS = new Set([
   "info",
   "changes",
@@ -308,7 +309,7 @@ const REPOSITORY_TEMPORARY_AI_GIT_BOUNDARY = [
   "Vibe64—not Temporary AI—owns every repository operation. The failed operation has already been rolled back.",
   "You may inspect Git read-only and edit ordinary working-tree files in this session. Do not change HEAD, branches, refs, the index, stashes, remotes, commits, checkpoints, or repository configuration.",
   "Do not run git add, commit, checkout, switch, restore, reset, clean, stash, merge, rebase, cherry-pick, revert, pull, push, fetch, or update-ref. Do not create a recovery ref or stash; Vibe64 already owns durable recovery.",
-  "Record the initial HEAD and index with read-only commands, leave both byte-for-byte unchanged, and do not publish. Resolve only by editing the conflicting working-tree files; Vibe64 owns applying and verifying the repository operation.",
+  "Record the initial HEAD and index with read-only commands, leave both byte-for-byte unchanged, and do not push. Resolve only by editing the conflicting working-tree files; Vibe64 owns applying and verifying the repository operation.",
   "Preserve the intended behavior of both the latest saved work and this session. Do not hand-edit generated Genesis maps; Vibe64 regenerates its derived artifacts. A clean index after rollback is not proof that the conflict is resolved."
 ].join("\n");
 
@@ -935,7 +936,7 @@ function useVibe64AutopilotView(props, emit, {
     const outcome = {
       status: succeeded ? "succeeded" : confirmedFailure ? "failed" : "unconfirmed",
       message: succeeded
-        ? "Session updated. Your changes were preserved. Nothing was published."
+        ? "Session updated. Your changes were preserved. Nothing was pushed."
         : confirmedFailure
           ? `Update still needs attention: ${operation?.error || saveWorkError.value || "The operation failed."}`
           : "Vibe64 could not confirm this Update result. Check the session's current Update status before trying again."
@@ -1025,7 +1026,7 @@ function useVibe64AutopilotView(props, emit, {
         displayMessage: `Fix this ${action} problem without losing work.`,
         failureMessage: `Temporary AI stopped before completing the ${action} repair. Review the error and progress below before retrying.`,
         message: [
-          `Help resolve this Vibe64 ${action} problem. Inspect the current session and canonical repository state, preserve all work, and do not publish until the conflict is understood:`,
+          `Help resolve this Vibe64 ${action} problem. Inspect the current session and canonical repository state, preserve all work, and do not push until the conflict is understood:`,
           REPOSITORY_TEMPORARY_AI_GIT_BOUNDARY,
           action === "Update" ? UPDATE_REPAIR_MESSAGES.handoff : "",
           saveWorkError.value
@@ -1067,7 +1068,7 @@ function useVibe64AutopilotView(props, emit, {
         displayMessage: "Fix this repository problem without losing work.",
         failureMessage: "Temporary AI stopped before completing the repository repair. Review the error and progress below before retrying.",
         message: [
-          "Help resolve this Vibe64 repository problem. Inspect the current session and canonical repository state, preserve all work, and do not publish until the conflict is understood:",
+          "Help resolve this Vibe64 repository problem. Inspect the current session and canonical repository state, preserve all work, and do not push until the conflict is understood:",
           REPOSITORY_TEMPORARY_AI_GIT_BOUNDARY,
           isUpdate ? UPDATE_REPAIR_MESSAGES.handoff : "",
           isIncoming ? "Repair only the listed conflicting files in this receiving session's worktree. Inspect both exact reviewed commits, preserve both sides' intended behavior and all unrelated/staged work. Do not commit, merge, rebase or push. Return to Incoming changes → Review resolved conflicts; only the person's reviewed Merge may integrate this contribution." : "",
@@ -1489,7 +1490,9 @@ function useVibe64AutopilotView(props, emit, {
   const saveWorkStatus = computed(() => String(
     saveWorkOperation.value?.status || (saveWorkSending.value ? "starting" : "")
   ));
+  // Stage values are persisted machine identifiers; show Save wording, never "publishing".
   const saveWorkStage = computed(() => String(
+    SAVE_WORK_STAGE_LABELS[saveWorkOperation.value?.stage] ||
     saveWorkOperation.value?.stage ||
     (saveWorkSending.value && !saveWorkOperation.value ? "Waiting for the session to be ready" : "")
   ));

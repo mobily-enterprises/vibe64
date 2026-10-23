@@ -646,7 +646,7 @@ const updateCompletionText = computed(() => {
     ambiguous: "Session updated. Workspace preparation needs a choice; review the setup issue above.",
     required: "Session updated. Workspace preparation is still required."
   }[status] || "Session updated.";
-  return `${heading} Your changes were preserved. Nothing was published.`;
+  return `${heading} Your changes were preserved. Nothing was pushed.`;
 });
 const canReturnToMainChat = computed(() => activeTaskRecoveryVerified.value && !activeTask.value.busy && (
   activeTask.value.recoveryOperation !== "update" ||

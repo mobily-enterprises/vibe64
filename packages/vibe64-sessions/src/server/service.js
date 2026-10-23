@@ -373,7 +373,7 @@ function createService({
     if (pending) throw Object.assign(new Error(
       pending.needsSave
         ? `Save connected work in ${pending.contribution.repository} before saving the main project.`
-        : `Reconcile the published work in ${pending.contribution.repository} before saving the main project.`
+        : `Reconcile the pushed work in ${pending.contribution.repository} before saving the main project.`
     ), { code: "vibe64_connected_save_required", details: {
       repository: pending.contribution.repository, projectSlug: pending.projectSlug,
       sessionId: pending.sessionId
@@ -672,7 +672,7 @@ function createService({
             ? "Interrupted Save recovered. The local clone cache could not be refreshed and will be retried later."
             : result.reconciled === true
               ? "Interrupted Save recovered and reconciled."
-              : "Interrupted Save was published and needs local reconciliation.",
+              : "Interrupted Save was pushed and needs local reconciliation.",
           status: "ready"
         },
         patch: {
@@ -1147,7 +1147,7 @@ function createService({
     const work = await service.inspectSessionWork(sessionId, {}, { includeConnected: false, inspectContributionPublication: true });
     if (work?.ok === false) return skipped(text(work.error) || "Its work could not be inspected.");
     if (work.publishedCommit && work.publishedCommit !== work.baseCommit && work.ahead > 0) {
-      return skipped(`Its published contribution is not on ${branch} yet. Merge it through Incoming changes, then update again.`);
+      return skipped(`Its pushed contribution is not on ${branch} yet. Merge it through Incoming changes, then update again.`);
     }
     const updated = await service.updateSessionWork(sessionId, { connectedRefresh: true });
     if (updated?.ok === false) {
@@ -1285,7 +1285,7 @@ function createService({
               });
         if (work.ok === false) return { ...work, details: { ...work.details, sessionId: session.sessionId } };
         if (work.operation?.status === "failed" && work.operation.code === "vibe64_session_save_publication_unknown") {
-          throw Object.assign(new Error(work.operation.error || "Connected publication is still unknown. Inspect work before retrying."), {
+          throw Object.assign(new Error(work.operation.error || "Whether the connected Save was pushed is still unknown. Inspect work before retrying."), {
             code: work.operation.code, details: { sessionId: session.sessionId }
           });
         }
@@ -1853,7 +1853,7 @@ function createService({
             session: await runtime.getSession(sessionId, { inspectSource: false })
           });
         }
-      }, "The pull request could not be confirmed. Retry to check GitHub and continue publishing.");
+      }, "The pull request could not be confirmed. Retry to check GitHub and continue.");
     },
 
     async saveSessionWork(sessionId, input = {}, requestContext = {}) {
@@ -1872,7 +1872,7 @@ function createService({
         )) {
           const recovered = await recoverInterruptedSave(runtime, session, previous);
           if (recovered?.status === "failed" && recovered.code === "vibe64_session_save_publication_unknown") {
-            throw Object.assign(new Error(recovered.error || "Inspect the uncertain Save before publishing again."), {
+            throw Object.assign(new Error(recovered.error || "Inspect the uncertain Save before saving again."), {
               code: recovered.code
             });
           }
@@ -1944,7 +1944,7 @@ function createService({
                 ? "Session work was saved. The local clone cache could not be refreshed and will be retried later."
                 : result.reconciled === true
                   ? "Session work was saved."
-                  : "Session work was published and needs local reconciliation.",
+                  : "Session work was pushed and needs local reconciliation.",
               status: "ready"
             },
             patch: {

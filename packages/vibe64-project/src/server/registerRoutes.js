@@ -63,7 +63,7 @@ function registerRoutes(http, {
   routes.actionRoute("PUT", "/repository/workflow", {
     actionId: "vibe64.project.repository.workflow.save",
     buildInput: (request) => ({ requirePullRequest: routes.requestBody(request).requirePullRequest }),
-    summary: "Choose whether native publication requires a pull request."
+    summary: "Choose whether Save requires a pull request."
   });
 
   function githubRoute(method, path, family, operation, validator, summary, bodyLimit) {

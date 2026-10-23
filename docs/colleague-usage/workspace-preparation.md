@@ -7,7 +7,7 @@ steps come from the project's setup contract.
 
 Select **Prepare workspace**. The notice shows progress while those steps run.
 Use **Expand** to inspect output, or **Dismiss** to hide an inactive notice.
-Preparation does not publish the project.
+Preparation does not save or push the project.
 
 To rerun preparation after success, select **Prepare workspace** (the wrench)
 in the session header. On narrow screens, open **Session actions** (three dots)

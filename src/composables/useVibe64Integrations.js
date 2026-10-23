@@ -190,7 +190,7 @@ export function useVibe64Integrations(context, selectedId) {
       if (!disposed && key === connectionKey.value) {
         paymentResult.value = null;
         paymentError.value = ["payments-publish", "payments-recover"].includes(operation)
-          ? "Publication did not finish cleanly. Check the application's pending provider operation before publishing again; changes may already exist."
+          ? "Applying the catalogue did not finish cleanly. Check the application's pending provider operation before applying again; changes may already exist."
           : "The application could not inspect payments. Check its payment command, configuration and Env, then retry.";
       }
     }

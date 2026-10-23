@@ -31,13 +31,13 @@ but the receiving repository's branch permissions still apply.
 
 If the contribution was discarded, further work needs a new contribution. If both
 active and discarded branches exist, resolve the interrupted discard first. A
-missing branch after a publication attempt needs its retained exact revision and
+missing branch after a push attempt needs its retained exact revision and
 receiving history checked; its absence alone proves nothing. An integrated
 revision remains accepted after its branch is discarded or deleted. Explicit
 Update can consume the proven accepted source, but further contribution pushes
 cannot recreate that removed branch. Keep the checkout and ask the coding agent
 to inspect uncertain saved work. After a lost acknowledgement, existing Save recovery can reconcile a
-publication when the remote confirms its exact prepared commit.
+push when the remote confirms its exact prepared commit.
 
 To revise a discarded, unmerged contribution, return to the originating session
 and press Save. Its refusal offers **Review replacement contribution**. Review
@@ -77,7 +77,7 @@ It runs the same preparation.
 The update uses the receiving session's normal **Update this session (rebase)**,
 which carries that checkout's own changes, including unsaved edits, onto the
 branch's latest commit. A checkout is left as it is while its agent is working,
-while a Save or Update runs in it, while its published contribution still awaits
+while a Save or Update runs in it, while its pushed contribution still awaits
 acceptance, or when the update would conflict with its changes. The preparation
 output shows one line per repository: `[Connected] jskit updated to abc1234.`,
 `[Connected] genesis is up to date.`, or `[Connected] vibe64 was not updated:`
@@ -95,7 +95,7 @@ then Save.` This keeps saved and deployed work tested against the current
 connected sources.
 
 When a session has recorded submitted contributions, its normal Save checks those
-exact revisions before publishing, including when the main repository has no new
+exact revisions before pushing, including when the main repository has no new
 file changes. If one is still pending, the error names the receiving repository,
 contribution, revision and integration branch. Once all are accepted and the
 selected sources are reconciled, a clean main repository reports no work to save. Open that
@@ -145,7 +145,7 @@ an instruction to merge or discard.
 For prepared sources, the chat Save button changes to a branch icon labelled **Save connected
 first** when connected work needs submission. It remains available when the main
 checkout has no changes. Its confirmation lists receiving repositories and
-contribution branches. Choose **Push connected contributions** to publish those
+contribution branches. Choose **Push connected contributions** to push those
 changes; the main project's changes stay local. The same controls work on phones.
 The result lists confirmed pushes, including those completed before a later
 failure. Review them in each receiving project's **Incoming changes**.
@@ -164,21 +164,21 @@ pass that list unchanged with the main `destinationReview` to Save.
 This saves one connected repository at a time: commit, push, record its commit,
 then continue. It never pushes the main project in that action. A failure reports
 the completed repositories and the repository that failed. Inspect and retry:
-completed repositories without new changes are skipped. If publication succeeded
+completed repositories without new changes are skipped. If the push succeeded
 but recording failed, retry records the confirmed receiving commit without
-republishing it. These commit records identify required integration, not a
+pushing it again. These commit records identify required integration, not a
 separate retry ledger. Files and existing receiving Save recovery remain available.
 Each receiver is checked again when its turn arrives, so new edits made while
 an earlier repository was saving are included in the next receiver's Save.
 If a push loses its acknowledgement, the exact remote commit can confirm it.
-If the remote is unavailable too, publication stays unknown: restore repository
+If the remote is unavailable too, the push outcome stays unknown: restore repository
 access and inspect work again. Recovery checks the original prepared commit
 without another push, including after restarting the editor. Main Save remains
 blocked while that outcome is unknown.
 The same recovery checks a failed local update after a push. When Git proves
-the attempt did not publish, its original rejection remains visible. A receiving
+the attempt did not push, its original rejection remains visible. A receiving
 project with its own connected work must satisfy its own Save checks; this action
-does not recursively publish further repositories.
+does not recursively save further repositories.
 If preparation fails before any push is attempted, fix the reported cause and
 retry; the contribution's files and recovery checkpoint remain. A missing branch
 after an uncertain push is still unknown, so Vibe64 does not recreate it merely
@@ -186,11 +186,11 @@ because it is absent.
 
 After connected work is saved, omit `connectedReview` for ordinary Main Save.
 Pending integration is reported by the existing exact-revision gate. New connected
-work or unreconciled publication blocks Main Save; inspect and save/recover the
+work or an unreconciled push blocks Main Save; inspect and save/recover the
 receiving session first. Colleague must review these destinations and have an
-explicit Save instruction before publishing.
+explicit Save instruction before saving.
 Main Save checks those sources again after preparing its commit, immediately
 before pushing. If a receiving worktree, HEAD, or recorded saved commit changed,
 inspect connected work and save it before retrying. This is a final snapshot
 check, not a lock across projects; avoid editing connected sources while Main
-Save is publishing, because changes after the final read belong to later work.
+Save is pushing, because changes after the final read belong to later work.

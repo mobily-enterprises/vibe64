@@ -146,7 +146,7 @@ const setupPrompt = computed(() => [
     selected.value?.provider === 'paddle'
       ? "Paddle needs a separate public client-side token and an app-owned Paddle.js checkout page; keep the private API key and signing secret server-side. Domain and merchant approval remain explicit provider steps."
       : "Stripe needs the environment's own webhook destination/signing secret and configured customer portal. Handle invoice payment failures and subscription lifecycle updates without granting unpaid renewal credits.",
-    "Expose the app billing screen with plans, credits, subscription status, customer-scoped subscription/invoice/transaction history and management actions. Authorize history separately, resolve the customer from this app's subject binding and preserve provider status; invoice/transaction totals are not proof of payment. Use controlled fixtures for authorization, webhook signatures, retries, plan/credit behavior and management output; report unimplemented capabilities honestly. Do not publish catalogue changes or perform charges during implementation.",
+    "Expose the app billing screen with plans, credits, subscription status, customer-scoped subscription/invoice/transaction history and management actions. Authorize history separately, resolve the customer from this app's subject binding and preserve provider status; invoice/transaction totals are not proof of payment. Use controlled fixtures for authorization, webhook signatures, retries, plan/credit behavior and management output; report unimplemented capabilities honestly. Do not apply catalogue changes to the provider or perform charges during implementation.",
     `Portable payment semantics (applies to every framework):\n\n${paymentContract}`,
     `Payment configuration JSON Schema (validate extensions.payments; no JSKIT runtime required):\n\n${JSON.stringify(paymentSchema, null, 2)}`,
     `Portable conformance instructions:\n\n${paymentConformanceGuide}`,
@@ -313,7 +313,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
       <v-btn value="development">Development</v-btn><v-btn value="production">Production</v-btn>
     </v-btn-toggle>
     <v-alert v-if="production" type="info" variant="tonal">
-      Published configuration{{ releaseId ? ` (${releaseId})` : '' }}. Make configuration changes in Development, then publish them.
+      Deployed configuration{{ releaseId ? ` (${releaseId})` : '' }}. Make configuration changes in Development, then deploy them.
       <p v-if="!dashboardContext.owner">Only the workspace owner can manage production connections.</p>
     </v-alert>
     <p v-if="!production && !dashboardContext.sessionId">Open a session to configure its integrations.</p>
@@ -331,7 +331,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
       <div class="integrations-panel__layout">
         <aside class="integrations-panel__catalogue" aria-label="Integrations catalogue">
           <v-text-field v-model="search" label="Search integrations" hide-details clearable @click:clear="search = ''" />
-          <h2 class="text-title-medium mt-6 mb-2">{{ production ? 'Configured in the published release' : 'Configured in this session' }}</h2>
+          <h2 class="text-title-medium mt-6 mb-2">{{ production ? 'Configured in the deployed release' : 'Configured in this session' }}</h2>
           <v-list v-if="filteredEntries.length" aria-label="Configured integrations" bg-color="transparent">
             <v-list-item
               v-for="[id, entry] in filteredEntries" :key="id" :active="selectedId === id" min-height="48"
@@ -480,11 +480,11 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                 <v-btn height="48" variant="text" :disabled="disabled" @click="registrationNeedsReview = false">I checked {{ provider.name }} and Env — allow another attempt</v-btn>
               </template>
             </section>
-            <p v-if="production">Production Env is managed on Deploy. Publish changes to apply them to the running release.</p>
+            <p v-if="production">Production Env is managed on Deploy. Deploy changes to apply them to the running release.</p>
             <section v-for="credential in credentials" :key="credential.label" :aria-label="credential.label" class="mt-4">
               <h3 class="text-title-medium">{{ credential.label }}</h3>
               <p>Save the credential as {{ credential.key }} in {{ environment }} Env. Your application receives it through Env.</p>
-              <p v-if="credential.public">Your application may publish this key in its frontend. Use a key restricted to data those users may read.</p>
+              <p v-if="credential.public">Your application may expose this key in its frontend. Use a key restricted to data those users may read.</p>
               <p v-if="dirty">Save configuration first, then enter the credential.</p>
               <v-btn height="48" variant="text" :disabled="dirty || disabled" :to="{
                 path: projectAppPath(projectSlug, production ? '/dashboard/deploy' : '/dashboard/env'),
@@ -513,7 +513,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
             <v-expansion-panels v-if="provider?.setup" class="mt-4">
               <v-expansion-panel :title="`Set up ${provider.name}`">
                 <v-expansion-panel-text>
-                  <p v-if="production">For the credential and callback Env steps below, use Open production Env. Save values in the published application's environment.</p>
+                  <p v-if="production">For the credential and callback Env steps below, use Open production Env. Save values in the deployed application's environment.</p>
                   <ol class="integrations-panel__instructions">
                     <li v-for="step in (provider.setup.stepsForSettings?.(selected?.settings || {}, selected?.authentication.method) || provider.setup.stepsByAuthentication?.[selected?.authentication.method] || provider.setup.steps)" :key="step">{{ step }}</li>
                   </ol>
@@ -524,7 +524,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                     <p v-if="clientMetadata.error" role="status">{{ clientMetadata.error }}</p>
                     <v-btn height="48" variant="text" :disabled="!clientMetadata.json" @click="copySetupValue(clientMetadata.json, 'Client metadata')">Copy client metadata</v-btn>
                     <p v-if="setupCopyMessage" role="status">{{ setupCopyMessage }}</p>
-                    <p>This document uses the current name, metadata URL and suggested callback. Update the hosted document when these change, and obtain any required callback approval. Copying does not publish it or grant provider access.</p>
+                    <p>This document uses the current name, metadata URL and suggested callback. Update the hosted document when these change, and obtain any required callback approval. Copying does not put it online or grant provider access.</p>
                   </section>
                   <section v-if="clientRegistrationEndpoint" aria-label="OAuth client registration" class="mt-4">
                     <h3 class="text-title-medium">OAuth client registration</h3>
@@ -545,7 +545,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
               </v-expansion-panel>
             </v-expansion-panels>
           </template>
-          <template v-else><h2>{{ production ? 'Select a published integration' : 'Add a service' }}</h2><p>Choose a service or an existing configuration to get started.</p></template>
+          <template v-else><h2>{{ production ? 'Select a deployed integration' : 'Add a service' }}</h2><p>Choose a service or an existing configuration to get started.</p></template>
         </main>
       </div>
       <footer v-if="!production" class="integrations-panel__footer">

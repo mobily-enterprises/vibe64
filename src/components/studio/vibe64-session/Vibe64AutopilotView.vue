@@ -903,7 +903,7 @@
           <ul class="my-3 pl-5" style="overflow-wrap: anywhere">
             <li v-for="file in resolvedUpdateReview.conflictPaths" :key="file">{{ file }}</li>
           </ul>
-          <p>Repairs may be made manually or in any coding chat. Vibe64 will check the repository state and apply Update. Nothing is published.</p>
+          <p>Repairs may be made manually or in any coding chat. Vibe64 will check the repository state and apply Update. Nothing is pushed.</p>
         </v-card-text>
         <v-card-actions class="flex-wrap">
           <v-btn @click="resolvedUpdateReview = null">Cancel</v-btn>
@@ -1708,7 +1708,7 @@ watch(() => [props.workState?.updateOperation, temporaryAiWorkspace.value?.updat
       !["checking", "unconfirmed"].includes(task.recoveryOutcome)) return;
   if (operation.status === "ready") {
     reportTemporaryRecovery(task.id, { status: "succeeded",
-      message: "Session updated. Your changes were preserved. Nothing was published." });
+      message: "Session updated. Your changes were preserved. Nothing was pushed." });
   } else if (operation.status === "failed") {
     reportTemporaryRecovery(task.id, { status: "failed",
       message: `Update still needs attention: ${operation.error || "The operation failed."}`,

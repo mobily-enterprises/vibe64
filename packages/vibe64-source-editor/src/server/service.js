@@ -998,7 +998,7 @@ function createService({
       };
       if (operation === "archive") {
         if (area !== "session" || !session.archivePath) {
-          throw sourceEditorError("This session has no published archive.", "vibe64_files_archive_unavailable", {}, 404);
+          throw sourceEditorError("This session has no archive available.", "vibe64_files_archive_unavailable", {}, 404);
         }
         return downloadSessionFile({ sourceRoot: path.dirname(session.archivePath), policy }, path.basename(session.archivePath));
       }

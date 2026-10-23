@@ -242,7 +242,7 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     receiving.published = "b".repeat(40);
     receiving.ahead = 1;
     assert.deepEqual(await updateOf(), { status: "skipped",
-      reason: "Its published contribution is not on main yet. Merge it through Incoming changes, then update again." });
+      reason: "Its pushed contribution is not on main yet. Merge it through Incoming changes, then update again." });
     assert.equal(receivingUpdates.length, 0, "a contribution awaiting acceptance is not rewritten");
     receiving.published = "";
     receiving.conflict = true;

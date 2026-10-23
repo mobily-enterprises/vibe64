@@ -206,7 +206,7 @@ async function actionFinished({ apiPath }) {
               <div class="text-body-small text-medium-emphasis mt-1">Proposed into {{ repository }}:{{ pr.baseRefName }}</div>
             </div>
           </div>
-          <p v-if="pr.state === 'OPEN'" class="text-body-medium ma-0">Open an isolated session with this PR’s changes and description. Save publishes further work to its source branch.</p>
+          <p v-if="pr.state === 'OPEN'" class="text-body-medium ma-0">Open an isolated session with this PR’s changes and description. Save pushes further work to its source branch.</p>
           <p v-if="pr.state === 'OPEN' && pr.unavailableReason" class="text-body-medium ma-0">{{ pr.unavailableReason }}</p>
           <p v-else-if="pr.state === 'OPEN' && !toolbar.canCreateSession" class="text-body-medium ma-0">{{ toolbar.createSessionTitle }}</p>
           <div class="d-flex flex-wrap ga-2">

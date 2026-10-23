@@ -3,7 +3,7 @@
 This topic explains verified lesson content, private progress and owner recovery.
 For host-registered learner controls and assessment, read **Learn with Colleague**
 (`learning-with-colleague`). For authoring and Git publication, read **Author a
-lesson and publish its source** (`lesson-authoring`). The underlying facilities
+lesson and save its source** (`lesson-authoring`). The underlying facilities
 below do not by themselves add learner controls or grant Colleague source access;
 available operations depend on the host registrations described in those topics.
 
@@ -49,7 +49,7 @@ The application also has a server-side verified-snapshot installation facility.
 For official catalogue courses it is reached through **Install** and **Update**
 in Learning's **Courses** pane, or Colleague's `course.install` on a direct
 request (see [Installing and updating Learning courses](learning-course-catalogue.md)).
-For other content, the local operator commands in **Author a lesson and publish its source**
+For other content, the local operator commands in **Author a lesson and save its source**
 invoke the original installation owner.
 An admitted owner operation must select the canonical local source and exact
 course pin. Colleague can explain this boundary and offer to help contact the

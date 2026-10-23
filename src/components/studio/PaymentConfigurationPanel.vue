@@ -70,7 +70,7 @@ function setEnv(reference, value, secret) {
 <template>
   <section aria-label="Application payments" class="mt-6">
     <h3 class="text-title-medium">Application payments</h3>
-    <p class="mb-4">Define this project's recurring plans. Your application owns checkout, subscriptions, feature access and credits. Saving these settings does not charge anyone or publish products.</p>
+    <p class="mb-4">Define this project's recurring plans. Your application owns checkout, subscriptions, feature access and credits. Saving these settings does not charge anyone or change provider products.</p>
     <v-btn v-for="environment in ['sandbox', 'live'].filter(value => !payments?.environments?.[value])" :key="environment" height="48" variant="outlined" class="mr-2 mb-4" :disabled="disabled" @click="addEnvironment(environment)">Configure {{ environment }} payments</v-btn>
     <template v-if="payments">
       <p v-if="validation.length" role="status">Complete the required payment fields before saving. {{ validation[0].message }}</p>
@@ -102,7 +102,7 @@ function setEnv(reference, value, secret) {
       </section>
       <section aria-label="Payment catalogue" class="mb-6">
         <h4 class="text-title-small mb-3">Provider catalogue</h4>
-        <p>Save the configuration, then ask your application to compare its plans with the provider. Publishing creates or updates provider products and prices. It does not charge customers.</p>
+        <p>Save the configuration, then ask your application to compare its plans with the provider. Applying the catalogue creates or updates provider products and prices. It does not charge customers.</p>
         <template v-if="canPrepare">
           <v-btn height="48" variant="tonal" class="my-3" :disabled="managementDisabled" @click="emit('prepare')">Prepare payment implementation request</v-btn>
           <p>Adds the saved payment requirements to your chat draft for review before sending. Save any changes first.</p>
@@ -143,7 +143,7 @@ function setEnv(reference, value, secret) {
           </ul>
           <p v-else>No product or price changes are needed.</p>
           <p v-if="management.review.removed.length">Plans absent from this configuration: {{ management.review.removed.join(', ') }}. Their provider records and subscriptions will remain; resolve existing subscribers in the application.</p>
-          <v-btn height="48" color="primary" class="mt-3" :disabled="managementDisabled || !management.review.changes.length || management.review.pending || Boolean(management.review.drift.length)" @click="publishOpen = true">Review publication</v-btn>
+          <v-btn height="48" color="primary" class="mt-3" :disabled="managementDisabled || !management.review.changes.length || management.review.pending || Boolean(management.review.drift.length)" @click="publishOpen = true">Review changes</v-btn>
         </template>
       </section>
       <v-sheet tag="section" aria-label="Billing history" class="mb-6">
@@ -180,9 +180,9 @@ function setEnv(reference, value, secret) {
         </v-card>
       </v-dialog>
       <v-dialog v-model="publishOpen" max-width="560">
-        <v-card title="Publish payment catalogue?">
+        <v-card title="Apply payment catalogue?">
           <v-card-text>Apply the listed changes to account {{ management?.providerAccountId }} in {{ management?.paymentEnvironment }}. Existing provider prices are retained. An interrupted request may have completed remotely; inspect its result before retrying.</v-card-text>
-          <v-card-actions><v-btn height="48" @click="publishOpen = false">Cancel</v-btn><v-btn height="48" color="primary" :disabled="managementDisabled" @click="publishCatalogue">Publish catalogue</v-btn></v-card-actions>
+          <v-card-actions><v-btn height="48" @click="publishOpen = false">Cancel</v-btn><v-btn height="48" color="primary" :disabled="managementDisabled" @click="publishCatalogue">Apply catalogue</v-btn></v-card-actions>
         </v-card>
       </v-dialog>
       <h4 class="text-title-small mb-3">Recurring plans</h4>
@@ -200,7 +200,7 @@ function setEnv(reference, value, secret) {
       </section>
       <v-text-field v-model="planId" label="New stable plan ID" placeholder="pro" :error-messages="planIdError" :disabled="disabled" persistent-hint hint="Changing an existing logical ID would create a different plan. Keep IDs stable for existing subscribers." />
       <v-btn height="48" variant="outlined" :disabled="disabled || !planId || Boolean(planIdError)" @click="addPlan">Add plan</v-btn>
-      <p class="mt-4">Save using this page's Save configuration action. The app still needs its payment implementation and a reviewed catalogue publication before checkout can use these plans.</p>
+      <p class="mt-4">Save using this page's Save configuration action. The app still needs its payment implementation and a reviewed catalogue applied to the provider before checkout can use these plans.</p>
     </template>
   </section>
 </template>

@@ -48,7 +48,7 @@ async function submit() {
     emit("update:modelValue", false);
     void props.dashboardContext.refreshSessionWork?.();
   } catch (error) {
-    feedback.error(error, "The pull request could not be confirmed. Retry to check GitHub and continue publishing.");
+    feedback.error(error, "The pull request could not be confirmed. Retry to check GitHub and continue.");
   } finally { pending.value = false; }
 }
 </script>
@@ -75,7 +75,7 @@ async function submit() {
         />
         <v-switch v-model="draft" color="primary" label="Create as draft" :disabled="pending" hide-details />
         <details class="pr-details text-body-small">
-          <summary class="py-3">What gets published</summary>
+          <summary class="py-3">What gets pushed</summary>
           <p>All saved file changes are committed and pushed to the PR branch. Database data and chat history are separate. GitHub automation may run; this does not deploy the app.</p>
         </details>
       </v-card-text>
@@ -86,7 +86,7 @@ async function submit() {
           color="primary" variant="flat" rounded="pill" height="48" :disabled="pending || !title.trim() || !destinationReview || dashboardContext.sourceOperationsSuspended"
           :aria-busy="pending" @click="submit"
         >
-          {{ pending ? 'Publishing…' : draft ? 'Create draft PR' : 'Create pull request' }}
+          {{ pending ? 'Creating…' : draft ? 'Create draft PR' : 'Create pull request' }}
         </v-btn>
       </v-card-actions>
     </v-card>

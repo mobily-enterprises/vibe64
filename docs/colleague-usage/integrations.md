@@ -5,7 +5,7 @@ application, separate from the AI accounts used to write its code. On mobile,
 reveal the project and use **Dashboard section**; scroll the selected integration's
 detail to its configuration and **Application connection** controls.
 
-1. Select **Development**, or **Production** when the host provides a published
+1. Select **Development**, or **Production** when the host provides a deployed
    application. Production uses its reviewed release and does not require a
    development session; its configuration is read-only.
 2. Select a configured integration, or use **Search integrations** and **Add**
@@ -59,4 +59,4 @@ or credentials. If you have an unsaved Integrations draft, an outside change mar
 the form as changed elsewhere and preserves your draft; deliberately discard and
 reload or reconcile it before saving. A source operation can temporarily block
 saving; retry explicitly once it finishes. Saving configuration alone does not
-connect a provider, run the app, perform a session Save or publish the project.
+connect a provider, run the app, perform a session Save or deploy the project.

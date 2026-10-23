@@ -240,7 +240,7 @@ not require an AI connection. Archive or renewal already in progress still block
 You can still browse and work in other session tabs; the server-selected source
 link stays on the pinned session. Cross-project requests addressed to the
 server-selected session also keep that destination. Pinning does not Save,
-publish, freeze file contents, or deploy.
+push, freeze file contents, or deploy.
 
 The pinned session cannot be archived or renewed, and the project cannot close
 or be closed by idle cleanup. Closing your browser does not remove the pin.
@@ -256,7 +256,7 @@ Desktop and mobile use the same pin button beside Save. Learning sessions have
 no source pin. Separate project pins do not affect each other.
 
 Colleague can explain the pin or, on your explicit request, pin/unpin a named
-session through its session action. Source cleanliness and publication checks
+session through its session action. Source cleanliness and saved-work checks
 for host updates still apply to the pinned source.
 
 ## Answer clarification questions

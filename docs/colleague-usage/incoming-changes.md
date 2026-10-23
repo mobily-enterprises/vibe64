@@ -45,18 +45,18 @@ AI**. The existing Temporary AI chat starts with Senior in this receiving sessio
 its Senior model and account must be available. It uses the working session
 currently selected in the receiving project and receives the exact reviewed
 commits and conflicting paths. It repairs those
-working files without committing, rebasing or publishing. You can also repair
+working files without committing, rebasing or pushing. You can also repair
 them manually. Preserve unrelated work and inspect both sides' intended behavior.
 
 When repair finishes, return to **Incoming changes → Review resolved conflicts**.
 This displays the proposed merge using the repaired conflicting files and the
 ordinary merge result for every other authored file, with regenerated Genesis
 maps included in the diff. Do not hand-edit generated maps. If regeneration
-fails, the merge stops without publishing or changing your session files.
+fails, the merge stops without pushing or changing your session files.
 Unrelated local changes are excluded.
 Review that diff, then explicitly choose **Merge into <target> → Merge contribution**.
 Vibe64 rechecks the candidate, receiving worktree/index/HEAD and both remote heads.
-Changed inputs require another review. AI completion alone never publishes or
+Changed inputs require another review. AI completion alone never pushes or
 proves a merge. The merge preserves both parents; local files, staged changes and
 the contribution branch remain available. Use ordinary Update to reconcile the
 receiving session afterwards.

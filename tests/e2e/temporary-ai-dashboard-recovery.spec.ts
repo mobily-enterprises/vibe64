@@ -24,10 +24,10 @@ const REPOSITORY_RECOVERY_GIT_BOUNDARY = [
   "Vibe64—not Temporary AI—owns every repository operation. The failed operation has already been rolled back.",
   "You may inspect Git read-only and edit ordinary working-tree files in this session. Do not change HEAD, branches, refs, the index, stashes, remotes, commits, checkpoints, or repository configuration.",
   "Do not run git add, commit, checkout, switch, restore, reset, clean, stash, merge, rebase, cherry-pick, revert, pull, push, fetch, or update-ref. Do not create a recovery ref or stash; Vibe64 already owns durable recovery.",
-  "Record the initial HEAD and index with read-only commands, leave both byte-for-byte unchanged, and do not publish. Resolve only by editing the conflicting working-tree files; Vibe64 owns applying and verifying the repository operation.",
+  "Record the initial HEAD and index with read-only commands, leave both byte-for-byte unchanged, and do not push. Resolve only by editing the conflicting working-tree files; Vibe64 owns applying and verifying the repository operation.",
   "Preserve the intended behavior of both the latest saved work and this session. Do not hand-edit generated Genesis maps; Vibe64 regenerates its derived artifacts. A clean index after rollback is not proof that the conflict is resolved."
 ].join("\n");
-const REPOSITORY_RECOVERY_PROMPT_LEAD = "Help resolve this Vibe64 repository problem. Inspect the current session and canonical repository state, preserve all work, and do not publish until the conflict is understood:";
+const REPOSITORY_RECOVERY_PROMPT_LEAD = "Help resolve this Vibe64 repository problem. Inspect the current session and canonical repository state, preserve all work, and do not push until the conflict is understood:";
 
 test.describe("Dashboard repository Temporary AI recovery", () => {
   let server: Awaited<ReturnType<typeof assistantStatusServer>>;
@@ -62,7 +62,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
       await page.getByRole("button", { name: "Review resolved conflicts", exact: true }).click();
       const review = page.getByRole("dialog", { name: "Apply resolved Update", exact: true });
       await expect(review).toContainText("tests/server/previewTestTarget.integration.test.js");
-      await expect(review).toContainText("Nothing is published.");
+      await expect(review).toContainText("Nothing is pushed.");
       await review.getByRole("button", { name: "Cancel", exact: true }).click();
       expect(inputs).toEqual([]);
       await page.getByRole("button", { name: "Review resolved conflicts", exact: true }).click();
@@ -250,7 +250,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
       const systemMessage = workspace.locator(".assistant-transcript__system");
       await expect(systemMessage).toHaveCount(1);
       await expect(systemMessage).toContainText("System");
-      await expect(systemMessage).toContainText("Session updated. Your changes were preserved. Nothing was published.");
+      await expect(systemMessage).toContainText("Session updated. Your changes were preserved. Nothing was pushed.");
       await expect(workspace.locator("[data-temporary-ai-recovery]")).toHaveCount(0);
       await expect(checkUpdate).toHaveCount(0);
       expect(captured.temporaryCreates).toHaveLength(1);
@@ -311,7 +311,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
         await expect(draft).toHaveValue("Keep this reply through reload.");
         await expect(workspace).toContainText("Temporary recovery complete.");
         if (result === "ready") {
-          await expect(workspace).toContainText("Session updated. Your changes were preserved. Nothing was published.");
+          await expect(workspace).toContainText("Session updated. Your changes were preserved. Nothing was pushed.");
         } else {
           await expect(workspace.getByText("Update needs attention", { exact: true })).toBeVisible();
           await workspace.getByText("Details", { exact: true }).click();
@@ -403,7 +403,7 @@ test.describe("Dashboard repository Temporary AI recovery", () => {
     setup = { status: "succeeded", updatedAt: "2026-09-15T00:04:00Z" };
     server.sessionChanged("workspace-setup-succeeded");
     await expect(message).toHaveCount(1);
-    await expect(message).toContainText("Session updated and workspace ready. Your changes were preserved. Nothing was published.");
+    await expect(message).toContainText("Session updated and workspace ready. Your changes were preserved. Nothing was pushed.");
     await expect(returnToChat).toBeInViewport({ ratio: 1 });
     await page.screenshot({ path: testInfo.outputPath("ready-to-return.png") });
     await returnToChat.click();

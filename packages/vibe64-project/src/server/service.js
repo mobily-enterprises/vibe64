@@ -1543,7 +1543,7 @@ function createService({
         : repository.permissions?.push !== true ? "Your GitHub account needs write access to this receiving repository." : "";
       const workflow = await readProjectRepositoryWorkflow(selectedProjectRuntimeRoot());
       const mergeReason = writeReason || (workflow.requirePullRequest
-        ? "This project requires pull requests for integration. Its current publication policy prevents direct Incoming merges." : "");
+        ? "This project requires pull requests for integration. Its current Save policy prevents direct Incoming merges." : "");
       const actions = { merge: mergeReason, discard: writeReason };
       if (input.action && actions[input.action]) {
         throw vibe64Error(actions[input.action], "vibe64_incoming_integration_forbidden");

@@ -169,7 +169,7 @@ function registerRoutes(http, {
     buildInput: (request) => withoutVibe64User({
       ...routes.requestBody(request), sessionId: request.params.sessionId
     }),
-    summary: "Publish session work on a new branch and create a GitHub pull request."
+    summary: "Push session work to a new branch and create a GitHub pull request."
   });
 
   routes.actionRoute("POST", "/sessions", {
@@ -297,7 +297,7 @@ function registerRoutes(http, {
   routes.actionRoute("POST", "/sessions/:sessionId/connected/replacement", {
     actionId: "vibe64.sessions.connected.replace",
     buildInput: request => ({ ...withoutVibe64User(routes.requestBody(request)), sessionId: request.params.sessionId }),
-    summary: "Prepare a replacement contribution without publishing either project."
+    summary: "Prepare a replacement contribution without saving either project."
   });
 
   routes.actionRoute("GET", "/incoming", {
@@ -370,7 +370,7 @@ function registerRoutes(http, {
       ...routes.requestBody(request),
       sessionId: request.params.sessionId
     }),
-    summary: "Update this session (rebase) without publishing or discarding its work."
+    summary: "Update this session (rebase) without saving or discarding its work."
   });
 
   routes.actionRoute("POST", "/sessions/:sessionId/integration-setup/resume", {

@@ -1126,7 +1126,7 @@ async function inspectSessionWorkDirect({
       }
     }
     if (!publishedCommit && context.baseCommit !== context.contribution.baseCommit) throw saveError(
-      "The published contribution branch is missing and no exact submitted revision is retained. Preserve the source and inspect its Save recovery evidence.",
+      "The pushed contribution branch is missing and no exact submitted revision is retained. Preserve the source and inspect its Save recovery evidence.",
       "vibe64_contribution_branch_missing");
     if (publishedCommit && !await commitIsAncestor(runCommand, context, publishedCommit, sessionHead, { commandOptions, project })) {
       throw saveError("The contribution branch contains work this source has not incorporated. Update its receiving session before saving the main project.",
@@ -1303,7 +1303,7 @@ async function readRemoteCanonical(runCommand, context, operationId, options) {
       const prepared = await gitOutput(runCommand, context,
         ["for-each-ref", "--format=%(refname)", "refs/vibe64/save/"], options);
       if (prepared.split("\n").some(ref => ref.endsWith("/prepared"))) {
-        throw saveError("This contribution branch is missing after a publication attempt. Inspect its saved work and integration history before resubmitting it.",
+        throw saveError("This contribution branch is missing after a push attempt. Inspect its saved work and integration history before resubmitting it.",
           "vibe64_contribution_branch_missing");
       }
       if (context.lastCanonicalCommit === context.contribution.baseCommit &&
@@ -1369,7 +1369,7 @@ async function readContributionHead(runCommand, context, options, allowDiscarded
   context.contributionRemoteAbsent = !refs.has(active) && !refs.has(discarded);
   if (refs.has(discarded) && (!allowDiscarded || refs.has(active))) {
     throw saveError(refs.has(active)
-      ? "Both contribution branches exist after an interrupted discard. Resolve that operation before publishing."
+      ? "Both contribution branches exist after an interrupted discard. Resolve that operation before saving."
       : "This contribution was discarded. Preserve its source and submit further work as a new contribution.",
     refs.has(active) ? "vibe64_contribution_discard_incomplete" : "vibe64_contribution_discarded");
   }
@@ -1929,7 +1929,7 @@ async function publishSaveCommit(runCommand, context, saveCommit, canonicalCommi
     : canonicalCommit;
   if (context.contribution) {
     if (context.contributionMissingPublished) throw saveError(
-      "This contribution branch was removed after publication. Preserve its source and submit further work as a new contribution.",
+      "This contribution branch was removed after it was pushed. Preserve its source and submit further work as a new contribution.",
       "vibe64_contribution_branch_missing");
     const expected = context.contributionRemoteAbsent ? "" : context.contributionPublishedCommit;
     if (await readContributionHead(runCommand, context, options) !== expected) {
@@ -1977,7 +1977,7 @@ async function publishSaveCommit(runCommand, context, saveCommit, canonicalCommi
   if (pushed?.ok !== true) {
     if (verified && verified !== expectedRemoteCommit) {
       throw saveError(
-        "The saved branch changed while Save was publishing. Update this session, then save again.",
+        "The saved branch changed while Save was pushing your changes. Update this session, then save again.",
         "vibe64_session_save_update_required",
         {
           canonicalCommit: verified,
@@ -1999,7 +1999,7 @@ async function publishSaveCommit(runCommand, context, saveCommit, canonicalCommi
     );
   }
   throw saveError(
-    "Canonical repository verification did not return the commit Vibe64 published.",
+    "Canonical repository verification did not return the commit Vibe64 pushed.",
     "vibe64_session_save_verification_failed"
   );
 }
@@ -3140,7 +3140,7 @@ async function saveSessionWorkDirect({
         proposedCommit: prepared.saveCommit,
         stage: "prepared"
       });
-      await onProgress({ kind: "publish", message: "Publishing one ordinary Save commit.", stage: "publishing" });
+      await onProgress({ kind: "publish", message: "Pushing the Save commit.", stage: "publishing" });
       verifiedCommit = await publishPreparedSessionWorkSave(runCommand, context, {
         commandOptions,
         connectedWorkSnapshots: snapshots,
@@ -3254,7 +3254,7 @@ async function saveSessionWork({
       checkpointCommit: text(checkpoint.checkpointCommit),
       checkpointTree: text(checkpoint.checkpointTree),
       kind: "publish",
-      message: "Publishing the captured work.",
+      message: "Sending your changes.",
       operationId,
       sessionHead: text(checkpoint.sessionHead),
       stage: "publishing"
@@ -3360,7 +3360,7 @@ async function recoverSessionWorkSave({
   );
   if (!operationId || !expectedCanonicalCommit || !proposedCommit || !checkpointCommit || !checkpointTree) {
     throw saveError(
-      "The interrupted Save stopped before a publishable commit was durably prepared. Retry Save.",
+      "The interrupted Save stopped before a commit was durably prepared for pushing. Retry Save.",
       "vibe64_session_save_interrupted_retryable",
       { retryable: true }
     );
@@ -3384,7 +3384,7 @@ async function recoverSessionWorkSave({
     }
     if (authorityCommit === expectedCanonicalCommit && context.contributionPublishedCommit !== proposedCommit) {
       throw saveError(
-        "The interrupted Save did not publish. Retry Save when ready.",
+        "The interrupted Save did not push your changes. Retry Save when ready.",
         "vibe64_session_save_interrupted_retryable",
         { retryable: true }
       );

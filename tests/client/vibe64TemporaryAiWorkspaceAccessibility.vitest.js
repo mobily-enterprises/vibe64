@@ -709,7 +709,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
     temporary.tasks.value = [{
       agentSettings: {}, delivery: createAssistantMessageDelivery(), busy: false, draft: "", error: "", id: "repair",
       messages: [
-        { id: "recovery_repair", role: "system", text: "Session updated. Your changes were preserved. Nothing was published." }
+        { id: "recovery_repair", role: "system", text: "Session updated. Your changes were preserved. Nothing was pushed." }
       ],
       recoveryNotice: "Review the repair.",
       recoveryOperation: "update", recoveryOutcome: "succeeded",
@@ -733,7 +733,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
       const message = findNode(container, (node) => node.type === "article" && nodeText(node).includes("Session updated"));
       expect(nodeText(findNode(message, (node) => node.props?.class === "assistant-transcript__system-meta"))).toContain("System");
       expect(nodeText(findNode(message, (node) => node.type === "p"))).toBe(
-        "Session updated and workspace ready. Your changes were preserved. Nothing was published."
+        "Session updated and workspace ready. Your changes were preserved. Nothing was pushed."
       );
       expect(nodeText(container).match(/Session updated/gu)).toHaveLength(1);
       const button = findNode(message, (node) => node.type === "button" && nodeText(node).trim() === "Return to main chat");

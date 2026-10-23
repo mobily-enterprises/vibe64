@@ -126,7 +126,7 @@ test('payment configuration persists and catalogue publication requires review',
       await expect(payment).toContainText('Workbench');
       await payment.getByRole('button', { name: 'Preview sandbox catalogue', exact: true }).click();
       await expect(payment).toContainText('Your application needs payment management implemented');
-      await expect(payment.getByRole('button', { name: 'Review publication', exact: true })).toHaveCount(0);
+      await expect(payment.getByRole('button', { name: 'Review changes', exact: true })).toHaveCount(0);
       expect(publications).toBe(0);
       paymentsImplemented = true;
       await payment.getByRole('button', { name: 'Preview sandbox catalogue', exact: true }).click();
@@ -136,7 +136,7 @@ test('payment configuration persists and catalogue publication requires review',
       await expect(readiness).toContainText('Credentials · Passed');
       await expect(readiness).toContainText('Merchant identity · Not verified');
       await expect(readiness).toContainText('Website and provider approval · Manual check required');
-      await expect(payment.getByRole('button', { name: 'Review publication', exact: true })).toHaveCount(0);
+      await expect(payment.getByRole('button', { name: 'Review changes', exact: true })).toHaveCount(0);
       readinessFails = true;
       await payment.getByRole('button', { name: 'Check sandbox readiness', exact: true }).click();
       await expect(payment).toContainText('The application could not inspect payments.');
@@ -146,14 +146,14 @@ test('payment configuration persists and catalogue publication requires review',
       await expect(readiness).toBeVisible();
       expect(publications).toBe(0);
       await payment.getByRole('button', { name: 'Preview sandbox catalogue', exact: true }).click();
-      await payment.getByRole('button', { name: 'Review publication', exact: true }).click();
+      await payment.getByRole('button', { name: 'Review changes', exact: true }).click();
       const confirmation = page.getByRole('dialog');
       await expect(confirmation).toContainText('acct_fixture');
       await expect(confirmation).toContainText('sandbox');
       await confirmation.getByRole('button', { name: 'Cancel', exact: true }).click();
       expect(publications).toBe(0);
-      await payment.getByRole('button', { name: 'Review publication', exact: true }).click();
-      await confirmation.getByRole('button', { name: 'Publish catalogue', exact: true }).click();
+      await payment.getByRole('button', { name: 'Review changes', exact: true }).click();
+      await confirmation.getByRole('button', { name: 'Apply catalogue', exact: true }).click();
       await expect(payment).toContainText('No product or price changes are needed.');
       expect(publications).toBe(1);
       pendingRecovery = true;

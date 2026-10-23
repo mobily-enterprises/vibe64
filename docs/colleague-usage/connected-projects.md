@@ -8,10 +8,10 @@ as a merged contribution.
 Checking connected Save status can take longer on a busy development workspace
 because it checks each receiving repository. Allow up to two minutes for the
 check. If status remains unavailable, use Save to check again and read its
-reported blocker; an incomplete check never publishes the main project.
+reported blocker; an incomplete check never saves the main project.
 
 The session badge shows **Unsaved changes** when a connected repository needs
-publication, even if the main repository is clean. After connected Save succeeds,
+saving, even if the main repository is clean. After connected Save succeeds,
 the result lists the pushed commits. An empty progress card closes when the action
 finishes; opened details with real output remain available until dismissed.
 

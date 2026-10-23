@@ -185,7 +185,7 @@ function createIntegrationSetupRequest(selection) {
   const payment = operation.startsWith("payments-");
   if (payment && (!["sandbox", "live"].includes(paymentEnvironment) || attemptId !== undefined || selection.setupRequest !== undefined ||
       (["payments-publish", "payments-recover"].includes(operation) ? !/^[a-f0-9]{64}$/u.test(reviewId || "") : reviewId !== undefined))) {
-    invalid("Select the payment environment and review catalogue changes before publishing.", 422);
+    invalid("Select the payment environment and review catalogue changes before applying them.", 422);
   }
   if (operation === "payments-recover" ? typeof providerId !== "string" || !/^[A-Za-z0-9_-]{1,200}$/.test(providerId) : providerId !== undefined) {
     invalid("Recovery requires the exact provider object ID and a current review.", 422);

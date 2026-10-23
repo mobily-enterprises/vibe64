@@ -1,7 +1,7 @@
-# Author a lesson and publish its source
+# Author a lesson and save its source
 
 Ask Colleague to coordinate a coding agent, review the lesson in the same session,
-and publish its source through the existing Save or pull-request workflow.
+and save its source through the existing Save or pull-request workflow.
 Colleague can operate those controls when requested; it does not edit files or
 run a shell itself. Git publication, pinned course material and installation are
 separate results. The current Getting started course has four step-based lessons
@@ -32,7 +32,7 @@ text needs a new immutable topic/course pin, keeping earlier learners’ version
 
 For example: “In this lesson-authoring project and session, improve the introduction's
 wording, keep its step IDs, checks and App/diagram contracts, validate and bundle it,
-arrange a review, then publish the source as a draft PR. Do not install or enable it.”
+arrange a review, then save the source as a draft PR. Do not install or enable it.”
 This is an example instruction, never authority to execute it without the person's
 actual request. A how-to question makes no edits, assignment or external write.
 
@@ -58,21 +58,21 @@ it does not mean published or installed. A preview can be published as preview
 source when requested. Pedagogical trial, real exercise and animation acceptance
 remain explicit requirements before claiming a reviewed course release.
 
-## Publish through the native repository workflow
+## Save through the native repository workflow
 
 After coding settles, inspect **Changes** and the exact repository/branch
 reported by the session. **Save** captures ALL current work, not selected files.
 A managed Vibe64 Git Save updates its canonical project; a GitHub Save pushes to
 the reviewed repository branch. Colleague can request native Save after an explicit
-Save/publication instruction and passes its unchanged destination review. It
+Save instruction and passes its unchanged destination review. It
 cannot bypass active-agent, stale-source, account or required-PR rules, or discard
-unrelated work to make publication pass. An ambiguous target stays unresolved.
+unrelated work to make Save pass. An ambiguous target stays unresolved.
 On mobile, reveal the project and use its Dashboard section chooser for Changes
 or Pull requests. The same native Save/PR permissions and review apply.
 
 For a required or requested PR workflow, Colleague can use the existing PR creation
 operation with the reviewed destination and requested title/body; draft is the
-default. PR creation saves and publishes the session's work. An already bound PR
+default. PR creation saves and pushes the session's work. An already bound PR
 is returned rather than silently edited. **Pull requests** shows actual remote
 source/base commits, checks and review blockers. Marking a draft ready or merging
 requires the person's corresponding instruction and the original fresh review;
@@ -80,10 +80,10 @@ creating a PR does not authorise merge. Use only a repository-enabled merge meth
 covered by that instruction. Save, PR creation or merge never deploys Vibe64.
 
 After success, report the actual saved destination or returned PR and current
-remote status. A coding agent's “pushed” message is not publication proof. After
+remote status. A coding agent's “pushed” message is not proof that Save pushed. After
 an uncertain result, inspect the original operation/PR before a deliberate retry;
-`published_needs_reconcile` means publication happened and local reconciliation
-still needs recovery. Do not republish automatically. Existing **Update this
+`published_needs_reconcile` means the push happened and local reconciliation
+still needs recovery. Do not push again automatically. Existing **Update this
 session (rebase)** and coding-agent conflict repair apply only when requested.
 
 ## Validate, bundle and pin
@@ -198,7 +198,7 @@ Internal snapshot acquisition also retains the authoring session's normal
 source protections: AI work, pending review or cleanup, and Workspace setup
 must finish before its committed content can be captured. A closing, renewing
 or unavailable source is refused. The saved trial control captures no source,
-automatically stops no work and does not publish the source.
+automatically stops no work and does not save or push the source.
 
 A workspace operator can now provision approved local lesson content through the
 terminal commands documented in [Local operator provisioning](../training-content.md#local-operator-provisioning).

@@ -76,7 +76,7 @@
                 {{ createBranch ? 'Creates the branch and opens a new session.' : 'Opens a new session on this branch.' }}
                 Your changes will be saved to {{ branchRepository }}:{{ createBranch ? newBranchName.trim() || 'your new branch' : branchName }}.
               </p>
-              <p class="text-body-small">App publishing still uses the project branch.</p>
+              <p class="text-body-small">Deploying the app still uses the project branch.</p>
             </template>
           </div>
         </template>

@@ -115,7 +115,7 @@ This first path uses an existing account. It does not create advertiser accounts
 provision billing, build Performance Max/Demand Gen campaigns, automatically audit
 a website, or attach live provider tools to coding-assistant hosts. Public editor
 management currently uses the development application's command/Env, even when
-the connected Ads account is real. Published-environment Ads management is not
+the connected Ads account is real. Deployed-environment Ads management is not
 provided by this screen. Reports/discovery show bounded lists; Google Ads remains
 the account-wide management UI. Native app composition and actual Google account
 approval remain required; fixture tests do not establish live provider acceptance.

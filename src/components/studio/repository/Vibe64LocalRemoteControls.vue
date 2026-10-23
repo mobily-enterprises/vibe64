@@ -173,7 +173,7 @@
         <v-card-text>
           <p>{{ pendingReview.action === 'push' ? 'Push to' : 'Pull from' }} <strong>{{ destination(pendingReview.target) }}</strong></p>
           <p class="local-remotes__url">{{ pendingReview.target.url }}</p>
-          <p v-if="pendingReview.action === 'push'">Publishes {{ pendingReview.count }} outgoing {{ pendingReview.count === 1 ? 'commit' : 'commits' }} from the local project. Unsaved session work is not included.</p>
+          <p v-if="pendingReview.action === 'push'">Pushes {{ pendingReview.count }} outgoing {{ pendingReview.count === 1 ? 'commit' : 'commits' }} from the local project. Unsaved session work is not included.</p>
           <p v-else-if="pendingReview.merge">Local and remote history have both advanced. Merge the remote changes into the local project, preserving both histories. Conflicts stop the operation for review.</p>
           <p v-else>Update the local project folder. Your sessions keep their work and can then use Update this session.</p>
         </v-card-text>

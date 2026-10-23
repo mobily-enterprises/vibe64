@@ -1972,7 +1972,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     pending.resolve({ ok: true, status: "updated" });
     await checking;
     expect(report).toHaveBeenLastCalledWith(task.id, {
-      status: "succeeded", message: "Session updated. Your changes were preserved. Nothing was published."
+      status: "succeeded", message: "Session updated. Your changes were preserved. Nothing was pushed."
     });
   });
 

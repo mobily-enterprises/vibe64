@@ -73,7 +73,7 @@ async function replace() {
 <template>
   <div v-if="available || replacement" class="d-flex flex-column ga-2" style="overflow-wrap: anywhere">
     <template v-if="replacement">
-      <p class="ma-0" role="status">Replacement prepared. Revise its source, then run Prepare workspace in this project before testing. Save connected first publishes it for review; Main Save still waits for acceptance.</p>
+      <p class="ma-0" role="status">Replacement prepared. Revise its source, then run Prepare workspace in this project before testing. Save connected first pushes it for review; Main Save still waits for acceptance.</p>
       <v-btn variant="tonal" min-height="48" :href="`${projectAppPath(replacement.projectSlug, '/')}?session=${encodeURIComponent(replacement.sessionId)}`">
         Open replacement session
       </v-btn>

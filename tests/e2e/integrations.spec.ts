@@ -1479,7 +1479,7 @@ for (const { viewport, providerBatch } of [
         expect(file.integrations.algolia.settings).toEqual({ applicationId: "APP123ABC", publicApiKeyRef: "env:ALGOLIA_PUBLIC_KEY" });
         expect(file.integrations.algolia.authentication).toEqual({ method: "api-key", secretRef: "env:ALGOLIA_BACKEND_KEY" });
         const frontendCredential = panel.getByRole("region", { name: "Public frontend API key", exact: true });
-        await expect(frontendCredential.getByText("Your application may publish this key in its frontend. Use a key restricted to data those users may read.", { exact: true })).toBeVisible();
+        await expect(frontendCredential.getByText("Your application may expose this key in its frontend. Use a key restricted to data those users may read.", { exact: true })).toBeVisible();
         await expect(frontendCredential.getByRole("link", { name: "Set credential in Env" })).toHaveAttribute("href", /prefillKey=ALGOLIA_PUBLIC_KEY/);
         await expect(panel.getByRole("region", { name: "Application credential", exact: true }).getByRole("link", { name: "Set credential in Env" })).toHaveAttribute("href", /prefillKey=ALGOLIA_BACKEND_KEY/);
         expect(file.extensions).toEqual(saved.extensions);

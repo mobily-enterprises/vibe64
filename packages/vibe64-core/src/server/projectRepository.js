@@ -245,7 +245,7 @@ function sessionConnectedContribution(session = {}) {
       !validRepositoryBranch(value.integrationBranch) || value.integrationBranch.startsWith("vibe64-incoming/") ||
       typeof value.baseCommit !== "string" || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/iu.test(value.baseCommit)) {
     throw projectRepositoryMetadataError("vibe64_contribution_authority_invalid",
-      "This contribution's saved source is invalid. Preserve its checkout and inspect its binding before publishing.");
+      "This contribution's saved source is invalid. Preserve its checkout and inspect its binding before saving.");
   }
   return { ...value, repository: value.repository.toLowerCase(), baseCommit: value.baseCommit.toLowerCase() };
 }
@@ -256,7 +256,7 @@ function sessionConnectedSubmissions(session = {}) {
   let value;
   try { value = JSON.parse(serialized); } catch { /* Never silently drop a publication requirement. */ }
   const invalid = () => projectRepositoryMetadataError("vibe64_connected_submissions_invalid",
-    "This session's connected publication bindings are invalid. Preserve the session and inspect its bindings before saving.");
+    "This session's connected Save bindings are invalid. Preserve the session and inspect its bindings before saving.");
   if (!isPlainObject(value) || value.schemaVersion !== 1 || !Array.isArray(value.submissions) ||
       Object.keys(value).some(key => !["schemaVersion", "submissions"].includes(key))) throw invalid();
   const identities = new Set();
@@ -298,7 +298,7 @@ function sessionRepositoryProject(project = {}, session = {}, { sourcePreparatio
         normalizeRepositoryMode(project.repositoryMode || project.repository?.mode) !== PROJECT_REPOSITORY_MODE_GITHUB ||
         repository !== contribution.repository || project.repository?.defaultBranch !== contribution.integrationBranch) {
       throw projectRepositoryMetadataError("vibe64_contribution_authority_changed",
-        "This contribution's repository or integration branch changed. Review its source binding before publishing.");
+        "This contribution's repository or integration branch changed. Review its source binding before saving.");
     }
     return { ...project, githubMirrorOptional: true,
       repository: { ...project.repository, defaultBranch: sourcePreparation
@@ -376,7 +376,7 @@ function assertSessionRepositoryReview(project, session, review) {
   if (!review || Object.entries(destination).some(([key, value]) => !value || review[key] !== value)) {
     throw projectRepositoryMetadataError(
       "vibe64_session_repository_review_changed",
-      "Review this session's repository and branch again before publishing. Its destination is missing or has changed."
+      "Review this session's repository and branch again before saving. Its destination is missing or has changed."
     );
   }
   return destination;

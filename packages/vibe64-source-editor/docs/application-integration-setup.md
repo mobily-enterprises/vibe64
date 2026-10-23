@@ -243,8 +243,8 @@ an editor payment gateway. The app owns the provider client, credentials,
 merchant mapping and transactional publication state. The editor owns the
 request/response contract below and requires workspace-owner access for payment
 management. When a host supplies production integrations, the same controls read
-the published configuration without editing it and send the current `releaseId`
-to that host. The host resolves the active published workspace and its release
+the deployed configuration without editing it and send the current `releaseId`
+to that host. The host resolves the active deployed workspace and its release
 Env under its publication lock, rejecting a stale release before execution. It
 must not substitute the selected development session or caller-supplied paths.
 `releaseId` is a host request field, not an application-command field: the app

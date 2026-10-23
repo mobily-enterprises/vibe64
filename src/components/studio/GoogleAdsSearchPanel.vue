@@ -73,7 +73,7 @@ function performConfirmed() {
     <p class="mb-4">Use this project's connected Google account to prepare a Search campaign in an existing Ads account. Google bills the account directly. Creating a campaign here leaves it paused; launching requires a separate review.</p>
     <v-alert type="info" variant="tonal" class="mb-4">Save the connection and connect Google first. Your application must implement the advertising setup command. These controls use the development application's credentials; they can still affect a real Google Ads account.</v-alert>
     <v-btn v-if="canPrepare" height="48" variant="tonal" class="mb-4" :disabled="blocked" @click="emit('prepare')">Prepare Search implementation request</v-btn>
-    <p v-if="managementDisabled">Save pending configuration changes and use an active owner session to run account operations. Published-environment advertising management is not available here.</p>
+    <p v-if="managementDisabled">Save pending configuration changes and use an active owner session to run account operations. Deployed-environment advertising management is not available here.</p>
     <v-progress-linear v-if="loading" indeterminate aria-label="Loading Google Ads" class="my-3" />
     <v-alert v-if="result?.status === 'unconfigured' || props.result?.status === 'unconfigured'" type="info" variant="tonal">Your application has not declared its advertising setup command. Use Prepare Search implementation request, then save the application implementation before running these operations.</v-alert>
     <v-alert v-if="error" type="error" variant="tonal" class="my-3" role="alert">{{ error }}</v-alert>

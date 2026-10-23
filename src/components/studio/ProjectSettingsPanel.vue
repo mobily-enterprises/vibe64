@@ -297,7 +297,7 @@
       <section v-if="repositoryWorkflow.available" class="project-settings__section" aria-labelledby="repository-workflow-title">
         <div class="project-settings__section-copy text-body-medium">
           <h2 id="repository-workflow-title" class="text-title-medium font-weight-bold">Git workflow</h2>
-          <p>Choose how Vibe64 publishes changes to this repository.</p>
+          <p>Choose how Vibe64 saves changes to this repository.</p>
         </div>
         <div class="project-settings__content text-body-medium">
           <v-radio-group

@@ -1,6 +1,6 @@
 # Review, Save and work with GitHub
 
-Source edits in a session, saving a project version and publishing an application
+Source edits in a session, saving a project version and deploying an application
 are separate operations. A different session has its own worktree. Check which
 project, session and branch you are using before saving or creating a pull request.
 
@@ -11,7 +11,7 @@ session's tab. Managed Vibe64 Git saves a version;
 GitHub workflows use your repository permissions and the project's direct-push or
 pull-request policy. **Update this session (rebase)** reconciles newer saved project
 work when offered; Save does not silently perform that update for you. A failed or
-uncertain publication needs a state check before another request.
+uncertain push needs a state check before another request.
 
 Whenever Save or Update reports a problem, its activity panel offers **Fix it with
 AI**, which opens a temporary repair chat with the exact error and asks it to
@@ -36,7 +36,7 @@ repair it. Ask the coding agent to reconcile the existing selected component as
 the error directs, preserving the project's authored setup and output sections.
 This does not require installing dependencies or preparing the database. Review
 the repair, then use **Save** again. The failed preflight leaves your source and
-published version unchanged. Colleague can explain this recovery; the coding
+saved version unchanged. Colleague can explain this recovery; the coding
 agent performs the source repair. These steps apply on desktop and mobile.
 
 If assistant naming is unavailable, Save uses a checkpoint-based version name
@@ -49,8 +49,8 @@ If a push loses its response, Vibe64 checks the exact prepared commit on the
 remote before treating it as failed. If the remote cannot be read, restore access
 and inspect the session's work again. Recovery uses the original Save operation
 and Git evidence, including after an editor restart, without another push. A
-failed local update after publication uses the same recovery. If Git confirms
-that nothing was published, the original rejection remains visible or an
+failed local update after a push uses the same recovery. If Git confirms
+that nothing was pushed, the original rejection remains visible or an
 uncertain attempt becomes explicitly retryable. Colleague can inspect work and
 explain that result; a new Save still requires your instruction.
 
@@ -80,7 +80,7 @@ coding work to finish, then:
    further repair is needed; cancelling leaves the files unchanged.
 3. Select **I've resolved these conflicts — apply Update** to acknowledge the
    repair and run Update. This works even when no repair chat exists or its AI
-   was stopped or failed. It does not Save, push or publish the work.
+   was stopped or failed. It does not Save or push the work.
 
 On phones, reveal chat to reach the Update error or repair tab; the file review
 and confirmation are the same as on desktop. The controls wait while an assistant
@@ -110,7 +110,7 @@ On mobile, reveal the project and choose the corresponding **Dashboard section**
 Creating a pull request uses the same connected-work checks as Main Save. Save
 connected work first, merge its submitted revisions in the receiving projects,
 and Update those connected sessions to the accepted source before creating the
-pull request. Changed source or revoked receiving access stops publication;
+pull request. Changed source or revoked receiving access stops the push;
 creating a pull request does not bypass those checks.
 
 Colleague can explain these workflows, open their views, inspect bounded saved-work
@@ -120,4 +120,4 @@ repository itself. Tell it the intended branch, issue or PR when ambiguous. A
 question such as “How do I create a PR?” makes no commit, push or external write.
 An accepted offer or direct request still needs any unresolved inputs and the
 native review/permission rules. Its report must distinguish requested, saved,
-published and unknown outcomes, and disclose unverified external results.
+pushed and unknown outcomes, and disclose unverified external results.

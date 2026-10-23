@@ -112,8 +112,14 @@ describe("useVibe64AutopilotView route hydration", () => {
       "2026-09-26T13:28:47.406Z  Writing a concise name for this work.",
       "2026-09-26T13:29:03.800Z  Session work was saved."
     ].join("\n"));
-    props.workState.operation.events.push({ at: "2026-09-26T13:30:00.000Z", message: "Publishing failed; retry Save." });
-    expect(view.saveWorkOutput.value).toContain("Publishing failed; retry Save.");
+    props.workState.operation.events.push({ at: "2026-09-26T13:30:00.000Z", message: "Push failed; retry Save." });
+    expect(view.saveWorkOutput.value).toContain("Push failed; retry Save.");
+    props.workState.operation.stage = "publishing";
+    expect(view.saveWorkStage.value).toBe("pushing");
+    props.workState.operation.stage = "published";
+    expect(view.saveWorkStage.value).toBe("pushed");
+    props.workState.operation.stage = "reconciling";
+    expect(view.saveWorkStage.value).toBe("reconciling");
   });
 
   it.each([true, false])("opens Current changes without the dashboard menu (direct link: %s)", async (direct) => {
