@@ -1414,10 +1414,13 @@ function createSessionAgentManager({
     },
     async resolveSelection(input = {}, options = {}) {
       const provider = providerFor({ engineId: input?.engineId });
-      return resolveVibe64AssistantSelection(
-        await providerCapabilities(provider, input, options),
-        input
-      );
+      let capabilities = await providerCapabilities(provider, input, options);
+      // Models setup saves choices from the whole catalogue, whose revision
+      // differs from one provider's page; check such a choice against it.
+      if (input.modelProviderId && input.catalogRevision && input.catalogRevision !== capabilities.revision) {
+        capabilities = await providerCapabilities(provider, { ...input, modelProviderId: "" }, options);
+      }
+      return resolveVibe64AssistantSelection(capabilities, input);
     },
     readConversation: sessionMethod("readConversation"),
     readEphemeralConversation: ephemeralScopeMethod("readConversation"),

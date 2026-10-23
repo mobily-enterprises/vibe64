@@ -801,6 +801,20 @@ test("session agent manager resolves live engine capabilities without fallback",
   );
 });
 
+test("a Models choice from the whole catalogue resolves although one provider's page has another revision", async () => {
+  const wholeRevision = `sha256:${"c".repeat(64)}`;
+  const manager = createSessionAgentManager({ providers: [{ id: "claude", transportId: "claude_cli", async capabilities(_context, input) {
+    return { engineId: "claude", transportId: "claude_cli", revision: input.modelProviderId ? catalogRevision : wholeRevision,
+      agents: [{ id: "claude", mode: "primary" }], defaults: { agentId: "claude", modelProviderId: "deepseek", modelId: "pro" },
+      modelProviders: [{ id: "deepseek", connected: true, models: [{ id: "pro", status: "available", variants: [{ id: "high" }] }] }] };
+  } }] });
+  const choice = { engineId: "claude", modelProviderId: "deepseek", modelId: "pro", variantId: "high" };
+  assert.equal((await manager.resolveSelection({ ...choice, catalogRevision: wholeRevision })).catalogRevision, wholeRevision);
+  assert.equal((await manager.resolveSelection({ ...choice, catalogRevision })).catalogRevision, catalogRevision);
+  await assert.rejects(manager.resolveSelection({ ...choice, catalogRevision: `sha256:${"d".repeat(64)}` }),
+    (error) => error.code === "vibe64_assistant_catalog_stale");
+});
+
 test("session agent manager reconciles each durable engine separately", async () => {
   const calls = [];
   const adapter = (id) => ({
