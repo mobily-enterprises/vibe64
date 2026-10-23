@@ -272,11 +272,14 @@ function normalizePreviewProxySocketIdleTimeoutMs(value = undefined, {
     : DEFAULT_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS;
 }
 
+// HTTPS Preview gates use a __Host- cookie: Secure, Path=/ and no Domain, so a
+// sibling host under the same parent domain cannot set or replace it.
 function previewTokenCookieName(proxyOrigin = "") {
   try {
     const url = new URL(proxyOrigin);
-    const suffix = url.port || (url.protocol === "https:" ? "443" : "80");
-    return `${PREVIEW_PROXY_TOKEN_COOKIE}_${suffix}`;
+    const https = url.protocol === "https:";
+    const suffix = url.port || (https ? "443" : "80");
+    return `${https ? "__Host-" : ""}${PREVIEW_PROXY_TOKEN_COOKIE}_${suffix}`;
   } catch {
     return PREVIEW_PROXY_TOKEN_COOKIE;
   }
@@ -2104,9 +2107,13 @@ function previewPublicSocketPath(publicOrigin = "", env = process.env) {
   const origin = normalizePreviewPublicOrigin(publicOrigin);
   const url = new URL(origin);
   const host = url.hostname;
-  const match = /^([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)--([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(?:\.|$)/u.exec(host);
+  // <preview>.<workspace>.<domain> nests a Preview under its editor host;
+  // <preview>--<workspace>.<domain> is the flat form. Both name one socket.
+  const label = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
+  const match = new RegExp(`^(${label})--(${label})(?:\\.|$)`, "u").exec(host) ||
+    new RegExp(`^(v64preview-[a-z0-9]{12})\\.(${label})\\.`, "u").exec(host);
   if (!match) {
-    throw new Error("Launch preview public origin must use the <preview>--<workspace> host format.");
+    throw new Error("Launch preview public origin must use the <preview>.<workspace> or <preview>--<workspace> host format.");
   }
   const socketDir = previewProxySocketDir(env);
   const portSuffix = url.port ? `--p${url.port}` : "";

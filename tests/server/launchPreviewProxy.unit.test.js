@@ -91,15 +91,29 @@ test("launch preview target URLs are constrained to loopback HTTP origins", () =
   assert.throws(() => normalizePreviewTargetHref("http://vibe64-launch-notvalid:4103/home"), /must be loopback/u);
 });
 
-test("launch preview bearer cookies are Secure on hosted HTTPS origins", () => {
+test("launch preview bearer cookies are host-only __Host- cookies on hosted HTTPS origins", () => {
   const hostedCookie = previewTokenCookie("secret", {
-    proxyOrigin: "https://v64preview-abc123def456--workspace.vibe64.dev"
+    proxyOrigin: "https://v64preview-abc123def456.workspace.studio.example"
   });
-  assert.match(hostedCookie, /; SameSite=None; HttpOnly; Secure$/u);
+  assert.match(hostedCookie, /^__Host-vibe64_preview_token_443=secret; Path=\/; SameSite=None; HttpOnly; Secure$/u);
+  assert.doesNotMatch(hostedCookie, /Domain=/iu);
   const localCookie = previewTokenCookie("secret", {
     proxyOrigin: "http://127.0.0.1:49000"
   });
-  assert.match(localCookie, /; SameSite=Lax; HttpOnly$/u);
+  assert.match(localCookie, /^vibe64_preview_token_49000=secret; Path=\/; SameSite=Lax; HttpOnly$/u);
+});
+
+test("launch preview public socket path accepts Previews nested under their editor host", () => {
+  const env = { VIBE64_PREVIEW_PROXY_SOCKET_DIR: "/srv/preview-sockets" };
+  assert.equal(
+    previewPublicSocketPath("https://v64preview-abcd1234ef56.workspace.studio.example", env),
+    "/srv/preview-sockets/v64preview-abcd1234ef56--workspace.sock"
+  );
+  assert.equal(
+    previewPublicSocketPath("http://v64preview-abcd1234ef56.workspace.users.localhost:3000", env),
+    "/srv/preview-sockets/v64preview-abcd1234ef56--workspace--p3000.sock"
+  );
+  assert.throws(() => previewPublicSocketPath("https://workspace.studio.example", env), /host format/u);
 });
 
 test("launch preview proxy injects HTML and proxies app-relative requests", async () => {

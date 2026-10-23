@@ -3218,8 +3218,7 @@ function previewPublicOriginForLaunch({
     previewPublicDomain || env?.[VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV] || ""
   ).trim();
   let baseDomain = normalizePublicDomain(
-    configuredPreviewDomain ||
-      previewPublicBaseDomain(studioHostMatch.baseDomain)
+    configuredPreviewDomain || studioHostMatch.baseDomain
   );
   if (!configuredPreviewDomain) {
     const requestPort = publicDomainPort(
@@ -3249,7 +3248,9 @@ function previewPublicOriginForLaunch({
   if (!hash) {
     return "";
   }
-  return `${protocol}://${PREVIEW_PUBLIC_HOST_PREFIX}-${hash}--${workspace}.${baseDomain}`;
+  // The Preview nests under its editor's workspace name, keeping the editor
+  // and its Preview iframe one site even when the domain is a public suffix.
+  return `${protocol}://${PREVIEW_PUBLIC_HOST_PREFIX}-${hash}.${workspace}.${baseDomain}`;
 }
 
 function studioHostMatchForPreview(hostname = "", {
@@ -3315,14 +3316,6 @@ function normalizePublicHostDomain(value = "") {
     return "";
   }
   return domain.replace(/:\d+$/u, "");
-}
-
-function previewPublicBaseDomain(studioBaseDomain = "") {
-  const baseDomain = String(studioBaseDomain || "").trim().toLowerCase();
-  if (baseDomain.startsWith("users.")) {
-    return baseDomain.slice("users.".length);
-  }
-  return baseDomain;
 }
 
 export {

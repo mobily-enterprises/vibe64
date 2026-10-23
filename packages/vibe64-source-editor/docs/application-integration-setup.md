@@ -189,7 +189,7 @@ under the wrong user. Account linking remains separate from application login.
 ## Callback and Env
 
 Use the actual assigned application origin as the initial callback suggestion,
-for example `https://sas-dogandgroom.hosting.vibe64.dev`, plus the implemented
+for example `https://my-app.example.com`, plus the implemented
 callback path. Google Calendar suggests `/integrations/google/callback`.
 The public editor receives the origin from its host; it never constructs it from
 the dashboard address or project slug. Without an assigned origin, enter the

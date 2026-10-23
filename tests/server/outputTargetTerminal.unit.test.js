@@ -528,9 +528,8 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
       async finishWorkflow(id, options) { workflowFinishes.push({ id, ...options }); },
       env: {
         VIBE64_PREVIEW_PROXY_SOCKET_DIR: previewSocketDir,
-        VIBE64_PREVIEW_PUBLIC_DOMAIN: "vibe64.dev",
         VIBE64_PUBLIC_PROTOCOL: "https",
-        VIBE64_PUBLIC_USER_DOMAIN: "users.vibe64.dev",
+        VIBE64_PUBLIC_USER_DOMAIN: "studio.example",
         VIBE64_WORKSPACE: "merc"
       },
       async ensureWorkspacePrepared() {
@@ -617,7 +616,7 @@ test("launch start awaits preparation, publishes hosted ingress, and cannot reta
       outputTargetId: "app"
     });
     const previewPublicOrigin = readyTerminal.metadata.previewPublicOrigin;
-    assert.match(previewPublicOrigin, /^https:\/\/v64preview-[a-z0-9]{12}--merc\.vibe64\.dev$/u);
+    assert.match(previewPublicOrigin, /^https:\/\/v64preview-[a-z0-9]{12}\.merc\.studio\.example$/u);
     assert.equal(existsSync(previewPublicSocketPath(previewPublicOrigin, {
       VIBE64_PREVIEW_PROXY_SOCKET_DIR: previewSocketDir
     })), true);
@@ -1077,51 +1076,50 @@ test("web launch rejects conflicting preview identity and preview authentication
   }
 });
 
-test("preview public origin maps user Studio hosts to the app preview domain", () => {
+test("preview public origin nests the Preview under its editor host", () => {
   const publicOrigin = previewPublicOriginForLaunch({
     env: {},
-    publicHost: "massimo.users.vibe64.dev",
+    publicHost: "massimo.studio.example",
     sessionId: "2026-06-19_14-44-21",
     targetHref: "http://127.0.0.1:4100/home",
     terminalSessionId: "38a93bff-7956-47f7-a2df-fd2906498869"
   });
 
-  assert.match(publicOrigin, /^https:\/\/v64preview-[a-z0-9]{12}--massimo\.vibe64\.dev$/u);
-  assert.equal(publicOrigin.includes(".users.vibe64.dev"), false);
+  assert.match(publicOrigin, /^https:\/\/v64preview-[a-z0-9]{12}\.massimo\.studio\.example$/u);
 });
 
 test("preview public origin follows the Studio HTTPS protocol by default", () => {
   const publicOrigin = previewPublicOriginForLaunch({
     env: {
-      VIBE64_PREVIEW_PUBLIC_DOMAIN: "vibe64.dev",
+      VIBE64_PREVIEW_PUBLIC_DOMAIN: "studio.example",
       VIBE64_PUBLIC_PROTOCOL: "https",
-      VIBE64_PUBLIC_USER_DOMAIN: "users.vibe64.dev"
+      VIBE64_PUBLIC_USER_DOMAIN: "studio.example"
     },
-    publicHost: "pass.users.vibe64.dev",
+    publicHost: "pass.studio.example",
     publicProtocol: "https",
     sessionId: "2026-07-10_05-25-34",
     targetHref: "http://127.0.0.1:4102/",
     terminalSessionId: "preview-terminal"
   });
 
-  assert.match(publicOrigin, /^https:\/\/v64preview-[a-z0-9]{12}--pass\.vibe64\.dev$/u);
+  assert.match(publicOrigin, /^https:\/\/v64preview-[a-z0-9]{12}\.pass\.studio\.example$/u);
 });
 
 test("independent editor namespaces keep cloned session preview routes distinct", () => {
-  const options = { publicHost: "pass.users.vibe64.dev", sessionId: "same-cloned-session" };
+  const options = { publicHost: "pass.studio.example", sessionId: "same-cloned-session" };
   const origin = (namespace) => previewPublicOriginForLaunch({ ...options,
     env: { VIBE64_PREVIEW_PUBLIC_NAMESPACE: namespace } });
   assert.equal(origin(""), previewPublicOriginForLaunch({ ...options, env: {} }));
   assert.equal(origin("first"), origin("first"));
   assert.notEqual(origin("first"), origin("second"));
-  assert.match(origin("first"), /^https:\/\/v64preview-[a-z0-9]{12}--pass\.vibe64\.dev$/u);
+  assert.match(origin("first"), /^https:\/\/v64preview-[a-z0-9]{12}\.pass\.studio\.example$/u);
 });
 
 test("preview public origin uses hosted workspace configuration without a request host", () => {
   const env = {
-    VIBE64_PREVIEW_PUBLIC_DOMAIN: "vibe64.dev",
+    VIBE64_PREVIEW_PUBLIC_DOMAIN: "studio.example",
     VIBE64_PUBLIC_PROTOCOL: "https",
-    VIBE64_PUBLIC_USER_DOMAIN: "users.vibe64.dev",
+    VIBE64_PUBLIC_USER_DOMAIN: "studio.example",
     VIBE64_WORKSPACE: "pass"
   };
   const sessionId = "2026-07-10_05-25-34";
@@ -1130,7 +1128,7 @@ test("preview public origin uses hosted workspace configuration without a reques
     previewPublicOriginForLaunch({ env, sessionId }),
     previewPublicOriginForLaunch({
       env,
-      publicHost: "pass.users.vibe64.dev",
+      publicHost: "pass.studio.example",
       sessionId
     })
   );
@@ -1139,9 +1137,9 @@ test("preview public origin uses hosted workspace configuration without a reques
 test("preview public origin rejects invalid hosted workspace configuration", () => {
   assert.equal(previewPublicOriginForLaunch({
     env: {
-      VIBE64_PREVIEW_PUBLIC_DOMAIN: "vibe64.dev",
+      VIBE64_PREVIEW_PUBLIC_DOMAIN: "studio.example",
       VIBE64_PUBLIC_PROTOCOL: "https",
-      VIBE64_PUBLIC_USER_DOMAIN: "users.vibe64.dev",
+      VIBE64_PUBLIC_USER_DOMAIN: "studio.example",
       VIBE64_WORKSPACE: "invalid.workspace"
     },
     sessionId: "2026-07-10_05-25-34"
@@ -1151,24 +1149,24 @@ test("preview public origin rejects invalid hosted workspace configuration", () 
 test("preview public origin follows the configured public protocol", () => {
   const publicOrigin = previewPublicOriginForLaunch({
     env: {
-      VIBE64_PREVIEW_PUBLIC_DOMAIN: "vibe64.dev",
+      VIBE64_PREVIEW_PUBLIC_DOMAIN: "studio.example",
       VIBE64_PREVIEW_PUBLIC_PROTOCOL: "http",
       VIBE64_PUBLIC_PROTOCOL: "https",
-      VIBE64_PUBLIC_USER_DOMAIN: "users.vibe64.dev"
+      VIBE64_PUBLIC_USER_DOMAIN: "studio.example"
     },
-    publicHost: "massimo.users.vibe64.dev",
+    publicHost: "massimo.studio.example",
     sessionId: "2026-06-19_14-44-21",
     targetHref: "http://127.0.0.1:4100/home",
     terminalSessionId: "38a93bff-7956-47f7-a2df-fd2906498869"
   });
 
-  assert.match(publicOrigin, /^https:\/\/v64preview-[a-z0-9]{12}--massimo\.vibe64\.dev$/u);
+  assert.match(publicOrigin, /^https:\/\/v64preview-[a-z0-9]{12}\.massimo\.studio\.example$/u);
 });
 
 test("preview public origin stays stable across terminal restarts", () => {
   const input = {
     env: {},
-    publicHost: "massimo.users.vibe64.dev",
+    publicHost: "massimo.studio.example",
     sessionId: "2026-06-19_14-44-21"
   };
 
@@ -1189,7 +1187,7 @@ test("preview public origin stays stable across terminal restarts", () => {
 test("preview public origin supports explicit localhost hosted routing config", () => {
   const publicOrigin = previewPublicOriginForLaunch({
     env: {},
-    previewPublicDomain: "localhost:3000",
+    previewPublicDomain: "users.localhost:3000",
     publicHost: "merc.users.localhost:3000",
     publicProtocol: "http",
     publicUserDomain: "users.localhost:3000",
@@ -1198,14 +1196,12 @@ test("preview public origin supports explicit localhost hosted routing config", 
     terminalSessionId: "38a93bff-7956-47f7-a2df-fd2906498869"
   });
 
-  assert.match(publicOrigin, /^http:\/\/v64preview-[a-z0-9]{12}--merc\.localhost:3000$/u);
-  assert.equal(publicOrigin.includes(".users.localhost"), false);
+  assert.match(publicOrigin, /^http:\/\/v64preview-[a-z0-9]{12}\.merc\.users\.localhost:3000$/u);
 });
 
 test("preview public origin supports env-driven localhost hosted routing config", () => {
   const publicOrigin = previewPublicOriginForLaunch({
     env: {
-      VIBE64_PREVIEW_PUBLIC_DOMAIN: "localhost:3000",
       VIBE64_PUBLIC_PROTOCOL: "http",
       VIBE64_PUBLIC_USER_DOMAIN: "users.localhost:3000"
     },
@@ -1215,7 +1211,7 @@ test("preview public origin supports env-driven localhost hosted routing config"
     terminalSessionId: "38a93bff-7956-47f7-a2df-fd2906498869"
   });
 
-  assert.match(publicOrigin, /^http:\/\/v64preview-[a-z0-9]{12}--merc\.localhost:3000$/u);
+  assert.match(publicOrigin, /^http:\/\/v64preview-[a-z0-9]{12}\.merc\.users\.localhost:3000$/u);
 });
 
 test("preview public origin isolates localhost instances by public port", () => {
@@ -1236,8 +1232,8 @@ test("preview public origin isolates localhost instances by public port", () => 
   });
 
   assert.notEqual(new URL(port3000Origin).hostname, new URL(port3001Origin).hostname);
-  assert.match(port3000Origin, /^http:\/\/v64preview-[a-z0-9]{12}--merc\.localhost:3000$/u);
-  assert.match(port3001Origin, /^http:\/\/v64preview-[a-z0-9]{12}--merc\.localhost:3001$/u);
+  assert.match(port3000Origin, /^http:\/\/v64preview-[a-z0-9]{12}\.merc\.users\.localhost:3000$/u);
+  assert.match(port3001Origin, /^http:\/\/v64preview-[a-z0-9]{12}\.merc\.users\.localhost:3001$/u);
 });
 
 test("web launch target port allocation reserves ports during concurrent spec creation", async () => {
