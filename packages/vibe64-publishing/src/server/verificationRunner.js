@@ -13,6 +13,14 @@ import { readJsonFile, serialized, writeJsonFile } from "./state/jsonFile.js";
 const VERIFICATION_CONTRACT = "vibe64.publishing-verification.v1";
 const PASSTHROUGH = ["PATH", "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TZ", "TERM"];
 const KEEP = 10;
+const OUTPUT_TAIL = 4000;
+
+// The end of a failed command's output, so the person sees why without a terminal.
+function failureOutput(outcome, home) {
+  const details = (outcome?.diagnostics || []).find((entry) => entry?.details)?.details || {};
+  const text = [details.stdout, details.stderr].map((value) => String(value || "").trimEnd()).filter(Boolean).join("\n");
+  return text.replaceAll(home, "~").slice(-OUTPUT_TAIL);
+}
 
 function checkEnvironment(home, base = process.env) {
   const environment = {};
@@ -51,12 +59,18 @@ function createVerificationRunner({ runtimeRoot, repository, verify = verifyGene
     const work = (async () => {
       const home = await mkdtemp(path.join(os.tmpdir(), "vibe64-checks-home-"));
       try {
-        const outcome = await repository.withCheckout(repositoryRoot, commit, (root) => verify({ projectRoot: root, environment: checkEnvironment(home) }));
+        let current = "";
+        const onEvent = (event) => {
+          if (event?.code === "VERIFICATION_STARTED") current = String(event.details?.label || "");
+        };
+        const outcome = await repository.withCheckout(repositoryRoot, commit, (root) => verify({ projectRoot: root, environment: checkEnvironment(home), onEvent }));
+        const status = outcome?.status === "passed" ? "passed" : outcome?.status === "unconfigured" ? "unconfigured" : "failed";
         return await record({
           commit,
-          status: outcome?.status === "passed" ? "passed" : outcome?.status === "unconfigured" ? "unconfigured" : "failed",
+          status,
           summary: String(outcome?.summary || "").slice(0, 2000),
           commands: (outcome?.commands || []).map(({ label }) => label).slice(0, 50),
+          ...(status === "failed" ? { failedCommand: current.slice(0, 200), output: failureOutput(outcome, home) } : {}),
           startedAt,
           finishedAt: now()
         });
