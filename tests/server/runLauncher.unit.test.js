@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   isDirectCliExecution,
   isWslEnvironment,
+  launcherProblem,
   quoteShellArg,
   serverShellCommand,
   serverWindowsCommand,
@@ -194,4 +195,13 @@ test("run launcher shell script preserves failed server output until enter", () 
   assert.equal(result.status, 7);
   assert.match(result.stderr, /server failed/u);
   assert.match(result.stdout, /Vibe64 server exited\. Exit status 7\. Press Enter to close this terminal/u);
+});
+
+test("run launcher stops with plain words on Windows and on the wrong Node.js", () => {
+  assert.match(launcherProblem({ platform: "win32", nodeVersion: "26.1.0", requiredMajor: "26" }), /^Vibe64 runs on Windows inside WSL2/u);
+  const old = launcherProblem({ platform: "linux", nodeVersion: "24.22.1", requiredMajor: "26" });
+  assert.match(old, /^Vibe64 needs Node\.js 26; this is Node\.js 24\.22\.1\./u);
+  assert.match(old, /mise use -g node@26/u);
+  assert.equal(launcherProblem({ platform: "darwin", nodeVersion: "26.12.1", requiredMajor: "26" }), "");
+  assert.equal(launcherProblem({ platform: "linux", nodeVersion: "26.0.0" }), "", "this package declares Node.js 26");
 });

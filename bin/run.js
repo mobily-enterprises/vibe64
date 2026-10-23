@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
-import { realpathSync } from "node:fs";
+import { readFileSync, realpathSync } from "node:fs";
 import { release as osRelease } from "node:os";
 import process from "node:process";
 import path from "node:path";
@@ -350,6 +350,43 @@ async function runServerInCurrentTerminal({
   });
 }
 
+// The Node.js major in package.json's engines field ("26.x" → "26").
+function requiredNodeMajor(packagePath = path.join(MODULE_DIR, "..", "package.json")) {
+  try {
+    return /^\D*(\d+)/u.exec(String(JSON.parse(readFileSync(packagePath, "utf8")).engines?.node || ""))?.[1] || "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Why Vibe64 cannot start here, in plain words, or "". Vibe64 runs commands
+ * through a POSIX shell, so Windows uses it inside WSL2; and it needs the
+ * Node.js major its package declares.
+ */
+function launcherProblem({
+  platform = process.platform,
+  nodeVersion = process.versions.node,
+  requiredMajor = requiredNodeMajor()
+} = {}) {
+  if (platform === "win32") {
+    return [
+      "Vibe64 runs on Windows inside WSL2 (Ubuntu), not in PowerShell or Command Prompt.",
+      "Install WSL2: https://learn.microsoft.com/en-us/windows/wsl/install",
+      "Then open Ubuntu, install Node.js there and run npx vibe64 inside it."
+    ].join("\n");
+  }
+  const major = String(nodeVersion || "").split(".")[0];
+  if (requiredMajor && major !== requiredMajor) {
+    return [
+      `Vibe64 needs Node.js ${requiredMajor}; this is Node.js ${nodeVersion}.`,
+      `To install it with mise, run: curl https://mise.run | sh && ~/.local/bin/mise use -g node@${requiredMajor}`,
+      "Then open a new terminal and run npx vibe64 again."
+    ].join("\n");
+  }
+  return "";
+}
+
 async function runLauncher({
   cwd = process.cwd(),
   env = process.env,
@@ -388,6 +425,11 @@ if (isDirectCliExecution()) {
     spec: () => import("../server/lib/agentSpecCli.js").then(({ runAgentSpecCli }) => runAgentSpecCli(process.argv.slice(3))),
     training: () => import("@local/vibe64-training/server/cli").then(({ runTrainingCli }) => runTrainingCli(process.argv.slice(3)))
   };
+  const problem = launcherProblem();
+  if (problem) {
+    console.error(problem);
+    process.exit(1);
+  }
   const command = Object.hasOwn(subcommands, process.argv[2]) ? subcommands[process.argv[2]]() : runLauncher();
   command.then((exitCode) => {
     process.exitCode = exitCode;
@@ -402,6 +444,7 @@ export {
   isDirectCliExecution,
   isWslEnvironment,
   launchInNewTerminal,
+  launcherProblem,
   quoteShellArg,
   runLauncher,
   serverShellCommand,
