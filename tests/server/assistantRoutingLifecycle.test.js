@@ -366,6 +366,31 @@ test("a stopped request stays waiting when its late saved receipt confirms deliv
   assert.equal(f.sends.length, 1);
 });
 
+test("a plain message sent while the previous request starts its turn steers that turn, including Retry", async (t) => {
+  // Production: the second message was written during the first request's Auto
+  // routing, dispatched just after that request started its native turn, and
+  // every Retry repeated the stale "send" expectation.
+  const f = await fixture(t);
+  const { submissionKind: _kind, ...plain } = request;
+  await f.service.send("session-1", { ...plain, messageId: "first" }, f.context);
+  assert.equal(f.sends.length, 1);
+  const helpers = f.helperCalls();
+  f.agent.sessionState = async () => ({ turn: { active: true, id: "turn-1" } });
+  const second = { messageId: "second", message: "But wait let me save first I forgot" };
+  // A caller that explicitly requires a new turn keeps that contract.
+  await assert.rejects(f.service.send("session-1", { ...second, submissionKind: "send" }, f.context), /started another turn/);
+  assert.equal(f.sends.length, 1);
+  const delivered = await f.service.send("session-1", second, f.context);
+  assert.equal(delivered.delivered, true);
+  assert.equal(f.sends.length, 2);
+  assert.equal(f.sends[1].input.messageId, "second");
+  assert.equal(f.sends[1].input.message, second.message, "steering is delivered verbatim, not reclassified");
+  assert.equal(f.helperCalls(), helpers);
+  const retried = await f.service.send("session-1", second, f.context);
+  assert.equal(retried.duplicate, true);
+  assert.equal(f.sends.length, 2, "Retry of a delivered message never sends it twice");
+});
+
 test("steering does not classify, and an unfinished goal rejects Auto", async (t) => {
   const f = await fixture(t);
   f.agent.sessionState = async () => ({ turn: { active: true } });

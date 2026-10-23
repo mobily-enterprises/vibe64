@@ -2328,6 +2328,18 @@ test("a message proven not sent returns a definite rejection so the chat shows i
     assert.deepEqual(error.details, { delivery });
     return true;
   });
+  // Shared conversation protocol rejections keep their code: the browser's
+  // finished-turn steering fallback recognizes it by that code.
+  problem = Object.assign(new Error("That turn has finished. Send this as a new request."), {
+    code: "conversation_steer_turn_finished", statusCode: 409, delivery: "not-sent"
+  });
+  await assert.rejects(send(), error => {
+    assert.equal(error.status, 409);
+    assert.equal(error.code, "conversation_steer_turn_finished");
+    assert.equal(error.message, problem.message);
+    assert.deepEqual(error.details, { delivery });
+    return true;
+  });
   problem = Object.assign(new Error("private storage path /srv/secret"), { statusCode: 500, delivery: "not-sent" });
   await assert.rejects(send(), error => {
     assert.equal(error.status, 422);

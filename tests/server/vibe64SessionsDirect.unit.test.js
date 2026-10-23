@@ -756,6 +756,24 @@ test("Main browser delivery preserves original owner-conflict recovery scalars w
   assert.deepEqual(await conversation.send(input), { ok: false, delivered: false, error: result.error });
 });
 
+test("Main browser plain messages leave the turn expectation to Routing; explicit steering keeps it", async () => {
+  const target = { projectSlug: "test-project", sessionId: "session-1" };
+  const sent = [];
+  const conversations = createMainBrowserConversations({
+    actions: { async execute(request) {
+      if (request.actionId === ACTION_READ_CONVERSATION_CONTEXT) return { actor: { id: "owner" } };
+      sent.push(request.input);
+      return { ok: true, delivered: true, messageId: request.input.messageId };
+    } },
+    terminals: { openBrowserConversation() { assert.fail("Sending must not open a native turn directly."); } }
+  });
+  const conversation = await conversations.open({ id: mainConversationId(target), context: { surface: "app", channel: "internal" } });
+  await conversation.send({ messageId: "plain", text: "But wait let me save first" });
+  await conversation.send({ messageId: "steer", text: "Also check tests", steer: true });
+  assert.equal(Object.hasOwn(sent[0], "submissionKind"), false, "a running turn must not bounce the person's message");
+  assert.equal(sent[1].submissionKind, "steer");
+});
+
 test("failed assistant delivery is published as failed, not accepted", async () => {
   const publications = [];
   const session = {

@@ -310,7 +310,9 @@ const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
 function notSentDeliveryError(error, messageId) {
   const delivery = { status: "not-sent", messageId };
   const status = Number(error.status || error.statusCode);
-  const readable = error instanceof AppError || String(error.code || "").startsWith("vibe64_");
+  // conversation_* codes are the shared conversation protocol's definite
+  // rejections; the browser recovers from them by code.
+  const readable = error instanceof AppError || /^(vibe64|conversation)_/u.test(String(error.code || ""));
   return new AppError(status >= 400 && status < 500 ? status : 422,
     readable ? error.message : "The message was not sent because Vibe64 could not prepare it. Your chat is saved; try again.", {
       code: readable ? error.code : "vibe64_assistant_message_not_sent",

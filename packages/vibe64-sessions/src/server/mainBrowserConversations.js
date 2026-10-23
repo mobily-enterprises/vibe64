@@ -96,7 +96,10 @@ function createMainBrowserConversations({ actions, terminals } = {}) {
           return operationResult(await execute(ACTION_SEND_AGENT_MESSAGE, {
             ...pickFields(input.data, messageFields),
             message: input.text, messageId: input.messageId,
-            submissionKind: input.steer === true ? "steer" : "send",
+            // The person's plain message has no turn expectation: Routing
+            // steers it into a running turn or starts one. Only explicit
+            // steering keeps its finished-turn rejection and fallback.
+            ...(input.steer === true ? { submissionKind: "steer" } : {}),
             ...(Object.hasOwn(input, "attachmentIds") ? { attachmentIds: input.attachmentIds } : {})
           }));
         },

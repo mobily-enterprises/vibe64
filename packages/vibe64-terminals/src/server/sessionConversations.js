@@ -632,7 +632,7 @@ function createSessionConversations({
           send(input, context) {
             return execute(ACTION_START_TEMPORARY_CONVERSATION_TURN, {
               ...Object.fromEntries(messageFields.filter(key => Object.hasOwn(input.data || {}, key)).map(key => [key, input.data[key]])),
-              messageId: input.messageId, message: input.text, submissionKind: input.steer === true ? "steer" : "send",
+              messageId: input.messageId, message: input.text, ...(input.steer === true ? { submissionKind: "steer" } : {}),
               ...(Object.hasOwn(input, "attachmentIds") ? { attachmentIds: input.attachmentIds } : {})
             }, context);
           },
