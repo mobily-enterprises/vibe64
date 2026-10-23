@@ -39,8 +39,9 @@ descriptions and fields, never their values. To use one, link it to the
 variable the application already reads (`vibe64-helper env link development
 STRIPE_SECRET_KEY <id> apiKey`) instead of asking the person to paste a key.
 A linked row is not editable; `vibe64-helper env unlink` returns it to an
-ordinary empty row. Env shows a linked row with a **Linked** chip and the
-host's provenance line; a managed resource of the same name still wins.
+ordinary empty row. Env shows a linked row as one line with a link icon and
+the host's provenance label; on a phone each variable becomes a small card. A
+managed resource of the same name still wins.
 
 Each managed shell command reads current Development Env, so the coding agent's
 next command receives added or changed values without restarting its conversation.
