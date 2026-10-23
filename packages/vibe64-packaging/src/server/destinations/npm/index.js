@@ -5,7 +5,8 @@
 // - attended: the person signs in with npmLoginArgv in a terminal the caller
 //   opens, writing the session into a config file the caller keeps;
 // - token: the caller turns a token into that file with npmTokenUserconfig.
-// Settings on the target: { registry, access: "public" | "restricted" }.
+// Settings on the target: { registry, access: "public" | "restricted" } and
+// { npm: argv prefix } (default `npm`) for a host that runs its own npm.
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
@@ -14,6 +15,7 @@ import path from "node:path";
 import { publishError } from "../../errors.js";
 import {
   artifactFiles,
+  commandPrefix,
   httpJson,
   httpRequest,
   httpUrl,
@@ -37,7 +39,8 @@ function npmSettings(target) {
   return {
     registry: httpUrl(settings.registry || DEFAULT_REGISTRY, "The npm registry"),
     access,
-    channel: target?.channel || "latest"
+    channel: target?.channel || "latest",
+    npm: commandPrefix(settings.npm, ["npm"], "The npm command")
   };
 }
 
@@ -125,7 +128,7 @@ async function credentialToken(credentials, registry) {
 
 // Runs the npm CLI with only the given user config, a private cache and no
 // global or project config, from an empty folder.
-async function runNpm(args, { userconfig = null, secrets = [], failureMessage }) {
+async function runNpm(args, { npm = ["npm"], userconfig = null, secrets = [], failureMessage }) {
   return withToolHome(async (home) => {
     const empty = path.join(home, "empty.npmrc");
     await writeFile(empty, "", { mode: 0o600 });
@@ -141,7 +144,7 @@ async function runNpm(args, { userconfig = null, secrets = [], failureMessage })
         npm_config_audit: "false"
       }
     });
-    return runTool({ argv: ["npm", ...args], cwd: home, env, secrets, failureCode: "VIBE64_PUBLISH_UPLOAD_FAILED", failureMessage });
+    return runTool({ argv: [...npm, ...args], cwd: home, env, secrets, failureCode: "VIBE64_PUBLISH_UPLOAD_FAILED", failureMessage });
   });
 }
 
@@ -170,7 +173,7 @@ async function readBack({ target, version, artifacts, credentials }) {
 }
 
 async function upload({ target, version, artifacts, credentials }) {
-  const { registry, access, channel } = npmSettings(target);
+  const { registry, access, channel, npm } = npmSettings(target);
   const { file, manifest } = await tarballDetails(artifacts);
   assertVersion(manifest, version);
   const { file: userconfig, token } = await credentialToken(credentials, registry);
@@ -178,6 +181,7 @@ async function upload({ target, version, artifacts, credentials }) {
   const args = ["publish", file.path, "--registry", registry, "--tag", channel, "--ignore-scripts"];
   if (access) args.push("--access", access);
   const result = await runNpm(args, {
+    npm,
     userconfig,
     secrets: [token],
     failureMessage: `npm did not publish ${manifest.name}@${manifest.version}.`
@@ -188,7 +192,7 @@ async function upload({ target, version, artifacts, credentials }) {
 // `npm publish --dry-run` on the exact tarball, plus what changes compared with
 // the version the channel serves today.
 async function dryRun({ target, version, artifacts, credentials }) {
-  const { registry, access, channel } = npmSettings(target);
+  const { registry, access, channel, npm } = npmSettings(target);
   const { file, bytes, entries, manifest } = await tarballDetails(artifacts);
   assertVersion(manifest, version);
   const { file: userconfig, token } = await credentialToken(credentials, registry);
@@ -200,6 +204,7 @@ async function dryRun({ target, version, artifacts, credentials }) {
     const args = ["publish", "--dry-run", file.path, "--registry", registry, "--tag", channel, "--ignore-scripts"];
     if (access) args.push("--access", access);
     report = (await runNpm(args, {
+      npm,
       userconfig,
       secrets: [token],
       failureMessage: `npm's dry run refused ${manifest.name}@${manifest.version}.`
@@ -253,7 +258,7 @@ async function verifyCredential({ target, credentials }) {
 // Points a channel (dist-tag) back at an earlier published version, such as
 // moving `latest` back after a bad release.
 async function moveChannel({ target, packageName, version, credentials }) {
-  const { registry, channel } = npmSettings(target);
+  const { registry, channel, npm } = npmSettings(target);
   const { file: userconfig, token } = await credentialToken(credentials, registry);
   if (!userconfig) throw publishError("VIBE64_PUBLISH_CREDENTIAL_MISSING", "Moving an npm tag needs an npm sign-in.");
   const packument = await readPackument({ registry, name: packageName, token });
@@ -261,6 +266,7 @@ async function moveChannel({ target, packageName, version, credentials }) {
     throw publishError("VIBE64_PUBLISH_TARGET_INVALID", `${packageName}@${version} is not published, so ${channel} cannot point to it.`);
   }
   await runNpm(["dist-tag", "add", `${packageName}@${version}`, channel, "--registry", registry], {
+    npm,
     userconfig,
     secrets: [token],
     failureMessage: `npm did not move ${channel} to ${version}.`

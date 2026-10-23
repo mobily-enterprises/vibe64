@@ -87,12 +87,18 @@ test("an npm library is built once, dry-run, published, read back and re-release
   assert.equal(verified.ok, true);
   assert.equal(verified.account, "canary");
 
-  // Dry run first: the exact tarball, its contents, nothing published.
+  // Dry run first: the exact tarball, its contents, nothing published. A host
+  // may run its own npm (here this Node with its bundled npm CLI).
+  const npmCli = path.join(path.dirname(process.execPath), "..", "lib", "node_modules", "npm", "bin", "npm-cli.js");
+  const dryTarget = { ...target, settings: { ...target.settings, npm: [process.execPath, npmCli] } };
   const dry = await withStageCredentials({ credentials: npmDestination.credentials, obtainCredential }, (credentials) => npmDestination.dryRun({
-    target, version: "0.1.0", artifacts: built.artifacts, credentials
+    target: dryTarget, version: "0.1.0", artifacts: built.artifacts, credentials
   }));
   assert.equal(dry.alreadyPublished, false);
   assert.equal(dry.previousVersion, null);
+  await assert.rejects(withStageCredentials({ credentials: npmDestination.credentials, obtainCredential }, (credentials) => npmDestination.dryRun({
+    target: { ...target, settings: { ...target.settings, npm: [process.execPath, "-e", "process.exit(3)"] } }, version: "0.1.0", artifacts: built.artifacts, credentials
+  })), /dry run refused/u, "the host's npm command is the one that runs");
   assert.deepEqual(dry.files.map(({ path: file }) => file), ["index.js", "package.json", "README.md", "stamp.txt"]);
   assert.doesNotMatch(dry.report, new RegExp(registry.token));
   const before = await npmDestination.readBack({ target, version: "0.1.0", artifacts: built.artifacts });
