@@ -14,14 +14,15 @@ function parsed(raw, label) {
 }
 
 // Chat preferences no longer name a workflow tool; a merge repair chat runs on
-// Fix it with AI.
+// Fix it with AI unless it chose a Custom model.
 function preferences(raw, repair) {
   if (!raw) return raw;
   const saved = parsed(raw, "chat mode");
   const { workflowEngineId: _workflowEngineId, override: _override, ...value } = saved;
-  if (repair) Object.assign(value, { mode: "fix", review: false });
+  const fix = repair && saved.mode !== "custom";
+  if (fix) Object.assign(value, { mode: "fix", review: false });
   else if (saved.override) value.override = saved.override;
-  const current = !Object.hasOwn(saved, "workflowEngineId") && (!repair || saved.mode === "fix" && saved.review === false && !saved.override);
+  const current = !Object.hasOwn(saved, "workflowEngineId") && (!fix || saved.mode === "fix" && saved.review === false && !saved.override);
   return current ? raw : JSON.stringify(value);
 }
 

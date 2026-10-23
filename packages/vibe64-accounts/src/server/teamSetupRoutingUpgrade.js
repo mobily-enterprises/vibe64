@@ -49,6 +49,9 @@ export async function upgradeTeamSetupRouting({ systemRoot, apply, backupRoot, r
       const roles = Object.keys(ROLE_LABELS).filter((role) => orchestrators[engineId][role]).map((role) => ROLE_LABELS[role]);
       report("warning", `${ENGINE_LABELS[engineId]} routing${roles.length ? ` (${roles.join(", ")})` : ""} is left in the backup, not carried over.`);
     }
+    if (orchestrators[sourceEngineId]?.helperRoutingReview) {
+      report("warning", "The Helper choice was waiting for review; Quick helper is off until the owner chooses its model.");
+    }
     const backup = orchestrators[sourceEngineId]?.sharedBackup ??
       V4_ENGINE_ORDER.map((engineId) => orchestrators[engineId]?.sharedBackup).find(Boolean);
     const openCodeConnections = backup?.engineId === "opencode"

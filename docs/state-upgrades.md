@@ -1443,14 +1443,17 @@ with its own backup root under `upgrades/backups/20261023-owner-team-ai-setups/`
 - Terminals (`upgradeTeamSetupSessions`, `sessions/`) removes `workflowEngineId`
   from Main and temporary chat preferences and from a renewal's successor
   routing. A temporary chat opened by **Fix it with AI** for an Update conflict
-  becomes mode `fix` with review off. A retained routing request or goal keeps
+  becomes mode `fix` with review off, unless it chose a Custom model, which it
+  keeps. A retained routing request or goal keeps
   its delivery, stage, identities and `workflowEngineId`; its schema-4 snapshot
   becomes `{ revision, owner }` from the block of that tool, its `helper`
   assignment becomes `quickHelper`. Nothing is replayed.
 - Accounts (`upgradeTeamSetupRouting`, `routing/`) picks the source block with
   Senior or Junior, preferring one with both, then Claude Code, Codex and
-  OpenCode. It becomes `owner` with Helper renamed Quick helper (an unset or off Helper
-  takes a Helper review's `proposed` choice), an explicit `null` kept off, and
+  OpenCode. It becomes `owner` with Helper renamed Quick helper, an explicit
+  `null` kept off, a pending Helper review (which refused background helpers
+  until a person chose) leaving Quick helper off with a warning, never applying
+  its `proposed` choice, and
   Colleague, Fix it with AI and Explain & check following Senior, Junior and
   Quick helper. The Shared backup becomes the team's Colleague and Quick helper
   when it is Workspace use offline; a plan sign-in (Claude Code with Anthropic,

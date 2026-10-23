@@ -78,17 +78,18 @@ test("C: with two tools the Claude Code block wins and the other is left in the 
   assert.ok(f.reports.some(({ message }) => message === "Codex routing (Senior, Junior, Helper) is left in the backup, not carried over."));
 });
 
-test("a Codex OpenAI backup is personal offline, a proposed Helper review becomes Quick helper and null stays off", async (t) => {
+test("a Codex OpenAI backup is personal offline, a pending Helper review leaves Quick helper off and null stays off", async (t) => {
   const astra = S("codex", "openai", "gpt-6-astra");
   const f = await routingFixture(t, { schemaVersion: 4, revision: 4, orchestrators: { codex: { senior: astra, junior: astra, router: null,
-    sharedBackup: S("codex", "openai", "gpt-6-luna"),
+    helper: S("codex", "openai", "gpt-6-luna"), sharedBackup: S("codex", "openai", "gpt-6-luna"),
     helperRoutingReview: { reason: "helper_choices_differ", previous: [{ engineId: "codex", modelProviderId: "openai", modelId: "gpt-6-luna", selectionSource: "explicit" }],
       proposed: S("codex", "openai", "gpt-6-luna", "low") } } } });
   await f.run(true);
   const v5 = await f.read();
   assert.equal(v5.owner.router, null);
-  assert.deepEqual(v5.owner.quickHelper, S("codex", "openai", "gpt-6-luna", "low"));
+  assert.equal(v5.owner.quickHelper, null, "a pending Helper review keeps helpers off; its proposal is not applied");
   assert.deepEqual(v5.nonOwner, {});
+  assert.ok(f.reports.some(({ message }) => /Quick helper is off until the owner chooses/u.test(message)));
 });
 
 test("routing without Senior or Junior, a missing file and an unreadable file", async (t) => {
@@ -116,6 +117,8 @@ test("session preferences, temporary repair chats, saved requests, goals and ren
     conversations: [
       { conversationId: "repair", recoveryOperation: "update", routingMetadata: {
         assistant_routing: JSON.stringify({ mode: "senior", review: false, workflowEngineId: "claude", override: opus }) } },
+      { conversationId: "custom-repair", recoveryOperation: "update", routingMetadata: {
+        assistant_routing: JSON.stringify({ mode: "custom", review: false, workflowEngineId: "claude", override: opus }) } },
       { conversationId: "custom", routingMetadata: { assistant_routing: JSON.stringify({ mode: "custom", review: false, workflowEngineId: "codex", override: opus }) } },
       { conversationId: "plain" }
     ],
@@ -129,8 +132,10 @@ test("session preferences, temporary repair chats, saved requests, goals and ren
   assert.deepEqual([upgraded.messageId, upgraded.delivery, upgraded.stage, upgraded.workflowEngineId], ["m1", "pending", "implementation", "claude"],
     "delivery, stage and identities are untouched");
   assert.deepEqual(JSON.parse(changes.metadata.assistant_routing_goal).configuration, { revision: 6, owner: { senior: opus, ...ownerFollows } });
-  const [repair, custom, plain] = changes.conversations;
+  const [repair, customRepair, custom, plain] = changes.conversations;
   assert.deepEqual(JSON.parse(repair.routingMetadata.assistant_routing), { mode: "fix", review: false });
+  assert.deepEqual(JSON.parse(customRepair.routingMetadata.assistant_routing), { mode: "custom", review: false, override: opus },
+    "a repair chat on a Custom model keeps it, as at runtime");
   assert.deepEqual(JSON.parse(custom.routingMetadata.assistant_routing), { mode: "custom", review: false, override: opus });
   assert.deepEqual(plain, { conversationId: "plain" });
   assert.deepEqual(changes.renewal.successor.assistantRouting, { mode: "senior", review: true });

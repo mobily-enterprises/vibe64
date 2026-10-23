@@ -53,12 +53,14 @@ function v4SourceEngineId(orchestrators = {}) {
 }
 
 // A v4 workflow block's roles as the v5 owner setup. Saved values are copied
-// exactly; null stays off and an absent role stays absent.
+// exactly; null stays off and an absent role stays absent. A pending Helper
+// review refused background helpers until a person chose, so Quick helper is
+// off; its proposal is never applied on the owner's behalf.
 function v4OwnerSetup(block = {}) {
   const owner = {};
   for (const role of ["senior", "junior", "router"]) if (block[role] !== undefined) owner[role] = block[role];
-  const quickHelper = block.helper ?? block.helperRoutingReview?.proposed ?? block.helper;
-  if (quickHelper !== undefined) owner.quickHelper = quickHelper;
+  if (block.helperRoutingReview) owner.quickHelper = null;
+  else if (block.helper !== undefined) owner.quickHelper = block.helper;
   return { ...owner, colleague: { follows: "senior" }, fix: { follows: "junior" }, explain: { follows: "quickHelper" } };
 }
 
