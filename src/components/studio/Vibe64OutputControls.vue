@@ -629,7 +629,7 @@
         >
           <v-icon :icon="mdiWebClock" size="46" />
         </div>
-        <span>{{ previewEmptyText }}</span>
+        <span class="vibe64-launch-controls__preview-empty-text" :title="previewEmptyText">{{ previewEmptyText }}</span>
         <v-btn
           v-if="embeddedManualStartButtonVisible && !previewActivityVisible"
           :disabled="embeddedManualStartButtonDisabled"
@@ -1897,4 +1897,15 @@ onBeforeUnmount(() => {
   }
 }
 
+
+/* A failure that is a whole stack trace reads as a few lines; the activity card keeps all of it. */
+.vibe64-launch-controls__preview-empty-text {
+  -webkit-box-orient: vertical;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  max-width: 48rem;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
 </style>
