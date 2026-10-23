@@ -4,7 +4,7 @@
 import { computed, nextTick, ref } from "vue";
 import { mdiChevronDown, mdiDownload, mdiQrcode, mdiTestTube, mdiRocketLaunchOutline, mdiReplay } from "@mdi/js";
 import { apkDownloadUrl } from "./usePublishing.js";
-import { destinationIcon, proofLine, relativeTime, shortCommit, statusInfo, stepLabel } from "./publishFormat.js";
+import { destinationIcon, packageLabeller, proofLine, relativeTime, shortCommit, statusInfo, stepLabel } from "./publishFormat.js";
 
 const props = defineProps({
   releases: { type: Array, default: () => [] },
@@ -12,11 +12,13 @@ const props = defineProps({
   destinations: { type: Array, default: () => [] },
   activeRelease: { type: String, default: "" },
   savedCommit: { type: String, default: "" },
+  packages: { type: Array, default: () => [] },
   call: { type: Function, required: true }
 });
 const emit = defineEmits(["install", "resume", "release"]);
 
 const open = ref("");
+const label = computed(() => packageLabeller(props.packages));
 const logs = ref({});
 const targetsById = computed(() => {
   const labels = Object.fromEntries(props.destinations.map((entry) => [entry.id, entry.shortLabel || entry.label]));
@@ -63,8 +65,8 @@ defineExpose({ reveal });
 function targetName(release, targetId) {
   const target = targetsById.value[targetId];
   const destination = target?.destination || release.targets?.[targetId]?.destination;
-  const label = target?.destinationLabel || props.destinations.find((entry) => entry.id === destination)?.label || destination || "";
-  return { icon: destinationIcon(destination), text: `${label} · ${target?.package || release.targets?.[targetId]?.package || targetId}` };
+  const where = target?.destinationLabel || props.destinations.find((entry) => entry.id === destination)?.label || destination || "";
+  return { icon: destinationIcon(destination), text: `${where} · ${label.value(target?.package || release.targets?.[targetId]?.package || targetId)}` };
 }
 
 async function showLog(id) {
@@ -73,7 +75,7 @@ async function showLog(id) {
 }
 
 function versionsLine(release) {
-  return Object.entries(release.versions || {}).map(([id, version]) => `${id} ${version}`).join(" · ") || shortCommit(release.savedCommit);
+  return Object.entries(release.versions || {}).map(([id, version]) => `${label.value(id)} ${version}`).join(" · ") || shortCommit(release.savedCommit);
 }
 
 function progress(release) {
@@ -111,7 +113,7 @@ function isApk(release, targetId) {
           <ol class="publish-history__steps">
             <li v-for="entry in release.steps" :key="entry.id">
               <v-icon :color="statusInfo(entry.status).color" :icon="statusInfo(entry.status).icon" size="16" />
-              <span>{{ stepLabel(entry.id, targetsById) }}</span>
+              <span>{{ stepLabel(entry.id, targetsById, label) }}</span>
               <span class="publish-history__message">{{ entry.message }}</span>
             </li>
           </ol>

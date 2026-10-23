@@ -20,7 +20,7 @@ import {
   mdiTestTube,
   mdiWrenchOutline
 } from "@mdi/js";
-import { destinationIcon, hostOf, shortCommit } from "./publishFormat.js";
+import { destinationIcon, hostOf, packageLabeller, shortCommit } from "./publishFormat.js";
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -46,6 +46,7 @@ const targets = computed(() => props.state?.targets || []);
 const baseline = computed(() => props.state?.baseline || {});
 const keys = computed(() => props.state?.keys || {});
 const labels = computed(() => Object.fromEntries((props.state?.destinations || []).map((entry) => [entry.id, entry.label])));
+const packageLabel = computed(() => packageLabeller(props.state?.packaging?.packages || []));
 const sessionId = computed(() => String(props.dashboardContext?.sessionId || ""));
 const canSave = computed(() => typeof props.dashboardContext?.requestSaveWork === "function");
 const blocked = computed(() => Boolean(plan.value?.preflight?.blocked));
@@ -89,12 +90,13 @@ const planSteps = computed(() => {
   const builds = [...new Set(chosen.map((target) => target.package))];
   const versionOf = (id) => plan.value.packages?.find((entry) => entry.id === id)?.version || shortCommit(plan.value.savedCommit);
   return [
-    ...builds.map((id) => ({ id: `build:${id}`, icon: mdiWrenchOutline, text: `Build ${id} ${versionOf(id)} once` })),
+    ...builds.map((id) => ({ id: `build:${id}`, icon: mdiWrenchOutline, text: `Build ${packageLabel.value(id)} ${versionOf(id)} once` })),
     ...(plan.value.tags || []).map((tag) => ({ id: `tag:${tag}`, icon: mdiTagOutline, text: `Tag the saved commit ${tag}` })),
     ...chosen.map((target) => {
       const account = accountsById.value[target.account];
       const where = hostOf(target.settings?.registry || target.settings?.repository || "");
-      return { id: `publish:${target.id}`, icon: destinationIcon(target.destination), text: `${labels.value[target.destination] || target.destination}: ${target.package} ${versionOf(target.package)}`, detail: [account?.label, where].filter(Boolean).join(" · ") };
+      const signed = target.destination === "android-sideload" ? "signed with your install key" : "";
+      return { id: `publish:${target.id}`, icon: destinationIcon(target.destination), text: `${labels.value[target.destination] || target.destination}: ${packageLabel.value(target.package)} ${versionOf(target.package)}`, detail: [account?.label, where, signed].filter(Boolean).join(" · ") };
     })
   ];
 });
@@ -259,7 +261,7 @@ function checkIcon(check) {
             >
               <template #label>
                 <v-icon :icon="destinationIcon(target.destination)" class="mr-2" size="18" />
-                {{ labels[target.destination] || target.destination }} · {{ target.package }}
+                {{ labels[target.destination] || target.destination }} · {{ packageLabel(target.package) }}
               </template>
             </v-checkbox>
           </div>
@@ -285,7 +287,7 @@ function checkIcon(check) {
           </h3>
           <v-skeleton-loader v-if="busy === 'plan' && !plan" type="list-item, list-item, list-item" />
           <ul v-else-if="plan" class="publish-release__checks">
-            <li v-for="check in shownChecks" :key="check.id" :class="{ 'is-failed': !check.ok }">
+            <li v-for="check in shownChecks" :key="check.id" :class="{ 'is-failed': !check.ok && check.severity === 'block', 'is-warning': !check.ok && check.severity !== 'block' }">
               <v-icon v-bind="checkIcon(check)" size="20" />
               <div>
                 <strong>{{ check.label }}</strong>
@@ -582,6 +584,10 @@ function checkIcon(check) {
 .publish-release__passed button > span {
   display: flex !important;
   flex: 1 1 auto;
+}
+
+.publish-release__checks li.is-warning {
+  background: color-mix(in srgb, rgb(var(--v-theme-warning)) 7%, transparent);
 }
 
 .publish-release__checks li.is-failed {

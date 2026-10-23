@@ -41,6 +41,8 @@ const props = defineProps({
   request: { type: Function, default: undefined }
 });
 
+// What a package without its own version is, in words a person uses.
+const PACKER_KINDS = { "web-bundle": "web files", capacitor: "app", npm: "npm package", "python-dist": "Python package" };
 const CARDS = { npm: NpmCard, pypi: PypiCard, "github-releases": GithubReleasesCard, "android-sideload": AndroidSideloadCard };
 const { state, loadError, refresh, call } = usePublishing({
   active: () => props.dashboardContext?.active !== false,
@@ -52,7 +54,7 @@ const dialogs = ref({ add: false, release: false, confirm: false, keys: false, k
 const addPreset = ref("");
 const addAccountKind = ref("");
 const confirmation = ref({ plan: null, targetIds: [], acknowledged: [], requestedBy: "" });
-const install = ref({ releaseId: "", targetId: "", title: "" });
+const install = ref({ releaseId: "", targetId: "", title: "", version: "" });
 const pageError = ref("");
 const working = ref("");
 
@@ -161,16 +163,29 @@ const reviewRequest = () => act("review", async () => {
 });
 const dismissRequest = () => act("dismiss", () => call("/confirmation/request", { method: "DELETE" }));
 
+// Finishing needs the very plan the person confirmed; when anything in it
+// changed, the honest next step is a new release from the saved work.
+const notice = ref("");
 const resume = (release) => act("resume", async () => {
   const targetIds = (release.steps || []).filter((entry) => entry.id.startsWith("publish:")).map((entry) => entry.id.slice("publish:".length));
   const { plan } = await call("/plan", { body: { targetIds }, refreshAfter: false });
-  if (plan.planHash !== release.planHash) throw new Error("The saved work changed since this release, so it cannot be finished as it was. Start a new release.");
+  if (plan.planHash !== release.planHash) {
+    notice.value = "This release's plan changed since you confirmed it, so here is a new release from the saved work.";
+    dialogs.value.release = true;
+    return;
+  }
   openConfirm({ plan, targetIds });
 });
 
 function openInstall({ releaseId, targetId }) {
   const target = targets.value.find((entry) => entry.id === targetId);
-  install.value = { releaseId, targetId, title: packageById.value[target?.package]?.applicationName || target?.package || "" };
+  const release = (state.value?.releases || []).find((entry) => entry.id === releaseId);
+  install.value = {
+    releaseId,
+    targetId,
+    title: packageById.value[target?.package]?.applicationName || target?.package || "",
+    version: release?.versions?.[target?.package] || target?.latest?.version || ""
+  };
   dialogs.value.install = true;
 }
 </script>
@@ -215,12 +230,11 @@ function openInstall({ releaseId, targetId }) {
       <div v-if="running" class="publish-banner publish-banner--running" role="status">
         <v-icon :icon="mdiProgressClock" class="publish-banner__spin" size="22" />
         <div>
-          <strong>{{ running.kind === "dry-run" ? "Dry run" : "Releasing" }} {{ Object.entries(running.versions || {}).map(([id, version]) => `${id} ${version}`).join(" · ") }}</strong>
+          <strong>{{ running.kind === "dry-run" ? "Dry run" : "Releasing" }} {{ Object.entries(running.versions || {}).map(([id, version]) => `${packageById[id]?.label || id} ${version}`).join(" · ") }}</strong>
           <span>{{ (running.steps || []).filter((entry) => entry.status === "done").length }} of {{ (running.steps || []).length }} steps done. You can leave this page; it carries on.</span>
         </div>
       </div>
 
-      <v-alert v-if="pageError" closable type="error" variant="tonal" @click:close="pageError = ''">{{ pageError }}</v-alert>
       <v-alert v-if="!baseline.supported" type="warning" variant="tonal">{{ baseline.message || "This project's repository cannot be published from here yet." }}</v-alert>
 
       <section class="publish-saved" aria-label="Saved work">
@@ -261,7 +275,7 @@ function openInstall({ releaseId, targetId }) {
           <span class="publish-saved__label">Packages</span>
           <span class="publish-saved__chips">
             <span v-for="entry in packages" :key="entry.id" class="publish-chip">
-              {{ entry.label }} <em>{{ entry.version || entry.packer }}</em>
+              {{ entry.label }} <em>{{ entry.version || PACKER_KINDS[entry.packer] || entry.packer }}</em>
             </span>
             <span v-if="!packages.length" class="publish-saved__muted">None yet</span>
           </span>
@@ -342,6 +356,7 @@ function openInstall({ releaseId, targetId }) {
         ref="history"
         :active-release="state.activeRelease || ''"
         :saved-commit="baseline.commit || ''"
+        :packages="packages"
         :call="call"
         :destinations="destinations"
         :releases="state.releases"
@@ -352,6 +367,12 @@ function openInstall({ releaseId, targetId }) {
       />
     </template>
 
+    <v-snackbar :model-value="Boolean(pageError || notice)" :color="pageError ? 'error' : undefined" location="bottom" max-width="560" timeout="8000" @update:model-value="pageError = ''; notice = ''">
+      {{ pageError || notice }}
+      <template #actions>
+        <v-btn variant="text" @click="pageError = ''; notice = ''">Close</v-btn>
+      </template>
+    </v-snackbar>
     <AddTargetDialog v-model="dialogs.add" :call="call" :preset="addPreset" :state="state" @add-account="openKeys" />
     <ReleaseDialog v-model="dialogs.release" :call="call" :dashboard-context="dashboardContext" :state="state" @accounts="openKeys()" @confirm="openConfirm" />
     <ConfirmPublishDialog
@@ -367,7 +388,7 @@ function openInstall({ releaseId, targetId }) {
     <PublishingAccountsPanel v-model="dialogs.keys" :add-kind="addAccountKind" :call="call" :state="state" @recovery-kit="dialogs.kit = true" />
     <RecoveryKitDialog v-model="dialogs.kit" :call="call" :state="state" />
     <AndroidSdkLicenceDialog v-model="dialogs.licence" :call="call" :state="state" />
-    <InstallOnPhoneDialog v-model="dialogs.install" :call="call" :release-id="install.releaseId" :target-id="install.targetId" :title="install.title" />
+    <InstallOnPhoneDialog v-model="dialogs.install" :call="call" :release-id="install.releaseId" :target-id="install.targetId" :title="install.title" :version="install.version" />
   </section>
 </template>
 

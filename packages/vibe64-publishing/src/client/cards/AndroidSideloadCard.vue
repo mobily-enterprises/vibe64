@@ -51,7 +51,7 @@ const ready = computed(() => tasks.value.every((task) => task.done));
   <TargetCard v-bind="$attrs" :busy="busy" :target="target" :waiting="ready ? '' : 'Finish the one-time setup below first'" @change-account="emit('change-account', $event)" @remove="emit('remove')" @show-release="emit('show-release', $event)">
     <template #facts>
       <div v-if="target.settings?.certificateSha256">
-        <dt>Key</dt>
+        <dt>Install key</dt>
         <dd class="publish-target__mono" :title="target.settings.certificateSha256">{{ target.settings.certificateSha256.slice(0, 23) }}…</dd>
       </div>
       <div v-if="target.latest?.proof?.size"><dt>Size</dt><dd>{{ (target.latest.proof.size / 1048576).toFixed(1) }} MB</dd></div>

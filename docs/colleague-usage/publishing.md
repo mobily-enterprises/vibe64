@@ -97,7 +97,11 @@ own error output (credentials removed) and **Full log**. A release where some
 targets failed shows **Partly published**; fix the cause and **Finish this
 release** retries only the unfinished targets of the same plan (published
 targets are not sent again). If the fix changed the saved work, the button
-reads **Release the new saved work** and starts a new release instead.
+reads **Release the new saved work** and starts a new release instead; if the
+plan itself changed (for example a check or setting), **Finish this release**
+opens a new release with a note saying why. Long tool output keeps its start
+and end. Checks that fail without blocking show in amber. Errors appear as a
+short message at the bottom of the page.
 
 ### Colleague and publishing
 
@@ -158,7 +162,8 @@ Package registries Vibe64 releases to:
   as two private files.
 - Every build gets a build number one higher than the last; it is never stored
   in the project. After a release the card shows **Install on phone**: a QR
-  code your phone scans on the same Wi-Fi. This computer shares only that one
+  code your phone scans on the same Wi-Fi. Opened on an Android phone itself,
+  it offers **Download** directly, with **Show a QR code for another phone**. This computer shares only that one
   APK, at an unguessable address, for 10 minutes or until you close the
   dialog. **Download APK** saves it here instead; History offers both for
   earlier releases.

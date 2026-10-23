@@ -4,7 +4,7 @@
 // this dialog but cannot press it.
 import { computed, ref, watch } from "vue";
 import { mdiLockOutline, mdiRocketLaunchOutline, mdiSourceCommit, mdiTagOutline } from "@mdi/js";
-import { destinationAccent, destinationIcon, shortCommit } from "./publishFormat.js";
+import { destinationAccent, destinationIcon, packageLabeller, shortCommit } from "./publishFormat.js";
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -24,6 +24,7 @@ const error = ref("");
 const locked = computed(() => !props.state?.keys?.unlocked);
 const needsKeys = computed(() => Boolean(props.state?.keys?.exists));
 const labels = computed(() => Object.fromEntries((props.state?.destinations || []).map((entry) => [entry.id, entry.label])));
+const packageLabel = computed(() => packageLabeller(props.state?.packaging?.packages || []));
 const versionOf = (packageId) => props.plan?.packages?.find((entry) => entry.id === packageId)?.version || shortCommit(props.plan?.savedCommit);
 const count = computed(() => props.plan?.targets?.length || 0);
 
@@ -77,7 +78,7 @@ async function publish() {
             <v-icon :icon="destinationIcon(target.destination)" size="20" />
             <span class="publish-confirm__where">
               <strong>{{ labels[target.destination] || target.destination }}</strong>
-              <span>{{ target.package }}<template v-if="target.channel"> · {{ target.channel }}</template></span>
+              <span>{{ packageLabel(target.package) }}<template v-if="target.channel"> · {{ target.channel }}</template></span>
             </span>
             <span class="publish-confirm__version">{{ versionOf(target.package) }}</span>
           </li>

@@ -135,14 +135,20 @@ function lastFailure(target, releases = []) {
   return null;
 }
 
-function stepLabel(stepId, targetsById = {}) {
+// A package's name as the person gave it in Packaging, or its id.
+function packageLabeller(packages = []) {
+  const labels = Object.fromEntries(packages.map((entry) => [entry.id, entry.label || entry.id]));
+  return (id) => labels[id] || id;
+}
+
+function stepLabel(stepId, targetsById = {}, label = (id) => id) {
   const [kind, ...rest] = String(stepId || "").split(":");
   const subject = rest.join(":");
   if (kind === "tag") return `Tag ${subject}`;
-  if (kind === "build") return `Build ${subject}`;
+  if (kind === "build") return `Build ${label(subject)}`;
   const target = targetsById[subject];
-  const name = target ? `${target.package} → ${target.destinationLabel || target.destination}` : subject;
+  const name = target ? `${label(target.package)} → ${target.destinationLabel || target.destination}` : subject;
   return kind === "dry-run" ? `Dry run ${name}` : `Publish ${name}`;
 }
 
-export { destinationAccent, destinationGap, destinationIcon, hostOf, lastFailure, proofLine, publicPageUrl, relativeTime, shortCommit, statusInfo, stepLabel };
+export { destinationAccent, destinationGap, destinationIcon, hostOf, lastFailure, packageLabeller, proofLine, publicPageUrl, relativeTime, shortCommit, statusInfo, stepLabel };
