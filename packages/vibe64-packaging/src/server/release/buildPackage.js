@@ -43,6 +43,7 @@ async function buildPackage({
   versionCode = null,
   toolchains = {},
   contentArtifacts = null,
+  projectSlug = "",
   signal
 } = {}, dependencies = {}) {
   const entry = packaging?.packages?.find((candidate) => candidate.id === packageId);
@@ -60,7 +61,7 @@ async function buildPackage({
   if (entry.content && !content) throw publishError("VIBE64_PUBLISH_BUILD_INVALID", `Package ${entry.id} names Content ${entry.content}, which Packaging does not declare.`);
   const builtContent = content && !contentArtifacts
     ? (await buildPackage({
-      projectRoot, commit, packaging, packageId: content.id, planHash, resultStore, workRoot, baseEnvironment, cacheDirectory, signal
+      projectRoot, commit, packaging, packageId: content.id, planHash, resultStore, workRoot, baseEnvironment, cacheDirectory, projectSlug, signal
     }, dependencies)).artifacts
     : contentArtifacts;
   const source = await mkdtemp(path.join(workRoot, "vibe64-release-source-"));
@@ -90,6 +91,7 @@ async function buildPackage({
       allowedRoots: recipe.allowedRoots,
       baseEnvironment,
       cacheDirectory,
+      projectSlug,
       signal
     }, dependencies);
     const check = await packer.checkArtifacts({ artifacts, version });

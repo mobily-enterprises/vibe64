@@ -87,7 +87,9 @@ Vibe64 for this project on this computer, not in the project's files.
    behind. If the saved work, targets, the account a target signs in with, or
    tools changed since you reviewed, it refuses and shows the new plan. Builds use the saved commit without the
    project's Genesis and agent folders (`genesis/`, `.genesis/`, `.agents/`,
-   `.claude/`, `.codex/`, `.opencode/`), so packages never ship them.
+   `.claude/`, `.codex/`, `.opencode/`), so packages never ship them. Builds
+   and **Run checks** run the project's own code the way Vibe64 runs any other
+   project command, with a throwaway home folder and none of your sign-ins.
 
 While a release runs each of its target cards shows **Publishing 1.4.3…**;
 afterwards a card shows the version people get, **Live · published …** and a

@@ -14,6 +14,7 @@ import path from "node:path";
 
 import { canonicalJson, sha256 } from "./canonical.js";
 import { publishError } from "./errors.js";
+import { runStageCommand } from "./projectCommands.js";
 
 const VIBE64_PUBLISH_ARTIFACTS_CONTRACT = "vibe64.publish-artifacts.v1";
 const BUILD_ENVIRONMENT_PASSTHROUGH = Object.freeze(["PATH", "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TZ", "TERM"]);
@@ -73,7 +74,9 @@ function tail(text) {
   return value.length > OUTPUT_LIMIT ? value.slice(-OUTPUT_LIMIT) : value;
 }
 
-// Runs argv without a shell, with exactly the given environment.
+// Runs Vibe64's own pinned tools (signing, upload, toolchain setup) without a
+// shell, with exactly the given environment. The project's own code never runs
+// through this: Stage 1 goes through the command gateway (projectCommands.js).
 function spawnCommand({ command, args, cwd, env, stdin = null, signal }) {
   return new Promise((resolve) => {
     const child = spawn(command, args, { cwd, env, signal, stdio: [stdin ? "pipe" : "ignore", "pipe", "pipe"] });
@@ -157,9 +160,10 @@ async function runBuildStage({
   allowedRoots = [],
   baseEnvironment = process.env,
   cacheDirectory = "",
+  projectSlug = "",
   signal
 } = {}, {
-  runCommand = spawnCommand
+  runCommand = runStageCommand
 } = {}) {
   const directory = resultDirectory(resultStore, planHash, packageId);
   // Resumable: a completed build for this plan and package is reused after verification.
@@ -184,7 +188,7 @@ async function runBuildStage({
       if (!Array.isArray(step.argv) || !step.argv.length || step.argv.some((value) => typeof value !== "string")) {
         throw stageError("VIBE64_PUBLISH_STAGE_INVALID", `Build step ${step.label} needs argv.`);
       }
-      const result = await runCommand({ command: step.argv[0], args: step.argv.slice(1), cwd: step.cwd, env, signal });
+      const result = await runCommand({ command: step.argv[0], args: step.argv.slice(1), cwd: step.cwd, env, signal, projectSlug });
       if (result?.ok !== true) {
         throw stageError("VIBE64_PUBLISH_BUILD_FAILED", `${step.label} failed${result?.exitCode == null ? "" : ` with exit code ${result.exitCode}`}.`, {
           step: step.label,

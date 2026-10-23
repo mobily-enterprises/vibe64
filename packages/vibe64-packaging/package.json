@@ -11,6 +11,7 @@
     "./server": "./src/server/index.js",
     "./server/plan": "./src/server/plan.js",
     "./server/stages": "./src/server/stages.js",
+    "./server/projectCommands": "./src/server/projectCommands.js",
     "./server/confirmationToken": "./src/server/confirmationToken.js",
     "./server/tagSavedCommit": "./src/server/tagSavedCommit.js",
     "./server/packers": "./src/server/packers/index.js",

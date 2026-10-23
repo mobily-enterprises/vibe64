@@ -22,6 +22,7 @@ export {
   issuePublishConfirmation,
   redeemPublishConfirmation
 } from "./confirmationToken.js";
+export { checkCommandRunner, runStageCommand } from "./projectCommands.js";
 export { tagSavedCommit } from "./tagSavedCommit.js";
 export { VIBE64_PACKERS, vibe64Packer } from "./packers/index.js";
 export { VIBE64_DESTINATIONS, vibe64Destination } from "./destinations/index.js";

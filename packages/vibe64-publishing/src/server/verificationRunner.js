@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 
 import { verifyGenesisProject } from "@local/vibe64-genesis/server";
+import { checkCommandRunner } from "@local/vibe64-packaging/server/projectCommands";
 
 import { readJsonFile, serialized, writeJsonFile } from "./state/jsonFile.js";
 
@@ -28,7 +29,9 @@ function checkEnvironment(home, base = process.env) {
   return { ...environment, HOME: home, TMPDIR: home, CI: "1", GIT_TERMINAL_PROMPT: "0" };
 }
 
-function createVerificationRunner({ runtimeRoot, repository, verify = verifyGenesisProject, now = () => new Date().toISOString() } = {}) {
+function createVerificationRunner({
+  runtimeRoot, repository, verify = verifyGenesisProject, processRunner = checkCommandRunner(), now = () => new Date().toISOString()
+} = {}) {
   if (!path.isAbsolute(runtimeRoot || "")) throw new TypeError("Checks need the project's publishing folder.");
   const file = path.join(runtimeRoot, "verification.json");
   const exclusive = serialized();
@@ -63,7 +66,7 @@ function createVerificationRunner({ runtimeRoot, repository, verify = verifyGene
         const onEvent = (event) => {
           if (event?.code === "VERIFICATION_STARTED") current = String(event.details?.label || "");
         };
-        const outcome = await repository.withCheckout(repositoryRoot, commit, (root) => verify({ projectRoot: root, environment: checkEnvironment(home), onEvent }));
+        const outcome = await repository.withCheckout(repositoryRoot, commit, (root) => verify({ projectRoot: root, environment: checkEnvironment(home), onEvent, processRunner }));
         const status = outcome?.status === "passed" ? "passed" : outcome?.status === "unconfigured" ? "unconfigured" : "failed";
         return await record({
           commit,
