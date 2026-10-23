@@ -251,9 +251,20 @@ function expectedChecksum(destination, artifacts) {
   return typeof destination.expectedChecksum === "function" ? destination.expectedChecksum(artifacts) : artifacts.digest;
 }
 
-// Stage 3 alone: what the destination reports for this target and version.
-async function readBackTarget({ destination, target, version, artifacts }) {
-  const result = await destination.readBack({ target, version, artifacts });
+// A destination's credential specs may depend on the target (for example a
+// private package that needs a sign-in even to be read back).
+function credentialSpecs(destination, field, target) {
+  const specs = typeof destination[field] === "function" ? destination[field](target) : destination[field];
+  return Array.isArray(specs) ? specs : [];
+}
+
+// Stage 3 alone: what the destination reports for this target and version. A
+// destination that cannot read without signing in declares readBackCredentials.
+async function readBackTarget({ destination, target, version, artifacts, obtainCredential, tempRoot }) {
+  const credentials = credentialSpecs(destination, "readBackCredentials", target);
+  const result = credentials.length
+    ? await withStageCredentials({ credentials, obtainCredential, tempRoot }, (supplied) => destination.readBack({ target, version, artifacts, credentials: supplied }))
+    : await destination.readBack({ target, version, artifacts });
   if (!result || typeof result.published !== "boolean") {
     throw stageError("VIBE64_PUBLISH_READ_BACK_INVALID", `${destination.label} returned no read-back result.`);
   }
@@ -284,16 +295,16 @@ async function publishTarget({
   await verifyArtifacts(artifacts);
   const checksum = expectedChecksum(destination, artifacts);
   if (previous?.status === "proven" && previous.version === version && previous.checksum === checksum) return previous;
-  const before = await readBackTarget({ destination, target, version, artifacts });
+  const before = await readBackTarget({ destination, target, version, artifacts, obtainCredential, tempRoot });
   if (before.published) {
     return { target: target.id, version, checksum, status: "proven", alreadyPublished: true, proof: before.proof || null, startedAt, finishedAt: now() };
   }
   const upload = await withStageCredentials({
-    credentials: destination.credentials || [],
+    credentials: credentialSpecs(destination, "credentials", target),
     obtainCredential,
     tempRoot
   }, (credentials) => destination.upload({ target, version, artifacts, credentials }));
-  const after = await readBackTarget({ destination, target, version, artifacts });
+  const after = await readBackTarget({ destination, target, version, artifacts, obtainCredential, tempRoot });
   if (!after.published) {
     throw stageError("VIBE64_PUBLISH_NOT_PROVEN", `${destination.label} accepted the upload but does not show ${version} yet.`, {
       target: target.id,

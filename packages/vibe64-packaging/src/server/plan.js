@@ -66,8 +66,21 @@ function normalizeTargets(targets, packages) {
     if (channel && !destination.channels.some((known) => channel === known || channel.startsWith(`${known}:`))) {
       invalid(`Target ${id}: ${destination.label} has no channel ${channel}.`);
     }
-    return { id, destination: destination.id, package: entry.id, channel };
+    const normalized = { id, destination: destination.id, package: entry.id, channel };
+    // Where the target publishes (registry, repository) is part of what the person confirms.
+    if (target.settings !== undefined && target.settings !== null) normalized.settings = targetSettings(target.settings, id);
+    return normalized;
   }).sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function targetSettings(settings, id) {
+  if (typeof settings !== "object" || Array.isArray(settings)) invalid(`Target ${id} settings must be an object.`);
+  const plain = (value) => typeof value === "string" || typeof value === "boolean"
+    || (Array.isArray(value) && value.every((item) => typeof item === "string"));
+  for (const [name, value] of Object.entries(settings)) {
+    if (!/^[a-z][A-Za-z0-9]*$/u.test(name) || !plain(value)) invalid(`Target ${id} setting ${name} must be text, true/false or a list of text.`);
+  }
+  return Object.fromEntries(Object.entries(settings).sort(([left], [right]) => left.localeCompare(right)));
 }
 
 // Content packages build before the app packages that consume them; each builds once.
