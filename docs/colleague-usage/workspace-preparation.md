@@ -99,6 +99,37 @@ Colleague can explain this recovery; installing a local tool and restarting the
 local editor require the person to use their terminal.
 
 
+## A database server you run
+
+When the project's Stack declares a MySQL/MariaDB or PostgreSQL database and
+this computer supplies none itself, the person runs that server: one they
+already have, or one they install. After a preparation step fails, a
+**database server** panel appears under the failed step. It says whether
+Vibe64 could sign in, in one sentence: nothing answering at the host and port,
+a wrong user or password, a user that can only sign in from the computer's
+administrator account (such as `root` on a fresh MariaDB, or `postgres`), a
+missing database, or no access to it.
+
+The panel's fields are the project's Env values under the exact names the
+Stack declares (for example `DB_HOST`, `DB_PORT`, `DB_NAME` or `DB_DATABASE`,
+`DB_USER` or `DB_USERNAME`, `DB_PASSWORD`). **Save and check** saves them in
+Env and signs in for real with the drivers Vibe64 bundles; **Check again**
+repeats the sign-in. A saved password is never shown or sent back; an empty
+password field keeps it. Env values always win over the Stack's defaults, and a
+variable exported in the shell that started Vibe64 does not count.
+
+**Install or start** shows the command for this computer (Debian, Ubuntu and
+WSL, or macOS with Homebrew; other systems get a link). **Create a login and
+database** shows one command that creates a project user, its database and,
+for PostgreSQL, the right to create test databases. **Suggest a user and
+password** fills in a project user and a strong password first; the command
+shows the password as dots but copies the real one. The person runs these
+commands in their own terminal; Vibe64 never starts a database server or runs
+them. When the panel says connected, choose **Retry** on the failed step.
+
+Colleague can explain the panel and each message. It must not ask for or repeat
+a password, and it never runs `sudo` or creates databases itself.
+
 ## Resource recovery after a daemon restart
 
 When the host supports database preservation checks, reopening a previously
