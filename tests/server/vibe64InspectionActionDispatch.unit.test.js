@@ -34,6 +34,7 @@ test("current-app and Studio Health inspections resolve current actor and their 
     });
     registerCurrentApp(app.http, { projectContext, routeSurface: "app", routeRelativePath: "studio/current-app" });
     registerHealth(app.http);
+    assert.ok(findRegisteredRoute(app, { method: "GET", path: "/api/studio/health/tools" }), "rows check named tools on their own route");
     const direct = (actionId, input) => actions.execute({ actionId, input, context: { channel: "automation", surface: "app" } });
     const cases = [
       ["vibe64.current-app.read", `${apiRouteBase}/studio/current-app`, { sessionId: "session" }, { projectSlug: slug }],

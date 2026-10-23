@@ -21,7 +21,7 @@ function registerRoutes(http, {
     summary: "Inspect Vibe64 host platform health."
   });
 
-  routes.actionRoute("GET", "tools", {
+  routes.actionRoute("GET", "/tools", {
     actionId: ACTION_CHECK_STUDIO_TOOLS,
     buildInput: routes.requestQuery,
     query: studioToolsQueryInputValidator,
