@@ -2020,6 +2020,11 @@ onBeforeUnmount(() => {
   padding: 0.35rem 0.5rem;
 }
 
+/* A missing tool's row needs room for its command and Check again. */
+.studio-autopilot__activity:has(.setup-tools:not(.setup-tools--quiet)) {
+  max-height: min(60dvh, 34rem);
+}
+
 .studio-autopilot__activity:empty {
   display: none;
   padding: 0;
