@@ -86,8 +86,8 @@ needed. It looks on your `PATH` and in the official installers' folders
 (`~/.local/bin`, `~/.claude/local`, `~/.opencode/bin`, `/opt/homebrew/bin` and
 `/usr/local/bin`), so it finds them even when it was started outside a terminal. A
 program installed somewhere else must be on the `PATH` of the terminal that starts
-Vibe64. When Vibe64 starts, it prints one line for each program it can't find, and
-**Dashboard → Health** shows a check for each. Where the host provides pinned versions
+Vibe64. When Vibe64 starts with no AI program at all, it prints one plain message;
+**Dashboard → Health** needs one AI program and lists the others as optional. Where the host provides pinned versions
 of these programs, none of these warnings or install commands appear.
 
 ## Advanced in Your AI setup

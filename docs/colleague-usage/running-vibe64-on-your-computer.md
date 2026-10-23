@@ -17,8 +17,24 @@ Nothing needs configuring. Vibe64 runs as you, with your own tools and folders.
 Vibe64 runs the tools already installed on your computer: the ones your
 terminal finds on its `PATH`, plus Homebrew's `/opt/homebrew/bin` on macOS.
 That includes Node.js, npm, Git and any language tools your projects need.
-Install or upgrade them the way you normally would; Vibe64 uses the new version
+Your own installs come first: `~/.local/bin`, mise's shims folder
+(`~/.local/share/mise/shims`) and the Claude Code, opencode, rustup and Bun
+folders are searched before the system folders, so `mise use -g python@3.13`
+beats an older system Python even before your shell profile is reloaded. On
+Debian and Ubuntu the newest `/usr/lib/postgresql/<version>/bin` is added, and on
+macOS Homebrew's PostgreSQL and MariaDB folders, so their programs are found.
+Install or upgrade tools the way you normally would; Vibe64 uses the new version
 the next time it runs a command.
+
+Vibe64 needs Node.js (the version it declares), Git and one AI tool. Everything
+else depends on the project: a tool row appears only where a step needs it, for
+example after **Preparing workspace** fails (see
+[Project language tools](project-language-tools.md)).
+
+On native Windows, `npx vibe64` stops and explains that Vibe64 runs on Windows
+inside WSL2 (Ubuntu): install WSL2, open Ubuntu, install Node.js there and run
+`npx vibe64` inside it. With the wrong Node.js
+version it stops and shows the mise command that installs the right one.
 
 - **AI agents.** Claude Code, Codex and opencode are used through their own
   commands, so each must be installed on this computer before you can use it.

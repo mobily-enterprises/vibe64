@@ -1,19 +1,44 @@
 # Check that this installation is ready (Health)
 
-**Dashboard → Health** (the **Studio Health** page) runs this installation's readiness checks and shows each
-one as passing or needing attention, with what was expected and what was observed. Use **Refresh**
-to run them again after fixing something. On a phone, open Dashboard, then choose
-**Health** from the section menu.
+**Dashboard → Health** (the **Studio Health** page) shows what this computer has
+and what Vibe64 needs from it. Use **Refresh** to run the checks again after fixing
+something. On a phone, open Dashboard, then choose **Health** from the section menu.
 
-| Check | Group | What a failure means |
-| --- | --- | --- |
-| Workspace services | Studio | The Vibe64 installation or its project list cannot be read. |
-| Tools | Runtime | Shown only when Vibe64 uses the programs installed on this computer (**Using your installed tools**). Always passes; it reminds you to install and update them yourself. |
-| AI connection | Credentials | No AI provider is connected; open **Account settings → AI Accounts**. |
-| Node.js, Git, GitHub CLI, ripgrep, Genesis | Runtime | That program is missing or the wrong version on this machine; install it with the system's normal installer. With your installed tools, Node.js must match the major version Vibe64 declares (shown in the check). |
-| Your name in Git | Runtime | A warning, never a failure: Git has no name and email for you yet, so commits are saved with a stand-in name ending in “via Vibe64”. The check shows the two `git config --global` lines, with a copy button, to set your own. Shown only when Vibe64 uses the programs installed on this computer. |
-| Claude Code, Codex, opencode | AI tools | With your installed tools: that AI tool isn't installed on this computer, or it didn't start. A missing tool shows its official install command; each is needed only for the AI that uses it. Where the host provides pinned versions, a single **Codex CLI** check (Runtime) replaces these. |
-| Playwright runtime, Playwright browser (Pinned browser where the host provides pinned versions) | Browser | Only automated browser tests need these; other work is unaffected. With your installed tools, the check shows Playwright's own message, for example **Playwright is not installed on this computer**; install Playwright, then run `playwright install chromium`. |
+The top line says **Vibe64 has what it needs.** or how many needed things are
+missing, and how many optional extras aren't set up. Only **Needed** checks count.
+
+**Needed** (Vibe64 can't work without these):
+
+| Check | What a failure means |
+| --- | --- |
+| Node.js | Node.js is missing or not the major version Vibe64 needs (shown in the row). The row shows the install command. |
+| Git | Git is missing or didn't start. |
+| An AI tool | None of Claude Code, Codex or opencode runs on this computer. One is enough. **Set up your AI** opens AI setup. |
+| AI connection | No AI is connected yet. **Set up your AI** opens AI setup (shown on the first AI row that needs it). |
+| Vibe64, Genesis | Vibe64's own parts can't be read. This is not something a project setting fixes. |
+
+**Optional** (nice to have; nothing depends on them): GitHub CLI, ripgrep, the AI
+tools you don't use, **Your name in Git** and the Playwright browser for automated
+browser checks.
+
+A tool counts as there only when it actually runs: Vibe64 starts it and asks for
+its version (a few seconds at most), using the same `PATH` your projects use. A file
+that exists but doesn't start shows as **didn't start**. A ready tool shows its
+version and where it was found, so a wrong pick is easy to spot.
+
+A missing tool shows one sentence, the install command for this computer (Debian,
+Ubuntu or WSL; macOS with Homebrew; otherwise mise) with a copy button, **Check
+again** and **Other ways**. Commands that need `sudo` say: "You'll be asked for
+your computer password. Nothing shows while you type." **Check again** spins, then
+either turns the row green or says "Still not found. Did the command finish
+without errors?" No restart is needed.
+
+**Your name in Git** is a warning, never a failure: Git has no name and email for
+you yet, so commits are saved with a stand-in name ending in “via Vibe64”. The row
+shows the two `git config --global` lines, with a copy button.
+
+Where the host provides pinned versions, every check is needed and the rows keep
+the host's own wording; no install commands appear.
 
 GitHub sign-in is not a Health check. **Account settings → GitHub** shows the
 **GitHub Connection** card: **Connection ready** means Vibe64 can use GitHub.
@@ -21,9 +46,9 @@ That card also holds **Git user.name**, **Git user.email** and **Save Git identi
 Connecting GitHub fills in your Git name and email only when Git has none; it
 never replaces ones you already set.
 
-A missing AI tool also appears in **Account settings → AI Accounts** and in AI onboarding,
-with a **Copy** button for the install command and **Check again**. When Vibe64 starts, it
-also prints one line for each AI tool it can't find.
+When Vibe64 starts in a terminal with no AI tool at all, it prints one plain
+message there with the Claude Code install command. It says nothing when one AI
+tool is installed.
 
 Health only reads. It never installs software, signs in or repairs anything, and
 a pass is not proof that a particular project builds.
