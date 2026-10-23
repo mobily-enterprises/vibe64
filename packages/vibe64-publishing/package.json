@@ -5,7 +5,10 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./client/publish-page": "./src/client/PublishPage.vue"
+    "./client/publish-page": "./src/client/PublishPage.vue",
+    "./server/actions": "./src/server/actions.js",
+    "./server/service": "./src/server/service.js",
+    "./shared/destinationCatalog": "./src/shared/destinationCatalog.js"
   },
   "jskit": {
     "kind": "runtime",
@@ -14,7 +17,10 @@
         "vibe64.publishing"
       ],
       "requires": [
-        "vibe64.project"
+        "runtime.actions",
+        "runtime.http",
+        "vibe64.project",
+        "vibe64.source-editor"
       ]
     },
     "runtime": {
@@ -38,7 +44,19 @@
         "surfaces": [
           {
             "subpath": "./client/publish-page",
-            "summary": "Renders the project's Publish page."
+            "summary": "Renders the project's Publish page: targets, release, confirmation, history, publishing keys and phone installs."
+          },
+          {
+            "subpath": "./server/actions",
+            "summary": "Defines the named publishing actions; irreversible and secret-handling ones accept only the person's own page requests."
+          },
+          {
+            "subpath": "./server/service",
+            "summary": "Orchestrates local releases (prepare, Save, plan, preflight, dry run, confirm, tag, build once, fan out, read back) with keys in the person's own age-encrypted store."
+          },
+          {
+            "subpath": "./shared/destinationCatalog",
+            "summary": "Describes each destination's needs, time and cost for the Add target dialog."
           }
         ],
         "capabilities": [
@@ -48,11 +66,16 @@
     }
   },
   "dependencies": {
+    "@jskit-ai/http-web": "0.1.90",
     "@jskit-ai/kernel": "0.1.244",
+    "@jskit-ai/shell-web": "0.1.249",
+    "@local/vibe64-core": "0.1.0",
     "@local/vibe64-genesis": "0.1.0",
     "@local/vibe64-packaging": "0.1.0",
     "@local/vibe64-project": "0.1.0",
+    "@local/vibe64-source-editor": "0.1.0",
     "@mdi/js": "^7.4.47",
+    "json-rest-schema": "^1.0.16",
     "vue": "^3.5.44",
     "vuetify": "^4.0.0"
   }

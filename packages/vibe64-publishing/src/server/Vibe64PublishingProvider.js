@@ -1,18 +1,35 @@
 import { defineFeature } from "@jskit-ai/kernel/server/features";
 
-// The local publishing experience: release orchestration, targets, history and
-// confirmation for this machine, built from @local/vibe64-packaging.
+import { createPublishingActions } from "./actions.js";
+import { registerRoutes } from "./registerRoutes.js";
+import { createPublishingService } from "./service.js";
+
+// The local publishing experience: release orchestration, targets, history,
+// keys and confirmation on this computer, built from @local/vibe64-packaging.
 const Vibe64PublishingProvider = defineFeature({
+  actionDefaults: {
+    channels: ["api", "automation", "internal"],
+    surfaces: ["app"]
+  },
+  actions: ({ publishing }) => createPublishingActions({ publishing }),
   id: "vibe64.publishing",
   domain: "vibe64-publishing",
   requires: {
-    project: "vibe64.project"
+    http: "runtime.http",
+    project: "vibe64.project",
+    sourceEditor: "vibe64.source-editor"
   },
   provides: {
     publishing: "vibe64.publishing"
   },
-  setup() {
-    return { publishing: Object.freeze({}) };
+  setup({ http, project, sourceEditor }) {
+    const publishing = createPublishingService({ project, sourceEditor });
+    registerRoutes(http, { publishing, routeRelativePath: "vibe64", routeSurface: "app" });
+    return { publishing };
+  },
+  shutdown(_dependencies, { outputs }) {
+    outputs.publishing.keys.lock();
+    return outputs.publishing.lanShare.stop();
   }
 });
 
