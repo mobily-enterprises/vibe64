@@ -304,15 +304,14 @@ function createReleaseOrchestrator({
     return numbers;
   }
 
-  // The runtime form of a plan target: plan settings plus the account that
-  // signs in and local tool choices (which twine), none of which change where
-  // it publishes.
+  // The runtime form of a plan target: plan settings and the confirmed account
+  // that signs in, plus local tool choices (which twine), which do not change
+  // where it publishes.
   async function runtimeTarget(planTarget, { tag = null, notes = null } = {}) {
     const tools = await toolchains.registryTools?.() || {};
-    const stored = await targets.get(planTarget.id);
     const settings = { ...(planTarget.settings || {}) };
     if (planTarget.destination === "pypi" && tools.twine) settings.twine = tools.twine;
-    return { ...planTarget, account: stored?.account || null, settings, ...(tag ? { tag } : {}), ...(notes ? { notes } : {}) };
+    return { ...planTarget, account: planTarget.account || null, settings, ...(tag ? { tag } : {}), ...(notes ? { notes } : {}) };
   }
 
   // Builds the current plan for the saved commit and runs preflight on it.
@@ -342,7 +341,7 @@ function createReleaseOrchestrator({
       packaging: release.packaging,
       versions,
       buildNumbers: await nextBuildNumbers(built),
-      targets: chosen.map(({ id, destination, package: packageId, channel, settings }) => ({ id, destination, package: packageId, channel, settings })),
+      targets: chosen.map(({ id, destination, package: packageId, channel, settings, account }) => ({ id, destination, package: packageId, channel, settings, account })),
       toolchain: {
         node: process.versions.node,
         ...(hasAndroid ? { java: String(toolStatus?.java?.version || "missing").replace(/[^0-9A-Za-z.+_-]/gu, "") || "missing", "android-build-tools": packaging.androidTemplate.buildTools } : {})
@@ -397,7 +396,7 @@ function createReleaseOrchestrator({
       savedCommit: publishPlan.savedCommit,
       tags: publishPlan.tags,
       packages: publishPlan.packages,
-      targets: publishPlan.targets.map((target) => ({ id: target.id, destination: target.destination, package: target.package, channel: target.channel, settings: target.settings })),
+      targets: publishPlan.targets.map((target) => ({ id: target.id, destination: target.destination, package: target.package, channel: target.channel, settings: target.settings, account: target.account || null })),
       toolchain: publishPlan.toolchain,
       templates: publishPlan.templates,
       steps: publishPlan.steps

@@ -11,6 +11,7 @@ import { publishError } from "./errors.js";
 const VIBE64_PUBLISH_PLAN_CONTRACT = "vibe64.publish-plan.v1";
 const COMMIT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
+const ACCOUNT = /^[a-z0-9][a-z0-9-]{0,62}$/u;
 const SEMVER = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
 const TOOL_NAME = /^[@a-z0-9][a-z0-9@/._-]*$/u;
 const VERSION_TEXT = /^[0-9A-Za-z][0-9A-Za-z.+_-]*$/u;
@@ -69,6 +70,12 @@ function normalizeTargets(targets, packages) {
     const normalized = { id, destination: destination.id, package: entry.id, channel };
     // Where the target publishes (registry, repository) is part of what the person confirms.
     if (target.settings !== undefined && target.settings !== null) normalized.settings = targetSettings(target.settings, id);
+    // The account that signs in is confirmed too: changing it changes the plan.
+    if (target.account !== undefined && target.account !== null && target.account !== "") {
+      const account = oneLine(target.account, `Target ${id} account`);
+      if (!ACCOUNT.test(account)) invalid(`Target ${id} account ${account} must use lowercase letters, digits and hyphens.`);
+      normalized.account = account;
+    }
     return normalized;
   }).sort((left, right) => left.id.localeCompare(right.id));
 }

@@ -92,12 +92,14 @@ test("the plan builds each package once, fans out, and its hash is deterministic
   assert.equal(createPublishPlan(input()).planHash, planHash);
 });
 
-test("the hash changes with the commit, targets, versions, toolchain, templates and Packaging", () => {
+test("the hash changes with the commit, targets, accounts, versions, toolchain, templates and Packaging", () => {
   const { planHash } = createPublishPlan(input());
   const variants = [
     input({ savedCommit: OTHER_COMMIT }),
     input({ targets: input().targets.slice(0, 2) }),
     input({ targets: input().targets.map((target) => target.id === "app-release" ? { ...target, channel: "prerelease" } : target) }),
+    input({ targets: input().targets.map((target) => target.id === "sdk-npm" ? { ...target, account: "npm-main" } : target) }),
+    input({ targets: input().targets.map((target) => target.id === "sdk-npm" ? { ...target, account: "npm-other" } : target) }),
     input({ versions: { app: "1.5.1", sdk: "0.9.1" } }),
     input({ buildNumbers: { app: 8 } }),
     input({ toolchain: { node: "26.2.0", "@capacitor/cli": "8.0.2" } }),

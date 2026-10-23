@@ -185,6 +185,10 @@ test("an assistant can only ask; the person confirms the exact current plan", as
 
   const { token } = await orchestrator.openConfirmation({ planHash: plan.planHash, actor: PERSON });
   await assert.rejects(orchestrator.confirmRelease({ planHash: plan.planHash, token, actor: { kind: "assistant", id: "assistant" } }), { code: "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON" });
+  await targets.update("sdk-npm", { account: "npm-other" });
+  await assert.rejects(orchestrator.confirmRelease({ planHash: plan.planHash, token, actor: PERSON }), { code: "VIBE64_PUBLISH_CONFIRMATION_PLAN_CHANGED" },
+    "the account that signs in is part of what the person confirmed");
+  await targets.update("sdk-npm", { account: "npm-main" });
   await targets.remove("py-pypi");
   await assert.rejects(orchestrator.confirmRelease({ planHash: plan.planHash, token, actor: PERSON }), { code: "VIBE64_PUBLISH_CONFIRMATION_PLAN_CHANGED" });
   assert.equal(calls.publishes.length, 0);
