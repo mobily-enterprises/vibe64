@@ -249,6 +249,8 @@ describe("Vibe64 project client scope", () => {
   it("does not rewrite global Studio and owner API paths into project API paths", () => {
     expect(scopedDevelopmentApiPathname("/api/studio/health", "alpha_1"))
       .toBe("/api/studio/health");
+    expect(scopedDevelopmentApiPathname("/api/studio/health/tools", "alpha_1"))
+      .toBe("/api/studio/health/tools");
     expect(scopedDevelopmentApiPathname("/api/vibe64/voice/voices", "alpha_1"))
       .toBe("/api/vibe64/voice/voices");
     expect(scopedDevelopmentApiPathname("/api/studio/browser-lifecycle/ws", "alpha_1"))
