@@ -58,7 +58,9 @@ const props = defineProps({
   recommendation: { type: Object, default: null },
   error: { type: String, default: "" },
   disabled: Boolean,
-  readonly: Boolean
+  readonly: Boolean,
+  // The host can open connecting this model's provider in another tool.
+  connectable: Boolean
 });
 const emit = defineEmits(["update", "change", "connect-provider"]);
 const advanced = ref(false);
@@ -161,7 +163,7 @@ function chooseThinking(variantId) {
               </v-list-item>
             </template>
             <template #selection>
-              <span class="routing-row__selection">
+              <span class="routing-row__selection" :title="[current?.label || selection?.modelId, offDefault ? `runs in ${toolLabel(value.engineId)}` : ''].filter(Boolean).join(' · ')">
                 <span class="routing-row__model-name">{{ current?.label || selection?.modelId }}</span>
                 <span v-if="offDefault" class="routing-row__runs-in">
                   · <span class="routing-tool" aria-hidden="true">{{ TOOL_MARKS[value.engineId] }}</span>runs in {{ toolLabel(value.engineId) }}
@@ -209,7 +211,7 @@ function chooseThinking(variantId) {
               </v-radio>
             </v-radio-group>
             <v-btn
-              v-if="elsewhere.length && !readonly" variant="text" color="primary" size="small" class="routing-row__connect"
+              v-if="connectable && elsewhere.length && !readonly" variant="text" color="primary" size="small" class="routing-row__connect"
               @click="emit('connect-provider', current.modelProviderId)"
             >
               Connect {{ current.providerLabel }} in another tool
@@ -247,9 +249,11 @@ function chooseThinking(variantId) {
 .routing-row__model-name { font-weight: 500; overflow-wrap: anywhere; }
 .routing-row__status { color: var(--v64-on-surface-variant); font: 400 0.8125rem/1.125rem var(--v64-font-family); }
 .routing-row__option :deep(.v-list-item-subtitle) { color: var(--v64-on-surface-variant); opacity: 1; }
+/* The tool suffix is the only sign of a non-default tool: in a narrow field the
+   model name shortens with an ellipsis and the suffix stays whole. */
 .routing-row__selection { align-items: center; display: inline-flex; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; }
-.routing-row__selection .routing-row__model-name { overflow-wrap: normal; }
-.routing-row__runs-in { align-items: center; color: var(--v64-on-surface-variant); display: inline-flex; font: var(--v64-type-body-md); gap: 4px; min-width: 0; }
+.routing-row__selection .routing-row__model-name { min-width: 0; overflow: hidden; overflow-wrap: normal; text-overflow: ellipsis; }
+.routing-row__runs-in { align-items: center; color: var(--v64-on-surface-variant); display: inline-flex; flex-shrink: 0; font: var(--v64-type-body-md); gap: 4px; }
 .routing-row__advanced {
   background: var(--v64-surface-container-low);
   border: 1px solid var(--v64-outline-variant);
