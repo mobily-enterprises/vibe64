@@ -28,3 +28,33 @@ test("a saved commit exports from a working checkout and from a bare repository"
     await assert.rejects(stat(path.join(directory, ".git")), `${label} export has no Git metadata`);
   }
 });
+
+test("a package build leaves out the project's Genesis and agent files, from checkouts and bare repositories", async (t) => {
+  const { VIBE64_PACKAGING_SOURCE_EXCLUSIONS } = await import("../../packages/vibe64-genesis/src/server/packaging.js");
+  const { root, commit } = await gitProject(t, {
+    "pyproject.toml": "[project]\nname = \"weather-kit\"\n",
+    "weather_kit/__init__.py": "",
+    "genesis/stack.md": "# Stack\n",
+    ".genesis/machine-city.json": "{}\n",
+    ".agents/skills/genesis-project/SKILL.md": "skill\n",
+    ".claude/settings.json": "{}\n",
+    ".codex/hooks.json": "{}\n",
+    ".opencode/plugins/genesis-project-guidance.js": "export {};\n",
+    "docs/genesis.md": "kept: only the top-level folders are left out\n"
+  });
+  const scratch = await mkdtemp(path.join(os.tmpdir(), "vibe64-export-test-"));
+  t.after(() => rm(scratch, { recursive: true, force: true }));
+  const bare = path.join(scratch, "canonical.git");
+  await run("git", ["clone", "-q", "--bare", root, bare]);
+  for (const [label, projectRoot] of [["checkout", root], ["bare", bare]]) {
+    const directory = path.join(scratch, label);
+    await exportSavedCommit({ projectRoot, commit, directory, exclude: VIBE64_PACKAGING_SOURCE_EXCLUSIONS });
+    for (const left of ["genesis", ".genesis", ".agents", ".claude", ".codex", ".opencode"]) {
+      await assert.rejects(stat(path.join(directory, left)), `${label} export leaves out ${left}`);
+    }
+    assert.ok(await stat(path.join(directory, "weather_kit", "__init__.py")), `${label} keeps the package`);
+    assert.ok(await stat(path.join(directory, "docs", "genesis.md")), `${label} keeps nested files that only share the name`);
+  }
+  const { stdout } = await run("git", ["-C", root, "status", "--porcelain"]);
+  assert.equal(stdout, "", "the project's own index and worktree are untouched");
+});

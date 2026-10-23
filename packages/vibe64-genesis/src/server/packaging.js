@@ -13,6 +13,11 @@ import {
 
 const VIBE64_PACKAGING_CONTRACT = "vibe64.packaging.v1";
 const VIBE64_PACKAGING_SECTION = "Packaging";
+// Project files that steer Genesis and coding agents, never what a package
+// ships. Releases build from the saved commit without them: a Python flat
+// layout then cannot find `genesis/` as a second package, and an npm package
+// without a `files` list cannot publish them.
+const VIBE64_PACKAGING_SOURCE_EXCLUSIONS = Object.freeze(["genesis", ".genesis", ".agents", ".claude", ".codex", ".opencode"]);
 const ERROR_CODE = "VIBE64_PACKAGING_INVALID";
 const ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const ENVIRONMENT_NAME = /^[A-Z_][A-Z0-9_]*$/u;
@@ -416,6 +421,7 @@ export {
   CAPACITOR_PLATFORMS as VIBE64_PACKAGING_PLATFORMS,
   VIBE64_PACKAGING_CONTRACT,
   VIBE64_PACKAGING_SECTION,
+  VIBE64_PACKAGING_SOURCE_EXCLUSIONS,
   parseVibe64PackagingLines,
   resolveVibe64PackagingEnvironment,
   vibe64PackagingInspection

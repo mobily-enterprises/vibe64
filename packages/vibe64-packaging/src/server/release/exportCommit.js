@@ -39,7 +39,9 @@ async function resolveCommit({ projectRoot, revision = "HEAD" }) {
   return git(projectRoot, ["rev-parse", "--verify", `${revision}^{commit}`]);
 }
 
-async function exportSavedCommit({ projectRoot, commit, directory } = {}) {
+// `exclude` names top-level-relative paths (folders or files) left out of the
+// export, such as the project's Genesis and agent files for a package build.
+async function exportSavedCommit({ projectRoot, commit, directory, exclude = [] } = {}) {
   if (typeof projectRoot !== "string" || !path.isAbsolute(projectRoot)) {
     throw publishError("VIBE64_PUBLISH_EXPORT_FAILED", "The project root must be an absolute path.");
   }
@@ -56,6 +58,7 @@ async function exportSavedCommit({ projectRoot, commit, directory } = {}) {
   try {
     const env = { GIT_INDEX_FILE: path.join(indexHome, "index") };
     await git(projectRoot, ["read-tree", commit], env);
+    if (exclude.length) await git(projectRoot, ["rm", "--cached", "-r", "-q", "--ignore-unmatch", "--", ...exclude], env, { workTree: directory });
     // The export folder is the work tree, so a bare canonical repository exports too.
     await git(projectRoot, ["checkout-index", "--all", "--force", `--prefix=${directory}${path.sep}`], env, { workTree: directory });
   } finally {

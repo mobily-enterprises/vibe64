@@ -6,6 +6,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
+import { VIBE64_PACKAGING_SOURCE_EXCLUSIONS } from "@local/vibe64-genesis/server/packaging";
+
 import { canonicalJson, sha256 } from "../canonical.js";
 import { publishError } from "../errors.js";
 import { vibe64Packer } from "../packers/index.js";
@@ -63,7 +65,9 @@ async function buildPackage({
     : contentArtifacts;
   const source = await mkdtemp(path.join(workRoot, "vibe64-release-source-"));
   try {
-    const { commitTime } = await exportSavedCommit({ projectRoot, commit, directory: path.join(source, "project") });
+    const { commitTime } = await exportSavedCommit({
+      projectRoot, commit, directory: path.join(source, "project"), exclude: VIBE64_PACKAGING_SOURCE_EXCLUSIONS
+    });
     const sourceRoot = path.join(source, "project");
     const recipe = await packer.buildRecipe({
       sourceRoot,

@@ -85,7 +85,9 @@ Vibe64 for this project on this computer, not in the project's files.
    tags the saved commit and pushes the tag, then sends the same files to
    every target and reads each back. A failed build therefore leaves no tag
    behind. If the saved work, targets or tools changed since you reviewed, it
-   refuses and shows the new plan.
+   refuses and shows the new plan. Builds use the saved commit without the
+   project's Genesis and agent folders (`genesis/`, `.genesis/`, `.agents/`,
+   `.claude/`, `.codex/`, `.opencode/`), so packages never ship them.
 
 While a release runs each of its target cards shows **Publishing 1.4.3…**;
 afterwards a card shows the version people get, **Live · published …** and a
