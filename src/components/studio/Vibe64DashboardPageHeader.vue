@@ -35,6 +35,7 @@ defineProps({
   animation: vibe64-dashboard-page-header-enter var(--v64-duration-medium, 300ms)
     var(--v64-ease-emphasized-decelerate, ease-out) both;
   display: flex;
+  flex-wrap: wrap;
   gap: var(--v64-space-3, 12px) var(--v64-space-4, 16px);
   min-width: 0;
   padding: var(--v64-space-1, 4px) 0 var(--v64-space-2, 8px);
@@ -55,9 +56,11 @@ defineProps({
   width: 44px;
 }
 
+/* In a narrow pane (Colleague open beside it) the actions wrap below the copy
+   instead of squeezing the description to one word per line. */
 .vibe64-dashboard-page-header__copy {
   display: grid;
-  flex: 1 1 auto;
+  flex: 1 1 16rem;
   gap: 2px;
   min-width: 0;
 }
