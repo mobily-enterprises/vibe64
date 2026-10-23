@@ -47,6 +47,7 @@ const cards = computed(() => props.onboarding.cards.value);
 const skippable = computed(() => view.value === "why" || Boolean(setup.value?.skippable));
 const dock = computed(() => xs.value && (screen.value === "success" || screen.value === "why" && skippable.value));
 const doneLabel = computed(() => setup.value?.doneLabel || "");
+const tourOffered = computed(() => Boolean(setup.value?.tourOffered));
 
 // First run opens on Why; a redo, an existing setup or a member opens the stage.
 function startsAtWhy() {
@@ -161,7 +162,10 @@ function focusTitle() {
           <v-btn block variant="text" @click="close('later')">Set up later</v-btn>
           <p class="ai-onboarding__dock-note">You can change this any time in {{ changeWhere }}.</p>
         </template>
-        <v-btn v-else block color="primary" variant="flat" size="large" :append-icon="mdiArrowRight" @click="close('done')">{{ doneLabel }}</v-btn>
+        <template v-else>
+          <v-btn block color="primary" variant="flat" size="large" :append-icon="mdiArrowRight" @click="close('done')">{{ doneLabel }}</v-btn>
+          <v-btn v-if="tourOffered" block color="primary" variant="tonal" size="large" data-test="ai-setup-take-tour" @click="setup?.takeTour()">Take a 5-minute tour</v-btn>
+        </template>
       </footer>
     </div>
   </v-dialog>

@@ -4,7 +4,7 @@ import { useDisplay } from "vuetify";
 import { useRoute } from "vue-router";
 import {
   mdiAlertCircleOutline, mdiArrowDown, mdiArrowLeft, mdiArrowRight, mdiCheck, mdiCheckCircle, mdiChevronDown,
-  mdiInformationOutline, mdiLaptop, mdiOpenInNew, mdiRobotHappyOutline, mdiShieldLockOutline, mdiTuneVariant
+  mdiInformationOutline, mdiLaptop, mdiMapMarkerPath, mdiOpenInNew, mdiRobotHappyOutline, mdiShieldLockOutline, mdiTuneVariant
 } from "@mdi/js";
 import AIAccountsSetup from "../studio/AIAccountsSetup.vue";
 import CliInstallNotice, { cliProblem } from "../studio/CliInstallNotice.vue";
@@ -175,6 +175,16 @@ const learning = inject(VIBE64_LEARNING_KEY, null);
 const learn = computed(() => Boolean(unref(learning)?.learnMode));
 const inLesson = computed(() => learn.value && Boolean(unref(learning)?.mode?.currentAttemptId));
 const doneLabel = computed(() => inLesson.value ? "Back to the lesson" : learn.value ? "Back to Learn" : "Start building");
+// One offer, once: the end of first-time setup (not a redo, not inline, not
+// in Learn) offers the course's orientation lesson; the done button is its
+// "not now". Starting it is the Learning controller's (openOrientation).
+const tourOffered = computed(() => !props.inline && firstRun.value && !learn.value &&
+  typeof unref(learning)?.openOrientation === "function");
+function takeTour() {
+  if (busy.value || !tourOffered.value) return;
+  unref(learning).openOrientation();
+  close("tour");
+}
 // The check waits for Colleague's hello when there is one to wait for.
 const proven = computed(() => colleagueNote.value !== "uses" || learn.value ||
   ["replied", "dismissed"].includes(hello.value.state));
@@ -534,7 +544,7 @@ watch(() => [props.inline ? String(route?.query?.providerId || "") : "", String(
 }, { immediate: true });
 
 // The shell's top bar and phone dock follow the stage.
-defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("choose", true), openProvider });
+defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: () => go("choose", true), openProvider, takeTour });
 </script>
 
 
@@ -896,7 +906,15 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
           Your current models stay as they are. {{ chosen.name }} is ready in AI Accounts whenever you want it.
         </p>
         <slot name="connection-access" :card="chosen" place="success" />
-        <v-btn v-if="ownButtons" color="primary" variant="flat" size="large" :block="xs" :append-icon="mdiArrowRight" @click="close('done')">{{ inline ? "Done" : doneLabel }}</v-btn>
+        <div v-if="ownButtons" class="aio-success-actions">
+          <v-btn color="primary" variant="flat" size="large" :block="xs" :append-icon="mdiArrowRight" @click="close('done')">{{ inline ? "Done" : doneLabel }}</v-btn>
+          <v-btn
+            v-if="tourOffered" color="primary" variant="tonal" size="large" :block="xs" :prepend-icon="mdiMapMarkerPath"
+            data-test="ai-setup-take-tour" @click="takeTour"
+          >
+            Take a 5-minute tour
+          </v-btn>
+        </div>
       </section>
 
       <section v-else key="owner" class="ai-onboarding__success">
@@ -1263,6 +1281,7 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
 }
 .ai-onboarding__success .ai-onboarding__lede { margin-inline: auto; }
 .ai-onboarding__success > .v-btn { margin-top: var(--v64-space-5); }
+.aio-success-actions { display: flex; flex-wrap: wrap; gap: var(--v64-space-3); justify-content: center; margin-top: var(--v64-space-5); width: 100%; }
 .aio-success-mark {
   animation: aio-arrive var(--v64-duration-long) var(--v64-ease-emphasized-decelerate) both;
   margin-bottom: var(--v64-space-6);

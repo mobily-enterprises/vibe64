@@ -343,7 +343,11 @@ bridge's `sayHello` sends one ordinary Colleague message and settles on its
 reply, the failed turn's or conversation's error, or 15 seconds; the success
 check appears only after a reply (or when the person continues anyway), and a
 failure offers Retry and Check connection. **Start building** asks the bridge
-to `reveal` Colleague with its composer focused. Embedded,
+to `reveal` Colleague with its composer focused. At the end of first-time setup (not a redo,
+not inline, not in Learn) the success screen, and the phone dock, also offers
+**Take a 5-minute tour** while the injected Learning controller has
+`openOrientation`; it asks that controller to start the course's orientation
+lesson and closes the flow with reason `tour`. Accounts names no lesson. Embedded,
 `NativeProviderConnections` shows only the key form under the flow's own step
 title, and `ProviderAccountsSetup` shows nothing before the first attempt; when
 the sign-in tool cannot run it shows a warning with Try again, Choose another

@@ -361,11 +361,11 @@ describe("shell", () => {
 });
 
 describe("flow", () => {
-  async function flow({ setUp = false, redo = setUp, learnMode = false } = {}) {
+  async function flow({ setUp = false, redo = setUp, learnMode = false, learning = { learnMode }, onClose = undefined } = {}) {
     if (setUp) mocks.accounts.status.value.accounts[2].connected = true;
     const onboarding = effectScope().run(() => useAiOnboarding({ enabled: true }));
-    const state = mount(AiSetup, { open: true, redo, onboarding, canConfigure: true },
-      [[VIBE64_LEARNING_KEY, { learnMode }]]);
+    const state = mount(AiSetup, { open: true, redo, onboarding, canConfigure: true, ...(onClose ? { onClose } : {}) },
+      [[VIBE64_LEARNING_KEY, learning]]);
     await vi.waitFor(() => expect(mocks.colleague.current).toHaveBeenCalled());
     await Promise.resolve();
     return { state, onboarding };
@@ -427,6 +427,25 @@ describe("flow", () => {
   it("names the way back by mode: Start building in Develop", async () => {
     const { state } = await flow();
     expect(state.doneLabel).toBe("Start building");
+  });
+
+  it("offers the tour once, at the end of first-time setup in Develop, and starts it through the Learning controller", async () => {
+    const onClose = vi.fn();
+    const learning = { learnMode: false, openOrientation: vi.fn() };
+    const { state } = await flow({ learning, onClose });
+    state.connect(claude, "have");
+    connectClaude();
+    await state.finish();
+    expect([state.screen, state.tourOffered]).toEqual(["success", true]);
+    state.takeTour();
+    expect(learning.openOrientation).toHaveBeenCalledOnce();
+    expect(onClose.mock.calls[0][0]).toBe("tour");
+  });
+
+  it("makes no tour offer on a redo, in Learn mode or where no Learning controller can start one", async () => {
+    expect((await flow({ setUp: true, learning: { learnMode: false, openOrientation: vi.fn() } })).state.tourOffered).toBe(false);
+    expect((await flow({ learning: { learnMode: true, openOrientation: vi.fn() } })).state.tourOffered).toBe(false);
+    expect((await flow()).state.tourOffered).toBe(false);
   });
 
   it("shows Colleague's failed hello without the check until a retry succeeds", async () => {
