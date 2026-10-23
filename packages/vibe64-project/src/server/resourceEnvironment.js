@@ -19,6 +19,7 @@ const DATABASE_CONNECTION_SEMANTICS = new Set([
   "username"
 ]);
 const SECRET_RESOURCE_SEMANTICS = new Set(["password", "url", "accessTokenFile"]);
+const SECRET_RESOURCE_SEMANTIC_SUFFIX = /[a-z0-9](Secret|Token|Password|Key)$/;
 const FORBIDDEN_RESOURCE_ENVIRONMENT_NAMES = new Set(["NODE_OPTIONS"]);
 const RESOURCE_PROVIDER_RESULT_KEYS = new Set([
   "contract",
@@ -29,6 +30,16 @@ const RESOURCE_PROVIDER_RESULT_KEYS = new Set([
   "requiredUnits",
   "resourceValues"
 ]);
+
+/**
+ * Whether a resource semantic names a secret value: the fixed connection
+ * secrets, and any camelCase semantic ending in Secret, Token, Password or Key
+ * (clientSecret, registrationToken, refreshToken, apiKey).
+ */
+function resourceSemanticIsSecret(semantic) {
+  const name = typeof semantic === "string" ? semantic : "";
+  return SECRET_RESOURCE_SEMANTICS.has(name) || SECRET_RESOURCE_SEMANTIC_SUFFIX.test(name);
+}
 
 function resourceEnvironmentError(message, code = "vibe64_resource_environment_invalid") {
   const error = new Error(message);
@@ -340,7 +351,7 @@ function normalizeResourceEnvironment(resources = [], provided = {}, {
       }
       environment[name] = values[semantic];
       sources[name] = `vibe64-host:managed-resource:${declaration.resource.kind}:${declaration.resource.id}`;
-      if (SECRET_RESOURCE_SEMANTICS.has(semantic)) {
+      if (resourceSemanticIsSecret(semantic)) {
         secretKeys.add(name);
       }
     }
@@ -420,7 +431,7 @@ function localDatabaseServerDeclarations(resources = [], { environment = {} } = 
         .filter(([semantic]) => LOCAL_DATABASE_FIELD_ORDER.includes(semantic))
         .sort(([left], [right]) => LOCAL_DATABASE_FIELD_ORDER.indexOf(left) - LOCAL_DATABASE_FIELD_ORDER.indexOf(right))
         .map(([semantic, name]) => {
-          const secret = SECRET_RESOURCE_SEMANTICS.has(semantic);
+          const secret = resourceSemanticIsSecret(semantic);
           const value = trimmedValue(environment, name);
           return {
             name,
@@ -528,5 +539,6 @@ export {
   normalizeDatabaseToolEnvironment,
   normalizeResourceEnvironment,
   preferredAlternative,
+  resourceSemanticIsSecret,
   satisfiedAlternative
 };

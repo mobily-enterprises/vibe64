@@ -4,8 +4,26 @@ import test from "node:test";
 import {
   applicationDatabaseToolEnvironment,
   normalizeDatabaseToolEnvironment,
-  normalizeResourceEnvironment
+  normalizeResourceEnvironment,
+  resourceSemanticIsSecret
 } from "../../packages/vibe64-project/src/server/resourceEnvironment.js";
+
+test("secret resource semantics: fixed connection secrets and camelCase secret suffixes", () => {
+  const secret = [
+    "password", "url", "accessTokenFile",
+    "clientSecret", "registrationToken", "refreshToken", "apiKey", "adminPassword", "signingKey"
+  ];
+  const plain = [
+    "host", "port", "database", "username", "issuer", "clientId", "region",
+    "secret", "token", "key", "Secret", "keyName", "tokenEndpoint", "", undefined, null, 42
+  ];
+  for (const semantic of secret) {
+    assert.equal(resourceSemanticIsSecret(semantic), true, String(semantic));
+  }
+  for (const semantic of plain) {
+    assert.equal(resourceSemanticIsSecret(semantic), false, String(semantic));
+  }
+});
 
 test("SQLite maps a declared filename and keeps browser reads enforced on the same file", () => {
   const resource = databaseResource({ kind: "sqlite", preferredBindings: { database: "DB_DATABASE" } });
