@@ -74,11 +74,12 @@ test("credential facts come from each destination's read-only check and never th
       return spec.id === "pypi-token" ? "pypi-AgEtoken" : "//127.0.0.1:9/:_authToken=abcdefgh\n";
     }
   });
-  assert.deepEqual(seen, ["npm-userconfig", "pypi-token"]);
+  assert.deepEqual(seen, ["npm-userconfig", "pypi-token", "android-sideload-keystore", "android-sideload-key-password"]);
   assert.equal(gathered["sdk-npm"].ok, false);
   assert.match(gathered["sdk-npm"].message, /Could not reach 127\.0\.0\.1:9/u);
   assert.deepEqual([gathered["client-pypi"].ok, gathered["client-pypi"].verified], [true, false]);
   assert.equal(gathered.phone.ok, false);
+  assert.match(gathered.phone.message, /Android SDK|Java home/u);
   const missing = await gatherCredentialFacts({ targets: [{ id: "client-pypi", destination: "pypi" }] });
   assert.equal(missing["client-pypi"].ok, false);
 });
