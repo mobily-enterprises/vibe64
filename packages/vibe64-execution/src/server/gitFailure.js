@@ -27,7 +27,7 @@ function failureText(result = {}) {
 
 function describeGitFailure(result = {}, options = {}) {
   const text = failureText(result);
-  if (/spawn git ENOENT|(?:^|\s)git: (?:command )?not found/mu.test(text)) {
+  if (/spawn(?:Sync)? git ENOENT|(?:^|\s)git: (?:command )?not found/mu.test(text)) {
     const installCommand = gitInstallCommand(options);
     return {
       code: "vibe64_git_missing",
