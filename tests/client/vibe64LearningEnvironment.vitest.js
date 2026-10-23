@@ -328,6 +328,36 @@ describe("useVibe64Learning controller", () => {
     expect(learning.confirmArchive, "other failures are not a confirmation").toBeNull();
   });
 
+  it("Take the tour asks the mounted overlay to start the course orientation, for the signed-in viewer only", async () => {
+    const { learning } = controller();
+    learning.openOrientation();
+    expect(learning.orientationRequested, "nobody is signed in yet").toBe(false);
+    learning.setViewer("member");
+    learning.openOrientation();
+    expect(learning.orientationRequested).toBe(true);
+    learning.orientationAnswered();
+    expect(learning.orientationRequested).toBe(false);
+    learning.openOrientation();
+    learning.setViewer("someone-else");
+    expect(learning.orientationRequested, "a viewer change forgets the request").toBe(false);
+  });
+
+  it("selects an enabled course's published orientation lesson this person may start, released courses first", () => {
+    const { orientationSelection } = LearningLib;
+    const saved = { ok: true, available: true, revision: 7 };
+    const course = (courseId, status, extra = {}) => ({ courseId, release: "0.5.0", status, enabled: true, orientation: "V64-WELCOME",
+      lessons: [{ code: "V64-WELCOME", status: "published" }], ...extra });
+    const catalogue = courses => ({ ok: true, canTryPreviews: false, courses });
+    expect(orientationSelection(catalogue([course("preview", "preview"), course("released", "released")]), saved))
+      .toEqual({ courseId: "released", release: "0.5.0", lessonCode: "V64-WELCOME", expectedRevision: 7 });
+    expect(orientationSelection(catalogue([course("preview", "preview")]), saved), "previews only for those who may try them").toBeNull();
+    expect(orientationSelection({ ...catalogue([course("preview", "preview")]), canTryPreviews: true }, saved)?.courseId).toBe("preview");
+    expect(orientationSelection(catalogue([course("off", "released", { enabled: false })]), saved)).toBeNull();
+    expect(orientationSelection(catalogue([course("none", "released", { orientation: undefined })]), saved)).toBeNull();
+    expect(orientationSelection(catalogue([course("draft", "released", { lessons: [{ code: "V64-WELCOME", status: "draft" }] })]), saved)).toBeNull();
+    expect(orientationSelection(catalogue([course("released", "released")]), { ok: true, available: false })).toBeNull();
+  });
+
   it("closes Courses as soon as the server confirms a start, before the rereads, and shows the Lesson pane", async () => {
     const router = { currentRoute: { value: { fullPath: "/app/learning" } }, push: vi.fn(async path => { router.currentRoute.value.fullPath = path; }) };
     let mode = { ...LEARN, currentAttemptId: "", practiceSlug: "" };
@@ -1434,6 +1464,14 @@ describe("Phone step row", () => {
 
 describe("The current lesson's linear flow", () => {
   const passedAll = ["quiz", "preview", "tick"].map(stepId => ({ stepId, outcome: "passed" }));
+
+  it("completes a format 3 studio lesson like a format 2 one", async () => {
+    const studio = () => { const value = lessonResult({ results: passedAll }); value.lesson = { ...value.lesson, schemaVersion: 3, stage: "studio" }; return value; };
+    const { learning } = controller({ reads: studio });
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT, stepId: "tick" });
+    expect([learning.lesson.value.stage, learning.complete]).toEqual(["studio", true]);
+  });
 
   it("opens the Lesson pane's Lesson finished screen when the learner's own step result completes the lesson, only then", async () => {
     let results = passedAll.slice(0, 2);

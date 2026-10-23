@@ -160,6 +160,12 @@ Accounts**. Otherwise the screen shows
 Choose **Start building** (the bottom bar on a phone) to close; Colleague opens
 with its message box ready so you can ask it to build your first page.
 
+The first time you set up your AI (not on a redo, and not in Learn mode) the
+success screen also offers **Take a 5-minute tour** beside **Start building**.
+It starts the installed course's orientation lesson, **Welcome to Vibe64**, in
+Learn mode; **Start building** is the "not now". It is offered only this once;
+**Take the tour** in the account menu starts the same lesson at any time.
+
 In Learn mode Colleague's conversation is your teacher's, so setup sends no
 hello there: the card says **Your teacher uses [provider] from your next
 message**, the check appears at once, and the close button reads **Back to the

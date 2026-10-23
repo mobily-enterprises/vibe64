@@ -210,13 +210,13 @@ function createTrainingActions({ catalogue, learners, exercises = null, courseIn
   };
 
   return Object.freeze([
-    definition("courses.list", {}, "Read installed course releases, their ordered topics and exact lesson choices. Read this again before a new start; earlier conversation results may name a now-disabled release. This is read-only; it does not enable a course, start a lesson or prepare a practice project. Drafts and disabled releases cannot be started. A course with status preview can be started only by the workspace owner; canTryPreviews reports whether this person may start lessons of enabled preview courses. Topic IDs identify pinned content, not usage-guide topics. canCreateCourses reports whether this person may create a custom course.", async (_input, actor) => {
+    definition("courses.list", {}, "Read installed course releases, their ordered topics and exact lesson choices. Read this again before a new start; earlier conversation results may name a now-disabled release. This is read-only; it does not enable a course, start a lesson or prepare a practice project. Drafts and disabled releases cannot be started. A course with status preview can be started only by the workspace owner; canTryPreviews reports whether this person may start lessons of enabled preview courses. Topic IDs identify pinned content, not usage-guide topics. canCreateCourses reports whether this person may create a custom course. orientation, when set, is the course's studio lesson that Take the tour starts.", async (_input, actor) => {
       const result = await catalogue.readCatalogue({ includeLessonTitles: true });
       return { ok: true, available: true, revision: result.revision,
         canCreateCourses: actor?.role === "owner" && typeof catalogue.createCourse === "function",
         canTryPreviews: actor?.role === "owner",
         courses: result.courses.map(entry => ({
-        ...pick(entry.course, ["courseId", "release", "title", "status"]), enabled: entry.enabled,
+        ...pick(entry.course, ["courseId", "release", "title", "status", "orientation"]), enabled: entry.enabled,
         topics: entry.lock.topics.map(topic => ({ topicId: topic.topicId, release: topic.release,
           title: (entry.topicTitles || []).find(value => value.topicId === topic.topicId && value.release === topic.release)?.title || topic.topicId })),
         lessons: entry.lock.topics.flatMap(topic => topic.lessons.map(lesson => {

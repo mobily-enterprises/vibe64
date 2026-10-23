@@ -31,7 +31,16 @@
           :prepend-icon="mdiAutoFix"
           subtitle="Choose or switch your AI"
           title="Redo onboarding"
+          data-vibe64-guide="ai-setup"
           @click="redoOnboarding"
+        />
+        <v-list-item
+          v-if="learning"
+          :prepend-icon="mdiMapMarkerPath"
+          subtitle="A short lesson on the screens around you"
+          title="Take the tour"
+          data-test="take-the-tour"
+          @click="learning.openOrientation()"
         />
       </v-list>
     </v-menu>
@@ -184,6 +193,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useDisplay, useTheme } from "vuetify";
 import { readAppearance, writeAppearance } from "@/lib/appearance.js";
+import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import {
   mdiAccountOutline,
   mdiAccountCogOutline,
@@ -193,6 +203,7 @@ import {
   mdiWeatherNight,
   mdiWeatherSunny,
   mdiGithub,
+  mdiMapMarkerPath,
   mdiRobotOutline
 } from "@mdi/js";
 import {
@@ -236,6 +247,8 @@ const providerOptions = computed(() => [
 ]);
 const dialogOpen = ref(false);
 const root = ref(null);
+// Take the tour starts the installed course's orientation lesson.
+const learning = useVibe64Learning();
 const theme = useTheme();
 // Phones get the full screen, like the app's other dialogs, and equal tabs
 // with the icon above the label, so all three fit without scrolling.

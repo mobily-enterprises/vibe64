@@ -7,7 +7,7 @@ import TrainingGuideOverlay from "@local/vibe64-training/client/guide-overlay";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { projectSlugFromRoute } from "@/lib/vibe64ProjectScope.js";
-import { modeRedirect } from "@/lib/vibe64Learning.js";
+import { modeRedirect, orientationSelection } from "@/lib/vibe64Learning.js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { useVibe64LearningCourses } from "@/composables/useVibe64LearningCourses.js";
 import Vibe64LearningAttempts from "./Vibe64LearningAttempts.vue";
@@ -74,7 +74,10 @@ watch(open, async value => {
   if (typeof element?.focus === "function" && !element.contains?.(globalThis.document?.activeElement)) element.focus({ preventScroll: true });
 });
 
-const courses = useVibe64LearningCourses({ authorPreview: computed(() => toValue(props.authorPreview) === true), active: open });
+// Courses' reads also serve a Take the tour request while Courses stays closed.
+const orientationRequested = computed(() => Boolean(learning?.orientationRequested));
+const courses = useVibe64LearningCourses({ authorPreview: computed(() => toValue(props.authorPreview) === true),
+  active: computed(() => open.value || orientationRequested.value) });
 const surface = computed(() => learning?.state.surface || "courses");
 const tabs = Object.freeze([
   { id: "courses", label: "Courses" },
@@ -92,11 +95,41 @@ useRealtimeEvent({
   }
 });
 
+// Take the tour: read the courses and saved lessons afresh, then start the
+// orientation lesson through the ordinary start; with none to start here,
+// Courses opens instead, where a course can be installed.
+let orientationRun = false;
+watch(orientationRequested, value => { if (value) void takeOrientation(); }, { immediate: true });
+async function takeOrientation() {
+  if (orientationRun) return;
+  orientationRun = true;
+  try {
+    await courses.refresh();
+    const selection = orientationSelection(courses.coursesResource.data.value, courses.learningResource.data.value);
+    if (selection) await learning.startLesson(selection, courses.startLesson);
+    else {
+      learning.show({ surface: "courses" });
+      learning.showNotice("There is no tour to take here yet. Courses shows the courses you can install or start.");
+    }
+  } catch (cause) {
+    learning.showNotice(String(cause?.message || "The tour did not start. Try again from Courses."));
+  } finally {
+    orientationRun = false;
+    // An archive confirmation keeps the request (and Courses' reads) until answered.
+    if (!learning.confirmArchive) learning.orientationAnswered();
+  }
+}
+
 // One confirmation before a start archives a different lesson in progress.
 const confirm = computed(() => learning?.confirmArchive || null);
 async function archiveAndStart() {
   try { await learning.confirmArchiveAndStart(); }
   catch (cause) { learning.showNotice(String(cause?.message || "The lesson did not start. Try again from Courses.")); }
+  finally { learning.orientationAnswered(); }
+}
+function keepCurrent() {
+  learning.cancelArchive();
+  learning.orientationAnswered();
 }
 function keydown(event) {
   if (event.key === "Escape" && !event.defaultPrevented && !confirm.value) {
@@ -160,7 +193,7 @@ function keydown(event) {
     :model-value="Boolean(confirm)"
     max-width="28rem"
     style="z-index: 2410"
-    @update:model-value="value => value || learning.cancelArchive()"
+    @update:model-value="value => value || keepCurrent()"
   >
     <v-card v-if="confirm" rounded="xl" data-test="learning-archive-confirm">
       <v-card-title class="text-wrap">Archive your lesson in progress?</v-card-title>
@@ -171,7 +204,7 @@ function keydown(event) {
       </v-card-text>
       <v-card-actions>
         <v-spacer />
-        <v-btn variant="text" min-height="48" data-test="learning-archive-cancel" @click="learning.cancelArchive()">Keep it</v-btn>
+        <v-btn variant="text" min-height="48" data-test="learning-archive-cancel" @click="keepCurrent">Keep it</v-btn>
         <v-btn color="primary" variant="flat" min-height="48" data-test="learning-archive-start" @click="archiveAndStart">Archive and start</v-btn>
       </v-card-actions>
     </v-card>

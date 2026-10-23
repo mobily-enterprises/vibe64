@@ -119,6 +119,14 @@ sessions. It is used in two cases:
   switch whose page says **No project selected** (see
   [The Lesson pane](#the-lesson-pane)). **L** only switches mode.
 
+**Take the tour**, in the account menu, starts the course's orientation lesson,
+**Welcome to Vibe64**: a short studio lesson on the screens around you (your
+AI, Colleague, **L**). It starts like any other lesson: it switches you to
+Learn, the lesson already in progress just opens, and another lesson in
+progress asks **Archive your lesson in progress?** first. With no installed
+course naming one, Courses opens instead with "There is no tour to take here
+yet." The end of first-time AI setup offers the same tour once.
+
 A local Vibe64 has no Projects page. Its `/` and `/app` addresses open Develop's
 place, the project Vibe64 was started in, or in Learn mode Learn's place (the
 lesson's practice project, or no project selected). `/app` does this without

@@ -239,7 +239,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   // unreadable).
   const state = reactive({ open: false, minimised: false, surface: "courses", attemptId: "", stepId: "", scroll: 0,
     loading: false, error: "", actorKey: "", busy: "", hiddenBy: "", finished: false, notice: "", modeBusy: "",
-    modeRead: false, trialAttemptId: "", beat: 0, beatPaused: false });
+    modeRead: false, trialAttemptId: "", beat: 0, beatPaused: false, orientationRequested: false });
   const lesson = shallowRef(null);
   // The learner's mode (server-backed): null until read or when unreadable (Develop).
   const mode = shallowRef(null);
@@ -285,8 +285,8 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   const focus = computed(() => ({ learningOpen: state.open, learningSurface: state.surface,
     ...(state.attemptId ? { learningAttemptId: state.attemptId } : {}),
     ...(state.attemptId && currentStep.value ? { learningStepId: currentStep.value.id } : {}) }));
-  // Every required step of the read version 2 lesson is passed.
-  const complete = computed(() => Boolean(lesson.value?.schemaVersion === 2 && steps.value.length &&
+  // Every required step of the read lesson with steps (format 2 or 3) is passed.
+  const complete = computed(() => Boolean(lesson.value?.schemaVersion >= 2 && steps.value.length &&
     steps.value.filter(step => step.required).every(step => stepStatus(results.value, step.id, lesson.value.passedStepIds) === "passed")));
   const lessonAttemptId = computed(() => state.finished ? state.attemptId : state.trialAttemptId || mode.value?.currentAttemptId || "");
   // The step bar shows the current lesson's step (not a finished lesson's screen).
@@ -334,7 +334,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     Object.assign(notesState, { loading: false, saving: false, error: "" });
     Object.assign(state, { open: false, minimised: false, surface: "courses", attemptId: "", stepId: "", scroll: 0,
       loading: false, error: "", busy: "", hiddenBy: "", finished: false, notice: "", modeBusy: "", modeRead: false,
-      trialAttemptId: "", beat: 0, beatPaused: false, actorKey: next });
+      trialAttemptId: "", beat: 0, beatPaused: false, orientationRequested: false, actorKey: next });
     finishRun = null;
     const place = next ? readPlace(next) : null;
     if (place) Object.assign(state, place);
@@ -655,7 +655,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     const value = lesson.value;
     const step = currentStep.value;
     const attempt = value?.attempt;
-    if (!state.actorKey || !state.attemptId || state.open || !text(projectSlug) || value?.schemaVersion !== 2 ||
+    if (!state.actorKey || !state.attemptId || state.open || !text(projectSlug) || !(value?.schemaVersion >= 2) ||
         attempt?.attemptId !== state.attemptId || attempt.ended || attempt.preparation?.phase !== "ready" ||
         value.practiceProjectSlug !== projectSlug || step?.check?.kind !== "auto" || step.check.files?.length) return null;
     return { attemptId: state.attemptId, stepId: step.id };
@@ -905,6 +905,15 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     }
   }
 
+  // Take the tour (the account menu, the end of AI setup): the mounted Courses
+  // overlay answers the request by starting its course's orientation lesson
+  // through startLesson, the ordinary start (the lesson already in progress
+  // simply opens; another one asks to be archived first).
+  function openOrientation() {
+    if (state.actorKey) state.orientationRequested = true;
+  }
+  function orientationAnswered() { state.orientationRequested = false; }
+
   async function confirmArchiveAndStart() {
     const value = confirmArchive.value;
     if (!value) return null;
@@ -1112,6 +1121,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     get lessonSwitchable() { return Boolean(layout?.value?.projectSlug || layout?.value?.studio); },
     get lessonShown() { return Boolean(layout?.value?.lessonPane); },
     get notice() { return state.notice; },
+    get orientationRequested() { return state.orientationRequested; },
     lesson, results, steps, currentStep, focus, colleagueRequest, notes, notesState: readonly(notesState), player,
     stepStatus: stepId => stepStatus(results.value, stepId, lesson.value?.passedStepIds || []),
     setViewer, show, openCourses, openLesson, closeCourses, showFinished, minimise, selectStep, setScroll, flushReader, loadLesson,
@@ -1119,8 +1129,23 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     exerciseStep, beginExercise, exerciseCurrent, finishExercise, prepareExercise,
     readNotes, saveNotes, clearNotes,
     readLearningMode, setMode, toggleMode, modePlace, openCurrent, showNotice, clearNotice,
-    startLesson, admitted, opened, confirmArchiveAndStart, cancelArchive, restart, finish, deleteAttempt, readPractice, deleteArchived
+    startLesson, openOrientation, orientationAnswered, admitted, opened, confirmArchiveAndStart, cancelArchive, restart, finish, deleteAttempt, readPractice, deleteArchived
   });
+}
+
+// The start of an installed course's orientation lesson (its studio
+// lesson that Take the tour starts) from the Courses reads, or null when no
+// enabled course this person may start names a published one. Released
+// courses come first.
+function orientationSelection(catalogue, saved) {
+  if (catalogue?.ok !== true || !Array.isArray(catalogue.courses) || saved?.ok !== true || saved.available !== true ||
+      !Number.isSafeInteger(saved.revision)) return null;
+  const startable = catalogue.courses.filter(course => course?.enabled === true && text(course.orientation) &&
+    (course.status === "released" || catalogue.canTryPreviews === true) &&
+    course.lessons?.some(lesson => lesson?.code === course.orientation && lesson.status === "published"));
+  const course = startable.find(value => value.status === "released") || startable[0];
+  return course ? Object.freeze({ courseId: course.courseId, release: course.release, lessonCode: course.orientation,
+    expectedRevision: saved.revision }) : null;
 }
 
 // A link in lesson text to another site opens in a new tab, so following
@@ -1151,4 +1176,4 @@ function revealCurrentStep(list) {
   return true;
 }
 
-export { VIBE64_DEVELOP_MODE_NOTE, VIBE64_LEARNING_AI_REQUIRED_CODE, VIBE64_LEARNING_MODE_NOTE, VIBE64_LEARNING_MODE_PROJECT_CODE, VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_PAGE_PATH, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_STUCK_MESSAGE, VIBE64_LEARNING_TEACH_MESSAGE, VIBE64_LESSON_IN_PROGRESS_CODE, createVibe64Learning, modeRedirect, normalizePractice, openLessonLink, reviewNote, revealCurrentStep, setLearningStudioHome, showMeCommand, stepStatus };
+export { VIBE64_DEVELOP_MODE_NOTE, VIBE64_LEARNING_AI_REQUIRED_CODE, VIBE64_LEARNING_MODE_NOTE, VIBE64_LEARNING_MODE_PROJECT_CODE, VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_PAGE_PATH, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_STUCK_MESSAGE, VIBE64_LEARNING_TEACH_MESSAGE, VIBE64_LESSON_IN_PROGRESS_CODE, createVibe64Learning, modeRedirect, normalizePractice, openLessonLink, orientationSelection, reviewNote, revealCurrentStep, setLearningStudioHome, showMeCommand, stepStatus };

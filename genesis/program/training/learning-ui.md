@@ -309,3 +309,16 @@ place, activity and fact it names is registered and its places are open to
 the viewer; lesson.read leaves the others out and completion counts only the
 available required steps. Starting a lesson needs format 3 and at least its
 available required steps.
+
+## Orientation (Take the tour)
+
+A course may name its `orientation` lesson, which `courses.list` returns.
+**Take the tour** (the account menu; once at the end of first-time AI setup)
+calls the controller's `openOrientation`, a request the mounted Courses
+overlay answers: it rereads the courses and saved lessons with Courses closed,
+picks the start with `orientationSelection` (an enabled course this person may
+start whose orientation is published, released courses first) and starts it
+through `startLesson`, so the lesson in progress opens as it is and another
+one asks to be archived first; the request lasts until that confirmation is
+answered. With nothing to start, Courses opens with a notice. Nothing
+records that a tour was taken beyond the lesson's own progress.

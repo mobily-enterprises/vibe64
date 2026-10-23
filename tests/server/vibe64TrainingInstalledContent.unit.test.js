@@ -732,9 +732,9 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 
-async function titleCatalogue(f) {
+async function titleCatalogue(f, extra = {}) {
   const course = { schemaVersion: 1, courseId: "readable-course", release: "0.1.0", title: "Readable lessons", status: "preview",
-    topics: [{ topicId: f.installed.pin.topicId, release: f.installed.pin.release }] };
+    topics: [{ topicId: f.installed.pin.topicId, release: f.installed.pin.release }], ...extra };
   const lock = createCourseLock(course, [{ ...f.installed.pin, topicManifest: f.installed.bundle.topicManifest }]);
   const catalogue = createInstalledTrainingCatalogue({ systemRoot: f.systemRoot });
   await catalogue.enableCourse({ course, lock, expectedRevision: 0 });
@@ -800,6 +800,16 @@ test("canonical course API and native tool project bounded installed lesson titl
   assert.doesNotMatch(JSON.stringify(result), /sourceRoot|repository|descriptor|snapshotRoot|lessonTitles|lesson\.json|controller/u);
   await assert.rejects(() => execute({ includeLessonTitles: true }), { code: "ACTION_VALIDATION_FAILED" });
   assert.deepEqual(await treeState(f.systemRoot), before);
+});
+
+test("courses.list names a course's orientation lesson, and a course without one has none", async t => {
+  const f = await fixture(t);
+  const { catalogue } = await titleCatalogue(f, { orientation: "LESSON-01" });
+  const { execute } = titleActions(f, catalogue);
+  assert.equal((await execute()).courses[0].orientation, "LESSON-01");
+  const plain = await fixture(t);
+  const { catalogue: without } = await titleCatalogue(plain);
+  assert.equal(Object.hasOwn((await titleActions(plain, without).execute()).courses[0], "orientation"), false);
 });
 
 test("title projection ignores edited live source and refuses a tampered exact installed descriptor without repair", async t => {
