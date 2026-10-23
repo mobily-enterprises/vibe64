@@ -191,7 +191,7 @@ function createAiConnectionService({ aiConnections, readAssistantCapabilities, i
       // conflict never tells the person that their working key was rejected.
       const routing = typeof initializeModelRouting === "function"
         ? await initializeModelRouting({ engineIds: ["opencode"], vibe64User }).catch((error) => ({ ok: false, error: error.message }))
-        : { ok: false, error: "Open Model routing to finish choosing models for this connection." };
+        : { ok: false, error: "Open Models to finish choosing models for this connection." };
       return { connection, ok: true, routing };
     },
     remove({ modelProviderId } = {}) {

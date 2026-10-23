@@ -245,7 +245,7 @@ SQL draft; leaving or reloading the workspace does not preserve an unsaved draft
 is not proof that execution has stopped or changes were undone; engineering work
 still goes to coding conversations.
 
-Colleague can inspect shared Model routing without an open project, search role
+Colleague can inspect Models without an open project, search role
 choices, preview their effect for the owner and collaborators, and save explicitly
 requested changes through the normal owner and revision checks. It distinguishes
 these future workflow choices from running agents, session chat modes and its own
@@ -509,9 +509,9 @@ their expiry dates. This is temporary storage, not an automatic project snapshot
 Files refreshes after the assistant finishes a turn without discarding the
 person's place or unsaved edits. People can download individual files and keep
 personal project-wide stars, reachable from chat and the file browser in any session.
-Code explanations use the workflow's Helper model and show which AI answered.
-A collaborator can ask for explanations when that model or its shared backup is
-available, even when the main conversation uses the owner's personal account.
+Code explanations use the person's Explain & check model and show which AI
+answered. A team member's explanations use the team setup, even when the main
+conversation uses the owner's personal account.
 Changing the effective AI connection or user requires a new explanation before
 follow-ups can continue. Stop and Close remain available without AI access.
 Opening a binary or oversized file from chat or Files keeps its filename visible
@@ -600,12 +600,12 @@ on the kinds of work they can do.
 Unavailable modes explain why and are identified as disabled to screen readers.
 Recommendations rank connected, permitted models for every job in the order
 Claude, Codex/OpenAI, DeepSeek, then GLM. Within native providers, Senior favours
-Opus/Astra, Junior Opus with Medium thinking/Sol, and Helper/Router Haiku/Luna. Model dropdowns group
+Opus/Astra, Junior Opus with Medium thinking/Sol, and Quick helper/Router Haiku/Luna. Model dropdowns group
 indented models beneath orchestrator headings, with provider/access details and
 recommended or unavailable markers. Their separate thinking control shows the
 selected thinking.
 Equally suitable models prefer the
-orchestrator being configured, including Router, Helper and shared Backup.
+tool the role already runs in.
 They preserve saved choices rather than silently changing models when the
 catalogue or recommendation policy changes.
 Connecting a newly usable assistant fills missing routing roles with compatible
@@ -613,9 +613,7 @@ recommendations and opens them for review. Native Codex and Claude sign-in open
 this review from their confirmed login result, including immediate completion.
 The connection review shows optional current-to-suggested model changes and their
 access scope. Keeping current routing leaves the new connection available;
-Each connected orchestrator has its own Configure routing action. Each assignment states what
-collaborators will get, including shared backups or access restrictions, without
-a separate preview section. The chat-mode switch is labelled Automatic deslop by Senior.
+The chat-mode switch is labelled Automatic deslop by Senior.
 A routing setup failure
 keeps the AI connected and appears in the review so the owner can finish setup.
 Repeating setup preserves saved choices, including roles the owner deliberately
@@ -627,7 +625,7 @@ Main do not retarget existing temporary chats. Automatic implementation tasks
 retain explicit Junior assignments; merge-repair chats always use Senior and
 check Senior access. After stopping a repair, the user can choose another
 orchestrator, model and thinking level for that chat while keeping its Senior
-role, repair instructions and history. Bounded background tasks use Helper.
+role, repair instructions and history. Bounded background tasks use Quick helper.
 There is no temporary-chat default setting.
 Temporary chats never run Auto, working plans or automatic review.
 Models is one screen with two setups: the owner's (Senior, Junior and Router
@@ -648,20 +646,16 @@ its Models summary; chat opens it through the routing cog, and Auto's missing
 roles bring the first one into view. Advanced keeps only connection plumbing.
 Main session creation and renewal share a workflow picker that lists
 Claude Code before Codex and OpenCode and
-previews the user's effective Senior and Junior models, including Shared backup.
+previews the owner's effective Senior and Junior models.
 It opens from saved routing and connection state without live model discovery;
 uninitialized choices say “Recommended on creation” until exact models are selected.
 Creating the first chat explicitly fills missing defaults, so included OpenCode
 works without a credential-setup step. Reading those defaults does not save them.
 The new-session dialog cannot be dismissed while creation is running. It closes
 on success and allows retry or dismissal after a failure.
-Owners can open the selected orchestrator's routing directly over the chat,
-without visiting account settings. The form separates Senior/Junior from
-independent Router/Helper and Shared backup. It previews what owners and
-collaborators will use before Save; a foreign Backup keeps planning and coding
-together there, including when review is off. Missing assignments point to this
-setup; other users are directed to the owner. Each assistant application has its own saved models for
-the direct roles and Router. In Auto, Router classifies new requests as conversation, planning, implementation
+Owners can open Models directly over the chat, without visiting account
+settings. Missing assignments point to this setup; other users are directed to
+the owner. In Auto, Router classifies new requests as conversation, planning, implementation
 or review and respects an explicit Senior or Junior choice. Senior handles planning
 and review; Junior implements unless the person explicitly chooses Senior.
 Routing progress appears with the message, without a duplicate banner above the
@@ -833,7 +827,7 @@ Save can proceed
 without assistant naming, using a checkpoint-based version name and a visible
 notice when naming is unavailable. Members can Save and create pull requests
 when the main chat uses a personal connection. Optional naming uses effective
-Helper or its eligible shared Backup; ordinary repository permissions still
+Quick helper from the person's own setup; ordinary repository permissions still
 apply. A request that
 overlaps preparation waits briefly at the server and explains a timeout. Failed
 requests remain readable and dismissible even before an operation starts;
@@ -992,8 +986,8 @@ Skipping leaves the application account connected and does not automatically
 resume the assistant. When the application's setup command confirms the requested
 connection, the saved card shows Setup completed. That records the setup decision;
 later reconnecting or disconnecting the account does not rewrite the old request.
-After setup, continuation uses the actor's effective Junior model, including a
-configured shared backup, without changing their selected chat mode or adding
+After setup, continuation uses the owner's effective Junior model (a team
+member's continuation waits for the owner's approval), without changing their selected chat mode or adding
 automatic review. Uncertain delivery can be checked without sending twice.
 If configuration changes while an application connection command runs, its result
 is rejected and people are asked to reload and check the account before retrying.
@@ -1062,10 +1056,9 @@ new generations. Window focus alone does not refresh Colleague or goals. Typing
 indicators use small, coalesced five-second updates without sharing draft text.
 An unconfirmed message remains visible without trapping an otherwise ready chat:
 people can send different words while checking the earlier delivery separately.
-Collaborators use the same model routing as owners. When an assigned connection
-is owner-only, its compatible shared fallback supplies chat, Auto, review and
-helpers, including database and source explanations and prompt hints. Each
-operation resolves access for its requesting person before using credentials.
+Team members use the team setup for Colleague, Fix it with AI, Explain & check
+and Quick helper, including database and source explanations and prompt hints;
+the owner's personal plans are never offered to them. Each operation resolves access for its requesting person before using credentials.
 Model capability and connection failures remain specific to that operation.
 Main chat always runs on the owner's setup, so a team member's Main chat
 message waits in Messages for approval above the composer instead of being sent:
@@ -1094,9 +1087,8 @@ Code with Claude, DeepSeek and GLM, and OpenCode's provider catalogue. Vibe64
 includes no AI of its own and never falls back to a free model; the free option
 is GLM-4.7 Flash with a free Z.AI account. Connections are grouped by orchestrator, with each independently configured provider
 listed under its owning orchestrator. Manage opens that exact pair with
-no provider selector. After connecting, optional routing suggestions and the
-Configure routing button stay with the orchestrator selected for setup, even
-when the same key also works with another orchestrator. Add connection offers only orchestrators with missing
+no provider selector. After connecting, optional model suggestions stay with the tool selected for
+setup, even when the same key also works with another tool. Add connection offers only orchestrators with missing
 connection options, then only their unconfigured providers. Expired or failed
 configured connections remain under Manage for reconnection. When every
 available connection is configured, Add connection is disabled. Each saved DeepSeek or GLM connection belongs to one orchestrator/provider.
@@ -1708,7 +1700,7 @@ capabilities and project access in Codex, Claude Code and OpenCode, without sepa
 modes.
 Temporary model and thinking choices come from the connected service's current
 catalogue, including new Codex models and OpenJunior models. Each chat retains its own workflow and selected model without changing Main chat.
-A Helper or shared Backup turn can use another assistant application; returning
+A Fix it with AI or Custom turn can use another assistant application; returning
 to Senior or Junior retains the conversation already held by its effective assistant.
 The server keeps their conversations, settings, drafts and sent attachments
 until explicit Close. Reloading or navigating away does not stop their work;
@@ -1769,8 +1761,8 @@ the editor or replacing the conversation. Recovery never repeats a sent message.
 The composer updates from external state without losing
 focus or selection.
 
-People configure Router and Helper independently in Model routing. Hints,
-commit naming and other bounded helpers capture the actor's effective Helper
+People configure Router and Quick helper independently in Models. Hints,
+commit naming and other bounded helpers capture the actor's effective Quick helper
 choice, which may use another orchestrator, without retargeting the working chat.
 Any connected model is eligible for Helper and Router as well as ordinary chat;
 with no connected AI, background helpers do not run.

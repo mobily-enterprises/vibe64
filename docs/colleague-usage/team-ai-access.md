@@ -79,5 +79,6 @@ setup for a team member: only the owner edits AI setup. A team member's Colleagu
 itself needs the team setup, so Colleague can answer only once the team setup is
 ready; until then, ask the owner directly.
 
-Related topics: [Personal-use AI subscriptions](ai-personal-use.md),
+Related topics: [AI model setups](ai-model-setups.md),
+[Personal-use AI subscriptions](ai-personal-use.md),
 [AI onboarding](ai-onboarding.md) and [Colleague](colleague.md).
