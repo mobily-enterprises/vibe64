@@ -10,7 +10,8 @@ const props = defineProps({
   destination: { type: Object, default: null },
   packageInfo: { type: Object, default: null },
   accounts: { type: Array, default: () => [] },
-  busy: { type: Boolean, default: false }
+  busy: { type: Boolean, default: false },
+  waiting: { type: String, default: "" }
 });
 const emit = defineEmits(["remove", "change-account"]);
 
@@ -56,7 +57,7 @@ const accountChoices = computed(() => props.accounts.filter((entry) => entry.kin
       </template>
       <template v-else>
         <strong class="publish-target__none">Not published yet</strong>
-        <span>{{ destination?.firstTime }}</span>
+        <span>{{ waiting || "Ready for its first release" }}</span>
       </template>
     </div>
 

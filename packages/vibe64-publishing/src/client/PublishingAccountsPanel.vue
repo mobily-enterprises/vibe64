@@ -164,7 +164,7 @@ const removeAccount = (id) => run(`remove:${id}`, () => props.call(`/accounts/${
               <span v-else-if="kitStale">Save a new kit so it holds every key.</span>
               <span v-else>Holds every key. Keep it somewhere safe off this computer.</span>
             </div>
-            <v-btn :color="kitStale ? 'primary' : undefined" :variant="kitStale ? 'flat' : 'tonal'" rounded="pill" size="small" @click="emit('recovery-kit')">Kit…</v-btn>
+            <v-btn :color="kitStale ? 'primary' : undefined" :variant="kitStale ? 'flat' : 'tonal'" rounded="pill" size="small" @click="emit('recovery-kit')">{{ kitStale ? "Save kit" : "Manage" }}</v-btn>
           </div>
         </template>
         <v-alert v-if="error" class="mt-3" type="error" variant="tonal">{{ error }}</v-alert>

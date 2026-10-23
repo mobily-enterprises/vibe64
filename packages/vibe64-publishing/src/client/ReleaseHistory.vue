@@ -22,6 +22,12 @@ const targetsById = computed(() => {
   return Object.fromEntries(props.targets.map((target) => [target.id, { ...target, destinationLabel: labels[target.destination] }]));
 });
 
+// A dry run never publishes: its success reads "Would publish".
+function outcomeLabel(release) {
+  if (release.kind === "dry-run" && release.status === "succeeded") return "Would publish — nothing was sent";
+  return statusInfo(release.status).label;
+}
+
 function toggle(id) {
   open.value = open.value === id ? "" : id;
 }
@@ -60,7 +66,7 @@ function isApk(release, targetId) {
           />
           <span class="publish-history__what">
             <strong>{{ release.kind === "dry-run" ? "Dry run" : "Release" }} · {{ versionsLine(release) }}</strong>
-            <span>{{ statusInfo(release.status).label }}{{ release.kind === "dry-run" && release.status === "succeeded" ? " — nothing was published" : "" }} · {{ relativeTime(release.finishedAt || release.createdAt) }} · plan {{ release.planId }}</span>
+            <span>{{ outcomeLabel(release) }} · {{ relativeTime(release.finishedAt || release.createdAt) }} · plan {{ release.planId }}</span>
           </span>
           <v-icon :icon="mdiChevronDown" class="publish-history__chevron" size="20" />
         </button>
@@ -127,6 +133,8 @@ function isApk(release, targetId) {
 
 .publish-history__row {
   align-items: center;
+  background: transparent;
+  border: 0;
   color: inherit;
   display: grid;
   gap: 12px;

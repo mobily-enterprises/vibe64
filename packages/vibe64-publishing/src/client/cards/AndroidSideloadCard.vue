@@ -48,7 +48,7 @@ const ready = computed(() => tasks.value.every((task) => task.done));
 </script>
 
 <template>
-  <TargetCard v-bind="$attrs" :busy="busy" :target="target" @change-account="emit('change-account', $event)" @remove="emit('remove')">
+  <TargetCard v-bind="$attrs" :busy="busy" :target="target" :waiting="ready ? '' : 'Finish the one-time setup below first'" @change-account="emit('change-account', $event)" @remove="emit('remove')">
     <template #facts>
       <div v-if="target.settings?.certificateSha256">
         <dt>Key</dt>

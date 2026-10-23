@@ -46,6 +46,13 @@ const canSave = computed(() => typeof props.dashboardContext?.requestSaveWork ==
 const blocked = computed(() => Boolean(plan.value?.preflight?.blocked));
 const needsAck = computed(() => (plan.value?.preflight?.checks || []).filter((check) => !check.ok && check.severity === "ack"));
 const ready = computed(() => Boolean(plan.value && !blocked.value && needsAck.value.every((check) => acknowledged.value.includes(check.id))));
+// What needs attention comes first; passed checks fold into one line.
+const showPassed = ref(false);
+const passedChecks = computed(() => (plan.value?.preflight?.checks || []).filter((check) => check.ok));
+const shownChecks = computed(() => [
+  ...(plan.value?.preflight?.checks || []).filter((check) => !check.ok),
+  ...(showPassed.value ? passedChecks.value : [])
+]);
 const checksRunning = computed(() => props.state?.checks?.status === "running");
 
 watch(() => props.modelValue, async (open) => {
@@ -150,7 +157,7 @@ function checkIcon(check) {
               </div>
               <span v-if="entry.external" class="publish-release__muted">Set by the project's own build.</span>
               <div v-else class="publish-release__bumps">
-                <v-chip-group v-model="versions[entry.id]" color="primary" mandatory selected-class="is-picked">
+                <v-chip-group v-model="versions[entry.id]" color="primary" column mandatory>
                   <v-chip v-for="choice in entry.suggestions" :key="choice.kind" :value="choice.version" filter rounded="pill" variant="outlined">
                     {{ choice.version }}<span class="publish-release__kind">{{ choice.kind }}</span>
                   </v-chip>
@@ -223,7 +230,7 @@ function checkIcon(check) {
           </h3>
           <v-skeleton-loader v-if="busy === 'plan' && !plan" type="list-item, list-item, list-item" />
           <ul v-else-if="plan" class="publish-release__checks">
-            <li v-for="check in plan.preflight.checks" :key="check.id" :class="{ 'is-failed': !check.ok }">
+            <li v-for="check in shownChecks" :key="check.id" :class="{ 'is-failed': !check.ok }">
               <v-icon v-bind="checkIcon(check)" size="20" />
               <div>
                 <strong>{{ check.label }}</strong>
@@ -247,6 +254,12 @@ function checkIcon(check) {
                 hide-details
                 label="I understand"
               />
+            </li>
+            <li v-if="passedChecks.length" class="publish-release__passed">
+              <button type="button" @click="showPassed = !showPassed">
+                <v-icon :icon="mdiCheckCircle" color="success" size="20" />
+                <span>{{ showPassed ? "Hide" : "Show" }} {{ passedChecks.length }} passed {{ passedChecks.length === 1 ? "check" : "checks" }}</span>
+              </button>
             </li>
           </ul>
           <div v-if="plan" class="publish-release__summary">
@@ -298,12 +311,15 @@ function checkIcon(check) {
 
 .publish-release__steps button {
   align-items: center;
+  background: transparent;
+  border: 0;
   border-radius: 999px;
   color: var(--v64-on-surface-variant);
   display: inline-flex;
   font: var(--v64-type-label-lg);
   gap: 8px;
   padding: 4px 10px 4px 4px;
+  white-space: nowrap;
 }
 
 .publish-release__steps button span {
@@ -317,7 +333,8 @@ function checkIcon(check) {
 }
 
 .publish-release__steps button.is-current {
-  color: var(--v64-on-surface);
+  background: var(--v64-secondary-container);
+  color: var(--v64-on-secondary-container);
 }
 
 .publish-release__steps button.is-current span {
@@ -329,6 +346,7 @@ function checkIcon(check) {
   background: var(--v64-outline-variant);
   flex: 0 1 48px;
   height: 1px;
+  min-width: 12px;
 }
 
 .publish-release__body {
@@ -342,6 +360,10 @@ function checkIcon(check) {
   color: var(--v64-on-surface-variant);
   font: var(--v64-type-body-md);
   margin: 0;
+}
+
+.publish-release__bumps {
+  min-width: 0;
 }
 
 .publish-release__package {
@@ -443,6 +465,30 @@ function checkIcon(check) {
   display: block;
   font: var(--v64-type-body-md);
   font-size: 0.8125rem;
+}
+
+.publish-release__passed {
+  display: block !important;
+  padding: 0 !important;
+}
+
+.publish-release__passed button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: var(--v64-on-surface-variant);
+  cursor: pointer;
+  display: flex;
+  font: var(--v64-type-label-lg);
+  gap: 12px;
+  padding: 10px 14px;
+  text-align: left;
+  width: 100%;
+}
+
+.publish-release__passed button span {
+  color: inherit !important;
+  font: inherit !important;
 }
 
 .publish-release__checks li.is-failed {

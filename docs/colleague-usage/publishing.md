@@ -35,7 +35,7 @@ afterwards **Unlock** it for 15 minutes when you add accounts or publish, and
   API token and the upload address) or GitHub (**Use my GitHub CLI sign-in**,
   or paste a token). Tokens go straight into the keys file; the page and
   Colleague only ever see the account's name and address.
-- **Recovery kit**: **Kit…** downloads every key as one file under a second
+- **Recovery kit**: **Save kit** (or **Manage**) downloads every key as one file under a second
   passphrase; keep both off this computer. **Restore** brings them back on a
   new computer. The panel says when a key is newer than your last kit.
 
@@ -60,8 +60,10 @@ Vibe64 for this project on this computer, not in the project's files.
    **Preflight**: saved and pushed work, Packaging, tags still free, checks
    passed (**Run checks** runs the project's verification on the saved
    commit), every sign-in valid, install key and recovery kit, Android
-   requirements. A red line stops the release until fixed; a changed toolchain
-   needs **I understand**. The plan has a short id such as `Plan 3f9c`.
+   requirements. Anything needing attention is listed first and passed checks
+   fold into **Show N passed checks**. A red line stops the release until
+   fixed; a changed toolchain needs **I understand**. The plan has a short id
+   such as `Plan 3f9c`.
 3. **Dry run** builds once and asks each destination what would happen;
    nothing is tagged or uploaded. It appears in History as a dry run.
 4. **Publish…** opens the confirmation: exactly which package goes where at
@@ -71,7 +73,9 @@ Vibe64 for this project on this computer, not in the project's files.
    reading each back. If the saved work, targets or tools changed since you
    reviewed, it refuses and shows the new plan.
 
-A release where some targets failed shows **Partly published**; fix the cause
+When a build or upload fails, **Show log** in History includes the tool's own
+output (with credentials removed). A release where some targets failed shows
+**Partly published**; fix the cause
 and **Finish this release** retries only the unfinished targets of the same
 plan. Published targets are not sent again.
 

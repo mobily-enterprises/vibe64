@@ -29,6 +29,7 @@ const packages = computed(() => (props.state?.packaging?.packages || []).filter(
 const accounts = computed(() => (props.state?.accounts || []).filter((entry) => entry.kind === chosen.value?.accountKind?.id));
 const needsAccount = computed(() => Boolean(chosen.value?.accountKind));
 const canAdd = computed(() => Boolean(chosen.value && packageId.value && (!needsAccount.value || accountId.value)));
+const packageLine = (entry) => `${entry.packer}${entry.version ? ` · ${entry.version}` : ""}`;
 const fits = (entry) => (props.state?.packaging?.packages || []).some((candidate) => entry.packers.includes(candidate.packer));
 
 watch(() => props.modelValue, (open) => {
@@ -112,8 +113,8 @@ async function add() {
             label="Package"
             variant="outlined"
           >
-            <template #item="{ props: item, item: { raw } }">
-              <v-list-item v-bind="item" :subtitle="`${raw.packer}${raw.version ? ` · ${raw.version}` : ''}`" />
+            <template #item="{ props: item, item: entry }">
+              <v-list-item v-bind="item" :subtitle="packageLine(entry.raw || entry)" />
             </template>
           </v-select>
           <template v-if="needsAccount">
@@ -168,6 +169,8 @@ async function add() {
   border: 1px solid var(--v64-outline-variant);
   border-radius: var(--v64-shape-lg, 16px);
   color: inherit;
+  cursor: pointer;
+  font: inherit;
   display: flex;
   gap: var(--v64-space-3, 12px);
   padding: var(--v64-space-4, 16px);

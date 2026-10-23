@@ -203,7 +203,7 @@ function openInstall({ releaseId, targetId }) {
             {{ checks ? statusInfo(checks.status).label : "Not run on this commit" }}
           </span>
         </div>
-        <div>
+        <div class="publish-saved__packages">
           <span class="publish-saved__label">Packages</span>
           <span class="publish-saved__chips">
             <span v-for="entry in packages" :key="entry.id" class="publish-chip">
@@ -362,9 +362,15 @@ function openInstall({ releaseId, targetId }) {
   border: 1px solid var(--v64-outline-variant);
   border-radius: var(--v64-shape-lg, 16px);
   display: grid;
-  gap: 12px 28px;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  gap: 12px 32px;
+  grid-template-columns: auto minmax(0, 1fr);
   padding: 14px 18px;
+}
+
+.publish-saved > .publish-saved__packages {
+  border-top: 1px solid var(--v64-outline-variant);
+  grid-column: 1 / -1;
+  padding-top: 12px;
 }
 
 .publish-saved > div {
@@ -481,6 +487,8 @@ function openInstall({ releaseId, targetId }) {
   border: 1px solid var(--v64-outline-variant);
   border-radius: var(--v64-shape-lg, 16px);
   color: inherit;
+  cursor: pointer;
+  font: inherit;
   display: grid;
   gap: 6px;
   justify-items: start;
