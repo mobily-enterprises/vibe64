@@ -423,6 +423,11 @@
           :active="workspaceSetupStatus === 'failed'"
           :runtimes="props.session?.workspaceSetup?.runtimes || []"
         />
+        <LocalDatabaseServer
+          v-if="workspaceSetupStatus === 'failed' && !workspaceSetupDismissed && sessionId"
+          :active="workspaceSetupStatus === 'failed'"
+          :session-id="sessionId"
+        />
       </div>
 
       <Vibe64ConversationLog
@@ -1123,6 +1128,9 @@ const Vibe64ArchitectureView = defineAsyncComponent(() => (
 ));
 const Vibe64DatabaseWorkspace = defineAsyncComponent(() => (
   import("@local/vibe64-database-tools/client").then((module) => module.loadVibe64DatabaseWorkspace())
+));
+const LocalDatabaseServer = defineAsyncComponent(() => (
+  import("@local/vibe64-database-tools/client").then((module) => module.loadLocalDatabaseServer())
 ));
 const composerInput = ref(null);
 const conversationView = ref(null);
@@ -2018,6 +2026,11 @@ onBeforeUnmount(() => {
   min-width: 0;
   overflow: auto;
   padding: 0.35rem 0.5rem;
+}
+
+/* A database server that isn't connected needs room for its settings and commands. */
+.studio-autopilot__activity:has(.db-server--attention) {
+  max-height: min(80dvh, 52rem);
 }
 
 /* A missing tool's row needs room for its command and Check again. */

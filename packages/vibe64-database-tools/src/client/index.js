@@ -7,6 +7,12 @@ async function loadVibe64DatabaseWorkspace() {
   return module.default;
 }
 
+async function loadLocalDatabaseServer() {
+  const module = await import("./components/LocalDatabaseServer.vue");
+  return module.default;
+}
+
 export {
+  loadLocalDatabaseServer,
   loadVibe64DatabaseWorkspace
 };

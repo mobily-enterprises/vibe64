@@ -28,6 +28,8 @@ import { writeClipboardText } from "@/lib/clipboard.js";
 
 const props = defineProps({
   command: { type: String, required: true },
+  // What the button copies when it differs from what is shown (a password shown as dots).
+  copyText: { type: String, default: "" },
   label: { type: String, default: "Copy command" }
 });
 const copied = ref(false);
@@ -35,7 +37,7 @@ let timer = null;
 
 async function copy() {
   try {
-    copied.value = await writeClipboardText(props.command);
+    copied.value = await writeClipboardText(props.copyText || props.command);
   } catch {
     copied.value = false;
   }
