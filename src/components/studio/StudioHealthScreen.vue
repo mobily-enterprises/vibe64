@@ -60,13 +60,14 @@
               class="studio-health__check studio-health__check--tool"
               @check="reload"
             />
-            <article v-else class="studio-health__check">
+            <article v-else class="studio-health__check" :class="{ 'studio-health__check--open': check.status !== 'pass' }">
               <v-icon :color="iconColor(check)" :icon="check.status === 'pass' ? mdiCheckCircle : mdiAlertCircleOutline" size="20" />
               <div class="studio-health__check-copy">
                 <div class="studio-health__check-heading">
                   <strong>{{ check.label }}</strong>
-                  <span>{{ check.observed }}</span>
+                  <span v-if="check.status === 'pass'"><template v-for="(part, index) in breakable(found(check))" :key="index">{{ part }}<wbr></template></span>
                 </div>
+                <p v-if="check.status !== 'pass'" class="studio-health__sentence">{{ check.observed }}</p>
                 <small v-if="check.explanation">{{ check.explanation }}</small>
                 <Vibe64CopyCommand v-if="check.command" class="mt-1" :command="check.command" />
                 <v-btn
@@ -74,7 +75,6 @@
                   class="studio-health__action"
                   color="primary"
                   rounded="pill"
-                  size="small"
                   variant="flat"
                   @click="requestVibe64AiOnboarding()"
                 >
@@ -151,12 +151,33 @@ const sections = computed(() => [
   { need: "optional", title: "Optional", caption: "Nice to have. Install them when you want them." }
 ].map((section) => ({
   ...section,
+  // Things to do come first; extras that are simply not installed fold at the end.
   checks: checks.value.filter((check) => (check.need || "needed") === section.need)
+    .map((check, index) => ({ check, index, rank: section.need === "optional" ? optionalRank(check) : 0 }))
+    .sort((a, b) => a.rank - b.rank || a.index - b.index)
+    .map(({ check }) => check)
 })).filter((section) => section.checks.length));
+
+function optionalRank(check) {
+  if (check.status === "pass") return 1;
+  return check.tool ? 2 : 0;
+}
 
 // AI setup explains installing and connecting: offered once, on the first AI row that needs it.
 const aiSetupCheckId = computed(() => checks.value
   .find((check) => ["ai-tool", "ai-auth"].includes(check.id) && check.status !== "pass")?.id || "");
+
+// A found tool reads "26.5.0 · ~/bin/node" under its own name, not "Node.js Node.js 26.5.0".
+function found(check) {
+  const text = String(check.observed || "");
+  const lead = `${check.label} `;
+  return check.tool && text.startsWith(lead) ? text.slice(lead.length) : text;
+}
+
+// Long paths wrap after a slash, never in the middle of a name.
+function breakable(text = "") {
+  return String(text).split(/(?<=\/)/u);
+}
 
 function iconColor(check) {
   if (check.status === "pass") return "success";
@@ -221,6 +242,8 @@ function iconColor(check) {
 }
 
 .studio-health__check + .studio-health__check { border-top: 1px solid var(--v64-outline-variant); }
+/* Icons sit on the 24px heading line, like the tool rows' icons. */
+.studio-health__check > .v-icon { margin-top: 2px; }
 .studio-health__check--tool { padding-inline: var(--v64-space-4, 16px); }
 
 .studio-health__check-copy {
@@ -243,8 +266,14 @@ function iconColor(check) {
   color: var(--v64-on-surface-variant);
   font-size: 0.8125rem;
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   white-space: pre-line;
+}
+
+.studio-health__sentence {
+  color: var(--v64-on-surface-variant);
+  font: var(--v64-type-body-md);
+  margin: 2px 0 0;
 }
 
 .studio-health__action { justify-self: start; margin-top: var(--v64-space-2, 8px); }
