@@ -1,19 +1,18 @@
-// The person's publishing keys on this computer: tokens, sign-ins and signing
-// keys in one age file encrypted with their passphrase, in their own home
-// folder (`<personal publishing folder>/keys.age`, mode 0600). A plain index
-// beside it lists what is stored (ids, kinds, labels, public facts), never a
-// secret value.
+// Publishing keys locked with the person's passphrase: tokens, sign-ins and
+// signing keys in one age file (`<folder>/keys.age`, mode 0600, in a 0700
+// folder its caller chooses). A plain index beside it lists what is stored
+// (ids, kinds, labels, public facts), never a secret value.
 //
 // The person unlocks the keys in Vibe64's own interface, for one release or a
 // short window. While unlocked, the decrypted values live only in this process's
-// memory; locking (or the window ending) zeroes them. Any program running as
-// the same user can read memory and files of that user, which the Publish page
-// says plainly.
+// memory and are never written decrypted to disk; locking (or the window
+// ending) zeroes them. Any program running as the same user can read memory and
+// files of that user, which the Publish page says plainly.
+import { randomUUID } from "node:crypto";
 import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { DEFAULT_WORK_FACTOR, ageDecrypt, ageEncrypt } from "./age.js";
-import { readJsonFile, serialized, writeJsonFile } from "../state/jsonFile.js";
 
 const KEYS_CONTRACT = "vibe64.publishing-keys.v1";
 const INDEX_CONTRACT = "vibe64.publishing-keys-index.v1";
@@ -33,6 +32,16 @@ function publicFacts(meta = {}) {
     else if (typeof value === "boolean" || Number.isFinite(value)) facts[name] = value;
   }
   return facts;
+}
+
+// One writer at a time inside this process.
+function serialized() {
+  let tail = Promise.resolve();
+  return (operation) => {
+    const run = tail.then(operation, operation);
+    tail = run.catch(() => {});
+    return run;
+  };
 }
 
 function createAgeStore({
@@ -70,13 +79,20 @@ function createAgeStore({
   }
 
   async function readIndex() {
-    const value = await readJsonFile(indexFile, () => ({ contract: INDEX_CONTRACT, entries: [], recoveryKit: null }));
+    let value;
+    try {
+      value = JSON.parse(await readFile(indexFile, "utf8"));
+    } catch (error) {
+      if (error?.code === "ENOENT") return { contract: INDEX_CONTRACT, entries: [], recoveryKit: null };
+      if (error instanceof SyntaxError) throw storeError("The publishing key index is not valid JSON.", "vibe64_publishing_state_invalid");
+      throw error;
+    }
     if (value?.contract !== INDEX_CONTRACT) throw storeError("The publishing key index is not in a format this Vibe64 reads.", "vibe64_publishing_state_invalid");
     return value;
   }
 
   async function writeIndex(index) {
-    await writeJsonFile(indexFile, { ...index, contract: INDEX_CONTRACT }, { mode: 0o600, directoryMode: 0o700 });
+    await writePrivate(indexFile, `${JSON.stringify({ ...index, contract: INDEX_CONTRACT }, null, 2)}\n`);
   }
 
   async function seal(state) {
@@ -84,19 +100,21 @@ function createAgeStore({
     const plaintext = Buffer.from(JSON.stringify({ contract: KEYS_CONTRACT, entries }), "utf8");
     try {
       const sealed = await ageEncrypt(plaintext, state.passphrase, { workFactor });
-      await writeBytes(sealed);
+      await writePrivate(file, sealed);
     } finally {
       plaintext.fill(0);
     }
   }
 
-  async function writeBytes(bytes) {
+  // Temporary file + rename, so a crash never leaves half a file behind.
+  async function writePrivate(target, bytes) {
     await mkdir(directory, { recursive: true, mode: 0o700 });
     await chmod(directory, 0o700);
-    const temporary = `${file}.${process.pid}.${Date.now()}.tmp`;
+    const temporary = path.join(directory, `.${path.basename(target)}.${process.pid}.${randomUUID()}.tmp`);
     try {
       await writeFile(temporary, bytes, { mode: 0o600, flag: "wx" });
-      await rename(temporary, file);
+      await rename(temporary, target);
+      await chmod(target, 0o600);
     } finally {
       await rm(temporary, { force: true });
     }

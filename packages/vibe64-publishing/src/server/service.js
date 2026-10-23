@@ -17,6 +17,7 @@ import {
   vibe64Destination,
   withStageCredentials
 } from "@local/vibe64-packaging/server";
+import { createAgeStore } from "@local/vibe64-packaging/server/keys";
 import { gatherCredentialFacts } from "@local/vibe64-packaging/server/preflight/registries";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
@@ -25,7 +26,6 @@ import { resolveDefaultLocalEditorSystemRoot } from "@local/vibe64-core/server/s
 import { PUBLISH_ACCOUNT_KINDS, PUBLISH_DESTINATION_CATALOG } from "../shared/destinationCatalog.js";
 import { confirmingActor, createConfirmationService } from "./confirmationService.js";
 import { createCredentialBroker } from "./credentialBroker.js";
-import { createAgeStore } from "./credentials/ageStore.js";
 import { createRecoveryKit, restoreRecoveryKit } from "./credentials/recoveryKit.js";
 import { createLanShare } from "./lanShare.js";
 import { createProjectRepository } from "./projectRepository.js";

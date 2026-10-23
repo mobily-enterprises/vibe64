@@ -13,6 +13,7 @@
     "./server/stages": "./src/server/stages.js",
     "./server/projectCommands": "./src/server/projectCommands.js",
     "./server/confirmationToken": "./src/server/confirmationToken.js",
+    "./server/keys": "./src/server/keys/index.js",
     "./server/tagSavedCommit": "./src/server/tagSavedCommit.js",
     "./server/packers": "./src/server/packers/index.js",
     "./server/destinations": "./src/server/destinations/index.js",
@@ -43,6 +44,10 @@
           {
             "subpath": "./server",
             "summary": "Builds deterministic publish plans, runs credential-free builds into an immutable result store, and signs, uploads and reads back with credentials its caller supplies. Holds no state, history, custody policy or UI."
+          },
+          {
+            "subpath": "./server/keys",
+            "summary": "Keeps publishing keys in a passphrase-locked age file in a private folder its caller chooses, unlocked only in memory for a short window; includes the keys-unlocked preflight check."
           },
           {
             "subpath": "./shared/qr",

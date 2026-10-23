@@ -22,6 +22,7 @@ import {
 } from "@local/vibe64-packaging/server";
 import { VIBE64_REGISTRY_PREFLIGHT_CHECKS } from "@local/vibe64-packaging/server/preflight/registries";
 import { VIBE64_ANDROID_PREFLIGHT_CHECKS } from "@local/vibe64-packaging/server/preflight/android";
+import { publishingKeysUnlocked } from "@local/vibe64-packaging/server/keys";
 
 import { recoveryKitCovers } from "./credentials/recoveryKit.js";
 import { sideloadKeyEntryId } from "./credentialBroker.js";
@@ -38,16 +39,6 @@ function uniqueChecks(...lists) {
 }
 
 // Local custody rules that sit on top of the shared checks.
-const keysUnlocked = definePreflightCheck({
-  id: "publishing-keys-unlocked",
-  label: "Publishing keys",
-  severity: "block",
-  applies: ({ plan }) => (plan?.targets || []).length > 0,
-  run: ({ keys }) => keys?.unlocked
-    ? { ok: true, message: "Unlocked for this release." }
-    : { ok: false, message: keys?.exists ? "Unlock your publishing keys to check sign-ins and sign." : "Create your publishing keys first." }
-});
-
 const sideloadKeyReady = definePreflightCheck({
   id: "phone-install-key",
   label: "Phone install key",
@@ -81,7 +72,7 @@ const githubRepositoryMatches = definePreflightCheck({
   }
 });
 
-const LOCAL_CHECKS = Object.freeze([keysUnlocked, sideloadKeyReady, githubRepositoryMatches]);
+const LOCAL_CHECKS = Object.freeze([publishingKeysUnlocked, sideloadKeyReady, githubRepositoryMatches]);
 const RELEASE_CHECKS = uniqueChecks(VIBE64_PREFLIGHT_CHECKS, VIBE64_REGISTRY_PREFLIGHT_CHECKS, VIBE64_ANDROID_PREFLIGHT_CHECKS, LOCAL_CHECKS);
 
 // The part of a long tool output that says why: tools such as npm name the
