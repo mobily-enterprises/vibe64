@@ -9,6 +9,7 @@
     "./server/actions": "./src/server/actions.js",
     "./server/managedProject": "./src/server/managedProject.js",
     "./server/resourceEnvironment": "./src/server/resourceEnvironment.js",
+    "./server/savedEnvValues": "./src/server/savedEnvValues.js",
     "./server/managedRepository": "./src/server/managedRepository.js",
     "./server/project-archive": "./src/server/projectArchive.js",
     "./server/projectSourceMutationLock": "./src/server/projectSourceMutationLock.js"
@@ -57,6 +58,10 @@
           {
             "subpath": "./server/resourceEnvironment",
             "summary": "Validates semantic host resource values and maps them through exact application-declared environment bindings."
+          },
+          {
+            "subpath": "./server/savedEnvValues",
+            "summary": "Validates a host's saved Env value provider (vibe64.saved-env-values.v1) and turns the values the person linked into non-editable Development Env records."
           },
           {
             "subpath": "./server/managedRepository",

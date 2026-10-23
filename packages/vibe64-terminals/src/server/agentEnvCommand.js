@@ -14,6 +14,13 @@ import {
   logOperationalEvent
 } from "@local/vibe64-core/server/logging";
 import {
+  currentProjectRequestContext
+} from "@local/vibe64-core/server/projectRequestContext";
+import {
+  SAVED_ENV_VALUE_SOURCE,
+  assertSavedEnvValueProvider
+} from "@local/vibe64-project/server/savedEnvValues";
+import {
   normalizeRuntimeConfigKey,
   runtimeConfigKeyLooksSecret
 } from "@local/vibe64-core/server/runtimeConfig";
@@ -75,6 +82,9 @@ function usageText() {
     "  vibe64-helper env status [development|production|all] [--json]",
     "  <value on stdin> | vibe64-helper env set <development|production> <KEY> [--secret] [--json]",
     "  vibe64-helper env remove <development|production> <KEY> [--json]",
+    "  vibe64-helper env saved [--json]",
+    "  vibe64-helper env link <development|production> <KEY> <saved-id> <field-id> [--json]",
+    "  vibe64-helper env unlink <development|production> <KEY> [--json]",
     "",
     "Values are accepted only on stdin and are never printed by this command.",
     "Zero-length stdin stores an empty value; whitespace is preserved as an exact value.",
@@ -82,7 +92,10 @@ function usageText() {
     "--secret marks the value as a secret, which Env keeps hidden. A key that is already secret stays secret, and keys",
     "whose names look secret (KEY, SECRET, TOKEN, PASSWORD, ...) become secrets automatically.",
     "Generated secrets (for example an application key): produce the value with the framework's own generator and pipe",
-    "it to env set <scope> <KEY> --secret. Never write it into the generated .env; Vibe64 regenerates that file from Env."
+    "it to env set <scope> <KEY> --secret. Never write it into the generated .env; Vibe64 regenerates that file from Env.",
+    "When the host offers saved values, env saved lists their names, descriptions and fields (* marks a secret), never",
+    "their values. env link fills the variable the application already reads from one field of a saved value; a linked",
+    "row is not editable, and env unlink returns it to an ordinary empty row."
   ].join("\n") + "\n";
 }
 
@@ -137,6 +150,8 @@ function parseCommandArgs(args = []) {
   });
   return {
     command,
+    entryId: normalizeText(positionals[3]),
+    fieldId: normalizeText(positionals[4]),
     help,
     json: flags.includes("--json"),
     key: normalizeText(positionals[2]),
@@ -171,35 +186,51 @@ function validateParsedCommand(parsed = {}) {
     }
     return null;
   }
-  if (!["set", "remove"].includes(parsed.command)) {
+  if (parsed.command === "saved") {
+    if (parsed.positionals.length !== 1 || parsed.secret) {
+      return syntaxFailure("saved accepts no arguments.");
+    }
+    return null;
+  }
+  if (!["set", "remove", "link", "unlink"].includes(parsed.command)) {
     return syntaxFailure(`Unknown Vibe64 Env command: ${parsed.command}`);
   }
   if (![ENV_SCOPE_DEVELOPMENT, ENV_SCOPE_PRODUCTION].includes(parsed.scope)) {
     return syntaxFailure(`${parsed.command} requires an explicit development or production scope.`);
   }
-  if (!parsed.key || parsed.positionals.length !== 3) {
+  if (parsed.command === "link") {
+    if (!parsed.key || !parsed.entryId || !parsed.fieldId || parsed.positionals.length !== 5) {
+      return syntaxFailure("link requires a variable name, a saved value id and a field id.");
+    }
+  } else if (!parsed.key || parsed.positionals.length !== 3) {
     return syntaxFailure(`${parsed.command} requires exactly one environment variable name.`);
   }
-  if (parsed.command === "remove" && parsed.secret) {
+  if (parsed.command !== "set" && parsed.secret) {
     return syntaxFailure("--secret is valid only when setting a value.");
   }
   return null;
 }
 
+function recordIsLinked(record = null) {
+  return normalizeText(record?.source) === SAVED_ENV_VALUE_SOURCE;
+}
+
 function statusRecord(record = {}, scope = "", isUserValueRecord = () => false) {
   const configured = record?.valuePresent === true;
   const stored = isUserValueRecord(record) === true;
+  const linked = recordIsLinked(record);
   return {
     configured,
     editable: record?.editable === true,
     key: normalizeText(record?.key),
+    ...(linked ? { label: normalizeText(record?.label), linked: true } : {}),
     missing: record?.missing === true || record?.valuePresent !== true,
     owner: normalizeText(record?.owner),
     requiredFor: Array.isArray(record?.requiredFor) ? record.requiredFor.map(normalizeText).filter(Boolean) : [],
     scope,
     secret: record?.secret === true,
     source: normalizeText(record?.source),
-    state: configured ? "configured" : stored ? "empty" : "missing",
+    state: linked ? "linked" : configured ? "configured" : stored ? "empty" : "missing",
     stored
   };
 }
@@ -242,6 +273,10 @@ function humanStatus(statuses = []) {
       continue;
     }
     for (const record of status.records) {
+      if (record.linked) {
+        lines.push(`  ${record.key} — linked${record.label ? ` — ${record.label}` : ""}`);
+        continue;
+      }
       const details = [
         record.state,
         record.secret ? "secret" : "plain",
@@ -304,6 +339,12 @@ function recordForKey(records = [], key = "") {
 function assertRecordEditable(record = null, scope = "", key = "") {
   if (!record || record.editable === true && normalizeText(record.owner) !== "system") {
     return;
+  }
+  if (recordIsLinked(record)) {
+    throw vibe64Error(
+      `${key} is linked to a saved value. Unlink it before entering a value here.`,
+      "vibe64_env_value_linked"
+    );
   }
   const label = scope === ENV_SCOPE_PRODUCTION ? "Production" : "Development";
   throw vibe64Error(
@@ -520,6 +561,11 @@ function createAgentEnvCommandService({
 
   const sessionProjects = new Map();
   let productionProvider = null;
+  let savedValueProvider = null;
+
+  function setSavedEnvValueProvider(provider = null) {
+    savedValueProvider = assertSavedEnvValueProvider(provider);
+  }
 
   function setProductionEnvironmentProvider(provider = null) {
     if (
@@ -553,7 +599,10 @@ function createAgentEnvCommandService({
         "vibe64_agent_env_command_project_required"
       );
     }
+    // The person whose request prepared this agent; a host's saved values
+    // apply that person's permissions.
     const binding = {
+      actor: currentProjectRequestContext()?.vibe64User || null,
       projectContextRoot: normalizedProjectContextRoot(project),
       projectSlug
     };
@@ -771,10 +820,86 @@ function createAgentEnvCommandService({
     }, parsed);
   }
 
+  function savedValueRequest(binding = {}, sessionId = "") {
+    return {
+      actor: binding.actor || null,
+      projectSlug: normalizeText(binding.projectSlug),
+      sessionId
+    };
+  }
+
+  async function savedResult(parsed = {}, sessionId = "", binding = {}) {
+    if (!savedValueProvider) {
+      const payload = { entries: [], ok: true };
+      return {
+        exitCode: 0,
+        ok: true,
+        stdout: parsed.json ? `${JSON.stringify(payload, null, 2)}\n` : "This workspace offers no saved values.\n"
+      };
+    }
+    const result = assertOperationResult(
+      await savedValueProvider.list(savedValueRequest(binding, sessionId)),
+      "Saved values could not be read."
+    );
+    const entries = (Array.isArray(result?.entries) ? result.entries : []).map((entry) => ({
+      description: normalizeText(entry?.description),
+      environments: Array.isArray(entry?.environments) ? entry.environments.map(normalizeText).filter(Boolean) : [],
+      fields: (Array.isArray(entry?.fields) ? entry.fields : []).map((field) => ({
+        id: normalizeText(field?.id),
+        label: normalizeText(field?.label),
+        secret: field?.secret === true
+      })).filter((field) => field.id),
+      id: normalizeText(entry?.id),
+      label: normalizeText(entry?.label)
+    })).filter((entry) => entry.id);
+    const payload = { entries, ok: true, provider: savedValueProvider.label };
+    const lines = entries.length === 0
+      ? [`${savedValueProvider.label} has nothing you can use here yet.`]
+      : entries.map((entry) => `${entry.id} ${entry.label}${entry.description ? ` — ${entry.description}` : ""}` +
+          ` (fields: ${entry.fields.map((field) => `${field.id}${field.secret ? "*" : ""}`).join(", ")})`);
+    return {
+      exitCode: 0,
+      ok: true,
+      stdout: parsed.json ? `${JSON.stringify(payload, null, 2)}\n` : `${lines.join("\n")}\n`
+    };
+  }
+
+  async function linkResult(parsed = {}, sessionId = "", binding = {}) {
+    const key = normalizeRuntimeConfigKey(parsed.key);
+    if (!savedValueProvider) {
+      return responseError("This workspace offers no saved values.", "vibe64_saved_env_values_unavailable");
+    }
+    const request = { ...savedValueRequest(binding, sessionId), environment: parsed.scope, key };
+    const linking = parsed.command === "link";
+    assertOperationResult(
+      linking
+        ? await savedValueProvider.link({ ...request, entryId: parsed.entryId, fieldId: parsed.fieldId })
+        : await savedValueProvider.unlink(request),
+      `${key} could not be ${linking ? "linked" : "unlinked"}.`
+    );
+    const label = parsed.scope === ENV_SCOPE_PRODUCTION ? "production" : "development";
+    const payload = { action: parsed.command, key, ok: true, scope: parsed.scope };
+    return {
+      ...payload,
+      exitCode: 0,
+      stdout: parsed.json
+        ? `${JSON.stringify(payload, null, 2)}\n`
+        : linking
+          ? `Linked ${label} Env ${key} to ${parsed.entryId} (${parsed.fieldId}).\nThe value was not printed.\n`
+          : `Unlinked ${label} Env ${key}; it is now an ordinary empty row.\n`
+    };
+  }
+
   async function execute(parsed = {}, input = {}, binding = {}) {
     const projectSlug = normalizeText(binding.projectSlug);
     if (parsed.command === "status") {
       return statusResult(parsed, normalizeText(input.sessionId), projectSlug);
+    }
+    if (parsed.command === "saved") {
+      return savedResult(parsed, normalizeText(input.sessionId), binding);
+    }
+    if (parsed.command === "link" || parsed.command === "unlink") {
+      return linkResult(parsed, normalizeText(input.sessionId), binding);
     }
     if (parsed.command === "set") {
       return setResult(parsed, normalizeText(input.sessionId), String(input.stdin ?? ""), projectSlug);
@@ -834,7 +959,8 @@ function createAgentEnvCommandService({
     bindSession,
     closeAllForSession,
     run,
-    setProductionEnvironmentProvider
+    setProductionEnvironmentProvider,
+    setSavedEnvValueProvider
   });
 }
 

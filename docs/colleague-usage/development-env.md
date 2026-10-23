@@ -32,6 +32,14 @@ coding agent generates it with the framework's own command and stores it as a
 value into a generated `.env` file: Vibe64 rewrites that file from Env, so an
 edit there would be lost. The key then appears in **Env** with its value hidden.
 
+When the host offers saved values, `vibe64-helper env saved` lists their names,
+descriptions and fields, never their values. To use one, link it to the
+variable the application already reads (`vibe64-helper env link development
+STRIPE_SECRET_KEY <id> apiKey`) instead of asking the person to paste a key.
+A linked row is not editable; `vibe64-helper env unlink` returns it to an
+ordinary empty row. Env shows a linked row with a **Linked** chip and the
+host's provenance line; a managed resource of the same name still wins.
+
 Each managed shell command reads current Development Env, so the coding agent's
 next command receives added or changed values without restarting its conversation.
 The agent can use ordinary application commands; it does not need to copy managed

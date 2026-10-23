@@ -97,8 +97,14 @@ import {
   localDatabaseServerDeclarations,
   normalizeResourceEnvironment,
   preferredAlternative,
+  resourceSemanticIsSecret,
   satisfiedAlternative
 } from "./resourceEnvironment.js";
+import {
+  SAVED_ENV_VALUE_SOURCE,
+  assertSavedEnvValueProvider,
+  savedEnvValueRecords
+} from "./savedEnvValues.js";
 import {
   developmentDatabasePolicy as resolveDevelopmentDatabasePolicy
 } from "./developmentDatabasePolicy.js";
@@ -215,7 +221,7 @@ function stackResourceRecords(resources = [], environment = {}, defaults = {}) {
         owner: "user",
         requiredFor: [RUNTIME_CONFIG_PHASES.SERVER],
         scope: RUNTIME_CONFIG_SCOPES.DEV,
-        secret: ["password", "url", "accessTokenFile"].includes(semantic) ? true : undefined,
+        secret: resourceSemanticIsSecret(semantic) ? true : undefined,
         source: `genesis-stack:${declaration.component}:${declaration.resource.id}`,
         value: ""
       });
@@ -269,7 +275,7 @@ function genesisEnvironmentIsUnconfigured(error) {
 function projectEnvironmentResult(resolved, input, userRecords) {
   if (input.includeResourceConfiguration !== true) return resolved.projectEnvironment;
   const values = [];
-  const userByKey = new Map(runtimeConfigRecordsForScope(userRecords,
+  const userByKey = new Map(runtimeConfigRecordsForScope([...(resolved.savedRecords || []), ...userRecords],
     input.environment || input.scope || RUNTIME_CONFIG_SCOPES.DEV,
     { target: input.target }).map((record) => [record.key, record]));
   for (const [key, value] of Object.entries(resolved.projectEnvironment)) {
@@ -314,6 +320,7 @@ function createService({
   targetRoot = ""
 } = {}) {
   let resourceEnvironmentProvider = null;
+  let savedEnvValueProvider = null;
   let templateApplicationObserver = null;
   const studioProjectContext = projectContext || (String(targetRoot || "").trim()
     ? createStudioProjectContext({
@@ -460,28 +467,51 @@ function createService({
     })).records;
   }
 
+  // Values the host supplies because the person linked a saved value to a
+  // Development Env variable. A failing provider fails the read instead of
+  // silently dropping values.
+  async function savedEnvRecords(input = {}) {
+    const scope = input.environment || input.scope || RUNTIME_CONFIG_SCOPES.DEV;
+    if (!savedEnvValueProvider || scope !== RUNTIME_CONFIG_SCOPES.DEV) return [];
+    return savedEnvValueRecords(savedEnvValueProvider, {
+      projectContextRoot: selectedTargetRoot(),
+      projectRuntimeRoot: selectedProjectRuntimeRoot(),
+      projectSlug: String(currentProjectRequestContext()?.slug || studioProjectContext.selectedProject?.slug || "").trim()
+    });
+  }
+
   async function resolvedProjectEnvironment(input = {}, userRecords = [], {
     provisionResources = false
   } = {}) {
     const source = await sourceForInput(input);
     const sourceRoot = source.sourceRoot;
+    const savedRecords = await savedEnvRecords(input);
     const userEnvironment = runtimeConfigEnv(userRecords, {
       scope: input.environment || input.scope || RUNTIME_CONFIG_SCOPES.DEV,
       target: input.target
     });
+    const savedEnvironment = runtimeConfigEnv(savedRecords, {
+      scope: input.environment || input.scope || RUNTIME_CONFIG_SCOPES.DEV,
+      target: input.target
+    });
+    const personEnvironment = {
+      ...userEnvironment,
+      ...savedEnvironment
+    };
     if (!sourceRoot) {
       return {
         databaseToolEnvironment: null,
         effectiveEnvironment: {
           ...env,
-          ...userEnvironment
+          ...personEnvironment
         },
         environmentFiles: [],
-        projectEnvironment: userEnvironment,
+        projectEnvironment: personEnvironment,
         platformEnvironmentSecrets: new Set(),
         platformEnvironmentSources: {},
         resources: [],
         resourcesPrepared: true,
+        savedRecords,
         source,
         warning: ""
       };
@@ -491,7 +521,7 @@ function createService({
       declaration = await inspectEnvironment({
         environment: {
           ...env,
-          ...userEnvironment
+          ...personEnvironment
         },
         projectRoot: sourceRoot
       });
@@ -501,14 +531,15 @@ function createService({
         environmentInspectionFailed: !genesisEnvironmentIsUnconfigured(error),
         effectiveEnvironment: {
           ...env,
-          ...userEnvironment
+          ...personEnvironment
         },
         environmentFiles: [],
-        projectEnvironment: userEnvironment,
+        projectEnvironment: personEnvironment,
         platformEnvironmentSecrets: new Set(),
         platformEnvironmentSources: {},
         resources: [],
         resourcesPrepared: true,
+        savedRecords,
         source,
         warning: genesisEnvironmentIsUnconfigured(error)
           ? ""
@@ -552,9 +583,10 @@ function createService({
         };
     const platformEnvironment = contribution.environment;
     const defaultEnvironment = declaredEnvironmentDefaults(declaration.environmentDefaults);
+    // A managed resource binding always wins over a linked saved value.
     const projectEnvironment = {
       ...defaultEnvironment,
-      ...userEnvironment,
+      ...personEnvironment,
       ...platformEnvironment
     };
     return {
@@ -572,6 +604,7 @@ function createService({
       projectEnvironment,
       resources: declaration.resources,
       resourcesPrepared: !developmentDatabase || provided.prepared === true,
+      savedRecords,
       source,
       warning: ""
     };
@@ -580,7 +613,10 @@ function createService({
   async function stackEnvRecords(input = {}, userRecords = []) {
     const resolved = await resolvedProjectEnvironment(input, userRecords);
     return {
+      // Saved values come first: by the record merge rule they replace Stack
+      // defaults and stale user values, and a managed resource replaces them.
       records: [
+        ...resolved.savedRecords,
         ...environmentRecords(resolved.defaultEnvironment, {
           editable: true,
           owner: RUNTIME_CONFIG_OWNERS.USER,
@@ -677,6 +713,12 @@ function createService({
     for (const key of Object.keys(values)) {
       const normalizedKey = normalizeRuntimeConfigKey(key);
       const record = currentRecords.get(normalizedKey);
+      if (record?.source === SAVED_ENV_VALUE_SOURCE) {
+        throw vibe64Error(
+          `${normalizedKey} is linked to a saved value. Unlink it before entering a value here.`,
+          "vibe64_env_value_linked"
+        );
+      }
       if (record && (record.owner !== RUNTIME_CONFIG_OWNERS.USER || record.editable !== true)) {
         throw vibe64Error(
           `${normalizedKey} is not editable as a user Env value.`,
@@ -1719,6 +1761,12 @@ function createService({
         throw new TypeError("Vibe64 template application observer must be a function or null.");
       }
       templateApplicationObserver = observer;
+    },
+
+    // vibe64.saved-env-values.v1: a host may fill Development Env variables
+    // the person explicitly linked to one of its saved values.
+    setSavedEnvValueProvider(provider = null) {
+      savedEnvValueProvider = assertSavedEnvValueProvider(provider);
     },
 
     setResourceEnvironmentProvider(provider = null) {

@@ -45,6 +45,7 @@ const RUNTIME_CONFIG_SECRET_KEY_PARTS = new Set([
   "TOKEN"
 ]);
 const REDACTED_RUNTIME_CONFIG_VALUE = "********";
+const RUNTIME_CONFIG_LABEL_MAX_LENGTH = 200;
 
 function runtimeConfigError(message, code) {
   return vibe64Error(message, code);
@@ -127,6 +128,18 @@ function runtimeConfigKeyIsVibe64Reserved(key = "") {
   return normalizeText(key).startsWith(RUNTIME_CONFIG_VIBE64_RESERVED_PREFIX);
 }
 
+// A display-only provenance line a host may give a record it supplies.
+function normalizeRuntimeConfigLabel(label) {
+  if (label === undefined || label === null || label === "") return "";
+  if (typeof label !== "string" || label.length > RUNTIME_CONFIG_LABEL_MAX_LENGTH || /[\r\n]/u.test(label)) {
+    throw runtimeConfigError(
+      `Runtime config labels must be one line of up to ${RUNTIME_CONFIG_LABEL_MAX_LENGTH} characters.`,
+      "vibe64_runtime_config_label_invalid"
+    );
+  }
+  return label.trim();
+}
+
 function normalizeRuntimeConfigRecord(record = {}) {
   if (!isPlainObject(record)) {
     throw runtimeConfigError("Runtime config records must be objects.", "vibe64_runtime_config_record_invalid");
@@ -136,9 +149,11 @@ function normalizeRuntimeConfigRecord(record = {}) {
   const secret = record.secret === undefined
     ? runtimeConfigKeyLooksSecret(key)
     : record.secret === true;
+  const label = normalizeRuntimeConfigLabel(record.label);
   return {
     editable: record.editable === undefined ? owner === RUNTIME_CONFIG_OWNERS.USER : record.editable === true,
     key,
+    ...(label ? { label } : {}),
     owner,
     requiredFor: normalizeRuntimeConfigPhases(record.requiredFor),
     scope: normalizeRuntimeConfigScope(record.scope),
@@ -299,6 +314,7 @@ function runtimeConfigViewRecord(record = {}, {
   return {
     editable: normalizedRecord.editable,
     key: normalizedRecord.key,
+    ...(normalizedRecord.label ? { label: normalizedRecord.label } : {}),
     missing: missingKeys.has(normalizedRecord.key),
     owner: normalizedRecord.owner,
     requiredFor: normalizedRecord.requiredFor,

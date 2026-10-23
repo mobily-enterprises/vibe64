@@ -2911,6 +2911,10 @@ function createService({
       agentEnvCommand.setProductionEnvironmentProvider(provider);
     },
 
+    setSavedEnvValueProvider(provider = null) {
+      agentEnvCommand.setSavedEnvValueProvider(provider);
+    },
+
     prepareWorkspaceSetup(sessionId, options = {}) {
       return prepareWorkspaceSetup(sessionId, options);
     },
