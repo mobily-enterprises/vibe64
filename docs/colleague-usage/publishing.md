@@ -84,14 +84,16 @@ Vibe64 for this project on this computer, not in the project's files.
    passphrase if the keys locked meanwhile) builds each package once, then
    tags the saved commit and pushes the tag, then sends the same files to
    every target and reads each back. A failed build therefore leaves no tag
-   behind. If the saved work, targets or tools changed since you reviewed, it
-   refuses and shows the new plan. Builds use the saved commit without the
+   behind. If the saved work, targets, the account a target signs in with, or
+   tools changed since you reviewed, it refuses and shows the new plan. Builds use the saved commit without the
    project's Genesis and agent folders (`genesis/`, `.genesis/`, `.agents/`,
    `.claude/`, `.codex/`, `.opencode/`), so packages never ship them.
 
 While a release runs each of its target cards shows **Publishing 1.4.3…**;
 afterwards a card shows the version people get, **Live · published …** and a
-**Verified** checksum read back from the destination. The Publish page's
+**Verified** checksum read back from the destination: npm's integrity value,
+or for PyPI and GitHub Releases each file's own sha256 (the value pip and the
+release page show). The Publish page's
 **Checks** line runs the checks on the saved commit at any time and, when they
 fail, shows which check failed with **Show output**.
 

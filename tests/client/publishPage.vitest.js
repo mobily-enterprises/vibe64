@@ -11,6 +11,7 @@ import ConfirmPublishDialog from "../../packages/vibe64-publishing/src/client/Co
 import ReleaseDialog from "../../packages/vibe64-publishing/src/client/ReleaseDialog.vue";
 import { lastFailure } from "../../packages/vibe64-publishing/src/client/publishFormat.js";
 import AndroidSideloadCard from "../../packages/vibe64-publishing/src/client/cards/AndroidSideloadCard.vue";
+import TargetCard from "../../packages/vibe64-publishing/src/client/cards/TargetCard.vue";
 import NpmCard from "../../packages/vibe64-publishing/src/client/cards/NpmCard.vue";
 import { PUBLISH_ACCOUNT_KINDS, PUBLISH_DESTINATION_CATALOG } from "../../packages/vibe64-publishing/src/shared/destinationCatalog.js";
 
@@ -196,4 +197,18 @@ it("lets a saved version nobody has published go out as it is, without a session
 
   const released = { ...suggestion.packages[0], released: true };
   expect(dialog.choicesFor(released).map((choice) => choice.kind)).toEqual(["patch", "minor", "major"]);
+});
+
+it("shows each file's own sha256 when the destination read back named files", async () => {
+  const a = "1".repeat(64);
+  const b = "2".repeat(64);
+  const html = await render(TargetCard, {
+    target: { id: "kit-pypi", destination: "pypi", package: "kit", latest: { version: "2.0.0", at: new Date().toISOString(), checksum: `sha256:${"9".repeat(64)}`,
+      proof: { project: "kit", files: [{ name: "kit-2.0.0-py3-none-any.whl", sha256: `sha256:${a}` }, { name: "kit-2.0.0.tar.gz", sha256: `sha256:${b}` }] } } },
+    destination: { label: "PyPI" }
+  });
+  expect(html).toContain("kit-2.0.0-py3-none-any.whl");
+  expect(html).toContain(`sha256 ${a.slice(0, 12)}`);
+  expect(html).toContain(`sha256 ${b.slice(0, 12)}`);
+  expect(html).not.toContain("9".repeat(12));
 });

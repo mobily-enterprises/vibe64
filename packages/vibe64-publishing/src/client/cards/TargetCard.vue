@@ -22,6 +22,15 @@ const accent = computed(() => destinationAccent(props.target.destination));
 const latest = computed(() => props.target.latest || null);
 const account = computed(() => props.accounts.find((entry) => entry.id === props.target.account) || null);
 const proof = computed(() => latest.value ? proofLine({ checksum: latest.value.checksum, ...latest.value.proof, url: "" }) : "");
+// Each file's own sha256 as the destination reported it, so people can match it
+// to what pip or a release page shows; the combined fingerprint is only a fallback.
+const proofFiles = computed(() => {
+  const facts = latest.value?.proof || {};
+  const listed = Array.isArray(facts.files) && facts.files.length ? facts.files : (Array.isArray(facts.assets) ? facts.assets : []);
+  return listed
+    .filter((file) => file?.name && /^sha256:[0-9a-f]{64}$/u.test(String(file.sha256 || "")))
+    .map((file) => ({ name: file.name, sha256: String(file.sha256).slice("sha256:".length) }));
+});
 const accountChoices = computed(() => props.accounts.filter((entry) => entry.kind === props.destination?.accountKind));
 // Only a page the destination itself named, or npmjs.com for a package it named.
 const pageUrl = computed(() => {
@@ -82,7 +91,24 @@ const failure = computed(() => props.activity?.failure || null);
 
     <dl class="publish-target__facts">
       <slot name="facts" />
-      <div v-if="proof && !activity.running">
+      <div v-if="proofFiles.length && !activity.running">
+        <dt>Verified</dt>
+        <dd class="publish-target__verified-files">
+          <span
+            v-for="file in proofFiles"
+            :key="file.name"
+            class="publish-target__verified publish-target__verified--file"
+            :title="`Read back from ${destination?.label || 'the destination'} after publishing: ${file.name} sha256 ${file.sha256}`"
+          >
+            <v-icon :icon="mdiCheckDecagram" color="success" size="16" />
+            <span class="publish-target__file-lines">
+              <span class="publish-target__file">{{ file.name }}</span>
+              <span class="publish-target__mono">sha256 {{ file.sha256.slice(0, 12) }}…</span>
+            </span>
+          </span>
+        </dd>
+      </div>
+      <div v-else-if="proof && !activity.running">
         <dt>Verified</dt>
         <dd class="publish-target__verified" :title="`Read back from ${destination?.label || 'the destination'} after publishing: ${proof}`">
           <v-icon :icon="mdiCheckDecagram" color="success" size="16" />
@@ -278,6 +304,27 @@ const failure = computed(() => props.activity?.failure || null);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.publish-target__verified-files {
+  display: grid !important;
+  gap: 4px;
+  min-width: 0;
+}
+
+.publish-target__verified--file {
+  align-items: flex-start !important;
+}
+
+.publish-target__file-lines {
+  display: grid;
+  min-width: 0;
+}
+
+.publish-target__file-lines > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .publish-target__facts {
