@@ -227,7 +227,12 @@ require OpenCode model discovery unless one of those saved roles uses OpenCode.
 
 Recommendations prefer **Claude → Codex/OpenAI → DeepSeek → GLM** among models
 connected and permitted for each role. Within the chosen provider, Senior uses
-Opus/Astra, Junior uses Sonnet/Sol, and Helper/Router use Haiku/Luna when offered.
+Opus/Astra, Junior uses Opus with **Medium** thinking on Claude Code and Sol on
+Codex, and Helper/Router use Haiku/Luna when offered. Senior and Junior otherwise
+recommend **High** thinking, Helper and Router **Low**. When a recommendation
+changes in a release, saved routes keep their models: the routing form then shows
+**Review recommendations** for the roles that differ, for example Junior moving
+from Sonnet with High thinking to Opus with Medium thinking.
 Senior and Junior stay in the selected orchestrator; independent roles can use
 other permitted orchestrators. Personal connections cannot supply a shared
 backup. **No recommended changes** means the current choices already match the

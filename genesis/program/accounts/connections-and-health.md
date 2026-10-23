@@ -285,8 +285,10 @@ keyed by exact orchestrator/provider/model route and role. The shared routing
 policy filters eligible choices before applying those scores. Every role prefers
 Claude/Anthropic, then Codex/OpenAI, then DeepSeek, then GLM. Scores remain integers
 from 1 to 10: Claude occupies 8–10, OpenAI 5–7, DeepSeek 4 and GLM 3. Within the
-native providers, Opus/Astra lead Senior, Sonnet/Sol lead Junior and Haiku/Luna
-lead Helper/Router. Unlisted models use their provider's lowest tier, so versioned
+native providers, Opus/Astra lead Senior, Opus/Sol lead Junior and Haiku/Luna
+lead Helper/Router. A score row may name a role's recommended thinking (Claude
+Code's Opus row recommends Medium for Junior); otherwise Senior and Junior
+recommend High and the background roles Low. Unlisted models use their provider's lowest tier, so versioned
 native names retain that priority; unknown providers use the JSON default 2,
 and OpenCode Zen's free Big Pickle has no score because it is never offered. Shared Backup uses Helper scores after
 excluding personal or unavailable connections. Score ties prefer

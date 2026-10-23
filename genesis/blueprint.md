@@ -600,7 +600,7 @@ on the kinds of work they can do.
 Unavailable modes explain why and are identified as disabled to screen readers.
 Recommendations rank connected, permitted models for every job in the order
 Claude, Codex/OpenAI, DeepSeek, then GLM. Within native providers, Senior favours
-Opus/Astra, Junior Sonnet/Sol, and Helper/Router Haiku/Luna. Model dropdowns group
+Opus/Astra, Junior Opus with Medium thinking/Sol, and Helper/Router Haiku/Luna. Model dropdowns group
 indented models beneath orchestrator headings, with provider/access details and
 recommended or unavailable markers. Their separate thinking control shows the
 selected thinking.

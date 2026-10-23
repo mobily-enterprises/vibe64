@@ -20,7 +20,7 @@ function catalog(providerIds = ["openai", "deepseek", "zai-coding-plan"], engine
     defaults: { agentId: engineId, modelProviderId: engineId === "claude" ? "anthropic" : "openai", modelId: engineId === "claude" ? "opus" : "gpt-6-astra", variantId: "high" },
     agents: [{ id: engineId, mode: "primary" }],
     modelProviders: providerIds.map((id) => ({ id, label: id, connected: true, models: models[id].map((modelId) => ({
-      id: modelId, label: modelId, status: "available", variants: [{ id: "low" }, { id: "high" }]
+      id: modelId, label: modelId, status: "available", variants: [{ id: "low" }, { id: "medium" }, { id: "high" }]
     })) })) };
 }
 
@@ -99,7 +99,11 @@ test("live recommendations follow provider priority after availability and perso
   })));
   const native = recommendedRoutingAssignments(claude);
   assert.equal(native.senior.modelId, "opus");
-  assert.equal(native.junior.modelId, "sonnet");
+  assert.equal(native.senior.variantId, "high");
+  assert.equal(native.junior.modelId, "opus");
+  assert.equal(native.junior.variantId, "medium", "Claude Code Junior is Opus with Medium thinking");
+  assert.equal(recommendedRoutingAssignments(codex).junior.modelId, "gpt-6-sol");
+  assert.equal(recommendedRoutingAssignments(codex).junior.variantId, "high", "other workflows keep their Junior thinking");
   assert.equal(native.helper.modelId, "haiku");
   assert.equal(native.router.modelId, "haiku");
   const assignments = { helper: { ...recommendedRoutingAssignments(codex).helper, modelProviderId: "deepseek", modelId: "deepseek-flash" } };

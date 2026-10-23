@@ -93,10 +93,19 @@ function routingModelChoices(engine, { purpose = "senior" } = {}) {
     }));
 }
 
-function routingModelScore(selection, role) {
-  const row = routingScores.models.find((candidate) => ["engineId", "modelProviderId", "modelId"]
+function routingScoreRow(selection) {
+  return routingScores.models.find((candidate) => ["engineId", "modelProviderId", "modelId"]
     .every((key) => candidate[key] === selection[key]));
-  return (row?.scores || routingScores.providerDefaultScores[selection.modelProviderId] || routingScores.defaultScores)[role === "sharedBackup" ? "helper" : role];
+}
+
+function routingModelScore(selection, role) {
+  return (routingScoreRow(selection)?.scores || routingScores.providerDefaultScores[selection.modelProviderId] || routingScores.defaultScores)[role === "sharedBackup" ? "helper" : role];
+}
+
+// The catalogue may name a model's recommended thinking per role; otherwise
+// background roles think low and Senior/Junior think high.
+function routingRecommendedEffort(selection, role) {
+  return routingScoreRow(selection)?.efforts?.[role] || (["helper", "router", "sharedBackup"].includes(role) ? "low" : "high");
 }
 
 function routingConnectionAccess(selection, connections = []) {
@@ -127,7 +136,7 @@ function recommendedRoutingAssignments(engine, { catalogs = engine ? [engine] : 
       try { return [role, { ...routingAssignmentSelection(selectedEngine, assignments[role], { purpose }), selectionSource: "recommended" }]; }
       catch { /* An obsolete variant must not prevent an otherwise eligible recommendation. */ }
     }
-    const preferredEffort = ["helper", "router", "sharedBackup"].includes(role) ? "low" : "high";
+    const preferredEffort = routingRecommendedEffort(choice, role);
     const agent = selectedEngine.agents.find(({ id }) => id === choice.agentId);
     const selection = resolveVibe64AssistantSelection(selectedEngine, { ...choice,
       variantId: agent.variantId || (choice.variants.some(({ id }) => id === preferredEffort) ? preferredEffort : choice.variantId) });
