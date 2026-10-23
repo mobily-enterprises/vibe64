@@ -33,3 +33,9 @@ export {
   preflightAllowsRelease,
   runPreflight
 } from "./preflight/index.js";
+export { VIBE64_REGISTRY_PREFLIGHT_CHECKS, gatherCredentialFacts } from "./preflight/registries.js";
+export { buildPackage } from "./release/buildPackage.js";
+export { exportSavedCommit, resolveCommit } from "./release/exportCommit.js";
+export { applyReleaseChange, prepareReleaseChange, readSourceVersion } from "./release/prepareChange.js";
+export { compareSemver, isSemver, pep440FromSemver } from "./release/version.js";
+export { npmLoginArgv, npmTokenUserconfig } from "./destinations/npm/index.js";

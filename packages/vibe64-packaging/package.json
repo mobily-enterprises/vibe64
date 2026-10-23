@@ -15,7 +15,9 @@
     "./server/tagSavedCommit": "./src/server/tagSavedCommit.js",
     "./server/packers": "./src/server/packers/index.js",
     "./server/destinations": "./src/server/destinations/index.js",
-    "./server/preflight": "./src/server/preflight/index.js"
+    "./server/preflight": "./src/server/preflight/index.js",
+    "./server/preflight/registries": "./src/server/preflight/registries.js",
+    "./server/release": "./src/server/release/index.js"
   },
   "jskit": {
     "kind": "runtime",

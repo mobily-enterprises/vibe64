@@ -32,5 +32,25 @@ How publishing will work, so Colleague can explain it:
 - Accounts, keys and build machines are always yours; Vibe64 never publishes
   under a shared account.
 
+Package registries Vibe64 can release to, once the page offers them:
+
+- **npm**: an `npm` package is packed once with `npm pack`; a dry run shows the
+  exact files and what changed since the version people install today. Proof
+  is the registry's own integrity value. Undo means moving `latest` back to an
+  earlier version (npm versions cannot be replaced).
+- **PyPI** (or TestPyPI): a `python-dist` package's sdist and wheel pass
+  `twine check` first. Versions use PyPI's spelling, so `1.5.0-rc.1` is
+  published as `1.5.0rc1`. Undo means yanking the release on pypi.org, which
+  Vibe64 links to; a file name can never be reused.
+- **GitHub Releases**: the built files are attached to the release of the tag
+  Vibe64 put on your saved commit, as draft, prerelease or latest. Undo means
+  making an earlier release latest again.
+- Re-running a release that already reached a registry is safe: the same
+  version with the same files counts as done. The same version with different
+  files is refused; choose a new version instead.
+- A project that already versions with Changesets, release-please,
+  setuptools-scm or similar keeps that tool; its Packaging says
+  `Version from: external` and Vibe64 only reads the version.
+
 Colleague can open **Publish** for you and explain these steps. It cannot
 publish, confirm a release or see any credential.
