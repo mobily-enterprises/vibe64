@@ -37,12 +37,16 @@ beforeEach(() => {
 });
 afterEach(() => { app?.unmount(); });
 
-it("switches an unavailable chat to the first other usable orchestrator, keeping its role", async () => {
+it("switches an unavailable chat to the first other usable orchestrator, keeping its role and Deslop choice", async () => {
   const { state, saved } = mount();
   expect(state.target.engineId).toBe("claude");
   await state.switchWorkflow();
-  expect(mocks.save).toHaveBeenCalledWith({ mode: "junior", review: false, workflowEngineId: "claude" });
+  expect(mocks.save).toHaveBeenCalledWith({ mode: "junior", review: true, workflowEngineId: "claude" });
   expect(saved).toHaveBeenCalledTimes(1);
+  app.unmount();
+  const off = mount({ mode: "auto", review: false, workflowEngineId: "codex" });
+  await off.state.switchWorkflow();
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: false, workflowEngineId: "claude" });
 });
 
 it("uses Senior for a custom chat and offers nothing when no other orchestrator is usable", async () => {
@@ -50,7 +54,7 @@ it("uses Senior for a custom chat and offers nothing when no other orchestrator 
     modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}` };
   const { state } = mount({ mode: "custom", review: false, workflowEngineId: "codex", override });
   await state.switchWorkflow();
-  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "senior", review: false, workflowEngineId: "claude" });
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "senior", review: true, workflowEngineId: "claude" });
   mocks.workflows.value = mocks.workflows.value.filter(choice => choice.engineId !== "claude");
   expect(state.target).toBe(null);
 });

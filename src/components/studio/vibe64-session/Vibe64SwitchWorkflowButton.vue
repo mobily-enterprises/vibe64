@@ -23,7 +23,9 @@ const command = useCommand({
   buildCommandOptions: () => ({ method: "PATCH", path: vibe64SessionPath(readRefOrGetterValue(props.sessionsApiPath), props.session.sessionId, "/assistant-selection") }),
   buildRawPayload: () => vibe64RealtimeOriginPayload({ assistantRouting: {
     mode: ["senior", "junior", "auto"].includes(preferences.value?.mode) ? preferences.value.mode : "senior",
-    review: false, workflowEngineId: target.value.engineId
+    // Keeps the chat's Deslop choice; Custom had none, so Deslop starts on.
+    review: preferences.value && preferences.value.mode !== "custom" ? preferences.value.review === true : true,
+    workflowEngineId: target.value.engineId
   } }),
   onRunSuccess: (result) => { if (result?.ok === false) throw new Error(result.error || "The chat could not be switched."); },
   fallbackRunError: "The chat could not be switched.", suppressSuccessMessage: true,

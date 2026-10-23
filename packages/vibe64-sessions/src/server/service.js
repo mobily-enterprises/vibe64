@@ -500,7 +500,8 @@ function createService({
         });
       }
     }
-    const preferences = assistantRoutingPreferences({ mode, review: false,
+    // Deslop starts on; the chat-mode switch can turn it off after a warning.
+    const preferences = assistantRoutingPreferences({ mode, review: true,
       workflowEngineId,
       ...(explicitSelection ? { override: explicitSelection } : {}) });
     if (explicitSelection && explicitSelection.engineId !== preferences.workflowEngineId) {

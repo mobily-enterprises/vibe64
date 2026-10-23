@@ -1847,8 +1847,9 @@ Only Senior explicitly marks a plan completed after reviewing its requirements
 and evidence. Successful turns and checked boxes never complete it automatically.
 Auto reviews implementation by either role, even when both use the same model.
 Senior can fix scoped defects or save substantial necessary rework for Junior,
-then review again. Deslop is optional within review; disabling cleanup cannot
-disable review. The person's pause or cancellation takes precedence. Ordinary
+then review again. Deslop is on by default within review; turning it off asks
+for confirmation (code quality suffers unless Deslop is run by hand, so it suits
+only quick throwaway projects), and disabling cleanup cannot disable review. The person's pause or cancellation takes precedence. Ordinary
 discussion and Stop never reopen, archive or complete a plan. Direct Senior and
 Junior still work from the person's request; Junior can update Progress and existing checklist ticks but cannot
 complete the plan.

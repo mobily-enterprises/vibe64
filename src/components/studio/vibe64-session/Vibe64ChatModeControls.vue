@@ -14,7 +14,9 @@ const props = defineProps({ session: { type: Object, default: null }, goal: { ty
 const emit = defineEmits(["saved", "reload", "custom"]);
 const preferences = computed(() => assistantRoutingFromMetadata(props.session?.metadata));
 const mode = ref("");
-const review = ref(false);
+// Deslop is on unless this chat's saved preferences turned it off.
+const review = ref(true);
+const deslopConfirmOpen = ref(false);
 const modelOverride = ref(null);
 const saving = ref(false);
 const saveError = ref("");
@@ -42,7 +44,7 @@ const updatedPreferences = computed(() => ({ mode: mode.value, review: review.va
   ...(!props.temporary && workflowEngineId.value ? { workflowEngineId: workflowEngineId.value } : {}),
   ...(modelOverride.value ? { override: modelOverride.value } : {}) }));
 watch(preferences, (value) => {
-  mode.value = value?.mode || ""; review.value = value?.review === true; modelOverride.value = value?.override || null;
+  mode.value = value?.mode || ""; review.value = value ? value.review === true : true; modelOverride.value = value?.override || null;
 }, { immediate: true });
 function roleLabel(role) {
   if (role === "custom" && preferences.value?.mode !== "custom") return "Choose an orchestrator, model and thinking level.";
@@ -103,6 +105,15 @@ async function save(nextMode = mode.value, nextReview = review.value, nextWorkfl
     saveError.value = error.message || "Chat mode could not be saved.";
   }
   finally { saving.value = false; }
+}
+// Turning Deslop off is confirmed first; Cancel leaves it on.
+function changeDeslop(enabled) {
+  if (enabled) save(mode.value, true);
+  else deslopConfirmOpen.value = true;
+}
+function confirmDeslopOff() {
+  deslopConfirmOpen.value = false;
+  save(mode.value, false);
 }
 function configure() {
   if (!props.canConfigure) return;
@@ -189,8 +200,8 @@ function configure() {
             <p v-if="requiredMode" class="text-body-small">Merge repairs always use Senior. Model changes apply to the next turn.</p>
             <p v-if="decisions[mode]?.backupReason === 'keep_workflow_together'" class="text-body-small mt-2">Senior and Junior use the shared backup together to keep this workflow in one orchestrator.</p>
             <template v-if="!temporary && mode === 'auto'">
-              <p class="text-body-small">Senior always reviews Junior's completed work. Deslop is optional.</p>
-              <v-switch :model-value="review" :disabled="disabled || saving || connecting || !reviewAvailable" label="Deslop during Senior review" hide-details color="primary" density="compact" @update:model-value="save(mode, $event)" />
+              <p class="text-body-small">Senior always reviews Junior's completed work and, with Deslop on, cleans it up. Keep Deslop on unless this is a quick throwaway project.</p>
+              <v-switch :model-value="review" :disabled="disabled || saving || connecting || !reviewAvailable" label="Deslop during Senior review" hide-details color="primary" density="compact" @update:model-value="changeDeslop($event)" />
               <p v-if="reviewDescription" class="text-body-small">{{ reviewDescription }}</p>
             </template>
           </div>
@@ -199,6 +210,21 @@ function configure() {
       </div>
     </v-card>
   </v-menu>
+  <v-dialog v-model="deslopConfirmOpen" max-width="30rem" aria-labelledby="chat-modes-deslop-off-title">
+    <v-card>
+      <v-card-title id="chat-modes-deslop-off-title" class="text-wrap">Turn off Deslop?</v-card-title>
+      <v-card-text>
+        <p class="mb-3">Deslop is the clean-up Senior does while reviewing: it removes duplicated helpers, dead code and muddled structure that AI-written code collects.</p>
+        <p class="mb-3"><strong>Without it, code quality will suffer.</strong> Over time the project gets harder to change and may crash and burn, unless you run Deslop yourself regularly by asking the AI to “Deslop” in the chat.</p>
+        <p>Only skip Deslop for a quick throwaway project. Cancel keeps it on.</p>
+      </v-card-text>
+      <v-card-actions>
+        <v-spacer />
+        <v-btn variant="flat" color="primary" autofocus @click="deslopConfirmOpen = false">Cancel</v-btn>
+        <v-btn variant="text" color="error" @click="confirmDeslopOff">Turn off Deslop</v-btn>
+      </v-card-actions>
+    </v-card>
+  </v-dialog>
   <v-dialog v-if="canConfigure" v-model="routingOpen" max-width="38rem" :persistent="routingSaving" scrollable aria-label="Model routing" @after-enter="routingFocusRole = decisions.auto?.missingRoles?.[0] || ''" @after-leave="modeMenu?.activatorEl?.focus()">
     <v-card>
       <v-card-text>

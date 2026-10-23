@@ -69,6 +69,29 @@ it("a failed switch to Auto keeps the direct role and custom model", async () =>
   expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: true, workflowEngineId: "codex" });
 });
 
+it("turning Deslop off asks first; Cancel keeps it on", async () => {
+  const state = mount();
+  await state.save("auto", true);
+  mocks.save.mockClear();
+  state.changeDeslop(false);
+  expect(state.deslopConfirmOpen).toBe(true);
+  expect(mocks.save).not.toHaveBeenCalled();
+  state.deslopConfirmOpen = false;
+  expect(state.review).toBe(true);
+  state.changeDeslop(false);
+  await state.confirmDeslopOff();
+  expect(state.deslopConfirmOpen).toBe(false);
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: false, workflowEngineId: "codex" });
+  state.changeDeslop(true);
+  expect(state.deslopConfirmOpen).toBe(false);
+  expect(mocks.save).toHaveBeenLastCalledWith({ mode: "auto", review: true, workflowEngineId: "codex" });
+});
+
+it("starts with Deslop on when the chat has no saved preferences", () => {
+  const state = mount(undefined, false, { session: { sessionId: "session-1", metadata: {} } });
+  expect(state.review).toBe(true);
+});
+
 it("does not save Helper as a chat mode", async () => {
   const state = mount();
   await state.save("helper", false);

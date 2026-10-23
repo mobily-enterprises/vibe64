@@ -127,7 +127,7 @@ const initialPlanSelection = {
 function assertInitialPlanMetadata(metadata = {}, createdBy = "", mode = "senior") {
   assert.equal(metadata.created_by, createdBy);
   assert.deepEqual(vibe64AssistantSelectionFromMetadata(metadata), initialPlanSelection);
-  assert.deepEqual(JSON.parse(metadata.assistant_routing), { mode, review: false, workflowEngineId: "opencode" });
+  assert.deepEqual(JSON.parse(metadata.assistant_routing), { mode, review: true, workflowEngineId: "opencode" });
 }
 
 async function requireAgentWrite(runtime, sessionId, operation) {
@@ -2961,7 +2961,7 @@ for (const chooseBranch of [false, true]) {
         ["resolve", { purpose: "senior", workflowEngineId: "codex" }, { vibe64User: actor }],
         ["access", initialPlanSelection, { vibe64User: actor, expectedConnectionIdentity: "shared-key" }]
       ]);
-      assert.deepEqual(JSON.parse(harness.creationInputs[0].metadata.assistant_routing), { mode: "senior", review: false, workflowEngineId: "codex" });
+      assert.deepEqual(JSON.parse(harness.creationInputs[0].metadata.assistant_routing), { mode: "senior", review: true, workflowEngineId: "codex" });
       assert.deepEqual(vibe64AssistantSelectionFromMetadata(harness.creationInputs[0].metadata), initialPlanSelection);
       assert.equal(harness.creationInputs[0].metadata.repository_branch, chooseBranch ? repositoryBranch.name : undefined);
       assert.deepEqual(harness.creationInputs[0].sourceContext, {
@@ -4355,7 +4355,7 @@ test("source-bearing Learning creation retains the original source context, poli
     assert.equal(f.creationInputs.length, 1);
     assert.deepEqual(f.creationInputs[0].sourceContext, { expectedCommit: "d".repeat(40), vibe64User: actor });
     assert.equal(f.creationInputs[0].metadata.created_by, actor.username);
-    assert.deepEqual(JSON.parse(f.creationInputs[0].metadata.assistant_routing), { mode: "junior", review: false, workflowEngineId: "claude" });
+    assert.deepEqual(JSON.parse(f.creationInputs[0].metadata.assistant_routing), { mode: "junior", review: true, workflowEngineId: "claude" });
     assert.deepEqual(vibe64AssistantSelectionFromMetadata(f.creationInputs[0].metadata), teacher);
     assert.equal(setup.length, 1);
     assert.equal(setup[0].runtime, f.runtime);

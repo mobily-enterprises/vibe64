@@ -84,9 +84,14 @@ continuation through its existing actions. An explanation or offer alone does no
 authorise another turn. Colleague's watches treat Waiting as needing attention.
 
 Auto always uses a separate Senior review after implementation, even when Senior
-implemented it or both roles use the same model. The **Deslop** switch adds
-behavior-preserving cleanup to Senior review; turning it off does not disable
-review. Unfinished checks continue in Senior review; substantial necessary rework
+implemented it or both roles use the same model. The **Deslop during Senior
+review** switch in the chat-mode menu adds behavior-preserving cleanup to Senior
+review. It is on for new chats. Turning it off opens **Turn off Deslop?**: without
+Deslop, code quality suffers and the project can become hard to change and may
+crash and burn over time, unless you ask the AI to “Deslop” in the chat yourself.
+Skip it only for quick throwaway projects. **Cancel** keeps Deslop on; **Turn off
+Deslop** saves it off for this chat. Turning it off does not disable review.
+Chats created before Deslop became the default keep their saved setting. Unfinished checks continue in Senior review; substantial necessary rework
 returns to Junior and comes back for another review. A changed product requirement
 needs your decision. Planning-only work waits for your request to implement it.
 

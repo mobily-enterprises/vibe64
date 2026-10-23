@@ -160,7 +160,8 @@ out with its reason; fix it with **Configure model routing**. An existing chat
 whose orchestrator is no longer connected shows **Open AI Accounts** and, when
 another orchestrator is available, **Switch to** that orchestrator (for example
 **Switch to Claude Code**). Switching keeps the chat's Senior, Junior or Auto
-mode (Custom becomes Senior), turns automatic review off, and keeps your draft.
+mode (Custom becomes Senior), keeps the chat's **Deslop** choice (on for a Custom
+chat), and keeps your draft.
 The controls and results are the same on desktop and mobile. Colleague can
 inspect redacted readiness and explain these steps; secret entry and connection
 consent remain your interaction in **AI Accounts**.
