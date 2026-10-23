@@ -134,7 +134,11 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
       if (nativeCommands && !["codex", "claude"].includes(actual.engineId)) throw new Error("Unexpected native test engine.");
       return { ...actual, catalogRevision: "current" };
     },
+    async listAssistantCapabilities() {
+      return { ok: true, engines: [{ engineId: "codex", modelProviders: [{ id: "openai", connected: true }] }] };
+    },
     async resolveAssistantPurpose(input) {
+      if (input.purpose === "colleague" && observations.colleagueAvailable === false) return { available: false };
       if (input.purpose === (observations.expectedHelperWorkload || "conversation_summary")) {
         observations.helperCalls.push({ purpose: input });
         return { available: observations.helperAvailable !== false, message: observations.helperUnavailableReason || "", effectiveSelection: { ...selection, modelId: "cheap-helper" }, connectionIdentity: "member-helper" };
@@ -230,9 +234,7 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
   events.register({ id: "test.colleague-replies", matches: event => event.entity === "colleague", handle: event => { observations.realtime.push(event); } });
   observations.routingInitialized = [];
   const accounts = {
-    workflows: [{ available: true, engineId: "codex" }],
-    async readModelRoutingWorkflows() { return { ok: true, workflows: structuredClone(accounts.workflows) }; },
-    async initializeModelRouting(input) { observations.routingInitialized.push(input.engineIds); return { ok: true, initialized: [] }; }
+    async initializeModelRouting(input) { observations.routingInitialized.push(input.vibe64User.username); return { ok: true, initialized: [] }; }
   };
   const service = createColleagueService({ actions, terminals, events, watchPollMs, watchDebounceMs: 1, systemRoot: root, accounts });
   const operation = withVibe64ActionContext({
@@ -2504,7 +2506,7 @@ test("first Colleague setup rejects without admission and retries the same autho
       : f.send(text, messageId, { focus });
     const rejected = await send();
     assert.equal(rejected.ok, false);
-    assert.equal(rejected.error, "Connect an AI and configure an available Senior model in AI Accounts before using Colleague.");
+    assert.equal(rejected.error, "Connect an AI and choose an available Colleague model in AI setup before using Colleague.");
     const failed = await f.service.wait(f.context);
     assert.equal(failed.status, "failed");
     assert.equal(failed.error, rejected.error);
@@ -2532,14 +2534,14 @@ test("first Colleague setup rejects without admission and retries the same autho
 
 test("a Colleague read reports no usable model before anything is sent, and stops once one is usable", async t => {
   const f = await fixture(t, []);
-  f.accounts.workflows = [{ available: false, engineId: "codex" }];
+  f.observations.colleagueAvailable = false;
   const before = await f.service.read({}, f.context);
   assert.equal(before.modelSetupRequired, true);
   assert.equal(before.status, "ready", "a read records no failure");
   assert.deepEqual(before.messages, []);
   assert.equal(f.observations.creates, 0);
   assert.deepEqual(f.observations.routingInitialized, [], "a read saves no routing");
-  f.accounts.workflows = [{ available: true, engineId: "codex" }];
+  f.observations.colleagueAvailable = true;
   const after = await f.service.read({}, f.context);
   assert.notEqual(after.modelSetupRequired, true);
   await f.service.close();
@@ -2547,14 +2549,14 @@ test("a Colleague read reports no usable model before anything is sent, and stop
 
 test("an earlier no-model failure stops blocking Colleague as soon as an AI is usable", async t => {
   const f = await fixture(t, [reply("Now I can teach.")]);
-  f.accounts.workflows = [{ available: false, engineId: "codex" }];
+  f.observations.colleagueAvailable = false;
   const rejected = await f.send("Teach me this step.", "before-ai");
   assert.equal(rejected.ok, false);
   const failed = await f.service.wait(f.context);
   assert.equal(failed.status, "failed");
   assert.equal(failed.modelSetupRequired, true);
   assert.equal((await f.service.read({}, f.context)).modelSetupRequired, true, "still no usable AI");
-  f.accounts.workflows = [{ available: true, engineId: "codex" }];
+  f.observations.colleagueAvailable = true;
   const current = await f.service.read({}, f.context);
   assert.notEqual(current.modelSetupRequired, true, "the stored failure does not outlive the missing AI");
   assert.equal(current.error, "");
@@ -2566,20 +2568,21 @@ test("an earlier no-model failure stops blocking Colleague as soon as an AI is u
   await f.service.close();
 });
 
-test("Colleague saves a connected workflow's recommended routing before choosing its first model", async t => {
+test("Colleague saves the recommended AI setup before choosing its first model", async t => {
   const f = await fixture(t, [reply("Routing was ready.")]);
   const resolvePurpose = f.terminals.resolveAssistantPurpose;
   t.mock.method(f.terminals, "resolveAssistantPurpose", async function (...args) {
-    // Like an existing Codex login: the workflow is available, but its roles
-    // are usable only after the recommended routing has been saved.
-    return f.observations.routingInitialized.length ? resolvePurpose.apply(this, args) : { available: false };
+    // Like an existing Codex login: Colleague is usable only after the
+    // recommended AI setup has been saved.
+    return f.observations.routingInitialized.length ? resolvePurpose.apply(this, args)
+      : { available: false, reasonCode: "vibe64_assistant_role_unconfigured" };
   });
   assert.notEqual((await f.service.read({}, f.context)).modelSetupRequired, true);
   assert.deepEqual(f.observations.routingInitialized, []);
   assert.equal((await f.send("Hello", "first-message")).ok, true);
   const finished = await f.service.wait(f.context);
   assert.equal(finished.status, "ready", finished.error);
-  assert.deepEqual(f.observations.routingInitialized, [["codex"]]);
+  assert.equal(f.observations.routingInitialized.length, 1);
   assert.equal(f.observations.starts.length, 1);
   await f.service.close();
 });
@@ -3487,20 +3490,20 @@ test("Colleague requires explicit Stop before model selection after native provi
   }
 });
 
-test("Colleague selects a workflow's routed Senior only when it uses the expected provider", async t => {
+test("Colleague selects the routed Colleague only when it uses the expected provider", async t => {
   const f = await fixture(t, []);
   const select = input => f.actions.execute({ actionId: "vibe64.colleague.model.select", input, context: f.context });
   await assert.rejects(select({ workflowEngineId: "codex", modelProviderId: "deepseek" }),
-    /This workflow's Senior uses a different AI\. Review its model routing in AI Accounts\./);
+    /Colleague's model in AI setup uses a different AI\. Review AI setup\./);
   assert.equal((await f.service.read({}, f.context)).assistantSelection, null);
   const selected = await select({ workflowEngineId: "codex", modelProviderId: "openai" });
   assert.deepEqual(selected.assistantSelection, selection);
-  assert.deepEqual(f.observations.routingInitialized, [["codex"], ["codex"]], "routing fills unset roles before resolving Senior");
+  assert.equal(f.observations.routingInitialized.length, 2, "routing fills unset roles before resolving Colleague");
   const resolvePurpose = f.terminals.resolveAssistantPurpose;
   t.mock.method(f.terminals, "resolveAssistantPurpose", async function (...args) {
-    return args[0].purpose === "senior" ? { available: false } : resolvePurpose.apply(this, args);
+    return args[0].purpose === "colleague" ? { available: false } : resolvePurpose.apply(this, args);
   });
-  await assert.rejects(select({ workflowEngineId: "claude" }), /This AI has no Senior model ready for Colleague yet\./);
+  await assert.rejects(select({ workflowEngineId: "claude" }), /Colleague has no model ready yet\. Review AI setup\./);
   await assert.rejects(select({}), /Choose a model for Colleague\./);
   assert.deepEqual((await f.service.read({}, f.context)).assistantSelection, selection, "a refused change keeps the saved model");
 });
@@ -3954,8 +3957,7 @@ test("the extracted retained Helper keeps its original native receipt and cleanu
     terminals: f.terminals, root: path.join(f.root, "colleague", "shared-parent", "helpers"),
     receipt: { read: () => structuredClone(retained), async write(value) {
       retained = structuredClone(value); writes.push(structuredClone(value));
-    } },
-    workflowEngineId: async () => "codex"
+    } }
   });
   await assert.rejects(helperFor().runHelper(f.context, {
     workloadId: "conversation_summary", stableContext: "Summarize only these supplied words. No tools.",

@@ -56,10 +56,8 @@ import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
   defineVibe64AgentExecutionProfileRequest,
-  vibe64AgentExecutionProfileAuditSnapshot,
-  vibe64AssistantSelectionFromMetadata
+  vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
-import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import {
   runVibe64AgentWriteExclusive
 } from "@local/vibe64-runtime/server/agentWriteLock";
@@ -242,9 +240,7 @@ async function describeSourceEditorAgentProvider(terminalService = null, context
   if (typeof terminalService?.resolveAssistantPurpose !== "function") {
     throw sourceEditorError("Assistant routing is unavailable for source explanations.", "vibe64_source_explanation_authorization_unavailable", {}, 503);
   }
-  const workflowEngineId = assistantRoutingFromMetadata(context.session?.metadata)?.workflowEngineId ||
-    vibe64AssistantSelectionFromMetadata(context.session?.metadata).engineId;
-  const decision = await terminalService.resolveAssistantPurpose({ purpose: "source_explanation", workflowEngineId }, {
+  const decision = await terminalService.resolveAssistantPurpose({ purpose: "source_explanation" }, {
     runtime: context.runtime, session: context.session, vibe64User: context.vibe64User
   });
   if (!decision.available) throw sourceEditorError(decision.message, decision.reasonCode, {}, 409);

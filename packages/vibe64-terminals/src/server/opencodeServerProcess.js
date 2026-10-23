@@ -19,7 +19,6 @@ import {
 } from "@local/vibe64-genesis/server";
 import { codexAppServerRuntimeBaseDir } from "@local/vibe64-runtime/server";
 import { VIBE64_ASSISTANT_ENGINE_IDS } from "@local/vibe64-runtime/shared";
-import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { requireCompletedNativeConversationReplacement } from "./assistantChangeover.js";
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import { prepareOpenCodeSessionCommandEnvironment } from "./agentCommandEnvironment.js";
@@ -282,8 +281,7 @@ function createOpenCodeHostPreparation({
     return { key: context.key, connection, failure: openCodeRuntimeFailure, async configure() {
       let helperModelId = "";
       if (!context.assistantScope && getAssistantManager()) {
-        const workflowEngineId = assistantRoutingFromMetadata(context.session.metadata)?.workflowEngineId || context.selection.engineId;
-        const helper = await getAssistantManager().resolveAssistantPurpose({ purpose: "helper", workflowEngineId }, {
+        const helper = await getAssistantManager().resolveAssistantPurpose({ purpose: "quick_helper" }, {
           ...context, vibe64User: options.vibe64User || null
         }).catch(() => null);
         if (helper?.available && helper.effectiveSelection.engineId === VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE &&

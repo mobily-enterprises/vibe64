@@ -1430,6 +1430,43 @@ upgrade still interprets older state with the included row it was written for.
 Focused evidence: `freeModelRetirementUpgrade.unit.test.js`,
 `colleagueConversationUpgrade.unit.test.js` and `stateUpgrades.unit.test.js`.
 
+## Owner and team AI setups (`20261023-owner-team-ai-setups`)
+
+Model routing stops being one block of roles per workflow tool. Schema 5 of
+`ai-connections/routing.json` holds `owner` (Senior, Junior, Router, Colleague,
+Fix it with AI, Explain & check, Quick helper) and `nonOwner` (the team setup:
+Colleague, Fix it with AI, Explain & check, Quick helper). Main chat always
+runs on the owner's setup; Shared backup is gone. This upgrade follows
+`20261022-free-model-retirement` and has two owners, run in this order, each
+with its own backup root under `upgrades/backups/20261023-owner-team-ai-setups/`:
+
+- Terminals (`upgradeTeamSetupSessions`, `sessions/`) removes `workflowEngineId`
+  from Main and temporary chat preferences and from a renewal's successor
+  routing. A temporary chat opened by **Fix it with AI** for an Update conflict
+  becomes mode `fix` with review off. A retained routing request or goal keeps
+  its delivery, stage, identities and `workflowEngineId`; its schema-4 snapshot
+  becomes `{ revision, owner }` from the block of that tool, its `helper`
+  assignment becomes `quickHelper`. Nothing is replayed.
+- Accounts (`upgradeTeamSetupRouting`, `routing/`) picks the source block with
+  Senior or Junior, preferring one with both, then Claude Code, Codex and
+  OpenCode. It becomes `owner` with Helper renamed Quick helper (an unset or off Helper
+  takes a Helper review's `proposed` choice), an explicit `null` kept off, and
+  Colleague, Fix it with AI and Explain & check following Senior, Junior and
+  Quick helper. The Shared backup becomes the team's Colleague and Quick helper
+  when it is Workspace use offline; a plan sign-in (Claude Code with Anthropic,
+  Codex with OpenAI), a curated provider marked personal or an OpenCode
+  connection saved for its owner is personal, leaving `nonOwner` empty with the
+  warning "Team members will be asked to wait until the owner sets up team AI."
+  Other blocks are reported as left in the backup. `revision` increments.
+
+Both use the backed-up publisher with no provider call. Check is read-only and
+reports, as INFO, routing that earlier pending upgrades will prepare first.
+Schema 5 or an absent file is a no-op, so a retry after success changes
+nothing. The live store and resolver refuse schema 4 and any `workflowEngineId`
+preference with `vibe64_assistant_routing_upgrade_required` until this upgrade
+runs. Focused evidence: `teamSetupUpgrade.unit.test.js` and
+`stateUpgrades.unit.test.js`.
+
 ## Training learner notes (no upgrade)
 
 Learner notes add, per learner under

@@ -2454,7 +2454,7 @@ function createSessionRenewalController({
           );
         }
         const successorAssistant = await resolveSuccessorAssistant(
-          { assistantSelection: input.assistantSelection, workflowEngineId: input.workflowEngineId },
+          { assistantSelection: input.assistantSelection },
           {
             session: idleSession,
             vibe64User: input.vibe64User || null

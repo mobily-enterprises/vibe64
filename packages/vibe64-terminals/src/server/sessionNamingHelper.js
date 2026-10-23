@@ -1,11 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
-import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
-import {
-  vibe64AgentExecutionProfileAuditSnapshot,
-  vibe64AssistantSelectionFromMetadata
-} from "@local/vibe64-runtime/shared";
+import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 
 function text(value = "") {
   return String(value || "").trim();
@@ -72,9 +68,7 @@ async function runSessionNamingHelper({
   // The owning task retains failed cleanup across restarts. Close its exact
   // native conversation before starting another helper.
   await cleanup();
-  const workflowEngineId = assistantRoutingFromMetadata(session.metadata)?.workflowEngineId ||
-    vibe64AssistantSelectionFromMetadata(session.metadata).engineId;
-  const decision = await agent.resolveAssistantPurpose({ purpose: profile.workloadId, workflowEngineId }, agentContext);
+  const decision = await agent.resolveAssistantPurpose({ purpose: profile.workloadId }, agentContext);
   if (!decision.available) throw namingError(decision.message, decision.reasonCode);
   const id = `naming_${randomUUID()}`;
   const root = path.join(runtime.stateRoot, "assistant-helpers", id);

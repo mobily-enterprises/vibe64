@@ -178,11 +178,11 @@ function mountMainConversationLog({ render = false, speech = { voices: [{ id: "c
 }
 
 describe("Vibe64 direct session view", () => {
-  it("admits Incoming repair by its requested Senior role without requiring Junior", async () => {
+  it("admits every repair on Fix it with AI and refuses it without Fix access or on an archived session", async () => {
     const component = fs.readFileSync(componentPath, "utf8");
     const owner = component.match(/async function startTemporaryAiTask\(options = \{\}\) \{[\s\S]*?\n\}/u)?.[0];
     expect(owner).toBeTruthy();
-    const allowed = new Set(["senior"]);
+    const allowed = new Set(["fix"]);
     const assistantCanUsePurpose = vi.fn(purpose => allowed.has(purpose));
     const props = { sessionSelectionArchived: false };
     const emit = vi.fn();
@@ -190,23 +190,18 @@ describe("Vibe64 direct session view", () => {
     const temporaryAiWorkspace = vue.ref({ startTask });
     const start = new Function("assistantCanUsePurpose", "props", "emit", "temporaryAiWorkspace",
       `${owner}\nreturn startTemporaryAiTask;`)(assistantCanUsePurpose, props, emit, temporaryAiWorkspace);
-    const incoming = { title: "Resolve Incoming merge", initialRouting: { mode: "senior", review: false } };
+    const incoming = { title: "Resolve Incoming merge" };
     expect(await start(incoming)).toEqual({ ok: true });
     expect(startTask).toHaveBeenCalledExactlyOnceWith(incoming);
-    expect(assistantCanUsePurpose).toHaveBeenLastCalledWith("senior");
+    expect(assistantCanUsePurpose).toHaveBeenLastCalledWith("fix");
     expect(emit).toHaveBeenCalledExactlyOnceWith("chat-attention");
     expect(await start({ recoveryOperation: "update" })).toEqual({ ok: true });
-    expect(await start({ title: "Ordinary Junior task" })).toBe(false);
-    expect(startTask).toHaveBeenCalledTimes(2);
-    allowed.delete("senior");
-    allowed.add("junior");
-    expect(await start(incoming)).toBe(false);
-    expect(await start({ recoveryOperation: "update" })).toBe(false);
-    expect(startTask).toHaveBeenCalledTimes(2);
-    expect(await start({ title: "Ordinary Junior task" })).toEqual({ ok: true });
     props.sessionSelectionArchived = true;
-    expect(await start({ title: "Ordinary Junior task" })).toBe(false);
-    expect(startTask).toHaveBeenCalledTimes(3);
+    expect(await start(incoming)).toBe(false);
+    props.sessionSelectionArchived = false;
+    allowed.clear();
+    expect(await start(incoming)).toBe(false);
+    expect(startTask).toHaveBeenCalledTimes(2);
   });
 
   it("sends implementation as new human work and uses the workflow action for stage continuation", async () => {
@@ -913,9 +908,9 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain('class="studio-autopilot__activity"');
     expect(component).toContain(".studio-autopilot__activity:empty");
     expect(composable).toContain("Vibe64—not Temporary AI—owns every repository operation");
-    expect(component).toContain(':disabled="repositoryRecoverySending || !(saveWorkActivityIsUpdate ? assistantSeniorAllowed : assistantJuniorAllowed)"');
-    expect(component).toContain(":title=\"(saveWorkActivityIsUpdate ? assistantSeniorAllowed : assistantJuniorAllowed) ? 'Open temporary AI to resolve this repository problem' : saveWorkActivityIsUpdate ? assistantSeniorRestrictionMessage : assistantJuniorRestrictionMessage\"");
-    expect(component).toContain(":title=\"assistantJuniorAllowed ? 'Open temporary AI to resolve workspace preparation' : assistantJuniorRestrictionMessage\"");
+    expect(component).toContain(':disabled="repositoryRecoverySending || !assistantFixAllowed"');
+    expect(component).toContain(":title=\"assistantFixAllowed ? 'Open temporary AI to resolve this repository problem' : assistantFixRestrictionMessage\"");
+    expect(component).toContain(":title=\"assistantFixAllowed ? 'Open temporary AI to resolve workspace preparation' : assistantFixRestrictionMessage\"");
     expect(component).toContain("assistantDirectAllowed: assistantDirectAllowed.value");
     expect(component).toContain("assistantRestrictionMessage: assistantRestrictionMessage.value");
     expect(composable).toContain("Do not run git add, commit, checkout, switch, restore, reset, clean, stash, merge, rebase");
@@ -1170,7 +1165,7 @@ describe("Vibe64 direct session view", () => {
       "utf8"
     );
 
-    expect(component).toContain(":ask-codex-to-fix-preview-identity=\"assistantJuniorAllowed ? askCodexToFixPreviewIdentity : null\"");
+    expect(component).toContain(":ask-codex-to-fix-preview-identity=\"assistantFixAllowed ? askCodexToFixPreviewIdentity : null\"");
     expect(launchControls).toContain("previewIdentityFixAvailable");
     expect(launchControls).toContain("<Vibe64TemporaryAiFixAction");
     expect(launchControls).toContain("previewIdentityFixSending");

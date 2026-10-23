@@ -13,7 +13,7 @@ vi.mock("../../packages/vibe64-accounts/src/client/composables/useCodexProviderC
 vi.mock("../../packages/vibe64-accounts/src/client/composables/useAiConnections.js", () => ({ useAiConnections: () => mocks.openCode }));
 vi.mock("../../packages/vibe64-accounts/src/client/composables/useModelRouting.js", async (importOriginal) => ({
   routingSuggestsChanges: (await importOriginal()).routingSuggestsChanges,
-  useModelRouting: ({ workflowsOnly }) => workflowsOnly ? mocks.routing.workflows : mocks.routing.configuration
+  useModelRouting: () => mocks.routing
 }));
 vi.mock("../../packages/vibe64-accounts/src/client/studio/AIAccountsSetup.vue", () => ({ default: {} }));
 vi.mock("../../packages/vibe64-accounts/src/client/studio/ModelRoutingForm.vue", () => ({ default: {} }));
@@ -51,6 +51,13 @@ function mount(component, props, provides = []) {
 }
 const resource = (data) => ({ data: ref(data), reload: vi.fn().mockResolvedValue({}) });
 
+// The owner's Senior as the AI setup read shows it, and whether it is usable now.
+function routeSenior({ assignment = null, recommendation = null, available = true } = {}) {
+  const pick = (selection) => selection && { schema: "vibe64.assistant-selection.v1", ...selection };
+  mocks.routing.setups.value = { owner: { roles: { senior: { value: pick(assignment), effective: pick(assignment),
+    recommendation: pick(recommendation) } } } };
+  mocks.routing.viewerDecisions.value = { senior: { available } };
+}
 beforeEach(() => {
   storage = new Map();
   vi.stubGlobal("window", Object.assign(new EventTarget(), { localStorage: {
@@ -67,10 +74,7 @@ beforeEach(() => {
   mocks.curated.resource.isInitialLoading = ref(false);
   mocks.openCode = { connections: ref([]), loadError: ref(""), isInitialLoading: ref(false), reload: vi.fn().mockResolvedValue({}),
     removingProviderId: ref(""), savingProviderId: ref(""), updatingModelAccessProviderId: ref("") };
-  const workflows = ref([]);
-  const engines = ref([]);
-  mocks.routing = { workflows: { resource: { reload: vi.fn().mockResolvedValue({}) }, workflows },
-    configuration: { resource: { reload: vi.fn().mockResolvedValue({}) }, engines } };
+  mocks.routing = { resource: { reload: vi.fn().mockResolvedValue({}) }, setups: ref(null), viewerDecisions: ref({}) };
   // A mounted Colleague as the real bridge sees it: the workflow's routed Senior,
   // refused when that Senior uses another provider.
   const selection = ref(null);
@@ -323,14 +327,11 @@ describe("flow", () => {
   };
   const connectClaude = () => {
     mocks.accounts.status.value.accounts[1].connected = true;
-    mocks.routing.workflows.workflows.value = [{ engineId: "claude", available: true }];
-    mocks.routing.configuration.engines.value = [{ engineId: "claude", roles: {
-      senior: { assignment: { engineId: "claude", modelProviderId: "anthropic", modelId: "opus" } } } }];
+    routeSenior({ assignment: { engineId: "claude", modelProviderId: "anthropic", modelId: "opus" } });
   };
   const routeDeepSeek = (senior) => {
     mocks.curated.resource.data.value.providers.find(({ id }) => id === "deepseek").connected = true;
-    mocks.routing.workflows.workflows.value = [{ engineId: "codex", available: true }];
-    mocks.routing.configuration.engines.value = [{ engineId: "codex", roles: { senior } }];
+    routeSenior(senior);
   };
 
   it("starts first-run at Choose and routes a new person straight to success", async () => {
@@ -356,8 +357,7 @@ describe("flow", () => {
     let accountsRead;
     mocks.accounts.statusResource.reload.mockReturnValueOnce(new Promise((resolve) => { accountsRead = resolve; }));
     const finishing = state.finish();
-    await vi.waitFor(() => expect(mocks.routing.configuration.resource.reload).toHaveBeenCalled());
-    expect(mocks.routing.workflows.resource.reload).toHaveBeenCalled();
+    await vi.waitFor(() => expect(mocks.routing.resource.reload).toHaveBeenCalled());
     expect([state.verifying, state.verifyLabel]).toEqual([true, "Setting up Claude as your main AI…"]);
     accountsRead({});
     await finishing;
@@ -425,7 +425,7 @@ describe("flow", () => {
     expect(state.screen).toBe("connect");
     expect(state.warning).toContain("Claude isn't connected yet");
     mocks.accounts.status.value.accounts[1].connected = true;
-    mocks.routing.workflows.workflows.value = [{ engineId: "claude", available: false }];
+    routeSenior({ available: false });
     await state.finish();
     expect([state.screen, state.notReady]).toEqual(["connect", true]);
     expect(mocks.colleague.selectForWorkflow).not.toHaveBeenCalled();
@@ -450,9 +450,7 @@ describe("flow", () => {
     mocks.curated.resource.data.value.providers.find(({ id }) => id === "deepseek").connected = true;
     await onboarding.reload();
     expect(state.cardAction(state.cards.find(({ id }) => id === "deepseek"))).toBe("main");
-    mocks.routing.workflows.workflows.value = [{ engineId: "codex", available: true }];
-    mocks.routing.configuration.engines.value = [{ engineId: "codex", roles: {
-      senior: { assignment: { engineId: "codex", modelProviderId: "openai", modelId: "gpt" } } } }];
+    routeSenior({ assignment: { engineId: "codex", modelProviderId: "openai", modelId: "gpt" } });
     await state.keep(codex);
     expect(state.screen).toBe("success");
     expect(mocks.colleague.selectForWorkflow).not.toHaveBeenCalled();
@@ -487,8 +485,7 @@ describe("flow", () => {
     expect([state.screen, state.autoRouting, state.currentSenior?.name]).toEqual(["routing", false, "Codex"]);
     mocks.colleague.seniorProviders.codex = "deepseek";
     state.routingForm = { applySuggested: vi.fn(async () => {
-      mocks.routing.configuration.engines.value = [{ engineId: "codex", roles: {
-        senior: { assignment: { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } } } }];
+      routeSenior({ assignment: { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } });
       await state.routingDone();
     }) };
     await state.useAsMain();
@@ -505,8 +502,7 @@ describe("flow", () => {
     expect([state.screen, state.autoRouting, state.currentSenior]).toEqual(["routing", true, null]);
     mocks.colleague.seniorProviders.codex = "deepseek";
     state.routingForm = { applySuggested: vi.fn(async () => {
-      mocks.routing.configuration.engines.value = [{ engineId: "codex", roles: {
-        senior: { assignment: { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } } } }];
+      routeSenior({ assignment: { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" } });
       await state.routingDone();
     }) };
     await vi.waitFor(() => expect(state.screen).toBe("success"));

@@ -28,7 +28,7 @@ async function fixture(t, { agentRuns = [], conversationLog = [] } = {}) {
   const startCommit = git("rev-parse", "HEAD").trim();
   const session = { sessionId, sessionRoot: path.join(root, "runtime/sessions", sessionId), agentRuns,
     metadata: { source_kind: "session_clone", source_path_authority: "managed_session_source", source_path: source,
-      assistant_routing: JSON.stringify({ mode: "senior", workflowEngineId: "codex" }) } };
+      assistant_routing: JSON.stringify({ mode: "senior" }) } };
   const project = {
     async runInProjectContext(slug, operation) { assert.equal(slug, projectSlug); return operation(); },
     async createRuntime() { return { async getSession(id) { assert.equal(id, sessionId); return session; } }; }
@@ -57,7 +57,6 @@ test("changes against the start commit include committed, uncommitted and new wo
 
   const read = await f.evidence.read({ attempt: f.attempt });
   assert.equal(read.session.agentWorking, false);
-  assert.equal(read.session.workflowEngineId, "codex");
   assert.equal(read.empty, false);
   assert.deepEqual(read.evidence.changes.files, [
     { path: "index.html", status: "changed", added: 0, removed: 1 },
@@ -120,7 +119,7 @@ test("the conversation is the bounded end of the Main chat, learner and agent te
 test("while the coding agent works nothing is read; a lesson without a start commit cannot be reviewed", async t => {
   const f = await fixture(t, { agentRuns: [{ active: true }] });
   const read = await f.evidence.read({ attempt: f.attempt, conversation: true });
-  assert.deepEqual(read, { session: { sessionId, agentWorking: true, workflowEngineId: "codex" }, evidence: null, empty: false });
+  assert.deepEqual(read, { session: { sessionId, agentWorking: true }, evidence: null, empty: false });
   assert.deepEqual(f.commands, []);
   assert.deepEqual(f.actionCalls, []);
   const { startCommit: _startCommit, ...older } = f.attempt.preparation;

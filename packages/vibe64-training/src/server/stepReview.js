@@ -56,14 +56,13 @@ function createTrainingStepReviewer({ learners, terminals } = {}) {
 
   // One review at a time per learner; the learner store holds the lock, the
   // Helper's private root and its receipt.
-  async function review({ actor, lesson, step, evidence, workflowEngineId, context = {} } = {}) {
+  async function review({ actor, lesson, step, evidence, context = {} } = {}) {
     if (["resolveAssistantPurpose", "resolveEphemeralAgentExecutionProfile", "runEphemeralAgentChatTurn", "deleteEphemeralAgentConversation"]
       .some(name => typeof terminals?.[name] !== "function")) {
       throw reviewFailure("Reviews need an AI Helper, which this installation does not provide.", "VIBE64_TRAINING_CHECK_UNDECLARED");
     }
     return learners.runReviewExclusive({ actor }, async ({ root, receipt }) => {
-      const helper = createRetainedConversationHelper({ terminals, root, receipt, scopePrefix: "review",
-        workflowEngineId: async () => workflowEngineId });
+      const helper = createRetainedConversationHelper({ terminals, root, receipt, scopePrefix: "review" });
       let text;
       try {
         // The Helper runs as the admitted learner, on their own AI accounts.

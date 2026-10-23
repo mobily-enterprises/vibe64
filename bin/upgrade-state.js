@@ -18,6 +18,8 @@ import { upgradeClaudeRejectedInput } from "@local/vibe64-terminals/server/assis
 
 import { upgradeIndependentProviderCredentials } from "@local/vibe64-accounts/server/providerCredentialsUpgrade";
 import { retireFreeModelRouting } from "@local/vibe64-accounts/server/freeModelRetirementUpgrade";
+import { upgradeTeamSetupRouting } from "@local/vibe64-accounts/server/teamSetupRoutingUpgrade";
+import { upgradeTeamSetupSessions } from "@local/vibe64-terminals/server/teamSetupSessionUpgrade";
 
 try {
   const { values } = parseArgs({ options: {
@@ -69,6 +71,8 @@ try {
     retireColleagueLearningWatches,
     retireFreeModelRouting,
     retireColleagueFreeModel,
+    upgradeTeamSetupSessions,
+    upgradeTeamSetupRouting,
     upgradePlanProgress,
     upgradeAssistantWorkflow,
     upgradeClaudeRejectedInput,

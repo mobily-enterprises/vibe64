@@ -47,10 +47,12 @@
     "./server/envUserValues": "./src/server/envUserValues.js",
     "./shared": "./src/shared/index.js",
     "./server/assistantRoutingStore": "./src/server/assistantRoutingStore.js",
+    "./server/workspaceTeam": "./src/server/workspaceTeam.js",
     "./shared/curatedCodexProviders": "./src/shared/curatedCodexProviders.js",
     "./server/codexProviderConnections": "./src/server/codexProviderConnections.js",
     "./server/stateUpgrades/routingV2Format": "./src/server/stateUpgrades/routingV2Format.js",
-    "./server/stateUpgrades/routingV3Format": "./src/server/stateUpgrades/routingV3Format.js"
+    "./server/stateUpgrades/routingV3Format": "./src/server/stateUpgrades/routingV3Format.js",
+    "./server/stateUpgrades/routingV4Format": "./src/server/stateUpgrades/routingV4Format.js"
   },
   "jskit": {
     "kind": "runtime",

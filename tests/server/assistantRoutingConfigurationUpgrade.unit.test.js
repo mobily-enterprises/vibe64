@@ -10,6 +10,7 @@ import { upgradeAssistantRoles } from "../../packages/vibe64-accounts/src/server
 import { upgradeAssistantRouting, upgradeAssistantRoutingConfiguration } from "../../packages/vibe64-accounts/src/server/assistantRoutingUpgrade.js";
 import { defineVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 import { createVibe64SessionStore, VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server";
+import { validateAssistantRoutingConfiguration as validateV4Routing } from "../../packages/vibe64-core/src/server/stateUpgrades/routingV4Format.js";
 import routingFormatCompatibility from "../../packages/vibe64-core/src/server/stateUpgrades/20261006-routing-format-compatibility.js";
 
 const selection = (engineId, modelProviderId, modelId, selectionSource = "explicit") => ({
@@ -160,7 +161,7 @@ test("preflight is read-only on fresh state and on active, temporary and archive
 test("the live routing store reads only the current format and never upgrades during reads", async (t) => {
   const f = await fixture(t, { populated: false });
   const store = createAssistantRoutingStore({ systemRoot: f.systemRoot });
-  assert.deepEqual(await store.read(), { schemaVersion: 4, revision: 0, orchestrators: {} });
+  assert.deepEqual(await store.read(), { schemaVersion: 5, revision: 0, owner: {}, nonOwner: {} });
   await assert.rejects(stat(f.systemRoot), { code: "ENOENT" });
   const config = upgradeAssistantRoutingConfiguration({ configuration: old({ economy: pickle }), connections: [included] });
   await mkdir(path.dirname(f.routingPath), { recursive: true });
@@ -168,11 +169,12 @@ test("the live routing store reads only the current format and never upgrades du
   await upgradeAssistantRoles({ systemRoot: f.systemRoot, backupRoot: path.join(f.systemRoot, "upgrades/backups/roles"), apply: true, report() {} });
   await assert.rejects(store.read(), { code: "vibe64_assistant_routing_upgrade_required" });
   await upgradeAssistantHelpers({ systemRoot: f.systemRoot, backupRoot: path.join(f.systemRoot, "upgrades/backups/helper"), apply: true, report() {} });
-  const saved = await store.read();
-  assert.equal(saved.schemaVersion, 4);
-  assert.deepEqual((await store.read()).orchestrators.codex.helperRoutingReview, { ...config.orchestrators.codex.helperRoutingReview, reason: "helper_choices_differ" });
-  await assert.rejects(store.write({ codex: { senior: pickle } }, saved.revision), /unsupported shape/u);
-  assert.deepEqual(await store.read(), saved);
+  await assert.rejects(store.read(), { code: "vibe64_assistant_routing_upgrade_required" }, "schema 4 waits for the owner and team AI setups upgrade");
+  const saved = validateV4Routing(JSON.parse(await readFile(f.routingPath, "utf8")));
+  assert.deepEqual(saved.orchestrators.codex.helperRoutingReview, { ...config.orchestrators.codex.helperRoutingReview, reason: "helper_choices_differ" });
+  const helperBytes = await readFile(f.routingPath, "utf8");
+  await assert.rejects(store.write({ owner: { senior: pickle }, nonOwner: {} }, saved.revision), { code: "vibe64_assistant_routing_upgrade_required" });
+  assert.equal(await readFile(f.routingPath, "utf8"), helperBytes);
   await writeFile(f.routingPath, JSON.stringify(old()));
   const original = await readFile(f.routingPath, "utf8");
   await assert.rejects(store.read(), {

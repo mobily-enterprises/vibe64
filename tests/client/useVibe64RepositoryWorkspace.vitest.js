@@ -116,7 +116,7 @@ describe("useVibe64RepositoryWorkspace", () => {
     );
     const workspace = useVibe64RepositoryWorkspace(ref({
       assistantDirectAllowed: false,
-      assistantJuniorAllowed: false,
+      assistantFixAllowed: false,
       requestSaveWork,
       sessionId: "session-1",
       sessionsApiPath: "/api/app/sample/vibe64/sessions"

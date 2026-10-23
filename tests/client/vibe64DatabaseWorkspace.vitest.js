@@ -267,12 +267,12 @@ describe("Database Workspace automatic table admission", () => {
   });
   it("uses Helper availability independently of Code and shows the shared helper model", async () => {
     const fixture = mountDatabaseWorkspace({ initialState: { ...firstState, assistant: {
-      available: true, engineId: "opencode", model: "deepseek-flash", variantId: "high", backupUsed: true
+      available: true, engineId: "opencode", model: "deepseek-flash", variantId: "high"
     } } });
     try {
       fixture.props.assistantAvailable = false;
       await flushWorkspace(fixture.runQuery);
-      expect(fixture.workspace.assistantStatusLabel).toBe("OpenCode (deepseek-flash high) · Shared backup");
+      expect(fixture.workspace.assistantStatusLabel).toBe("OpenCode (deepseek-flash high)");
       fixture.workspace.assistantBinding.runtime.value.draft.value = "Explain this table";
       await fixture.workspace.assistantBinding.runtime.value.submit();
       expect(mocks.database.askAssistant).toHaveBeenCalledTimes(1);

@@ -1,6 +1,7 @@
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { createAssistantRoutingStore, validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/assistantRoutingStore";
-import { ASSISTANT_ROUTING_ASSIGNMENTS } from "@local/vibe64-runtime/shared/assistantRouting";
+import { ASSISTANT_SETUP_ROLES } from "@local/vibe64-runtime/shared/assistantRouting";
+import { readWorkspaceTeam } from "@local/vibe64-core/server/workspaceTeam";
 import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { watch } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -2081,7 +2082,7 @@ function createService({
         rotateCodexMarker: finalizedCodexAuthSession
       });
       if (["codex", "claude"].includes(accountId) && account?.connected === true && exitCode === 0) {
-        account.routing = await initializeModelRouting({ engineIds: [accountId], vibe64User });
+        account.routing = await initializeModelRouting({ vibe64User });
       }
       // Reads of the finished session reuse this status instead of asking the CLI again.
       const finishedMetadata = authMetadata(id);
@@ -2274,111 +2275,88 @@ function createService({
   async function readModelRouting(input = {}) {
     return accountsResult(async () => {
       if ((input.choiceSearch !== undefined || input.choiceOffset !== undefined || input.choiceRole) &&
-          (!input.engineId || !ASSISTANT_ROUTING_ASSIGNMENTS.includes(input.choiceRole))) {
-        return { ok: false, code: "vibe64_routing_choice_scope", error: "Choose the workflow and role before searching model choices." };
+          !ASSISTANT_SETUP_ROLES[input.setup]?.includes(input.choiceRole)) {
+        return { ok: false, code: "vibe64_routing_choice_scope", error: "Choose the setup and role before searching model choices." };
       }
       const saved = await routingStore().read();
       const view = await routingView(saved, input);
       if (!input.choiceRole) return view;
-      const engine = view.engines.find(engine => engine.engineId === input.engineId);
-      if (!engine || engine.error) return { ok: false, code: "vibe64_routing_choices_unavailable", error: "Model choices are unavailable for this workflow. Open AI Accounts for details." };
       const search = String(input.choiceSearch || "").toLowerCase();
-      const choices = engine.roles[input.choiceRole].choices.filter(choice =>
+      const choices = view.setups[input.setup].roles[input.choiceRole].choices.filter(choice =>
         [choice.engineId, choice.agentId, choice.modelProviderId, choice.modelId, choice.label, choice.providerLabel]
           .some(value => String(value || "").toLowerCase().includes(search)));
       const offset = input.choiceOffset || 0;
       return { ok: true, revision: saved.revision, canConfigure: view.canConfigure,
-        engineId: engine.engineId, choiceRole: input.choiceRole, choiceCount: choices.length,
+        setup: input.setup, choiceRole: input.choiceRole, choiceCount: choices.length,
         choices: choices.slice(offset, offset + 20), nextOffset: offset + 20 < choices.length ? offset + 20 : null };
     });
   }
 
-  function routingView(configuration, input, workflowsOnly = false) {
+  async function routingView(configuration, input) {
     if (typeof inspectRoutingConfiguration !== "function") throw new Error("Model routing is unavailable on this host.");
-    const canConfigure = !codexManagementError(input);
-    return inspectRoutingConfiguration(configuration, { vibe64User: input.vibe64User || null,
-      ...(input.engineId ? { engineId: input.engineId } : {}),
-      ...(input.includeOtherModels ? { includeOtherModels: true } : {}),
-      includeCollaboratorPreview: canConfigure, workflowsOnly }).then((result) => ({
-      ok: true, revision: configuration.revision, canConfigure, ...result
-    }));
+    const [result, team] = await Promise.all([
+      inspectRoutingConfiguration(configuration, { vibe64User: input.vibe64User || null,
+        ...(input.preferProvider ? { preferProvider: input.preferProvider } : {}) }), readWorkspaceTeam()]);
+    return { ok: true, revision: configuration.revision, canConfigure: !codexManagementError(input), team, ...result };
   }
 
   const sameRoutingSelection = (left, right) => ["engineId", "agentId", "modelProviderId", "modelId", "variantId"]
     .every((key) => left?.[key] === right?.[key]);
 
-  // Internal setup used after connection setup and explicit session creation.
-  // It accepts no assignments; user-directed changes stay on owner-only Save.
+  // Internal setup used after connection setup, explicit session creation and
+  // the team card. It accepts no values: it fills only the setup's absent roles
+  // from recommendations; user-directed changes stay on owner-only Save.
   async function initializeModelRouting(input = {}) {
     return accountsResult(async () => {
-      const engineIds = input.engineIds || [];
-      if (!Array.isArray(engineIds) || engineIds.some((id) => !["codex", "claude", "opencode"].includes(id))) {
-        throw new Error("Choose supported orchestrators to initialize model routing.");
+      const setup = input.setup || "owner";
+      const preferProvider = input.preferProvider || null;
+      if (!ASSISTANT_SETUP_ROLES[setup] || preferProvider && (typeof preferProvider.modelProviderId !== "string" ||
+          !["codex", "claude", "opencode"].includes(preferProvider.engineId))) {
+        throw new Error("Choose a supported AI setup to initialize model routing.");
       }
       const saved = await routingStore().read();
-      const pendingEngineIds = engineIds.filter((id) => !ASSISTANT_ROUTING_ASSIGNMENTS.every((role) =>
-        Object.hasOwn(saved.orchestrators[id] || {}, role)));
-      if (!pendingEngineIds.length) return { ok: true, initialized: [] };
-      const views = await Promise.all(pendingEngineIds.map((engineId) => routingView(saved, { ...input, engineId })));
-      const engines = views.flatMap((view) => view.engines);
-      const orchestrators = structuredClone(saved.orchestrators);
+      if (ASSISTANT_SETUP_ROLES[setup].every((role) => Object.hasOwn(saved[setup], role))) return { ok: true, initialized: [] };
+      const values = (await routingView(saved, { ...input, ...(preferProvider ? { preferProvider: { ...preferProvider, setup } } : {}) }))
+        .setups[setup].setupValues;
+      const next = { ...saved[setup] };
       const initialized = [];
-      for (const engine of engines) {
-        if (!engineIds.includes(engine.engineId) || engine.error) continue;
-        const assignments = orchestrators[engine.engineId] || {};
-        for (const role of ASSISTANT_ROUTING_ASSIGNMENTS) {
-          if (Object.hasOwn(assignments, role) || !engine.setupAssignments[role]) continue;
-          assignments[role] = engine.setupAssignments[role];
-          initialized.push({ engineId: engine.engineId, role });
-        }
-        if (Object.keys(assignments).length) orchestrators[engine.engineId] = assignments;
+      for (const role of ASSISTANT_SETUP_ROLES[setup]) {
+        if (Object.hasOwn(next, role) || !values[role]) continue;
+        next[role] = values[role];
+        initialized.push({ setup, role });
       }
       if (initialized.length) {
-        await routingStore().write(orchestrators, saved.revision);
+        await routingStore().write({ ...saved, [setup]: next }, saved.revision);
         await publishAccountChanged("codex", { reason: "model-routing-initialized" });
       }
-      const errors = engines.filter((engine) => engineIds.includes(engine.engineId) && engine.error);
-      if (errors.length) return { ok: false, initialized, error: errors.map((engine) => `${engine.label}: ${engine.error}`).join(" ") };
       return { ok: true, initialized };
     });
   }
 
+  // A draft names whole role values per setup; omitted roles keep their saved value.
   async function routingDraft(input) {
     const saved = await routingStore().read();
     if (input.revision !== saved.revision) throw Object.assign(new Error("Model routing changed in another tab. Reload and review the current choices."), {
       code: "vibe64_assistant_routing_stale", statusCode: 409
     });
-    if (!input.orchestrators || typeof input.orchestrators !== "object" || Array.isArray(input.orchestrators)) {
-      throw new Error("Reload model routing and review your choices.");
+    const configuration = { schemaVersion: 5, revision: saved.revision, owner: { ...saved.owner }, nonOwner: { ...saved.nonOwner } };
+    for (const setup of Object.keys(ASSISTANT_SETUP_ROLES)) {
+      const changes = input[setup];
+      if (changes === undefined) continue;
+      if (!changes || typeof changes !== "object" || Array.isArray(changes) ||
+          Object.keys(changes).some((role) => !ASSISTANT_SETUP_ROLES[setup].includes(role))) throw new Error("Unknown model routing role.");
+      Object.assign(configuration[setup], structuredClone(changes));
     }
-    if (input.engineId && (!["codex", "claude", "opencode"].includes(input.engineId) ||
-        Object.keys(input.orchestrators).some((id) => id !== input.engineId) ||
-        input.reviewedHelperWorkflows?.some((id) => id !== input.engineId))) {
-      throw new Error("Save routing only for the selected orchestrator.");
-    }
-    const orchestrators = structuredClone(saved.orchestrators);
-    for (const [engineId, assignments] of Object.entries(input.orchestrators)) {
-      if (!["codex", "claude", "opencode"].includes(engineId)) throw new Error("Choose a supported workflow orchestrator.");
-      if (!assignments || typeof assignments !== "object" || Array.isArray(assignments) ||
-          Object.keys(assignments).some((role) => !ASSISTANT_ROUTING_ASSIGNMENTS.includes(role))) throw new Error("Unknown model routing role.");
-      orchestrators[engineId] = { ...orchestrators[engineId], ...assignments };
-    }
-    const reviewed = input.reviewedHelperWorkflows || [];
-    if (!Array.isArray(reviewed) || reviewed.some((id) => !Object.hasOwn(orchestrators, id))) throw new Error("Choose the workflow whose helper settings you reviewed.");
-    for (const engineId of reviewed) {
-      if (!orchestrators[engineId].helper) throw new Error("Choose Helper before confirming the migrated helper settings.");
-      delete orchestrators[engineId].helperRoutingReview;
-    }
-    const configuration = validateAssistantRoutingConfiguration({ schemaVersion: 4, revision: saved.revision, orchestrators });
-    return { saved, configuration };
+    // A Senior/Junior tool mismatch is reported on the Junior field, not as a shape error.
+    const { senior, junior } = configuration.owner;
+    const pairError = senior?.schema && junior?.schema && senior.engineId !== junior.engineId ? "Senior and Junior must run in the same tool." : "";
+    validateAssistantRoutingConfiguration(pairError ? { ...configuration, owner: { ...configuration.owner, junior: null } } : configuration);
+    return { saved, configuration, pairError };
   }
 
   return Object.freeze({
     initializeModelRouting,
     readModelRouting,
-    async readModelRoutingWorkflows(input = {}) {
-      return accountsResult(async () => routingView(await routingStore().read(), input, true));
-    },
     async previewModelRouting(input = {}) {
       return accountsResult(async () => {
         const failure = codexManagementError(input);
@@ -2391,25 +2369,24 @@ function createService({
       return accountsResult(async () => {
         const failure = codexManagementError(input);
         if (failure) return failure;
-        const { configuration, saved } = await routingDraft(input);
+        const { configuration, saved, pairError } = await routingDraft(input);
         const view = await routingView(configuration, input);
-        const fieldErrors = {};
-        for (const engine of view.engines) {
-          for (const role of ASSISTANT_ROUTING_ASSIGNMENTS) {
-            const selection = configuration.orchestrators[engine.engineId]?.[role];
-            if (!selection) continue;
-            const previous = saved.orchestrators[engine.engineId]?.[role];
+        const fieldErrors = pairError ? { "owner.junior": pairError } : {};
+        for (const setup of Object.keys(ASSISTANT_SETUP_ROLES)) {
+          for (const role of ASSISTANT_SETUP_ROLES[setup]) {
+            const selection = configuration[setup][role];
+            if (!selection?.schema) continue;
+            const previous = saved[setup][role];
             const unchanged = sameRoutingSelection(previous, selection);
-            if (engine.roles[role].error && (!unchanged || role === "helper" && input.reviewedHelperWorkflows?.includes(engine.engineId))) {
-              fieldErrors[`${engine.engineId}.${role}`] = engine.roles[role].error;
-            }
-            selection.selectionSource = unchanged ? previous.selectionSource
-              : selection.selectionSource === "recommended" && sameRoutingSelection(selection, engine.roles[role].recommendation)
+            const state = view.setups[setup].roles[role];
+            if (state.error && !unchanged) fieldErrors[`${setup}.${role}`] = state.error;
+            selection.selectionSource = unchanged && previous?.schema ? previous.selectionSource
+              : selection.selectionSource === "recommended" && sameRoutingSelection(selection, state.recommendation)
                 ? "recommended" : "explicit";
           }
         }
         if (Object.keys(fieldErrors).length) return { ok: false, error: "Review the highlighted routing choices.", fieldErrors };
-        await routingStore().write(configuration.orchestrators, input.revision);
+        await routingStore().write(configuration, input.revision);
         await publishAccountChanged("codex", { reason: "model-routing-updated" });
         return readModelRouting(input);
       });
@@ -2565,8 +2542,7 @@ function createService({
         const failure = codexManagementError(input);
         if (failure) return failure;
         const providers = await codexProviders.change(input.modelProviderId, input);
-        const engineIds = [input.engineId];
-        const routing = await initializeModelRouting({ engineIds, vibe64User: input.vibe64User });
+        const routing = await initializeModelRouting({ vibe64User: input.vibe64User });
         await publishAccountChanged(input.engineId, { reason: "provider-key-saved" });
         return { ok: true, providers, routing };
       });

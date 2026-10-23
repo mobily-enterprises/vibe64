@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readdirSync, readFileSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -8,9 +9,8 @@ import { createService } from "@local/vibe64-accounts/server/service";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { assistantModePrompt, assistantGoalManagementMessage, assistantRoutingPrompt, assistantWorkflowInstructions, parseRoutingDecision, recommendedRoutingAssignments,
-  routingAssignmentSelection, routingModelChoices, routingModelScore, resolveAssistantPurpose,
-  ASSISTANT_ROUTING_ROLES } from "@local/vibe64-runtime/shared/assistantRouting";
-import { VIBE64_AGENT_EXECUTION_WORKLOAD_IDS } from "@local/vibe64-runtime/shared";
+  routingAssignmentSelection, routingModelChoices, routingModelScore, routingRunsInChoices, resolveAssistantPurpose, assistantRoutingPreferences,
+  assistantRoutingSetupFor, ASSISTANT_PURPOSE_ROLES, MAIN_CHAT_PURPOSES } from "@local/vibe64-runtime/shared/assistantRouting";
 import { curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import routingScores from "../../packages/vibe64-runtime/src/shared/assistantRoutingScores.json" with { type: "json" };
 
@@ -67,30 +67,31 @@ test("synthetic goal presentation uses native command/output identity and preser
   }
 });
 
+const SCORED_ROLES = ["senior", "junior", "router", "quickHelper"];
+const recommend = (catalogs, options = {}) => recommendedRoutingAssignments({ catalogs: [catalogs].flat(), ...options });
+
 test("Codex recommendations prefer native OpenAI for every role when DeepSeek and GLM are connected", () => {
   for (const providers of [["openai"], ["openai", "zai-coding-plan"],
     ["openai", "deepseek"], ["openai", "zai-coding-plan", "deepseek"]]) {
-    const roles = recommendedRoutingAssignments(catalog(providers));
+    const roles = recommend(catalog(providers));
     assert.equal(roles.senior.modelId, "gpt-6-astra");
     assert.equal(roles.junior.modelId, "gpt-6-sol");
-    assert.equal(roles.helper.modelId, "gpt-6-luna");
-    assert.equal(roles.router.modelId, roles.helper.modelId);
-    assert.equal(roles.helper.variantId, "low");
+    assert.equal(roles.quickHelper.modelId, "gpt-6-luna");
+    assert.equal(roles.router.modelId, roles.quickHelper.modelId);
+    assert.equal(roles.quickHelper.variantId, "low");
+    assert.deepEqual([roles.colleague, roles.fix, roles.explain], [{ follows: "senior" }, { follows: "junior" }, { follows: "quickHelper" }]);
   }
 });
 
-test("every role ranks Claude above OpenAI, then DeepSeek, then both GLM connections", () => {
-  const groups = [["anthropic"], ["openai"], ["deepseek"], ["zai", "zai-coding-plan"]];
-  for (const role of [...ASSISTANT_ROUTING_ROLES, "sharedBackup"]) {
-    for (let i = 0; i < groups.length - 1; i += 1) {
-      const scores = providers => routingScores.models.filter(row => providers.includes(row.modelProviderId))
-        .map(row => routingModelScore(row, role));
-      assert.ok(Math.min(...scores(groups[i])) > Math.max(...scores(groups[i + 1])), `${role}: ${groups[i]} > ${groups[i + 1]}`);
-    }
+test("every role ranks Claude above every other provider, and DeepSeek above both GLM connections", () => {
+  const scores = (role, providers) => routingScores.models.filter(row => providers.includes(row.modelProviderId)).map(row => routingModelScore(row, role));
+  for (const role of SCORED_ROLES) {
+    assert.ok(Math.min(...scores(role, ["anthropic"])) > Math.max(...scores(role, ["openai", "deepseek", "zai", "zai-coding-plan"])), role);
+    assert.ok(Math.max(...scores(role, ["deepseek"])) > Math.max(...scores(role, ["zai", "zai-coding-plan"])), role);
   }
 });
 
-test("live recommendations follow provider priority after availability and personal Backup eligibility", () => {
+test("live recommendations follow provider priority; the team setup never recommends personal plans", () => {
   const codex = catalog();
   const claude = catalog(["anthropic", "deepseek", "zai-coding-plan"], "claude");
   const catalogs = [codex, claude];
@@ -98,46 +99,57 @@ test("live recommendations follow provider priority after availability and perso
     engineId: engine.engineId, modelProviderId: provider.id, available: true,
     ownerOnly: ["anthropic", "openai"].includes(provider.id)
   })));
-  const native = recommendedRoutingAssignments(claude);
-  assert.equal(native.senior.modelId, "opus");
-  assert.equal(native.senior.variantId, "high");
-  assert.equal(native.junior.modelId, "opus");
-  assert.equal(native.junior.variantId, "medium", "Claude Code Junior is Opus with Medium thinking");
-  assert.equal(recommendedRoutingAssignments(codex).junior.modelId, "gpt-6-sol");
-  assert.equal(recommendedRoutingAssignments(codex).junior.variantId, "high", "other workflows keep their Junior thinking");
-  assert.equal(native.helper.modelId, "haiku");
-  assert.equal(native.router.modelId, "haiku");
-  const assignments = { helper: { ...recommendedRoutingAssignments(codex).helper, modelProviderId: "deepseek", modelId: "deepseek-flash" } };
-  const original = structuredClone(assignments);
+  const owner = recommend(claude);
+  assert.deepEqual([owner.senior.modelId, owner.senior.variantId], ["opus", "high"]);
+  assert.deepEqual([owner.junior.modelId, owner.junior.variantId], ["opus", "medium"], "Claude Code Junior is Opus with Medium thinking");
+  assert.deepEqual([owner.quickHelper.modelId, owner.router.modelId, owner.router.variantId], ["haiku", "haiku", "low"]);
+  assert.deepEqual([recommend(codex).junior.modelId, recommend(codex).junior.variantId], ["gpt-6-sol", "high"]);
+  const values = { quickHelper: { ...recommend(codex).quickHelper, modelProviderId: "deepseek", modelId: "deepseek-flash" } };
+  const original = structuredClone(values);
   for (const [providerId, modelId] of [["anthropic", "haiku"], ["openai", "gpt-6-luna"], ["deepseek", "deepseek-flash"], ["zai-coding-plan", "glm-5.3"]]) {
     for (const ordered of [catalogs, [...catalogs].reverse()]) {
-      const roles = recommendedRoutingAssignments(codex, { catalogs: ordered, connectionAccess, assignments });
-      for (const role of ["helper", "router"]) {
-        assert.equal(roles[role].modelProviderId, providerId, role);
-        assert.equal(roles[role].modelId, modelId, role);
-      }
-      assert.ok(["deepseek", "zai-coding-plan"].includes(roles.sharedBackup.modelProviderId), "personal models cannot supply a shared Backup");
+      const roles = recommend(ordered, { connectionAccess, values });
+      for (const role of ["quickHelper", "router"]) assert.deepEqual([roles[role].modelProviderId, roles[role].modelId], [providerId, modelId], role);
+      const team = recommend(ordered, { setup: "nonOwner", connectionAccess, values });
+      assert.ok(["deepseek", "zai-coding-plan"].includes(team.colleague.modelProviderId), "personal models never serve team members");
+      assert.deepEqual([team.fix, team.explain], [{ follows: "colleague" }, { follows: "quickHelper" }]);
     }
     for (const access of connectionAccess) if (access.modelProviderId === providerId) access.available = false;
   }
-  assert.deepEqual(assignments, original, "recommendation inspection preserves saved choices");
+  assert.deepEqual(values, original, "recommendation inspection preserves saved choices");
+});
+
+test("the gold standard team setup is DeepSeek in Claude Code; preferProvider keeps roles on one provider and tool", () => {
+  const catalogs = [catalog(["anthropic", "deepseek"], "claude"), catalog(["deepseek"], "codex"), catalog(["deepseek"], "opencode")];
+  const connectionAccess = catalogs.flatMap(({ engineId, modelProviders }) => modelProviders.map(({ id }) => ({
+    engineId, modelProviderId: id, available: true, ownerOnly: id === "anthropic" })));
+  const team = recommend(catalogs, { setup: "nonOwner", connectionAccess });
+  assert.deepEqual([team.colleague.engineId, team.colleague.modelId, team.colleague.variantId], ["claude", "deepseek-v4-pro", "high"]);
+  assert.deepEqual([team.quickHelper.engineId, team.quickHelper.modelId, team.quickHelper.variantId], ["claude", "deepseek-flash", "low"]);
+  assert.equal(recommend(catalogs, { connectionAccess }).senior.modelId, "opus");
+  const preferred = recommend(catalogs, { connectionAccess, preferProvider: { modelProviderId: "deepseek", engineId: "opencode" } });
+  for (const role of SCORED_ROLES) assert.deepEqual([preferred[role].engineId, preferred[role].modelProviderId], ["opencode", "deepseek"], role);
+  const values = { senior: preferred.senior };
+  assert.equal(recommend(catalogs, { connectionAccess, values, preferProvider: { modelProviderId: "zai", engineId: "codex" } }).senior, values.senior,
+    "a provider with no valid choice keeps the role's current value");
 });
 
 test("unlisted native models retain provider priority without admitting unsupported routes", () => {
   const codex = catalog();
   const claude = catalog(["anthropic"], "claude");
   claude.modelProviders[0].models = [{ id: "claude-sonnet-4-6", label: "Claude Sonnet", status: "available", variants: [{ id: "low" }, { id: "high" }] }];
-  assert.equal(recommendedRoutingAssignments(codex, { catalogs: [codex, claude] }).helper.modelId, "claude-sonnet-4-6");
+  assert.equal(recommend([codex, claude]).quickHelper.modelId, "claude-sonnet-4-6");
   codex.modelProviders[0].models = [{ id: "gpt-new", label: "GPT", status: "available", variants: [] }];
-  const roles = recommendedRoutingAssignments(codex);
-  for (const role of ASSISTANT_ROUTING_ROLES) assert.equal(roles[role].modelId, "gpt-new", role);
-  assert.equal(routingModelScore({ engineId: "opencode", modelProviderId: "unknown", modelId: "unknown" }, "helper"), 2);
+  const roles = recommend(codex);
+  for (const role of ["senior", "junior", "router"]) assert.equal(roles[role].modelId, "gpt-new", role);
+  assert.equal(roles.quickHelper.modelId, "deepseek-flash", "DeepSeek Flash is a strong Quick helper");
+  assert.equal(routingModelScore({ engineId: "opencode", modelProviderId: "unknown", modelId: "unknown" }, "quickHelper"), 2);
 });
 
 test("a saved assignment is revalidated without replacing it with a recommendation", () => {
   const engine = catalog();
-  const saved = { ...recommendedRoutingAssignments(engine).junior, modelProviderId: "zai-coding-plan", modelId: "glm-5.3", selectionSource: "explicit" };
-  assert.equal(recommendedRoutingAssignments(engine).junior.modelId, "gpt-6-sol");
+  const saved = { ...recommend(engine).junior, modelProviderId: "zai-coding-plan", modelId: "glm-5.3", selectionSource: "explicit" };
+  assert.equal(recommend(engine).junior.modelId, "gpt-6-sol");
   assert.equal(routingAssignmentSelection(engine, saved).modelId, "glm-5.3");
   engine.modelProviders.find(({ id }) => id === "deepseek").models.push({ id: "deepseek-unqualified", label: "deepseek-unqualified", status: "available", variants: [{ id: "high" }] });
   assert.throws(() => routingAssignmentSelection(engine, { ...saved, modelProviderId: "deepseek", modelId: "deepseek-unqualified" }), /has not been verified/);
@@ -256,7 +268,7 @@ test("routing receipts and reviewer identity survive transcript storage and relo
   const assistantRouting = { requestedMode: "auto", resolvedMode: "review", reason: "implementation", parentMessageId: "code-request", settingsRevision: 2 };
   await store.writeConversationUserMessage("routing", { messageId: "review-request", text: "Automatic review", turnMetadata: {
     actorId: "app", actorDisplayName: "Automatic review", engineId: "codex",
-    assistantSelection: recommendedRoutingAssignments(catalog()).senior, assistantRouting
+    assistantSelection: recommend(catalog()).senior, assistantRouting
   } });
   await store.writeConversationAssistantMessage("routing", { text: "Checked the code." });
   const [turn] = await create().readConversationTail("routing");
@@ -282,39 +294,66 @@ test("routing saves are atomic, revision-checked, private and preserve unreadabl
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-routing-"));
   t.after(() => rm(root, { force: true, recursive: true }));
   const store = createAssistantRoutingStore({ systemRoot: root });
-  const first = await store.write({ codex: recommendedRoutingAssignments(catalog()) }, 0);
+  assert.deepEqual(await store.read(), { schemaVersion: 5, revision: 0, owner: {}, nonOwner: {} });
+  const { senior, junior } = recommend(catalog());
+  const first = await store.write({ owner: { senior, junior, colleague: { follows: "senior" } }, nonOwner: {} }, 0);
   assert.equal(first.revision, 1);
-  await assert.rejects(store.write({}, 0), /another tab/);
+  await assert.rejects(store.write({ owner: {}, nonOwner: {} }, 0), /another tab/);
   assert.deepEqual(await store.read(), first);
   const file = path.join(root, "ai-connections", "routing.json");
+  for (const owner of [{ colleague: { follows: "junior" }, fix: { follows: "colleague" } }, { senior: { follows: "junior" } },
+    { colleague: { follows: "colleague" } }, { colleague: { follows: "senior", extra: true } }, { sharedBackup: senior }]) {
+    await assert.rejects(store.write({ owner, nonOwner: {} }, 1), /unsupported shape/);
+  }
+  await assert.rejects(store.write({ owner: {}, nonOwner: { senior } }, 1), /unsupported shape/, "team members have no main chat roles");
+  await assert.rejects(store.write({ owner: { senior, junior: { ...junior, engineId: "opencode" } }, nonOwner: {} }, 1), /same tool/);
+  await writeFile(file, JSON.stringify({ schemaVersion: 4, revision: 1, orchestrators: {} }));
+  await assert.rejects(store.read(), (error) => error.code === "vibe64_assistant_routing_upgrade_required");
   await writeFile(file, "broken");
-  await assert.rejects(store.write({}, 1));
+  await assert.rejects(store.write({ owner: {}, nonOwner: {} }, 1));
   assert.equal(await readFile(file, "utf8"), "broken");
 });
 
-test("Accounts exposes safe choices and validates owner-managed assignments", async (t) => {
+test("Accounts reads and saves both setups for the owner only and refuses personal team models per field", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-routing-accounts-"));
   t.after(() => rm(root, { force: true, recursive: true }));
   const manager = createSessionAgentManager({
-    providers: [{ id: "codex", transportId: "codex_app_server", async capabilities() { return catalog(); } }],
-    readAssistantAccess: async () => ({ available: true, ownerOnly: false, connectionIdentity: "fixture-connection" })
+    providers: [{ id: "codex", transportId: "codex_app_server", async capabilities() { return catalog(); } },
+      { id: "opencode", transportId: "opencode_server", async capabilities() { return catalog(["deepseek"], "opencode"); } }],
+    readAssistantAccess: async ({ modelProviderId }) => ({ available: true, ownerOnly: modelProviderId === "openai", connectionIdentity: `fixture-${modelProviderId}` })
   });
   const service = createService({ systemRoot: root, targetRoot: root,
     inspectRoutingConfiguration: (configuration, options) => manager.inspectRoutingConfiguration(configuration, options),
     canManageCodex: ({ vibe64User } = {}) => vibe64User?.role === "owner" ? null : { ok: false, error: "Owner required" } });
+  assert.equal(service.readModelRoutingWorkflows, undefined, "the per-tool workflow read is gone");
+  const owner = { role: "owner" };
   const data = await service.readModelRouting();
   assert.equal(data.ok, true, JSON.stringify(data));
-  assert.equal(data.engines[0].roles.senior.assignment, null);
-  const recommendations = recommendedRoutingAssignments(catalog());
-  const input = { revision: data.revision, orchestrators: { codex: Object.fromEntries(
-    ASSISTANT_ROUTING_ROLES.map((role) => [role, recommendations[role]])
-  ) } };
+  assert.deepEqual(data.team, { available: false, ownerName: "", memberCount: 0 });
+  assert.deepEqual([data.setups.owner.roles.senior.value, data.setups.owner.roles.senior.configured], [null, false]);
+  assert.equal(data.setups.nonOwner.roles.colleague.choices.some(({ modelProviderId }) => modelProviderId === "openai"), false,
+    "team pickers list no personal choices");
+  const recommendations = recommend(catalog());
+  const input = { revision: data.revision, owner: Object.fromEntries(SCORED_ROLES.map((role) => [role, recommendations[role]])) };
   assert.equal((await service.saveModelRouting(input)).ok, false);
-  const saved = await service.saveModelRouting({ ...input, vibe64User: { role: "owner" } });
+  const saved = await service.saveModelRouting({ ...input, vibe64User: owner });
   assert.equal(saved.ok, true, JSON.stringify(saved));
-  assert.equal(saved.engines[0].roles.junior.assignment.modelId, "gpt-6-sol");
-  assert.equal(saved.engines[0].roles.junior.assignment.selectionSource, "recommended");
-  assert.equal((await service.saveModelRouting({ ...input, vibe64User: { role: "owner" } })).ok, false);
+  assert.equal(saved.setups.owner.roles.junior.value.modelId, "gpt-6-sol");
+  assert.equal(saved.setups.owner.roles.junior.value.selectionSource, "recommended");
+  assert.equal((await service.saveModelRouting({ ...input, vibe64User: owner })).ok, false, "a stale revision is refused");
+  const personal = await service.saveModelRouting({ revision: saved.revision, nonOwner: { colleague: recommendations.senior }, vibe64User: owner });
+  assert.equal(personal.ok, false);
+  assert.equal(personal.fieldErrors["nonOwner.colleague"], "Team members can't use personal plans. Choose a Workspace-use model.");
+  const split = await service.saveModelRouting({ revision: saved.revision, owner: { junior: { ...recommendations.junior, engineId: "opencode", agentId: "opencode", modelProviderId: "deepseek", modelId: "deepseek-flash" } }, vibe64User: owner });
+  assert.equal(split.fieldErrors["owner.junior"], "Senior and Junior must run in the same tool.");
+  const team = await service.initializeModelRouting({ setup: "nonOwner", vibe64User: owner,
+    preferProvider: { modelProviderId: "deepseek", engineId: "codex" } });
+  assert.equal(team.ok, true, JSON.stringify(team));
+  const filled = await createAssistantRoutingStore({ systemRoot: root }).read();
+  assert.equal(filled.nonOwner.quickHelper.modelProviderId, "deepseek");
+  assert.deepEqual([filled.nonOwner.fix, filled.nonOwner.explain], [{ follows: "colleague" }, { follows: "quickHelper" }]);
+  assert.deepEqual(filled.owner, (await createAssistantRoutingStore({ systemRoot: root }).read()).owner);
+  assert.deepEqual((await service.initializeModelRouting({ setup: "nonOwner", vibe64User: owner })).initialized, [], "filled roles are kept");
 });
 
 function routingFixture() {
@@ -331,17 +370,16 @@ function routingFixture() {
     { engineId: "codex", modelProviderId: "zai-coding-plan", ownerOnly: true, available: true, connectionIdentity: "glm-plan-1" },
     { engineId: "opencode", modelProviderId: "opencode", ownerOnly: false, available: true, connectionIdentity: "workspace-zen" }
   ];
-  const roles = recommendedRoutingAssignments(codex);
-  // Resolver/access cases retain their original saved shared DeepSeek routes;
-  // a recommendation change does not rewrite those existing assignments.
+  const roles = recommend(codex);
+  // Resolver/access cases keep explicit shared DeepSeek routes independently of recommendation policy.
   roles.junior = routingAssignmentSelection(codex, { ...roles.junior, modelProviderId: "deepseek", modelId: "deepseek-flash" });
-  roles.helper = { ...roles.junior, variantId: "low" };
-  roles.router = { ...roles.helper };
-  const backup = recommendedRoutingAssignments(opencode).junior;
-  const configuration = { revision: 4, orchestrators: { codex: { ...roles, sharedBackup: backup } } };
-  const input = { workflowEngineId: "codex", actor: { id: "member", role: "member" }, configuration,
-    catalogs: [codex, opencode], connectionAccess };
-  return { input, roles, backup, resolve: (purpose, options = {}) => resolveAssistantPurpose({ ...input, purpose, ...options }) };
+  roles.quickHelper = { ...roles.junior, variantId: "low" };
+  roles.router = { ...roles.quickHelper };
+  const zen = recommend(opencode).senior;
+  const configuration = { revision: 4, owner: roles,
+    nonOwner: { colleague: zen, quickHelper: roles.quickHelper, fix: { follows: "colleague" }, explain: { follows: "quickHelper" } } };
+  const input = { actor: { id: "member", role: "member" }, configuration, catalogs: [codex, opencode], connectionAccess };
+  return { input, roles, zen, resolve: (purpose, options = {}) => resolveAssistantPurpose({ ...input, purpose, ...options }) };
 }
 
 test("shipped score JSON has complete bounded scores and unique exact route identities", () => {
@@ -352,10 +390,10 @@ test("shipped score JSON has complete bounded scores and unique exact route iden
     identities.add(key);
     assert.ok(["codex", "claude", "opencode"].includes(row.engineId));
     assert.ok(row.modelProviderId && row.modelId);
-    for (const role of ASSISTANT_ROUTING_ROLES) assert.equal(routingModelScore(row, role), row.scores[role]);
+    for (const role of SCORED_ROLES) assert.equal(routingModelScore(row, role), row.scores[role]);
   }
   for (const scores of [routingScores.defaultScores, ...Object.values(routingScores.providerDefaultScores), ...routingScores.models.map(({ scores }) => scores)]) {
-    assert.deepEqual(Object.keys(scores).sort(), [...ASSISTANT_ROUTING_ROLES].sort());
+    assert.deepEqual(Object.keys(scores).sort(), [...SCORED_ROLES].sort());
     for (const value of Object.values(scores)) assert.ok(Number.isInteger(value) && value >= 1 && value <= 10);
   }
 });
@@ -376,320 +414,210 @@ test("scores do not admit unsupported Codex history routes; isolated Router has 
   assert.equal(routingModelScore({ ...ordinary, modelId: "fake-deepseek-flash" }, "junior"), 4);
 });
 
-test("independent recommendations compare engines, retain saved ties and filter Backup by connection scope", () => {
-  const f = routingFixture();
-  const options = { catalogs: f.input.catalogs, connectionAccess: f.input.connectionAccess };
-  const before = structuredClone(f.input);
-  const recommended = recommendedRoutingAssignments(f.input.catalogs[1], options);
-  assert.equal(recommended.senior.engineId, "opencode");
-  assert.equal(recommended.junior.engineId, "opencode");
-  assert.equal(recommended.helper.engineId, "codex");
-  assert.equal(recommended.router.modelId, "gpt-6-luna");
-  assert.equal(recommended.sharedBackup.modelProviderId, "deepseek");
-  assert.deepEqual(f.input, before, "recommendations do not rewrite saved assignments");
-  const withoutDeepSeek = { ...options, catalogs: [catalog(["openai"]), f.input.catalogs[1]] };
-  for (const catalogs of [withoutDeepSeek.catalogs, [...withoutDeepSeek.catalogs].reverse()]) {
-    const choices = recommendedRoutingAssignments(f.input.catalogs[1], { ...withoutDeepSeek, catalogs });
-    assert.equal(choices.helper.modelId, "gpt-6-luna");
-    assert.equal(choices.router.modelId, "gpt-6-luna");
-    assert.equal(choices.sharedBackup.modelId, "zen-model");
-  }
-  f.input.connectionAccess.find(({ modelProviderId }) => modelProviderId === "deepseek").ownerOnly = true;
-  assert.equal(recommendedRoutingAssignments(f.input.catalogs[0], options).sharedBackup.modelId, "zen-model");
-  const engine = f.input.catalogs[1];
-  engine.modelProviders[0].models.push(...["model-b", "model-a"].map((id) => ({ id, status: "available", variants: [] })));
-  assert.equal(recommendedRoutingAssignments(engine).junior.modelId, "model-a");
-  const saved = { ...recommendedRoutingAssignments(engine).junior, modelId: "model-b" };
-  engine.modelProviders[0].models.reverse();
-  assert.equal(recommendedRoutingAssignments(engine, { assignments: { junior: saved } }).junior.modelId, "model-b");
-});
-
-test("equal recommendations prefer the workflow orchestrator before saved or alphabetical ties", () => {
-  const catalogs = [
-    ["claude", "claude_stream_json"], ["codex", "codex_app_server"], ["opencode", "opencode_server"]
-  ].map(([engineId, transportId]) => ({
+test("equal recommendations prefer Claude Code, then saved choices, then a stable order", () => {
+  const catalogs = [["claude", "claude_stream_json"], ["codex", "codex_app_server"], ["opencode", "opencode_server"]].map(([engineId, transportId]) => ({
     ...catalog(["deepseek"]), engineId, transportId,
     defaults: { agentId: engineId, modelProviderId: "deepseek", modelId: "deepseek-flash", variantId: "low" },
     agents: [{ id: engineId, mode: "primary" }]
   }));
-  const connectionAccess = catalogs.map(({ engineId }) => ({
-    engineId, modelProviderId: "deepseek", ownerOnly: false, available: true
-  }));
-  for (const engine of catalogs) {
-    const foreign = catalogs.find((candidate) => candidate.engineId !== engine.engineId);
-    const assignments = recommendedRoutingAssignments(foreign, { connectionAccess });
-    const saved = structuredClone(assignments);
-    for (const orderedCatalogs of [catalogs, [...catalogs].reverse()]) {
-      const roles = recommendedRoutingAssignments(engine, { catalogs: orderedCatalogs, assignments, connectionAccess });
-      for (const role of ["router", "helper", "sharedBackup"]) {
-        assert.equal(roles[role].engineId, engine.engineId, `${engine.engineId} ${role}`);
-        assert.equal(roles[role].modelId, "deepseek-flash");
-      }
-    }
-    assert.deepEqual(assignments, saved, "recommendations leave saved choices unchanged");
-    const unavailable = connectionAccess.map((access) => ({ ...access, available: access.engineId !== engine.engineId }));
-    const roles = recommendedRoutingAssignments(engine, { catalogs, assignments, connectionAccess: unavailable });
-    for (const role of ["router", "helper", "sharedBackup"]) {
-      assert.equal(roles[role].engineId, foreign.engineId, "an unavailable local connection cannot win a tie");
+  const connectionAccess = catalogs.map(({ engineId }) => ({ engineId, modelProviderId: "deepseek", ownerOnly: false, available: true }));
+  for (const ordered of [catalogs, [...catalogs].reverse()]) {
+    const roles = recommend(ordered, { connectionAccess });
+    for (const role of ["router", "quickHelper"]) assert.deepEqual([roles[role].engineId, roles[role].modelId], ["claude", "deepseek-flash"], role);
+  }
+  const unavailable = connectionAccess.map((access) => ({ ...access, available: access.engineId !== "claude" }));
+  const values = { quickHelper: recommend(catalogs[2], { connectionAccess }).quickHelper };
+  assert.equal(recommend(catalogs, { connectionAccess: unavailable, values }).quickHelper.engineId, "opencode",
+    "an unavailable connection cannot win; the saved choice breaks the remaining tie");
+});
+
+test("main chat always uses the owner setup; everyone else's helpers use their own setup", () => {
+  for (const purpose of MAIN_CHAT_PURPOSES) {
+    for (const actor of [null, { role: "owner" }, { role: "member" }]) assert.equal(assistantRoutingSetupFor(purpose, actor), "owner", purpose);
+  }
+  for (const purpose of Object.keys(ASSISTANT_PURPOSE_ROLES).filter((purpose) => !MAIN_CHAT_PURPOSES.includes(purpose))) {
+    assert.equal(assistantRoutingSetupFor(purpose, null), "owner", purpose);
+    assert.equal(assistantRoutingSetupFor(purpose, { role: "owner" }), "owner", purpose);
+    assert.equal(assistantRoutingSetupFor(purpose, { role: "member" }), "nonOwner", purpose);
+  }
+  assert.equal(assistantRoutingSetupFor("custom", { role: "member" }, { temporaryChat: true }), "nonOwner",
+    "a temporary chat's Custom model is the person's own choice");
+});
+
+test("team members never reach main chat models; their messages need the owner's approval", () => {
+  const f = routingFixture();
+  for (const purpose of ["senior", "junior", "auto", "review", "deslop", "request_routing"]) {
+    const member = f.resolve(purpose, { reviewEnabled: purpose === "auto" });
+    assert.deepEqual([member.available, member.reasonCode, member.approvalRequired], [false, "vibe64_main_chat_approval_required", true], purpose);
+    assert.equal(member.message, "Main chat runs on the owner's AI. Your messages wait for their approval.");
+    assert.equal(member.effectiveSelection, null);
+    const owner = f.resolve(purpose, { actor: { role: "owner" }, reviewEnabled: purpose === "auto" });
+    assert.equal(owner.available, true, `${purpose}: ${owner.message}`);
+    assert.equal(owner.setup, "owner");
+  }
+  assert.equal(f.resolve("custom", { override: { role: "custom", selection: f.zen } }).approvalRequired, true);
+});
+
+test("Same as follows one role of the same setup and names the followed role", () => {
+  const f = routingFixture();
+  const owner = { actor: { role: "owner" } };
+  const ownerColleague = f.resolve("colleague", owner);
+  assert.deepEqual([ownerColleague.role, ownerColleague.setup, ownerColleague.followedRole], ["colleague", "owner", "senior"]);
+  assert.equal(ownerColleague.effectiveSelection.modelId, "gpt-6-astra");
+  assert.equal(f.resolve("fix", owner).effectiveSelection.modelId, "deepseek-flash");
+  const memberColleague = f.resolve("colleague");
+  assert.deepEqual([memberColleague.setup, memberColleague.followedRole, memberColleague.effectiveSelection.modelId], ["nonOwner", "", "zen-model"]);
+  const fix = f.resolve("fix");
+  assert.deepEqual([fix.followedRole, fix.effectiveSelection.modelId, fix.connectionIdentity], ["colleague", "zen-model", "workspace-zen"]);
+  for (const purpose of ["source_explanation", "database_assistant", "lesson_review"]) {
+    const explain = f.resolve(purpose);
+    assert.deepEqual([explain.role, explain.followedRole, explain.effectiveSelection.modelProviderId], ["explain", "quickHelper", "deepseek"], purpose);
+    assert.deepEqual(explain.executionProfileRequest, { profileId: "helper", workloadId: purpose });
+  }
+  for (const purpose of ["commit_title", "session_title", "prompt_hint", "conversation_summary", "voice_turn", "quick_helper"]) {
+    assert.equal(f.resolve(purpose).role, "quickHelper", purpose);
+    assert.equal(f.resolve(purpose).available, true, purpose);
+  }
+  delete f.input.configuration.nonOwner.colleague;
+  assert.deepEqual([f.resolve("fix").reasonCode, f.resolve("fix").message], ["vibe64_team_ai_role_unconfigured",
+    "The workspace owner hasn't chosen a Colleague model for team members yet."]);
+  f.input.configuration.owner.quickHelper = null;
+  assert.deepEqual([f.resolve("source_explanation", owner).reasonCode, f.resolve("source_explanation", owner).message],
+    ["vibe64_assistant_role_unconfigured", "Choose a Quick helper model in AI setup."]);
+});
+
+test("a personal model in the team setup is refused at use while the owner keeps it", () => {
+  const f = routingFixture();
+  f.input.configuration.nonOwner.colleague = f.roles.senior;
+  const member = f.resolve("colleague");
+  assert.equal(member.available, false);
+  assert.equal(member.reasonCode, "vibe64_assistant_owner_required");
+  assert.equal(member.message, "This team model uses a personal plan. The workspace owner must choose a Workspace-use model.");
+  assert.equal(f.resolve("colleague", { actor: { role: "owner" } }).effectiveSelection.modelId, "gpt-6-astra");
+  const custom = f.resolve("custom", { temporaryChat: true, override: { role: "custom", selection: f.roles.senior } });
+  assert.equal(custom.message, "This custom model uses a personal connection. Choose a model you can access.");
+  assert.equal(f.resolve("custom", { temporaryChat: true, override: { role: "custom", selection: f.zen } }).available, true);
+});
+
+test("Senior and Junior run in one tool; no result carries Backup fields", () => {
+  const f = routingFixture();
+  const owner = { actor: { role: "owner" } };
+  for (const purpose of [...Object.keys(ASSISTANT_PURPOSE_ROLES), "auto"]) {
+    for (const actor of [{ role: "owner" }, { role: "member" }]) {
+      const result = f.resolve(purpose, { actor, override: purpose === "custom" ? { role: "custom", selection: f.zen } : undefined });
+      assert.ok(!["backupUsed", "backupReason"].some((key) => Object.hasOwn(result, key)), purpose);
     }
   }
+  assert.equal(f.resolve("junior", { ...owner, override: { role: "junior", selection: f.zen } }).message,
+    "Senior and Junior overrides must run in your main AI's tool.");
+  f.input.configuration.owner.junior = f.zen;
+  assert.equal(f.resolve("junior", owner).message, "Senior and Junior must run in the same tool.");
+});
+
+test("old routing snapshots and chat preferences require the state upgrade", () => {
+  const f = routingFixture();
+  for (const configuration of [{ revision: 3, orchestrators: { codex: f.roles } }, { revision: 3 }]) {
+    const result = f.resolve("junior", { actor: { role: "owner" }, configuration });
+    assert.equal(result.reasonCode, "vibe64_assistant_routing_upgrade_required");
+    assert.match(result.message, /predates the current AI setup/);
+  }
+  assert.throws(() => assistantRoutingPreferences({ mode: "senior", workflowEngineId: "codex" }),
+    (error) => error.code === "vibe64_assistant_routing_upgrade_required");
+  assert.deepEqual(assistantRoutingPreferences({ mode: "fix", review: true }), { mode: "fix", review: false });
 });
 
 test("Auto names missing assignments and preserves connection and access failure reasons", () => {
   const f = routingFixture();
-  const roles = f.input.configuration.orchestrators.codex;
+  const owner = { actor: { role: "owner" } };
+  const roles = f.input.configuration.owner;
   const router = roles.router;
   roles.router = null;
-  const missing = f.resolve("auto", { actor: { role: "owner" } });
+  const missing = f.resolve("auto", owner);
   assert.equal(missing.available, false);
   assert.deepEqual(missing.missingRoles, ["router"]);
-  assert.equal(missing.message, "Auto needs a Router model. Choose one in Model routing.");
+  assert.equal(missing.message, "Auto needs a Router model. Choose one in AI setup.");
   const senior = roles.senior;
   roles.senior = null;
-  assert.equal(f.resolve("auto").message, "Auto needs models for Senior and Router. Choose them in Model routing.");
-  assert.equal(f.resolve("junior").message, "Choose a Senior model in Model routing.");
+  assert.equal(f.resolve("auto", owner).message, "Auto needs models for Senior and Router. Choose them in AI setup.");
+  assert.equal(f.resolve("junior", owner).message, "Choose a Senior model in AI setup.");
   roles.router = router;
   roles.senior = senior;
-  const shared = f.resolve("auto");
+  const shared = f.resolve("auto", owner);
   assert.equal(shared.available, true, shared.message);
+  assert.equal(shared.router.modelId, "deepseek-flash");
   f.input.connectionAccess.find(({ modelProviderId }) => modelProviderId === "deepseek").available = false;
-  assert.match(f.resolve("auto", { actor: { role: "owner" } }).message, /connection is unavailable/);
+  assert.match(f.resolve("auto", owner).message, /connection is unavailable/);
 });
 
-test("owner retains the configured pair and captured review uses Senior", () => {
+test("the owner keeps the configured pair and captured review uses Senior", () => {
   const f = routingFixture();
   const result = f.resolve("junior", { actor: { role: "owner" }, reviewEnabled: true });
   assert.equal(result.available, true, result.message);
+  assert.equal(result.engineId, "codex");
   assert.equal(result.effectiveSelection.modelId, "deepseek-flash");
   assert.equal(result.seniorJuniorPair.senior.effectiveSelection.modelId, "gpt-6-astra");
-  assert.equal(result.backupUsed, false);
+  const override = { role: "junior", selection: { ...f.roles.junior, variantId: "low" } };
+  const overridden = f.resolve("junior", { actor: { role: "owner" }, override });
+  assert.equal(overridden.configuredSelection.variantId, "low");
 });
 
-test("foreign Backup moves both effective roles even when Junior is accessible and review is off", () => {
+test("a deleted connection identity or an unavailable model is an error, never a substitution", () => {
   const f = routingFixture();
-  const before = structuredClone(f.input);
-  for (const reviewEnabled of [false, true]) {
-    for (const purpose of ["senior", "junior", "review"]) {
-      const result = f.resolve(purpose, { reviewEnabled });
-      assert.equal(result.available, true, result.message);
-      assert.equal(result.effectiveSelection.engineId, "opencode");
-      assert.equal(result.seniorJuniorPair.senior.effectiveSelection.modelId, "zen-model");
-      assert.equal(result.seniorJuniorPair.junior.effectiveSelection.modelId, "zen-model");
-      assert.equal(result.seniorJuniorPair.senior.backupReason, "personal_connection");
-      assert.equal(result.seniorJuniorPair.junior.backupReason, "keep_workflow_together");
-    }
-  }
-  assert.deepEqual(f.input, before, "resolution must not rewrite saved settings or catalogues");
-});
-
-test("foreign Backup moves accessible Senior when only Junior is personal", () => {
-  const f = routingFixture();
-  Object.assign(f.input.configuration.orchestrators.codex, { senior: f.roles.junior, junior: f.roles.senior });
-  for (const reviewEnabled of [false, true]) {
-    for (const purpose of ["senior", "junior", "review"]) {
-      const result = f.resolve(purpose, { reviewEnabled });
-      assert.equal(result.available, true, result.message);
-      assert.equal(result.effectiveSelection.engineId, "opencode");
-      assert.equal(result.seniorJuniorPair.senior.backupReason, "keep_workflow_together");
-      assert.equal(result.seniorJuniorPair.junior.backupReason, "personal_connection");
-      assert.deepEqual(result.seniorJuniorPair.senior.effectiveSelection, result.seniorJuniorPair.junior.effectiveSelection);
-    }
-  }
-});
-
-test("both personal roles share the same foreign Backup without inventing another assignment", () => {
-  const f = routingFixture();
-  f.input.configuration.orchestrators.codex.junior = { ...f.roles.senior, modelId: "gpt-6-sol" };
-  for (const reviewEnabled of [false, true]) {
-    for (const purpose of ["senior", "junior", "review"]) {
-      const result = f.resolve(purpose, { reviewEnabled });
-      assert.equal(result.available, true, result.message);
-      assert.equal(result.effectiveSelection.engineId, "opencode");
-      assert.equal(result.seniorJuniorPair.senior.backupReason, "personal_connection");
-      assert.equal(result.seniorJuniorPair.junior.backupReason, "personal_connection");
-      assert.deepEqual(result.seniorJuniorPair.senior.effectiveSelection, result.seniorJuniorPair.junior.effectiveSelection);
-    }
-  }
-});
-
-test("same-engine Backup substitutes personal Senior without replacing an accessible different coder", () => {
-  const f = routingFixture();
-  const roles = f.input.configuration.orchestrators.codex;
-  roles.sharedBackup = f.roles.junior;
-  roles.junior = { ...f.roles.senior, modelId: "gpt-6-sol" };
-  f.input.connectionAccess.push({ engineId: "codex", modelProviderId: "openai", modelId: "gpt-6-sol",
-    ownerOnly: false, available: true, connectionIdentity: "shared-openai-api" });
-  for (const reviewEnabled of [false, true]) {
-    for (const purpose of ["senior", "junior", "review"]) {
-      const result = f.resolve(purpose, { reviewEnabled });
-      assert.equal(result.available, true, result.message);
-      assert.equal(result.effectiveSelection.engineId, "codex");
-      assert.equal(result.effectiveSelection.modelId, purpose === "junior" ? "gpt-6-sol" : "deepseek-flash");
-      assert.equal(result.backupUsed, purpose !== "junior");
-      assert.equal(result.seniorJuniorPair.senior.effectiveSelection.modelId, "deepseek-flash");
-      assert.equal(result.seniorJuniorPair.junior.effectiveSelection.modelId, "gpt-6-sol");
-    }
-  }
-});
-
-test("background helpers stay independent of the Backup pair and Router has a distinct assignment", () => {
-  const f = routingFixture();
-  const external = { ...f.backup, modelId: "external-helper" };
-  f.input.catalogs[1].modelProviders[0].models.push({ id: external.modelId, status: "available", variants: [] });
-  f.input.configuration.orchestrators.codex.router = external;
-  const result = f.resolve("prompt_hint");
-  assert.equal(result.available, true, result.message);
-  assert.equal(result.effectiveSelection.modelId, "deepseek-flash");
-  assert.equal(result.seniorJuniorPair, undefined);
-  assert.deepEqual(result.executionProfileRequest, { profileId: "helper", workloadId: "prompt_hint" });
-  const router = f.resolve("request_routing");
-  assert.equal(router.effectiveSelection.modelId, "external-helper");
-  assert.equal(router.executionProfileRequest.workloadId, "request_routing");
-  f.input.configuration.orchestrators.codex.helper = f.roles.senior;
-  f.input.configuration.orchestrators.codex.sharedBackup = external;
-  assert.equal(f.resolve("prompt_hint").effectiveSelection.engineId, "opencode");
-});
-
-test("unresolved migration helper choices block only background helpers", () => {
-  const f = routingFixture();
-  f.input.configuration.orchestrators.codex.helperRoutingReview = { reason: "helper_choices_differ", previous: [] };
-  assert.equal(f.resolve("prompt_hint").reasonCode, "vibe64_assistant_helper_review_required");
-  assert.equal(f.resolve("helper").available, true);
-  assert.equal(f.resolve("junior").available, true);
-  assert.equal(f.resolve("request_routing").available, true);
-});
-
-test("known personal connection health does not prevent shared access, but deleted identity does", () => {
-  const f = routingFixture();
-  f.input.connectionAccess[0].available = false;
-  f.input.catalogs[0].modelProviders[0].connected = false;
-  assert.equal(f.resolve("junior").available, true);
-  f.input.connectionAccess.shift();
-  assert.equal(f.resolve("junior").available, false);
-  assert.match(f.resolve("junior").message, /no longer recognised/);
-});
-
-test("missing, personal, unhealthy or incompatible Backup fails before any request can be dispatched", () => {
-  for (const change of [
-    (f) => { delete f.input.configuration.orchestrators.codex.sharedBackup; },
-    (f) => { f.input.connectionAccess.at(-1).ownerOnly = true; },
-    (f) => { f.input.connectionAccess.at(-1).available = false; },
-    (f) => { f.input.catalogs[1].modelProviders[0].models[0].capabilities.toolcall = false; }
-  ]) {
-    const f = routingFixture();
-    change(f);
-    for (const reviewEnabled of [false, true]) assert.equal(f.resolve("junior", { reviewEnabled }).available, false);
-  }
-});
-
-test("an unavailable accessible model is an error, not a reason to use Backup", () => {
-  const f = routingFixture();
+  const owner = { actor: { role: "owner" } };
   f.input.connectionAccess.find(({ modelProviderId }) => modelProviderId === "deepseek").available = false;
-  const result = f.resolve("junior", { actor: { role: "owner" } });
-  assert.equal(result.available, false);
-  assert.equal(result.reasonCode, "vibe64_assistant_connection_unavailable");
-  assert.equal(result.backupUsed, false);
+  const result = f.resolve("junior", owner);
+  assert.deepEqual([result.available, result.reasonCode], [false, "vibe64_assistant_connection_unavailable"]);
   assert.equal(f.resolve("prompt_hint").available, false);
+  f.input.connectionAccess.shift();
+  assert.match(f.resolve("senior", owner).message, /no longer recognised/);
 });
 
 test("capability requirements are checked on effective models without changing destinations", () => {
   const f = routingFixture();
-  assert.equal(f.resolve("senior", { requirements: { capabilities: ["images"] } }).available, false);
-  assert.equal(f.resolve("junior", { reviewEnabled: true, requirements: { review: ["images"] } }).available, false);
-  assert.equal(f.resolve("auto", { reviewEnabled: false, requirements: { review: ["images"] } }).available, false,
+  const owner = { actor: { role: "owner" } };
+  assert.equal(f.resolve("senior", { ...owner, requirements: { capabilities: ["images"] } }).available, false);
+  assert.equal(f.resolve("junior", { ...owner, reviewEnabled: true, requirements: { review: ["images"] } }).available, false);
+  assert.equal(f.resolve("auto", { ...owner, reviewEnabled: false, requirements: { review: ["images"] } }).available, false,
     "Auto must validate the mandatory reviewer even when optional cleanup is disabled");
-  const result = f.resolve("senior", { requirements: { capabilities: ["toolcall"] } });
+  const result = f.resolve("colleague", { requirements: { capabilities: ["toolcall"] } });
   assert.equal(result.available, true, result.message);
   assert.equal(result.effectiveSelection.modelId, "zen-model");
 });
 
-test("overrides cannot split a required Backup pair and direct Senior/Junior cannot cross engines", () => {
-  const f = routingFixture();
-  const before = structuredClone(f.input);
-  const override = { role: "junior", selection: { ...f.roles.junior, variantId: "low" } };
-  const originalOverride = structuredClone(override);
-  for (const reviewEnabled of [false, true]) {
-    const result = f.resolve("junior", { override, reviewEnabled });
-    assert.equal(result.available, true, result.message);
-    assert.equal(result.configuredSelection.variantId, "low");
-    assert.equal(result.effectiveSelection.engineId, "opencode");
-    assert.equal(result.seniorJuniorPair.senior.effectiveSelection.engineId, "opencode");
-    assert.equal(result.seniorJuniorPair.junior.backupReason, "keep_workflow_together");
-    const sharedPlan = f.resolve("senior", { override: { role: "senior", selection: f.roles.junior }, reviewEnabled });
-    assert.equal(sharedPlan.available, true, sharedPlan.message);
-    assert.equal(sharedPlan.effectiveSelection.engineId, "codex");
-    assert.equal(sharedPlan.seniorJuniorPair.junior.effectiveSelection.engineId, "codex");
-    assert.equal(sharedPlan.backupUsed, false, "an accessible Plan override removes the need for Backup before resolving the pair");
-  }
-  assert.deepEqual(f.input, before);
-  assert.deepEqual(override, originalOverride);
-  assert.equal(f.resolve("junior", { override: { role: "junior", selection: f.backup } }).available, false);
-  assert.equal(f.resolve("senior", { override: { role: "senior", selection: f.backup } }).available, false);
-  assert.equal(f.resolve("helper", { override: { role: "helper", selection: f.backup } }).available, false);
-});
-
-test("the pure resolver requires a trusted actor input; standalone null remains explicit", () => {
+test("the pure resolver requires a trusted actor input; standalone null is the owner", () => {
   const f = routingFixture();
   assert.equal(f.resolve("senior", { actor: undefined }).available, false);
   assert.equal(f.resolve("senior", { actor: null }).effectiveSelection.modelId, "gpt-6-astra");
-  assert.equal(f.resolve("unknown").available, false);
+  assert.equal(f.resolve("colleague", { actor: null }).setup, "owner");
+  assert.equal(f.resolve("unknown", { actor: null }).available, false);
 });
 
-
-test("a workspace Zen model is eligible for chat, Backup, Router and bounded Helpers", () => {
+test("a workspace Zen model is eligible for chat, Router and bounded Helpers in either setup", () => {
   const f = routingFixture();
   const engine = f.input.catalogs[1];
-  const recommended = recommendedRoutingAssignments(engine, { connectionAccess: f.input.connectionAccess });
-  assert.equal(recommended.senior.modelId, "zen-model");
-  assert.equal(recommended.junior.modelId, "zen-model");
-  assert.equal(recommended.sharedBackup.modelId, "zen-model");
-  assert.equal(recommended.router.modelId, "zen-model");
-  assert.equal(recommended.helper.modelId, "zen-model");
-  Object.assign(f.input.configuration.orchestrators.codex, { router: f.backup, helper: f.backup });
-  assert.equal(f.resolve("helper").available, true);
+  for (const setup of ["owner", "nonOwner"]) {
+    const recommended = recommend(engine, { setup, connectionAccess: f.input.connectionAccess });
+    for (const role of setup === "owner" ? SCORED_ROLES : ["colleague", "quickHelper"]) assert.equal(recommended[role].modelId, "zen-model", `${setup} ${role}`);
+  }
+  Object.assign(f.input.configuration.owner, { router: f.zen, quickHelper: f.zen });
   for (const purpose of ["request_routing", "prompt_hint", "voice_turn", "auto"]) {
     const result = f.resolve(purpose, { actor: { role: "owner" } });
     assert.equal(result.available, true, result.message);
   }
 });
 
-for (const purpose of ["senior", "junior", "helper", "review", "deslop", ...Object.values(VIBE64_AGENT_EXECUTION_WORKLOAD_IDS)]) {
-  test(`${purpose} resolves a personal assignment through the same collaborator fallback`, () => {
-    const f = routingFixture();
-    const assignments = f.input.configuration.orchestrators.codex;
-    Object.assign(assignments, { senior: f.roles.senior, junior: f.roles.senior,
-      helper: f.roles.senior, router: f.roles.senior, sharedBackup: f.roles.junior });
-    const before = structuredClone(f.input.configuration);
-    const member = f.resolve(purpose);
-    assert.equal(member.available, true, member.message);
-    assert.equal(member.effectiveSelection.modelProviderId, "deepseek");
-    assert.equal(member.connectionIdentity, "deepseek-key-1");
-    assert.equal(member.backupUsed, true);
-    const owner = f.resolve(purpose, { actor: { role: "owner" } });
-    assert.equal(owner.available, true, owner.message);
-    assert.equal(owner.effectiveSelection.modelProviderId, "openai");
-    assert.equal(owner.backupUsed, false);
-    assert.deepEqual(f.input.configuration, before);
-    assignments.sharedBackup = f.roles.senior;
-    assert.equal(f.resolve(purpose).reasonCode, "vibe64_assistant_backup_invalid");
-  });
-}
-
-test("Auto resolves its pair and Router through fallback without depending on Helper", () => {
-  const f = routingFixture();
-  const assignments = f.input.configuration.orchestrators.codex;
-  assignments.router = f.roles.senior;
-  assignments.sharedBackup = f.roles.junior;
-  delete assignments.helper;
-  const result = f.resolve("auto", { reviewEnabled: true });
-  assert.equal(result.available, true, result.message);
-  assert.equal(result.router.modelProviderId, "deepseek");
-  assert.equal(result.routerConnectionIdentity, "deepseek-key-1");
-  for (const role of ["senior", "junior"]) {
-    assert.equal(result.seniorJuniorPair[role].effectiveSelection.modelProviderId, "deepseek");
-  }
-  assignments.sharedBackup = f.backup;
-  const included = f.resolve("auto");
-  assert.equal(included.available, true, included.message);
-  assert.equal(included.router.modelId, "zen-model");
+test("subscriptions run only in their own tool; key models list every tool that offers them", () => {
+  const sources = (code) => readdirSync(path.resolve("packages"), { recursive: true })
+    .filter((file) => /\/src\/.*\.js$/u.test(`/${file}`) && readFileSync(path.resolve("packages", file), "utf8").includes(`"${code}"`))
+    .filter((file) => !file.endsWith("shared/assistantRouting.js"));
+  assert.deepEqual(sources("claude_subscription"), ["vibe64-terminals/src/server/claudeConversationAccounts.js"]);
+  assert.deepEqual(sources("codex_subscription"), ["vibe64-runtime/src/server/codexAppServerProvider.js"]);
+  const choice = (engineId, modelProviderId, modelId, endpointCode) => ({ engineId, modelProviderId, modelId, endpointCode });
+  const groups = routingRunsInChoices([choice("claude", "anthropic", "opus", "claude_subscription"), choice("codex", "openai", "gpt-6-sol", "codex_subscription"),
+    choice("claude", "deepseek", "deepseek-v4-pro", ""), choice("codex", "deepseek", "deepseek-v4-pro", ""), choice("opencode", "deepseek", "deepseek-v4-pro", "")]);
+  assert.deepEqual(groups.map(({ modelId, billing, engineIds, fixedRunsIn }) => [modelId, billing, engineIds, fixedRunsIn]), [
+    ["opus", "claude_subscription", ["claude"], { engineId: "claude", reason: "claude_plan" }],
+    ["gpt-6-sol", "codex_subscription", ["codex"], { engineId: "codex", reason: "chatgpt_plan" }],
+    ["deepseek-v4-pro", "key", ["claude", "codex", "opencode"], undefined]
+  ]);
 });

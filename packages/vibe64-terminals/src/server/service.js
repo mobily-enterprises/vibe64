@@ -3876,11 +3876,8 @@ function createService({
     async inspectAssistantAccess(sessionId, options = {}) {
       const context = await assistantSessionOptions(sessionId, options);
       const preferences = assistantRoutingFromMetadata(context.session.metadata);
-      const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
       const native = await sessionAgent.assistantAccess(sessionId, context);
-      const purposes = await sessionAgent.inspectAssistantPurposes({ ...preferences,
-        workflowEngineId: preferences?.workflowEngineId || selection.engineId
-      }, context);
+      const purposes = await sessionAgent.inspectAssistantPurposes({ ...preferences }, context);
       const currentMode = preferences?.mode || "";
       const steering = sessionHasActiveAgentRun(context.session);
       const available = currentMode && !steering ? purposes[currentMode]?.available === true : native.available;
@@ -3951,8 +3948,8 @@ function createService({
       return sessionAgent.listCapabilities(input, options);
     },
 
-    resolveAssistantPurpose(input = {}, options = {}) {
-      return sessionAgent.resolveAssistantPurpose(input, options);
+    resolveAssistantPurpose(input = {}, options = {}, resolution = {}) {
+      return sessionAgent.resolveAssistantPurpose(input, options, resolution);
     },
 
     inspectAssistantRoutingConfiguration(configuration, options = {}) {

@@ -109,8 +109,7 @@ function useVibe64AssistantAccess({
   const currentPurpose = computed(() => purposes.value[access.value?.currentMode]);
   const accessLabel = computed(() => {
     const selection = currentPurpose.value?.effectiveSelection;
-    return currentPurpose.value?.backupUsed ? "Shared backup" : selection
-      ? vibe64AssistantSelectionLabel(selection) : assistantAccessText(access.value?.accessLabel) || "Unavailable";
+    return selection ? vibe64AssistantSelectionLabel(selection) : assistantAccessText(access.value?.accessLabel) || "Unavailable";
   });
   const canUseChat = computed(() => access.value?.canUse === true);
   const canRouteChat = computed(() => !access.value?.steering && currentPurpose.value?.available === true);

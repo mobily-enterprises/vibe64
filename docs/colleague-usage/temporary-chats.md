@@ -9,9 +9,11 @@ first chat. If another temporary or host conversation was selected, it stays
 selected with its draft intact. Dismissing the dialog has the same effect; no
 chat is created and no message is sent. This applies on desktop and narrow screens.
 
-Ordinary temporary chats offer **Custom**, **Senior** and **Junior**. Choose
-**Custom** to open the **Orchestrator**, **Model** and **Thinking** fields. Select
-an available connection and model, then **Apply**. The next message uses that
+Ordinary temporary chats offer **Fix it with AI**, **Custom**, **Senior** and
+**Junior**; a team member's offer **Fix it with AI** and **Custom**. **Fix it with
+AI** uses the model AI setup chose for fixes, which may run in a different tool
+from Main chat. Choose **Custom** to open the **Orchestrator**, **Model** and
+**Thinking** fields. Select an available connection and model, then **Apply**. The next message uses that
 choice and the existing conversation history. Main chat's selection is unchanged.
 
 ## Rename a temporary chat
@@ -70,10 +72,10 @@ message; uncertain delivery is checked before any resend.
 
 ## Hand a merge repair to another model
 
-**Fix it with AI** for an Update conflict opens a temporary repair using Senior
-and sends the repair instructions once. Its reply appears in that temporary
-chat; Main chat's history is unchanged.
-Merge repair always retains the Senior role. To hand it to Codex:
+**Fix it with AI** for an Update conflict opens a temporary repair on the Fix it
+with AI model and sends the repair instructions once. Its reply appears in that
+temporary chat; Main chat's history is unchanged.
+Merge repair stays in Fix it with AI mode or on a model you choose. To hand it to Codex:
 
 1. If it is still working, press **Stop** and wait for it to stop.
 2. Open its **Chat mode** icon and choose **Choose model**.

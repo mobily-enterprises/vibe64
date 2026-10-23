@@ -9,11 +9,10 @@ const DEFAULT_HELPER_TIMEOUT_MS = 120000;
 // The original Colleague retained Helper lifetime. The parent supplies its own
 // private root, durable receipt and scope prefix (Colleague's summaries keep
 // "summary"); native execution remains with Terminals.
-function createRetainedConversationHelper({ terminals, root, receipt, workflowEngineId, scopePrefix = "summary" }) {
+function createRetainedConversationHelper({ terminals, root, receipt, scopePrefix = "summary" }) {
   if (!path.isAbsolute(root || "") || typeof receipt?.read !== "function" ||
-      typeof receipt?.write !== "function" || typeof workflowEngineId !== "function" ||
-      !/^[a-z][a-z0-9]{0,31}$/u.test(scopePrefix)) {
-    throw new TypeError("A retained Helper requires its original parent root, receipt, workflow selection and scope prefix.");
+      typeof receipt?.write !== "function" || !/^[a-z][a-z0-9]{0,31}$/u.test(scopePrefix)) {
+    throw new TypeError("A retained Helper requires its original parent root, receipt and scope prefix.");
   }
   const scopePattern = new RegExp(`^${scopePrefix}_[a-f0-9-]+$`, "u");
   async function cleanup(context) {
@@ -31,8 +30,8 @@ function createRetainedConversationHelper({ terminals, root, receipt, workflowEn
   }
 
   async function requireHelper(context, workloadId) {
-    const decision = await terminals.resolveAssistantPurpose({ purpose: workloadId, workflowEngineId: await workflowEngineId(context) }, { vibe64User: authenticatedVibe64User(context) });
-    if (!decision.available) throw Object.assign(new Error(`${decision.message ? `${String(decision.message).slice(0, 512)} ` : ""}Choose an available Helper for this workflow in AI Accounts → Model routing, then try again.`), {
+    const decision = await terminals.resolveAssistantPurpose({ purpose: workloadId }, { vibe64User: authenticatedVibe64User(context) });
+    if (!decision.available) throw Object.assign(new Error(`${decision.message ? `${String(decision.message).slice(0, 512)} ` : ""}Review AI setup, then try again.`), {
       code: "vibe64_colleague_helper_unavailable", statusCode: 409
     });
     return decision;

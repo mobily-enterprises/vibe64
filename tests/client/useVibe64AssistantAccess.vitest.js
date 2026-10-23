@@ -143,7 +143,7 @@ describe("useVibe64AssistantAccess", () => {
     endpointMocks.resources = [resource({
       ok: true, available: true, canUse: true, nativeCanUse: false, canUseAny: true, currentMode: "junior",
       purposes: {
-        junior: { available: true, backupUsed: true, effectiveSelection: { engineId: "opencode", modelId: "big-pickle" } },
+        junior: { available: true, effectiveSelection: { engineId: "opencode", modelId: "big-pickle" } },
         auto: { available: false, message: "Choose a compatible Router model." },
         prompt_hint: { available: false, message: "Review the migrated helper settings." }
       }
@@ -157,7 +157,7 @@ describe("useVibe64AssistantAccess", () => {
     expect(access.canUsePurpose("junior")).toBe(true);
     expect(access.canUsePurpose("auto")).toBe(false);
     expect(access.canUsePurpose("prompt_hint")).toBe(false);
-    expect(access.accessLabel.value).toBe("Shared backup");
+    expect(access.accessLabel.value).toBe("OpenCode (big-pickle not recorded)");
     expect(access.restrictionMessage.value).toBe("");
     endpointMocks.resources[0].data.value = {
       ...endpointMocks.resources[0].data.value, currentMode: "auto", canUse: false, nativeCanUse: true

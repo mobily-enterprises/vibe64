@@ -342,8 +342,7 @@ function useVibe64AutopilotView(props, emit, {
   assistantAccessLoading = null,
   assistantCanUseAi = null,
   assistantCanRouteChat = null,
-  assistantCanUseJunior = null,
-  assistantCanUseSenior = null,
+  assistantCanUseFix = null,
   assistantCanUseNative = null,
   assistantProgressLabel = null,
   onAttachmentsAccepted = null,
@@ -376,10 +375,9 @@ function useVibe64AutopilotView(props, emit, {
   const assistantDirectAllowed = computed(() => (
     !assistantAccessConfigured || unref(assistantCanUseAi) === true
   ));
-  const assistantJuniorAllowed = computed(() => assistantCanUseJunior === null
-    ? assistantDirectAllowed.value : unref(assistantCanUseJunior) === true);
-  const assistantSeniorAllowed = computed(() => assistantCanUseSenior === null
-    ? assistantDirectAllowed.value : unref(assistantCanUseSenior) === true);
+  // Temporary AI repairs run on the Fix it with AI model.
+  const assistantFixAllowed = computed(() => assistantCanUseFix === null
+    ? assistantDirectAllowed.value : unref(assistantCanUseFix) === true);
   const sessionGithubActor = computed(() => sessionGithubCommandActor(props.session || {}));
   const sessionGithubActorHeaderVisible = computed(() => Boolean(
     props.active &&
@@ -787,7 +785,7 @@ function useVibe64AutopilotView(props, emit, {
     !sessionId.value ||
     props.sessionSelectionArchived ||
     repositoryOperationActive.value ||
-    !assistantJuniorAllowed.value
+    !assistantFixAllowed.value
   ));
 
   async function retryWorkspaceSetup() {
@@ -949,7 +947,7 @@ function useVibe64AutopilotView(props, emit, {
   async function askCodexToFixPreviewIdentity(input = {}) {
     if (
       typeof requestTemporaryAi !== "function" ||
-      !assistantJuniorAllowed.value ||
+      !assistantFixAllowed.value ||
       !props.active ||
       !sessionId.value ||
       props.sessionSelectionArchived ||
@@ -979,11 +977,11 @@ function useVibe64AutopilotView(props, emit, {
     return result !== false && result?.ok !== false;
   }
 
-  function temporaryAiRecoveryUnavailable(isUpdate = false) {
+  function temporaryAiRecoveryUnavailable() {
     return Boolean(
       repositoryRecoverySending.value ||
       typeof requestTemporaryAi !== "function" ||
-      !(isUpdate ? assistantSeniorAllowed.value : assistantJuniorAllowed.value) ||
+      !assistantFixAllowed.value ||
       !props.active ||
       !sessionId.value ||
       props.sessionSelectionArchived ||
@@ -992,7 +990,7 @@ function useVibe64AutopilotView(props, emit, {
   }
 
   async function fixRepositoryActionError() {
-    if (temporaryAiRecoveryUnavailable(saveWorkActivityIsUpdate.value) || !saveWorkCanResolveWithTemporaryAi.value) {
+    if (temporaryAiRecoveryUnavailable() || !saveWorkCanResolveWithTemporaryAi.value) {
       return false;
     }
     const action = saveWorkActivityIsUpdate.value ? "Update" : "Save";
@@ -1035,7 +1033,7 @@ function useVibe64AutopilotView(props, emit, {
     const diagnostic = normalizedAgentTurnText(error);
     const isUpdate = ["vibe64_session_update_conflict", "vibe64_session_update_history_diverged"].includes(code);
     const isIncoming = code === "vibe64_incoming_merge_conflict";
-    if (temporaryAiRecoveryUnavailable(isUpdate || isIncoming) || !diagnostic) {
+    if (temporaryAiRecoveryUnavailable() || !diagnostic) {
       return false;
     }
     repositoryRecoverySending.value = true;
@@ -1058,7 +1056,6 @@ function useVibe64AutopilotView(props, emit, {
           isIncoming ? "Repair only the listed conflicting files in this receiving session's worktree. Inspect both exact reviewed commits, preserve both sides' intended behavior and all unrelated/staged work. Do not commit, merge, rebase or push. Return to Incoming changes → Review resolved conflicts; only the person's reviewed Merge may integrate this contribution." : "",
           diagnostic
         ].join("\n\n"),
-        ...(isIncoming ? { initialRouting: { mode: "senior", review: false } } : {}),
         nextStepMessage: isUpdate ? UPDATE_REPAIR_MESSAGES.nextStep : "Review the repair, then retry the repository operation.",
         recoveryNotice: TEMPORARY_AI_RECOVERY_NOTICE,
         recoveryOperation: isUpdate ? "update" : "",
@@ -1985,7 +1982,7 @@ function useVibe64AutopilotView(props, emit, {
   }
 
   async function describeSubsystems() {
-    if (typeof requestTemporaryAi !== "function" || !assistantJuniorAllowed.value ||
+    if (typeof requestTemporaryAi !== "function" || !assistantFixAllowed.value ||
         !props.active || !sessionId.value || props.sessionSelectionArchived || repositoryOperationActive.value) {
       return false;
     }
@@ -2127,8 +2124,7 @@ function useVibe64AutopilotView(props, emit, {
     Vibe64OutputControls,
     sendLessonMessage,
     assistantDirectAllowed,
-    assistantJuniorAllowed,
-    assistantSeniorAllowed,
+    assistantFixAllowed,
     agentActive,
     reasoningActive,
     agentObservationLost,

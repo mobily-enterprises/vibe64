@@ -3,10 +3,9 @@ import {
   vibe64AssistantConversationKey,
   VIBE64_ASSISTANT_ENGINE_IDS
 } from "../shared/assistantSelection.js";
-import { assistantRoutingPreferences as currentPreferences, ASSISTANT_PURPOSE_ROLES } from "../shared/assistantRouting.js";
 import { validateAssistantRoutingConfiguration as validateV2 } from "@local/vibe64-core/server/stateUpgrades/routingV2Format";
 import { validateAssistantRoutingConfiguration as validateV3 } from "@local/vibe64-core/server/stateUpgrades/routingV3Format";
-import { validateAssistantRoutingConfiguration as validateV4 } from "@local/vibe64-core/server/assistantRoutingStore";
+import { validateAssistantRoutingConfiguration as validateV4 } from "@local/vibe64-core/server/stateUpgrades/routingV4Format";
 
 const engines = new Set(Object.values(VIBE64_ASSISTANT_ENGINE_IDS));
 const modes = new Set(["plan", "code", "economy", "auto"]);
@@ -19,6 +18,24 @@ const nativeRequestStatuses = new Set([
   "implementation_pending", "implementation_sending", "implementation_uncertain"
 ]);
 const record = (value) => value && typeof value === "object" && !Array.isArray(value);
+// Frozen schema-4 purposes and preferences: these published upgrades keep
+// their exact behaviour after later routing formats.
+const V4_PURPOSES = ["custom", "senior", "junior", "helper", "review", "deslop", "commit_title", "conversation_summary",
+  "voice_turn", "database_assistant", "lesson_review", "prompt_hint", "request_routing", "session_title", "source_explanation"];
+
+function currentPreferences(value = {}) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || !["custom", "senior", "junior", "auto"].includes(value.mode)) {
+    throw Object.assign(new Error("Choose Custom, Senior, Junior, or Auto."), { code: "vibe64_assistant_routing_invalid", statusCode: 409 });
+  }
+  if (value.workflowEngineId !== undefined && !engines.has(value.workflowEngineId)) {
+    throw Object.assign(new Error("Choose a supported workflow orchestrator."), { code: "vibe64_assistant_routing_invalid", statusCode: 409 });
+  }
+  if (value.mode === "custom" && !value.override) {
+    throw Object.assign(new Error("Choose a custom model first."), { code: "vibe64_assistant_routing_invalid", statusCode: 409 });
+  }
+  if (value.override && value.mode !== "auto") defineVibe64AssistantSelection(value.override);
+  return value;
+}
 
 // Validate known native formats without translating their captured decisions.
 // Configuration snapshots omit schemaVersion; the enclosing request supplies it.
@@ -28,7 +45,7 @@ function validateAssistantRoutingUpgradeRecord(value, { schemaVersion = 4, prefe
     throw new Error("Saved routing has an unsupported format. Use the matching release.");
   }
   const roles = new Set(["custom", "senior", "junior", "auto", "router", "review", "deslop",
-    schemaVersion === 3 ? "intern" : "helper", ...Object.keys(ASSISTANT_PURPOSE_ROLES).filter(role => role !== "helper")]);
+    schemaVersion === 3 ? "intern" : "helper", ...V4_PURPOSES.filter(role => role !== "helper")]);
   for (const key of ["mode", "requestedMode", "resolvedMode", "role"]) {
     if (value[key] !== undefined && value[key] !== "" && !roles.has(value[key])) {
       throw new Error("Saved routing contains an unknown role. Inspect it before upgrading.");

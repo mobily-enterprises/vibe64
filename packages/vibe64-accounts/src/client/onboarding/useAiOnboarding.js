@@ -67,10 +67,8 @@ function useAiOnboarding({ endpoint = "", enabled = true } = {}) {
   const accounts = useVibe64Accounts();
   const curated = useCodexProviderConnections({ enabled });
   const openCode = useAiConnections({ ...(endpoint ? { endpoint } : {}), enabled });
-  const routingEngineId = ref("");
   const routingEnabled = ref(false);
-  const workflows = useModelRouting({ workflowsOnly: true, enabled: routingEnabled });
-  const routing = useModelRouting({ engineId: routingEngineId, enabled: routingEnabled });
+  const routing = useModelRouting({ enabled: routingEnabled });
   const colleague = useVibe64ColleagueModel();
   const colleagueCurrent = ref(null);
 
@@ -114,26 +112,24 @@ function useAiOnboarding({ endpoint = "", enabled = true } = {}) {
     return colleague.sayHello(HELLO).catch((error) => ({ ok: false, error: error?.message || "No reply." }));
   }
 
-  // Re-reads the chosen provider's connection and, at the same time, its orchestrator's routing.
+  // Re-reads the chosen provider's connection and, at the same time, the owner's AI setup.
   async function verify(provider) {
     const { connect } = provider;
-    routingEngineId.value = connect.engineId;
     routingEnabled.value = true;
     await nextTick();
-    await Promise.all([reload(), workflows.resource.reload(), routing.resource.reload()]);
+    await Promise.all([reload(), routing.resource.reload()]);
     if (!aiOnboardingConnections(provider, lists.value).length) return { connected: false };
-    const workflow = workflows.workflows.value.find(({ engineId }) => engineId === connect.engineId);
-    const engine = routing.engines.value.find(({ engineId }) => engineId === connect.engineId);
-    const senior = engine?.roles?.senior || {};
-    const routed = senior.assignment?.modelProviderId === connect.modelProviderId;
+    const senior = routing.setups.value?.owner?.roles?.senior || {};
+    const routed = senior.effective?.modelProviderId === connect.modelProviderId;
     return {
       connected: true,
-      // The workflow is usable and its Senior is, or would be, this provider.
-      available: workflow?.available === true && (routed || senior.recommendation?.modelProviderId === connect.modelProviderId),
+      // The owner's Senior is, or would be, this provider and is usable.
+      available: routed ? routing.viewerDecisions.value.senior?.available === true
+        : senior.recommendation?.modelProviderId === connect.modelProviderId,
       routed,
-      routingWouldChange: routingSuggestsChanges(engine, connect.modelProviderId),
+      routingWouldChange: routingSuggestsChanges(routing.setups.value, connect.modelProviderId),
       // The Senior model already in use, which a routing change would replace.
-      currentSenior: senior.assignment ? { ...senior.assignment, name: providerName(senior.assignment) } : null
+      currentSenior: senior.value?.schema ? { ...senior.value, name: providerName(senior.value) } : null
     };
   }
 

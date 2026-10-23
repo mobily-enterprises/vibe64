@@ -1,4 +1,4 @@
-import { defineVibe64AssistantSelection, resolveVibe64AssistantSelection, VIBE64_ASSISTANT_ENGINE_IDS } from "./assistantSelection.js";
+import { defineVibe64AssistantSelection, resolveVibe64AssistantSelection } from "./assistantSelection.js";
 import { curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import routingScores from "./assistantRoutingScores.json" with { type: "json" };
 import { VIBE64_AGENT_EXECUTION_WORKLOAD_IDS } from "./agentExecutionProfiles.js";
@@ -6,54 +6,95 @@ import { canUseVibe64Assistant, VIBE64_ASSISTANT_ACCESS_ERROR_CODES } from "./as
 import { vibe64AssistantSelectionLabel } from "./assistantLabels.js";
 
 const ASSISTANT_MODES = Object.freeze([
-  { id: "custom", label: "Custom", description: "Choose an orchestrator, model and thinking level for this chat." },
+  { id: "custom", label: "Custom", description: "Choose a model and thinking level for this chat." },
   { id: "senior", label: "Senior", description: "Talk directly to your most capable model. Ask questions or request changes." },
   { id: "junior", label: "Junior", description: "Talk directly to your everyday model. Ask questions or request changes." },
   { id: "auto", label: "Auto", description: "Name either role, or let Senior handle plans and reviews and Junior handle other requests. Implementation always gets Senior review." }
 ]);
+// Temporary repair chats only; main chat never uses it.
+const ASSISTANT_FIX_MODE = Object.freeze({ id: "fix", label: "Fix it with AI", description: "Repair what went wrong with the Fix it with AI model." });
 const ASSISTANT_ROUTING_METADATA = "assistant_routing";
-const ASSISTANT_ROUTING_ROLES = Object.freeze(["senior", "junior", "helper", "router"]);
-const ASSISTANT_ROUTING_ASSIGNMENTS = Object.freeze([...ASSISTANT_ROUTING_ROLES, "sharedBackup"]);
+// The owner's setup drives main chat; the team setup serves everyone else's helpers.
+const ASSISTANT_SETUP_ROLES = Object.freeze({
+  owner: Object.freeze(["senior", "junior", "router", "colleague", "fix", "explain", "quickHelper"]),
+  nonOwner: Object.freeze(["colleague", "fix", "explain", "quickHelper"])
+});
+const ASSISTANT_FOLLOWING_ROLES = Object.freeze(["colleague", "fix", "explain"]);
 const ASSISTANT_ROUTING_ROLE_DEFINITIONS = Object.freeze([
-  ...ASSISTANT_MODES.filter(({ id }) => ["senior", "junior"].includes(id)),
-  { id: "helper", label: "Helper", description: "Used for suggestions, naming, summaries and explanations." },
-  { id: "router", label: "Router", description: "Honors requested roles; otherwise chooses Senior for plans, reviews and Deslop, and Junior for other requests." }
-]);
+  { id: "senior", label: "Senior", description: "Plans, reviews and Deslop in main chat. Your most capable model.", group: "main" },
+  { id: "junior", label: "Junior", description: "Everyday changes in main chat.", group: "main" },
+  { id: "router", label: "Router", description: "Chooses Senior or Junior when main chat is on Auto.", group: "main" },
+  { id: "colleague", label: "Colleague", description: "The default for Colleague. Each person can change their own.", group: "helpers" },
+  { id: "fix", label: "Fix it with AI", description: "Repair chats opened from errors and conflicts. Can run in a different tool from the chat it fixes.", group: "helpers" },
+  { id: "explain", label: "Explain & check", description: "Explain this code, the database assistant and Check my work.", group: "helpers" },
+  { id: "quickHelper", label: "Quick helper", description: "Titles, commit messages, prompt hints and summaries.", group: "helpers" }
+].map(Object.freeze));
+// Recommended "Same as" defaults; other roles are scored selections.
+const ASSISTANT_ROLE_DEFAULT_FOLLOWS = Object.freeze({
+  owner: Object.freeze({ colleague: "senior", fix: "junior", explain: "quickHelper" }),
+  nonOwner: Object.freeze({ fix: "colleague", explain: "quickHelper" })
+});
 const ROUTING_REASONS = Object.freeze([
   "conversation", "planning", "implementation", "review"
 ]);
+// Main chat always runs on the owner's setup.
+const MAIN_CHAT_PURPOSES = Object.freeze(["custom", "senior", "junior", "auto", "review", "deslop", "request_routing"]);
 const ASSISTANT_PURPOSE_ROLES = Object.freeze({
-  custom: "custom",
-  senior: "senior", junior: "junior", helper: "helper", review: "senior", deslop: "senior",
-  ...Object.fromEntries(Object.values(VIBE64_AGENT_EXECUTION_WORKLOAD_IDS).map((purpose) => [purpose, purpose === "request_routing" ? "router" : "helper"]))
+  custom: "custom", senior: "senior", junior: "junior", review: "senior", deslop: "senior",
+  request_routing: "router", colleague: "colleague", fix: "fix",
+  source_explanation: "explain", database_assistant: "explain", lesson_review: "explain",
+  commit_title: "quickHelper", session_title: "quickHelper", prompt_hint: "quickHelper",
+  conversation_summary: "quickHelper", voice_turn: "quickHelper", quick_helper: "quickHelper"
 });
+// The purpose whose model rules (catalogue compatibility) a role's choices follow.
+const ASSISTANT_ROLE_PURPOSES = Object.freeze({ senior: "senior", junior: "junior", router: "request_routing",
+  colleague: "colleague", fix: "fix", explain: "source_explanation", quickHelper: "prompt_hint" });
 
 function assistantModeLabel(mode) {
-  return ASSISTANT_MODES.find(({ id }) => id === mode)?.label ||
-    ({ review: "Senior review", deslop: "Senior Deslop", router: "Router", helper: "Helper" })[mode] || "";
+  return ASSISTANT_MODES.find(({ id }) => id === mode)?.label || (mode === "fix" ? ASSISTANT_FIX_MODE.label : "") ||
+    ({ review: "Senior review", deslop: "Senior Deslop" })[mode] ||
+    ASSISTANT_ROUTING_ROLE_DEFINITIONS.find(({ id }) => id === mode)?.label || "";
 }
 
 function routingError(message, code = "vibe64_assistant_routing_invalid") {
   return Object.assign(new Error(message), { code, statusCode: 409 });
 }
 
+const upgradeRequired = () => routingError("This saved request predates the current AI setup. The administrator must run the state upgrade.",
+  "vibe64_assistant_routing_upgrade_required");
+
 function assistantRoutingPreferences(value = {}) {
-  if (!value || typeof value !== "object" || Array.isArray(value) || !ASSISTANT_MODES.some(({ id }) => id === value.mode)) {
+  if (!value || typeof value !== "object" || Array.isArray(value) ||
+      ![...ASSISTANT_MODES, ASSISTANT_FIX_MODE].some(({ id }) => id === value.mode)) {
     throw routingError("Choose Custom, Senior, Junior, or Auto.");
   }
-  if (value.workflowEngineId !== undefined && !Object.values(VIBE64_ASSISTANT_ENGINE_IDS).includes(value.workflowEngineId)) {
-    throw routingError("Choose a supported workflow orchestrator.");
-  }
+  if (Object.hasOwn(value, "workflowEngineId")) throw upgradeRequired();
   if (value.mode === "custom" && !value.override) throw routingError("Choose a custom model first.");
   // The saved review preference controls optional Deslop; Auto review is mandatory.
-  return { mode: value.mode, review: value.mode !== "custom" && value.review === true,
-    ...(value.workflowEngineId ? { workflowEngineId: value.workflowEngineId } : {}),
-    ...(value.override && value.mode !== "auto" ? { override: defineVibe64AssistantSelection(value.override) } : {}) };
+  return { mode: value.mode, review: !["custom", "fix"].includes(value.mode) && value.review === true,
+    ...(value.override && !["auto", "fix"].includes(value.mode) ? { override: defineVibe64AssistantSelection(value.override) } : {}) };
 }
 
 function assistantRoutingFromMetadata(metadata = {}) {
   return metadata[ASSISTANT_ROUTING_METADATA]
     ? assistantRoutingPreferences(JSON.parse(metadata[ASSISTANT_ROUTING_METADATA])) : null;
+}
+
+const isAssistantRoutingOwner = (actor) => !actor || actor.role === "owner";
+
+// A temporary chat's Custom model is the person's own choice, not main chat.
+const isMainChatPurpose = (purpose, { temporaryChat = false } = {}) =>
+  MAIN_CHAT_PURPOSES.includes(purpose) && !(temporaryChat && purpose === "custom");
+
+function assistantRoutingSetupFor(purpose, actor, options = {}) {
+  return isMainChatPurpose(purpose, options) || isAssistantRoutingOwner(actor) ? "owner" : "nonOwner";
+}
+
+// A role's saved value after one level of "Same as".
+function assistantSetupRoleValue(setupValues = {}, role) {
+  const value = setupValues[role];
+  return value?.follows ? { value: setupValues[value.follows] ?? null, followedRole: value.follows }
+    : { value: value ?? null, followedRole: "" };
 }
 
 function assistantRoutingStatusIsPending(request) {
@@ -93,19 +134,35 @@ function routingModelChoices(engine, { purpose = "senior" } = {}) {
     }));
 }
 
+// One row per model and billing: a subscription runs only in its own tool
+// (structurally, only Claude Code and Codex produce these endpoints), while a
+// key-based model may run in each tool where its provider is connected.
+function routingRunsInChoices(models = []) {
+  const groups = new Map();
+  for (const model of models) {
+    const billing = ["claude_subscription", "codex_subscription"].includes(model.endpointCode) ? model.endpointCode : "key";
+    const key = JSON.stringify([model.modelProviderId, model.modelId, billing]);
+    if (!groups.has(key)) groups.set(key, { modelProviderId: model.modelProviderId, modelId: model.modelId, billing, choices: [] });
+    groups.get(key).choices.push(model);
+  }
+  return [...groups.values()].map((group) => ({ ...group, engineIds: group.choices.map(({ engineId }) => engineId),
+    ...(group.billing === "key" ? {} : { fixedRunsIn: { engineId: group.choices[0].engineId,
+      reason: group.billing === "claude_subscription" ? "claude_plan" : "chatgpt_plan" } }) }));
+}
+
 function routingScoreRow(selection) {
   return routingScores.models.find((candidate) => ["engineId", "modelProviderId", "modelId"]
     .every((key) => candidate[key] === selection[key]));
 }
 
 function routingModelScore(selection, role) {
-  return (routingScoreRow(selection)?.scores || routingScores.providerDefaultScores[selection.modelProviderId] || routingScores.defaultScores)[role === "sharedBackup" ? "helper" : role];
+  return (routingScoreRow(selection)?.scores || routingScores.providerDefaultScores[selection.modelProviderId] || routingScores.defaultScores)[role];
 }
 
 // The catalogue may name a model's recommended thinking per role; otherwise
-// background roles think low and Senior/Junior think high.
+// background roles think low and the rest think high.
 function routingRecommendedEffort(selection, role) {
-  return routingScoreRow(selection)?.efforts?.[role] || (["helper", "router", "sharedBackup"].includes(role) ? "low" : "high");
+  return routingScoreRow(selection)?.efforts?.[role] || (["quickHelper", "router"].includes(role) ? "low" : "high");
 }
 
 function routingConnectionAccess(selection, connections = []) {
@@ -113,112 +170,136 @@ function routingConnectionAccess(selection, connections = []) {
     || connections.find((entry) => entry.engineId === selection.engineId && entry.modelProviderId === selection.modelProviderId && !entry.modelId);
 }
 
-function recommendedRoutingAssignments(engine, { catalogs = engine ? [engine] : [], assignments = {}, connectionAccess = [] } = {}) {
-  return Object.fromEntries(ASSISTANT_ROUTING_ASSIGNMENTS.map((role) => {
-    const candidates = ["senior", "junior"].includes(role) ? (engine ? [engine] : []) : catalogs;
-    const purpose = role === "router" ? "request_routing" : role === "sharedBackup" ? "junior" : role === "helper" ? "prompt_hint" : role;
-    const choices = candidates.flatMap((catalog) => routingModelChoices(catalog, { purpose }))
-      .filter((choice) => !choice.compatibilityError && (role !== "junior" && role !== "sharedBackup" || choice.capabilities?.toolcall !== false))
+const isRoutingSelection = (value) => Boolean(value?.schema);
+
+// One recommended value per role of the setup. Team members' choices exclude
+// personal connections; preferProvider keeps a role on that provider and tool
+// when it offers a valid choice, otherwise on the role's current value.
+function recommendedRoutingAssignments({ catalogs = [], setup = "owner", values = {}, connectionAccess = [], preferProvider = null } = {}) {
+  const recommended = {};
+  const sameRoute = (left, right) => ["engineId", "modelProviderId", "modelId", "agentId"].every((key) => left?.[key] === right?.[key]);
+  const stableKey = (choice) => JSON.stringify([choice.engineId, choice.modelProviderId, choice.modelId, choice.agentId]);
+  for (const role of ASSISTANT_SETUP_ROLES[setup]) {
+    const follows = ASSISTANT_ROLE_DEFAULT_FOLLOWS[setup][role];
+    if (follows) { recommended[role] = { follows }; continue; }
+    const scoreRole = role === "colleague" ? "senior" : role;
+    const purpose = ASSISTANT_ROLE_PURPOSES[scoreRole];
+    const seniorEngine = role === "junior" ? recommended.senior?.engineId : "";
+    let choices = catalogs.flatMap((catalog) => routingModelChoices(catalog, { purpose }))
+      .filter((choice) => !choice.compatibilityError && (!seniorEngine || choice.engineId === seniorEngine) &&
+        (!["junior", "colleague"].includes(role) || choice.capabilities?.toolcall !== false))
       .filter((choice) => {
         const access = routingConnectionAccess(choice, connectionAccess);
-        return access?.available !== false && (role !== "sharedBackup" || access?.ownerOnly === false);
+        return access?.available !== false && (setup !== "nonOwner" || access?.ownerOnly === false);
       });
-    const sameRoute = (left, right) => ["engineId", "modelProviderId", "modelId", "agentId"].every((key) => left?.[key] === right?.[key]);
-    const stableKey = (choice) => JSON.stringify([choice.engineId, choice.modelProviderId, choice.modelId, choice.agentId]);
-    choices.sort((left, right) => routingModelScore(right, role) - routingModelScore(left, role)
-      || Number(right.engineId === engine?.engineId) - Number(left.engineId === engine?.engineId)
-      || Number(sameRoute(right, assignments[role])) - Number(sameRoute(left, assignments[role]))
+    if (preferProvider) {
+      const preferred = choices.filter((choice) => choice.modelProviderId === preferProvider.modelProviderId && choice.engineId === preferProvider.engineId);
+      if (!preferred.length) { recommended[role] = values[role] ?? null; continue; }
+      choices = preferred;
+    }
+    choices.sort((left, right) => routingModelScore(right, scoreRole) - routingModelScore(left, scoreRole)
+      || Number(right.engineId === "claude") - Number(left.engineId === "claude")
+      || Number(sameRoute(right, values[role])) - Number(sameRoute(left, values[role]))
       || stableKey(left).localeCompare(stableKey(right), "en"));
     const choice = choices[0];
-    if (!choice) return [role, null];
-    const selectedEngine = candidates.find((catalog) => catalog.engineId === choice.engineId);
-    if (sameRoute(choice, assignments[role])) {
-      try { return [role, { ...routingAssignmentSelection(selectedEngine, assignments[role], { purpose }), selectionSource: "recommended" }]; }
+    if (!choice) { recommended[role] = null; continue; }
+    const selectedEngine = catalogs.find((catalog) => catalog.engineId === choice.engineId);
+    if (sameRoute(choice, values[role])) {
+      try { recommended[role] = { ...routingAssignmentSelection(selectedEngine, values[role], { purpose }), selectionSource: "recommended" }; continue; }
       catch { /* An obsolete variant must not prevent an otherwise eligible recommendation. */ }
     }
-    const preferredEffort = routingRecommendedEffort(choice, role);
+    const preferredEffort = routingRecommendedEffort(choice, scoreRole);
     const agent = selectedEngine.agents.find(({ id }) => id === choice.agentId);
     const selection = resolveVibe64AssistantSelection(selectedEngine, { ...choice,
       variantId: agent.variantId || (choice.variants.some(({ id }) => id === preferredEffort) ? preferredEffort : choice.variantId) });
-    return [role, { ...selection, selectionSource: "recommended" }];
-  }));
+    recommended[role] = { ...selection, selectionSource: "recommended" };
+  }
+  return recommended;
 }
 
 function routingAssignmentSelection(engine, assignment, { purpose = "senior" } = {}) {
   // A saved role keeps its exact model when the catalogue refreshes. Validate
   // availability against the current catalogue instead of silently substituting.
-  if (!assignment) throw routingError("Configure this mode in AI Accounts → Model routing first.");
-  if (!engine || assignment.engineId !== engine.engineId) throw routingError("The configured model belongs to another orchestrator.");
+  if (!assignment) throw routingError("Choose this model in AI setup first.");
+  if (!engine || assignment.engineId !== engine.engineId) throw routingError("The chosen model's tool is not available.");
   const selection = resolveVibe64AssistantSelection(engine, { ...assignment, catalogRevision: engine.revision });
   const choice = routingModelChoices(engine, { purpose }).find((item) => item.modelProviderId === selection.modelProviderId && item.modelId === selection.modelId);
   if (choice?.compatibilityError) throw routingError(choice.compatibilityError);
   return selection;
 }
 
-function resolveAssistantPurpose({ purpose, workflowEngineId, actor, configuration, catalogs = [], connectionAccess = [],
-  override, requirements = {}, reviewEnabled = false, validateModels = true } = {}) {
+function joinedLabels(labels) {
+  return labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`;
+}
+
+function resolveAssistantPurpose({ purpose, actor, configuration, catalogs = [], connectionAccess = [],
+  override, requirements = {}, reviewEnabled = false, validateModels = true, temporaryChat = false } = {}) {
   const role = ASSISTANT_PURPOSE_ROLES[purpose];
-  const result = { available: false, reasonCode: "", message: "", role: role || purpose, workflowEngineId,
+  const setup = assistantRoutingSetupFor(purpose, actor, { temporaryChat });
+  const result = { available: false, reasonCode: "", message: "", role: role || purpose, setup, followedRole: "",
     settingsRevision: configuration?.revision, configuredSelection: null, effectiveSelection: null,
-    connectionIdentity: "", backupUsed: false, instructionPurpose: purpose, executionProfileRequest: null };
+    connectionIdentity: "", instructionPurpose: purpose, executionProfileRequest: null };
   try {
     if (actor === undefined) throw routingError("The requesting user is required to resolve model routing.");
-    const assignments = configuration?.orchestrators?.[workflowEngineId] || (purpose === "custom" ? {} : null);
-    if (!assignments) throw routingError("Configure model routing for this workflow first.");
+    if (configuration && (configuration.orchestrators || !configuration.owner)) throw upgradeRequired();
+    if (isMainChatPurpose(purpose, { temporaryChat }) && !isAssistantRoutingOwner(actor)) {
+      return { ...result, reasonCode: "vibe64_main_chat_approval_required", approvalRequired: true,
+        message: "Main chat runs on the owner's AI. Your messages wait for their approval." };
+    }
+    const values = configuration?.[setup] || {};
     if (purpose === "auto") {
-      const missingRoles = ["senior", "junior", "router"].filter((name) => !assignments[name]);
+      const missingRoles = ["senior", "junior", "router"].filter((name) => !isRoutingSelection(values[name]));
       if (missingRoles.length) {
-        const labels = missingRoles.map(assistantModeLabel);
-        const names = labels.length === 1 ? labels[0] : `${labels.slice(0, -1).join(", ")} and ${labels.at(-1)}`;
+        const names = joinedLabels(missingRoles.map(assistantModeLabel));
         return { ...result, reasonCode: "vibe64_assistant_role_unconfigured", missingRoles,
-          message: labels.length === 1 ? `Auto needs a ${names} model. Choose one in Model routing.`
-            : `Auto needs models for ${names}. Choose them in Model routing.` };
+          message: missingRoles.length === 1 ? `Auto needs a ${names} model. Choose one in AI setup.`
+            : `Auto needs models for ${names}. Choose them in AI setup.` };
       }
-      const input = { workflowEngineId, actor, configuration, catalogs, connectionAccess, validateModels };
+      const input = { actor, configuration, catalogs, connectionAccess, validateModels };
       const junior = resolveAssistantPurpose({ ...input, purpose: "junior", requirements, reviewEnabled: true });
       const router = resolveAssistantPurpose({ ...input, purpose: "request_routing" });
       const unavailable = [junior, router].find((decision) => !decision.available);
-      if (unavailable) {
-        return { ...result, reasonCode: unavailable.reasonCode, message: unavailable.message };
-      }
-      return { ...result, available: true, seniorJuniorPair: junior.seniorJuniorPair, router: router.effectiveSelection,
-        routerConnectionIdentity: router.connectionIdentity };
+      if (unavailable) return { ...result, reasonCode: unavailable.reasonCode, message: unavailable.message };
+      return { ...result, available: true, engineId: junior.engineId, seniorJuniorPair: junior.seniorJuniorPair,
+        router: router.effectiveSelection, routerConnectionIdentity: router.connectionIdentity };
     }
     if (!role) throw routingError("Unknown assistant purpose.");
-    if (role === "helper" && purpose !== "helper" && assignments.helperRoutingReview) {
-      throw routingError("Review the migrated helper choices in Model routing before using background assistance.",
-        "vibe64_assistant_helper_review_required");
-    }
     if (override && (!["custom", "senior", "junior"].includes(override.role) || !override.selection)) {
       throw routingError("A conversation override must identify its role and selection.");
     }
-    const configured = { ...assignments, ...(override ? { [override.role]: override.selection } : {}) };
-    const identity = (value, roleName) => {
-      if (!value) throw routingError(roleName === "custom" ? "Choose a custom model from Chat mode." : `Choose a ${assistantModeLabel(roleName) || "Shared backup"} model in Model routing.`);
+    const configured = (roleName) => override?.role === roleName ? { value: override.selection, followedRole: "" }
+      : assistantSetupRoleValue(values, roleName);
+    const identity = ({ value, followedRole }, roleName) => {
+      const named = followedRole || roleName;
+      if (!value) {
+        if (roleName === "custom") throw routingError("Choose a custom model from Chat mode.");
+        if (setup === "nonOwner") {
+          throw routingError(`The workspace owner hasn't chosen a ${assistantModeLabel(named)} model for team members yet.`, "vibe64_team_ai_role_unconfigured");
+        }
+        throw routingError(`Choose a ${assistantModeLabel(named)} model in AI setup.`, "vibe64_assistant_role_unconfigured");
+      }
       const selection = defineVibe64AssistantSelection(value);
       const access = routingConnectionAccess(selection, connectionAccess);
       if (!access || typeof access.ownerOnly !== "boolean" || typeof access.available !== "boolean" ||
           typeof access.connectionIdentity !== "string" || !access.connectionIdentity.trim()) {
-        throw routingError("The configured connection is no longer recognised. Review Model routing.", VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE);
+        throw routingError("The chosen connection is no longer recognised. Review AI setup.", VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE);
+      }
+      if (!canUseVibe64Assistant({ ...access, available: true }, actor)) {
+        throw routingError(roleName === "custom" ? "This custom model uses a personal connection. Choose a model you can access."
+          : setup === "nonOwner" ? "This team model uses a personal plan. The workspace owner must choose a Workspace-use model."
+            : "Only the workspace owner can use this personal AI connection.", VIBE64_ASSISTANT_ACCESS_ERROR_CODES.RESTRICTED);
       }
       return { selection, access };
     };
-    const restricted = ({ access }) => !canUseVibe64Assistant({ ...access, available: true }, actor);
-    const backup = () => {
-      if (!assignments.sharedBackup) throw routingError("Connect and configure a shared backup for collaborator access.", "vibe64_assistant_backup_required");
-      const destination = identity(assignments.sharedBackup, "sharedBackup");
-      if (destination.access.ownerOnly) throw routingError("Shared backup must use a workspace connection.", "vibe64_assistant_backup_invalid");
-      return destination;
-    };
     const validate = (destination, instructionPurpose, requiredCapabilities = []) => {
       if (destination.access.available === false) throw routingError("The selected AI connection is unavailable.", VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE);
-      // Read-only mode and workflow choices need connection/access decisions, without
+      // Read-only mode choices need connection/access decisions, without
       // launching model discovery. Dispatch always validates the model catalogue.
       if (!validateModels) return destination;
       const engine = catalogs.find((entry) => entry.engineId === destination.selection.engineId);
       const selection = routingAssignmentSelection(engine, destination.selection, { purpose: instructionPurpose });
       const model = engine.modelProviders.find(({ id }) => id === selection.modelProviderId).models.find(({ id }) => id === selection.modelId);
-      if (["junior", "review", "deslop"].includes(instructionPurpose) && model.capabilities?.toolcall === false) {
+      if (["junior", "review", "deslop", "fix"].includes(instructionPurpose) && model.capabilities?.toolcall === false) {
         throw routingError("The selected model cannot perform coding or review tools.", "vibe64_assistant_capability_unavailable");
       }
       if (!Array.isArray(requiredCapabilities) || requiredCapabilities.some((name) => model.capabilities?.[name] !== true)) {
@@ -226,37 +307,24 @@ function resolveAssistantPurpose({ purpose, workflowEngineId, actor, configurati
       }
       return { ...destination, selection };
     };
-    const snapshot = (original, effective, backupReason = "") => ({
-      configuredSelection: original.selection, effectiveSelection: effective.selection,
-      connectionIdentity: effective.access.connectionIdentity, backupUsed: Boolean(backupReason), backupReason
-    });
+    const snapshot = (original, effective) => ({ configuredSelection: original.selection, effectiveSelection: effective.selection,
+      connectionIdentity: effective.access.connectionIdentity });
     if (role === "senior" || role === "junior") {
-      const original = { senior: identity(configured.senior, "senior"), junior: identity(configured.junior, "junior") };
-      if (Object.values(original).some(({ selection }) => selection.engineId !== workflowEngineId)) {
-        throw routingError("Configure Senior and Junior in the same workflow orchestrator.");
+      const original = { senior: identity(configured("senior"), "senior"), junior: identity(configured("junior"), "junior") };
+      if (original.senior.selection.engineId !== original.junior.selection.engineId) {
+        throw routingError(override ? "Senior and Junior overrides must run in your main AI's tool." : "Senior and Junior must run in the same tool.");
       }
       const effective = { ...original };
-      const reasons = { senior: "", junior: "" };
-      if (Object.values(original).some(restricted)) {
-        const destination = backup();
-        for (const key of ["senior", "junior"]) {
-          if (restricted(original[key]) || destination.selection.engineId !== workflowEngineId) {
-            effective[key] = destination;
-            reasons[key] = restricted(original[key]) ? "personal_connection" : "keep_workflow_together";
-          }
-        }
-      }
       for (const key of ["senior", "junior"]) effective[key] = validate(effective[key], key, requirements[key]);
       effective[role] = validate(effective[role], purpose, requirements.capabilities);
       if (reviewEnabled || purpose === "review") effective.senior = validate(effective.senior, "review", requirements.review);
-      result.seniorJuniorPair = Object.fromEntries(["senior", "junior"].map((key) => [key, snapshot(original[key], effective[key], reasons[key])]));
-      Object.assign(result, result.seniorJuniorPair[role]);
+      result.seniorJuniorPair = Object.fromEntries(["senior", "junior"].map((key) => [key, snapshot(original[key], effective[key])]));
+      Object.assign(result, result.seniorJuniorPair[role], { engineId: original.senior.selection.engineId });
     } else {
-      const original = identity(configured[role], role);
-      const needsBackup = restricted(original);
-      if (role === "custom" && needsBackup) throw routingError("This custom model uses a personal connection. Choose a model you can access.", VIBE64_ASSISTANT_ACCESS_ERROR_CODES.RESTRICTED);
-      const effective = validate(needsBackup ? backup() : original, purpose, requirements.capabilities);
-      Object.assign(result, snapshot(original, effective, needsBackup ? "personal_connection" : ""));
+      const value = configured(role);
+      const original = identity(value, role);
+      const effective = validate(original, purpose, requirements.capabilities);
+      Object.assign(result, snapshot(original, effective), { followedRole: value.followedRole, engineId: effective.selection.engineId });
     }
     if (Object.values(VIBE64_AGENT_EXECUTION_WORKLOAD_IDS).includes(purpose)) {
       result.executionProfileRequest = { profileId: "helper", workloadId: purpose };
@@ -266,6 +334,7 @@ function resolveAssistantPurpose({ purpose, workflowEngineId, actor, configurati
     return { ...result, reasonCode: error.code || "vibe64_assistant_routing_invalid", message: error.message };
   }
 }
+
 
 function parseRoutingDecision(text) {
   let result;
@@ -312,6 +381,7 @@ function assistantModePrompt(mode, message, { planInstructions = "", intent = ""
     custom: direct,
     senior: direct,
     junior: direct,
+    fix: direct,
     deslop: [
       "Perform Deslop directly using the project's Deslop guidance.",
       "You may edit code for behavior-preserving cleanup; earlier Auto planning restrictions do not apply.",
@@ -479,8 +549,10 @@ function assistantWorkflowUpgradeChanges({ metadata = {}, conversations = [] }) 
     routingMetadata: { ...(record.routingMetadata || {}), ...change(record.routingMetadata || {}) } })) };
 }
 
-export { ASSISTANT_MODES, ASSISTANT_ROUTING_METADATA, ASSISTANT_ROUTING_ROLES, ASSISTANT_ROUTING_ASSIGNMENTS,
-  ASSISTANT_ROUTING_ROLE_DEFINITIONS, ASSISTANT_PURPOSE_ROLES, ROUTING_REASONS, routingModelScore, resolveAssistantPurpose, assistantRoutingPreferences,
+export { ASSISTANT_MODES, ASSISTANT_FIX_MODE, ASSISTANT_ROUTING_METADATA, ASSISTANT_SETUP_ROLES, ASSISTANT_FOLLOWING_ROLES,
+  ASSISTANT_ROUTING_ROLE_DEFINITIONS, ASSISTANT_ROLE_DEFAULT_FOLLOWS, ASSISTANT_PURPOSE_ROLES, ASSISTANT_ROLE_PURPOSES, MAIN_CHAT_PURPOSES, ROUTING_REASONS,
+  routingModelScore, resolveAssistantPurpose, assistantRoutingPreferences, assistantRoutingSetupFor, assistantSetupRoleValue,
+  isAssistantRoutingOwner, isMainChatPurpose, routingRunsInChoices,
   assistantRoutingFromMetadata, hasConnectedAssistantModels, routingModelChoices, recommendedRoutingAssignments, routingAssignmentSelection,
   parseRoutingDecision, assistantRoutingPrompt, assistantWorkflowInstructions,
   assistantModeLabel, assistantModePrompt, assistantGoalObjective, assistantGoalManagementMessage, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel,

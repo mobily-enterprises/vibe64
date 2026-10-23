@@ -6,7 +6,8 @@ import { ACTION_START_TEMPORARY_CONVERSATION_TURN, ACTION_STOP_TEMPORARY_CONVERS
   ACTION_UPDATE_TEMPORARY_CONVERSATION } from "./actions.js";
 import { temporaryConversationTurnActionInputValidator, temporaryConversationUpdateInputValidator } from "./inputSchemas.js";
 import { parseIntegrationSetupRequest, normalizeVibe64AgentTaskResult, serializeVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
-import { assistantGoalManagementMessage, assistantGoalObjective, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantGoalManagementMessage, assistantGoalObjective, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingStatusIsPending,
+  isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createAssistantRouting } from "./assistantRouting.js";
 import { requireCompletedConversationRewind, sendWithAssistantChangeover, sessionConversationKey } from "./assistantChangeover.js";
 import { createMainConversationBinding, readMainConversationHistory, MAIN_CONVERSATION_PRESENTATION } from "./mainConversationBinding.js";
@@ -118,6 +119,8 @@ function requireSuccess(result) {
 
 // Session storage owns discovery and the transcript. Existing provider adapters
 // own native turns. Only explicit Close removes a user-facing temporary chat.
+const TEAM_TEMPORARY_MODES = "Senior and Junior are for the workspace owner. Choose Fix it with AI or Custom.";
+
 function createSessionConversations({
   sessionAgent,
   conversationRuntime,
@@ -202,14 +205,9 @@ function createSessionConversations({
       agent_identity_conversation_id: record.providerConversationId || "",
       agent_identity_model_provider: record.providerConversationId ? selection.modelProviderId : ""
     });
-    if (record.recoveryOperation === "update") {
-      const preferences = assistantRoutingFromMetadata(metadata);
+    if (record.recoveryOperation === "update" && assistantRoutingFromMetadata(metadata)?.mode !== "custom") {
       // Enforce repair policy for future turns without rewriting saved requests or history.
-      metadata.assistant_routing = JSON.stringify(assistantRoutingPreferences({
-        ...preferences, mode: "senior", review: false,
-        workflowEngineId: preferences?.workflowEngineId || selection.engineId,
-        override: preferences?.mode === "senior" ? preferences.override : undefined
-      }));
+      metadata.assistant_routing = JSON.stringify({ mode: "fix", review: false });
     }
     return { ...ctx, routingConversationId: record.conversationId, assistantSelection: selection,
       session: { ...ctx.session, metadata } };
@@ -227,9 +225,7 @@ function createSessionConversations({
   async function purposes(ctx, record) {
     const selected = selectedContext(ctx, record);
     const preferences = assistantRoutingFromMetadata(selected.session.metadata);
-    const decisions = await sessionAgent.inspectAssistantPurposes({ ...preferences,
-      workflowEngineId: preferences?.workflowEngineId || record.assistantSelection.engineId
-    }, selected);
+    const decisions = await sessionAgent.inspectAssistantPurposes({ ...preferences, temporaryChat: true }, selected);
     const autoUnavailable = { available: false, message: "Auto is available in Main chat only. Choose Senior or Junior." };
     return JSON.parse(JSON.stringify({ ...decisions, auto: autoUnavailable, review: autoUnavailable }, (key, value) =>
       ["connectionIdentity", "routerConnectionIdentity"].includes(key) ? undefined : value));
@@ -479,7 +475,6 @@ function createSessionConversations({
         messages: turn.messages.map(message => message.role === "user" ? { ...message, receipt: false } : message) });
     scopedStore.writeConversationUserMessage = (_id, ...args) => store.writeConversationUserMessage(scope, ...args);
     const context = { ...selected, routingConversationId: conversationId, conversationContext: ctx, recentChatContext: record.recentChatContext,
-      requiredAssistantMode: record.recoveryOperation === "update" ? "senior" : "",
       runtime: { ...ctx.runtime, store: scopedStore }, session: { ...ctx.session, metadata } };
     scopedStore.conversationMessageIdExists = async (_id, messageId) => {
       if (!await store.conversationMessageIdExists(scope, messageId)) return false;
@@ -499,7 +494,7 @@ function createSessionConversations({
   const routingAgent = {
     listCapabilities: (input, ctx) => sessionAgent.listCapabilities(input, nativeContext(ctx)),
     requireAssistantAccessForSelection: (input, ctx) => sessionAgent.requireAssistantAccessForSelection(input, nativeContext(ctx)),
-    resolveAssistantPurpose: (input, ctx) => sessionAgent.resolveAssistantPurpose(input, nativeContext(ctx)),
+    resolveAssistantPurpose: (input, ctx) => sessionAgent.resolveAssistantPurpose({ ...input, temporaryChat: true }, nativeContext(ctx)),
     ...Object.fromEntries(["resolveEphemeralExecutionProfile", "createEphemeralConversation", "startEphemeralConversationTurn",
       "waitForEphemeralConversationTurn", "stopEphemeralConversation", "deleteEphemeralConversation"]
       .map((name) => [name, (...args) => sessionAgent[name](...args)])),
@@ -669,15 +664,17 @@ function createSessionConversations({
         created = true;
         const parentPreferences = assistantRoutingFromMetadata(ctx.session.metadata);
         const parentSelection = vibe64AssistantSelectionFromMetadata(ctx.session.metadata);
-        const inheritedPreferences = parentPreferences
+        // Team members' temporary chats run on their own Fix it with AI or Custom model.
+        const owner = isAssistantRoutingOwner(input.vibe64User || options.vibe64User);
+        let inheritedPreferences = { mode: "fix" };
+        if (owner) inheritedPreferences = parentPreferences
           ? { ...parentPreferences, mode: parentPreferences.mode === "auto" ? "senior" : parentPreferences.mode }
           : { mode: "senior", override: parentSelection };
-        const requestedPreferences = input.presentation?.recoveryOperation === "update" ? { mode: "senior", review: false }
+        const requestedPreferences = input.presentation?.recoveryOperation === "update" ? { mode: "fix" }
           : input.assistantRouting || inheritedPreferences;
         if (requestedPreferences.mode === "auto") throw new Error("Temporary chats use Senior or Junior. Auto is available in Main chat only.");
-        const preferences = assistantRoutingPreferences({ ...requestedPreferences, review: false,
-          workflowEngineId: parentPreferences?.workflowEngineId || parentSelection.engineId
-        });
+        if (!owner && ["senior", "junior"].includes(requestedPreferences.mode)) throw new Error(TEAM_TEMPORARY_MODES);
+        const preferences = assistantRoutingPreferences({ ...requestedPreferences, review: false });
         const initialPresentation = presentation(input.presentation);
         const recentContext = input.includeRecentChatContext === true
           ? await ctx.runtime.store.mutateSession(sessionId, () => recentChatContext(ctx.runtime.store, sessionId)) : null;
@@ -785,24 +782,22 @@ function createSessionConversations({
         if (input.assistantRouting) {
           const requested = assistantRoutingPreferences(input.assistantRouting);
           if (requested.mode === "auto") throw new Error("Temporary chats use Senior or Junior. Auto is available in Main chat only.");
-          const repair = record.recoveryOperation === "update";
-          if (repair && !["senior", "custom"].includes(requested.mode)) throw new Error("Merge repairs always use Senior. You can choose a different model for Senior.");
-          const selectingModel = requested.mode === "custom" || repair && requested.override;
+          if (record.recoveryOperation === "update" && !["fix", "custom"].includes(requested.mode)) {
+            throw new Error("Repair chats use Fix it with AI. Choose Custom to pick a different model.");
+          }
+          if (!isAssistantRoutingOwner(input.vibe64User || options.vibe64User) && ["senior", "junior"].includes(requested.mode)) throw new Error(TEAM_TEMPORARY_MODES);
+          const selectingModel = requested.mode === "custom";
           const override = selectingModel
             ? await sessionAgent.resolveSelection(requested.override, ctx) : requested.override;
           if (selectingModel) await sessionAgent.requireAssistantAccessForSelection(override, ctx);
-          const preferences = assistantRoutingPreferences({ ...requested, mode: repair ? "senior" : requested.mode, override, review: false,
-            workflowEngineId: selectingModel ? override.engineId
-              : JSON.parse(record.routingMetadata?.assistant_routing || "null")?.workflowEngineId || record.assistantSelection.engineId });
+          const preferences = assistantRoutingPreferences({ ...requested, override, review: false });
           fields.routingMetadata = { ...record.routingMetadata, assistant_routing: JSON.stringify(preferences) };
         }
         if (settingsChanged && !input.assistantRouting) {
           const preferences = assistantRoutingFromMetadata(selectedContext(ctx, record).session.metadata);
           if (preferences.mode === "auto") throw new Error("Choose Senior or Junior before customizing its model.");
+          if (preferences.mode === "fix") throw new Error("Fix it with AI uses the model chosen in AI setup. Choose Custom to pick another model.");
           const selection = record.assistantSelection;
-          if (["senior", "junior"].includes(preferences.mode) && selection.engineId !== preferences.workflowEngineId) {
-            throw new Error("Senior and Junior model overrides must use the workflow orchestrator. Configure its shared backup in Model routing.");
-          }
           const override = await sessionAgent.resolveSelection({ engineId: selection.engineId, modelProviderId: selection.modelProviderId,
             agentId: selection.agentId, modelId: input.agentSettings.model || selection.modelId,
             variantId: input.agentSettings.thinking || "" }, ctx);

@@ -5,7 +5,6 @@ import { setImmediate } from "node:timers/promises";
 
 import {
   ACTION_PREVIEW_MODEL_ROUTING,
-  ACTION_READ_MODEL_ROUTING_WORKFLOWS,
   ACTION_READ_ACCOUNTS,
   ACTION_READ_ACCOUNT_AUTH_SESSION,
   ACTION_SAVE_GIT_IDENTITY,
@@ -334,14 +333,14 @@ test("curated Codex routes use trusted request identity and accept only curated 
   });
 });
 
-test("routing draft preview uses trusted request identity and carries explicit helper review", async () => {
+test("routing draft preview uses trusted request identity and carries both setups", async () => {
   await withLocalRequestBypass(async () => {
     const runtime = testAccountRouteRuntime();
     registerRoutes(runtime.http, { accounts: runtime.accounts, fastify: runtime.fastify,
       projectScoped: false, routeRelativePath: "vibe64/accounts", routeSurface: "app" });
     const route = findRegisteredRoute(runtime, { method: "POST", path: "/api/vibe64/accounts/model-routing/preview" });
     assert.ok(route);
-    const body = { revision: 4, orchestrators: {}, reviewedHelperWorkflows: ["codex"], vibe64User: { role: "owner" } };
+    const body = { revision: 4, owner: { fix: { follows: "junior" } }, nonOwner: {}, vibe64User: { role: "owner" } };
     assert.equal(route.options.body.schema.patch(body).errors.vibe64User.code, "FIELD_NOT_ALLOWED");
     for (const vibe64User of [{ role: "member", username: "member" }, undefined]) {
       let action;
@@ -349,25 +348,15 @@ test("routing draft preview uses trusted request identity and carries explicit h
         async executeAction(value) { action = value; return { ok: true }; }
       }, testReply());
       assert.equal(action.actionId, ACTION_PREVIEW_MODEL_ROUTING);
-      assert.deepEqual(action.input.reviewedHelperWorkflows, ["codex"]);
+      assert.deepEqual([action.input.owner, action.input.nonOwner], [{ fix: { follows: "junior" } }, {}]);
       assert.equal(Object.hasOwn(action.input, "vibe64User"), false);
     }
   });
 });
 
-test("workflow choices use the lightweight action and trusted request identity", async () => {
-  await withLocalRequestBypass(async () => {
-    const runtime = testAccountRouteRuntime();
-    registerRoutes(runtime.http, { accounts: runtime.accounts, fastify: runtime.fastify,
-      projectScoped: false, routeRelativePath: "vibe64/accounts", routeSurface: "app" });
-    const route = findRegisteredRoute(runtime, { method: "GET", path: "/api/vibe64/accounts/model-routing/workflows" });
-    assert.ok(route);
-    const member = { role: "member", username: "member" };
-    let action;
-    await route.handler({ vibe64User: member, input: { query: { vibe64User: { role: "owner" } } },
-      async executeAction(value) { action = value; return { ok: true, workflows: [] }; }
-    }, testReply());
-    assert.equal(action.actionId, ACTION_READ_MODEL_ROUTING_WORKFLOWS);
-    assert.equal(Object.hasOwn(action.input, "vibe64User"), false);
-  });
+test("the per-tool workflow choices route is gone", () => {
+  const runtime = testAccountRouteRuntime();
+  registerRoutes(runtime.http, { accounts: runtime.accounts, fastify: runtime.fastify,
+    projectScoped: false, routeRelativePath: "vibe64/accounts", routeSurface: "app" });
+  assert.equal(findRegisteredRoute(runtime, { method: "GET", path: "/api/vibe64/accounts/model-routing/workflows" }), null);
 });

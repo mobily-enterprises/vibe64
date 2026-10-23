@@ -692,7 +692,6 @@ defineExpose({ busy, doneLabel, screen, skippable, wasSetUp, back: () => go("cho
           <ModelRoutingForm
             ref="routingForm"
             :plain="!fullRouting"
-            :engine-id="chosen.connect.engineId"
             :connection-id="fullRouting ? '' : chosen.connect.modelProviderId"
             :connection-label="fullRouting ? '' : chosen.name"
             @busy="routingBusy = $event" @saved="routingDone" @close="routingDone"

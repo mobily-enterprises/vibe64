@@ -352,7 +352,7 @@ test("standalone registers connection actions once and host-owned account runtim
         });
         try {
           const definitions = feature.actions.listDefinitions();
-          assert.equal(definitions.length, hostOwned ? 14 : 19);
+          assert.equal(definitions.length, hostOwned ? 13 : 18);
           assert.equal(definitions.filter(({ id }) => id.startsWith("vibe64.accounts.ai-connections.")).length, hostOwned ? 0 : 5);
           for (const definition of definitions) assert.equal(definition.extensions.vibe64.projectScoped, false);
         } finally { await feature.runtime.shutdown(); }
@@ -2250,145 +2250,110 @@ async function routingAccountsFixture(root) {
     publishAccountChanged: async (...args) => { events.push(args); } });
   const owner = { role: "owner", username: "owner" };
   const member = { role: "member", username: "member" };
-  const assignments = { senior, junior, router: junior, helper: junior, sharedBackup: pickle };
+  const assignments = { senior, junior, router: junior, quickHelper: junior,
+    colleague: { follows: "senior" }, fix: { follows: "junior" }, explain: { follows: "quickHelper" } };
   return { service, store, manager, owner, member, denied, events, assignments, senior, junior, pickle, unavailable, catalogCalls };
 }
 
-test("model routing setup initializes compatible missing roles once and preserves deliberate choices", async () => {
+test("model routing setup initializes missing roles once and preserves deliberate choices", async () => {
   await withTempDir(async (root) => {
     const f = await routingAccountsFixture(root);
     const preview = await f.service.readModelRouting({ vibe64User: f.member });
-    const setup = preview.engines.find(({ engineId }) => engineId === "codex");
-    assert.equal(setup.preview.viewer.senior.available, false, "reading does not initialize missing defaults");
-    assert.equal(setup.setupPreview.senior.effectiveSelection.modelId, "deepseek-flash");
-    assert.equal(setup.setupPreview.senior.backupUsed, true);
+    assert.equal(preview.viewer.colleague.available, false, "reading does not initialize missing defaults");
+    assert.equal(preview.viewer.senior.approvalRequired, true);
+    assert.equal(preview.setups.owner.setupPreview.senior.available, true);
     assert.equal((await f.store.read()).revision, 0);
-    // Internal session setup can be triggered by the first collaborator; it
-    // accepts only workflow IDs and cannot replace the owner's assignments.
-    f.catalogCalls.length = 0;
-    const first = await f.service.initializeModelRouting({ engineIds: ["codex"], vibe64User: f.member });
+    // Internal setup can be triggered by the first collaborator; it accepts no
+    // values and fills only absent roles.
+    const first = await f.service.initializeModelRouting({ vibe64User: f.member });
     assert.equal(first.ok, true, first.error);
-    assert.deepEqual(f.catalogCalls.filter(({ engineId }) => engineId === "opencode").map(({ input }) => input),
-      [{ configuredOnly: "true" }], "initializing Codex must not discover unrelated OpenCode models");
-    assert.equal(first.initialized.length, 5);
+    assert.equal(first.initialized.length, 7);
     const saved = await f.store.read();
-    assert.equal(saved.orchestrators.codex.senior.modelId, "gpt-6-astra");
-    assert.equal(saved.orchestrators.codex.junior.modelId, "gpt-6-astra");
-    assert.equal(saved.orchestrators.codex.helper.modelId, "gpt-6-astra");
-    assert.equal(saved.orchestrators.codex.router.modelId, "gpt-6-astra");
-    assert.equal(saved.orchestrators.codex.sharedBackup.modelId, "deepseek-flash");
-    assert.equal(saved.orchestrators.opencode, undefined, "only the newly usable orchestrator is initialized");
-    assert.deepEqual(await f.service.initializeModelRouting({ engineIds: ["codex"], vibe64User: f.owner }), { ok: true, initialized: [] });
+    for (const role of ["senior", "junior"]) assert.equal(saved.owner[role].modelId, "gpt-6-astra", role);
+    assert.equal(saved.owner.quickHelper.modelId, "deepseek-flash", "a workspace key outranks a plan for Quick helper");
+    assert.ok(saved.owner.router.schema);
+    assert.deepEqual([saved.owner.colleague, saved.owner.fix, saved.owner.explain],
+      [{ follows: "senior" }, { follows: "junior" }, { follows: "quickHelper" }]);
+    assert.deepEqual(saved.nonOwner, {}, "only the requested setup is initialized");
+    assert.deepEqual(await f.service.initializeModelRouting({ vibe64User: f.owner }), { ok: true, initialized: [] });
     assert.deepEqual(await f.store.read(), saved);
-    const chosen = { ...saved.orchestrators.codex, junior: { ...f.senior, selectionSource: "explicit" }, helper: null };
+    const chosen = { ...saved.owner, junior: { ...f.senior, selectionSource: "explicit" }, quickHelper: null };
     delete chosen.router;
-    await f.store.write({ codex: chosen }, saved.revision);
-    const result = await f.service.initializeModelRouting({ engineIds: ["codex", "claude"], vibe64User: f.owner });
-    assert.deepEqual(result.initialized, [{ engineId: "codex", role: "router" }]);
+    await f.store.write({ ...saved, owner: chosen }, saved.revision);
+    const result = await f.service.initializeModelRouting({ vibe64User: f.owner });
+    assert.deepEqual(result.initialized, [{ setup: "owner", role: "router" }]);
     const current = await f.store.read();
-    assert.equal(current.orchestrators.codex.helper, null, "explicitly unset is not a missing assignment");
+    assert.equal(current.owner.quickHelper, null, "explicitly off is not a missing assignment");
+    assert.deepEqual(current.owner.junior, chosen.junior);
     const nextPreview = await f.service.readModelRouting({ vibe64User: f.owner });
-    assert.equal(nextPreview.engines.find(({ engineId }) => engineId === "codex").setupPreview.helper.available, false);
-    assert.deepEqual(current.orchestrators.codex.junior, chosen.junior);
-    assert.equal(current.orchestrators.claude, undefined, "an unavailable orchestrator gets no helper-only profile");
-    assert.equal(f.events.length, 2);
+    assert.equal(nextPreview.setups.owner.setupPreview.prompt_hint.available, false);
+    const team = await f.service.initializeModelRouting({ setup: "nonOwner", vibe64User: f.owner });
+    assert.equal(team.ok, true, team.error);
+    const teamSaved = (await f.store.read()).nonOwner;
+    assert.notEqual(teamSaved.colleague.modelProviderId, "openai", "the team setup never takes a personal plan");
+    assert.deepEqual([teamSaved.fix, teamSaved.explain], [{ follows: "colleague" }, { follows: "quickHelper" }]);
+    assert.deepEqual((await f.store.read()).owner, current.owner);
+    assert.equal(f.events.length, 3);
   });
 });
 
-test("model routing setup still discovers an explicitly assigned cross-engine helper", async () => {
+test("initializing a complete saved setup does not wait for live catalogues", async () => {
   await withTempDir(async (root) => {
     const f = await routingAccountsFixture(root);
-    await f.store.write({ codex: { senior: f.senior, junior: f.junior, helper: f.pickle, sharedBackup: null } }, 0);
-    const result = await f.service.initializeModelRouting({ engineIds: ["codex"], vibe64User: f.owner });
-    assert.equal(result.ok, true, result.error);
-    assert.ok(f.catalogCalls.some(({ engineId, input }) => engineId === "opencode" && input.connectedOnly === "true"));
-    assert.deepEqual((await f.store.read()).orchestrators.codex.helper, f.pickle);
-  });
-});
-
-test("scoped routing saves one orchestrator and rejects edits or acknowledgements for another", async () => {
-  await withTempDir(async (root) => {
-    const f = await routingAccountsFixture(root);
-    await f.store.write({ codex: f.assignments, opencode: { senior: f.pickle, junior: f.pickle } }, 0);
-    const before = await f.store.read();
-    const view = await f.service.readModelRouting({ vibe64User: f.owner, engineId: "codex" });
-    assert.deepEqual(view.engines.map(({ engineId }) => engineId), ["codex"]);
-    for (const changes of [{ orchestrators: { opencode: { helper: f.pickle } } },
-      { orchestrators: {}, reviewedHelperWorkflows: ["opencode"] }]) {
-      const rejected = await f.service.saveModelRouting({ vibe64User: f.owner, revision: before.revision, engineId: "codex", ...changes });
-      assert.equal(rejected.ok, false);
-      assert.match(rejected.error, /selected orchestrator/);
-      assert.deepEqual(await f.store.read(), before);
-    }
-    const saved = await f.service.saveModelRouting({ vibe64User: f.owner, revision: before.revision, engineId: "codex",
-      orchestrators: { codex: { helper: f.pickle } } });
-    assert.equal(saved.ok, true, saved.error);
-    assert.deepEqual(saved.engines.map(({ engineId }) => engineId), ["codex"]);
-    const after = await f.store.read();
-    assert.equal(after.orchestrators.codex.helper.modelId, "big-pickle");
-    assert.deepEqual(after.orchestrators.opencode, before.orchestrators.opencode);
-  });
-});
-
-test("workflow reads use saved routing and scoped access without discovering model catalogues", async () => {
-  await withTempDir(async (root) => {
-    const f = await routingAccountsFixture(root);
-    await f.store.write({ codex: f.assignments, opencode: { senior: f.pickle, junior: f.pickle } }, 0);
-    const revision = (await f.store.read()).revision;
-    const member = await f.service.readModelRoutingWorkflows({ vibe64User: f.member });
-    assert.equal(member.ok, true, member.error);
-    assert.equal(member.canConfigure, false);
-    assert.equal(member.workflows[0].seniorLabel, "OpenCode (big-pickle default)");
-    assert.equal(member.workflows[0].juniorLabel, "OpenCode (big-pickle default)");
-    assert.equal(member.workflows[0].backupUsed, true);
-    const owner = await f.service.readModelRoutingWorkflows({ vibe64User: f.owner });
-    assert.equal(owner.canConfigure, true);
-    assert.equal(owner.workflows[0].seniorLabel, "Codex (gpt-6-astra default)");
-    assert.equal((await f.store.read()).revision, revision);
-    assert.deepEqual(f.events, []);
-    assert.doesNotMatch(JSON.stringify(member), /private-identity|connectionIdentity/);
-  });
-});
-
-test("initializing a complete saved workflow does not wait for live catalogues", async () => {
-  await withTempDir(async (root) => {
-    const f = await routingAccountsFixture(root);
-    await f.store.write({ codex: { ...f.assignments, sharedBackup: null } }, 0);
+    await f.store.write({ owner: f.assignments, nonOwner: {} }, 0);
     const service = createService({ accountRuntime: createAccountsRuntime({ systemRoot: root }),
       inspectRoutingConfiguration: async () => { throw new Error("Model discovery must not run."); } });
-    assert.deepEqual(await service.initializeModelRouting({ engineIds: ["codex"], vibe64User: f.owner }), { ok: true, initialized: [] });
-    assert.equal((await f.store.read()).orchestrators.codex.sharedBackup, null);
+    assert.deepEqual(await service.initializeModelRouting({ vibe64User: f.owner }), { ok: true, initialized: [] });
+    assert.equal((await f.store.read()).owner.quickHelper.modelId, f.junior.modelId);
   });
 });
 
-test("model routing setup leaves an unusable workflow and incomplete catalogue untouched", async () => {
+test("a save patches only the requested roles of each setup and refuses unknown roles", async () => {
   await withTempDir(async (root) => {
     const f = await routingAccountsFixture(root);
-    f.unavailable.add("gpt-6-astra");
-    f.unavailable.add("deepseek-flash");
-    const result = await f.service.initializeModelRouting({ engineIds: ["codex"], vibe64User: f.owner });
+    await f.store.write({ owner: f.assignments, nonOwner: {} }, 0);
+    const before = await f.store.read();
+    for (const changes of [{ owner: { sharedBackup: f.pickle } }, { nonOwner: { senior: f.pickle } }, { owner: { colleague: { follows: "colleague" } } }]) {
+      const rejected = await f.service.saveModelRouting({ vibe64User: f.owner, revision: before.revision, ...changes });
+      assert.equal(rejected.ok, false, JSON.stringify(changes));
+      assert.deepEqual(await f.store.read(), before);
+    }
+    const saved = await f.service.saveModelRouting({ vibe64User: f.owner, revision: before.revision,
+      nonOwner: { colleague: f.pickle, fix: { follows: "colleague" } }, owner: { fix: { follows: "senior" } } });
+    assert.equal(saved.ok, true, saved.error);
+    const after = await f.store.read();
+    assert.deepEqual(after.nonOwner, { colleague: { ...f.pickle, selectionSource: "explicit" }, fix: { follows: "colleague" } });
+    assert.deepEqual(after.owner, { ...before.owner, fix: { follows: "senior" } });
+    assert.equal(saved.setups.nonOwner.roles.fix.effective.modelId, "big-pickle");
+    assert.equal(saved.setups.nonOwner.roles.explain.configured, false, "an absent role is not configured");
+  });
+});
+
+test("model routing setup leaves an unusable setup untouched", async () => {
+  await withTempDir(async (root) => {
+    const f = await routingAccountsFixture(root);
+    for (const model of ["gpt-6-astra", "deepseek-flash", "big-pickle"]) f.unavailable.add(model);
+    const result = await f.service.initializeModelRouting({ vibe64User: f.owner });
     assert.deepEqual(result, { ok: true, initialized: [] });
     assert.equal((await f.store.read()).revision, 0);
     assert.equal(f.events.length, 0);
   });
 });
 
-test("model routing read and draft preview resolve the whole collaborator pair without writing", async () => {
+test("model routing read and draft preview resolve both setups without writing", async () => {
   await withTempDir(async (root) => {
     const f = await routingAccountsFixture(root);
     const initial = await f.service.readModelRouting({ vibe64User: f.owner });
     assert.equal(initial.ok, true, initial.error);
     assert.equal(initial.revision, 0);
+    assert.deepEqual(initial.team, { available: false, ownerName: "", memberCount: 0 });
     await assert.rejects(readFile(path.join(root, "ai-connections/routing.json")), { code: "ENOENT" });
-    const draft = { revision: 0, orchestrators: { codex: f.assignments }, vibe64User: f.owner };
+    const draft = { revision: 0, owner: f.assignments, vibe64User: f.owner };
     const preview = await f.service.previewModelRouting(draft);
     assert.equal(preview.ok, true, preview.error);
-    const codex = preview.engines.find(({ engineId }) => engineId === "codex");
-    assert.equal(codex.preview.owner.senior.effectiveSelection.modelId, "gpt-6-astra");
-    assert.equal(codex.preview.collaborator.senior.effectiveSelection.engineId, "opencode");
-    assert.equal(codex.preview.collaborator.junior.backupReason, "keep_workflow_together");
-    assert.equal(codex.preview.collaborator.review.effectiveSelection.modelId, "big-pickle");
-    assert.equal(codex.preview.collaborator.auto.available, true);
+    assert.equal(preview.setups.owner.preview.senior.effectiveSelection.modelId, "gpt-6-astra");
+    assert.equal(preview.setups.owner.preview.fix.effectiveSelection.modelId, "deepseek-flash");
+    assert.equal(preview.setups.nonOwner.preview.fix.reasonCode, "vibe64_team_ai_role_unconfigured");
     assert.equal((await f.store.read()).revision, 0);
     assert.deepEqual(f.events, []);
     assert.doesNotMatch(JSON.stringify(preview), /private-identity|connectionIdentity/);
@@ -2397,99 +2362,51 @@ test("model routing read and draft preview resolve the whole collaborator pair w
     const saved = await f.service.saveModelRouting(draft);
     assert.equal(saved.ok, true, saved.error);
     const member = await f.service.readModelRouting({ vibe64User: f.member });
-    const viewer = member.engines.find(({ engineId }) => engineId === "codex").preview;
     assert.equal(member.canConfigure, false);
-    assert.equal(viewer.owner, undefined);
-    assert.equal(viewer.collaborator, undefined);
-    assert.equal(viewer.viewer.junior.effectiveSelection.engineId, "opencode");
+    assert.equal(member.viewer.junior.approvalRequired, true);
+    assert.equal(member.viewer.fix.reasonCode, "vibe64_team_ai_role_unconfigured");
   });
 });
 
 test("model routing preserves unavailable assignments and their provenance while repairing another role", async () => {
   await withTempDir(async (root) => {
     const f = await routingAccountsFixture(root);
-    await f.store.write({ codex: f.assignments, opencode: { ...Object.fromEntries(Object.keys(f.assignments).map((role) => [role, f.pickle])) } }, 0);
+    await f.store.write({ owner: f.assignments, nonOwner: {} }, 0);
     f.unavailable.add(f.senior.modelId);
-    const result = await f.service.saveModelRouting({ vibe64User: f.owner, revision: 1, orchestrators: { codex: {
-      ...f.assignments, senior: { ...f.senior, selectionSource: "explicit" }, helper: { ...f.pickle, selectionSource: "explicit" }
-    } } });
+    const result = await f.service.saveModelRouting({ vibe64User: f.owner, revision: 1, owner: {
+      senior: { ...f.senior, selectionSource: "explicit" }, quickHelper: { ...f.pickle, selectionSource: "explicit" }
+    } });
     assert.equal(result.ok, true, result.error);
     const saved = await f.store.read();
-    assert.deepEqual(saved.orchestrators.codex.senior, f.senior);
-    assert.equal(saved.orchestrators.codex.helper.engineId, "opencode");
-    assert.equal(saved.orchestrators.codex.helper.selectionSource, "explicit");
-    assert.equal(saved.orchestrators.opencode.junior.modelId, "big-pickle");
-    assert.match(result.engines.find(({ engineId }) => engineId === "codex").roles.senior.error, /unavailable/);
-    const stale = await f.service.previewModelRouting({ vibe64User: f.owner, revision: 1, orchestrators: {} });
+    assert.deepEqual(saved.owner.senior, f.senior);
+    assert.equal(saved.owner.quickHelper.engineId, "opencode");
+    assert.equal(saved.owner.quickHelper.selectionSource, "explicit");
+    assert.match(result.setups.owner.roles.senior.error, /unavailable/);
+    const stale = await f.service.previewModelRouting({ vibe64User: f.owner, revision: 1 });
     assert.equal(stale.code, "vibe64_assistant_routing_stale");
-    const invalid = await f.service.saveModelRouting({ vibe64User: f.owner, revision: 2, orchestrators: { codex: { sharedBackup: f.senior } } });
-    assert.equal(invalid.ok, false);
-    assert.ok(invalid.fieldErrors["codex.sharedBackup"]);
+    f.unavailable.delete(f.senior.modelId);
+    const personal = await f.service.saveModelRouting({ vibe64User: f.owner, revision: 2, nonOwner: { colleague: f.senior } });
+    assert.equal(personal.ok, false);
+    assert.equal(personal.fieldErrors["nonOwner.colleague"], "Team members can't use personal plans. Choose a Workspace-use model.");
     assert.equal((await f.store.read()).revision, 2);
   });
 });
 
-test("model routing only clears migrated helper evidence after explicit review of a valid Helper choice", async () => {
-  await withTempDir(async (root) => {
-    const f = await routingAccountsFixture(root);
-    const helperRoutingReview = { reason: "helper_choices_differ", previous: [{ engineId: "codex", modelProviderId: "openai",
-      modelId: "gpt-6-luna", selectionSource: "explicit" }], proposed: f.junior };
-    await f.store.write({ codex: { ...f.assignments, helperRoutingReview } }, 0);
-    const unrelated = await f.service.saveModelRouting({ vibe64User: f.owner, revision: 1, orchestrators: { codex: { router: f.senior } } });
-    assert.equal(unrelated.ok, true, unrelated.error);
-    assert.deepEqual((await f.store.read()).orchestrators.codex.helperRoutingReview, helperRoutingReview);
-    const preview = unrelated.engines.find(({ engineId }) => engineId === "codex").preview.owner;
-    assert.equal(preview.helper.available, true);
-    assert.equal(preview.prompt_hint.reasonCode, "vibe64_assistant_helper_review_required");
-    const resolved = await f.service.saveModelRouting({ vibe64User: f.owner, revision: 2,
-      orchestrators: {}, reviewedHelperWorkflows: ["codex"] });
-    assert.equal(resolved.ok, true, resolved.error);
-    assert.equal((await f.store.read()).orchestrators.codex.helperRoutingReview, undefined);
-    assert.equal(resolved.engines.find(({ engineId }) => engineId === "codex").preview.owner.prompt_hint.available, true);
-  });
-});
-
-test("first-session setup offers included OpenCode for chat and managed Router and Helper", async () => {
+test("first-session setup offers included OpenCode for chat and managed Router and Quick helper", async () => {
   await withTempDir(async (root) => {
     const f = await routingAccountsFixture(root);
     f.unavailable.add("gpt-6-astra");
     f.unavailable.add("deepseek-flash");
     const before = await f.service.readModelRouting({ vibe64User: f.member });
-    const preview = before.engines.find(({ engineId }) => engineId === "opencode");
-    assert.equal(preview.setupPreview.auto.available, true);
-    assert.equal(preview.setupPreview.senior.available, true);
+    assert.equal(before.setups.owner.setupPreview.auto.available, true);
+    assert.equal(before.setups.owner.setupPreview.senior.available, true);
     assert.equal((await f.store.read()).revision, 0);
-    const initialized = await f.service.initializeModelRouting({ engineIds: ["opencode"], vibe64User: f.member });
+    const initialized = await f.service.initializeModelRouting({ vibe64User: f.member });
     assert.equal(initialized.ok, true, initialized.error);
     const saved = await f.store.read();
-    assert.deepEqual(Object.keys(saved.orchestrators), ["opencode"]);
-    for (const role of ["senior", "junior", "sharedBackup"]) {
-      assert.equal(saved.orchestrators.opencode[role].modelId, "big-pickle");
-    }
-    const after = await f.service.readModelRouting({ vibe64User: f.member });
-    assert.equal(saved.orchestrators.opencode.router.modelId, "big-pickle");
-    assert.equal(saved.orchestrators.opencode.helper.modelId, "big-pickle");
-    assert.equal(after.engines.find(({ engineId }) => engineId === "opencode").preview.viewer.auto.available, true);
-  });
-});
-
-test("routing reads leave the retired temporary default inert and new saves omit it", async () => {
-  await withTempDir(async (root) => {
-    const f = await routingAccountsFixture(root);
-    const draft = { revision: 0, orchestrators: {}, vibe64User: f.owner };
-    assert.equal((await f.service.previewModelRouting(draft)).temporaryChatRole, undefined);
-    assert.deepEqual(await f.service.saveModelRouting({ ...draft, vibe64User: f.member }), f.denied);
-    const saved = await f.service.saveModelRouting(draft);
-    assert.equal(saved.ok, true, saved.error);
-    const routingPath = path.join(root, "ai-connections", "routing.json");
-    const original = JSON.stringify({ ...await f.store.read(), temporaryChatRole: "helper" });
-    await writeFile(routingPath, original);
-    assert.equal((await f.service.readModelRouting({ vibe64User: f.member })).temporaryChatRole, undefined);
-    assert.equal(await readFile(routingPath, "utf8"), original);
-    const updated = await f.service.saveModelRouting({ ...draft, revision: saved.revision });
-    assert.equal(updated.ok, true, updated.error);
-    assert.equal((await f.store.read()).temporaryChatRole, undefined);
-    assert.equal((await f.service.saveModelRouting(draft)).code, "vibe64_assistant_routing_stale");
+    for (const role of ["senior", "junior", "router", "quickHelper"]) assert.equal(saved.owner[role].modelId, "big-pickle", role);
+    const after = await f.service.readModelRouting({ vibe64User: f.owner });
+    assert.equal(after.viewer.auto.available, true);
   });
 });
 
@@ -2497,7 +2414,7 @@ test("routing reads leave the retired temporary default inert and new saves omit
 test("Colleague routing tools inspect, search, preview and save through native owner and revision rules", async () => {
   await withTempDir(async root => {
     const f = await routingAccountsFixture(root);
-    await f.store.write({ codex: f.assignments, opencode: { senior: f.pickle, junior: f.pickle } }, 0);
+    await f.store.write({ owner: f.assignments, nonOwner: { colleague: f.pickle, fix: { follows: "colleague" } } }, 0);
     let actor = f.owner;
     const actions = createActionCatalogue({ events: { async publish() {} } });
     actions.register({ contributorId: "accounts", domain: "accounts", actions: createActions({ accounts: f.service })
@@ -2513,34 +2430,34 @@ test("Colleague routing tools inspect, search, preview and save through native o
       assert.doesNotThrow(() => catalog.toOpenAiToolSchema(tool));
       return catalog.executeToolCall({ toolName: tool.name, toolSet, context, argumentsText: JSON.stringify(input) });
     };
+    const role = (result, setup, name) => result.result.setups.find(row => row.setup === setup).roles.find(row => row.role === name);
     const before = await f.store.read();
-    const initial = await execute("read", { engineId: "codex" });
+    const initial = await execute("read");
     assert.equal(initial.ok, true, JSON.stringify(initial));
     assert.equal(initial.result.revision, before.revision);
     assert.equal(initial.result.canConfigure, true);
-    assert.equal(initial.result.engines.length, 1);
-    assert.equal(initial.result.engines[0].roles.find(role => role.role === "helper").assignment.modelId, f.junior.modelId);
-    assert.doesNotMatch(JSON.stringify(initial), /private-identity|connectionIdentity|capabilities|setupAssignments/);
-    const choices = await execute("read", { engineId: "codex", choiceRole: "helper", choiceSearch: "deepseek", includeOtherModels: true });
+    assert.equal(role(initial, "owner", "quickHelper").value.modelId, f.junior.modelId);
+    assert.deepEqual([role(initial, "owner", "colleague").follows, role(initial, "nonOwner", "fix").effective.modelId], ["senior", "big-pickle"]);
+    assert.doesNotMatch(JSON.stringify(initial), /private-identity|connectionIdentity|capabilities|setupValues/);
+    const choices = await execute("read", { setup: "owner", choiceRole: "quickHelper", choiceSearch: "deepseek" });
     assert.equal(choices.ok, true, JSON.stringify(choices));
     assert.equal(choices.result.choiceCount, 1);
     assert.equal(choices.result.nextOffset, null);
     assert.equal(choices.result.choices[0].selection.modelId, f.junior.modelId);
     assert.equal(choices.result.choices[0].available, true);
     assert.equal(choices.result.choices[0].ownerOnly, false);
-    assert.equal((await execute("read", { choiceRole: "helper" })).result.ok, false);
-    assert.equal((await execute("read", { engineId: "codex", choiceOffset: 20 })).result.ok, false);
-    const pageEnd = await execute("read", { engineId: "codex", choiceRole: "helper", choiceOffset: 20 });
+    assert.equal((await execute("read", { choiceRole: "quickHelper" })).result.ok, false);
+    assert.equal((await execute("read", { setup: "owner", choiceOffset: 20 })).result.ok, false);
+    const pageEnd = await execute("read", { setup: "owner", choiceRole: "quickHelper", choiceOffset: 20 });
     assert.deepEqual(pageEnd.result.choices, []);
-    const draft = { engineId: "codex", revision: before.revision, orchestrators: { codex: { helper: f.pickle } } };
+    const draft = { revision: before.revision, owner: { quickHelper: f.pickle } };
     const preview = await execute("preview", draft);
     assert.equal(preview.ok, true, JSON.stringify(preview));
-    assert.equal(preview.result.engines[0].roles.find(role => role.role === "helper").assignment.modelId, f.pickle.modelId);
+    assert.equal(role(preview, "owner", "quickHelper").value.modelId, f.pickle.modelId);
     assert.deepEqual(await f.store.read(), before, "preview must not persist");
     actor = f.member;
-    const member = await execute("read", { engineId: "codex" });
+    const member = await execute("read");
     assert.equal(member.result.canConfigure, false);
-    assert.ok(member.result.engines[0].preview.every(item => item.audience === "viewer"));
     for (const operation of ["preview", "save"]) {
       const denied = await execute(operation, draft);
       assert.ok(denied.result, `${operation}: ${JSON.stringify(denied)}`);
@@ -2549,29 +2466,30 @@ test("Colleague routing tools inspect, search, preview and save through native o
     assert.deepEqual(await f.store.read(), before);
     actor = f.owner;
     for (const invalid of [
-      { orchestrators: { codex: { unknownRole: f.senior } } },
-      { orchestrators: { foreign: {} } },
-      { orchestrators: { codex: { helper: { ...f.senior, apiKey: "must-not-pass" } } } },
-      { orchestrators: { codex: { helper: { ...f.senior, catalogRevision: "old" } } } },
-      { orchestrators: { codex: { helper: { modelId: "incomplete" } } } },
+      { owner: { unknownRole: f.senior } },
+      { orchestrators: { codex: {} } },
+      { owner: { quickHelper: { ...f.senior, apiKey: "must-not-pass" } } },
+      { owner: { quickHelper: { ...f.senior, catalogRevision: "old" } } },
+      { owner: { quickHelper: { modelId: "incomplete" } } },
+      { owner: { colleague: { follows: "colleague" } } },
       { vibe64User: f.owner }, { projectSlug: "unnecessary" }
-    ]) assert.equal((await execute("save", { ...draft, ...invalid })).ok, false, JSON.stringify(invalid));
+    ]) assert.equal((await execute("save", { ...draft, ...invalid })).result?.ok === true, false, JSON.stringify(invalid));
     assert.deepEqual(await f.store.read(), before);
     const saved = await execute("save", draft);
     assert.equal(saved.ok, true, JSON.stringify(saved));
     assert.equal(saved.result.revision, before.revision + 1);
     const after = await f.store.read();
-    assert.equal(after.orchestrators.codex.helper.modelId, f.pickle.modelId);
-    assert.deepEqual(after.orchestrators.codex.senior, before.orchestrators.codex.senior);
-    assert.deepEqual(after.orchestrators.opencode, before.orchestrators.opencode);
+    assert.equal(after.owner.quickHelper.modelId, f.pickle.modelId);
+    assert.deepEqual(after.owner.senior, before.owner.senior);
+    assert.deepEqual(after.nonOwner, before.nonOwner);
     assert.equal((await execute("save", draft)).result.code, "vibe64_assistant_routing_stale");
-    const unavailable = await execute("save", { ...draft, revision: after.revision, orchestrators: { codex: { sharedBackup: f.senior } } });
-    assert.equal(unavailable.result.ok, false);
-    assert.deepEqual(unavailable.result.invalidRoles, ["codex.sharedBackup"]);
+    const personal = await execute("save", { ...draft, revision: after.revision, nonOwner: { quickHelper: f.senior } });
+    assert.equal(personal.result.ok, false);
+    assert.deepEqual(personal.result.invalidRoles, ["nonOwner.quickHelper"]);
     assert.deepEqual(await f.store.read(), after);
-    const disabled = await execute("save", { ...draft, revision: after.revision, orchestrators: { codex: { helper: null } } });
+    const disabled = await execute("save", { ...draft, revision: after.revision, owner: { quickHelper: null } });
     assert.equal(disabled.result.ok, true, JSON.stringify(disabled));
-    assert.equal((await f.store.read()).orchestrators.codex.helper, null);
+    assert.equal((await f.store.read()).owner.quickHelper, null);
     actor = null;
     assert.equal((await execute("read")).ok, false);
   });
@@ -2581,17 +2499,15 @@ test("routing choice pages preserve the ordinary full view and bound filtered mo
   await withTempDir(async root => {
     const choices = Array.from({ length: 43 }, (_, index) => ({ engineId: "codex", agentId: "codex",
       modelProviderId: "openai", modelId: `model-${index}`, label: `Choice ${index}`, providerLabel: "GPT" }));
-    const view = { engines: [{ engineId: "codex", roles: { helper: { choices } }, error: "" }] };
-    const calls = [];
+    const view = { engines: [{ engineId: "codex", error: "" }], setups: { owner: { roles: { quickHelper: { choices } } }, nonOwner: { roles: {} } } };
     const service = createService({ accountRuntime: createAccountsRuntime({ systemRoot: root }),
-      inspectRoutingConfiguration: async (_saved, input) => { calls.push(input); return view; } });
-    assert.equal((await service.readModelRouting({ engineId: "codex" })).engines, view.engines);
-    const scope = { engineId: "codex", choiceRole: "helper", includeOtherModels: true };
+      inspectRoutingConfiguration: async () => view });
+    assert.equal((await service.readModelRouting({})).setups, view.setups);
+    const scope = { setup: "owner", choiceRole: "quickHelper" };
     const first = await service.readModelRouting(scope);
     assert.equal(first.choiceCount, 43);
     assert.equal(first.choices.length, 20);
     assert.equal(first.nextOffset, 20);
-    assert.equal(calls.at(-1).includeOtherModels, true);
     const second = await service.readModelRouting({ ...scope, choiceOffset: first.nextOffset });
     assert.equal(second.choices[0].modelId, "model-20");
     assert.equal(second.nextOffset, 40);
@@ -2601,10 +2517,7 @@ test("routing choice pages preserve the ordinary full view and bound filtered mo
     const filtered = await service.readModelRouting({ ...scope, choiceSearch: "CHOICE 42" });
     assert.deepEqual(filtered.choices, [choices[42]]);
     assert.equal(filtered.choiceCount, 1);
-    view.engines[0].error = "private provider detail";
-    const failed = await service.readModelRouting(scope);
-    assert.equal(failed.ok, false);
-    assert.doesNotMatch(JSON.stringify(failed), /private provider/);
+    assert.equal((await service.readModelRouting({ setup: "nonOwner", choiceRole: "senior" })).ok, false, "team setups have no Senior");
     await assert.rejects(readFile(path.join(root, "ai-connections/routing.json")), { code: "ENOENT" });
   });
 });

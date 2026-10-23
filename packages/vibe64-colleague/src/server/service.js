@@ -16,7 +16,7 @@ import { createConversationSummary } from "./conversationSummary.js";
 import { assignmentCommands, assignmentSummary, createAssignmentOperations } from "./assignments.js";
 import { validateColleagueConversationRecord } from "./conversationRecord.js";
 
-const COLLEAGUE_MODEL_UNAVAILABLE = "Connect an AI and configure an available Senior model in AI Accounts before using Colleague.";
+const COLLEAGUE_MODEL_UNAVAILABLE = "Connect an AI and choose an available Colleague model in AI setup before using Colleague.";
 // Learn threads teach; only Develop delegates work or watches agents. Develop
 // can still read and switch the mode for the person.
 const LEARN_ONLY_ACTION = /^vibe64\.training\.(?!learning-mode\.(?:read|set)$)|^vibe64\.colleague\.navigation\.open-learning$/u;
@@ -145,8 +145,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   });
   const transcript = createConversationTranscript({ storage });
   const assignments = createAssignmentOperations({ actions, persist, transcript });
-  const summaries = createConversationSummary({ actions, terminals, persist,
-    workflowEngineId: async (state, context) => state.record.assistantSelection?.engineId || (await chooseSelection(context)).engineId });
+  const summaries = createConversationSummary({ actions, terminals, persist });
   // One state per conversation thread (Develop, or a Learn thread), keyed by
   // its owner key. A person's browsers are shared by their threads, and only
   // the visible thread has a live runtime.
@@ -537,53 +536,45 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     };
   }
 
-  // The workflows the person can use now. Like the session workflow picker,
-  // a connected workflow whose roles were never saved counts: its recommended
-  // routing is previewed here and saved when Colleague first chooses a model.
-  async function availableWorkflows(user) {
-    const choices = requireResult(await accounts.readModelRoutingWorkflows({ vibe64User: user }));
-    return (choices.workflows || []).filter(choice => choice.available);
+  // The person's routed Colleague: the owner's or the team setup's Colleague
+  // role, saving recommendations first as session creation does, so an AI
+  // connected outside the in-app sign-in is usable without a manual Save.
+  async function routedColleague(user) {
+    await accounts.initializeModelRouting?.({ vibe64User: user });
+    return terminals.resolveAssistantPurpose({ purpose: "colleague" }, { vibe64User: user });
   }
 
-  // Session creation saves a workflow's recommended routing before resolving
-  // it. Colleague does the same, so an AI connected outside the in-app sign-in
-  // (an existing login) is usable without a manual Save. A failed setup leaves
-  // the saved routing to decide.
-  async function routedSenior(user, engineId) {
-    await accounts.initializeModelRouting?.({ engineIds: [engineId], vibe64User: user });
-    return terminals.resolveAssistantPurpose({ purpose: "senior", workflowEngineId: engineId }, { vibe64User: user });
-  }
-
-  async function chooseSelection(context, selection, workflow = null) {
+  // An exact selection, or the routed Colleague; with modelProviderId the
+  // routed Colleague must use that provider.
+  async function chooseSelection(context, selection, routed = null) {
     const user = authenticatedVibe64User(context);
     if (selection) {
       const resolved = await terminals.resolveAssistantSelection(selection, { vibe64User: user });
       await terminals.requireAssistantSelectionAccess(resolved, { vibe64User: user });
       return resolved;
     }
-    if (workflow) {
-      const decision = await routedSenior(user, workflow.engineId);
-      if (!decision.available) throw failure("This AI has no Senior model ready for Colleague yet. Review its model routing in AI Accounts.", "vibe64_colleague_model_unavailable");
-      if (workflow.modelProviderId && decision.effectiveSelection.modelProviderId !== workflow.modelProviderId) {
-        throw failure("This workflow's Senior uses a different AI. Review its model routing in AI Accounts.", "vibe64_colleague_senior_elsewhere");
-      }
-      return decision.effectiveSelection;
+    const decision = await routedColleague(user);
+    if (!decision.available) {
+      if (routed) throw failure("Colleague has no model ready yet. Review AI setup.", "vibe64_colleague_model_unavailable");
+      throw failure(COLLEAGUE_MODEL_UNAVAILABLE, "vibe64_colleague_model_unavailable");
     }
-    // A personal Claude or Codex subscription is the real experience; other
-    // connected providers follow in their listed order.
-    const rank = ({ engineId }) => ["claude", "codex"].includes(engineId) ? ["claude", "codex"].indexOf(engineId) : 2;
-    for (const choice of (await availableWorkflows(user)).sort((left, right) => rank(left) - rank(right))) {
-      const decision = await routedSenior(user, choice.engineId);
-      if (decision.available) return decision.effectiveSelection;
+    if (routed?.modelProviderId && decision.effectiveSelection.modelProviderId !== routed.modelProviderId) {
+      throw failure("Colleague's model in AI setup uses a different AI. Review AI setup.", "vibe64_colleague_senior_elsewhere");
     }
-    throw failure(COLLEAGUE_MODEL_UNAVAILABLE, "vibe64_colleague_model_unavailable");
+    return decision.effectiveSelection;
   }
 
-  // Read-only: says whether a send could choose a model now. Only a definite
-  // "no available workflow" counts; any other failure is left to the send.
+  // Read-only: says whether a send could choose a model now. An unset
+  // Colleague role counts when an AI is connected, because a send saves the
+  // recommended setup first. Only a definite answer counts; a failed read
+  // is left to the send.
   async function selectionAvailable(context) {
     try {
-      return (await availableWorkflows(authenticatedVibe64User(context))).length > 0;
+      const user = authenticatedVibe64User(context);
+      const decision = await terminals.resolveAssistantPurpose({ purpose: "colleague" }, { vibe64User: user });
+      if (decision.available || decision.reasonCode !== "vibe64_assistant_role_unconfigured") return decision.available;
+      const catalog = requireResult(await terminals.listAssistantCapabilities({ configuredOnly: "true", vibe64User: user }));
+      return (catalog.engines || []).some((engine) => (engine.modelProviders || []).some((provider) => provider.connected === true));
     } catch {
       return true;
     }
@@ -1519,7 +1510,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         if (closed || state.stopping || state.running) throw failure("Finish or stop Colleague's current turn before changing its model.");
         if (!input.assistantSelection && !input.workflowEngineId) throw failure("Choose a model for Colleague.");
         const selected = await chooseSelection(context, input.assistantSelection, input.assistantSelection ? null
-          : { engineId: input.workflowEngineId, modelProviderId: input.modelProviderId || "" });
+          : { modelProviderId: input.modelProviderId || "" });
         const settings = await terminals.resolveConversationConfiguration(selected, promptFor(state), { vibe64User: authenticatedVibe64User(context) });
         const changed = ["engineId", "modelProviderId", "modelId", "agentId", "variantId"]
           .some(key => (state.record.assistantSelection?.[key] || "") !== (selected[key] || ""));

@@ -2397,9 +2397,9 @@ createInterface({ input: process.stdin }).on('line', async line => {
     assert.equal((await service.readAgentGoal("test", options)).goal, null);
     const routedSelection = { ...defineVibe64AssistantSelection(f.context.assistantSelection), selectionSource: "explicit" };
     await createAssistantRoutingStore({ systemRoot: path.join(f.root, "system") }).write({
-      claude: { senior: routedSelection, junior: routedSelection }
+      owner: { senior: routedSelection, junior: routedSelection }, nonOwner: {}
     }, 0);
-    await store.writeMetadataValue("test", "assistant_routing", JSON.stringify({ mode: "senior", workflowEngineId: "claude" }));
+    await store.writeMetadataValue("test", "assistant_routing", JSON.stringify({ mode: "senior" }));
     if (busyGoal) {
       const working = await service.sendAgentMessage("test", { message: "Continue working", messageId: "before-busy-goal" }, options);
       assert.equal(working.delivered, true);
@@ -2500,7 +2500,7 @@ createInterface({ input: process.stdin }).on('line', async line => {
     assert.equal((await store.readConversationLog("test")).some(turn => turn.user?.messageId === canonicalCommand.messageId), false);
     // Save a different role while native acknowledgement is still held. Its
     // next-turn pin must survive the older goal-start completion callback.
-    await store.writeMetadataValue("test", "assistant_routing", JSON.stringify({ mode: "junior", workflowEngineId: "claude" }));
+    await store.writeMetadataValue("test", "assistant_routing", JSON.stringify({ mode: "junior" }));
     await writeFile(goalAttachmentGate, "hold");
     await rm(goalAcknowledgementGate);
     while (!await store.conversationMessageIdExists("test", canonicalCommand.messageId)) {

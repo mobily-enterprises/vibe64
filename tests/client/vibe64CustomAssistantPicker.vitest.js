@@ -41,7 +41,7 @@ beforeEach(() => {
 });
 function mount({ mode = "auto", saved = selection, disabled = false, saveSelection } = {}) {
   const open = ref(false);
-  const session = { sessionId: "one", assistantSelection: saved, metadata: { assistant_routing: JSON.stringify({ mode, workflowEngineId: saved.engineId,
+  const session = { sessionId: "one", assistantSelection: saved, metadata: { assistant_routing: JSON.stringify({ mode,
     ...(mode === "custom" ? { override: saved } : {}) }) } };
   const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
   app = renderer.createApp({ ...Menu, render: () => null }, { modelValue: open.value, session,

@@ -846,10 +846,10 @@ test("database assistant uses one selected-provider secondary conversation and a
 });
 
 test("database assistant availability describes the resolved Helper destination", () => {
-  assert.deepEqual(databaseAssistantAvailability({ available: true, effectiveSelection: sharedDatabaseSelection,
-    backupUsed: true }), { available: true, engineId: "opencode", model: "deepseek-chat", variantId: "", backupUsed: true, message: "" });
+  assert.deepEqual(databaseAssistantAvailability({ available: true, effectiveSelection: sharedDatabaseSelection }),
+    { available: true, engineId: "opencode", model: "deepseek-chat", variantId: "", message: "" });
   assert.deepEqual(databaseAssistantAvailability({ available: false, message: "Helper is unavailable" }), {
-    available: false, engineId: "", model: "", variantId: "", backupUsed: false, message: "Helper is unavailable"
+    available: false, engineId: "", model: "", variantId: "", message: "Helper is unavailable"
   });
 });
 
@@ -1769,7 +1769,7 @@ test("database copilot keeps failed cleanup for restart and closes a late cancel
   const terminalService = {
     async resolveAssistantPurpose(input, options) {
       resolutions += 1;
-      assert.equal(input.workflowEngineId, "codex");
+      assert.equal(input.workflowEngineId, undefined);
       assert.equal(options.vibe64User.role, "member");
       return { available: true, effectiveSelection: sharedDatabaseSelection, connectionIdentity: "shared-connection" };
     },

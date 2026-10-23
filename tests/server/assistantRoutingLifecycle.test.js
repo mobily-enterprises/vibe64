@@ -44,6 +44,14 @@ function sharedOpenCode(f, modelProviderId = "opencode", modelId = "big-pickle")
     variantId: "", catalogRevision: catalog.revision, selectionSource: "explicit" };
 }
 
+// The owner's Senior and Junior moved to OpenCode, with the same models.
+function openCodePair(f) {
+  sharedOpenCode(f);
+  f.catalogs.at(-1).modelProviders.push(...structuredClone(f.catalog.modelProviders));
+  const moved = (role) => ({ ...f.assignments[role], engineId: "opencode", agentId: "build" });
+  return { senior: moved("senior"), junior: moved("junior") };
+}
+
 
 
 import { fixture, planDocument, publishPlanFixture, reportOutcome } from "../fixtures/assistantRouting.js";
@@ -253,7 +261,7 @@ test("generated Junior cannot change the mode of an unfinished Senior goal", asy
 });
 
 for (const mode of ["senior", "junior"]) {
-  test(`a member's API-key Codex account permits Auto to ${mode} without Backup`, async (t) => {
+  test(`an API-key Codex account is workspace use; members wait for approval and the owner's Auto routes to ${mode}`, async (t) => {
     const f = await fixture(t);
     const root = f.context.runtime.stateRoot;
     const authPath = path.join(root, ".codex", "auth.json");
@@ -268,7 +276,11 @@ for (const mode of ["senior", "junior"]) {
     assert.equal(access.endpointCode, "openai_api");
     assert.ok(access.connectionIdentity);
     f.connections.set("codex:openai", access);
+    const owner = f.context.vibe64User;
     f.context.vibe64User = { role: "member", username: "collaborator" };
+    await assert.rejects(f.service.send("session-1", request, f.context), { code: "vibe64_main_chat_approval_required" });
+    assert.deepEqual([f.sends.length, f.helperCalls()], [0, 0]);
+    f.context.vibe64User = owner;
     f.router.respond = async () => ({ ok: true,
       text: JSON.stringify({ mode, reason: mode === "senior" ? "planning" : "implementation" }) });
 
@@ -276,8 +288,7 @@ for (const mode of ["senior", "junior"]) {
     assert.equal(f.helperCalls(), 1);
     assert.equal(f.cleanupCalls(), 1);
     assert.equal(f.sends[0].selection.modelId, mode === "senior" ? "gpt-6-astra" : "deepseek-flash");
-    assert.equal(f.state().decision.backupUsed, false);
-    assert.equal(f.state().submittedBy.username, "collaborator");
+    assert.equal(f.state().submittedBy.username, "owner");
     assert.equal(f.state().decision.seniorJuniorPair.senior.connectionIdentity, access.connectionIdentity);
     await reportOutcome(f, mode === "junior" ? "handoff" : "wait");
     await f.service.afterTurn("session-1", completion(), f.context);
@@ -308,7 +319,7 @@ test("changing routing settings while classifying does not retarget this request
   const f = await fixture(t);
   const classify = f.router.respond;
   f.router.respond = async (...args) => {
-    await f.configuration.write({ codex: { ...f.assignments, junior: f.assignments.senior } }, 1);
+    await f.configuration.write({ owner: { ...f.assignments, junior: f.assignments.senior }, nonOwner: {} }, 1);
     return classify(...args);
   };
   await f.service.send("session-1", request, f.context);
@@ -650,7 +661,7 @@ test("an account change cannot bypass a goal's model pin or current account acce
 test("Auto uses a foreign Router and does not require Helper", async (t) => {
   const f = await fixture(t);
   const router = sharedOpenCode(f, "deepseek", "deepseek-chat");
-  await f.configuration.write({ codex: { ...f.assignments, router, helper: null } }, 1);
+  await f.configuration.write({ owner: { ...f.assignments, router, quickHelper: null }, nonOwner: {} }, 1);
   const start = f.agent.startEphemeralConversationTurn;
   f.agent.startEphemeralConversationTurn = async (scope, input, options) => {
     assert.equal(options.assistantSelection.engineId, "opencode");
@@ -660,98 +671,52 @@ test("Auto uses a foreign Router and does not require Helper", async (t) => {
   };
   await f.service.send("session-1", request, f.context);
   assert.equal(f.state().assignments.router.modelId, "deepseek-chat");
-  assert.equal(f.state().assignments.helper, undefined);
+  assert.equal(f.state().assignments.quickHelper, undefined);
   assert.equal(f.sends[0].selection.engineId, "codex");
   assert.equal(f.state().helper, null);
 });
 
 for (const review of [false, true]) {
-  test(`same-engine Backup keeps a different accessible coder through completion and restart with review ${review}`, async (t) => {
-    const f = await fixture(t, { mode: "junior", review, workflowEngineId: "opencode" });
-    const backup = sharedOpenCode(f);
-    f.catalogs.at(-1).modelProviders.push(...structuredClone(f.catalog.modelProviders));
-    const senior = { ...f.assignments.senior, engineId: "opencode", agentId: "build" };
-    const junior = { ...f.assignments.junior, engineId: "opencode", agentId: "build" };
-    await f.configuration.write({ codex: f.assignments, opencode: {
-      senior, junior, helper: junior, router: junior, sharedBackup: backup
-    } }, 1);
+  test(`an OpenCode main AI keeps its pair through completion and restart with review ${review}`, async (t) => {
+    const f = await fixture(t, { mode: "junior", review });
+    await f.configuration.write({ owner: { ...f.assignments, ...openCodePair(f) }, nonOwner: {} }, 1);
     const configuration = await f.configuration.read();
-    f.context.vibe64User = { role: "member", username: "collaborator" };
     await f.service.send("session-1", request, f.context);
-    assert.equal(f.sends[0].selection.modelId, "deepseek-flash");
-    assert.equal(f.sends[0].selection.engineId, "opencode");
-    assert.equal(f.state().assignments.senior.modelId, "big-pickle");
-    assert.equal(f.state().assignments.junior.modelId, "deepseek-flash");
-    assert.equal(f.state().decision.seniorJuniorPair.junior.backupUsed, false);
+    assert.deepEqual([f.sends[0].selection.engineId, f.sends[0].selection.modelId], ["opencode", "deepseek-flash"]);
+    assert.equal(f.state().assignments.senior.engineId, "opencode");
     await f.service.afterTurn("session-1", completion(), f.context);
     assert.equal(f.state().review, false, "direct Junior ignores Auto review preferences");
     assert.equal(f.sends.length, 1);
-    f.metadata.assistant_routing = JSON.stringify({ mode: "senior", review: false, workflowEngineId: "opencode" });
+    f.metadata.assistant_routing = JSON.stringify({ mode: "senior", review: false });
     await f.restart().send("session-1", { ...request, messageId: "next-plan" }, f.context);
-    assert.equal(f.sends.at(-1).selection.modelId, "big-pickle");
-    assert.equal(f.state().assignments.junior.modelId, "deepseek-flash");
-    assert.equal(f.state().workflowEngineId, "opencode");
+    assert.deepEqual([f.sends.at(-1).selection.engineId, f.sends.at(-1).selection.modelId], ["opencode", "gpt-6-astra"]);
+    assert.equal(f.state().workflowEngineId, "opencode", "the main AI's tool runs the workflow");
     assert.equal(f.helperCalls(), 0);
     assert.deepEqual(await f.configuration.read(), configuration);
   });
 
-  test(`a member's foreign Backup keeps Plan and Code together with review ${review}`, async (t) => {
+  test(`a saved Code override survives restart with review ${review}`, async (t) => {
     const f = await fixture(t, { mode: "junior", review });
-    const backup = sharedOpenCode(f);
-    await f.configuration.write({ codex: { ...f.assignments, sharedBackup: backup } }, 1);
-    f.context.vibe64User = { role: "member", username: "collaborator" };
-    await f.service.send("session-1", request, f.context);
-    assert.equal(f.sends[0].selection.engineId, "opencode");
-    assert.equal(f.state().assignments.senior.modelId, "big-pickle");
-    assert.equal(f.state().assignments.junior.modelId, "big-pickle", "even the otherwise-shared original coder follows the pair");
-    assert.equal(f.state().workflowEngineId, "codex");
-    assert.equal(f.sends[0].input.turnMetadata.assistantRouting.backupUsed, true);
-    await f.service.afterTurn("session-1", completion(), f.context);
-    assert.equal(f.state().review, false, "direct Junior ignores Auto review preferences");
-    assert.equal(f.sends.length, 1);
-    f.metadata.assistant_routing = JSON.stringify({ mode: "senior", workflowEngineId: "codex", review: false });
-    await f.service.send("session-1", { ...request, messageId: "next-plan" }, f.context);
-    assert.equal(f.sends.at(-1).selection.engineId, "opencode");
-    assert.equal(f.state().workflowEngineId, "codex", "a backup execution never chooses its own workflow profile");
-  });
-
-  test(`a saved Code override survives member Backup, restart and owner return with review ${review}`, async (t) => {
-    const f = await fixture(t, { mode: "junior", review });
-    const backup = sharedOpenCode(f);
-    await f.configuration.write({ codex: { ...f.assignments, sharedBackup: backup } }, 1);
     const override = { ...f.assignments.junior, variantId: "low", selectionSource: "explicit" };
-    const preferences = JSON.stringify({ mode: "junior", review, workflowEngineId: "codex", override });
+    const preferences = JSON.stringify({ mode: "junior", review, override });
     f.metadata.assistant_routing = preferences;
-    f.context.vibe64User = { role: "member", username: "collaborator" };
     await f.service.send("session-1", request, f.context);
-    assert.equal(f.sends[0].selection.engineId, "opencode");
-    assert.equal(f.state().decision.seniorJuniorPair.junior.configuredSelection.variantId, "low");
-    assert.equal(f.state().decision.seniorJuniorPair.junior.backupReason, "keep_workflow_together");
+    assert.deepEqual([f.sends[0].selection.engineId, f.sends[0].selection.modelId, f.sends[0].selection.variantId], ["codex", "deepseek-flash", "low"]);
     const restarted = f.restart();
     await restarted.afterTurn("session-1", completion(), f.context);
     assert.equal(f.state().review, false, "direct Junior ignores Auto review preferences");
     assert.equal(f.sends.length, 1);
     assert.equal(f.metadata.assistant_routing, preferences);
-    f.context.vibe64User = { role: "owner", username: "owner" };
-    await restarted.send("session-1", { ...request, messageId: "owner-return" }, f.context);
-    assert.equal(f.sends.at(-1).selection.engineId, "codex");
-    assert.equal(f.sends.at(-1).selection.modelId, "deepseek-flash");
-    assert.equal(f.sends.at(-1).selection.variantId, "low");
-    assert.equal(f.state().decision.backupUsed, false);
-    assert.equal(f.metadata.assistant_routing, preferences);
   });
 }
 
-test("an incapable Backup refuses Senior and Junior before delivery without splitting the pair or dropping review", async (t) => {
+test("a main AI without tool calls refuses Senior and Junior before delivery", async (t) => {
   const f = await fixture(t);
-  const backup = sharedOpenCode(f);
-  f.catalogs[1].modelProviders[0].models[0].capabilities = { toolcall: false };
-  await f.configuration.write({ codex: { ...f.assignments, sharedBackup: backup } }, 1);
-  f.context.vibe64User = { role: "member", username: "collaborator" };
+  for (const provider of f.catalog.modelProviders) for (const model of provider.models) model.capabilities = { toolcall: false };
   const originalSelection = f.metadata.assistant_selection;
   for (const mode of ["senior", "junior"]) {
     for (const review of [false, true]) {
-      f.metadata.assistant_routing = JSON.stringify({ mode, review, workflowEngineId: "codex" });
+      f.metadata.assistant_routing = JSON.stringify({ mode, review });
       await assert.rejects(f.service.send("session-1", request, f.context), {
         code: "vibe64_assistant_capability_unavailable"
       });
@@ -845,30 +810,34 @@ test("Helper cannot be selected for direct chat or sent as a chat mode", async (
   assert.equal(f.helperCalls(), 0);
 });
 
-test("a goal switching orchestrators requires ordinary Send before native goal admission", async (t) => {
+test("a goal switching tools requires ordinary Send before native goal admission", async (t) => {
   const f = await fixture(t, { mode: "junior", review: false });
-  const backup = sharedOpenCode(f);
-  await f.configuration.write({ codex: { ...f.assignments, sharedBackup: backup } }, 1);
-  f.context.vibe64User = { role: "member", username: "collaborator" };
+  await f.configuration.write({ owner: { ...f.assignments, ...openCodePair(f) }, nonOwner: {} }, 1);
   await assert.rejects(f.service.prepareGoal("session-1", { action: "set", objective: "Implement agreed validation" }, f.context),
     { code: "vibe64_changeover_message_required" });
   assert.equal(f.metadata.assistant_routing_goal, undefined);
   assert.equal(JSON.parse(f.metadata.assistant_selection).engineId, "opencode");
 });
 
-test("a migrated unsent request goes through fresh admission while retaining its original actor", async (t) => {
-  const f = await fixture(t, { mode: "junior", review: false });
-  const backup = sharedOpenCode(f);
-  await f.configuration.write({ codex: { ...f.assignments, sharedBackup: backup } }, 1);
-  f.metadata.assistant_routing_request = JSON.stringify({ schemaVersion: 5, delivery: "failed", stage: null, workflow: false, admissionRequired: true, workflowEngineId: "codex",
-    messageId: request.messageId, input: { message: request.message }, mode: "junior", resolvedMode: "junior", status: "waiting", review: false,
-    assignments: { junior: f.assignments.junior }, settingsRevision: 1, submittedBy: { role: "member", username: "original-member" } });
-  await f.service.send("session-1", request, f.context);
-  assert.equal(f.sends[0].selection.engineId, "opencode");
-  assert.equal(f.state().submittedBy.username, "original-member");
-  assert.equal(f.state().admissionRequired, undefined);
-  assert.equal(f.state().decision.backupUsed, true);
-});
+for (const [role, refusal] of [["owner", null], ["member", "vibe64_main_chat_approval_required"]]) {
+  test(`a migrated unsent ${role} request goes through fresh admission as its original actor`, async (t) => {
+    const f = await fixture(t, { mode: "junior", review: false });
+    const original = JSON.stringify({ schemaVersion: 5, delivery: "failed", stage: null, workflow: false, admissionRequired: true, workflowEngineId: "codex",
+      messageId: request.messageId, input: { message: request.message }, mode: "junior", resolvedMode: "junior", status: "waiting", review: false,
+      assignments: { junior: f.assignments.junior }, settingsRevision: 1, submittedBy: { role, username: `original-${role}` } });
+    f.metadata.assistant_routing_request = original;
+    if (refusal) {
+      await assert.rejects(f.service.send("session-1", request, f.context), { code: refusal });
+      assert.equal(f.metadata.assistant_routing_request, original, "a team member's old request is never sent on the owner's AI");
+      assert.equal(f.sends.length, 0);
+      return;
+    }
+    await f.service.send("session-1", request, f.context);
+    assert.equal(f.sends[0].selection.engineId, "codex");
+    assert.equal(f.state().submittedBy.username, "original-owner");
+    assert.equal(f.state().admissionRequired, undefined);
+  });
+}
 
 for (const actorFields of [{}, { submittedBy: null }]) {
   test(`a migrated request with ${Object.hasOwn(actorFields, "submittedBy") ? "null" : "missing"} actor cannot borrow the hosted retry user's identity`, async (t) => {
@@ -932,7 +901,7 @@ test("a legacy explicit goal retains its model when the current configured coder
   const f = await fixture(t, { mode: "junior", review: false });
   f.metadata.assistant_routing_goal = JSON.stringify({ mode: "junior", workflowEngineId: "codex", selection: f.assignments.junior,
     objective: "Implement validation", status: "active" });
-  await f.configuration.write({ codex: { ...f.assignments, junior: f.assignments.senior } }, 1);
+  await f.configuration.write({ owner: { ...f.assignments, junior: f.assignments.senior }, nonOwner: {} }, 1);
   const prepared = await f.service.prepareGoal("session-1", { action: "resume" }, f.context);
   assert.equal(prepared.pinned.selection.modelId, "deepseek-flash");
 });
@@ -980,8 +949,8 @@ for (const mode of ["auto", "senior", "junior"]) {
 test("the Deslop button uses the configured planner despite a conversation's Junior override", async (t) => {
   const f = await fixture(t, { mode: "junior", review: true });
   const saved = await f.configuration.read();
-  await f.configuration.write({ codex: { ...saved.orchestrators.codex, senior: { ...f.assignments.senior, modelId: "gpt-6-sol" } } }, saved.revision);
-  f.metadata.assistant_routing = JSON.stringify({ mode: "junior", workflowEngineId: "codex", review: true, override: f.assignments.junior });
+  await f.configuration.write({ ...saved, owner: { ...saved.owner, senior: { ...f.assignments.senior, modelId: "gpt-6-sol" } } }, saved.revision);
+  f.metadata.assistant_routing = JSON.stringify({ mode: "junior", review: true, override: f.assignments.junior });
   await f.service.send("session-1", { ...request, genesisTask: "deslop", message: "Deslop commit abc123." }, f.context);
   assert.equal(f.sends[0].selection.modelId, "gpt-6-sol", "Deslop follows the saved Plan assignment, not a hard-coded model");
   assert.equal(f.helperCalls(), 0);
@@ -1077,10 +1046,8 @@ test("Codex result projection preserves the completion reason for steering recov
   assert.equal(f.sends[0].input.messageId, "codex-terminal-completed");
 });
 
-test("a member cannot steer an active personal turn even when a shared fallback exists", async (t) => {
+test("a member cannot steer or send to an active main chat turn", async (t) => {
   const f = await fixture(t, { mode: "auto", review: true });
-  const backup = sharedOpenCode(f, "zai", "glm-4.7");
-  await f.configuration.write({ codex: { ...f.assignments, sharedBackup: backup } }, 1);
   f.agent.sessionState = async () => ({ turn: { active: true } });
   f.context.vibe64User = { role: "member", username: "collaborator" };
   for (const submissionKind of ["steer", undefined]) {
@@ -1099,8 +1066,8 @@ for (const message of ["Explain the current design.", "deslop"]) {
   test(`Custom keeps the exact selection without configured roles: ${message}`, async (t) => {
     const f = await fixture(t, null);
     const selection = { ...f.assignments.senior, modelId: "gpt-6-sol", variantId: "low" };
-    f.metadata.assistant_routing = JSON.stringify({ mode: "custom", workflowEngineId: "codex", override: selection });
-    await f.configuration.write({ codex: { senior: null, junior: null, router: null, helper: null, sharedBackup: null } }, 1);
+    f.metadata.assistant_routing = JSON.stringify({ mode: "custom", override: selection });
+    await f.configuration.write({ owner: { senior: null, junior: null, router: null, quickHelper: null }, nonOwner: {} }, 1);
     const result = await f.service.send("session-1", { ...request, message }, f.context);
     assert.equal(result.delivered, true, JSON.stringify(result));
     assert.equal(f.helperCalls(), 0);
@@ -1113,11 +1080,11 @@ for (const message of ["Explain the current design.", "deslop"]) {
   });
 }
 
-test("Custom refuses a personal connection instead of substituting the shared backup", async (t) => {
+test("a team member's main chat Custom model waits for the owner's approval", async (t) => {
   const f = await fixture(t, null);
-  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", workflowEngineId: "codex", override: f.assignments.senior });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", override: f.assignments.senior });
   await assert.rejects(f.service.send("session-1", request, { ...f.context, vibe64User: { role: "member", username: "member" } }),
-    { code: "vibe64_assistant_owner_required" });
+    { code: "vibe64_main_chat_approval_required" });
   assert.equal(f.sends.length, 0);
 });
 
@@ -1188,7 +1155,7 @@ test("a cancelled uncertain request permits new work on a changed assistant with
   const next = { ...f.assignments.junior, modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "high" };
   assert.notEqual(f.state().deliverySelection.modelProviderId, next.modelProviderId);
   f.metadata.assistant_selection = JSON.stringify(next);
-  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", review: false, workflowEngineId: "codex", override: next });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", review: false, override: next });
   f.failAdmission(false);
   const result = await f.service.send("session-1", nextRequest, f.context);
   assert.equal(result.delivered, true);
@@ -1232,22 +1199,25 @@ test("new requests cannot replace unconfirmed or still-owned handoffs", async (t
   }
 });
 
-test("a paused goal retains its orchestrator when a different one is deferred", async (t) => {
-  const f = await fixture(t, { mode: "senior", review: false, workflowEngineId: "claude" });
+test("a paused goal retains its tool when the main AI moved to another one", async (t) => {
+  const f = await fixture(t, { mode: "senior", review: false });
+  const configuration = await f.configuration.read();
+  await f.configuration.write({ owner: { ...f.assignments, ...openCodePair(f) }, nonOwner: {} }, 1);
   const pinned = { mode: "senior", workflowEngineId: "codex", selection: f.assignments.senior,
-    objective: "Finish validation", status: "paused" };
+    configuration: { revision: configuration.revision, owner: configuration.owner }, objective: "Finish validation", status: "paused" };
   f.metadata.assistant_routing_goal = JSON.stringify(pinned);
   f.agent.readGoal = async () => ({ status: "available", goal: pinned });
   await f.service.send("session-1", request, f.context);
   assert.equal(f.sends.length, 1);
   assert.equal(f.sends[0].selection.engineId, "codex");
-  assert.equal(JSON.parse(f.metadata.assistant_routing).workflowEngineId, "claude");
 });
 
-test("a paused goal can inspect a rejected message with another orchestrator deferred", async (t) => {
-  const f = await fixture(t, { mode: "senior", review: false, workflowEngineId: "claude" });
+test("a paused goal can inspect a rejected message after the main AI moved", async (t) => {
+  const f = await fixture(t, { mode: "senior", review: false });
+  const configuration = await f.configuration.read();
+  await f.configuration.write({ owner: { ...f.assignments, ...openCodePair(f) }, nonOwner: {} }, 1);
   const pinned = { mode: "senior", workflowEngineId: "codex", selection: f.assignments.senior,
-    objective: "Finish validation", status: "paused" };
+    configuration: { revision: configuration.revision, owner: configuration.owner }, objective: "Finish validation", status: "paused" };
   f.metadata.assistant_routing_goal = JSON.stringify(pinned);
   f.agent.readGoal = async () => ({ status: "available", goal: pinned });
   let stateReads = 0;
@@ -1341,7 +1311,7 @@ test("delivery inspection exposes the original failed-before-admission receipt w
 
 test("routing retains the original definite native validation rejection without dispatch", async t => {
   const f = await fixture(t, { mode: "custom", review: false, override: null });
-  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", workflowEngineId: "codex", override: f.assignments.senior });
+  f.metadata.assistant_routing = JSON.stringify({ mode: "custom", override: f.assignments.senior });
   f.rejectAdmission({ ok: false, delivered: false, code: "conversation_invalid_message",
     error: "Bounded text or attachment IDs and a stable messageId are required." });
   await assert.rejects(f.service.send("session-1", { ...request, message: "x".repeat(32_001) }, f.context), {
@@ -1443,7 +1413,7 @@ for (const status of ["active", "paused"]) {
       return { ok: true };
     };
     assert.equal(await f.service.applyGoalSelection("session-1", f.assignments.senior,
-      { mode: "senior", review: false, workflowEngineId: "codex" }, f.context), "next-turn");
+      { mode: "senior", review: false }, f.context), "next-turn");
     assert.deepEqual(updates, [{ sessionId: "session-1", input: { threadId: "native-thread",
       model: f.assignments.senior.modelId, effort: f.assignments.senior.variantId }, selection: f.assignments.senior }]);
     const saved = JSON.parse(f.metadata.assistant_routing_goal);
@@ -1459,7 +1429,7 @@ for (const status of ["active", "paused"]) {
   });
 }
 
-test("goal settings keep other orchestrators and Auto deferred, and expose native failures without rewriting the pin", async t => {
+test("goal settings keep other tools and Auto deferred, and expose native failures without rewriting the pin", async t => {
   const f = await fixture(t, { mode: "senior", review: false });
   const pinned = { mode: "junior", workflowEngineId: "codex", selection: f.assignments.junior,
     objective: "Finish validation", status: "active" };
@@ -1468,17 +1438,17 @@ test("goal settings keep other orchestrators and Auto deferred, and expose nativ
   f.agent.readGoal = async () => ({ status: "available", threadId: "native-thread", goal: pinned });
   f.agent.updateSessionSettings = async () => assert.fail("A deferred selection must not reach the current native goal");
   assert.equal(await f.service.applyGoalSelection("session-1", { ...f.assignments.senior, engineId: "claude" },
-    { mode: "senior", workflowEngineId: "claude" }, f.context), "after-goal");
+    { mode: "senior" }, f.context), "after-goal");
   assert.equal(await f.service.applyGoalSelection("session-1", f.assignments.senior,
-    { mode: "auto", workflowEngineId: "codex" }, f.context), "after-goal");
+    { mode: "auto" }, f.context), "after-goal");
   assert.equal(f.metadata.assistant_routing_goal, original);
   f.agent.updateSessionSettings = async () => ({ ok: false, error: "Native settings failed", code: "settings_failed" });
   await assert.rejects(f.service.applyGoalSelection("session-1", f.assignments.senior,
-    { mode: "senior", workflowEngineId: "codex" }, f.context), { code: "settings_failed" });
+    { mode: "senior" }, f.context), { code: "settings_failed" });
   assert.equal(f.metadata.assistant_routing_goal, original);
   f.agent.readGoal = async () => ({ status: "unavailable", goal: null });
   assert.equal(await f.service.applyGoalSelection("session-1", f.assignments.senior,
-    { mode: "senior", workflowEngineId: "codex" }, f.context), "unobserved");
+    { mode: "senior" }, f.context), "unobserved");
   assert.equal(f.metadata.assistant_routing_goal, original);
 });
 
@@ -1493,7 +1463,7 @@ test("a concurrent goal pause survives a next-turn model update", async t => {
     return { ok: true };
   };
   await f.service.applyGoalSelection("session-1", f.assignments.senior,
-    { mode: "senior", workflowEngineId: "codex" }, f.context);
+    { mode: "senior" }, f.context);
   const saved = JSON.parse(f.metadata.assistant_routing_goal);
   assert.equal(saved.status, "paused");
   assert.equal(saved.selection.modelId, f.assignments.senior.modelId);
@@ -1512,7 +1482,7 @@ test("a goal model update does not overwrite a concurrently replaced objective",
     return { ok: true };
   };
   assert.equal(await f.service.applyGoalSelection("session-1", f.assignments.senior,
-    { mode: "senior", workflowEngineId: "codex" }, f.context), "after-goal");
+    { mode: "senior" }, f.context), "after-goal");
   assert.deepEqual(JSON.parse(f.metadata.assistant_routing_goal), replacement);
 });
 

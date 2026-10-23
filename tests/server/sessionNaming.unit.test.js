@@ -25,7 +25,7 @@ async function fixture(t) {
   const agent = {
     async resolveAssistantPurpose(input, options) {
       calls.push("resolve");
-      assert.deepEqual(input, { purpose: "session_title", workflowEngineId: "codex" });
+      assert.deepEqual(input, { purpose: "session_title" });
       assert.equal(options.vibe64User, actor);
       return { available: true, effectiveSelection: selection, connectionIdentity: "ada-connection" };
     },

@@ -23,7 +23,20 @@
       </v-card-title>
 
       <v-card-text class="vibe64-assistant-dialog__body">
-        <Vibe64WorkflowSelector :active="modelValue" :disabled="submitting" @update:workflow="workflowEngineId = $event" @update:ready="workflowReady = $event" />
+        <v-skeleton-loader v-if="routing.resource.isInitialLoading.value" type="list-item-two-line" />
+        <v-alert v-else-if="routing.loadError.value" type="error" variant="tonal">
+          {{ routing.loadError.value }}
+          <v-btn variant="text" @click="routing.resource.reload()">Try again</v-btn>
+        </v-alert>
+        <p v-else-if="mainSelection" class="text-body-medium mb-0">
+          Runs on your main AI: {{ vibe64AssistantSelectionLabel(mainSelection) }}
+          <v-btn variant="text" size="small" @click="openConnectionSettings">Change</v-btn>
+        </p>
+        <div v-else class="d-flex flex-column ga-2">
+          <strong>No AI is set up</strong>
+          <span class="text-body-small">Connect an AI account, then come back to start a session.</span>
+          <v-btn color="primary" variant="tonal" class="align-self-start" @click="openConnectionSettings">Manage AI accounts</v-btn>
+        </div>
         <template v-if="branchSelectionAvailable">
           <v-select
             v-model="branchMode"
@@ -83,7 +96,7 @@
           ref="submitButton"
           :aria-busy="submitting ? 'true' : undefined"
           color="primary"
-          :disabled="!workflowReady || submitting || !branchSelectionReady"
+          :disabled="!mainSelection || submitting || !branchSelectionReady"
           variant="flat"
           @click="submit"
         >
@@ -99,11 +112,16 @@ import { computed, nextTick, ref, watch } from "vue";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import { mdiClose } from "@mdi/js";
-import Vibe64WorkflowSelector from "./Vibe64WorkflowSelector.vue";
+import { useModelRouting } from "@local/vibe64-accounts/client";
+import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
+import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";
 const props = defineProps({ modelValue: Boolean, toolbar: { type: Object, default: () => ({}) } });
 const emit = defineEmits(["created", "update:model-value"]);
-const workflowEngineId = ref("");
-const workflowReady = ref(false);
+// Main chat starts on the owner's Senior from AI setup.
+const routing = useModelRouting({ enabled: computed(() => props.modelValue) });
+const mainSelection = computed(() => routing.setups.value?.owner?.roles?.senior?.effective ||
+  routing.setups.value?.owner?.roles?.senior?.recommendation || null);
+const openConnectionSettings = () => requestVibe64AccountConnectionsDialog({ section: "ai" });
 const submitButton = ref(null);
 const submitting = computed(() => props.toolbar.createSessionRunning === true);
 const branchMode = ref("project");
@@ -146,10 +164,10 @@ function close() {
   if (!submitting.value) emit("update:model-value", false);
 }
 async function submit() {
-  if (!workflowReady.value || !workflowEngineId.value || submitting.value || !branchSelectionReady.value) return;
+  if (!mainSelection.value || submitting.value || !branchSelectionReady.value) return;
   let response;
   try {
-    const options = { workflowEngineId: workflowEngineId.value };
+    const options = {};
     if (chooseBranch.value) {
       options.repositoryBranch = {
         name: createBranch.value ? newBranchName.value.trim() : branchName.value,

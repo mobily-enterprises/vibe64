@@ -2,8 +2,6 @@ import { lstat, readFile } from "node:fs/promises";
 import path from "node:path";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
-import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
-import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import { vibe64AgentRunStateIsActive } from "@local/vibe64-runtime/server/sessionStore";
 import { PRACTICE_AGENT_GUIDANCE_EXCLUDES } from "@local/vibe64-terminals/server/practiceAgentGuidance";
 
@@ -39,18 +37,6 @@ function sessionAgentWorking(session) {
     if (run?.active === true) return true;
     try { return vibe64AgentRunStateIsActive(run?.state); } catch { return false; }
   });
-}
-
-// The practice session's workflow, whose Helper route the review uses (as the
-// database assistant does for its session). Unreadable selection names none,
-// and the Helper route then reports itself unavailable.
-function sessionWorkflowEngineId(session) {
-  const metadata = session?.metadata || {};
-  try {
-    return assistantRoutingFromMetadata(metadata)?.workflowEngineId || vibe64AssistantSelectionFromMetadata(metadata).engineId || "";
-  } catch {
-    return "";
-  }
 }
 
 // Splits one `git diff` output into its per-file sections.
@@ -191,10 +177,10 @@ function createTrainingStepEvidence({ project, actions, runCommand = runVibe64Co
         throw evidenceFailure("This lesson's practice session is unavailable. Resume the lesson, then try again.");
       }
       const working = sessionAgentWorking(session);
-      return { agentWorking: working, workflowEngineId: sessionWorkflowEngineId(session),
+      return { agentWorking: working,
         changes: working ? null : await readChanges(source, attempt.projectSlug, startCommit) };
     });
-    const session = { sessionId, agentWorking: observed.agentWorking, workflowEngineId: observed.workflowEngineId };
+    const session = { sessionId, agentWorking: observed.agentWorking };
     if (observed.agentWorking) return { session, evidence: null, empty: false };
     const evidence = { changes: observed.changes };
     if (conversation) evidence.conversation = await readConversation(attempt, sessionId, context);

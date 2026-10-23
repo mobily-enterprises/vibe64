@@ -1,10 +1,10 @@
 <script setup>
 import { computed, ref, watch } from "vue";
-import { mdiAccountOutline, mdiAccountStarOutline, mdiAutoFix, mdiCheck, mdiClose, mdiCogOutline, mdiTuneVariant } from "@mdi/js";
+import { mdiAccountOutline, mdiAccountStarOutline, mdiAutoFix, mdiCheck, mdiClose, mdiCogOutline, mdiTuneVariant, mdiWrenchOutline } from "@mdi/js";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { ModelRoutingForm, useModelRouting } from "@local/vibe64-accounts/client";
-import { ASSISTANT_MODES, assistantModeLabel, assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
+import { ModelRoutingForm } from "@local/vibe64-accounts/client";
+import { ASSISTANT_FIX_MODE, ASSISTANT_MODES, assistantModeLabel, assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64SessionPath, VIBE64_SESSIONS_API_SUFFIX, VIBE64_SURFACE_ID } from "@/lib/vibe64SessionRequestConfig.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
@@ -25,34 +25,26 @@ const modeMenu = ref(null);
 const routingOpen = ref(false);
 const routingFocusRole = ref("");
 const routingSaving = ref(false);
-const modeIcons = { custom: mdiTuneVariant, senior: mdiAccountStarOutline, junior: mdiAccountOutline, auto: mdiAutoFix };
-const modes = computed(() => ASSISTANT_MODES.filter(({ id }) => (!props.temporary || id !== "auto") && (!props.requiredMode || id === "custom" || id === props.requiredMode)));
+const modeIcons = { custom: mdiTuneVariant, senior: mdiAccountStarOutline, junior: mdiAccountOutline, auto: mdiAutoFix, fix: mdiWrenchOutline };
+// Temporary chats add Fix it with AI; modes reserved for the owner are not listed.
+const modes = computed(() => (props.temporary ? [...ASSISTANT_MODES.filter(({ id }) => id !== "auto"), ASSISTANT_FIX_MODE] : ASSISTANT_MODES)
+  .filter(({ id }) => (!props.requiredMode || id === "custom" || id === props.requiredMode) && !decisions.value[id]?.approvalRequired));
 const modeLabel = computed(() => assistantModeLabel(mode.value));
-const savedWorkflowEngineId = computed(() => preferences.value?.workflowEngineId || props.session?.assistantSelection?.engineId);
-const workflowEngineId = ref("");
-watch(savedWorkflowEngineId, (value) => { workflowEngineId.value = value; }, { immediate: true });
-const { resource: workflows, connectedWorkflows, loadError: workflowError } = useModelRouting({
-  enabled: computed(() => detailsOpen.value && !props.temporary && mode.value !== "custom"), workflowsOnly: true
-});
-const workflowChoices = computed(() => connectedWorkflows.value.map((choice) => ({
-  ...choice, props: { disabled: !choice.available, "aria-disabled": !choice.available ? "true" : undefined, subtitle: choice.error || undefined }
-})));
 const decisions = computed(() => props.purposes || {});
 const hasGoal = computed(() => Boolean(props.goal && !["completed", "complete"].includes(props.goal.status)));
 const reviewAvailable = computed(() => !props.temporary && !hasGoal.value && mode.value === "auto");
 const updatedPreferences = computed(() => ({ mode: mode.value, review: review.value,
-  ...(!props.temporary && workflowEngineId.value ? { workflowEngineId: workflowEngineId.value } : {}),
   ...(modelOverride.value ? { override: modelOverride.value } : {}) }));
 watch(preferences, (value) => {
   mode.value = value?.mode || ""; review.value = value ? value.review === true : true; modelOverride.value = value?.override || null;
 }, { immediate: true });
 function roleLabel(role) {
-  if (role === "custom" && preferences.value?.mode !== "custom") return "Choose an orchestrator, model and thinking level.";
+  if (role === "custom" && preferences.value?.mode !== "custom") return "Choose a model and thinking level.";
   const decision = decisions.value[role === "router" ? "request_routing" : role];
   if (decision && !decision.available) return decision.message || "Unavailable";
   const selection = decision?.effectiveSelection;
   if (!selection) return canConfigureMessage();
-  return `${vibe64AssistantSelectionLabel(selection)}${decision?.backupUsed ? ' · Shared backup' : ''}`;
+  return vibe64AssistantSelectionLabel(selection);
 }
 function canConfigureMessage() {
   return props.canConfigure ? "Choose a model in routing settings." : "Ask the owner to configure this mode.";
@@ -86,13 +78,11 @@ function openCustom() {
   detailsOpen.value = false;
   emit("custom", modeMenu.value?.activatorEl);
 }
-async function save(nextMode = mode.value, nextReview = review.value, nextWorkflow = workflowEngineId.value) {
+async function save(nextMode = mode.value, nextReview = review.value) {
   if (saving.value || props.disabled || !modes.value.some(({ id }) => id === nextMode) || nextMode === "auto" && props.temporary) return;
-  if (nextWorkflow !== workflowEngineId.value && (props.temporary || nextMode === "custom" ||
-      !workflowChoices.value.some((choice) => choice.engineId === nextWorkflow && choice.available))) return;
-  const previous = { mode: mode.value, review: review.value, workflowEngineId: workflowEngineId.value, override: modelOverride.value };
-  if (nextMode !== mode.value || nextWorkflow !== workflowEngineId.value) modelOverride.value = null;
-  mode.value = nextMode; review.value = !props.temporary && nextReview; workflowEngineId.value = nextWorkflow; saving.value = true;
+  const previous = { mode: mode.value, review: review.value, override: modelOverride.value };
+  if (nextMode !== mode.value) modelOverride.value = null;
+  mode.value = nextMode; review.value = !props.temporary && nextReview; saving.value = true;
   saveError.value = "";
   try {
     const result = props.savePreferences ? await props.savePreferences(updatedPreferences.value) : await command.run();
@@ -100,7 +90,7 @@ async function save(nextMode = mode.value, nextReview = review.value, nextWorkfl
     emit("saved");
   }
   catch (error) {
-    mode.value = previous.mode; review.value = previous.review; workflowEngineId.value = previous.workflowEngineId;
+    mode.value = previous.mode; review.value = previous.review;
     modelOverride.value = previous.override;
     saveError.value = error.message || "Chat mode could not be saved.";
   }
@@ -137,7 +127,7 @@ function configure() {
         <strong>Chat mode</strong>
         <div class="d-flex">
           <v-btn
-            v-if="canConfigure && (temporary || mode === 'custom')"
+            v-if="canConfigure"
             :icon="mdiCogOutline" variant="text" width="48" height="48"
             aria-label="Configure model routing" title="Configure model routing" @click="configure"
           />
@@ -147,25 +137,7 @@ function configure() {
       <div class="chat-modes__details-body">
         <p v-if="connecting || active || saving || !mode" class="text-body-small px-4 pb-2" role="status">{{ connecting ? 'Connecting assistant…' : saving ? 'Saving mode…' : active ? 'For your next request' : description }}</p>
         <v-alert v-if="saveError" type="error" variant="tonal" density="compact" class="mx-3 mb-2">{{ saveError }}</v-alert>
-        <p v-if="hasGoal" class="text-body-small px-4 pb-2" role="status">Model and Senior/Junior changes apply to the next goal turn. Another orchestrator or Auto applies after this goal finishes.</p>
-        <div v-if="!temporary && mode !== 'custom'" class="px-4 pt-2 pb-2">
-          <v-select
-            :model-value="workflowEngineId" :items="workflowChoices" item-title="label" item-value="engineId"
-            label="Orchestrator" variant="outlined" density="compact" hide-details
-            no-data-text="No orchestrators have connected models."
-            :loading="connecting || workflows.isInitialLoading.value" :disabled="disabled || saving || !mode"
-            @update:model-value="save(mode, review, $event)"
-          >
-            <template v-if="canConfigure" #append>
-              <v-btn
-                :icon="mdiCogOutline" variant="text" width="48" height="48"
-                aria-label="Configure model routing" title="Configure model routing" @click="configure"
-              />
-            </template>
-          </v-select>
-          <p class="text-body-small mt-2">Switch coding tools and keep this conversation.</p>
-          <p v-if="workflowError" class="text-body-small text-error" role="alert">{{ workflowError }} <v-btn variant="text" @click="workflows.reload()">Retry</v-btn></p>
-        </div>
+        <p v-if="hasGoal" class="text-body-small px-4 pb-2" role="status">Model and Senior/Junior changes apply to the next goal turn. Another tool or Auto applies after this goal finishes.</p>
         <v-list :lines="false" class="py-0">
           <v-list-item
             :title="requiredMode ? 'Choose model' : 'Custom'" :prepend-icon="modeIcons.custom" :active="mode === 'custom'" role="button"
@@ -197,8 +169,7 @@ function configure() {
             </v-list-item>
           </v-list>
           <div class="px-4 pb-3">
-            <p v-if="requiredMode" class="text-body-small">Merge repairs always use Senior. Model changes apply to the next turn.</p>
-            <p v-if="decisions[mode]?.backupReason === 'keep_workflow_together'" class="text-body-small mt-2">Senior and Junior use the shared backup together to keep this workflow in one orchestrator.</p>
+            <p v-if="requiredMode" class="text-body-small">Repair chats use Fix it with AI, or a model you choose. Model changes apply to the next turn.</p>
             <template v-if="!temporary && mode === 'auto'">
               <p class="text-body-small">Senior always reviews Junior's completed work and, with Deslop on, cleans it up. Keep Deslop on unless this is a quick throwaway project.</p>
               <v-switch :model-value="review" :disabled="disabled || saving || connecting || !reviewAvailable" label="Deslop during Senior review" hide-details color="primary" density="compact" @update:model-value="changeDeslop($event)" />
@@ -228,7 +199,7 @@ function configure() {
   <v-dialog v-if="canConfigure" v-model="routingOpen" max-width="38rem" :persistent="routingSaving" scrollable aria-label="Model routing" @after-enter="routingFocusRole = decisions.auto?.missingRoles?.[0] || ''" @after-leave="modeMenu?.activatorEl?.focus()">
     <v-card>
       <v-card-text>
-        <ModelRoutingForm v-if="routingOpen" :engine-id="workflowEngineId" :focus-role="routingFocusRole" @busy="routingSaving = $event" @close="routingOpen = false" @saved="routingSaving = false; routingOpen = false" />
+        <ModelRoutingForm v-if="routingOpen" :focus-role="routingFocusRole" @busy="routingSaving = $event" @close="routingOpen = false" @saved="routingSaving = false; routingOpen = false" />
       </v-card-text>
     </v-card>
   </v-dialog>

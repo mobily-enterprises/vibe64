@@ -2,8 +2,9 @@ import path from "node:path";
 import { listTerminalSessions } from "@local/vibe64-execution/server/terminalSessions";
 import { openMainConversation } from "../mainConversationBinding.js";
 import { requireCompletedConversationRewind, requireCompletedNativeConversationReplacement } from "../assistantChangeover.js";
-import { ASSISTANT_PURPOSE_ROLES, ASSISTANT_ROUTING_ASSIGNMENTS, recommendedRoutingAssignments,
-  routingAssignmentSelection, routingModelChoices, resolveAssistantPurpose, hasConnectedAssistantModels } from "@local/vibe64-runtime/shared/assistantRouting";
+import { ASSISTANT_PURPOSE_ROLES, ASSISTANT_ROLE_PURPOSES, ASSISTANT_SETUP_ROLES, assistantRoutingSetupFor, assistantSetupRoleValue,
+  isAssistantRoutingOwner, isMainChatPurpose, recommendedRoutingAssignments, routingAssignmentSelection, routingModelChoices,
+  resolveAssistantPurpose, hasConnectedAssistantModels } from "@local/vibe64-runtime/shared/assistantRouting";
 
 import {
   assertCanUseVibe64Assistant,
@@ -20,7 +21,6 @@ import {
   resolveVibe64AssistantSelection,
   serializeVibe64AssistantSelection,
   vibe64AssistantSelectionFromMetadata,
-  vibe64AssistantSelectionLabel,
   vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
 import {
@@ -833,13 +833,15 @@ function createSessionAgentManager({
     const actor = await resolveAssistantUser(assistantUser(options));
     options = { ...options, vibe64User: actor };
     const configuration = structuredClone(options.configuration || await readRoutingConfiguration?.());
-    const { purpose, workflowEngineId, override, requirements, reviewEnabled } = input;
-    const assignments = configuration?.orchestrators?.[workflowEngineId] || {};
+    const { purpose, override, requirements, reviewEnabled, temporaryChat = false } = input;
+    const values = configuration?.[assistantRoutingSetupFor(purpose, actor, { temporaryChat })] || {};
     const role = ASSISTANT_PURPOSE_ROLES[purpose];
-    const roles = purpose === "auto" ? ["senior", "junior", "router"]
-      : ["senior", "junior"].includes(role) ? ["senior", "junior"] : role ? [role] : [];
+    // Team members never reach main chat's models; the resolver says why.
+    const roles = isMainChatPurpose(purpose, { temporaryChat }) && !isAssistantRoutingOwner(actor) ? []
+      : purpose === "auto" ? ["senior", "junior", "router"]
+        : ["senior", "junior"].includes(role) ? ["senior", "junior"] : role ? [role] : [];
     const selections = roles.map((key) => override?.role === key && purpose !== "auto"
-      ? override.selection : assignments[key]).filter(Boolean);
+      ? override.selection : assistantSetupRoleValue(values, key).value).filter(Boolean);
     const connectionAccess = [];
     async function readSelectionAccess(assistantSelection) {
       const fact = { ...await readFact(`access:${JSON.stringify(assistantSelection)}`,
@@ -852,13 +854,7 @@ function createSessionAgentManager({
       const fact = await readSelectionAccess(selection);
       if (canUseVibe64Assistant(fact, actor)) accessible.push(selection);
     }
-    const needsBackup = role !== "custom" && connectionAccess.some((access) => !canUseVibe64Assistant({ ...access, available: true }, actor));
-    if (needsBackup && assignments.sharedBackup) {
-      const fact = await readSelectionAccess(assignments.sharedBackup);
-      if (canUseVibe64Assistant(fact, actor)) accessible.push(assignments.sharedBackup);
-    }
-    const resolution = { purpose, workflowEngineId, actor, configuration,
-      connectionAccess, override, requirements, reviewEnabled };
+    const resolution = { purpose, actor, configuration, connectionAccess, override, requirements, reviewEnabled, temporaryChat };
     // Access and missing roles need no native discovery.
     // An eligible destination still requires the current catalogue before dispatch.
     const preflight = resolveAssistantPurpose({ ...resolution, validateModels: false });
@@ -891,7 +887,7 @@ function createSessionAgentManager({
         catalogs.push(catalog);
       } catch {
         // An unreadable catalogue makes its destination unavailable. It must
-        // not fail an independent role or turn a provider outage into Backup.
+        // not fail an independent role.
         for (const fact of connectionAccess) if (fact.engineId === engineId) fact.available = false;
       }
     }
@@ -903,64 +899,11 @@ function createSessionAgentManager({
     const facts = new Map();
     const purposes = [...Object.keys(ASSISTANT_PURPOSE_ROLES), "auto"];
     return Object.fromEntries(await Promise.all(purposes.map(async (purpose) => [purpose,
-      await resolvePurpose({ purpose, workflowEngineId: input.workflowEngineId,
-        reviewEnabled: purpose === "auto",
+      await resolvePurpose({ purpose, reviewEnabled: purpose === "auto", temporaryChat: input.temporaryChat === true,
         ...(input.override && purpose === input.mode
           ? { override: { role: input.mode, selection: input.override } } : {})
       }, { ...options, configuration }, { facts, validateModels: false })
     ])));
-  }
-
-  async function inspectWorkflowChoices(configuration, options) {
-    const engineLabel = (id) => VIBE64_AGENT_PROVIDERS.find((provider) => provider.id === id)?.label || id;
-    const actor = await resolveAssistantUser(assistantUser(options));
-    options = { ...options, vibe64User: actor };
-    const access = new Map();
-    const readAccess = (selection) => {
-      const key = JSON.stringify([selection.engineId, selection.modelProviderId, selection.modelId]);
-      if (!access.has(key)) access.set(key, routingSelectionAccess(selection, options));
-      return access.get(key);
-    };
-    const needsSetup = (engineId) => !["senior", "junior"].every((role) =>
-      Object.hasOwn(configuration.orchestrators[engineId] || {}, role));
-    const errors = new Map();
-    const catalogs = (await Promise.all([...providerById.values()].map(async (provider) => {
-      try { return await providerCapabilities(provider, { configuredOnly: "true" }, options); }
-      catch (cause) { errors.set(provider.id, cause.message); return null; }
-    }))).filter(Boolean);
-    const defaultAccess = catalogs.some(({ engineId }) => needsSetup(engineId))
-      ? await Promise.all(catalogs.flatMap((catalog) => routingModelChoices(catalog)).map(readAccess))
-      : [];
-    const workflows = await Promise.all([...providerById.values()].map(async (provider) => {
-      const saved = configuration.orchestrators[provider.id] || {};
-      const assignments = { ...saved };
-      const catalog = catalogs.find(({ engineId }) => engineId === provider.id);
-      const connected = hasConnectedAssistantModels(catalog);
-      const error = needsSetup(provider.id) ? errors.get(provider.id) || "" : "";
-      // First use still offers connected assistants (including included OpenCode).
-      // Only configured defaults are read; creation discovers and saves full recommendations.
-      if (needsSetup(provider.id) && !error) {
-        const recommended = recommendedRoutingAssignments(catalog, { catalogs, assignments, connectionAccess: defaultAccess });
-        for (const role of ["senior", "junior", "sharedBackup"]) {
-          if (!Object.hasOwn(saved, role) && recommended[role]) assignments[role] = recommended[role];
-        }
-      }
-      if (!Object.keys(saved).length && !assignments.senior && !assignments.junior && !error) return null;
-      const connectionAccess = await Promise.all([assignments.senior, assignments.junior, assignments.sharedBackup].filter(Boolean).map(readAccess));
-      const previewConfiguration = { ...configuration, orchestrators: { ...configuration.orchestrators, [provider.id]: assignments } };
-      const decision = resolveAssistantPurpose({ purpose: "senior", workflowEngineId: provider.id, actor,
-        configuration: previewConfiguration, connectionAccess, validateModels: false });
-      const modelLabel = (role) => {
-        const selection = decision.seniorJuniorPair?.[role]?.effectiveSelection || saved[role];
-        if (!Object.hasOwn(saved, role)) return "Recommended on creation";
-        return selection ? vibe64AssistantSelectionLabel(selection) : "Not configured";
-      };
-      return { engineId: provider.id, label: engineLabel(provider.id), connected,
-        seniorLabel: modelLabel("senior"), juniorLabel: modelLabel("junior"),
-        backupUsed: Object.values(decision.seniorJuniorPair || {}).some((role) => role.backupUsed),
-        available: !error && decision.available, error: error || decision.message };
-    }));
-    return { workflows: workflows.filter(Boolean) };
   }
 
   async function connectedProviderCatalog(provider, options) {
@@ -984,21 +927,15 @@ function createSessionAgentManager({
     return { ...catalog, page: { kind: "providers", hasMore: false, nextCursor: "", total: catalog.modelProviders.length } };
   }
 
+  // The AI setup screen's read: both setups' saved values, recommendations,
+  // choices and illustrative decisions, from every connected tool's catalogue.
   async function inspectRoutingConfiguration(configuration, options = {}) {
-    if (options.workflowsOnly === true) return inspectWorkflowChoices(configuration, options);
-    if (options.engineId && !providerById.has(options.engineId)) throw new Error("Choose a supported orchestrator.");
-    const assignmentsInScope = options.engineId
-      ? [configuration.orchestrators[options.engineId] || {}] : Object.values(configuration.orchestrators);
-    const requiredEngines = new Set([options.engineId, ...assignmentsInScope.flatMap((assignments) =>
-      ASSISTANT_ROUTING_ASSIGNMENTS.map((role) => assignments[role]?.engineId).filter(Boolean))]);
     const catalogs = [];
     const catalogErrors = new Map();
     const connectedEngineIds = new Set();
     await Promise.all([...providerById.values()].map(async (provider) => {
       try {
-        const catalog = options.engineId && !options.includeOtherModels && !requiredEngines.has(provider.id)
-          ? await providerCapabilities(provider, { configuredOnly: "true" }, options)
-          : await connectedProviderCatalog(provider, options);
+        const catalog = await connectedProviderCatalog(provider, options);
         if (hasConnectedAssistantModels(catalog)) connectedEngineIds.add(provider.id);
         catalogs.push(catalog);
       } catch (error) { catalogErrors.set(provider.id, error.message); }
@@ -1007,10 +944,8 @@ function createSessionAgentManager({
     const routeKey = (selection) => JSON.stringify([selection.engineId, selection.modelProviderId, selection.modelId]);
     const selections = new Map(catalogs.flatMap((engine) => routingModelChoices(engine, { purpose: "request_routing" }))
       .map((selection) => [routeKey(selection), selection]));
-    for (const assignments of assignmentsInScope) {
-      for (const role of ASSISTANT_ROUTING_ASSIGNMENTS) {
-        if (assignments[role]) selections.set(routeKey(assignments[role]), assignments[role]);
-      }
+    for (const value of [...Object.values(configuration.owner), ...Object.values(configuration.nonOwner)]) {
+      if (value?.schema) selections.set(routeKey(value), value);
     }
     const access = new Map();
     const entries = [...selections];
@@ -1022,60 +957,62 @@ function createSessionAgentManager({
     const connectionAccess = [...access.values()];
     // Illustrative actors affect only these read-only decisions. They never enter
     // a provider execution context. Preview uses the same policy as admission.
-    const preview = (workflowEngineId, actor, previewConfiguration = configuration) => Object.fromEntries(
-      ["senior", "junior", "helper", "prompt_hint", "request_routing", "review", "auto"].map((purpose) => {
-        const decision = resolveAssistantPurpose({ purpose, workflowEngineId, actor, configuration: previewConfiguration, catalogs, connectionAccess });
-        return [purpose, JSON.parse(JSON.stringify(decision, (key, value) =>
-          ["connectionIdentity", "routerConnectionIdentity"].includes(key) ? undefined : value))];
-      })
-    );
-    const engineIds = new Set([...providerById.keys()].filter((id) => connectedEngineIds.has(id) || catalogErrors.has(id)).concat(Object.keys(configuration.orchestrators).filter((engineId) => {
-      const saved = configuration.orchestrators[engineId];
-      return ASSISTANT_ROUTING_ASSIGNMENTS.some((role) => saved[role]) || saved.helperRoutingReview;
-    })));
-    return { engines: [...engineIds].filter((engineId) => !options.engineId || engineId === options.engineId).map((engineId) => {
-      const engine = catalogs.find((entry) => entry.engineId === engineId);
-      const assignments = configuration.orchestrators[engineId] || {};
-      const recommendations = recommendedRoutingAssignments(engine, { catalogs, assignments, connectionAccess });
-      const setupAssignments = { ...assignments };
-      // Explicit setup fills only absent roles. An explicit null stays disabled.
-      if (!catalogErrors.has(engineId) && recommendations.senior && recommendations.junior) {
-        for (const role of ASSISTANT_ROUTING_ASSIGNMENTS) {
-          if (!Object.hasOwn(setupAssignments, role) && recommendations[role]) {
-            setupAssignments[role] = recommendations[role];
-          }
+    const decide = (purposes, actor, previewConfiguration) => Object.fromEntries(purposes.map((purpose) => {
+      const decision = resolveAssistantPurpose({ purpose, actor, configuration: previewConfiguration, catalogs, connectionAccess });
+      return [purpose, JSON.parse(JSON.stringify(decision, (key, value) =>
+        ["connectionIdentity", "routerConnectionIdentity"].includes(key) ? undefined : value))];
+    }));
+    const previewPurposes = { owner: ["senior", "junior", "request_routing", "review", "auto", "colleague", "fix", "source_explanation", "prompt_hint"],
+      nonOwner: ["colleague", "fix", "source_explanation", "prompt_hint"] };
+    const illustrative = { owner: { role: "owner" }, nonOwner: { role: "member" } };
+    const setups = Object.fromEntries(Object.keys(ASSISTANT_SETUP_ROLES).map((setup) => {
+      const values = configuration[setup];
+      const recommendations = recommendedRoutingAssignments({ catalogs, setup, values, connectionAccess,
+        preferProvider: options.preferProvider?.setup === setup ? options.preferProvider : null });
+      // Setup fills only absent roles; an explicit null stays off. The owner's
+      // main chat needs both Senior and Junior before anything is filled.
+      const setupValues = { ...values };
+      if (setup === "nonOwner" || recommendations.senior && recommendations.junior) {
+        for (const role of ASSISTANT_SETUP_ROLES[setup]) {
+          if (!Object.hasOwn(setupValues, role) && recommendations[role]) setupValues[role] = recommendations[role];
         }
+        if (setupValues.senior?.schema && setupValues.junior?.schema && setupValues.senior.engineId !== setupValues.junior.engineId &&
+            !Object.hasOwn(values, "junior")) delete setupValues.junior;
       }
-      const setupConfiguration = { ...configuration,
-        orchestrators: { ...configuration.orchestrators, [engineId]: setupAssignments } };
-      const roles = Object.fromEntries(ASSISTANT_ROUTING_ASSIGNMENTS.map((role) => {
-        const purpose = role === "router" ? "request_routing" : role === "helper" ? "prompt_hint" : role === "sharedBackup" ? "junior" : role;
-        const candidates = ["senior", "junior"].includes(role) ? (engine ? [engine] : []) : catalogs;
-        const choices = candidates.flatMap((catalog) => routingModelChoices(catalog, { purpose }).map((choice) => {
+      const roles = Object.fromEntries(ASSISTANT_SETUP_ROLES[setup].map((role) => {
+        const purpose = ASSISTANT_ROLE_PURPOSES[role];
+        const choices = catalogs.flatMap((catalog) => routingModelChoices(catalog, { purpose }).map((choice) => {
           const fact = access.get(routeKey(choice));
-          return { ...choice, engineLabel: catalog.label, ownerOnly: fact?.ownerOnly !== false,
+          return { ...choice, engineLabel: catalog.label, ownerOnly: fact?.ownerOnly !== false, endpointCode: fact?.endpointCode || "",
             accessLabel: fact?.accessLabel || "Unavailable", available: fact?.available === true && Boolean(fact.connectionIdentity) };
-        })).filter((choice) => role !== "sharedBackup" || !choice.ownerOnly);
-        const assignment = assignments[role] || null;
+        })).filter((choice) => setup !== "nonOwner" || !choice.ownerOnly);
+        const value = Object.hasOwn(values, role) ? values[role] : undefined;
         let error = "";
-        if (assignment) {
+        if (value?.schema) {
           try {
-            if (["senior", "junior"].includes(role) && assignment.engineId !== engineId) throw new Error("Senior and Junior must use the workflow orchestrator.");
-            routingAssignmentSelection(catalogs.find((row) => row.engineId === assignment.engineId), assignment, { purpose });
-            const choice = choices.find((row) => routeKey(row) === routeKey(assignment));
-            if (!choice?.available) throw new Error(role === "sharedBackup" ? "Choose an available workspace connection for Shared backup." : "The selected AI connection is unavailable.");
-            if (["junior", "sharedBackup"].includes(role) && choice.capabilities?.toolcall === false) throw new Error("Choose a model that supports coding tools.");
+            routingAssignmentSelection(catalogs.find((row) => row.engineId === value.engineId), value, { purpose });
+            const fact = access.get(routeKey(value));
+            if (setup === "nonOwner" && fact?.ownerOnly !== false) throw new Error("Team members can't use personal plans. Choose a Workspace-use model.");
+            const choice = choices.find((row) => routeKey(row) === routeKey(value));
+            if (!choice?.available) throw new Error("The selected AI connection is unavailable.");
+            if (["junior", "fix"].includes(role) && choice.capabilities?.toolcall === false) throw new Error("Choose a model that supports coding tools.");
+            if (role === "junior" && values.senior?.schema && values.senior.engineId !== value.engineId) throw new Error("Senior and Junior must run in the same tool.");
           } catch (cause) { error = cause.message; }
         }
-        return [role, { assignment, recommendation: recommendations[role], choices, error }];
+        const { value: effective, followedRole } = assistantSetupRoleValue(values, role);
+        return [role, { value: value ?? null, configured: value !== undefined, effective: effective?.schema ? effective : null,
+          followedRole, recommendation: recommendations[role] ?? null, choices, error }];
       }));
-      return { engineId, label: engine?.label || engineId, connected: connectedEngineIds.has(engineId), roles, choices: roles.senior.choices,
-        setupAssignments, setupPreview: preview(engineId, assistantUser(options), setupConfiguration),
-        error: catalogErrors.get(engineId) || "", helperRoutingReview: assignments.helperRoutingReview || null,
-        preview: { viewer: preview(engineId, assistantUser(options)), ...(options.includeCollaboratorPreview ? {
-          owner: preview(engineId, { role: "owner" }), collaborator: preview(engineId, { role: "member" })
-        } : {}) } };
-    }) };
+      return [setup, { roles, setupValues, preview: decide(previewPurposes[setup], illustrative[setup], configuration),
+        setupPreview: decide(previewPurposes[setup], illustrative[setup], { ...configuration, [setup]: setupValues }) }];
+    }));
+    return {
+      engines: [...providerById.keys()].filter((id) => connectedEngineIds.has(id) || catalogErrors.has(id)).map((engineId) => ({
+        engineId, label: catalogs.find((entry) => entry.engineId === engineId)?.label || VIBE64_AGENT_PROVIDERS.find(({ id }) => id === engineId)?.label || engineId,
+        connected: connectedEngineIds.has(engineId), error: catalogErrors.get(engineId) || "" })),
+      setups,
+      viewer: decide(["senior", "junior", "auto", "colleague", "fix", "source_explanation", "prompt_hint"], assistantUser(options), configuration)
+    };
   }
 
   function sessionMethod(method) {

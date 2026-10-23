@@ -2,7 +2,8 @@ import crypto from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { createMainBrowserConversations } from "./mainBrowserConversations.js";
 import { assertSessionRepositoryReview, sessionConnectedContribution, sessionConnectedSources, sessionConnectedSubmissions, sessionRepositoryDestination, sessionRepositoryProject } from "@local/vibe64-core/server/projectRepository";
-import { ASSISTANT_ROUTING_METADATA, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
+import { ASSISTANT_ROUTING_METADATA, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingStatusIsPending,
+  isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
 
 import { vibe64Result } from "@local/vibe64-core/server/serverResponses";
 import {
@@ -235,7 +236,6 @@ function legacyCodexAssistantSelection() {
 function createService({
   actions = null,
   initializeModelRouting,
-  readModelRoutingWorkflows,
   project,
   publishSessionChanged = async () => null,
   renewalActorResolver = null,
@@ -475,46 +475,36 @@ function createService({
     return legacyCodexAssistantSelection();
   }
 
+  // Main chat starts on the owner's setup. A renewal keeps the chat mode; a
+  // chosen model that isn't main chat's own makes the chat Custom.
   async function resolveSessionStart(input = {}, { session = null, vibe64User = null, mode = "senior" } = {}) {
+    const owner = isAssistantRoutingOwner(vibe64User);
+    if (!owner && Object.keys(input.assistantSelection || {}).length) {
+      throw Object.assign(new Error("Main chat runs on the workspace owner's AI. Team members can't choose its model."), {
+        code: "vibe64_main_chat_approval_required", statusCode: 403 });
+    }
     const explicitSelection = Object.keys(input.assistantSelection || {}).length
       ? await resolveAssistantSelection(input.assistantSelection, vibe64User, { configuredOnly: true })
       : null;
     const previous = session ? assistantRoutingFromMetadata(session.metadata) : null;
-    let workflowEngineId = input.workflowEngineId || explicitSelection?.engineId || previous?.workflowEngineId;
-    if (!workflowEngineId) {
-      if (typeof readModelRoutingWorkflows !== "function") {
-        throw new TypeError("Session creation requires the available AI workflow reader.");
-      }
-      const available = await readModelRoutingWorkflows({ vibe64User });
-      if (available?.ok !== true) {
-        throw Object.assign(new Error(available?.error || "AI workflows could not be read. Retry after checking AI Accounts."), {
-          code: available?.code || "vibe64_assistant_workflow_unavailable", statusCode: available?.statusCode || 409
-        });
-      }
-      // Match the normal workflow picker's default; the original routing and
-      // connection checks below still admit the actual model for this actor.
-      workflowEngineId = available.workflows?.find(choice => choice.available)?.engineId;
-      if (!workflowEngineId) {
-        throw Object.assign(new Error("No AI workflow is available. Connect an AI account and configure Model routing, then retry the same lesson or session."), {
-          code: "vibe64_assistant_workflow_unavailable", statusCode: 409
-        });
-      }
-    }
+    const startMode = previous && !["custom", "fix"].includes(previous.mode) ? previous.mode : mode;
     // Deslop starts on; the chat-mode switch can turn it off after a warning.
-    const preferences = assistantRoutingPreferences({ mode, review: true,
-      workflowEngineId,
-      ...(explicitSelection ? { override: explicitSelection } : {}) });
-    if (explicitSelection && explicitSelection.engineId !== preferences.workflowEngineId) {
-      throw new Error(`The starting ${mode === "junior" ? "Junior" : "Senior"} model must use the chosen workflow orchestrator.`);
-    }
-    const routingSetup = await initializeModelRouting({ engineIds: [preferences.workflowEngineId], vibe64User });
+    const preferences = assistantRoutingPreferences(explicitSelection ? { mode: "custom", override: explicitSelection }
+      : { mode: startMode, review: true });
+    const routingSetup = await initializeModelRouting({ vibe64User });
     if (routingSetup?.ok === false) throw Object.assign(new Error(routingSetup.error), { code: routingSetup.code, statusCode: routingSetup.statusCode });
-    const decision = await terminals.resolveAssistantPurpose({ purpose: mode, workflowEngineId: preferences.workflowEngineId,
-      ...(explicitSelection ? { override: { role: mode, selection: explicitSelection } } : {}) }, { vibe64User });
+    // A team member's session records main chat's starting model only; their
+    // messages wait for the owner, so nothing runs as them here.
+    const purpose = preferences.mode === "auto" ? "senior" : preferences.mode;
+    const decision = await terminals.resolveAssistantPurpose({ purpose,
+      ...(explicitSelection ? { override: { role: "custom", selection: explicitSelection } } : {}) },
+    { vibe64User: owner ? vibe64User : { role: "owner" } }, owner ? undefined : { validateModels: false });
     if (!decision.available) throw Object.assign(new Error(decision.message), { code: decision.reasonCode, statusCode: 403 });
-    await terminals.requireAssistantSelectionAccess(decision.effectiveSelection, {
-      vibe64User, expectedConnectionIdentity: decision.connectionIdentity
-    });
+    if (owner) {
+      await terminals.requireAssistantSelectionAccess(decision.effectiveSelection, {
+        vibe64User, expectedConnectionIdentity: decision.connectionIdentity
+      });
+    }
     return { assistantSelection: decision.effectiveSelection, assistantRouting: preferences };
   }
 
@@ -1077,7 +1067,6 @@ function createService({
         }
         const allocate = () => executeConnectedAction(binding.projectSlug, "vibe64.sessions.connected.allocate", {
           contribution: binding.contribution,
-          workflowEngineId: assistantRoutingFromMetadata(session.metadata).workflowEngineId,
           sessionName: (text(session.sessionName) || sessionId).slice(0, 120)
         }, requestContext);
         let result = await allocate();
@@ -1356,7 +1345,7 @@ function createService({
             });
           }
         }
-        return named(await service.createSession({ workflowEngineId: input.workflowEngineId, vibe64User: trustedAssistantUser(input) }, {
+        return named(await service.createSession({ vibe64User: trustedAssistantUser(input) }, {
           sessionId: contribution.id, expectedCommit: contribution.baseCommit, connectedContribution: contribution
         }));
       });
@@ -2452,24 +2441,19 @@ function createService({
             let resolved;
             let connectionIdentity;
             if (input.assistantRouting && input.assistantRouting.mode !== "custom") {
-              const previous = assistantRoutingFromMetadata(session.metadata);
-              const previousWorkflow = previous?.workflowEngineId || current.engineId;
-              preferences = assistantRoutingPreferences({ ...input.assistantRouting,
-                workflowEngineId: input.assistantRouting.workflowEngineId || previousWorkflow });
-              if (["senior", "junior"].includes(preferences.mode) && preferences.override?.engineId &&
-                  preferences.override.engineId !== preferences.workflowEngineId) throw new Error("Senior and Junior overrides must use the workflow orchestrator.");
-              if (preferences.workflowEngineId === previousWorkflow) {
-                const observed = typeof terminals.readAgentGoal === "function"
-                  ? await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User }) : null;
-                const pinned = JSON.parse(session.metadata.assistant_routing_goal || "null");
-                const goal = observed?.status === "available" ? observed.goal : observed?.goal || pinned;
-                if (!goal || ["complete", "completed"].includes(goal.status)) {
-                  await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(preferences));
-                  return { assistantSelection: current, session: await runtime.getSession(sessionId, { inspectSource: false }) };
-                }
+              preferences = assistantRoutingPreferences(input.assistantRouting);
+              // Main chat's tool follows the owner's setup; a changed tool
+              // catches up on the next message. Only an active goal rebinds now.
+              const observed = typeof terminals.readAgentGoal === "function"
+                ? await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User }) : null;
+              const pinned = JSON.parse(session.metadata.assistant_routing_goal || "null");
+              const goal = observed?.status === "available" ? observed.goal : observed?.goal || pinned;
+              if (!goal || ["complete", "completed"].includes(goal.status)) {
+                await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(preferences));
+                return { assistantSelection: current, session: await runtime.getSession(sessionId, { inspectSource: false }) };
               }
               const decision = await terminals.resolveAssistantPurpose({
-                purpose: preferences.mode, workflowEngineId: preferences.workflowEngineId, reviewEnabled: preferences.review,
+                purpose: preferences.mode, reviewEnabled: preferences.review,
                 ...(preferences.override ? { override: { role: preferences.mode, selection: preferences.override } } : {})
               }, { vibe64User });
               if (!decision.available) throw Object.assign(new Error(decision.message), { code: decision.reasonCode, statusCode: 403 });
@@ -2497,7 +2481,7 @@ function createService({
             const goal = observedGoal?.status === "available" ? observedGoal.goal
               : observedGoal?.goal || agentSession?.goal || JSON.parse(session.metadata.assistant_routing_goal || "null");
             const nextPreferences = preferences || {
-              mode: "custom", review: false, workflowEngineId: next.engineId, override: next
+              mode: "custom", review: false, override: next
             };
             if (deferred || agentSession?.turn?.active || goal && !["complete", "completed"].includes(goal.status)) {
               await terminals.applyGoalSelection(sessionId, next, nextPreferences, { runtime, session, vibe64User });

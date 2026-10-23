@@ -243,13 +243,8 @@
             >
               Open AI Accounts
             </v-btn>
-            <Vibe64SwitchWorkflowButton
-              v-if="assistantAccountUnavailable && !props.sessionSelectionArchived" :session="props.session"
-              :sessions-api-path="props.sessionsApiPath" :disabled="sourceOperationsSuspended"
-              @saved="reloadAssistantAccess(); props.retryAgentConnection()"
-            />
             <v-btn
-              v-else
+              v-if="!assistantAccountUnavailable || props.sessionSelectionArchived"
               variant="tonal"
               min-height="32"
               size="small"
@@ -343,9 +338,9 @@
             </v-btn>
             <Vibe64TemporaryAiFixAction
               v-if="saveWorkCanResolveWithTemporaryAi"
-              :disabled="repositoryRecoverySending || !(saveWorkActivityIsUpdate ? assistantSeniorAllowed : assistantJuniorAllowed)"
+              :disabled="repositoryRecoverySending || !assistantFixAllowed"
               :pending="repositoryRecoverySending"
-              :title="(saveWorkActivityIsUpdate ? assistantSeniorAllowed : assistantJuniorAllowed) ? 'Open temporary AI to resolve this repository problem' : saveWorkActivityIsUpdate ? assistantSeniorRestrictionMessage : assistantJuniorRestrictionMessage"
+              :title="assistantFixAllowed ? 'Open temporary AI to resolve this repository problem' : assistantFixRestrictionMessage"
               @click="fixRepositoryActionError"
             />
             <v-btn
@@ -405,7 +400,7 @@
               v-else
               :disabled="workspaceSetupAskDisabled"
               :pending="workspaceSetupFixSending"
-              :title="assistantJuniorAllowed ? 'Open temporary AI to resolve workspace preparation' : assistantJuniorRestrictionMessage"
+              :title="assistantFixAllowed ? 'Open temporary AI to resolve workspace preparation' : assistantFixRestrictionMessage"
               @click="askCodexToFixWorkspaceSetup"
             />
           </template>
@@ -757,13 +752,13 @@
           :open-request="databaseOpenRequest"
           v-if="rightPaneTabMounted('database')"
           :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'database'"
-          :assistant-available="assistantCanUsePurpose('junior')"
-          :assistant-unavailable-message="assistantJuniorRestrictionMessage"
+          :assistant-available="assistantCanUsePurpose('fix')"
+          :assistant-unavailable-message="assistantFixRestrictionMessage"
           class="studio-autopilot__session-tool-content"
           :project-slug="projectSlug"
           :session-id="sessionId"
           :sessions-api-path="props.sessionsApiPath"
-          @request-overview-assistant="assistantCanUsePurpose('junior') ? startTemporaryAiTask($event) : prefillComposer($event.message, { append: true })"
+          @request-overview-assistant="assistantCanUsePurpose('fix') ? startTemporaryAiTask($event) : prefillComposer($event.message, { append: true })"
         />
       </section>
 
@@ -774,7 +769,7 @@
         role="tabpanel"
       >
         <Vibe64ArchitectureView
-          :assistant-available="assistantJuniorAllowed && !repositoryOperationActive && !props.sessionSelectionArchived"
+          :assistant-available="assistantFixAllowed && !repositoryOperationActive && !props.sessionSelectionArchived"
           v-if="rightPaneTabMounted('system')"
           :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'system'"
           class="studio-autopilot__session-tool-content"
@@ -838,12 +833,12 @@
           :active="props.active && props.projectPane === 'preview'"
           :archived="props.sessionSelectionArchived"
           :busy="sourceOperationsSuspended || agentActive || Boolean(props.page?.busy || props.page?.launchBusy)"
-          :can-ask="assistantJuniorAllowed"
+          :can-ask="assistantFixAllowed"
           :request-temporary-ai="startTemporaryAiTask"
           :session-id="selectedAssistantSessionId"
         >
           <Vibe64OutputControls
-            :ask-codex-to-fix-preview-identity="assistantJuniorAllowed ? askCodexToFixPreviewIdentity : null"
+            :ask-codex-to-fix-preview-identity="assistantFixAllowed ? askCodexToFixPreviewIdentity : null"
             :attach-preview-file="attachPreviewFile"
             :prepare-preview-file="attachPreviewFileProducer"
             :auto-start-managed-preview="!props.sessionSelectionArchived"
@@ -1006,7 +1001,6 @@ import Vibe64AgentPlanUsage from "@/components/studio/vibe64-session/Vibe64Agent
 import Vibe64SessionPin from "./Vibe64SessionPin.vue";
 import Vibe64RoutingNotice from "./Vibe64RoutingNotice.vue";
 import Vibe64WorkPlan from "./Vibe64WorkPlan.vue";
-import Vibe64SwitchWorkflowButton from "./Vibe64SwitchWorkflowButton.vue";
 import Vibe64ChatModeControls from "./Vibe64ChatModeControls.vue";
 import { useModelRouting } from "@local/vibe64-accounts/client";
 import Vibe64SessionAssistantMenu from "@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
@@ -1190,8 +1184,7 @@ const reloadAssistantAccess = () => props.conversationRuntime.access.reload();
 const {
   Vibe64OutputControls,
   assistantDirectAllowed,
-  assistantJuniorAllowed,
-  assistantSeniorAllowed,
+  assistantFixAllowed,
   agentActive,
   reasoningActive,
   agentObservationLost,
@@ -1345,8 +1338,7 @@ const {
   assistantAccessLoading,
   assistantCanUseAi: assistantCanUseAiState,
   assistantCanRouteChat,
-  assistantCanUseJunior: computed(() => assistantCanUsePurpose("junior")),
-  assistantCanUseSenior: computed(() => assistantCanUsePurpose("senior")),
+  assistantCanUseFix: computed(() => assistantCanUsePurpose("fix")),
   assistantCanUseNative,
   assistantProgressLabel: openCodeProgressLabel,
   onAttachmentsAccepted: (attachmentIds) => composerInput.value?.clearAttachments?.({ attachmentIds }),
@@ -1485,8 +1477,7 @@ const saveWorkNeedsPullRequest = computed(() => !saveWorkConnectedReview.value &
   props.workState?.publicationRequiresPullRequest === true && !sessionPullRequest.value?.number);
 const saveWorkCanCreatePullRequest = computed(() => githubProject.value && !sessionPullRequest.value?.number &&
   saveWorkFailure.value?.code === "vibe64_pull_request_required");
-const assistantJuniorRestrictionMessage = computed(() => assistantPurposes.value.junior?.message || "Junior is unavailable. Review model routing.");
-const assistantSeniorRestrictionMessage = computed(() => assistantPurposes.value.senior?.message || "Senior is unavailable. Review model routing.");
+const assistantFixRestrictionMessage = computed(() => assistantPurposes.value.fix?.message || "Fix it with AI is unavailable. Review AI setup.");
 const publicationLabel = computed(() => {
   if (saveWorkConnectedReview.value) return "Push connected contributions";
   const destination = saveWorkReview.value;
@@ -1497,10 +1488,8 @@ const dashboardContext = computed(() => ({
   ...(dashboardSessionContext.value || {}),
   assistantDirectAllowed: assistantDirectAllowed.value,
   assistantDraftAvailable: sourceEditorAskCodexAvailable.value,
-  assistantJuniorAllowed: assistantJuniorAllowed.value,
-  assistantJuniorRestrictionMessage: assistantJuniorRestrictionMessage.value,
-  assistantSeniorAllowed: assistantSeniorAllowed.value,
-  assistantSeniorRestrictionMessage: assistantSeniorRestrictionMessage.value,
+  assistantFixAllowed: assistantFixAllowed.value,
+  assistantFixRestrictionMessage: assistantFixRestrictionMessage.value,
   assistantRestrictionMessage: assistantRestrictionMessage.value,
   requestAssistantDraft: (text) => prefillComposer(text, { append: true }),
   requestUpdateWork: props.updateSessionWork,
@@ -1612,7 +1601,7 @@ function openTemporaryAi() {
 }
 
 async function startTemporaryAiTask(options = {}) {
-  if (!assistantCanUsePurpose(options.recoveryOperation === "update" || options.initialRouting?.mode === "senior" ? "senior" : "junior") || props.sessionSelectionArchived) {
+  if (!assistantCanUsePurpose("fix") || props.sessionSelectionArchived) {
     return false;
   }
   emit("chat-attention");

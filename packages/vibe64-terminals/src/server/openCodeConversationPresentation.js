@@ -3,7 +3,6 @@ import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { VIBE64_AGENT_EXECUTION_PROFILE_IDS, VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
   vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
-import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { conversationMessageId, upstreamMessageId } from "./openCodeConversationStorage.js";
 import { renewalCleanupContext } from "./sessionRenewalHandover.js";
@@ -66,8 +65,7 @@ function createOpenCodeConversationPresentation({ getAssistantManager, publishSe
       AbortSignal.timeout(OPENCODE_REASONING_SUMMARY_TIMEOUT_MS)
     ]);
     signal.throwIfAborted();
-    const workflowEngineId = assistantRoutingFromMetadata(context.session.metadata)?.workflowEngineId || context.selection.engineId;
-    const decision = await agent.resolveAssistantPurpose({ purpose: "conversation_summary", workflowEngineId }, context);
+    const decision = await agent.resolveAssistantPurpose({ purpose: "conversation_summary" }, context);
     if (!decision.available) return "";
     signal.throwIfAborted();
     const id = `reasoning_${randomUUID()}`;

@@ -22,7 +22,8 @@
     "./server/practiceAgentGuidance": "./src/server/practiceAgentGuidance.js",
     "./server/assistantClaudeCommandUpgrade": "./src/server/assistantClaudeCommandUpgrade.js",
     "./server/assistantClaudeDeliveryUpgrade": "./src/server/assistantClaudeDeliveryUpgrade.js",
-    "./server/assistantPlanProgressUpgrade": "./src/server/assistantPlanProgressUpgrade.js"
+    "./server/assistantPlanProgressUpgrade": "./src/server/assistantPlanProgressUpgrade.js",
+    "./server/teamSetupSessionUpgrade": "./src/server/teamSetupSessionUpgrade.js"
   },
   "jskit": {
     "kind": "runtime",

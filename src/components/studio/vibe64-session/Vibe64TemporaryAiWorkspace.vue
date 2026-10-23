@@ -250,7 +250,7 @@
               <div class="vibe64-temporary-ai__composer-actions">
                   <Vibe64ChatModeControls
                     v-if="task.id === activeTask.id" :session="modeSession" :goal="task.goal" temporary
-                    :required-mode="task.recoveryOperation === 'update' ? 'senior' : ''"
+                    :required-mode="task.recoveryOperation === 'update' ? 'fix' : ''"
                     :save-preferences="(preferences) => temporary.updateRouting(task.id, preferences)"
                     :active="task.busy" :disabled="props.repositoryBusy || task.status === 'closing'"
                     :can-configure="props.canConfigureRouting"

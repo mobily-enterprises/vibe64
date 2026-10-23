@@ -74,7 +74,7 @@ async function namingFixture(t) {
   const agent = {
     async resolveAssistantPurpose(input, options) {
       calls.push("resolve");
-      assert.deepEqual(input, { purpose: "commit_title", workflowEngineId: "codex" });
+      assert.deepEqual(input, { purpose: "commit_title" });
       assert.equal(options.vibe64User, actor);
       return { available: true, effectiveSelection: selection, connectionIdentity: "shared-key-generation-1" };
     },

@@ -29,14 +29,17 @@ during a pending delivery may require cancelling that request and sending it aga
 These steps apply on desktop and mobile. Account sign-in and credential entry
 remain your actions; Colleague can explain the recovery and offer supported help.
 
-An unfinished goal stays with its current orchestrator. Open **Chat mode** while
+An unfinished goal stays with its current tool. Open **Chat mode** while
 it is running or paused and choose **Senior**, **Junior**, or **Custom**. A model
-or direct-mode change within the same orchestrator applies to the next turn,
+or direct-mode change within the same tool applies to the next turn,
 including automatic goal continuations. The current turn keeps its settings;
 the goal keeps its objective, budget and progress. You do not need **Pause goal**,
 **Cancel goal** or a reload to save settings.
-Choosing another **Orchestrator** or **Auto** saves the preference for after the
-goal finishes; it does not transfer or cancel the current goal. Ordinary messages still use the current goal’s orchestrator while that preference is deferred. If a message is rejected before sending, its delivery check also uses the current goal’s orchestrator. These steps apply
+Choosing **Auto**, a model in another tool, or moving the main AI to another tool
+in AI setup applies after the goal finishes; it does not transfer or cancel the
+current goal. Ordinary messages still use the current goal’s tool and the AI setup
+saved when it started. If a message is rejected before sending, its delivery check
+also uses the current goal’s tool. These steps apply
 on desktop and mobile, including goals created by the assistant. Colleague can
 explain or offer a supported change and needs your request before performing it.
 

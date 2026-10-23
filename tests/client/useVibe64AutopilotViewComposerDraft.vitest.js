@@ -478,12 +478,12 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.systemReloadVersion.value).toBe(1);
   });
 
-  it("uses Junior availability for generated work while the main personal chat is restricted", async () => {
+  it("uses Fix it with AI availability for generated work while the main personal chat is restricted", async () => {
     const canCode = ref(true);
     const requestTemporaryAi = vi.fn(async () => ({ ok: true, taskId: "shared-code-task" }));
     const { view, props } = await createViewWithProps({ session: { ...viewProps().session,
       workspaceSetup: { status: "failed", diagnostic: "Install failed." }
-    } }, { assistantCanUseAi: ref(false), assistantCanUseJunior: canCode, requestTemporaryAi });
+    } }, { assistantCanUseAi: ref(false), assistantCanUseFix: canCode, requestTemporaryAi });
     view.composerDraft.value = "Keep my draft.";
     expect(view.assistantDirectAllowed.value).toBe(false);
     expect(view.workspaceSetupAskDisabled.value).toBe(false);
@@ -502,17 +502,14 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(requestTemporaryAi).toHaveBeenCalledTimes(4);
   });
 
-  it("admits merge repair through Senior even when Junior and the main model are unavailable", async () => {
-    const senior = ref(true);
-    const junior = ref(false);
+  it("admits merge repair through Fix it with AI even when the main model is unavailable", async () => {
+    const fix = ref(true);
     const requestTemporaryAi = vi.fn(async () => ({ ok: true }));
-    const view = await createView({}, { assistantCanUseAi: ref(false), assistantCanUseSenior: senior,
-      assistantCanUseJunior: junior, requestTemporaryAi });
+    const view = await createView({}, { assistantCanUseAi: ref(false), assistantCanUseFix: fix, requestTemporaryAi });
     const conflict = { code: "vibe64_session_update_conflict", error: "Keep both changes." };
     expect(await view.fixRepositoryError(conflict)).toBe(true);
     expect(requestTemporaryAi).toHaveBeenCalledWith(expect.objectContaining({ recoveryOperation: "update" }));
-    senior.value = false;
-    junior.value = true;
+    fix.value = false;
     expect(await view.fixRepositoryError(conflict)).toBe(false);
     expect(requestTemporaryAi).toHaveBeenCalledOnce();
   });
@@ -2247,15 +2244,14 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.chatTurns.value).toEqual(originalTurns);
   });
 
-  it("opens Incoming conflict repair with Senior and requires a separate reviewed Merge", async () => {
+  it("opens Incoming conflict repair with Fix it with AI and requires a separate reviewed Merge", async () => {
     const senior = ref(true);
     const requestTemporaryAi = vi.fn(async () => ({ ok: true, taskId: "incoming-repair" }));
-    const view = await createView({}, { assistantCanUseAi: ref(false), assistantCanUseSenior: senior,
-      assistantCanUseJunior: ref(false), requestTemporaryAi });
+    const view = await createView({}, { assistantCanUseAi: ref(false), assistantCanUseFix: senior, requestTemporaryAi });
     const input = { code: "vibe64_incoming_merge_conflict", error: "Exact target abc and contribution def; shared.txt.", title: "Resolve Incoming merge" };
     expect(await view.fixRepositoryError(input)).toBe(true);
     const task = requestTemporaryAi.mock.calls[0][0];
-    expect(task.initialRouting).toEqual({ mode: "senior", review: false });
+    expect(task.initialRouting).toBeUndefined();
     expect(task.recoveryOperation).toBe("");
     expect(task.message).toContain("Repair only the listed conflicting files");
     expect(task.message).toContain("Do not commit, merge, rebase or push");
@@ -3016,7 +3012,7 @@ describe("useVibe64AutopilotView direct chat", () => {
 
   it.each(["restricted", "unavailable", "failed"])("allows native Save when AI access is %s and no turn is running", async (connectionStatus) => {
     const { props, view } = await createViewWithProps({ agentConnectionStatus: connectionStatus,
-      workState: { unsaved: true } }, { assistantCanUseAi: ref(false), assistantCanUseJunior: ref(false) });
+      workState: { unsaved: true } }, { assistantCanUseAi: ref(false), assistantCanUseFix: ref(false) });
     expect(view.saveWorkDisabled.value).toBe(false);
     expect(view.requestSaveWork()).toBe(true);
     await view.confirmSaveWork();

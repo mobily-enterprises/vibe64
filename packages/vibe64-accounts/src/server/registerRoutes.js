@@ -1,5 +1,5 @@
 import {
-  ACTION_READ_MODEL_ROUTING, ACTION_READ_MODEL_ROUTING_WORKFLOWS, ACTION_SAVE_MODEL_ROUTING, ACTION_PREVIEW_MODEL_ROUTING,
+  ACTION_READ_MODEL_ROUTING, ACTION_SAVE_MODEL_ROUTING, ACTION_PREVIEW_MODEL_ROUTING,
   ACTION_READ_CODEX_PROVIDERS, ACTION_SAVE_CODEX_PROVIDER, ACTION_REMOVE_CODEX_PROVIDER,
   ACTION_CANCEL_ACCOUNT_AUTH_SESSION,
   ACTION_LOGOUT_ACCOUNT,
@@ -107,11 +107,6 @@ function registerRoutes(
     summary: "Disconnect a curated Codex provider."
   });
 
-  routes.actionRoute("GET", "/model-routing/workflows", {
-    actionId: ACTION_READ_MODEL_ROUTING_WORKFLOWS,
-    buildInput: () => withoutVibe64User(),
-    summary: "Read saved workflows and connection access without model discovery."
-  });
   routes.actionRoute("GET", "/model-routing", {
     actionId: ACTION_READ_MODEL_ROUTING, query: modelRoutingReadInputValidator,
     buildInput: (request) => withoutVibe64User(routes.requestQuery(request)),
@@ -120,12 +115,12 @@ function registerRoutes(
   routes.actionRoute("PATCH", "/model-routing", {
     actionId: ACTION_SAVE_MODEL_ROUTING, body: modelRoutingInputValidator,
     buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
-    summary: "Save the workspace's model routing assignments."
+    summary: "Save the workspace's owner and team AI setups."
   });
   routes.actionRoute("POST", "/model-routing/preview", {
     actionId: ACTION_PREVIEW_MODEL_ROUTING, body: modelRoutingInputValidator,
     buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
-    summary: "Preview owner and collaborator routing without saving or running AI."
+    summary: "Preview the owner and team AI setups without saving or running AI."
   });
   for (const method of ["GET", "PATCH"]) {
     routes.serviceRoute(method, "/helper-model", {

@@ -315,8 +315,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     const evidenceHash = sha256(canonicalJson({ lessonHash: lesson.hash, stepId, rubric: step.check.rubric, evidence: read.evidence }));
     const same = entry.results.findLast(value => value.stepId === stepId && value.kind === "review" && value.evidence.evidenceHash === evidenceHash);
     if (same) return replayed(same, stepId);
-    const verdict = await reviewer.review({ actor, lesson, step, evidence: read.evidence,
-      workflowEngineId: read.session.workflowEngineId, context });
+    const verdict = await reviewer.review({ actor, lesson, step, evidence: read.evidence, context });
     const { passed, ...feedback } = verdict;
     const saved = await record({ actor, attemptId, requestId, lesson,
       result: { stepId, kind: "review", outcome: passed ? "passed" : "not-yet-passed", origin: "check",

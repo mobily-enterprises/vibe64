@@ -153,17 +153,18 @@ added. Use an open session before uploading again. Colleague can explain the
 notice; it cannot override the closing check. The same rule applies on desktop
 and mobile.
 
-Open **Chat mode** at any point to choose **Senior**, **Junior**, an
-**Orchestrator**, or **Custom** → **Apply**. Saving settings does not stop the
+Open **Chat mode** at any point to choose **Auto**, **Senior**, **Junior**, or
+**Custom** → **Apply**. Senior and Junior come from the AI setup and always run
+in the main AI's tool. Saving settings does not stop the
 current turn. The next turn uses the new settings; see [Goals and model
 changes](coding-agent-goals.md) for automatic continuations and an unfinished
-goal's retained orchestrator. If saving fails, the control reports the error;
+goal's retained tool. If saving fails, the control reports the error;
 retry after resolving it. Colleague can explain or perform a supported selection
 change when you explicitly ask.
 
 To change the model for an active Update merge repair, open **Chat mode** in
 that repair's composer, then **Choose model**. In **Custom AI**, choose a
-**Model** and select **Apply**. The repair keeps **Senior**, its history and its
+**Model** and select **Apply**. The repair keeps **Fix it with AI**, its history and its
 current turn. The next turn uses the selected model; Main chat's model is
 unchanged. On compact screens, reveal chat first; the controls are the same as
 on desktop.

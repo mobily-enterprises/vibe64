@@ -38,7 +38,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
   const editorOpen = ref(false);
   const routingOpen = ref(false);
   const routingEngineId = ref("");
-  const { connectedWorkflows } = useModelRouting({ workflowsOnly: true, enabled: owner });
+  const { connectedEngines: connectedWorkflows } = useModelRouting({ enabled: owner });
   const routingSaving = ref(false);
   const editorRoutingPending = ref(false);
   const editorRoutingSetupError = ref("");

@@ -50,16 +50,16 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
       })) }, { id: "deepseek", label: "DeepSeek", connected: true, models: [{ id: "deepseek-flash", label: "DeepSeek Flash",
         status: "available", variants: [{ id: "low" }, { id: "high" }] }] }
     ] };
-  const assignments = recommendedRoutingAssignments(catalog);
+  const assignments = recommendedRoutingAssignments({ catalogs: [catalog] });
   // Preserve the original explicit lifecycle routes independently of recommendation policy.
   assignments.junior = { ...assignments.junior, modelProviderId: "deepseek", modelId: "deepseek-flash", selectionSource: "explicit" };
-  assignments.helper = { ...assignments.junior, variantId: "low" };
+  assignments.quickHelper = { ...assignments.junior, variantId: "low" };
   // Keep a distinct, explicit classifier so lifecycle checks do not depend on recommendation rankings.
   assignments.router = { ...assignments.router, modelProviderId: "openai", modelId: "gpt-6-luna", selectionSource: "explicit" };
   const configuration = createAssistantRoutingStore({ systemRoot: root });
-  await configuration.write({ codex: assignments }, 0);
+  await configuration.write({ owner: assignments, nonOwner: {} }, 0);
   const metadata = { assistant_selection: JSON.stringify(assignments.senior),
-    ...(preferences ? { assistant_routing: JSON.stringify({ workflowEngineId: "codex", ...preferences }) } : {}) };
+    ...(preferences ? { assistant_routing: JSON.stringify(preferences) } : {}) };
   const receipts = new Map();
   const notices = new Map();
   const session = { sessionId: "session-1", metadata };

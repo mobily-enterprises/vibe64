@@ -20,7 +20,8 @@
     "./server/completedDiscussionPlanUpgrade": "./src/server/completedDiscussionPlanUpgrade.js",
     "./server/providerCredentialsUpgrade": "./src/server/providerCredentialsUpgrade.js",
     "./server/freeModelRetirementUpgrade": "./src/server/freeModelRetirementUpgrade.js",
-    "./server/assistantPlanUpgrade": "./src/server/assistantPlanUpgrade.js"
+    "./server/assistantPlanUpgrade": "./src/server/assistantPlanUpgrade.js",
+    "./server/teamSetupRoutingUpgrade": "./src/server/teamSetupRoutingUpgrade.js"
   },
   "jskit": {
     "kind": "runtime",

@@ -127,7 +127,7 @@ describe("temporary AI mounted lifetime", () => {
       ? { ok: true }
       : { conversations: [{ conversationId: "conversation-1", status: "completed", messages: [],
         agentSettings: { model: "deepseek-flash", thinking: "low" },
-        routingMetadata: { assistant_routing: '{"mode":"auto","workflowEngineId":"codex"}' }
+        routingMetadata: { assistant_routing: '{"mode":"auto"}' }
       }] });
     const { temporary } = mountTemporaryAi({ openTask: false });
     await vi.waitFor(() => expect(temporary.tasks.value).toHaveLength(1));
@@ -178,7 +178,7 @@ describe("temporary AI mounted lifetime", () => {
     const viewer = ref({ actorKey: "owner" });
     const started = Promise.withResolvers();
     const record = { conversationId: "conversation-1", status: "ready", messages: [],
-      routingMetadata: { assistant_routing: '{"mode":"junior","workflowEngineId":"codex"}' },
+      routingMetadata: { assistant_routing: '{"mode":"junior"}' },
       purposes: { junior: { available: true, effectiveSelection: { engineId: "codex", modelId: "deepseek-flash" } } } };
     http.request.mockImplementation(async (_path, options) => {
       if (options?.method === "POST") return started.promise;

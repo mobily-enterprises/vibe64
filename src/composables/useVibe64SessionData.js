@@ -264,7 +264,6 @@ function useVibe64SessionData({
     buildCommandOptions: (_model, { context }) => ({ method: "POST", path: context?.apiPath }),
     buildRawPayload: (_model, { context }) => vibe64RealtimeOriginPayload({
       assistantSelection: context?.assistantSelection || {},
-      ...(context?.workflowEngineId ? { workflowEngineId: context.workflowEngineId } : {}),
       ...(context?.repositoryBranch ? { repositoryBranch: context.repositoryBranch } : {}),
       ...(context?.pullRequestNumber ? { pullRequestNumber: context.pullRequestNumber } : {})
     }),
@@ -616,7 +615,7 @@ function useVibe64SessionData({
 
   let createSessionInFlight = null;
 
-  async function createSession(assistantSelection = {}, { pullRequestNumber, workflowEngineId, repositoryBranch } = {}) {
+  async function createSession(assistantSelection = {}, { pullRequestNumber, repositoryBranch } = {}) {
     if (createSessionInFlight) {
       return createSessionInFlight;
     }
@@ -628,7 +627,7 @@ function useVibe64SessionData({
     createSessionPending.value = true;
     createSessionInFlight = (async () => {
       try {
-        const response = await createSessionCommand.run({ assistantSelection, pullRequestNumber, workflowEngineId, repositoryBranch, apiPath: creationApiPath });
+        const response = await createSessionCommand.run({ assistantSelection, pullRequestNumber, repositoryBranch, apiPath: creationApiPath });
         if (
           !sessionDataDisposed &&
           creationProjectSlug === String(projectSlug.value || "").trim()

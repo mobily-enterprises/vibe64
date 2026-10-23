@@ -244,12 +244,12 @@
           >
             Unsaved edits are kept in this browser tab if you close this window or switch sessions.
           </p>
-          <Vibe64WorkflowSelector
-            :active="renewal.open && renewal.phase === 'review'"
+          <Vibe64RenewalAssistantSelector
+            :active="renewal.open && renewal.phase === 'review' && !routing.resource.isInitialLoading.value"
             :disabled="dialogBusy"
-            :initial-engine-id="renewal.workflowEngineId"
+            :initial-selection="mainSelection"
             @update:ready="assistantSelectionReady = $event"
-            @update:workflow="successorWorkflowEngineId = $event"
+            @update:selection="successorSelection = $event"
           />
           <p class="studio-session-renewal__supporting text-body-small">
             Renewing will stop this session’s tools, create and prepare a fresh session, deliver the handover, then archive this one.
@@ -453,7 +453,8 @@ import {
   mdiRefresh
 } from "@mdi/js";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
-import Vibe64WorkflowSelector from "@/components/studio/vibe64-session/Vibe64WorkflowSelector.vue";
+import Vibe64RenewalAssistantSelector from "@/components/studio/vibe64-session/Vibe64RenewalAssistantSelector.vue";
+import { useModelRouting } from "@local/vibe64-accounts/client";
 import {
   sessionRenewalFailureSupportingMessage
 } from "@/lib/vibe64SessionRenewalViewModel.js";
@@ -468,7 +469,12 @@ const props = defineProps({
 const { smAndDown } = useDisplay();
 const renewalTitleId = `vibe64-session-renewal-title-${useId()}`;
 const assistantSelectionReady = ref(false);
-const successorWorkflowEngineId = ref("");
+const successorSelection = ref(null);
+// The fresh session starts on main chat's Senior unless another model is chosen.
+const routing = useModelRouting({ enabled: computed(() => Boolean(props.renewal.open)) });
+const mainSelection = computed(() => routing.setups.value?.owner?.roles?.senior?.effective || null);
+const sameSelection = (left, right) => ["engineId", "agentId", "modelProviderId", "modelId", "variantId"]
+  .every((key) => (left?.[key] || "") === (right?.[key] || ""));
 const dialogBusy = computed(() => Boolean(
   props.renewal.successorSelectionPending || (
     props.renewal.busy && props.renewal.phase !== "progress"
@@ -487,7 +493,7 @@ const renewalProgress = computed(() => {
 const canConfirmRenewal = computed(() => Boolean(
   props.renewal.canConfirm &&
   assistantSelectionReady.value &&
-  successorWorkflowEngineId.value
+  successorSelection.value
 ));
 const manualDraft = computed(() => props.renewal.renewal?.draft?.origin === "manual");
 const failedSupportingMessage = computed(() => (
@@ -525,7 +531,7 @@ function closeFromModel(value) {
 
 function confirmRenewal() {
   if (canConfirmRenewal.value) {
-    props.renewal.confirm?.(successorWorkflowEngineId.value);
+    props.renewal.confirm?.(sameSelection(successorSelection.value, mainSelection.value) ? null : successorSelection.value);
   }
 }
 </script>

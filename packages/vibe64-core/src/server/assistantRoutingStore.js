@@ -3,15 +3,23 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const writes = new Map();
-const routingRoles = ["senior", "junior", "helper", "router", "sharedBackup"];
+const setupRoles = Object.freeze({
+  owner: ["senior", "junior", "router", "colleague", "fix", "explain", "quickHelper"],
+  nonOwner: ["colleague", "fix", "explain", "quickHelper"]
+});
+const followingRoles = ["colleague", "fix", "explain"];
 // eslint-disable-next-line no-control-regex -- Routing identifiers must exclude ASCII control characters.
 const controlCharacters = /[\x00-\x1f\x7f]/u;
 const object = (value) => value && typeof value === "object" && !Array.isArray(value);
 
+// Schema 5: the owner's setup (main chat and the owner's helpers) and the team
+// setup (everyone else's helpers). A role is absent, null (off), a selection,
+// or { follows } naming another role of the same setup, one level deep.
 function validateAssistantRoutingConfiguration(value) {
   const invalid = () => { throw new Error("Saved model routing has an unsupported shape. Restore or repair the settings before changing them."); };
-  if (!object(value) || !Number.isSafeInteger(value.revision) || value.revision < 0 ||
-      !object(value.orchestrators) || value.schemaVersion !== 4) invalid();
+  if (!object(value) || value.schemaVersion !== 5 || !Number.isSafeInteger(value.revision) || value.revision < 0 ||
+      Object.keys(value).some((key) => !["schemaVersion", "revision", "owner", "nonOwner"].includes(key)) ||
+      !object(value.owner) || !object(value.nonOwner)) invalid();
   const assignment = (entry) => {
     if (!object(entry) || entry.schema !== "vibe64.assistant-selection.v1" ||
         Object.keys(entry).some((key) => !["schema", "engineId", "agentId", "modelProviderId", "modelId", "variantId", "catalogRevision", "selectionSource"].includes(key)) ||
@@ -22,25 +30,20 @@ function validateAssistantRoutingConfiguration(value) {
           (name === "variantId" || entry[name].trim().length) && !controlCharacters.test(entry[name])) ||
         !["recommended", "explicit"].includes(entry.selectionSource)) invalid();
   };
-  for (const [engineId, roles] of Object.entries(value.orchestrators)) {
-    if (!["codex", "claude", "opencode"].includes(engineId) || !object(roles) ||
-        Object.keys(roles).some((key) => ![...routingRoles, "helperRoutingReview"].includes(key))) invalid();
-    for (const role of routingRoles) {
-      if (roles[role] == null) continue;
-      assignment(roles[role]);
-      if (["senior", "junior"].includes(role) && roles[role].engineId !== engineId) invalid();
+  for (const [setup, roles] of Object.entries(setupRoles)) {
+    const values = value[setup];
+    if (Object.keys(values).some((key) => !roles.includes(key))) invalid();
+    for (const [role, entry] of Object.entries(values)) {
+      if (entry === null) continue;
+      if (!object(entry) || !Object.hasOwn(entry, "follows")) { assignment(entry); continue; }
+      const target = values[entry.follows];
+      if (Object.keys(entry).length !== 1 || !followingRoles.includes(role) || entry.follows === role ||
+          !roles.includes(entry.follows) || object(target) && Object.hasOwn(target, "follows")) invalid();
     }
-    if (roles.helperRoutingReview !== undefined) {
-      const review = roles.helperRoutingReview;
-      if (!object(review) || Object.keys(review).some((key) => !["reason", "previous", "proposed"].includes(key)) ||
-          review.reason !== "helper_choices_differ" || !Array.isArray(review.previous) ||
-          !review.previous.length || review.previous.some((entry) => !object(entry) ||
-            Object.keys(entry).some((key) => !["engineId", "modelProviderId", "modelId", "selectionSource"].includes(key)) ||
-            !["codex", "claude", "opencode"].includes(entry.engineId) ||
-            !["modelProviderId", "modelId"].every((key) => typeof entry[key] === "string" && entry[key].length > 0 && entry[key].length <= 512 && !controlCharacters.test(entry[key])) ||
-            !["explicit", "default"].includes(entry.selectionSource))) invalid();
-      if (review.proposed != null) assignment(review.proposed);
-    }
+  }
+  const { senior, junior } = value.owner;
+  if (object(senior) && object(junior) && senior.engineId !== junior.engineId) {
+    throw new Error("Senior and Junior must run in the same tool.");
   }
   return value;
 }
@@ -51,26 +54,26 @@ function createAssistantRoutingStore({ systemRoot } = {}) {
   async function read() {
     try {
       const value = JSON.parse(await readFile(filePath, "utf8"));
-      if (value.schemaVersion !== 4) {
+      if (value.schemaVersion !== 5) {
         throw Object.assign(new Error("Vibe64's saved AI settings need an upgrade. The workspace administrator must stop Vibe64, run this version's upgrade-state command, and restart it."), {
           code: "vibe64_assistant_routing_upgrade_required", statusCode: 409
         });
       }
       return validateAssistantRoutingConfiguration(value);
     } catch (error) {
-      if (error.code === "ENOENT") return { schemaVersion: 4, revision: 0, orchestrators: {} };
+      if (error.code === "ENOENT") return { schemaVersion: 5, revision: 0, owner: {}, nonOwner: {} };
       if (error instanceof SyntaxError) throw new Error("Saved model routing is unreadable. Restore or repair the settings before changing them.");
       throw error;
     }
   }
-  async function write(orchestrators, expectedRevision) {
+  async function write({ owner, nonOwner }, expectedRevision) {
     const previous = writes.get(filePath) || Promise.resolve();
     const operation = previous.catch(() => null).then(async () => {
       const current = await read();
       if (current.revision !== expectedRevision) throw Object.assign(new Error("Model routing changed in another tab. Reload and review the current choices."), {
         code: "vibe64_assistant_routing_stale", statusCode: 409
       });
-      const next = validateAssistantRoutingConfiguration({ schemaVersion: 4, revision: current.revision + 1, orchestrators });
+      const next = validateAssistantRoutingConfiguration({ schemaVersion: 5, revision: current.revision + 1, owner, nonOwner });
       await mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
       const temporary = `${filePath}.${randomUUID()}.tmp`;
       try {

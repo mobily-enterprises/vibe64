@@ -29,10 +29,10 @@ test("all account operations use project-independent canonical contracts and aut
     };
     const cases = [
       ["GET", "", "read", "getStatus", { refresh: true, providerIds: ["codex"] }],
-      ["GET", "/model-routing/workflows", "model-routing.workflows.read", "readModelRoutingWorkflows", {}],
-      ["GET", "/model-routing", "model-routing.read", "readModelRouting", { engineId: "claude", includeOtherModels: true }],
-      ["PATCH", "/model-routing", "model-routing.save", "saveModelRouting", { revision: 1, engineId: "codex", orchestrators: {}, reviewedHelperWorkflows: ["codex"] }],
-      ["POST", "/model-routing/preview", "model-routing.preview", "previewModelRouting", { revision: 1, orchestrators: {} }],
+      ["GET", "/model-routing", "model-routing.read", "readModelRouting", { setup: "nonOwner", choiceRole: "colleague", choiceSearch: "deep", choiceOffset: 20 }],
+      ["PATCH", "/model-routing", "model-routing.save", "saveModelRouting", { revision: 1, owner: { colleague: { follows: "senior" } }, nonOwner: { fix: null } }],
+      ["POST", "/model-routing/preview", "model-routing.preview", "previewModelRouting", { revision: 1, owner: {},
+        preferProvider: { setup: "nonOwner", modelProviderId: "deepseek", engineId: "claude" } }],
       ["GET", "/codex-providers", "codex-providers.read", "readCodexProviders", {}],
       ["PATCH", "/codex-providers", "codex-providers.save", "saveCodexProvider", { modelProviderId: "deepseek", engineId: "codex", apiKey: "fixture-only" }],
       ["POST", "/codex-providers/remove", "codex-providers.remove", "removeCodexProvider", { modelProviderId: "deepseek", engineId: "claude" }],
@@ -60,7 +60,7 @@ test("all account operations use project-independent canonical contracts and aut
     const app = testRouteApp();
     registerRoutes(app.http, { accounts, aiConnectionService, requireAiManagement, fastify: { get() {} }, projectScoped: false,
       routeRelativePath: "vibe64/accounts", routeSurface: "app" });
-    assert.equal(actions.listDefinitions().length, 19);
+    assert.equal(actions.listDefinitions().length, 18);
     for (const [method, suffix, operation, serviceMethod, data] of cases) {
       const route = findRegisteredRoute(app, { method, path: `/api/vibe64/accounts${suffix}` });
       assert.ok(route, operation);
@@ -118,7 +118,7 @@ test("all account operations use project-independent canonical contracts and aut
     const count = calls.length;
     for (const [operation, input] of [
       ["logout", {}], ["auth.start", {}], ["auth-session.read", {}], ["git-identity.save", { gitUserName: "Name" }],
-      ["model-routing.save", { orchestrators: {} }], ["model-routing.preview", { revision: 1 }],
+      ["model-routing.save", { owner: {} }], ["model-routing.preview", { revision: 1, orchestrators: {} }],
       ["ai-connections.save", { modelProviderId: "deepseek", engineId: "codex", apiKey: "fixture-only" }],
       ["ai-connections.save", { modelProviderId: "deepseek", providerRevision: "revision" }],
       ["ai-connections.remove", { modelProviderId: "../other" }],

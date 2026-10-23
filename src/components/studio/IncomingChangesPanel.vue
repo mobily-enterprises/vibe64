@@ -79,7 +79,7 @@ async function apply() {
   } finally { pending.value = false; }
 }
 async function fixConflict() {
-  if (actionDisabled.value || !conflict.value || props.dashboardContext.assistantSeniorAllowed === false ||
+  if (actionDisabled.value || !conflict.value || props.dashboardContext.assistantFixAllowed === false ||
       typeof props.dashboardContext.requestTemporaryAi !== "function") return;
   const { review, conflictPaths, checkpointCommit } = conflict.value;
   openingRepair.value = true;
@@ -168,7 +168,7 @@ async function refresh() {
             These files need repair in this receiving session: {{ conflict.conflictPaths?.join(', ') }}.
             Your original work has a private checkpoint. AI completion does not merge or publish anything.
             <div class="d-flex flex-wrap ga-2 mt-2">
-              <Vibe64TemporaryAiFixAction :pending="openingRepair" :disabled="actionDisabled || dashboardContext.assistantSeniorAllowed === false || typeof dashboardContext.requestTemporaryAi !== 'function'" @click="fixConflict" />
+              <Vibe64TemporaryAiFixAction :pending="openingRepair" :disabled="actionDisabled || dashboardContext.assistantFixAllowed === false || typeof dashboardContext.requestTemporaryAi !== 'function'" @click="fixConflict" />
               <v-btn height="48" variant="tonal" :disabled="actionDisabled" @click="reviewRepair">Review resolved conflicts</v-btn>
             </div>
           </v-alert>

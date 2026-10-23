@@ -2,8 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, readdir, rm } from "node:fs/promises";
 import path from "node:path";
 import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
-import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
-import { vibe64AssistantSelectionFromMetadata, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
+import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import {
   logOperationalEvent
 } from "@local/vibe64-core/server/logging";
@@ -134,9 +133,7 @@ function createService({
   const activeAssistants = new Set();
 
   async function assistantDecision(context) {
-    const workflowEngineId = assistantRoutingFromMetadata(context.session.metadata)?.workflowEngineId ||
-      vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId;
-    return terminalService.resolveAssistantPurpose({ purpose: "database_assistant", workflowEngineId }, {
+    return terminalService.resolveAssistantPurpose({ purpose: "database_assistant" }, {
       session: context.session, vibe64User: context.vibe64User
     });
   }

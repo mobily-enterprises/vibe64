@@ -4,7 +4,6 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { upgradeAssistantHelpers, upgradeAssistantHelperSession, upgradeAssistantHelperTurn } from "../../packages/vibe64-accounts/src/server/assistantHelperUpgrade.js";
-import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { upgradeSessionConversations } from "@local/vibe64-runtime/server/conversationStorageUpgrade";
 
@@ -63,7 +62,7 @@ test("Helper upgrade preserves user choices and authored content while removing 
   assert.equal(await f.store.readMetadataValue("active", "assistant_routing"), metadata.assistant_routing);
   await assert.rejects(stat(f.backupRoot), { code: "ENOENT" });
   await f.run(true);
-  const saved = await createAssistantRoutingStore({ systemRoot: f.systemRoot }).read();
+  const saved = JSON.parse(await readFile(f.file, "utf8"));
   assert.equal(saved.schemaVersion, 4);
   assert.equal(saved.revision, 17);
   assert.deepEqual(saved.orchestrators.codex.helper, selection);
@@ -188,7 +187,7 @@ test("provider defaults are renamed without changing the Helper assignment or co
   await f.run(true);
   const saved = JSON.parse(await readFile(file, "utf8"));
   assert.deepEqual(saved.connections.custom, { apiKey: "keep-private", defaultModelId: "provider-default", label: "Connection" });
-  assert.deepEqual((await createAssistantRoutingStore({ systemRoot: f.systemRoot }).read()).orchestrators.codex.helper, selection);
+  assert.deepEqual((JSON.parse(await readFile(f.file, "utf8"))).orchestrators.codex.helper, selection);
 });
 
 test("current Custom routing keeps its destination, receipts and untouched bytes", async t => {

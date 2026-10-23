@@ -31,7 +31,7 @@ function scopedConversationRuntime(controller) {
 async function fixture(t, { providers = [], readAccess = null, ...options } = {}) {
   const harness = await controllerHarness(options);
   const helper = { ...harness.selection, variantId: "low", selectionSource: "explicit" };
-  harness.routing = { schemaVersion: 4, revision: 1, orchestrators: { opencode: { helper } } };
+  harness.routing = { schemaVersion: 5, revision: 1, owner: { quickHelper: helper }, nonOwner: { quickHelper: helper } };
   harness.accessCalls = [];
   harness.controllerOptions.getAssistantManager = () => harness.manager;
   harness.controller = harness.createController();
@@ -109,9 +109,9 @@ test("foreign Helper summaries use an isolated scope and leave the working OpenC
   };
   const response = { pending: true, text: "", content: [part()] };
   const harness = await fixture(t, { providers: [provider], assistantResponses: [response] });
-  harness.routing.orchestrators.opencode.helper = { engineId: "claude", agentId: "claude", modelProviderId: "anthropic",
+  harness.routing.owner.quickHelper = harness.routing.nonOwner.quickHelper = { engineId: "claude", agentId: "claude", modelProviderId: "anthropic",
     modelId: "haiku", variantId: "", catalogRevision: `sha256:${"b".repeat(64)}`, selectionSource: "explicit" };
-  const decision = await harness.manager.resolveAssistantPurpose({ purpose: "conversation_summary", workflowEngineId: "opencode" }, {
+  const decision = await harness.manager.resolveAssistantPurpose({ purpose: "conversation_summary" }, {
     session: harness.session, vibe64User: { username: "member", role: "member" }
   });
   assert.equal(decision.available, true, JSON.stringify(decision));
@@ -197,7 +197,7 @@ test("an initial partial word does not suppress later live reasoning", async (t)
   const current = { ...part(), text: "I" };
   const response = { pending: true, text: "", content: [current] };
   const harness = await fixture(t, { assistantResponses: [response] });
-  harness.routing.orchestrators.opencode.helper = null;
+  harness.routing.owner.quickHelper = harness.routing.nonOwner.quickHelper = null;
   await harness.controller.sendMessage("session-1", { message: "Review", messageId: "partial" });
   await delay(300);
   assert.equal(harness.thinkingMessages.length, 0);

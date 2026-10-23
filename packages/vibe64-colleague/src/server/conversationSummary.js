@@ -11,12 +11,11 @@ const outputSchema = { type: "object", additionalProperties: false, required: ["
   summary: { type: "string", maxLength: 1600 }, citations: { type: "array", maxItems: 6, items: { type: "string", maxLength: 128 } }
 } };
 
-function createConversationSummary({ actions, terminals, persist, workflowEngineId }) {
+function createConversationSummary({ actions, terminals, persist }) {
   function helperFor(state) {
     return createRetainedConversationHelper({ terminals, root: path.join(state.root, "summaries"),
       receipt: { read: () => state.record.summaryHelper,
-        async write(helper) { state.record.summaryHelper = helper; await persist(state); } },
-      workflowEngineId: context => workflowEngineId(state, context)
+        async write(helper) { state.record.summaryHelper = helper; await persist(state); } }
     });
   }
 

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import { validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/stateUpgrades/routingV2Format";
 import { validateAssistantRoutingConfiguration as validateV3 } from "@local/vibe64-core/server/stateUpgrades/routingV3Format";
-import { validateAssistantRoutingConfiguration as validateV4 } from "@local/vibe64-core/server/assistantRoutingStore";
+import { validateAssistantRoutingConfiguration as validateV4 } from "@local/vibe64-core/server/stateUpgrades/routingV4Format";
 import { codexProviderPaths } from "@local/vibe64-core/server/codexProviderConnections";
 import { codexAuthMarkerPath, readCodexAuthStatus } from "@local/vibe64-core/server/codexAuthState";
 import { listProjectRuntimeRoots } from "@local/vibe64-core/server/studioProjectContext";

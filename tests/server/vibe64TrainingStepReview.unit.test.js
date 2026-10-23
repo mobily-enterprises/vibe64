@@ -58,7 +58,7 @@ async function fixture(t) {
   await learners.recordPreparationStart({ actor: user, attemptId, initialSessionId: sessionId, expectedRevision: 2, startCommit: "d".repeat(40) });
   await learners.recordPreparationReady({ actor: user, attemptId, initialSessionId: sessionId, expectedRevision: 3 });
 
-  const state = { read: { session: { sessionId, agentWorking: false, workflowEngineId: "codex" }, evidence: evidenceOf(), empty: false },
+  const state = { read: { session: { sessionId, agentWorking: false }, evidence: evidenceOf(), empty: false },
     answer: JSON.stringify({ verdict: "passed", comment: "The heading is green and the box kept its border.", hint: "",
       points: [{ text: "Heading is green", met: true }, { text: "Nothing else broke", met: true }] }),
     helperAvailable: true, providerError: null };
@@ -155,7 +155,7 @@ test("Check my work passes on the learner's own Helper with the fixed framing, a
       points: [{ text: "Heading is green", met: true }, { text: "Nothing else broke", met: true }] } });
   assert.deepEqual(f.evidenceCalls.map(call => call.conversation), [true], "the declared conversation is part of the evidence");
   const [purpose, run] = f.helperCalls;
-  assert.deepEqual(purpose.purpose, { purpose: "lesson_review", workflowEngineId: "codex" });
+  assert.deepEqual(purpose.purpose, { purpose: "lesson_review" });
   assert.equal(purpose.user.username, "alice", "the Helper runs as the learner, on their own AI account");
   assert.equal(run.input.executionProfile.workloadId, "lesson_review");
   assert.match(run.scope.id, /^review_[a-f0-9-]+$/u);
@@ -228,7 +228,7 @@ test("no changes, a working agent and every failed review record nothing", async
   f.state.providerError = "The provider timed out.";
   await assert.rejects(f.press("provider"), { code: "VIBE64_TRAINING_REVIEW_FAILED", message: /Your AI could not finish the review: The provider timed out\. Nothing was recorded/u });
   f.state.helperAvailable = false;
-  await assert.rejects(f.press("route"), { code: "vibe64_colleague_helper_unavailable", message: /AI Accounts → Model routing/u });
+  await assert.rejects(f.press("route"), { code: "vibe64_colleague_helper_unavailable", message: /Review AI setup/u });
   assert.deepEqual(await f.results(), []);
   assert.equal(f.published.length, 0);
   assert.deepEqual(JSON.parse(await readFile(path.join(f.systemRoot, "training/users/NDI/review-helper.json"), "utf8")).helper, null,

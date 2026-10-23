@@ -7,7 +7,7 @@ const shortText = { type: "string", maxLength: 256, required: false };
 const sessionFields = {
   ...Object.fromEntries([
     "sessionId", "sessionName", "status", "updatedAt", "archivedAt", "workspaceSetupStatus", "agentStatus", "agentPhase", "runId",
-    "routingStatus", "routingMode", "agentError", "engineId", "chatMode", "workflowEngineId", "catalogRevision"
+    "routingStatus", "routingMode", "agentError", "engineId", "chatMode", "catalogRevision"
   ].map((key) => [key, shortText])),
   ...Object.fromEntries(["modelId", "modelProviderId", "variantId", "agentId"].map((key) => [key, { ...shortText, maxLength: 512 }])),
   reviewEnabled: { type: "boolean", required: false },
@@ -56,8 +56,7 @@ function sessionSummary(session) {
     variantId: session.assistantSelection?.variantId,
     agentId: session.assistantSelection?.agentId,
     catalogRevision: session.assistantSelection?.catalogRevision,
-    chatMode: preferences?.mode,
-    workflowEngineId: preferences?.workflowEngineId
+    chatMode: preferences?.mode
   };
   return {
     ...Object.fromEntries(Object.entries(fields).flatMap(([key, value]) => (
@@ -71,14 +70,14 @@ function sessionSummary(session) {
 }
 
 function assistantAccessTool() {
-  const strings = ["purpose", "role", "workflowEngineId", "reasonCode", "engineId", "modelProviderId", "modelId", "variantId", "agentId", "catalogRevision"];
+  const strings = ["purpose", "role", "setup", "followedRole", "reasonCode", "engineId", "modelProviderId", "modelId", "variantId", "agentId", "catalogRevision"];
   const purposeSchema = createSchema({
     ...Object.fromEntries(strings.map((key) => [key, { ...shortText, maxLength: 512 }])),
     message: { ...shortText, maxLength: 512 },
-    available: { type: "boolean", required: true }, backupUsed: { type: "boolean", required: true }
+    available: { type: "boolean", required: true }, approvalRequired: { type: "boolean", required: true }
   });
   return {
-    description: "Inspect this actor's current coding-session AI access and configured destinations for Senior, Junior, Auto, review, Deslop and Helper. Returns available/reason/message and the effective selection for each purpose, including Backup use. These are configured roles, not the full model catalogue. Current chatMode/preferences come from sessions.inspect; changing chat mode affects future requests and does not mean the currently running model changed.",
+    description: "Inspect this actor's current coding-session AI access and configured destinations for Senior, Junior, Auto, review, Deslop, Colleague, Fix it with AI, Explain & check and Quick helper. Returns available/reason/message, the setup used (main chat always uses the owner's setup; a team member's helpers use the team setup), any Same as role followed, and the effective selection for each purpose. approvalRequired means this actor is a team member: their main-chat messages wait for the owner's approval. These are configured roles, not the full model catalogue. Current chatMode/preferences come from sessions.inspect; changing chat mode affects future requests and does not mean the currently running model changed.",
     output: { mode: "replace", schema: createSchema({
       ok: { type: "boolean", required: true }, error: { ...shortText, maxLength: 512 }, code: shortText,
       currentMode: shortText, accessLabel: shortText,
@@ -89,11 +88,11 @@ function assistantAccessTool() {
       return { ok: result.ok === true,
         ...Object.fromEntries(["error", "code", "currentMode", "accessLabel"].flatMap((key) => typeof result[key] === "string" ? [[key, result[key].slice(0, key === "error" ? 512 : 256)]] : [])),
         ...Object.fromEntries(["available", "canUse", "canUseAny", "nativeCanUse", "ownerOnly", "steering"].flatMap((key) => typeof result[key] === "boolean" ? [[key, result[key]]] : [])),
-        purposes: ["senior", "junior", "auto", "review", "deslop", "helper"].flatMap((purpose) => {
+        purposes: ["senior", "junior", "auto", "review", "deslop", "colleague", "fix", "source_explanation", "quick_helper"].flatMap((purpose) => {
           const access = result.purposes?.[purpose];
           if (!access) return [];
           const values = { ...access, ...access.effectiveSelection, purpose };
-          return [{ available: access.available === true, backupUsed: access.backupUsed === true,
+          return [{ available: access.available === true, approvalRequired: access.approvalRequired === true,
             ...Object.fromEntries([...strings, "message"].flatMap((key) => typeof values[key] === "string" ? [[key, values[key].slice(0, 512)]] : [])) }];
         }) };
     }

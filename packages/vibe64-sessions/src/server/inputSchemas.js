@@ -68,7 +68,6 @@ const renewalDraftFields = {
 
 const renewalConfirmationFields = {
   ...renewalDraftGuardFields,
-  workflowEngineId: { type: "string", enum: ["codex", "claude", "opencode"], required: false },
   assistantSelection: {
     type: "object",
     additionalProperties: true,
@@ -314,7 +313,6 @@ const incomingChangeInputValidator = patchSchema({
 
 const connectedSourceAllocationInputValidator = patchSchema({
   contribution: { type: "object", additionalProperties: true, required: true },
-  workflowEngineId: { type: "string", enum: ["codex", "claude", "opencode"], required: false },
   sessionName: { type: "string", required: false, minLength: 1, maxLength: 120 }
 });
 
@@ -335,7 +333,6 @@ const connectedWorkInputValidator = patchSchema({
 });
 
 const sessionCreateInputValidator = patchSchema({
-  workflowEngineId: { type: "string", enum: ["codex", "claude", "opencode"], required: false },
   repositoryBranch: { type: "object", required: false, schema: createSchema({
     name: { type: "string", minLength: 1, maxLength: 255, noTrim: true, required: true },
     fromBranch: { type: "string", minLength: 1, maxLength: 255, noTrim: true, required: false },
@@ -423,7 +420,6 @@ const assistantSelectionField = { type: "object", required: false, schema: creat
 const assistantRoutingField = { type: "object", required: false, schema: createSchema({
   mode: { type: "string", enum: ASSISTANT_MODES.map(({ id }) => id), required: true },
   review: { type: "boolean", required: false },
-  workflowEngineId: { type: "string", enum: Object.values(VIBE64_ASSISTANT_ENGINE_IDS), required: false },
   override: assistantSelectionField
 }) };
 

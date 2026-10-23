@@ -18,6 +18,7 @@ const renewalUiHarness = vi.hoisted(() => ({
     variantId: "high"
   },
   buttons: [],
+  chosenSelection: null,
   compact: false,
   dialogAttrs: null
 }));
@@ -70,7 +71,11 @@ vi.mock("vuetify/components/VTextarea", () => ({
 vi.mock("@/components/studio/StudioErrorNotice.vue", () => ({
   default: passthroughComponent("section")
 }));
-vi.mock("@/components/studio/vibe64-session/Vibe64WorkflowSelector.vue", () => ({
+vi.mock("@local/vibe64-accounts/client", () => ({
+  useModelRouting: () => ({ resource: { isInitialLoading: VueRuntime.ref(false) },
+    setups: VueRuntime.ref({ owner: { roles: { senior: { effective: renewalUiHarness.assistantSelection } } } }) })
+}));
+vi.mock("@/components/studio/vibe64-session/Vibe64RenewalAssistantSelector.vue", () => ({
   default: defineComponent({
     props: {
       active: Boolean
@@ -78,7 +83,7 @@ vi.mock("@/components/studio/vibe64-session/Vibe64WorkflowSelector.vue", () => (
     emits: ["update:ready", "update:selection"],
     setup(props, { emit }) {
       if (props.active) {
-        emit("update:workflow", "codex");
+        emit("update:selection", renewalUiHarness.chosenSelection);
         emit("update:ready", renewalUiHarness.assistantReady);
       }
       return () => h("section", "AI for the fresh session");
@@ -213,6 +218,7 @@ async function renderRenewal(renewal, { compact = false } = {}) {
 
 beforeEach(() => {
   renewalUiHarness.assistantReady = true;
+  renewalUiHarness.chosenSelection = renewalUiHarness.assistantSelection;
   renewalUiHarness.buttons = [];
   renewalUiHarness.compact = false;
   renewalUiHarness.dialogAttrs = null;
@@ -401,7 +407,11 @@ describe("session renewal dialog", () => {
     expect(confirming).toContain('aria-busy="true"');
   });
 
-  it("confirms with the exact ready assistant selected for the fresh session", async () => {
+  it.each([
+    ["main chat's AI without a frozen model", null, null],
+    ["a different exact model", { modelId: "gpt-5.6-mini" }, { modelId: "gpt-5.6-mini" }]
+  ])("confirms the fresh session on %s", async (_name, change, sent) => {
+    renewalUiHarness.chosenSelection = { ...renewalUiHarness.assistantSelection, ...change };
     const renewal = renewalModel({
       phase: "review",
       renewal: { draft: { text: "Draft" }, sessionId: "session-1", status: "review" }
@@ -415,7 +425,7 @@ describe("session renewal dialog", () => {
     expect(confirmButton).toBeTruthy();
     expect(confirmButton.disabled).toBe(false);
     confirmButton.onClick();
-    expect(renewal.confirm).toHaveBeenCalledWith("codex");
+    expect(renewal.confirm).toHaveBeenCalledWith(sent && { ...renewalUiHarness.assistantSelection, ...sent });
   });
 
   it("cannot confirm while the fresh-session assistant choice is unresolved", async () => {

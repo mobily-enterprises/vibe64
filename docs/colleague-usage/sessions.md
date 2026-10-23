@@ -1,9 +1,10 @@
 # Create and switch sessions
 
 Use **New session** (+), or **Create session** when there are no open sessions,
-to open **Start an AI session**. It lists **Claude Code** first, then **Codex**,
-then **OpenCode**, and preselects the first available one. Choose an available
-orchestrator, review any branch choice, then select **Create session** (or
+to open **Start an AI session**. It shows **Runs on your main AI:** and the main
+AI's model; every session runs on that AI setup, with no per-session tool
+choice. Select **Change** to open AI setup instead. Review any branch choice,
+then select **Create session** (or
 **Create branch & session**). While **Creating session…** is shown, the dialog
 shows a progress bar and explains that it is copying the project source. It stays open: clicking outside,
 pressing Escape, Close and Cancel cannot dismiss it. On success it closes and
@@ -25,9 +26,10 @@ followed by the project's setup steps. The assistant can start when preparation
 finishes; see [Prepare a session after updating its source](workspace-preparation.md)
 for failures and retry.
 
-Creation through an action without an explicit AI choice uses the first available
-workflow from the same picker. An explicit choice is preserved even when it is
-unavailable: fix its account or Model routing settings before retrying. Colleague
+Creation through an action without an explicit AI choice uses the main AI. An
+explicit model choice makes the new chat Custom and is preserved even when it is
+unavailable: fix its account or AI setup before retrying. A team member's new
+session still records the owner's main AI; main chat runs on the owner's AI. Colleague
 can read the available choices and explain recovery; it must not claim a failed
 request left no saved lesson without checking that lesson's current state.
 
@@ -144,8 +146,9 @@ permissions and confirmation still apply.
 
 ## Chat availability
 
-The chat checks which modes you can use and shows the effective assistant,
-shared-backup label or an actionable connection message. These lightweight
+The chat checks which modes you can use and shows the effective assistant or an
+actionable connection message. Modes that run on the owner's AI are not listed
+for team members. These lightweight
 checks do not start a model or download its repeated execution plan. Opening
 **Chat mode** still shows the available choices; access is checked again when
 work is sent. Colleague can explain an unavailable mode, but cannot grant access.

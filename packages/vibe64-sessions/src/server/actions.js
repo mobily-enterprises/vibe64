@@ -276,7 +276,7 @@ function createSessionActions({ sessions } = {}) {
     action({
       id: ACTION_CREATE_SESSION,
       kind: "command",
-      assistant: sessionTool("Create a coding session in the selected project using its normal workspace and resource admission. workflowEngineId chooses an existing configured workflow (codex, claude or opencode). To open a saved GitHub/Vibe64 Git branch, read repository.branches.read first and supply repositoryBranch with its exact name and expectedCommit. To create a new branch, name is the requested new name, fromBranch is the reviewed existing source name, and expectedCommit is that source's exact commit. This creates a repository branch and session from saved source; it does not copy another session's unsaved work or conversation. Inspect that session's work and explain the source before branching; never silently Save to include unsaved work. The service checks capacity before branch creation, rejects existing target names and stale source commits, and forbids combining a branch with pullRequestNumber. Creation can start preparation; inspect the returned session before sending work. On an uncertain result inspect both sessions and branches before retrying; an admitted branch may exist even if later workspace creation failed."),
+      assistant: sessionTool("Create a coding session in the selected project using its normal workspace and resource admission. Main chat starts on the workspace owner's AI setup. To open a saved GitHub/Vibe64 Git branch, read repository.branches.read first and supply repositoryBranch with its exact name and expectedCommit. To create a new branch, name is the requested new name, fromBranch is the reviewed existing source name, and expectedCommit is that source's exact commit. This creates a repository branch and session from saved source; it does not copy another session's unsaved work or conversation. Inspect that session's work and explain the source before branching; never silently Save to include unsaved work. The service checks capacity before branch creation, rejects existing target names and stale source commits, and forbids combining a branch with pullRequestNumber. Creation can start preparation; inspect the returned session before sending work. On an uncertain result inspect both sessions and branches before retrying; an admitted branch may exist even if later workspace creation failed."),
       input: sessionCreateInputValidator,
       execute: (input) => sessions.createSession(input || {})
     }),
@@ -358,13 +358,12 @@ function createSessionActions({ sessions } = {}) {
     }),
     action({
       id: ACTION_CONFIRM_SESSION_RENEWAL,
-      assistant: renewalTool("Confirm renewal only after the user approves the exact current handover draft and successor workflow. Supply its operationKey, draftHash as expectedHash and draftRevision as expectedRevision; workflowEngineId chooses an existing configured workflow. The service rechecks source, conversation, access and draft guards before starting a successor. If it returns review again, obtain approval for the refreshed draft instead of confirming automatically. Admission/running is not completion: inspect until the successor is actually available."),
+      assistant: renewalTool("Confirm renewal only after the user approves the exact current handover draft and successor model. Supply its operationKey, draftHash as expectedHash and draftRevision as expectedRevision; omit assistantSelection to keep main chat on the owner's AI setup. The service rechecks source, conversation, access and draft guards before starting a successor. If it returns review again, obtain approval for the refreshed draft instead of confirming automatically. Admission/running is not completion: inspect until the successor is actually available."),
       kind: "command",
       idempotency: "domain_native",
       input: sessionRenewalConfirmationActionInputValidator,
       execute: (input, context) => sessions.confirmSessionRenewal(input.sessionId, {
         assistantSelection: input.assistantSelection,
-        ...(input.workflowEngineId ? { workflowEngineId: input.workflowEngineId } : {}),
         expectedHash: input.expectedHash,
         expectedRevision: input.expectedRevision,
         operationKey: input.operationKey,

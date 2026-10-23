@@ -1,4 +1,4 @@
-import { ASSISTANT_ROUTING_ASSIGNMENTS } from "@local/vibe64-runtime/shared/assistantRouting";
+import { ASSISTANT_SETUP_ROLES } from "@local/vibe64-runtime/shared/assistantRouting";
 import { CURATED_CODEX_PROVIDERS } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { createSchema } from "json-rest-schema";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
@@ -76,14 +76,15 @@ const modelRoutingSelectionSchema = createSchema({
   catalogRevision: { type: "string", pattern: /^sha256:[a-f0-9]{64}$/u, required: true },
   selectionSource: { type: "string", enum: ["recommended", "explicit"], required: true }
 });
-const routingAssignments = createSchema(Object.fromEntries(ASSISTANT_ROUTING_ASSIGNMENTS.map(role =>
-  [role, { type: "object", schema: modelRoutingSelectionSchema, nullable: true, required: false }])));
+// A role value is a selection, null (off) or { follows }; the routing store validates which.
+const setupValues = setup => ({ type: "object", required: false, schema: createSchema(Object.fromEntries(ASSISTANT_SETUP_ROLES[setup].map(role =>
+  [role, { type: "object", additionalProperties: true, nullable: true, required: false }]))) });
+const routingSetup = { type: "string", enum: Object.keys(ASSISTANT_SETUP_ROLES), required: false };
 
 const modelRoutingReadInputValidator = deepFreeze({
   schema: createSchema({
-    engineId: routingEngine,
-    includeOtherModels: { type: "boolean", required: false },
-    choiceRole: { type: "string", enum: ASSISTANT_ROUTING_ASSIGNMENTS, required: false },
+    setup: routingSetup,
+    choiceRole: { type: "string", enum: ASSISTANT_SETUP_ROLES.owner, required: false },
     choiceSearch: { type: "string", noTrim: false, maxLength: 200, required: false },
     choiceOffset: { type: "integer", min: 0, required: false }
   }), mode: "create"
@@ -91,12 +92,13 @@ const modelRoutingReadInputValidator = deepFreeze({
 
 const modelRoutingInputValidator = deepFreeze({
   schema: createSchema({
-    engineId: routingEngine,
     revision: { type: "integer", min: 0, required: true },
-    reviewedHelperWorkflows: { type: "array", items: { type: "string", enum: ["codex", "claude", "opencode"] }, required: false },
-    orchestrators: { type: "object", required: true, schema: createSchema(Object.fromEntries(
-      routingEngine.enum.map(engineId => [engineId, { type: "object", schema: routingAssignments, required: false }])
-    )) }
+    owner: setupValues("owner"),
+    nonOwner: setupValues("nonOwner"),
+    // Recommendations restricted to one provider and tool, for "Use as main AI" and the team card.
+    preferProvider: { type: "object", required: false, schema: createSchema({
+      setup: { ...routingSetup, required: true }, modelProviderId: routingIdentifier, engineId: { ...routingEngine, required: true }
+    }) }
   }), mode: "create"
 });
 

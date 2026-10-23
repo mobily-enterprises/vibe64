@@ -17,7 +17,7 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
     const actor = { username: "developer", role: "owner" };
     const source = { repository: "example/library", integrationBranch: "main", baseCommit: "a".repeat(40) };
     const parent = { sessionId: "parent", status: "active", sourceReady: true, metadata: {
-      assistant_routing: JSON.stringify({ mode: "senior", review: false, workflowEngineId: "opencode" })
+      assistant_routing: JSON.stringify({ mode: "senior", review: false })
     } };
     const sessionsByProject = { [slug]: new Map([["parent", parent]]), library: new Map() };
     const sourceFor = projectSlug => ({ ...source, repository: `example/${projectSlug}` });

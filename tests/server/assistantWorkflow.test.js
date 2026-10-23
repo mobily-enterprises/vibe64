@@ -252,27 +252,16 @@ for (const selected of ["junior", "senior"]) test(`initial ${selected} implement
   f.router.respond = async () => ({ ok: true, text: JSON.stringify({ mode: selected, reason: "implementation" }) });
   await f.service.send("session-1", request, f.context); await report(f, "handoff");
   const configuration = await f.configuration.read();
-  await f.configuration.write({ codex: { ...f.assignments, senior: { ...f.assignments.senior, modelId: "gpt-6-sol" } } }, configuration.revision);
+  await f.configuration.write({ ...configuration, owner: { ...f.assignments, senior: { ...f.assignments.senior, modelId: "gpt-6-sol" } } }, configuration.revision);
   await f.service.afterTurn("session-1", end(f.state()), f.context);
   assert.equal(f.sends[1].selection.modelId, "gpt-6-astra"); assert.equal(f.helperCalls(), 1);
 });
 
-for (const revoked of ["unavailable", "replaced", "actor"]) test(`review rechecks the original ${revoked} access after an outcome and again on explicit resume`, async t => {
-  let available = true;
-  const f = await fixture(t, undefined, { resolveAssistantUser: async user => {
-    if (!available && user.username === "original-member") throw new Error("Submitting member removed");
-    return user;
-  } });
-  f.context.vibe64User = { role: "member", username: "original-member" };
-  f.connections.set("codex:openai", { ownerOnly: false });
-  await f.service.send("session-1", request, f.context); await report(f, "handoff");
-  if (revoked === "actor") available = false;
-  else f.connections.set("codex:openai", revoked === "unavailable" ? { available: false, ownerOnly: false } : { ownerOnly: false, connectionIdentity: "replaced" });
-  await f.service.afterTurn("session-1", end(f.state()), f.context);
-  assert.equal(f.state().status, "waiting"); assert.equal(f.sends.length, 1);
-  f.context.vibe64User = { role: "owner", username: "owner" };
-  await assert.rejects(f.restart().send("session-1", { messageId: request.messageId, reviewAction: "retry" }, f.context));
-  assert.equal(f.sends.length, 1); assert.equal(f.state().submittedBy.username, "original-member");
+test("a member's main chat request waits for the owner's approval without sending", async t => {
+  const f = await fixture(t);
+  f.context.vibe64User = { role: "member", username: "member" };
+  await assert.rejects(f.service.send("session-1", request, f.context), { code: "vibe64_main_chat_approval_required" });
+  assert.equal(f.sends.length, 0);
 });
 
 test("a Router disconnected after classification cannot strand an authorised review", async t => {

@@ -1987,7 +1987,7 @@ test("a member's hints use foreign shared Helper independently of a personal wor
   const member = { username: "collaborator", role: "member" };
   const fixture = createFixture({
     resolvePurpose({ input, options }) {
-      assert.deepEqual(input, { purpose: "prompt_hint", workflowEngineId: "codex" });
+      assert.deepEqual(input, { purpose: "prompt_hint" });
       assert.deepEqual(JSON.parse(options.session.metadata.assistant_selection), CODEX_SELECTION);
       assert.deepEqual(options.vibe64User, member);
       return { available: true, effectiveSelection: helper, connectionIdentity: "shared-pickle", settingsRevision: "routing-1" };

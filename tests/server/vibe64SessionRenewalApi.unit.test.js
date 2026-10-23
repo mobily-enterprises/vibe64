@@ -97,7 +97,7 @@ test("native renewal tools retain complete reviewed text and guards without leak
     const guards = { operationKey: state.operationKey, expectedHash: state.draft.hash, expectedRevision: state.draft.revision };
     for (const [suffix] of methods) {
       const fields = suffix === "inspect" ? {} : ["draft.request", "retry"].includes(suffix) ? { operationKey: state.operationKey }
-        : { ...guards, ...(suffix === "draft.update" ? { draft: state.draft.text } : {}), ...(suffix === "confirm" ? { workflowEngineId: "codex" } : {}) };
+        : { ...guards, ...(suffix === "draft.update" ? { draft: state.draft.text } : {}) };
       const result = await execute(suffix, fields);
       assert.equal(result.ok, true, JSON.stringify(result.error));
       assert.equal(result.result.hasRenewal, true);
@@ -181,7 +181,6 @@ test("renewal inputs require durable operation and optimistic draft guards", () 
 
   const confirmation = sessionRenewalConfirmationActionInputValidator.schema.create({
     assistantSelection: ASSISTANT_SELECTION,
-    workflowEngineId: "codex",
     expectedHash: DRAFT_HASH,
     expectedRevision: 3,
     operationKey: "renewal:session-1:one",
@@ -265,7 +264,6 @@ test("renewal actions use server action context identity and domain-native idemp
   };
   const base = {
     assistantSelection: ASSISTANT_SELECTION,
-    workflowEngineId: "codex",
     expectedHash: DRAFT_HASH,
     expectedRevision: 2,
     operationKey: "renewal:session-1:one",
@@ -308,7 +306,6 @@ test("renewal actions use server action context identity and domain-native idemp
     }],
     ["confirm", "session-1", {
       assistantSelection: ASSISTANT_SELECTION,
-    workflowEngineId: "codex",
       expectedHash: DRAFT_HASH,
       expectedRevision: 2,
       operationKey: "renewal:session-1:one",
@@ -394,7 +391,6 @@ test("renewal HTTP routes expose the six state transitions without accepting bod
           actionId: ACTION_CONFIRM_SESSION_RENEWAL,
           body: {
             assistantSelection: ASSISTANT_SELECTION,
-    workflowEngineId: "codex",
             expectedHash: DRAFT_HASH,
             expectedRevision: 2,
             operationKey: "renewal:session-1:one",

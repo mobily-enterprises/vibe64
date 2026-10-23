@@ -704,9 +704,10 @@ test("source explanations preserve one pre-resolved profile through the terminal
       projectService: terminalProjectService
     });
     await writeCodexAuthMarker(path.join(temporaryRoot, "system"), { connected: true, loginId: randomUUID() });
-    await createAssistantRoutingStore({ systemRoot: path.join(temporaryRoot, "system") }).write({ codex: {
-      helper: { ...JSON.parse(session.metadata.assistant_selection), modelId: "gpt-5.6-luna", variantId: "low", selectionSource: "explicit" }
-    } }, 0);
+    await createAssistantRoutingStore({ systemRoot: path.join(temporaryRoot, "system") }).write({ owner: {
+      quickHelper: { ...JSON.parse(session.metadata.assistant_selection), modelId: "gpt-5.6-luna", variantId: "low", selectionSource: "explicit" },
+      explain: { follows: "quickHelper" }
+    }, nonOwner: {} }, 0);
     let firstResolvedProfile = null;
     let resolvedProfile = null;
     let resolutionCalls = 0;
@@ -873,9 +874,10 @@ for (const startFails of [false, true]) {
         projectService: terminalProjectService
       });
       await writeCodexAuthMarker(path.join(temporaryRoot, "system"), { connected: true, loginId: randomUUID() });
-      await createAssistantRoutingStore({ systemRoot: path.join(temporaryRoot, "system") }).write({ codex: {
-        helper: { ...JSON.parse(session.metadata.assistant_selection), modelId: "gpt-5.6-luna", variantId: "low", selectionSource: "explicit" }
-      } }, 0);
+      await createAssistantRoutingStore({ systemRoot: path.join(temporaryRoot, "system") }).write({ owner: {
+        quickHelper: { ...JSON.parse(session.metadata.assistant_selection), modelId: "gpt-5.6-luna", variantId: "low", selectionSource: "explicit" },
+        explain: { follows: "quickHelper" }
+      }, nonOwner: {} }, 0);
       const sourceEditor = createSourceEditorService({
         projectService: terminalProjectService,
         temporaryRoot,
@@ -3263,7 +3265,7 @@ test("Codex integration continuation recovers native acceptance with a fresh ser
     const systemRoot = controllerOptions.env.VIBE64_SYSTEM_ROOT;
     await writeCodexAuthMarker(systemRoot, { connected: true, loginId: randomUUID() });
     const junior = { ...JSON.parse((await store.readSession(sessionId)).metadata.assistant_selection), selectionSource: "explicit" };
-    await createAssistantRoutingStore({ systemRoot }).write({ codex: { senior: junior, junior } }, 0);
+    await createAssistantRoutingStore({ systemRoot }).write({ owner: { senior: junior, junior }, nonOwner: {} }, 0);
     const routingAccess = await terminalService.inspectAssistantAccess(sessionId);
     assert.equal(routingAccess.purposes.junior.available, true, JSON.stringify(routingAccess));
     const prepared = await terminalService.ensureAgentSession(sessionId);
@@ -12047,7 +12049,7 @@ test("Main browser facade uses the original native owner and action authority wi
       assert.equal(captures.turns.length, 0);
       await writeCodexAuthMarker(controllerOptions.env.VIBE64_SYSTEM_ROOT, { connected: true, loginId: randomUUID() });
       await store.writeMetadataValue(sessionId, "assistant_routing", JSON.stringify({
-        mode: "custom", review: false, workflowEngineId: "codex",
+        mode: "custom", review: false,
         override: JSON.parse(before.assistant_selection)
       }));
       const rejectedMessageId = "main-browser-oversized";
@@ -12148,7 +12150,7 @@ test("Main browser facade uses the original native owner and action authority wi
         captures.onSessionChanged = onSessionChanged;
       }
       const selected = await request("POST", "/selection", { selection: {
-        assistantRouting: { mode: "senior", review: false, workflowEngineId: "codex" }
+        assistantRouting: { mode: "senior", review: false }
       } });
       assert.equal(selected.statusCode, 200, selected.body);
       assert.equal(selected.json().ok, true, selected.body);
@@ -12327,9 +12329,9 @@ test("Main Codex canonical goals preserve original result policy, pinned targets
     await writeCodexAuthMarker(controllerOptions.env.VIBE64_SYSTEM_ROOT, { connected: true, loginId: randomUUID() });
     const selection = { ...JSON.parse((await store.readSession(sessionId)).metadata.assistant_selection), selectionSource: "explicit" };
     await createAssistantRoutingStore({ systemRoot: controllerOptions.env.VIBE64_SYSTEM_ROOT }).write({
-      codex: { senior: selection, junior: selection }
+      owner: { senior: selection, junior: selection }, nonOwner: {}
     }, 0);
-    await store.writeMetadataValue(sessionId, "assistant_routing", JSON.stringify({ mode: "senior", workflowEngineId: "codex" }));
+    await store.writeMetadataValue(sessionId, "assistant_routing", JSON.stringify({ mode: "senior" }));
     registerVibe64ActionContext(actions, {
       projectContext: { projectsRoot: path.dirname(runtime.projectContextRoot), async readWorkspaceProject() {
         return { project: { projectRoot: runtime.projectContextRoot, projectRuntimeRoot: runtime.stateRoot } };

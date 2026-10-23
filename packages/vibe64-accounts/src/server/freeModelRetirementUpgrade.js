@@ -1,5 +1,5 @@
 import path from "node:path";
-import { validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/assistantRoutingStore";
+import { validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/stateUpgrades/routingV4Format";
 import { publishStateUpgradeFiles, readUpgradeFile, verifyUpgradeParents } from "@local/vibe64-core/server/stateUpgradeFiles";
 
 const ROLES = ["senior", "junior", "helper", "router", "sharedBackup"];

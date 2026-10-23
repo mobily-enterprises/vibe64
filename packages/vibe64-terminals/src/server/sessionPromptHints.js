@@ -20,10 +20,8 @@ import {
   VIBE64_PROMPT_HINT_STATIC_STARTERS,
   normalizedPromptHintDraft,
   normalizedPromptHintSuggestions,
-  vibe64AgentExecutionProfileAuditSnapshot,
-  vibe64AssistantSelectionFromMetadata
+  vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
-import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import {
   vibe64AgentRunStateIsActive
 } from "@local/vibe64-runtime/server/sessionStore";
@@ -531,9 +529,7 @@ function createSessionPromptHintsService({
       return null;
     }
     const options = agentOptions(context, vibe64User);
-    const workflowEngineId = assistantRoutingFromMetadata(context.session.metadata)?.workflowEngineId ||
-      vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId;
-    const decision = await agent.resolveAssistantPurpose({ purpose: "prompt_hint", workflowEngineId }, options);
+    const decision = await agent.resolveAssistantPurpose({ purpose: "prompt_hint" }, options);
     if (cancelled()) return null;
     if (!decision.available) throw Object.assign(new Error(decision.message), { code: decision.reasonCode });
     return {

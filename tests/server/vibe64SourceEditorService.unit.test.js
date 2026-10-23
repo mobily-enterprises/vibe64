@@ -4490,7 +4490,6 @@ test("source explanations use a member's shared Helper without the personal work
       requireAssistantAccess() { throw new Error("The working conversation must not authorize this helper."); },
       resolveAssistantPurpose(input, options) {
         assert.equal(input.purpose, "source_explanation");
-        assert.equal(input.workflowEngineId, "codex");
         assert.deepEqual(options.vibe64User, member);
         assert.equal(JSON.parse(options.session.metadata.assistant_selection).modelId, "gpt-6-astra");
         return { available: true, effectiveSelection: selection, connectionIdentity: "workspace-deepseek" };

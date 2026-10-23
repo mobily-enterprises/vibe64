@@ -301,7 +301,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
   >
     <v-card :class="dialogClass" :rounded="smAndDown ? 0 : 'xl'">
       <v-card-text class="vibe64-codex-setup__body">
-        <ModelRoutingForm v-if="nativeRoutingReady" :engine-id="nativeSetupProviderId" :connection-id="nativeSetupProviderId === 'codex' ? 'openai' : 'anthropic'" :connection-label="nativeSetupProviderId === 'codex' ? 'Codex login' : 'Claude login'" :setup-error="nativeRoutingSetupError" @busy="codexProviderSaving = $event" @close="nativeSetupOpen = false" @saved="nativeSetupOpen = false; emit('changed')" />
+        <ModelRoutingForm v-if="nativeRoutingReady" :connection-id="nativeSetupProviderId === 'codex' ? 'openai' : 'anthropic'" :connection-label="nativeSetupProviderId === 'codex' ? 'Codex login' : 'Claude login'" :setup-error="nativeRoutingSetupError" @busy="codexProviderSaving = $event" @close="nativeSetupOpen = false" @saved="nativeSetupOpen = false; emit('changed')" />
         <NativeProviderConnections
           v-else
           v-model="nativeModelProviderId"
@@ -372,7 +372,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
       </v-card-title>
 
       <v-card-text v-if="editorRoutingPending">
-        <ModelRoutingForm engine-id="opencode" :connection-id="editorProviderId" :connection-label="editorLabel" :setup-error="editorRoutingSetupError" @busy="routingSaving = $event" @close="finishConnectionRouting" @saved="finishConnectionRouting" />
+        <ModelRoutingForm :connection-id="editorProviderId" :connection-label="editorLabel" :setup-error="editorRoutingSetupError" @busy="routingSaving = $event" @close="finishConnectionRouting" @saved="finishConnectionRouting" />
       </v-card-text>
       <v-card-text v-else-if="catalogPreparationError" class="vibe64-provider-editor__body">
         <v-alert
@@ -484,7 +484,7 @@ const dialogClass = computed(() => ["ai-dialog", { "ai-dialog--compact": smAndDo
   <v-dialog v-model="routingOpen" max-width="38rem" :fullscreen="smAndDown" :persistent="routingSaving" scrollable>
     <v-card :class="dialogClass" :rounded="smAndDown ? 0 : 'xl'">
       <v-card-text>
-        <ModelRoutingForm v-if="routingOpen" :engine-id="routingEngineId" :readonly="!isOwner" @busy="routingSaving = $event" @close="routingOpen = false" @saved="routingOpen = false; emit('changed')" />
+        <ModelRoutingForm v-if="routingOpen" :readonly="!isOwner" @busy="routingSaving = $event" @close="routingOpen = false" @saved="routingOpen = false; emit('changed')" />
       </v-card-text>
     </v-card>
   </v-dialog>

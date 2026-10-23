@@ -106,7 +106,6 @@ function createVibe64SessionsFeature() {
       const sessions = createService({
         actions: actionCatalogue,
         initializeModelRouting: (input) => accounts.initializeModelRouting(input),
-        readModelRoutingWorkflows: (input) => accounts.readModelRoutingWorkflows(input),
         project,
         publishSessionChanged: createSessionChangedPublisher(events),
         sessionPresence,

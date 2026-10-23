@@ -75,9 +75,8 @@ const agentAttachmentDeleteActionInputValidator = validator({
 const temporaryConversationListInputValidator = validator({ sessionId: sessionIdField });
 const temporaryConversationPresentationField = { type: "object", additionalProperties: true, required: false };
 const temporaryConversationRoutingField = { type: "object", required: false, schema: createSchema({
-  mode: { type: "string", enum: ASSISTANT_MODES.filter(({ id }) => id !== "auto").map(({ id }) => id), required: true },
+  mode: { type: "string", enum: [...ASSISTANT_MODES.filter(({ id }) => id !== "auto").map(({ id }) => id), "fix"], required: true },
   review: { type: "boolean", required: false },
-  workflowEngineId: { type: "string", enum: Object.values(VIBE64_ASSISTANT_ENGINE_IDS), required: false },
   override: { type: "object", required: false, schema: createSchema({
     engineId: { type: "string", enum: Object.values(VIBE64_ASSISTANT_ENGINE_IDS), required: false },
     ...Object.fromEntries(["schema", "agentId", "modelProviderId", "modelId", "variantId", "catalogRevision"]
