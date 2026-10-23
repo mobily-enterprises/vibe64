@@ -240,6 +240,8 @@ test("the Vibe64 driver contributes stable session rules and no turn context", (
   assert.match(session, /wait for their choices before configuring access/u);
   assert.match(session, /Do not create users, change roles, reset passwords/u);
   assert.match(session, /per-run enable flag and secret/u);
+  assert.match(session, /A web app with login accounts has an application-owned adapter/u);
+  assert.match(session, /set it up from the app framework's own pattern as part of the work instead of merely offering it/u);
   assert.match(session, /continue independent setup work/u);
   assert.match(session, /vibe64-helper --help/u);
   assert.doesNotMatch(session, /vibe64-(?:preview|playwright|env|database|github)\b/u);
