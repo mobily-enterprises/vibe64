@@ -11,12 +11,15 @@ to run them again after fixing something. On a phone, open Dashboard, then choos
 | Tools | Runtime | Shown only when Vibe64 uses the programs installed on this computer (**Using your installed tools**). Always passes; it reminds you to install and update them yourself. |
 | AI connection | Credentials | No AI provider is connected; open **Account settings → AI Accounts**. |
 | Node.js, Git, GitHub CLI, ripgrep, Genesis | Runtime | That program is missing or the wrong version on this machine; install it with the system's normal installer. With your installed tools, Node.js must match the major version Vibe64 declares (shown in the check). |
+| Your name in Git | Runtime | A warning, never a failure: Git has no name and email for you yet, so commits are saved with a stand-in name ending in “via Vibe64”. The check shows the two `git config --global` lines, with a copy button, to set your own. Shown only when Vibe64 uses the programs installed on this computer. |
 | Claude Code, Codex, opencode | AI tools | With your installed tools: that AI tool isn't installed on this computer, or it didn't start. A missing tool shows its official install command; each is needed only for the AI that uses it. Where the host provides pinned versions, a single **Codex CLI** check (Runtime) replaces these. |
 | Playwright runtime, Playwright browser (Pinned browser where the host provides pinned versions) | Browser | Only automated browser tests need these; other work is unaffected. With your installed tools, the check shows Playwright's own message, for example **Playwright is not installed on this computer**; install Playwright, then run `playwright install chromium`. |
 
 GitHub sign-in is not a Health check. **Account settings → GitHub** shows the
 **GitHub Connection** card: **Connection ready** means Vibe64 can use GitHub.
 That card also holds **Git user.name**, **Git user.email** and **Save Git identity**.
+Connecting GitHub fills in your Git name and email only when Git has none; it
+never replaces ones you already set.
 
 A missing AI tool also appears in **Account settings → AI Accounts** and in AI onboarding,
 with a **Copy** button for the install command and **Check again**. When Vibe64 starts, it

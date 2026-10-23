@@ -33,6 +33,24 @@ the next time it runs a command.
   A Django, Rails or Spring Boot project therefore needs no Node.js packages
   for these checks.
 
+## Git
+
+Vibe64 keeps each project's history with Git (2.28 or newer).
+
+- **Git missing or too old.** The repository button at the top of a project
+  says **Git needed** (or **Update Git**). Open it for the install command for
+  this computer, with a copy button; after installing, press **Check again**.
+- **A folder without Git.** The button says **No Git yet**. Open it and choose
+  **Start version control here** to start Git in that folder. Vibe64 never does
+  this by itself, and nothing is uploaded.
+- **Your name on commits.** Commits use the name and email from your own Git
+  settings. If Git has none, they are saved with a stand-in name ending in
+  “via Vibe64”, and **Health** and the Save result show the two
+  `git config --global` lines to set yours.
+- **Signed commits.** If your Git signs every commit (`commit.gpgsign`) and the
+  key needs a passphrase, Vibe64 can't type it. Make one signed commit in a
+  terminal to unlock the key, then try again. Vibe64 doesn't change the setting.
+
 ## Where Vibe64 keeps things
 
 | What | Linux | macOS |
