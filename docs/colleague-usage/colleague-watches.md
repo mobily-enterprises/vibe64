@@ -14,6 +14,14 @@ one-shot watch ends after its first delivered report. Ask “Tell me when the wo
 finishes” for a completion watch instead. Watching starts only on your request,
 checks your current project access and does not stop or resend the coding work.
 
+Colleague can also watch more than conversations, wherever your Vibe64 offers
+it, for example a project's deployment on a hosted Vibe64: ask “Tell me when my
+app is live” or “Tell me if anything changes in that deployment”. Ask Colleague
+what it can watch here; it lists what this installation offers. An app that is
+already live is reported at once. Every reading checks your current access to
+that project; a watch only reports and never deploys, restarts or changes
+anything.
+
 Use the eye-and-count **Watches and assignments** button beside Previous
 conversations to inspect ongoing work. It opens a separate view; nothing is
 listed below chat. **Resume** restarts a paused watch, and **Cancel** removes its
@@ -21,10 +29,13 @@ watch without stopping the agent. Close this view to return to the same chat and
 draft. On phone, use **Close watches and assignments** in its header. Ask
 Colleague to list, cancel or resume watches if you prefer.
 
-Colleague does not watch lessons. In the Learning environment your own step
-actions (an answer, **Done**, or an automatic check from your App press or a
-code step's **Check now**) record step results directly; see
-[The Learning environment (L)](learning-environment.md).
+Colleague never watches lessons or decides steps. In the Learning environment
+your own step actions (an answer, **Done**, or an automatic check from your App
+press or a code step's **Check now**) record step results directly; see
+[The Learning environment (L)](learning-environment.md). In Learn mode your
+teacher can watch your lesson's practice project for you (its agent, or its
+deployment where offered) and nothing else; that watch ends with the lesson
+attempt. Watches in Develop stay in Develop's conversation.
 
 You can ask “Which projects do I have?” from any page, including AI Accounts;
 no open project is required. Colleague checks the projects available to you.

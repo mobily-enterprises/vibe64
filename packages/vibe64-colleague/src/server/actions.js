@@ -67,8 +67,17 @@ const watchFields = {
   condition: { type: "string", enum: ["reply", "finished", "attention"], required: true },
   question: { ...text, maxLength: 1000, required: true }, once: { type: "boolean", required: false }
 };
-const watchSchema = createSchema({ ...watchFields, source: text, status: { ...text, required: true }, error: { ...text, maxLength: 512 },
- });
+// A registered state source's watch (watchSources.js): its source, that
+// source's input and one of its conditions.
+const sourceWatchFields = {
+  watchId: clientId, source: { ...text, minLength: 1, maxLength: 64, required: true },
+  input: { type: "object", additionalProperties: true, required: true },
+  condition: { ...text, minLength: 1, maxLength: 64, required: true },
+  question: { ...text, maxLength: 1000, required: true }, once: { type: "boolean", required: false }
+};
+const watchSchema = createSchema({ ...watchFields, projectSlug: text, sessionId: text, condition: { ...text, required: true },
+  source: text, input: { type: "object", additionalProperties: true, required: false },
+  status: { ...text, required: true }, error: { ...text, maxLength: 512 } });
 const watchOutput = { mode: "replace", schema: createSchema({ ok: { type: "boolean", required: true },
   watch: { type: "object", schema: watchSchema, required: false },
   watches: { type: "array", items: watchSchema, required: false } }) };
@@ -147,7 +156,15 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
     definition("turn.stop", { expectedConversationId: { ...clientId, required: false } }, (input, context) => colleague.stop(input, context)),
     definition("model.select", { ...modelSelectionFields, expectedConversationId: { ...clientId, required: false } }, (input, context) => colleague.selectModel(input, context)),
     definition("watches.read", {}, (input, context) => colleague.listWatches(input, context), {
-      description: "List your conversation watches with their exact target, condition and active/paused state. Paused reads need attention; silence does not prove an agent is blocked.", output: watchOutput
+      description: "List your watches with their exact target, condition and active/paused state. Paused reads need attention; silence does not prove an agent is blocked.", output: watchOutput
+    }),
+    definition("watch.sources.read", {}, () => colleague.listWatchSources(), {
+      description: "List what this installation lets you watch besides coding conversations (for example a project's deployment): each source's input fields and conditions. Use watch.source.create with one of them.",
+      output: { mode: "replace", schema: createSchema({ ok: { type: "boolean", required: true },
+        sources: { type: "array", maxItems: 32, required: true, items: createSchema({ source: { ...text, required: true },
+          label: { ...text, required: true }, description: { ...text, maxLength: 1000, required: true }, scope: { ...text, required: true },
+          input: { type: "object", additionalProperties: true, required: true },
+          conditions: { type: "object", additionalProperties: true, required: true } }) } }) }
     }),
     definition("assignments.read", { assignmentId: { ...clientId, required: false } }, (input, context) => colleague.assignment("read", input, context), {
       alwaysAvailable: true,
@@ -207,6 +224,9 @@ function createColleagueActions(colleague, usage = createColleagueUsageKnowledge
     definition("watch.create", watchFields, (input, context) => colleague.watch(input, context), {
       description: "Watch a Main or temporary conversation using code, without repeated model calls. Supply exact project/session IDs and optional temporary conversationId, a unique watchId (reuse it on retry), and the user's question. reply reports the next completed visible response, including commentary while a goal continues; a response may be progress rather than the requested answer, so report its actual meaning and continuing work honestly. finished reports work ending; attention reports explicit failures, interruptions or structured input requests, not inferred inactivity. Partial tokens, thinking and tool output do not count as replies. All conditions also report failures. once defaults to true. If a response already exists, report it immediately. Watches only authorize reporting, never further coding or stopping agents. Assignment follow-through uses its own retained watches and completion guards.", output: watchOutput
     }, true),
+    definition("watch.source.create", sourceWatchFields, (input, context) => colleague.watchState(input, context), {
+      description: "Watch something listed by watch.sources.read, using code, without repeated model calls. Supply its source, exactly its input fields (a project source takes the exact projectSlug), one of its conditions, a unique watchId (reuse it on retry) and the user's question. A condition other than changed reports when it becomes true, at once if it already holds; changed reports the next change. once defaults to true. The project's ordinary access applies to every reading. Watches only authorize reporting, never acting on what they report.", output: watchOutput
+    }),
     definition("watch.cancel", { watchId: clientId }, (input, context) => colleague.cancelWatch(input, context), {
       description: "Stop the exact watch by its watchId. It stops observation and pending notifications only; it does not stop the application or coding agent.", output: watchOutput
     }),

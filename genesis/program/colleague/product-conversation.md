@@ -107,7 +107,7 @@ Learn threads use `learnInstructions` (teaching, notes, lesson lifecycle and the
 Learn refusal); Develop uses `instructions`, which only points to **L**. The
 common catalogue predicate hides `vibe64.training.*` (except
 `learning-mode.read`/`learning-mode.set`) and `navigation.open-learning` in
-Develop, and `assignment.create`/`watch.create` in Learn; it governs direct
+Develop, and `assignment.create` in Learn; it governs direct
 schemas, search, contracts and execution, retaining the original
 assignment-only background mutation rule. No saved history is rewritten.
 
@@ -716,6 +716,37 @@ watch ID for a different target, source, condition or question is refused.
 
 There is no `learning-task` watch source; the numbered practice-sessions upgrade
 removes saved Learning watches and their observations.
+
+Watch sources (`watchSources.js`) are one registry for everything Colleague can
+watch besides a project's own coding conversations, extended by owners through
+composition. `registerConversationSource(name, read)` adds a conversation source
+(above). `registerWatchSource({ id, label, description, scope, input,
+conditions, read, entity? })` adds a state source: `read(input, context)`
+answers `{ fingerprint, summary, conditionsMet }` through ordinary actions under
+the watcher's authority. `scope: "project"` sources take `input.projectSlug`,
+whose access and Learn/Develop rule apply to every read. `entity` names the
+realtime entity whose `entity.changed` events (entityId = project slug) trigger
+an early read. The assistant lists state sources with `watch.sources.read` and
+watches one with `watch.source.create` (`source`, exactly its `input` fields,
+one of its `conditions`); `watch.create` stays the coding-conversation
+contract and never accepts a source. A state watch records `source`, `input`
+and `projectSlug`; its cursor is `{ fingerprint, conditionsMet }`. `changed`
+reports the next fingerprint change. Any other condition reports when it
+becomes true, at once if it already holds. Scheduling, cursors persistence,
+the 16-watch budget, pause/resume/cancel and wake delivery are shared with
+conversation watches. Public registers no state source of its own yet. Local
+publishing registers its `publication` source here when it records publication
+history, and a host registers its own (Online: `deployment`). Application usage
+("stats") has no source until something records usage.
+
+Learn threads may create watches, of either kind, only on their own lesson
+attempt's practice project (the mode's `currentAttemptId` must be the thread's
+attempt and the target its `practiceSlug`); the lobby and every other target
+are refused. A Learn thread's watches end with the attempt: releasing the
+thread stops its scheduler, and its record moves or is removed with the
+attempt's thread file. A watch only reports. A step passes only through its own
+check (a `fact` check reads the same owner's reader), and assignments stay
+Develop-only.
 
 The existing session event bus asks the watch scheduler to schedule coalesced
 reads outside the publisher's write lock. A 30-second code-only reconciliation

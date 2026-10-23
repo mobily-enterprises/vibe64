@@ -12,15 +12,18 @@ import { readLearningModeFor } from "@local/vibe64-core/server/learningMode";
 import { learnThreadFile, learnThreadLearnerKey, registerLearnThreadReleaser } from "@local/vibe64-core/server/learnThreads";
 import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions, learnInstructions, nativeInstructions, nativeLearnInstructions } from "./protocol.js";
 import { conversationObservation, readWatchedConversation, watchUpdate } from "./attention.js";
+import { createWatchSources, stateObservation, stateWatchInput, stateWatchUpdate } from "./watchSources.js";
 import { createConversationSummary } from "./conversationSummary.js";
 import { assignmentCommands, assignmentSummary, createAssignmentOperations } from "./assignments.js";
 import { validateColleagueConversationRecord } from "./conversationRecord.js";
 
 const COLLEAGUE_MODEL_UNAVAILABLE = "Connect an AI and choose an available Colleague model in AI setup before using Colleague.";
-// Learn threads teach; only Develop delegates work or watches agents. Develop
-// can still read and switch the mode for the person.
+// Learn threads teach; only Develop delegates work. Develop can still read and
+// switch the mode for the person. Learn threads watch only their lesson's
+// practice project (the service decides).
 const LEARN_ONLY_ACTION = /^vibe64\.training\.(?!learning-mode\.(?:read|set)$)|^vibe64\.colleague\.navigation\.open-learning$/u;
-const DEVELOP_ONLY_ACTIONS = new Set(["vibe64.colleague.assignment.create", "vibe64.colleague.watch.create"]);
+const DEVELOP_ONLY_ACTIONS = new Set(["vibe64.colleague.assignment.create"]);
+const LEARN_WATCH_REFUSAL = "In Learn mode Colleague watches only this lesson's practice project.";
 
 function failure(message, code = "vibe64_colleague_failed", statusCode = 409) {
   return Object.assign(new Error(message), { code, statusCode });
@@ -30,7 +33,7 @@ function requireResult(result) {
   return result;
 }
 function publicWatch({ cursor, ...watch }) {
-  return watch;
+  return structuredClone(watch);
 }
 function colleagueHistoryMessages(turn) {
   const runtime = turn.metadata?.runtime;
@@ -219,7 +222,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     // result copied into feedback. Argument/result byte gates remain 256 KiB.
     limits: { ...runtimeOptions.limits, maxInputCharacters: 6 * COLLEAGUE_TOOL_PAYLOAD_LIMIT,
       maxOutputCharacters: 1_670_455 } });
-  const conversationSources = new Map();
+  const watchSources = createWatchSources();
   let closed = false;
   let resolveName = async () => "Colleague";
 
@@ -1067,7 +1070,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   }
 
   function scheduleWatches(state, delay = watchPollMs) {
-    if (closed || state.rotating || !state.requestContext ||
+    // A released Learn thread's watches ended with its lesson attempt.
+    if (closed || state.released || state.rotating || !state.requestContext ||
         !state.record.watches.some((watch) => watch.status === "active")) return;
     if (state.watchTimer && delay === watchPollMs) return;
     clearTimeout(state.watchTimer);
@@ -1078,21 +1082,29 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     state.watchTimer.unref?.();
   }
 
+  // A watch without a source is a project's own coding conversation.
+  function watchSource(watch) {
+    if (!watch.source) return null;
+    const source = watchSources.get(watch.source);
+    if (!source) throw failure("This watch's source is unavailable in this runtime.");
+    return source;
+  }
+
   async function readWatch(watch, context) {
-    if (!watch.source) return readWatchedConversation(actions, watch, context);
-    const source = conversationSources.get(watch.source);
-    if (!source) throw failure("This watched conversation source is unavailable in this runtime.");
+    const source = watchSource(watch);
+    if (!source) return readWatchedConversation(actions, watch, context);
+    if (source.kind === "state") return stateObservation(source, await source.read({ ...watch.input }, context));
     return conversationObservation({ ...requireResult(await source.read(watch, context)),
       replyDuringWork: watch.condition === "reply" && !watch.assignmentId });
   }
 
   async function observeWatch(state, watch) {
     const observation = await readWatch(watch, actionContext(state, { clientId: "", focus: watch }));
-    if (closed || watch.status !== "active") return;
+    if (closed || state.released || watch.status !== "active") return;
     if (watch.assignmentId && !watch.expectedRunId && observation.latestUserMessageId === watch.messageId && observation.runId !== watch.cursor?.runId) {
       watch.expectedRunId = observation.runId;
     }
-    const { cursor, reason } = watchUpdate(watch, observation);
+    const { cursor, reason } = (watchSource(watch)?.kind === "state" ? stateWatchUpdate : watchUpdate)(watch, observation);
     watch.cursor = cursor;
     watch.error = "";
     if (reason) {
@@ -1116,6 +1128,14 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     }
   }
 
+  // A teacher watches only the practice project of its own lesson attempt;
+  // the watch ends with the attempt (its thread is released).
+  async function assertLearnWatchTarget(state, context, projectSlug) {
+    const mode = await readLearningModeFor(authenticatedVibe64User(context), { thread: "learn" });
+    if (!state.thread.attemptId || mode?.currentAttemptId !== state.thread.attemptId || !mode.practiceSlug ||
+        projectSlug !== mode.practiceSlug) throw failure(LEARN_WATCH_REFUSAL, "vibe64_colleague_learn_watch", 403);
+  }
+
   async function suppressWatchObservation(state, watchId) {
     state.record.observations = state.record.observations.filter(item => item.watchId !== watchId);
     await persist(state);
@@ -1137,6 +1157,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   }
 
   async function pollWatches(state) {
+    if (state.released) return;
     if (state.rotating) { state.watchDirty = true; return; }
     if (state.polling) { state.watchDirty = true; return state.polling; }
     state.polling = (async () => {
@@ -1170,13 +1191,16 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
 
   events?.register({
     id: "vibe64.colleague.attention",
-    matches: (event) => !closed && event.type === "entity.changed" && event.source === "vibe64" && event.entity === "session",
+    matches: (event) => !closed && event.type === "entity.changed" &&
+      (event.source === "vibe64" && event.entity === "session" || watchSources.readsEntity(event.entity)),
     handle(event) {
       // Publishers may still hold a session write lock. Never await a read here.
+      const session = event.source === "vibe64" && event.entity === "session";
       for (const pending of users.values()) void pending.then((state) => {
         const payload = event.realtime?.payload || {};
-        const relevant = watch => watch.status === "active" && watch.sessionId === event.entityId &&
-          (!payload.projectSlug || watch.projectSlug === payload.projectSlug);
+        const relevant = watch => watch.status === "active" && (session
+          ? !watch.input && watch.sessionId === event.entityId && (!payload.projectSlug || watch.projectSlug === payload.projectSlug)
+          : watchSources.get(watch.source)?.entity === event.entity && watch.projectSlug === event.entityId);
         if (state.record.watches.some(relevant)) scheduleWatches(state, watchDebounceMs);
       });
     }
@@ -1270,14 +1294,16 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         };
       }
     },
-    registerConversationSource(name, source) {
-      const normalized = typeof source === "function" ? { read: source } : source;
-      if (!/^[a-z][a-z0-9-]{0,63}$/u.test(name) || typeof normalized?.read !== "function" ||
-          normalized.notify !== undefined && typeof normalized.notify !== "function") {
-        throw new TypeError("A conversation source needs a unique name and an authorized reader.");
+    // Owners extend what Colleague can watch (watchSources.js).
+    registerConversationSource(name, read) { watchSources.registerConversation(name, read); },
+    registerWatchSource(source) { watchSources.register(source); },
+    listWatchSources() { return { ok: true, sources: watchSources.list() }; },
+    // The assistant's watch.source.create: registered state sources only.
+    async watchState(input, context) {
+      if (watchSources.get(input.source)?.kind !== "state") {
+        throw failure("Colleague cannot watch that. watch.sources.read lists what it can watch here.", "vibe64_colleague_failed", 422);
       }
-      if (conversationSources.has(name)) throw new TypeError("A conversation source needs a unique name and an authorized reader.");
-      conversationSources.set(name, Object.freeze({ read: normalized.read, ...(normalized.notify ? { notify: normalized.notify } : {}) }));
+      return service.watch(input, context);
     },
     setNameResolver(resolver) {
       if (typeof resolver !== "function") throw new TypeError("Colleague name resolver must be a function.");
@@ -1423,21 +1449,34 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       state.summaryRunning = summaries.read(state, input, scoped).finally(() => { state.summaryRunning = null; state.summaryAbort = null; });
       return state.summaryRunning;
     },
+    // A conversation watch names its project, session and conversation (and
+    // an owner's conversation source); a state watch names its registered
+    // source and that source's input.
     async watch(input, context) {
       const state = await stateFor(context);
       return changeWatches(state, async () => {
         if (closed) throw failure("Colleague is shutting down.");
+        const source = input.source ? watchSources.get(input.source) : null;
+        const watchedInput = source?.kind === "state" ? stateWatchInput(source, input.input) : null;
+        if (watchedInput && !Object.hasOwn(source.conditions, input.condition)) {
+          throw failure(`A ${source.label} watch reports ${Object.keys(source.conditions).join(", ")}.`, "vibe64_colleague_failed", 422);
+        }
+        const target = watchedInput ? { source: input.source, input: watchedInput, projectSlug: watchedInput.projectSlug || "" }
+          : { ...(input.source ? { source: input.source } : {}), projectSlug: input.projectSlug, sessionId: input.sessionId,
+            conversationId: input.conversationId || "" };
         const existing = state.record.watches.find((watch) => watch.watchId === input.watchId);
         if (existing) {
-          if (["source", "projectSlug", "sessionId", "conversationId", "condition", "question"].some(key => (existing[key] || "") !== (input[key] || "")) ||
+          if (["source", "projectSlug", "sessionId", "conversationId"].some(key => (existing[key] || "") !== (target[key] || "")) ||
+              !isDeepStrictEqual(existing.input || null, target.input || null) ||
+              ["condition", "question"].some(key => (existing[key] || "") !== (input[key] || "")) ||
               (existing.once !== false) !== (input.once !== false)) throw failure("This watch ID belongs to a different request. Use a new watch ID.");
           return { ok: true, watch: publicWatch(existing) };
         }
+        if (input.source && !source) throw failure("Colleague cannot watch that here.", "vibe64_colleague_failed", 422);
+        if (state.thread.kind === "learn") await assertLearnWatchTarget(state, context, target.projectSlug);
         if (state.record.watches.filter((watch) => ["active", "pending", "paused"].includes(watch.status)).length >= 16) throw failure("Cancel an existing watch before adding another; up to 16 can be retained.");
         state.requestContext = context;
-        const watch = { watchId: input.watchId, projectSlug: input.projectSlug, sessionId: input.sessionId,
-          conversationId: input.conversationId || "", condition: input.condition, question: input.question,
-          ...(input.source ? { source: input.source } : {}),
+        const watch = { watchId: input.watchId, ...target, condition: input.condition, question: input.question,
           once: input.once !== false, status: "active", error: "" };
         // Verify access before retaining the target or admitting a notification.
         await observeWatch(state, watch);

@@ -187,8 +187,19 @@ Its completed notification can still be spoken when sound is on. A saved notice,
 “An update from your watched conversations.”, appears before the completed answer,
 including after reopening. Internal watch instructions and tool arguments stay hidden.
 
-For response watches, Learning observation and recorded action outcomes, read
+For response watches, watching more than conversations (such as a
+deployment), Learning observation and recorded action outcomes, read
 [Colleague watches and operations](colleague-watches.md).
+
+## Colleague outside projects
+
+Colleague works on every screen, not only inside a project: the account menu,
+AI setup, Courses and any other screen outside your projects. Ask how to do
+something there and it reads this release's guide first. Ask “Show me where…”
+and it points at the place, or opens it when you ask it to; it only offers
+places this Vibe64 has and that you may use. It can list your projects, and
+watch what this Vibe64 lets it watch for you. A studio lesson's step bar points
+at the same places.
 
 Recognized words can appear as a Pending user message in chat; acceptance replaces
 it with the saved message once. Unsent or discarded words are not saved history.

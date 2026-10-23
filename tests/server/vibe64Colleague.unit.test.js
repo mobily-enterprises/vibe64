@@ -16,6 +16,7 @@ import { releaseLearnThread } from "@local/vibe64-core/server/learnThreads";
 import { createColleagueService } from "../../packages/vibe64-colleague/src/server/service.js";
 import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/actions.js";
 import { conversationObservation, readWatchedConversation, watchUpdate } from "../../packages/vibe64-colleague/src/server/attention.js";
+import { createWatchSources, stateWatchUpdate } from "../../packages/vibe64-colleague/src/server/watchSources.js";
 import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions as colleagueInstructions, learnInstructions } from "../../packages/vibe64-colleague/src/server/protocol.js";
 import { createColleagueNavigationCoordination } from "../../packages/vibe64-colleague/src/server/navigationCoordination.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
@@ -5420,7 +5421,7 @@ test("each lesson attempt keeps its own teacher thread across mode switches, Lea
     ["Teach me", "Teacher answer", "And now?", "Teacher again"]);
 });
 
-test("Develop hides teaching tools and Learn hides delegation and watches", async t => {
+test("Develop hides teaching tools and Learn hides delegation but keeps watches", async t => {
   const training = name => withVibe64ActionContext({ id: `vibe64.training.${name}`, kind: "query", idempotency: "none",
     input: { schema: createSchema({}), mode: "create" }, execute: () => ({ ok: true }),
     output: { schema: createSchema({ ok: { type: "boolean", required: true } }), mode: "replace" },
@@ -5441,7 +5442,8 @@ test("Develop hides teaching tools and Learn hides delegation and watches", asyn
   for (const shown of ["vibe64_training_lesson_read", "vibe64_training_learning_mode_set", "vibe64_colleague_navigation_open_learning"]) {
     assert.ok(learn.includes(shown), shown);
   }
-  for (const hidden of ["vibe64_colleague_assignment_create", "vibe64_colleague_watch_create"]) assert.equal(learn.includes(hidden), false, hidden);
+  assert.equal(learn.includes("vibe64_colleague_assignment_create"), false, "a teacher never delegates the work");
+  for (const shown of ["vibe64_colleague_watch_create", "vibe64_colleague_watch_source_create"]) assert.ok(learn.includes(shown), shown);
 });
 
 test("switching threads never interrupts a running turn, and only the visible thread keeps a live handle", async t => {
@@ -5508,4 +5510,125 @@ test("Training's release ends an attempt's thread, even mid-turn, and leaves its
   await fs.mkdir(path.join(f.root, "colleague", "NDI", "learn", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"), { recursive: true });
   await releaseLearnThread({ learnerKey: "NDI", attemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" });
   assert.equal(await exists(path.join(f.root, "colleague", "NDI", "learn", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")), false);
+});
+
+// Watch sources: owners register what Colleague can watch besides coding
+// conversations (Online's deployments, local publishing later).
+function registerDeploymentSource(f) {
+  f.observations.deployment = { live: false, release: "" };
+  f.observations.deploymentReads = [];
+  f.actions.register({ contributorId: "deployment-observer", domain: "test", actions: [{
+    channels: ["api", "automation", "internal"], surfaces: ["app"],
+    ...withVibe64ActionContext({ id: "vibe64.test.deployment.read", kind: "query", idempotency: "none",
+      input: { schema: createSchema({}), mode: "create" }, output: null,
+      async execute(_input, context) {
+        f.observations.deploymentReads.push(context.projectSlug);
+        return { ok: true, ...structuredClone(f.observations.deployment) };
+      }
+    }, { projectScoped: true })
+  }] });
+  f.service.registerWatchSource({ id: "deployment", label: "Deployment", description: "A project's deployed app.",
+    input: { projectSlug: "The exact project slug." }, entity: "deployment",
+    conditions: { live: "The app is live at its address.", changed: "Anything about the deployment changed." },
+    async read(input, context) {
+      const result = await f.actions.execute({ actionId: "vibe64.test.deployment.read", input: {}, context: { ...context, projectSlug: input.projectSlug } });
+      return { fingerprint: JSON.stringify([result.live, result.release]), summary: result.live ? `Live (${result.release}).` : "Not live.",
+        conditionsMet: result.live ? ["live"] : [] };
+    } });
+}
+const deploymentWatch = { watchId: "deploy-1", source: "deployment", input: { projectSlug: "alpha" }, condition: "live", question: "Tell me when my app is live." };
+
+test("a state watch reports when its condition becomes true and changed reports the next change", () => {
+  const live = { fingerprint: "live-r1", conditionsMet: ["live"] };
+  const offline = { fingerprint: "offline", conditionsMet: [] };
+  assert.equal(stateWatchUpdate({ condition: "live" }, offline).reason, "");
+  assert.equal(stateWatchUpdate({ condition: "live" }, live).reason, "live", "an app already live answers at once");
+  assert.equal(stateWatchUpdate({ condition: "live", cursor: offline }, live).reason, "live");
+  assert.equal(stateWatchUpdate({ condition: "live", cursor: live }, { fingerprint: "live-r2", conditionsMet: ["live"] }).reason, "",
+    "a new release of a live app is not newly live");
+  assert.equal(stateWatchUpdate({ condition: "changed" }, live).reason, "", "changed starts from the first reading");
+  assert.equal(stateWatchUpdate({ condition: "changed", cursor: offline }, live).reason, "changed");
+  assert.deepEqual(stateWatchUpdate({ condition: "changed", cursor: live }, live), { cursor: live, reason: "" });
+});
+
+test("watch sources are one registry with named inputs and conditions", () => {
+  const sources = createWatchSources();
+  const read = async () => ({ fingerprint: "x" });
+  sources.registerConversation("system-repair", read);
+  assert.throws(() => sources.register({ id: "system-repair", label: "Repair", description: "d", conditions: { done: "d" }, input: { projectSlug: "p" }, read }), /unique name/);
+  assert.throws(() => sources.register({ id: "deployment", label: "Deployment", description: "d", conditions: { live: "d" }, read }), /takes projectSlug/);
+  assert.throws(() => sources.register({ id: "deployment", label: "Deployment", description: "d", conditions: {}, input: { projectSlug: "p" }, read }), /at least one condition/);
+  assert.throws(() => sources.register({ id: "deployment", label: "Deployment", description: "d", conditions: { live: "d" }, input: { projectSlug: "p" } }), /authorized reader/);
+  sources.register({ id: "usage", label: "Usage", description: "Studio-wide.", scope: "studio", conditions: { changed: "d" }, read });
+  assert.deepEqual(sources.list(), [{ source: "usage", label: "Usage", description: "Studio-wide.", scope: "studio", input: {}, conditions: { changed: "d" } }],
+    "conversation sources are host-owned; only state sources are offered to the assistant");
+});
+
+test("a registered state source is watched by code, reads under project access, wakes on its entity's events and answers when it holds", async (t) => {
+  const f = await fixture(t, [reply("Your app is live.")], { watching: true, watchPollMs: 60000 });
+  registerDeploymentSource(f);
+  registerWorkspaceConversation(f);
+  assert.deepEqual((await watchAction(f, "watch.sources.read", {})).sources.map(source => [source.source, Object.keys(source.conditions)]),
+    [["deployment", ["live", "changed"]]]);
+  await assert.rejects(watchAction(f, "watch.source.create", { ...deploymentWatch, input: { projectSlug: "alpha", release: "r1" } }), /takes projectSlug/);
+  await assert.rejects(watchAction(f, "watch.source.create", { ...deploymentWatch, condition: "unhealthy" }), /reports live, changed/);
+  await assert.rejects(watchAction(f, "watch.source.create", { ...deploymentWatch, source: "release-notes" }), /watch\.sources\.read lists/);
+  await assert.rejects(watchAction(f, "watch.source.create", { ...deploymentWatch, source: "workspace-repair" }), /watch\.sources\.read lists/,
+    "a conversation source is chosen only by its owner's action");
+  f.observations.deniedProjects.add("beta");
+  await assert.rejects(watchAction(f, "watch.source.create", { ...deploymentWatch, watchId: "deploy-beta", input: { projectSlug: "beta" } }), /access denied/);
+
+  const created = await watchAction(f, "watch.source.create", deploymentWatch);
+  assert.deepEqual({ ...created.watch }, { watchId: "deploy-1", source: "deployment", input: { projectSlug: "alpha" }, projectSlug: "alpha",
+    condition: "live", question: "Tell me when my app is live.", once: true, status: "active", error: "" });
+  assert.deepEqual(f.observations.deploymentReads, ["alpha"]);
+  assert.equal((await watchAction(f, "watch.source.create", deploymentWatch)).watch.watchId, "deploy-1", "a retry returns the same watch");
+  await assert.rejects(watchAction(f, "watch.source.create", { ...deploymentWatch, input: { projectSlug: "gamma" } }), /different request/);
+
+  f.observations.deployment = { live: true, release: "r1" };
+  f.events.publish({ type: "entity.changed", source: "vibe64-online", entity: "deployment", entityId: "alpha" });
+  await until(() => f.observations.starts.length === 1);
+  const result = await f.service.wait(f.context);
+  assert.equal(result.messages.at(-1).text, "Your app is live.");
+  assert.equal(result.watches[0].status, "delivered");
+  const prompt = f.observations.starts[0].data;
+  assert.equal(prompt.readOnly, true);
+  assert.deepEqual(Object.fromEntries(["source", "reason", "summary", "conditionsMet", "question"].map(key => [key, prompt.observations[0][key]])),
+    { source: "deployment", reason: "live", summary: "Live (r1).", conditionsMet: ["live"], question: "Tell me when my app is live." });
+  assert.equal(prompt.observations[0].focus.projectSlug, "alpha");
+  f.events.publish({ type: "entity.changed", source: "vibe64-online", entity: "deployment", entityId: "alpha" });
+  await new Promise(resolve => setTimeout(resolve, 20));
+  assert.equal(f.observations.starts.length, 1, "a delivered one-shot watch reads no more");
+});
+
+test("a lesson's teacher watches only its attempt's practice project, and the watch ends with the attempt", async (t) => {
+  const f = await fixture(t, [], { watching: true, watchPollMs: 15 });
+  registerDeploymentSource(f);
+  const learning = learnModeFixture(t);
+  learning.mode = { ...learning.mode, practiceSlug: "training-practice" };
+  learning.learn();
+  const practiceWatch = { ...deploymentWatch, input: { projectSlug: "training-practice" } };
+  await assert.rejects(watchAction(f, "watch.source.create", deploymentWatch), /only this lesson's practice project/);
+  await assert.rejects(watchAction(f, "watch.create", watchInput), /only this lesson's practice project/,
+    "a coding conversation outside the practice project is refused too");
+  assert.deepEqual(f.observations.deploymentReads, [], "a refused target is never read");
+  await watchAction(f, "watch.source.create", practiceWatch);
+  await until(() => f.observations.deploymentReads.length >= 3);
+  assert.ok(f.observations.deploymentReads.every(slug => slug === "training-practice"));
+  assert.equal((await savedThread(f.root, path.join("learn", `${LESSON_ATTEMPT}.json`))).watches[0].source, "deployment",
+    "the watch belongs to the attempt's teacher thread");
+
+  learning.learn("");
+  await assert.rejects(watchAction(f, "watch.source.create", { ...practiceWatch, watchId: "lobby-1" }), /only this lesson's practice project/,
+    "Learn without a lesson has no practice project");
+  learning.develop();
+  assert.deepEqual((await f.service.read({}, f.context)).watches, [], "Develop keeps its own watches");
+
+  learning.learn();
+  await releaseLearnThread({ learnerKey: "NDI", attemptId: LESSON_ATTEMPT });
+  await new Promise(resolve => setTimeout(resolve, 30));
+  const reads = f.observations.deploymentReads.length;
+  await new Promise(resolve => setTimeout(resolve, 60));
+  assert.equal(f.observations.deploymentReads.length, reads, "a closed attempt's watch reads nothing more");
+  assert.equal(await exists(path.join(f.root, "colleague", "NDI", "learn", LESSON_ATTEMPT)), false);
 });

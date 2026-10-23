@@ -24,8 +24,12 @@ each, and the one you see always follows the mode:
   keep being followed while you are in Learn; their updates wait in Develop's
   conversation until you return. **Start fresh** and **Previous conversations**
   work within the conversation you are in.
-- In Learn, Colleague does not create assignments or watches; in Develop it does
-  not teach, read lessons or your teacher notes.
+- In Learn, Colleague does not create assignments, and it watches only your
+  lesson's practice project: ask "tell me when the agent answers" or, where
+  your Vibe64 can watch it, "tell me when my app is live". The watch only
+  reports; the step's own check still decides the step, and the watch ends with
+  the lesson attempt (finish, restart or delete). In Develop it does not teach,
+  read lessons or your teacher notes.
 
 ## Colleague as your teacher
 

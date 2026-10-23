@@ -1016,8 +1016,8 @@ onBeforeUnmount(() => {
         <v-btn :icon="mdiClose" variant="text" aria-label="Close watches and assignments" title="Close watches and assignments" @click="watchDetails = false" />
       </v-card-title>
       <v-card-text class="vibe64-colleague__watch-details">
-        <section v-if="watches.length" class="vibe64-colleague__watch-card" aria-label="Conversation watches">
-          <p class="text-title-medium">Conversation watches ({{ watches.length }})</p>
+        <section v-if="watches.length" class="vibe64-colleague__watch-card" aria-label="Watches">
+          <p class="text-title-medium">Watches ({{ watches.length }})</p>
           <ul>
             <li v-for="item in watches" :key="item.watchId">
               <div>
