@@ -1906,6 +1906,19 @@ describe("Lesson step bar", () => {
       expect(labels).toEqual({ read: "Mark as done", quiz: "Answer in Lesson", preview: "Check my work", tick: "Done" });
     } finally { app.unmount(); }
   });
+
+  it("offers Check now on a fact step's bar", async () => {
+    const lesson = { schemaVersion: 3, stage: "studio", code: "V64-WELCOME", title: "Welcome", steps: [
+      { id: "ai", title: "Your AI", bodyText: "Press Check now.", required: true, check: { kind: "fact", fact: "ai-ready" } }] };
+    const { learning } = controller({ reads: () => lessonResult({ lesson }) });
+    learning.setViewer("member");
+    await flush();
+    const { root, app } = mountStepBar(learning);
+    try {
+      await flush();
+      expect(textOf(byTest(root, "learning-step-bar-verdict")).trim()).toBe("Check now");
+    } finally { app.unmount(); }
+  });
 });
 
 describe("Learning route hold", () => {

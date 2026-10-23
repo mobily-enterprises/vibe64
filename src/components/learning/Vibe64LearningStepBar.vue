@@ -42,6 +42,8 @@ const verdict = computed(() => {
   if (kind.value === "self") return { label: "Done", run: () => learning.done(stepId), busy: `done:${stepId}` };
   if (kind.value === "none") return { label: "Mark as done", run: () => learning.done(stepId), busy: `done:${stepId}` };
   if (kind.value === "auto") return { label: "Check my work", run: check, busy: `check:${stepId}` };
+  // A fact check reads the real outcome (AI ready, app live); the step text says "Check now".
+  if (kind.value === "fact") return { label: "Check now", run: check, busy: `check:${stepId}` };
   if (kind.value === "review") return { label: note.value ? "Check again" : "Check my work", run: checkReview, busy: `review:${stepId}` };
   if (kind.value === "choice") return { label: "Answer in Lesson", run: () => learning.openLesson(), busy: "" };
   return null;

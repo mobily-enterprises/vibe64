@@ -167,7 +167,7 @@ async function showMe() {
 }
 // I'm stuck: on a step with something to do or check that has not passed.
 const stuckOffered = computed(() => Boolean(!ended.value && statusOf(step.value?.id) !== "passed" &&
-  (["auto", "review"].includes(kind.value) || step.value?.beats?.some(beat => beat.kind === "do"))));
+  (["auto", "fact", "review"].includes(kind.value) || step.value?.beats?.some(beat => beat.kind === "do"))));
 function askStuck() {
   actionError.value = "";
   try {
@@ -237,9 +237,9 @@ async function markRead() {
         @click="answer">Check answer</v-btn>
       <p v-if="checkReason" class="vibe64-learning-step__hint" role="status" data-test="learning-check-reason">{{ checkReason }}</p>
     </section>
-    <section v-else-if="!ended && kind === 'auto'" class="vibe64-learning-step__check" aria-label="Automatic check">
+    <section v-else-if="!ended && (kind === 'auto' || kind === 'fact')" class="vibe64-learning-step__check" aria-label="Automatic check">
       <p v-if="step.check.files?.length">Make this change yourself in Dashboard → Files. Saving does not check it: press Check now when you are ready.</p>
-      <p v-else>This step is checked automatically when you do it in your practice project.</p>
+      <p v-else-if="kind === 'auto'">This step is checked automatically when you do it in your practice project.</p>
       <v-btn variant="tonal" rounded="pill" min-height="48" data-test="learning-check"
         :disabled="Boolean(busy)" :loading="busy === `check:${step.id}`" @click="runCheck">Check now</v-btn>
       <p v-if="checkReason" class="vibe64-learning-step__hint" role="status" data-test="learning-check-reason">{{ checkReason }}</p>
