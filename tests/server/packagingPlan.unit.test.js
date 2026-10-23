@@ -46,6 +46,7 @@ function input(overrides = {}) {
     savedCommit: COMMIT,
     packaging: APP,
     versions: { app: "1.5.0", sdk: "0.9.1" },
+    buildNumbers: { app: 7 },
     targets: [
       { id: "sdk-npm", destination: "npm", package: "sdk", channel: "latest" },
       { id: "phone", destination: "android-sideload", package: "app" },
@@ -76,6 +77,8 @@ test("the plan builds each package once, fans out, and its hash is deterministic
     ["app", "1.5.0", "app@1.5.0"],
     ["sdk", "0.9.1", "sdk@0.9.1"]
   ]);
+  assert.equal(plan.packages.find(({ id }) => id === "app").buildNumber, 7);
+  assert.equal(plan.packages.find(({ id }) => id === "sdk").buildNumber, undefined);
   assert.deepEqual(plan.targets.map(({ id }) => id), ["app-release", "phone", "sdk-npm"]);
   assert.deepEqual(plan.tags, ["app@1.5.0", "sdk@0.9.1"]);
   assert.deepEqual(plan.steps.filter(({ kind }) => kind === "build").map((step) => step.package), ["web", "app", "sdk"]);
@@ -96,6 +99,7 @@ test("the hash changes with the commit, targets, versions, toolchain, templates 
     input({ targets: input().targets.slice(0, 2) }),
     input({ targets: input().targets.map((target) => target.id === "app-release" ? { ...target, channel: "prerelease" } : target) }),
     input({ versions: { app: "1.5.1", sdk: "0.9.1" } }),
+    input({ buildNumbers: { app: 8 } }),
     input({ toolchain: { node: "26.2.0", "@capacitor/cli": "8.0.2" } }),
     input({ templates: { "capacitor-android": "2" } }),
     input({ packaging: packaging([
@@ -136,6 +140,9 @@ test("invalid plans are refused", () => {
   refuses({ versions: { app: "1.5", sdk: "0.9.1" } }, /needs its release version/u);
   refuses({ versions: { app: "1.5.0", sdk: "0.9.1", web: "1.0.0" } }, /does not publish/u);
   refuses({ toolchain: { node: "latest version" } }, /exact version/u);
+  refuses({ buildNumbers: {} }, /needs its build number/u);
+  refuses({ buildNumbers: { app: 0 } }, /needs its build number/u);
+  refuses({ buildNumbers: { app: 7, sdk: 1 } }, /does not build as an app/u);
   assert.throws(
     () => createPublishPlan(input({ targets: [{ id: "x", destination: "app-store", package: "app" }] })),
     (error) => error.code === "VIBE64_PUBLISH_DESTINATION_UNKNOWN"

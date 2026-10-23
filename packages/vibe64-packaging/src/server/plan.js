@@ -96,10 +96,20 @@ function buildOrder(targets, packages) {
   return order;
 }
 
+// App builds carry a build number (Android versionCode) that only ever grows; it
+// is never in source, so the caller supplies it (its last one + 1).
+function appBuildNumber(value, id) {
+  if (!Number.isInteger(value) || value < 1 || value > 2_100_000_000) {
+    invalid(`App package ${id} needs its build number, a whole number from 1 to 2,100,000,000.`);
+  }
+  return value;
+}
+
 function createPublishPlan({
   savedCommit,
   packaging,
   versions = {},
+  buildNumbers = {},
   targets,
   toolchain = {},
   templates = {}
@@ -117,9 +127,13 @@ function createPublishPlan({
       id,
       packer: entry.packer,
       version,
-      tag: releaseTagName({ packageId: id, version, independent: versionedCount > 1 })
+      tag: releaseTagName({ packageId: id, version, independent: versionedCount > 1 }),
+      ...(entry.packer === "capacitor" ? { buildNumber: appBuildNumber(buildNumbers[id], id) } : {})
     };
   });
+  for (const id of Object.keys(buildNumbers)) {
+    if (!built.some((entry) => entry.id === id && entry.buildNumber)) invalid(`Build number given for ${id}, which this release does not build as an app.`);
+  }
   for (const id of Object.keys(versions)) {
     if (!built.some((entry) => entry.id === id && entry.version)) invalid(`Version given for ${id}, which this release does not publish.`);
   }

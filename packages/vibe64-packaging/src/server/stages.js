@@ -140,6 +140,13 @@ async function verifyArtifacts(artifacts) {
   return artifacts;
 }
 
+// A completed, still-intact build of this plan and package, or null.
+async function storedArtifacts({ resultStore, planHash, packageId }) {
+  const directory = resultDirectory(resultStore, planHash, packageId);
+  if (!await stat(path.join(directory, "manifest.json")).catch(() => null)) return null;
+  return { ...await verifyArtifacts(await readArtifacts(directory)), reused: true };
+}
+
 async function runBuildStage({
   planHash,
   packageId,
@@ -260,11 +267,13 @@ function credentialSpecs(destination, field, target) {
 
 // Stage 3 alone: what the destination reports for this target and version. A
 // destination that cannot read without signing in declares readBackCredentials.
-async function readBackTarget({ destination, target, version, artifacts, obtainCredential, tempRoot }) {
+// `toolchains` (such as { javaHome, androidHome }) passes through to destinations
+// that run local signing tools; registry destinations ignore it.
+async function readBackTarget({ destination, target, version, artifacts, obtainCredential, tempRoot, toolchains = {} }) {
   const credentials = credentialSpecs(destination, "readBackCredentials", target);
   const result = credentials.length
-    ? await withStageCredentials({ credentials, obtainCredential, tempRoot }, (supplied) => destination.readBack({ target, version, artifacts, credentials: supplied }))
-    : await destination.readBack({ target, version, artifacts });
+    ? await withStageCredentials({ credentials, obtainCredential, tempRoot }, (supplied) => destination.readBack({ target, version, artifacts, credentials: supplied, toolchains }))
+    : await destination.readBack({ target, version, artifacts, toolchains });
   if (!result || typeof result.published !== "boolean") {
     throw stageError("VIBE64_PUBLISH_READ_BACK_INVALID", `${destination.label} returned no read-back result.`);
   }
@@ -289,13 +298,14 @@ async function publishTarget({
   previous = null,
   obtainCredential,
   tempRoot,
+  toolchains = {},
   now = () => new Date().toISOString()
 } = {}) {
   const startedAt = now();
   await verifyArtifacts(artifacts);
   const checksum = expectedChecksum(destination, artifacts);
   if (previous?.status === "proven" && previous.version === version && previous.checksum === checksum) return previous;
-  const before = await readBackTarget({ destination, target, version, artifacts, obtainCredential, tempRoot });
+  const before = await readBackTarget({ destination, target, version, artifacts, obtainCredential, tempRoot, toolchains });
   if (before.published) {
     return { target: target.id, version, checksum, status: "proven", alreadyPublished: true, proof: before.proof || null, startedAt, finishedAt: now() };
   }
@@ -303,8 +313,8 @@ async function publishTarget({
     credentials: credentialSpecs(destination, "credentials", target),
     obtainCredential,
     tempRoot
-  }, (credentials) => destination.upload({ target, version, artifacts, credentials }));
-  const after = await readBackTarget({ destination, target, version, artifacts, obtainCredential, tempRoot });
+  }, (credentials) => destination.upload({ target, version, artifacts, credentials, toolchains }));
+  const after = await readBackTarget({ destination, target, version, artifacts, obtainCredential, tempRoot, toolchains });
   if (!after.published) {
     throw stageError("VIBE64_PUBLISH_NOT_PROVEN", `${destination.label} accepted the upload but does not show ${version} yet.`, {
       target: target.id,
@@ -325,6 +335,7 @@ export {
   readBackTarget,
   runBuildStage,
   spawnCommand,
+  storedArtifacts,
   verifyArtifacts,
   withStageCredentials
 };

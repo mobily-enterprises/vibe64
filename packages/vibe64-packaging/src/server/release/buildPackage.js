@@ -9,13 +9,22 @@ import path from "node:path";
 import { canonicalJson, sha256 } from "../canonical.js";
 import { publishError } from "../errors.js";
 import { vibe64Packer } from "../packers/index.js";
-import { runBuildStage } from "../stages.js";
+import { runBuildStage, storedArtifacts } from "../stages.js";
 import { exportSavedCommit } from "./exportCommit.js";
 
 // Without a release plan (a build on its own), the result store is keyed by
-// everything that decides the bytes: commit, Packaging, package and version.
-function buildOnlyKey({ commit, packagingHash, packageId, version }) {
-  return sha256(canonicalJson({ contract: "vibe64.publish-build.v1", commit, packagingHash, package: packageId, version }));
+// everything that decides the bytes: commit, Packaging, package, version and,
+// for app packages, the build number and the pinned native template.
+function buildOnlyKey({ commit, packagingHash, packageId, version, versionCode = null, template = null }) {
+  return sha256(canonicalJson({
+    contract: "vibe64.publish-build.v1",
+    commit,
+    packagingHash,
+    package: packageId,
+    version,
+    ...(versionCode === null ? {} : { versionCode }),
+    ...(template === null ? {} : { template })
+  }));
 }
 
 async function buildPackage({
@@ -29,18 +38,44 @@ async function buildPackage({
   workRoot = os.tmpdir(),
   baseEnvironment = process.env,
   cacheDirectory = "",
+  versionCode = null,
+  toolchains = {},
+  contentArtifacts = null,
   signal
 } = {}, dependencies = {}) {
   const entry = packaging?.packages?.find((candidate) => candidate.id === packageId);
   if (!entry) throw publishError("VIBE64_PUBLISH_BUILD_INVALID", `Packaging declares no package ${packageId}.`);
   const packer = vibe64Packer(entry.packer);
   if (!packer.implemented) throw publishError("VIBE64_PUBLISH_NOT_IMPLEMENTED", `The ${entry.packer} packer cannot build yet.`);
-  const key = planHash || buildOnlyKey({ commit, packagingHash: packaging.packagingHash, packageId, version });
+  const template = typeof packer.templates === "function" ? packer.templates() : null;
+  const key = planHash || buildOnlyKey({ commit, packagingHash: packaging.packagingHash, packageId, version, versionCode, template });
+  const stored = await storedArtifacts({ resultStore, planHash: key, packageId });
+  if (stored) {
+    return { planHash: key, package: packageId, packer: entry.packer, artifacts: stored, check: await packer.checkArtifacts({ artifacts: stored, version }) };
+  }
+  // An app package's Content (a web-bundle) builds first, once, into the same store.
+  const content = entry.content ? packaging.packages.find((candidate) => candidate.id === entry.content) : null;
+  if (entry.content && !content) throw publishError("VIBE64_PUBLISH_BUILD_INVALID", `Package ${entry.id} names Content ${entry.content}, which Packaging does not declare.`);
+  const builtContent = content && !contentArtifacts
+    ? (await buildPackage({
+      projectRoot, commit, packaging, packageId: content.id, planHash, resultStore, workRoot, baseEnvironment, cacheDirectory, signal
+    }, dependencies)).artifacts
+    : contentArtifacts;
   const source = await mkdtemp(path.join(workRoot, "vibe64-release-source-"));
   try {
     const { commitTime } = await exportSavedCommit({ projectRoot, commit, directory: path.join(source, "project") });
     const sourceRoot = path.join(source, "project");
-    const recipe = await packer.buildRecipe({ sourceRoot, entry, version, commitTime });
+    const recipe = await packer.buildRecipe({
+      sourceRoot,
+      entry,
+      version,
+      commitTime,
+      content,
+      contentArtifacts: builtContent,
+      versionCode,
+      toolchains,
+      cacheDirectory
+    });
     const artifacts = await runBuildStage({
       planHash: key,
       packageId,
