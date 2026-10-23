@@ -11,6 +11,7 @@ import { assistantModePrompt, assistantGoalManagementMessage, assistantRoutingPr
   routingAssignmentSelection, routingModelChoices, routingModelScore, resolveAssistantPurpose,
   ASSISTANT_ROUTING_ROLES } from "@local/vibe64-runtime/shared/assistantRouting";
 import { VIBE64_AGENT_EXECUTION_WORKLOAD_IDS } from "@local/vibe64-runtime/shared";
+import { curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import routingScores from "../../packages/vibe64-runtime/src/shared/assistantRoutingScores.json" with { type: "json" };
 
 const revision = `sha256:${"a".repeat(64)}`;
@@ -138,7 +139,8 @@ test("a saved assignment is revalidated without replacing it with a recommendati
   const saved = { ...recommendedRoutingAssignments(engine).junior, modelProviderId: "zai-coding-plan", modelId: "glm-5.3", selectionSource: "explicit" };
   assert.equal(recommendedRoutingAssignments(engine).junior.modelId, "gpt-6-sol");
   assert.equal(routingAssignmentSelection(engine, saved).modelId, "glm-5.3");
-  assert.throws(() => routingAssignmentSelection(engine, { ...saved, modelProviderId: "deepseek", modelId: "deepseek-v4-pro" }), /has not been verified/);
+  engine.modelProviders.find(({ id }) => id === "deepseek").models.push({ id: "deepseek-unqualified", label: "deepseek-unqualified", status: "available", variants: [{ id: "high" }] });
+  assert.throws(() => routingAssignmentSelection(engine, { ...saved, modelProviderId: "deepseek", modelId: "deepseek-unqualified" }), /has not been verified/);
   assert.throws(() => routingAssignmentSelection(engine, { ...saved, modelId: "glm-unverified" }), /available/);
   engine.modelProviders.find(({ id }) => id === "zai-coding-plan").connected = false;
   assert.throws(() => routingAssignmentSelection(engine, saved), /Connect/);
@@ -360,10 +362,15 @@ test("shipped score JSON has complete bounded scores and unique exact route iden
 
 test("scores do not admit unsupported Codex history routes; isolated Router has its own compatibility", () => {
   const engine = catalog();
-  const ordinary = routingModelChoices(engine).find(({ modelId }) => modelId === "deepseek-v4-pro");
-  const isolated = routingModelChoices(engine, { purpose: "request_routing" }).find(({ modelId }) => modelId === "deepseek-v4-pro");
-  assert.ok(ordinary.compatibilityError);
-  assert.equal(isolated.compatibilityError, "");
+  engine.modelProviders.find(({ id }) => id === "deepseek").models.push({ id: "deepseek-unqualified", label: "deepseek-unqualified", status: "available", variants: [{ id: "high" }] });
+  const choice = (modelId, options) => routingModelChoices(engine, options).find((candidate) => candidate.modelId === modelId);
+  // Curated models follow JSKIT's live Codex history qualification.
+  for (const modelId of ["deepseek-flash", "deepseek-v4-pro"]) {
+    assert.equal(Boolean(choice(modelId).compatibilityError), curatedCodexModel(modelId, "deepseek").codexHistoryRouting !== true, modelId);
+    assert.equal(choice(modelId, { purpose: "request_routing" }).compatibilityError, "", modelId);
+  }
+  assert.ok(choice("deepseek-unqualified").compatibilityError);
+  const ordinary = choice("deepseek-flash");
   engine.modelProviders.push({ id: "unqualified", connected: true, models: [{ id: "gpt-6-astra", status: "available", variants: [] }] });
   assert.ok(routingModelChoices(engine, { purpose: "request_routing" }).find(({ modelProviderId }) => modelProviderId === "unqualified").compatibilityError);
   assert.equal(routingModelScore({ ...ordinary, modelId: "fake-deepseek-flash" }, "junior"), 4);

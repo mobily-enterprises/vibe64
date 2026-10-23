@@ -51,7 +51,8 @@ message is needed to enable its tools or context window. Each provider still
 requires its own connection in **AI Accounts**.
 
 When supported, switching from a compacted GPT conversation to DeepSeek or GLM
-recovers readable earlier messages automatically. You do not need to paste a
+recovers readable earlier messages automatically. DeepSeek V4.1 Flash, DeepSeek
+V4 Pro and GLM 5.3 support this, so each can be a Codex Senior or Junior. You do not need to paste a
 second copy. Saved native history stays intact; unsupported recovery produces
 the error described below instead of silently omitting earlier work.
 
