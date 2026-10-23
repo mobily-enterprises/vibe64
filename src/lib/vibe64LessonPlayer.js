@@ -35,6 +35,11 @@ function documentHidden() {
   return globalThis.document?.visibilityState === "hidden";
 }
 
+// The same beat of the lesson: a step result re-reads the lesson, which
+// replaces its step objects while the learner stays on that beat.
+const beatIdentity = value => value ? JSON.stringify([value.kind, value.target, value.text, value.path || ""]) : "";
+const sameBeat = (a, b) => Boolean(a && b) && beatIdentity(a) === beatIdentity(b);
+
 // The page activity that completes a do beat, or "".
 function beatEvent(beat) {
   return learningVocabulary.activity(beat.target)?.event || learningVocabulary.place(beat.target)?.event || "";
@@ -126,7 +131,9 @@ function createLessonPlayer({ state, steps, currentStep, active, selectStep, rem
     stopTimer();
     next();
   }
-  watch(() => [active(), currentStep.value?.id, index.value, beat.value], ([shown, , , value]) => {
+  // Keyed by the beat's content: a re-read lesson (new step objects) leaves it playing as it was.
+  watch([active, () => currentStep.value?.id, index, () => beatIdentity(beat.value)], ([shown]) => {
+    const value = beat.value;
     stopTimer();
     clearTimeout(confirmTimer);
     local.confirmed = "";
@@ -166,7 +173,7 @@ function createLessonPlayer({ state, steps, currentStep, active, selectStep, rem
     if (doBeats.every(([, position]) => detected.has(`${stepId}:${position}`))) allDone(stepId);
     confirmTimer = setTimeout(() => {
       local.confirmed = "";
-      if (currentStep.value?.id === stepId && index.value === at && beat.value === value) next();
+      if (currentStep.value?.id === stepId && index.value === at && sameBeat(beat.value, value)) next();
     }, CONFIRM_MS);
   }
   watch(() => beat.value?.kind === "do" && active() && !local.confirmed && placeShown(beat.value), shown => {
@@ -197,7 +204,7 @@ function createLessonPlayer({ state, steps, currentStep, active, selectStep, rem
     if (receipt?.shown) {
       // Only this player's own ring is taken away again.
       // A ring drawn after its beat moved on, or after Courses covered it, goes at once.
-      if (beat.value === value && !state.open) local.ring = shownGuide();
+      if (sameBeat(beat.value, value) && !state.open) local.ring = shownGuide();
       else clearGuide(shownGuide());
     }
     return receipt;

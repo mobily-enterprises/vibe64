@@ -30,7 +30,7 @@ function harness({ reduced = false, hidden = false, steps: lessonSteps = STEPS, 
     showGuide: async (guide, options) => { guides.push({ target: guide.target, filePath: guide.filePath, navigate: guide.navigate, ...options }); return { shown: true }; },
     clearGuide: id => cleared.push(id), shownGuide: () => `ring-${guides.length}`,
     motionReduced: () => flags.reduced, hidden: () => flags.hidden });
-  return { state, player, shown, guides, cleared, remember, flags, focus, activity, allDone };
+  return { state, steps, player, shown, guides, cleared, remember, flags, focus, activity, allDone };
 }
 const settle = async () => { for (let i = 0; i < 3; i += 1) { await Promise.resolve(); await nextTick(); } };
 
@@ -124,6 +124,19 @@ describe("lesson beat player", () => {
     vi.advanceTimersByTime(1600);
     await settle();
     expect([h.state.beat, h.player.confirmed, h.player.final]).toEqual([1, "", true]);
+  });
+
+  it("moves on from a confirmed do beat after the step's result re-read the lesson", async () => {
+    const h = harness({ stepId: "ask" });
+    await settle();
+    h.activity.report("message-sent", { projectSlug: "practice-1" });
+    expect(h.player.confirmed).toBe("✓ Done.");
+    // The step passed: the lesson is read again, with new step objects.
+    h.steps.value = structuredClone(STEPS);
+    await settle();
+    vi.advanceTimersByTime(1600);
+    await settle();
+    expect([h.state.beat, h.player.final]).toEqual([1, true]);
   });
 
   it("completes do beats whose activity happened earlier in the step, in order, but not again after Back", async () => {

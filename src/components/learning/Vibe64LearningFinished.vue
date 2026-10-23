@@ -15,8 +15,14 @@ const props = defineProps({
 });
 const lesson = computed(() => props.learning.lesson.value);
 const steps = computed(() => lesson.value?.steps || []);
-const passedCount = computed(() => steps.value.filter(step => props.learning.stepStatus(step.id) === "passed").length);
+const passedNow = computed(() => steps.value.filter(step => props.learning.stepStatus(step.id) === "passed").length);
 const busy = computed(() => props.learning.state.busy);
+// What the attempt held when it finished: archiving it clears its live results
+// and practice project, so the summary keeps the count and what was archived.
+const summary = ref(null);
+const passedCount = computed(() => summary.value?.passed ?? passedNow.value);
+const archivedWith = computed(() => (summary.value?.practice ?? Boolean(lesson.value?.practiceProjectSlug))
+  ? "its practice project and conversation" : "its conversation");
 
 // Finish: once per attempt shown here.
 const finished = ref(false);
@@ -25,6 +31,7 @@ let finishingFor = "";
 async function finish() {
   if (finished.value || busy.value) return;
   finishError.value = "";
+  summary.value ||= { passed: passedNow.value, practice: Boolean(lesson.value?.practiceProjectSlug) };
   if (await props.learning.finish()) {
     finished.value = true;
     void props.courses.learningResource.reload();
@@ -34,6 +41,7 @@ watch(() => props.learning.finished && props.learning.state.attemptId, attemptId
   if (!attemptId || finishingFor === attemptId) return;
   finishingFor = attemptId;
   finished.value = false;
+  summary.value = null;
   void finish();
 }, { immediate: true });
 
@@ -73,7 +81,7 @@ async function startNext() {
     <p class="vibe64-learning-finished__eyebrow">Lesson finished</p>
     <h2 id="vibe64-learning-finished-title">{{ lesson?.title || lesson?.code }}</h2>
     <p>You completed every required step: {{ passedCount }} of {{ steps.length }} steps passed.</p>
-    <p v-if="finished">It is archived with its practice project and conversation, under Courses → Archived.</p>
+    <p v-if="finished">It is archived with {{ archivedWith }}, under Courses → Archived.</p>
     <p v-else-if="!finishError" class="vibe64-learning-finished__hint" role="status">
       <v-progress-circular indeterminate size="16" width="2" class="me-2" />Finishing the lesson…
     </p>
