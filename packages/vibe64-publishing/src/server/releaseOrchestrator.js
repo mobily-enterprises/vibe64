@@ -9,6 +9,7 @@
 //      target, read each one back, and record it all in the release history.
 // Every target is resumable: confirming the same plan again finishes what is
 // left, and what is already published with the same bytes counts as done.
+import os from "node:os";
 import path from "node:path";
 
 import {
@@ -82,6 +83,16 @@ const githubRepositoryMatches = definePreflightCheck({
 
 const LOCAL_CHECKS = Object.freeze([keysUnlocked, sideloadKeyReady, githubRepositoryMatches]);
 const RELEASE_CHECKS = uniqueChecks(VIBE64_PREFLIGHT_CHECKS, VIBE64_REGISTRY_PREFLIGHT_CHECKS, VIBE64_ANDROID_PREFLIGHT_CHECKS, LOCAL_CHECKS);
+
+// A failure's log lines: the message, then the tool's own output (builds run
+// without credentials; upload output is already redacted) so the person can
+// see why, with the home folder shortened.
+function failureLog(targetId, error, at) {
+  const lines = [{ at, level: "error", message: `${targetId ? `${targetId}: ` : ""}${String(error?.message || error).slice(0, 1000)}` }];
+  const output = String(error?.details?.output || "").trim();
+  if (output) lines.push({ at, level: "error", message: output.slice(-1800).replaceAll(os.homedir(), "~") });
+  return lines;
+}
 
 // The CHANGELOG section of one version, used as release notes.
 function changelogSection(text, version) {
@@ -160,9 +171,9 @@ function createReleaseOrchestrator({
   }
 
   async function lastOutcomes() {
-    const records = (await history.list({ limit: 100 })).filter((record) => record.kind === "release").map(interruptedOr);
+    const records = (await history.list({ limit: 100 })).map(interruptedOr);
     const latest = {};
-    for (const record of records) {
+    for (const record of records.filter((entry) => entry.kind === "release")) {
       for (const [targetId, outcome] of Object.entries(record.targets || {})) {
         if (latest[targetId] || outcome.status !== "proven") continue;
         const { localFile, ...shown } = outcome;
@@ -281,13 +292,15 @@ function createReleaseOrchestrator({
     return numbers;
   }
 
-  // The runtime form of a plan target: plan settings plus local tool choices
-  // (which twine, which gh) that do not change where it publishes.
+  // The runtime form of a plan target: plan settings plus the account that
+  // signs in and local tool choices (which twine), none of which change where
+  // it publishes.
   async function runtimeTarget(planTarget, { tag = null, notes = null } = {}) {
     const tools = await toolchains.registryTools?.() || {};
+    const stored = await targets.get(planTarget.id);
     const settings = { ...(planTarget.settings || {}) };
     if (planTarget.destination === "pypi" && tools.twine) settings.twine = tools.twine;
-    return { ...planTarget, settings, ...(tag ? { tag } : {}), ...(notes ? { notes } : {}) };
+    return { ...planTarget, account: stored?.account || null, settings, ...(tag ? { tag } : {}), ...(notes ? { notes } : {}) };
   }
 
   // Builds the current plan for the saved commit and runs preflight on it.
@@ -450,7 +463,7 @@ function createReleaseOrchestrator({
           record.finishedAt = now();
           record.error = { code: error?.code || "vibe64_publishing_failed", message: String(error?.message || error).slice(0, 2000) };
           for (const entry of record.steps || []) if (entry.status === "running") entry.status = "failed";
-          record.log.push({ at: now(), level: "error", message: String(error?.message || error).slice(0, 2000) });
+          record.log.push(...failureLog("", error, now()));
           return record;
         }).catch(() => {});
       } finally {
@@ -513,6 +526,7 @@ function createReleaseOrchestrator({
           failures += 1;
           await history.update(record.id, (entry) => {
             entry.targets[planTarget.id] = { status: "failed", error: { code: error?.code || "", message: String(error?.message || error).slice(0, 1000) } };
+            entry.log.push(...failureLog(planTarget.id, error, now()));
             return entry;
           });
           await step(record.id, `dry-run:${planTarget.id}`, "failed", String(error?.message || error).slice(0, 300));
@@ -626,7 +640,7 @@ function createReleaseOrchestrator({
             version: versionOf(current, planTarget.package),
             error: { code: error?.code || "", message: String(error?.message || error).slice(0, 1000) }
           };
-          entry.log.push({ at: now(), level: "error", message: `${planTarget.id}: ${String(error?.message || error).slice(0, 1000)}` });
+          entry.log.push(...failureLog(planTarget.id, error, now()));
           return entry;
         });
         await step(recordId, stepId, "failed", String(error?.message || error).slice(0, 300));

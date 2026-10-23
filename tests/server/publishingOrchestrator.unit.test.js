@@ -53,11 +53,11 @@ async function fixture(t, { failing = new Set(), verification = "passed" } = {})
     pushTags: async (_facts, tags) => { calls.pushes.push(...tags); return { pushed: tags }; }
   };
   const credentials = {
-    facts: async ({ targets }) => Object.fromEntries(targets.map((target) => [target.id, { ok: true, verified: true }])),
+    facts: async ({ targets }) => Object.fromEntries(targets.map((target) => [target.id, target.account ? { ok: true, verified: true } : { ok: false, message: `${target.id} has no account` }])),
     dryRun: async ({ target }) => { calls.dryRuns.push(target.id); return { alreadyPublished: false, files: [{ path: "index.js", size: 10 }], destination: target.destination }; },
     publish: async ({ target, version, artifacts, previous }) => {
-      calls.publishes.push({ id: target.id, version, digest: artifacts.digest, previous: previous?.status || null, tag: target.tag, notes: target.notes });
-      if (failing.has(target.id)) throw Object.assign(new Error(`${target.id} registry said no`), { code: "VIBE64_PUBLISH_UPLOAD_FAILED" });
+      calls.publishes.push({ id: target.id, account: target.account, version, digest: artifacts.digest, previous: previous?.status || null, tag: target.tag, notes: target.notes });
+      if (failing.has(target.id)) throw Object.assign(new Error(`${target.id} registry said no`), { code: "VIBE64_PUBLISH_UPLOAD_FAILED", details: { output: `HTTPError: 403 Forbidden from ${os.homedir()}/upload` } });
       return { target: target.id, version, checksum: `sha256:${target.id}`, status: "proven", alreadyPublished: false, proof: { integrity: `sha512-${target.id}`, token: "never-shown" } };
     },
     safeReport: (report) => ({ alreadyPublished: report.alreadyPublished, files: report.files }),
@@ -119,6 +119,7 @@ test("one confirmed plan builds each package once, fans out to every target and 
   assert.deepEqual(calls.tags.sort(), ["py@1.2.0", "sdk@1.2.0"]);
   assert.deepEqual(calls.pushes.sort(), ["py@1.2.0", "sdk@1.2.0"]);
   assert.deepEqual(calls.publishes.map(({ id }) => id).sort(), ["py-pypi", "sdk-github-releases", "sdk-npm"]);
+  assert.deepEqual(calls.publishes.map(({ account }) => account).sort(), ["github-main", "npm-main", "pypi-main"], "each target signs in with its own account");
   const github = calls.publishes.find(({ id }) => id === "sdk-github-releases");
   assert.equal(github.tag, "sdk@1.2.0");
   assert.equal(github.notes, "- Offline drafts.", "release notes come from the saved CHANGELOG entry");
@@ -151,7 +152,9 @@ test("a failing target leaves the release partial and the same confirmed plan re
   assert.equal(partial.targets["py-pypi"].status, "failed");
   assert.match(partial.targets["py-pypi"].error.message, /registry said no/u);
   assert.equal(partial.targets["sdk-npm"].status, "proven");
-  assert.equal((await orchestrator.readLogs(first.releaseId)).log.some(({ level, message }) => level === "error" && /py-pypi/u.test(message)), true);
+  const failedLog = (await orchestrator.readLogs(first.releaseId)).log.filter(({ level }) => level === "error").map(({ message }) => message);
+  assert.ok(failedLog.some((message) => /py-pypi: py-pypi registry said no/u.test(message)));
+  assert.ok(failedLog.includes("HTTPError: 403 Forbidden from ~/upload"), "the tool's own output says why, with home shortened");
 
   failing.clear();
   calls.publishes.length = 0;
@@ -203,6 +206,9 @@ test("preflight blocks a release whose checks did not pass, and a dry run publis
   assert.deepEqual(calls.dryRuns, ["sdk-npm"]);
   assert.deepEqual(calls.tags, [], "a dry run never tags");
   assert.deepEqual(calls.publishes, [], "a dry run never publishes");
+  const state = await orchestrator.readState();
+  assert.deepEqual(state.releases.map(({ id, kind }) => [id, kind]), [[dry.releaseId, "dry-run"]], "the page history shows dry runs");
+  assert.equal(state.targets.find(({ id }) => id === "sdk-npm").latest, null, "a dry run is never a published version");
 });
 
 test("prepare writes the version change into the session; release notes come from the changelog", async (t) => {
