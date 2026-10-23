@@ -162,6 +162,11 @@ function commandDiagnostic(result = {}, label = "", secrets = []) {
     result.stderr || result.error || result.output,
     secrets
   ));
+  // A program that isn't installed fails before it runs: say that, not "spawn x ENOENT".
+  const absent = /\bspawn (\S+) ENOENT\b/u.exec(output)?.[1];
+  if (absent) {
+    return `Vibe64 couldn't find ${absent.split("/").pop()} on this computer, so this step couldn't run.`;
+  }
   if (output) {
     return output.slice(-1600);
   }

@@ -422,9 +422,10 @@
           v-if="workspaceSetupStatus === 'failed' && !workspaceSetupDismissed"
           :active="workspaceSetupStatus === 'failed'"
           :runtimes="props.session?.workspaceSetup?.runtimes || []"
+          @missing="workspaceSetupToolsMissing = $event > 0"
         />
         <LocalDatabaseServer
-          v-if="workspaceSetupStatus === 'failed' && !workspaceSetupDismissed && sessionId"
+          v-if="workspaceSetupStatus === 'failed' && !workspaceSetupDismissed && !workspaceSetupToolsMissing && sessionId"
           :active="workspaceSetupStatus === 'failed'"
           :session-id="sessionId"
         />
@@ -1099,6 +1100,8 @@ const architectureFileRequest = ref(null);
 const architectureProgramRequest = ref(null);
 watch(() => props.session?.sessionId, () => { architectureFileRequest.value = null; architectureProgramRequest.value = null; });
 const resourceRetryBusy = ref(false);
+// A missing Stack tool is fixed first; the database panel waits for it.
+const workspaceSetupToolsMissing = ref(false);
 function openSubsystemTextLink({ event, href }, sourcePath, openSource) {
   // Markdown links are relative to their declaration, not the dashboard URL.
   const relative = href && !/^(?:[a-z][a-z\d+.-]*:|\/|#)/iu.test(href);

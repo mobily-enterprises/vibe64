@@ -198,8 +198,13 @@ watch(() => props.active, (active, previousActive) => {
   grid-area: status;
 }
 
+/* A long failure (a stack trace) reads as three lines; Expand shows all of it. */
 .vibe64-temporary-action-terminal--error .vibe64-temporary-action-terminal__line {
+  -webkit-box-orient: vertical;
+  display: -webkit-box;
   flex-basis: 100%;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
   overflow-wrap: anywhere;
   white-space: normal;
 }

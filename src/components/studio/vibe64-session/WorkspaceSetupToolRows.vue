@@ -28,7 +28,7 @@
 <script setup>
 // After a workspace preparation step fails: the Stack runtimes it used, with
 // the install command for any that are missing or didn't run.
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import { mdiCheckCircle } from "@mdi/js";
 import ToolInstallRow from "@/components/studio/ToolInstallRow.vue";
 import { useLocalToolRows } from "@/composables/useLocalToolRows.js";
@@ -38,7 +38,11 @@ const props = defineProps({
   active: Boolean
 });
 
+const emit = defineEmits(["missing"]);
+
 const { tools, missing, checking, check } = useLocalToolRows(() => props.runtimes, { enabled: () => props.active });
+// The page shows one fix at a time: other setup panels wait while a tool is missing.
+watch(() => missing.value.length, (count) => emit("missing", count), { immediate: true });
 const ready = computed(() => tools.value.filter((tool) => tool.status === "ready"));
 </script>
 

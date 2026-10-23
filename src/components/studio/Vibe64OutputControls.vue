@@ -653,7 +653,7 @@
           Check again
         </v-btn>
         <code
-          v-if="launchStatusDetailText"
+          v-if="launchStatusDetailText && launchStatusDetailText !== String(previewEmptyText || '').trim()"
           class="vibe64-launch-controls__preview-status-detail"
         >
           {{ launchStatusDetailText }}

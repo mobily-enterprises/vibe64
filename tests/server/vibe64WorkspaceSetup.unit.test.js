@@ -948,6 +948,28 @@ test("ambiguous setup remains an actionable session state without executing eith
   });
 });
 
+test("a program that isn't installed reads as one plain sentence", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const { runtime, session } = await workspaceSession(targetRoot);
+    const runner = createWorkspaceSetupRunner({
+      async startWorkflow() { return { ok: true, workflow: { id: "setup-workflow" } }; },
+      async finishWorkflow() {},
+      inspect: () => readySetup(),
+      projectService: {
+        async projectExecutionEnvironment() {
+          return { environment: {}, resourceConfigurationFingerprint: "d".repeat(64) };
+        }
+      },
+      async runCommand() {
+        return { exitCode: 1, ok: false, error: "Command failed with ENOENT: npm ci\nspawn npm ENOENT" };
+      }
+    });
+    const finished = await (await runner.start({ runtime, session })).completion;
+    assert.equal(finished.status, "failed");
+    assert.equal(finished.diagnostic, "Vibe64 couldn't find npm on this computer, so this step couldn't run.");
+  });
+});
+
 test("command failure records a short diagnostic and leaves the session active", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const { runtime, session } = await workspaceSession(targetRoot);
