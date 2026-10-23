@@ -159,11 +159,25 @@ function createProjectRepository({ readProject } = {}) {
     return { pushed: tags };
   }
 
+  // Sends the saved branch to its upstream branch, as the person's own
+  // `git push` would: their Git sign-in, fast-forward only, never forced.
+  async function pushSaved(facts) {
+    if (!facts.remote || facts.pushed) return { pushed: false };
+    const upstreamBranch = facts.upstreamRef.split("/").slice(3).join("/");
+    await git(facts.repositoryRoot, ["push", "--quiet", facts.remote.name, `${facts.commit}:refs/heads/${upstreamBranch}`], {
+      interactiveCredentials: true,
+      timeout: 120_000
+    });
+    // Keep the remote-tracking branch current, so "pushed" reads true at once.
+    await git(facts.repositoryRoot, ["update-ref", facts.upstreamRef, facts.commit]);
+    return { pushed: true, remote: facts.remote.name, branch: upstreamBranch };
+  }
+
   async function fileAtCommit(repositoryRoot, commit, file) {
     return git(repositoryRoot, ["show", `${commit}:${file}`], { optional: true });
   }
 
-  return Object.freeze({ baseline, createTags, existingTags, fileAtCommit, pushTags, readRelease, subjectsSince, withCheckout });
+  return Object.freeze({ baseline, createTags, existingTags, fileAtCommit, pushSaved, pushTags, readRelease, subjectsSince, withCheckout });
 }
 
 export { createProjectRepository, githubRepositoryOf };

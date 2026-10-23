@@ -217,6 +217,15 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
       verification.run({ repositoryRoot: baseline.repositoryRoot, commit: baseline.commit });
       return { checks: await verification.status(baseline.commit) };
     }),
+    // The release needs the saved work on the remote; the person pushes it from
+    // the Release dialog instead of hunting for the branch menu.
+    pushSavedWork: () => result(async () => {
+      const baseline = await repository.baseline();
+      if (!baseline.supported) throw serviceError(baseline.message, "vibe64_publishing_repository_unavailable");
+      if (!baseline.saved) throw serviceError("Save your changes before pushing them.", "vibe64_publishing_baseline_unsaved");
+      const pushed = await repository.pushSaved(baseline);
+      return { ...pushed, baseline: await repository.baseline() };
+    }),
     dryRun: (input = {}) => result(() => projectRuntime().orchestrator.dryRun({
       planHash: input.planHash, targetIds: input.targetIds || [], acknowledged: input.acknowledged || []
     })),

@@ -71,7 +71,9 @@ Vibe64 for this project on this computer, not in the project's files.
    N checks passed**. A red line stops the release and the footer says so; an
    amber one (a changed toolchain) needs **I understand**. Failed checks name
    the check, **Show output** shows the end of its output and **Run again**
-   reruns it; a refused sign-in offers **Fix sign-in**. **What happens** lists
+   reruns it; a refused sign-in offers **Fix sign-in**; saved work that is
+   not on the remote yet offers **Push to origin** (fast-forward only, never
+   forced; it is the person's button, not a Colleague tool). **What happens** lists
    the steps in order: build each package once, tag the saved commit, publish
    to each target (with its account and address), under a short plan id such
    as `Plan 3f9c`.

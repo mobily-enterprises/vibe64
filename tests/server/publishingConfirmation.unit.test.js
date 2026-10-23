@@ -31,7 +31,7 @@ test("chat, automation and internal callers are never the person", () => {
 test("confirmation actions accept only the person's own page requests", () => {
   const actions = createPublishingActions({ publishing: new Proxy({}, { get: () => () => ({ ok: true }) }) });
   const byId = new Map(actions.map((action) => [action.id, action]));
-  for (const id of [PUBLISHING_ACTIONS.CONFIRMATION_OPEN, PUBLISHING_ACTIONS.RELEASE_CONFIRM, PUBLISHING_ACTIONS.KEYS_UNLOCK, PUBLISHING_ACTIONS.ACCOUNT_ADD, PUBLISHING_ACTIONS.RECOVERY_KIT_CREATE]) {
+  for (const id of [PUBLISHING_ACTIONS.BASELINE_PUSH, PUBLISHING_ACTIONS.CONFIRMATION_OPEN, PUBLISHING_ACTIONS.RELEASE_CONFIRM, PUBLISHING_ACTIONS.KEYS_UNLOCK, PUBLISHING_ACTIONS.ACCOUNT_ADD, PUBLISHING_ACTIONS.RECOVERY_KIT_CREATE]) {
     assert.deepEqual(byId.get(id).channels, PERSON_ONLY, `${id} is person-only`);
     assert.equal(byId.get(id).extensions.assistant, undefined, `${id} is no assistant tool`);
   }

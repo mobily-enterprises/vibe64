@@ -170,6 +170,13 @@ const unlock = () => run("unlock", async () => {
 
 const runChecks = () => run("checks", () => props.call("/checks"));
 
+// The saved work goes to the remote first; then the plan is read again.
+const pushSaved = () => run("push", async () => {
+  await props.call("/baseline/push");
+  busy.value = "";
+  await review();
+});
+
 const dryRun = () => run("dry-run", async () => {
   const answer = await props.call("/dry-run", { body: { planHash: plan.value.planHash, targetIds: selected.value, acknowledged: acknowledged.value } });
   emit("dry-run-started", answer.releaseId);
@@ -306,6 +313,16 @@ function checkIcon(check) {
                 @click="runChecks"
               >
                 {{ state?.checks?.status === "failed" ? "Run again" : "Run checks" }}
+              </v-btn>
+              <v-btn
+                v-else-if="check.id === 'baseline-saved-pushed' && !check.ok && baseline.saved && !baseline.pushed && baseline.remote"
+                :loading="busy === 'push'"
+                rounded="pill"
+                size="small"
+                variant="tonal"
+                @click="pushSaved"
+              >
+                Push to {{ baseline.remote.name }}
               </v-btn>
               <v-btn
                 v-else-if="check.id === 'credentials-valid' && !check.ok"

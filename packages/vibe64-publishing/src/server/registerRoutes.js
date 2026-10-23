@@ -45,6 +45,7 @@ function registerRoutes(http, { publishing, projectContext = null, routeRelative
   route("DELETE", "/targets/:targetId", A.TARGET_REMOVE, "Remove a publishing target.", (request) => ({ targetId: request.params.targetId }));
   route("POST", "/targets/:targetId/install-key", A.INSTALL_KEY_CREATE, "Create the phone install key for a target.", (request) => ({ targetId: request.params.targetId }));
   route("POST", "/plan", A.PLAN_READ, "Build the exact release plan for the saved commit and run preflight.", body);
+  route("POST", "/baseline/push", A.BASELINE_PUSH, "Push the saved work to the project's remote, fast-forward only.");
   route("POST", "/checks", A.CHECKS_RUN, "Run the project's checks on the saved commit.");
   route("POST", "/dry-run", A.DRYRUN_RUN, "Start a dry run of the current plan.", body);
   route("POST", "/confirmation", A.CONFIRMATION_OPEN, "Open the person's confirmation for the current plan.", body);
