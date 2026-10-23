@@ -143,7 +143,7 @@ test("approval sends the message as the owner with its sender, keeping an edited
   assert.equal(result.status, "sent");
   assert.equal(sent.length, 1);
   assert.equal(sent[0].input.message, "Add a toggle");
-  assert.equal(sent[0].input.messageId, "approval:message-0004");
+  assert.equal(sent[0].input.messageId, "approval:message-0004:2", "an edited text is its own delivery");
   assert.equal(sent[0].input.vibe64User, owner);
   assert.equal(sent[0].options.vibe64User, owner);
   assert.equal(sent[0].options.browserAuthority, browserAuthority);
@@ -167,12 +167,16 @@ test("a failed approval returns to waiting with its error and retries with the s
   assert.equal(entries()[0].status, "waiting");
   assert.equal(entries()[0].error, "The assistant started another turn. Review it before sending.");
 
-  // A send interrupted after approval leaves the entry sending; the owner can approve it again.
+  // A send interrupted after approval leaves the entry sending; the owner can
+  // approve it again unchanged, but not edit it.
   const stuck = JSON.parse(metadata.get(MAIN_CHAT_APPROVALS_METADATA));
   stuck.entries[0].status = "sending";
   metadata.set(MAIN_CHAT_APPROVALS_METADATA, JSON.stringify(stuck));
+  await assert.rejects(service.approveMainChatApproval("s1", "message-0005", { expectedRevision: 1, text: "Fix the footer", vibe64User: owner }),
+    { statusCode: 409, code: "vibe64_main_chat_approval_sending" });
+  assert.equal(entries()[0].text, "Fix the header");
   assert.equal((await service.approveMainChatApproval("s1", "message-0005", { expectedRevision: 1, vibe64User: owner })).ok, true);
-  assert.deepEqual(sent.map(({ input }) => input.messageId), ["approval:message-0005", "approval:message-0005"]);
+  assert.deepEqual(sent.map(({ input }) => input.messageId), ["approval:message-0005:1", "approval:message-0005:1"]);
   assert.equal(entries()[0].status, "sent");
   assert.equal(entries()[0].error, "");
 });

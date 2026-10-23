@@ -197,14 +197,19 @@ function createMainChatApprovals({
       });
     },
 
-    // Approval hands the message to the owner's ordinary send. Its stable
-    // messageId lets a retry after an interrupted send reuse the same delivery.
+    // Approval hands the message to the owner's ordinary send. Its delivery
+    // id is stable per revision: approving a message already sending retries
+    // the stored text, and an edited text is a new delivery.
     async approve(sessionId, approvalId, { expectedRevision, text: editedText } = {}, { vibe64User, browserAuthority = null }) {
       requireOwner(vibe64User);
       const entry = await change(sessionId, "main-chat-approval-approved", (approvals) => {
         const current = entryFor(approvals, approvalId);
         requireState(current, ["waiting", "sending"], expectedRevision);
-        if (text(editedText) && text(editedText) !== current.text) {
+        const edited = text(editedText) && text(editedText) !== current.text;
+        if (edited && current.status === "sending") {
+          throw failure("This message is being sent. Approve it again to retry it unchanged.", "vibe64_main_chat_approval_sending", 409);
+        }
+        if (edited) {
           current.originalText ||= current.text;
           current.text = text(editedText);
           current.revision += 1;
@@ -216,7 +221,7 @@ function createMainChatApprovals({
       let result;
       try {
         result = await deliver(sessionId, {
-          message: entry.text, messageId: entry.messageId, vibe64User,
+          message: entry.text, messageId: `${entry.messageId}:${entry.revision}`, vibe64User,
           turnMetadata: { sender: { id: entry.sender.id, displayName: entry.sender.displayName,
             approvalId: entry.id, approvedBy: entry.decidedBy.displayName } }
         }, browserAuthority ? { browserAuthority } : {});

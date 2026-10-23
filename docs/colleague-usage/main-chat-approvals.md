@@ -99,7 +99,8 @@ Approving sends the message exactly as if you had sent it yourself, on your AI:
 
 If a page reload interrupts a send, the card may stay on **Sending…** with
 **Send again**. Sending again reuses the same delivery, so the message is never
-delivered twice.
+delivered twice. Its text can't be edited while it is sending; an edited text
+is always a new delivery.
 
 If the sender edited the message after you opened it, your action fails with
 "{sender} changed this message. Review it again." Read the new text and decide
