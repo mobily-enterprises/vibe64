@@ -311,6 +311,7 @@
             @recheck="props.refreshSessionData?.()"
           />
         </v-sheet>
+        <GitStandInIdentityNotice v-if="saveWorkStandInIdentity" @close="saveWorkStandInIdentity = false" />
         <v-alert v-if="saveWorkConnectedResults.length" type="info" variant="tonal" closable @click:close="saveWorkConnectedResults = []">
           <p class="mb-2">Connected contributions pushed. The main project was not pushed.</p>
           <ul>
@@ -1027,6 +1028,7 @@ import {
 } from "@mdi/js";
 import { vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
 import Vibe64CreatePullRequestDialog from "@/components/studio/vibe64-session/Vibe64CreatePullRequestDialog.vue";
+import GitStandInIdentityNotice from "@/components/studio/repository/GitStandInIdentityNotice.vue";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
 import Vibe64ProjectOnboarding from "@/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue";
 import Vibe64AgentPlanUsage from "@/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue";
@@ -1330,6 +1332,7 @@ const {
   saveConnectedFirst,
   saveWorkConnectedReview,
   saveWorkConnectedResults,
+  saveWorkStandInIdentity,
   saveWorkActivityDismissed,
   saveWorkActivityKey,
   saveWorkActivityIsUpdate,

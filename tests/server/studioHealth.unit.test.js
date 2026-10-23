@@ -254,3 +254,34 @@ test("assistants read a bounded Health summary through the same action", async (
   assert.equal(summary.checks[0].observed.length, 300);
   assert.deepEqual(assistant.transformResult({ ok: false, error: "Down" }), { ok: false, error: "Down" });
 });
+
+test("without runtime packs Health shows the name commits get and how to set your own", async () => {
+  const studioRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-health-identity-"));
+  await writeFile(path.join(studioRoot, "package.json"), JSON.stringify({ engines: { node: "26.x" } }), "utf8");
+  const inspect = async (ident) => {
+    const service = createService({
+      connectionsService: { getStatus: async () => ({ ok: true, connections: [] }) },
+      env: { HOME: path.join(studioRoot, "home"), PATH: path.join(studioRoot, "empty") },
+      projectService: { listProjects: async () => ({ ok: true, projects: [] }) },
+      async runCommand({ args, command }) {
+        if (command === "git" && args.join(" ") === "var GIT_AUTHOR_IDENT") {
+          return ident ? { ok: true, stdout: `${ident} 1761200000 +0800\n` } : { ok: false, error: "spawn git ENOENT" };
+        }
+        return successfulCommandResult(command, args);
+      },
+      studioRoot
+    });
+    return (await service.inspect()).checks.find((check) => check.id === "git-identity");
+  };
+
+  const own = await inspect("Ana Diaz <ana@example.test>");
+  assert.equal(own.status, "pass");
+  assert.equal(own.observed, "Ana Diaz <ana@example.test>");
+
+  const standIn = await inspect("ana via Vibe64 <ana@local.users.vibe64.invalid>");
+  assert.equal(standIn.status, "warn");
+  assert.match(standIn.observed, /^Git doesn't know your name and email yet, so commits are saved as “ana via Vibe64”\.$/u);
+  assert.match(standIn.command, /^git config --global user\.name "Your Name"\ngit config --global user\.email "you@example\.com"$/u);
+
+  assert.equal(await inspect(""), undefined);
+});

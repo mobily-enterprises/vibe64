@@ -126,6 +126,7 @@ export {
   GIT_COMMITTER_EMAIL_ENV,
   GIT_COMMITTER_NAME_ENV,
   fallbackGitIdentity,
+  GIT_IDENTITY_COMMANDS,
   gitIdentityEnv,
   gitIdentityReadiness,
   isFallbackGitIdentityEmail,

@@ -4002,3 +4002,36 @@ test("Incoming derived regeneration failure preserves remote heads and receiving
   assert.equal(await git(f.session.sourcePath, ["write-tree"]), index);
   assert.equal(await git(f.session.sourcePath, ["worktree", "list", "--porcelain"]), worktrees);
 });
+
+test("Save reports when its commit carries the stand-in Git identity", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-save-identity-"));
+  try {
+    const fixture = await createRemoteFixture(root);
+    const session = await sessionForRemote(root, fixture);
+    const project = githubProject(root, fixture.remote);
+    const save = async (operationId, filename, env = {}) => {
+      await writeFile(path.join(session.sourcePath, filename), `${operationId}\n`, "utf8");
+      const result = await saveSessionWork({
+        commandOptions: { gitAuthToken: "identity-token", gitTransport: "github-token" },
+        operationId,
+        project,
+        runCommand: (request) => commandRunner({ ...request, env: { ...(request.env || {}), ...env } }),
+        session
+      });
+      session.metadata.base_commit = result.saveCommit;
+      session.metadata.canonical_commit = result.saveCommit;
+      return result;
+    };
+    const own = await save("save-own-identity", "own.txt");
+    assert.equal(own.standInIdentity, false);
+    const standIn = await save("save-stand-in-identity", "stand-in.txt", {
+      GIT_AUTHOR_EMAIL: "ana@local.users.vibe64.invalid",
+      GIT_AUTHOR_NAME: "ana via Vibe64"
+    });
+    assert.equal(standIn.standInIdentity, true);
+    assert.equal(await git(root, ["--git-dir", fixture.remote, "show", "-s", "--format=%ae", standIn.saveCommit]),
+      "ana@local.users.vibe64.invalid");
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});

@@ -14,6 +14,11 @@ const GIT_COMMITTER_NAME_ENV = "GIT_COMMITTER_NAME";
 const GIT_COMMITTER_EMAIL_ENV = "GIT_COMMITTER_EMAIL";
 const FALLBACK_EMAIL_DOMAIN = ".users.vibe64.invalid";
 const GIT_CONFIG_READ_TIMEOUT_MS = 2_000;
+// The two lines that give Git the person's own name and email.
+const GIT_IDENTITY_COMMANDS = [
+  "git config --global user.name \"Your Name\"",
+  "git config --global user.email \"you@example.com\""
+].join("\n");
 
 function sanitizeEmailLabel(value = "", fallback = "vibe64") {
   return normalizeText(value)
@@ -210,6 +215,7 @@ function gitIdentityReadiness(options = {}) {
 }
 
 export {
+  GIT_IDENTITY_COMMANDS,
   GIT_AUTHOR_EMAIL_ENV,
   GIT_AUTHOR_NAME_ENV,
   GIT_COMMITTER_EMAIL_ENV,

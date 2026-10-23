@@ -2,6 +2,8 @@ import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
+  GIT_IDENTITY_COMMANDS,
+  isFallbackGitIdentityEmail,
   OPERATOR_CLIS,
   operatorCliInstall,
   isValidPlaywrightBrowserLaunchOutput,
@@ -150,6 +152,42 @@ async function operatorCliCheck(tool, { env, runCommand, studioRoot }) {
   });
 }
 
+// The name and email commits actually get here: git reports the identity the
+// command env resolved. Nothing is blocked on a stand-in; the person is told how
+// to set their own. A missing Git is already the Git row's failure.
+async function gitIdentityCheck({ runCommand, studioRoot }) {
+  const result = await runCommand({
+    actor: "app",
+    args: ["var", "GIT_AUTHOR_IDENT"],
+    command: "git",
+    cwd: studioRoot,
+    mode: "capture",
+    purpose: "health",
+    runtimes: ["git"],
+    timeout: COMMAND_TIMEOUT_MS
+  });
+  const match = /^(.*?) <([^>]*)>/u.exec(String(result?.stdout || result?.output || "").trim());
+  if (result?.ok !== true || !match) return null;
+  const [, name, email] = match;
+  const check = { id: "git-identity", label: "Your name in Git", group: "Runtime" };
+  if (!isFallbackGitIdentityEmail(email)) {
+    return passedCheck({
+      ...check,
+      expected: "Commits carry your name and email.",
+      observed: `${name} <${email}>`,
+      explanation: "Taken from your Git settings."
+    });
+  }
+  return {
+    ...check,
+    command: GIT_IDENTITY_COMMANDS,
+    expected: "Commits carry your name and email.",
+    observed: `Git doesn't know your name and email yet, so commits are saved as “${name}”.`,
+    explanation: "Run this once in a terminal to use your own:",
+    status: "warn"
+  };
+}
+
 async function inspectWorkspace({ projectService, studioRoot }) {
   try {
     await access(path.join(studioRoot, "package.json"));
@@ -245,6 +283,7 @@ function createService({
           isValid: (output) => /^git version\s+/u.test(compactOutput(output)),
           explanation: "Vibe64 owns Git credentials and repository operations."
         }),
+        ...(packs ? [] : [gitIdentityCheck({ runCommand, studioRoot })]),
         check({
           id: "github-cli",
           label: "GitHub CLI",
@@ -335,7 +374,7 @@ function createService({
         inspectAccounts({ connectionsService, input }),
         Promise.all(commandChecks)
       ]);
-      const checks = [workspace, ...(packs ? [] : [ownToolsCheck()]), ...accounts, ...commands];
+      const checks = [workspace, ...(packs ? [] : [ownToolsCheck()]), ...accounts, ...commands.filter(Boolean)];
       const failed = checks.filter((check) => check.status !== "pass").length;
       return {
         ok: true,

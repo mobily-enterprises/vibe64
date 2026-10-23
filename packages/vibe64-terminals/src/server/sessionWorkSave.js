@@ -21,6 +21,7 @@ import {
   checkpointRefs,
   createGitTurnCheckpoint,
   githubMirrorRefreshInvocation,
+  isFallbackGitIdentityEmail,
   runVibe64Command,
   vibe64Host,
   writeGitWorktreeTree
@@ -2939,13 +2940,20 @@ async function prepareSessionWorkSave(runCommand, context, {
     saveCommit,
     { commandOptions, project }
   );
+  // The commit carries the identity the command env resolved; say so when it
+  // was the stand-in, so the person can give Git their own name.
+  const authorEmail = await gitOutput(runCommand, context, ["show", "-s", "--format=%ae", saveCommit], {
+    commandOptions,
+    project
+  });
   return {
     canonicalCommit,
     changeBaseCommit: comparison.changeBaseCommit,
     changedPaths,
     mergedTree,
     preparedRef,
-    saveCommit
+    saveCommit,
+    standInIdentity: isFallbackGitIdentityEmail(authorEmail)
   };
 }
 
@@ -2981,6 +2989,7 @@ function completedSessionWorkSave(context, checkpoint, prepared, verifiedCommit,
     preparedRef: prepared.preparedRef,
     saveCommit: prepared.saveCommit,
     sessionHead: checkpoint.sessionHead,
+    standInIdentity: prepared.standInIdentity === true,
     status: finalized.status,
     verifiedCommit,
     ...finalized

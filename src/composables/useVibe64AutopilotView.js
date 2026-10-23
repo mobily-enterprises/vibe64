@@ -463,6 +463,8 @@ function useVibe64AutopilotView(props, emit, {
   const saveWorkReview = ref(null);
   const saveWorkConnectedReview = ref(null);
   const saveWorkConnectedResults = ref([]);
+  // The last Save was recorded with the stand-in Git name and email.
+  const saveWorkStandInIdentity = ref(false);
   const saveWorkError = ref("");
   const saveWorkFailure = ref(null);
   const saveWorkAttempt = ref(null);
@@ -1668,6 +1670,7 @@ function useVibe64AutopilotView(props, emit, {
     saveWorkError.value = "";
     saveWorkFailure.value = null;
     saveWorkConnectedResults.value = [];
+    saveWorkStandInIdentity.value = false;
     saveWorkConfirmOpen.value = false;
     try {
       const result = await props.saveSessionWork({ destinationReview: saveWorkReview.value,
@@ -1678,6 +1681,7 @@ function useVibe64AutopilotView(props, emit, {
       }
       saveWorkAttempt.value = null;
       saveWorkConnectedResults.value = result?.connected || [];
+      saveWorkStandInIdentity.value = result?.standInIdentity === true;
       if (result) reportActivity("saved", { projectSlug: savingProjectSlug, sessionId: savingSessionId });
       return result;
     } catch (error) {
@@ -2110,6 +2114,7 @@ function useVibe64AutopilotView(props, emit, {
     saveWorkConfirmOpen.value = false;
     saveWorkConnectedReview.value = null;
     saveWorkConnectedResults.value = [];
+    saveWorkStandInIdentity.value = false;
     resolvedUpdateReview.value = null;
     saveWorkSending.value = false;
     saveWorkAttempt.value = null;
@@ -2248,6 +2253,7 @@ function useVibe64AutopilotView(props, emit, {
     saveConnectedFirst,
     saveWorkConnectedReview,
     saveWorkConnectedResults,
+    saveWorkStandInIdentity,
     saveWorkDisabled,
     updateWorkDisabled,
     saveWorkActivityDismissed,

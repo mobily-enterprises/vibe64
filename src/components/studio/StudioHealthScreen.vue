@@ -61,6 +61,7 @@
             </div>
             <p>{{ check.observed }}</p>
             <small>{{ check.explanation }}</small>
+            <Vibe64CopyCommand v-if="check.command" class="mt-1" :command="check.command" />
           </div>
         </article>
       </div>
@@ -78,6 +79,7 @@ import {
   mdiHeartPulse,
   mdiRefresh
 } from "@mdi/js";
+import Vibe64CopyCommand from "@/components/common/Vibe64CopyCommand.vue";
 import Vibe64DashboardPageHeader from "@/components/studio/Vibe64DashboardPageHeader.vue";
 import {
   STUDIO_HEALTH_ENDPOINT,
