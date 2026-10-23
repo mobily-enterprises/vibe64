@@ -1,9 +1,10 @@
 <script setup>
 // The frame every target card shares: where it goes, what it publishes, the
-// last version people can get, and the destination's own facts and actions.
+// version people can get now (verified by reading it back), what is happening
+// to it, and the destination's own facts and actions.
 import { computed } from "vue";
-import { mdiDotsVertical, mdiTrashCanOutline, mdiAccountKeyOutline } from "@mdi/js";
-import { destinationAccent, destinationIcon, proofLine, relativeTime } from "../publishFormat.js";
+import { mdiAlertCircleOutline, mdiCheckDecagram, mdiDotsVertical, mdiOpenInNew, mdiTrashCanOutline, mdiAccountKeyOutline } from "@mdi/js";
+import { destinationAccent, destinationIcon, proofLine, publicPageUrl, relativeTime } from "../publishFormat.js";
 
 const props = defineProps({
   target: { type: Object, required: true },
@@ -11,19 +12,28 @@ const props = defineProps({
   packageInfo: { type: Object, default: null },
   accounts: { type: Array, default: () => [] },
   busy: { type: Boolean, default: false },
-  waiting: { type: String, default: "" }
+  waiting: { type: String, default: "" },
+  // { running, version, failure: { release, message } } from the page.
+  activity: { type: Object, default: () => ({}) }
 });
-const emit = defineEmits(["remove", "change-account"]);
+const emit = defineEmits(["remove", "change-account", "show-release"]);
 
 const accent = computed(() => destinationAccent(props.target.destination));
 const latest = computed(() => props.target.latest || null);
 const account = computed(() => props.accounts.find((entry) => entry.id === props.target.account) || null);
-const proof = computed(() => latest.value ? proofLine({ checksum: latest.value.checksum, ...latest.value.proof }) : "");
+const proof = computed(() => latest.value ? proofLine({ checksum: latest.value.checksum, ...latest.value.proof, url: "" }) : "");
 const accountChoices = computed(() => props.accounts.filter((entry) => entry.kind === props.destination?.accountKind));
+// Only a page the destination itself named, or npmjs.com for a package it named.
+const pageUrl = computed(() => {
+  const proofFacts = latest.value?.proof || {};
+  if (proofFacts.page) return proofFacts.page;
+  return proofFacts.package ? publicPageUrl(props.target.destination, { package: proofFacts.package, version: latest.value.version, settings: props.target.settings }) : "";
+});
+const failure = computed(() => props.activity?.failure || null);
 </script>
 
 <template>
-  <article class="publish-target" :class="`publish-target--${accent}`" :data-target="target.id">
+  <article class="publish-target" :class="[`publish-target--${accent}`, { 'is-running': activity.running, 'is-live': latest && !activity.running }]" :data-target="target.id">
     <header class="publish-target__head">
       <span class="publish-target__icon" aria-hidden="true">
         <v-icon :icon="destinationIcon(target.destination)" size="22" />
@@ -50,10 +60,14 @@ const accountChoices = computed(() => props.accounts.filter((entry) => entry.kin
       </v-menu>
     </header>
 
-    <div class="publish-target__version">
-      <template v-if="latest">
+    <div class="publish-target__version" aria-live="polite">
+      <template v-if="activity.running">
+        <strong class="publish-target__pending">{{ activity.version ? `Publishing ${activity.version}` : "Publishing" }}…</strong>
+        <v-progress-linear class="publish-target__progress" color="primary" indeterminate rounded />
+      </template>
+      <template v-else-if="latest">
         <strong>{{ latest.version }}</strong>
-        <span>published {{ relativeTime(latest.at) }}</span>
+        <span class="publish-target__live"><i aria-hidden="true" />Live · published {{ relativeTime(latest.at) }}</span>
       </template>
       <template v-else>
         <strong class="publish-target__none">Not published yet</strong>
@@ -61,18 +75,29 @@ const accountChoices = computed(() => props.accounts.filter((entry) => entry.kin
       </template>
     </div>
 
+    <button v-if="failure && !activity.running" class="publish-target__failure" type="button" @click="emit('show-release', failure.release.id)">
+      <v-icon :icon="mdiAlertCircleOutline" size="18" />
+      <span><strong>Last release failed.</strong> {{ failure.message }}</span>
+    </button>
+
     <dl class="publish-target__facts">
       <slot name="facts" />
-      <div v-if="proof">
-        <dt>Proof</dt>
-        <dd class="publish-target__mono" :title="proof">{{ proof }}</dd>
+      <div v-if="proof && !activity.running">
+        <dt>Verified</dt>
+        <dd class="publish-target__verified" :title="`Read back from ${destination?.label || 'the destination'} after publishing: ${proof}`">
+          <v-icon :icon="mdiCheckDecagram" color="success" size="16" />
+          <span class="publish-target__mono">{{ proof }}</span>
+        </dd>
       </div>
     </dl>
 
     <slot name="setup" />
 
-    <footer v-if="$slots.actions" class="publish-target__actions">
+    <footer v-if="$slots.actions || pageUrl" class="publish-target__actions">
       <slot name="actions" />
+      <v-btn v-if="pageUrl" :append-icon="mdiOpenInNew" :href="pageUrl" rel="noopener" rounded="pill" size="small" target="_blank" variant="tonal">
+        View {{ latest.version }}
+      </v-btn>
     </footer>
   </article>
 </template>
@@ -83,9 +108,9 @@ const accountChoices = computed(() => props.accounts.filter((entry) => entry.kin
   background: var(--v64-surface-container-low);
   border: 1px solid var(--v64-outline-variant);
   border-radius: var(--v64-shape-lg, 16px);
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--v64-space-3, 12px);
-  grid-template-rows: auto auto 1fr auto;
   min-width: 0;
   overflow: hidden;
   padding: var(--v64-space-4, 16px);
@@ -168,6 +193,93 @@ const accountChoices = computed(() => props.accounts.filter((entry) => entry.kin
   font: var(--v64-type-title-md);
 }
 
+.publish-target.is-running::before {
+  animation: publish-target-sweep 1.4s linear infinite;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  background-size: 50% 100%;
+  background-repeat: no-repeat;
+}
+
+@keyframes publish-target-sweep {
+  from { background-position: -50% 0; }
+  to { background-position: 150% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .publish-target.is-running::before { animation: none; }
+}
+
+.publish-target__pending {
+  color: rgb(var(--v-theme-primary));
+  font: var(--v64-type-title-md) !important;
+}
+
+.publish-target__progress {
+  margin-top: 6px;
+}
+
+.publish-target__version .publish-target__live {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.publish-target__live i {
+  background: rgb(var(--v-theme-success));
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px color-mix(in srgb, rgb(var(--v-theme-success)) 22%, transparent);
+  display: inline-block;
+  flex: 0 0 auto;
+  height: 7px;
+  width: 7px;
+}
+
+.publish-target__failure {
+  align-items: flex-start;
+  background: color-mix(in srgb, rgb(var(--v-theme-error)) 9%, var(--v64-surface));
+  border: 1px solid color-mix(in srgb, rgb(var(--v-theme-error)) 28%, transparent);
+  border-radius: var(--v64-shape-md, 12px);
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  font: var(--v64-type-body-md);
+  font-size: 0.8125rem;
+  gap: 8px;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.publish-target__failure .v-icon {
+  color: rgb(var(--v-theme-error));
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.publish-target__failure span {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.publish-target__failure:hover,
+.publish-target__failure:focus-visible {
+  border-color: rgb(var(--v-theme-error));
+}
+
+.publish-target__verified {
+  align-items: center;
+  display: flex !important;
+  gap: 6px;
+}
+
+.publish-target__verified span {
+  color: var(--v64-on-surface-variant);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .publish-target__facts {
   align-content: start;
   display: grid;
@@ -204,6 +316,7 @@ const accountChoices = computed(() => props.accounts.filter((entry) => entry.kin
 
 .publish-target__actions {
   display: flex;
+  margin-top: auto;
   flex-wrap: wrap;
   gap: var(--v64-space-2, 8px);
 }

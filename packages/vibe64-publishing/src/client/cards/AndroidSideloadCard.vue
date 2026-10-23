@@ -11,7 +11,7 @@ const props = defineProps({
   keys: { type: Object, default: () => ({}) },
   busy: { type: Boolean, default: false }
 });
-const emit = defineEmits(["remove", "change-account", "setup-tools", "create-key", "recovery-kit", "install"]);
+const emit = defineEmits(["remove", "change-account", "setup-tools", "create-key", "recovery-kit", "install", "show-release"]);
 
 const keyEntry = computed(() => (props.keys.entries || []).find((entry) => entry.id === `android-sideload:${props.target.package}`) || null);
 const kitCovers = computed(() => Boolean(keyEntry.value && props.keys.recoveryKit?.createdAt &&
@@ -48,7 +48,7 @@ const ready = computed(() => tasks.value.every((task) => task.done));
 </script>
 
 <template>
-  <TargetCard v-bind="$attrs" :busy="busy" :target="target" :waiting="ready ? '' : 'Finish the one-time setup below first'" @change-account="emit('change-account', $event)" @remove="emit('remove')">
+  <TargetCard v-bind="$attrs" :busy="busy" :target="target" :waiting="ready ? '' : 'Finish the one-time setup below first'" @change-account="emit('change-account', $event)" @remove="emit('remove')" @show-release="emit('show-release', $event)">
     <template #facts>
       <div v-if="target.settings?.certificateSha256">
         <dt>Key</dt>

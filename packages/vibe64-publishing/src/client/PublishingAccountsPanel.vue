@@ -11,6 +11,7 @@ import {
   mdiLockOpenVariantOutline,
   mdiLockOutline,
   mdiNpm,
+  mdiKeyChange,
   mdiPlus,
   mdiShieldKeyOutline,
   mdiTrashCanOutline
@@ -30,6 +31,8 @@ const passphrase = ref("");
 const repeat = ref("");
 const adding = ref(false);
 const form = ref({ kind: "npm", label: "", address: "", token: "", source: "token" });
+// Replacing keeps the account's kind, name and address, so targets using it keep working.
+const replacing = ref("");
 const busy = ref("");
 const error = ref("");
 
@@ -54,11 +57,18 @@ watch(() => props.modelValue, (open) => {
 function startAdding(kindId = "npm") {
   const chosen = kinds.value.find((entry) => entry.id === kindId) || kinds.value[0];
   form.value = { kind: chosen?.id || "npm", label: "", address: chosen?.defaultAddress || "", token: "", source: "token" };
+  replacing.value = "";
   adding.value = true;
 }
 
+function startReplacing(account) {
+  form.value = { kind: account.kind, label: account.label, address: account.address || "", token: "", source: account.source === "github-cli" ? "github-cli" : "token" };
+  adding.value = true;
+  replacing.value = account.id;
+}
+
 watch(() => form.value.kind, (value, previous) => {
-  if (value === previous) return;
+  if (value === previous || replacing.value) return;
   form.value.address = kinds.value.find((entry) => entry.id === value)?.defaultAddress || "";
   form.value.source = "token";
 });
@@ -90,6 +100,7 @@ const addAccount = () => run("add", async () => {
   await props.call("/accounts", { body: { kind: kindId, label: label || kind.value?.label, address, source, ...(source === "token" ? { token } : {}) } });
   form.value.token = "";
   adding.value = false;
+  replacing.value = "";
 });
 const removeAccount = (id) => run(`remove:${id}`, () => props.call(`/accounts/${encodeURIComponent(id)}`, { method: "DELETE" }));
 </script>
@@ -133,25 +144,27 @@ const removeAccount = (id) => run(`remove:${id}`, () => props.call(`/accounts/${
                 <strong>{{ account.label }}</strong>
                 <span>{{ account.source === "github-cli" ? "From your GitHub CLI sign-in" : account.address || "Token" }} · added {{ relativeTime(account.createdAt) }}</span>
               </div>
+              <v-btn :aria-label="`Replace the token of ${account.label}`" :disabled="!keys.unlocked" :icon="mdiKeyChange" size="small" title="Replace token" variant="text" @click="startReplacing(account)" />
               <v-btn :aria-label="`Remove ${account.label}`" :disabled="!keys.unlocked" :icon="mdiTrashCanOutline" :loading="busy === `remove:${account.id}`" size="small" variant="text" @click="removeAccount(account.id)" />
             </li>
           </ul>
           <p v-else-if="!adding" class="publish-keys__note">No accounts yet. Install on my phone needs none; npm, PyPI and GitHub each need one.</p>
 
           <div v-if="adding" class="publish-keys__add">
-            <v-btn-toggle v-model="form.kind" class="mb-3" color="primary" density="comfortable" divided mandatory rounded="pill" variant="outlined">
+            <p v-if="replacing" class="publish-keys__note mb-3">New token for <strong>{{ form.label }}</strong>. Targets using it keep working with the new token.</p>
+            <v-btn-toggle v-if="!replacing" v-model="form.kind" class="mb-3" color="primary" density="comfortable" divided mandatory rounded="pill" variant="outlined">
               <v-btn v-for="entry in kinds" :key="entry.id" :prepend-icon="KIND_ICONS[entry.id]" :value="entry.id">{{ entry.label }}</v-btn>
             </v-btn-toggle>
-            <v-text-field v-model="form.label" :placeholder="kind?.label" label="Name" variant="outlined" />
-            <v-text-field v-if="kind?.addressLabel" v-model="form.address" :label="kind.addressLabel" variant="outlined" />
+            <v-text-field v-if="!replacing" v-model="form.label" :placeholder="kind?.label" label="Name" variant="outlined" />
+            <v-text-field v-if="kind?.addressLabel && !replacing" v-model="form.address" :label="kind.addressLabel" variant="outlined" />
             <v-radio-group v-if="form.kind === 'github'" v-model="form.source" density="compact" hide-details inline>
               <v-radio label="Use my GitHub CLI sign-in" value="github-cli" />
               <v-radio label="Paste a token" value="token" />
             </v-radio-group>
             <v-text-field v-if="form.source === 'token'" v-model="form.token" autocomplete="off" :label="kind?.tokenLabel || 'Token'" type="password" variant="outlined" />
             <div class="publish-keys__add-actions">
-              <v-btn rounded="pill" variant="text" @click="adding = false">Cancel</v-btn>
-              <v-btn :disabled="form.source === 'token' && form.token.length < 8" :loading="busy === 'add'" color="primary" rounded="pill" variant="flat" @click="addAccount">Add</v-btn>
+              <v-btn rounded="pill" variant="text" @click="adding = false; replacing = ''">Cancel</v-btn>
+              <v-btn :disabled="form.source === 'token' && form.token.length < 8" :loading="busy === 'add'" color="primary" rounded="pill" variant="flat" @click="addAccount">{{ replacing ? "Replace token" : "Add" }}</v-btn>
             </div>
           </div>
 
@@ -274,6 +287,11 @@ const removeAccount = (id) => run(`remove:${id}`, () => props.call(`/accounts/${
   gap: 12px;
   grid-template-columns: 22px minmax(0, 1fr) auto;
   padding: 10px 14px;
+}
+
+.publish-keys__list li {
+  grid-template-columns: 22px minmax(0, 1fr) auto auto;
+  gap: 4px 12px;
 }
 
 .publish-keys__list li + li {

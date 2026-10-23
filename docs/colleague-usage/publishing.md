@@ -9,12 +9,15 @@ The page has four parts:
 - **Releases use your saved work**: the saved commit and branch a release
   would use, whether it is pushed, whether the project's checks passed on it,
   and each package from Packaging with its current version.
-- **Targets**: one card per place a release goes. With no targets yet, the page
-  offers the destinations, those needing no account first: **Install on my
-  phone**, **GitHub Releases**, **npm** and **PyPI**. Each shows what it needs,
-  how long the first and later releases take, and what it costs.
+- **Targets**: one card per place a release goes, followed by an **Add
+  target** tile. With no targets yet, the page offers the destinations, those
+  this project can use first: **Install on my phone**, **GitHub Releases**,
+  **npm** and **PyPI**. One that cannot be used yet says why (for example
+  "Needs a Python package in Packaging" or "Needs this project's repository
+  on GitHub"). Each shows what it needs, how long the first and later releases
+  take, and what it costs.
 - **History**: every release and dry run with each step, each target's outcome
-  and its proof, and **Show log**. A running release updates live; you can
+  and its proof, and **Full log**. A running release updates live; you can
   leave the page and it carries on.
 - **Accounts & keys** (top right) and **Release** (top right).
 
@@ -35,6 +38,8 @@ afterwards **Unlock** it for 15 minutes when you add accounts or publish, and
   API token and the upload address) or GitHub (**Use my GitHub CLI sign-in**,
   or paste a token). Tokens go straight into the keys file; the page and
   Colleague only ever see the account's name and address.
+- **Replace token** (the key icon on an account) keeps the account's name and
+  address, so targets using it keep working with the new token.
 - **Recovery kit**: **Save kit** (or **Manage**) downloads every key as one file under a second
   passphrase; keep both off this computer. **Restore** brings them back on a
   new computer. The panel says when a key is newer than your last kit.
@@ -43,41 +48,56 @@ afterwards **Unlock** it for 15 minutes when you add accounts or publish, and
 
 **Add target** (or a destination tile) asks where the release goes, then which
 package (only packages that destination can publish are offered) and which
-account. npm also takes an optional tag such as `next`; empty means `latest`.
-Add the account first if the dialog says so. A card's **⋮** menu switches the
+account. **What it needs** marks what this project and your keys already have.
+npm also takes an optional tag such as `next`; empty means `latest`. When the
+dialog asks for an account, **Add account** opens Accounts & keys and, when you
+press Done, comes back to the same target. A card's **⋮** menu switches the
 target to another account of the same kind or removes it. Targets are kept by
 Vibe64 for this project on this computer, not in the project's files.
 
 ### Release
 
-1. **Release → Version**: Vibe64 suggests the next patch, minor or major
-   version for each package and drafts **What's new** from the saved commits.
-   **Write version** puts the version bump and a `CHANGELOG.md` entry into this
-   session as an ordinary change; review it and **Save** it (pushed, like any
-   Save). **Release the saved version** skips this when the saved work is
-   already the version you want.
+1. **Release → Version**: each package offers its saved version **as saved**
+   while no release has published it, then the next patch, minor and major.
+   Releasing as saved needs no session. A new version needs one: **Write
+   1.4.3** puts the version bump and a `CHANGELOG.md` entry (drafted from the
+   saved commits in **What's new**) into the session as an ordinary change;
+   review it and **Save** it. Without a session the dialog says so and offers
+   **Release as saved** while the saved version is still unpublished.
 2. **Review & publish**: choose targets, unlock your keys if asked, and read
-   **Preflight**: saved and pushed work, Packaging, tags still free, checks
-   passed (**Run checks** runs the project's verification on the saved
-   commit), every sign-in valid, install key and recovery kit, Android
-   requirements. Anything needing attention is listed first and passed checks
-   fold into **Show N passed checks**. A red line stops the release until
-   fixed; a changed toolchain needs **I understand**. The plan has a short id
-   such as `Plan 3f9c`.
+   **Before publishing**: saved and pushed work, Packaging, tags still free,
+   checks passed, every sign-in valid, install key and recovery kit, Android
+   requirements. What needs attention comes first; the rest folds into **All
+   N checks passed**. A red line stops the release and the footer says so; an
+   amber one (a changed toolchain) needs **I understand**. Failed checks name
+   the check, **Show output** shows the end of its output and **Run again**
+   reruns it; a refused sign-in offers **Fix sign-in**. **What happens** lists
+   the steps in order: build each package once, tag the saved commit, publish
+   to each target (with its account and address), under a short plan id such
+   as `Plan 3f9c`.
 3. **Dry run** builds once and asks each destination what would happen;
    nothing is tagged or uploaded. It appears in History as a dry run.
 4. **Publish…** opens the confirmation: exactly which package goes where at
    which version, the saved commit and tag. **Publish** there (with your
-   passphrase if the keys locked meanwhile) tags the saved commit, pushes the
-   tag, builds each package once and sends the same files to every target,
-   reading each back. If the saved work, targets or tools changed since you
-   reviewed, it refuses and shows the new plan.
+   passphrase if the keys locked meanwhile) builds each package once, then
+   tags the saved commit and pushes the tag, then sends the same files to
+   every target and reads each back. A failed build therefore leaves no tag
+   behind. If the saved work, targets or tools changed since you reviewed, it
+   refuses and shows the new plan.
 
-When a build or upload fails, **Show log** in History includes the tool's own
-output (with credentials removed). A release where some targets failed shows
-**Partly published**; fix the cause
-and **Finish this release** retries only the unfinished targets of the same
-plan. Published targets are not sent again.
+While a release runs each of its target cards shows **Publishing 1.4.3…**;
+afterwards a card shows the version people get, **Live · published …** and a
+**Verified** checksum read back from the destination. The Publish page's
+**Checks** line runs the checks on the saved commit at any time and, when they
+fail, shows which check failed with **Show output**.
+
+When a build or upload fails, the target card says **Last release failed**
+with the reason; pressing it opens that release in History with the tool's
+own error output (credentials removed) and **Full log**. A release where some
+targets failed shows **Partly published**; fix the cause and **Finish this
+release** retries only the unfinished targets of the same plan (published
+targets are not sent again). If the fix changed the saved work, the button
+reads **Release the new saved work** and starts a new release instead.
 
 ### Colleague and publishing
 

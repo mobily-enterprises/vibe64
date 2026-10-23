@@ -8,6 +8,8 @@ import { afterEach, expect, it, vi } from "vitest";
 
 import PublishPage from "../../packages/vibe64-publishing/src/client/PublishPage.vue";
 import ConfirmPublishDialog from "../../packages/vibe64-publishing/src/client/ConfirmPublishDialog.vue";
+import ReleaseDialog from "../../packages/vibe64-publishing/src/client/ReleaseDialog.vue";
+import { lastFailure } from "../../packages/vibe64-publishing/src/client/publishFormat.js";
 import AndroidSideloadCard from "../../packages/vibe64-publishing/src/client/cards/AndroidSideloadCard.vue";
 import NpmCard from "../../packages/vibe64-publishing/src/client/cards/NpmCard.vue";
 import { PUBLISH_ACCOUNT_KINDS, PUBLISH_DESTINATION_CATALOG } from "../../packages/vibe64-publishing/src/shared/destinationCatalog.js";
@@ -68,7 +70,7 @@ it("reads the project's publishing state and asks the person to review an assist
   const page = mount(PublishPage, { request, dashboardContext: { sessionId: "s1" } });
   await vi.waitFor(() => expect(page.state).toBeTruthy());
   expect(page.targets.map((target) => target.id)).toEqual(["sdk-npm"]);
-  expect(page.keysLabel).toBe("Accounts & keys");
+  expect(page.activityByTarget["sdk-npm"]).toEqual({ running: false, version: "", failure: null });
 
   await page.reviewRequest();
   expect(calls.at(-1)).toEqual(["POST", "/plan", { targetIds: ["sdk-npm"] }]);
@@ -141,7 +143,57 @@ it("shows where an npm target publishes and that it has not published yet", asyn
     destination: { ...PUBLISH_DESTINATION_CATALOG.find((entry) => entry.id === "npm"), accountKind: "npm" },
     accounts: publishingState().accounts
   });
-  expect(html).toContain("http://127.0.0.1:4873/");
+  expect(html).toContain(">127.0.0.1:4873<");
   expect(html).toContain("Not published yet");
   expect(html).toContain("Local npm");
+});
+
+it("offers first the destinations this project can use, and says why the others wait", async () => {
+  const state = publishingState({ targets: [], packaging: { status: "ready", packages: [{ id: "py", label: "Py", packer: "python-dist", version: "1.0.0" }], diagnostics: [], problem: "" } });
+  const page = mount(PublishPage, { request: async () => state });
+  await vi.waitFor(() => expect(page.state).toBeTruthy());
+  expect(page.startDestinations.map((entry) => [entry.id, entry.availability.reason])).toEqual([
+    ["pypi", ""],
+    ["android-sideload", "Needs an app package in Packaging"],
+    ["github-releases", "Needs this project's repository on GitHub"],
+    ["npm", "Needs a JavaScript package in Packaging"]
+  ]);
+});
+
+it("marks a target whose newest release failed, until a later release publishes it", () => {
+  const target = { id: "sdk-npm", latest: { version: "1.0.0", at: "2026-10-23T09:00:00Z" } };
+  const failed = { id: "r-2", kind: "release", status: "failed", createdAt: "2026-10-23T10:00:00Z", finishedAt: "2026-10-23T10:01:00Z",
+    steps: [{ id: "build:sdk", status: "failed" }, { id: "publish:sdk-npm", status: "pending" }], targets: {}, error: { message: "Build failed with exit code 1." } };
+  expect(lastFailure(target, [failed])).toMatchObject({ release: { id: "r-2" }, message: "Build failed with exit code 1." });
+  const dryRun = { ...failed, id: "r-3", kind: "dry-run" };
+  expect(lastFailure(target, [dryRun])).toBe(null);
+  expect(lastFailure({ ...target, latest: { ...target.latest, at: "2026-10-23T11:00:00Z" } }, [failed])).toBe(null);
+});
+
+it("lets a saved version nobody has published go out as it is, without a session", async () => {
+  const suggestion = { ok: true, notes: "- Fix", packages: [{ id: "sdk", label: "SDK", current: "1.2.0", released: false, external: false,
+    suggestions: [{ kind: "patch", version: "1.2.1" }, { kind: "minor", version: "1.3.0" }, { kind: "major", version: "2.0.0" }] }] };
+  const calls = [];
+  const call = vi.fn(async (suffix, options = {}) => {
+    calls.push(suffix);
+    if (suffix === "/release/suggestion") return suggestion;
+    if (suffix === "/plan") return { ok: true, plan: PLAN };
+    return { ok: true };
+  });
+  const dialog = mount(ReleaseDialog, { modelValue: false, state: publishingState(), call, dashboardContext: {} });
+  app._instance.props.modelValue = true;
+  await vi.waitFor(() => expect(dialog.suggestion).toBeTruthy());
+  expect(dialog.choicesFor(suggestion.packages[0]).map((choice) => choice.kind)).toEqual(["as saved", "patch", "minor", "major"]);
+  expect(dialog.versions).toEqual({ sdk: "1.2.0" });
+  expect(dialog.needsWriting).toBe(false);
+  dialog.versions.sdk = "1.2.1";
+  expect(dialog.needsWriting).toBe(true);
+  expect(dialog.unreleasedSaved).toBe(true);
+  await dialog.releaseAsSaved();
+  expect(dialog.versions).toEqual({ sdk: "1.2.0" });
+  expect(calls).not.toContain("/release/prepare");
+  expect(dialog.planSteps.map((entry) => entry.id)).toEqual(["build:sdk", "tag:v1.2.0", "publish:sdk-npm"]);
+
+  const released = { ...suggestion.packages[0], released: true };
+  expect(dialog.choicesFor(released).map((choice) => choice.kind)).toEqual(["patch", "minor", "major"]);
 });

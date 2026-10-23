@@ -22,6 +22,7 @@ function usePublishing({ active = () => true, request = publishingRequest } = {}
 
   const busy = computed(() => Boolean(
     state.value?.activeRelease ||
+    (state.value?.releases || []).some((release) => release.status === "running") ||
     state.value?.checks?.status === "running" ||
     state.value?.toolchains?.install?.status === "running"
   ));
@@ -50,10 +51,11 @@ function usePublishing({ active = () => true, request = publishingRequest } = {}
     return answer;
   }
 
+  // Immediate: a page opened while a release runs keeps following it.
   watch(busy, (running) => {
     clearInterval(timer);
     timer = running ? setInterval(refresh, 2000) : null;
-  });
+  }, { immediate: true });
   onBeforeUnmount(() => clearInterval(timer));
 
   return { state, loading, loadError, busy, refresh, call };

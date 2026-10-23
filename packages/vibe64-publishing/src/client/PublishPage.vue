@@ -2,12 +2,16 @@
 // The Publish page: this project's targets (where releases go), the saved work
 // a release would use, and the history of releases. Every irreversible step
 // ends in the person's own confirmation.
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import {
+  mdiAccountKeyOutline,
   mdiAlertOutline,
   mdiCheckCircle,
   mdiClockOutline,
+  mdiGithub,
+  mdiLockOpenVariantOutline,
   mdiPackageVariantClosed,
+  mdiPlay,
   mdiPlus,
   mdiProgressClock,
   mdiRobotOutline,
@@ -29,7 +33,7 @@ import AndroidSideloadCard from "./cards/AndroidSideloadCard.vue";
 import GithubReleasesCard from "./cards/GithubReleasesCard.vue";
 import NpmCard from "./cards/NpmCard.vue";
 import PypiCard from "./cards/PypiCard.vue";
-import { destinationAccent, destinationIcon, shortCommit, statusInfo } from "./publishFormat.js";
+import { destinationAccent, destinationGap, destinationIcon, lastFailure, shortCommit, statusInfo } from "./publishFormat.js";
 import { usePublishing } from "./usePublishing.js";
 
 const props = defineProps({
@@ -63,24 +67,58 @@ const targets = computed(() => state.value?.targets || []);
 const baseline = computed(() => state.value?.baseline || {});
 const checks = computed(() => state.value?.checks || null);
 const packagingReady = computed(() => state.value?.packaging?.status === "ready");
-const running = computed(() => (state.value?.releases || []).find((release) => release.id === state.value?.activeRelease) || null);
+const running = computed(() => (state.value?.releases || []).find((release) => release.id === state.value?.activeRelease) ||
+  (state.value?.releases || []).find((release) => release.status === "running") || null);
 const pending = computed(() => state.value?.pendingConfirmation || null);
-const keysLabel = computed(() => {
-  const keys = state.value?.keys;
-  if (!keys?.exists) return "Set up keys";
-  return keys.unlocked ? "Keys unlocked" : "Accounts & keys";
+const keysIcon = computed(() => state.value?.keys?.unlocked ? mdiLockOpenVariantOutline : mdiShieldKeyOutline);
+const history = ref(null);
+
+function availability(entry) {
+  const reason = destinationGap(entry, { packages: packages.value, baseline: baseline.value });
+  return { ok: !reason, reason };
+}
+const startDestinations = computed(() => destinations.value
+  .map((entry) => ({ ...entry, availability: availability(entry) }))
+  .sort((left, right) => Number(right.availability.ok) - Number(left.availability.ok)));
+const startLead = computed(() => {
+  const open = startDestinations.value.filter((entry) => entry.availability.ok);
+  if (!open.length) return "None of these fits this project's packages yet.";
+  const free = open.filter((entry) => entry.zeroAccount).length;
+  return free ? `Choose where your first release goes. ${free === 1 ? "One needs" : `${free} need`} no new account.` : "Choose where your first release goes.";
 });
+
+// What each card shows about the release in flight or the last one that failed.
+const activityByTarget = computed(() => Object.fromEntries(targets.value.map((target) => {
+  const inFlight = running.value && (running.value.steps || []).some((entry) => entry.id === `publish:${target.id}`) && running.value.kind === "release";
+  return [target.id, {
+    running: Boolean(inFlight),
+    version: inFlight ? running.value.versions?.[target.package] || "" : "",
+    failure: lastFailure(target, state.value?.releases || [])
+  }];
+})));
+
+const runChecks = () => act("checks", () => call("/checks"));
+const showOutput = ref(false);
 
 function openAdd(preset = "") {
   addPreset.value = preset;
   dialogs.value.add = true;
 }
 
+// Adding an account from Add target comes back to Add target afterwards.
+const returnToAdd = ref("");
 function openKeys(kind = "") {
   addAccountKind.value = kind;
+  returnToAdd.value = kind && dialogs.value.add ? addPreset.value || destinations.value.find((entry) => entry.accountKind === kind)?.id || "" : "";
   dialogs.value.add = false;
   dialogs.value.keys = true;
 }
+watch(() => dialogs.value.keys, (open) => {
+  if (open || !returnToAdd.value) return;
+  addPreset.value = returnToAdd.value;
+  returnToAdd.value = "";
+  dialogs.value.add = true;
+});
 
 async function act(name, work) {
   working.value = name;
@@ -145,7 +183,7 @@ function openInstall({ releaseId, targetId }) {
       title="Publish"
     >
       <template #actions>
-        <v-btn :prepend-icon="mdiShieldKeyOutline" rounded="pill" variant="tonal" @click="openKeys()">{{ keysLabel }}</v-btn>
+        <v-btn :prepend-icon="keysIcon" data-test="open-keys" rounded="pill" variant="tonal" @click="openKeys()">Accounts &amp; keys</v-btn>
         <v-btn
           :disabled="!targets.length || !packagingReady || Boolean(running)"
           :prepend-icon="mdiRocketLaunchOutline"
@@ -199,10 +237,26 @@ function openInstall({ releaseId, targetId }) {
         <div>
           <span class="publish-saved__label">Checks</span>
           <span class="publish-saved__line">
-            <v-icon :color="statusInfo(checks?.status).color" :icon="checks ? statusInfo(checks.status).icon : mdiClockOutline" size="18" />
-            {{ checks ? statusInfo(checks.status).label : "Not run on this commit" }}
+            <v-icon :class="{ 'publish-banner__spin': checks?.status === 'running' }" :color="statusInfo(checks?.status).color" :icon="checks ? statusInfo(checks.status).icon : mdiClockOutline" size="18" />
+            {{ checks ? (checks.status === "failed" ? `${checks.failedCommand || "Checks"} failed` : statusInfo(checks.status).label) : "Not run on this commit" }}
+            <v-btn
+              v-if="packagingReady && (!checks || checks.status === 'failed')"
+              :loading="working === 'checks'"
+              :prepend-icon="mdiPlay"
+              class="ml-1"
+              rounded="pill"
+              size="x-small"
+              variant="tonal"
+              @click="runChecks"
+            >
+              {{ checks ? "Run again" : "Run checks" }}
+            </v-btn>
+            <v-btn v-if="checks?.status === 'failed' && checks.output" class="publish-saved__output-toggle" rounded="pill" size="x-small" variant="text" @click="showOutput = !showOutput">
+              {{ showOutput ? "Hide output" : "Show output" }}
+            </v-btn>
           </span>
         </div>
+        <pre v-if="showOutput && checks?.status === 'failed' && checks.output" class="publish-saved__output">{{ checks.output }}</pre>
         <div class="publish-saved__packages">
           <span class="publish-saved__label">Packages</span>
           <span class="publish-saved__chips">
@@ -228,16 +282,14 @@ function openInstall({ releaseId, targetId }) {
       </div>
 
       <section v-else class="publish-targets" aria-labelledby="publish-targets-title">
-        <h2 id="publish-targets-title" class="publish-section-title">
-          Targets
-          <v-btn v-if="targets.length" :prepend-icon="mdiPlus" class="ml-auto" rounded="pill" size="small" variant="tonal" @click="openAdd()">Add target</v-btn>
-        </h2>
+        <h2 id="publish-targets-title" class="publish-section-title">Targets</h2>
         <div v-if="targets.length" class="publish-targets__grid">
           <component
             :is="CARDS[target.destination]"
             v-for="target in targets"
             :key="target.id"
             :accounts="state.accounts"
+            :activity="activityByTarget[target.id]"
             :busy="working.endsWith(`:${target.id}`)"
             :destination="destinationById[target.destination]"
             :keys="state.keys"
@@ -250,16 +302,22 @@ function openInstall({ releaseId, targetId }) {
             @recovery-kit="dialogs.kit = true"
             @remove="removeTarget(target)"
             @setup-tools="dialogs.licence = true"
+            @show-release="history?.reveal($event)"
           />
+          <button class="publish-targets__add" data-test="add-target" type="button" @click="openAdd()">
+            <span class="publish-targets__add-icon"><v-icon :icon="mdiPlus" size="22" /></span>
+            <strong>Add target</strong>
+            <span>Publish {{ packages.length === 1 ? packages[0].label : "a package" }} somewhere else too.</span>
+          </button>
         </div>
         <div v-else class="publish-start">
-          <p class="publish-start__lead">Choose where your first release goes. The first two need no account.</p>
+          <p class="publish-start__lead">{{ startLead }}</p>
           <div class="publish-start__grid">
             <button
-              v-for="entry in destinations"
+              v-for="entry in startDestinations"
               :key="entry.id"
               :class="`publish-start__tile--${destinationAccent(entry.id)}`"
-              :disabled="!packages.some((candidate) => entry.packers.includes(candidate.packer))"
+              :disabled="!entry.availability.ok"
               class="publish-start__tile"
               type="button"
               @click="openAdd(entry.id)"
@@ -267,9 +325,13 @@ function openInstall({ releaseId, targetId }) {
               <span class="publish-start__icon"><v-icon :icon="destinationIcon(entry.id)" size="26" /></span>
               <strong>{{ entry.label }}</strong>
               <span>{{ entry.summary }}</span>
-              <span class="publish-start__meta">
-                <v-icon :icon="entry.zeroAccount ? mdiCheckCircle : mdiShieldKeyOutline" size="14" />
-                {{ entry.zeroAccount ? "No account" : "Needs an account" }} · {{ entry.cost }}
+              <span v-if="!entry.availability.ok" class="publish-start__meta publish-start__meta--missing">
+                <v-icon :icon="mdiAlertOutline" size="14" />
+                {{ entry.availability.reason }}
+              </span>
+              <span v-else class="publish-start__meta">
+                <v-icon :icon="entry.id === 'github-releases' ? mdiGithub : entry.zeroAccount ? mdiCheckCircle : mdiAccountKeyOutline" size="14" />
+                {{ entry.id === "github-releases" ? "Your GitHub sign-in" : entry.zeroAccount ? "No account" : "Needs an account" }} · {{ entry.cost }}
               </span>
             </button>
           </div>
@@ -277,18 +339,21 @@ function openInstall({ releaseId, targetId }) {
       </section>
 
       <ReleaseHistory
+        ref="history"
         :active-release="state.activeRelease || ''"
+        :saved-commit="baseline.commit || ''"
         :call="call"
         :destinations="destinations"
         :releases="state.releases"
         :targets="targets"
         @install="openInstall"
+        @release="dialogs.release = true"
         @resume="resume"
       />
     </template>
 
     <AddTargetDialog v-model="dialogs.add" :call="call" :preset="addPreset" :state="state" @add-account="openKeys" />
-    <ReleaseDialog v-model="dialogs.release" :call="call" :dashboard-context="dashboardContext" :state="state" @confirm="openConfirm" />
+    <ReleaseDialog v-model="dialogs.release" :call="call" :dashboard-context="dashboardContext" :state="state" @accounts="openKeys()" @confirm="openConfirm" />
     <ConfirmPublishDialog
       v-model="dialogs.confirm"
       :acknowledged="confirmation.acknowledged"
@@ -433,6 +498,67 @@ function openInstall({ releaseId, targetId }) {
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
 }
 
+.publish-targets__add {
+  align-content: center;
+  background: transparent;
+  border: 1.5px dashed var(--v64-outline-variant);
+  border-radius: var(--v64-shape-lg, 16px);
+  color: var(--v64-on-surface-variant);
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  gap: 6px;
+  justify-items: center;
+  min-height: 180px;
+  padding: 20px;
+  text-align: center;
+  transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+}
+
+.publish-targets__add:hover,
+.publish-targets__add:focus-visible {
+  background: color-mix(in srgb, rgb(var(--v-theme-primary)) 5%, transparent);
+  border-color: rgb(var(--v-theme-primary));
+  color: rgb(var(--v-theme-primary));
+}
+
+.publish-targets__add-icon {
+  align-items: center;
+  background: var(--v64-surface-container-high);
+  border-radius: 50%;
+  display: inline-flex;
+  height: 40px;
+  justify-content: center;
+  width: 40px;
+}
+
+.publish-targets__add strong {
+  color: var(--v64-on-surface);
+  font: var(--v64-type-title-md);
+}
+
+.publish-targets__add span:last-child {
+  font: var(--v64-type-body-md);
+  font-size: 0.8125rem;
+  max-width: 16rem;
+}
+
+.publish-saved__output {
+  background: var(--v64-surface);
+  border: 1px solid color-mix(in srgb, rgb(var(--v-theme-error)) 30%, var(--v64-outline-variant));
+  border-radius: var(--v64-shape-sm, 8px);
+  font-size: 0.75rem;
+  grid-column: 1 / -1;
+  max-height: 14rem;
+  overflow: auto;
+  padding: 10px 12px;
+  white-space: pre-wrap;
+}
+
+.publish-start__meta--missing {
+  color: rgb(var(--v-theme-warning)) !important;
+}
+
 .publish-empty {
   background: var(--v64-surface-container-low);
   border: 1px dashed var(--v64-outline-variant);
@@ -505,8 +631,17 @@ function openInstall({ releaseId, targetId }) {
 }
 
 .publish-start__tile:disabled {
+  background: transparent;
+  border-style: dashed;
   cursor: not-allowed;
-  opacity: 0.5;
+}
+
+.publish-start__tile:disabled > :not(.publish-start__meta--missing) {
+  opacity: 0.55;
+}
+
+.publish-start__tile:disabled .publish-start__icon {
+  filter: grayscale(1);
 }
 
 .publish-start__tile--success { --accent: rgb(var(--v-theme-success)); }

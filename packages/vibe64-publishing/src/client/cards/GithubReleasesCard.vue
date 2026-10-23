@@ -4,13 +4,13 @@ import { mdiOpenInNew } from "@mdi/js";
 import TargetCard from "./TargetCard.vue";
 
 defineProps({ target: { type: Object, required: true } });
-defineEmits(["remove", "change-account"]);
+defineEmits(["remove", "change-account", "show-release"]);
 </script>
 
 <template>
-  <TargetCard v-bind="$attrs" :target="target" @change-account="$emit('change-account', $event)" @remove="$emit('remove')">
+  <TargetCard v-bind="$attrs" :target="target" @change-account="$emit('change-account', $event)" @remove="$emit('remove')" @show-release="$emit('show-release', $event)">
     <template #facts>
-      <div><dt>Repository</dt><dd class="publish-target__mono">{{ target.settings?.repository }}</dd></div>
+      <div><dt>Repository</dt><dd>{{ target.settings?.repository }}</dd></div>
       <div v-if="target.latest?.proof?.tag"><dt>Release</dt><dd>{{ target.latest.proof.tag }}</dd></div>
     </template>
     <template v-if="target.latest?.proof?.url" #actions>

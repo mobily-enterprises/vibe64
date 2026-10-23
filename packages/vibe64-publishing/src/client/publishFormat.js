@@ -82,6 +82,59 @@ function proofLine(proof = {}) {
   return "";
 }
 
+// "registry.npmjs.org" rather than a full URL: the place a person recognises.
+function hostOf(address) {
+  try {
+    const url = new URL(String(address || ""));
+    return `${url.host}${url.pathname.replace(/\/+$/u, "")}`;
+  } catch {
+    return String(address || "");
+  }
+}
+
+// Where people find a published version, when the destination has a public page.
+function publicPageUrl(destination, { package: name, version, settings = {} } = {}) {
+  if (!name) return "";
+  if (destination === "npm" && /(^|\.)npmjs\.org$/u.test(hostOf(settings.registry || "https://registry.npmjs.org/").split("/")[0])) {
+    return `https://www.npmjs.com/package/${name}${version ? `/v/${version}` : ""}`;
+  }
+  if (destination === "pypi" && ["pypi", "testpypi"].includes(settings.instance)) {
+    return `https://${settings.instance === "testpypi" ? "test." : ""}pypi.org/project/${name}/${version ? `${version}/` : ""}`;
+  }
+  return "";
+}
+
+// Why a destination cannot take this project yet ("" when it can): a package of
+// a kind it publishes, and for GitHub Releases a repository on GitHub.
+function destinationGap(entry, { packages = [], baseline = {} } = {}) {
+  if (!packages.some((candidate) => entry.packers.includes(candidate.packer))) {
+    if (entry.id === "android-sideload") return "Needs an app package in Packaging";
+    if (entry.id === "npm") return "Needs a JavaScript package in Packaging";
+    if (entry.id === "pypi") return "Needs a Python package in Packaging";
+    return "Needs a package in Packaging";
+  }
+  if (entry.id === "github-releases" && !baseline.remote?.githubRepository) return "Needs this project's repository on GitHub";
+  return "";
+}
+
+// The most recent release that tried this target and failed after its last
+// success: what the target card warns about.
+function lastFailure(target, releases = []) {
+  const since = Date.parse(target?.latest?.at || "") || 0;
+  for (const release of releases) {
+    if (release.kind !== "release" || release.status === "running") continue;
+    if ((Date.parse(release.finishedAt || release.createdAt) || 0) <= since) return null;
+    const outcome = release.targets?.[target.id];
+    const step = (release.steps || []).find((entry) => entry.id === `publish:${target.id}`);
+    if (outcome?.status === "proven" || outcome?.status === "succeeded") return null;
+    if (!outcome && !step) continue;
+    if (outcome?.error || ["failed", "partial", "interrupted"].includes(release.status)) {
+      return { release, message: outcome?.error?.message || release.error?.message || statusInfo(release.status).label };
+    }
+  }
+  return null;
+}
+
 function stepLabel(stepId, targetsById = {}) {
   const [kind, ...rest] = String(stepId || "").split(":");
   const subject = rest.join(":");
@@ -92,4 +145,4 @@ function stepLabel(stepId, targetsById = {}) {
   return kind === "dry-run" ? `Dry run ${name}` : `Publish ${name}`;
 }
 
-export { destinationAccent, destinationIcon, proofLine, relativeTime, shortCommit, statusInfo, stepLabel };
+export { destinationAccent, destinationGap, destinationIcon, hostOf, lastFailure, proofLine, publicPageUrl, relativeTime, shortCommit, statusInfo, stepLabel };

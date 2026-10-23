@@ -1,19 +1,20 @@
 <script setup>
 // Every release and dry run: what was planned, each step, each target's
 // outcome with its proof, and the log. A running release updates live.
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { mdiChevronDown, mdiDownload, mdiQrcode, mdiTestTube, mdiRocketLaunchOutline, mdiReplay } from "@mdi/js";
 import { apkDownloadUrl } from "./usePublishing.js";
-import { proofLine, relativeTime, shortCommit, statusInfo, stepLabel } from "./publishFormat.js";
+import { destinationIcon, proofLine, relativeTime, shortCommit, statusInfo, stepLabel } from "./publishFormat.js";
 
 const props = defineProps({
   releases: { type: Array, default: () => [] },
   targets: { type: Array, default: () => [] },
   destinations: { type: Array, default: () => [] },
   activeRelease: { type: String, default: "" },
+  savedCommit: { type: String, default: "" },
   call: { type: Function, required: true }
 });
-const emit = defineEmits(["install", "resume"]);
+const emit = defineEmits(["install", "resume", "release"]);
 
 const open = ref("");
 const logs = ref({});
@@ -28,8 +29,42 @@ function outcomeLabel(release) {
   return statusInfo(release.status).label;
 }
 
+const FAILED = ["failed", "partial", "interrupted"];
+// Only the newest release can be finished; older failures are history.
+const latestFailedRelease = computed(() => {
+  const newest = props.releases.find((entry) => entry.kind === "release");
+  return newest && FAILED.includes(newest.status) ? newest.id : "";
+});
+const showFull = ref({});
+
+// A failed release opens with what went wrong: the tool's own error output.
 function toggle(id) {
   open.value = open.value === id ? "" : id;
+  const release = props.releases.find((entry) => entry.id === id);
+  if (open.value && FAILED.includes(release?.status) && !logs.value[id]) void showLog(id);
+}
+
+function failureOutput(id) {
+  const lines = (logs.value[id] || []).filter((line) => line.level === "error").map((line) => line.message);
+  return lines.slice(1).join("\n").trim() || "";
+}
+
+// Opens one release and brings it into view, with its log: what a failed
+// target card links to.
+async function reveal(id) {
+  open.value = id;
+  await nextTick();
+  showFull.value = { ...showFull.value, [id]: false };
+  document.querySelector(`[data-release="${CSS.escape(id)}"]`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  if (!logs.value[id]) await showLog(id);
+}
+defineExpose({ reveal });
+
+function targetName(release, targetId) {
+  const target = targetsById.value[targetId];
+  const destination = target?.destination || release.targets?.[targetId]?.destination;
+  const label = target?.destinationLabel || props.destinations.find((entry) => entry.id === destination)?.label || destination || "";
+  return { icon: destinationIcon(destination), text: `${label} · ${target?.package || release.targets?.[targetId]?.package || targetId}` };
 }
 
 async function showLog(id) {
@@ -82,7 +117,7 @@ function isApk(release, targetId) {
           </ol>
           <ul v-if="Object.keys(release.targets || {}).length" class="publish-history__outcomes">
             <li v-for="(outcome, targetId) in release.targets" :key="targetId">
-              <strong>{{ targetId }}</strong>
+              <strong class="publish-history__target"><v-icon :icon="targetName(release, targetId).icon" size="16" />{{ targetName(release, targetId).text }}</strong>
               <span v-if="outcome.error" class="publish-history__error">{{ outcome.error.message }}</span>
               <span v-else class="publish-history__proof">{{ outcome.alreadyPublished ? "already published · " : "" }}{{ proofLine({ checksum: outcome.checksum, ...outcome.proof }) || statusInfo(outcome.status).label }}</span>
               <span v-if="release.kind === 'release' && outcome.status === 'proven' && isApk(release, targetId)" class="publish-history__apk">
@@ -92,13 +127,19 @@ function isApk(release, targetId) {
             </li>
           </ul>
           <p v-if="release.error" class="publish-history__error">{{ release.error.message }}</p>
+          <pre v-if="FAILED.includes(release.status) && failureOutput(release.id) && !showFull[release.id]" class="publish-history__log publish-history__log--failure">{{ failureOutput(release.id) }}</pre>
           <div class="publish-history__tools">
-            <v-btn v-if="release.kind === 'release' && ['partial', 'failed', 'interrupted'].includes(release.status)" :prepend-icon="mdiReplay" rounded="pill" size="small" variant="tonal" @click="emit('resume', release)">
-              Finish this release
-            </v-btn>
-            <v-btn rounded="pill" size="small" variant="text" @click="showLog(release.id)">Show log</v-btn>
+            <template v-if="release.kind === 'release' && FAILED.includes(release.status) && release.id === latestFailedRelease">
+              <v-btn v-if="!savedCommit || savedCommit === release.savedCommit" :prepend-icon="mdiReplay" rounded="pill" size="small" variant="tonal" @click="emit('resume', release)">
+                Finish this release
+              </v-btn>
+              <v-btn v-else :prepend-icon="mdiRocketLaunchOutline" rounded="pill" size="small" variant="tonal" @click="emit('release')">
+                Release the new saved work
+              </v-btn>
+            </template>
+            <v-btn rounded="pill" size="small" variant="text" @click="showFull = { ...showFull, [release.id]: !showFull[release.id] }; showLog(release.id)">{{ showFull[release.id] ? "Hide full log" : "Full log" }}</v-btn>
           </div>
-          <pre v-if="logs[release.id]" class="publish-history__log">{{ logs[release.id].map((line) => `${line.at ? line.at.slice(11, 19) + "  " : ""}${line.message}`).join("\n") || "No log lines." }}</pre>
+          <pre v-if="logs[release.id] && showFull[release.id]" class="publish-history__log">{{ logs[release.id].map((line) => `${line.at ? line.at.slice(11, 19) + "  " : ""}${line.message}`).join("\n") || "No log lines." }}</pre>
         </div>
       </li>
     </ol>
@@ -216,6 +257,12 @@ function isApk(release, targetId) {
   padding: 6px 10px;
 }
 
+.publish-history__target {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
 .publish-history__proof {
   color: var(--v64-on-surface-variant);
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -248,6 +295,10 @@ function isApk(release, targetId) {
   overflow: auto;
   padding: 10px 12px;
   white-space: pre-wrap;
+}
+
+.publish-history__log--failure {
+  border-color: color-mix(in srgb, rgb(var(--v-theme-error)) 35%, var(--v64-outline-variant));
 }
 
 @media (max-width: 600px) {

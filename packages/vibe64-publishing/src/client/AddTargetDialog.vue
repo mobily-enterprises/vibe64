@@ -2,8 +2,8 @@
 // Add a target: choose where it goes (with what it needs, how long it takes
 // and what it costs), then which package and which account.
 import { computed, ref, watch } from "vue";
-import { mdiArrowLeft, mdiCheck, mdiClockOutline, mdiCurrencyUsd, mdiPlus } from "@mdi/js";
-import { destinationAccent, destinationIcon } from "./publishFormat.js";
+import { mdiAlertOutline, mdiArrowLeft, mdiCheckCircle, mdiCircleOutline, mdiClockOutline, mdiCurrencyUsd, mdiPlus } from "@mdi/js";
+import { destinationAccent, destinationGap, destinationIcon } from "./publishFormat.js";
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -30,7 +30,15 @@ const accounts = computed(() => (props.state?.accounts || []).filter((entry) => 
 const needsAccount = computed(() => Boolean(chosen.value?.accountKind));
 const canAdd = computed(() => Boolean(chosen.value && packageId.value && (!needsAccount.value || accountId.value)));
 const packageLine = (entry) => `${entry.packer}${entry.version ? ` · ${entry.version}` : ""}`;
-const fits = (entry) => (props.state?.packaging?.packages || []).some((candidate) => entry.packers.includes(candidate.packer));
+const missing = (entry) => destinationGap(entry, { packages: props.state?.packaging?.packages || [], baseline: props.state?.baseline || {} });
+const ordered = computed(() => [...destinations.value].sort((left, right) => Number(Boolean(missing(left))) - Number(Boolean(missing(right)))));
+// "What it needs", each marked done when this project or these keys already have it.
+const needs = computed(() => (chosen.value?.needs || []).map((text, index) => {
+  let done = false;
+  if (index === 0) done = packages.value.length > 0;
+  else if (/account|sign-in/iu.test(text)) done = !needsAccount.value || accounts.value.length > 0;
+  return { text, done };
+}));
 
 watch(() => props.modelValue, (open) => {
   if (!open) return;
@@ -75,10 +83,10 @@ async function add() {
       <v-card-text>
         <div v-if="!chosen" class="publish-destinations" role="list">
           <button
-            v-for="entry in destinations"
+            v-for="entry in ordered"
             :key="entry.id"
             :class="`publish-destination--${destinationAccent(entry.id)}`"
-            :disabled="!fits(entry)"
+            :disabled="Boolean(missing(entry))"
             class="publish-destination"
             role="listitem"
             type="button"
@@ -86,13 +94,13 @@ async function add() {
           >
             <span class="publish-destination__icon"><v-icon :icon="destinationIcon(entry.id)" size="24" /></span>
             <span class="publish-destination__copy">
-              <strong>{{ entry.label }} <v-chip v-if="entry.zeroAccount" class="ml-1" color="success" size="x-small" variant="tonal">No account</v-chip></strong>
+              <strong>{{ entry.label }} <v-chip v-if="entry.zeroAccount && entry.id !== 'github-releases'" class="ml-1" color="success" size="x-small" variant="tonal">No account</v-chip></strong>
               <span>{{ entry.summary }}</span>
               <span class="publish-destination__meta">
                 <span><v-icon :icon="mdiClockOutline" size="14" /> {{ entry.repeat }} after setup</span>
                 <span><v-icon :icon="mdiCurrencyUsd" size="14" /> {{ entry.cost }}</span>
               </span>
-              <span v-if="!fits(entry)" class="publish-destination__missing">Needs a {{ entry.packers.join(" or ") }} package in Packaging.</span>
+              <span v-if="missing(entry)" class="publish-destination__missing"><v-icon :icon="mdiAlertOutline" size="14" /> {{ missing(entry) }}.</span>
             </span>
           </button>
         </div>
@@ -101,7 +109,9 @@ async function add() {
           <section class="publish-add-needs" aria-label="What it needs">
             <h3>What it needs</h3>
             <ul>
-              <li v-for="need in chosen.needs" :key="need"><v-icon :icon="mdiCheck" size="16" /> {{ need }}</li>
+              <li v-for="need in needs" :key="need.text" :class="{ 'is-done': need.done }">
+                <v-icon :icon="need.done ? mdiCheckCircle : mdiCircleOutline" size="16" /> {{ need.text }}
+              </li>
             </ul>
             <p>First time: {{ chosen.firstTime }}. Later: {{ chosen.repeat }}. {{ chosen.cost }}.</p>
           </section>
@@ -186,8 +196,18 @@ async function add() {
 }
 
 .publish-destination:disabled {
+  background: transparent;
+  border-style: dashed;
   cursor: not-allowed;
-  opacity: 0.55;
+}
+
+.publish-destination:disabled .publish-destination__icon,
+.publish-destination:disabled .publish-destination__copy > :not(.publish-destination__missing) {
+  opacity: 0.6;
+}
+
+.publish-destination:disabled .publish-destination__icon {
+  filter: grayscale(1);
 }
 
 .publish-destination--success { --accent: rgb(var(--v-theme-success)); }
@@ -267,9 +287,13 @@ async function add() {
 }
 
 .publish-add-needs li .v-icon {
-  color: rgb(var(--v-theme-success));
+  color: var(--v64-on-surface-variant);
   flex: 0 0 auto;
   transform: translateY(3px);
+}
+
+.publish-add-needs li.is-done .v-icon {
+  color: rgb(var(--v-theme-success));
 }
 
 .publish-add-needs p {
