@@ -53,8 +53,10 @@ resource readiness, environment names, declared Workspace setup commands and
 managed tool entry points. This read exposes no environment values and starts
 no preparation. Repeat it after changing resource declarations. A
 `not-prepared` resource requires Workspace setup; it is not a request to invent
-credentials. In the session chat, wait for the assistant to finish, then choose
-**Prepare workspace**, or **Retry** on a failed preparation. Adding a resource
+credentials. Starting Preview (`vibe64-helper preview ensure --wait`) prepares
+the workspace, so the agent rereads the status before reporting preparation. In
+the session chat, **Prepare workspace** or **Retry** on a failed preparation
+does the same once the assistant has finished. Adding a resource
 requires preparation even if the dependency-install command has not changed.
 An earlier successful preparation does not cover a changed setup recipe or newly
 unprepared resources. Preparation retry checks the current requirements before

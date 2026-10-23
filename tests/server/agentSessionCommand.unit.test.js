@@ -201,7 +201,8 @@ test("agent shell commands run as session-owned managed executions and drain on 
     let summary = JSON.parse((await readStatus()).stdout);
     assert.equal(summary.project, projectSlug);
     assert.equal(summary.environment.status, "not-prepared");
-    assert.match(summary.recovery, /Prepare workspace/);
+    assert.match(summary.recovery, /preview ensure --wait/);
+    assert.match(summary.recovery, /Read this status again before reporting/);
     assert.equal(summary.workspaceSetup.status, "succeeded");
     assert.equal(summary.tools.browserTests, "vibe64-helper playwright status");
     assert.equal(summary.tools.browserTestReadiness, "vibe64-helper playwright readiness");

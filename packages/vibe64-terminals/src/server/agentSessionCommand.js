@@ -728,7 +728,9 @@ function createAgentSessionCommandService({
           database: "vibe64-helper database refresh"
         },
         recovery: environment.status === "not-prepared"
-          ? "Let the assistant finish, then choose Prepare workspace in the session chat, or Retry on its failed preparation."
+          // The assistant reads this mid-turn; starting Preview prepares the
+          // workspace, so stale "not prepared" advice must not reach the person.
+          ? "Run vibe64-helper preview ensure --wait: starting Preview prepares the workspace and its managed resources. Read this status again before reporting preparation to the person. If preparation fails, fix the cause; the person can use Retry on its card."
           : environment.status === "missing-configuration"
           ? "Supply the missing application resource configuration through Development Env."
           : environment.status === "unavailable"
