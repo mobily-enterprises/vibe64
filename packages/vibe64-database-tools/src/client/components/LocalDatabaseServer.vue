@@ -15,7 +15,17 @@
       <div class="db-server__heading">
         <strong class="db-server__title">{{ title(database) }}</strong>
         <span v-if="connected(database)" class="db-server__where">{{ where(database) }}</span>
-        <span v-if="connected(database) && !editing" class="db-server__lead">Choose Retry above to finish preparing.</span>
+        <v-btn
+          v-if="connected(database) && !editing"
+          class="db-server__finish"
+          color="primary"
+          :prepend-icon="mdiRefresh"
+          rounded="pill"
+          variant="flat"
+          @click="emit('retry')"
+        >
+          Finish preparing
+        </v-btn>
         <span v-else class="db-server__lead">
           This project keeps its data in a {{ labelFor(database) }} server that you run, on this computer or one you already have.
         </span>
@@ -23,6 +33,7 @@
       <v-btn
         v-if="connected(database) && !editing"
         class="db-server__edit"
+        color="primary"
         size="small"
         variant="text"
         @click="editing = true"
@@ -211,6 +222,8 @@ const props = defineProps({
   sessionId: { type: String, required: true },
   active: { type: Boolean, default: true }
 });
+// Once connected, the next step is finishing workspace preparation from here.
+const emit = defineEmits(["retry"]);
 
 const paths = usePaths();
 const serverPath = computed(() => `${paths.api("/vibe64/database", { surface: "app" })}/sessions/${encodeURIComponent(props.sessionId)}/server`);
@@ -291,7 +304,7 @@ function showFields(database) {
 }
 
 function statusText(database) {
-  if (connected(database)) return `Connected as ${value(database, "username") || "the saved user"}. Choose Retry above to finish preparing.`;
+  if (connected(database)) return `Connected as ${value(database, "username") || "the saved user"}.`;
   if (database.check?.state === "incomplete") {
     return `Fill in ${database.missing.join(", ")} below, then choose Save and check.`;
   }
@@ -451,6 +464,7 @@ async function saveAndCheck(database) {
 }
 
 .db-server__edit { margin-top: -4px; }
+.db-server__finish { justify-self: start; margin-top: var(--v64-space-2, 8px); }
 
 .db-server__body {
   display: grid;

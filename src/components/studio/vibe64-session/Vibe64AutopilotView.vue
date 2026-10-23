@@ -428,6 +428,7 @@
           v-if="workspaceSetupStatus === 'failed' && !workspaceSetupDismissed && !workspaceSetupToolsMissing && sessionId"
           :active="workspaceSetupStatus === 'failed'"
           :session-id="sessionId"
+          @retry="retryWorkspaceSetup"
         />
       </div>
 
