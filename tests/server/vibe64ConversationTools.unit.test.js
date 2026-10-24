@@ -53,7 +53,8 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   const catalog = createServiceToolCatalog(actions, { maxDirectTools: 100 });
   const context = { surface: "app" };
   const toolSet = catalog.resolveToolSet(context);
-  assert.equal(toolSet.tools.length, 43);
+  assert.equal(toolSet.tools.length, 44);
+  assert.equal(toolSet.tools.some(tool => tool.actionId === "vibe64.assistants.capabilities.list"), true);
   assert.equal(toolSet.tools.some(tool => tool.actionId === "vibe64.sessions.pin"), true);
   assert.equal(toolSet.tools.some(tool => tool.actionId === "vibe64.sessions.conversation.rewind"), false);
   assert.equal(toolSet.tools.some((tool) => tool.actionId.includes("attachment") || tool.actionId.startsWith("vibe64.repository.history.")), false);
