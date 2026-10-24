@@ -9,6 +9,7 @@ import getPort from "get-port";
 import http from "node:http";
 import { resolveCommandEnv } from "../../packages/vibe64-execution/src/server/env/resolveCommandEnv.js";
 import { currentActorUser } from "../../packages/vibe64-execution/src/server/actor/userIdentity.js";
+import { previewPublicSocketPath } from "../../packages/vibe64-terminals/src/server/launchPreviewProxy.js";
 import { once } from "node:events";
 import { io } from "socket.io-client";
 import {
@@ -181,7 +182,7 @@ if (JSON.stringify(process.argv.slice(2)) === JSON.stringify(["auth", "status", 
     }
     assert.equal(output.preview?.state, "ready", JSON.stringify(output));
     const preview = new URL(output.previewTarget.href);
-    const socketPath = path.join(root, "runtime", "vibe64", "apps", `${preview.hostname.split(".")[0]}.sock`);
+    const socketPath = previewPublicSocketPath(preview.origin, { XDG_RUNTIME_DIR: path.join(root, "runtime") });
     const nestedPage = await new Promise((resolve, reject) => {
       const request = http.get({ socketPath, path: preview.pathname + preview.search,
         headers: { host: preview.host } }, response => {
