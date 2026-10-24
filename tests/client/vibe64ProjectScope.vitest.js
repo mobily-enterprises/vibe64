@@ -41,7 +41,7 @@ const projectQueryMocks = vi.hoisted(() => ({ route: null }));
 vi.mock("vue-router", () => ({
   RouterView: { render: () => null },
   useRoute: () => projectQueryMocks.route,
-  useRouter: () => ({ push: vi.fn(), afterEach: vi.fn(() => vi.fn()) })
+  useRouter: () => ({ push: vi.fn(), afterEach: vi.fn(() => vi.fn()), resolve: () => ({ matched: [] }) })
 }));
 vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
   useCommand: () => ({
@@ -62,6 +62,7 @@ vi.mock("@/components/studio/Vibe64SessionPanel.vue", () => ({
     }
   })
 }));
+vi.mock("vuetify", () => ({ useDisplay: () => ({ smAndDown: Vue.ref(false) }) }));
 vi.mock("vuetify/components/VAlert", () => ({ VAlert: passthroughComponent("aside") }));
 vi.mock("vuetify/components/VBtn", () => ({ VBtn: passthroughComponent("button") }));
 vi.mock("vuetify/components/VForm", () => ({ VForm: passthroughComponent("form") }));
@@ -596,7 +597,7 @@ describe("Vibe64 project client scope", () => {
     expect(source).toContain("const selected = await createProject();");
     expect(source).toContain("const selected = await selectProject(slug);");
     expect(source).toContain("router.push(projectAppPath(selected))");
-    expect(source).toContain('v-if="!displayError && (selectionInitialLoading || !runtimeReady)"');
+    expect(source).toContain('v-if="!teamAiBlocked && !displayError && (selectionInitialLoading || !runtimeReady)"');
     expect(source).toContain("<v-skeleton-loader");
   });
 });

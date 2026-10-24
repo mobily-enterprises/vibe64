@@ -80,7 +80,8 @@ describe("Vibe64 terminal consumers", () => {
     expect(longRunning).toContain('v-if="open"');
     expect(longRunning).toContain("props.terminal?.closeTerminalSocket?.()");
 
-    expect(temporaryAction).toContain('props.active || props.error || props.status === "required" || detailsViewed.value');
+    expect(temporaryAction).toContain('props.active || props.error || props.status === "required" ||');
+    expect(temporaryAction).toContain("(detailsViewed.value && Boolean(props.status || props.stage || props.output))");
     expect(temporaryAction).toContain('v-if="visible"');
     expect(temporaryAction).toContain(':expanded="detailsOpen"');
     expect(temporaryAction).toContain(":show-close=\"canDismiss\"");
@@ -98,7 +99,8 @@ describe("Vibe64 terminal consumers", () => {
     expect(provider).toContain("mobile-takeover");
     expect(provider).toContain("show-copy");
     expect(provider).toContain(":stage=\"authTerminalStage\"");
-    expect(provider).not.toContain(":loading=");
+    // Sign-in buttons show their own waiting state; the terminal surface does not.
+    expect(provider.match(/<Vibe64Terminal\b[^>]*>/u)[0]).not.toContain(":loading=");
     expect(provider).not.toContain("<details");
     expect(provider).not.toContain("Show login output");
     expect(provider).not.toContain("View terminal");

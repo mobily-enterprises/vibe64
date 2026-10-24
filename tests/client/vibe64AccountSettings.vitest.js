@@ -177,7 +177,7 @@ describe("standalone personal AI profile settings", () => {
     await state.openDialog({ refresh: false, providerId: "ai" });
     expect(openProvider).toHaveBeenCalledTimes(1);
     const component = await readFile(new URL("../../src/components/studio/Vibe64AuthSettingsButton.vue", import.meta.url), "utf8");
-    expect(component).toMatch(/<AiSetup\s+v-if="selectedProviderId === 'ai'"\s+ref="aiSetup"\s+inline\s+can-configure\s+@busy="aiConnectionsBusy = \$event"/u);
+    expect(component).toMatch(/<AiSetup\s+v-if="selectedProviderId === 'ai'"\s+ref="aiSetup"\s+inline\s+can-configure\s+:focus="aiFocus"\s+@busy="aiConnectionsBusy = \$event"/u);
     app.unmount();
     vi.unstubAllGlobals();
   });

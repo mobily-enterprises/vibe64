@@ -60,9 +60,11 @@ async function mountCourses({ authorTrial = null, accounts = { aiOnboardingAvail
     owner.savedAuthorPreview = Vue.ref(authorTrial);
     owner.resumeAuthorPreview = async attemptId => { calls.authorPreview = attemptId; return { attemptId, current: true }; };
   }
-  const picker = { props: ["canStart", "canResume", "learningResult"], emits: ["start", "resume", "refresh"], setup(props, { emit }) {
+  // A start's failure shows on the card that requested it, through the picker's startError.
+  const picker = { props: ["canStart", "canResume", "learningResult", "startError"], emits: ["start", "resume", "refresh"], setup(props, { emit }) {
     calls.pickerProps = props;
-    return () => Vue.h("button", { "data-test": "start-lesson", onClick: () => emit("start", { courseId: "course", release: "0.1.7", lessonCode: "V64-START-00", expectedRevision: 3 }) });
+    return () => Vue.h("button", { "data-test": "start-lesson", onClick: () => emit("start", { courseId: "course", release: "0.1.7", lessonCode: "V64-START-00", expectedRevision: 3 }) },
+      props.startError || "");
   } };
   // The shared controller's open step: a start no longer current opens nothing.
   const controller = { opened: async outcome => { if (outcome?.current !== false) calls.opened.push(outcome); return outcome; } };

@@ -205,7 +205,7 @@ describe("useVibe64SourceEditorFileSync", () => {
     ), "utf8");
     // Check the declared bindings; this does not mount or exercise the parent components.
     expect(autopilot).toMatch(
-      /<Vibe64SessionFiles\b[^>]*:active="props\.active && normalWorkspaceActive && props\.projectPane === 'dashboard' && rightPaneTab === 'editor'"/u
+      /<Vibe64SessionFiles\b[^>]*:active="props\.active && props\.projectPane === 'dashboard' && rightPaneTab === 'editor'"/u
     );
     expect(files).toMatch(
       /<Vibe64SessionSourceEditor\b[^>]*:active="active && area === 'repo'"/u
