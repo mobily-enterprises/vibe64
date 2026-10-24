@@ -252,9 +252,11 @@ identities and regenerates the lock through the original `createCourseLock`
 operation, then compares the complete ordered result. Disabled snapshots remain
 verified too; missing or corrupt content fails admission closed, without repair.
 
-`training/catalogue.json` contains schema version, revision and up to 16 retained
+`training/catalogue.json` contains schema version, revision and up to 16
 course-release entries in 1 MiB. Each stores immutable definition/lock and mutable
-enablement. New releases do not replace earlier identities. An absent read creates
+enablement; `removeCourse` deletes a whole entry (installed topic content and
+attempt pins stay), and an emptied catalogue keeps its later revision. New
+releases do not replace earlier identities. An absent read creates
 nothing; malformed, unsupported or aliased paths/records fail closed. Explicit
 toggles use the existing persistent Kernel OS lock and Core atomic writer, with
 private modes and expected revision. Stale writes conflict; matching current
@@ -281,13 +283,16 @@ Installing rereads it, fetches each missing locked topic at its exact commit int
 a `topic-<uuid>` scratch directory, and delegates to the original
 `installTopic` (clean-commit, canonical-source and byte proof, staging, per-pin
 lock) and `enableCourse` (catalogue lock, expected revision; one retry on
-conflict). Older releases of the course are then disabled for new starts through
-`disableCourse`; saved attempts resume from their pins and nothing is deleted.
-The 16-release limit fails closed before downloading. Installs are serialized in
+conflict). Older releases of the course are then removed through
+`removeCourse`, freeing their places and reported in `retired`; saved attempts
+resume from their pins and installed content. The 16-release limit, counted
+before the older release is removed, fails closed before downloading. Installs are serialized in
 process and identical requests share one operation. Scratch directories are
 removed in `finally`; the managed exec helper admits Git only in exactly that
 one-level scratch shape. `available.list` and `course.install` are ordinary
-signed-in Training actions; only the owner may re-enable a disabled release.
+signed-in Training actions. A disabled release is refused for everyone
+(`VIBE64_TRAINING_COURSE_DISABLED`); only the operator's `enable-course`
+re-enables it.
 
 ## Private reservation authority
 
@@ -566,7 +571,8 @@ environment file covers exact argument/identity delegation and operator refusal.
 The original `runTrainingCli` dispatch also supports `install-topic
 <committed-topic-directory> <system-root>`, `installed-courses <system-root>`,
 `enable-course <course.json> <course.lock.json> <system-root> <expected-revision>`
-and `disable-course <courseId> <release> <system-root> <expected-revision>`.
+and `disable-course` / `remove-course <courseId> <release> <system-root>
+<expected-revision>`.
 The local process's existing filesystem authority selects these paths; no browser,
 assistant tool, permission policy or runtime is added. CLI resolves local relative
 paths and retains the original installed owners' alias/root checks. Argument
@@ -576,7 +582,8 @@ Installation derives its pin through original `readPinnedTopic` and delegates to
 original `installTopic`, which independently verifies source/commit/identity and
 publishes only its verified snapshot. CLI returns the exact pin and whether it
 installed or reused it; it does not enable, execute or publish. Catalogue commands
-use original fresh `readCatalogue`, `enableCourse` and `disableCourse`, retaining
+use original fresh `readCatalogue`, `enableCourse`, `disableCourse` and
+`removeCourse`, retaining
 whole-topic validation, release immutability, locking, CAS and truthful uncertain
 save errors. Reads never seed or repair. Course lock generation, installation and
 enablement remain separate operations. State formats are unchanged; existing

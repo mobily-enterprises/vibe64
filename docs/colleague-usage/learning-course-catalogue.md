@@ -104,10 +104,11 @@ installed course is not installed twice.
   [Local operator provisioning](../training-content.md#local-operator-provisioning)).
   Nothing was changed.
 - **… already keeps 16 installed course releases, its limit**: every installed
-  course release uses one of 16 places. Updating a course reuses its place,
-  because the older release is removed; a new course needs a free one. The
-  server's operator can free a place by removing a release on the server; saved
-  lessons keep their content. Nothing was changed.
+  course release uses one of 16 places. Installing or updating needs a free
+  place at that moment; an update frees the older release's place only after
+  the newer one is installed, so with all 16 in use an update is refused too.
+  The server's operator can free a place by removing a release on the server;
+  saved lessons keep their content. Nothing was changed.
 - **Topic source or installed snapshot conflicts with the approved owner pin** or
   **Conflicting copy installed**: the server holds different content under the
   same release. Nothing is replaced automatically; ask the owner to inspect it.

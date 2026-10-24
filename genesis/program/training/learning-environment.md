@@ -160,7 +160,9 @@ guide overlay 3000 above L 2400 above Colleague.
   checks the admitted revision, archives the current attempt, then reserves
   the new one. The same lesson in progress, or a replayed start request, goes
   straight to the learner store. `lesson.restart {attemptId, requestId,
-  expectedRevision}` archives the attempt and reserves a new attempt with the
+  expectedRevision, confirmed}` (off the browser's `api` channel it is refused
+  with `VIBE64_TRAINING_LESSON_UNCONFIRMED` unless `confirmed: true`) archives
+  the attempt and reserves a new attempt with the
   same pin and request (a retry finishes a stopped restart through the
   replayed reservation); preparation then creates a fresh project and session
   `training-<attemptId>` with exercise-source proof. `lesson.finish {attemptId,

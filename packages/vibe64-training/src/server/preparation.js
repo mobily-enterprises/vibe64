@@ -52,7 +52,7 @@ function createTrainingService({ catalogue, content, learners, learningSpace = n
   async function startLesson({ actor, courseId, release, lessonCode, requestId, expectedRevision, archiveCurrent = false } = {}) {
     const approved = await catalogue.readCatalogue();
     const entry = approved.courses.find(value => value.course.courseId === courseId && value.course.release === release);
-    if (!entry?.enabled) throw trainingError("VIBE64_TRAINING_COURSE_UNAVAILABLE", "This exact course release is not enabled. Ask the owner to enable it, or resume your saved lesson.");
+    if (!entry?.enabled) throw trainingError("VIBE64_TRAINING_COURSE_UNAVAILABLE", "This exact course release is not enabled on this server. Read the courses again and start from a listed release, or resume your saved lesson.");
     // A preview course is for the workspace owner to review before release;
     // its admitted attempt is otherwise an ordinary saved lesson.
     if (entry.course.status !== "released" && actor?.role !== "owner") {
