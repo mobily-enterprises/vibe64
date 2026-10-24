@@ -2139,6 +2139,47 @@ test("the local Colleague host hands Colleague its own browser navigator", async
   assert.ok(Object.keys(await received.navigate({ route: "/app/manage/accounts" })).includes("route"));
 });
 
+test("the local Colleague host never carries this project's session to another project", async t => {
+  const hostKeys = await import("../../src/lib/vibe64AssistantHost.js");
+  const hostFilename = new URL("../../src/components/Vibe64LocalColleagueHost.vue", import.meta.url);
+  const { descriptor } = parse(await readFile(hostFilename, "utf8"), { filename: String(hostFilename) });
+  const { code } = await transform(compileScript(descriptor, { id: "colleague-project-switch", inlineTemplate: true }).content, { format: "cjs" });
+  const route = vue.reactive({ path: "/app/project/demo", query: { session: "demo-session", chat: "main" } });
+  const pushed = [];
+  const imports = {
+    vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { pushed.push(target); Object.assign(route, target); } }) },
+    "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
+    "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
+    "@local/vibe64-colleague/shared/learning-focus": learningFocus,
+    "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request"], setup() { return () => null; } } },
+    "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: async () => ({}) }) },
+    "@/lib/vibe64ProjectScope.js": { projectAppPath: (slug, suffix = "") => `/app/project/${slug}${suffix}`,
+      projectSlugFromRoute: value => /^\/app\/project\/([^/]+)/u.exec(value.path)?.[1] || "" },
+    "@/lib/studioUrls.js": { resolveStudioRequestUrl: value => value },
+    "@/lib/vibe64AccountConnectionsDialog.js": { requestVibe64AccountConnectionsDialog: () => true },
+    "@/lib/vibe64AssistantHost.js": hostKeys
+  };
+  const module = { exports: {} };
+  new Function("require", "module", "exports", code)(name => {
+    assert.ok(Object.hasOwn(imports, name), name); return imports[name];
+  }, module, module.exports);
+  const renderer = vue.createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
+    setText() {}, setElementText() {}, patchProp() {}, insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+  const navigation = vue.shallowRef(null);
+  const host = renderer.createApp(module.exports.default);
+  for (const key of Object.values(hostKeys)) host.provide(key, vue.ref(null));
+  host.provide(hostKeys.VIBE64_BROWSER_NAVIGATION_KEY, navigation);
+  host.provide(hostKeys.VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
+  host.mount({}); t.after(() => host.unmount());
+  await flush();
+  const opening = navigation.value({ id: "other", status: "pending", projectSlug: "other" }).catch(error => error);
+  await flush();
+  assert.deepEqual(pushed.at(-1), { path: "/app/project/other", query: {} });
+  // A newer navigation supersedes the one still waiting for its view.
+  await navigation.value({ route: "/app/manage/accounts" });
+  assert.match((await opening).message, /changed before it opened/u);
+});
+
 test("the local Colleague host reports the shared Learning state, opens Courses and shows its exact lesson step in the Lesson pane", async t => {
   const hostKeys = await import("../../src/lib/vibe64AssistantHost.js");
   const hostFilename = new URL("../../src/components/Vibe64LocalColleagueHost.vue", import.meta.url);

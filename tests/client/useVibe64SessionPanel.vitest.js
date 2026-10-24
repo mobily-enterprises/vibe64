@@ -270,8 +270,8 @@ import { computed, effectScope, nextTick, reactive, ref } from "vue";
 import { vi } from "vitest";
 import { useVibe64SessionPanel } from "../../src/composables/useVibe64SessionPanel.js";
 
-const panelHarness = vi.hoisted(() => ({ data: null, registryInput: null }));
-vi.mock("vue-router", () => ({ useRoute: () => ({ query: {} }) }));
+const panelHarness = vi.hoisted(() => ({ data: null, registryInput: null, route: { query: {} } }));
+vi.mock("vue-router", () => ({ useRoute: () => panelHarness.route }));
 vi.mock("@/composables/useVibe64ProjectScope.js", () => ({ useVibe64ProjectSlug: () => ref("project") }));
 vi.mock("@/composables/useVibe64SessionData.js", () => ({ useVibe64SessionData: () => panelHarness.data }));
 vi.mock("@/composables/useVibe64SessionRepositoryStatusRegistry.js", () => ({
@@ -326,5 +326,39 @@ describe("mounted session hosts", () => {
       expect(f.data.selectedSessionId.value).toBe("other");
       expect(f.data.selectSessionId).not.toHaveBeenCalled();
     } finally { f.scope.stop(); }
+  });
+
+  it("never mounts a runtime for a selected session this project does not list", async () => {
+    const f = mountPanel();
+    try {
+      f.data.selectedSessionId.value = "another-projects-session";
+      await nextTick();
+      expect(f.panel.runtimeHostSessionIds.value).toEqual(["work"]);
+      expect(panelHarness.registryInput.selectedSessionId()).toBe("");
+      f.data.sessionList.loadError = "Updates unavailable";
+      f.data.sessions.value = [];
+      await nextTick();
+      expect(f.panel.runtimeHostSessionIds.value).toEqual(["work"]);
+    } finally { f.scope.stop(); }
+  });
+
+  it("before the first list mounts only this project's remembered selection, never the link's", async () => {
+    const f = mountPanel();
+    try {
+      f.data.sessionList.isInitialLoading = true;
+      f.data.sessions.value = [];
+      f.data.selectedSessionId.value = "remembered";
+      await nextTick();
+      expect(f.panel.runtimeHostSessionIds.value).toEqual(["remembered"]);
+      panelHarness.route = { query: { session: "linked" } };
+      const g = mountPanel();
+      try {
+        g.data.sessionList.isInitialLoading = true;
+        g.data.sessions.value = [];
+        g.data.selectedSessionId.value = "linked";
+        await nextTick();
+        expect(g.panel.runtimeHostSessionIds.value).toEqual([]);
+      } finally { g.scope.stop(); }
+    } finally { f.scope.stop(); panelHarness.route = { query: {} }; }
   });
 });

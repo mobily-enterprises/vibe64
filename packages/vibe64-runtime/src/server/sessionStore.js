@@ -208,6 +208,12 @@ function isSafeBackgroundTaskId(taskId) {
   return BACKGROUND_TASK_ID_PATTERN.test(normalizeText(taskId));
 }
 
+// A session id that is not one of this project's sessions: every caller
+// answers the same clean 404, whichever operation looked it up.
+function unknownSessionError(sessionId) {
+  return Object.assign(vibe64Error(`Unknown vibe64 session: ${sessionId}`, "vibe64_session_not_found"), { statusCode: 404 });
+}
+
 function assertValidVibe64SessionId(sessionId) {
   const normalizedSessionId = normalizeText(sessionId);
   if (!isValidVibe64SessionId(normalizedSessionId)) {
@@ -1425,10 +1431,7 @@ function createVibe64SessionStore({
           "vibe64_session_archived"
         );
       }
-      throw vibe64Error(
-        `Unknown vibe64 session: ${sessionPaths.sessionId}`,
-        "vibe64_session_not_found"
-      );
+      throw unknownSessionError(sessionPaths.sessionId);
     }
     return sessionPaths;
   }
@@ -1729,7 +1732,7 @@ function createVibe64SessionStore({
     if (publishedArchive) {
       return withExtractedSessionArchive(publishedArchive, read);
     }
-    throw vibe64Error(`Unknown vibe64 session: ${activePaths.sessionId}`, "vibe64_session_not_found");
+    throw unknownSessionError(activePaths.sessionId);
   }
 
   async function withPublishedRenewalSession(sessionId, operation) {
@@ -3102,7 +3105,7 @@ function createVibe64SessionStore({
       learningSessionBinding(summary.metadata, admittedLearningScope, summary.sessionId);
       return summary;
     }
-    throw vibe64Error(`Unknown vibe64 session: ${activePaths.sessionId}`, "vibe64_session_not_found");
+    throw unknownSessionError(activePaths.sessionId);
   }
 
   async function readSessionSummaryFromPaths(sessionPaths) {
@@ -3489,10 +3492,7 @@ function createVibe64SessionStore({
           if (await readSessionArchiveRecord(activePaths.sessionId)) {
             return;
           }
-          throw vibe64Error(
-            `Unknown vibe64 session: ${activePaths.sessionId}`,
-            "vibe64_session_not_found"
-          );
+          throw unknownSessionError(activePaths.sessionId);
         }
         const [status, metadata] = await Promise.all([
           readStatusFromPaths(activePaths),
@@ -3652,10 +3652,7 @@ function createVibe64SessionStore({
             );
           }
           if (!activeExists) {
-            throw vibe64Error(
-              `Unknown vibe64 session: ${normalizedSourceSessionId}`,
-              "vibe64_session_not_found"
-            );
+            throw unknownSessionError(normalizedSourceSessionId);
           }
           const [status, metadata] = await Promise.all([
             readStatusFromPaths(activePaths),
@@ -3782,10 +3779,7 @@ function createVibe64SessionStore({
               step: "closing-renamed"
             });
           } else if (!closingExists) {
-            throw vibe64Error(
-              `Unknown vibe64 session: ${normalizedSourceSessionId}`,
-              "vibe64_session_not_found"
-            );
+            throw unknownSessionError(normalizedSourceSessionId);
           }
 
           const [closingStatus, closingMetadata] = await Promise.all([
@@ -3947,10 +3941,7 @@ function createVibe64SessionStore({
     if (!await pathExists(sessionPaths.manifestPath)) {
       const archiveRecord = await readSessionArchiveRecord(sessionId);
       if (!archiveRecord) {
-        throw vibe64Error(
-          `Unknown vibe64 session: ${assertValidVibe64SessionId(sessionId)}`,
-          "vibe64_session_not_found"
-        );
+        throw unknownSessionError(assertValidVibe64SessionId(sessionId));
       }
       await validateSessionArchive(archiveRecord.archivePath);
       return archiveRecord;

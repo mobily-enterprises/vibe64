@@ -196,6 +196,7 @@ import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import Vibe64TeamAiGate from "@/components/studio/Vibe64TeamAiGate.vue";
 import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";
 import { useProjectSelectionGate } from "@/composables/useProjectSelectionGate.js";
+import { provideVibe64OpenedProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { VIBE64_LEARNING_MODE_NOTE } from "@/lib/vibe64Learning.js";
 import {
@@ -232,6 +233,8 @@ const props = defineProps({
 const PROJECTS_PATH = "/app/manage/projects";
 const emit = defineEmits(["missing", "ready", "error", "deleted", "retry-runtime"]);
 const router = useRouter();
+// A gate scoped to the current project is keyed by its slug: its view keeps it.
+if (props.scopeSelectionToCurrentProject) provideVibe64OpenedProjectSlug();
 // Learn/Develop and Courses, where the deleted practice project's lesson remains (null without a host shell).
 const learning = useVibe64Learning();
 const recovering = ref(false);

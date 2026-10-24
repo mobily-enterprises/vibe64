@@ -144,6 +144,18 @@ test("session state requires an explicit runtime root", () => {
   );
 });
 
+test("another project's session id is an unknown session with a 404 status", async () => {
+  await withTemporaryRoot(async (firstRoot) => {
+    await withTemporaryRoot(async (secondRoot) => {
+      await createStore(firstRoot).createSession({ sessionId: "2026-10-24_07-55-25" });
+      await assert.rejects(
+        () => createStore(secondRoot).readSession("2026-10-24_07-55-25"),
+        { code: "vibe64_session_not_found", statusCode: 404 }
+      );
+    });
+  });
+});
+
 test("plain session status has no workflow completion state", () => {
   assert.deepEqual(VIBE64_SESSION_STATUS, {
     ACTIVE: "active",

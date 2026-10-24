@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   renewedSuccessorSessionId,
+  routeQueryWithoutUnlistedSession,
   sessionListRealtimeShouldRefresh,
   selectedSessionIdForCurrentAlias,
   shouldPreserveSelectedSessionDuringRefresh
@@ -94,6 +95,28 @@ describe("current session selection", () => {
     await published;
 
     expect(calls).toEqual(["session-1", "session-3"]);
+  });
+
+  it("drops another project's session from the URL, with its chat", () => {
+    const sessions = [{ sessionId: "inspector-session" }];
+    const route = (session, slug = "mercbot-inspector") => ({
+      params: { slug },
+      query: { session, chat: "main", conversation: "c1", pane: "dashboard" }
+    });
+
+    expect(routeQueryWithoutUnlistedSession({
+      route: route("mercbot-session"), projectSlug: "mercbot-inspector", sessions
+    })).toEqual({ pane: "dashboard" });
+    expect(routeQueryWithoutUnlistedSession({
+      route: route("inspector-session"), projectSlug: "mercbot-inspector", sessions
+    })).toBe(null);
+    // A view still showing while the route names the next project keeps it.
+    expect(routeQueryWithoutUnlistedSession({
+      route: route("mercbot-session", "mercbot"), projectSlug: "mercbot-inspector", sessions
+    })).toBe(null);
+    expect(routeQueryWithoutUnlistedSession({
+      route: { params: { slug: "mercbot-inspector" }, query: {} }, projectSlug: "mercbot-inspector", sessions
+    })).toBe(null);
   });
 
   it("preserves a temporarily missing selection only during refresh", () => {

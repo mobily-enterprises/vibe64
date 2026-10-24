@@ -12,6 +12,7 @@ import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
+import { projectSlugFromRoute } from "@/lib/vibe64ProjectScope.js";
 import {
   selectedSessionIdFromRoute,
   useVibe64SessionSelection
@@ -126,6 +127,18 @@ function renewedSuccessorSessionId({
     String(session?.metadata?.renewed_from || "").trim() === predecessorId
   ));
   return matches.length === 1 ? String(matches[0]?.sessionId || "").trim() : "";
+}
+
+// A ?session= that is not one of this project's sessions (another project's,
+// or one that is gone) leaves the URL, with its chat, once the list has
+// answered; the project's normal session choice then applies. Null keeps the
+// URL: no such param, or the route already shows another project.
+function routeQueryWithoutUnlistedSession({ route = {}, projectSlug = "", sessions = [] } = {}) {
+  const routeSessionId = selectedSessionIdFromRoute(route);
+  if (!routeSessionId || projectSlugFromRoute(route) !== projectSlug ||
+    sessionIdExistsInList(routeSessionId, sessions)) return null;
+  const { session: _session, conversation: _conversation, chat: _chat, ...query } = route.query || {};
+  return query;
 }
 
 function shouldPreserveSelectedSessionDuringRefresh({
@@ -694,6 +707,11 @@ function useVibe64SessionData({
     return createSessionInFlight;
   }
 
+  function dropUnlistedRouteSession() {
+    const query = routeQueryWithoutUnlistedSession({ route, projectSlug: projectSlug.value, sessions: sessions.value });
+    if (query) void router.replace({ path: route.path, hash: route.hash, query }).catch(() => null);
+  }
+
   let pendingRenewalNavigation = null;
   function syncRenewalSuccessorUrl(predecessorId, successorId) {
     if (selectedSessionIdFromRoute(route) !== predecessorId) return;
@@ -836,6 +854,8 @@ function useVibe64SessionData({
         }
       }
     }
+    // A renewal owns its predecessor's link (syncRenewalSuccessorUrl).
+    if (!state.selectionRenewalPredecessorId) dropUnlistedRouteSession();
     if (
       !state.selectedSessionId &&
       emptySessionListObservedForProject === state.selectionScope
@@ -905,6 +925,7 @@ function useVibe64SessionData({
 }
 
 export {
+  routeQueryWithoutUnlistedSession,
   sessionListRealtimeShouldRefresh,
   renewedSuccessorSessionId,
   selectedSessionIdForCurrentAlias,

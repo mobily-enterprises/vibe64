@@ -149,8 +149,10 @@ async function navigate(command = {}) {
   const suffix = command.pane && command.pane !== "preview" ? paneSuffix[command.pane] : "";
   if (command.pane && command.pane !== "preview" && !suffix) throw new Error("This project view is unavailable.");
   // The requested view replaces the shown one, uncovered: the lesson's
-  // flag (?lesson=1) and an empty project's ?pane go.
-  const { pane: _pane, lesson: _lesson, ...query } = route.query;
+  // flag (?lesson=1) and an empty project's ?pane go. Another project starts
+  // from a clean query: this project's session never travels to it.
+  const { pane: _pane, lesson: _lesson, ...shownQuery } = route.query;
+  const query = projectSlugFromRoute(route) === command.projectSlug ? shownQuery : {};
   if (command.sessionId) query.session = command.sessionId;
   if (command.databaseView) query.databaseView = command.databaseView;
   if (command.pane === "integrations") {

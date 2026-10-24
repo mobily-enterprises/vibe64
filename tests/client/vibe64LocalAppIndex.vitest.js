@@ -202,7 +202,7 @@ it("shared original shell refs are per mount and only local composition supplies
     expect(localSource).toContain('import { Vibe64Colleague } from "@local/vibe64-colleague/client"');
     expect(localSource).toContain("if (browserNavigation) browserNavigation.value = navigate;");
     // Show me's view replaces the shown one, uncovered: the lesson's ?lesson=1 goes.
-    expect(localSource).toContain("const { pane: _pane, lesson: _lesson, ...query } = route.query;");
+    expect(localSource).toContain("const { pane: _pane, lesson: _lesson, ...shownQuery } = route.query;");
     // A template auto-unwraps the injected ref, so Colleague receives the local navigator itself.
     expect(localSource).toContain(':navigate="navigate"');
     expect(localSource).not.toContain("createConversationRuntime");

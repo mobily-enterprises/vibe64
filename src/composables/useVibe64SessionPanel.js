@@ -3,6 +3,7 @@ import { useRoute } from "vue-router";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
+import { selectedSessionIdFromRoute } from "@/composables/useVibe64SessionSelection.js";
 import {
   blockingVibe64SessionPageError
 } from "@/lib/vibe64SessionPanelModel.js";
@@ -111,12 +112,20 @@ function useVibe64SessionPanel(props, emit) {
     selectedSession: sessionData.selectedSession,
     selectedSessionId: sessionData.selectedSessionId
   });
+  // Only a session this project listed gets a runtime, so a ?session= from
+  // another project (a stale link) never reaches a session request. While the
+  // first list loads, this project's remembered selection may mount early.
+  const listedSelectedSessionId = computed(() => {
+    const id = selection.selectedSessionId;
+    if ((sessionData.sessions.value || []).some((session) => session.sessionId === id)) return id;
+    return sessionData.sessionList.isInitialLoading && id !== selectedSessionIdFromRoute(route) ? id : "";
+  });
   let repositoryStatusRegistry = {
     observe: () => null
   };
   repositoryStatusRegistry = useVibe64SessionRepositoryStatusRegistry({
     onState: applyRuntimeWorkState,
-    selectedSessionId: () => selection.selectedSessionId,
+    selectedSessionId: () => listedSelectedSessionId.value,
     sessionSourceOperationsSuspended: (sessionId) => (
       runtimeStateBySessionId[sessionId]?.sourceOperationsSuspended === true
     ),
@@ -157,8 +166,8 @@ function useVibe64SessionPanel(props, emit) {
   const sessionLoadError = computed(() => Boolean(sessionData.sessionList.loadError));
   const runtimeHostSessionIds = computed(() => {
     const visibleSessionIds = new Set(toolbarSessions.value.filter((session) => !session.archiving).map((session) => session.sessionId));
-    if (selection.selectedSessionId) {
-      visibleSessionIds.add(selection.selectedSessionId);
+    if (listedSelectedSessionId.value) {
+      visibleSessionIds.add(listedSelectedSessionId.value);
     }
     if (sessionLoadError.value) {
       for (const mountedSessionId of mountedRuntimeSessionIds.value) {
@@ -234,9 +243,7 @@ function useVibe64SessionPanel(props, emit) {
 
   watch(sessionData.sessions, (sessions = []) => {
     if (sessionLoadError.value) {
-      if (selection.selectedSessionId) {
-        ensureRuntimeHost(selection.selectedSessionId);
-      }
+      ensureRuntimeHost(listedSelectedSessionId.value);
       return;
     }
     const visibleSessionIds = new Set(sessions.map((session) => session.sessionId));
@@ -246,19 +253,10 @@ function useVibe64SessionPanel(props, emit) {
         delete runtimeStateBySessionId[sessionId];
       }
     }
-    if (selection.selectedSessionId) {
-      ensureRuntimeHost(selection.selectedSessionId);
-    }
+    ensureRuntimeHost(listedSelectedSessionId.value);
   });
 
-  watch(() => [
-    selection.selectedSessionId,
-    selection.selectedSessionId ? "selected" : "empty"
-  ].join("|"), () => {
-    if (selection.selectedSessionId) {
-      ensureRuntimeHost(selection.selectedSessionId);
-    }
-  }, {
+  watch(listedSelectedSessionId, ensureRuntimeHost, {
     immediate: true
   });
 

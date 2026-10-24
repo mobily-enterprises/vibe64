@@ -66,6 +66,13 @@ select another tab; session-list refreshes preserve that choice. Following a
 different session link selects its named session. A session being archived is
 temporarily unavailable for selection.
 
+A link whose session is not one of this project's open sessions (another
+project's session, or one that has since been archived) loses its `session`
+part once the session list loads, and the project opens its usual session
+instead; no chat, Preview or other session work starts for the unknown
+session. Switching projects always starts the next project from its own
+sessions, never the previous project's.
+
 The right-side session actions tighten their spacing and icon size in narrower
 chat panes to leave more room for labels. Wider panes retain their usual spacing;
 the smallest panes keep secondary actions in **Session actions**. Update uses a
