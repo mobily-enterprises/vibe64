@@ -414,7 +414,7 @@ async function operatorFixture(t) {
   return { ...f, git, owner, course, coursePath, lockPath, systemRoot: path.join(owner, "system"), outputs, run };
 }
 
-test("operator CLI separately installs exact committed content and enables or disables with fresh catalogue CAS", async t => {
+test("operator CLI separately installs exact committed content and enables, disables or removes with fresh catalogue CAS", async t => {
   const f = await operatorFixture(t);
   const courseBefore = await readFile(f.coursePath), lockBefore = await readFile(f.lockPath);
   await f.run("installed-courses", f.systemRoot);
@@ -450,6 +450,17 @@ test("operator CLI separately installs exact committed content and enables or di
   assert.equal(f.outputs.at(-1).courses[0].enabled, false);
   assert.deepEqual(JSON.parse(await readFile(path.join(snapshot, "pin.json"), "utf8")), first.pin,
     "disabling retains the exact installed pin for existing attempts");
+  await assert.rejects(f.run("remove-course", f.course.courseId, f.course.release, f.systemRoot, "1"),
+    { code: "VIBE64_TRAINING_CATALOGUE_REVISION_CONFLICT" });
+  await f.run("remove-course", f.course.courseId, f.course.release, f.systemRoot, "2");
+  assert.deepEqual([f.outputs.at(-1).revision, f.outputs.at(-1).changed], [3, true]);
+  await f.run("installed-courses", f.systemRoot);
+  assert.deepEqual(f.outputs.at(-1), { ok: true, schemaVersion: 1, revision: 3, courses: [] },
+    "removing the last release leaves an empty catalogue at a later revision");
+  await assert.rejects(f.run("remove-course", f.course.courseId, f.course.release, f.systemRoot, "3"),
+    { code: "VIBE64_TRAINING_COURSE_MISSING" });
+  assert.deepEqual(JSON.parse(await readFile(path.join(snapshot, "pin.json"), "utf8")), first.pin,
+    "removing a release keeps the installed topic content for saved attempts");
   assert.deepEqual(await readFile(f.coursePath), courseBefore);
   assert.deepEqual(await readFile(f.lockPath), lockBefore);
   assert.equal(f.git("status", "--porcelain"), "");
@@ -462,6 +473,7 @@ test("operator CLI refuses malformed revisions aliases dirty sources and changed
   for (const revision of ["", "-1", "1.5", "+1", "01", "9007199254740992"]) {
     await assert.rejects(f.run("enable-course", f.coursePath, f.lockPath, f.systemRoot, revision), /Usage/u);
     await assert.rejects(f.run("disable-course", f.course.courseId, f.course.release, f.systemRoot, revision), /Usage/u);
+    await assert.rejects(f.run("remove-course", f.course.courseId, f.course.release, f.systemRoot, revision), /Usage/u);
   }
   for (const args of [["install-topic", f.root], ["installed-courses", f.systemRoot, "extra"],
     ["enable-course", f.coursePath, f.lockPath, f.systemRoot, "0", "extra"],

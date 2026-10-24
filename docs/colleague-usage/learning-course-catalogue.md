@@ -14,7 +14,7 @@ courses.
 3. The catalogue is grouped by **topic** (for example **Vibe64**). Under each
    topic, every course shows its title, release (for example `0.1.10`), a
    **Released** or **Preview** chip, its lesson count and whether it is
-   **Installed**, **Not installed**, **Disabled by the owner** or has a
+   **Installed**, **Not installed**, **Disabled on this server** or has a
    **Conflicting copy installed**. A topic without courses says **No courses in
    this topic yet.** Courses whose catalogue entry names no topic are listed
    under **Other courses**.
@@ -71,11 +71,11 @@ same installation as **Install**, for the newer release.
 After an update:
 
 - The new release is installed and enabled, and new lessons start from it.
-- Older releases of that course are disabled **for new starts only**. They are
-  not deleted. Their old card is hidden from the list, except while you still
-  have a saved lesson in that release: that card stays, labelled **Disabled for
-  new lessons**, and **Continue lesson** still opens the exact lesson you
-  started. Lesson history is unchanged.
+- The older release of that course is removed from the installed courses, so
+  it no longer uses one of the server's 16 places and its card goes away. Its
+  lesson content stays installed: a lesson you started in it still shows under
+  **Lesson in progress**, with its title, and **Continue lesson** opens the
+  exact lesson you started. Lesson history is unchanged.
 - Progress carries over. A lesson whose content did not change keeps its
   **Completed** status. A lesson whose content changed shows **Not started**
   (or **In progress**) with the note **Completed in <old release> · updated
@@ -96,11 +96,18 @@ installed course is not installed twice.
   install. Nothing was enabled; retry.
 - **The official course catalogue is invalid …**: the published catalogue is
   wrong. Nothing was installed; the catalogue maintainers must correct it.
-- **The owner disabled course … on this server**: shown as **Disabled by the
-  owner**. Only the workspace owner can enable it again.
+- **Course … was disabled on this server, and installing does not enable it
+  again**: shown as **Disabled on this server**, with **This release was disabled
+  on this server. Installing cannot enable it again; only the server's operator
+  can.** Nobody can re-enable it from the page or through Colleague, the
+  workspace owner included; the server's operator does it on the server (see
+  [Local operator provisioning](../training-content.md#local-operator-provisioning)).
+  Nothing was changed.
 - **… already keeps 16 installed course releases, its limit**: every installed
-  or updated release uses one of 16 places and none is deleted automatically. Ask
-  the owner to free space; nothing was changed.
+  course release uses one of 16 places. Updating a course reuses its place,
+  because the older release is removed; a new course needs a free one. The
+  server's operator can free a place by removing a release on the server; saved
+  lessons keep their content. Nothing was changed.
 - **Topic source or installed snapshot conflicts with the approved owner pin** or
   **Conflicting copy installed**: the server holds different content under the
   same release. Nothing is replaced automatically; ask the owner to inspect it.
@@ -116,5 +123,5 @@ Colleague can list the catalogue (`available.list`), explain each course's state
 and offer to install or update a course. It installs or updates only after you
 directly ask for that course or accept its offer, using the same server action
 as the button, and it reports the real result. It cannot install courses from
-other sources, choose a different catalogue, delete releases or re-enable a
-course the owner disabled.
+other sources, choose a different catalogue, remove a release to free a place
+or re-enable a disabled release; those stay with the server's operator.

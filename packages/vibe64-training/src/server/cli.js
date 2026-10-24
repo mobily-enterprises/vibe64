@@ -24,18 +24,18 @@ async function runTrainingCli(args, { write = text => console.log(text) } = {}) 
     write(JSON.stringify({ ok: true, ...catalogue }, null, 2));
     return 0;
   }
-  if (args[0] === "enable-course" || args[0] === "disable-course") {
+  if (["enable-course", "disable-course", "remove-course"].includes(args[0])) {
     const [command, first, second, systemRoot, revision] = args;
     if (args.length !== 5 || !first || !second || !systemRoot || !/^(0|[1-9][0-9]*)$/u.test(revision || "") || !Number.isSafeInteger(Number(revision))) {
       throw new Error(command === "enable-course"
         ? "Usage: vibe64 training enable-course <course.json> <course.lock.json> <system-root> <expected-revision>"
-        : "Usage: vibe64 training disable-course <courseId> <release> <system-root> <expected-revision>");
+        : `Usage: vibe64 training ${command} <courseId> <release> <system-root> <expected-revision>`);
     }
     const catalogue = createInstalledTrainingCatalogue({ systemRoot: path.resolve(systemRoot) });
     const expectedRevision = Number(revision);
     const result = command === "enable-course"
       ? await catalogue.enableCourse({ course: JSON.parse(await readFile(first, "utf8")), lock: JSON.parse(await readFile(second, "utf8")), expectedRevision })
-      : await catalogue.disableCourse({ courseId: first, release: second, expectedRevision });
+      : await catalogue[command === "remove-course" ? "removeCourse" : "disableCourse"]({ courseId: first, release: second, expectedRevision });
     write(JSON.stringify({ ok: true, ...result }, null, 2));
     return 0;
   }

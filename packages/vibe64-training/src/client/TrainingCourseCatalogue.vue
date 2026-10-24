@@ -38,7 +38,7 @@ function progressText(course) {
   if (progress.phase === "enable") return "Enabling the course…";
   return "Installing…";
 }
-const installedLabel = { enabled: "Installed", disabled: "Disabled by the owner", conflict: "Conflicting copy installed", "not-installed": "Not installed" };
+const installedLabel = { enabled: "Installed", disabled: "Disabled on this server", conflict: "Conflicting copy installed", "not-installed": "Not installed" };
 const installedTone = { enabled: "enabled", disabled: "disabled", conflict: "disabled", "not-installed": "neutral" };
 const installable = course => course.installed === "not-installed";
 function install(course) {
@@ -86,7 +86,7 @@ function install(course) {
             </p>
             <p v-if="course.updateFrom" class="tcc__detail">You have {{ course.updateFrom }}. Updating keeps your saved lessons and progress.</p>
             <p v-if="course.status !== 'released'" class="tcc__detail">Preview course: it can be installed; until it is released, only the workspace owner can try its lessons from Courses.</p>
-            <p v-if="course.installed === 'disabled'" class="tcc__detail">Ask the owner to enable this release again.</p>
+            <p v-if="course.installed === 'disabled'" class="tcc__detail">This release was disabled on this server. Installing cannot enable it again; only the server's operator can.</p>
             <p v-if="stateOf(course)?.phase === 'installing'" class="tcc__progress" role="status">
               <v-progress-circular indeterminate size="18" width="2" color="primary" /><span>{{ progressText(course) }}</span>
             </p>

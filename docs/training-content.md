@@ -598,9 +598,11 @@ the store does not authenticate objects or discover/fetch repositories.
 contains the original course definition, its complete generated `lock`, and an
 `enabled` boolean. Both definition and lock are immutable for a course ID/release;
 changing even its title requires another approved release. A new release is a
-separate retained entry. Enablement is the only mutable field. The pilot retains
-at most 16 course releases in a file bounded to 1 MiB; it never silently removes
-disabled releases. New directories use 0700 and catalogue records use 0600.
+separate entry. Enablement is the only mutable field; `removeCourse` deletes a
+whole entry. The catalogue keeps at most 16 course releases in a file bounded to
+1 MiB. Only a course Update (its older releases) and the operator's
+`remove-course` remove entries; installed topic content is never removed with
+them, so saved attempts keep their pinned lessons. New directories use 0700 and catalogue records use 0600.
 
 Every read freshly verifies all entries, including disabled ones, against installed
 topic pins and the original `createCourseLock` owner. The approved lock must exactly
@@ -657,7 +659,8 @@ retry returns `changed:false`; the same name with a different definition returns
 `VIBE64_TRAINING_COURSE_INVALID`, `VIBE64_TRAINING_COURSE_TOPIC_UNAVAILABLE`,
 `VIBE64_TRAINING_COURSE_LIMIT` and the original catalogue revision/busy/save
 errors. To retire a custom course, disable its exact release with
-`vibe64 training disable-course custom-<name-slug> 1.0.0 <system-root> <revision>`.
+`vibe64 training disable-course custom-<name-slug> 1.0.0 <system-root> <revision>`,
+or remove it with `remove-course` to free its place.
 
 Course progress in the **Courses** pane is read-only: `learning.read` adds
 `lessonProgress`, one `{lessonCode,lessonHash,required,passed,completed,open}`
@@ -921,9 +924,9 @@ fetches its canonical repository at exactly the locked commit (`git init`,
 original `installTopic` with `topicHash = manifestHash`. That owner re-verifies
 the clean commit, canonical source and every byte. It then calls
 `enableCourse` with a fresh revision, retrying once on a revision conflict.
-Older enabled releases of the same course are then disabled with
-`disableCourse` (fresh revision; new starts only). Saved attempts keep their pin
-and resume. Installs run one at a time; repeated requests for the same release
+Older releases of the same course are then removed with `removeCourse` (fresh
+revision), freeing their places; the result lists them in `retired`. Saved
+attempts keep their pin, installed content and resume. Installs run one at a time; repeated requests for the same release
 share one operation. Git runs through `runVibe64Command` as the daemon with
 hooks disabled; no fetched file is executed.
 
@@ -933,10 +936,11 @@ from sources, and are removed in `finally`. The managed exec helper admits the
 daemon's generic commands in exactly that one-level directory under
 `~/.local/state/vibe64/training-sources/`.
 
-An already enabled exact release is a no-op. A disabled release is re-enabled
-only for the workspace owner (`VIBE64_TRAINING_COURSE_DISABLED` otherwise). A new
-entry beyond the installed catalogue's 16 retained releases fails before any
-download with `VIBE64_TRAINING_COURSE_LIMIT`; nothing is deleted.
+An already enabled exact release is a no-op. A disabled release is refused for
+everyone, the owner included (`VIBE64_TRAINING_COURSE_DISABLED`); re-enabling
+stays the operator's `enable-course`. A new entry beyond the installed
+catalogue's 16 releases fails before any download with
+`VIBE64_TRAINING_COURSE_LIMIT`; the operator frees a place with `remove-course`.
 
 The actions are `vibe64.training.available.list` (`GET
 /api/vibe64/training/available`) and `vibe64.training.course.install` (`POST
@@ -960,6 +964,7 @@ vibe64 training install-topic /absolute/path/to/learn-topic /absolute/vibe64/sta
 vibe64 training installed-courses /absolute/vibe64/state
 vibe64 training enable-course /absolute/path/to/course.json /absolute/path/to/course.lock.json /absolute/vibe64/state 0
 vibe64 training disable-course first-course 0.1.0 /absolute/vibe64/state 1
+vibe64 training remove-course first-course 0.1.0 /absolute/vibe64/state 2
 ```
 
 `install-topic` derives the exact pin from the clean committed topic repository;
@@ -971,7 +976,9 @@ install a new pin rather than replacing retained content.
 `installed-courses` returns the freshly verified catalogue, including its
 revision, enablement and exact course locks. A missing catalogue reads as revision
 zero without creating files. Supply that exact current nonnegative decimal
-revision to `enable-course` or `disable-course`. The original catalogue owner
+revision to `enable-course`, `disable-course` or `remove-course`. Removing an
+exact release takes it out of the catalogue and frees its place; its installed
+topic content stays, so saved attempts keep resuming. The original catalogue owner
 verifies the course/lock against every installed topic, preserves immutable
 release definitions, and serializes writes. A stale revision requires a new read
 and deliberate retry. An unconfirmed save requires inspecting the current

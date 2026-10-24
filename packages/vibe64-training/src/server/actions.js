@@ -184,7 +184,7 @@ function createTrainingActions({ catalogue, learners, content = null, exercises 
       const actor = authenticatedVibe64User(context);
       if (!actor) throw Object.assign(new Error("Log in to Vibe64 before using learning actions."), { code: "vibe64_auth_required", statusCode: 401 });
       try {
-        return boundedResult(await execute(input, actor));
+        return boundedResult(await execute(input, actor, context));
       } catch (cause) {
         if (cause.code === "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE") throw cause;
         // Course creation reports the catalogue owner's own corrective message.
@@ -281,11 +281,11 @@ function createTrainingActions({ catalogue, learners, content = null, exercises 
     definition("course.install", {
       courseId: { ...id, pattern: "^[a-z][a-z0-9-]{0,63}$" },
       release: { ...text, pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
-    }, "Install and enable one exact course release from the official catalogue only after the person's direct request or accepted offer. Read available.list first and use its exact courseId and release. The server downloads each pinned topic at its exact commit, verifies it byte for byte against the catalogue lock and enables the course; it runs no course code and starts no lesson. Repeating it for an installed, enabled course changes nothing. When available.list shows updateFrom, this same action is the course Update: the newer release is installed and enabled and older releases of that course are disabled for new starts only; saved lessons keep their pinned release and can still be resumed, and nothing is deleted. Courses from other sources remain an owner operation outside Vibe64.", async (input, actor) => {
+    }, "Install and enable one exact course release from the official catalogue only after the person's direct request or accepted offer. Read available.list first and use its exact courseId and release. The server downloads each pinned topic at its exact commit, verifies it byte for byte against the catalogue lock and enables the course; it runs no course code and starts no lesson. Repeating it for an installed, enabled course changes nothing. A release disabled on this server (available.list installed: disabled) is refused for everyone, the owner included: installing never enables it again, and only the server's operator can. When available.list shows updateFrom, this same action is the course Update: the newer release is installed and enabled and the older releases of that course, listed in retired, are removed from the installed courses, freeing their places; saved lessons keep their pinned lesson content and can still be resumed, and lesson content and progress are not deleted. The server keeps at most 16 installed course releases; only the server's operator can remove one to free a place. Courses from other sources remain an owner operation outside Vibe64.", async input => {
       if (typeof courseInstaller?.installCourse !== "function") {
         return { ok: false, available: false, error: "Installing courses from the catalogue is unavailable in this installation. No course was installed." };
       }
-      const result = await courseInstaller.installCourse({ ...pick(input, ["courseId", "release"]), actor });
+      const result = await courseInstaller.installCourse(pick(input, ["courseId", "release"]));
       return { ok: true, available: true, changed: result.changed === true, catalogueCommit: result.catalogueCommit,
         retired: Array.isArray(result.retired) ? result.retired : [],
         ...(Number.isSafeInteger(result.revision) ? { revision: result.revision } : {}),
@@ -346,8 +346,14 @@ function createTrainingActions({ catalogue, learners, content = null, exercises 
       if (typeof exercises?.prepareLesson !== "function") return unavailable();
       return announced(actor, async () => prepared(await exercises.prepareLesson({ actor, attemptId: input.attemptId })), input.attemptId);
     }),
-    definition("lesson.restart", { attemptId, requestId, expectedRevision: revision }, "Restart the lesson in progress only after the person asked for it and confirmed it. Use its exact attemptId and the current revision from learning.read. The attempt is archived (its practice project, step results and teacher conversation are kept in Courses, Archived) and a new attempt of the same lesson starts with a fresh practice project, a fresh teacher conversation and no results. Keep the same request ID on an uncertain retry; it finishes a restart that stopped part-way. A pinned session or a full archive (20 lessons) refuses the restart and changes nothing.", async (input, actor) => {
+    definition("lesson.restart", { attemptId, requestId, expectedRevision: revision,
+      confirmed: { type: "boolean", required: false } }, "Restart the lesson in progress only after the person asked for it and then confirmed restarting this exact lesson in the conversation; pass confirmed: true only then, or the restart is refused with VIBE64_TRAINING_LESSON_UNCONFIRMED and nothing changes. Name the lesson and say what is kept. Use its exact attemptId and the current revision from learning.read. The attempt is archived (its practice project, step results and teacher conversation are kept in Courses, Archived) and a new attempt of the same lesson starts with a fresh practice project, a fresh teacher conversation and no results. Keep the same request ID on an uncertain retry; it finishes a restart that stopped part-way. A pinned session or a full archive (20 lessons) refuses the restart and changes nothing.", async (input, actor, context) => {
       if (typeof exercises?.restartLesson !== "function") return unavailable("close");
+      // The learner's own Restart button (the api channel) is its confirmation.
+      if (context.channel !== "api" && input.confirmed !== true) {
+        throw Object.assign(new Error("Ask the person to confirm restarting this exact lesson, then repeat with confirmed: true. Nothing was changed."),
+          { code: "VIBE64_TRAINING_LESSON_UNCONFIRMED", statusCode: 409 });
+      }
       return announced(actor, async () => prepared(await exercises.restartLesson({ actor,
         ...pick(input, ["attemptId", "requestId", "expectedRevision"]) })), input.attemptId);
     }),

@@ -136,8 +136,8 @@ const releaseOrder = (left, right) => {
   const a = left.split(".").map(Number), b = right.split(".").map(Number);
   return a[0] - b[0] || a[1] - b[1] || a[2] - b[2];
 };
-// A release that an update disabled stays installed for its saved attempts;
-// it is listed only while a saved lesson still uses it.
+// An update removes the older release; one still disabled beside a newer
+// enabled release is listed only while a saved lesson uses it.
 const superseded = course => !course.enabled && courses.value.some(other => other.courseId === course.courseId && other.enabled &&
   releaseOrder(other.release, course.release) > 0);
 const summaries = computed(() => courses.value.map(course => ({ course, key: courseKey(course),
@@ -175,13 +175,16 @@ async function requestCreateCourse(input) {
 }
 
 // Display-only lookups for the saved lesson card: the readable title of the
-// exact pinned lesson when the current catalogue still lists it.
+// exact pinned lesson from the current catalogue, or, once an update removed
+// its release, from Learn mode's own read of the pinned lesson.
 const savedPlace = computed(() => {
   const pin = savedAttempt.value?.pin;
   if (!pin) return null;
   const course = courses.value.find(value => value.courseId === pin.course.courseId && value.release === pin.course.release);
   const lesson = course?.lessons.find(value => value.code === pin.lesson.code && value.hash === pin.lesson.hash);
-  return { courseTitle: course?.title || "", lessonTitle: lesson?.title || "" };
+  const mode = props.learningResult?.learningMode;
+  const modeTitle = mode?.currentAttemptId === savedAttempt.value.attemptId && mode.lessonTitle !== pin.lesson.code ? mode.lessonTitle : "";
+  return { courseTitle: course?.title || "", lessonTitle: lesson?.title || modeTitle || "" };
 });
 const statusTone = course => !course.enabled ? "disabled" : course.status === "released" ? "enabled" : "preview";
 const statusIcon = { enabled: icons.checkCircle, preview: icons.eye, disabled: icons.cancel };

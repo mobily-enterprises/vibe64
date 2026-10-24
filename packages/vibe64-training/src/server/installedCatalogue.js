@@ -146,7 +146,8 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
         throw new Error("Installed catalogue exceeds its 1 MiB limit.");
       }
       const catalogue = validateContent(catalogueSchema, JSON.parse(bytes.toString("utf8")), "Installed catalogue");
-      if (catalogue.courses.length ? catalogue.revision < 1 : catalogue.revision !== 0) {
+      // Removing the last release leaves an empty catalogue at a later revision.
+      if (catalogue.courses.length && catalogue.revision < 1) {
         throw new Error("Installed catalogue revision conflicts with its course inventory.");
       }
       const seen = new Set();
@@ -234,7 +235,7 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
         return await save(catalogue, current);
       }
       if (catalogue.courses.length >= MAX_COURSES) {
-        throw new Error("Installed catalogue reached its 16 course-release limit. No retained release was removed.");
+        throw new Error("Installed catalogue reached its 16 course-release limit. Remove a release with vibe64 training remove-course to free a place; no release was removed.");
       }
       catalogue.courses.push(entry);
       return await save(catalogue, entry);
@@ -243,10 +244,12 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
     }
   }
 
-  async function disableCourse({ courseId, release: courseRelease, expectedRevision } = {}) {
+  // Disabling blocks new starts; removing also frees the release's place.
+  // Either way installed topic content and saved attempts keep their pins.
+  async function changeEntry({ courseId, release: courseRelease, expectedRevision } = {}, remove) {
     requireRevision(expectedRevision);
     if (typeof courseId !== "string" || !/^[a-z][a-z0-9-]{0,63}$/u.test(courseId) || typeof courseRelease !== "string" || !/^\d+\.\d+\.\d+$/u.test(courseRelease)) {
-      throw new Error("Disable an exact installed course ID and three-part release.");
+      throw new Error(`${remove ? "Remove" : "Disable"} an exact installed course ID and three-part release.`);
     }
     const before = await readCatalogue();
     if (!before.courses.some(entry => entry.course.courseId === courseId && entry.course.release === courseRelease)) {
@@ -260,6 +263,10 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
       if (!entry) {
         throw failure("VIBE64_TRAINING_COURSE_MISSING", "This course release is no longer in the catalogue. Read the current catalogue before retrying.", 404);
       }
+      if (remove) {
+        catalogue.courses = catalogue.courses.filter(value => value !== entry);
+        return await save(catalogue, entry);
+      }
       if (!entry.enabled) {
         return { revision: catalogue.revision, entry, changed: false };
       }
@@ -269,6 +276,8 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
       await unlock();
     }
   }
+  const disableCourse = selection => changeEntry(selection, false);
+  const removeCourse = selection => changeEntry(selection, true);
 
   // A custom course is an ordinary released catalogue entry: the owner names it
   // and orders whole topics already pinned by enabled released courses. The
@@ -315,7 +324,7 @@ function createInstalledTrainingCatalogue({ systemRoot } = {}) {
     return enableCourse({ course, lock: createCourseLock(course, resolved), expectedRevision });
   }
 
-  return { readCatalogue, enableCourse, disableCourse, createCourse };
+  return { readCatalogue, enableCourse, disableCourse, removeCourse, createCourse };
 }
 
 export { createInstalledTrainingCatalogue };

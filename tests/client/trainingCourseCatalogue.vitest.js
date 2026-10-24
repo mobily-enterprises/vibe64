@@ -69,8 +69,8 @@ describe("Training course catalogue", () => {
       course({ courseId: "failed", title: "Failed course" })
     ]), installState: { courseId: "busy", release: "0.2.0", phase: "installing" } }, TrainingCourseCatalogue);
     expect(html).toContain("View course");
-    expect(html).toContain("Disabled by the owner");
-    expect(html).toContain("Ask the owner to enable this release again.");
+    expect(html).toContain("Disabled on this server");
+    expect(html).toContain("Installing cannot enable it again; only the server&#39;s operator can.");
     expect(html).toContain("Preview course: it can be installed; until it is released, only the workspace owner can try its lessons");
     expect(html).toContain("Downloading and verifying topic 1 of 2");
     const failed = await render({ availableResult: available([course({ courseId: "failed" })]),
@@ -129,6 +129,21 @@ describe("Training course catalogue", () => {
     expect(html).toContain("getting-started · 0.1.0");
     expect(html).toContain("Disabled for new lessons");
     expect(html).toContain("Continue lesson");
+  });
+
+  it("still offers Continue lesson, with its title, when an update removed the saved lesson's release", async () => {
+    const attemptId = "11111111-1111-4111-8111-111111111111";
+    const active = { attemptId, pin: {
+      course: { courseId: "getting-started", release: "0.1.0" },
+      topic: { topicId: "intro", release: "0.1.0", commit: "a".repeat(40), topicHash: "b".repeat(64) },
+      lesson: { code: "V64-START-00", hash: "f".repeat(64) } }, projectSlug: "", preparation: { phase: "reserved" }, learning: { submissions: [], resume: null } };
+    const html = await render({ catalogueResult: { ok: true, available: true, revision: 4, courses: [installedCourse("0.2.0", true)] },
+      learningResult: learning({ active, learningMode: { on: true, currentAttemptId: attemptId, lessonCode: "V64-START-00", lessonTitle: "Connect your first AI (first edition)" } }),
+      canStart: true, canResume: true, availableResult: available([course({ installed: "enabled" })]) });
+    expect(html).toContain("Connect your first AI (first edition)");
+    expect(html).toContain("getting-started · 0.1.0");
+    expect(html).toContain("Continue lesson");
+    expect(html).not.toContain("Disabled for new lessons");
   });
 
   it("keeps unchanged lessons completed and marks changed ones as completed in an earlier release", async () => {

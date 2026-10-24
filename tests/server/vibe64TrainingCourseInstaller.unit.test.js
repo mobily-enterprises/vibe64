@@ -164,16 +164,24 @@ test("installing a listed course verifies its exact topic pin, enables it once a
   assert.equal(f.commands.filter(args => args.includes("fetch")).length, fetches + 1, "only the catalogue is reread");
 });
 
-test("an installed topic snapshot is reused when its course is enabled", async (t) => {
+test("installing refuses a disabled release for everyone; a removed release reinstalls from its verified snapshot", async (t) => {
   const f = await fixture(t);
   await f.make().installCourse({ courseId: "first-course", release: "0.1.0" });
   const current = await f.catalogue.readCatalogue();
   await f.catalogue.disableCourse({ courseId: "first-course", release: "0.1.0", expectedRevision: current.revision });
-  await assert.rejects(f.make().installCourse({ courseId: "first-course", release: "0.1.0", actor: { role: "member" } }),
-    { code: "VIBE64_TRAINING_COURSE_DISABLED", statusCode: 409 });
+  for (const role of ["member", "owner"]) {
+    await assert.rejects(f.make().installCourse({ courseId: "first-course", release: "0.1.0", actor: { role } }),
+      error => error.code === "VIBE64_TRAINING_COURSE_DISABLED" && error.statusCode === 409 && /operator/u.test(error.message));
+  }
+  assert.deepEqual((await f.catalogue.readCatalogue()).courses.map(entry => entry.enabled), [false], "installing never re-enables it");
+  assert.equal((await f.make().listAvailable()).courses[0].installed, "disabled");
+
+  const disabled = await f.catalogue.readCatalogue();
+  await f.catalogue.removeCourse({ courseId: "first-course", release: "0.1.0", expectedRevision: disabled.revision });
+  assert.deepEqual((await f.catalogue.readCatalogue()).courses, []);
   const installer = f.make();
   const before = f.commands.length;
-  const result = await installer.installCourse({ courseId: "first-course", release: "0.1.0", actor: { role: "owner" } });
+  const result = await installer.installCourse({ courseId: "first-course", release: "0.1.0" });
   assert.equal(result.changed, true);
   assert.equal(f.commands.slice(before).filter(args => args.includes("fetch")).length, 1, "the verified snapshot needs no topic download");
   assert.equal((await f.catalogue.readCatalogue()).courses[0].enabled, true);
@@ -225,8 +233,8 @@ test("a concurrent catalogue change is retried once against a fresh revision", a
     always += 1;
     throw Object.assign(new Error("changed"), { code: "VIBE64_TRAINING_CATALOGUE_REVISION_CONFLICT", statusCode: 409 });
   } };
-  await f.catalogue.disableCourse({ courseId: "first-course", release: "0.1.0", expectedRevision: 1 });
-  await assert.rejects(f.make({ catalogue: conflicting }).installCourse({ courseId: "first-course", release: "0.1.0", actor: { role: "owner" } }),
+  await f.catalogue.removeCourse({ courseId: "first-course", release: "0.1.0", expectedRevision: 1 });
+  await assert.rejects(f.make({ catalogue: conflicting }).installCourse({ courseId: "first-course", release: "0.1.0" }),
     { code: "VIBE64_TRAINING_CATALOGUE_REVISION_CONFLICT" });
   assert.equal(always, 2);
 });
@@ -263,7 +271,7 @@ test("catalogue actions require a signed-in user and report install results", as
   assert.equal(result.available, false);
 });
 
-test("an update installs the newer release and retires older releases for new starts only", async (t) => {
+test("an update installs the newer release and removes the older one, freeing its place, while saved lessons resume", async (t) => {
   const f = await fixture(t);
   const installer = f.make();
   await installer.installCourse({ courseId: "first-course", release: "0.1.0" });
@@ -293,11 +301,11 @@ test("an update installs the newer release and retires older releases for new st
   const updated = await f.make().installCourse({ courseId: "first-course", release: "0.2.0" });
   assert.deepEqual([updated.changed, updated.retired], [true, ["0.1.0"]]);
   const installed = await f.catalogue.readCatalogue();
-  assert.deepEqual(installed.courses.map(entry => [entry.course.release, entry.enabled]), [["0.1.0", false], ["0.2.0", true]]);
+  assert.deepEqual(installed.courses.map(entry => [entry.course.release, entry.enabled]), [["0.2.0", true]]);
   const after = (await f.make().listAvailable()).courses[0];
   assert.deepEqual([after.installed, after.updateFrom], ["enabled", null]);
 
-  // Nothing was deleted: the saved attempt keeps its pin, content and resume.
+  // Only the catalogue entry went: the saved attempt keeps its pin, content and resume.
   const state = await learners.readState({ actor, includeCompletion: true });
   assert.deepEqual(state.active.pin, oldPin);
   await content.readTopic(oldPin.topic);
@@ -321,7 +329,7 @@ test("an install or update that would exceed the installed release limit fails c
     return { ...current, courses: [...current.courses, ...filler] };
   } };
   await assert.rejects(f.make({ catalogue }).installCourse({ courseId: "first-course", release: "0.1.0" }),
-    error => error.code === "VIBE64_TRAINING_COURSE_LIMIT" && /never deleted/u.test(error.message));
+    error => error.code === "VIBE64_TRAINING_COURSE_LIMIT" && /operator can free a place by removing a release/u.test(error.message));
   assert.deepEqual((await f.catalogue.readCatalogue()).courses, []);
   assert.deepEqual(await f.scratch(), []);
 });

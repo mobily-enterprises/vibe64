@@ -132,7 +132,8 @@ courses**, then try again), a topic that is no longer available, or the 16
 course-release limit. Only the workspace owner can create courses; Colleague can
 create one when the owner asks with a name and topics. A custom course cannot be
 renamed or edited; the owner can disable it with `vibe64 training
-disable-course` (see `docs/training-content.md`) and create another one.
+disable-course`, or remove it with `vibe64 training remove-course` to free its
+place (see `docs/training-content.md`), and create another one.
 
 ## Preview courses
 

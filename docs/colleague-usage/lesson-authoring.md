@@ -157,7 +157,7 @@ A preview remains a preview;
 required draft lessons prevent a released course. This command does not publish
 a remote release, install a topic or make a learner course available.
 The managed session command rejects `install-topic`, `installed-courses`,
-`enable-course` and `disable-course`. Installation and course enablement use the
+`enable-course`, `disable-course` and `remove-course`. Installation and course enablement use the
 separate owner/operator workflow. If the managed authoring command is missing or
 cannot read its installed entrypoint, keep the source and ask the platform owner
 to reconcile the installed release; do not install another CLI in the session.
@@ -203,10 +203,11 @@ automatically stops no work and does not save or push the source.
 A workspace operator can now provision approved local lesson content through the
 terminal commands documented in [Local operator provisioning](../training-content.md#local-operator-provisioning).
 `install-topic` installs a clean committed topic; `installed-courses` reads the
-fresh catalogue revision; `enable-course` and `disable-course` change only the
-exact selected release against that revision. Creating a course lock does not
+fresh catalogue revision; `enable-course`, `disable-course` and `remove-course`
+change only the exact selected release against that revision. Creating a course lock does not
 install or enable it, and installation does not make it available to learners.
-Disabling blocks new starts while retaining existing attempts' pins. For content outside
+Disabling blocks new starts while retaining existing attempts' pins; removing
+also frees the release's place and still keeps its installed content for them. For content outside
 the official catalogue this is an OS-operator task on the selected installation,
 with no learner/mobile control or Colleague source/shell access. Colleague can explain the steps and offer to help
 formulate the operator request; it cannot run operator installation, enablement or deployment on

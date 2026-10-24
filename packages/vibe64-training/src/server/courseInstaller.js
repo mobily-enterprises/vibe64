@@ -24,7 +24,8 @@ const RELEASE = /^\d+\.\d+\.\d+$/u;
 const SOURCES_DIR = "training-sources";
 const SCRATCH_NAME = /^(catalogue|topic)-[a-f0-9-]{36}$/u;
 const MAX_FILE_BYTES = 256 * 1024;
-// The installed catalogue's own retained-release limit; nothing is ever deleted.
+// The installed catalogue's own release limit. An update replaces its older
+// release; an operator frees other places with `vibe64 training remove-course`.
 const MAX_INSTALLED_RELEASES = 16;
 const MAX_COURSES = 64;
 const CACHE_MS = 60_000;
@@ -92,7 +93,8 @@ function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "",
       systemRoot === path.parse(systemRoot).root) {
     throw new Error("Course installation needs a canonical absolute, non-root server-owned system root.");
   }
-  if (typeof catalogue?.readCatalogue !== "function" || typeof catalogue.enableCourse !== "function") {
+  if (typeof catalogue?.readCatalogue !== "function" || typeof catalogue.enableCourse !== "function" ||
+      typeof catalogue.removeCourse !== "function") {
     throw new TypeError("Course installation requires the installed catalogue owner.");
   }
   const catalogueRepository = String(repository || "").trim() || DEFAULT_CATALOGUE_REPOSITORY;
@@ -263,16 +265,17 @@ function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "",
   }
 
   // After a newer release is enabled, older releases of the same course are
-  // disabled for new starts only. Saved attempts keep their pinned release.
+  // removed from the catalogue, freeing their places. Saved attempts keep their
+  // pinned lesson content and still resume; only new starts use the newer one.
   async function retireOlderReleases(course) {
     const retired = [];
     for (let attempt = 0; ; attempt += 1) {
       const current = await catalogue.readCatalogue();
-      const older = current.courses.find(entry => entry.enabled && entry.course.courseId === course.courseId &&
+      const older = current.courses.find(entry => entry.course.courseId === course.courseId &&
         compareReleases(entry.course.release, course.release) < 0);
       if (!older) return retired;
       try {
-        await catalogue.disableCourse({ courseId: course.courseId, release: older.course.release, expectedRevision: current.revision });
+        await catalogue.removeCourse({ courseId: course.courseId, release: older.course.release, expectedRevision: current.revision });
         retired.push(older.course.release);
         attempt = -1;
       } catch (error) {
@@ -281,7 +284,7 @@ function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "",
     }
   }
 
-  async function installExact({ courseId, release, actor }) {
+  async function installExact({ courseId, release }) {
     const key = `${courseId}@${release}`;
     const report = value => progress.set(key, { ...value });
     try {
@@ -304,13 +307,15 @@ function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "",
         throw failure("VIBE64_TRAINING_COURSE_RELEASE_CONFLICT",
           `This server already has a different course ${key}. Installed releases are immutable; ask the owner to inspect it.`, 409);
       }
-      if (state === "disabled" && actor?.role !== "owner") {
+      // Installing never re-enables a disabled release, for anyone: that stays
+      // the operator's deliberate `vibe64 training enable-course`.
+      if (state === "disabled") {
         throw failure("VIBE64_TRAINING_COURSE_DISABLED",
-          `The owner disabled course ${key} on this server. Ask the owner to enable it again.`, 409);
+          `Course ${key} was disabled on this server, and installing does not enable it again. Only the server's operator can enable it again. Nothing was changed.`, 409);
       }
       if (state === "not-installed" && installed.courses.length >= MAX_INSTALLED_RELEASES) {
         throw failure("VIBE64_TRAINING_COURSE_LIMIT",
-          `This server already keeps ${MAX_INSTALLED_RELEASES} installed course releases, its limit. Installed and older releases are never deleted automatically, so ${key} cannot be added. Ask the owner to free space before installing or updating.`, 409);
+          `This server already keeps ${MAX_INSTALLED_RELEASES} installed course releases, its limit, so ${key} cannot be added. The server's operator can free a place by removing a release; saved lessons keep their content. Nothing was changed.`, 409);
       }
       const total = lock.topics.length;
       for (const [index, topic] of lock.topics.entries()) {
@@ -351,7 +356,7 @@ function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "",
     }
   }
 
-  function installCourse({ courseId, release, actor } = {}) {
+  function installCourse({ courseId, release } = {}) {
     if (typeof courseId !== "string" || !COURSE_ID.test(courseId) || typeof release !== "string" || !RELEASE.test(release)) {
       return Promise.reject(failure("VIBE64_TRAINING_COURSE_INVALID", "Choose an exact course ID and three-part release.", 400));
     }
@@ -360,7 +365,7 @@ function createTrainingCourseInstaller({ systemRoot, catalogue, repository = "",
     // One install at a time: topics shared between courses never race their
     // per-pin installation lock, and repeated clicks share one operation.
     if (!progress.has(key)) progress.set(key, { phase: "queued", topicsDone: 0, topicsTotal: 0 });
-    const operation = queue.then(() => installExact({ courseId, release, actor }));
+    const operation = queue.then(() => installExact({ courseId, release }));
     queue = operation.catch(() => null);
     const shared = operation.finally(() => { pending.delete(key); });
     pending.set(key, shared);

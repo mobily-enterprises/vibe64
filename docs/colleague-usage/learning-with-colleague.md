@@ -162,7 +162,9 @@ another removes the oldest one's project and keeps its record and conversation
 when a finish, restart or archive will do this.
 
 Colleague restarts or deletes only after you confirm that exact lesson in the
-chat (`confirmed`); it names the lesson and says what is kept. A pinned session
+chat (`confirmed`); it names the lesson and says what is kept. The server
+refuses Colleague's restart or delete without that confirmation and changes
+nothing; your own **Restart** and **Delete** buttons need none. A pinned session
 must be unpinned first; that refusal changes nothing. Colleague cannot see or
 change another learner's lessons, and it cannot turn a practice project into one
 of your own projects. The buttons under **Courses** → **In progress** and

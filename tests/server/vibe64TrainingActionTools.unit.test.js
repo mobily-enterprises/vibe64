@@ -329,7 +329,7 @@ test("restart and finish are unavailable without their host and reject malformed
   }, async finishLesson() {
     throw Object.assign(new Error("Pass every required step before finishing this lesson. Nothing was changed."), { code: "VIBE64_TRAINING_LESSON_INCOMPLETE", statusCode: 409 });
   } });
-  const result = await failed.tool("lesson.restart", input);
+  const result = await failed.tool("lesson.restart", { ...input, confirmed: true });
   assert.equal(result.ok, false);
   assert.doesNotMatch(JSON.stringify(result), excluded);
   await assert.rejects(() => failed.execute("lesson.restart", input), error => error.code === "VIBE64_TRAINING_PROGRESS_SAVE_UNCONFIRMED" &&
@@ -337,6 +337,23 @@ test("restart and finish are unavailable without their host and reject malformed
   await assert.rejects(() => failed.execute("lesson.finish", inputs["lesson.finish"]), { code: "VIBE64_TRAINING_LESSON_INCOMPLETE",
     message: "Pass every required step before finishing this lesson. Nothing was changed." }, "a lesson refusal keeps its own message");
   assert.equal((await f.learners.readState({ actor: f.auth.user })).active.attemptId, input.attemptId);
+});
+
+test("Colleague restarts a lesson only with the person's confirmation; the learner's own button needs none", async t => {
+  const f = await fixture(t);
+  const saved = await f.reserve();
+  const input = { attemptId: saved.attempt.attemptId, requestId: "restart-one", expectedRevision: saved.revision };
+  const c = f.register(f.exercises);
+  for (const value of [input, { ...input, confirmed: false }]) {
+    await assert.rejects(() => c.execute("lesson.restart", value, "automation"), error =>
+      error.code === "VIBE64_TRAINING_LESSON_UNCONFIRMED" && /confirmed: true/u.test(error.message));
+    const refused = await c.tool("lesson.restart", value);
+    assert.equal(refused.ok, false);
+  }
+  assert.equal(f.calls.length, 0, "an unconfirmed restart reaches no exercise owner");
+  assert.equal((await c.tool("lesson.restart", { ...input, confirmed: true })).ok, true);
+  await c.execute("lesson.restart", input);
+  assert.deepEqual(f.calls.map(call => call.operation), ["restart", "restart"]);
 });
 
 test("a lesson action that fails still tells every tab to reread, since it may already have changed the lesson", async t => {

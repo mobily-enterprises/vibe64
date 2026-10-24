@@ -235,7 +235,7 @@ if (process.env.TRAINING_TEST_EXIT) {
         path: childEnv.PATH, marker: childEnv.TRAINING_EXISTING_ENV,
         appRoot: childEnv.VIBE64_APP_ROOT, node: process.execPath });
     }
-    for (const operation of ["install-topic", "installed-courses", "enable-course", "disable-course"]) {
+    for (const operation of ["install-topic", "installed-courses", "enable-course", "disable-course", "remove-course"]) {
       await assert.rejects(run(command, ["training", operation, "topic", "/operator-root"],
         { cwd: sourceRoot, env: childEnv }), error => {
         assert.equal(error.code, 2);
