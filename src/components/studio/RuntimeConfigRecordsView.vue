@@ -16,7 +16,7 @@
         :save-busy="saveBusy"
         :secret-reveal-busy-key="secretRevealBusyKey"
         :secret-reveal-enabled="secretRevealEnabled"
-        show-actions
+        :show-actions="!readonly"
         @hide-secret="$emit('hide-secret', $event)"
         @remove-record="$emit('remove-record', $event)"
         @reveal-secret="$emit('reveal-secret', $event)"
@@ -83,6 +83,11 @@ const props = defineProps({
   environmentLabel: {
     default: "environment",
     type: String
+  },
+  // Shows the person's rows without their edit and remove actions.
+  readonly: {
+    default: false,
+    type: Boolean
   },
   records: {
     default: () => [],

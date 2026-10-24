@@ -73,6 +73,14 @@ it("lists linked rows with the person's own values, never under System values", 
   expect(state.systemRecords.map((record) => record.key)).toEqual(["DATABASE_URL"]);
 });
 
+it("a readonly view keeps the person's rows but drops their edit and remove actions", () => {
+  const view = source("src/components/studio/RuntimeConfigRecordsView.vue");
+  expect(view).toContain(':show-actions="!readonly"');
+  expect(view).not.toMatch(/^\s+show-actions$/mu);
+  const state = mountWith(RuntimeConfigRecordsView, { readonly: true, records: [{ key: "SHOP_NAME", editable: true, source: "user" }] });
+  expect(state.editableRecords.map((record) => record.key)).toEqual(["SHOP_NAME"]);
+});
+
 it("mounts the host component only when provided, with the documented props", () => {
   const table = source("src/components/studio/RuntimeConfigRecordsTable.vue");
   const panel = source("src/components/studio/EnvPanel.vue");
