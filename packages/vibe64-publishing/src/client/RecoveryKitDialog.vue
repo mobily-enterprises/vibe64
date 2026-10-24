@@ -73,7 +73,8 @@ const restore = () => act(async () => {
   if (!chosen) throw new Error("Choose the kit file.");
   const answer = await props.call("/recovery-kit/restore", { body: { data: await asBase64(chosen), passphrase: passphrase.value } });
   passphrase.value = "";
-  done.value = `Restored ${answer.restored?.length || 0} keys.`;
+  const restoredCount = answer.restored?.length || 0;
+  done.value = `Restored ${restoredCount} ${restoredCount === 1 ? "key" : "keys"}.`;
 });
 </script>
 

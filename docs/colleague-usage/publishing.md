@@ -42,7 +42,9 @@ afterwards **Unlock** it for 15 minutes when you add accounts or publish, and
   address, so targets using it keep working with the new token.
 - **Recovery kit**: **Save kit** (or **Manage**) downloads every key as one file under a second
   passphrase; keep both off this computer. **Restore** brings them back on a
-  new computer. The panel says when a key is newer than your last kit.
+  new computer and says how many came back ("Restored 1 key."). When a key is
+  newer than your last kit, the panel reads "Your recovery kit is out of date",
+  says when it was last saved, and offers **Save kit**.
 
 ### Add a target
 
