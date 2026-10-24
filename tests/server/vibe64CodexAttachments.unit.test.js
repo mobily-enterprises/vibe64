@@ -23,6 +23,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createVibe64SessionStore, VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import { createSessionAttachments } from "../../packages/vibe64-terminals/src/server/sessionAttachments.js";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { resolveDefaultLocalEditorSystemRoot } from "@local/vibe64-core/server/studioRoots";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
 import {
   registerMultipartSupport
@@ -1600,10 +1601,16 @@ test("the exact binary 500 MiB boundary succeeds and one extra byte is rejected"
 });
 
 test("Codex attachment root is process-owned and isolates files from sibling state", async () => {
-  const root = codexAttachmentHostRoot({ env: {} });
-  assert.equal(root.endsWith(path.join("vibe64", "attachments")), false);
-  assert.equal(path.basename(root), "attachments");
-  assert.match(path.basename(path.dirname(root)), /^vibe64-/u);
+  // Without a server-fixed root, a process uses the local state root, never temporary space.
+  const previous = process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV];
+  delete process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV];
+  try {
+    const root = codexAttachmentHostRoot({ env: {} });
+    assert.equal(root, path.join(resolveDefaultLocalEditorSystemRoot(), "attachments"));
+    assert.equal(root.startsWith(tmpdir()), false);
+  } finally {
+    if (previous !== undefined) process.env[VIBE64_CODEX_ATTACHMENTS_ROOT_ENV] = previous;
+  }
 
   const configuredRoot = await mkdtemp(path.join(tmpdir(), "vibe64-attachment-root-test-"));
   const attachmentRoot = path.join(configuredRoot, "owner", "state", "attachments");

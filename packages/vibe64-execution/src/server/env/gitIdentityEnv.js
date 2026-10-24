@@ -125,12 +125,16 @@ function readGitConfigIdentity(cwd, env) {
 }
 
 // The person's own Git configuration, read by git itself so global, XDG,
-// include and repository-local rules all apply. Runs with the command's env.
+// include and repository-local rules all apply. Runs with the command's env,
+// but finds git on the server's own PATH: an agent PATH can start with
+// Vibe64's git shim, which this process serves and a synchronous read would
+// block until its timeout.
 function personGitConfigIdentity({ cwd = "", env = null } = {}) {
   if (!env || typeof env !== "object") return null;
+  const readEnv = { ...env, PATH: process.env.PATH || env.PATH };
   const repositoryDirectory = existingDirectory(cwd);
-  const values = (repositoryDirectory && readGitConfigIdentity(repositoryDirectory, env)) ||
-    readGitConfigIdentity(existingDirectory(env.HOME), env) || {};
+  const values = (repositoryDirectory && readGitConfigIdentity(repositoryDirectory, readEnv)) ||
+    readGitConfigIdentity(existingDirectory(env.HOME), readEnv) || {};
   if (!values.name || !values.email) return null;
   return {
     authorEmail: values.email,

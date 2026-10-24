@@ -171,7 +171,10 @@ function createCodexConversationPreparation({
   }
 
   async function withCodexAppServerThreadReadiness(sessionId, {
-    agentSettings = {}
+    agentSettings = {},
+    // A context-usage probe prepares the thread before the first message; only
+    // the message's own preparation records its opening briefing.
+    recordBriefing = true
   } = {}, operation) {
     const context = await codexAppServerSessionContext(sessionId);
     if (context.ok === false) {
@@ -215,7 +218,7 @@ function createCodexConversationPreparation({
           });
         },
         async ready(preparedSession) {
-          const briefingWasDelivered = !sessionBriefingIsDelivered(preparedSession);
+          const briefingWasDelivered = recordBriefing && !sessionBriefingIsDelivered(preparedSession);
           const deliveredAt = new Date().toISOString();
           if (briefingWasDelivered) {
             await runtime.store.mutateSession(sessionId, async () => {

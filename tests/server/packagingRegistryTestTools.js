@@ -113,13 +113,14 @@ async function startVerdaccio(t) {
 async function pythonTools() {
   const root = path.join(TOOLS, "python-registry");
   const python = path.join(root, "bin", "python");
+  // The standard library's venv and pip, so CI needs no extra Python tooling.
   if (!await exists(python)) {
-    await run("uv", ["venv", "-q", root], { timeout: 120_000 });
+    await run("python3", ["-m", "venv", root], { timeout: 120_000 });
   }
   try {
     await run(python, ["-c", "import pypiserver, twine, build, passlib"], { timeout: 60_000 });
   } catch {
-    await run("uv", ["pip", "install", "-q", "--python", python, ...PYTHON_PACKAGES], { timeout: 300_000 });
+    await run(python, ["-m", "pip", "install", "-q", ...PYTHON_PACKAGES], { timeout: 300_000 });
   }
   return { python, bin: path.join(root, "bin") };
 }

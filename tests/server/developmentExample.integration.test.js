@@ -124,7 +124,7 @@ if (JSON.stringify(process.argv.slice(2)) === JSON.stringify(["auth", "status", 
     assert.equal(aiAccounts.status, 200, logs);
     const aiState = await aiAccounts.json();
     assert.equal(aiState.ok, true);
-    assert.ok(aiState.connections.some((connection) => connection.id === "opencode" && connection.connected));
+    assert.deepEqual(aiState.connections, [], "Vibe64 includes no AI connection of its own");
     const nativeAccounts = await (await fetch(`${origin}/api/vibe64/accounts?providerIds=codex`)).json();
     assert.equal(nativeAccounts.accounts.find((account) => account.id === "codex").connected, false);
     const claudeAccounts = await (await fetch(`${origin}/api/vibe64/accounts?providerIds=claude`)).json();
@@ -161,7 +161,7 @@ if (JSON.stringify(process.argv.slice(2)) === JSON.stringify(["auth", "status", 
     assert.ok(opened.ok, await opened.text());
     const createdResponse = await fetch(`${origin}/api/app/hello-node/vibe64/sessions`, {
       method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ workflowEngineId: "claude" })
+      body: JSON.stringify({})
     });
     assert.equal(createdResponse.status, 200, await createdResponse.clone().text());
     const created = await createdResponse.json();

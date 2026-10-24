@@ -1934,6 +1934,12 @@ async function withAgentMessageController(operation, {
       auth_mode: "api_key"
     })
   );
+  // Changeover history transfer budgets against the runtime's native model
+  // catalogue; a test that needs other limits writes its own.
+  await mkdir(path.join(temporaryRoot, "provider-runtime"));
+  await writeFile(path.join(temporaryRoot, "provider-runtime", "models.json"), JSON.stringify({ models: [
+    { slug: "gpt-5.5", context_window: 272000, effective_context_window_percent: 95 }
+  ] }));
   const previousRuntimeNamespace = process.env.VIBE64_RUNTIME_NAMESPACE;
   process.env.VIBE64_RUNTIME_NAMESPACE = "test";
   const {
@@ -2385,8 +2391,10 @@ test("the common Codex entry uses the original main journal, receipt files and c
     const pinned = await common.open({ id: sessionId, representation: "native", context: {
       runtime, session: pinnedSession, assistantSelection: JSON.parse(selected)
     } });
+    // Pause also stops the turn through the current Codex account, so the changed
+    // selection names a provider Codex does not curate.
     await store.writeMetadataValue(sessionId, "assistant_selection", JSON.stringify({
-      ...JSON.parse(selected), engineId: "opencode", modelProviderId: "deepseek"
+      ...JSON.parse(selected), engineId: "opencode", modelProviderId: "anthropic"
     }));
     const readPinned = await pinned.readGoal();
     assert.equal(readPinned.status, "available");
@@ -10515,20 +10523,20 @@ test("goal Resume respects Save admission and protects the gap before a native t
     assert.equal(captures.steers.length, 1);
     assert.equal(captures.steers[0].turnId, provider.turnId);
 
-    provider.interruptTurn = async () => { throw new Error("Pausing a goal must not interrupt its turn"); };
+    // Pause keeps the goal and stops its current turn through the ordinary Stop owner.
+    const interrupted = [];
+    provider.interruptTurn = async (threadId, turnId) => { interrupted.push(turnId); provider.status = "interrupted"; return { interrupted: true }; };
     const paused = await runtime.store.runSessionExclusive(sessionId, "agent-write-mode", () => (
       terminalService.updateAgentGoal(sessionId, { ...input, action: "pause" })
     ));
     assert.equal(paused.acquired, true);
     assert.equal(paused.value.ok, true, JSON.stringify(paused.value));
+    assert.deepEqual(interrupted, [provider.turnId]);
     const pausedRun = (await runtime.getSession(sessionId)).agentRuns.find((run) => run.providerGoalThreadId === goal.threadId);
     assert.equal(pausedRun.providerGoalStatus, "paused");
-    assert.equal(pausedRun.active, true);
-    await assert.rejects(terminalService.saveSessionWork(sessionId), { code: "vibe64_session_save_agent_active" });
-    completeAgentMessageHarnessTurn(captures, provider, provider.turnId, "Finished the current turn after pausing the goal.");
     await waitForSessionValue(() => runtime.getSession(sessionId), (session) => (
       session.agentRuns.some((run) => run.providerGoalStatus === "paused" && !run.active)
-    ), "the paused goal's current turn to finish normally");
+    ), "the paused goal's current turn to stop");
     await assert.rejects(terminalService.saveSessionWork(sessionId, {
       onRepositoryWriteAcquired() { throw stopBeforeGit; }
     }), (error) => error === stopBeforeGit);

@@ -595,7 +595,7 @@ function createCodexSessionAgentProvider({
           async readContextUsage({ input, signal }) {
             signal?.throwIfAborted();
             const ready = await codexConversationPreparation.threadReadiness(sessionId,
-              { agentSettings: input.agentSettings }, codexAppServerRunOwner.ensureThreadReady);
+              { agentSettings: input.agentSettings, recordBriefing: false }, codexAppServerRunOwner.ensureThreadReady);
             if (ready.ok === false) throw new Error(ready.error || "Codex context could not be prepared.");
             signal?.throwIfAborted();
             const current = await codexAppServerRunOwner.conversationContext(sessionId, input, {});

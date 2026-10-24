@@ -12,7 +12,8 @@ test("managed Codex terminals pass the hook-trust bypass to Codex", () => {
   });
   const codexCommands = startupScript
     .split("\n")
-    .filter((line) => line.includes("/codex "));
+    // An installed Codex resolves to an absolute path; CI has only the bare name.
+    .filter((line) => /(?:^|[\s/])codex -c /u.test(line));
 
   assert.equal(codexCommands.length, 2);
   for (const command of codexCommands) {

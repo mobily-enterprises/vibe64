@@ -1726,7 +1726,7 @@ function createService({
       }
       const segment = latest.pending?.expectedSegmentId;
       const prefix = `${latest.selection?.engineId}:`;
-      const threadId = result.threadId || latest.native?.threadId ||
+      const threadId = result.threadId || result.goal.threadId || latest.native?.threadId ||
         (typeof segment === "string" && segment.startsWith(prefix) ? segment.slice(prefix.length) : null);
       if (!threadId) throw new Error("The accepted goal's native conversation identity is unavailable.");
       return { ...latest, daemonId: goalRuntimeId, pending: null, error: null,
