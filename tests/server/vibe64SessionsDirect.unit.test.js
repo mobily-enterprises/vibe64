@@ -303,7 +303,7 @@ test("sessions expose only direct chat and source actions", () => {
   ]);
   const contextRead = createSessionActions({ sessions: {} }).find(action => action.id === ACTION_READ_CONVERSATION_CONTEXT);
   assert.deepEqual(contextRead.channels, ["internal"]);
-  assert.equal(contextRead.extensions?.assistant, undefined);
+  assert.equal(contextRead.extensions.assistant.exclude, true);
   const createAction = createSessionActions({ sessions: {} }).find(action => action.id === ACTION_CREATE_SESSION);
   const validated = createAction.input.schema.patch({ sessionId: "caller-supplied" });
   assert.equal(validated.errors.sessionId.code, "FIELD_NOT_ALLOWED");
@@ -4502,4 +4502,18 @@ test("incoming change facades require a session before reaching Git", async () =
   assert.equal((await service.inspectIncomingContributions("session-a", {})).ok, true);
   assert.equal((await service.changeIncomingContribution("session-a", {})).ok, true);
   assert.deepEqual(calls, [["inspect", "session-a"], ["change", "session-a"]]);
+});
+
+test("session actions hide people's approvals and undescribed actions from Colleague; exposed ones are described", () => {
+  const actions = createSessionActions({ sessions: {} });
+  for (const id of ["read", "edit", "withdraw", "approve", "decline"].map((name) => `vibe64.sessions.main-chat-approvals.${name}`)) {
+    assert.equal(actions.find((action) => action.id === id).extensions.assistant.exclude, true, id);
+  }
+  for (const action of actions.filter(({ extensions }) => !extensions.assistant.exclude)) {
+    assert.ok(action.extensions.assistant.description?.trim(), action.id);
+  }
+  const capabilities = actions.find(({ id }) => id === "vibe64.assistants.capabilities.list").extensions.assistant;
+  assert.deepEqual(capabilities.transformResult({ ok: true, engines: [{ engineId: "codex", label: "Codex", revision: "r", health: { status: "ready", message: "" },
+    modelProviders: [{ id: "openai", label: "GPT", connected: true, description: "d", models: Array.from({ length: 41 }, (_, index) => ({ id: `m${index}`, label: `M${index}`, raw: 1 })) }] }] })
+    .engines[0].modelProviders[0].models.length, 40);
 });

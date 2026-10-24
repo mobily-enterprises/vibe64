@@ -190,5 +190,6 @@ Package registries Vibe64 releases to:
   from developers verified by Google; this goes worldwide in 2027. Preflight
   says so before a release.
 
-Colleague can open **Publish** for you and explain these steps. It cannot
+Colleague can open **Publish** for you, or point at it in the Dashboard, and
+explain these steps. It cannot
 publish, confirm a release or see any credential.

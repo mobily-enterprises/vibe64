@@ -23,6 +23,8 @@ const COLLEAGUE_MODEL_UNAVAILABLE = "Connect an AI and choose an available Colle
 // practice project (the service decides).
 const LEARN_ONLY_ACTION = /^vibe64\.training\.(?!learning-mode\.(?:read|set)$)|^vibe64\.colleague\.navigation\.open-learning$/u;
 const DEVELOP_ONLY_ACTIONS = new Set(["vibe64.colleague.assignment.create"]);
+// Main's own goal controls act on the Main conversation running them; Colleague never has them.
+const MAIN_ONLY_ACTIONS = new Set(["vibe64.terminals.main-goal.pause", "vibe64.terminals.main-goal.block"]);
 const LEARN_WATCH_REFUSAL = "In Learn mode Colleague watches only this lesson's practice project.";
 
 function failure(message, code = "vibe64_colleague_failed", statusCode = 409) {
@@ -161,7 +163,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   const visible = new Map();
   // Released attempt threads never reopen: their file belongs to Training.
   const releasedThreads = new Set();
-  const toolPolicy = ({ actionId, kind, context }) => actionId !== "vibe64.terminals.main-goal.pause" &&
+  const toolPolicy = ({ actionId, kind, context }) => !MAIN_ONLY_ACTIONS.has(actionId) &&
     (context.colleague.thread === "learn" ? !DEVELOP_ONLY_ACTIONS.has(actionId) : !LEARN_ONLY_ACTION.test(actionId)) &&
     (!context.colleague.autonomous || kind === "query" ||
       !context.colleague.readOnly && assignmentCommands.has(actionId));

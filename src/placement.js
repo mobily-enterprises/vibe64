@@ -241,6 +241,7 @@ addPlacement({
   order: 500,
   props: {
     label: "Publish",
+    guideId: "publish",
     icon: mdiPackageVariantClosed,
     surface: "app",
     scopedSuffix: "/project/[slug]/dashboard/publish",

@@ -43,6 +43,7 @@ const BUILT_IN_PLACES = [
   { id: "git-log", label: "Git log", scope: "project", open: { pane: "repository" }, steps: [DASHBOARD, step("git-log", "Git log")] },
   { id: "session-info", label: "Session info", scope: "project", open: { pane: "session" }, steps: [DASHBOARD, step("session-info", "Session info")] },
   { id: "architecture", label: "Architecture", scope: "project", open: { pane: "system" }, steps: [DASHBOARD, step("architecture", "Architecture")] },
+  { id: "publish", label: "Publish", scope: "project", open: { pane: "publish" }, steps: [DASHBOARD, step("publish", "Publish")] },
   { id: "chat", label: "Coding chat", scope: "project", open: null, shown: [{ pane: "chat" }, { chatVisible: true }], steps: [step("chat", "Coding chat")] },
   { id: "save", label: "Save", scope: "project", open: null, event: "saved", steps: [step("save", "Save")] },
   { id: "reload-preview", label: "Reload preview", scope: "project", open: null, event: "preview-reloaded",

@@ -159,7 +159,8 @@ Advanced, and Save/Cancel stay at the bottom.
 
 ## What Colleague can do
 
-Colleague can explain the roles and setups, read the current choices, open AI
+Colleague can explain the roles and setups, read the current choices, list the
+engines, providers and models available to you, open AI
 Accounts and save supported model changes when the owner explicitly asks. It
 offers help without changing anything for a how-to question. Team members'
 Colleague can explain the team setup but cannot change it.

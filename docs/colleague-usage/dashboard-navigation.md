@@ -55,12 +55,13 @@ has no separate lesson Dashboard. See
 [Practice projects in standalone lessons](learning-practice-projects.md).
 
 Colleague can open supported views in your initiating browser and wait for the
-actual selection before reporting success. Ask “Show me Database for this session”
-or “Open Project settings”. It can explain visible controls using its guides.
+actual selection before reporting success. Ask “Show me Database for this session”,
+“Open Project settings” or “Open Publish”: it opens Preview and every Dashboard
+section listed above (session tools need a session). It can explain visible controls using its guides.
 During a lesson, it opens the practice project's ordinary **Preview** or
 **Database → ERD** like any project's, minimising Learning if it is open.
 By default Colleague points at the real tab or Dashboard section (Database, Files,
-Current changes, Git log, Session info, Architecture) with a short ring and
+Current changes, Git log, Session info, Architecture, Publish) with a short ring and
 caption so you click it yourself. A changed project, session or browser is
 refused instead of being silently retargeted. Agent navigation is a demonstration,
 not proof that the learner used the control; only the learner's own step

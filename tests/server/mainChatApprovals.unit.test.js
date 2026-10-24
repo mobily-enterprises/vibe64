@@ -215,7 +215,7 @@ test("approval operations are people's actions, not assistant tools", () => {
     ACTION_APPROVE_MAIN_CHAT_APPROVAL, ACTION_DECLINE_MAIN_CHAT_APPROVAL]) {
     const definition = actions.find((action) => action.id === id);
     assert.ok(definition, id);
-    assert.equal(definition.extensions.assistant, undefined, id);
+    assert.equal(definition.extensions.assistant.exclude, true, id);
   }
   const send = actions.find((action) => action.id === ACTION_SEND_AGENT_MESSAGE);
   assert.match(send.extensions.assistant.description, /queues the message for the owner's approval/u);

@@ -2033,6 +2033,16 @@ test("Colleague opens a host's studio pages through navigation.guide, owner page
   await assert.rejects(guide({ target: "colleague-test-users" }), { statusCode: 401 });
 });
 
+test("navigation.open opens Publish", async (t) => {
+  const f = await fixture(t, [], { watching: true });
+  await f.service.focus({ clientId: "tab-a", focus: {} }, f.context);
+  const context = { ...f.context, colleague: { clientId: "tab-a" } };
+  const pending = f.actions.execute({ actionId: "vibe64.colleague.navigation.open", input: { projectSlug: "alpha", pane: "publish" }, context });
+  const navigation = await pendingNavigation(f, "tab-a", command => command.pane === "publish");
+  await f.service.acknowledgeNavigation({ clientId: "tab-a", commandId: navigation.id, ok: true, focus: { projectSlug: "alpha", pane: "publish" } }, f.context);
+  assert.equal((await pending).ok, true);
+});
+
 test("Colleague shows a lesson step in the Lesson pane, or opens or closes Courses, until its initiating browser confirms it", async t => {
   const f = await fixture(t, [], { watching: true });
   await f.service.focus({ clientId: "tab-a", focus: {} }, f.context);
@@ -5421,12 +5431,14 @@ test("each lesson attempt keeps its own teacher thread across mode switches, Lea
     ["Teach me", "Teacher answer", "And now?", "Teacher again"]);
 });
 
-test("Develop hides teaching tools and Learn hides delegation but keeps watches", async t => {
-  const training = name => withVibe64ActionContext({ id: `vibe64.training.${name}`, kind: "query", idempotency: "none",
+test("Develop hides teaching tools and Learn hides delegation but keeps watches; neither has Main's goal controls", async t => {
+  const action = (id, kind = "query") => withVibe64ActionContext({ id, kind, idempotency: "none",
     input: { schema: createSchema({}), mode: "create" }, execute: () => ({ ok: true }),
     output: { schema: createSchema({ ok: { type: "boolean", required: true } }), mode: "replace" },
-    extensions: { assistant: { description: `Test ${name}.` } } }, { projectScoped: false });
-  const f = await fixture(t, [reply("Develop"), reply("Learn")], { extraActions: [training("lesson.read"), training("learning-mode.set")] });
+    extensions: { assistant: { description: `Test ${id}.` } } }, { projectScoped: false });
+  const training = name => action(`vibe64.training.${name}`);
+  const mainGoal = ["pause", "block"].map(name => action(`vibe64.terminals.main-goal.${name}`, "command"));
+  const f = await fixture(t, [reply("Develop"), reply("Learn")], { extraActions: [training("lesson.read"), training("learning-mode.set"), ...mainGoal] });
   const learning = learnModeFixture(t);
   const tools = start => start.body.tools.map(tool => tool.function.name);
   await f.send("Hello", "develop-1");
@@ -5444,6 +5456,10 @@ test("Develop hides teaching tools and Learn hides delegation but keeps watches"
   }
   assert.equal(learn.includes("vibe64_colleague_assignment_create"), false, "a teacher never delegates the work");
   for (const shown of ["vibe64_colleague_watch_create", "vibe64_colleague_watch_source_create"]) assert.ok(learn.includes(shown), shown);
+  for (const names of [develop, learn]) {
+    assert.ok(names.includes("vibe64_training_learning_mode_set"), "the catalogue lists ordinary actions");
+    for (const hidden of ["vibe64_terminals_main_goal_pause", "vibe64_terminals_main_goal_block"]) assert.equal(names.includes(hidden), false, hidden);
+  }
 });
 
 test("switching threads never interrupts a running turn, and only the visible thread keeps a live handle", async t => {
@@ -5631,4 +5647,15 @@ test("a lesson's teacher watches only its attempt's practice project, and the wa
   await new Promise(resolve => setTimeout(resolve, 60));
   assert.equal(f.observations.deploymentReads.length, reads, "a closed attempt's watch reads nothing more");
   assert.equal(await exists(path.join(f.root, "colleague", "NDI", "learn", LESSON_ATTEMPT)), false);
+});
+
+test("Colleague's own browser endpoints are not Colleague tools; its exposed actions are described", () => {
+  const actions = createColleagueActions({});
+  for (const name of ["state.read", "conversation.start-fresh", "conversation.history.read", "conversation.history-page.read", "focus.update",
+    "message.send", "turn.stop", "model.select", "navigation.acknowledge"]) {
+    assert.equal(actions.find(({ id }) => id === `vibe64.colleague.${name}`).extensions.assistant.exclude, true, name);
+  }
+  for (const action of actions.filter(({ extensions }) => !extensions.assistant.exclude)) {
+    assert.ok(action.extensions.assistant.description?.trim(), action.id);
+  }
 });

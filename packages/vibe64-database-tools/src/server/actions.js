@@ -38,7 +38,7 @@ function action({ execute, id, input, kind = "command", assistant }) {
     },
     events: [],
     execute,
-    extensions: { assistant },
+    extensions: { assistant: assistant ?? { exclude: true } },
     id,
     idempotency: kind === "query" ? "none" : "optional",
     input,

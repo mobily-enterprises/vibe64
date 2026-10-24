@@ -99,6 +99,26 @@ function assistantAccessTool() {
   };
 }
 
+function assistantCapabilitiesTool() {
+  const model = createSchema({ id: { ...shortText, maxLength: 512 }, label: shortText });
+  const provider = createSchema({ id: { ...shortText, maxLength: 512 }, label: shortText, connected: { type: "boolean", required: true },
+    models: { type: "array", items: model, required: true }, modelsTruncated: { type: "boolean", required: true } });
+  const engine = createSchema({ engineId: shortText, label: shortText, status: shortText, message: { ...shortText, maxLength: 512 },
+    modelProviders: { type: "array", items: provider, required: true } });
+  const pick = (value, keys, max = 256) => Object.fromEntries(keys.flatMap((key) => typeof value?.[key] === "string" ? [[key, value[key].slice(0, max)]] : []));
+  return {
+    description: "List the full catalogue of coding-agent engines, their model providers and models available to this user, with whether each provider is connected. Each provider lists at most 40 models. Read-only: connecting accounts and choosing models stay in AI Accounts and Models; the configured role choices come from sessions.assistant-access.inspect.",
+    output: { mode: "replace", schema: createSchema({ ok: { type: "boolean", required: true }, error: { ...shortText, maxLength: 512 }, code: shortText,
+      unavailable: { type: "boolean", required: false }, engines: { type: "array", items: engine, required: true } }) },
+    transformResult(result) {
+      return { ok: result.ok === true, ...pick(result, ["error", "code"], 512), ...(result.unavailable === true ? { unavailable: true } : {}),
+        engines: (result.engines || []).map((row) => ({ ...pick(row, ["engineId", "label"]), ...pick(row.health, ["status"]), ...pick(row.health, ["message"], 512),
+          modelProviders: (row.modelProviders || []).map((entry) => ({ ...pick(entry, ["id", "label"], 512), connected: entry.connected === true,
+            models: (entry.models || []).slice(0, 40).map((item) => pick(item, ["id", "label"], 512)), modelsTruncated: (entry.models || []).length > 40 })) })) };
+    }
+  };
+}
+
 function sessionTool(description) {
   return {
     description,
@@ -333,4 +353,4 @@ function renewalTool(description, { includeDraft = false } = {}) {
   };
 }
 
-export { assistantAccessTool, conversationLogTool, conversationOperationTool, renewalTool, sessionTool, sessionWorkTool, sessionPullRequestTool, incomingContributionTool };
+export { assistantAccessTool, assistantCapabilitiesTool, conversationLogTool, conversationOperationTool, renewalTool, sessionTool, sessionWorkTool, sessionPullRequestTool, incomingContributionTool };

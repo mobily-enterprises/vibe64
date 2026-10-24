@@ -257,7 +257,7 @@ test("project and sessions register routes and captured actions during setup", a
   ]);
   const contextRead = sessionActions[0].actions.find(action => action.id === "vibe64.sessions.conversation.context.read");
   assert.deepEqual(contextRead.channels, ["internal"]);
-  assert.equal(contextRead.extensions?.assistant, undefined);
+  assert.equal(contextRead.extensions.assistant.exclude, true);
   const internalActionIds = sessionActions[0].actions.filter(action => action.channels?.join() === "internal").map(({ id }) => id).sort();
   assert.deepEqual(internalActionIds, [
     "vibe64.sessions.connected.allocate",

@@ -120,3 +120,13 @@ test("database controls reject missing identity, SQL and forged authority before
     assert.equal(calls.length, 0);
   });
 });
+
+test("database actions keep SQL, rows, layout, snippets and Ask AI away from Colleague; exposed ones are described", () => {
+  const actions = createDatabaseActions({ databaseTools: {} });
+  for (const name of ["query.run", "cell.update", "row.insert", "row.delete", "lookup.search", "overview.save", "layout.save", "snippet.save", "snippet.delete", "assistant.ask"]) {
+    assert.equal(actions.find(({ id }) => id === `vibe64.database.${name}`).extensions.assistant.exclude, true, name);
+  }
+  for (const action of actions.filter(({ extensions }) => !extensions.assistant.exclude)) {
+    assert.ok(action.extensions.assistant.description?.trim(), action.id);
+  }
+});

@@ -103,3 +103,11 @@ test("a fact reader answers for the learner; failures and missing readers answer
   assert.deepEqual(await readLearningFact("vocabulary-test-fact", { actor: {} }), { holds: false, reason: "Deployment state is unavailable." });
   assert.equal((await readLearningFact("never-registered", { actor: {} })).holds, false);
 });
+
+test("Publish is a built-in project place that opens its Dashboard section", () => {
+  const vocabulary = createLearningVocabulary({ facts: [] });
+  assert.deepEqual(vocabulary.place("publish").steps.map(step => step.id), ["dashboard", "publish"]);
+  assert.deepEqual(trainingGuideCommand(trainingGuideRequest({ target: "publish", navigate: true, highlight: false }, vocabulary),
+    { id: "one", projectSlug: "alpha", sessionId: "s1" }, vocabulary),
+  { id: "one", projectSlug: "alpha", sessionId: "s1", conversationId: "", pane: "publish", status: "pending" });
+});
