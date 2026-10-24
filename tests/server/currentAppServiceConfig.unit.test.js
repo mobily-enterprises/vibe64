@@ -84,6 +84,26 @@ test("current app returns the explicit Vibe64 Outputs contract", async () => {
   });
 });
 
+test("current app tells the Outputs reason when the host is still preparing its resources", async () => {
+  await withTemporaryRoot(async (root) => {
+    const seen = [];
+    for (const status of ["not-prepared", "missing-configuration"]) {
+      const service = createService({
+        inspectOutputs(input) {
+          seen.push(input.resourcesPreparing);
+          return { diagnostics: [], resources: [], stackHash: "h", status: "ready", targets: [] };
+        },
+        projectService: { ...projectService(root), async projectEnvironmentStatus(input) {
+          assert.equal(input.scope, "dev");
+          return { status };
+        } }
+      });
+      await service.inspectCurrentApp();
+    }
+    assert.deepEqual(seen, [true, false]);
+  });
+});
+
 test("missing Vibe64 Outputs declarations are unconfigured, not guessed", async () => {
   await withTemporaryRoot(async (root) => {
     const service = createService({

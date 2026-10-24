@@ -116,6 +116,17 @@ function createService({
     };
   }
 
+  // A host that supplies resources (a managed database) may not have prepared
+  // them yet; Preview then says Vibe64 is on it rather than asking for values.
+  async function resourcesBeingPrepared(input = {}) {
+    if (typeof projectService.projectEnvironmentStatus !== "function") return false;
+    try {
+      return (await projectService.projectEnvironmentStatus({ scope: "dev", sessionId: input.sessionId })).status === "not-prepared";
+    } catch {
+      return false;
+    }
+  }
+
   return Object.freeze({
     async inspectCurrentApp(input = {}) {
       return currentAppResult(async () => {
@@ -124,10 +135,8 @@ function createService({
           return unconfiguredCurrentApp("", "Choose a project source or session before inspecting Vibe64 outputs.");
         }
         try {
-          return outputsView(root, await inspectOutputs({
-            environment: await projectEnvironment(input),
-            projectRoot: root
-          }));
+          const [environment, resourcesPreparing] = await Promise.all([projectEnvironment(input), resourcesBeingPrepared(input)]);
+          return outputsView(root, await inspectOutputs({ environment, projectRoot: root, resourcesPreparing }));
         } catch (error) {
           if (!EXPECTED_UNCONFIGURED_CODES.has(String(error?.code || ""))) {
             throw error;

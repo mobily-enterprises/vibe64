@@ -417,14 +417,16 @@ function setGenesisCollaboration(options = {}) {
   return exactGenesisInspection(setCollaboration, GENESIS_CONTRACTS.collaboration, options);
 }
 
-async function inspectVibe64Outputs(options = {}) {
+// resourcesPreparing (the host is still preparing resources it supplies) only
+// words the reason Preview cannot start; Genesis never sees it.
+async function inspectVibe64Outputs({ resourcesPreparing = false, ...options } = {}) {
   const [[section, resourceSection, workspaceSetupSection], environment] = await Promise.all([
     inspectGenesisStackSections([
       VIBE64_OUTPUTS_SECTION, VIBE64_RESOURCE_ESTIMATES_SECTION, VIBE64_WORKSPACE_SETUP_SECTION
     ], options),
     exactGenesisInspection(inspectEnvironment, GENESIS_CONTRACTS.environment, options)
   ]);
-  const outputs = vibe64OutputsInspection({ environment, section });
+  const outputs = vibe64OutputsInspection({ environment, section, resourcesPreparing: resourcesPreparing === true });
   return {
     ...outputs,
     resourceEstimates: vibe64ResourceEstimatesInspection({

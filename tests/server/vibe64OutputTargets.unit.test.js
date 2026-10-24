@@ -345,6 +345,21 @@ test("genuinely unconfigured Outputs remain an empty target list", async (t) => 
   }
 });
 
+test("a missing Stack resource says what to set and where, or that Vibe64 is still preparing it", () => {
+  const section = { diagnostics: [], stackHash: "sha256:unit", status: "ready", source: "project",
+    lines: ["### Target `app`: Run app", "- Default.", "- Mode: `interactive`", "- Runtimes: `nodejs`", "- Run `Start`: `npm` `run` `dev`",
+      "#### Presentation", "- Kind: `web`", "- Ready when: `GET` `/` returns `200`"] };
+  const missing = (details) => ({ diagnostics: [{ code: "STACK_RESOURCE_MISSING", message: "Stack component project requires database: DB_DATABASE.",
+    details: { component: "project", resource: "database", ...details } }], stackHash: "sha256:unit" });
+  const reason = (environment, options = {}) => vibe64OutputsInspection({ environment, section, ...options }).targets[0].disabledReason;
+  assert.equal(reason(missing({ alternatives: ["DB_DATABASE"], missing: [["DB_DATABASE"]] })),
+    "This app needs its database before Preview can start: set DB_DATABASE in Env (in Dash, under Development), then press Check again.");
+  assert.equal(reason(missing({ alternatives: ["DB_NAME + DB_HOST + DB_PASSWORD", "DATABASE_URL"], missing: [["DB_PASSWORD"], ["DATABASE_URL"]] })),
+    "This app needs its database before Preview can start: set DB_PASSWORD, or DATABASE_URL in Env (in Dash, under Development), then press Check again.");
+  assert.equal(reason(missing({ alternatives: ["DB_DATABASE"], missing: [["DB_DATABASE"]] }), { resourcesPreparing: true }),
+    "Vibe64 is still setting up this app's database. Preview can start when workspace setup finishes; then press Check again.");
+});
+
 test("configured blocked Outputs keep disabled targets without exposing private inputs", async (t) => {
   const context = await outputContext(t);
   const disabledReason = "MySQL needs one of: DB_PASSWORD.";

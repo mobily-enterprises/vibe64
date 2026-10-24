@@ -19,6 +19,15 @@ apply one. After you choose a starter and accept its offer or directly request
 it, Colleague can use the existing onboarding action and recheck the result.
 A successful import does not mean dependencies are prepared or Preview is running.
 
+When a starter needs a resource such as its database, Preview waits for it and
+says so instead of starting. Where the host supplies that resource (hosted
+Vibe64's managed databases), Preview says "Vibe64 is still setting up this
+app's database" until workspace setup finishes; press **Check again** then.
+Where you supply it, Preview names the variables to set, for example "set
+DB_DATABASE in Env (in Dash, under Development)": open **Dash → Env**, choose
+**Development**, add the value (see [Development Env](development-env.md)) and
+press **Check again**.
+
 For recurring **Preview could not load an application resource** errors, enable
 Preview diagnostics in the affected Studio browser before reproducing: add
 `vibe64_preview_debug=1` to the page URL, or set

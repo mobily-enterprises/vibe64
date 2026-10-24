@@ -731,7 +731,26 @@ function parseVibe64OutputsLines(lines, {
   return { version: 1, targets };
 }
 
-function vibe64OutputsInspection({ environment = {}, section = {} } = {}) {
+// Why Preview cannot start, in the words of the page it shows on. Genesis's
+// STACK_RESOURCE_MISSING names the Stack component and resource; the person
+// needs the variable to set and where, or, while the host is still preparing
+// the resource it supplies, that Vibe64 is on it.
+function resourceReason(diagnostic, { resourcesPreparing = false } = {}) {
+  const details = diagnostic.details || {};
+  const missing = Array.isArray(details.missing) ? details.missing : [];
+  // Each alternative by the names still missing from it (defaults may fill the rest).
+  const choices = (Array.isArray(details.alternatives) ? details.alternatives : []).map((alternative, index) => (
+    Array.isArray(missing[index]) && missing[index].length ? missing[index].join(" and ") : String(alternative)
+  )).filter(Boolean);
+  if (diagnostic.code !== "STACK_RESOURCE_MISSING" || !choices.length) return diagnostic.message;
+  const resource = String(details.resource || "").trim() || "resources";
+  if (resourcesPreparing) {
+    return `Vibe64 is still setting up this app's ${resource}. Preview can start when workspace setup finishes; then press Check again.`;
+  }
+  return `This app needs its ${resource} before Preview can start: set ${choices.join(", or ")} in Env (in Dash, under Development), then press Check again.`;
+}
+
+function vibe64OutputsInspection({ environment = {}, section = {}, resourcesPreparing = false } = {}) {
   assertMatchingStackInspections(section, environment, "Outputs section");
   const sectionDiagnostics = [...(section.diagnostics || [])];
   const environmentDiagnostics = [...(environment.diagnostics || [])];
@@ -739,7 +758,7 @@ function vibe64OutputsInspection({ environment = {}, section = {} } = {}) {
   if (section.status === "ready") parsed = parseVibe64OutputsLines(section.lines);
   const disabledReason = environmentDiagnostics.length === 0
     ? null
-    : environmentDiagnostics.map(({ message }) => message).join(" ");
+    : [...new Set(environmentDiagnostics.map(diagnostic => resourceReason(diagnostic, { resourcesPreparing })))].join(" ");
   const targets = parsed.targets.map((target) => ({
     ...target,
     source: section.source || null,
