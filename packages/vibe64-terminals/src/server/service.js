@@ -781,6 +781,8 @@ function createOpenCodeSessionRegistration({
 }
 
 const AGENT_WRITE_WAIT_MS = 60_000;
+const MAIN_AI_CHANGED_GOAL_NOTICE = "Goal cancelled because the main AI changed in AI setup. The work done so far is kept. " +
+  "To continue, choose Goal → Set goal and start it again; it will run on the new main AI.";
 
 const PROJECT_RUNTIME_DORMANT_CLOSE_AFTER_MS = 30 * 60 * 1000;
 const PROJECT_RUNTIME_DORMANCY_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
@@ -2642,6 +2644,18 @@ function createService({
       reason,
       runtime
     };
+  }
+
+  // Runs visit inside each open project's context (or the current project).
+  async function forEachOpenProject(visit, reportFailure, label) {
+    if (typeof projectService.listProjects !== "function") return visit();
+    const listed = await projectService.listProjects();
+    if (listed?.ok === false) throw new Error(listed.error || `${label} could not list projects.`);
+    for (const project of openProjectRuntimeRecords(listed)) {
+      if (closing) break;
+      try { await projectService.runInProjectContext(project.slug, visit); }
+      catch (error) { reportFailure(error, { projectSlug: project.slug }); }
+    }
   }
 
   async function listOpenProjectRuntimeSessions() {
@@ -4525,18 +4539,48 @@ function createService({
             }
           }
         };
-        if (typeof projectService.listProjects === "function") {
-          const listed = await projectService.listProjects();
-          if (listed?.ok === false) throw new Error(listed.error || "Goal recovery could not list projects.");
-          for (const project of openProjectRuntimeRecords(listed)) {
-            if (closing) break;
-            try { await projectService.runInProjectContext(project.slug, recoverCurrentProject); }
-            catch (error) { reportFailure(error, { projectSlug: project.slug }); }
-          }
-        } else await recoverCurrentProject();
+        await forEachOpenProject(recoverCurrentProject, reportFailure, "Goal recovery");
         return { ok: results.every(result => result.ok !== false), results };
       })();
       return goalRecovery;
+    },
+
+    // The owner saved a different main AI in AI setup. Every unfinished goal on
+    // the old main AI is cancelled through the ordinary Cancel goal path, so
+    // nothing keeps running on it; the chat keeps its history and says why.
+    // A goal on a Custom model is the person's own choice and is left alone.
+    async cancelGoalsForMainAiChange(input = {}) {
+      const results = [];
+      const reportFailure = (error, target) => {
+        const result = { ...target, ok: false, code: error.code, error: error.message };
+        results.push(result);
+        logOperationalEvent(logger, "warn", { ...result, event: "vibe64.agent_goal.main_ai_cancel_failed",
+          component: "vibe64.agent_goal" }, "A goal on the previous main AI could not be cancelled.");
+      };
+      const cancelCurrentProject = async () => {
+        const projectSlug = projectRuntimeContext().projectSlug;
+        for (const session of await listOpenProjectRuntimeSessions()) {
+          if (closing) break;
+          const pinned = JSON.parse(session.metadata?.assistant_routing_goal || "null");
+          if (!pinned || pinned.mode === "custom" || ["complete", "completed", "cancelled"].includes(pinned.status)) continue;
+          try {
+            const options = { vibe64User: input.vibe64User || null };
+            const observed = await service.readAgentGoal(session.sessionId, options);
+            if (observed?.status !== "available" || !observed.goal || ["complete", "completed"].includes(observed.goal.status)) continue;
+            const result = await service.updateAgentGoal(session.sessionId, { ...options, action: "cancel",
+              threadId: observed.threadId, createdAt: observed.goal.createdAt, objective: observed.goal.objective });
+            if (result?.ok === false) throw Object.assign(new Error(result.error || "The goal could not be cancelled."), result);
+            const context = await assistantSessionOptions(session.sessionId, options);
+            const turn = await context.runtime.store.writeConversationSystemMessage(session.sessionId, {
+              messageId: `main-ai-changed-goal-cancelled:${randomUUID()}`, text: MAIN_AI_CHANGED_GOAL_NOTICE });
+            await publishAgentSessionChanged(session.sessionId, { reason: "assistant-routing-changed",
+              ...(turn ? { payload: { conversationLogPatch: { type: "upsert-turn", turn } } } : {}) });
+            results.push({ projectSlug, sessionId: session.sessionId, cancelled: true });
+          } catch (error) { reportFailure(error, { projectSlug, sessionId: session.sessionId }); }
+        }
+      };
+      await forEachOpenProject(cancelCurrentProject, reportFailure, "Goal cancellation");
+      return { ok: results.every(result => result.ok !== false), results };
     },
 
     reconcileAgentSessions,

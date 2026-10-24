@@ -1,6 +1,6 @@
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { createAssistantRoutingStore, validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/assistantRoutingStore";
-import { ASSISTANT_SETUP_ROLES, isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
+import { ASSISTANT_SETUP_ROLES, assistantSetupRoleValue, isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
 import { readWorkspaceTeam } from "@local/vibe64-core/server/workspaceTeam";
 import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { watch } from "node:fs";
@@ -1395,6 +1395,7 @@ function createService({
   env = process.env,
   githubAccountMode = GITHUB_ACCOUNT_MODE_LOCAL,
   invalidateAgentRuntimes = async () => null,
+  cancelGoalsForMainAiChange = async () => null,
   personalProfileStore = null,
   inspectRoutingConfiguration = null,
   previousGithub = null,
@@ -2311,6 +2312,12 @@ function createService({
 
   const sameRoutingSelection = (left, right) => ["engineId", "agentId", "modelProviderId", "modelId", "variantId"]
     .every((key) => left?.[key] === right?.[key]);
+  // The main AI is the owner's Senior and Junior tool and model; a thinking
+  // level change alone keeps it, and a first setup replaces nothing.
+  const mainAiChanged = (previous, next) => ["senior", "junior"].some((role) => {
+    const [before, after] = [previous, next].map((setup) => assistantSetupRoleValue(setup, role).value);
+    return before?.schema && ["engineId", "agentId", "modelProviderId", "modelId"].some((key) => before[key] !== after?.[key]);
+  });
 
   // Internal setup used after connection setup, explicit session creation and
   // the team card. It accepts no values: it fills only the setup's absent roles
@@ -2399,7 +2406,13 @@ function createService({
         if (Object.keys(fieldErrors).length) return { ok: false, error: "Review the highlighted routing choices.", fieldErrors };
         await routingStore().write(configuration, input.revision);
         await publishAccountChanged("codex", { reason: "model-routing-updated" });
-        return readModelRouting(input);
+        const routing = await readModelRouting(input);
+        if (!mainAiChanged(saved.owner, configuration.owner)) return routing;
+        // Unfinished goals never continue on the previous main AI.
+        const cancelled = await cancelGoalsForMainAiChange({ vibe64User: input.vibe64User || null });
+        const results = cancelled?.results || [];
+        return { ...routing, goalsCancelled: results.filter((result) => result.cancelled).length,
+          goalCancelFailures: results.filter((result) => result.ok === false).map(({ sessionId, projectSlug, error }) => ({ sessionId, projectSlug, error })) };
       });
     },
     async getStatus(input = {}) {

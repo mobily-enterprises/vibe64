@@ -14,8 +14,8 @@ mode** and choose another connected **Orchestrator**, or choose **Custom** and a
 permitted model. A pending automatic continuation or review does not prevent
 this change: Vibe64 cancels its old scheduling and waits for routing-helper
 cleanup before switching. During an active turn, the new settings are saved for
-the next turn. An unfinished goal keeps its orchestrator; another orchestrator
-is saved for after that goal finishes. A reported cleanup failure keeps
+the next turn. Saving a different main AI in AI setup cancels unfinished goals;
+see [Goals and model changes](coding-agent-goals.md). A reported cleanup failure keeps
 the previous selection; retry after restoring the execution service.
 The session's files and saved conversation remain. Switching does not resend
 the session's already-delivered opening briefing through project setup. A first

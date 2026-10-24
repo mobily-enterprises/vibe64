@@ -29,19 +29,29 @@ during a pending delivery may require cancelling that request and sending it aga
 These steps apply on desktop and mobile. Account sign-in and credential entry
 remain your actions; Colleague can explain the recovery and offer supported help.
 
-An unfinished goal stays with its current tool. Open **Chat mode** while
-it is running or paused and choose **Senior**, **Junior**, or **Custom**. A model
-or direct-mode change within the same tool applies to the next turn,
-including automatic goal continuations. The current turn keeps its settings;
-the goal keeps its objective, budget and progress. You do not need **Pause goal**,
-**Cancel goal** or a reload to save settings.
-Choosing **Auto**, a model in another tool, or moving the main AI to another tool
-in AI setup applies after the goal finishes; it does not transfer or cancel the
-current goal. Ordinary messages still use the current goal’s tool and the AI setup
-saved when it started. If a message is rejected before sending, its delivery check
-also uses the current goal’s tool. These steps apply
-on desktop and mobile, including goals created by the assistant. Colleague can
-explain or offer a supported change and needs your request before performing it.
+Open **Chat mode** while a goal is running or paused and choose **Senior**,
+**Junior**, or **Custom**. A model or direct-mode change within the same tool
+applies to the next turn, including automatic goal continuations. The current
+turn keeps its settings; the goal keeps its objective, budget and progress. You
+do not need **Pause goal**, **Cancel goal** or a reload to save settings.
+Choosing **Auto** or a Custom model in another tool in **Chat mode** applies after
+the goal finishes.
+
+Changing the main AI cancels unfinished goals. When the workspace owner saves a
+different tool or model for **Senior** or **Junior** in **AI setup** (or **Model
+setups**), Vibe64 cancels every unfinished goal (running, paused or blocked) in
+the workspace's open sessions, using the same path as **Cancel goal**. No goal
+keeps running on the previous main AI. Each affected chat shows **Goal cancelled
+because the main AI changed in AI setup**; the conversation, files and work done
+so far are kept. To continue, choose **Goal** → **Set goal** and start it again;
+it runs on the new main AI. Changing only a thinking level, the Router or the
+helper roles does not cancel goals, and neither does the first AI setup. A goal
+started on a **Custom** model is your own choice and is not cancelled. If a goal
+cannot be cancelled (for example its AI is unreachable), it stays as it was and
+the failure is recorded in the operational log; open that chat and use **Goal**
+→ **Cancel goal**. These steps apply on desktop and mobile. Colleague can explain
+this and change the AI setup on your request; it warns that saving cancels
+unfinished goals.
 
 When changing a Codex model provider during a goal, the current turn finishes
 before the same conversation continues with the new provider. If that change

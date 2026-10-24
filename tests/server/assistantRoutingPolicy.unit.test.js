@@ -360,6 +360,39 @@ test("Accounts reads and saves both setups for the owner only and refuses person
   assert.deepEqual((await service.initializeModelRouting({ setup: "nonOwner", vibe64User: owner })).initialized, [], "filled roles are kept");
 });
 
+test("saving a different main AI cancels unfinished goals; thinking-only changes and first setup do not", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-routing-goal-cancel-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const manager = createSessionAgentManager({
+    providers: [{ id: "codex", transportId: "codex_app_server", async capabilities() { return catalog(); } }],
+    readAssistantAccess: async ({ modelProviderId }) => ({ available: true, ownerOnly: modelProviderId === "openai", connectionIdentity: `fixture-${modelProviderId}` })
+  });
+  const calls = [];
+  const service = createService({ systemRoot: root, targetRoot: root,
+    inspectRoutingConfiguration: (configuration, options) => manager.inspectRoutingConfiguration(configuration, options),
+    cancelGoalsForMainAiChange: async (input) => {
+      calls.push(input);
+      return { ok: false, results: [{ sessionId: "s-1", cancelled: true }, { sessionId: "s-2", ok: false, error: "Goal busy." }] };
+    },
+    canManageCodex: ({ vibe64User } = {}) => vibe64User?.role === "owner" ? null : { ok: false, error: "Owner required" } });
+  const owner = { role: "owner", username: "owner" };
+  const recommendations = recommend(catalog());
+  const first = await service.saveModelRouting({ revision: (await service.readModelRouting()).revision, vibe64User: owner,
+    owner: Object.fromEntries(SCORED_ROLES.map((role) => [role, recommendations[role]])) });
+  assert.equal(first.ok, true, JSON.stringify(first));
+  assert.equal(calls.length, 0, "a first setup has no previous main AI");
+  const thinking = await service.saveModelRouting({ revision: first.revision, vibe64User: owner,
+    owner: { senior: { ...recommendations.senior, variantId: "low" } } });
+  assert.equal(thinking.ok, true, JSON.stringify(thinking));
+  assert.equal(calls.length, 0, "a thinking level change keeps the main AI");
+  const moved = await service.saveModelRouting({ revision: thinking.revision, vibe64User: owner,
+    owner: { senior: { ...recommendations.senior, modelId: recommendations.senior.modelId === "gpt-6-luna" ? "gpt-6-sol" : "gpt-6-luna" } } });
+  assert.equal(moved.ok, true, JSON.stringify(moved));
+  assert.deepEqual(calls, [{ vibe64User: owner }]);
+  assert.equal(moved.goalsCancelled, 1);
+  assert.deepEqual(moved.goalCancelFailures, [{ sessionId: "s-2", projectSlug: undefined, error: "Goal busy." }]);
+});
+
 function routingFixture() {
   const codex = catalog();
   const opencode = { ...catalog(["openai"]), engineId: "opencode", label: "OpenCode",

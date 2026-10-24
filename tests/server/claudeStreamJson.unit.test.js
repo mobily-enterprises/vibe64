@@ -2874,6 +2874,22 @@ createInterface({ input: process.stdin }).on('line', async line => {
       assert.equal(goalToolCall.result.ok, true, JSON.stringify(goalToolCall));
       assert.equal((await service.readAgentGoal("test", options)).goal.status, "blocked",
         "The goal command retains fresh request authority even without a hosted runtime actor or intervening user message");
+      // Saving a different main AI cancels the unfinished goal through Cancel
+      // goal and tells the chat why; nothing is left to continue on the old AI.
+      const switched = await service.cancelGoalsForMainAiChange({ vibe64User: actor });
+      assert.deepEqual(switched.results.map(({ sessionId, cancelled }) => ({ sessionId, cancelled })),
+        [{ sessionId: "test", cancelled: true }], JSON.stringify(switched));
+      const afterSwitch = await service.readAgentGoal("test", options);
+      assert.ok(!afterSwitch.goal || ["complete", "completed"].includes(afterSwitch.goal.status), JSON.stringify(afterSwitch));
+      assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, false,
+        "a cancelled goal is never resumed after restart");
+      assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_routing_goal).status, "complete");
+      assert.equal((await trace()).filter(row => row.frame?.type === "user").at(-1).frame.message.content, "/goal clear");
+      const notices = (await store.readConversationLog("test"))
+        .filter(turn => JSON.stringify(turn).includes("Goal cancelled because the main AI changed"));
+      assert.equal(notices.length, 1, JSON.stringify(notices));
+      assert.deepEqual((await service.cancelGoalsForMainAiChange({ vibe64User: actor })).results, [],
+        "a finished goal is not cancelled again");
 
     }
   });

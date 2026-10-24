@@ -170,6 +170,8 @@ const Vibe64AccountsFeature = defineFeature({
       personalProfileStore,
       inspectRoutingConfiguration: typeof terminals?.inspectAssistantRoutingConfiguration === "function"
         ? (configuration, options) => terminals.inspectAssistantRoutingConfiguration(configuration, options) : null,
+      cancelGoalsForMainAiChange: async (input = {}) => typeof terminals?.cancelGoalsForMainAiChange === "function"
+        ? terminals.cancelGoalsForMainAiChange(input) : null,
       invalidateAgentRuntimes: async (input = {}) => {
         if (typeof terminals?.invalidateAgentRuntimes === "function") {
           return terminals.invalidateAgentRuntimes(input);

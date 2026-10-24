@@ -157,10 +157,22 @@ Open **Chat mode** at any point to choose **Auto**, **Senior**, **Junior**, or
 **Custom** → **Apply**. Senior and Junior come from the AI setup and always run
 in the main AI's tool. Saving settings does not stop the
 current turn. The next turn uses the new settings; see [Goals and model
-changes](coding-agent-goals.md) for automatic continuations and an unfinished
-goal's retained tool. If saving fails, the control reports the error;
-retry after resolving it. Colleague can explain or perform a supported selection
-change when you explicitly ask.
+changes](coding-agent-goals.md) for automatic continuations and goals. If saving
+fails, the control reports the error; retry after resolving it. Colleague can
+explain or perform a supported selection change when you explicitly ask.
+
+A message sent while a turn is still running joins that turn, with that turn's
+mode and model. This includes a Claude turn whose reply is ready while a
+background task (for example a long test run) still runs: the status reads
+**Reply ready · background task still running…**. If you changed **Chat mode**
+(or chose another Custom model) after that turn started, Vibe64 does not send the
+message into the old turn. It reports that the running turn still uses the old
+mode, and the message stays in chat with **Retry**. Choose **Stop** (this also
+stops the background task) or wait for the turn to finish, then choose **Retry**:
+the message is then sent as a new request on your current Chat mode, so Auto can
+route a plan request to Senior. Without a Chat mode change, messages still steer
+the running turn as before. This applies on desktop and mobile; Colleague can
+explain the notice, and you choose Stop and Retry.
 
 To change the model for an active Update merge repair, open **Chat mode** in
 that repair's composer, then **Choose model**. In **Custom AI**, choose a
