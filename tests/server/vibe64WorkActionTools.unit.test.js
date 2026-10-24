@@ -31,7 +31,9 @@ test("work tools retain exact review identities and project authority through HT
     ];
     const sessions = Object.fromEntries(cases.map(([, , , name]) => [name, async (...args) => {
       const context = currentProjectRequestContext();
-      calls.push({ args, actor: context.vibe64User, project: context.slug });
+      // Save and inspect also receive their caller's action context; HTTP and
+      // tool calls differ only in channel, so compare the operation inputs.
+      calls.push({ args: args.filter(arg => !arg?.requestMeta), actor: context.vibe64User, project: context.slug });
       return native;
     }]));
     const actions = createActionCatalogue();

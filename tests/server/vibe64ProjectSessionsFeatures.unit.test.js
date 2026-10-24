@@ -156,6 +156,7 @@ test("project and sessions register routes and captured actions during setup", a
   const sessionActions = [];
   const sessionRoutes = [];
   const configurationReads = [];
+  const templateObservers = [];
   const sessionCatalogue = createActionCatalogue();
   const sessionOutputs = await Vibe64SessionsProvider.setup({
     actionCatalogue: {
@@ -175,7 +176,7 @@ test("project and sessions register routes and captured actions during setup", a
         }
       }
     },
-    project: { async createRuntime() { return {}; } },
+    project: { async createRuntime() { return {}; }, setTemplateApplicationObserver(observer) { templateObservers.push(observer); } },
     sourceEditor: { async readIntegrations(input) {
       configurationReads.push(input);
       return { ok: true, baseHash: "verified-configuration" };
@@ -190,6 +191,7 @@ test("project and sessions register routes and captured actions during setup", a
   }, {});
 
   assert.equal(typeof sessionOutputs.sessions.createSession, "function");
+  assert.deepEqual(templateObservers.map((observer) => typeof observer), ["function"], "applying a starter prepares its session workspace");
   assert.equal(typeof sessionOutputs.sessions.setRenewalActorResolver, "function");
   assert.doesNotThrow(() => sessionOutputs.sessions.setRenewalActorResolver(async () => null));
   assert.throws(
@@ -235,6 +237,7 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.sessions.integration-setup.resume",
     "vibe64.sessions.integration-setup.skip",
     "vibe64.sessions.list",
+    ...["approve", "decline", "edit", "read", "withdraw"].map((operation) => `vibe64.sessions.main-chat-approvals.${operation}`),
     "vibe64.sessions.pin",
     "vibe64.sessions.presence.update",
     "vibe64.sessions.preview-state.broadcast",

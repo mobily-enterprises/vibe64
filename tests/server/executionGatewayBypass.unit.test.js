@@ -36,6 +36,9 @@ const DIRECT_EXECUTION_PATTERNS = Object.freeze([
   }
 ]);
 
+const PUBLISHING_TOOLS = "Publishing runs Vibe64's own fixed git/tool commands without a shell; project code runs through the command gateway.";
+const TOOL_HOME = "Packaging and publishing tools run with a private staging HOME so they never read or write the person's own configuration.";
+
 const DIRECT_EXECUTION_ALLOWLIST = new Map([
   ["packages/vibe64-terminals/src/server/opencodeSessionEnvironmentPlugin.js", {
     "child_process import": { count: 1, reason: "The native OpenCode plugin reads Genesis instructions inside its existing managed execution scope." },
@@ -44,6 +47,18 @@ const DIRECT_EXECUTION_ALLOWLIST = new Map([
   ["packages/vibe64-database-tools/src/server/sqliteClient.js", {
     "child_process import": { count: 1, reason: "SQLite connections isolate synchronous native code from the server event loop." },
     "fork call": { count: 1, reason: "A fixed IPC worker allows cancellation of native SQLite queries." }
+  }],
+  ...[
+    "packages/vibe64-packaging/bin/vibe64-publish.js",
+    "packages/vibe64-packaging/src/server/packers/registryRecipe.js",
+    "packages/vibe64-packaging/src/server/release/exportCommit.js",
+    "packages/vibe64-publishing/src/server/credentialBroker.js",
+    "packages/vibe64-publishing/src/server/projectRepository.js",
+    "packages/vibe64-publishing/src/server/service.js"
+  ].map((filePath) => [filePath, { "child_process import": { count: 1, reason: PUBLISHING_TOOLS } }]),
+  ["packages/vibe64-packaging/src/server/stages.js", {
+    "child_process import": { count: 1, reason: PUBLISHING_TOOLS },
+    "spawn call": { count: 1, reason: "Packaging stages spawn Vibe64's pinned signing, upload and toolchain tools with an exact environment." }
   }]
 ]);
 
@@ -74,7 +89,21 @@ const ENV_POLICY_PATTERNS = Object.freeze([
   }
 ]);
 
-const ENV_POLICY_ALLOWLIST = new Map();
+const ENV_POLICY_ALLOWLIST = new Map([
+  ["packages/vibe64-packaging/src/server/destinations/androidSideload/index.js", { "HOME object key": { count: 2, reason: TOOL_HOME } }],
+  ["packages/vibe64-packaging/src/server/destinations/androidSideload/key.js", { "HOME object key": { count: 1, reason: TOOL_HOME } }],
+  ["packages/vibe64-packaging/src/server/toolchains/androidSdk.js", { "HOME object key": { count: 1, reason: TOOL_HOME } }],
+  ["packages/vibe64-packaging/src/server/toolchains/download.js", { "HOME object key": { count: 1, reason: TOOL_HOME } }],
+  ["packages/vibe64-publishing/src/server/verificationRunner.js", { "HOME object key": { count: 1, reason: TOOL_HOME } }],
+  ...["packages/vibe64-packaging/src/server/destinations/registryCommon.js", "packages/vibe64-packaging/src/server/stages.js"].map((filePath) => [filePath, {
+    "HOME object key": { count: 1, reason: TOOL_HOME },
+    "XDG_CACHE_HOME object key": { count: 1, reason: TOOL_HOME },
+    "XDG_CONFIG_HOME object key": { count: 1, reason: TOOL_HOME }
+  }]),
+  ["packages/vibe64-terminals/src/server/vibe64OutputTargets.js", {
+    "export PATH": { count: 1, reason: "Output startup restores the tool PATH Vibe64 resolved after a login shell (macOS path_helper) reorders it." }
+  }]
+]);
 
 async function listJavaScriptFiles(root) {
   const entries = await readdir(root, { withFileTypes: true });

@@ -13,7 +13,9 @@ const HOST_PROFILE_FILE = "packages/vibe64-execution/src/server/hostProfile.js";
 const SYSTEM_LOCATION = /(?<![\w.~$/-])\/(?:var\/lib|var\/cache|opt|etc|usr\/lib|run)\/[\w.-]+/gu;
 // Locations other software owns, which local code and its tests may name.
 const OTHER_SOFTWARE_LOCATIONS = new Set([
-  "/etc/passwd", "/etc/nsswitch.conf", "/etc/codex", "/opt/homebrew", "/run/user", "/run/app"
+  "/etc/passwd", "/etc/nsswitch.conf", "/etc/codex", "/opt/homebrew", "/run/user", "/run/app",
+  // Database and Ruby packages' own install and data folders.
+  "/usr/lib/postgresql", "/var/lib/postgres", "/var/lib/pgsql", "/var/lib/mysql", "/opt/mariadb", "/var/lib/gems"
 ]);
 // Known blocker: the privileged helper, its two test files and its release
 // packaging still describe the host they run on. They leave this repository

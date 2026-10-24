@@ -62,7 +62,8 @@ test("standalone connects an OpenCode provider and reopens its existing credenti
   } });
   assert.equal(await configured.codexConnectionStatus(), false);
   assert.equal(await configured.claudeConnectionStatus(), true);
-  assert.equal((await configured.listConnections())[0].id, "opencode");
+  // Vibe64 includes no AI of its own: nothing is connected until the person adds a provider.
+  assert.deepEqual(await configured.listConnections(), []);
 
   const service = createAiConnectionService({ aiConnections, readAssistantCapabilities: terminals.listAssistantCapabilities });
   const app = testRouteApp();
@@ -84,7 +85,7 @@ test("standalone connects an OpenCode provider and reopens its existing credenti
     await route.handler({ hostname: "localhost", ip: "127.0.0.1", params: { providerId: "deepseek" },
       body: { modelId: "retired-setting" } }, retired);
     assert.equal(retired.statusCode, 410);
-    assert.match(retired.payload.error, /Reload.*Helper/);
+    assert.match(retired.payload.error, /moved to Models\. Reload the app/u);
   }
   const storedBefore = await readFile(aiConnections.filePath, "utf8");
   const reopened = createAiConnectionRuntime({ systemRoot, terminals });

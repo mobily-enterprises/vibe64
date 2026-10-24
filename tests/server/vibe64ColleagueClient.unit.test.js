@@ -717,9 +717,8 @@ test("Colleague signals a local message submission before its delayed admission"
   await sending;
   await flush();
   assert.equal(view.state.voice.controller.state.binding.state.messages[0].id, "invitation");
-  assert.equal(view.events.length, 1);
-  view.setConversation({ messages: [{ id: "invitation", role: "user", text: "Please speak again" }], status: "ready" });
-  view.publish({ type: "settled" });
+  // Once the first message is admitted, a steerable Colleague sends the
+  // follow-up into the working turn instead of waiting for it to settle.
   await queued;
   assert.deepEqual(view.events, [["message-submit", "invitation"], ["message-submit", "other"]]);
 });

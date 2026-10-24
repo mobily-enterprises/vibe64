@@ -185,7 +185,7 @@ test("Colleague reads saved Z.AI facts through the original owner without creden
     assert.deepEqual([verifications, changes], effectCounts, "reading does not verify, unlock, invalidate or publish");
   }
   const api = await actions.execute({ actionId: tool.actionId, input: {}, context: { channel: "api", surface: "app" } });
-  assert.equal(api.connections.length, 3, "the original UI list retains every connection");
+  assert.deepEqual(api.connections.map(row => row.modelProviderId).sort(), ["zai", "zai-coding-plan"], "the original UI list retains every connection");
   assert.ok(api.connections.find(row => row.modelProviderId === "zai").keyHint);
 
   const localActors = [];

@@ -511,7 +511,7 @@ test("missing project-pinned skills leave chat delivery and preparation recovery
   await assert.rejects(access(path.join(projectRoot, "node_modules/genesis-compiler")), { code: "ENOENT" });
 });
 
-test("incomplete project contracts defer skill refresh without blocking repair chat", async (t) => {
+test("a pending Stack section proposal neither defers skill refresh nor changes source", async (t) => {
   const warnings = [];
   const { service, session, projectService } = await terminalServiceFixture(t, agentWriteLockHarness(), {
     logger: { warn(event) { warnings.push(event); } }
@@ -525,17 +525,18 @@ test("incomplete project contracts defer skill refresh without blocking repair c
     .replace(/\n## Resource estimates\n[\s\S]*?(?=\n## |$)/u, "");
   await writeFile(stackPath, stack);
   session.workspaceSetup = { status: "succeeded", recipeHash: "existing-setup" };
-  projectService.runProjectSourceExclusive = async () => assert.fail("Incomplete contracts must not change source.");
-  await assert.rejects(inspectGenesisSkills({ projectRoot }), { code: "STACK_PROJECT_CONTRACTS_INCOMPLETE" });
+  projectService.runProjectSourceExclusive = async () => assert.fail("A pending proposal must not change source.");
+  // Genesis lists an unadopted component section as pending; the Stack still reads.
+  await inspectGenesisSkills({ projectRoot });
   await assert.rejects(service.sendAgentMessage(session.sessionId,
     { message: "Help repair project setup." }, { engineId: "opencode" }),
   { code: "vibe64_assistant_selection_invalid" });
   assert.deepEqual(session.workspaceSetup, { status: "succeeded", recipeHash: "existing-setup" });
   assert.equal(await readFile(stackPath, "utf8"), stack);
-  assert.equal(warnings.some((event) => event.event === "vibe64.agent_skills.refresh_deferred"), true);
+  assert.equal(warnings.some((event) => event.event === "vibe64.agent_skills.refresh_deferred"), false);
 });
 
-test("an undecided competing Stack section defers skill refresh like incomplete contracts", async (t) => {
+test("an undecided competing Stack section defers skill refresh without blocking repair chat", async (t) => {
   const warnings = [];
   const ambiguous = Object.assign(new Error("Decide `## Connected development` first. Author one complete project section."), {
     code: "STACK_SECTION_AMBIGUOUS",

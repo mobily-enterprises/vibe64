@@ -78,7 +78,7 @@ test("apply clears each targeted store/native route with private backups, retain
   assert.equal(state.sentinel, "retain");
   assert.deepEqual(state.connections, { unrelated: { apiKey: "unrelated-fixture", sentinel: true } });
   const store = createAiConnectionStore({ filePath: f.store, verifyConnection() { assert.fail("Upgrade and reads cannot make provider calls"); } });
-  assert.equal((await store.listConnections()).find(row => row.id === "opencode").preferred, false);
+  assert.equal((await store.listConnections()).some(row => row.preferred), false, "the retained preference names no remaining connection");
   assert.equal(await store.resolveConnection("zai"), null);
   assert.equal(await readFile(f.retained, "utf8"), "conversation-fixture");
   assert.equal(await readFile(f.subscription, "utf8"), "subscription-login-fixture");

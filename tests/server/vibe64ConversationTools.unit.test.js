@@ -2,13 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
-import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
 import { createTerminalActions } from "../../packages/vibe64-terminals/src/server/actions.js";
 import { withRouteProject } from "./vibe64RouteTestHelpers.js";
 
-test("the native JSKIT catalogue exposes bounded conversation contracts without internal state", async () => {
+test("the native JSKIT catalogue exposes bounded conversation contracts without internal state", () => withRouteProject(async ({ projectContext, slug }) => {
   const calls = [];
   const native = {
     ok: true, conversationId: "chat-1", status: "inProgress", runId: "run-1",
@@ -17,7 +16,7 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   };
   const terminals = {
     async updateTemporaryConversation(sessionId, input) { calls.push({ sessionId, input }); return { ok: true,
-      routingMetadata: { assistant_routing: JSON.stringify({ ...input.assistantRouting, workflowEngineId: "codex", review: false }),
+      routingMetadata: { assistant_routing: JSON.stringify({ ...input.assistantRouting, review: false }),
         private: "private-native-binding" } }; },
     async readSessionWorkPlan() { return { ok: true, available: true, text: "  Full page 🙂\n", status: "ready", revision: "a".repeat(64),
       offset: 0, nextOffset: 14, totalCharacters: 16020, hasMore: true, path: "/private/plan.md", token: "secret" }; },
@@ -27,11 +26,11 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   };
   const sessions = {
     async updateAssistantSelection(sessionId, input) { calls.push({ sessionId, input }); return { ok: true, sessionId, assistantSelection: { engineId: "codex", modelId: "previous-model" }, metadata: {
-      assistant_routing: JSON.stringify({ ...input.assistantRouting, workflowEngineId: "codex" }),
+      assistant_routing: JSON.stringify(input.assistantRouting),
       assistant_routing_request: JSON.stringify({ status: "completed", resolvedMode: "senior" })
     } }; },
     async inspectAssistantAccess() { return { ok: true, currentMode: "junior", canUse: true, purposes: {
-      junior: { available: true, role: "junior", workflowEngineId: "codex", backupUsed: true, message: "Using Backup.",
+      junior: { available: true, role: "junior", approvalRequired: true, message: "Waits for the owner.",
         effectiveSelection: { engineId: "codex", modelProviderId: "openai", modelId: "observed-model", variantId: "high", agentId: "codex", catalogRevision: "sha256:observed" },
         connectionIdentity: { private: "private-account" }, executionProfileRequest: { private: "private-workload" } },
       auto: { available: false, reasonCode: "missing-router", message: "Configure Router first." },
@@ -48,22 +47,28 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   actions.register({ contributorId: "conversation-tools", domain: "vibe64", actions: [
     ...createSessionActions({ sessions }), ...createTerminalActions({ terminals })
   ].map((action) => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
+  // Main-chat sends resolve their actor and project through the canonical action context.
+  registerVibe64ActionContext(actions, { projectContext, resolveUser: async () => ({ username: "member", uid: 42, role: "member" }),
+    authorizeProject() {} });
   const catalog = createServiceToolCatalog(actions, { maxDirectTools: 100 });
   const context = { surface: "app" };
   const toolSet = catalog.resolveToolSet(context);
-  assert.equal(toolSet.tools.length, 37);
+  assert.equal(toolSet.tools.length, 43);
   assert.equal(toolSet.tools.some(tool => tool.actionId === "vibe64.sessions.pin"), true);
   assert.equal(toolSet.tools.some(tool => tool.actionId === "vibe64.sessions.conversation.rewind"), false);
-  assert.equal(toolSet.tools.some((tool) => tool.actionId.includes("attachment") || tool.actionId.includes("repository")), false);
+  assert.equal(toolSet.tools.some((tool) => tool.actionId.includes("attachment") || tool.actionId.startsWith("vibe64.repository.history.")), false);
+  // Incoming contributions are reviewed and changed only through their guarded inspect/change pair.
+  assert.deepEqual(toolSet.tools.filter((tool) => tool.actionId.startsWith("vibe64.repository.")).map((tool) => tool.actionId).sort(),
+    ["vibe64.repository.incoming.change", "vibe64.repository.incoming.inspect"]);
   async function execute(actionId, input) {
     const tool = toolSet.tools.find((entry) => entry.actionId === actionId);
     assert.ok(tool, actionId);
     const wireSchema = catalog.toOpenAiToolSchema(tool);
     assert.ok(wireSchema.function.parameters.properties.projectSlug);
     assert.equal(Object.hasOwn(wireSchema.function.parameters.properties, "vibe64User"), false);
-    return runWithProjectRequestContext({ slug: "alpha", vibe64User: { username: "member" } }, () => catalog.executeToolCall({
-      toolName: tool.name, argumentsText: JSON.stringify({ projectSlug: "alpha", ...input }), context, toolSet
-    }));
+    return catalog.executeToolCall({
+      toolName: tool.name, argumentsText: JSON.stringify({ projectSlug: slug, ...input }), context, toolSet
+    });
   }
   const read = await execute("vibe64.terminals.temporary-conversation.read", { sessionId: "session-1", conversationId: "chat-1" });
   assert.equal(read.ok, true, JSON.stringify(read));
@@ -109,7 +114,8 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   const invalid = await execute("vibe64.terminals.temporary-conversation.read", { sessionId: "session-1", conversationId: "chat-1", messageLimit: 200 });
   assert.equal(invalid.ok, false);
   assert.equal(calls.length, beforeInvalidRead);
-  const created = await execute("vibe64.sessions.create", { workflowEngineId: "codex" });
+  // Main chat starts on the workspace owner's AI setup; creation takes no engine.
+  const created = await execute("vibe64.sessions.create", {});
   assert.deepEqual(created.result, { ok: true, sessionId: "created-session", workspaceSetupStatus: "running" });
   assert.equal(calls.at(-1).vibe64User.username, "member");
   const sent = await execute("vibe64.sessions.agent-message.send", { sessionId: "session-1", message: "Please consider this correction.", messageId: "steer-1", submissionKind: "steer" });
@@ -132,7 +138,6 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   const auto = await execute("vibe64.sessions.assistant-selection.update", { sessionId: "session-1", assistantRouting: { mode: "auto", review: false } });
   assert.equal(auto.result.reviewEnabled, true, "Auto always reviews even with cleanup off");
   assert.equal(auto.result.deslopEnabled, false);
-  assert.equal(changed.result.workflowEngineId, "codex");
   assert.equal(changed.result.hasModelOverride, false);
   assert.equal(changed.result.modelId, "previous-model", "changing mode does not claim that the active model changed");
   const access = await execute("vibe64.sessions.assistant-access.inspect", { sessionId: "session-1" });
@@ -140,7 +145,7 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   assert.equal(access.result.canUse, true);
   assert.equal(access.result.purposes.length, 2);
   assert.equal(access.result.purposes[0].modelId, "observed-model");
-  assert.equal(access.result.purposes[0].backupUsed, true);
+  assert.equal(access.result.purposes[0].approvalRequired, true);
   assert.equal(access.result.purposes[1].available, false);
   assert.equal(access.result.purposes[1].reasonCode, "missing-router");
   assert.equal(JSON.stringify(access).includes("private"), false);
@@ -157,7 +162,6 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   });
   assert.equal(temporaryMode.ok, true, JSON.stringify(temporaryMode));
   assert.equal(temporaryMode.result.chatMode, "junior");
-  assert.equal(temporaryMode.result.workflowEngineId, "codex");
   assert.equal(temporaryMode.result.reviewEnabled, false, "the output reports stored preferences rather than echoing the request");
   assert.equal(temporaryMode.result.hasModelOverride, false);
   assert.equal(JSON.stringify(temporaryMode).includes("private"), false);
@@ -171,8 +175,8 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   const temporaryTool = toolSet.tools.find(({ actionId }) => actionId === "vibe64.terminals.temporary-conversation.update");
   const temporarySchema = catalog.toOpenAiToolSchema(temporaryTool).function.parameters;
   const routingSchema = temporarySchema.definitions[temporarySchema.properties.assistantRouting.allOf[0].$ref.split("/").at(-1)];
-  assert.deepEqual(routingSchema.properties.mode.enum, ["custom", "senior", "junior"]);
-});
+  assert.deepEqual(routingSchema.properties.mode.enum, ["custom", "senior", "junior", "fix"]);
+}));
 
 test("session lifecycle tools preserve canonical execution, bounded results and current authority", async () => {
   await withRouteProject(async ({ projectContext, slug }) => {

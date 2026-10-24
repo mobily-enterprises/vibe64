@@ -141,6 +141,9 @@ test("unlisted native models retain provider priority without admitting unsuppor
   claude.modelProviders[0].models = [{ id: "claude-sonnet-4-6", label: "Claude Sonnet", status: "available", variants: [{ id: "low" }, { id: "high" }] }];
   assert.equal(recommend([codex, claude]).quickHelper.modelId, "claude-sonnet-4-6");
   codex.modelProviders[0].models = [{ id: "gpt-new", label: "GPT", status: "available", variants: [] }];
+  // Scored DeepSeek V4 Pro ties OpenAI's provider default; leave only DeepSeek's default to compare.
+  const deepseek = codex.modelProviders.find(({ id }) => id === "deepseek");
+  deepseek.models = deepseek.models.filter(({ id }) => id !== "deepseek-v4-pro");
   const roles = recommend(codex);
   for (const role of ["senior", "junior", "router"]) assert.equal(roles[role].modelId, "gpt-new", role);
   assert.equal(roles.quickHelper.modelId, "deepseek-flash", "DeepSeek Flash is a strong Quick helper");

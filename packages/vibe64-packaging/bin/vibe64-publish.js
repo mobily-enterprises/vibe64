@@ -8,6 +8,11 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { createInterface } from "node:readline/promises";
+import { configureVibe64Host } from "@local/vibe64-execution/server/hostProfile";
+
+// The person runs this on their own computer, never as a child of a host that
+// provisions its machines, so it uses the own-computer host profile.
+configureVibe64Host(null);
 
 const USAGE = `Usage: vibe64-publish <command> [options]
 
