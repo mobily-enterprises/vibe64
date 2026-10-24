@@ -48,7 +48,10 @@ export function createTemporaryConversationFixture({ request, created = () => {}
       status: record.readError ? "unavailable" : pendingRequest ? "unconfirmed"
         : ["starting", "inProgress", "routing", "sending"].includes(record.status) ? "working" : "ready",
       capabilities: { attachments: true, steering: true, goals: false },
-      conversationLog: conversationTurnsFromMessages(record.messages || []),
+      // Saved turns carry ordered ids, as the server's do; transcript patches
+      // sort by turn id, and random message ids would reorder requests.
+      conversationLog: conversationTurnsFromMessages(record.messages || [])
+        .map((turn, index) => ({ ...turn, turnId: String(index + 1).padStart(6, "0") })),
       pagination: { limit: 12, hasMoreBefore: false }, presentation: record, pendingRequest,
       streaming: { revision: 0, messages: [] }, error: record.error || "" };
   }

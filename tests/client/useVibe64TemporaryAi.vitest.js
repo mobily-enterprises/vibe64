@@ -592,8 +592,7 @@ describe("useVibe64TemporaryAi", () => {
     expect(temporary.activeTask.value.recoveryOutcome).toBe("failed");
     expect(mocks.requests.filter(([path]) => path.endsWith("/messages")).at(-1)[1].body.text)
       .toContain("Still conflicts.");
-    // The completed turn reaches its observer after the remaining polling hops.
-    await vi.waitFor(() => expect(observer).toHaveBeenLastCalledWith(expect.objectContaining({ runId: "turn-2", outcomeKind: "continue" })));
+    expect(observer).toHaveBeenLastCalledWith(expect.objectContaining({ runId: "turn-2", outcomeKind: "continue" }));
   });
 
   it("starts a requested repair on Fix it with AI without enabling automatic Update recovery", async () => {
