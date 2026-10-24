@@ -288,6 +288,8 @@ function createClaudeConversationHost({
           async compactContext({ context: current, input, signal }) {
             signal?.throwIfAborted();
             const entry = await conversations.acquire({ ...current, sessionId });
+            // False: Claude is working, and summarises itself as it goes.
+            if (conversations.snapshot(entry)?.active) return false;
             return conversations.compactContext(entry, { ...input, signal });
           },
           state: {

@@ -408,7 +408,9 @@ export async function createSessionConversationBinding(provider, sessionId, opti
         if (bytes < 32_768 && host.compactContext) {
           try {
             await setPhase?.("compacting");
-            await host.compactContext({ context, signal, input });
+            // A working turn cannot be summarised, but it compacts itself as
+            // it works, so the message joins it with the history that fits.
+            if (await host.compactContext({ context, signal, input }) === false) return Math.max(bytes, 1024);
           } catch (error) {
             if (signal?.aborted) throw error;
             throw Object.assign(new Error(`The assistant's memory is full and could not be summarised automatically: ${error.message} Your chat is saved; try again.`),

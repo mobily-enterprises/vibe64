@@ -3464,6 +3464,16 @@ test("Main transfer budget summarises a nearly full Claude context before sizing
     error.statusCode === 409 && /too full/u.test(error.message), "a summary that frees too little stays a readable refusal");
 });
 
+test("Main transfer budget lets a message join a working, nearly full Claude without summarising", async t => {
+  const f = await fixture(t);
+  const binding = await createSessionConversationBinding(f.provider, f.context.sessionId, f.context);
+  const options = { context: f.context, input: { message: "Also check the footer" }, handover: "", signal: new AbortController().signal };
+  await f.provider.sendMessage(f.context, { message: "Work", messageId: "busy-work" });
+  f.behavior.contextUsage = { totalTokens: 966_000, maxTokens: 1_000_000, autoCompactThreshold: 967_000, model: "opus" };
+  assert.equal(await binding.maximumHistoryBytes(options), 1024);
+  assert.notEqual(f.processes[0].lastInput.message, "/compact", "a working turn is never sent /compact");
+});
+
 
 for (const smallWindow of [false, true]) test(`Main Claude switching retains complete visible history within its actual budget, smallWindow=${smallWindow}`, async t => {
   const f = await fixture(t);
