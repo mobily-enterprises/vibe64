@@ -111,6 +111,22 @@ it("lists only Fix it with AI and Custom when Senior and Junior need the owner's
   expect(state.modes.map(({ id }) => id)).toEqual(["custom", "fix"]);
 });
 
+it("a team member's Main chat offers no mode, Custom model or Deslop change", () => {
+  const approval = { available: false, approvalRequired: true, message: "Main chat runs on the owner's AI." };
+  const purposes = Object.fromEntries(["custom", "senior", "junior", "auto", "review"].map((id) => [id, approval]));
+  const openPicker = vi.fn();
+  const state = mount(mocks.save, false, { purposes, onCustom: openPicker, session: { sessionId: "session-1",
+    metadata: { assistant_routing: JSON.stringify({ mode: "auto", review: true }) } } });
+  expect(state.ownerOnly).toBe(true);
+  expect(state.modes).toEqual([]);
+  expect(state.reviewAvailable).toBe(false);
+  state.openCustom();
+  expect(openPicker).not.toHaveBeenCalled();
+  app.unmount();
+  const temporary = mount(mocks.save, true, { purposes });
+  expect(temporary.ownerOnly).toBe(false);
+});
+
 it("a failed save restores the mode and exact override", async () => {
   const state = mount();
   mocks.save.mockRejectedValueOnce(new Error("Previous assistant could not stop."));

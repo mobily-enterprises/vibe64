@@ -47,9 +47,8 @@ Choices and defaults come from the installed model pack and may include male and
 female voices. If only one voice is installed it is shown but cannot be changed.
 Server model setup is an operator task.
 Colleague can list the installed voices with their names and languages, so it can
-match "a British female voice" to an installed one or say none matches. Where the
-host saves speech preferences, it can then save that choice for you; otherwise
-choose it yourself in **Speaking voice**.
+match "a British female voice" to an installed one or say none matches; you
+then choose it in **Speaking voice**.
 
 Loading **Speaking voice** performs a read-only, authorized catalogue check. It
 does not start the microphone, open an audio connection or send an assistant

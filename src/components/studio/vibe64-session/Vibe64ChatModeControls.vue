@@ -38,7 +38,10 @@ const modes = computed(() => (props.temporary ? [...ASSISTANT_MODES.filter(({ id
 const modeLabel = computed(() => assistantModeLabel(mode.value));
 const decisions = computed(() => props.purposes || {});
 const hasGoal = computed(() => Boolean(props.goal && !["completed", "complete"].includes(props.goal.status)));
-const reviewAvailable = computed(() => !props.temporary && !hasGoal.value && mode.value === "auto");
+// Main chat's mode, review and model are the owner's; the server refuses a
+// team member's change outside their own lesson.
+const ownerOnly = computed(() => !props.temporary && decisions.value.senior?.approvalRequired === true);
+const reviewAvailable = computed(() => !props.temporary && !ownerOnly.value && !hasGoal.value && mode.value === "auto");
 const updatedPreferences = computed(() => ({ mode: mode.value, review: review.value,
   ...(modelOverride.value ? { override: modelOverride.value } : {}) }));
 watch(preferences, (value) => {
@@ -67,6 +70,7 @@ const description = computed(() => {
 const triggerLabel = computed(() => `Chat mode${modeLabel.value ? `: ${modeLabel.value}` : ''}. ${description.value}${review.value && reviewAvailable.value ? '. Automatic deslop by Senior on' : ''}`);
 const reviewDescription = computed(() => {
   if (hasGoal.value) return "Auto and automatic review apply after the current goal finishes.";
+  if (ownerOnly.value) return "";
   if (!reviewAvailable.value) return "Automatic review is available in Auto only.";
   if (decisions.value.review?.available === false) return decisions.value.review.message;
   return "";
@@ -80,7 +84,7 @@ const command = useCommand({
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC, surfaceId: VIBE64_SURFACE_ID, writeMethod: "PATCH"
 });
 function openCustom() {
-  if (props.disabled || saving.value) return;
+  if (props.disabled || saving.value || ownerOnly.value) return;
   detailsOpen.value = false;
   emit("custom", modeMenu.value?.activatorEl);
 }
@@ -143,11 +147,12 @@ function configure() {
       <div class="chat-modes__details-body">
         <p v-if="connecting || active || saving || !mode" class="text-body-small px-4 pb-2" role="status">{{ connecting ? 'Connecting assistant…' : saving ? 'Saving mode…' : active ? 'For your next request' : description }}</p>
         <v-alert v-if="saveError" type="error" variant="tonal" density="compact" class="mx-3 mb-2">{{ saveError }}</v-alert>
+        <p v-if="ownerOnly" class="text-body-small px-4 pb-2" role="status">Main chat runs on the owner's AI. Only the owner can change its chat mode, review or model.</p>
         <p v-if="hasGoal" class="text-body-small px-4 pb-2" role="status">Model and Senior/Junior changes apply to the next goal turn. Another tool or Auto applies after this goal finishes.</p>
         <v-list :lines="false" class="py-0">
           <v-list-item
             :title="requiredMode ? 'Choose model' : 'Custom'" :prepend-icon="modeIcons.custom" :active="mode === 'custom'" role="button"
-            :aria-pressed="mode === 'custom'" :disabled="disabled || saving" color="primary" min-height="60"
+            :aria-pressed="mode === 'custom'" :disabled="disabled || saving || ownerOnly" color="primary" min-height="60"
             @click="openCustom"
           >
             <template #subtitle><span class="chat-modes__model">{{ mode === 'custom' ? description : roleLabel('custom') }}</span></template>
