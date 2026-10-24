@@ -160,6 +160,14 @@ if (JSON.stringify(process.argv.slice(2)) === JSON.stringify(["auth", "status", 
       body: JSON.stringify({ reason: "project-open" })
     });
     assert.ok(opened.ok, await opened.text());
+    // Main chat starts on the owner's AI setup; save the recommended one (the
+    // stand-in Claude) so the test does not depend on this computer's own AI.
+    const routing = await (await fetch(`${origin}/api/vibe64/accounts/model-routing`)).json();
+    const savedRouting = await fetch(`${origin}/api/vibe64/accounts/model-routing`, {
+      method: "PATCH", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ revision: routing.revision, owner: routing.setups.owner.setupValues })
+    });
+    assert.equal(savedRouting.status, 200, await savedRouting.clone().text());
     const createdResponse = await fetch(`${origin}/api/app/hello-node/vibe64/sessions`, {
       method: "POST", headers: { "content-type": "application/json" },
       body: JSON.stringify({})
