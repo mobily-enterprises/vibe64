@@ -16,6 +16,17 @@ and hides the previous failure controls while it is sending. If that attempt
 fails or its receipt becomes uncertain, the corresponding recovery controls
 return with its current delivery state.
 
+## After a restart or lost assistant process
+
+If Vibe64 restarts (for example during an update) or the assistant's process
+is lost while a message is being delivered, the chat never stays unable to
+send. When the message already appears in the conversation, it was delivered:
+there is no **Retry** to choose and **Send** stays available. When you reopen
+or reload the chat and the assistant's turn for that request is no longer
+running, the request shows as waiting with **The assistant stopped before this
+request finished. Send it again if it is unfinished.** Check the reply, then
+send a new message to continue. This works the same on desktop and mobile.
+
 A message that fails before it reaches the assistant shows its error at once
 and is marked **failed**, not uncertain, for example when the assistant's memory
 is too full. Fix the cause and choose **Retry**; nothing was sent.

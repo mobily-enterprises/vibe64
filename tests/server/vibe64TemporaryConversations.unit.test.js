@@ -1942,11 +1942,13 @@ test("missed completion stays deferred during source work and reconciles once af
     const completed = Promise.withResolvers();
     const originalWrite = f.store.writeSessionConversation;
     let completions = 0;
+    // Count completion transitions; later record writes carry the same status.
+    let complete = false;
     f.store.writeSessionConversation = async (...args) => {
       const result = await originalWrite(...args);
-      if (JSON.parse(result.routingMetadata?.assistant_routing_request || "null")?.status === "complete") {
-        completions += 1; completed.resolve();
-      }
+      const nowComplete = JSON.parse(result.routingMetadata?.assistant_routing_request || "null")?.status === "complete";
+      if (nowComplete && !complete) { completions += 1; completed.resolve(); }
+      complete = nowComplete;
       return result;
     };
     const holding = f.store.runSessionExclusive("one", "agent-write-mode", async () => {

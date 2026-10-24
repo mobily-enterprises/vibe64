@@ -359,10 +359,39 @@ test("a late saved receipt clears interrupted delivery without dispatching again
   f.failAdmission();
   await assert.rejects(f.service.send("session-1", request, f.context), /Lost admission/);
   await f.context.runtime.store.writeConversationUserMessage("session-1", { messageId: request.messageId });
+  // Its native turn survived the lost response and is still running.
+  f.agent.sessionState = async () => ({ turn: { active: true, id: "turn-1" } });
   await f.restart().reconcile("session-1", f.context);
+  assert.equal(f.state().delivery, "accepted");
   assert.equal(f.state().status, "working");
   assert.equal(f.state().error, undefined);
   assert.equal(f.sends.length, 1);
+});
+
+// Production incident: a restart during dispatch, after native admission saved
+// the message, left the request working with no turn to ever report its end.
+test("accepted work settles on reconciliation when its native turn is no longer running", async (t) => {
+  const f = await fixture(t, { mode: "senior", review: false });
+  f.failAdmission();
+  await assert.rejects(f.service.send("session-1", request, f.context), /Lost admission/);
+  await f.context.runtime.store.writeConversationUserMessage("session-1", { messageId: request.messageId });
+  f.context.session.agentRuns = [{ id: "claude_stream_json", state: "interrupted", turnId: "turn-restarted" }];
+  await f.restart().reconcile("session-1", f.context);
+  assert.equal(f.state().delivery, "accepted");
+  assert.equal(f.state().status, "waiting");
+  assert.match(f.state().error, /stopped before this request finished/);
+  assert.equal(f.sends.length, 1);
+  // A request already stuck as working with no turn ID settles the same way.
+  const stuck = { ...f.state(), status: "working" };
+  delete stuck.error;
+  f.metadata.assistant_routing_request = JSON.stringify(stuck);
+  await f.restart().reconcile("session-1", f.context);
+  assert.equal(f.state().status, "waiting");
+  // An unavailable native state is not proof that the turn ended.
+  f.metadata.assistant_routing_request = JSON.stringify(stuck);
+  f.agent.sessionState = async () => { throw new Error("Native state unavailable."); };
+  await f.restart().reconcile("session-1", f.context);
+  assert.equal(f.state().status, "working");
 });
 
 test("a stopped request stays waiting when its late saved receipt confirms delivery", async t => {

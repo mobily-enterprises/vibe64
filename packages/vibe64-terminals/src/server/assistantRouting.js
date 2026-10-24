@@ -916,9 +916,22 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         state.status = "waiting"; state.error = state.attemptedMessageId ? "Delivery was interrupted. Check its original receipt before continuing." : "Preparation was interrupted. Resume when ready.";
         await save(context, state);
       }
-      if (state.status === "working" && state.delivery === "accepted" && state.turnId) {
-        const run = context.session.agentRuns?.find(row => (row.providerTurnId || row.turnId) === state.turnId);
-        if (run && !["starting", "active", "finalizing"].includes(run.state)) outcome = run;
+      if (state.status === "working" && state.delivery === "accepted") {
+        const run = state.turnId && context.session.agentRuns?.find(row => (row.providerTurnId || row.turnId) === state.turnId);
+        if (run && !["starting", "active", "finalizing"].includes(run.state)) { outcome = run; return; }
+        // Accepted work runs only inside its native turn. A restart or lost
+        // process can leave no turn (or no turn ID) to report its end, so
+        // the native turn itself decides: when none is running, it ended.
+        const native = await agent.sessionState(sessionId, context).catch(() => null);
+        const turn = native?.turn;
+        if (!native || native.ok === false || turn?.active === true) return;
+        if (state.turnId && turn?.id === state.turnId) {
+          outcome = { active: false, state: turn.runState || turn.state || turn.status, providerTurnId: turn.id };
+        } else {
+          state.status = "waiting";
+          state.error = "The assistant stopped before this request finished. Send it again if it is unfinished.";
+          await save(context, state);
+        }
       }
     });
     if (outcome) await afterTurn(sessionId, { payload: { agentRun: outcome } }, options, { recovered: true });
