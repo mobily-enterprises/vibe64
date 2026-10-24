@@ -15,8 +15,9 @@ permitted model. A pending automatic continuation or review does not prevent
 this change: Vibe64 cancels its old scheduling and waits for routing-helper
 cleanup before switching. During an active turn, the new settings are saved for
 the next turn. After a different main AI is saved in AI setup, an unfinished
-goal is cancelled the next time it would continue; see [Goals and model changes](coding-agent-goals.md). A reported cleanup failure keeps
-the previous selection; retry after restoring the execution service.
+goal is cancelled the next time it would continue; see [Goals and model
+changes](coding-agent-goals.md). A reported cleanup failure keeps the previous
+selection; retry after restoring the execution service.
 The session's files and saved conversation remain. Switching does not resend
 the session's already-delivered opening briefing through project setup. A first
 switch to Claude carries the bounded conversation history directly, including

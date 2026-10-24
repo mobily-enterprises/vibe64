@@ -1464,12 +1464,13 @@ function createService({
     codexGitCommand, agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand,
     connectionStatus: (context) => assistantRuntime.claudeConnectionStatus(context)
   });
+  const readRoutingConfiguration = () => createAssistantRoutingStore({ systemRoot: codexProviderOptions.systemRoot }).read();
   const sessionAgent = createSessionAgentManager({
     attachments: sessionAttachments,
     conversationRuntime: mainConversations,
     readProviderUsage: providerUsage.read,
     resolveAssistantUser: (user) => assistantRuntime.resolveAssistantUser(user),
-    readRoutingConfiguration: () => createAssistantRoutingStore({ systemRoot: codexProviderOptions.systemRoot }).read(),
+    readRoutingConfiguration,
     providers: [
       claudeProvider,
       codex.provider,
@@ -1754,8 +1755,9 @@ function createService({
   async function cancelGoalIfMainAiChanged(sessionId, vibe64User = null, { activeOnly = false } = {}) {
     const context = await assistantSessionOptions(sessionId, { vibe64User });
     const pinned = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
-    if (!pinned || pinned.mode === "custom" || (activeOnly ? pinned.status !== "active" : ["complete", "completed"].includes(pinned.status)) ||
-        !assistantMainAiChanged(pinned.configuration?.owner, (await createAssistantRoutingStore({ systemRoot: codexProviderOptions.systemRoot }).read()).owner)) return false;
+    if (!pinned || pinned.mode === "custom") return false;
+    if (activeOnly ? pinned.status !== "active" : ["complete", "completed"].includes(pinned.status)) return false;
+    if (!assistantMainAiChanged(pinned.configuration?.owner, (await readRoutingConfiguration()).owner)) return false;
     const observed = await service.readAgentGoal(sessionId, context);
     if (observed?.status !== "available" || !observed.goal || ["complete", "completed"].includes(observed.goal.status)) return false;
     const result = await service.updateAgentGoal(sessionId, { vibe64User, action: "cancel",
