@@ -104,6 +104,12 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
   }
   const pendingTopics = new Map();
 
+  // An installed lesson this Vibe64 cannot teach (see validateTopic installed).
+  function unusableLesson(bundle) {
+    return Object.assign(new Error(`Lesson ${bundle.lesson.code} ("${bundle.lesson.title}") cannot be taught by this version of Vibe64: ${bundle.problem} Update the course in Courses, or ask its authors for a fixed release.`),
+      { code: "VIBE64_TRAINING_LESSON_UNUSABLE", statusCode: 422 });
+  }
+
   async function readTopic(input = {}) {
     const topic = await readVerifiedTopic(input);
     return { ...topic, bundles: topic.bundles.map(bundle => ({ ...bundle, lesson: withoutAnswers(bundle.lesson) })) };
@@ -140,7 +146,7 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
       const bundle = JSON.parse((await boundedFile(path.join(snapshotRoot, "bundle.json"), 32 * 1024 * 1024)).toString("utf8"));
       const filesRoot = path.join(snapshotRoot, "files");
       const installedPaths = await inventory(filesRoot);
-      const result = await validateTopic(filesRoot);
+      const result = await validateTopic(filesRoot, { installed: true });
       const expectedBundle = {
         schemaVersion: 1,
         topic: result.topic,
@@ -249,6 +255,7 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
     if (!bundle) throw new Error(`Lesson ${lessonCode} is not declared in this pinned topic.`);
     if (bundle.status !== "published" && !allowDraftLessons) throw new Error(`Lesson ${lessonCode} is draft and cannot be taught. Choose a published lesson.`);
     if (bundle.hash !== lessonHash) throw new Error(`Lesson ${lessonCode} content hash changed. Resume its exact pinned revision or explicitly start a new attempt.`);
+    if (bundle.problem) throw unusableLesson(bundle);
     // The topic's declared vocabulary: its beats name host places by these names.
     const declarations = Object.fromEntries(["places", "activities", "facts"].map(key => [key, [...topic.topic[key] || []]]));
     return { pin: topic.pin, lesson: bundle.lesson, manifest: bundle.manifest,

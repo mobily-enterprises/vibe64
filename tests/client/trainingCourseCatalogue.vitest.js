@@ -108,6 +108,15 @@ describe("Training course catalogue", () => {
     expect(after).not.toContain("Update available");
     expect(after).not.toContain("Disabled for new lessons");
     expect(after).toContain("getting-started · 0.2.0");
+    expect(after).toContain("1 course · 2 lessons installed", "the header counts the cards shown, not the hidden release");
+  });
+
+  it("names installed lessons this Vibe64 cannot teach on the course card", async () => {
+    const shown = { ...installedCourse("0.2.0", true), unusableLessons: [{ code: "V64-PUBLISH-01", title: "Publish your app" }] };
+    const html = await render({ catalogueResult: { ok: true, available: true, revision: 1, courses: [shown] },
+      learningResult: learning(), canStart: true, canResume: true });
+    expect(html).toContain("One lesson is not shown because this version of Vibe64 can&#39;t teach it: Publish your app.");
+    expect(html).not.toContain("Internal server error");
   });
 
   it("keeps a superseded release visible while its saved lesson can still be resumed", async () => {

@@ -185,8 +185,16 @@ const savedPlace = computed(() => {
 });
 const statusTone = course => !course.enabled ? "disabled" : course.status === "released" ? "enabled" : "preview";
 const statusIcon = { enabled: icons.checkCircle, preview: icons.eye, disabled: icons.cancel };
-// Lessons shared by several courses count once.
-const uniqueLessonCount = computed(() => new Set(choices.value.map(({ lesson }) => `${lesson.code}\n${lesson.hash}`)).size);
+// Installed lessons this Vibe64 cannot teach are left out of the course and named.
+function unusableNote(course) {
+  const titles = course.unusableLessons.map(lesson => lesson.title).join(", ");
+  return `${course.unusableLessons.length === 1 ? "One lesson is" : `${course.unusableLessons.length} lessons are`} not shown because this version of Vibe64 can't teach ${course.unusableLessons.length === 1 ? "it" : "them"}: ${titles}. Update the course when Courses offers an update.`;
+}
+
+// The header counts the cards shown (an older release an update replaced is
+// hidden); lessons shared by several courses count once.
+const uniqueLessonCount = computed(() => new Set(summaries.value.flatMap(({ course }) =>
+  course.lessons.map(lesson => `${lesson.code}\n${lesson.hash}`))).size);
 const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
 </script>
 <template>
@@ -205,8 +213,8 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
         <p class="tlp-eyebrow"><v-icon :icon="icons.school" size="18" /> Learning</p>
         <h2>Courses</h2>
         <p>Choose a course to see its lessons and your progress, or continue your lesson.</p>
-        <p v-if="courses.length" class="tlp-hero__meta">
-          {{ plural(courses.length, 'course') }} · {{ plural(uniqueLessonCount, 'lesson') }} installed
+        <p v-if="summaries.length" class="tlp-hero__meta">
+          {{ plural(summaries.length, 'course') }} · {{ plural(uniqueLessonCount, 'lesson') }} installed
         </p>
       </div>
       <v-btn class="tlp-hero__refresh" variant="tonal" rounded="pill" min-height="48" :prepend-icon="icons.refresh"
@@ -319,6 +327,7 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
               <span><v-icon :icon="icons.layers" size="16" />{{ plural(course.topics.length, 'topic') }}</span>
               <span><v-icon :icon="icons.book" size="16" />{{ plural(course.lessons.length, 'lesson') }}</span>
             </p>
+            <p v-if="course.unusableLessons?.length" class="tlp-card__next" role="note">{{ unusableNote(course) }}</p>
             <div class="tlp-card__progress">
               <TrainingProgressRing :value="progress.completed" :max="progress.total" :size="48" :stroke="5"
                 :label="`${course.title}: ${progress.completed} of ${progress.total} lessons complete`" />

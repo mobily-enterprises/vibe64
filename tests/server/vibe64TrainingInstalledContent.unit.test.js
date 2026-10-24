@@ -836,6 +836,20 @@ test("courses.list leaves out lessons this person cannot take here, and a topic 
   assert.deepEqual([empty.courses[0].lessons, empty.courses[0].topics], [[], []], "a topic of host lessons only is absent");
 });
 
+test("courses.list leaves out an installed lesson this Vibe64 cannot teach and names it on its course", async t => {
+  const f = await fixture(t);
+  const { catalogue } = await titleCatalogue(f);
+  const content = { async readLesson(input) {
+    if (input.lessonCode === "LESSON-01") {
+      throw Object.assign(new Error("Lesson LESSON-01 cannot be taught by this version of Vibe64."), { code: "VIBE64_TRAINING_LESSON_UNUSABLE" });
+    }
+    return { steps: [{ id: "one", required: true, check: { kind: "self" }, beats: [{ kind: "show", target: "preview", text: "Look." }] }] };
+  } };
+  const listed = await titleActions(f, catalogue, content).execute();
+  assert.deepEqual(listed.courses[0].lessons.map(lesson => lesson.code), ["LESSON-02"]);
+  assert.deepEqual(listed.courses[0].unusableLessons, [{ code: "LESSON-01", title: "Use an application" }]);
+});
+
 test("title projection ignores edited live source and refuses a tampered exact installed descriptor without repair", async t => {
   const f = await fixture(t);
   const { catalogue } = await titleCatalogue(f);

@@ -714,6 +714,19 @@ test("authoring refuses retired lesson formats; installed v2 snapshots still val
   await assert.rejects(() => validateTopic(f.root), /fact check needs lesson format 3/u);
 });
 
+test("an installed snapshot keeps a lesson this Vibe64 cannot teach, with its problem; authoring and installing refuse it", async t => {
+  const f = await stepsTopic(t);
+  await f.write("steps/read-more.md", "# Read more\n\n```beats\ndo app-deployed: Deploy it.\n```\n");
+  for (const options of [{}, { authoring: true }]) {
+    await assert.rejects(() => validateTopic(f.root, options), /do app-deployed\) names nothing the learner can do/u);
+  }
+  const [bundle] = (await validateTopic(f.root, { installed: true })).bundles;
+  assert.match(bundle.problem, /Lesson STEPS-ONE: step read-more beats: .*names nothing the learner can do/u);
+  assert.equal(bundle.lesson.title, f.lesson.title, "the lesson keeps its identity and title");
+  await f.write("steps/read-more.md", "# Read more\n");
+  assert.equal(Object.hasOwn((await validateTopic(f.root, { installed: true })).bundles[0], "problem"), false);
+});
+
 test("a studio lesson checks facts and names host places its topic declares", async t => {
   const f = await stepsTopic(t);
   const studio = { schemaVersion: 3, code: "STEPS-ONE", title: "Your workspace", stage: "studio", prerequisites: [],

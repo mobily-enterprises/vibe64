@@ -95,6 +95,10 @@ const path = computed(() => {
       <p v-else class="training-course-page__next-title">No lesson in this course can be started here.</p>
     </div>
     <TrainingStartFeedback v-if="startFeedback" :feedback="startFeedback" />
+    <p v-if="course.unusableLessons?.length" class="training-course-page__empty" role="note">
+      Not shown, because this version of Vibe64 can't teach {{ course.unusableLessons.length === 1 ? "it" : "them" }}:
+      {{ course.unusableLessons.map(lesson => lesson.title).join(", ") }}. Update the course when Courses offers an update.
+    </p>
 
     <ol class="training-course-page__topics">
       <li v-for="{ topic, index, done, lessons } in path" :key="JSON.stringify([topic.topicId, topic.release])" class="training-course-page__topic">

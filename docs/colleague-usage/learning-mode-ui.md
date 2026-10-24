@@ -17,7 +17,15 @@ its dots mirror the course's lessons, ticked when complete), a chip saying
 whether it is **Enabled**, a **Preview course** or **Disabled for new lessons**
 (plus **Lesson in progress** or **Course complete** when true), the title, its ID and
 release, topic and lesson counts, "N of M lessons complete" with a progress ring,
-and the next lesson.
+and the next lesson. The banner counts the courses and lessons on the cards
+shown (an older release an update replaced is not counted).
+
+An installed lesson this version of Vibe64 cannot teach (for example it names a
+screen this Vibe64 no longer has) is left out of its course, and the card and
+course page say "One lesson is not shown because this version of Vibe64 can't
+teach it: <title>". The rest of the course works as usual. **Update** the
+course when Courses offers an update; starting that lesson is refused with the
+same reason.
 
 A lesson is complete when every required step has passed in your saved progress
 (required assessments, for a lesson in the earlier format). Only required

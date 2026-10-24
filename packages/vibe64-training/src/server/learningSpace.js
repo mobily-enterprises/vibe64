@@ -234,9 +234,12 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
 }
 
 // The pinned lesson's title, or its code when its content cannot be read.
+// The title comes from the lesson's identity (its descriptor), so a lesson
+// this Vibe64 can no longer teach is still named by its title.
 async function lessonTitle(content, pin) {
+  const read = typeof content.readAdmissionIdentity === "function" ? content.readAdmissionIdentity : content.readLesson;
   try {
-    return (await content.readLesson({ ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash })).lesson.title;
+    return (await read({ ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash })).lesson.title;
   } catch {
     return pin.lesson.code;
   }

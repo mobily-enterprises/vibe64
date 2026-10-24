@@ -196,7 +196,7 @@ function validateSteps(lesson, visuals, checks, code, bodies, vocabulary) {
   }
 }
 
-async function bundleLesson(reader, entry, { authoring, vocabulary }) {
+async function bundleLesson(reader, entry, { authoring, installed, vocabulary }) {
   const descriptor = await reader.json(entry.descriptor);
   const lesson = validateLesson(descriptor.value, entry.code);
   if (lesson.code !== entry.code) throw new Error(`Lesson code mismatch: ${entry.code}.`);
@@ -311,14 +311,27 @@ async function bundleLesson(reader, entry, { authoring, vocabulary }) {
       }
     }
   }
-  if (lessonHasSteps(lesson)) validateSteps(lesson, visuals, checks, entry.code, bodies, vocabulary);
+  // An installed snapshot is checked byte for byte; one lesson this Vibe64's
+  // teaching rules no longer accept (a place it no longer has, say) is kept
+  // with its problem so the rest of the course still reads. It cannot start.
+  let problem = "";
+  if (lessonHasSteps(lesson)) {
+    try {
+      validateSteps(lesson, visuals, checks, entry.code, bodies, vocabulary);
+    } catch (error) {
+      if (!installed) throw error;
+      problem = error.message;
+    }
+  }
   const manifest = { schemaVersion: 1, code: lesson.code, files: [...files.values()].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0) };
-  return { lesson, manifest, hash: hash(canonicalJson(manifest)), descriptorPath: descriptor.relative, served };
+  return { lesson, manifest, hash: hash(canonicalJson(manifest)), descriptorPath: descriptor.relative, served, ...(problem ? { problem } : {}) };
 }
 
 // authoring refuses retired v1 lessons: author commands never produce them,
 // while installed v1 snapshots still verify for the published upgrades.
-async function validateTopic(directory, { authoring = false } = {}) {
+// installed reads an installed snapshot: a lesson that breaks the teaching
+// rules is returned with its problem instead of failing the whole topic.
+async function validateTopic(directory, { authoring = false, installed = false } = {}) {
   const reader = await createTopicReader(directory);
   const packageFile = await reader.json("package.json");
   if (!/^learn-[a-z0-9-]+$/u.test(packageFile.value.name || "") || !/^\d+\.\d+\.\d+$/u.test(packageFile.value.version || "")) throw new Error("Topic package needs a learn- name and an exact release version.");
@@ -334,7 +347,7 @@ async function validateTopic(directory, { authoring = false } = {}) {
   const served = new Set();
   for (const entry of topic.lessons) {
     // Draft descriptors are validated too; draft status never grants permission to teach them.
-    const { served: lessonServed, ...bundle } = await bundleLesson(reader, entry, { authoring, vocabulary });
+    const { served: lessonServed, ...bundle } = await bundleLesson(reader, entry, { authoring, installed, vocabulary });
     for (const file of lessonServed) served.add(file);
     bundles.push({ ...bundle, status: entry.status, required: entry.required });
   }
