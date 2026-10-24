@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -119,6 +119,24 @@ test("without git on PATH the lookup quietly finds nothing", async (t) => {
     userKey: "ana"
   });
   assert.equal(identity.source, "fallback");
+});
+
+// Hosted incident 2026-10-24: an agent's PATH starts with Vibe64's git shim,
+// which the reading server itself serves; a synchronous read through it froze
+// the server and lost chat subscriptions. The read must never run that shim.
+test("the identity read never runs a git shim that leads the command's PATH", async (t) => {
+  const { env, gitConfig, root } = await freshHome(t);
+  await gitConfig(["--global", "user.name", "Ana Shim"]);
+  await gitConfig(["--global", "user.email", "ana@example.test"]);
+  const shimDir = path.join(root, "shim");
+  const marker = path.join(root, "shim-ran");
+  await mkdir(shimDir, { recursive: true });
+  await writeFile(path.join(shimDir, "git"), `#!/bin/sh\ntouch '${marker}'\nsleep 5\nexit 1\n`, { mode: 0o755 });
+  const started = Date.now();
+  const identity = personGitConfigIdentity({ env: { ...env, PATH: `${shimDir}:${env.PATH}` } });
+  assert.ok(Date.now() - started < 1_500, "the read waited on the shim");
+  assert.equal(identity?.authorName, "Ana Shim");
+  assert.equal(await stat(marker).then(() => true, () => false), false, "the shim ran");
 });
 
 test("connecting GitHub keeps the person's Git identity and never writes empty values", async (t) => {

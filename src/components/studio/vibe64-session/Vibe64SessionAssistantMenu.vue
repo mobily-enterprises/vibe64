@@ -415,6 +415,9 @@ async function applySelection(selection, { closeMenu = true } = {}) {
     return response;
   } catch (error) {
     saveError.value = error.message || "The custom model could not be saved.";
+    // A refused save may mean the catalogue changed ("Review the current
+    // choices and try again"); show the current choices so a retry can work.
+    reloadCatalog().catch(() => {});
     return { ok: false, error: saveError.value };
   } finally {
     saving.value = false;
