@@ -19,7 +19,7 @@ import Vibe64LearningStage from "@/components/learning/Vibe64LearningStage.vue";
 import Vibe64NoProjectPane from "@/components/learning/Vibe64NoProjectPane.vue";
 import Vibe64LearningCoursesItem from "@/components/learning/Vibe64LearningCoursesItem.vue";
 import { useVibe64AppPage } from "@/composables/useVibe64AppPage.js";
-import { projectDisplayName } from "@/lib/vibe64PracticeProjectName.js";
+import { projectDisplayName, projectSubtitle } from "@/lib/vibe64PracticeProjectName.js";
 
 const githubActorHostId = "studio-home-shell-github-actor";
 const githubActorTeleportTarget = `#${githubActorHostId}`;
@@ -98,7 +98,7 @@ const {
                   :key="project.slug"
                   :active="project.slug === projectSlug"
                   :title="projectDisplayName(project)"
-                  :subtitle="project.projectRoot"
+                  :subtitle="projectSubtitle(project)"
                   @click="openProject(project)"
                 />
                 <v-list-item

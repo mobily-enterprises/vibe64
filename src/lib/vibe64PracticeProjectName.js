@@ -21,4 +21,10 @@ function projectDisplayName(project = null, { lessonTitle = "" } = {}) {
   return isPracticeProjectSlug(slug) ? practiceProjectName({ lessonTitle }) : slug;
 }
 
-export { isPracticeProjectSlug, practiceProjectName, projectDisplayName };
+// The line under a project's name in project lists: its folder, except for a
+// practice project, whose folder is an internal path learners never need.
+function projectSubtitle(project = null) {
+  return isPracticeProjectSlug(project?.slug) ? "For your current lesson" : String(project?.projectRoot || "");
+}
+
+export { isPracticeProjectSlug, practiceProjectName, projectDisplayName, projectSubtitle };

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { VIBE64_LEARNING_ROUTES, createVibe64Learning, normalizePractice } from "../../src/lib/vibe64Learning.js";
-import { isPracticeProjectSlug, projectDisplayName } from "../../src/lib/vibe64PracticeProjectName.js";
+import { isPracticeProjectSlug, projectDisplayName, projectSubtitle } from "../../src/lib/vibe64PracticeProjectName.js";
 
 const CURRENT = "12345678-1234-4234-8234-123456789abc";
 const listed = { ok: true,
@@ -63,6 +63,8 @@ describe("practice project display name", () => {
     // The slug alone names a practice project as practice (no catalogue marker); the lesson title completes it.
     expect(projectDisplayName({ slug: "my-app", practice: { lessonCode: "V64-START-02" } })).toBe("my-app");
     expect(projectDisplayName({ slug })).toBe("Practice project");
+    expect(projectSubtitle({ slug, projectRoot: "/very/long/internal/path" })).toBe("For your current lesson");
+    expect(projectSubtitle({ slug: "my-app", projectRoot: "/home/me/projects/my-app" })).toBe("/home/me/projects/my-app");
     expect(projectDisplayName({ slug }, { lessonTitle: "First change" })).toBe("Practice: First change");
   });
 });
