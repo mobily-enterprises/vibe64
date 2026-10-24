@@ -299,6 +299,6 @@ motion.
 
 ## What Colleague can do
 
-Colleague can explain these screens, compare the providers and offer to open
-the flow. Choosing a plan, paying, signing in, entering a key and approving
+Colleague can explain these screens, compare the providers and point at where
+the flow starts; it cannot open the flow for you. Choosing a plan, paying, signing in, entering a key and approving
 model changes remain your steps; never paste a key into chat.

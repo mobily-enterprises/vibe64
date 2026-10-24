@@ -37,5 +37,5 @@ the same on desktop and mobile.
 ## What Colleague can do
 
 Colleague can explain which connections are personal and what members need, and
-can open AI Accounts. Subscribing, signing in and entering keys remain the
+can point at AI Accounts; it cannot open it for you. Subscribing, signing in and entering keys remain the
 owner's steps in the browser.

@@ -255,8 +255,8 @@ upgrade. Do not reset the conversation or change its model to work around that
 error. Unknown or corrupt routing still needs administrator inspection before
 apply; Colleague can explain the recovery but cannot perform the host upgrade.
 
-Colleague can explain these steps, inspect account readiness and open AI
-Accounts. It offers help without changing anything for a how-to question.
+Colleague can explain these steps, inspect account readiness and point at AI
+Accounts; it cannot open it for you. It offers help without changing anything for a how-to question.
 Connection, consent and model-access steps it cannot perform must be completed
 in the actual account screens; it rechecks status after you finish. Vibe64
 includes no AI of its own on any installation; AI Accounts or AI onboarding
