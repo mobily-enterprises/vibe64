@@ -229,32 +229,36 @@ function createAiConnectionActions({ aiConnectionService, requireAiManagement = 
     input, output: null, idempotency: "none",
     audit: { actionName: `vibe64.accounts.ai-connections.${operation}` }, observability: {},
     extensions: { assistant: operation === "list" ? {
-      description: "Read the owner's saved regular Z.AI API connection status for account setup, without a project. Returns only saved connection, preferred-provider, default-model and model-access policy facts. A missing connection is null; unavailable means the host has no connection store. This does not verify current credentials, balance, model entitlement or running conversations. Regular Z.AI and a Personal Coding Plan are separate connections. Use Model routing read for actual future workflow assignments and offered choices; the preferred provider/default model is not the Senior assignment or Colleague's model. The person must register, enter the key and consent to paid models in AI Accounts. Never request a key in chat or infer setup completion from a quiz answer.",
+      description: "Read the owner's saved API connections in AI Accounts, without a project: one row per saved provider (for example Z.AI, Z.AI Coding Plan, OpenRouter or OpenCode Zen) with provider, label, ready, reason when not ready, preferred, defaultModelId and modelAccessMode. An empty list means nothing is saved; unavailable means the host has no connection store. ready is saved state only: it does not verify current credentials, balance, model entitlement or running conversations. Claude and Codex sign-ins are not saved connections. Regular Z.AI and a Z.AI Coding Plan are separate connections. Use Model routing read for actual future workflow assignments and offered choices; the preferred provider/default model is not the Senior assignment or Colleague's model. The person must register, enter the key and consent to paid models in AI Accounts. Never request a key in chat or infer setup completion from a quiz answer.",
       output: { mode: "replace", schema: createSchema({
         ok: { type: "boolean", required: true },
         unavailable: { type: "boolean", required: true },
         error: { type: "string", maxLength: 512, required: false },
-        zai: { type: "object", nullable: true, required: true, schema: createSchema({
-          modelProviderId: { type: "string", enum: ["zai"], required: true },
-          connected: { type: "boolean", required: true },
+        connections: { type: "array", required: true, maxItems: 100, items: createSchema({
+          provider: { type: "string", maxLength: 256, required: true },
+          label: { type: "string", maxLength: 256, required: true },
+          ready: { type: "boolean", required: true },
+          reason: { type: "string", maxLength: 256, required: true },
           preferred: { type: "boolean", required: true },
           defaultModelId: { type: "string", maxLength: 512, required: true },
-          modelAccessMode: { type: "string", enum: ["recommended", "all"], nullable: true, required: true }
+          modelAccessMode: { type: "string", maxLength: 64, nullable: true, required: true }
         }) }
       }) },
+      // Only facts about each connection: never its key, key hint or fingerprint.
       transformResult(result) {
         if (result.ok !== true) return {
-          ok: false, unavailable: false, zai: null,
+          ok: false, unavailable: false, connections: [],
           error: "Saved AI connection status could not be read. Open AI Accounts for details."
         };
-        const connection = result.connections.find(row => row.modelProviderId === "zai");
-        return { ok: true, unavailable: result.unavailable === true, zai: connection ? {
-          modelProviderId: "zai", connected: connection.connected === true,
-          preferred: connection.preferred === true,
-          defaultModelId: String(connection.defaultModelId || "").slice(0, 512),
-          modelAccessMode: ["recommended", "all"].includes(connection.modelAccess?.mode)
-            ? connection.modelAccess.mode : null
-        } : null };
+        return { ok: true, unavailable: result.unavailable === true, connections: result.connections.slice(0, 100).map(row => ({
+          provider: String(row.modelProviderId || "").slice(0, 256),
+          label: String(row.label || row.modelProviderId || "").slice(0, 256),
+          ready: row.connected === true,
+          reason: row.connected === true ? "" : "No default model is known for this provider. Reconnect it in AI Accounts.",
+          preferred: row.preferred === true,
+          defaultModelId: String(row.defaultModelId || "").slice(0, 512),
+          modelAccessMode: typeof row.modelAccess?.mode === "string" ? row.modelAccess.mode.slice(0, 64) : null
+        })) };
       }
     } : { exclude: true } },
     async execute(input) {

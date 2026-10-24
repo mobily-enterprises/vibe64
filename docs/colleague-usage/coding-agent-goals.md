@@ -148,8 +148,10 @@ explicit confirmation.
 A copied development workspace never inherits permission to run its parent's
 goals. Restart continuation applies to supported Main native goals; temporary
 logical and scoped conversations do not expose native goal controls or receipts.
-Colleague can explain these controls and offer the supported action, but needs
-your request before changing a goal.
+Colleague can read a session's current goal (its objective and whether it is
+active, paused, blocked or complete) and explain these controls. It cannot set,
+pause, resume or cancel a goal itself: it tells you which **Goal** control to
+use and can draft an objective for **Set goal**.
 
 A paused Claude goal stays paused while you send ordinary messages in the same
 chat, including after reloading or restarting the application. The objective

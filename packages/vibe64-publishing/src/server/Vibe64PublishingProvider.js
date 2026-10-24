@@ -1,6 +1,7 @@
 import { defineFeature } from "@jskit-ai/kernel/server/features";
 
 import { createPublishingActions } from "./actions.js";
+import { publicationWatchSource } from "./publicationWatch.js";
 import { registerRoutes } from "./registerRoutes.js";
 import { createPublishingService } from "./service.js";
 
@@ -15,6 +16,7 @@ const Vibe64PublishingProvider = defineFeature({
   id: "vibe64.publishing",
   domain: "vibe64-publishing",
   requires: {
+    colleague: "vibe64.colleague",
     http: "runtime.http",
     project: "vibe64.project",
     sourceEditor: "vibe64.source-editor"
@@ -22,9 +24,10 @@ const Vibe64PublishingProvider = defineFeature({
   provides: {
     publishing: "vibe64.publishing"
   },
-  setup({ http, project, sourceEditor }) {
+  setup({ colleague, http, project, sourceEditor }, { actionCatalogue }) {
     const publishing = createPublishingService({ project, sourceEditor });
     registerRoutes(http, { publishing, routeRelativePath: "vibe64", routeSurface: "app" });
+    colleague.registerWatchSource(publicationWatchSource({ actions: actionCatalogue }));
     return { publishing };
   },
   shutdown(_dependencies, { outputs }) {

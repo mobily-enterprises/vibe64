@@ -135,7 +135,7 @@ test("terminal and output HTTP operations share validated actions and fresh auth
       }
       assert.equal(actions.getDefinition(actionId).input.mode, "create");
       assert.equal(actions.getDefinition(actionId).extensions.assistant.exclude === true,
-        !["work-plan.read", "outputs.read", "output-target.start", "output-target.stop", "output-terminal.read", "output-terminal.close"].includes(operation));
+        !["agent-goal.read", "project-runtime.close", "work-plan.read", "outputs.read", "output-target.start", "output-target.stop", "output-terminal.read", "output-terminal.close"].includes(operation));
       const count = calls.length;
       allowed = false;
       await assert.rejects(route.handler(request, reply), { statusCode: 403 });
@@ -164,6 +164,17 @@ test("terminal and output HTTP operations share validated actions and fresh auth
     assert.equal(calls.length, count);
     assert.equal(currentProjectRequestContext(), null);
   }));
+});
+
+test("Colleague reads a Main goal and closes a project on request, but never changes a goal", () => {
+  const definitions = new Map(createTerminalActions({ terminals: {} }).map(definition => [definition.id, definition]));
+  for (const [operation, pattern] of [["agent-goal.read", /changes nothing.*Goal control/su], ["project-runtime.close", /when the person asks.*kept/su]]) {
+    const { assistant } = definitions.get(`vibe64.terminals.${operation}`).extensions;
+    assert.equal(assistant.exclude, undefined, operation);
+    assert.match(assistant.description, pattern, operation);
+  }
+  assert.equal(definitions.get("vibe64.terminals.agent-goal.read").kind, "query");
+  assert.equal(definitions.get("vibe64.terminals.agent-goal.update").extensions.assistant.exclude, true);
 });
 
 test("output and attachment action downloads stream exact bytes and close their handles", async () => {

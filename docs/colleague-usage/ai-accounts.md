@@ -196,13 +196,17 @@ change models or resend the pending words until cleanup and delivery are resolve
 Colleague can explain the error and inspect readiness, but cannot repair the
 host's process service. These recovery steps apply on desktop and mobile.
 
-For regular Z.AI setup, ask Colleague “Is my regular Z.AI connection saved?”
+To check your saved API connections, ask Colleague, for example “Which AI
+connections are saved and ready?” or “Is my regular Z.AI connection saved?”
 The workspace owner can get a fresh, read-only check without opening a project.
-It reports the saved connection, preferred provider, default model and whether
-the account's model policy is recommended-only or unlocked. It never reads out
-the key, key hint or fingerprint. A Personal Coding Plan is a separate connection;
-it does not satisfy this check. If connection storage is unavailable, Colleague
-reports that instead of saying you are disconnected. On desktop and phone,
+It covers every provider saved in **AI Accounts** (Z.AI, a Z.AI Coding Plan,
+OpenAI, OpenCode Zen and any other), and for each one reports whether it is
+ready, why not when it is not, whether it is the preferred provider, its default
+model and whether its model policy is recommended-only or unlocked. It never
+reads out the key, key hint or fingerprint. Claude and Codex sign-ins are not
+saved connections. A Personal Coding Plan is a separate connection from regular
+Z.AI; it does not satisfy a regular Z.AI check. If connection storage is
+unavailable, Colleague reports that instead of saying you are disconnected. On desktop and phone,
 registration, masked **API key** entry and paid-model consent remain your steps
 in **AI Accounts**. If a check fails, reopen AI Accounts and inspect its saved state;
 do not paste a key into chat or reconnect solely because of a failed read.

@@ -19,6 +19,7 @@
       "requires": [
         "runtime.actions",
         "runtime.http",
+        "vibe64.colleague",
         "vibe64.project",
         "vibe64.source-editor"
       ]

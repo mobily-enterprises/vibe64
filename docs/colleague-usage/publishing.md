@@ -123,6 +123,13 @@ confirmation. Only your **Publish** press publishes. Colleague never sees a
 token, key, passphrase or file path, and cannot add accounts, unlock keys,
 accept a licence or confirm.
 
+After you press **Publish**, ask Colleague “Tell me when the release is live”
+or “Tell me if it fails”. It watches the project's latest release (not dry
+runs) and reports once every target is live, or when the release fails, reaches
+only some targets or stops before finishing; “Tell me if anything changes”
+reports each change. A watch only reports: it never publishes, retries or
+confirms. Manage it from **Watches and assignments** in Colleague.
+
 How publishing works underneath:
 
 Package registries Vibe64 releases to:

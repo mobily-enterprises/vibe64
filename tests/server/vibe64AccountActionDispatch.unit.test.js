@@ -128,7 +128,7 @@ test("all account operations use project-independent canonical contracts and aut
   });
 });
 
-test("Colleague reads saved Z.AI facts through the original owner without credentials or account effects", async (t) => {
+test("Colleague reads every saved provider's readiness through the original owner without credentials or account effects", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-zai-status-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const filePath = path.join(root, "connections.json");
@@ -160,7 +160,7 @@ test("Colleague reads saved Z.AI facts through the original owner without creden
     argumentsText: JSON.stringify(input) });
   let response = await execute();
   assert.equal(response.ok, true, JSON.stringify(response));
-  assert.deepEqual(response.result, { ok: true, unavailable: false, zai: null });
+  assert.deepEqual(response.result, { ok: true, unavailable: false, connections: [] });
   await assert.rejects(readFile(filePath), { code: "ENOENT" }, "status must not create account state");
 
   const revision = `sha256:${"a".repeat(64)}`;
@@ -168,24 +168,28 @@ test("Colleague reads saved Z.AI facts through the original owner without creden
     { provider: { id, definitionRevision: revision } });
   await connect("zai-coding-plan");
   response = await execute();
-  assert.deepEqual(response.result, { ok: true, unavailable: false, zai: null }, "a Coding Plan is not a regular API connection");
+  assert.deepEqual(response.result.connections.map(({ provider, ready }) => [provider, ready]), [["zai-coding-plan", true]],
+    "a Coding Plan is its own connection");
   await connect("zai");
+  await connect("openai");
   for (const mode of ["recommended", "all"]) {
     if (mode === "all") await store.updateModelAccess("zai", { unlocked: true });
     const before = await readFile(filePath, "utf8");
     const effectCounts = [verifications, changes];
     response = await execute();
     assert.equal(response.ok, true, JSON.stringify(response));
-    assert.deepEqual(response.result, { ok: true, unavailable: false, zai: {
-      modelProviderId: "zai", connected: true, preferred: true,
-      defaultModelId: "glm-4.7-flash", modelAccessMode: mode
-    } });
-    assert.doesNotMatch(JSON.stringify(response), /secret|1234|keyHint|fingerprint|providerRevision|connections\.json|Coding Plan/);
+    const zai = response.result.connections.find(row => row.provider === "zai");
+    assert.deepEqual(zai, { provider: "zai", label: zai.label, ready: true, reason: "", preferred: true,
+      defaultModelId: "glm-4.7-flash", modelAccessMode: mode });
+    assert.deepEqual(response.result.connections.find(row => row.provider === "openai"), { provider: "openai", label: "openai",
+      ready: true, reason: "", preferred: false, defaultModelId: "gpt-5-mini", modelAccessMode: null }, "every saved provider, not only Z.AI");
+    assert.deepEqual(response.result.connections.map(row => row.provider).sort(), ["openai", "zai", "zai-coding-plan"]);
+    assert.doesNotMatch(JSON.stringify(response), /secret|1234|keyHint|fingerprint|providerRevision|connections\.json|••••/);
     assert.equal(await readFile(filePath, "utf8"), before);
     assert.deepEqual([verifications, changes], effectCounts, "reading does not verify, unlock, invalidate or publish");
   }
   const api = await actions.execute({ actionId: tool.actionId, input: {}, context: { channel: "api", surface: "app" } });
-  assert.deepEqual(api.connections.map(row => row.modelProviderId).sort(), ["zai", "zai-coding-plan"], "the original UI list retains every connection");
+  assert.deepEqual(api.connections.map(row => row.modelProviderId).sort(), ["openai", "zai", "zai-coding-plan"], "the original UI list retains every connection");
   assert.ok(api.connections.find(row => row.modelProviderId === "zai").keyHint);
 
   const localActors = [];
@@ -224,11 +228,11 @@ test("Colleague reads saved Z.AI facts through the original owner without creden
   managementAllowed = false;
   response = await execute();
   assert.equal(response.ok, true, JSON.stringify(response));
-  assert.deepEqual(response.result, { ok: false, unavailable: false, zai: null,
+  assert.deepEqual(response.result, { ok: false, unavailable: false, connections: [],
     error: "Saved AI connection status could not be read. Open AI Accounts for details." });
   assert.equal(reads, beforeReads);
   managementAllowed = true;
   service = createAiConnectionService();
   response = await execute();
-  assert.deepEqual(response.result, { ok: true, unavailable: true, zai: null });
+  assert.deepEqual(response.result, { ok: true, unavailable: true, connections: [] });
 });
