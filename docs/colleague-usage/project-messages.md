@@ -104,3 +104,26 @@ hosts without that facility do not advertise it.
 If the destination has a pinned source session, that is its server-selected
 session for messages without `--session`, even while someone browses another tab. Unpinning restores ordinary
 selection. Pinning does not change message permissions or acknowledgement rules.
+
+## View another project's Preview
+
+A coding assistant can open another project's running Preview, for example to
+review an app built in a sibling project. Ask it to look, for example: “Check
+the shell in mercbot's Preview.” It uses:
+
+```sh
+vibe64-helper session project-preview mercbot
+```
+
+The command prints that project's current Preview address, which the assistant
+opens in its managed browser. Add `--session <id>` to choose a session other
+than the selected one. Access follows the same rule as messages: you must be
+able to use that project, and it must be open with an active session.
+
+The address can change when that Preview restarts, for example after new
+packages are installed. The assistant runs the command again instead of reusing
+an old address. The command never starts the other project's Preview. If the
+project is closed, has no active session, or its Preview is not running after a
+short wait (about ten seconds), the command stops with a clear message; open the
+project or start its Preview, then ask again. Signing in to that app uses its
+own accounts, as for any visitor.

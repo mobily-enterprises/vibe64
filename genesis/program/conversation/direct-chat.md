@@ -4090,6 +4090,14 @@ rejected before assistant preparation or receipt writes. Explicit addressing nev
 changes selection or substitutes a missing/inactive destination; preparation
 rechecks the addressed session rather than requiring it to be selected.
 
+`vibe64-helper session project-preview <project> [--session <id>]` uses the same
+socket, actor and access check (`authorizeProjectMessage`). `readProjectPreview`
+in `projectMessage.js` resolves the destination session as messaging does and
+returns that session's current Preview proxy URL from `launchStatus`, re-read on
+every call because a restart can move the Preview. It never starts the other
+Preview and fails clearly for a closed project, inactive session or own session;
+a Preview that is not ready is polled for at most about ten seconds.
+
 Hosted admission re-reads the actor and checks destination project access. A
 closed/closing project, absent selected session or unavailable assistant fails
 before delivery. Incoming text visibly names its origin and explicitly retains

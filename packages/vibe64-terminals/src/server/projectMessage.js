@@ -91,4 +91,46 @@ async function sendProjectMessage(input, { projectService, authorize, assertOpen
   }, { vibe64User: actor });
 }
 
-export { sendProjectMessage };
+// Another project's Preview is read with the same authority as messaging it.
+// Resolve it on every call: a restart may move the Preview to a new address.
+// Never start or wait indefinitely for another project's Preview.
+async function readProjectPreview(input, { projectService, authorize, assertOpen, launchTarget, waitMs = 10000, pollMs = 500 }) {
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(input.projectSlug)) {
+    throw vibe64Error("A project slug is required.", "vibe64_project_preview_input_required");
+  }
+  const actor = await authorize(input.actor, input.projectSlug);
+  return projectService.runInProjectContext(input.projectSlug, async () => {
+    const project = await projectService.readCurrentProject();
+    if (project?.runtime?.open !== true) {
+      throw vibe64Error(`${input.projectSlug} is closed, so its Preview is unavailable. Ask the person to open it.`, "vibe64_project_preview_project_closed");
+    }
+    assertOpen(project);
+    const runtime = await projectService.createRuntime({ inspectSource: false });
+    const session = input.destinationSessionId
+      ? await runtime.store.readSession(input.destinationSessionId)
+      : await runtime.store.readCurrentSession();
+    if (!session || input.destinationSessionId && session.status !== VIBE64_SESSION_STATUS.ACTIVE) {
+      throw vibe64Error(`${input.projectSlug} has no active ${input.destinationSessionId ? "session with that ID" : "selected session"}.`, "vibe64_project_preview_session_unavailable");
+    }
+    if (input.sourceProject === input.projectSlug && input.sourceSession === session.sessionId) {
+      throw vibe64Error("This is your own session. Use vibe64-helper preview inspect-url for its Preview.", "vibe64_project_preview_self");
+    }
+    const deadline = Date.now() + waitMs;
+    for (;;) {
+      const status = await launchTarget.launchStatus(session.sessionId);
+      if (status?.ok === false) {
+        throw vibe64Error(status.error || `${input.projectSlug}'s Preview status is unavailable.`, status.code || "vibe64_project_preview_unavailable");
+      }
+      const target = status.previewTarget || {};
+      if (status.preview?.stoppedIntent !== true && target.available !== false && target.href) {
+        return { ok: true, projectSlug: input.projectSlug, sessionId: session.sessionId, url: target.href };
+      }
+      if (Date.now() >= deadline) {
+        throw vibe64Error(`${input.projectSlug}'s Preview is not running or is still restarting. Try again shortly; if it stays down, ask the person to start it.`, "vibe64_project_preview_not_running");
+      }
+      await new Promise(resolve => setTimeout(resolve, pollMs));
+    }
+  }, { vibe64User: actor });
+}
+
+export { readProjectPreview, sendProjectMessage };

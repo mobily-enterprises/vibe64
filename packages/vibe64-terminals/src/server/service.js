@@ -96,7 +96,7 @@ import {
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 import { vibe64Error } from "@local/vibe64-core/server/core";
-import { sendProjectMessage } from "./projectMessage.js";
+import { readProjectPreview, sendProjectMessage } from "./projectMessage.js";
 import { createProjectServices } from "./projectServices.js";
 import {
   actorHomeEnv,
@@ -1198,6 +1198,12 @@ function createService({
     projectService
   });
   const agentSessionCommand = createAgentSessionCommandService({
+    readProjectPreview: input => readProjectPreview(input, {
+      projectService,
+      authorize: (actor, slug) => assistantRuntime.authorizeProjectMessage(actor, slug),
+      assertOpen: () => projectServices.assertOpen(projectRuntimeContext()),
+      launchTarget: outputTarget
+    }),
     sendProjectMessage: input => sendProjectMessage(input, {
       projectService,
       publish: publishAgentSessionChanged,

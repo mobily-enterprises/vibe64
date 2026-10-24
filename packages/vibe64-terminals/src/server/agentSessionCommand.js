@@ -210,18 +210,20 @@ function sessionRenameCommandSource() {
 import http from "node:http";
 
 const args = process.argv.slice(2);
-const usage = 'Usage: vibe64-helper session status [--json] | rename "Name" | message-project <project> [--session <session-id>] <message> [message-id]';
+const usage = 'Usage: vibe64-helper session status [--json] | rename "Name" | message-project <project> [--session <session-id>] <message> [message-id] | project-preview <project> [--session <session-id>]';
 if (!args.length || args[0] === "--help" || args[0] === "-h") {
   console.log(usage);
   process.exit(0);
 }
 const status = args[0] === "status" && (args.length === 1 || args.length === 2 && args[1] === "--json");
-const explicitSession = args[0] === "message-project" && args[2] === "--session";
+const explicitSession = ["message-project", "project-preview"].includes(args[0]) && args[2] === "--session";
 const messageIndex = explicitSession ? 4 : 2;
 const messageProject = args[0] === "message-project" &&
   [messageIndex + 1, messageIndex + 2].includes(args.length) &&
   args[1]?.trim() && args[messageIndex]?.trim() && (!explicitSession || args[3]?.trim());
-if (!status && !messageProject && (args[0] !== "rename" || args.length !== 2 || !args[1].trim())) {
+const projectPreview = args[0] === "project-preview" && args.length === (explicitSession ? 4 : 2) &&
+  args[1]?.trim() && (!explicitSession || args[3]?.trim());
+if (!status && !messageProject && !projectPreview && (args[0] !== "rename" || args.length !== 2 || !args[1].trim())) {
   console.error(usage);
   process.exit(2);
 }
@@ -237,7 +239,7 @@ try {
   });
   const result = await new Promise((resolve, reject) => {
     const request = http.request({
-      socketPath: control.socketPath, method: "POST", path: messageProject ? "/agent-session-command/message-project" : status ? "/agent-session-command/status" : "/agent-session-command/rename", timeout: 15000,
+      socketPath: control.socketPath, method: "POST", path: messageProject ? "/agent-session-command/message-project" : projectPreview ? "/agent-session-command/project-preview" : status ? "/agent-session-command/status" : "/agent-session-command/rename", timeout: 15000,
       headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) }
     }, (response) => {
       let text = "";
@@ -251,7 +253,7 @@ try {
     request.end(body);
   });
   if (result.ok !== true) throw new Error(result.error || "The session command failed.");
-  console.log(JSON.stringify(status || messageProject ? result : { sessionName: result.sessionName }));
+  console.log(projectPreview ? result.url : JSON.stringify(status || messageProject ? result : { sessionName: result.sessionName }));
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;
@@ -450,10 +452,11 @@ async function ensureAgentSessionCommandServer({
           }
         });
         const isProjectMessage = request.url === "/agent-session-command/message-project";
+        const isProjectPreview = request.url === "/agent-session-command/project-preview";
         const isRename = request.url === "/agent-session-command/rename";
         const isPlan = request.url === "/agent-session-command/plan";
         const isStatus = request.url === "/agent-session-command/status";
-        const authorized = normalizeText(input.token) === (isRename || isPlan || isStatus || isProjectMessage ? renameToken : token) &&
+        const authorized = normalizeText(input.token) === (isRename || isPlan || isStatus || isProjectMessage || isProjectPreview ? renameToken : token) &&
           normalizeText(input.generationId) === generationId &&
           normalizeText(input.sessionId) === normalizeText(sessionId);
         if (!authorized) {
@@ -465,6 +468,11 @@ async function ensureAgentSessionCommandServer({
         }
         if (isProjectMessage) {
           const result = await commandService.messageProject(sessionId, input);
+          sendJsonCommandResponse(response, vibe64StatusCode(result), result);
+          return;
+        }
+        if (isProjectPreview) {
+          const result = await commandService.projectPreview(sessionId, input);
           sendJsonCommandResponse(response, vibe64StatusCode(result), result);
           return;
         }
@@ -554,6 +562,7 @@ async function ensureAgentSessionCommandServer({
 
 function createAgentSessionCommandService({
   sendProjectMessage = null,
+  readProjectPreview = null,
   reportWorkflowOutcome = null,
   logger = null,
   projectService,
@@ -663,18 +672,37 @@ function createAgentSessionCommandService({
     return runWithProjectRequestContext(binding.projectContext || {}, run);
   }
 
+  // Cross-project commands act for the person who submitted the current request.
+  async function requestActor(store, sessionId, binding) {
+    const routing = JSON.parse(await store.readMetadataValue(sessionId, "assistant_routing_request") || "null");
+    return routing?.submittedBy || binding.actor;
+  }
+
   async function messageProject(sessionId, input) {
     return runInSessionProject(sessionId, async ({ binding, store }) => {
       if (typeof sendProjectMessage !== "function") {
         throw vibe64Error("Project messaging is unavailable in this session.", "vibe64_project_message_unavailable");
       }
-      const routing = JSON.parse(await store.readMetadataValue(sessionId, "assistant_routing_request") || "null");
       return sendProjectMessage({
         projectSlug: normalizeText(input.projectSlug), message: normalizeText(input.message),
         ...(input.destinationSessionId !== undefined ? { destinationSessionId: normalizeText(input.destinationSessionId) } : {}),
         messageId: normalizeText(input.messageId) || randomUUID(),
         sourceProject: binding.projectSlug, sourceSession: sessionId,
-        actor: routing?.submittedBy || binding.actor
+        actor: await requestActor(store, sessionId, binding)
+      });
+    });
+  }
+
+  async function projectPreview(sessionId, input) {
+    return runInSessionProject(sessionId, async ({ binding, store }) => {
+      if (typeof readProjectPreview !== "function") {
+        throw vibe64Error("Project Previews are unavailable in this session.", "vibe64_project_preview_unavailable");
+      }
+      return readProjectPreview({
+        projectSlug: normalizeText(input.projectSlug),
+        ...(input.destinationSessionId !== undefined ? { destinationSessionId: normalizeText(input.destinationSessionId) } : {}),
+        sourceProject: binding.projectSlug, sourceSession: sessionId,
+        actor: await requestActor(store, sessionId, binding)
       });
     });
   }
@@ -968,6 +996,7 @@ function createAgentSessionCommandService({
     closeAllForSession,
     renameSession,
     messageProject,
+    projectPreview,
     sessionStatus,
     managePlan,
     run
