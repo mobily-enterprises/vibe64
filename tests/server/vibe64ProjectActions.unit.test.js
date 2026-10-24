@@ -300,15 +300,10 @@ test("Learn mode creates no projects and selects only the practice project; Deve
   assert.deepEqual(calls, [["select", practiceSlug], ["create", "shop"], ["select", "shop"]]);
 });
 
-test("project actions hide secret reveal and undescribed actions from Colleague; the project catalogue is described and path-free", () => {
+test("project actions hide secret reveal and undescribed actions from Colleague", () => {
   const actions = createProjectActions({ project: {} });
   assert.equal(actions.find(({ id }) => id === "vibe64.project.env.secret.reveal").extensions.assistant.exclude, true);
   for (const action of actions.filter(({ extensions }) => !extensions.assistant.exclude)) {
     assert.ok(action.extensions.assistant.description?.trim(), action.id);
-  }
-  for (const id of ["vibe64.project.projects.list", "vibe64.project.projects.create", "vibe64.project.projects.select"]) {
-    const { transformResult } = actions.find((action) => action.id === id).extensions.assistant;
-    assert.deepEqual(transformResult({ ok: true, projectsRoot: "/private", projects: [{ slug: "alpha", name: "Alpha", selected: true, projectRoot: "/private/alpha" }] }),
-      { ok: true, projects: [{ slug: "alpha", name: "Alpha", selected: true }] }, id);
   }
 });

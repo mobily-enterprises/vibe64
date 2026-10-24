@@ -4512,8 +4512,4 @@ test("session actions hide people's approvals and undescribed actions from Colle
   for (const action of actions.filter(({ extensions }) => !extensions.assistant.exclude)) {
     assert.ok(action.extensions.assistant.description?.trim(), action.id);
   }
-  const capabilities = actions.find(({ id }) => id === "vibe64.assistants.capabilities.list").extensions.assistant;
-  assert.deepEqual(capabilities.transformResult({ ok: true, engines: [{ engineId: "codex", label: "Codex", revision: "r", health: { status: "ready", message: "" },
-    modelProviders: [{ id: "openai", label: "GPT", connected: true, description: "d", models: Array.from({ length: 41 }, (_, index) => ({ id: `m${index}`, label: `M${index}`, raw: 1 })) }] }] })
-    .engines[0].modelProviders[0].models.length, 40);
 });

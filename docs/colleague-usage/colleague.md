@@ -197,9 +197,8 @@ Colleague works on every screen, not only inside a project: the account menu,
 AI setup, Courses and any other screen outside your projects. Ask how to do
 something there and it reads this release's guide first. Ask “Show me where…”
 and it points at the place, or opens it when you ask it to; it only offers
-places this Vibe64 has and that you may use. It can list your projects, select
-one or (for the workspace owner) create one when you ask, and watch what this Vibe64 lets it watch for you. A studio lesson's step bar points
-at the same places.
+places this Vibe64 has and that you may use. It can watch what this Vibe64
+lets it watch for you. A studio lesson's step bar points at the same places.
 
 Recognized words can appear as a Pending user message in chat; acceptance replaces
 it with the saved message once. Unsent or discarded words are not saved history.

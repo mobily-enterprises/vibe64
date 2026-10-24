@@ -3,7 +3,7 @@ import { mainConversationRequestContext } from "./mainConversationAuthority.js";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { isLocalStudioRequest } from "@local/vibe64-core/server/localStudioRequest";
-import { assistantAccessTool, assistantCapabilitiesTool, conversationLogTool, conversationOperationTool, renewalTool, sessionTool, sessionWorkTool, sessionPullRequestTool, incomingContributionTool } from "./assistantContracts.js";
+import { assistantAccessTool, conversationLogTool, conversationOperationTool, renewalTool, sessionTool, sessionWorkTool, sessionPullRequestTool, incomingContributionTool } from "./assistantContracts.js";
 import {
   incomingInspectionInputValidator,
   incomingChangeInputValidator,
@@ -268,7 +268,6 @@ function createSessionActions({ sessions } = {}) {
     }),
     action({
       id: ACTION_LIST_ASSISTANT_CAPABILITIES,
-      assistant: assistantCapabilitiesTool(),
       projectScoped: false,
       kind: "query",
       input: assistantCapabilitiesInputValidator,

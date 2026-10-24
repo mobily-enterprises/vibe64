@@ -57,7 +57,8 @@ has no separate lesson Dashboard. See
 Colleague can open supported views in your initiating browser and wait for the
 actual selection before reporting success. Ask “Show me Database for this session”,
 “Open Project settings” or “Open Publish”: it opens Preview and every Dashboard
-section listed above (session tools need a session). It can explain visible controls using its guides.
+section listed above (session tools need a session). It can explain visible
+controls using its guides.
 During a lesson, it opens the practice project's ordinary **Preview** or
 **Database → ERD** like any project's, minimising Learning if it is open.
 By default Colleague points at the real tab or Dashboard section (Database, Files,

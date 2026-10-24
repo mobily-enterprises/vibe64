@@ -159,30 +159,6 @@ function createVibe64ProjectChangedPublisher({ events = null } = {}) {
   };
 }
 
-const projectCatalogueDescriptions = {
-  list: "List the projects available to this user: each project's slug and name, and which one is selected.",
-  create: "Create and select a new project when the person explicitly asks for one. Supply its name and optionally a slug. Only the workspace owner creates projects, and Learn mode refuses with code vibe64_learning_mode_project. Returns the updated project list.",
-  select: "Make the project with this exact slug the selected project when the person asks to switch to it. Returns the updated project list. To show a project in the browser, use navigation.open instead."
-};
-
-// Projects as a compact list: slugs, names and the selection, never folder paths.
-function projectCatalogueTool(operation) {
-  const name = { type: "string", maxLength: 256, required: false };
-  return {
-    description: projectCatalogueDescriptions[operation],
-    output: { mode: "replace", schema: createSchema({
-      ok: { type: "boolean", required: true }, error: { ...name, maxLength: 512 }, code: name,
-      projects: { type: "array", required: true, items: createSchema({ slug: { ...name, required: true }, name, selected: { type: "boolean", required: true } }) }
-    }) },
-    transformResult(result) {
-      const error = result.errors?.[0];
-      return { ok: result.ok === true,
-        projects: (result.projects || []).map((entry) => ({ slug: String(entry.slug || ""), ...(entry.name ? { name: String(entry.name).slice(0, 256) } : {}), selected: entry.selected === true })),
-        ...(error?.message ? { error: String(error.message).slice(0, 512) } : {}), ...(error?.code ? { code: String(error.code).slice(0, 256) } : {}) };
-    }
-  };
-}
-
 function action({ assistant, events = [], execute, id, input, kind, ownerRequired = false }) {
   return withVibe64ActionContext({
     id,
@@ -273,14 +249,12 @@ function createProjectActions({ project } = {}) {
     }),
     action({
       id: ACTION_LIST_PROJECTS,
-      assistant: projectCatalogueTool("list"),
       kind: "query",
       input: projectsReadInputValidator,
       execute: (_input, context) => project.listProjects({ actor: authenticatedVibe64User(context) })
     }),
     action({
       id: ACTION_CREATE_PROJECT,
-      assistant: projectCatalogueTool("create"),
       kind: "command",
       // Hosted members create practice projects only through lessons.
       ownerRequired: true,
@@ -295,7 +269,6 @@ function createProjectActions({ project } = {}) {
     }),
     action({
       id: ACTION_SELECT_PROJECT,
-      assistant: projectCatalogueTool("select"),
       kind: "command",
       input: projectSelectInputValidator,
       events: [projectChangedEvent()],
