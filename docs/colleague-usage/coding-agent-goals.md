@@ -38,18 +38,19 @@ Choosing **Auto** or a Custom model in another tool in **Chat mode** applies aft
 the goal finishes.
 
 When the workspace owner saves a different tool or model for **Senior** or
-**Junior** in **AI setup** (or **Model setups**), Vibe64 cancels every unfinished
-goal (running, paused or blocked) in open sessions, as **Cancel goal** would.
-Each affected chat shows **Goal cancelled because the main AI changed in AI
-setup**; the conversation, files and work done so far are kept. To continue,
+**Junior** in **AI setup** (or **Model setups**), an unfinished goal started on
+the previous main AI is cancelled the next time it would continue, as **Cancel
+goal** would: when its current turn ends, when you choose **Resume goal**, or
+after a server restart. This includes goals in projects that were not open when
+the setup changed. The chat shows **Goal cancelled because the main AI changed in
+AI setup**; the conversation, files and work done so far are kept. To continue,
 choose **Goal** → **Set goal** again; it runs on the new main AI. A goal on a
 **Custom** model is not cancelled, and neither a thinking-level-only change, a
-Router or helper change, nor the first AI setup cancels goals. If a goal cannot
-be cancelled (for example its AI is unreachable), it stays as it was and the
-failure is recorded in the operational log; open that chat and choose **Goal** →
-**Cancel goal**. These steps apply on desktop and mobile. Colleague can explain
-this and change the AI setup on your request; it warns first that saving cancels
-unfinished goals.
+Router or helper change, nor the first AI setup cancels goals. If the goal cannot
+be cancelled (for example its AI is unreachable), the failure is recorded in the
+operational log; choose **Goal** → **Cancel goal**. These steps apply on desktop
+and mobile. Colleague can explain this and change the AI setup on your request;
+it warns first that unfinished goals will be cancelled.
 
 When changing a Codex model provider during a goal, the current turn finishes
 before the same conversation continues with the new provider. If that change

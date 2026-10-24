@@ -123,7 +123,7 @@ import { claudeNativeMessageId } from "@jskit-ai/assistant-core/server/claude-tu
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
 import { createAssistantRouting } from "./assistantRouting.js";
-import { assistantGoalObjective, assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantGoalObjective, assistantMainAiChanged, assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createSessionConversations } from "./sessionConversations.js";
 import {
   createOpenCodeMainMessagePreparation,
@@ -1144,6 +1144,10 @@ function createService({
       assistantRouting?.afterTurn(sessionId, payload, {}).catch((error) => {
         logOperationalEvent(logger, "warn", { component: "vibe64.assistant_routing", event: "vibe64.assistant_routing.review_deferred", sessionId, code: error.code }, "Automatic review needs attention.");
       }),
+      // A goal's automatic continuation follows each of its turns.
+      cancelGoalIfMainAiChanged(sessionId, null, { activeOnly: true }).catch((error) => {
+        logOperationalEvent(logger, "warn", { component: "vibe64.agent_goal", event: "vibe64.agent_goal.main_ai_cancel_failed", sessionId, code: error.code }, "A goal on the previous main AI could not be cancelled.");
+      }),
       prepareWorkspaceSetup(sessionId, {
         publish: true,
         waitMs: AGENT_WRITE_WAIT_MS
@@ -1737,6 +1741,27 @@ function createService({
     });
   }
 
+  // A goal never continues on a main AI the owner has since replaced in AI
+  // setup: the next time it would continue, it is cancelled through the
+  // ordinary Cancel goal path and the chat says why. A Custom goal runs the
+  // person's own model, and a paused goal is checked when it is resumed.
+  async function cancelGoalIfMainAiChanged(sessionId, vibe64User = null, { activeOnly = false } = {}) {
+    const context = await assistantSessionOptions(sessionId, { vibe64User });
+    const pinned = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
+    if (!pinned || pinned.mode === "custom" || (activeOnly ? pinned.status !== "active" : ["complete", "completed"].includes(pinned.status)) ||
+        !assistantMainAiChanged(pinned.configuration?.owner, (await createAssistantRoutingStore({ systemRoot: codexProviderOptions.systemRoot }).read()).owner)) return false;
+    const observed = await service.readAgentGoal(sessionId, context);
+    if (observed?.status !== "available" || !observed.goal || ["complete", "completed"].includes(observed.goal.status)) return false;
+    const result = await service.updateAgentGoal(sessionId, { vibe64User, action: "cancel",
+      threadId: observed.threadId, createdAt: observed.goal.createdAt, objective: observed.goal.objective });
+    if (result?.ok === false) throw Object.assign(new Error(result.error || "The goal could not be cancelled."), result);
+    const turn = await context.runtime.store.writeConversationSystemMessage(sessionId, {
+      messageId: `main-ai-changed-goal-cancelled:${randomUUID()}`, text: MAIN_AI_CHANGED_GOAL_NOTICE });
+    await publishAgentSessionChanged(sessionId, { reason: "assistant-routing-changed",
+      ...(turn ? { payload: { conversationLogPatch: { type: "upsert-turn", turn } } } : {}) });
+    return true;
+  }
+
   async function recoverSessionGoal(sessionId) {
     let context = await assistantSessionOptions(sessionId);
     let intent = readGoalIntent(context.session);
@@ -1805,6 +1830,7 @@ function createService({
     const result = await service.updateAgentGoal(sessionId, { action: "resume", vibe64User: actor,
       expectedSegmentId: observed.target.segmentId, expectedGoalId: observed.goal.id,
       messageId: `goal-restart-${randomUUID()}` }, { canonical: true, restartIntentId: intent.id });
+    if (result?.code === "vibe64_goal_main_ai_changed") return { sessionId, cancelled: true };
     if (result?.ok === false) throw Object.assign(new Error(result.error || "Goal continuation failed."), result);
     return { sessionId, resumed: true };
   }
@@ -2644,18 +2670,6 @@ function createService({
       reason,
       runtime
     };
-  }
-
-  // Runs visit inside each open project's context (or the current project).
-  async function forEachOpenProject(visit, reportFailure, label) {
-    if (typeof projectService.listProjects !== "function") return visit();
-    const listed = await projectService.listProjects();
-    if (listed?.ok === false) throw new Error(listed.error || `${label} could not list projects.`);
-    for (const project of openProjectRuntimeRecords(listed)) {
-      if (closing) break;
-      try { await projectService.runInProjectContext(project.slug, visit); }
-      catch (error) { reportFailure(error, { projectSlug: project.slug }); }
-    }
   }
 
   async function listOpenProjectRuntimeSessions() {
@@ -4254,6 +4268,9 @@ function createService({
     },
 
     async updateAgentGoal(sessionId, input = {}, { canonical = false, restartIntentId = null } = {}) {
+      if (input.action === "resume" && await cancelGoalIfMainAiChanged(sessionId, input.vibe64User || null)) {
+        return { ok: false, code: "vibe64_goal_main_ai_changed", error: MAIN_AI_CHANGED_GOAL_NOTICE };
+      }
       if (["set", "resume"].includes(input.action)) {
         assertProjectEffectAdmission();
         return runMainAgentWrite(sessionId, input, async (context) => {
@@ -4539,48 +4556,18 @@ function createService({
             }
           }
         };
-        await forEachOpenProject(recoverCurrentProject, reportFailure, "Goal recovery");
+        if (typeof projectService.listProjects === "function") {
+          const listed = await projectService.listProjects();
+          if (listed?.ok === false) throw new Error(listed.error || "Goal recovery could not list projects.");
+          for (const project of openProjectRuntimeRecords(listed)) {
+            if (closing) break;
+            try { await projectService.runInProjectContext(project.slug, recoverCurrentProject); }
+            catch (error) { reportFailure(error, { projectSlug: project.slug }); }
+          }
+        } else await recoverCurrentProject();
         return { ok: results.every(result => result.ok !== false), results };
       })();
       return goalRecovery;
-    },
-
-    // The owner saved a different main AI in AI setup. Every unfinished goal on
-    // the old main AI is cancelled through the ordinary Cancel goal path, so
-    // nothing keeps running on it; the chat keeps its history and says why.
-    // A goal on a Custom model is the person's own choice and is left alone.
-    async cancelGoalsForMainAiChange(input = {}) {
-      const results = [];
-      const options = { vibe64User: input.vibe64User || null };
-      const reportFailure = (error, target) => {
-        const result = { ...target, ok: false, code: error.code, error: error.message };
-        results.push(result);
-        logOperationalEvent(logger, "warn", { ...result, event: "vibe64.agent_goal.main_ai_cancel_failed",
-          component: "vibe64.agent_goal" }, "A goal on the previous main AI could not be cancelled.");
-      };
-      const cancelCurrentProject = async () => {
-        const projectSlug = projectRuntimeContext().projectSlug;
-        for (const session of await listOpenProjectRuntimeSessions()) {
-          if (closing) break;
-          const pinned = JSON.parse(session.metadata?.assistant_routing_goal || "null");
-          if (!pinned || pinned.mode === "custom" || ["complete", "completed", "cancelled"].includes(pinned.status)) continue;
-          try {
-            const observed = await service.readAgentGoal(session.sessionId, options);
-            if (observed?.status !== "available" || !observed.goal || ["complete", "completed"].includes(observed.goal.status)) continue;
-            const result = await service.updateAgentGoal(session.sessionId, { ...options, action: "cancel",
-              threadId: observed.threadId, createdAt: observed.goal.createdAt, objective: observed.goal.objective });
-            if (result?.ok === false) throw Object.assign(new Error(result.error || "The goal could not be cancelled."), result);
-            const context = await assistantSessionOptions(session.sessionId, options);
-            const turn = await context.runtime.store.writeConversationSystemMessage(session.sessionId, {
-              messageId: `main-ai-changed-goal-cancelled:${randomUUID()}`, text: MAIN_AI_CHANGED_GOAL_NOTICE });
-            await publishAgentSessionChanged(session.sessionId, { reason: "assistant-routing-changed",
-              ...(turn ? { payload: { conversationLogPatch: { type: "upsert-turn", turn } } } : {}) });
-            results.push({ projectSlug, sessionId: session.sessionId, cancelled: true });
-          } catch (error) { reportFailure(error, { projectSlug, sessionId: session.sessionId }); }
-        }
-      };
-      await forEachOpenProject(cancelCurrentProject, reportFailure, "Goal cancellation");
-      return { ok: results.every(result => result.ok !== false), results };
     },
 
     reconcileAgentSessions,

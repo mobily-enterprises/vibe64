@@ -13,6 +13,7 @@ import { codexAuthMarkerPath } from "@local/vibe64-core/server/codexAuthState";
 import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerProvider";
 
 import { assistantRoutingStatusLabel, assistantModePrompt, assistantGoalObjective } from "@local/vibe64-runtime/shared/assistantRouting";
+import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { createCodexSessionAgentProvider } from "../fixtures/codexProviderAdapter.js";
 
 const request = { messageId: "request-1", message: "Yes, implement it.", submissionKind: "send" };
@@ -423,7 +424,9 @@ test("a Chat mode change is never steered into the running turn of the old mode"
   f.metadata.assistant_routing = JSON.stringify({ mode: "custom", review: false, override: f.assignments.junior });
   if (f.assignments.junior.modelId !== f.assignments.senior.modelId || f.assignments.junior.variantId !== f.assignments.senior.variantId) {
     await assert.rejects(f.service.send("session-1", { ...plain, messageId: "other-model" }, f.context),
-      { code: "vibe64_assistant_chat_mode_changed" });
+      (error) => error.code === "vibe64_assistant_chat_mode_changed" &&
+        error.message.includes(`still uses ${vibe64AssistantSelectionLabel(f.assignments.senior)}, so this message would ` +
+          `not use ${vibe64AssistantSelectionLabel(f.assignments.junior)}.`));
   }
   assert.equal(f.sends.length, 2, "nothing reaches the old turn after the mode changed");
   assert.equal(f.helperCalls(), 0);

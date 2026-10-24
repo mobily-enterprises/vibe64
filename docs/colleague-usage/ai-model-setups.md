@@ -129,11 +129,11 @@ main AI** on another card moves Senior, Junior, Router and Quick helper to that
 provider in the tool it is connected through (see
 [AI onboarding](ai-onboarding.md#redo-with-an-existing-setup)).
 
-Saving a different tool or model for Senior or Junior, here or with **Use as
-main AI**, cancels every unfinished goal in open sessions except one on a Custom
-model; each affected chat says so, and you start the goal again on the new main
-AI (see [Goals and model changes](coding-agent-goals.md)). A thinking-level-only
-change does not. The crown and **Recommended** ribbon stay on Claude's card; they
+After you save a different tool or model for Senior or Junior, here or with
+**Use as main AI**, an unfinished goal (except one on a Custom model) is
+cancelled the next time it would continue; its chat says so, and you start the
+goal again on the new main AI (see [Goals and model
+changes](coding-agent-goals.md)). A thinking-level-only change does not. The crown and **Recommended** ribbon stay on Claude's card; they
 never mean "in use".
 
 ## Colleague's model

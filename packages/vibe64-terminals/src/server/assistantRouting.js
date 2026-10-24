@@ -6,7 +6,7 @@ import path from "node:path";
 import { readWorkPlan, manageWorkPlan, workPlanInstructions } from "./assistantWorkPlan.js";
 import { vibe64AgentRunStateIsActive } from "@local/vibe64-runtime/server/sessionStore";
 import { VIBE64_ASSISTANT_SELECTION_METADATA, VIBE64_AGENT_EXECUTION_PROFILE_IDS, VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
-  serializeVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
+  serializeVibe64AssistantSelection, vibe64AssistantSelectionLabel, vibe64AssistantSelectionFromMetadata, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import {
   ROUTING_REASONS, assistantModeLabel, assistantModePrompt, assistantGoalObjective, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingFromMetadata,
   assistantRoutingPrompt, parseRoutingDecision, assistantWorkflowInstructions, assistantRoutingOutcomeNotice
@@ -503,8 +503,11 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         const runningRequest = state?.status === "working" && state.delivery === "accepted" && !state.stopped;
         if (runningRequest && !options.purpose && !activeGoal(goalPin) && (state.mode !== preferences.mode ||
             state.mode === "custom" && state.override?.selection && !sameSelection(state.override.selection, preferences.override))) {
-          throw Object.assign(failure(`The running turn still uses ${assistantModeLabel(state.mode)}, so this message would ` +
-            `not use ${assistantModeLabel(preferences.mode)}. Stop the turn (this also stops its background task) or wait ` +
+          const [runs, chosen] = state.mode === preferences.mode
+            ? [state.override.selection, preferences.override].map(selection => vibe64AssistantSelectionLabel(selection))
+            : [state.mode, preferences.mode].map(assistantModeLabel);
+          throw Object.assign(failure(`The running turn still uses ${runs}, so this message would ` +
+            `not use ${chosen}. Stop the turn (this also stops its background task) or wait ` +
             "for it to finish, then send again.", "vibe64_assistant_chat_mode_changed"), { delivery: "not-sent" });
         }
         if (state?.workflow === true) task.steeringRequestId = state.messageId;

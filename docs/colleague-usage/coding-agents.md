@@ -166,8 +166,8 @@ mode and model. This includes a Claude turn whose reply is ready while a
 background task (for example a long test run) still runs: the status reads
 **Reply ready · background task still running…**. If you changed **Chat mode**
 (or chose another Custom model) since that turn started, Vibe64 does not send the
-message into it: it says the running turn still uses the old mode, and the
-message stays in chat with **Retry**. Choose **Stop** (this also stops the
+message into it: it names the mode or model the running turn still uses, and
+the message stays in chat with **Retry**. Choose **Stop** (this also stops the
 background task) or wait for the turn to finish, then choose **Retry** to send it
 as a new request on your current Chat mode. During a goal, the goal's own mode
 governs its turns (see [Goals and model changes](coding-agent-goals.md)). This

@@ -112,6 +112,16 @@ function assistantSetupRoleValue(setupValues = {}, role) {
     : { value: value ?? null, followedRole: "" };
 }
 
+// The main AI is the owner's Senior and Junior tool and model; a thinking
+// level change alone keeps it, and a first setup replaces nothing.
+function assistantMainAiChanged(previousOwner, nextOwner) {
+  return ["senior", "junior"].some((role) => {
+    const before = assistantSetupRoleValue(previousOwner, role).value;
+    const after = assistantSetupRoleValue(nextOwner, role).value;
+    return before?.schema && ["engineId", "agentId", "modelProviderId", "modelId"].some((key) => before[key] !== after?.[key]);
+  });
+}
+
 function assistantRoutingStatusIsPending(request) {
   return request?.status !== "complete" && ["routing", "pending", "sending", "uncertain"].includes(request?.delivery);
 }
@@ -571,7 +581,7 @@ function assistantWorkflowUpgradeChanges({ metadata = {}, conversations = [] }) 
 
 export { ASSISTANT_MODES, ASSISTANT_FIX_MODE, ASSISTANT_ROUTING_METADATA, ASSISTANT_SETUP_ROLES, ASSISTANT_FOLLOWING_ROLES,
   ASSISTANT_ROUTING_ROLE_DEFINITIONS, ASSISTANT_ROLE_DEFAULT_FOLLOWS, ASSISTANT_PURPOSE_ROLES, ASSISTANT_ROLE_PURPOSES, MAIN_CHAT_PURPOSES, ROUTING_REASONS,
-  routingModelScore, resolveAssistantPurpose, assistantRoutingPreferences, assistantRoutingSetupFor, assistantRoutingSetupValues, assistantSetupRoleValue,
+  routingModelScore, resolveAssistantPurpose, assistantRoutingPreferences, assistantRoutingSetupFor, assistantRoutingSetupValues, assistantSetupRoleValue, assistantMainAiChanged,
   isAssistantRoutingOwner, isMainChatPurpose, needsMainChatApproval, routingRunsInChoices,
   assistantRoutingFromMetadata, hasConnectedAssistantModels, routingModelChoices, recommendedRoutingAssignments, routingAssignmentSelection,
   parseRoutingDecision, assistantRoutingPrompt, assistantWorkflowInstructions,

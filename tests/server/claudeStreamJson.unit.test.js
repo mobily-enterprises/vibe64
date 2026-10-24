@@ -2874,22 +2874,32 @@ createInterface({ input: process.stdin }).on('line', async line => {
       assert.equal(goalToolCall.result.ok, true, JSON.stringify(goalToolCall));
       assert.equal((await service.readAgentGoal("test", options)).goal.status, "blocked",
         "The goal command retains fresh request authority even without a hosted runtime actor or intervening user message");
-      // Saving a different main AI cancels the unfinished goal through Cancel
-      // goal and tells the chat why; nothing is left to continue on the old AI.
-      const switched = await service.cancelGoalsForMainAiChange({ vibe64User: actor });
-      assert.deepEqual(switched.results.map(({ sessionId, cancelled }) => ({ sessionId, cancelled })),
-        [{ sessionId: "test", cancelled: true }], JSON.stringify(switched));
+      // The owner saves a different main AI while this project is closed. Once
+      // it opens again, nothing changes until the goal would continue: Resume
+      // then cancels it through Cancel goal and tells the chat why.
+      const routing = createAssistantRoutingStore({ systemRoot: path.join(f.root, "system") });
+      const savedRouting = await routing.read();
+      const nextMainAi = { ...savedRouting.owner.senior, modelId: `${savedRouting.owner.senior.modelId}-next` };
+      await service.close();
+      await routing.write({ owner: { ...savedRouting.owner, senior: nextMainAi, junior: nextMainAi },
+        nonOwner: savedRouting.nonOwner }, savedRouting.revision);
+      service = createService();
+      const reopened = await service.readAgentGoal("test", options);
+      assert.equal(reopened.goal.status, "blocked", "opening the project cancels nothing by itself");
+      const framesBeforeResume = (await trace()).filter(row => row.frame?.type === "user").length;
+      const resumed = await service.updateAgentGoal("test", { ...options, ...reopened.goal, threadId: reopened.threadId, action: "resume" });
+      assert.equal(resumed.code, "vibe64_goal_main_ai_changed", JSON.stringify(resumed));
       const afterSwitch = await service.readAgentGoal("test", options);
       assert.ok(!afterSwitch.goal || ["complete", "completed"].includes(afterSwitch.goal.status), JSON.stringify(afterSwitch));
       assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_goal_intent).active, false,
         "a cancelled goal is never resumed after restart");
       assert.equal(JSON.parse((await store.readSession("test")).metadata.assistant_routing_goal).status, "complete");
-      assert.equal((await trace()).filter(row => row.frame?.type === "user").at(-1).frame.message.content, "/goal clear");
+      const resumeFrames = (await trace()).filter(row => row.frame?.type === "user").slice(framesBeforeResume);
+      assert.ok(resumeFrames.length && resumeFrames.every(row => row.frame.message.content === "/goal clear"),
+        `the goal runs no turn on the old main AI: ${JSON.stringify(resumeFrames)}`);
       const notices = (await store.readConversationLog("test"))
         .filter(turn => JSON.stringify(turn).includes("Goal cancelled because the main AI changed"));
       assert.equal(notices.length, 1, JSON.stringify(notices));
-      assert.deepEqual((await service.cancelGoalsForMainAiChange({ vibe64User: actor })).results, [],
-        "a finished goal is not cancelled again");
 
     }
   });
