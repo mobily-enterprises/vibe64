@@ -61,6 +61,8 @@ function record(value) {
 
 const REPOSITORY_UPDATE_CHECK_METADATA = "repository_update_check";
 const REPOSITORY_UPDATE_CHECK_CACHE_MS = 25_000;
+// A starter's workspace preparation waits this long for a busy session.
+const STARTER_PREPARATION_WAIT_MS = 60_000;
 function repositoryUpdateCheckIsFresh(value = {}, now = Date.now()) {
   const checkedAt = Date.parse(text(value?.checkedAt));
   return Number.isFinite(checkedAt) && now - checkedAt >= 0 &&
@@ -269,9 +271,9 @@ function createService({
     isPrepared: (sessionId) => typeof terminals.workspaceSetupIsPrepared === "function"
       ? terminals.workspaceSetupIsPrepared(sessionId)
       : undefined,
-    start: ({ retry = false, runtime, session }) => terminals.prepareWorkspaceSetup(
+    start: ({ retry = false, runtime, session, waitMs }) => terminals.prepareWorkspaceSetup(
       session.sessionId,
-      { retry, runtime, session }
+      { retry, runtime, session, waitMs }
     ),
     startRenewal: ({ retry = false, runtime, session }) => terminals.prepareRenewalWorkspaceSetup(
       session.sessionId,
@@ -2357,12 +2359,15 @@ function createService({
 
     // A starter replaces the Stack of a session that was prepared as empty;
     // prepare it now so the Preview does not wait for host-managed resources.
+    // The new session's first AI turn usually holds the session briefly, so
+    // preparation waits its turn instead of giving up and leaving the app
+    // without its database until something else prepares it.
     async prepareStarterWorkspace(sessionId) {
       if (setupRunner.isRunning(sessionId)) return;
       const runtime = await project.createRuntime({ inspectSource: false });
       const session = await runtime.getSession(sessionId, { inspectSource: false });
       if (session.status !== "active") return;
-      const setup = await setupRunner.start({ runtime, session });
+      const setup = await setupRunner.start({ runtime, session, waitMs: STARTER_PREPARATION_WAIT_MS });
       if (setup?.ok === false) return;
       await publishSessionChanged(sessionId, {
         operation: "updated",

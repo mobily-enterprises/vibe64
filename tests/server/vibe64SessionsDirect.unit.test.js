@@ -3833,6 +3833,7 @@ test("an applied starter prepares the session workspace once and publishes its p
   let running = false;
   let status = "unconfigured";
   const starts = [];
+  const waits = [];
   const publications = [];
   let finishSetup;
   const completion = new Promise((resolve) => { finishSetup = resolve; });
@@ -3845,6 +3846,7 @@ test("an applied starter prepares the session workspace once and publishes its p
       isRunning: () => running,
       async start(input) {
         starts.push(input.session.sessionId);
+        waits.push(input.waitMs);
         status = "running";
         return { completion, state: { status } };
       },
@@ -3854,6 +3856,8 @@ test("an applied starter prepares the session workspace once and publishes its p
 
   await service.prepareStarterWorkspace("session-1");
   assert.deepEqual(starts, ["session-1"]);
+  // The new session's first AI turn holds it briefly; preparation waits its turn.
+  assert.ok(waits[0] >= 30_000, "starter preparation waits for a busy session instead of giving up");
   assert.equal(publications[0][0], "session-1");
   assert.equal(publications[0][1].reason, "workspace-setup-started");
   assert.equal(publications[0][1].session.workspaceSetup.status, "running");
