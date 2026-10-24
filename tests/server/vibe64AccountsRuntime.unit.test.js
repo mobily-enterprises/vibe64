@@ -308,6 +308,27 @@ async function startAccountsFeature({
   };
 }
 
+test("account readiness reads the AI catalogue as the person asking, even outside a project", async () => {
+  const seen = [];
+  const owner = { username: "owner", role: "owner" };
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    await writeReadyCodexMarker(systemRoot);
+    const feature = await startAccountsFeature({ env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot },
+      terminals: { configureAssistantRuntime() {}, async invalidateAgentRuntimes() { return { ok: true }; },
+        async listAssistantCapabilities(input, options = {}) {
+          seen.push({ input, options });
+          return { ok: true, engines: [{ modelProviders: [{ id: "deepseek", connected: true }] }] };
+        } }
+    });
+    try {
+      const status = await feature.connections.getStatus({ vibe64User: owner });
+      assert.equal(status.connections?.find((row) => row.id === "ai")?.connected, true, JSON.stringify(status));
+      assert.deepEqual(seen.map(({ options }) => options.vibe64User), [owner]);
+    } finally { await feature.runtime.shutdown(); }
+  });
+});
+
 test("accounts feature reads roots only from its named runtime env capability", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");

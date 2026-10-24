@@ -574,7 +574,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       const user = authenticatedVibe64User(context);
       const decision = await terminals.resolveAssistantPurpose({ purpose: "colleague" }, { vibe64User: user });
       if (decision.available || decision.reasonCode !== "vibe64_assistant_role_unconfigured") return decision.available;
-      const catalog = requireResult(await terminals.listAssistantCapabilities({ configuredOnly: "true", vibe64User: user }));
+      const catalog = requireResult(await terminals.listAssistantCapabilities({ configuredOnly: "true" }, { vibe64User: user }));
       return (catalog.engines || []).some((engine) => (engine.modelProviders || []).some((provider) => provider.connected === true));
     } catch {
       return true;

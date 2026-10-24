@@ -161,7 +161,9 @@ const Vibe64AccountsFeature = defineFeature({
       : null;
     const resolvedAccountRuntime = createDefaultAccountRuntime({ accountRuntime, project, systemRoot, targetRoot });
     const listAssistantCapabilities = typeof terminals?.listAssistantCapabilities === "function"
-      ? (input) => terminals.listAssistantCapabilities(input)
+      // The reader's user is the authority option, not catalogue input: a page
+      // outside a project (Studio Health) has no project user to fall back on.
+      ? (input) => terminals.listAssistantCapabilities(input, { vibe64User: input.vibe64User || null })
       : null;
     const accounts = createService({
       accountRuntime: resolvedAccountRuntime,
