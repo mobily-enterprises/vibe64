@@ -2448,7 +2448,8 @@ test("Colleague routing tools inspect, search, preview and save through native o
     const catalog = createServiceToolCatalog(actions);
     const context = { channel: "automation", surface: "app" };
     const toolSet = catalog.resolveToolSet(context);
-    assert.deepEqual(toolSet.tools.map(tool => tool.actionId).sort(), ["preview", "read", "save"].map(operation => `vibe64.accounts.model-routing.${operation}`));
+    assert.deepEqual(toolSet.tools.map(tool => tool.actionId).sort(), ["vibe64.accounts.git-identity.save",
+      ...["preview", "read", "save"].map(operation => `vibe64.accounts.model-routing.${operation}`)]);
     const execute = (operation, input = {}) => {
       const tool = toolSet.tools.find(tool => tool.actionId === `vibe64.accounts.model-routing.${operation}`);
       assert.doesNotThrow(() => catalog.toOpenAiToolSchema(tool));

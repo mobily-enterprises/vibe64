@@ -135,7 +135,7 @@ test("terminal and output HTTP operations share validated actions and fresh auth
       }
       assert.equal(actions.getDefinition(actionId).input.mode, "create");
       assert.equal(actions.getDefinition(actionId).extensions.assistant.exclude === true,
-        !["agent-goal.read", "project-runtime.close", "work-plan.read", "outputs.read", "output-target.start", "output-target.stop", "output-terminal.read", "output-terminal.close"].includes(operation));
+        !["agent-goal.read", "agent-plan-usage.read", "project-runtime.close", "work-plan.read", "work-plan.archive", "work-plan.restore", "outputs.read", "output-target.start", "output-target.stop", "output-terminal.read", "output-terminal.close"].includes(operation));
       const count = calls.length;
       allowed = false;
       await assert.rejects(route.handler(request, reply), { statusCode: 403 });
@@ -175,6 +175,18 @@ test("Colleague reads a Main goal and closes a project on request, but never cha
   }
   assert.equal(definitions.get("vibe64.terminals.agent-goal.read").kind, "query");
   assert.equal(definitions.get("vibe64.terminals.agent-goal.update").extensions.assistant.exclude, true);
+});
+
+test("Colleague's temporary-chat tools offer every routing choice with the team-member and repair limits", () => {
+  const definitions = new Map(createTerminalActions({ terminals: {} }).map(definition => [definition.id, definition]));
+  for (const operation of ["create", "update"]) {
+    const { description } = definitions.get(`vibe64.terminals.temporary-conversation.${operation}`).extensions.assistant;
+    for (const pattern of [/\bfix\b.*Fix it with AI/su, /custom.*override.*never invent/su, /Senior and Junior are the workspace owner's only/u, /Auto is Main chat only/u]) {
+      assert.match(description, pattern, operation);
+    }
+  }
+  assert.match(definitions.get("vibe64.terminals.temporary-conversation.update").extensions.assistant.description, /repair chat.*only fix or custom/su);
+  assert.match(definitions.get("vibe64.terminals.temporary-conversation.create").extensions.assistant.description, /team member's uses fix/u);
 });
 
 test("output and attachment action downloads stream exact bytes and close their handles", async () => {

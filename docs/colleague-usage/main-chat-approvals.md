@@ -139,6 +139,12 @@ lesson there is no queue: the message is sent to the lesson's team AI. Approving
 declining and withdrawing are human-only: Colleague cannot do them, so it should
 point the person to the buttons above.
 
+Main chat's **Chat mode** (Senior, Junior, Auto, Custom) and its Deslop review
+are the owner's too. A team member's **Chat mode** menu doesn't list them, and a
+member's or their Colleague's request to change them is refused with "Only the
+owner can change its chat mode, review or model", with or without an active goal.
+In the member's own lesson they can change it.
+
 ## Errors
 
 | Message | Meaning |

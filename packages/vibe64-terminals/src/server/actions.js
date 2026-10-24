@@ -1,6 +1,6 @@
 import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
-import { ACTION_PAUSE_MAIN_GOAL, ACTION_BLOCK_MAIN_GOAL, mainGoalPauseTool, mainGoalBlockTool, temporaryConversationTool, workPlanTool } from "./assistantContracts.js";
+import { ACTION_PAUSE_MAIN_GOAL, ACTION_BLOCK_MAIN_GOAL, mainGoalPauseTool, mainGoalBlockTool, planUsageTool, temporaryConversationTool, workPlanChangeTool, workPlanTool } from "./assistantContracts.js";
 import { outputStatusTool, outputTerminalTool } from "./outputAssistantContracts.js";
 import { terminalKeyInput, terminalSessionContainsText, terminalSessionControlSnapshot } from "@local/vibe64-execution/server/terminalSessions";
 import {
@@ -51,6 +51,8 @@ const ACTION_GENERATE_SESSION_PROMPT_HINTS = "vibe64.terminals.prompt-hints.gene
 const ACTION_CANCEL_SESSION_PROMPT_HINTS = "vibe64.terminals.prompt-hints.cancel";
 const ACTION_READ_CANONICAL_AGENT_GOAL = "vibe64.terminals.agent-goal.canonical.read";
 const ACTION_UPDATE_CANONICAL_AGENT_GOAL = "vibe64.terminals.agent-goal.canonical.update";
+
+const TEMPORARY_ROUTING = "assistantRouting.mode is fix (Fix it with AI: the model AI setup chose for fixes), custom (send override with an exact observed selection: engineId, modelProviderId, modelId, variantId, agentId, catalogRevision from the session's assistant access or an AI setup choice; never invent one), senior or junior. Senior and Junior are the workspace owner's only: a team member's chat uses fix or custom. Auto is Main chat only.";
 
 function action({ assistant, channels, execute, id, idempotency = "optional", input, kind = "command" }) {
   return withVibe64ActionContext({
@@ -121,12 +123,15 @@ function createTerminalActions({ terminals } = {}) {
     action({ id: ACTION_UPDATE_CANONICAL_AGENT_GOAL, channels: ["internal"], input: canonicalAgentGoalInputValidator, idempotency: "none",
       execute: (input) => terminals.updateAgentGoal(input.sessionId, input, { canonical: true }) }),
     action({ id: "vibe64.terminals.agent-plan-usage.read", input: sessionInputValidator, kind: "query", idempotency: "none",
+      assistant: planUsageTool(),
       execute: (input) => terminals.readAgentPlanUsage(input.sessionId, { vibe64User: input.vibe64User || null }) }),
     action({ id: "vibe64.terminals.work-plan.read", input: workPlanReadInputValidator, kind: "query", idempotency: "none",
       assistant: workPlanTool(), execute: (input) => terminals.readSessionWorkPlan(input.sessionId, input) }),
     action({ id: "vibe64.terminals.work-plan.archive", input: workPlanArchiveInputValidator, idempotency: "none",
+      assistant: workPlanChangeTool("Archive the exact session's current plan when the person asks, as the plan viewer's Archive does. First read every page of the current plan and pass its revision and progressRevision as expectedRevision and expectedProgressRevision. This moves the exact Plan and Progress pair to History and leaves no current plan; it does not mark unfinished work completed and starts no AI work. It is refused while Main chat or its review is working, or when the plan changed since the read (read again). Anyone who can work in the session can archive, as in the viewer."),
       execute: (input) => terminals.archiveSessionWorkPlan(input.sessionId, input) }),
     action({ id: "vibe64.terminals.work-plan.restore", input: workPlanRestoreInputValidator, idempotency: "none",
+      assistant: workPlanChangeTool("Make an archived plan current when the person asks, as the plan viewer's Make current does. Pass the archiveId of the History entry the person chose (from work-plan.read history). It reopens that exact Plan and Progress pair as Active and removes it from History; it starts no AI work, so ask in chat to continue its work. It is refused while a current plan exists (archive it first, only if the person agrees, or ask Senior in Main chat to replace it) and while Main chat or its review is working."),
       execute: (input) => terminals.restoreSessionWorkPlan(input.sessionId, input) }),
     action({ id: "vibe64.terminals.agent-session.prepare", input: sessionInputValidator,
       execute: (input) => terminals.ensureAgentSession(input.sessionId, { vibe64User: input.vibe64User || null }) }),
@@ -198,13 +203,13 @@ function createTerminalActions({ terminals } = {}) {
     }),
     action({
       id: ACTION_UPDATE_TEMPORARY_CONVERSATION,
-      assistant: temporaryConversationTool("Update an existing temporary conversation's title/draft presentation (an empty title restores its Temporary N name) or its Senior/Junior assistantRouting. This does not send a message."),
+      assistant: temporaryConversationTool("Update an existing temporary conversation's title/draft presentation (an empty title restores its Temporary N name) or its chat mode for the next message. " + TEMPORARY_ROUTING + " A repair chat opened by an Update conflict's Fix it with AI accepts only fix or custom. This does not send a message."),
       input: temporaryConversationUpdateInputValidator,
       execute: (input) => terminals.updateTemporaryConversation(input.sessionId, input)
     }),
     action({
       id: ACTION_CREATE_TEMPORARY_CONVERSATION,
-      assistant: temporaryConversationTool("Create a separate temporary conversation in a session. Use assistantRouting.mode senior or junior when requested. Provide a stable conversationId for retry; creating a chat does not send a prompt or open it in the browser. Only when requested, includeRecentChatContext=true captures up to forty visible Main messages as independent initial context."),
+      assistant: temporaryConversationTool("Create a separate temporary conversation in a session. " + TEMPORARY_ROUTING + " Omitted, the owner's chat follows Main chat's mode (Auto becomes Senior) and a team member's uses fix. Provide a stable conversationId for retry; creating a chat does not send a prompt or open it in the browser. Only when requested, includeRecentChatContext=true captures up to forty visible Main messages as independent initial context."),
       input: temporaryConversationCreateActionInputValidator,
       execute: (input) => terminals.createTemporaryConversation(input.sessionId, input)
     }),

@@ -3,7 +3,7 @@ import { mainConversationRequestContext } from "./mainConversationAuthority.js";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { isLocalStudioRequest } from "@local/vibe64-core/server/localStudioRequest";
-import { assistantAccessTool, conversationLogTool, conversationOperationTool, renewalTool, sessionTool, sessionWorkTool, sessionPullRequestTool, incomingContributionTool } from "./assistantContracts.js";
+import { assistantAccessTool, conversationLogTool, repositoryHistoryTool, repositoryVersionFilesTool, conversationOperationTool, renewalTool, sessionTool, sessionWorkTool, sessionPullRequestTool, incomingContributionTool } from "./assistantContracts.js";
 import {
   incomingInspectionInputValidator,
   incomingChangeInputValidator,
@@ -236,12 +236,14 @@ function createSessionActions({ sessions } = {}) {
     }),
     action({
       id: ACTION_INSPECT_REPOSITORY_HISTORY,
+      assistant: repositoryHistoryTool(),
       kind: "query",
       input: repositoryHistoryInputValidator,
       execute: (input) => sessions.inspectRepositoryHistory(input || {})
     }),
     action({
       id: ACTION_INSPECT_REPOSITORY_VERSION_FILES,
+      assistant: repositoryVersionFilesTool(),
       kind: "query",
       input: repositoryVersionFilesInputValidator,
       execute: (input) => sessions.inspectRepositoryVersionFiles(input || {})
@@ -304,7 +306,7 @@ function createSessionActions({ sessions } = {}) {
     }),
     action({
       id: ACTION_UPDATE_ASSISTANT_SELECTION,
-      assistant: sessionTool("Change the requested coding session's chat mode or assistant using the existing selection controls. For a mode change send assistantRouting={mode: senior|junior|auto, review: boolean}; inspect current preferences first to preserve the review choice. review=true (Deslop) is the default; set review=false only when the user explicitly asks after you warn that code quality will suffer unless they run Deslop themselves, and that skipping it suits only quick throwaway projects. Senior/Junior are direct chat; Auto honors explicit Senior/Junior requests, otherwise uses Senior for plans, reviews and Deslop and Junior for other work. Either role's implementation receives automatic Senior review; the review preference controls optional Deslop. This does not send a message. An unfinished goal blocks Auto. To select an available model/workflow send assistantSelection using an observed engineId/modelProviderId/modelId/agentId/variantId/catalogRevision; never invent a model. The service checks access, pending work and engine changeover. Send one of assistantRouting or assistantSelection. Inspect chatMode for saved preferences; routingMode describes the previous/current request and may differ."),
+      assistant: sessionTool("Change the requested coding session's chat mode or assistant using the existing selection controls. For a mode change send assistantRouting={mode: senior|junior|auto, review: boolean}; inspect current preferences first to preserve the review choice. Main chat runs on the workspace owner's AI: only the owner can change its mode, review or model, with or without a goal; for a team member this is refused, except in their own lesson. review=true (Deslop) is the default; set review=false only when the user explicitly asks after you warn that code quality will suffer unless they run Deslop themselves, and that skipping it suits only quick throwaway projects. Senior/Junior are direct chat; Auto honors explicit Senior/Junior requests, otherwise uses Senior for plans, reviews and Deslop and Junior for other work. Either role's implementation receives automatic Senior review; the review preference controls optional Deslop. This does not send a message. An unfinished goal blocks Auto. To select an available model/workflow send assistantSelection using an observed engineId/modelProviderId/modelId/agentId/variantId/catalogRevision; never invent a model. The service checks access, pending work and engine changeover. Send one of assistantRouting or assistantSelection. Inspect chatMode for saved preferences; routingMode describes the previous/current request and may differ."),
       kind: "command",
       input: assistantSelectionUpdateActionInputValidator,
       execute: (input) => sessions.updateAssistantSelection(

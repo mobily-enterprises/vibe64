@@ -63,7 +63,9 @@ a pass is not proof that a particular project builds.
 Ask Colleague "check my setup" (or similar). Colleague runs the same Health checks
 and tells you which ones fail and what to do next for your system. It can also
 check single tools on request (“is Ruby installed?”), explain each step of the
-setup guides, and point at **Account settings** for you (it cannot open it). Installing programs, signing in to GitHub or an AI
+setup guides, and point at **Account settings** for you (it cannot open it). For
+**Your name in Git**, tell Colleague the name and email to use and it saves them,
+as **Save Git identity** does; it never guesses them. Installing programs, signing in to GitHub or an AI
 provider, and entering keys are things you do yourself; never paste a key or
 password into chat. Long command output stays on the Health page; Colleague sees a
 short summary of each check.

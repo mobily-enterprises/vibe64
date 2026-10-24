@@ -103,7 +103,7 @@ function workPlanTool() {
     totalCharacters: { type: "integer", min: 0, required: false }, hasMore: { type: "boolean", required: false }
   };
   return {
-    description: "Read Main chat's paired Plan and Progress without starting AI. Always finish BOTH text and progressText across every page before implementing, reviewing or claiming a complete read. Offset/limit count Unicode characters; pages contain at most 16000. Follow nextOffset while hasMore, passing the first page's revision and progressRevision as expectedRevision and expectedProgressRevision on every later page. If changed, restart the read. Never call a partial page the complete plan. Current and archived plans remain readable after completion. Use archiveId from history to read an archived snapshot. Execute, change, reopen or archive a plan through an explicit chat request; Auto routes by intent. Temporary chats do not support Auto plans.",
+    description: "Read Main chat's paired Plan and Progress without starting AI. Always finish BOTH text and progressText across every page before implementing, reviewing or claiming a complete read. Offset/limit count Unicode characters; pages contain at most 16000. Follow nextOffset while hasMore, passing the first page's revision and progressRevision as expectedRevision and expectedProgressRevision on every later page. If changed, restart the read. Never call a partial page the complete plan. Current and archived plans remain readable after completion. Use archiveId from history to read an archived snapshot. Archive the current plan with work-plan.archive and make an archive current with work-plan.restore; execute, change or reopen it over a current plan through an explicit chat request; Auto routes by intent. Temporary chats do not support Auto plans.",
     output: { mode: "replace", schema: createSchema(fields) },
     transformResult(result = {}) {
       return Object.fromEntries(Object.entries(result).filter(([key]) => Object.hasOwn(fields, key)));
@@ -111,4 +111,51 @@ function workPlanTool() {
   };
 }
 
-export { temporaryConversationTool, workPlanTool };
+// Archive and Make current return the paired plan's identity, never its text.
+function workPlanChangeTool(description) {
+  const strings = ["sessionId", "code", "title", "status", "revision", "progressRevision", "notice"];
+  return {
+    description,
+    output: { mode: "replace", schema: createSchema({
+      ok: { type: "boolean", required: true }, available: { type: "boolean", required: false },
+      error: { type: "string", maxLength: 1000, required: false },
+      ...Object.fromEntries(strings.map((key) => [key, { ...shortText, maxLength: 512 }]))
+    }) },
+    transformResult(result = {}) {
+      return { ok: result.ok === true,
+        ...(typeof result.available === "boolean" ? { available: result.available } : {}),
+        ...(typeof result.error === "string" ? { error: result.error.slice(0, 1000) } : {}),
+        ...Object.fromEntries(strings.flatMap((key) => typeof result[key] === "string" ? [[key, result[key].slice(0, 512)]] : [])) };
+    }
+  };
+}
+
+const isoTime = (value) => Number.isFinite(value) && value > 0 ? new Date(value).toISOString() : "";
+
+function planUsageTool() {
+  return {
+    description: "Read the exact session's AI balance or plan allowance, the same reading as the value in Main chat's bottom row. status available means a reading exists; unsupported means this connection has none or this person can't use it, which does not mean zero. balances are account amounts (string, in currency) for DeepSeek or GLM pay-as-you-go keys; windows are allowances with remainingPercent, windowDurationMins (10080 weekly, 300 five-hour) and resetsAt. checkedAt is when the snapshot was taken; DeepSeek and GLM update only at the start and end of a main chat turn. The value belongs to the whole account, not this turn. Reading changes nothing and reveals no key; topping up stays with the person on the provider's site (managementUrl).",
+    output: { mode: "replace", schema: createSchema({
+      ok: { type: "boolean", required: true }, status: shortText, code: shortText, error: { ...shortText, maxLength: 512 },
+      providerLabel: shortText, engineId: shortText, modelProviderId: shortText, checkedAt: shortText,
+      managementUrl: { ...shortText, maxLength: 512 },
+      balances: { type: "array", maxItems: 8, required: false, items: createSchema({ currency: shortText, amount: shortText }) },
+      windows: { type: "array", maxItems: 12, required: false, items: createSchema({ id: shortText,
+        remainingPercent: { type: "number", required: false }, windowDurationMins: { type: "integer", required: false }, resetsAt: shortText }) }
+    }) },
+    transformResult(result = {}) {
+      return { ok: result.ok !== false,
+        ...Object.fromEntries(["status", "code", "error", "providerLabel", "engineId", "modelProviderId", "managementUrl"]
+          .flatMap((key) => typeof result[key] === "string" ? [[key, result[key].slice(0, 512)]] : [])),
+        ...(isoTime(result.checkedAt) ? { checkedAt: isoTime(result.checkedAt) } : {}),
+        ...(Array.isArray(result.balances) ? { balances: result.balances.slice(0, 8).map((value) => ({
+          currency: String(value?.currency || "").slice(0, 16), amount: String(value?.amount ?? "").slice(0, 64) })) } : {}),
+        ...(Array.isArray(result.windows) ? { windows: result.windows.slice(0, 12).map((window) => ({ id: String(window?.id || "").slice(0, 64),
+          ...(Number.isFinite(window?.remainingPercent) ? { remainingPercent: window.remainingPercent } : {}),
+          ...(Number.isSafeInteger(window?.windowDurationMins) ? { windowDurationMins: window.windowDurationMins } : {}),
+          ...(isoTime(window?.resetsAt * 1000) ? { resetsAt: isoTime(window.resetsAt * 1000) } : {}) })) } : {}) };
+    }
+  };
+}
+
+export { planUsageTool, temporaryConversationTool, workPlanChangeTool, workPlanTool };

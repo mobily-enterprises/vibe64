@@ -146,9 +146,14 @@ the session has no plan; the native plan icon remains an independent way to
 check. Opening the viewer reads the plan; it never creates,
 edits, approves, archives, reopens or executes one and starts no coding turn.
 Explaining the workflow or offering help is not authorization to change a plan.
-Colleague's plan-reading action cannot archive, reopen, edit or execute it:
-those require the person's Archive or Make current control, or an explicit Main-chat request,
-sent through an already-authorized chat operation when available.
+Colleague's plan-reading action cannot edit or execute a plan. When you ask,
+Colleague can **Archive** the current plan or **Make current** an archived one
+through the same operations as the viewer's buttons, with the same limits: it
+reads the whole current plan first, Archive is refused if the plan changed since
+that read, Make current is refused while a current plan exists, and both wait
+while the assistant or its review is running. Neither starts AI work; ask in
+chat to continue a plan made current. Replacing a current plan with an archive
+(reopen over it), editing and executing remain explicit Main-chat requests.
 
 ## Auto roles and workflow
 

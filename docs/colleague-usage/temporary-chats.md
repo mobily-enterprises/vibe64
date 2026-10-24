@@ -98,6 +98,15 @@ Colleague can explain these steps and change a temporary chat's selection throug
 its authorized temporary-conversation action when explicitly asked. Stopping or
 sending work remains a separate requested action.
 
+Colleague offers the same choices as the **Chat mode** menu: **Fix it with AI**,
+**Custom** with a model it has seen in AI setup or the session's access (it never
+invents one), and for the owner **Senior** or **Junior**. A team member's Colleague
+offers only **Fix it with AI** and **Custom**, and a new chat it creates for them
+starts on **Fix it with AI**; the owner's starts on Main chat's mode (Auto becomes
+Senior). A merge repair chat accepts only **Fix it with AI** or **Custom**. Auto
+is Main chat only. Colleague doesn't start an Update conflict's **Fix it with AI**
+repair itself: choose that button on the Update error.
+
 ## Work elsewhere while a chat runs
 
 Select **Main chat** or another temporary tab to continue elsewhere. The hidden

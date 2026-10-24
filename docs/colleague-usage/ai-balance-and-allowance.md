@@ -50,8 +50,10 @@ do not show a balance. A confirmed zero does display as zero.
 Colleague can explain these controls, help identify the session's selected model,
 and offer to change the selection through its existing session actions. A change
 requires the person's request or acceptance and normal access checks. Colleague
-does not have a balance-reading tool or access to API keys; the person reads the
-indicator, opens the provider site and handles any account payment or top-up.
+can read the same balance or allowance for a session: the amount and currency,
+or the remaining percentage with its reset time, and when it was checked. Like
+the indicator, no reading does not mean zero. Colleague has no access to API
+keys; the person opens the provider site and handles any account payment or top-up.
 
 Verified against `Vibe64AgentPlanUsage.vue`, `Vibe64ChatModeControls.vue`,
 `Vibe64SessionAssistantMenu.vue`, provider usage normalization, and the session

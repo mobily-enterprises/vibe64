@@ -22,7 +22,12 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
       offset: 0, nextOffset: 14, totalCharacters: 16020, hasMore: true, path: "/private/plan.md", token: "secret" }; },
     async readTemporaryConversation(...args) { calls.push(args); return native; },
     async listTemporaryConversations() { return { ok: true, conversations: Array(60).fill(native) }; },
-    async stopTemporaryConversation() { return { ok: false, code: "vibe64_busy", error: "The conversation is closing." }; }
+    async stopTemporaryConversation() { return { ok: false, code: "vibe64_busy", error: "The conversation is closing." }; },
+    async readAgentPlanUsage() { return { status: "available", providerLabel: "DeepSeek", checkedAt: Date.UTC(2026, 9, 24), apiKey: "private-key",
+      balances: [{ currency: "USD", amount: "12.40", token: "private-balance" }],
+      windows: [{ id: "seven_day", remainingPercent: 68, windowDurationMins: 10080, resetsAt: Date.UTC(2026, 9, 30) / 1000 }] }; },
+    async archiveSessionWorkPlan(sessionId, input) { calls.push({ sessionId, input }); return { ok: true, sessionId, available: false,
+      notice: "Archived “Plan”. It remains available in Plan history.", text: "private-plan-text", path: "/private/plan.md" }; }
   };
   const sessions = {
     async updateAssistantSelection(sessionId, input) { calls.push({ sessionId, input }); return { ok: true, sessionId, assistantSelection: { engineId: "codex", modelId: "previous-model" }, metadata: {
@@ -41,6 +46,11 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
     async readSessionConversationLog() { return { ok: true, rewind: { turnId: "000010", pending: false, text: "private-full-prompt" }, conversationLog: Array.from({ length: 10 }, (_, i) => ({ turnId: `turn-${i}`, user: { text: `Question ${i}` }, assistant: { text: "a".repeat(6000) }, privateBinding: "secret" })), pagination: { hasMoreBefore: true } }; },
     async inspectSession() { return { ok: true, sessionId: "session-1", status: "active", agentSession: { turn: { state: "inProgress", active: true, phase: "thinking", id: "turn-1" } }, metadata: { assistant_routing_request: JSON.stringify({ status: "planning", task: "planning", assignments: { secret: "private-model-binding" } }) } }; },
     async listSessions() { return { ok: true, sessions: [{ sessionId: "session-1", sessionName: "Planning", status: "active", sourcePath: "/private/repository", metadata: { token: "private-token" } }] }; },
+    async inspectRepositoryHistory() { return { ok: true, historySnapshotCommit: "a".repeat(40), hasMore: true, nextCursor: "cursor-2",
+      versions: Array.from({ length: 60 }, (_, index) => ({ commit: "b".repeat(40), shortCommit: "bbbbbbbb", author: "Ada", authorEmail: "private-email@example.com",
+        committedAt: "2026-10-24T00:00:00Z", message: `Save ${index}`, parents: ["private-parent"], isMerge: false })) }; },
+    async inspectRepositoryVersionFiles() { return { ok: true, commit: "b".repeat(40), totalCount: 150, offset: 0, truncated: false,
+      diff: "private-diff", files: Array.from({ length: 150 }, (_, index) => ({ path: `src/${index}.js`, status: "M", added: 1, deleted: 0 })) }; },
     async createSession(input) { calls.push(input); return { ok: true, sessionId: "created-session", workspaceSetup: { status: "running" }, sourcePath: "/private/source" }; }
   };
   const actions = createActionCatalogue();
@@ -53,13 +63,17 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   const catalog = createServiceToolCatalog(actions, { maxDirectTools: 100 });
   const context = { surface: "app" };
   const toolSet = catalog.resolveToolSet(context);
-  assert.equal(toolSet.tools.length, 43);
+  assert.equal(toolSet.tools.length, 48);
   assert.equal(toolSet.tools.some(tool => tool.actionId === "vibe64.sessions.pin"), true);
   assert.equal(toolSet.tools.some(tool => tool.actionId === "vibe64.sessions.conversation.rewind"), false);
-  assert.equal(toolSet.tools.some((tool) => tool.actionId.includes("attachment") || tool.actionId.startsWith("vibe64.repository.history.")), false);
-  // Incoming contributions are reviewed and changed only through their guarded inspect/change pair.
+  assert.equal(toolSet.tools.some((tool) => tool.actionId.includes("attachment")), false);
+  // Incoming contributions are reviewed and changed only through their guarded inspect/change pair;
+  // saved history is read as commits and file names, never diff text.
   assert.deepEqual(toolSet.tools.filter((tool) => tool.actionId.startsWith("vibe64.repository.")).map((tool) => tool.actionId).sort(),
-    ["vibe64.repository.incoming.change", "vibe64.repository.incoming.inspect"]);
+    ["vibe64.repository.history.files.inspect", "vibe64.repository.history.inspect", "vibe64.repository.incoming.change", "vibe64.repository.incoming.inspect"]);
+  for (const actionId of ["vibe64.terminals.agent-plan-usage.read", "vibe64.terminals.work-plan.archive", "vibe64.terminals.work-plan.restore"]) {
+    assert.equal(toolSet.tools.some(tool => tool.actionId === actionId), true, actionId);
+  }
   async function execute(actionId, input) {
     const tool = toolSet.tools.find((entry) => entry.actionId === actionId);
     assert.ok(tool, actionId);
@@ -106,6 +120,22 @@ test("the native JSKIT catalogue exposes bounded conversation contracts without 
   const listedSessions = await execute("vibe64.sessions.list", {});
   assert.deepEqual(listedSessions.result.sessions, [{ sessionId: "session-1", sessionName: "Planning", status: "active" }]);
   assert.equal(JSON.stringify(listedSessions).includes("private-"), false);
+  const history = await execute("vibe64.repository.history.inspect", {});
+  assert.equal(history.result.versions.length, 50);
+  assert.deepEqual(history.result.versions[0], { commit: "b".repeat(40), shortCommit: "bbbbbbbb", author: "Ada",
+    committedAt: "2026-10-24T00:00:00Z", message: "Save 0", isMerge: false });
+  assert.equal(history.result.nextCursor, "cursor-2");
+  const files = await execute("vibe64.repository.history.files.inspect", { commit: "b".repeat(40), historySnapshotCommit: "a".repeat(40) });
+  assert.equal(files.result.files.length, 100);
+  assert.equal(files.result.truncated, true, "a page cut to 100 files still says more remain");
+  assert.deepEqual(files.result.files[0], { path: "src/0.js", status: "M", added: 1, deleted: 0 });
+  const usage = await execute("vibe64.terminals.agent-plan-usage.read", { sessionId: "session-1" });
+  assert.deepEqual(usage.result, { ok: true, status: "available", providerLabel: "DeepSeek", checkedAt: "2026-10-24T00:00:00.000Z",
+    balances: [{ currency: "USD", amount: "12.40" }],
+    windows: [{ id: "seven_day", remainingPercent: 68, windowDurationMins: 10080, resetsAt: "2026-10-30T00:00:00.000Z" }] });
+  const archived = await execute("vibe64.terminals.work-plan.archive", { sessionId: "session-1", expectedRevision: "c".repeat(64), expectedProgressRevision: "d".repeat(64) });
+  assert.deepEqual(archived.result, { ok: true, available: false, sessionId: "session-1", notice: "Archived “Plan”. It remains available in Plan history." });
+  assert.equal(JSON.stringify([history, files, usage, archived]).includes("private"), false);
   const failed = await execute("vibe64.terminals.temporary-conversation.stop", { sessionId: "session-1", conversationId: "chat-1" });
   assert.equal(failed.ok, true);
   assert.equal(failed.result.ok, false);

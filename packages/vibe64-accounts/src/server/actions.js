@@ -33,6 +33,25 @@ const ACTION_CANCEL_ACCOUNT_AUTH_SESSION = "vibe64.accounts.auth-session.cancel"
 const ACTION_SAVE_GIT_IDENTITY = "vibe64.accounts.git-identity.save";
 const ACTION_SAVE_PERSONAL_AI_PROFILE = "vibe64.accounts.personal-ai-profile.save";
 
+const gitIdentityText = { type: "string", maxLength: 512, required: false };
+// Saves only the person's own Git name and email; the account object stays out.
+const gitIdentityTool = Object.freeze({
+  description: "Save the signed-in person's own Git name and email (git config --global user.name and user.email in their tool home), as Save Git identity does on Account settings → GitHub; this clears Health's Your name in Git warning. Use only values the person stated in this conversation for this purpose; never guess them from a GitHub username, an email seen elsewhere or a stand-in name. The email must be a valid address. This replaces both values for future Saves; it does not rewrite earlier commits, sign in to GitHub or change anyone else's identity. Report the returned values.",
+  output: { mode: "replace", schema: createSchema({
+    ok: { type: "boolean", required: true }, error: gitIdentityText, code: gitIdentityText,
+    gitUserName: gitIdentityText, gitUserEmail: gitIdentityText
+  }) },
+  transformResult(result = {}) {
+    const identity = result.account?.gitIdentity || {};
+    const code = result.code || result.errors?.[0]?.code;
+    return { ok: result.ok === true,
+      ...(typeof result.error === "string" ? { error: result.error.slice(0, 512) } : {}),
+      ...(typeof code === "string" ? { code: code.slice(0, 512) } : {}),
+      ...(typeof identity.name === "string" ? { gitUserName: identity.name.slice(0, 512) } : {}),
+      ...(typeof identity.email === "string" ? { gitUserEmail: identity.email.slice(0, 512) } : {}) };
+  }
+});
+
 function createActions({ accounts } = {}) {
   if (!accounts || typeof accounts.getStatus !== "function") {
     throw new TypeError("createActions requires the Vibe64 Accounts API.");
@@ -128,6 +147,7 @@ function createActions({ accounts } = {}) {
       }
     },
     {
+      extensions: { assistant: gitIdentityTool },
       id: ACTION_SAVE_GIT_IDENTITY,
       version: 1,
       kind: "command",

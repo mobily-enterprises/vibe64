@@ -2473,6 +2473,12 @@ function createService({
     async updateAssistantSelection(sessionId, input = {}) {
       return sessionResult(async () => {
         const vibe64User = trustedAssistantUser(input);
+        // Main chat's mode, review and model are the owner's, with or without a
+        // goal, except in a team member's own lesson.
+        if (!isAssistantRoutingOwner(vibe64User) && !currentRequestIsPracticeProject()) {
+          throw Object.assign(new Error("Main chat runs on the workspace owner's AI. Only the owner can change its chat mode, review or model."),
+            { code: "vibe64_main_chat_approval_required", statusCode: 403 });
+        }
         const runtime = await project.createRuntime({ inspectSource: false });
         const save = async () => {
           const apply = async ({ deferred = false } = {}) => {

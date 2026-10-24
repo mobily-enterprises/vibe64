@@ -141,8 +141,10 @@ workspace for retry. Resolve the reported problem, then retry **Archive session*
 If the last open session cannot be archived, its chat is selected again so you
 can inspect the failure and retry. If another session is already selected, that
 selection stays in place and the failed session becomes available in its tab.
-Colleague can explain these steps and the reported error; the existing session
-permissions and confirmation still apply.
+Colleague can explain these steps and the reported error. When you explicitly
+ask it to archive a named session, it archives it through the same action; the
+same pin, renewal and preparation guards apply, and it reports a failed cleanup
+for retry. Stopping an agent or ending Colleague is never an archive request.
 
 ## Chat availability
 
@@ -152,6 +154,8 @@ for team members. These lightweight
 checks do not start a model or download its repeated execution plan. Opening
 **Chat mode** still shows the available choices; access is checked again when
 work is sent. Colleague can explain an unavailable mode, but cannot grant access.
+The owner's Colleague can change Main chat's mode on request; a team member's
+cannot, outside their own lesson (see [Main chat approvals](main-chat-approvals.md)).
 
 To open the coding agent's own terminal, or leave it on a phone, see [Open the coding agent's terminal](session-terminal.md).
 

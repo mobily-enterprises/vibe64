@@ -35,6 +35,11 @@ changes** remains with the selected session. If Git log offers a session update
 or reconciliation, that action applies to the selected session; opening the log
 does not change files.
 The same **Git log** label appears in the mobile **Dashboard section** chooser.
+Colleague can answer "What did my last Save change?": it reads the same saved
+versions (commit, author, time and message) and the names of the files each
+version changed, with added and removed line counts. It never reads the file
+differences; open the version in **Git log** to see them, or ask a coding
+conversation.
 
 Files provides **Repo** for source and **Session Dropzone** for exchanging files with the
 selected session, plus **Project Backups (2w retention)** shared by all sessions

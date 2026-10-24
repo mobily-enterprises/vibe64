@@ -108,6 +108,16 @@ test("canonical voice catalogue action preserves Colleague authorization before 
   assert.equal(context.vibe64Action.user.uid, 42, "The caller's resolved authority remains intact.");
 });
 
+test("Colleague lists installed speaking voices by exact id, label and language only", () => {
+  const [action] = createVoiceActions({ actions: { async execute() { return { ok: true }; } }, voice: { async readCatalogue() { return {}; } } });
+  const tool = action.extensions.assistant;
+  assert.equal(tool.exclude, undefined);
+  assert.match(tool.description, /exact id.*British female voice.*changes nothing/su);
+  assert.deepEqual(tool.transformResult({ defaultVoice: "bella", engine: "private-engine",
+    voices: [{ id: "bella", label: "Bella (American female)", language: "en-us", path: "/private/model" }, { id: "george", label: "George (British male)" }] }),
+  { defaultVoice: "bella", voices: [{ id: "bella", label: "Bella (American female)", language: "en-us" }, { id: "george", label: "George (British male)" }] });
+});
+
 test("public project voice checks exact session ownership and retains native proxy frame order", { timeout: 10000 }, async t => {
   const f = await fixture(t, { delayAccess: true });
   const v = await f.open();

@@ -72,6 +72,7 @@ import {
   runVibe64AgentWriteExclusive
 } from "../../packages/vibe64-runtime/src/server/agentWriteLock.js";
 import {
+  runWithPracticeProjectContext,
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import {
@@ -3077,7 +3078,7 @@ test("assistant selection can recover from an unavailable current choice before 
       },
       async requireAssistantSelectionAccess(selection, options) {
         assert.deepEqual(selection, requestedSelection);
-        assert.equal(options.vibe64User.username, "member");
+        assert.equal(options.vibe64User.username, "owner");
         throw denied;
       },
       async resolveAssistantSelection(selection) {
@@ -3093,7 +3094,7 @@ test("assistant selection can recover from an unavailable current choice before 
 
   const result = await service.updateAssistantSelection("session-1", {
     assistantSelection: { modelId: requestedSelection.modelId },
-    vibe64User: { username: "member" }
+    vibe64User: { username: "owner", role: "owner" }
   });
 
   assert.equal(result.ok, false);
@@ -4078,6 +4079,32 @@ test("chat mode changes save for the next message without changing the main AI",
   assert.notEqual(changed.ok, false, JSON.stringify(changed));
   assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "senior", review: true });
   assert.deepEqual(JSON.parse(session.metadata.assistant_selection), current);
+});
+
+test("a team member can't change main chat's mode, review or model outside their lesson", async () => {
+  const lock = agentWriteLockHarness();
+  const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
+    assistant_routing: JSON.stringify({ mode: "junior", review: true }),
+    assistant_selection: JSON.stringify({ schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex",
+      modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` }) } };
+  let runtimes = 0;
+  const runtime = { async getSession() { return session; }, store: { ...lock.store,
+    async writeMetadataValue(_id, name, value) { session.metadata[name] = value; } } };
+  const service = createService({ project: { async createRuntime() { runtimes += 1; return runtime; } }, terminals: {
+    async readAgentGoal() { return { status: "available", goal: null }; } } });
+  const member = { role: "member", username: "member" };
+  for (const input of [{ assistantRouting: { mode: "senior", review: true } }, { assistantRouting: { mode: "auto", review: false } },
+    { assistantSelection: { modelId: "gpt-5.6-codex" } }]) {
+    const refused = await service.updateAssistantSelection(session.sessionId, { ...input, vibe64User: member });
+    assert.equal(refused.ok, false);
+    assert.equal(refused.code, "vibe64_main_chat_approval_required");
+  }
+  assert.equal(runtimes, 0);
+  assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "junior", review: true });
+  const practice = await runWithPracticeProjectContext("test", { vibe64User: member },
+    () => service.updateAssistantSelection(session.sessionId, { assistantRouting: { mode: "senior", review: true }, vibe64User: member }));
+  assert.notEqual(practice.ok, false, JSON.stringify(practice));
+  assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "senior", review: true });
 });
 
 test("Auto preferences can be saved without changing an unfinished goal when observation is unavailable", async () => {

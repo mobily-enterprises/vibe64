@@ -236,3 +236,30 @@ test("Colleague reads every saved provider's readiness through the original owne
   response = await execute();
   assert.deepEqual(response.result, { ok: true, unavailable: true, connections: [] });
 });
+
+test("Colleague saves the person's own stated Git name and email and returns only those values", async () => {
+  const calls = [];
+  const accounts = { getStatus() {}, async saveGitIdentity(input) {
+    calls.push(input);
+    return { ok: true, output: "private-output", account: { id: "github", username: "private-login", token: "private-token",
+      gitIdentity: { name: input.gitUserName, email: input.gitUserEmail } } };
+  } };
+  const member = { username: "member", role: "member" };
+  const actions = createActionCatalogue({ events: { async publish() {} } });
+  actions.register({ contributorId: "accounts", domain: "accounts", actions: createActions({ accounts })
+    .map(action => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
+  registerVibe64ActionContext(actions, { resolveUser: async () => member,
+    authorizeProject() { assert.fail("A Git identity belongs to the person, not a project."); } });
+  const catalog = createServiceToolCatalog(actions);
+  const context = { channel: "automation", surface: "app" };
+  const toolSet = catalog.resolveToolSet(context);
+  const tool = toolSet.tools.find(entry => entry.actionId === "vibe64.accounts.git-identity.save");
+  assert.match(tool.description, /values the person stated.*never guess/su);
+  const response = await catalog.executeToolCall({ toolName: tool.name, toolSet, context,
+    argumentsText: JSON.stringify({ gitUserName: "Ada Lovelace", gitUserEmail: "ada@example.test" }) });
+  assert.equal(response.ok, true, JSON.stringify(response));
+  assert.deepEqual(response.result, { ok: true, gitUserName: "Ada Lovelace", gitUserEmail: "ada@example.test" });
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].vibe64User, member, "the save runs as the signed-in person");
+  assert.equal(JSON.stringify(response).includes("private"), false);
+});
