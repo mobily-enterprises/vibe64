@@ -68,5 +68,6 @@ test("failed reports a failed or partial release and changed reports every chang
 
 test("a refused reading surfaces its reason instead of a guess", async () => {
   const source = publicationWatchSource({ actions: { async execute() { return { ok: false, error: "Open a project to publish it." }; } } });
-  await assert.rejects(source.read({ projectSlug: "books" }, {}), { message: "Open a project to publish it.", statusCode: 409 });
+  const refused = await source.read({ projectSlug: "books" }, {});
+  assert.throws(() => stateObservation(source, refused), { message: "Open a project to publish it.", statusCode: 409 });
 });

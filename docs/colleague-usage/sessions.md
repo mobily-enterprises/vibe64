@@ -248,7 +248,9 @@ Idle cleanup otherwise closes an open project, with its Preview, terminals and
 assistant processes, 30 to 35 minutes after its last recorded activity (opening
 it, session changes and assistant work). Leaving the project or closing the
 browser does not close it sooner; close the project yourself to free its
-memory at once. A running assistant turn or active goal keeps it open.
+memory at once, or ask Colleague to close it: it uses the same Close, which also
+stops other sessions' running work, and reports a failed Close as incomplete
+cleanup. A running assistant turn or active goal keeps it open.
 The pin survives server restarts. To change it, return to the pinned session and
 choose **Unpin session**; tab selection then controls the source link again.
 Other sessions show a disabled pin with **Unpin the project's pinned session first**.

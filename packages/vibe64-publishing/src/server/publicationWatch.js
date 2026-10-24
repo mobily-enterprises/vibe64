@@ -31,9 +31,8 @@ function publicationWatchSource({ actions }) {
     },
     async read({ projectSlug }, context) {
       const state = await actions.execute({ actionId: PUBLISHING_ACTIONS.STATE_READ, input: {}, context: { ...context, projectSlug } });
-      if (state?.ok === false) {
-        throw Object.assign(new Error(state.error || "The publication could not be read."), { statusCode: state.statusCode || 409 });
-      }
+      // Colleague reports a refused reading (ok false) with its own reason.
+      if (state?.ok === false) return state;
       const release = (state.releases || []).find((record) => record.kind === "release") || null;
       return {
         fingerprint: JSON.stringify([release?.id || "", release?.status || ""]),
