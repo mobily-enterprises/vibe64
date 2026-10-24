@@ -207,7 +207,9 @@ stay expanded. A card whose sign-in or key stopped working has an amber outline,
 a **Reconnect required** badge and **Reconnect [provider]**, which opens its
 connect step. Claude's card adds **Upgrade your experience** when you use
 another AI. Choose **Use [provider] as my main AI** (on the other cards **Use as
-main AI**) to switch, or **Get** another provider to add it. When switching
+main AI**) to switch, or **Get** another provider to add it. While Vibe64 is
+still reading which AI is your main one, connected cards show a spinning,
+disabled button instead. When switching
 would replace the model Vibe64 builds with, **Build with [provider]?** offers
 two choices: **Use [provider] for building** applies the suggested models in the
 tool the provider is connected through and moves Colleague; **Keep [current]

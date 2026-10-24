@@ -79,7 +79,7 @@ beforeEach(() => {
   mocks.openCode = { connections: ref([]), loadError: ref(""), isInitialLoading: ref(false), reload: vi.fn().mockResolvedValue({}),
     removingProviderId: ref(""), savingProviderId: ref(""), updatingModelAccessProviderId: ref("") };
   mocks.routing = { resource: { reload: vi.fn().mockResolvedValue({}), data: ref({ revision: 4 }) }, setups: ref(null), viewerDecisions: ref({}),
-    team: ref({ available: false, ownerName: "", memberCount: 0 }) };
+    team: ref({ available: false, ownerName: "", memberCount: 0 }), loadError: ref("") };
   mocks.preferred = {};
   mocks.tools = { tools: ref([]), checking: ref(false), check: vi.fn().mockResolvedValue({}) };
   mocks.request = vi.fn(async () => ({ ok: true, setups: { owner: { roles: mocks.preferred } } }));
@@ -516,6 +516,8 @@ describe("flow", () => {
     expect([state.screen, state.wasSetUp]).toEqual(["choose", true]);
     const codex = state.cards.find(({ id }) => id === "codex");
     expect(codex).toMatchObject({ connected: true, through: ["codex"] });
+    expect(state.cardAction(codex)).toBe("checking");
+    routeSenior({ assignment: { engineId: "codex", modelProviderId: "openai", modelId: "gpt" } });
     expect(state.cardAction(codex)).toBe("keep");
     expect(state.cardAction(state.cards.find(({ id }) => id === "claude"))).toBe("get");
     mocks.curated.resource.data.value.providers.find(({ id }) => id === "deepseek").connected = true;
@@ -689,6 +691,7 @@ describe("flow", () => {
     onCodexOpenAi();
     const { state } = await flow({ setUp: true });
     const card = (id) => state.cards.find((item) => item.id === id);
+    routeSenior({ assignment: { engineId: "codex", modelProviderId: "openai", modelId: "gpt" } });
     expect(state.cardNote(card("codex"))).toBe("");
     expect(state.cardNote(card("claude"))).toBe(claude.upgrade);
     expect(state.connectedLabel(card("codex"))).toBe("Connected · in use");

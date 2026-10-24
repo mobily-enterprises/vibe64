@@ -136,9 +136,11 @@ const currentMarks = computed(() => [...connectedCards.value, ...(otherConnected
 const currentNames = computed(() => [...connectedCards.value.map(({ name }) => name), ...otherConnected.value]);
 // Advanced appears once anything is configured.
 const showAdvanced = computed(() => props.canConfigure && (wasSetUp.value || manager.configuredAiRows.value.length > 0));
-// Main AI: the card of the owner's Senior; before the AI setup is read, Colleague's model stands in.
+// Main AI: the card of the owner's Senior. Until the AI setup is read, which
+// card is main is unknown, so connected cards offer no switch yet.
 const ownerRoles = computed(() => setup.routing?.setups.value?.owner?.roles || null);
-const ownerSenior = computed(() => ownerRoles.value ? ownerRoles.value.senior?.effective || null : setup.colleague.value);
+const ownerSenior = computed(() => ownerRoles.value?.senior?.effective || null);
+const mainKnown = computed(() => Boolean(ownerRoles.value || setup.routing?.loadError.value));
 const mainAi = computed(() => setup.mainAi?.value?.card.connected ? setup.mainAi.value : null);
 const mainCard = computed(() => mainAi.value?.card || null);
 const nativeLogin = computed(() => ["anthropic", "openai"].includes(chosen.value?.connect.modelProviderId));
@@ -367,6 +369,7 @@ function needsReconnect(card) {
 function cardAction(card) {
   if (!card.connected) return needsReconnect(card) ? "reconnect" : "get";
   if (!wasSetUp.value) return "get";
+  if (!mainKnown.value) return "checking";
   return usesProvider(ownerSenior.value, card) ? "keep" : "main";
 }
 
@@ -702,6 +705,10 @@ defineExpose({ busy, doneLabel, screen, skippable, tourOffered, wasSetUp, back: 
                   >
                     {{ card.crown ? `Use ${card.name} as my main AI` : "Use as main AI" }}
                   </v-btn>
+                  <v-btn
+                    v-else-if="cardAction(card) === 'checking'" variant="tonal" size="large" loading disabled
+                    aria-label="Checking which AI is your main AI"
+                  />
                   <v-btn
                     v-else-if="cardAction(card) === 'reconnect'" color="warning" variant="flat" size="large"
                     :disabled="verifying" @click="connect(card, 'have')"
