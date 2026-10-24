@@ -358,13 +358,13 @@ describe("Preview project onboarding", () => {
   it("groups starters by technology in catalogue order, titled by their shared name prefix", async () => {
     const starter = (technology, name) => ({ id: `official:${technology}/${name}`, technology, name, description: name });
     const html = await render("new", {}, null, [
-      starter("jskit", "JSKIT · Basic app"), starter("jskit", "JSKIT · Accounts app"),
+      starter("jskit", "JSKIT · Basic app"), starter("jskit", "JSKIT · App with users"),
       starter("django", "Django · Basic app"), starter("spring-boot", "Spring Boot · Basic app"),
       starter("nextjs", "Next.js · Basic app"), starter("custom", "Plain starter")
     ]);
     const headings = [...html.matchAll(/<h3[^>]*>([^<]*)<\/h3>/gu)].map(([, text]) => text);
     expect(headings).toEqual(["JSKIT", "Django", "Spring Boot", "Next.js", "custom"]);
-    expect(html.indexOf("JSKIT · Accounts app")).toBeLessThan(html.indexOf("Django · Basic app"));
+    expect(html.indexOf("JSKIT · App with users")).toBeLessThan(html.indexOf("Django · Basic app"));
   });
   it("asks an existing project's purpose and never renders stale seed offers", async () => {
     const html = await render("adoption");

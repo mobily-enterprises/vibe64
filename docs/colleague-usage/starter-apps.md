@@ -4,9 +4,9 @@ In an empty project's onboarding, starters are grouped by technology. Choose
 the JSKIT starter that matches the app:
 
 - **Basic app**: responsive shell, server/client/browser tests, no database or login.
-- **Database app**: the same shell plus MySQL migrations and isolated database
+- **App with no users, but a database**: the same shell plus MySQL migrations and isolated database
   tests, without accounts.
-- **Accounts app**: sign-up, login, private pages and persisted profiles, plus
+- **App with users**: sign-up, login, private pages and persisted profiles, plus
   account-persistence and browser tests.
 
 For another framework, each of Django, Rails, Spring Boot, Express and Next.js

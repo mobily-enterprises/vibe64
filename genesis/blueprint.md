@@ -948,7 +948,7 @@ and workspace preparation.
 Starter selection waits briefly for session initialization. Once its source is
 added, a later setup-check failure is shown as a setup problem with recheck,
 without presenting the completed import as a failed action.
-The official JSKIT choices are Basic app, Database app and Accounts app, with
+The official JSKIT choices are Basic app, App with no users, but a database and App with users, with
 ready server, client and browser tests. Database adds persistence without login;
 Accounts adds authentication and persisted profiles. Database-backed starters
 declare separate integration and browser-test databases.

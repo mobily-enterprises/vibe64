@@ -3,7 +3,7 @@
 This continues [Previewing a web application](preview.md).
 
 In an empty project's **Preview**, choose **Use this starter** on the desired
-Basic, Database, or Accounts app. On mobile, open **Show project** first. Import
+starter, such as Basic app, App with no users, but a database, or App with users. On mobile, open **Show project** first. Import
 adds source to this session; review it and use **Save** to keep it in the project.
 Setup and running the app are separate operations.
 

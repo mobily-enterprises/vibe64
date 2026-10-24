@@ -58,8 +58,8 @@ work. Public applications and non-web projects do not need preview accounts.
 1. Open the project and create or select its coding session. At **What would you
    like to build with?**, review the available starter cards, grouped by
    technology. The official catalogue lists JSKIT first: **JSKIT · Basic app**
-   (no accounts or database), **JSKIT · Database app** (MySQL, no accounts) and
-   **JSKIT · Accounts app** (sign-up, login and MySQL). Then one **Basic app**
+   (no accounts or database), **JSKIT · App with no users, but a database** (MySQL) and
+   **JSKIT · App with users** (sign-up, login and MySQL). Then one **Basic app**
    each for Django, Rails, Spring Boot, Express and Next.js: a small notes form
    saved to SQLite (MySQL/MariaDB for Spring Boot), with ready tests. Only the
    Rails starter has sign-in, with a seeded development account

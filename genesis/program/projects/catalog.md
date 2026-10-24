@@ -56,7 +56,8 @@ workspace.
 
 ## Public contract
 
-Official JSKIT starter choices are Basic app, Database app and Accounts app.
+Official JSKIT starter choices are Basic app, App with no users, but a database and
+App with users.
 They include server/client/browser tests and a declared browser-tests target;
 Database adds MySQL migrations without login, while Accounts adds authentication
 and account-persistence tests. Import and Workspace setup remain separate.
