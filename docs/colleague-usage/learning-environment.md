@@ -59,41 +59,52 @@ names the lesson and plays its current step, beat by beat. How it works is in
 
 ## The Lesson pane
 
-In Learn mode the current lesson is read on the project page itself, beside
+In Learn mode the current lesson is read on the page itself, beside
 Colleague, your teacher. The **Lesson** pane is the one place a lesson is read:
 the step list, the current step with its text, diagram, question or check,
 **Show me** and **Teach me** (see [Reading a lesson](#reading-a-lesson)), and
 the lesson's **Lesson finished** screen. Starting, continuing or resuming a
-lesson from Courses and Colleague's **Step N/M** button both open it here, at the step you were reading.
+lesson from Courses and Colleague's **Step N/M** button both open it, at the step you were reading.
 
-- **On the lesson's practice project** the header switch reads **Preview** and
-  **Dash** (Dashboard), and the lesson step bar has a **Lesson** button. Press
-  **Lesson** to read the lesson: the button stays pressed and neither
-  **Preview** nor **Dash** is selected while it shows. Select **Preview** or
-  **Dash** to leave it; Preview keeps running behind the lesson, so its App is
-  still there. The address ends in `?pane=lesson`, so a reload, or **L** back
-  to Learn, returns to the Lesson pane.
-- The Lesson pane has a soft yellow background, the colour of the step bar and
-  the **L** button, so it is clearly the learning part of the page.
+The lesson is an on/off toggle of its own, separate from **Preview** and
+**Dash**:
+
+- **On the lesson's practice project** the header shows the **Preview** |
+  **Dash** switch and, after a thin divider, the **Lesson** toggle: a pill with
+  a school icon and a small switch. Off, it is outlined and its switch is to
+  the left (tooltip **Show lesson**). Press it and it turns solid Learning
+  yellow with its switch to the right and a check (tooltip **Hide lesson**):
+  the lesson now covers whichever of **Preview** or **Dash** was selected, as
+  a yellow sheet with **Lesson** and a **Hide lesson** button at its top.
+- **Pressing Lesson again hides the lesson.** So does **Hide lesson** on the
+  sheet, or choosing **Preview** or **Dash** (that one then shows). What it
+  covered is exactly as you left it: Preview is not reloaded and keeps its
+  App's page, and Dash keeps its section. **Preview** or **Dash** stays
+  selected in the switch while the lesson covers it.
+- The address carries the toggle as `?lesson=1`, apart from the pane, so a
+  reload, or **L** back to Learn, shows the lesson again over the same pane.
+- **On Management and other screens outside any project** (a studio lesson)
+  the toggle is on the lesson step bar. The lesson then lies over the right
+  side of the page (all of it on a phone) without moving or narrowing the
+  page underneath; it stays shown as you move between that page's tabs until
+  you hide it.
 - **On a lesson without a practice project** there is no
-  coding session, so there is no chat column and no pane switches: the Lesson
+  coding session, so there is no chat column and no toggle: the Lesson
   pane fills the page.
 - The reader lays itself out by the width it has: in a narrow pane (on a
   phone, or beside the chat column and an open Colleague) the step list becomes
   a row of numbered circles at the top (a tick for a passed step); the step
   text scrolls below them. When there are more circles than fit, the row
-  scrolls sideways and follows the current step as you press **Next step** or
-  **Previous step**, or reopen the lesson, so the step you are reading always
-  stays in view.
+  scrolls sideways and follows the current step as you move through the
+  lesson, so the step you are reading always stays in view.
 - Your reading place (step and scroll position) is saved for your account. A
   reload in the same tab returns to it; in another browser the lesson opens at
   the step you last read.
 - On a phone (and other narrow screens up to 980px wide) the page shows one
-  side at a time: the chat or the project pane. The next-pane button at the top
-  goes from **Preview** to **Dash** and back, showing the next pane's name; from
-  the Lesson pane it goes to **Preview**, and **Lesson** on the yellow step bar
-  brings the lesson back. Without a practice project there is only the Lesson
-  pane, so the button is not shown.
+  side at a time: the chat or the project. The next-pane button at the top
+  goes from **Preview** to **Dash** and back, showing the next pane's name
+  (from under the lesson it hides the lesson too). The **Lesson** toggle is
+  beside it; turning it on shows the project side with the lesson over it.
 
 ## No project selected and `/app`
 
@@ -136,13 +147,16 @@ project page.
 the Courses overlay above the page: the
 catalogue where you choose, start and manage lessons. It fills the screen, with
 a **Courses** tab, an **In progress** tab and an **Archived** tab, and at the
-right a blue **Back to editor** button and a close button (×, **Close
-Courses**). A lesson is not read here: opening
+right a blue **Continue lesson** button (while a lesson is in progress) and
+a **Back** button. A lesson is not read here: opening
 one closes Courses and shows it in the page's
 [Lesson pane](#the-lesson-pane).
 
-- Press **Back to editor**, × or Escape to close it. The page you were on, and Colleague, are
-  visible again.
+- Press **Back** or Escape to close Courses. The page you were on (the
+  editor, Management or any other page), and Colleague, are visible again,
+  exactly as you left them.
+- Press **Continue lesson** to go on with your lesson where it runs: for a
+  project lesson its practice project, with the lesson shown.
 - Press **Courses** again to come back to the same tab.
 - A reload of the page leaves Courses closed; this tab remembers which Courses
   tab you were on for the next time you press **Courses**. In another browser it

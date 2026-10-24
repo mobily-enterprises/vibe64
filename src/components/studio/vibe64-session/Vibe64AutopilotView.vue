@@ -861,11 +861,8 @@
         </v-dialog>
       </section>
 
-      <!-- Learn mode's Lesson pane; Preview stays mounted (and running) behind it. -->
-      <Vibe64LearningLessonPane
-        v-if="props.projectPane === 'lesson' && props.active"
-        class="studio-autopilot__right-pane-page"
-      />
+      <!-- Learn mode's lesson, its toggle on: a sheet over Preview or Dash, which stay mounted (and running) under it. -->
+      <Vibe64LessonSheet v-if="lessonShown && props.active" />
       <div
         v-show="props.projectPane === 'preview'"
         class="studio-autopilot__right-pane-page"
@@ -892,7 +889,7 @@
             :preview-goal-state="props.conversationRuntime?.goalState"
             class="studio-autopilot__preview-launch"
             embedded-preview
-            :preview-displayed="props.projectPane === 'preview'"
+            :preview-displayed="props.projectPane === 'preview' && !lessonShown"
             :session="props.session"
             :source-operations-suspended="sourceOperationsSuspended"
             :toolbar-teleport-target="props.projectPane === 'preview' ? props.previewToolbarTeleportTarget : ''"
@@ -1069,7 +1066,8 @@ import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import { useDisplay } from "vuetify";
 import Vibe64TemporaryAiWorkspace from "@/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue";
 import Vibe64DashboardShell from "@/components/studio/Vibe64DashboardShell.vue";
-import Vibe64LearningLessonPane from "@/components/learning/Vibe64LearningLessonPane.vue";
+import Vibe64LessonSheet from "@/components/learning/Vibe64LessonSheet.vue";
+import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { vibe64SessionToolGuideId } from "@/lib/vibe64SessionToolDefinitions.js";
 import { writeClipboardText } from "@/lib/clipboard.js";
 import { resolveStudioRequestUrl } from "@/lib/studioUrls.js";
@@ -1096,6 +1094,8 @@ import {
 
 const emit = defineEmits(vibe64AutopilotViewEmits);
 const props = defineProps(vibe64AutopilotViewProps);
+const learning = useVibe64Learning();
+const lessonShown = computed(() => Boolean(learning?.lessonShown));
 const resourceRecoveryControl = inject(VIBE64_RESOURCE_RECOVERY_KEY, null);
 const architectureFileRequest = ref(null);
 const architectureProgramRequest = ref(null);

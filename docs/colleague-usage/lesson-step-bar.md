@@ -1,31 +1,44 @@
 # The lesson step bar
 
 The yellow lesson step bar above the project page plays the current lesson
-step: its position, beats, **Lesson** and **Courses**. The rest of
+step: its position, beats, **Back** and **Next**, and **Courses**. The rest of
 Learn mode is in [The Learning environment](learning-environment.md).
 
 In Learn mode, while your lesson is loaded, a yellow bar above the project page
-names the lesson and shows **Step N of M** with the step's title and status.
-**Previous step** and **Next step** (arrow buttons) move through the steps.
-**Lesson** (a school-cap icon), on a lesson with a practice project, shows the
-lesson in the project pane at its current step, with everything for it: its
-text, diagram and **Play**, **Done**, **Mark as done**, its question or **Check
-now**, **Show me**, **Teach me**, **I'm stuck** and **Previous step**/**Next
-step** (see [The Lesson pane](learning-environment.md#the-lesson-pane)). It
-stays pressed while the lesson shows, and the header's **Preview** or **Dash**
-leaves it. On a lesson without a practice project the lesson is already the
-whole page, so the bar has no **Lesson** button.
-**Courses**, at its right end (a book icon
-on a phone), opens the Courses overlay to choose another lesson. The bar is
-always shown in full; it cannot be collapsed or hidden. On a phone the lesson
-name is hidden.
+names the lesson and shows **Step N of M** (this step's number among all the
+lesson's steps) with the step's title and status.
+
+**Moving through the lesson.** One labelled pair of buttons, with the same
+names for screen readers and the keyboard:
+
+- **Back** goes back one part of this step, or into the previous step from its
+  first part. It is greyed out at the very start of the lesson.
+- The forward button says exactly what it does: **Next** while this step has
+  more parts, **Next step** on its last part (and on a step without parts),
+  and **Finish** on the last step once every required step is done (it shows
+  the **Lesson finished** screen). On the last step before that there is no
+  forward button. There is no second **Next step** button.
+
+On a practice project the **Lesson** toggle is in the header beside **Preview**
+| **Dash** (see [The Lesson pane](learning-environment.md#the-lesson-pane)); on
+Management and other screens outside any project it is on the bar, between
+the forward button and **Courses**. Press it to show the lesson (it turns
+yellow with its switch on); press it again to hide it. On a lesson without a
+practice project the lesson is already the whole page, so there is no toggle.
+
+Away from the lesson's practice project (for example on Management), the bar
+also offers **Open practice project**, which goes back to that project's
+editor. **Courses**, at its right end (a book icon on a phone), opens the
+Courses overlay to choose another lesson. The bar is always shown in full; it
+cannot be collapsed or hidden. On a phone the lesson name is hidden.
 
 ### Steps with beats
 
 Some steps walk you through the real page from the bar itself, one short line
 (a *beat*) at a time, while the lesson stays where it is. The bar then shows
-the lesson name, **N/M** (the step) and a dot per beat (the filled dot is the
-current one), then the beat's line:
+the lesson name, **Step N of M** and a dot per beat, the parts of this step
+(the filled dot is the current one; hovering the dots says, for example,
+**This step: part 2 of 4**), then the beat's line:
 
 - A *show* line rings the place it names (for example the **Preview** tab or the
   coding chat) and moves on by itself after a few seconds; a thin line under
@@ -62,12 +75,12 @@ current one), then the beat's line:
   **Set up your AI**; see `learning-mode-ui`.
 - On a step you would finish with **Done**, doing every *do* line of it marks
   the step done by itself.
-- **Back** and **Next** (arrows) move one beat, and into the previous or next
-  step at either end.
+- **Back** and **Next** move one beat; on the step's last beat the forward
+  button reads **Next step** and goes into the next step.
 - After the last beat the bar shows the step's own control: **Done**, **Mark as
   done**, **Check my work** (an automatic check, or a review; a check that does
   not pass says why under the line) or **Answer in Lesson** for a question, which shows the
-  step in the Lesson pane. When the step has passed it shows **Next step**. **I'm stuck**
+  step in the Lesson pane, beside a quieter **Next step**. **I'm stuck**
   (on a *do* line, and after the last beat of a step that **Check my work**
   decides, until the step passes; also in the Lesson pane beside **Teach me**) opens
   Colleague and asks it for help with this step (see `learning-with-colleague`).
@@ -92,7 +105,8 @@ why, nothing is recorded, and you can press **Check again**. Colleague never
 runs a review or passes a step for you.
 
 This tab remembers the beat and the pause; another tab or device starts the
-step at its first beat. On a phone the bar has two lines: the position and arrows above,
-the beat's line and its one button below; **Courses** shows only its icon
-and **Lesson** its icon and name. A step without beats shows its title
-and status as before, and **Show me** when it can point at a place.
+step at its first beat. On a phone the bar has three tidy rows: the position
+with the icon buttons (**Courses**, **Open practice project** and, off a
+project, **Lesson**), then the beat's line and its one button, then **Back**
+at the left and the forward button at the right. A step without beats shows
+its title and status as before, and **Show me** when it can point at a place.

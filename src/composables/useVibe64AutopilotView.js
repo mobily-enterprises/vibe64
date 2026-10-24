@@ -258,7 +258,7 @@ function agentConnectionThinkingLabel({
 }
 
 function normalizeProjectPane(value = "") {
-  return ["dashboard", "lesson"].includes(value) ? value : "preview";
+  return value === "dashboard" ? value : "preview";
 }
 
 function sessionNavLabel(session = {}) {

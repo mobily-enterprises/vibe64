@@ -129,8 +129,9 @@ guide overlay 3000 above L 2400 above Colleague.
   ordinary Main chat send with `messageSource:"lesson"`, stored as turn
   metadata `source:"lesson"` and shown as **Sent by the lesson**). Save is
   pointed at only.
-- Lesson (`openLesson`, pressed from the layout owner's `lessonPane`): the step
-  bar shows the current step in the Lesson pane, whose reader renders
+- Lesson (`openLesson` turns the lesson's `?lesson=1` flag on, `toggleLesson`
+  and `hideLesson` turn it off; pressed from the layout owner's `lessonShown`):
+  the current step shows in the Lesson pane, whose reader renders
   `Vibe64LearningStep.vue` with every step control; the bar has no step panel
   of its own. A choice step's final beat state offers **Answer in Lesson**,
   which opens it.

@@ -35,7 +35,7 @@ each, and the one you see always follows the mode:
 
 In Learn mode, **Courses** (on the lesson step bar, or in the project menu beside **L**) is the catalogue
 where you choose and start lessons; your current lesson is read on the Learn
-page itself, in its **Lesson** tab beside Colleague (see `learning-environment`).
+page itself, in its **Lesson** sheet beside Colleague (the **Lesson** toggle) (see `learning-environment`).
 You can read lessons yourself without AI. Choose **Teach me** on a lesson step,
 or ask Colleague about your lesson, and Colleague teaches the current step.
 **Teach me** opens Colleague beside the step and sends "Teach me this step.";
@@ -51,12 +51,12 @@ passes the step for you:
   arrive in pages; Colleague reads every page before claiming a step's text is
   missing.
 - It points at, or with "show me" opens, the real Vibe64 places the step uses,
-  replays the step's diagram, can show your current step in the **Lesson** tab,
+  replays the step's diagram, can show your current step in the **Lesson** sheet (turning the toggle on),
   and can open **Courses** or close it so you see the app. Courses keeps its
   place while closed.
 - In Learn mode with a lesson in progress, Colleague's header shows a small
   yellow **Step N/M** button (a check once the step passed). Pressing it shows
-  that step in the page's **Lesson** tab (see `learning-environment`); on a
+  that step in the page's **Lesson** sheet (see `learning-environment`); on a
   phone Colleague's full-screen chat also minimises so the step is visible, and
   its avatar button brings Colleague back. It appears on the desktop panel, the
   phone's full-screen chat and during voice chat. Develop shows no step button.

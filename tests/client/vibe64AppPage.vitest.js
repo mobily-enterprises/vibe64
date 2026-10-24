@@ -137,7 +137,7 @@ describe("Vibe64 app page", () => {
     })).toBe(false);
   });
 
-  it("switches Preview and Dash in the header; the Lesson pane is the step bar's, and alone without a project", () => {
+  it("switches Preview and Dash in the header; the lesson is its own toggle, and alone without a project", () => {
     const ids = tabs => tabs.map(tab => tab.id);
     expect(ids(projectPaneTabs({ projectSlug: "alpha" }))).toEqual(["preview", "dashboard"]);
     expect(ids(projectPaneTabs({ projectSlug: "" }))).toEqual(["preview", "dashboard"]);
@@ -147,9 +147,8 @@ describe("Vibe64 app page", () => {
       .toEqual([["Preview", "Preview"], ["Dash", "Dashboard"]]);
   });
 
-  it("cycles the phone's next-pane pill through the panes in tab order, and leaves the Lesson pane for Preview", () => {
+  it("cycles the phone's next-pane pill through Preview and Dash (the lesson is not a pane)", () => {
     const practice = projectPaneTabs({ projectSlug: "training-abc", lesson: true });
-    expect(nextProjectPane(practice, "lesson")).toMatchObject({ pane: "preview", label: "Preview", ariaLabel: "Go to preview" });
     expect(nextProjectPane(practice, "preview")).toMatchObject({ pane: "dashboard", label: "Dash", name: "Dashboard", ariaLabel: "Go to dashboard" });
     expect(nextProjectPane(practice, "dashboard")).toMatchObject({ pane: "preview", ariaLabel: "Go to preview" });
     expect(nextProjectPane(projectPaneTabs({ projectSlug: "", lesson: true }), "lesson")).toBeNull();

@@ -1,13 +1,13 @@
 <script setup>
 import { computed, inject, nextTick, onBeforeUnmount, ref, toValue, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { mdiArrowLeft, mdiClose } from "@mdi/js";
+import { mdiArrowLeft, mdiArrowRight } from "@mdi/js";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import TrainingGuideOverlay from "@local/vibe64-training/client/guide-overlay";
 import { VIBE64_TRAINING_LEARNER_CHANGED_EVENT } from "@local/vibe64-training/shared/learner-events";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { projectSlugFromRoute } from "@/lib/vibe64ProjectScope.js";
-import { modeRedirect, orientationSelection } from "@/lib/vibe64Learning.js";
+import { modeRedirect, orientationSelection, withLesson } from "@/lib/vibe64Learning.js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { useVibe64LearningCourses } from "@/composables/useVibe64LearningCourses.js";
 import Vibe64LearningAttempts from "./Vibe64LearningAttempts.vue";
@@ -51,8 +51,8 @@ watch(() => [learning?.mode, route?.fullPath, learning?.state.modeBusy], (_value
   const modeChanged = Boolean(previous?.[0]) && previous[0] !== learning.mode;
   if (target.note && !modeChanged) learning.showNotice(target.note);
   // A Lesson finished screen whose practice project it just archived goes on
-  // in the Lesson pane of the mode's home.
-  void router.replace(learning.state.finished && learning.mode?.on ? `${target.path}?pane=lesson` : target.path);
+  // in the lesson shown on the mode's home.
+  void router.replace(learning.state.finished && learning.mode?.on ? withLesson(target.path) : target.path);
 }, { immediate: true });
 // A mode's note goes when L switches to the other mode.
 watch(() => learning?.mode?.on, (_on, wasOn) => {
@@ -131,6 +131,11 @@ function keepCurrent() {
   learning.cancelArchive();
   learning.orientationAnswered();
 }
+// Continue lesson: the current lesson (not a finished one's screen), shown where it runs.
+const continueOffered = computed(() => Boolean(learning?.mode?.on && learning.lessonAttemptId && !learning.state.finished));
+function continueLesson() {
+  void learning.openLesson().catch(cause => learning.showNotice(String(cause?.message || "The lesson could not open. Try again.")));
+}
 function keydown(event) {
   if (event.key === "Escape" && !event.defaultPrevented && !confirm.value) {
     event.stopPropagation();
@@ -163,17 +168,22 @@ function keydown(event) {
           {{ tab.label }}
         </button>
       </nav>
-      <!-- The labelled way out; the X stays for people who look for it. -->
+      <!-- Two labelled ways out, no bare X: Back closes Courses onto the page it
+           covers (your place there is kept); Continue lesson goes on with the
+           current lesson where it runs (its practice project for a project lesson). -->
       <v-btn
-        color="primary" variant="flat" rounded="pill" min-height="40" :prepend-icon="mdiArrowLeft"
-        class="vibe64-learning__exit" data-test="learning-back-to-editor" @click="learning.closeCourses()"
+        v-if="continueOffered" color="primary" variant="flat" rounded="pill" min-height="40" :append-icon="mdiArrowRight"
+        class="vibe64-learning__exit" data-test="learning-continue-lesson" @click="continueLesson"
       >
-        Back to editor
+        Continue lesson
       </v-btn>
       <v-btn
-        :icon="mdiClose" variant="text" min-width="48" min-height="48" aria-label="Close Courses"
-        title="Close Courses (your place is kept)" data-test="learning-hide" @click="learning.closeCourses()"
-      />
+        variant="tonal" rounded="pill" min-height="40" :prepend-icon="mdiArrowLeft"
+        class="vibe64-learning__exit" title="Close Courses (your place is kept)"
+        data-test="learning-back" @click="learning.closeCourses()"
+      >
+        Back
+      </v-btn>
     </header>
     <div class="vibe64-learning__content">
       <div v-if="surface === 'courses'" class="vibe64-learning__scroll">

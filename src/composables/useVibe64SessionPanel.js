@@ -466,9 +466,7 @@ function sessionRepositoryWorkState(workState = null) {
 }
 
 function normalizeProjectPane(value = "") {
-  return ["dashboard", "lesson", "preview"].includes(value)
-    ? value
-    : "preview";
+  return value === "dashboard" ? value : "preview";
 }
 
 function sessionPanelPageErrorMessage(error = "") {

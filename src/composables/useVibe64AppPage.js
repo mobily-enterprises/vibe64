@@ -34,6 +34,7 @@ import {
 } from "@/lib/studioGateApi.js";
 import { isPracticeProjectSlug, projectDisplayName } from "@/lib/vibe64PracticeProjectName.js";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
+import { lessonShownIn, withoutLesson } from "@/lib/vibe64Learning.js";
 import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
@@ -46,9 +47,10 @@ const PREVIEW_TOOLBAR_HOST_ID = "studio-home-shell-preview-toolbar";
 const PROJECT_RUNTIME_CLOSE_API_PATH = "/api/vibe64/project-runtime/close";
 const PROJECT_RUNTIME_OPEN_API_PATH = "/api/vibe64/project-runtime/open";
 // The project panes the header's Preview | Dash switch chooses between. Learn
-// mode's Lesson pane is not one of them: the lesson step bar's Lesson button
-// shows it, and while it shows neither of these is selected. A lesson without
-// a practice project is the lesson alone: no switch.
+// mode's lesson is not one of them: it is its own on/off flag (the Lesson
+// toggle beside the switch, ?lesson=1), a sheet covering whichever of these
+// is selected, which stays mounted under it. A lesson without a practice
+// project is the lesson alone: no switch.
 const PROJECT_PANES = Object.freeze({
   preview: Object.freeze({ id: "preview", label: "Preview", name: "Preview", icon: mdiApplicationOutline }),
   dashboard: Object.freeze({ id: "dashboard", label: "Dash", name: "Dashboard", icon: mdiViewDashboardOutline })
@@ -59,8 +61,7 @@ function projectPaneTabs({ projectSlug = "", lesson = false } = {}) {
   return !projectSlug && lesson ? [] : [preview, dashboard];
 }
 
-// The phone's "next pane" pill: the pane after the shown one, in tab order
-// (from the Lesson pane, the first).
+// The phone's "next pane" pill: the pane after the selected one, in tab order.
 function nextProjectPane(tabs = [], pane = "") {
   const index = tabs.findIndex(tab => tab.id === pane);
   const next = tabs[(index + 1) % tabs.length] || null;
@@ -157,18 +158,18 @@ function useVibe64AppPage() {
   const developmentBasePath = computed(() => projectAppPath(projectSlug.value));
   const dashboardBasePath = computed(() => `${developmentBasePath.value}/dashboard`);
   const dashboardRouteActive = computed(() => normalizedPath(route.path).startsWith(`${dashboardBasePath.value}/`));
-  // Learn mode's current lesson has a Lesson pane (?pane=lesson on the
-  // project's base path, shown by the step bar's Lesson button; the only pane
-  // without a project).
+  // Learn mode's current lesson has a Lesson sheet: over a practice project's
+  // Preview or Dash while its flag is on (?lesson=1, the Lesson toggle); the
+  // whole area without a project.
   const lessonPaneAvailable = computed(() => Boolean(learning?.learnMode && learning.lessonAttemptId));
+  const lessonShown = computed(() => lessonPaneAvailable.value && (!projectSlug.value || lessonShownIn(route.query)));
+  const lessonToggleVisible = computed(() => Boolean(projectSlug.value) && lessonPaneAvailable.value);
   // Without a project the panes are empty and switch in place; the pane and
   // the dashboard section live in the address, so Learn mode's place keeps them.
-  const emptyPane = computed(() => lessonPaneAvailable.value ? "lesson"
-    : route.query?.pane === "dashboard" ? "dashboard" : "preview");
+  const emptyPane = computed(() => route.query?.pane === "dashboard" ? "dashboard" : "preview");
   const emptySection = computed(() => typeof route.query?.section === "string" ? route.query.section : "");
   const projectPane = computed(() => !projectSlug.value ? emptyPane.value
-    : dashboardRouteActive.value ? "dashboard"
-      : route.query?.pane === "lesson" && lessonPaneAvailable.value ? "lesson" : "preview");
+    : dashboardRouteActive.value ? "dashboard" : "preview");
   const projectTabs = computed(() => projectPaneTabs({ projectSlug: projectSlug.value, lesson: lessonPaneAvailable.value }));
   // A lesson without a practice project has no coding session, so no chat column.
   const chatColumnVisible = computed(() => Boolean(projectSlug.value) || !lessonPaneAvailable.value);
@@ -207,10 +208,11 @@ function useVibe64AppPage() {
     get projectSlug() { return projectSlug.value; },
     get ready() { return projectPaneNavigationVisible.value; },
     get projectVisible() { return projectVisible.value; },
-    // The Lesson pane is on screen (Colleague's focus reports pane=lesson).
-    get lessonVisible() { return projectVisible.value && projectPane.value === "lesson"; },
-    // The project side shows the Lesson pane (the step bar's Lesson button is pressed).
-    get lessonPane() { return projectPane.value === "lesson"; },
+    // The lesson is on screen (Colleague's focus reports pane=lesson).
+    get lessonVisible() { return projectVisible.value && lessonShown.value; },
+    // The lesson's flag is on (the Lesson toggle is pressed).
+    get lessonShown() { return lessonShown.value; },
+    hideLesson,
     get chatVisible() { return chatColumnVisible.value && !chatCollapsed.value; },
     showProject: showProjectPane,
     showChat() { setChatCollapsed(false); }
@@ -297,10 +299,10 @@ function useVibe64AppPage() {
   );
 
   watch(projectSlug, retryProjectRuntime, { flush: "sync" });
-  // A phone shows one surface: opening the Lesson pane (a started lesson,
+  // A phone shows one surface: showing the lesson (a started lesson,
   // Colleague) shows the project side.
-  watch(projectPane, pane => {
-    if (pane === "lesson" && mobilePaneLayout.value) setChatCollapsed(true);
+  watch(lessonShown, shown => {
+    if (shown && mobilePaneLayout.value) setChatCollapsed(true);
   });
   watch(
     [projectOpenKey, () => openProjectRuntimeCommand.canRun, () => openProjectRuntimeCommand.isRunning],
@@ -408,6 +410,8 @@ function useVibe64AppPage() {
     showProjectPane,
     switcherProjects,
     learnMode,
+    lessonShown,
+    lessonToggleVisible,
     projectTitle
   };
 
@@ -426,19 +430,21 @@ function useVibe64AppPage() {
     setPageTitle(title);
   }
 
+  // The Lesson toggle pressed again: the flag goes off, uncovering the
+  // Preview or Dash view underneath as it was.
+  function hideLesson() {
+    if (lessonShownIn(route.query)) void router.replace({ path: route.path, query: withoutLesson(route.query) });
+  }
+
+  // Preview or Dash: that pane, uncovered (the lesson's flag goes off).
   function selectProjectPane(pane = "") {
-    const known = pane === "lesson" && lessonPaneAvailable.value ? pane
-      : projectTabs.value.some(tab => tab.id === pane) ? pane : "preview";
+    const known = projectTabs.value.some(tab => tab.id === pane) ? pane : "preview";
     if (!projectSlug.value) {
       void router.replace({ query: { ...route.query, pane: known } });
       return;
     }
     if (mobilePaneLayout.value) {
       setChatCollapsed(true);
-    }
-    if (known === "lesson") {
-      void router.push({ path: developmentBasePath.value, query: { pane: "lesson" } });
-      return;
     }
     if (known === "dashboard") {
       void router.push(dashboardReturnPath({

@@ -4,7 +4,7 @@ The **L** button switches between **Develop** (your own projects) and
 **Learn** (lessons); see [The Learning environment (L)](learning-environment.md).
 In Learn mode the app bar turns yellow, and **Courses** (at the right of the
 lesson step bar, or in the project menu beside **L**) opens the Courses overlay, the catalogue where
-lessons are chosen; a lesson itself is read in the page's **Lesson** tab. This
+lessons are chosen; a lesson itself is read in the page's **Lesson** sheet (the **Lesson** toggle). This
 guide describes the overlay's **Courses** tab. Its **In progress** and
 **Archived** tabs are described in
 [Practice projects](learning-practice-projects.md).
@@ -39,9 +39,10 @@ project. **Back to courses** returns to the list. On a phone the cards stack in
 one column and the course page scrolls in the same pane.
 
 The lesson card above the course cards is headed "Lesson in progress · code"
-with the lesson title and, once reported, a ring of required steps passed with
-"N of M required steps passed. This lesson is complete." or "Continue the
-remaining steps." **Continue lesson** opens that exact attempt. Disabled,
+with the lesson title and, once reported, a ring reading **N of M required done**, and
+"N of M required steps done. This lesson is complete." or "Continue the
+remaining steps." It counts only the required steps, so it can differ from
+the step bar's **Step N of M**, which counts every step. **Continue lesson** opens that exact attempt. Disabled,
 unavailable, loading and error states are shown on the same page. **Refresh
 courses** rereads installed courses, progress and the course catalogue; after a
 step result is saved, Courses refreshes that lesson's progress by itself. If
@@ -67,8 +68,8 @@ lesson: Creating your practice project. This can take a while; the lesson opens
 by itself when it is ready.** Other start buttons stay disabled until the
 request settles. If the start fails, the card says **The lesson did not start**
 with the reason. As soon as the start is
-confirmed, Courses closes by itself and the lesson opens in the **Lesson** tab
-of its practice project; you do not need **Continue lesson**. A practice project's Workspace setup can
+confirmed, Courses closes by itself and the lesson opens (its **Lesson** toggle on)
+over its practice project; you do not need **Continue lesson**. A practice project's Workspace setup can
 continue afterwards and the lesson becomes ready when setup succeeds (see
 [Practice projects](learning-practice-projects.md)). **Starting lessons is
 unavailable in this installation** appears only when the installation cannot
@@ -96,8 +97,8 @@ in progress, and **L** returns to it. When every required step has passed, the
 (see [The Learning environment (L)](learning-environment.md)).
 
 Starting or continuing a lesson, or **Open** under **In progress**, closes
-Courses and opens the lesson in the **Lesson** tab of its practice project; its
-**Preview** and **Dashboard** tabs are beside it. Setup repair there is ordinary project work
+Courses and opens the lesson over its practice project, with the **Lesson**
+toggle on beside the **Preview** | **Dash** switch; press it again to hide the lesson. Setup repair there is ordinary project work
 (ask that session's agent or use Workspace setup recovery); it is not a learner
 answer or a passed step.
 

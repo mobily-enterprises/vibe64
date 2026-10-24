@@ -100,6 +100,16 @@ function readPlace(actorKey) {
     beat: Number.isSafeInteger(value.beat) && value.beat >= 0 ? value.beat : 0, beatPaused: value.beatPaused === true };
 }
 
+// The lesson's own on/off flag in the address (?lesson=1), apart from the
+// project's Preview | Dash pane: while it is on, the Lesson sheet covers the
+// pane it is shown over (or docks beside a studio page).
+const lessonShownIn = query => query?.lesson === "1";
+const withLesson = path => `${path}?lesson=1`;
+function withoutLesson(query = {}) {
+  const { lesson: _lesson, ...rest } = query || {};
+  return rest;
+}
+
 // Each mode's last place in this browser (localStorage): the full route,
 // including the Preview/Dashboard pane and the dashboard section.
 const modePlaceKey = (actorKey, side) => `${MODE_PLACE_PREFIX}${actorKey}:${side}`;
@@ -522,8 +532,9 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   const openCourses = surface => show({ surface });
 
   // The Lesson pane of the Learn page: Learn mode on, Courses closed (not as
-  // the learner's own close), the step selected, and the lesson's home (its
-  // practice project, else /app/learning) showing its Lesson pane.
+  // the learner's own close), the step selected, and the lesson shown (its
+  // Lesson flag on) over the practice project's Preview or Dash where the
+  // learner is, else on the lesson's home.
   async function openLesson({ attemptId, stepId } = {}) {
     if (!state.actorKey) throw new Error("Sign in before opening a lesson.");
     let value = state.modeRead ? mode.value : await readLearningMode();
@@ -541,15 +552,15 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
       else Object.assign(state, { stepId, beat: 0 });
     }
     remember();
-    // A studio lesson docks its Lesson pane on the studio page showing a
-    // stage frame, and shows it as a project pane while the learner is in its
-    // practice project (not its Lesson finished screen: finishing archives
-    // that project); anything else goes to the lesson's home.
+    // In its practice project the lesson covers the Preview or Dash view the
+    // learner is on (not its Lesson finished screen: finishing archives that
+    // project); a studio lesson docks it on the studio page showing a stage
+    // frame; anything else goes to the lesson's home.
     const here = String(router?.currentRoute?.value?.path || "");
     const inPractice = !state.finished && Boolean(value.practiceSlug) && projectSlugFromPathname(here) === value.practiceSlug;
-    const home = value.lessonStage === "project" ? learnHomePath(value)
-      : layout?.value?.studio && here ? here : inPractice ? projectAppPath(value.practiceSlug) : learnHomePath(value);
-    const target = `${home}?pane=lesson`;
+    const home = inPractice ? here : value.lessonStage === "project" ? learnHomePath(value)
+      : layout?.value?.studio && here ? here : learnHomePath(value);
+    const target = withLesson(home);
     if (router && currentPath() !== target) await router.push(target);
     // A phone shows one side: the project side, where the Lesson pane is,
     // also when the address already names it (after L, or Show chat).
@@ -573,6 +584,11 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   }
 
   const closeCourses = () => minimise("learner");
+
+  // The Lesson toggle: pressing it again hides the lesson (its flag off); the
+  // Preview or Dash it covered is still there, as it was.
+  function hideLesson() { layout?.value?.hideLesson?.(); }
+  const toggleLesson = () => layout?.value?.lessonShown ? hideLesson() : openLesson();
 
   // The "Lesson finished" screen of the current lesson, in the Lesson pane:
   // shown when this learner's own step action completes the lesson, and again
@@ -1125,16 +1141,16 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     get lessonTitle() { return mode.value?.currentAttemptId ? mode.value.lessonTitle || mode.value.lessonCode || "" : ""; },
     get practice() { return practice.value; },
     get confirmArchive() { return confirmArchive.value; },
-    // The step bar's Lesson button: offered beside a practice project's
-    // Preview and Dash (a lesson without one is its only pane), pressed while
-    // the project page shows the Lesson pane.
-    get lessonSwitchable() { return Boolean(layout?.value?.projectSlug || layout?.value?.studio); },
-    get lessonShown() { return Boolean(layout?.value?.lessonPane); },
+    // The step bar's Lesson toggle: on a studio page (a practice project has
+    // its toggle beside Preview | Dash; a lesson without a project is its only
+    // pane). lessonShown: the toggle is pressed.
+    get lessonSwitchable() { return Boolean(layout?.value?.studio); },
+    get lessonShown() { return Boolean(layout?.value?.lessonShown); },
     get notice() { return state.notice; },
     get orientationRequested() { return state.orientationRequested; },
     lesson, results, steps, currentStep, focus, colleagueRequest, notes, notesState: readonly(notesState), player,
     stepStatus: stepId => stepStatus(results.value, stepId, lesson.value?.passedStepIds || []),
-    setViewer, show, openCourses, openLesson, closeCourses, showFinished, finishSummary, minimise, selectStep, setScroll, flushReader, loadLesson,
+    setViewer, show, openCourses, openLesson, hideLesson, toggleLesson, closeCourses, showFinished, finishSummary, minimise, selectStep, setScroll, flushReader, loadLesson,
     runCheck, answer, done, review, savedReview, reviewNote, showMe, teachMe, stuck, doItForMe, doItForMeKind, consumeColleagueRequest, learnerChanged,
     exerciseStep, beginExercise, exerciseCurrent, finishExercise, prepareExercise,
     readNotes, saveNotes, clearNotes,
@@ -1186,4 +1202,4 @@ function revealCurrentStep(list) {
   return true;
 }
 
-export { VIBE64_DEVELOP_MODE_NOTE, VIBE64_LEARNING_AI_REQUIRED_CODE, VIBE64_LEARNING_MODE_NOTE, VIBE64_LEARNING_MODE_PROJECT_CODE, VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_PAGE_PATH, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_STUCK_MESSAGE, VIBE64_LEARNING_TEACH_MESSAGE, VIBE64_LESSON_IN_PROGRESS_CODE, createVibe64Learning, modeRedirect, normalizePractice, openLessonLink, orientationSelection, reviewNote, revealCurrentStep, setLearningStudioHome, showMeCommand, stepStatus };
+export { VIBE64_DEVELOP_MODE_NOTE, VIBE64_LEARNING_AI_REQUIRED_CODE, VIBE64_LEARNING_MODE_NOTE, VIBE64_LEARNING_MODE_PROJECT_CODE, VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_PAGE_PATH, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_STUCK_MESSAGE, VIBE64_LEARNING_TEACH_MESSAGE, VIBE64_LESSON_IN_PROGRESS_CODE, createVibe64Learning, lessonShownIn, modeRedirect, normalizePractice, openLessonLink, orientationSelection, reviewNote, revealCurrentStep, setLearningStudioHome, showMeCommand, stepStatus, withLesson, withoutLesson };

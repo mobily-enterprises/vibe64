@@ -167,8 +167,9 @@ not passed, else the first step.
 
 The L button switches mode; in Learn it is followed by a Courses button
 (`openCourses`) and the lesson title. The overlay (`aria-label` Courses) has
-surfaces `courses`, `progress`, `archived` and `lesson`, and a close button
-(`closeCourses`, also Escape) that keeps its place. **In progress** and
+surfaces `courses`, `progress`, `archived` and `lesson`, a **Back** button
+(`closeCourses`, also Escape: back onto the page it covers, its place kept)
+and, with a lesson in progress, **Continue lesson** (`openLesson`); no bare X. **In progress** and
 **Archived** (`Vibe64LearningAttempts.vue`) show the one current row with Open
 (`openCurrent`: the lesson's place, overlay closed), Restart and Delete (each
 confirmed by a second click), and archived rows with Delete; a loader stands in
@@ -176,18 +177,25 @@ until the first `practice.list` read answers. The **Lesson finished**
 screen (`Vibe64LearningFinished.vue`) finishes its attempt once, then offers
 **Next lesson** (through `startLesson`) and **Back to courses**. The step bar
 (`Vibe64LearningStepBar.vue`, on the project page) shows the current lesson's
-step in Learn with Previous/Next, always in full (it has no collapse
-toggle). On a practice project its **Lesson** button (`openLesson`) shows the
-Lesson pane and stays pressed (`aria-pressed`, from the layout owner's
-`lessonPane`) while it shows; the header's Preview | Dash switch
-(`projectPaneTabs`: Preview and Dash, its accessible name Dashboard) has no
-Lesson tab, selects neither while the lesson shows, and leaves it. The Lesson
-pane (`Vibe64LearningLessonPane.vue`) wears the step bar's Learning yellow
+step in Learn as **Step N of M**, always in full (it has no collapse toggle),
+with one labelled navigation pair: **Back** and a forward button whose label
+is what it does (**Next** within the step's beats, **Next step** on its last
+part, **Finish** (`showFinished`) on a complete lesson's last step). Away from
+the practice project it offers **Open practice project**. The lesson is an
+on/off flag apart from the pane (`?lesson=1`; `lessonShownIn`, `withLesson`,
+`withoutLesson`): the header's Preview | Dash switch (`projectPaneTabs`: Preview
+and Dash, its accessible name Dashboard) is followed by the **Lesson** toggle
+(`Vibe64LessonToggle.vue`, `aria-pressed` from the layout owner's
+`lessonShown`, `toggleLesson`), which is on the step bar instead on a studio
+page (`lessonSwitchable`). On, `Vibe64LessonSheet.vue` covers the selected pane,
+which stays mounted (the Preview iframe is not reloaded), with its own **Hide
+lesson** (`hideLesson`, the layout owner's); choosing Preview or Dash drops
+the flag. The Lesson pane (`Vibe64LearningLessonPane.vue`) wears the step bar's Learning yellow
 (`--v64-learning-container`) so it reads as learning, apart from the project's
 own panes; the reader's current step is a surface card with the
 `--v64-learning-strong` stroke on it. `openLesson` also asks the page layout (`VIBE64_COLLEAGUE_LAYOUT_KEY`,
 passed to the controller as `layout`) to show the project side, so on a phone
-it reveals the Lesson pane even when the address already names it. The project picker (`ProjectSelectionGate`) never lists
+it reveals the lesson even when the address already shows it. The project picker (`ProjectSelectionGate`) never lists
 practice projects and, for a mode refusal, shows the server's message with
 **Switch to Develop/Learn**; a deleted practice project points to Courses →
 Archived.
@@ -234,7 +242,7 @@ name keeps one meaning. A project place opens in the project and session the
 initiating browser has open; a route place opens at its route, acknowledged by
 the browser's focus `route`. Each place is
 a path of `data-vibe64-guide` ids on existing controls: the project page's
-Preview/Dash tabs, the step bar's Lesson button, the L button, the real Dashboard section items
+Preview/Dash tabs, the Lesson toggle, the L button, the real Dashboard section items
 (`guideId` in `vibe64SessionToolDefinitions.js`), the Database
 Overview/ERD/Data toggle, and file-tree rows (`data-vibe64-guide-path`). Lessons
 supply no selectors. An open place's pane also carries
@@ -300,10 +308,11 @@ it (`learnHomePath`): a project lesson's practice project, else the host's
 studio home, `/app/learning` here; a host with its own studio pages sets its
 own with `setLearningStudioHome`. The learning-mode read carries the current
 lesson's `lessonStage`. `Vibe64LearningStage.vue` is the one stage frame: a
-project shell mounts it bare (the step bar; its Lesson pane is a project
-pane), and a studio page wraps its content in it with `studio`, so the step
-bar's Lesson button docks the same Lesson pane beside the page
-(`?pane=lesson`, over it on a phone) with a close button, and the frame owns
+project shell mounts it bare (the step bar; its lesson is a sheet over
+Preview or Dash), and a studio page wraps its content in it with `studio`, so
+the step bar's Lesson toggle (`?lesson=1`) lays the same Lesson sheet over the
+page's right side from a zero-width sticky anchor (the whole page on a phone)
+without reflowing the page, and the frame owns
 the Colleague layout while it shows. A step is available here when every
 place, activity and fact it names is registered and its places are open to
 the viewer; lesson.read leaves the others out and completion counts only the

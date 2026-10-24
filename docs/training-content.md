@@ -83,7 +83,7 @@ declare them.
 A v3 `lesson.json` declares `schemaVersion: 3` and everything v2 has, plus
 `stage`: `"project"` for a lesson taught in its practice project (it needs its
 `exercise`), or `"studio"` for one taught on the screens outside any project
-(its Lesson pane docks beside the page). Learn mode opens a lesson where its
+(its Lesson sheet lies over the page while the Lesson toggle is on). Learn mode opens a lesson where its
 stage says.
 
 A step may check a fact: `"check": { "kind": "fact", "fact": "ai-ready" }`,
@@ -200,7 +200,7 @@ One beat per line: `<show|do|check> <target>[ <path>]: <text>`.
   step's `check.rubric` from `lesson.json`, its single source.
 - Places: `preview`, `dashboard`, `database-erd`, `database-data`, `files`,
   `changes`, `git-log`, `session-info`, `architecture`, `learning` (the **L**
-  button), `lesson` (the step bar's **Lesson** button), `chat` (the coding chat), `colleague`,
+  button), `lesson` (the **Lesson** toggle), `chat` (the coding chat), `colleague`,
   `courses`, `lesson-bar` (the bar itself), `save` and `reload-preview`.
   `dashboard` and `lesson-bar` can only be shown.
 - 1–8 beats. Only `lesson`, `lesson-bar`, `courses`, `learning`,

@@ -1,22 +1,28 @@
 <script setup>
 import { computed, ref, watch } from "vue";
-import { mdiBookOpenPageVariantOutline, mdiChevronLeft, mdiChevronRight, mdiPause, mdiPlay, mdiSchoolOutline } from "@mdi/js";
+import { useRoute, useRouter } from "vue-router";
+import { mdiApplicationOutline, mdiBookOpenPageVariantOutline, mdiChevronLeft, mdiChevronRight, mdiPause, mdiPlay } from "@mdi/js";
 import { aiOnboardingAvailable, aiOnboardingNeeded, requestVibe64AiOnboarding } from "@local/vibe64-accounts/client";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
+import { projectAppPath, projectSlugFromPathname } from "@/lib/vibe64ProjectScope.js";
+import Vibe64LessonToggle from "./Vibe64LessonToggle.vue";
 
 // The current lesson's step bar, at the top of the project page in Learn
 // mode (also with no project selected): the lesson companion. It names the
-// lesson and its current step. A step with beats plays them here one line at
-// a time (dots show where), pointing at the real places; Back/Next move by
-// beat into the neighbouring steps, and after the last beat the step's own
-// verdict control and Next step appear. A step without beats shows its title
-// and status, with Show me when it declares a guide. Lesson shows the lesson
-// itself, at its current step with every control, in the project pane
-// (pressed while it shows; the header's Preview | Dash leave it). Courses,
-// always on it, is the way out to the catalogue. It
-// is always this one line (two on a phone); it does not collapse. While the lesson waits for the
-// learner's AI (its practice project could not be prepared without one), the
-// line says so instead and offers Set up your AI.
+// lesson and says "Step 3 of 12". A step with beats plays them here one line
+// at a time (dots show the parts of this step), pointing at the real places.
+// One labelled pair moves through the lesson: Back, and a forward button
+// that says what it does: Next to this step's next part, Next step from its
+// last part (where the step's own verdict control also shows), Finish on a
+// complete lesson's last step. A step without beats shows its title and
+// status, with Show me when it declares a guide. On a studio page the Lesson
+// toggle shows the lesson itself over the page (a practice project has it
+// beside Preview | Dash); away from the lesson's practice project, Open
+// practice project goes back to it. Courses, always on it, is the way out to
+// the catalogue. It is always this one line (three tidy rows on a phone); it
+// does not collapse. While the lesson waits for the learner's AI (its
+// practice project could not be prepared without one), the line says so
+// instead and offers Set up your AI.
 const learning = useVibe64Learning();
 const lesson = computed(() => learning?.lesson.value || null);
 const steps = computed(() => lesson.value?.steps || []);
@@ -116,8 +122,23 @@ const go = offset => {
   const next = steps.value[index.value + offset];
   if (next) learning.selectStep(next.id);
 };
+const partLabel = computed(() => `This step: part ${Math.min(beatIndex.value + 1, beats.value.length)} of ${beats.value.length}`);
 const back = () => beats.value.length ? player.value.back() : go(-1);
-const forward = () => beats.value.length ? player.value.next() : go(1);
+const atStart = computed(() => beats.value.length ? Boolean(player.value?.atStart) : index.value <= 0);
+const lastStep = computed(() => index.value >= steps.value.length - 1);
+// The one forward button: its label is exactly what it does.
+const forwardAction = computed(() => {
+  if (beats.value.length && !player.value?.final) return { label: "Next", run: () => player.value.next() };
+  if (!lastStep.value) return { label: "Next step", run: () => beats.value.length ? player.value.next() : go(1) };
+  return learning?.complete && !ended.value ? { label: "Finish", run: () => learning.showFinished() } : null;
+});
+// Away from the lesson's practice project (Management, another studio page): the way back to it.
+const route = useRoute();
+const router = useRouter();
+const practiceSlug = computed(() => learning?.mode?.practiceSlug || lesson.value?.practiceProjectSlug || "");
+const practiceAway = computed(() => Boolean(practiceSlug.value && !ended.value &&
+  projectSlugFromPathname(String(route?.path || "")) !== practiceSlug.value));
+const openPractice = () => router?.push(projectAppPath(practiceSlug.value));
 </script>
 
 <template>
@@ -135,13 +156,13 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
     >
       <div class="vibe64-learning-step-bar__position">
         <span class="vibe64-learning-step-bar__lesson">{{ lesson.title || lesson.code }}</span>
-        <span class="vibe64-learning-step-bar__step">
-          <template v-if="beats.length">{{ index + 1 }}/{{ steps.length }}</template>
+        <span class="vibe64-learning-step-bar__step" data-test="learning-step-bar-position">
+          <template v-if="beats.length">Step {{ index + 1 }} of {{ steps.length }}</template>
           <template v-else>Step {{ index + 1 }} of {{ steps.length }}: {{ step.title }}</template>
         </span>
         <span
           v-if="beats.length" class="vibe64-learning-step-bar__dots" role="img"
-          :aria-label="`Part ${Math.min(beatIndex + 1, beats.length)} of ${beats.length}`" data-test="learning-step-bar-dots"
+          :aria-label="partLabel" :title="partLabel" data-test="learning-step-bar-dots"
         >
           <span
             v-for="(item, position) in beats" :key="position" class="vibe64-learning-step-bar__dot"
@@ -183,12 +204,6 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
           I'm stuck
         </v-btn>
         <v-btn
-          v-else-if="final && !verdict && index < steps.length - 1" color="primary" variant="tonal" rounded="pill" min-height="40"
-          data-test="learning-step-bar-next-step" @click="forward"
-        >
-          Next step
-        </v-btn>
-        <v-btn
           v-if="!beats.length && step.guide && !ended" variant="tonal" rounded="pill" min-height="40"
           data-test="learning-step-bar-show-me" @click="showMe"
         >
@@ -203,27 +218,31 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
           Set up your AI
         </v-btn>
       </div>
-      <div class="vibe64-learning-step-bar__controls">
+      <nav class="vibe64-learning-step-bar__controls" aria-label="Lesson navigation">
         <v-btn
           v-if="beat?.kind === 'show' && !aiRequired" :icon="player.paused ? mdiPlay : mdiPause" variant="text" size="small" min-width="40" min-height="40"
           :aria-label="player.paused ? 'Play' : 'Pause'" data-test="learning-step-bar-pause" @click="player.togglePause()"
         />
         <v-btn
-          :icon="mdiChevronLeft" variant="text" size="small" min-width="40" min-height="40" :aria-label="beats.length ? 'Back' : 'Previous step'"
-          :disabled="beats.length ? player.atStart : index <= 0" data-test="learning-step-bar-previous" @click="back"
-        />
+          variant="text" rounded="pill" min-height="40" :prepend-icon="mdiChevronLeft" :disabled="atStart"
+          data-test="learning-step-bar-previous" @click="back"
+        >
+          Back
+        </v-btn>
         <v-btn
-          :icon="mdiChevronRight" variant="text" size="small" min-width="40" min-height="40" :aria-label="beats.length ? 'Next' : 'Next step'"
-          :disabled="beats.length ? player.atEnd : index >= steps.length - 1" data-test="learning-step-bar-next" @click="forward"
-        />
-      </div>
+          v-if="forwardAction" :variant="final && verdict ? 'text' : 'tonal'" color="primary" rounded="pill" min-height="40"
+          :append-icon="mdiChevronRight" data-test="learning-step-bar-next" @click="forwardAction.run()"
+        >
+          {{ forwardAction.label }}
+        </v-btn>
+      </nav>
+      <span v-if="learning.lessonSwitchable" class="vibe64-learning-step-bar__lesson-toggle"><Vibe64LessonToggle /></span>
       <v-btn
-        v-if="learning.lessonSwitchable" variant="tonal" rounded="pill" min-height="40" min-width="40" :prepend-icon="mdiSchoolOutline"
-        class="vibe64-learning-step-bar__lesson-pane" :class="{ 'is-pressed': learning.lessonShown }"
-        :aria-pressed="learning.lessonShown ? 'true' : 'false'" data-test="learning-step-bar-lesson" data-vibe64-guide="lesson"
-        @click="learning.openLesson()"
+        v-if="practiceAway" variant="tonal" rounded="pill" min-height="40" min-width="40" :prepend-icon="mdiApplicationOutline"
+        class="vibe64-learning-step-bar__practice" aria-label="Open practice project" data-test="learning-step-bar-practice"
+        @click="openPractice"
       >
-        Lesson
+        <span class="vibe64-learning-step-bar__practice-label">Open practice project</span>
       </v-btn>
       <v-btn
         variant="tonal" rounded="pill" min-height="40" min-width="40" :prepend-icon="mdiBookOpenPageVariantOutline"
@@ -287,24 +306,28 @@ const forward = () => beats.value.length ? player.value.next() : go(1);
   transition: transform 100ms linear;
 }
 .vibe64-learning-step-bar .v-btn { letter-spacing: 0; text-transform: none; }
-.vibe64-learning-step-bar__lesson-pane.is-pressed { background: var(--v64-learning, #f5c518); color: var(--v64-on-learning, #2b2100); font-weight: 700; }
+.vibe64-learning-step-bar__step { font-variant-numeric: tabular-nums; }
+.vibe64-learning-step-bar__lesson-toggle { display: inline-flex; flex: 0 0 auto; }
 
 @media (prefers-reduced-motion: reduce) {
   .vibe64-learning-step-bar__progress { transition: none; }
 }
 
-/* A phone: line 1 is the position and controls, line 2 the beat and its one action. */
+/* A phone: three tidy rows. Row 1 the position with the icon buttons, row 2
+   the beat (or step status) and its one action, row 3 Back and the forward
+   button at either end. */
 @media (max-width: 600px) {
   .vibe64-learning-step-bar { column-gap: 4px; flex-wrap: wrap; row-gap: 0; }
   /* One action on the beat's line: I'm stuck stays in the Lesson pane's step beside Do it for me. */
   .vibe64-learning-step-bar__stuck--beside { display: none; }
   .vibe64-learning-step-bar__lesson { display: none; }
-  .vibe64-learning-step-bar--beats .vibe64-learning-step-bar__position { flex: 1 1 auto; }
-  .vibe64-learning-step-bar--beats .vibe64-learning-step-bar__line { flex-basis: 100%; order: 3; padding: 0 0 6px 8px; }
-  .vibe64-learning-step-bar__courses { padding-inline: 0; }
-  .vibe64-learning-step-bar__lesson-pane { padding-inline: 8px; }
-  .vibe64-learning-step-bar__lesson-pane :deep(.v-btn__prepend) { margin-inline: 0 4px; }
-  .vibe64-learning-step-bar__courses :deep(.v-btn__prepend) { margin-inline: 0; }
-  .vibe64-learning-step-bar__courses-label { display: none; }
+  .vibe64-learning-step-bar__position { flex: 1 1 auto; order: 1; }
+  .vibe64-learning-step-bar__lesson-toggle, .vibe64-learning-step-bar__practice, .vibe64-learning-step-bar__courses { order: 2; }
+  .vibe64-learning-step-bar__line { flex-basis: 100%; order: 3; padding: 0 0 2px 8px; }
+  .vibe64-learning-step-bar__controls { flex-basis: 100%; justify-content: space-between; order: 4; }
+  .vibe64-learning-step-bar__controls .v-btn:last-child { margin-inline-start: auto; }
+  .vibe64-learning-step-bar__courses, .vibe64-learning-step-bar__practice { padding-inline: 0; }
+  .vibe64-learning-step-bar__courses :deep(.v-btn__prepend), .vibe64-learning-step-bar__practice :deep(.v-btn__prepend) { margin-inline: 0; }
+  .vibe64-learning-step-bar__courses-label, .vibe64-learning-step-bar__practice-label { display: none; }
 }
 </style>

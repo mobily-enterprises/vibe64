@@ -228,8 +228,8 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
     <article v-if="savedAttempt" class="tlp-saved training-lesson-picker__saved" aria-labelledby="tlp-saved-heading">
       <div class="tlp-saved__glow" aria-hidden="true" />
       <TrainingProgressRing v-if="completion" class="tlp-saved__ring" :value="completion.passed" :max="completion.required" :size="96" :stroke="10"
-        :label="`${completion.passed} of ${completion.required} required steps passed`">
-        <span class="tlp-saved__ring-value"><strong>{{ completion.passed }}</strong>/{{ completion.required }}</span>
+        :label="`${completion.passed} of ${completion.required} required steps done`">
+        <span class="tlp-saved__ring-value"><strong>{{ completion.passed }}</strong> of {{ completion.required }}<small>required done</small></span>
       </TrainingProgressRing>
       <div v-else class="tlp-saved__badge" aria-hidden="true"><v-icon :icon="icons.bookmark" size="36" /></div>
       <div class="tlp-saved__body">
@@ -240,7 +240,7 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
         </p>
         <p v-if="completion" class="tlp-saved__status">
           <v-icon v-if="completion.completed" :icon="icons.checkCircle" size="18" color="success" />
-          {{ completion.passed }} of {{ completion.required }} required steps passed. {{ completion.completed ? 'This lesson is complete.' : 'Continue the remaining steps.' }}
+          {{ completion.passed }} of {{ completion.required }} required steps done. {{ completion.completed ? 'This lesson is complete.' : 'Continue the remaining steps.' }}
         </p>
         <p v-else class="tlp-saved__status">Saved attempt retained. Completion has not been reported.</p>
         <p v-if="learningResult.activeSummaryCurrent === false" class="tlp-note tlp-note--warn">The saved summary needs reconciliation. Continue lesson rechecks this same attempt; reading it does not repair it.</p>
@@ -450,6 +450,8 @@ const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
 .tlp-saved__ring { --training-ring-color: var(--v64-primary); --training-ring-track: color-mix(in srgb, var(--v64-primary) 16%, transparent); }
 .tlp-saved__ring-value { font: var(--v64-type-label-lg); color: var(--v64-on-surface-variant); }
 .tlp-saved__ring-value strong { font: var(--v64-type-headline-sm); color: var(--v64-on-surface); }
+.tlp-saved__ring-value { display: flex; flex-direction: column; align-items: center; line-height: 1.1; text-align: center; }
+.tlp-saved__ring-value small { font-size: 0.6875rem; }
 .tlp-saved__badge {
   flex: none; display: grid; place-items: center; width: 96px; height: 96px; border-radius: 50%;
   background: var(--v64-learning); color: var(--v64-on-learning); box-shadow: var(--v64-elevation-2);

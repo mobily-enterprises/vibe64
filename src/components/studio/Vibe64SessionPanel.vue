@@ -35,7 +35,7 @@
       :aria-hidden="selectedSessionArchiving ? 'true' : undefined"
       :chat-collapsed="chatCollapsed"
       :dashboard="dashboardProjectActive"
-      :lesson="projectPane === 'lesson'"
+      :lesson="Boolean(learning?.lessonShown)"
       :hint="emptyChatHintText"
       :inert="selectedSessionArchiving"
       :preview-detail="emptyPreviewDetailText"
@@ -64,7 +64,7 @@
         <slot name="dashboard" :dashboard-context="{ ...emptyDashboardContext, sessionToolbar: toolbar }" />
       </template>
       <template #lesson>
-        <Vibe64LearningLessonPane />
+        <Vibe64LessonSheet />
       </template>
       <template #preview>
         <div
@@ -140,7 +140,8 @@ import Vibe64SessionRuntimeHost from "@/components/studio/vibe64-session/Vibe64S
 import Vibe64SessionToolbar from "@/components/studio/vibe64-session/Vibe64SessionToolbar.vue";
 import Vibe64CreateSessionButton from "@/components/studio/vibe64-session/Vibe64CreateSessionButton.vue";
 import Vibe64EmptySessionLayout from "@/components/studio/Vibe64EmptySessionLayout.vue";
-import Vibe64LearningLessonPane from "@/components/learning/Vibe64LearningLessonPane.vue";
+import Vibe64LessonSheet from "@/components/learning/Vibe64LessonSheet.vue";
+import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import Vibe64SessionFrame from "@/components/studio/Vibe64SessionFrame.vue";
 import StudioErrorNotice from "@/components/studio/StudioErrorNotice.vue";
 import Vibe64UnavailableSessions from "@/components/studio/Vibe64UnavailableSessions.vue";
@@ -161,6 +162,7 @@ const hostConversation = inject(VIBE64_HOST_CONVERSATION_KEY, null);
 const emit = defineEmits(vibe64SessionPanelEmits);
 const props = defineProps(vibe64SessionPanelProps);
 const sessionTooltip = createVibe64SessionTooltipState();
+const learning = useVibe64Learning();
 provide(VIBE64_SESSION_TOOLTIP_KEY, sessionTooltip);
 
 const {

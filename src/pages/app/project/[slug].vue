@@ -18,6 +18,7 @@ import Vibe64SessionPanel from "@/components/studio/Vibe64SessionPanel.vue";
 import Vibe64LearningStage from "@/components/learning/Vibe64LearningStage.vue";
 import Vibe64NoProjectPane from "@/components/learning/Vibe64NoProjectPane.vue";
 import Vibe64LearningCoursesItem from "@/components/learning/Vibe64LearningCoursesItem.vue";
+import Vibe64LessonToggle from "@/components/learning/Vibe64LessonToggle.vue";
 import { useVibe64AppPage } from "@/composables/useVibe64AppPage.js";
 import { projectDisplayName, projectSubtitle } from "@/lib/vibe64PracticeProjectName.js";
 
@@ -37,6 +38,7 @@ const {
   handleProjectSelectionMissing,
   handleProjectSelectionReady,
   learnMode,
+  lessonToggleVisible,
   mdiChevronDown,
   mdiChevronRight,
   mobilePaneSwipeEnabled,
@@ -172,6 +174,10 @@ const {
             >
               {{ tab.label }}
             </button>
+          </div>
+          <!-- The lesson's own on/off flag: a sheet over Preview or Dash, apart from that choice. -->
+          <div v-if="lessonToggleVisible && projectPaneNavigationVisible" class="studio-home-shell-lesson-toggle">
+            <Vibe64LessonToggle />
           </div>
           <div
             v-if="previewToolbarHostVisible"
@@ -492,6 +498,16 @@ const {
 /* M3 segmented button: an outlined pill of equal-width segments split by
    hairlines. The selected segment fills with the secondary container and
    gains a check that slides in. */
+/* The Lesson toggle stands apart from the Preview | Dash segments: a divider,
+   then its own pill. */
+.studio-home-shell-lesson-toggle {
+  align-items: center;
+  border-inline-start: 1px solid var(--v64-outline-variant);
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding-inline-start: var(--studio-home-project-gap);
+}
+
 .studio-home-shell-project-tabs {
   border: 1px solid var(--v64-outline);
   border-radius: var(--v64-shape-full);
@@ -671,6 +687,12 @@ const {
     max-width: min(26rem, 42vw);
   }
 
+  /* One pane control at a time on a narrow bar: the next-pane pill, then the
+     Lesson toggle, then Preview's controls, which give way first. */
+  .studio-home-shell-project-mobile-action { order: 1; }
+  .studio-home-shell-lesson-toggle { order: 2; }
+  .studio-home-shell-preview-toolbar-host { order: 3; }
+
 }
 
 @media (max-width: 600px) {
@@ -709,6 +731,16 @@ const {
   .studio-home-shell-project-mobile-action {
     min-width: 4rem;
     padding-inline: var(--v64-space-3) var(--v64-space-1);
+  }
+
+  /* The Lesson toggle keeps its school icon and switch; its name is its
+     accessible name and tooltip. */
+  .studio-home-shell-lesson-toggle {
+    padding-inline-start: var(--v64-space-1);
+  }
+
+  .studio-home-shell-lesson-toggle :deep(.vibe64-lesson-toggle__label) {
+    display: none;
   }
 
   /* The session controls teleported beside the name keep their size; only

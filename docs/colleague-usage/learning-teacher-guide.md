@@ -72,7 +72,8 @@ passes a lesson step. When a lesson asks you to find a place, click it yourself.
 
 ## Opening your lesson
 
-Colleague can show your current lesson step in the Learn page's **Lesson** pane,
+Colleague can show your current lesson step in the Learn page's **Lesson** pane
+(turning the **Lesson** toggle on),
 and open the **Courses** catalogue or close it so you can see the app, without
 ending the lesson. While the lesson is going, the **Step N/M** button in
 Colleague's header shows the current step in the Lesson pane (on a phone,

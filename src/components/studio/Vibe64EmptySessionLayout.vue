@@ -7,7 +7,8 @@
 defineProps({
   chatCollapsed: Boolean,
   dashboard: Boolean,
-  // Learn mode's Lesson pane (its #lesson slot) instead of Preview.
+  // Learn mode's lesson toggle is on: its #lesson slot covers Preview or the
+  // Dashboard, which stay mounted under it.
   lesson: Boolean,
   hint: {
     default: "",
@@ -71,12 +72,6 @@ defineProps({
         <slot name="dashboard" />
       </div>
       <div
-        v-else-if="lesson"
-        class="studio-ai-sessions__lesson-empty-pane"
-      >
-        <slot name="lesson" />
-      </div>
-      <div
         v-else
         class="studio-ai-sessions__preview-empty-pane"
         data-vibe64-guide-pane="preview"
@@ -94,12 +89,14 @@ defineProps({
           <slot name="preview" />
         </div>
       </div>
+      <slot v-if="lesson" name="lesson" />
     </section>
   </div>
 </template>
 
 <style scoped>
-.studio-ai-sessions__empty-main {
+.studio-ai-sessions__empty-main,
+.studio-ai-sessions__empty-project-panel {
   position: relative;
 }
 
@@ -201,12 +198,6 @@ defineProps({
   overflow-y: auto;
   padding: 0.85rem;
   scrollbar-gutter: stable;
-}
-
-.studio-ai-sessions__lesson-empty-pane {
-  min-height: 0;
-  min-width: 0;
-  overflow: hidden;
 }
 
 .studio-ai-sessions__preview-empty-pane {

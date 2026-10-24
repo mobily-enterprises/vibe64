@@ -87,7 +87,7 @@ lesson…** or **Loading archived lessons…** instead of staying blank.
 practice project's name (or **No practice project**). Without one it says
 **No lesson in progress. Start one from Courses.** The row has three buttons:
 
-- **Open** closes Courses and opens the lesson in the **Lesson** tab of its
+- **Open** closes Courses and opens the lesson (its **Lesson** toggle on) over its
   practice project (or, for a lesson without one, of the page with no project
   selected).
 - **Restart** turns into **Archive and restart**; press that to archive this
@@ -121,7 +121,7 @@ projects.
 ## Finishing a lesson
 
 When every required step has passed, the lesson's **Lesson finished** screen,
-in the page's **Lesson** tab, finishes it: the lesson counts as completed for good, and the attempt is
+in the page's **Lesson** sheet, finishes it: the lesson counts as completed for good, and the attempt is
 archived as one bundle (its record, practice project and conversation). The
 screen then offers **Next lesson** and **Back to courses**. **Start lesson** on
 the course page starts a new attempt with a fresh project, teacher and results; the

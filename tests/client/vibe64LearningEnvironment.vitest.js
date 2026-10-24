@@ -5,6 +5,7 @@ import { compileScript, compileTemplate, parse } from "@vue/compiler-sfc";
 import { transformSync } from "esbuild";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as LearningLib from "../../src/lib/vibe64Learning.js";
+import * as ProjectScope from "../../src/lib/vibe64ProjectScope.js";
 import { createPageActivity } from "../../src/lib/vibe64PageActivity.js";
 import { watchColleagueLearningRequests } from "../../packages/vibe64-colleague/src/client/colleagueLearningRequests.js";
 import { applyLearningNavigation, learningPanelFocus, learningPanelMatches } from "../../packages/vibe64-colleague/src/shared/learningFocus.js";
@@ -220,7 +221,7 @@ describe("useVibe64Learning controller", () => {
     expect(again.learning.state.modeBusy).toBe("");
   });
 
-  it("opens the Lesson pane at a step: Courses closes, and the lesson's home shows ?pane=lesson", async () => {
+  it("opens the lesson at a step: Courses closes, and the lesson's home shows it (?lesson=1)", async () => {
     const route = { fullPath: "/app/project/practice-one" };
     const router = { currentRoute: { value: route }, push: vi.fn(async path => { route.fullPath = path; }) };
     const { learning } = controller({ router });
@@ -228,7 +229,7 @@ describe("useVibe64Learning controller", () => {
     await flush();
     await learning.openCourses("courses");
     await learning.openLesson({ stepId: "quiz" });
-    expect(router.push).toHaveBeenLastCalledWith("/app/project/practice-one?pane=lesson");
+    expect(router.push).toHaveBeenLastCalledWith("/app/project/practice-one?lesson=1");
     expect([learning.open, learning.hiddenBy, learning.stepId]).toEqual([false, "", "quiz"]);
     expect(learning.lessonAttemptId).toBe(ATTEMPT);
     // Without a practice project the lesson's home is the Learn page.
@@ -236,28 +237,29 @@ describe("useVibe64Learning controller", () => {
     plain.learning.setViewer("member");
     await flush();
     await plain.learning.openLesson();
-    expect(router.push).toHaveBeenLastCalledWith(`${LearningLib.VIBE64_LEARNING_PAGE_PATH}?pane=lesson`);
+    expect(router.push).toHaveBeenLastCalledWith(`${LearningLib.VIBE64_LEARNING_PAGE_PATH}?lesson=1`);
     // A studio lesson docks its Lesson pane on the studio page showing a stage frame.
     const studioRoute = { path: "/app/studio-page", fullPath: "/app/studio-page" };
     const studioRouter = { currentRoute: { value: studioRoute }, push: vi.fn(async target => { studioRoute.fullPath = target; }) };
-    const layout = Vue.shallowRef({ studio: true, projectSlug: "", lessonPane: false });
+    const layout = Vue.shallowRef({ studio: true, projectSlug: "", lessonShown: false });
     const studio = controller({ router: studioRouter, layout, mode: () => ({ ...LEARN, practiceSlug: "", lessonStage: "studio" }) });
     studio.learning.setViewer("member");
     await flush();
     expect(studio.learning.lessonSwitchable, "a studio stage frame offers Lesson").toBe(true);
     await studio.learning.openLesson();
-    expect(studioRouter.push).toHaveBeenLastCalledWith("/app/studio-page?pane=lesson");
-    // In its practice project (no stage frame there) a studio lesson shows the
-    // project's Lesson pane instead of leaving the project for the studio home.
+    expect(studioRouter.push).toHaveBeenLastCalledWith("/app/studio-page?lesson=1");
+    // In its practice project (no stage frame there) a studio lesson covers
+    // the project's view the learner is on (here a Dash section) instead of
+    // leaving the project for the studio home.
     const deployRoute = { path: "/app/project/training-abc/dashboard/deploy", fullPath: "/app/project/training-abc/dashboard/deploy" };
     const deployRouter = { currentRoute: { value: deployRoute }, push: vi.fn(async target => { deployRoute.fullPath = target; }) };
-    const projectLayout = Vue.shallowRef({ studio: false, projectSlug: "training-abc", lessonPane: false });
+    const projectLayout = Vue.shallowRef({ studio: false, projectSlug: "training-abc", lessonShown: false });
     const practice = controller({ router: deployRouter, layout: projectLayout,
       mode: () => ({ ...LEARN, practiceSlug: "training-abc", lessonStage: "studio" }) });
     practice.learning.setViewer("member");
     await flush();
     await practice.learning.openLesson();
-    expect(deployRouter.push).toHaveBeenLastCalledWith("/app/project/training-abc?pane=lesson");
+    expect(deployRouter.push).toHaveBeenLastCalledWith("/app/project/training-abc/dashboard/deploy?lesson=1");
     // Its Lesson finished screen, which archives that project, shows on the studio home instead.
     const passed = ["quiz", "preview", "tick"].map(stepId => ({ stepId, outcome: "passed" }));
     deployRoute.fullPath = deployRoute.path;
@@ -267,7 +269,7 @@ describe("useVibe64Learning controller", () => {
     await flush();
     await done.learning.showFinished();
     expect(done.learning.finished).toBe(true);
-    expect(deployRouter.push).toHaveBeenLastCalledWith(`${LearningLib.VIBE64_LEARNING_PAGE_PATH}?pane=lesson`);
+    expect(deployRouter.push).toHaveBeenLastCalledWith(`${LearningLib.VIBE64_LEARNING_PAGE_PATH}?lesson=1`);
   });
 
   it("opens Courses on its lesson picker when L switches to Learn with no lesson in progress", async () => {
@@ -343,7 +345,7 @@ describe("useVibe64Learning controller", () => {
     expect(start).toHaveBeenLastCalledWith({ ...selection, archiveCurrent: true }, { onAdmitted: learning.admitted });
     expect(outcome).toMatchObject({ attemptId: OTHER });
     expect(learning.confirmArchive).toBeNull();
-    expect(router.push, "the started lesson opens at its place, in its Lesson pane").toHaveBeenLastCalledWith("/app/project/training-next?pane=lesson");
+    expect(router.push, "the started lesson opens at its place, in its Lesson pane").toHaveBeenLastCalledWith("/app/project/training-next?lesson=1");
     expect([learning.open, learning.attemptId], "Courses closes").toEqual([false, OTHER]);
     await expect(learning.startLesson(selection, async () => { throw new Error("offline"); })).rejects.toThrow("offline");
     expect(learning.confirmArchive, "other failures are not a confirmation").toBeNull();
@@ -402,7 +404,7 @@ describe("useVibe64Learning controller", () => {
     mode = { ...LEARN, currentAttemptId: OTHER, practiceSlug: "training-next" };
     reread.resolve();
     await started;
-    expect(router.push).toHaveBeenLastCalledWith("/app/project/training-next?pane=lesson");
+    expect(router.push).toHaveBeenLastCalledWith("/app/project/training-next?lesson=1");
     expect([learning.open, learning.attemptId]).toEqual([false, OTHER]);
 
     // When the realtime change already made it the lesson in progress here,
@@ -412,7 +414,7 @@ describe("useVibe64Learning controller", () => {
     router.push.mockClear();
     const next = vi.fn(async (_selection, { onAdmitted }) => { onAdmitted(OTHER); await flush(); return { attemptId: OTHER, current: true }; });
     await learning.startLesson({ lessonCode: "V64-START-02" }, next);
-    expect(router.push.mock.calls[0], "shown before the start's own open").toEqual(["/app/project/training-next?pane=lesson"]);
+    expect(router.push.mock.calls[0], "shown before the start's own open").toEqual(["/app/project/training-next?lesson=1"]);
     expect(learning.open).toBe(false);
   });
 
@@ -444,14 +446,14 @@ describe("useVibe64Learning controller", () => {
     expect([learning.open, router.push.mock.calls.length]).toEqual([false, 0]);
     modeRead.resolve(LEARN);
     await flush();
-    expect(router.push, "before the start's progress reread is in").toHaveBeenCalledWith("/app/project/practice-one?pane=lesson");
+    expect(router.push, "before the start's progress reread is in").toHaveBeenCalledWith("/app/project/practice-one?lesson=1");
     reread.resolve();
     await started;
     expect(router.push).toHaveBeenCalledOnce();
   });
 
   it("shows the project side on a phone whenever a lesson opens, also when its address is already the Lesson pane", async () => {
-    const router = { currentRoute: { value: { fullPath: "/app/project/practice-one?pane=lesson" } }, push: vi.fn() };
+    const router = { currentRoute: { value: { fullPath: "/app/project/practice-one?lesson=1" } }, push: vi.fn() };
     const layout = Vue.shallowRef({ showProject: vi.fn() });
     const { learning } = controller({ router, layout });
     learning.setViewer("member");
@@ -467,7 +469,7 @@ describe("useVibe64Learning controller", () => {
     learning.setViewer("member");
     await flush();
     await learning.opened({ attemptId: ATTEMPT, current: true });
-    expect(router.push).toHaveBeenLastCalledWith("/app/learning?pane=lesson");
+    expect(router.push).toHaveBeenLastCalledWith("/app/learning?lesson=1");
     expect([learning.attemptId, learning.lessonAttemptId, learning.open]).toEqual([ATTEMPT, ATTEMPT, false]);
     await learning.readLearningMode();
     expect(learning.lessonAttemptId, "a mode read keeps the trial").toBe(ATTEMPT);
@@ -1174,7 +1176,7 @@ describe("Courses overlay", () => {
     const overlay = compiledUi(path.resolve("src/components/learning/Vibe64LearningOverlay.vue"), {
       vue: Vue,
       "vue-router": { useRoute: () => route, useRouter: () => ({ replace }) },
-      "@mdi/js": { mdiClose: "close" },
+      "@mdi/js": { mdiArrowLeft: "left", mdiArrowRight: "right" },
       "@/lib/vibe64ProjectScope.js": { projectSlugFromRoute: value => String(value?.params?.slug || "") },
       "@/lib/vibe64Learning.js": LearningLib,
       "@jskit-ai/realtime/client/composables/useRealtimeEvent": { useRealtimeEvent: options => realtime.push(options) },
@@ -1239,15 +1241,12 @@ describe("Courses overlay", () => {
       byTest(root, "learning-archived-tab").props.onClick();
       await flush();
       expect([learning.surface, byTest(root, "attempts").props.archived]).toEqual(["archived", true]);
-      expect(textOf(byTest(root, "learning-back-to-editor")).trim()).toBe("Back to editor");
-      byTest(root, "learning-back-to-editor").props.onClick();
+      expect(textOf(byTest(root, "learning-back")).trim(), "Back, onto the page Courses covers").toBe("Back");
+      expect(byTest(root, "learning-hide"), "no second, unlabelled close").toBeUndefined();
+      expect(textOf(byTest(root, "learning-continue-lesson")).trim(), "the way on into the lesson").toBe("Continue lesson");
+      byTest(root, "learning-back").props.onClick();
       await flush();
-      expect([learning.open, learning.minimised, learning.hiddenBy], "the labelled way out closes Courses").toEqual([false, true, "learner"]);
-      await learning.openCourses("archived");
-      await flush();
-      byTest(root, "learning-hide").props.onClick();
-      await flush();
-      expect([learning.open, learning.minimised, learning.hiddenBy]).toEqual([false, true, "learner"]);
+      expect([learning.open, learning.minimised, learning.hiddenBy], "Back closes Courses").toEqual([false, true, "learner"]);
       await learning.openCourses("lesson");
       await flush();
       expect(learning.surface, "the retired lesson tab is no Courses tab").toBe("archived");
@@ -1666,18 +1665,27 @@ const beatsLesson = () => {
   return value;
 };
 
-const STEP_BAR_ICONS = Object.freeze({ mdiBookOpenPageVariantOutline: "book", mdiChevronLeft: "left",
-  mdiChevronRight: "right", mdiPause: "pause", mdiPlay: "play", mdiSchoolOutline: "school" });
+const STEP_BAR_ICONS = Object.freeze({ mdiApplicationOutline: "app", mdiBookOpenPageVariantOutline: "book", mdiCheck: "check",
+  mdiChevronLeft: "left", mdiChevronRight: "right", mdiPause: "pause", mdiPlay: "play", mdiSchoolOutline: "school" });
+// A tooltip stub that renders its activator.
+const tooltip = { inheritAttrs: false, setup: (_props, { attrs, slots }) => () => Vue.h("div", { "data-tooltip": attrs.text },
+  slots.activator?.({ props: {} })) };
 // The step bar over a host layout.
 function mountStepBar(learning, accounts = { aiOnboardingAvailable: Vue.ref(true),
-  aiOnboardingNeeded: Vue.ref(false), requestVibe64AiOnboarding: vi.fn(() => true) }) {
+  aiOnboardingNeeded: Vue.ref(false), requestVibe64AiOnboarding: vi.fn(() => true) },
+  { route = Vue.reactive({ path: "/app/project/practice-one" }), router = { push: vi.fn(async () => {}) } } = {}) {
+  const learningImport = { useVibe64Learning: () => learning };
+  const toggle = compiledUi(path.resolve("src/components/learning/Vibe64LessonToggle.vue"), {
+    vue: Vue, "@mdi/js": STEP_BAR_ICONS, "@/composables/useVibe64Learning.js": learningImport });
   const bar = compiledUi(path.resolve("src/components/learning/Vibe64LearningStepBar.vue"), {
-    vue: Vue, "@mdi/js": STEP_BAR_ICONS,
-    "@/composables/useVibe64Learning.js": { useVibe64Learning: () => learning },
+    vue: Vue, "@mdi/js": STEP_BAR_ICONS, "vue-router": { useRoute: () => route, useRouter: () => router },
+    "@/lib/vibe64ProjectScope.js": ProjectScope, "./Vibe64LessonToggle.vue": { default: toggle },
+    "@/composables/useVibe64Learning.js": learningImport,
     "@local/vibe64-accounts/client": accounts });
   const root = { children: [] };
   const app = uiRenderer().createApp({ render: () => Vue.h(bar) });
   for (const tag of WIDGETS) app.component(tag, widget);
+  app.component("v-tooltip", tooltip);
   app.mount(root);
   return { root, app };
 }
@@ -1821,26 +1829,34 @@ describe("Lesson step bar", () => {
     } finally { app.unmount(); }
   });
 
-  it("offers Lesson beside a practice project's panes, pressed while the Lesson pane shows, and opens the lesson", async () => {
-    const layout = Vue.shallowRef({ projectSlug: "practice-one", lessonPane: false, showProject: vi.fn() });
-    const router = { currentRoute: Vue.ref({ fullPath: "/app/project/practice-one" }), push: vi.fn(async () => {}) };
-    const { learning } = controller({ layout, router });
+  it("offers the Lesson toggle on a studio page's step bar: pressed while shown, pressing it again hides the lesson", async () => {
+    const hideLesson = vi.fn();
+    const layout = Vue.shallowRef({ studio: true, projectSlug: "", lessonShown: false, hideLesson, showProject: vi.fn() });
+    const router = { currentRoute: Vue.ref({ path: "/app/manage/projects", fullPath: "/app/manage/projects" }), push: vi.fn(async () => {}) };
+    const { learning } = controller({ layout, router, mode: () => ({ ...LEARN, lessonStage: "studio" }) });
     learning.setViewer("member");
     await flush();
-    const { root, app } = mountStepBar(learning);
+    const { root, app } = mountStepBar(learning, undefined, { route: Vue.reactive({ path: "/app/manage/projects" }), router });
     try {
       await flush();
-      const lesson = () => byTest(root, "learning-step-bar-lesson");
-      expect([textOf(lesson()).trim(), lesson().props["aria-pressed"], lesson().props["data-vibe64-guide"]]).toEqual(["Lesson", "false", "lesson"]);
+      const lesson = () => byTest(root, "lesson-toggle");
+      expect([lesson().props["aria-label"], lesson().props["aria-pressed"], lesson().props["data-vibe64-guide"]]).toEqual(["Lesson", "false", "lesson"]);
+      expect(nodes(root).find(node => node.props?.["data-tooltip"])?.props["data-tooltip"]).toBe("Show lesson");
       await lesson().props.onClick();
       await flush();
-      expect(router.push, "Lesson opens the lesson's Lesson pane").toHaveBeenLastCalledWith("/app/project/practice-one?pane=lesson");
-      layout.value = { ...layout.value, lessonPane: true };
+      expect(router.push, "the toggle shows the lesson over this studio page").toHaveBeenLastCalledWith("/app/manage/projects?lesson=1");
+      layout.value = { ...layout.value, lessonShown: true };
       await flush();
-      expect(lesson().props["aria-pressed"], "pressed while the Lesson pane shows").toBe("true");
-      layout.value = { ...layout.value, projectSlug: "" };
+      expect(lesson().props["aria-pressed"], "pressed while the lesson shows").toBe("true");
+      expect(nodes(root).find(node => node.props?.["data-tooltip"])?.props["data-tooltip"]).toBe("Hide lesson");
+      await lesson().props.onClick();
+      expect(hideLesson, "pressing it again hides the lesson").toHaveBeenCalledOnce();
+      // Away from the practice project the bar offers the way back to it.
+      byTest(root, "learning-step-bar-practice").props.onClick();
+      expect(router.push).toHaveBeenLastCalledWith("/app/project/practice-one");
+      layout.value = { ...layout.value, studio: false, projectSlug: "practice-one" };
       await flush();
-      expect(lesson(), "a lesson without a practice project is its only pane").toBeUndefined();
+      expect(lesson(), "a practice project has its toggle beside Preview | Dash").toBeUndefined();
     } finally { app.unmount(); }
   });
 
@@ -1852,8 +1868,10 @@ describe("Lesson step bar", () => {
     try {
       await flush();
       expect(textOf(byTest(root, "learning-step-bar-beat"))).toBe("This is your app.");
-      expect(textOf(root)).toContain("1/4");
-      expect(byTest(root, "learning-step-bar-dots").props["aria-label"]).toBe("Part 1 of 2");
+      expect(textOf(byTest(root, "learning-step-bar-position"))).toBe("Step 1 of 4");
+      expect(byTest(root, "learning-step-bar-dots").props["aria-label"]).toBe("This step: part 1 of 2");
+      expect(textOf(byTest(root, "learning-step-bar-next")).trim(), "more parts in this step").toBe("Next");
+      expect(textOf(byTest(root, "learning-step-bar-previous")).trim()).toBe("Back");
       expect(byTest(root, "learning-step-bar-pause")).toBeDefined();
       expect(byTest(root, "learning-step-bar-previous").props.disabled).toBe(true);
       byTest(root, "learning-step-bar-next").props.onClick();
@@ -1862,8 +1880,10 @@ describe("Lesson step bar", () => {
       expect(JSON.parse(saved.get("vibe64:learning-environment:v2:member")).beat, "the beat is this tab's place").toBe(1);
       byTest(root, "learning-step-bar-next").props.onClick();
       await flush();
-      // A reading step after its last beat: its own Mark as done, then Next step once done.
+      // A reading step after its last beat: its own Mark as done, and the one forward button says Next step.
       expect(textOf(byTest(root, "learning-step-bar-verdict"))).toContain("Mark as done");
+      expect(textOf(byTest(root, "learning-step-bar-next")).trim(), "the step's last part").toBe("Next step");
+      expect(byTest(root, "learning-step-bar-next-step"), "no second Next step button").toBeUndefined();
       expect(byTest(root, "learning-step-bar-pause"), "nothing to pause after the beats").toBeUndefined();
       learning.selectStep("tick");
       await flush();

@@ -66,7 +66,7 @@ describe("guide pane anchors", () => {
 
   it("anchors every lesson companion place on its real control", () => {
     const anchors = {
-      lesson: "src/components/learning/Vibe64LearningStepBar.vue", chat: "src/components/studio/vibe64-session/Vibe64AutopilotView.vue",
+      lesson: "src/components/learning/Vibe64LessonToggle.vue", chat: "src/components/studio/vibe64-session/Vibe64AutopilotView.vue",
       save: "src/components/studio/vibe64-session/Vibe64AutopilotView.vue", "reload-preview": "src/components/studio/Vibe64OutputControls.vue",
       colleague: "packages/vibe64-colleague/src/client/Vibe64Colleague.vue", courses: "src/components/learning/Vibe64LearningStepBar.vue",
       "lesson-bar": "src/components/learning/Vibe64LearningStepBar.vue"
