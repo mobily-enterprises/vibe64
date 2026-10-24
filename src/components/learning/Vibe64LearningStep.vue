@@ -7,7 +7,7 @@ import { VIBE64_LEARNING_ROUTES } from "@/lib/vibe64Learning.js";
 import Vibe64LearningMarkdown from "./Vibe64LearningMarkdown.vue";
 
 // One lesson step exactly as the reader shows it: label, title, Markdown body,
-// its diagram with Play, its check, Show me / Teach me and Previous/Next step.
+// its diagram with Play, its check and Show me / Teach me; the step bar and the step list move between steps.
 // Show me on a step with beats plays them in the lesson step bar.
 // Used by the Lesson pane's reader. Verdicts come only
 // from the Training actions (auto check, choice comparator, self or reading
@@ -180,7 +180,6 @@ function teachMe() {
     props.learning.teachMe(step.value.id);
   } catch (cause) { actionError.value = String(cause?.message || "Colleague could not be asked."); }
 }
-const last = computed(() => index.value >= steps.value.length - 1);
 const go = offset => {
   const next = steps.value[index.value + offset];
   if (next) props.learning.selectStep(next.id);
@@ -278,12 +277,10 @@ async function markRead() {
       <v-btn v-if="stuckOffered" variant="tonal" rounded="pill" min-height="48" data-test="learning-stuck" @click="askStuck">I'm stuck</v-btn>
     </div>
     <slot name="after-actions" />
-    <div class="vibe64-learning-step__pager">
-      <v-btn variant="text" rounded="pill" min-height="48" data-test="learning-previous" :disabled="index <= 0" @click="go(-1)">Previous step</v-btn>
+    <div v-if="!ended && kind === 'none' && !readingDone" class="vibe64-learning-step__pager">
       <span class="vibe64-learning-step__pager-end">
-        <v-btn v-if="!ended && kind === 'none' && !readingDone" color="primary" variant="tonal" rounded="pill" min-height="48"
+        <v-btn color="primary" variant="tonal" rounded="pill" min-height="48"
           data-test="learning-mark-read" :disabled="Boolean(busy)" :loading="busy === `done:${step.id}`" @click="markRead">Mark as done</v-btn>
-        <v-btn variant="text" rounded="pill" min-height="48" data-test="learning-next" :disabled="last" @click="go(1)">Next step</v-btn>
       </span>
     </div>
   </div>
