@@ -165,14 +165,14 @@ A message sent while a turn is still running joins that turn, with that turn's
 mode and model. This includes a Claude turn whose reply is ready while a
 background task (for example a long test run) still runs: the status reads
 **Reply ready · background task still running…**. If you changed **Chat mode**
-(or chose another Custom model) after that turn started, Vibe64 does not send the
-message into the old turn. It reports that the running turn still uses the old
-mode, and the message stays in chat with **Retry**. Choose **Stop** (this also
-stops the background task) or wait for the turn to finish, then choose **Retry**:
-the message is then sent as a new request on your current Chat mode, so Auto can
-route a plan request to Senior. Without a Chat mode change, messages still steer
-the running turn as before. This applies on desktop and mobile; Colleague can
-explain the notice, and you choose Stop and Retry.
+(or chose another Custom model) since that turn started, Vibe64 does not send the
+message into it: it says the running turn still uses the old mode, and the
+message stays in chat with **Retry**. Choose **Stop** (this also stops the
+background task) or wait for the turn to finish, then choose **Retry** to send it
+as a new request on your current Chat mode. During a goal, the goal's own mode
+governs its turns (see [Goals and model changes](coding-agent-goals.md)). This
+applies on desktop and mobile; Colleague can explain the notice, and you choose
+Stop and Retry.
 
 To change the model for an active Update merge repair, open **Chat mode** in
 that repair's composer, then **Choose model**. In **Custom AI**, choose a

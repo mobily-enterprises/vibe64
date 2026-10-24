@@ -4551,6 +4551,7 @@ function createService({
     // A goal on a Custom model is the person's own choice and is left alone.
     async cancelGoalsForMainAiChange(input = {}) {
       const results = [];
+      const options = { vibe64User: input.vibe64User || null };
       const reportFailure = (error, target) => {
         const result = { ...target, ok: false, code: error.code, error: error.message };
         results.push(result);
@@ -4564,7 +4565,6 @@ function createService({
           const pinned = JSON.parse(session.metadata?.assistant_routing_goal || "null");
           if (!pinned || pinned.mode === "custom" || ["complete", "completed", "cancelled"].includes(pinned.status)) continue;
           try {
-            const options = { vibe64User: input.vibe64User || null };
             const observed = await service.readAgentGoal(session.sessionId, options);
             if (observed?.status !== "available" || !observed.goal || ["complete", "completed"].includes(observed.goal.status)) continue;
             const result = await service.updateAgentGoal(session.sessionId, { ...options, action: "cancel",

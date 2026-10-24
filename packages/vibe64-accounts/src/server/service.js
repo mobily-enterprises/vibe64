@@ -2315,7 +2315,8 @@ function createService({
   // The main AI is the owner's Senior and Junior tool and model; a thinking
   // level change alone keeps it, and a first setup replaces nothing.
   const mainAiChanged = (previous, next) => ["senior", "junior"].some((role) => {
-    const [before, after] = [previous, next].map((setup) => assistantSetupRoleValue(setup, role).value);
+    const before = assistantSetupRoleValue(previous, role).value;
+    const after = assistantSetupRoleValue(next, role).value;
     return before?.schema && ["engineId", "agentId", "modelProviderId", "modelId"].some((key) => before[key] !== after?.[key]);
   });
 
@@ -2406,13 +2407,9 @@ function createService({
         if (Object.keys(fieldErrors).length) return { ok: false, error: "Review the highlighted routing choices.", fieldErrors };
         await routingStore().write(configuration, input.revision);
         await publishAccountChanged("codex", { reason: "model-routing-updated" });
-        const routing = await readModelRouting(input);
-        if (!mainAiChanged(saved.owner, configuration.owner)) return routing;
         // Unfinished goals never continue on the previous main AI.
-        const cancelled = await cancelGoalsForMainAiChange({ vibe64User: input.vibe64User || null });
-        const results = cancelled?.results || [];
-        return { ...routing, goalsCancelled: results.filter((result) => result.cancelled).length,
-          goalCancelFailures: results.filter((result) => result.ok === false).map(({ sessionId, projectSlug, error }) => ({ sessionId, projectSlug, error })) };
+        if (mainAiChanged(saved.owner, configuration.owner)) await cancelGoalsForMainAiChange({ vibe64User: input.vibe64User || null });
+        return readModelRouting(input);
       });
     },
     async getStatus(input = {}) {

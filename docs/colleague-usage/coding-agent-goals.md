@@ -37,20 +37,18 @@ do not need **Pause goal**, **Cancel goal** or a reload to save settings.
 Choosing **Auto** or a Custom model in another tool in **Chat mode** applies after
 the goal finishes.
 
-Changing the main AI cancels unfinished goals. When the workspace owner saves a
-different tool or model for **Senior** or **Junior** in **AI setup** (or **Model
-setups**), Vibe64 cancels every unfinished goal (running, paused or blocked) in
-the workspace's open sessions, using the same path as **Cancel goal**. No goal
-keeps running on the previous main AI. Each affected chat shows **Goal cancelled
-because the main AI changed in AI setup**; the conversation, files and work done
-so far are kept. To continue, choose **Goal** → **Set goal** and start it again;
-it runs on the new main AI. Changing only a thinking level, the Router or the
-helper roles does not cancel goals, and neither does the first AI setup. A goal
-started on a **Custom** model is your own choice and is not cancelled. If a goal
-cannot be cancelled (for example its AI is unreachable), it stays as it was and
-the failure is recorded in the operational log; open that chat and use **Goal**
-→ **Cancel goal**. These steps apply on desktop and mobile. Colleague can explain
-this and change the AI setup on your request; it warns that saving cancels
+When the workspace owner saves a different tool or model for **Senior** or
+**Junior** in **AI setup** (or **Model setups**), Vibe64 cancels every unfinished
+goal (running, paused or blocked) in open sessions, as **Cancel goal** would.
+Each affected chat shows **Goal cancelled because the main AI changed in AI
+setup**; the conversation, files and work done so far are kept. To continue,
+choose **Goal** → **Set goal** again; it runs on the new main AI. A goal on a
+**Custom** model is not cancelled, and neither a thinking-level-only change, a
+Router or helper change, nor the first AI setup cancels goals. If a goal cannot
+be cancelled (for example its AI is unreachable), it stays as it was and the
+failure is recorded in the operational log; open that chat and choose **Goal** →
+**Cancel goal**. These steps apply on desktop and mobile. Colleague can explain
+this and change the AI setup on your request; it warns first that saving cancels
 unfinished goals.
 
 When changing a Codex model provider during a goal, the current turn finishes

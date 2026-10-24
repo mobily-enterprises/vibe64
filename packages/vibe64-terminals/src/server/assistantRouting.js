@@ -31,14 +31,6 @@ const activeGoal = (goal) => goal && !["complete", "completed"].includes(goal.st
 const workflowRole = state => state.stage === "review" && state.followup ? "senior" : state.resolvedMode;
 const activeMessage = state => state.followup || state.input;
 const usesWorkPlan = state => state.planInvolved === true;
-const SELECTION_KEYS = ["engineId", "modelProviderId", "modelId", "agentId", "variantId"];
-// The running request's Chat mode (or Custom model) differs from the saved one.
-function chatModeChangedSince(state, preferences) {
-  if (!state || !preferences || state.stopped || state.status !== "working" || state.delivery !== "accepted") return false;
-  if (state.mode !== preferences.mode) return true;
-  const running = state.mode === "custom" ? state.override?.selection : null;
-  return Boolean(running && SELECTION_KEYS.some((name) => running[name] !== preferences.override?.[name]));
-}
 function failure(message, code = "vibe64_assistant_routing_unavailable") {
   return Object.assign(new Error(message), { code, statusCode: 409 });
 }
@@ -504,12 +496,13 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       if (native?.turn?.active) {
         if (explicitDeslop) throw failure("Deslop uses the Senior model in its own turn. Finish or stop the current turn, then send Deslop again.");
         if (input.submissionKind === "send") throw failure("The assistant started another turn. Review it before sending.");
-        // Steering keeps the running turn's mode and model, also while its
-        // finished reply only waits for a background task. Never let a Chat
-        // mode change silently route a new message to the old model. A goal's
-        // own mode governs its turns until it finishes.
+        // Steering keeps the running request's mode and model, also while its
+        // finished reply only waits for a background task, so refuse it once the
+        // saved Chat mode (or Custom model) differs. A goal's own mode governs its turns.
         const goalPin = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
-        if (!options.purpose && !activeGoal(goalPin) && chatModeChangedSince(state, preferences)) {
+        const runningRequest = state?.status === "working" && state.delivery === "accepted" && !state.stopped;
+        if (runningRequest && !options.purpose && !activeGoal(goalPin) && (state.mode !== preferences.mode ||
+            state.mode === "custom" && state.override?.selection && !sameSelection(state.override.selection, preferences.override))) {
           throw Object.assign(failure(`The running turn still uses ${assistantModeLabel(state.mode)}, so this message would ` +
             `not use ${assistantModeLabel(preferences.mode)}. Stop the turn (this also stops its background task) or wait ` +
             "for it to finish, then send again.", "vibe64_assistant_chat_mode_changed"), { delivery: "not-sent" });
