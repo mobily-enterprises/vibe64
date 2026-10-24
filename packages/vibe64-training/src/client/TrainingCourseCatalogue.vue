@@ -81,7 +81,7 @@ function install(course) {
               <span class="tcc__chip"><code>{{ course.release }}</code></span>
               <span class="tcc__chip" :class="course.status === 'released' ? 'tcc__chip--enabled' : 'tcc__chip--preview'">{{ course.status === 'released' ? 'Released' : 'Preview' }}</span>
               <span class="tcc__chip">{{ plural(course.lessonCount, 'lesson') }}</span>
-              <span class="tcc__chip" :class="`tcc__chip--${installedTone[course.installed] || 'neutral'}`">{{ installedLabel[course.installed] || course.installed }}</span>
+              <span v-if="!course.updateFrom" class="tcc__chip" :class="`tcc__chip--${installedTone[course.installed] || 'neutral'}`">{{ installedLabel[course.installed] || course.installed }}</span>
               <span v-if="course.updateFrom" class="tcc__chip tcc__chip--update"><v-icon :icon="icons.update" size="14" />Update available: {{ course.release }}</span>
             </p>
             <p v-if="course.updateFrom" class="tcc__detail">You have {{ course.updateFrom }}. Updating keeps your saved lessons and progress.</p>

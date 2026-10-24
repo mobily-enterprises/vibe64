@@ -101,6 +101,7 @@ describe("Training course catalogue", () => {
     expect(before).toContain("Update available: 0.2.0");
     expect(before).toContain(">Update<");
     expect(before).toContain("You have 0.1.0. Updating keeps your saved lessons and progress.");
+    expect(before).not.toContain("Not installed");
     const after = await render({ catalogueResult: { ok: true, available: true, revision: 3, courses: [installedCourse("0.1.0", false), installedCourse("0.2.0", true)] },
       learningResult: learning(), canStart: true, canResume: true,
       availableResult: available([course({ installed: "enabled", otherReleases: ["0.1.0"] })]) });
