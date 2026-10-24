@@ -209,3 +209,6 @@ overlap a test run already active for this checkout.
 - `npm run test:full` and `npm run verify` are broad verification commands.
   Run them only after the human has confirmed that the feature works and has
   explicitly approved full verification.
+- Focused local tests are not the whole proof. After pushing to `main`, check
+  that repository's GitHub CI run (`gh run list`, `gh run watch`) and, if it is
+  red, fix it before moving on.

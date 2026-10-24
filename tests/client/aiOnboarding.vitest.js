@@ -617,7 +617,7 @@ describe("flow", () => {
     function answerTeam() {
       const pro = pick({ engineId: "claude", modelProviderId: "deepseek", modelId: "deepseek-v4-pro" });
       const flash = pick({ engineId: "claude", modelProviderId: "deepseek", modelId: "deepseek-flash", variantId: "low" });
-      mocks.request.mockImplementation(async (url, { method, body }) => method === "PATCH"
+      mocks.request.mockImplementation(async (url, { method }) => method === "PATCH"
         ? { ok: true, setups: { nonOwner: { roles: { colleague: teamRole("deepseek-v4-pro", "DeepSeek V4 Pro"),
           quickHelper: teamRole("deepseek-flash", "DeepSeek V4.1 Flash") } } } }
         : { ok: true, setups: { nonOwner: { roles: Object.fromEntries(["colleague", "fix", "explain", "quickHelper"].map((role) => [role, { configured: false }])),
