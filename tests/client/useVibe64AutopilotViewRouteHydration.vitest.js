@@ -230,7 +230,7 @@ describe("useVibe64AutopilotView route hydration", () => {
     const tag = autopilot.match(/<Vibe64OutputControls\b[\s\S]*?\/>/u)?.[0];
     const binding = tag?.match(new RegExp(`:${attribute}="([^"]+)"`, "u"))?.[1];
     expect(binding).toBeDefined();
-    const previewValue = new Function("props", "rightPaneTab", `return (${binding});`);
+    const previewValue = new Function("props", "rightPaneTab", "lessonShown = false", `return (${binding});`);
     const props = { projectPane: "preview", previewToolbarTeleportTarget: "#preview-toolbar" };
     const visible = attribute === "preview-displayed" ? true : "#preview-toolbar";
     const hidden = attribute === "preview-displayed" ? false : "";
@@ -241,6 +241,10 @@ describe("useVibe64AutopilotView route hydration", () => {
     props.projectPane = "preview";
     for (const tool of ["editor", "database", "system"]) {
       expect(previewValue(props, tool)).toBe(visible);
+    }
+    if (attribute === "preview-displayed") {
+      // The Lesson sheet covers the Preview; it stays mounted but is not displayed.
+      expect(previewValue(props, "preview", true)).toBe(false);
     }
   });
 
