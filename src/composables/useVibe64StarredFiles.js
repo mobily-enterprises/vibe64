@@ -2,7 +2,7 @@ import { computed, onScopeDispose, ref, watch } from "vue";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { vibe64SourceEditorStarsPath } from "@/lib/vibe64SessionRequestConfig.js";
-import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
+import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 
 function useVibe64StarredFiles({ projectSlug, sessionId, sessionsApiPath } = {}) {
@@ -27,7 +27,7 @@ function useVibe64StarredFiles({ projectSlug, sessionId, sessionsApiPath } = {})
   async function request(url, options) {
     const response = await getHttpWebClient().request(url, options);
     if (response?.ok === false) {
-      throw new Error(vibe64ApiResponseError(response, "Starred files could not load."));
+      throw vibe64ApiError(response, "Starred files could not load.");
     }
     return response;
   }

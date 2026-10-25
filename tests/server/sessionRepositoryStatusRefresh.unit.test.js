@@ -6,6 +6,7 @@ import * as vue from "vue";
 import * as realtime from "../../src/lib/vibe64RepositoryRealtime.js";
 import * as visibility from "../../src/lib/vibe64SessionToolbarVisibility.js";
 import { readRefOrGetterValue } from "../../src/lib/vueRefOrGetterValue.js";
+import { vibe64ApiResponseError } from "../../src/lib/vibe64ApiResponses.js";
 
 // Exercise the real registry and Vue scheduling with controlled HTTP/realtime boundaries.
 const source = (await readFile(new URL("../../src/composables/useVibe64SessionRepositoryStatusRegistry.js", import.meta.url), "utf8"))
@@ -18,7 +19,7 @@ function fixture(t, { suspended = false } = {}) {
   const access = vue.ref(suspended);
   const dependencies = {
     computed: vue.computed, onScopeDispose: vue.onScopeDispose, watch: vue.watch,
-    ...realtime, ...visibility, readRefOrGetterValue,
+    ...realtime, ...visibility, readRefOrGetterValue, vibe64ApiResponseError,
     useRealtimeEvent: () => {},
     VIBE64_SESSION_CHANGED_EVENT: "vibe64.session.changed",
     VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT: "vibe64.source-editor.file.changed",
@@ -120,4 +121,13 @@ test("manual checks respect suspended source access and disposed sessions", asyn
   f.access.value = false;
   await f.registry.refresh("session-a");
   assert.equal(f.requests.length, 0);
+});
+
+test("a refused work inspection shows the server's specific message", async (t) => {
+  const f = fixture(t);
+  f.requests[0].resolve({ ok: true, canonicalCommit: "old", updateAvailable: false });
+  await setImmediate();
+  f.requests[1].resolve({ ok: false, error: { code: "work_refused" }, errors: [{ message: "Work inspection refused." }] });
+  await setImmediate();
+  assert.equal(f.states.at(-1).error, "Work inspection refused.");
 });

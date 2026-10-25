@@ -1,7 +1,7 @@
 import { computed, onScopeDispose, reactive, ref, watch } from "vue";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
-import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
+import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
 import {
   vibe64RepositoryHistoryPath,
   vibe64RepositoryVersionDiffPath,
@@ -32,10 +32,7 @@ async function requestJson(path, options = {}) {
     ...options
   });
   if (result?.ok === false) {
-    const error = new Error(vibe64ApiResponseError(result, "Repository information could not be loaded."));
-    error.code = String(result.code || result.errors?.[0]?.code || "").trim();
-    error.response = result;
-    throw error;
+    throw vibe64ApiError(result, "Repository information could not be loaded.");
   }
   return result;
 }

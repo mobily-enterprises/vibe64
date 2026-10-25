@@ -29,6 +29,7 @@ import {
   vibe64SourceEditorTreePath
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
+  vibe64ApiError,
   vibe64ApiResponseError
 } from "@/lib/vibe64ApiResponses.js";
 import {
@@ -413,10 +414,7 @@ function loadedTreeDirectoryPaths(root = null) {
 async function sourceEditorRequest(url = "", options = {}) {
   const payload = await getHttpWebClient().request(url, options);
   if (payload?.ok === false) {
-    const message = vibe64ApiResponseError(payload, "Source editor request failed.");
-    const error = new Error(message);
-    error.payload = payload;
-    throw error;
+    throw vibe64ApiError(payload, "Source editor request failed.");
   }
   return payload;
 }
@@ -981,7 +979,7 @@ function useVibe64SourceEditor({
       return true;
     } catch (error) {
       if (requestId === fileRequestId) {
-        const code = error?.code || error?.payload?.code;
+        const code = error?.code;
         if (code === "vibe64_source_editor_binary_file" || code === "vibe64_source_editor_file_too_large") {
           // Keep non-text files out of the editable buffer and its autosave/file-sync paths.
           selectedPath.value = "";

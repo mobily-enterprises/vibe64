@@ -17,6 +17,7 @@ import {
   repositoryStatusSessionId
 } from "@/lib/vibe64RepositoryRealtime.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
+import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
 
 const DEFAULT_MAX_CONCURRENCY = 2;
 const DEFAULT_STALE_AFTER_MS = 5 * 60_000;
@@ -141,7 +142,7 @@ function createVibe64SessionRepositoryStatusQueue({
         return;
       }
       if (result?.ok === false) {
-        throw new Error(String(result?.message || result?.error || "Session work could not be inspected."));
+        throw new Error(vibe64ApiResponseError(result, "Session work could not be inspected."));
       }
       observe(sessionId, {
         ...result,
@@ -357,9 +358,7 @@ function useVibe64SessionRepositoryStatusRegistry({
         return null;
       }
       if (result?.ok === false) {
-        throw new Error(String(
-          result?.message || result?.error || "Repository update status is unavailable."
-        ));
+        throw new Error(vibe64ApiResponseError(result, "Repository update status is unavailable."));
       }
       observeCanonicalCheck(id, result);
       return result;
