@@ -8,6 +8,7 @@ import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEn
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { VIBE64_ASSISTANT_ACCESS_ERROR_CODES } from "@local/vibe64-runtime/shared";
 import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
+import { refetchEndpointResource } from "@/lib/vibe64EndpointResourceRefetch.js";
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
@@ -45,15 +46,6 @@ import {
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
-
-function refetchMountedSessionResource(resource) {
-  if (typeof resource?.query?.refetch === "function") {
-    return resource.query.refetch({
-      cancelRefetch: false
-    });
-  }
-  return resource?.reload?.();
-}
 
 function useVibe64MountedSessionData({
   active = false,
@@ -170,7 +162,7 @@ function useVibe64MountedSessionData({
       reason,
       sessionId: activeSessionId.value
     });
-    refreshInFlight = Promise.resolve(refetchMountedSessionResource(detailResource));
+    refreshInFlight = Promise.resolve(refetchEndpointResource(detailResource));
     try {
       const result = await refreshInFlight;
       vibe64SessionDebugLog("client.mountedSession.refresh.done", {
@@ -517,6 +509,5 @@ function useVibe64MountedSessionData({
 }
 
 export {
-  refetchMountedSessionResource,
   useVibe64MountedSessionData
 };

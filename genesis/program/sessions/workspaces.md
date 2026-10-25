@@ -63,6 +63,7 @@ that turn without dropping either half. No saved history is rewritten.
 - `src/composables/useVibe64SessionRepositoryStatusRegistry.js`
 - `src/composables/useVibe64SessionData.js`
 - `src/composables/useVibe64SessionDialogs.js`
+- `src/lib/vibe64SessionArchiveState.js`
 - `src/composables/useVibe64SessionSelection.js`
 - `src/composables/useStoredSelection.js`
 - `src/lib/vibe64CurrentSessionPublisher.js`
@@ -71,6 +72,7 @@ that turn without dropping either half. No saved history is rewritten.
 - `tests/client/vibe64SessionCreation.vitest.js`
 - `tests/client/useVibe64SessionData.vitest.js`
 - `tests/client/useVibe64SessionDialogs.vitest.js`
+- `tests/client/vibe64SessionArchiveState.vitest.js`
 
 ## Public contract
 

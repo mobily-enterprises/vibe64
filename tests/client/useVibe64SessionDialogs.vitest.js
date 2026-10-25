@@ -61,7 +61,6 @@ describe("useVibe64SessionDialogs", () => {
 
     expect(beginArchive).toHaveBeenCalledOnce();
     expect(refreshSessionData).toHaveBeenCalledWith({
-      includeList: true,
       reason: "archive-session"
     });
     expect(dialogs.archiving.value).toBe(false);

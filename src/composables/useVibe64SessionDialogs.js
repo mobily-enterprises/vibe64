@@ -104,7 +104,7 @@ function useVibe64SessionDialogs({
       if (archivingSessionId.value === sessionId) {
         archivingSessionId.value = "";
       }
-      void refreshSessionData({ includeList: true, reason: "archive-session" }).catch(() => null);
+      void refreshSessionData({ reason: "archive-session" }).catch(() => null);
     }
   }
 

@@ -36,10 +36,10 @@ import {
 } from "@/lib/vibe64SessionPanelModel.js";
 import {
   vibe64SessionDisplayTitle,
-  vibe64SessionStatusColor,
-  vibe64SessionStatusLabel,
   isArchivedVibe64Session
 } from "@/lib/vibe64SessionViewModel.js";
+import { refetchEndpointResource } from "@/lib/vibe64EndpointResourceRefetch.js";
+import { sessionArchiveState } from "@/lib/vibe64SessionArchiveState.js";
 import {
   vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
@@ -102,14 +102,6 @@ const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
   "output-target-closed",
   "output-target-stopped"
 ]);
-function sessionArchiveOperation(session) {
-  try {
-    return JSON.parse(session?.metadata?.session_archive_operation || "null");
-  } catch {
-    return { status: "failed", error: "Session archive state could not be read." };
-  }
-}
-
 function sessionIdExistsInList(sessionId = "", nextSessions = []) {
   const normalizedSessionId = String(sessionId || "").trim();
   return Boolean(normalizedSessionId) && nextSessions.some((session) => session.sessionId === normalizedSessionId);
@@ -145,24 +137,18 @@ function shouldPreserveSelectedSessionDuringRefresh({
   createSessionRunning = false,
   currentSessionId = "",
   nextSessions = [],
-  selectedSessionLoading = false,
   sessionListLoading = false
 } = {}) {
   const normalizedSessionId = String(currentSessionId || "").trim();
   if (!normalizedSessionId || sessionIdExistsInList(normalizedSessionId, nextSessions)) {
     return false;
   }
-  return Boolean(
-    sessionListLoading ||
-    createSessionRunning ||
-    selectedSessionLoading
-  );
+  return Boolean(sessionListLoading || createSessionRunning);
 }
 
 function selectedSessionIdForCurrentAlias({
   createSessionRunning = false,
   selectedSessionId = "",
-  selectedSessionLoading = false,
   sessionListLoaded = true,
   sessionListLoadError = "",
   sessionListLoading = false,
@@ -179,7 +165,7 @@ function selectedSessionIdForCurrentAlias({
   if (sessionIdExistsInList(normalizedSessionId, sessions)) {
     return normalizedSessionId;
   }
-  if (sessions.length > 0 || createSessionRunning || selectedSessionLoading) {
+  if (sessions.length > 0 || createSessionRunning) {
     return null;
   }
   return "";
@@ -201,15 +187,6 @@ function sessionListRealtimeShouldRefresh({ payload = {} } = {}, projectSlug = "
     return false;
   }
   return !reason || !SESSION_LIST_IGNORED_REALTIME_REASONS.has(reason);
-}
-
-function refetchEndpointResource(resource) {
-  if (typeof resource?.query?.refetch === "function") {
-    return resource.query.refetch({
-      cancelRefetch: false
-    });
-  }
-  return resource?.reload?.();
 }
 
 function useVibe64SessionData() {
@@ -287,11 +264,10 @@ function useVibe64SessionData() {
     surfaceId: VIBE64_SURFACE_ID,
     writeMethod: "POST"
   });
-  const createSessionPending = ref(false);
   // useCommand's observable operation state is shared by placement source. It
   // may still describe a creation in another project after project navigation,
   // so it cannot own this page's local loading state.
-  const createSessionRunning = computed(() => createSessionPending.value);
+  const createSessionRunning = ref(false);
   const updateCurrentSessionCommand = useCommand({
     access: "never",
     apiSuffix: VIBE64_CURRENT_SESSION_API_SUFFIX,
@@ -352,19 +328,17 @@ function useVibe64SessionData() {
       }
     }
     return visibleVibe64Sessions([...items.values()]).map((session) => {
-      const operation = sessionArchiveOperation(session);
+      const archiveState = sessionArchiveState(session);
       return {
         ...session,
         agentActivity: latestAgentTurnRealtimeOverlay(
           session.agentActivity,
           agentActivityBySessionId.value[session.sessionId]
         ),
-        archiveOperation: operation,
-        archiveStartedAt: operation?.startedAt || session.archiveStartedAt,
-        archiveError: operation?.status === "failed" ? operation.error : "",
-        archiving: Boolean(session.archiving || operation?.status === "running" || (
-          operation?.status !== "failed" && session.metadata?.session_closing_reason === "archived"
-        ))
+        archiveOperation: archiveState.operation,
+        archiveStartedAt: archiveState.operation?.startedAt || session.archiveStartedAt,
+        archiveError: archiveState.archiveError,
+        archiving: Boolean(session.archiving || archiveState.archiving)
       };
     });
   });
@@ -436,7 +410,6 @@ function useVibe64SessionData() {
   const creationOptions = computed(() => sessionList.pages?.[0]?.creation || {});
   const selectedSession = computed(() => enrichVibe64SessionForDisplay(selectedListSession.value));
   const isSelectedSessionArchived = computed(() => isArchivedVibe64Session(selectedSession.value || {}));
-  const pageLoading = computed(() => Boolean(sessionList.isLoading));
   const canCreateSession = computed(() => {
     return creationOptions.value.canCreate === true;
   });
@@ -604,10 +577,7 @@ function useVibe64SessionData() {
     for (const [id, attempt] of Object.entries(archiveAttempts.value)) {
       if (attempt.succeeded || archive.archivingSessionId === id) continue;
       const session = items.find((item) => item.sessionId === id);
-      const operation = sessionArchiveOperation(session);
-      if (!session || operation?.status === "failed" || (
-        operation?.status !== "running" && session.metadata?.session_closing_reason !== "archived"
-      )) {
+      if (!session || !sessionArchiveState(session).archiving) {
         delete archiveAttempts.value[id];
       }
     }
@@ -634,7 +604,7 @@ function useVibe64SessionData() {
     const creationApiPath = sessionsApiPath.value;
     const creationQueryKey = [...sessionListQueryKey.value];
     vibe64SessionDebugLog("client.sessionData.createSession.start");
-    createSessionPending.value = true;
+    createSessionRunning.value = true;
     createSessionInFlight = (async () => {
       try {
         const response = await createSessionCommand.run({ assistantSelection, pullRequestNumber, repositoryBranch, apiPath: creationApiPath });
@@ -681,7 +651,7 @@ function useVibe64SessionData() {
           if (response?.sessionId) {
             selectSessionId(response.sessionId);
           }
-          refreshSessionDataInBackground({ includeList: true, reason: "create-session" });
+          refreshSessionDataInBackground({ reason: "create-session" });
         }
         vibe64SessionDebugLog("client.sessionData.createSession.done", {
           ...vibe64SessionDebugSummary(response || {}),
@@ -697,7 +667,7 @@ function useVibe64SessionData() {
         });
         throw error;
       } finally {
-        createSessionPending.value = false;
+        createSessionRunning.value = false;
         createSessionInFlight = null;
       }
     })();
@@ -778,7 +748,6 @@ function useVibe64SessionData() {
       selectedSessionMissing: selectedSessionMissing.value,
       nextSessions,
       selectedSessionId: String(selectedSessionId.value || ""),
-      sessionIds: nextSessions.map((session) => session.sessionId).join("|"),
       sessionListInitialLoading: sessionList.isInitialLoading,
       sessionListLoaded: sessionList.pages.length > 0,
       sessionListLoadError: String(sessionList.loadError || ""),
@@ -898,8 +867,6 @@ function useVibe64SessionData() {
     createSessionVisible,
     createSessionTitle,
     isSelectedSessionArchived,
-    availableSessions,
-    pageLoading,
     refreshSessionData,
     selectSessionId,
     selectedSession,
@@ -908,10 +875,7 @@ function useVibe64SessionData() {
     sessionList,
     sessions,
     sessionsApiPath,
-    shortSessionId,
-    statusColor: vibe64SessionStatusColor,
-    statusLabel: vibe64SessionStatusLabel,
-    updateCurrentSessionCommand
+    shortSessionId
   };
 }
 
