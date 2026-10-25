@@ -10,7 +10,13 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { parseIntegrationSetupRequest } from "../shared/integrationSetupRequest.js";
-import { defineVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "../shared/assistantSelection.js";
+import { SESSION_RENEWAL_ID_PATTERN, assertRenewalId } from "./sessionRenewalIds.js";
+import { runSourceCommand } from "./sourceCommand.js";
+import {
+  VIBE64_ASSISTANT_ENGINE_ID_SET,
+  defineVibe64AssistantSelection,
+  vibe64AssistantSelectionFromMetadata
+} from "../shared/assistantSelection.js";
 import { copyFile, cp, lstat, mkdir, open, readdir, readFile, realpath, rename, rm, stat, writeFile } from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import path from "node:path";
@@ -29,8 +35,7 @@ import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { explicitPathIsManagedSessionSource, managedSessionSourcePath, sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import {
   processStartIdentityPlatform,
-  readProcessStart,
-  runVibe64Command
+  readProcessStart
 } from "@local/vibe64-execution/server";
 import {
   normalizeVibe64ConversationAttachments
@@ -127,7 +132,7 @@ const BACKGROUND_TASK_EVENT_LIMIT = 200;
 const AGENT_RUN_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,191}$/u;
 const ARTIFACT_PATH_SEGMENT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/u;
 const BACKGROUND_TASK_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,191}$/u;
-const SESSION_RENEWAL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u;
+const UUID_V4_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
 const SESSION_RENEWAL_STATE_FILE_PATTERN = /^([A-Za-z0-9][A-Za-z0-9_-]{0,127})\.json$/u;
 const CONVERSATION_MESSAGE_ROLES = deepFreeze([
   "assistant",
@@ -250,17 +255,6 @@ function assertSafeBackgroundTaskId(taskId) {
     );
   }
   return normalizedTaskId;
-}
-
-function assertRenewalId(renewalId) {
-  const normalizedRenewalId = normalizeText(renewalId);
-  if (!SESSION_RENEWAL_ID_PATTERN.test(normalizedRenewalId)) {
-    throw vibe64Error(
-      `Invalid Vibe64 session renewal id: ${normalizedRenewalId || "(empty)"}`,
-      "vibe64_invalid_session_renewal_id"
-    );
-  }
-  return normalizedRenewalId;
 }
 
 function sessionIsUnfinishedRenewalRecord(session = {}) {
@@ -508,29 +502,12 @@ async function runCommand(command, args = [], {
   maxBuffer = COMMAND_BUFFER_BYTES,
   timeout = SESSION_ARCHIVE_TIMEOUT_MS
 } = {}) {
-  const resolvedCwd = cwd || process.cwd();
-  const result = await runVibe64Command({
-    actor: "daemon",
-    allowedRoots: [
-      resolvedCwd,
-      ...allowedRoots
-    ].filter(Boolean),
-    args,
-    command,
-    cwd: resolvedCwd,
-    envPolicy: "session",
+  return runSourceCommand(command, args, {
+    allowedRoots,
+    cwd: cwd || process.cwd(),
     maxBuffer,
-    mode: "capture",
-    purpose: "source",
     timeout
   });
-  return {
-    ok: result.ok === true,
-    output: normalizeText(`${result.stdout || ""}\n${result.stderr || ""}`) ||
-      normalizeText(result.output || result.error),
-    stdout: String(result.stdout || ""),
-    stderr: String(result.stderr || "")
-  };
 }
 
 function revisionNumber(value) {
@@ -1142,7 +1119,7 @@ function validateLearningSessionScope(value) {
       typeof value.learnerId !== "string" || !value.learnerId || value.learnerId.trim() !== value.learnerId ||
       // eslint-disable-next-line no-control-regex -- Match the existing authenticated learner identity contract.
       Buffer.byteLength(value.learnerId) > 128 || /[\u0000-\u001f\u007f]/u.test(value.learnerId) ||
-      typeof value.attemptId !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(value.attemptId) ||
+      typeof value.attemptId !== "string" || !UUID_V4_PATTERN.test(value.attemptId) ||
       value.noExercise !== false || !isPlainObject(value.pin) ||
       !["course", "topic", "lesson"].every(name => isPlainObject(value.pin[name]))) throw invalid();
   let bytes, pin;
@@ -2583,7 +2560,7 @@ function createVibe64SessionStore({
           typeof saved.requestId !== "string" || !/^[a-f0-9]{64}$/u.test(saved.requestId) ||
           (completed ? !validIntegrationSetupCompletion(saved) || !validIntegrationContinuation(saved.continuation) ||
             typeof saved.continuationMessageId !== "string" ||
-            !/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(saved.continuationMessageId) : saved.outcome !== "skipped")) {
+            !UUID_V4_PATTERN.test(saved.continuationMessageId) : saved.outcome !== "skipped")) {
         throw vibe64Error("Invalid integration setup decision.", "vibe64_invalid_integration_setup_decision");
       }
       if (saved.requestId === requestId) decision = saved;
@@ -2608,7 +2585,7 @@ function createVibe64SessionStore({
     if (!isPlainObject(value)) return false;
     if (value.status === "pending") return Object.keys(value).length === 1;
     return Object.keys(value).length === 3 && ["sending", "accepted"].includes(value.status) &&
-      ["claude", "codex", "opencode"].includes(value.engineId) &&
+      VIBE64_ASSISTANT_ENGINE_ID_SET.has(value.engineId) &&
       typeof value.threadId === "string" && value.threadId.trim() === value.threadId && value.threadId.length > 0;
   }
 
@@ -2757,7 +2734,7 @@ function createVibe64SessionStore({
       ...other,
       actorDisplayName: normalizeText(value.actorDisplayName),
       actorId: normalizeText(value.actorId),
-      ...(["claude", "codex", "opencode"].includes(value.engineId) ? { engineId: value.engineId } : {}),
+      ...(VIBE64_ASSISTANT_ENGINE_ID_SET.has(value.engineId) ? { engineId: value.engineId } : {}),
       ...(value.assistantSelection ? { assistantSelection: defineVibe64AssistantSelection(value.assistantSelection) } : {}),
       ...(isPlainObject(value.assistantRouting) && ["senior", "junior", "fix", "helper", "review", "deslop"].includes(value.assistantRouting.resolvedMode) ? {
         assistantRouting: Object.fromEntries(["requestedMode", "resolvedMode", "reason", "parentMessageId", "settingsRevision"]

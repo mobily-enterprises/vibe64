@@ -23,7 +23,6 @@ import {
   vibe64SessionDebugLog
 } from "./sessionDebugLog.js";
 import {
-  VIBE64_AGENT_PROVIDER_IDS,
   VIBE64_CODEX_DEFAULT_MODEL,
   VIBE64_CODEX_DEFAULT_THINKING,
   effectiveVibe64AgentExecutionSettings
@@ -34,8 +33,9 @@ import {
   Vibe64AgentExecutionProfileError,
   defineVibe64AgentExecutionProfileResolution
 } from "../shared/agentExecutionProfiles.js";
+import { VIBE64_ASSISTANT_ENGINE_IDS } from "../shared/assistantSelection.js";
 
-const CODEX_SESSION_AGENT_PROVIDER = "codex";
+const CODEX_SESSION_AGENT_PROVIDER = VIBE64_ASSISTANT_ENGINE_IDS.CODEX;
 const CODEX_SESSION_MODEL = VIBE64_CODEX_DEFAULT_MODEL;
 const CODEX_SESSION_REASONING_EFFORT = VIBE64_CODEX_DEFAULT_THINKING;
 const CODEX_SESSION_REASONING_SUMMARY = "concise";
@@ -148,7 +148,7 @@ function codexAppServerHelperProfile(executionProfile = null) {
   const profile = defineVibe64AgentExecutionProfileResolution(executionProfile);
   if (
     profile.profileId !== VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER ||
-    profile.providerId !== VIBE64_AGENT_PROVIDER_IDS.CODEX
+    profile.providerId !== VIBE64_ASSISTANT_ENGINE_IDS.CODEX
   ) {
     throw codexAppServerHelperPolicyError(
       "Codex helper execution requires a server-resolved Codex helper profile.",
@@ -892,7 +892,8 @@ async function startFreshCodexAppServerThreadForSession(options = {}) {
 
 function codexAppServerThreadIdForSession(session = {}, workdir = "") {
   const metadata = session.metadata || {};
-  if (metadata.agent_identity_provider !== "codex") {
+  // Sessions without a Codex agent identity keep the legacy codex_conversation_id fallback.
+  if (metadata.agent_identity_provider !== CODEX_SESSION_AGENT_PROVIDER) {
     return normalizeWorkdir(workdir) && normalizeWorkdir(metadata.codex_conversation_workdir) === normalizeWorkdir(workdir)
       ? normalizeAgentText(metadata.codex_conversation_id) : "";
   }
@@ -902,9 +903,6 @@ function codexAppServerThreadIdForSession(session = {}, workdir = "") {
   const recordedWorkdir = normalizeWorkdir(metadata.agent_identity_workdir);
   const expectedWorkdir = normalizeWorkdir(workdir);
   if (!recordedWorkdir || !expectedWorkdir || recordedWorkdir !== expectedWorkdir) {
-    return "";
-  }
-  if (metadata.agent_identity_provider && metadata.agent_identity_provider !== CODEX_SESSION_AGENT_PROVIDER) {
     return "";
   }
   if (metadata.agent_identity_status && metadata.agent_identity_status !== "ready") {

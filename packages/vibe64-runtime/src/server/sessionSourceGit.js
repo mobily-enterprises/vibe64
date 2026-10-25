@@ -6,9 +6,7 @@ import {
   pathExists,
   vibe64Error
 } from "@local/vibe64-core/server/core";
-import {
-  runVibe64Command
-} from "@local/vibe64-execution/server";
+import { runSourceCommand } from "./sourceCommand.js";
 
 const GIT_TIMEOUT_MS = 30_000;
 const GIT_REPACK_TIMEOUT_MS = 60_000;
@@ -16,30 +14,12 @@ const GIT_REPACK_TIMEOUT_MS = 60_000;
 async function runGit(sourceRoot = "", args = [], {
   timeout = GIT_TIMEOUT_MS
 } = {}) {
-  const result = await runVibe64Command({
-    actor: "daemon",
-    allowedRoots: [sourceRoot],
-    args: [
-      "-C",
-      sourceRoot,
-      ...args
-    ],
-    command: "git",
+  return runSourceCommand("git", ["-C", sourceRoot, ...args], {
     cwd: sourceRoot,
-    envPolicy: "session",
     gitSafeDirectories: [sourceRoot],
-    mode: "capture",
-    purpose: "source",
     runtimes: ["git"],
     timeout
   });
-  return {
-    ok: result.ok === true,
-    output: normalizeText(`${result.stdout || ""}\n${result.stderr || ""}`) ||
-      normalizeText(result.output || result.error),
-    stderr: String(result.stderr || ""),
-    stdout: String(result.stdout || "")
-  };
 }
 
 function pathInsideOrEqual(rootPath = "", candidatePath = "") {

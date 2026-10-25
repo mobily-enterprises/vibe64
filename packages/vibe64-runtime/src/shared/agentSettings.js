@@ -2,12 +2,7 @@ import { curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProvide
 import {
   VIBE64_AGENT_EXECUTION_PROFILE_IDS
 } from "./agentExecutionProfiles.js";
-
-const VIBE64_AGENT_PROVIDER_IDS = Object.freeze({
-  CLAUDE: "claude",
-  CODEX: "codex",
-  OPENCODE: "opencode"
-});
+import { VIBE64_ASSISTANT_ENGINE_IDS } from "./assistantSelection.js";
 
 const VIBE64_AGENT_PROVIDER_NOT_IMPLEMENTED_CODE = "vibe64_agent_provider_not_implemented";
 const VIBE64_AGENT_PROVIDER_UNKNOWN_CODE = "vibe64_agent_provider_unknown";
@@ -17,7 +12,7 @@ const VIBE64_AGENT_PARAMETER_IDS = Object.freeze({
   THINKING: "thinking"
 });
 
-const VIBE64_DEFAULT_AGENT_PROVIDER_ID = VIBE64_AGENT_PROVIDER_IDS.CODEX;
+const VIBE64_DEFAULT_AGENT_PROVIDER_ID = VIBE64_ASSISTANT_ENGINE_IDS.CODEX;
 const VIBE64_CODEX_SOL_MODEL = "gpt-5.6-sol";
 const VIBE64_CODEX_GPT_5_5_MODEL = "gpt-5.5";
 const VIBE64_CODEX_DEFAULT_MODEL = VIBE64_CODEX_SOL_MODEL;
@@ -39,7 +34,7 @@ const VIBE64_AGENT_PROVIDERS = Object.freeze([
     executionProfiles: Object.freeze([
       VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER
     ]),
-    id: VIBE64_AGENT_PROVIDER_IDS.CODEX,
+    id: VIBE64_ASSISTANT_ENGINE_IDS.CODEX,
     implemented: true,
     label: "Codex",
     parameters: Object.freeze([
@@ -107,14 +102,14 @@ const VIBE64_AGENT_PROVIDERS = Object.freeze([
   }),
   Object.freeze({
     executionProfiles: Object.freeze([VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER]),
-    id: VIBE64_AGENT_PROVIDER_IDS.CLAUDE,
+    id: VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE,
     implemented: true,
     label: "Claude Code",
     parameters: Object.freeze([])
   }),
   Object.freeze({
     executionProfiles: Object.freeze([]),
-    id: VIBE64_AGENT_PROVIDER_IDS.OPENCODE,
+    id: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
     implemented: false,
     label: "OpenCode",
     parameters: Object.freeze([])
@@ -187,7 +182,7 @@ function supportedAgentThinkingValues(provider = {}, model = "") {
 
 function normalizedAgentThinkingValue(provider = {}, model = "", value = "") {
   const normalized = normalizeAgentSettingText(value);
-  if (provider.id === VIBE64_AGENT_PROVIDER_IDS.CODEX) return normalized;
+  if (provider.id === VIBE64_ASSISTANT_ENGINE_IDS.CODEX) return normalized;
   const supported = supportedAgentThinkingValues(provider, model);
   if (!supported || !normalized || supported.has(normalized)) {
     return normalized;
@@ -228,7 +223,7 @@ function vibe64AgentSettingParameters(value = {}) {
 function effectiveVibe64AgentSettings(value = {}) {
   const normalized = normalizeVibe64AgentSettings(value);
   const provider = agentProviderDefinition(normalized.providerId);
-  const curated = provider.id === VIBE64_AGENT_PROVIDER_IDS.CODEX ? curatedCodexModel(normalized.model) : null;
+  const curated = provider.id === VIBE64_ASSISTANT_ENGINE_IDS.CODEX ? curatedCodexModel(normalized.model) : null;
   return {
     model: effectiveAgentParameterValue(provider, VIBE64_AGENT_PARAMETER_IDS.MODEL, normalized.model),
     providerId: provider.id,
@@ -245,11 +240,11 @@ function agentOptionRequestValue(option = {}, name = "", fallback = true) {
 }
 
 function effectiveVibe64AgentExecutionSettings(value = {}) {
-  const curated = (value.providerId || value.provider || "codex") === "codex" ? curatedCodexModel(value.model, value.modelProviderId) : null;
+  const curated = (value.providerId || value.provider || VIBE64_ASSISTANT_ENGINE_IDS.CODEX) === VIBE64_ASSISTANT_ENGINE_IDS.CODEX ? curatedCodexModel(value.model, value.modelProviderId) : null;
   if (curated) {
     return {
       model: curated.id,
-      providerId: "codex",
+      providerId: VIBE64_ASSISTANT_ENGINE_IDS.CODEX,
       modelProviderId: curated.modelProviderId,
       thinking: value.thinking || curated.defaultThinking,
       request: { reasoning: true, summary: false }
@@ -300,7 +295,6 @@ function displayVibe64AgentSetting(providerId = "", parameterId = "", value = ""
 export {
   VIBE64_AGENT_PARAMETER_IDS,
   VIBE64_AGENT_PROVIDER_NOT_IMPLEMENTED_CODE,
-  VIBE64_AGENT_PROVIDER_IDS,
   VIBE64_AGENT_PROVIDER_UNKNOWN_CODE,
   VIBE64_AGENT_PROVIDERS,
   VIBE64_CODEX_DEFAULT_MODEL,

@@ -14,6 +14,8 @@ import {
   runVibe64Command,
   writeGitWorktreeTree
 } from "@local/vibe64-execution/server";
+import { runSourceCommand } from "./sourceCommand.js";
+import { assertRenewalId as assertSessionRenewalId } from "./sessionRenewalIds.js";
 
 const GIT_TIMEOUT_MS = 30_000;
 const SNAPSHOT_TIMEOUT_MS = 60_000;
@@ -24,7 +26,6 @@ const RECOVERY_CHECKPOINT_BUNDLE_ARTIFACT = `${RECOVERY_ARTIFACT_ROOT}/checkpoin
 const RECOVERY_PATCH_ARTIFACT = `${RECOVERY_ARTIFACT_ROOT}/worktree.patch`;
 const RECOVERY_UNTRACKED_ARTIFACT = `${RECOVERY_ARTIFACT_ROOT}/untracked-files.tar.gz`;
 const RECOVERY_UNTRACKED_LIST_ARTIFACT = `${RECOVERY_ARTIFACT_ROOT}/untracked-files.list`;
-const SESSION_RENEWAL_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u;
 
 async function runCommand(command, args = [], {
   allowedRoots = [],
@@ -33,30 +34,14 @@ async function runCommand(command, args = [], {
   runtimes = [],
   timeout = GIT_TIMEOUT_MS
 } = {}) {
-  const result = await runVibe64Command({
-    actor: "daemon",
-    allowedRoots: [
-      cwd,
-      ...allowedRoots
-    ].filter(Boolean),
-    args,
-    command,
+  return runSourceCommand(command, args, {
+    allowedRoots,
     cwd,
-    envPolicy: "session",
     gitSafeDirectories: command === "git" ? [cwd] : [],
     maxBuffer,
-    mode: "capture",
-    purpose: "source",
     runtimes,
     timeout
   });
-  return {
-    ok: result.ok === true,
-    output: normalizeText(`${result.stdout || ""}\n${result.stderr || ""}`) ||
-      normalizeText(result.output || result.error),
-    stdout: String(result.stdout || ""),
-    stderr: String(result.stderr || "")
-  };
 }
 
 async function runGit(cwd, args = [], options = {}) {
@@ -104,17 +89,6 @@ async function readWorktreeGitFact(worktreePath, args = [], fallback = "") {
 
 function sameResolvedPath(left = "", right = "") {
   return Boolean(left && right) && path.resolve(left) === path.resolve(right);
-}
-
-function assertSessionRenewalId(renewalId = "") {
-  const normalizedRenewalId = normalizeText(renewalId);
-  if (!SESSION_RENEWAL_ID_PATTERN.test(normalizedRenewalId)) {
-    throw vibe64Error(
-      `Invalid Vibe64 session renewal id: ${normalizedRenewalId || "(empty)"}`,
-      "vibe64_invalid_session_renewal_id"
-    );
-  }
-  return normalizedRenewalId;
 }
 
 function renewalSourceStagePath(session = {}, renewalId = "") {
