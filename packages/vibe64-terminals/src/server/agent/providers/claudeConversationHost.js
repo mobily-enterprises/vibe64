@@ -7,15 +7,19 @@ import { requireCompletedNativeConversationReplacement } from "../../assistantCh
 import { createClaudeConversationMessagePolicy, publishMainConversationEvent, readSessionConversationContext } from "../../mainConversationBinding.js";
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { randomUUID } from "node:crypto";
-import path from "node:path";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
-import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
+import {
+  VIBE64_AGENT_EXECUTION_PROFILE_IDS,
+  VIBE64_ASSISTANT_ENGINE_IDS,
+  VIBE64_ASSISTANT_TRANSPORT_IDS,
+  vibe64AgentExecutionProfileAuditSnapshot
+} from "@local/vibe64-runtime/shared";
 import { appCredentialContext, operatorCliCommand, runVibe64Command, stopVibe64Execution } from "@local/vibe64-execution/server";
 import { captureProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { closeTerminalSessionsForNamespace, listTerminalSessions } from "@local/vibe64-execution/server/terminalSessions";
 import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
 import { resolveVibe64SystemRoot } from "@local/vibe64-core/server/studioRoots";
-import { createClaudeCodeProcess } from "../../claudeCodeProcess.js";
+import { claudeConfigRoot, createClaudeCodeProcess } from "../../claudeCodeProcess.js";
 import { createClaudeConversationOwner, claudeNativeMessageId as nativeMessageId } from "@jskit-ai/assistant-core/server/claude-turn";
 import { prepareAgentSessionCommandEnvironment } from "../../agentCommandEnvironment.js";
 import { recordSessionGitCommandActor } from "../../sessionGitCommandActor.js";
@@ -29,8 +33,8 @@ import {
 } from "../../sessionRenewalReceipts.js";
 import { claudeConversationError as error, claudeTerminalNamespace } from "../../terminalShared.js";
 
-const ENGINE = "claude";
-const TRANSPORT = "claude_stream_json";
+const ENGINE = VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE;
+const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
 const text = (value) => String(value ?? "").trim();
 const now = () => new Date().toISOString();
 
@@ -55,7 +59,7 @@ function createClaudeConversationHost({
     null, claudeTerminalNamespace, publishApplicationSessionChanged, publishConversation
   );
   const providerConnections = createCodexProviderConnectionStore({ systemRoot });
-  const configRoot = env.CLAUDE_CONFIG_DIR || path.join(credentialHome.home, ".claude");
+  const configRoot = claudeConfigRoot({ env, credentialHome });
   const conversationStorage = createClaudeConversationStorage({ createError: error });
   const { metadata, ...nativeStorage } = conversationStorage;
   const messagePolicy = createClaudeConversationMessagePolicy({ env, recordGitActor, publishSessionChanged,
@@ -317,7 +321,7 @@ function createClaudeConversationHost({
         };
       })();
     },
-    id: ENGINE, transportId: TRANSPORT, executionProfiles: ["helper"],
+    id: ENGINE, transportId: TRANSPORT, executionProfiles: [VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER],
     assistantAccess: accounts.assistantAccess,
     capabilities: accounts.capabilities,
     describeProvider: accounts.describeProvider,

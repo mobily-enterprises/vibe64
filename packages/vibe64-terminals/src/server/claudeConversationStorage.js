@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { VIBE64_ASSISTANT_ENGINE_IDS, VIBE64_ASSISTANT_TRANSPORT_IDS } from "@local/vibe64-runtime/shared";
 
-const ENGINE = "claude";
-const TRANSPORT = "claude_stream_json";
+const ENGINE = VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE;
+const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
 
 /** Apply only to an offline disposable copy, never to a live execution owner. */
 export function prepareCopiedClaudeConversationState(serialized) {

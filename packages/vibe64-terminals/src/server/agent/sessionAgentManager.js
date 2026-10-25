@@ -54,6 +54,39 @@ const CONVERSATION_COMMANDS = Object.freeze({
   stopConversation: (conversation, request) => conversation.cancel(request.input),
   deleteConversation: (conversation, request) => conversation.dispose(request.input)
 });
+// Operations served directly by the shared conversation runtime: the error when
+// it is absent, whether the provider projects the result, and the runtime call.
+const RUNTIME_CONVERSATION_OPERATIONS = Object.freeze({
+  closeProject: { missing: "Native project cleanup requires the shared runtime.", project: true,
+    run: (runtime, context, input) => runtime.closeNativeProject({ context, input }) },
+  invalidateRuntimes: { missing: "Native runtime invalidation requires the shared runtime.", project: true,
+    run: (runtime, context, input) => runtime.invalidateNativeRuntimes({ context, input }) },
+  reconcileSessions: { missing: "Native reconciliation requires the shared runtime.", project: true,
+    run: (runtime, context, sessions, options) => runtime.reconcileNativeSessions({ context, sessions, options }) },
+  unsubscribeSessions: { missing: "Native subscription reset requires the shared runtime.", project: true,
+    run: (runtime, context, sessions) => runtime.unsubscribeNativeSessions({ context, sessions }) },
+  hasActiveTemporaryConversation: { missing: "Native activity requires the shared runtime.", project: true,
+    run: (runtime, context) => runtime.inspectNativeTemporaryActivity({ id: context.sessionId, context }) },
+  interruptDetachedChatTurn: { missing: "Historical native cleanup requires the shared runtime.",
+    run: (runtime, context, input) => runtime.interruptNativeDetachedConversation({ id: context.sessionId, context, input }) },
+  deleteDetachedChatThread: { missing: "Historical native cleanup requires the shared runtime.",
+    run: (runtime, context, input) => runtime.deleteNativeDetachedConversation({ id: context.sessionId, context, input }) },
+  listNativeConversationStorage: { missing: "Native history storage requires the shared runtime.",
+    run: (runtime, context, binding) => runtime.listNativeConversationStorage({ id: context.sessionId, context, binding }) },
+  retireConversationHistory: { missing: "Native history storage requires the shared runtime.",
+    run: (runtime, context, binding) => runtime.retireNativeConversationHistory({ id: context.sessionId, context, binding }) },
+  updateSessionSettings: { missing: "Native settings require the shared runtime.", project: true,
+    run: (runtime, context, input) => runtime.updateNativeConversationSettings({ id: context.sessionId, context, input }) },
+  ensureSession: { missing: "Native conversation readiness requires the shared runtime.", project: true,
+    run: (runtime, context) => runtime.ensureNativeConversation({ id: context.sessionId, context }) },
+  createConversation: { missing: "Native conversation creation requires the shared runtime.",
+    run: (runtime, context, input) => runtime.createNativeConversation({ id: context.sessionId, context, input }) },
+  releaseRenewalPredecessorProcessExitProof: { missing: "Native renewal proof release requires the shared runtime.",
+    run: (runtime, context, input) => runtime.releaseNativeRenewalPredecessorProcessExitProof({ id: context.sessionId, context, input }) },
+  releaseRenewalSuccessorProcessExitProof: { missing: "Native renewal proof release requires the shared runtime.",
+    run: (runtime, context, input) => runtime.releaseNativeRenewalSuccessorProcessExitProof({ id: context.sessionId, context, input }) }
+});
+const CANONICAL_GOAL_ENGINE_IDS = new Set(["claude", "codex"]);
 const SCOPED_CONVERSATION_METHODS = new Set(["readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation"]);
 const EXECUTION_PROFILE_RESOLUTION_METHODS = new Set(["runDetachedChatTurn", "streamDetachedChatTurn"]);
 const AI_METHODS = new Set([
@@ -298,6 +331,11 @@ function createSessionAgentManager({
     return provider;
   }
 
+  function forgetBinding(key) {
+    bindings.delete(key);
+    bindingTokens.delete(key);
+  }
+
   function bindingKey(sessionId, options = {}) {
     const id = normalizeText(sessionId);
     return options.routingConversationId ? `${id}\0conversation\0${options.routingConversationId}` : id;
@@ -461,68 +499,17 @@ function createSessionAgentManager({
 
   function conversationOperation(provider, method) {
     if (!provider.conversationOperations?.includes(method)) return null;
-    if (method === "closeProject") return (context, input) => {
-      if (!conversationRuntime) throw new TypeError("Native project cleanup requires the shared runtime.");
-      return provider.projectConversationResult(method, () =>
-        conversationRuntime.closeNativeProject({ context, input }));
-    };
-    if (method === "invalidateRuntimes") return (context, input) => {
-      if (!conversationRuntime) throw new TypeError("Native runtime invalidation requires the shared runtime.");
-      return provider.projectConversationResult(method, () =>
-        conversationRuntime.invalidateNativeRuntimes({ context, input }));
-    };
-    if (method === "reconcileSessions") return (context, sessions, options) => {
-      if (!conversationRuntime) throw new TypeError("Native reconciliation requires the shared runtime.");
-      return provider.projectConversationResult(method, () =>
-        conversationRuntime.reconcileNativeSessions({ context, sessions, options }));
-    };
-    if (method === "unsubscribeSessions") return (context, sessions) => {
-      if (!conversationRuntime) throw new TypeError("Native subscription reset requires the shared runtime.");
-      return provider.projectConversationResult(method, () =>
-        conversationRuntime.unsubscribeNativeSessions({ context, sessions }));
-    };
-    if (method === "hasActiveTemporaryConversation") return context => {
-      if (!conversationRuntime) throw new TypeError("Native activity requires the shared runtime.");
-      return provider.projectConversationResult(method, () =>
-        conversationRuntime.inspectNativeTemporaryActivity({ id: context.sessionId, context }));
-    };
-    if (method === "interruptDetachedChatTurn" || method === "deleteDetachedChatThread") return (context, input) => {
-      if (!conversationRuntime) throw new TypeError("Historical native cleanup requires the shared runtime.");
-      return method === "interruptDetachedChatTurn"
-        ? conversationRuntime.interruptNativeDetachedConversation({ id: context.sessionId, context, input })
-        : conversationRuntime.deleteNativeDetachedConversation({ id: context.sessionId, context, input });
-    };
-    if (method === "listNativeConversationStorage" || method === "retireConversationHistory") return (context, binding) => {
-      if (!conversationRuntime) throw new TypeError("Native history storage requires the shared runtime.");
-      return method === "listNativeConversationStorage"
-        ? conversationRuntime.listNativeConversationStorage({ id: context.sessionId, context, binding })
-        : conversationRuntime.retireNativeConversationHistory({ id: context.sessionId, context, binding });
-    };
-    if (method === "updateSessionSettings") return (context, input) => {
-      if (!conversationRuntime) throw new TypeError("Native settings require the shared runtime.");
-      return provider.projectConversationResult(method, () =>
-        conversationRuntime.updateNativeConversationSettings({ id: context.sessionId, context, input }));
-    };
-    if (method === "ensureSession") return context => {
-      if (!conversationRuntime) throw new TypeError("Native conversation readiness requires the shared runtime.");
-      return provider.projectConversationResult(method, () =>
-        conversationRuntime.ensureNativeConversation({ id: context.sessionId, context }));
+    const runtimeOperation = RUNTIME_CONVERSATION_OPERATIONS[method];
+    if (runtimeOperation) return (context, ...args) => {
+      if (!conversationRuntime) throw new TypeError(runtimeOperation.missing);
+      const perform = () => runtimeOperation.run(conversationRuntime, context, ...args);
+      return runtimeOperation.project ? provider.projectConversationResult(method, perform) : perform();
     };
     if (method === "closeSession") return async context => {
       if (!conversationRuntime) throw new TypeError("Native conversation cleanup requires the shared runtime.");
       const closed = await conversationRuntime.disposeNative(provider.prepareConversationRequest(method, context));
       if (!closed) throw new TypeError("Native conversation cleanup requires its configured conversation host.");
       return closed.result;
-    };
-    if (method === "createConversation") return (context, input) => {
-      if (!conversationRuntime) throw new TypeError("Native conversation creation requires the shared runtime.");
-      return conversationRuntime.createNativeConversation({ id: context.sessionId, context, input });
-    };
-    if (method === "releaseRenewalPredecessorProcessExitProof" || method === "releaseRenewalSuccessorProcessExitProof") return (context, input) => {
-      if (!conversationRuntime) throw new TypeError("Native renewal proof release requires the shared runtime.");
-      return method === "releaseRenewalPredecessorProcessExitProof"
-        ? conversationRuntime.releaseNativeRenewalPredecessorProcessExitProof({ id: context.sessionId, context, input })
-        : conversationRuntime.releaseNativeRenewalSuccessorProcessExitProof({ id: context.sessionId, context, input });
     };
     if (method === "generateSessionRenewalHandover" || method === "seedSessionRenewalHandover") return (context, input) => {
       if (!conversationRuntime) throw new TypeError("Native renewal requires the shared runtime.");
@@ -578,6 +565,18 @@ function createSessionAgentManager({
     const selection = defineVibe64AssistantSelection(pinned.selection);
     return { ...options, assistantSelection: selection, session: { ...options.session,
       metadata: { ...options.session.metadata, [VIBE64_ASSISTANT_SELECTION_METADATA]: serializeVibe64AssistantSelection(selection) } } };
+  }
+
+  // Reading or stopping a goal uses the session's current provider without rebinding it.
+  function goalProvider(sessionId, options) {
+    return providerFor({ ...options, providerId: sessionAgentProviderId(options,
+      bindings.get(bindingKey(sessionId, options)) || defaultProviderId) });
+  }
+
+  function requireCanonicalGoalSupport(provider, options) {
+    if (options.canonicalGoal && !CANONICAL_GOAL_ENGINE_IDS.has(provider.id)) throw Object.assign(new Error("Canonical goal policy is not connected for this assistant."), {
+      code: "conversation_unsupported"
+    });
   }
 
   async function callSessionProvider(method, ...args) {
@@ -749,8 +748,7 @@ function createSessionAgentManager({
       : run();
   }
 
-  async function callProvider(method = "", input = {}, options = {}) {
-    const provider = providerFor(options);
+  async function callProviderOperation(provider, method, input, options) {
     const operation = conversationOperation(provider, method) || provider[method];
     if (typeof operation !== "function") {
       throw new TypeError(`Assistant provider ${provider.id} does not implement ${method}().`);
@@ -761,21 +759,16 @@ function createSessionAgentManager({
     }, input, options));
   }
 
+  async function callProvider(method = "", input = {}, options = {}) {
+    return callProviderOperation(providerFor(options), method, input, options);
+  }
+
   async function callAllProviders(method = "", input = {}, options = {}) {
     const requestedProviderId = sessionAgentProviderId(options);
     const targets = requestedProviderId
       ? [providerFor(options)]
       : [...providerById.values()];
-    const results = await Promise.all(targets.map(async (provider) => {
-      const operation = conversationOperation(provider, method) || provider[method];
-      if (typeof operation !== "function") {
-        throw new TypeError(`Assistant provider ${provider.id} does not implement ${method}().`);
-      }
-      return agentOperationResult(provider, "", await operation.call(provider, {
-        providerId: provider.id,
-        transportId: provider.transportId
-      }, input, options));
-    }));
+    const results = await Promise.all(targets.map(provider => callProviderOperation(provider, method, input, options)));
     if (results.length === 1) {
       return results[0];
     }
@@ -1047,8 +1040,7 @@ function createSessionAgentManager({
       { ...options, assistantScope, routingConversationId: "", runtime: null, session: null }
     );
     if (result?.ok !== false) {
-      bindings.delete(assistantScope.id);
-      bindingTokens.delete(assistantScope.id);
+      forgetBinding(assistantScope.id);
     }
     return result;
   }
@@ -1083,8 +1075,7 @@ function createSessionAgentManager({
       ? agentOperationResult(provider, id, { closed: false, ok: true })
       : agentOperationResult(provider, id, await operation.call(provider, context));
     if (result.ok !== false) {
-      bindings.delete(id);
-      bindingTokens.delete(id);
+      forgetBinding(id);
       for (const [terminalId, terminal] of terminalBindings) {
         if (terminal.sessionId === id && terminal.providerId === provider.id) terminalBindings.delete(terminalId);
       }
@@ -1092,61 +1083,14 @@ function createSessionAgentManager({
     return result;
   }
 
-  async function releaseRenewalPredecessorProcessExitProof(
-    sessionId = "",
-    input = {},
-    options = {}
-  ) {
-    const id = normalizeText(sessionId);
-    const result = await callSessionProvider(
-      "releaseRenewalPredecessorProcessExitProof",
-      id,
-      input,
-      options
-    );
-    if (result.ok !== false) {
-      bindings.delete(id);
-      bindingTokens.delete(id);
-    }
-    return result;
-  }
-
-  async function releaseRenewalPredecessorAttachments(
-    sessionId = "",
-    input = {},
-    options = {}
-  ) {
-    const id = normalizeText(sessionId);
-    const result = await callSessionProvider(
-      "releaseRenewalPredecessorAttachments",
-      id,
-      input,
-      options
-    );
-    if (result.ok !== false) {
-      bindings.delete(id);
-      bindingTokens.delete(id);
-    }
-    return result;
-  }
-
-  async function releaseRenewalSuccessorProcessExitProof(
-    sessionId = "",
-    input = {},
-    options = {}
-  ) {
-    const id = normalizeText(sessionId);
-    const result = await callSessionProvider(
-      "releaseRenewalSuccessorProcessExitProof",
-      id,
-      input,
-      options
-    );
-    if (result.ok !== false) {
-      bindings.delete(id);
-      bindingTokens.delete(id);
-    }
-    return result;
+  // A released renewal predecessor or successor no longer holds its session binding.
+  function releaseAndForget(method) {
+    return async (sessionId = "", input = {}, options = {}) => {
+      const id = normalizeText(sessionId);
+      const result = await callSessionProvider(method, id, input, options);
+      if (result.ok !== false) forgetBinding(id);
+      return result;
+    };
   }
 
   const manager = Object.freeze({
@@ -1171,8 +1115,7 @@ function createSessionAgentManager({
     },
     async readGoal(sessionId, options = {}) {
       options = goalOptions(options);
-      const provider = providerFor({ ...options, providerId: sessionAgentProviderId(options,
-        bindings.get(bindingKey(sessionId, options)) || defaultProviderId) });
+      const provider = goalProvider(sessionId, options);
       const operation = conversationOperation(provider, "readGoal") || provider.readGoal;
       if (typeof operation !== "function") {
         const result = { status: "unsupported", goal: null };
@@ -1182,9 +1125,7 @@ function createSessionAgentManager({
         });
         return null;
       }
-      if (options.canonicalGoal && !["claude", "codex"].includes(provider.id)) throw Object.assign(new Error("Canonical goal policy is not connected for this assistant."), {
-        code: "conversation_unsupported"
-      });
+      requireCanonicalGoalSupport(provider, options);
       return operation.call(provider, { sessionId, runtime: options.runtime, session: options.session,
         ...(options.applicationTools ? { applicationTools: options.applicationTools } : {}),
         ...(options.canonicalGoal ? { canonicalGoal: true, onGoalResult: options.onGoalResult } : {}),
@@ -1208,10 +1149,7 @@ function createSessionAgentManager({
       const stopping = ["pause", "block", "cancel"].includes(input.action);
       if (!stopping) requireCompletedNativeConversationReplacement(options.session, { requireBriefing: true });
       if (stopping) options = goalOptions(options);
-      const provider = stopping
-        ? providerFor({ ...options, providerId: sessionAgentProviderId(options,
-          bindings.get(bindingKey(sessionId, options)) || defaultProviderId) })
-        : bindSession(sessionId, options);
+      const provider = stopping ? goalProvider(sessionId, options) : bindSession(sessionId, options);
       let authorization;
       try {
         authorization = stopping ? null : await requireAccessContext(provider, sessionId, options);
@@ -1225,9 +1163,7 @@ function createSessionAgentManager({
       if (typeof operation !== "function") {
         throw new TypeError("This assistant does not support goal controls.");
       }
-      if (options.canonicalGoal && !["claude", "codex"].includes(provider.id)) throw Object.assign(new Error("Canonical goal policy is not connected for this assistant."), {
-        code: "conversation_unsupported"
-      });
+      requireCanonicalGoalSupport(provider, options);
       return operation.call(provider, { sessionId, runtime: options.runtime, session: options.session, signal: options.signal,
         ...(options.browserAuthority ? { browserAuthority: options.browserAuthority } : {}),
         ...(options.applicationTools ? { applicationTools: options.applicationTools } : {}),
@@ -1274,11 +1210,7 @@ function createSessionAgentManager({
     resolveEphemeralExecutionProfile: ephemeralScopeMethod("resolveExecutionProfile"),
     async deleteConversation(sessionId, input = {}, options = {}) {
       const result = await callSessionProvider("deleteConversation", sessionId, input, options);
-      if (result?.ok !== false && options.routingConversationId) {
-        const key = bindingKey(sessionId, options);
-        bindings.delete(key);
-        bindingTokens.delete(key);
-      }
+      if (result?.ok !== false && options.routingConversationId) forgetBinding(bindingKey(sessionId, options));
       return result;
     },
     deleteEphemeralConversation,
@@ -1437,9 +1369,9 @@ function createSessionAgentManager({
     },
     runDetachedChatTurn: sessionMethod("runDetachedChatTurn"),
     runEphemeralChatTurn,
-    releaseRenewalPredecessorAttachments,
-    releaseRenewalPredecessorProcessExitProof,
-    releaseRenewalSuccessorProcessExitProof,
+    releaseRenewalPredecessorAttachments: releaseAndForget("releaseRenewalPredecessorAttachments"),
+    releaseRenewalPredecessorProcessExitProof: releaseAndForget("releaseRenewalPredecessorProcessExitProof"),
+    releaseRenewalSuccessorProcessExitProof: releaseAndForget("releaseRenewalSuccessorProcessExitProof"),
     seedSessionRenewalHandover: sessionMethod("seedSessionRenewalHandover"),
     sendMessage: sessionMethod("sendMessage"),
     inspectMessageAdmission: sessionMethod("inspectMessageAdmission"),

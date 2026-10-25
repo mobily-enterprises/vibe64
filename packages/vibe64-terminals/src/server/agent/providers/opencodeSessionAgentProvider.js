@@ -1,45 +1,23 @@
 import { randomUUID } from "node:crypto";
 import { captureProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import {
-  VIBE64_AGENT_HELPER_WORKLOAD_LIMITS,
   VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES,
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
-  VIBE64_AGENT_EXECUTION_TOOL_POLICIES,
   VIBE64_ASSISTANT_ENGINE_IDS,
   VIBE64_ASSISTANT_TRANSPORT_IDS,
   Vibe64AgentExecutionProfileError,
-  defineVibe64AgentExecutionProfileRequest,
-  defineVibe64AgentExecutionProfileResolution,
-  vibe64AgentExecutionProfileAuditSnapshot
+  defineVibe64HelperExecutionProfileResolution,
+  emitVibe64AgentExecutionProfile,
+  vibe64HelperExecutionProfileRequest
 } from "@local/vibe64-runtime/shared";
 import { OPENCODE_EXPECTED_VERSION, openCodeRuntimeFailure as runtimeFailure } from "../../opencodeServerProcess.js";
 import { openCodeSessionId as safeSessionId, opencodeTerminalNamespace } from "../../terminalShared.js";
 
 const OPENCODE_HELPER_PROFILE_REVISION =
   `opencode-${OPENCODE_EXPECTED_VERSION}-selected-model-tool-free-v1`;
-const OPENCODE_HELPER_WORKLOAD_LIMITS = VIBE64_AGENT_HELPER_WORKLOAD_LIMITS;
-
-function openCodeExecutionProfileError(code, message, details = {}) {
-  return new Vibe64AgentExecutionProfileError(code, message, details);
-}
 
 function resolveOpenCodeHelperExecutionProfile(context = {}, request = {}) {
-  const executionProfile = defineVibe64AgentExecutionProfileRequest(request);
-  if (executionProfile.profileId !== VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER) {
-    throw openCodeExecutionProfileError(
-      VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.PROFILE_UNKNOWN,
-      `OpenCode does not provide execution profile ${executionProfile.profileId}.`,
-      { profileId: executionProfile.profileId }
-    );
-  }
-  const limits = OPENCODE_HELPER_WORKLOAD_LIMITS[executionProfile.workloadId];
-  if (!limits) {
-    throw openCodeExecutionProfileError(
-      VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.WORKLOAD_UNSUPPORTED,
-      `OpenCode helper does not support workload ${executionProfile.workloadId}.`,
-      { workloadId: executionProfile.workloadId }
-    );
-  }
+  const { executionProfile, limits } = vibe64HelperExecutionProfileRequest(request, "OpenCode");
   const selection = context.assistantSelection || {};
   const modelId = String(selection.modelId || "").trim();
   if (
@@ -47,53 +25,19 @@ function resolveOpenCodeHelperExecutionProfile(context = {}, request = {}) {
     !String(selection.modelProviderId || "").trim() ||
     !modelId
   ) {
-    throw openCodeExecutionProfileError(
+    throw new Vibe64AgentExecutionProfileError(
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.MODEL_UNAVAILABLE,
       "Choose a Helper model in Model routing."
     );
   }
-  const thinking = String(selection.variantId || "").trim();
-  return defineVibe64AgentExecutionProfileResolution({
-    ...executionProfile,
+  return defineVibe64HelperExecutionProfileResolution({
+    executionProfile,
     limits,
     model: modelId,
-    policy: {
-      environmentAccess: false,
-      networkAccess: false,
-      repositoryWrite: false,
-      tools: VIBE64_AGENT_EXECUTION_TOOL_POLICIES.NONE
-    },
     providerId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
-    request: {
-      allowProviderModelFallback: false,
-      reasoning: Boolean(thinking),
-      summary: false
-    },
     revision: OPENCODE_HELPER_PROFILE_REVISION,
-    thinking
+    thinking: String(selection.variantId || "").trim()
   });
-}
-
-function emitOpenCodeExecutionProfile(context = {}, executionProfile = null) {
-  if (!executionProfile) {
-    return null;
-  }
-  const snapshot = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
-  context.onEvent?.({
-    executionProfile: snapshot,
-    type: "execution-profile"
-  });
-  return snapshot;
-}
-
-
-function unsupportedOperation(operation = "operation") {
-  return {
-    code: "vibe64_opencode_operation_unsupported",
-    error: `OpenCode does not support the Vibe64 ${operation} operation yet.`,
-    ok: false,
-    retryable: false
-  };
 }
 
 function createOpenCodeSessionAgentProvider({
@@ -226,25 +170,20 @@ function createOpenCodeSessionAgentProvider({
     })();
   }
 
+  async function runDetachedChatTurn(context, input = {}) {
+    const executionProfile = emitVibe64AgentExecutionProfile(context, input.executionProfile);
+    const result = await runNativeDetachedConversation({
+      id: context.sessionId, context, input,
+      options: { onEvent: context.onEvent, runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
+    });
+    return executionProfile ? { ...result, executionProfile } : result;
+  }
+
   return Object.freeze({
     prepareConversationHost,
     conversationOperations: Object.freeze(["createConversation", "ensureSession", "sendMessage", "sessionState", "inspectMessageAdmission", "interruptTurn", "readConversation", "startConversationTurn", "waitForConversationTurn", "stopConversation", "deleteConversation", "closeSession", "closeProject", "invalidateRuntimes", "reconcileSessions", "generateSessionRenewalHandover", "seedSessionRenewalHandover", "releaseRenewalPredecessorProcessExitProof", "releaseRenewalSuccessorProcessExitProof", "interruptDetachedChatTurn", "deleteDetachedChatThread", "listNativeConversationStorage", "retireConversationHistory", "hasActiveTemporaryConversation"]),
-    async runDetachedChatTurn(context, input = {}) {
-      const executionProfile = emitOpenCodeExecutionProfile(context, input.executionProfile);
-      const result = await runNativeDetachedConversation({
-        id: context.sessionId, context, input,
-        options: { onEvent: context.onEvent, runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
-      });
-      return executionProfile ? { ...result, executionProfile } : result;
-    },
-    async streamDetachedChatTurn(context, input = {}) {
-      const executionProfile = emitOpenCodeExecutionProfile(context, input.executionProfile);
-      const result = await runNativeDetachedConversation({
-        id: context.sessionId, context, input,
-        options: { onEvent: context.onEvent, runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
-      });
-      return executionProfile ? { ...result, executionProfile } : result;
-    },
+    runDetachedChatTurn,
+    streamDetachedChatTurn: runDetachedChatTurn,
     prepareConversationRequest(method, context, input = {}) {
       if (method === "generateSessionRenewalHandover" || method === "seedSessionRenewalHandover") return {
         input, context: { runtime: context.runtime, session: context.session, vibe64User: context.vibe64User }
@@ -357,8 +296,6 @@ function createOpenCodeSessionAgentProvider({
 
 export {
   OPENCODE_HELPER_PROFILE_REVISION,
-  OPENCODE_HELPER_WORKLOAD_LIMITS,
   createOpenCodeSessionAgentProvider,
-  resolveOpenCodeHelperExecutionProfile,
-  unsupportedOperation
+  resolveOpenCodeHelperExecutionProfile
 };

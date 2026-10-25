@@ -84,7 +84,7 @@ function normalizedConnections(value = null) {
           accessLabel: text(connection?.accessLabel),
           billingLabel: text(connection?.billingLabel),
           connected: connection?.connected !== false,
-          defaultModelId: text(connection?.defaultModelId || connection?.defaultModelId),
+          defaultModelId: text(connection?.defaultModelId),
           fingerprint: text(connection?.fingerprint),
           id: text(connection?.modelProviderId || connection?.providerId || connection?.id),
           label: text(connection?.productLabel || connection?.label),

@@ -1,13 +1,19 @@
 import { createHash } from "node:crypto";
 import { claudeCatalogueModels } from "@jskit-ai/assistant-core/server/claude-process";
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
-import { VIBE64_AGENT_HELPER_WORKLOAD_LIMITS, defineVibe64AgentExecutionProfileResolution } from "@local/vibe64-runtime/shared";
+import {
+  VIBE64_AGENT_EXECUTION_PROFILE_IDS,
+  VIBE64_AGENT_HELPER_WORKLOAD_LIMITS,
+  VIBE64_ASSISTANT_ENGINE_IDS,
+  VIBE64_ASSISTANT_TRANSPORT_IDS,
+  defineVibe64HelperExecutionProfileResolution
+} from "@local/vibe64-runtime/shared";
 import { CLAUDE_CODE_VERSION } from "./claudeCodeProcess.js";
 import { claudeConversationError as error } from "./terminalShared.js";
 import { sanitizeOperationText } from "@local/vibe64-core/server/logging";
 
-const ENGINE = "claude";
-const TRANSPORT = "claude_stream_json";
+const ENGINE = VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE;
+const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
 const text = (value) => String(value ?? "").trim();
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 /** Original provider-key pin, retained for stopped historical conversion. */
@@ -116,7 +122,7 @@ function createClaudeConversationAccounts({ owner, configRoot, providerConnectio
     },
     async resolveExecutionProfile(context, request) {
       const limits = VIBE64_AGENT_HELPER_WORKLOAD_LIMITS[request.workloadId];
-      if (request.profileId !== "helper" || !limits) throw error("Unsupported Claude helper execution profile.");
+      if (request.profileId !== VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER || !limits) throw error("Unsupported Claude helper execution profile.");
       const modelId = context.assistantSelection?.modelId;
       const modelProviderId = context.assistantSelection?.modelProviderId;
       const catalog = await accounts.capabilities(context, { modelProviderId });
@@ -126,15 +132,13 @@ function createClaudeConversationAccounts({ owner, configRoot, providerConnectio
       if (!model || (thinking && !model.variants.some((variant) => variant.id === thinking))) {
         throw error("The selected Claude helper model is unavailable. Choose another in AI Accounts.");
       }
-      return defineVibe64AgentExecutionProfileResolution({
-        ...request,
+      return defineVibe64HelperExecutionProfileResolution({
+        executionProfile: request,
         limits,
         model: modelId,
-        thinking,
         providerId: ENGINE,
         revision: `claude-${CLAUDE_CODE_VERSION}-${modelId}-tool-free-v1`,
-        policy: { environmentAccess: false, networkAccess: false, repositoryWrite: false, tools: "none" },
-        request: { allowProviderModelFallback: false, reasoning: Boolean(thinking), summary: false }
+        thinking
       });
     },
   };

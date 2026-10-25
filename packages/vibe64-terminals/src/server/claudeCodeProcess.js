@@ -1,5 +1,6 @@
+import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createVibe64ConversationExecution, shellQuote } from "@local/vibe64-execution/server";
+import { appCredentialContext, createVibe64ConversationExecution, shellQuote } from "@local/vibe64-execution/server";
 import { logOperationalEvent, sanitizeOperationText, shouldRedactLogField } from "@local/vibe64-core/server/logging";
 import { isVibe64DebugLoggingEnabled } from "@local/vibe64-core/shared";
 import { claudeCodeArguments as nativeClaudeArguments, claudeFlagSettings as nativeClaudeFlagSettings, createClaudeCodeProcess as startClaude } from "@jskit-ai/assistant-core/server/claude-process";
@@ -106,4 +107,9 @@ async function createClaudeCodeProcess({
   }
 }
 
-export { CLAUDE_CODE_VERSION, claudeCodeArguments, claudeFlagSettings, createClaudeCodeProcess };
+/** Claude Code's configuration directory: CLAUDE_CONFIG_DIR, else the credential home's .claude. */
+function claudeConfigRoot({ env = process.env, credentialHome } = {}) {
+  return env.CLAUDE_CONFIG_DIR || path.join((credentialHome || appCredentialContext()).home, ".claude");
+}
+
+export { CLAUDE_CODE_VERSION, claudeCodeArguments, claudeConfigRoot, claudeFlagSettings, createClaudeCodeProcess };

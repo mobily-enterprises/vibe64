@@ -342,6 +342,58 @@ function vibe64AgentExecutionProfileAuditSnapshot(value) {
   return defineVibe64AgentExecutionProfileResolution(value);
 }
 
+/** Checks a helper request against the shared helper workloads for one provider. */
+function vibe64HelperExecutionProfileRequest(request, providerLabel) {
+  const executionProfile = defineVibe64AgentExecutionProfileRequest(request);
+  if (executionProfile.profileId !== VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER) {
+    throw executionProfileError(
+      VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.PROFILE_UNKNOWN,
+      `${providerLabel} does not provide execution profile ${executionProfile.profileId}.`,
+      { profileId: executionProfile.profileId }
+    );
+  }
+  const limits = VIBE64_AGENT_HELPER_WORKLOAD_LIMITS[executionProfile.workloadId];
+  if (!limits) {
+    throw executionProfileError(
+      VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.WORKLOAD_UNSUPPORTED,
+      `${providerLabel} helper does not support workload ${executionProfile.workloadId}.`,
+      { workloadId: executionProfile.workloadId }
+    );
+  }
+  return { executionProfile, limits };
+}
+
+/** Resolves a helper on the provider's chosen model with tools, writes and fallback disabled. */
+function defineVibe64HelperExecutionProfileResolution({ executionProfile, limits, model, providerId, revision, thinking }) {
+  return defineVibe64AgentExecutionProfileResolution({
+    ...executionProfile,
+    limits,
+    model,
+    policy: {
+      environmentAccess: false,
+      networkAccess: false,
+      repositoryWrite: false,
+      tools: VIBE64_AGENT_EXECUTION_TOOL_POLICIES.NONE
+    },
+    providerId,
+    request: { allowProviderModelFallback: false, reasoning: Boolean(thinking), summary: false },
+    revision,
+    thinking
+  });
+}
+
+/** Reports a resolved profile to the turn's event listener and returns its audit snapshot. */
+function emitVibe64AgentExecutionProfile(context = {}, executionProfile = null) {
+  if (!executionProfile) {
+    return null;
+  }
+  const snapshot = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
+  if (typeof context.onEvent === "function") {
+    context.onEvent({ executionProfile: snapshot, type: "execution-profile" });
+  }
+  return snapshot;
+}
+
 function vibe64AgentProviderSupportsExecutionProfile(provider, profileId) {
   if (!isPlainRecord(provider) || typeof profileId !== "string") {
     return false;
@@ -363,6 +415,9 @@ export {
   Vibe64AgentExecutionProfileError,
   defineVibe64AgentExecutionProfileRequest,
   defineVibe64AgentExecutionProfileResolution,
+  defineVibe64HelperExecutionProfileResolution,
+  emitVibe64AgentExecutionProfile,
   vibe64AgentExecutionProfileAuditSnapshot,
-  vibe64AgentProviderSupportsExecutionProfile
+  vibe64AgentProviderSupportsExecutionProfile,
+  vibe64HelperExecutionProfileRequest
 };

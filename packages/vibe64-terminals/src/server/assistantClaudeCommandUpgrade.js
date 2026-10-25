@@ -3,14 +3,14 @@ import { isDeepStrictEqual } from "node:util";
 import { listProjectRuntimeRoots } from "@local/vibe64-core/server/projectState";
 import { publishStateUpgradeFiles } from "@local/vibe64-core/server/stateUpgradeFiles";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
-import { appCredentialContext } from "@local/vibe64-execution/server";
+import { claudeConfigRoot } from "./claudeCodeProcess.js";
 import { readClaudeHistory } from "@jskit-ai/assistant-core/server/claude-history";
 import { nativeConversationBindings } from "./nativeConversationRetirement.js";
 
 // Stopped-service repair only. Exact native UUID and output bytes establish
 // command identity; visible wording never establishes management provenance.
 export async function upgradeClaudeCommandMessages(context) {
-  const configRoot = process.env.CLAUDE_CONFIG_DIR || path.join(appCredentialContext().home, ".claude");
+  const configRoot = claudeConfigRoot();
   return publishStateUpgradeFiles({ ...context, async prepareUpdates(temporaryRoot) {
     const updates = [];
     for (const projectRuntimeRoot of await listProjectRuntimeRoots(context.systemRoot)) {

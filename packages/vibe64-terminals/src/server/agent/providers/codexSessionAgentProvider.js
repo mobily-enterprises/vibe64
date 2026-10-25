@@ -23,24 +23,21 @@ import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 import {
-  VIBE64_AGENT_HELPER_WORKLOAD_LIMITS,
   VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES,
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
-  VIBE64_AGENT_EXECUTION_TOOL_POLICIES,
+  VIBE64_ASSISTANT_ENGINE_IDS,
+  VIBE64_ASSISTANT_TRANSPORT_IDS,
   VIBE64_CODEX_DEFAULT_MODEL,
   VIBE64_CODEX_DEFAULT_THINKING,
   Vibe64AgentExecutionProfileError,
-  defineVibe64AgentExecutionProfileRequest,
-  defineVibe64AgentExecutionProfileResolution,
-  vibe64AgentExecutionProfileAuditSnapshot
+  defineVibe64HelperExecutionProfileResolution,
+  emitVibe64AgentExecutionProfile,
+  vibe64HelperExecutionProfileRequest
 } from "@local/vibe64-runtime/shared";
 
-const CODEX_PRODUCT_PROVIDER_ID = "codex";
-const CODEX_APP_SERVER_TRANSPORT_ID = "codex_app_server";
 const CODEX_ATTACHMENT_MAX_ITEMS = 10;
 const CODEX_ATTACHMENT_RENEW_RETRY_DELAYS_MS = Object.freeze([500, 1_000, 2_000, 5_000]);
 const CODEX_HELPER_PROFILE_REVISION = "codex-helper-selected-v4";
-const CODEX_HELPER_WORKLOAD_LIMITS = VIBE64_AGENT_HELPER_WORKLOAD_LIMITS;
 const acceptedAttachmentRenewalTimers = new WeakMap();
 
 function codexAssistantSettings(context = {}, input = {}) {
@@ -50,12 +47,12 @@ function codexAssistantSettings(context = {}, input = {}) {
       ? context.agentSettings
       : {};
   const selection = context?.assistantSelection;
-  return selection?.engineId === CODEX_PRODUCT_PROVIDER_ID
+  return selection?.engineId === VIBE64_ASSISTANT_ENGINE_IDS.CODEX
     ? {
         ...requested,
         model: selection.modelId,
         modelProviderId: selection.modelProviderId,
-        providerId: CODEX_PRODUCT_PROVIDER_ID,
+        providerId: VIBE64_ASSISTANT_ENGINE_IDS.CODEX,
         thinking: selection.variantId
       }
     : requested;
@@ -113,7 +110,7 @@ function codexAssistantCapabilities(connected = true, catalog = codexConfiguredM
       modelProviderId: connected ? "openai" : defaultCuratedProvider?.id || "openai",
       variantId: connected ? defaultThinking : ""
     },
-    engineId: CODEX_PRODUCT_PROVIDER_ID,
+    engineId: VIBE64_ASSISTANT_ENGINE_IDS.CODEX,
     health: {
       message: available ? "" : "Connect a Codex provider in AI Accounts.",
       status: available ? "ready" : "unavailable"
@@ -127,7 +124,7 @@ function codexAssistantCapabilities(connected = true, catalog = codexConfiguredM
       models
     }, ...curated],
     revision,
-    transportId: CODEX_APP_SERVER_TRANSPORT_ID
+    transportId: VIBE64_ASSISTANT_TRANSPORT_IDS.CODEX_APP_SERVER
   };
 }
 
@@ -142,31 +139,8 @@ function codexCatalogRows(value = null) {
   ));
 }
 
-function codexHelperExecutionProfileRequest(request = {}) {
-  const executionProfile = defineVibe64AgentExecutionProfileRequest(request);
-  if (executionProfile.profileId !== VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER) {
-    throw codexExecutionProfileError(
-      VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.PROFILE_UNKNOWN,
-      `Codex does not provide execution profile ${executionProfile.profileId}.`,
-      { profileId: executionProfile.profileId }
-    );
-  }
-  const limits = CODEX_HELPER_WORKLOAD_LIMITS[executionProfile.workloadId];
-  if (!limits) {
-    throw codexExecutionProfileError(
-      VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.WORKLOAD_UNSUPPORTED,
-      `Codex helper does not support workload ${executionProfile.workloadId}.`,
-      { workloadId: executionProfile.workloadId }
-    );
-  }
-  return {
-    executionProfile,
-    limits
-  };
-}
-
 function resolveCodexHelperExecutionProfile(request = {}, catalog = null, modelId = "", thinking = "") {
-  const { executionProfile, limits } = codexHelperExecutionProfileRequest(request);
+  const { executionProfile, limits } = vibe64HelperExecutionProfileRequest(request, "Codex");
   const model = codexCatalogRows(catalog).find((row) => row?.hidden !== true && normalizeText(row?.model) === modelId);
   if (!model) {
     throw codexExecutionProfileError(
@@ -182,18 +156,11 @@ function resolveCodexHelperExecutionProfile(request = {}, catalog = null, modelI
       { model: modelId, thinking }
     );
   }
-  return defineVibe64AgentExecutionProfileResolution({
-    ...executionProfile,
+  return defineVibe64HelperExecutionProfileResolution({
+    executionProfile,
     limits,
     model: modelId,
-    policy: {
-      environmentAccess: false,
-      networkAccess: false,
-      repositoryWrite: false,
-      tools: VIBE64_AGENT_EXECUTION_TOOL_POLICIES.NONE
-    },
-    providerId: CODEX_PRODUCT_PROVIDER_ID,
-    request: { allowProviderModelFallback: false, reasoning: Boolean(thinking), summary: false },
+    providerId: VIBE64_ASSISTANT_ENGINE_IDS.CODEX,
     revision: CODEX_HELPER_PROFILE_REVISION,
     thinking
   });
@@ -460,21 +427,6 @@ function codexAttachmentLimitResult(input = {}) {
   };
 }
 
-function emitCodexExecutionProfile(context = {}, executionProfile = null) {
-  if (!executionProfile) {
-    return null;
-  }
-  const snapshot = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
-  if (typeof context.onEvent === "function") {
-    context.onEvent({
-      executionProfile: snapshot,
-      type: "execution-profile"
-    });
-  }
-  return snapshot;
-}
-
-
 function createCodexSessionAgentProvider({
   connectionStatus = async () => true,
   runNativeDetachedConversation,
@@ -507,12 +459,24 @@ function createCodexSessionAgentProvider({
   const nativeSessionResult = result => Object.hasOwn(result, "session")
     ? withCodexState(result.value, result.session) : result.value;
 
+  // A streamed turn always carries its onEvent option; a plain run carries it only when it is callable.
+  async function runDetachedTurn(context, input, eventOptions) {
+    const executionProfile = emitVibe64AgentExecutionProfile(context, input.executionProfile);
+    const result = await runNativeDetachedConversation({
+      id: context.sessionId,
+      context,
+      input: { ...input, vibe64User: input.vibe64User || context.vibe64User || null },
+      options: { ...eventOptions, runtime: context.runtime, session: context.session }
+    });
+    return executionProfile ? { ...result, executionProfile } : result;
+  }
+
   return Object.freeze({
     executionProfiles: Object.freeze([
       VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER
     ]),
-    id: CODEX_PRODUCT_PROVIDER_ID,
-    transportId: CODEX_APP_SERVER_TRANSPORT_ID,
+    id: VIBE64_ASSISTANT_ENGINE_IDS.CODEX,
+    transportId: VIBE64_ASSISTANT_TRANSPORT_IDS.CODEX_APP_SERVER,
     prepareSelection: prepareCodexModelRouting,
     prepareConversationHost(sessionId, context = {}, mode = "main") {
       if (mode === "activity" || mode === "settings") return { native: { runOwner: codexAppServerRunOwner } };
@@ -714,29 +678,11 @@ function createCodexSessionAgentProvider({
         return method === "sendMessage" || method === "interruptTurn" ? nativeSessionResult(result) : result;
       }));
     },
-    async runDetachedChatTurn(context, input = {}) {
-      const executionProfile = emitCodexExecutionProfile(context, input.executionProfile);
-      const result = await runNativeDetachedConversation({
-        id: context.sessionId,
-        context,
-        input: { ...input, vibe64User: input.vibe64User || context.vibe64User || null },
-        options: {
-          ...(typeof context.onEvent === "function" ? { onEvent: context.onEvent } : {}),
-          runtime: context.runtime,
-          session: context.session
-        }
-      });
-      return executionProfile ? { ...result, executionProfile } : result;
+    runDetachedChatTurn(context, input = {}) {
+      return runDetachedTurn(context, input, typeof context.onEvent === "function" ? { onEvent: context.onEvent } : {});
     },
-    async streamDetachedChatTurn(context, input = {}) {
-      const executionProfile = emitCodexExecutionProfile(context, input.executionProfile);
-      const result = await runNativeDetachedConversation({
-        id: context.sessionId,
-        context,
-        input: { ...input, vibe64User: input.vibe64User || context.vibe64User || null },
-        options: { onEvent: context.onEvent, runtime: context.runtime, session: context.session }
-      });
-      return executionProfile ? { ...result, executionProfile } : result;
+    streamDetachedChatTurn(context, input = {}) {
+      return runDetachedTurn(context, input, { onEvent: context.onEvent });
     },
     async capabilities(context = {}, input = {}) {
       const connected = (await connectionStatus(context)) !== false;
@@ -781,7 +727,7 @@ function createCodexSessionAgentProvider({
       const {
         executionProfile,
         limits
-      } = codexHelperExecutionProfileRequest(input);
+      } = vibe64HelperExecutionProfileRequest(input, "Codex");
       const helperModelId = context.assistantSelection?.modelId;
       return resolveCodexHelperExecutionProfile(
         executionProfile,
@@ -849,11 +795,7 @@ function createCodexSessionAgentProvider({
 }
 
 export {
-  CODEX_APP_SERVER_TRANSPORT_ID,
-  CODEX_ATTACHMENT_MAX_ITEMS,
   CODEX_HELPER_PROFILE_REVISION,
-  CODEX_HELPER_WORKLOAD_LIMITS,
-  CODEX_PRODUCT_PROVIDER_ID,
   createCodexSessionAgentProvider,
   resolveCodexHelperExecutionProfile
 };

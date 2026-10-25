@@ -16,6 +16,7 @@ import {
   VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES,
   VIBE64_AGENT_EXECUTION_PROFILE_IDS,
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
+  VIBE64_AGENT_HELPER_WORKLOAD_LIMITS,
   VIBE64_PROMPT_HINT_OUTPUT_SCHEMA,
   vibe64AgentExecutionProfileAuditSnapshot
 } from "../../packages/vibe64-runtime/src/shared/index.js";
@@ -24,7 +25,6 @@ import {
 } from "../../packages/vibe64-runtime/src/server/codexAppServerSessionBridge.js";
 import {
   CODEX_HELPER_PROFILE_REVISION,
-  CODEX_HELPER_WORKLOAD_LIMITS,
   resolveCodexHelperExecutionProfile
 } from "../../packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js";
 
@@ -483,7 +483,7 @@ test("Codex helper resolves Luna-low from the live catalog with bounded tool-fre
   });
   assert.deepEqual(
     result.limits,
-    CODEX_HELPER_WORKLOAD_LIMITS[VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.SOURCE_EXPLANATION]
+    VIBE64_AGENT_HELPER_WORKLOAD_LIMITS[VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.SOURCE_EXPLANATION]
   );
 
 });
@@ -547,7 +547,7 @@ test("Codex declares one provider-owned helper capability with limits for every 
 
   assert.deepEqual(provider.executionProfiles, [VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER]);
   assert.deepEqual(
-    Object.keys(CODEX_HELPER_WORKLOAD_LIMITS).sort(),
+    Object.keys(VIBE64_AGENT_HELPER_WORKLOAD_LIMITS).sort(),
     Object.values(VIBE64_AGENT_EXECUTION_WORKLOAD_IDS).sort()
   );
 

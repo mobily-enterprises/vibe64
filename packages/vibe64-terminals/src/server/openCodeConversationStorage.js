@@ -1,4 +1,4 @@
-import { VIBE64_ASSISTANT_ENGINE_IDS } from "@local/vibe64-runtime/shared";
+import { VIBE64_ASSISTANT_ENGINE_IDS, VIBE64_ASSISTANT_TRANSPORT_IDS } from "@local/vibe64-runtime/shared";
 import { createHash, randomUUID } from "node:crypto";
 
 function openCodeFingerprint(...values) {
@@ -58,7 +58,7 @@ async function recordOpenCodeSessionIdentity(context, nativeId) {
     text(context.session?.metadata?.opencode_conversation_id) !== nativeId ||
     text(context.session?.metadata?.agent_identity_conversation_id) !== nativeId ||
     text(context.session?.metadata?.agent_identity_provider) !== VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE ||
-    text(context.session?.metadata?.agent_transport_id) !== "opencode_server"
+    text(context.session?.metadata?.agent_transport_id) !== VIBE64_ASSISTANT_TRANSPORT_IDS.OPENCODE_SERVER
   ) {
     const capturedAt = new Date().toISOString();
     await writeOpenCodeSessionMetadata(context, {
@@ -70,7 +70,7 @@ async function recordOpenCodeSessionIdentity(context, nativeId) {
       agent_identity_status: "ready",
       agent_identity_updated_at: capturedAt,
       agent_identity_workdir: context.workdir,
-      agent_transport_id: "opencode_server",
+      agent_transport_id: VIBE64_ASSISTANT_TRANSPORT_IDS.OPENCODE_SERVER,
       agent_transport_kind: "loopback-http"
     });
     context.session.metadata.opencode_conversation_id = nativeId;

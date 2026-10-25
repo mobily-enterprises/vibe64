@@ -4,7 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { listProjectRuntimeRoots } from "@local/vibe64-core/server/projectState";
 import { publishStateUpgradeFiles, readUpgradeFile, verifyUpgradeParents } from "@local/vibe64-core/server/stateUpgradeFiles";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
-import { appCredentialContext } from "@local/vibe64-execution/server";
+import { claudeConfigRoot } from "./claudeCodeProcess.js";
 import { claudeNativeMessageId } from "@jskit-ai/assistant-core/server/claude-turn";
 import { readClaudeHistory } from "@jskit-ai/assistant-core/server/claude-history";
 
@@ -44,7 +44,7 @@ export async function rejectedClaudeInputChanges({ metadata, runs, configRoot })
 }
 
 export async function upgradeClaudeRejectedInput(context) {
-  const configRoot = process.env.CLAUDE_CONFIG_DIR || path.join(appCredentialContext().home, ".claude");
+  const configRoot = claudeConfigRoot();
   const manifestPath = path.join(context.backupRoot, "manifest.json");
   await verifyUpgradeParents(context.systemRoot, manifestPath);
   const resuming = await readUpgradeFile(manifestPath) !== null;
