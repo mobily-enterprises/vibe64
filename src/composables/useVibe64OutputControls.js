@@ -1268,6 +1268,8 @@ function useVibe64OutputControls({
     void connectLaunchTerminal();
   }
 
+  // Refetches the current scope's outputs. A caller that captured `scopeKey`
+  // earlier gets nothing once the project or session has changed since.
   async function refresh({
     scopeKey = launchScopeKey.value
   } = {}) {
@@ -1275,7 +1277,7 @@ function useVibe64OutputControls({
       return null;
     }
     const refreshScopeKey = String(scopeKey || "").trim();
-    if (!refreshScopeKey) {
+    if (!refreshScopeKey || refreshScopeKey !== launchScopeKey.value) {
       return null;
     }
     return typeof outputTargetsResource.query?.refetch === "function"
@@ -1402,9 +1404,7 @@ function useVibe64OutputControls({
       localLaunchStarting: launchStarting.value,
       payload: context?.payload || {}
     }, sessionId.value),
-    onEvent: () => refresh({
-      scopeKey: launchScopeKey.value
-    })
+    onEvent: () => refresh()
   });
 
   watch([
@@ -1444,9 +1444,7 @@ function useVibe64OutputControls({
       return;
     }
     outputTargetsRefreshRevision = currentRevision;
-    void refresh({
-      scopeKey: launchScopeKey.value
-    });
+    void refresh();
   }, {
     flush: "post"
   });

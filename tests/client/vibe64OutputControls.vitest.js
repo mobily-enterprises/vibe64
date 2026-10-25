@@ -1054,3 +1054,41 @@ it("Preview Retry setup reruns only a failed Workspace setup", async () => {
     expect(retries).toHaveLength(1);
   } finally { app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals(); }
 });
+
+it("a refresh captured for an earlier project or session does not refetch the current one", async () => {
+  const Vue = await import("vue");
+  const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
+  const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
+  const { launchControlScopeKey, useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
+  const reads = [];
+  vi.stubGlobal("window", { location: new URL("http://localhost/app/project/scoped"),
+    localStorage: fakeStorage(), addEventListener() {}, removeEventListener() {} });
+  configureHttpWebClient({ request(url) {
+    reads.push(url);
+    return Promise.resolve({ outputTargets: [], preview: { state: "idle" } });
+  } });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const session = Vue.ref({ sessionId: "first", metadata: { source_kind: "session_clone",
+    source_path: "/controlled/scoped/sessions/active/first/source", source_path_authority: "managed_session_source" },
+    sourcePath: "/controlled/scoped/sessions/active/first/source" });
+  let controls;
+  const renderer = Vue.createRenderer({ createElement: () => ({}), createComment: () => ({}), createText: () => ({}),
+    insert() {}, remove() {}, setElementText() {}, setText() {}, patchProp() {}, parentNode() {}, nextSibling() {} });
+  const app = renderer.createApp({ setup() {
+    controls = useVibe64OutputControls({ session });
+    return () => Vue.h("div");
+  } });
+  provideConversationFixture(app, { on() {}, off() {} }, "local");
+  app.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
+  app.use(VueQueryPlugin, { queryClient }); app.mount({});
+  try {
+    await vi.waitFor(() => expect(controls.loading.value).toBe(false));
+    const before = reads.length;
+    await expect(controls.refresh({ scopeKey: launchControlScopeKey("scoped", "earlier") })).resolves.toBeNull();
+    expect(reads).toHaveLength(before);
+    await controls.refresh({ scopeKey: launchControlScopeKey("scoped", "first") });
+    expect(reads).toHaveLength(before + 1);
+    await controls.refresh();
+    expect(reads).toHaveLength(before + 2);
+  } finally { app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals(); }
+});
