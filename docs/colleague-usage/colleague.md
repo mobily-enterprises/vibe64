@@ -188,7 +188,7 @@ Its completed notification can still be spoken when sound is on. A saved notice,
 including after reopening. Internal watch instructions and tool arguments stay hidden.
 
 For response watches, watching more than conversations (such as a
-deployment), Learning observation and recorded action outcomes, read
+project's publication), Learning observation and recorded action outcomes, read
 [Colleague watches and operations](colleague-watches.md).
 
 ## Colleague outside projects

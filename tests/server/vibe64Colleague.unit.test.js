@@ -5545,7 +5545,7 @@ test("Training's release ends an attempt's thread, even mid-turn, and leaves its
 });
 
 // Watch sources: owners register what Colleague can watch besides coding
-// conversations (Online's deployments, local publishing later).
+// conversations (Publishing's publication, or a composed host's own source).
 function registerDeploymentSource(f) {
   f.observations.deployment = { live: false, release: "" };
   f.observations.deploymentReads = [];

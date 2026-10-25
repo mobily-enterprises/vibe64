@@ -75,6 +75,7 @@ registers current focus only, without replaying stale focus or resuming watches.
 - `packages/vibe64-colleague/src/server/learningWatchUpgrade.js`
 - `packages/vibe64-colleague/src/server/nativeConversationUpgrade.js`
 - `packages/vibe64-colleague/src/server/retiredOperationUpgrade.js`
+- `packages/vibe64-publishing/src/server/publicationWatch.js`
 
 ## Public contract
 
@@ -745,9 +746,8 @@ and `projectSlug`; its cursor is `{ fingerprint, conditionsMet }`. `changed`
 reports the next fingerprint change. Any other condition reports when it
 becomes true, at once if it already holds. Scheduling, cursors persistence,
 the 16-watch budget, pause/resume/cancel and wake delivery are shared with
-conversation watches. Public registers no state source of its own yet. Local
-publishing registers its `publication` source here when it records publication
-history, and a host registers its own (Online: `deployment`). Application usage
+conversation watches. Public Publishing registers the `publication` source, and
+a composed host may register its own. Application usage
 ("stats") has no source until something records usage.
 
 Learn threads may create watches, of either kind, only on their own lesson

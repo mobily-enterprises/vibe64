@@ -4,8 +4,8 @@ import { learningVocabulary } from "../shared/learningVocabulary.js";
 // the attempt's practice project slug, when it has one) with
 // { holds, reason? }; its owner decides how, reading through ordinary actions
 // with the check's own action `context` so the learner's access applies. Public Training registers its
-// built-in readers; a host registers its own (for example a deployment that
-// is live) by composition. Registering a reader also registers its name in
+// built-in readers; a host registers its own (for example one
+// for its own state) by composition. Registering a reader also registers its name in
 // the learning vocabulary, which is what makes a step that checks it
 // available here.
 const readers = new Map();

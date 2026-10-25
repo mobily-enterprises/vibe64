@@ -38,8 +38,8 @@ function requireResult(result) {
 function publicWatch({ cursor, ...watch }) {
   return structuredClone(watch);
 }
-// The system notice before an autonomous reply to a watch (a conversation or a
-// deployment). Turns saved before it was worded for every watch keep theirs.
+// The system notice before an autonomous reply to a watch (a conversation or
+// another watch source). Turns saved before it was worded for every watch keep theirs.
 const WATCH_UPDATE_NOTICE = "An update from what you asked Colleague to watch.";
 const WATCH_UPDATE_NOTICES = new Set([WATCH_UPDATE_NOTICE, "An update from your watched conversations."]);
 // A watch notice stays only beside the reply it introduced.
