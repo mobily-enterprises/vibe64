@@ -361,44 +361,6 @@ function createTrainingActions({ catalogue, learners, content = null, exercises 
   ]);
 }
 
-// Hosts acquire source through their existing session owner. The shared action
-// layer retains the original bounded learning projections and actor authority.
-function createTrainingAuthorPreviewActions({ preview } = {}) {
-  if (typeof preview?.readState !== "function" || typeof preview?.startLesson !== "function") {
-    throw new TypeError("Author preview actions require an admitted source/preview owner.");
-  }
-  const output = { ...resultOutput, schema: createSchema({ ...resultOutput.schema.getFieldDefinitions(),
-    authorPreview: { type: "boolean", required: true } }) };
-  const definition = (name, fields, description, execute, projectScoped) => withVibe64ActionContext({
-    id: `vibe64.training.author-preview.${name}`, version: 1, kind: name === "read" ? "query" : "command",
-    idempotency: name === "start" ? "domain_native" : "none",
-    input: { mode: "create", schema: createSchema(fields) }, output: null,
-    extensions: { assistant: { alwaysAvailable: true, description, output } },
-    async execute(input, context) {
-      const actor = authenticatedVibe64User(context);
-      try { return boundedResult({ ...await execute(input, actor), authorPreview: true }); }
-      catch (cause) {
-        if (cause.code === "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE") throw cause;
-        throw operationError(cause);
-      }
-    }
-  }, { projectScoped, ownerRequired: true });
-  return Object.freeze([
-    definition("read", {}, "Read this signed-in owner's isolated author-preview state and revision: owner trials of draft lessons, kept apart from normal learner progress. It does not read source, install a topic, refresh a preview or affect normal learner progress. Snapshot admission is not a completed trial. A trial attempt opens in Learning like any lesson; read lesson.read with its attempt ID for its steps.", async (_input, actor) => {
-      const result = await preview.readState({ actor });
-      return { ok: true, available: true, revision: result.revision, activeSummaryCurrent: result.activeSummaryCurrent,
-        active: active(result.active), completion: completion(result.completion),
-        history: result.progress.attempts.filter(value => value.ended).map(active) };
-    }, false),
-    definition("start", {
-      projectSlug: { ...text, maxLength: 128 }, sessionId: { ...text, maxLength: 128 },
-      lessonCode: id, expectedCommit: { ...text, maxLength: 40, pattern: "^[a-f0-9]{40}$" },
-      requestId: { ...requestId, maxLength: 18 }, expectedRevision: revision
-    }, "Admit a lesson snapshot only after the owner's direct request or accepted offer. Use the exact authorized authoring project/session, clean committed topic root, lesson code, observed 40-character commit and author-preview.read revision. The host reads that exact session under original idle/lifecycle/source guards and installs its immutable snapshot. A local commit is not remote publication or an enabled learner course. Use the same at-most18-character request and unchanged source arguments on uncertain retry; retained reservations reuse their saved pin without reading edited source. A fresh request refuses an active author preview. To explicitly refresh, read author-preview.read, delete its exact attempt through lesson.delete only when requested, then use a new author-preview.start request for the new committed snapshot and returned revision. Report end confirmed/start pending separately if start fails. Never silently end, replace, retarget or merge ordinary learner progress. Return the exact preview attempt. The trial opens in Learning like any lesson: read lesson.read with its attempt ID and teach its steps. Do not claim a completed trial. A preparation error may follow successful snapshot admission and attempt reservation: reread author-preview.read before describing the outcome, and preserve/resume that exact saved attempt rather than claiming nothing changed. Preparation is not running Preview or a pass. Colleague has no source paths or shell access.", async (input, actor) =>
-      prepared(await preview.startLesson({ actor, ...pick(input, ["projectSlug", "sessionId", "lessonCode", "expectedCommit", "requestId", "expectedRevision"]) })), true)
-  ]);
-}
-
 // The bounded projections and schema a host's own Training actions reuse.
 export { active as attemptProjection, attemptId, attemptSummary, boundedResult, completion as completionProjection, createTrainingActions,
-  createTrainingAuthorPreviewActions, id, operationError, pick, practiceSlug, prepared as preparedResult, requestId, resultOutput, revision, text };
+  id, operationError, pick, practiceSlug, prepared as preparedResult, requestId, resultOutput, revision, text };

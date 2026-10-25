@@ -186,19 +186,9 @@ updated from Learning's **Courses** pane by any signed-in person (see
 operator steps below remain for content outside that catalogue, for an author's
 own snapshots, and for disabling a release.
 
-In supported hosted installations, ask Colleague to admit your exact clean
-committed snapshot from the authorized authoring session. Then open Learning with
-**L**; on its **Courses** tab the **Author trial** card shows the snapshot's lesson
-and release, and **Resume author trial** opens it in the ordinary lesson reader, the page's **Lesson** sheet. This saved trial has isolated progress; it is not an
-enabled learner course. Ordinary **Start lesson** still requires a published lesson in
-an enabled release. Local validation/bundling alone admits no trial. Do not change
-a draft's status to bypass that guard or report a trial as published progress.
-
-Internal snapshot acquisition also retains the authoring session's normal
-source protections: AI work, pending review or cleanup, and Workspace setup
-must finish before its committed content can be captured. A closing, renewing
-or unavailable source is refused. The saved trial control captures no source,
-automatically stops no work and does not save or push the source.
+Ordinary **Start lesson** requires a published lesson in an enabled release;
+local validation or bundling makes no lesson startable. Do not change a draft's
+status to bypass that guard or report a draft as published progress.
 
 A workspace operator can now provision approved local lesson content through the
 terminal commands documented in [Local operator provisioning](../training-content.md#local-operator-provisioning).

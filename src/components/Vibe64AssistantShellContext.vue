@@ -5,8 +5,8 @@ import { VIBE64_ASSISTANT_HOST_KEY, VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_COLLEAGUE_
 import { createVibe64Learning } from "@/lib/vibe64Learning.js";
 import { createPageActivity } from "@/lib/vibe64PageActivity.js";
 const props = defineProps({ local: Boolean });
-// Standalone's existing local display scope is not a hosted authenticated user.
-// Hosted AuthGate continues to supply its real viewer to authenticated children.
+// Standalone's local display scope is not an authenticated user; a host with
+// sign-in supplies its real viewer to its authenticated children instead.
 if (props.local) provide(VIBE64_ASSISTANT_VIEWER_KEY, Object.freeze({ actorKey: "local" }));
 provide(VIBE64_ASSISTANT_HOST_KEY, shallowRef(null));
 const colleagueView = shallowRef(null);

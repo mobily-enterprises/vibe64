@@ -44,7 +44,7 @@ function uiRenderer() {
 const uiWidget = { setup: (_props, { attrs, slots }) => () => Vue.h("div", attrs, slots.default?.()) };
 function nodes(root) { return [root, ...root.children.flatMap(nodes)]; }
 
-async function mountCourses({ authorTrial = null, slot = null, accounts = { aiOnboardingAvailable: Vue.ref(true), aiOnboardingNeeded: Vue.ref(false),
+async function mountCourses({ slot = null, accounts = { aiOnboardingAvailable: Vue.ref(true), aiOnboardingNeeded: Vue.ref(false),
   requestVibe64AiOnboarding: vi.fn(() => true) } } = {}) {
   const route = Vue.reactive({ fullPath: "/app" });
   const calls = { pickerProps: null, opened: [] };
@@ -54,12 +54,6 @@ async function mountCourses({ authorTrial = null, slot = null, accounts = { aiOn
   owner.refresh = async () => null;
   owner.startLesson = async input => { calls.start = input; return { attemptId: "attempt", current: true }; };
   owner.resumeLesson = async attempt => { calls.resume = attempt; return { attemptId: attempt, current: true }; };
-  if (authorTrial) {
-    owner.authorPreviewEnabled = Vue.ref(true);
-    owner.authorPreviewResource = { data: Vue.ref({ ok: true, available: true, authorPreview: true }), isLoading: Vue.ref(false), loadError: Vue.ref("") };
-    owner.savedAuthorPreview = Vue.ref(authorTrial);
-    owner.resumeAuthorPreview = async attemptId => { calls.authorPreview = attemptId; return { attemptId, current: true }; };
-  }
   // A start's failure shows on the card that requested it, through the picker's startError.
   const picker = { props: ["canStart", "canResume", "learningResult", "startError"], emits: ["start", "resume", "refresh"], setup(props, { emit }) {
     calls.pickerProps = props;
@@ -154,19 +148,6 @@ it("tells a learner with no AI to set it up, before a start and when a start's p
     expect(view.accounts.requestVibe64AiOnboarding).toHaveBeenCalledTimes(1);
     view.accounts.aiOnboardingAvailable.value = false; await Vue.nextTick();
     expect(nodes(notice()).some(node => node.props?.onClick), "no Set up your AI for a viewer who cannot set it up").toBe(false);
-  } finally { view.app.unmount(); }
-});
-
-it("adds one saved author-trial control beside the courses without released-course start", async () => {
-  const view = await mountCourses({ authorTrial: { attemptId: "saved-preview",
-    pin: { topic: { release: "0.1.8", commit: "f".repeat(40) }, lesson: { code: "DRAFT-ONE" } } } });
-  try {
-    const button = nodes(view.root).find(node => node.props?.["data-test"] === "resume-author-trial");
-    expect(button).toBeTruthy(); expect(button.props.disabled).toBeFalsy();
-    button.props.onClick(); await Vue.nextTick(); await Vue.nextTick();
-    expect(view.calls.authorPreview).toBe("saved-preview"); expect(view.calls.start).toBeUndefined();
-    expect(view.calls.opened).toEqual([{ attemptId: "saved-preview", current: true }]);
-    expect(view.calls.pickerProps.learningResult).toBe(view.owner.learningResource.data.value);
   } finally { view.app.unmount(); }
 });
 

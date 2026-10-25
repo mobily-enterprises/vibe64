@@ -16,13 +16,11 @@ import Vibe64LearningTeacherNotes from "./Vibe64LearningTeacherNotes.vue";
 
 // The Courses overlay (Learn mode's Courses button), the catalogue where
 // lessons are chosen and started (the lesson itself is read in the Learn
-// page's Lesson pane), mounted once per host for the signed-in viewer: public
-// App.vue and hosted AuthGate's authenticated content. It also keeps each address in its mode, colours the app bar in
-// Learn mode, and mounts the one global teacher guide overlay of that host.
-const props = defineProps({
-  // Owner-only author trial of draft lessons (hosted owner).
-  authorPreview: { type: [Boolean, Object], default: false }
-});
+// page's Lesson pane), mounted once per host for the signed-in viewer (public
+// App.vue, or a host's own authenticated shell). Its `courses` slot is a host's
+// own Courses content above the picker. It also keeps each address in its
+// mode, colours the app bar in Learn mode, and mounts the one global teacher
+// guide overlay of that host.
 const learning = useVibe64Learning();
 const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, null);
 const actorKey = computed(() => String(toValue(viewer)?.actorKey || ""));
@@ -78,8 +76,7 @@ watch(open, async value => {
 
 // Courses' reads also serve a Take the tour request while Courses stays closed.
 const orientationRequested = computed(() => Boolean(learning?.orientationRequested));
-const courses = useVibe64LearningCourses({ authorPreview: computed(() => toValue(props.authorPreview) === true),
-  active: computed(() => open.value || orientationRequested.value) });
+const courses = useVibe64LearningCourses({ active: computed(() => open.value || orientationRequested.value) });
 const surface = computed(() => learning?.state.surface || "courses");
 const tabs = Object.freeze([
   { id: "courses", label: "Courses" },

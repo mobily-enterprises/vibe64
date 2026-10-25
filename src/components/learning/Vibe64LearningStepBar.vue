@@ -132,7 +132,7 @@ const forwardAction = computed(() => {
   if (!lastStep.value) return { label: "Next step", run: () => beats.value.length ? player.value.next() : go(1) };
   return learning?.complete && !ended.value ? { label: "Finish", run: () => learning.showFinished() } : null;
 });
-// Away from the lesson's practice project (Management, another studio page): the way back to it.
+// Away from the lesson's practice project (another page of this Vibe64): the way back to it.
 const route = useRoute();
 const router = useRouter();
 const practiceSlug = computed(() => learning?.mode?.practiceSlug || lesson.value?.practiceProjectSlug || "");

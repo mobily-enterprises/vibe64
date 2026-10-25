@@ -46,7 +46,7 @@ controller itself is described in [Learning environment (L)](learning-environmen
 
 ## Public contract
 
-`useVibe64LearningCourses({ authorPreview, active })` is the Courses adapter of
+`useVibe64LearningCourses({ active })` is the Courses adapter of
 the L overlay; `active` is L's open state. `coursesResource` and
 `learningResource` use the original endpoint resource, Vue Query cache and HTTP
 cancellation, scoped by the injected actual viewer actor. A private reader
@@ -101,17 +101,20 @@ schema, and focus with a retired key is refused like any unknown field; an old
 `?mode=learning` address renders the ordinary project page; and session realtime matchers ignore events that carry a
 `learningAttemptId`, because the server can still emit them without a project.
 
-## Saved hosted author-trial reader
+## A host's own Courses content
 
-The host opts into one original owner-only `author-preview.read` HTTP adapter by
-passing `authorPreview` to the L overlay (hosted: the workspace owner's AuthGate).
-Normal standalone resources perform no extra preview read. The adapter masks its
-saved trial on actor/role change and uses the same actor-envelope endpoint
-resource. One card in the Courses surface displays that isolated active pin and
-delegates Resume to the same saved-attempt preparation. It neither reserves on
-read nor merges normal progress. Snapshot acquisition and explicit end/new-start
-refresh remain the existing hosted Colleague actions. Published Start
-eligibility and immutable pins are unchanged; no draft course is promoted.
+The L overlay's `courses` slot (forwarded to `Vibe64LearningCourses`'s default
+slot, above the picker) receives `{ courses, opened, busy, canRequest }`, so a
+host can list its own saved lessons. `courses.hostRead(name, path, enabled?)`,
+called in that content's setup, makes its read with the same actor-envelope
+endpoint resource (masked on actor change, denied reads expose nothing) and
+registers it for `refresh()` while mounted. `courses.resumeLesson(attemptId,
+{ savedIn })` with `savedIn = { current(), reload() }` reopens such a lesson
+through the same saved-attempt Resume only while `current()` holds (refusing
+before any request otherwise), reports the outcome not current when it no
+longer holds, and calls `reload()` after the resume. Standalone mounts no such
+content and makes no extra read. Published Start eligibility and immutable
+pins are unchanged.
 
 ## Learn and Develop modes
 
@@ -138,8 +141,8 @@ refusal. The overlay applies it on every route and mode change, showing the
 note only when the learner opened the address. It waits while `state.modeBusy`
 is set, so it never cancels `setMode`'s own move to the saved place. It sets body class
 `vibe64-learn-mode` (the yellow app bar) in Learn. `Vibe64LearningRouteHold.vue`
-wraps each host's routed pages (public `App.vue`, hosted AuthGate's prepared
-content; locally also the AI onboarding host) and renders them only once the
+wraps each host's routed pages (public `App.vue`, or a host's own prepared
+authenticated content; locally also the AI onboarding host) and renders them only once the
 mode is read and no redirect applies, so a redirected page never sends requests
 the server would refuse. It also holds a project page while `state.modeBusy` is
 `"set"`: L always leaves a project page, so the page goes at the press, before

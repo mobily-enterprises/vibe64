@@ -222,7 +222,7 @@ The composing server chooses a separate preview state root with the actual
 authenticated actor. The original schema, atomic writer, CAS, locks and immutable
 receipts own that isolated trial state; no new journal or historical rewrite
 exists. These constructor prerequisites do not select a preview snapshot or admit
-an author; the owner-only `author-preview.read`/`author-preview.start` actions do.
+an author; that admission belongs to the composing host.
 
 ## Verified installation
 

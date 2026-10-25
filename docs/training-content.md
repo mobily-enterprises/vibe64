@@ -558,7 +558,7 @@ The exact schema-version-1 pin contains `topicId`, `release`, canonical `reposit
 course lock's topic `manifestHash` to `topicHash` at that owning operation.
 This low-level service does not authenticate callers, fetch Git repositories,
 enable courses or grant access. Its callers are the operator `install-topic`
-command, the owner author trial and the official catalogue installer below.
+command, a host's own snapshot admission and the official catalogue installer below.
 
 Installation reuses the clean committed-source proof, original bundle command
 and installed reader. It checks the approved identity before and after bundling,

@@ -110,7 +110,7 @@ toggle on beside the **Preview** | **Dash** switch; press it again to hide the l
 (ask that session's agent or use Workspace setup recovery); it is not a learner
 answer or a passed step.
 
-Opening Courses again rereads saved lessons and any admitted author trial, without
+Opening Courses again rereads saved lessons, without
 reloading the page. An account change immediately hides the previous person's
 progress and diagrams; a late result of a request made before the change cannot
 open the lesson in the new view, but admitted lesson work is not undone.

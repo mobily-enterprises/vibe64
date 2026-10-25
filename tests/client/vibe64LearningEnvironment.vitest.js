@@ -463,7 +463,7 @@ describe("useVibe64Learning controller", () => {
     expect(layout.value.showProject).toHaveBeenCalledOnce();
   });
 
-  it("shows an author trial, which never becomes the mode's lesson, as this tab's current lesson in the Lesson pane", async () => {
+  it("shows a resumed saved lesson, which never becomes the mode's lesson, as this tab's current lesson in the Lesson pane", async () => {
     const router = { currentRoute: { value: { fullPath: "/app/learning" } }, push: vi.fn(async path => { router.currentRoute.value.fullPath = path; }) };
     const { learning } = controller({ router, mode: () => ({ ...LEARN, currentAttemptId: "", practiceSlug: "" }) });
     learning.setViewer("member");

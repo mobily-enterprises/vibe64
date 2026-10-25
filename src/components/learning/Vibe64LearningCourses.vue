@@ -27,10 +27,7 @@ const progress = computed(() => toValue(props.courses.learningResource.data));
 const busy = computed(() => toValue(props.courses.busy));
 const retry = computed(() => toValue(props.courses.startRetry));
 const starting = computed(() => toValue(props.courses.starting) === true);
-const trial = computed(() => toValue(props.courses.savedAuthorPreview));
 const installState = computed(() => toValue(props.courses.installState) || null);
-const trialResource = computed(() => props.courses.authorPreviewResource);
-const trialEnabled = computed(() => toValue(props.courses.authorPreviewEnabled) === true);
 const errorVisible = computed(() => Boolean(errorLearner.value && errorLearner.value === toValue(props.courses.learnerId)
   && toValue(props.courses.active)));
 // The lesson in progress waits for the learner's AI (its saved preparation
@@ -43,7 +40,7 @@ const aiNotice = computed(() => aiFailure.value?.message ||
   (aiOnboardingNeeded.value ? "Lessons use your AI: the coding agent in each practice project and Colleague, your teacher, both need it. Set up your AI before you start." : ""));
 const canRequest = computed(() => Boolean(toValue(props.courses.learnerId) && toValue(props.courses.active)));
 let feedbackGeneration = 0;
-watch(() => [toValue(props.courses.learnerId), toValue(props.courses.active), route.fullPath, trialEnabled.value], () => {
+watch(() => [toValue(props.courses.learnerId), toValue(props.courses.active), route.fullPath], () => {
   feedbackGeneration += 1;
   error.value = "";
   errorLearner.value = "";
@@ -86,29 +83,6 @@ async function request(operation, kind = "") {
     <v-btn v-if="retry" class="vibe64-learning-launcher__retry" variant="tonal" rounded="pill" min-height="48" :disabled="busy || !canRequest" @click="start(toValue(courses.startRetry), '')">
       Retry lesson start
     </v-btn>
-    <section v-if="trialEnabled && trialResource" class="vibe64-learning-launcher__trial" aria-label="Saved author trial" :aria-busy="toValue(trialResource.isLoading)">
-      <p class="vibe64-learning-launcher__trial-eyebrow">Authoring</p>
-      <h2>Author trial</h2>
-      <p>This isolated snapshot is separate from your published lesson progress.</p>
-      <v-skeleton-loader v-if="toValue(trialResource.isLoading) && !trial" type="list-item-two-line, actions" aria-label="Loading saved author trial" />
-      <v-alert v-if="toValue(trialResource.loadError)" type="error" variant="tonal">
-        {{ toValue(trialResource.loadError) }} Refresh courses before reopening the trial.
-      </v-alert>
-      <template v-if="trial">
-        <p>{{ trial.pin.lesson.code }} · {{ trial.pin.topic.release }}</p>
-        <details><summary>Saved trial identity</summary><code>{{ trial.pin.topic.commit }}</code></details>
-        <v-btn
-          variant="tonal" rounded="pill" min-height="48" data-test="resume-author-trial"
-          :disabled="busy || !canRequest || toValue(trialResource.isLoading) || !!toValue(trialResource.loadError)"
-          @click="opened(owner => owner.resumeAuthorPreview(trial.attemptId))"
-        >
-          Resume author trial
-        </v-btn>
-      </template>
-      <p v-else-if="!toValue(trialResource.isLoading) && !toValue(trialResource.loadError)">
-        Ask Colleague to admit the exact clean committed lesson snapshot from your authoring session first.
-      </p>
-    </section>
     <!-- A host's own Courses content (for example its own saved lessons) sits
          above the picker; opened() opens a lesson it resumes like any other. -->
     <slot :courses="courses" :opened="opened" :busy="busy" :can-request="canRequest" />
@@ -141,21 +115,6 @@ async function request(operation, kind = "") {
 <style scoped>
 .vibe64-learning-launcher { min-height: 0; overflow-y: auto; padding: var(--v64-space-4, 16px); }
 .vibe64-learning-launcher__retry { margin-bottom: var(--v64-space-3, 12px); letter-spacing: 0; text-transform: none; }
-.vibe64-learning-launcher__trial {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--v64-space-2, 8px);
-  margin-bottom: var(--v64-space-4, 16px);
-  padding: var(--v64-space-4, 16px) var(--v64-space-5, 24px);
-  border: 1px dashed var(--v64-outline, rgba(var(--v-theme-on-surface), 0.24));
-  border-radius: var(--v64-shape-lg, 16px);
-  background: var(--v64-surface-container-low, rgb(var(--v-theme-surface)));
-}
-.vibe64-learning-launcher__trial > * { margin: 0; max-width: 100%; overflow-wrap: anywhere; }
-.vibe64-learning-launcher__trial h2 { font: var(--v64-type-title-lg, 600 1.375rem/1.75rem system-ui, sans-serif); }
-.vibe64-learning-launcher__trial-eyebrow { font: var(--v64-type-label-md, 500 0.75rem/1rem system-ui, sans-serif); letter-spacing: 0.08em; text-transform: uppercase; color: var(--v64-on-surface-variant, inherit); }
-.vibe64-learning-launcher__trial .v-btn { letter-spacing: 0; text-transform: none; }
 .vibe64-learning-launcher__error { flex: 0 0 auto; margin-block: 0 var(--v64-space-3, 12px); }
 .vibe64-learning-launcher__ai { margin-top: var(--v64-space-2, 8px); letter-spacing: 0; text-transform: none; }
 </style>

@@ -11,7 +11,7 @@ import { trainingFailure } from "./errors.js";
 
 // The official catalogue is the only source this facility reads. Arbitrary
 // repositories, local directories and author snapshots stay with the operator
-// CLI and the owner-only author trial.
+// CLI and the low-level content installer.
 const DEFAULT_CATALOGUE_REPOSITORY = "mobily-enterprises/vibe64-learning-catalog";
 const CATALOGUE_REPOSITORY = /^[a-zA-Z0-9_.-]+\/[a-zA-Z0-9_.-]+$/u;
 const TOPIC_REPOSITORY = /^[a-zA-Z0-9_.-]+\/learn-[a-zA-Z0-9_.-]+$/u;
@@ -20,8 +20,9 @@ const HASH = /^[a-f0-9]{64}$/u;
 const COURSE_ID = /^[a-z][a-z0-9-]{0,63}$/u;
 const RELEASE = /^\d+\.\d+\.\d+$/u;
 // Scratch sources live beside, never inside, the training installation
-// namespace: the content installer refuses a source inside it. Hosted managed
-// execution admits Git only in this exact one-level scratch shape.
+// namespace: the content installer refuses a source inside it. Each scratch
+// source is exactly one level below it with this name, and each Git run is
+// confined (allowedRoots) to one such directory; keep that shape exact.
 const SOURCES_DIR = "training-sources";
 const SCRATCH_NAME = /^(catalogue|topic)-[a-f0-9-]{36}$/u;
 const MAX_FILE_BYTES = 256 * 1024;

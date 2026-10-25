@@ -11,7 +11,7 @@ import { VIBE64_LEARNING_ROUTES, VIBE64_LESSON_IN_PROGRESS_CODE } from "@/lib/vi
 // anything. `active` (a ref or getter) is the overlay's open state; requests
 // are made only while it is open, and it stays above the app, so app
 // navigation behind it does not retire them.
-export function useVibe64LearningCourses({ authorPreview = false, active } = {}) {
+export function useVibe64LearningCourses({ active } = {}) {
   const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
   const actorKey = computed(() => String(toValue(viewer)?.actorKey || ""));
   const open = computed(() => toValue(active) === true);
@@ -56,19 +56,12 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
   const learningResource = readResource("learning", VIBE64_LEARNING_ROUTES.learning);
   // The official catalogue is read from GitHub by the server, so only while L is open.
   const availableResource = readResource("available", VIBE64_LEARNING_ROUTES.available, open);
-  const authorPreviewEnabled = computed(() => toValue(authorPreview) === true);
-  const authorPreviewResource = authorPreview === false ? null : readResource("author-preview", VIBE64_LEARNING_ROUTES.authorPreview, authorPreviewEnabled);
   // A host's own reads beside the courses (hostRead), reread with them.
   const hostReads = new Set();
   // Saved lessons may change while L is closed. Opening L rereads them, not
   // reusing an earlier picker result.
   watch(open, (value, previous) => {
     if (value && !previous) void refresh();
-  });
-  const savedAuthorPreview = computed(() => {
-    const result = authorPreviewResource?.data.value;
-    return result?.ok === true && result.available === true && result.authorPreview === true && !result.active?.ended
-      ? result.active || null : null;
   });
   const learnerId = computed(() => learningResource.data.value?.ok === true && learningResource.data.value?.available === true
     && typeof learningResource.data.value.learnerId === "string" ? learningResource.data.value.learnerId : "");
@@ -95,14 +88,12 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
   }
   const current = scope => !disposed && scope.actor === actorKey.value && scope.learnerId === learnerId.value
     && scope.generation === generation && open.value
-    && (!scope.authorPreviewAttemptId || (authorPreviewEnabled.value &&
-      savedAuthorPreview.value?.attemptId === scope.authorPreviewAttemptId && !authorPreviewResource.loadError.value))
     && (!scope.savedIn || scope.savedIn.current() === true);
 
   async function refresh() {
     if (!actorKey.value || disposed) return null;
     return Promise.all([coursesResource.reload(), learningResource.reload(), availableResource.reload(),
-      ...(authorPreviewResource ? [authorPreviewResource.reload()] : []), ...[...hostReads].map(read => read.reload())]);
+      ...[...hostReads].map(read => read.reload())]);
   }
 
   // A host's own actor-scoped read shown beside the courses, made in the
@@ -137,7 +128,6 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
     if (handedOver) onAdmitted(admitted.attemptId);
     if (stillCurrent()) {
       await learningResource.reload();
-      if (scope.authorPreviewAttemptId) await authorPreviewResource.reload();
       if (scope.savedIn) await scope.savedIn.reload();
     }
     return { result, attemptId: admitted.attemptId, learnerId: scope.learnerId,
@@ -240,14 +230,7 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
     }
   }
 
-  async function resumeAuthorPreview(attemptId) {
-    if (busy.value) return null;
-    const scope = Object.freeze({ ...capture(), authorPreviewAttemptId: attemptId });
-    if (!attemptId || !current(scope)) throw new Error("Read this owner's exact saved author trial before reopening it.");
-    return resume(attemptId, scope, null);
-  }
-
   return Object.freeze({ active: open,
     coursesResource, learningResource, availableResource, installState, installCourse, learnerId, busy, starting, startRetry,
-    refresh, hostRead, startLesson, resumeLesson, createCourse, authorPreviewEnabled, authorPreviewResource, savedAuthorPreview, resumeAuthorPreview });
+    refresh, hostRead, startLesson, resumeLesson, createCourse });
 }

@@ -34,10 +34,9 @@ const VIBE64_LEARNING_ROUTES = Object.freeze({
   lessonDelete: attemptId => attemptPath(attemptId, "/delete"),
   // Saved progress (its revision fences restart and finish).
   learning: `${TRAINING_PATH}/learning`,
-  // Courses: the installed courses, the official catalogue, an owner's author trial.
+  // Courses: the installed courses and the official catalogue.
   courses: `${TRAINING_PATH}/courses`,
   available: `${TRAINING_PATH}/available`,
-  authorPreview: `${TRAINING_PATH}/author-preview`,
   courseInstall: `${TRAINING_PATH}/courses/install`,
   lessonStart: `${TRAINING_PATH}/lessons/start`,
   lessonResume: attemptId => attemptPath(attemptId, "/resume"),
@@ -94,7 +93,8 @@ function writeJson(kind, key, value) {
 }
 
 // This tab's place (sessionStorage): the Courses tab, and the Lesson pane's
-// attempt, step and scroll (trialAttemptId: an author trial opened here), and
+// attempt, step and scroll (trialAttemptId: a saved lesson opened here that is
+// not the learner's lesson in progress), and
 // the step bar's beat and pause.
 function readPlace(actorKey) {
   const value = readJson("sessionStorage", `${STORAGE_PREFIX}${actorKey}`);
@@ -269,9 +269,10 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   // open/minimised: the Courses overlay. hiddenBy: "learner" when the
   // learner's own close or Escape hid it (Colleague then returns a phone
   // learner to its conversation), else "". finished: the Lesson pane shows
-  // the "Lesson finished" screen. trialAttemptId: an author trial opened in
-  // this tab, which is the current lesson here (a trial never changes the
-  // learner's mode). modeRead: this viewer's mode has been read (or found
+  // the "Lesson finished" screen. trialAttemptId: a saved lesson opened in
+  // this tab that is not the mode's lesson in progress (a host's own saved
+  // lesson in Courses); it is the current lesson here and never changes the
+  // learner's mode. modeRead: this viewer's mode has been read (or found
   // unreadable). Each surface has its own error, cleared only when its own
   // operation starts: lessonError (the lesson read and step actions: Reader,
   // Step, step bar) and attemptsError (restart, finish, delete and the In
@@ -353,8 +354,8 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
       beat: state.beat, beatPaused: state.beatPaused });
   }
 
-  // The signed-in viewer is supplied by the mounted overlay (hosted AuthGate
-  // provides it below this controller). A different viewer sees nothing of the
+  // The signed-in viewer is supplied by the mounted overlay (the host's
+  // authenticated shell provides it below this controller). A different viewer sees nothing of the
   // previous person's mode, places, lesson or pending requests.
   function setViewer(actorKey) {
     const next = String(actorKey || "");
@@ -576,7 +577,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     if (!value?.on) return null;
     minimise();
     const changed = text(attemptId) && attemptId !== state.attemptId;
-    // Another attempt than this tab's author trial ends the trial here.
+    // Another attempt than this tab's saved lesson ends that lesson here.
     if (text(attemptId) && attemptId !== state.trialAttemptId) state.trialAttemptId = "";
     if (changed) {
       state.finished = false;
@@ -921,9 +922,9 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   // Projects): its Lesson pane.
   const openCurrent = () => openLesson();
 
-  // After a confirmed start, resume, restart or author trial: Learn mode is on
-  // and the attempt is the current lesson; show it in its Lesson pane. A
-  // trial is not the mode's attempt in progress, so this tab keeps it as its
+  // After a confirmed start, resume or restart: Learn mode is on and the
+  // attempt is the current lesson; show it in its Lesson pane. A resumed
+  // lesson that is not the mode's attempt in progress stays this tab's
   // current lesson.
   async function opened(outcome) {
     if (!outcome?.attemptId || outcome.current === false) return outcome;
@@ -1168,7 +1169,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     get mode() { return mode.value; },
     get learnMode() { return learnMode.value; },
     // The lesson the Lesson pane shows: the current lesson (the mode's attempt
-    // in progress, or this tab's author trial), or a just finished lesson's
+    // in progress, or this tab's other saved lesson), or a just finished lesson's
     // Finished screen until it is left.
     get lessonAttemptId() { return lessonAttemptId.value; },
     get stepBarVisible() { return stepBarVisible.value; },
