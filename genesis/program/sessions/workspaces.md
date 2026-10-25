@@ -22,6 +22,7 @@ that turn without dropping either half. No saved history is rewritten.
 - `src/components/studio/vibe64-session/Vibe64ConnectedReplacement.vue`
 - `packages/vibe64-runtime/src/server/runtime.js`
 - `packages/vibe64-runtime/src/server/sessionStore.js`
+- `packages/vibe64-runtime/src/server/sessionLocks.js`
 - `tests/server/vibe64Runtime.unit.test.js`
 - `tests/server/vibe64SessionStore.unit.test.js`
 - `tests/server/assistantRoutingStateInventory.unit.test.js`
