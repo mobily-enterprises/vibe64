@@ -18,7 +18,6 @@ export * from "./sessionSourcePath.js";
 export * from "./studioProjectContext.js";
 export * from "./studioRoots.js";
 export * from "./terminalWebSocketRoutes.js";
-export * from "./vibe64MembershipStore.js";
 export * from "./projectState.js";
 export * from "./projectPromptHints.js";
 export * from "./projectRecordMetadata.js";
