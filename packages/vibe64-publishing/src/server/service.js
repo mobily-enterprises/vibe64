@@ -165,7 +165,7 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
       const state = await orchestrator.readState();
       return {
         ...state,
-        destinations: PUBLISH_DESTINATION_CATALOG,
+        destinations: PUBLISH_DESTINATION_CATALOG.map((entry) => ({ ...entry, packers: vibe64Destination(entry.id).packers })),
         accountKinds: Object.values(PUBLISH_ACCOUNT_KINDS),
         accounts: await broker.accounts(),
         keys: { ...state.keys, entries: state.keys.entries.map(({ id, kind, label, createdAt, certificateSha256, accountKind, address }) => ({ id, kind, label, createdAt, certificateSha256, accountKind, address })) },

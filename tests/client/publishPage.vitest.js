@@ -14,6 +14,10 @@ import AndroidSideloadCard from "../../packages/vibe64-publishing/src/client/car
 import TargetCard from "../../packages/vibe64-publishing/src/client/cards/TargetCard.vue";
 import NpmCard from "../../packages/vibe64-publishing/src/client/cards/NpmCard.vue";
 import { PUBLISH_ACCOUNT_KINDS, PUBLISH_DESTINATION_CATALOG } from "../../packages/vibe64-publishing/src/shared/destinationCatalog.js";
+import { VIBE64_DESTINATIONS } from "../../packages/vibe64-packaging/src/server/destinations/index.js";
+
+// As the service sends them: the catalog with each destination's own packers.
+const DESTINATIONS = PUBLISH_DESTINATION_CATALOG.map((entry) => ({ ...entry, packers: VIBE64_DESTINATIONS[entry.id].packers }));
 
 let app;
 afterEach(() => {
@@ -52,7 +56,7 @@ function publishingState(overrides = {}) {
     pendingConfirmation: null,
     releases: [],
     activeRelease: null,
-    destinations: PUBLISH_DESTINATION_CATALOG,
+    destinations: DESTINATIONS,
     accountKinds: Object.values(PUBLISH_ACCOUNT_KINDS),
     accounts: [{ id: "npm-local", kind: "npm", label: "Local npm", address: "http://127.0.0.1:4873/" }],
     share: { sharing: false },
@@ -141,7 +145,7 @@ it("walks a phone target through tools, install key and recovery kit before it o
 it("shows where an npm target publishes and that it has not published yet", async () => {
   const html = await render(NpmCard, {
     target: publishingState().targets[0],
-    destination: { ...PUBLISH_DESTINATION_CATALOG.find((entry) => entry.id === "npm"), accountKind: "npm" },
+    destination: { ...DESTINATIONS.find((entry) => entry.id === "npm"), accountKind: "npm" },
     accounts: publishingState().accounts
   });
   expect(html).toContain(">127.0.0.1:4873<");
@@ -159,6 +163,13 @@ it("offers first the destinations this project can use, and says why the others 
     ["github-releases", "Needs this project's repository on GitHub"],
     ["npm", "Needs a JavaScript package in Packaging"]
   ]);
+
+  const webOnly = publishingState({ targets: [], baseline: { ...state.baseline, remote: { githubRepository: "ada/notes" } },
+    packaging: { status: "ready", packages: [{ id: "web", label: "Web", packer: "web-bundle", version: null }], diagnostics: [], problem: "" } });
+  const webPage = mount(PublishPage, { request: async () => webOnly });
+  await vi.waitFor(() => expect(webPage.state).toBeTruthy());
+  expect(webPage.startDestinations.find((entry) => entry.id === "github-releases").availability.reason, "GitHub Releases takes what its destination takes")
+    .toBe("Needs a package in Packaging");
 });
 
 it("marks a target whose newest release failed, until a later release publishes it", () => {

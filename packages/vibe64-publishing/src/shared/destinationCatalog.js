@@ -1,13 +1,13 @@
 // What the Publish page tells a person about each destination before they add
 // it: what it is, what it needs, how long the first and later releases take and
-// what it costs. Zero-account destinations come first.
+// what it costs. Zero-account destinations come first. Which packages each one
+// takes is the destination's own (packaging), added when the page state is read.
 const PUBLISH_DESTINATION_CATALOG = Object.freeze([
   Object.freeze({
     id: "android-sideload",
     label: "Install on my phone",
     shortLabel: "Phone APK",
     summary: "A signed Android app you install from a QR code. No store account.",
-    packers: Object.freeze(["capacitor"]),
     zeroAccount: true,
     firstTime: "About 10 minutes, mostly a one-time 1.9 GB download of Android's build tools",
     repeat: "About 2 minutes",
@@ -23,7 +23,6 @@ const PUBLISH_DESTINATION_CATALOG = Object.freeze([
     label: "GitHub Releases",
     shortLabel: "GitHub release",
     summary: "Attach the built files to a release of this project's GitHub repository.",
-    packers: Object.freeze(["npm", "python-dist", "capacitor", "web-bundle"]),
     zeroAccount: true,
     firstTime: "About 2 minutes",
     repeat: "About 1 minute",
@@ -38,7 +37,6 @@ const PUBLISH_DESTINATION_CATALOG = Object.freeze([
     label: "npm",
     shortLabel: "npm",
     summary: "Publish a JavaScript library people install with npm install.",
-    packers: Object.freeze(["npm"]),
     zeroAccount: false,
     firstTime: "About 5 minutes, including creating an access token on npmjs.com",
     repeat: "About 1 minute",
@@ -53,7 +51,6 @@ const PUBLISH_DESTINATION_CATALOG = Object.freeze([
     label: "PyPI",
     shortLabel: "PyPI",
     summary: "Publish a Python library people install with pip install.",
-    packers: Object.freeze(["python-dist"]),
     zeroAccount: false,
     firstTime: "About 5 minutes, including creating an API token on pypi.org",
     repeat: "About 1 minute",
