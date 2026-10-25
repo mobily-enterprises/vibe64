@@ -62,14 +62,13 @@ function registerRoutes(
       routes.serviceRoute(method, `/ai-connections${suffix}`, {
         summary: "Manage AI provider connections."
       }, async (request) => {
-        const vibe64User = request.vibe64User || null;
         try {
           return await handler({
             body: routes.requestBody(request),
             query: routes.requestQuery(request),
             params: request.params,
             executeAction: request.executeAction
-          }, vibe64User);
+          });
         } catch (error) {
           return {
             ...vibe64ErrorResponse(error),
