@@ -531,6 +531,32 @@ describe("useVibe64Learning controller", () => {
     expect([learning.state.lessonError, learning.state.attemptsError]).toEqual(["", "Archive delete refused."]);
   });
 
+  it("clears a failed lessons read on the next successful read, but never an action's failure", async () => {
+    let readFails = true;
+    const list = { ok: true, current: null, archived: [{ attemptId: OTHER, lesson: { code: "V64-START-00", title: "Set yourself up" }, reason: "finished",
+      archivedAt: "2026-10-20T10:15:00.000Z", hasProject: false }] };
+    const { learning } = controller({
+      practice: () => { if (readFails) throw new Error("offline"); return list; },
+      posts: url => url === VIBE64_LEARNING_ROUTES.archiveDelete(OTHER) ? { ok: false, error: "Archive delete refused." } : { ok: true }
+    });
+    learning.setViewer("member");
+    await flush();
+    await learning.readPractice();
+    expect(learning.state.attemptsError).toBe("offline");
+    readFails = false;
+    await learning.readPractice();
+    expect(learning.state.attemptsError, "a successful reread clears the read's own failure").toBe("");
+    expect(learning.practice.archived).toHaveLength(1);
+    expect(await learning.deleteArchived(OTHER)).toBeNull();
+    expect(learning.state.attemptsError).toBe("Archive delete refused.");
+    readFails = true;
+    await learning.readPractice();
+    expect(learning.state.attemptsError, "a failed reread does not replace the action's failure").toBe("Archive delete refused.");
+    readFails = false;
+    await learning.readPractice();
+    expect(learning.state.attemptsError, "a successful reread keeps the action's failure").toBe("Archive delete refused.");
+  });
+
   it("keeps the Lesson pane's place and Courses' tab; closing and reopening Courses changes neither", async () => {
     vi.useFakeTimers();
     const { learning, calls } = controller();

@@ -79,8 +79,8 @@ receipt storage and the first response.
 
 Learning does not belong to a project. A yellow learner plate with a black L,
 present on every signed-in page, opens the Learning environment above the
-current page: Courses (course cards and progress, course pages, the catalogue,
-the owner's custom-course form and author trial) and the open lesson. Closing it
+current page: Courses (course cards and progress, course pages, the catalogue
+and the owner's custom-course form) and the open lesson. Closing it
 returns to exactly where the person was; reopening it returns to the same lesson,
 step and scroll position, and resuming the lesson in another browser opens its
 last-read step. Minimising it keeps that
@@ -121,7 +121,7 @@ Continuing a lesson reuses its practice project while it exists.
 Public Vibe64 owns this shared learning experience. Text lessons work without
 a host or a speech service; optional speech uses the existing voice integration.
 Lesson authors retain the original coding-agent and reviewed Git workflows,
-with an isolated owner author trial of a committed draft.
+and an isolated draft-lesson store a host can use.
 
 Teaching authors validate local topic content and produce reproducible lesson
 bundles through the Vibe64 command; draft lessons stay labelled as drafts.

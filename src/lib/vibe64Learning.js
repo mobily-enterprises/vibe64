@@ -300,6 +300,9 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   // The latest mode read in flight.
   let modeLoad = null;
   let practiceReads = 0;
+  // Whether attemptsError came from a failed readPractice, which a later
+  // successful read clears; an action's failure stays until an action starts.
+  let attemptsErrorFromRead = false;
   let saveTimer = null;
   let lastSaved = "";
   // The one finish in flight or confirmed for an attempt.
@@ -364,6 +367,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     reads += 1;
     modeReads += 1;
     practiceReads += 1;
+    attemptsErrorFromRead = false;
     clearTimeout(saveTimer);
     pending.clear();
     exerciseObservations.clear();
@@ -995,13 +999,17 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     const expected = viewer;
     state.busy = kind;
     state.attemptsError = "";
+    attemptsErrorFromRead = false;
     try {
       const result = await request(url, { method: "POST", body: await body() });
       if (result?.ok !== true) throw new Error(result?.error || fallback);
       if (expected === viewer) await Promise.all([readLearningMode(), readPractice()]);
       return result;
     } catch (cause) {
-      if (expected === viewer) state.attemptsError = String(cause?.message || fallback);
+      if (expected === viewer) {
+        state.attemptsError = String(cause?.message || fallback);
+        attemptsErrorFromRead = false;
+      }
       return null;
     } finally {
       if (state.busy === kind) state.busy = "";
@@ -1068,9 +1076,19 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     const expected = ++practiceReads;
     try {
       const value = normalizePractice(await request(VIBE64_LEARNING_ROUTES.practice, { method: "GET" }));
-      if (expected === practiceReads) practice.value = value;
+      if (expected === practiceReads) {
+        practice.value = value;
+        if (attemptsErrorFromRead) {
+          state.attemptsError = "";
+          attemptsErrorFromRead = false;
+        }
+      }
     } catch (cause) {
-      if (expected === practiceReads) state.attemptsError = String(cause?.message || "Your lessons could not be read. Try again.");
+      // A read failure never replaces a shown action failure.
+      if (expected === practiceReads && (!state.attemptsError || attemptsErrorFromRead)) {
+        state.attemptsError = String(cause?.message || "Your lessons could not be read. Try again.");
+        attemptsErrorFromRead = true;
+      }
     }
     return practice.value;
   }

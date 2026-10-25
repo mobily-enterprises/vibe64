@@ -76,7 +76,8 @@ guide overlay 3000 above L 2400 above Colleague.
   (`stepBarVisible`; always shown in full, it does not collapse) shows the
   current lesson at the top of its project.
 - Errors: each surface has its own, cleared only when its own operation
-  starts. `state.lessonError` holds the lesson read and step actions (Reader,
+  starts; a failure of `readPractice` is also cleared by its next successful
+  read, which never clears an action's failure (nor replaces it). `state.lessonError` holds the lesson read and step actions (Reader,
   Step, step bar); `state.attemptsError` holds `restart`, `finish`,
   `deleteAttempt`, `deleteArchived` and `readPractice` (Attempts, Finished, a
   host's own lesson actions). A failed `setMode` is the overlay `notice`.

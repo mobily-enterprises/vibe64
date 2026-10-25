@@ -347,6 +347,9 @@ attempt.
 - A failed **Restart**, **Delete** or archived-lesson delete shows its message
   in the Attempts list, not in the lesson; it stays there until you try that
   change again.
+- If your lessons could not be read, the Attempts list says so; the message
+  goes away as soon as they are read again, for example when you reopen the
+  tab.
 - Signing out or switching account closes Courses and the lesson and clears the
   previous person's place on this device.
 

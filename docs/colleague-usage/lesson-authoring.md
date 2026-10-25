@@ -213,8 +213,6 @@ installation, learner delivery, step completion or pilot acceptance.
 
 Each step result stays attached to its exact lesson attempt. Switching the
 displayed Preview or project is not permission to move an answer or a check
-result into another lesson's progress. The saved trial control uses the original snapshot admission and explicit refresh
-operations described above. Edited source requires a deliberately ended old trial
-and a newly admitted committed snapshot; Resume keeps the existing pin.
+result into another lesson's progress.
 
 Pinned source admission verifies committed file bytes in bounded Git batches, including binary assets and filenames containing line breaks. It retains the clean-source and repeated commit checks; a source change still requires committing and retrying the same authorized operation. This does not publish or change a course pin.
