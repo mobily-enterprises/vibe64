@@ -47,7 +47,8 @@ import {
   prepareConversationSubscriptionReset,
   prepareSessionDetachedConversationCleanup,
   prepareSessionDetachedConversationRun,
-  prepareSessionConversationStorage
+  prepareSessionConversationStorage,
+  CLAUDE_PREPARATION_DELIVERY_STAGES
 } from "./mainConversationBinding.js";
 import { rememberAssistantBeforeChangeover, replaceNativeConversation, requireCompletedConversationRewind, requireCompletedNativeConversationReplacement, sendWithAssistantChangeover } from "./assistantChangeover.js";
 import { createSessionAttachments } from "./sessionAttachments.js";
@@ -714,6 +715,7 @@ function createService({
   }
   const mainConversations = createConversationRuntime({
     engine: "codex",
+    hostDeliveryStages: CLAUDE_PREPARATION_DELIVERY_STAGES,
     onDeliveryTiming(event) {
       const slow = event.elapsedMs >= 1000 && ["accepted", "first-response"].includes(event.stage);
       logOperationalEvent(logger, slow || event.stage === "failed" ? "warn" : "info", {

@@ -49,7 +49,8 @@ lock wait and complete Send duration. Assistant routing reports one
 `vibe64.agent_message.routing_timing` event per Send with its lock, duplicate,
 native-state, goal, resolution, save, validation, selection and dispatch phases.
 Claude message preparation marks `git-actor` and `genesis-rendered` on JSKIT's
-delivery timing observer when JSKIT supplies one; otherwise it reports its own
+delivery timing observer when JSKIT supplies one; the Main conversation runtime
+declares those names as its host delivery stages; otherwise it reports its own
 `vibe64.agent_message.preparation_timing` event with those phases. Records contain identities and timings,
 not prompts, output or credentials. Slow accepted sends and first responses are
 visible at the normal warning log level; faster milestones use information level.

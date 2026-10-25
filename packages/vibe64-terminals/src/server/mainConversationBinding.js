@@ -633,13 +633,16 @@ function codexContextRefreshPending(session = {}) {
 
 // The existing Claude owner shares this application policy across its retained entries.
 // Main/scoped/renewal predicates remain the original distinct rules.
+// Claude message preparation marks these stages on JSKIT's delivery observer.
+export const CLAUDE_PREPARATION_DELIVERY_STAGES = Object.freeze(["git-actor", "genesis-rendered"]);
+
 export function createClaudeConversationMessagePolicy({ env, recordGitActor, publishSessionChanged, onTiming = () => {} }) {
   const error = claudeConversationError;
   const ENGINE = "claude";
   const text = value => String(value ?? "").trim();
   async function prepareMessage(entry, input, { context: ctx, message, steering, renewal, deliveryTiming }) {
     if (entry.profile && message.length > entry.profile.limits.maxInputCharacters) throw error("Claude helper input exceeded its limit.");
-    // JSKIT's delivery observer records these marks when it supplies one.
+    // JSKIT's delivery observer records these declared marks when it supplies one.
     const started = performance.now();
     const stages = {};
     const mark = stage => {
