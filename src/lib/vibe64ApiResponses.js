@@ -1,5 +1,7 @@
+// Failures name their message in errors[0], error (text or { message }) or message.
 function vibe64ApiResponseError(response = {}, fallback = "Vibe64 request failed.") {
-  return String(response.errors?.[0]?.message || response.error || response.message || fallback);
+  const error = typeof response?.error === "string" ? response.error : response?.error?.message;
+  return String(response?.errors?.[0]?.message || error || response?.message || fallback);
 }
 
 function vibe64ApiError(response = {}, fallback = "Vibe64 request failed.") {

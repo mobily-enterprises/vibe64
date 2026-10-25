@@ -109,6 +109,7 @@ import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedba
 import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
 import { vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
+import { downloadAttachment } from "@/lib/vibe64AttachmentDownload.js";
 import { writeClipboardText } from "@/lib/clipboard.js";
 
 const props = defineProps({
@@ -272,20 +273,11 @@ function uploadFiles(files) {
   });
 }
 function download(target, operation = "download") {
-  return command(async () => {
-    const response = await fetch(scopedDevelopmentApiUrl(url(operation, target), props.projectSlug), { credentials: "include" });
-    if (!response.ok || !response.headers.get("content-disposition")?.startsWith("attachment;")) {
-      throw new Error(vibe64ApiResponseError(await response.json().catch(() => ({})), "Download failed."));
-    }
-    const objectUrl = URL.createObjectURL(await response.blob());
-    const anchor = document.createElement("a");
-    anchor.href = objectUrl;
-    anchor.download = target.split("/").at(-1);
-    document.body.append(anchor);
-    anchor.click();
-    anchor.remove();
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-  });
+  return command(() => downloadAttachment(
+    scopedDevelopmentApiUrl(url(operation, target), props.projectSlug),
+    target.split("/").at(-1),
+    "Download failed."
+  ));
 }
 function openDialog(operation, entry = null) {
   dialogOperation.value = operation;

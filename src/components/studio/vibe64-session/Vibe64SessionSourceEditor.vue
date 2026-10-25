@@ -726,6 +726,7 @@ import Vibe64StarredFilesList from "@/components/studio/vibe64-session/Vibe64Sta
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { vibe64SourceEditorDownloadPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
+import { downloadAttachment } from "@/lib/vibe64AttachmentDownload.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import {
   useVibe64SourceEditor
@@ -957,28 +958,14 @@ function requestDownload(filePath) {
 async function downloadFile(target) {
   downloadingPath.value = target.path;
   try {
-    // The JSON HTTP client cannot return binary bodies. Keep the same project scope and cookie authentication.
-    const url = scopedDevelopmentApiUrl(
-      vibe64SourceEditorDownloadPath(target.sessionsApiPath, target.sessionId, target.path),
-      target.projectSlug
+    await downloadAttachment(
+      scopedDevelopmentApiUrl(
+        vibe64SourceEditorDownloadPath(target.sessionsApiPath, target.sessionId, target.path),
+        target.projectSlug
+      ),
+      basename(target.path),
+      "File could not download. Check your connection and access, then retry."
     );
-    const response = await fetch(url, { credentials: "include" });
-    if (!response.ok || !response.headers.get("content-disposition")?.startsWith("attachment;")) {
-      const failure = await response.json().catch(() => ({}));
-      const message = typeof failure.error === "string"
-        ? failure.error
-        : failure.error?.message || "File could not download. Check your connection and access, then retry.";
-      throw new Error(message);
-    }
-    const blob = await response.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = objectUrl;
-    anchor.download = basename(target.path);
-    document.body.append(anchor);
-    anchor.click();
-    anchor.remove();
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
   } catch (cause) {
     downloadFeedback.error(cause, "File could not download.");
   } finally {
