@@ -39,6 +39,9 @@ function documentHidden() {
 // replaces its step objects while the learner stays on that beat.
 const beatIdentity = value => value ? JSON.stringify([value.kind, value.target, value.text, value.path || ""]) : "";
 const sameBeat = (a, b) => Boolean(a && b) && beatIdentity(a) === beatIdentity(b);
+// A step whose last beat is its check ends on that beat; otherwise it ends
+// one past its last beat, where the bar shows the step's own verdict control.
+const stepEnd = beats => beats.length ? beats.length - (beats.at(-1)?.kind === "check" ? 1 : 0) : 0;
 
 // The page activity that completes a do beat, or "".
 function beatEvent(beat) {
@@ -72,9 +75,7 @@ function createLessonPlayer({ state, steps, currentStep, active, selectStep, rem
   const activityMatches = (value, event) => value?.kind === "do" && beatEvent(value) === event.name &&
     (!value.path || event.path === value.path);
   const beats = computed(() => Array.isArray(currentStep.value?.beats) ? currentStep.value.beats : []);
-  // A step whose last beat is its check ends on that beat; otherwise it ends
-  // one past its last beat, where the bar shows the step's own verdict control.
-  const end = computed(() => beats.value.length ? beats.value.length - (beats.value.at(-1).kind === "check" ? 1 : 0) : 0);
+  const end = computed(() => stepEnd(beats.value));
   const index = computed(() => Math.max(0, Math.min(Number.isSafeInteger(state.beat) ? state.beat : 0, end.value)));
   const beat = computed(() => beats.value[index.value] || null);
   const stepIndex = computed(() => steps.value.findIndex(step => step.id === currentStep.value?.id));
@@ -99,8 +100,7 @@ function createLessonPlayer({ state, steps, currentStep, active, selectStep, rem
     if (index.value > 0) return moveTo(index.value - 1);
     const previous = steps.value[stepIndex.value - 1];
     if (!previous) return;
-    const previousBeats = Array.isArray(previous.beats) ? previous.beats : [];
-    selectStep(previous.id, previousBeats.length - (previousBeats.at(-1)?.kind === "check" ? 1 : 0));
+    selectStep(previous.id, stepEnd(Array.isArray(previous.beats) ? previous.beats : []));
   }
 
   // Show me on a step with beats: play it from its first beat.

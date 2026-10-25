@@ -5,8 +5,10 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { createHash } from "node:crypto";
 import { canonicalJson } from "./content.js";
-import { lessonHasSteps, validateContent } from "./contentSchemas.js";
+import { declaredStepCheck, lessonHasSteps, validateContent } from "./contentSchemas.js";
 import { codeStepOf, readDeclaredFiles, verifyStepAuthorship } from "./codeAuthorship.js";
+import { trainingFailure } from "./errors.js";
+import { pinnedLessonKey } from "./installedContent.js";
 
 const identity = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 128,
   pattern: "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}$" };
@@ -27,7 +29,7 @@ const DEFAULT_CODE_TIMEOUT_SECONDS = 15;
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 
 function failure(code, message, extra = {}) {
-  return Object.assign(new Error(message), { code, statusCode: 409, ...extra });
+  return trainingFailure(code, message, { statusCode: 409, ...extra });
 }
 
 async function canonicalDirectory(directory) {
@@ -83,7 +85,7 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
     const input = validateContent(inputSchema, submitted, "Native response check identities");
     signal?.throwIfAborted();
     const attempt = await readAttempt(actor, input);
-    const pin = { ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash };
+    const pin = pinnedLessonKey(attempt.pin);
     const lesson = await content.readLesson(pin);
     const checkId = responseStepCheck(lesson, input.stepId);
     const declared = await content.readCheck({ ...pin, checkId });
@@ -166,7 +168,7 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
   // (not a code check) declared by the exact pinned lesson.
   function responseStepCheck(lesson, id) {
     const step = lessonHasSteps(lesson.lesson) ? lesson.lesson.steps?.find(value => value.id === id) : null;
-    const check = step?.check?.kind === "auto" ? lesson.lesson.checks?.find(value => value.id === step.check.check) : null;
+    const check = declaredStepCheck(lesson.lesson, step);
     if (!check || check.kind === "code") {
       throw failure("VIBE64_TRAINING_CHECK_UNDECLARED", "This lesson step does not declare an exercise response check.");
     }
@@ -196,7 +198,7 @@ function createTrainingDeclaredCheckOwner({ learners, content, project, terminal
     const input = validateContent(codeInputSchema, submitted, "Native code check identities");
     signal?.throwIfAborted();
     const attempt = await readAttempt(actor, input);
-    const pin = { ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash };
+    const pin = pinnedLessonKey(attempt.pin);
     const lesson = await content.readLesson(pin);
     const { check, files: declaredFiles } = openCodeStep(lesson, input.stepId);
     if (typeof learners.readCodeLedger !== "function" || typeof content.readExercise !== "function") {

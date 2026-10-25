@@ -50,7 +50,7 @@ function registerTrainingRoutes(http) {
   actionRoute("GET", "/learning-mode", "learning-mode.read");
   actionRoute("POST", "/learning-mode", "learning-mode.set");
   // Learner notes (contract C7): the signed-in learner's own, never another's.
-  // 4000 characters of Markdown may take up to 16 KiB of escaped JSON.
+  // LEARNER_NOTES_MAX_CHARS of Markdown may take up to 16 KiB of escaped JSON.
   actionRoute("GET", "/teacher-notes", "learner-notes.read");
   actionRoute("POST", "/teacher-notes", "learner-notes.update", 32 * 1024);
   actionRoute("POST", "/teacher-notes/clear", "learner-notes.clear");

@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
-import { lessonHasSteps } from "./contentSchemas.js";
+import { declaredStepCheck, lessonHasSteps } from "./contentSchemas.js";
+import { trainingFailure } from "./errors.js";
+import { pinnedLessonKey } from "./installedContent.js";
 
 const MAX_FILE_BYTES = 1024 * 1024;
 // Code steps share one save log per attempt (the ledger holds 256);
@@ -11,7 +13,7 @@ const MAX_SEPARATE_ENTRIES = 255;
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 
 function failure(code, message, statusCode = 409) {
-  return Object.assign(new Error(message), { code, statusCode });
+  return trainingFailure(code, message, { statusCode });
 }
 
 // Reads the bytes of declared exercise-relative files from the live session
@@ -79,7 +81,7 @@ function trackedPaths(ledger) {
 function codeStepOf(lesson, stepId) {
   if (!lessonHasSteps(lesson?.lesson)) return null;
   const step = lesson.lesson.steps?.find(value => value.id === stepId);
-  const check = step?.check?.kind === "auto" ? lesson.lesson.checks?.find(value => value.id === step.check.check) : null;
+  const check = declaredStepCheck(lesson.lesson, step);
   if (check?.kind !== "code" || !step.check.files?.length) return null;
   return { step, check, files: step.check.files };
 }
@@ -107,7 +109,7 @@ function createTrainingCodeAuthorship({ learners, content, project } = {}) {
 
   async function openCodeStep(attempt, stepId) {
     if (attempt?.preparation?.phase !== "ready") return null;
-    const lesson = await content.readLesson({ ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
+    const lesson = await content.readLesson(pinnedLessonKey(attempt.pin));
     const code = codeStepOf(lesson, stepId);
     return code ? { attempt, lesson, ...code } : null;
   }

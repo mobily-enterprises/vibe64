@@ -8,6 +8,7 @@ import { createCourseLock } from "./catalogue.js";
 import { canonicalJson } from "./content.js";
 import { courseSchema, list, validateContent } from "./contentSchemas.js";
 import { createInstalledTrainingContent, validateInstalledTopicPin } from "./installedContent.js";
+import { trainingFailure } from "./errors.js";
 
 const MAX_COURSES = 16;
 const MAX_BYTES = 1024 * 1024;
@@ -24,11 +25,7 @@ const catalogueSchema = createSchema({
 });
 
 function failure(code, message, statusCode, cause) {
-  return Object.assign(new Error(message), {
-    code,
-    ...(statusCode ? { statusCode } : {}),
-    ...(cause ? { cause } : {})
-  });
+  return trainingFailure(code, message, { statusCode, ...(cause ? { cause } : {}) });
 }
 
 function requireRevision(value) {

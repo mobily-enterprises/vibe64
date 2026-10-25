@@ -6,6 +6,7 @@ import { projectAppPath, projectSlugFromPathname } from "@/lib/vibe64ProjectScop
 import { practiceProjectName } from "@/lib/vibe64PracticeProjectName.js";
 import { learningVocabulary, trainingGuideRequest, trainingGuideSteps } from "@local/vibe64-training/shared/learning-vocabulary";
 import { createLessonPlayer } from "@/lib/vibe64LessonPlayer.js";
+import { LEARNER_NOTES_MAX_CHARS, TRAINING_LESSON_IN_PROGRESS_CODE, TRAINING_NOTES_CHANGED_CODE, TRAINING_PRACTICE_AI_REQUIRED_CODE } from "@local/vibe64-training/shared/learner-contract";
 
 // Learn and Develop: one host shell, two modes. One controller per host shell
 // owns the mode (server-backed, per learner), each mode's place in this
@@ -33,6 +34,13 @@ const VIBE64_LEARNING_ROUTES = Object.freeze({
   lessonDelete: attemptId => attemptPath(attemptId, "/delete"),
   // Saved progress (its revision fences restart and finish).
   learning: `${TRAINING_PATH}/learning`,
+  // Courses: the installed courses, the official catalogue, an owner's author trial.
+  courses: `${TRAINING_PATH}/courses`,
+  available: `${TRAINING_PATH}/available`,
+  authorPreview: `${TRAINING_PATH}/author-preview`,
+  courseInstall: `${TRAINING_PATH}/courses/install`,
+  lessonStart: `${TRAINING_PATH}/lessons/start`,
+  lessonResume: attemptId => attemptPath(attemptId, "/resume"),
   // Learner notes (C7): the signed-in learner's own teacher notes.
   notes: `${TRAINING_PATH}/teacher-notes`,
   notesClear: `${TRAINING_PATH}/teacher-notes/clear`,
@@ -50,12 +58,10 @@ const VIBE64_LEARNING_MODE_NOTE = "You're in Learn mode. Press L to go back to y
 const VIBE64_DEVELOP_MODE_NOTE = "This is a practice project. Press L to switch to Learn.";
 // The server's refusal of a project the current mode does not allow.
 const VIBE64_LEARNING_MODE_PROJECT_CODE = "vibe64_learning_mode_project";
-// lesson.start's refusal while a different lesson is in progress.
-const VIBE64_LESSON_IN_PROGRESS_CODE = "VIBE64_TRAINING_LESSON_IN_PROGRESS";
-// A lesson's practice project could not be prepared because the learner has
-// no usable AI yet (its saved preparation failure, and the start's refusal).
-const VIBE64_LEARNING_AI_REQUIRED_CODE = "VIBE64_TRAINING_PRACTICE_AI_REQUIRED";
-const VIBE64_LEARNING_NOTES_MAX = 4000;
+// Training's refusal codes and notes limit (owned by its learner contract).
+const VIBE64_LESSON_IN_PROGRESS_CODE = TRAINING_LESSON_IN_PROGRESS_CODE;
+const VIBE64_LEARNING_AI_REQUIRED_CODE = TRAINING_PRACTICE_AI_REQUIRED_CODE;
+const VIBE64_LEARNING_NOTES_MAX = LEARNER_NOTES_MAX_CHARS;
 // The Courses catalogue's tabs. A stored "lesson" (the retired reader tab) reads as courses.
 const SURFACES = Object.freeze(["courses", "progress", "archived"]);
 const STORAGE_PREFIX = "vibe64:learning-environment:v2:";
@@ -386,9 +392,14 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
 
   // The mode with this attempt in progress: the latest read (a start's
   // realtime change usually reread it already), else a fresh read.
-  async function modeWith(attemptId) {
+  // The mode once any read in flight (and its realtime follow-up) settles.
+  async function settledMode() {
     if (modeLoad) await modeLoad.catch(() => null);
     await Promise.resolve();
+  }
+
+  async function modeWith(attemptId) {
+    await settledMode();
     return mode.value?.on && mode.value.currentAttemptId === attemptId ? mode.value : readLearningMode();
   }
 
@@ -808,8 +819,13 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   function teachMe(stepId = currentStep.value?.id) {
     if (!state.attemptId || !stepId) throw new Error("Open a lesson step before asking Colleague to teach it.");
     selectStep(stepId);
-    colleagueRequest.value = Object.freeze({ id: `teach-${now()}-${Math.random().toString(36).slice(2, 8)}`,
-      kind: "teach", message: VIBE64_LEARNING_TEACH_MESSAGE, actorKey: state.actorKey, attemptId: state.attemptId, stepId });
+    return askColleague("teach", { message: VIBE64_LEARNING_TEACH_MESSAGE, stepId });
+  }
+
+  // One request for this host's Colleague, about this learner's lesson step.
+  function askColleague(kind, { message, stepId }) {
+    colleagueRequest.value = Object.freeze({ id: `${kind}-${now()}-${Math.random().toString(36).slice(2, 8)}`, kind,
+      ...(message ? { message } : {}), actorKey: state.actorKey, attemptId: state.attemptId, stepId });
     return colleagueRequest.value;
   }
 
@@ -848,8 +864,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     if (kind === "courses") return show();
     if (kind === "lesson") return openLesson({ stepId: currentStep.value?.id });
     if (kind === "colleague") {
-      colleagueRequest.value = Object.freeze({ id: `open-${now()}-${Math.random().toString(36).slice(2, 8)}`, kind: "open",
-        actorKey: state.actorKey, attemptId: state.attemptId, stepId: currentStep.value?.id || "" });
+      askColleague("open", { stepId: currentStep.value?.id || "" });
       return true;
     }
     if (kind === "reload-preview") {
@@ -869,9 +884,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   // Colleague reads the learner's work on the step and helps without passing it.
   function stuck(stepId = currentStep.value?.id) {
     if (!state.attemptId || !stepId) throw new Error("Open a lesson step before asking Colleague for help.");
-    colleagueRequest.value = Object.freeze({ id: `stuck-${now()}-${Math.random().toString(36).slice(2, 8)}`,
-      kind: "stuck", message: VIBE64_LEARNING_STUCK_MESSAGE, actorKey: state.actorKey, attemptId: state.attemptId, stepId });
-    return colleagueRequest.value;
+    return askColleague("stuck", { message: VIBE64_LEARNING_STUCK_MESSAGE, stepId });
   }
 
   function consumeColleagueRequest(id) {
@@ -905,8 +918,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   function admitted(attemptId) {
     minimise();
     void (async () => {
-      if (modeLoad) await modeLoad.catch(() => null);
-      await Promise.resolve();
+      await settledMode();
       if (mode.value?.on && mode.value.currentAttemptId === attemptId) await openLesson({ attemptId });
     })().catch(() => {});
   }
@@ -1078,7 +1090,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
       if (expected === viewer) {
         notesState.error = String(cause?.message || "The notes save was not confirmed. Try again.");
         // Someone else changed them: show the current notes; the edit stays with the caller.
-        if (cause?.code === "VIBE64_TRAINING_NOTES_CHANGED") {
+        if (cause?.code === TRAINING_NOTES_CHANGED_CODE) {
           pending.delete(key);
           const message = notesState.error;
           await readNotes();

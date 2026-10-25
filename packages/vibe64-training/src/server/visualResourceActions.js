@@ -1,5 +1,6 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { pinnedLessonKey } from "./installedContent.js";
 
 const TRAINING_VISUAL_RESOURCE_ACTION = "vibe64.training.visual-resource.read";
 // The original lesson bundle permits 32 MiB; base64 expansion and metadata
@@ -35,8 +36,7 @@ function createTrainingVisualResourceActions({ learners, content } = {}) {
         });
       }
       const { pin } = attempt;
-      const resource = await content.readVisual({ ...pin.topic, lessonCode: pin.lesson.code,
-        lessonHash: pin.lesson.hash, visualId });
+      const resource = await content.readVisual({ ...pinnedLessonKey(pin), visualId });
       const savedVisual = attempt.learning?.resume?.visuals.find(item => item.visualId === visualId);
       const encode = file => ({ path: file.path, encoding: "base64", bytes: file.bytes.toString("base64") });
       const result = {

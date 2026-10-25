@@ -4,6 +4,7 @@ import { practiceSlug } from "@local/vibe64-core/server/learningSpace";
 import { learnThreadFile, releaseLearnThread } from "@local/vibe64-core/server/learnThreads";
 import { writeJsonFileAtomic } from "@local/vibe64-core/server/projectRecordMetadata";
 import { learnerIdentity } from "./learnerState.js";
+import { pinnedLessonKey } from "./installedContent.js";
 
 const MAX_ARCHIVES = 20;
 // Archives keep their record and conversation; only the newest few keep their
@@ -239,7 +240,7 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
 async function lessonTitle(content, pin) {
   const read = typeof content.readAdmissionIdentity === "function" ? content.readAdmissionIdentity : content.readLesson;
   try {
-    return (await read({ ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash })).lesson.title;
+    return (await read(pinnedLessonKey(pin))).lesson.title;
   } catch {
     return pin.lesson.code;
   }

@@ -75,7 +75,7 @@ async function mountCourses({ authorTrial = null, accounts = { aiOnboardingAvail
     "@local/vibe64-accounts/client": accounts, "@/lib/vibe64Learning.js": LearningEnvironment
   });
   const root = { children: [] };
-  const app = uiRenderer().createApp({ render: () => Vue.h(component, { learning: owner }) });
+  const app = uiRenderer().createApp({ render: () => Vue.h(component, { courses: owner }) });
   for (const tag of ["v-btn", "v-alert", "v-skeleton-loader"]) app.component(tag, uiWidget);
   app.mount(root); await Vue.nextTick();
   return { app, root, owner, calls, route, accounts };

@@ -4,6 +4,7 @@ import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import { vibe64AgentRunStateIsActive } from "@local/vibe64-runtime/server/sessionStore";
 import { PRACTICE_AGENT_GUIDANCE_EXCLUDES } from "@local/vibe64-terminals/server/practiceAgentGuidance";
+import { trainingFailure } from "./errors.js";
 
 // The bounded evidence of one learner's practice work that a review check
 // (and Colleague's "I'm stuck" help) reads: the practice session's changes
@@ -27,7 +28,7 @@ const commitPattern = /^[a-f0-9]{40}(?:[a-f0-9]{24})?$/u;
 const excludes = PRACTICE_AGENT_GUIDANCE_EXCLUDES.map(folder => `:(exclude)${folder.replace(/\/$/u, "")}`);
 
 function evidenceFailure(message, code = "VIBE64_TRAINING_EVIDENCE_UNREADABLE") {
-  return Object.assign(new Error(message), { code, statusCode: 409 });
+  return trainingFailure(code, message, { statusCode: 409 });
 }
 
 const nulList = text => String(text || "").split("\0").filter(Boolean);

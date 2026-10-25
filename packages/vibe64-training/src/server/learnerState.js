@@ -6,10 +6,12 @@ import { tryAcquireExclusiveFileLock } from "@jskit-ai/kernel/server/support";
 import { practiceSlug } from "@local/vibe64-core/server/learningSpace";
 import { writeJsonFileAtomic } from "@local/vibe64-core/server/projectRecordMetadata";
 import { assertValidVibe64SessionId } from "@local/vibe64-runtime/server/sessionStore";
+import { LEARNER_NOTES_MAX_CHARS as MAX_NOTES_CHARS, TRAINING_LESSON_IN_PROGRESS_CODE, TRAINING_NOTES_CHANGED_CODE } from "../shared/learnerContract.js";
 import { canonicalJson } from "./content.js";
 import { lessonHasSteps, list, validateContent } from "./contentSchemas.js";
-import { createInstalledTrainingContent, validateInstalledTopicPin } from "./installedContent.js";
+import { createInstalledTrainingContent, pinnedLessonKey, validateInstalledTopicPin } from "./installedContent.js";
 import { availableStepIds } from "./lessonAvailability.js";
+import { trainingFailure } from "./errors.js";
 
 // One learner's Learning state (Rev 4 contract C1). An attempt is one run of a
 // lesson; at most one is in progress (the last one, named by activeAttemptId).
@@ -24,8 +26,6 @@ const MAX_STEP_RESULTS = 64;
 const MAX_STEP_RECEIPTS = 32;
 const MAX_STEP_RECORD_BYTES = 1024 * 1024;
 const MAX_READER_BYTES = 4096;
-// Learner notes (contract C7): one short teacher summary, never a transcript.
-const MAX_NOTES_CHARS = 4000;
 const MAX_NOTES_BYTES = 32 * 1024;
 const MAX_NOTES_REQUESTS = 32;
 const MAX_MODE_BYTES = 1024;
@@ -268,7 +268,7 @@ function validateLessonStepResults(entry, lesson) {
 }
 
 function failure(code, message, statusCode, details = {}) {
-  return Object.assign(new Error(message), { code, ...(statusCode ? { statusCode } : {}), ...details });
+  return trainingFailure(code, message, { statusCode, ...details });
 }
 
 function learnerIdentity(actor) {
@@ -623,7 +623,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
   async function verifyInstalled(pin, { admissionOnly = false } = {}) {
     const read = admissionOnly && typeof installed.readAdmissionIdentity === "function"
       ? installed.readAdmissionIdentity : installed.readLesson;
-    const lesson = await read.call(installed, { ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash });
+    const lesson = await read.call(installed, pinnedLessonKey(pin));
     if (canonicalJson(lesson.pin) !== canonicalJson(pin.topic)) {
       throw new Error("The installed topic differs from the admitted reservation pin.");
     }
@@ -743,7 +743,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       let attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
       if (attempt && canonicalJson(attempt.pin) !== canonicalJson(pin)) {
         const current = await verifyInstalled(attempt.pin).catch(() => null);
-        throw failure("VIBE64_TRAINING_LESSON_IN_PROGRESS", "Another lesson is in progress. Archive it before starting this one.", 409,
+        throw failure(TRAINING_LESSON_IN_PROGRESS_CODE, "Another lesson is in progress. Archive it before starting this one.", 409,
           { details: { attemptId: attempt.attemptId, lessonCode: attempt.pin.lesson.code, lessonTitle: current?.lesson?.title || attempt.pin.lesson.code } });
       }
       if (expectedRevision !== state.revision) {
@@ -1257,7 +1257,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       }
       const current = record?.revision || 0;
       if (expectedRevision !== undefined && expectedRevision !== current) {
-        throw failure("VIBE64_TRAINING_NOTES_CHANGED",
+        throw failure(TRAINING_NOTES_CHANGED_CODE,
           "The notes changed since they were read. Read them again and save the combined summary; nothing was saved.", 409);
       }
       if (current === Number.MAX_SAFE_INTEGER) throw failure("VIBE64_TRAINING_NOTES_REVISION_LIMIT", "Learner notes reached their revision limit. Nothing was saved.", null);

@@ -1,8 +1,10 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { trainingStepObservationSchema } from "../shared/practicalSchemas.js";
-import { attemptId, attemptSummary, id, operationError, pick as pickPresent, practiceSlug, requestId, text } from "./actions.js";
+import { attemptId, attemptSummary, id, operationError, pick, practiceSlug, requestId, text } from "./actions.js";
+import { boundedTrainingResult, trainingFailure } from "./errors.js";
 import { availableStepIds } from "./lessonAvailability.js";
+import { pinnedLessonKey } from "./installedContent.js";
 
 // Learning v2 (Rev 4 C2): the lesson reader, step results, reader position,
 // the lesson in progress and the archived lessons. Admission is the existing
@@ -11,7 +13,6 @@ import { availableStepIds } from "./lessonAvailability.js";
 // learning space (learningSpace.js) lists and closes attempts. "Browser"
 // actions run only on the learner's own api channel and are excluded from
 // Colleague's tools.
-const MAX_RESULT_BYTES = 128 * 1024;
 const MAX_PAGE_BODY_BYTES = 64 * 1024;
 const opaque = { type: "object", additionalProperties: true, required: false };
 const BROWSER = Object.freeze({ channels: ["api"], surfaces: ["app"] });
@@ -58,26 +59,16 @@ const practiceOutput = {
   })
 };
 
-// Step records may omit optional parts; a missing part projects as {}.
-function pick(value = {}, fields) {
-  return pickPresent(value, fields);
-}
-
 function refusalText(reason, fallback) {
   return typeof reason === "string" && reason.trim() ? reason.trim().slice(0, 512) : fallback;
 }
 
-function failure(message, code, statusCode = 409) {
-  return Object.assign(new Error(message), { code, statusCode });
+function failure(code, message, statusCode = 409) {
+  return trainingFailure(code, message, { statusCode });
 }
 
-function bounded(result) {
-  if (Buffer.byteLength(JSON.stringify(result)) > MAX_RESULT_BYTES) {
-    throw failure("The lesson result exceeds 128 KiB. Ask the owner to inspect the content; nothing was silently omitted.",
-      "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE", 413);
-  }
-  return structuredClone(result);
-}
+const bounded = result => boundedTrainingResult(result, { statusCode: 413,
+  message: "The lesson result exceeds 128 KiB. Ask the owner to inspect the content; nothing was silently omitted." });
 
 // Never the choice answer: only fields the reader and Colleague may see.
 function stepProjection(step) {
@@ -177,7 +168,7 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
   async function readAttempt(actor, attempt) {
     const state = await attemptLearners.readState({ actor, attemptId: attempt });
     const saved = state.progress.attempts.find(value => value.attemptId === attempt);
-    if (!saved) throw failure("This learner has no matching saved attempt.", "VIBE64_TRAINING_ATTEMPT_MISSING", 404);
+    if (!saved) throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "This learner has no matching saved attempt.", 404);
     return { state, attempt: saved };
   }
 
@@ -201,7 +192,7 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
     else attempt = (await learners.readState({ actor })).active;
     if (!attempt) return { ok: true, available: true, attempt: null, lesson: null };
     const slug = await practiceSlug({ attempt, actor, learningSpace });
-    const lesson = await content.readLesson({ ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
+    const lesson = await content.readLesson(pinnedLessonKey(attempt.pin));
     const summary = attemptSummary(attempt, slug);
     // Steps this learner cannot take here (a place this installation does not
     // have, or one only the owner sees) are simply absent.
@@ -209,7 +200,7 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
     const projected = lesson.steps.filter(step => available.has(step.id)).map(step => ({ ...stepProjection(step), bodyText: step.bodyText }));
     const count = pageBodies(projected, lesson.notesText);
     const index = input.page ?? 0;
-    if (index >= count) throw failure(`This lesson has ${count} page(s).`, "ACTION_VALIDATION_FAILED", 400);
+    if (index >= count) throw failure("ACTION_VALIDATION_FAILED", `This lesson has ${count} page(s).`, 400);
     for (const step of projected) if (step.bodyPage !== index) delete step.bodyText;
     const progress = await steps.read({ actor, attemptId: attempt.attemptId });
     const reader = typeof attemptLearners.readReader === "function"
@@ -247,8 +238,8 @@ function createTrainingStepActions({ learners, attemptLearners = learners, conte
     confirmed: { type: "boolean", required: false } }, { output: practiceOutput, description },
   async (input, actor, context) => {
     if (context.channel !== "api" && input.confirmed !== true) {
-      throw failure("Ask the person to confirm this deletion, then repeat with confirmed: true.",
-        "VIBE64_TRAINING_PRACTICE_UNCONFIRMED");
+      throw failure("VIBE64_TRAINING_PRACTICE_UNCONFIRMED",
+        "Ask the person to confirm this deletion, then repeat with confirmed: true.");
     }
     let result;
     try { result = await run(input, actor); }

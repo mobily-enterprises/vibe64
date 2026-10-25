@@ -4,9 +4,7 @@ import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
-import { VIBE64_LESSON_IN_PROGRESS_CODE } from "@/lib/vibe64Learning.js";
-
-const TRAINING_PATH = "/api/vibe64/training";
+import { VIBE64_LEARNING_ROUTES, VIBE64_LESSON_IN_PROGRESS_CODE } from "@/lib/vibe64Learning.js";
 
 // The Courses overlay's adapter. It owns neither admission nor progress:
 // original Training actions reauthorize every captured attempt before changing
@@ -22,10 +20,10 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
   watch(() => [actorKey.value, open.value], () => { generation += 1; }, { flush: "sync" });
   onScopeDispose(() => { disposed = true; generation += 1; });
 
-  function readResource(name, enabled = null) {
+  function readResource(name, path, enabled = null) {
     const client = getHttpWebClient();
     const original = useEndpointResource({
-      path: `${TRAINING_PATH}/${name}`,
+      path,
       queryKey: computed(() => ["vibe64", "training", name, actorKey.value || "signed-out"]),
       enabled: computed(() => Boolean(actorKey.value) && (!enabled || toValue(enabled) === true)),
       // Tag the existing query result with its admitted reader. Query observers
@@ -54,12 +52,12 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
       query: { ...original.query, data, refetch }, reload: () => refetch() });
   }
 
-  const coursesResource = readResource("courses");
-  const learningResource = readResource("learning");
+  const coursesResource = readResource("courses", VIBE64_LEARNING_ROUTES.courses);
+  const learningResource = readResource("learning", VIBE64_LEARNING_ROUTES.learning);
   // The official catalogue is read from GitHub by the server, so only while L is open.
-  const availableResource = readResource("available", open);
+  const availableResource = readResource("available", VIBE64_LEARNING_ROUTES.available, open);
   const authorPreviewEnabled = computed(() => toValue(authorPreview) === true);
-  const authorPreviewResource = authorPreview === false ? null : readResource("author-preview", authorPreviewEnabled);
+  const authorPreviewResource = authorPreview === false ? null : readResource("author-preview", VIBE64_LEARNING_ROUTES.authorPreview, authorPreviewEnabled);
   // Colleague may admit an author trial while L is closed. Opening L must
   // reread the saved attempt, not reuse that earlier empty picker result.
   watch(open, (value, previous) => {
@@ -152,7 +150,7 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
     busy.value = true;
     starting.value = true;
     try {
-      const outcome = await prepare(`${TRAINING_PATH}/lessons/start`,
+      const outcome = await prepare(VIBE64_LEARNING_ROUTES.lessonStart,
         { ...request.input, requestId: request.requestId }, scope, { onAdmitted });
       if (pendingStart.value === request) pendingStart.value = null;
       return { ...outcome, requestId: request.requestId };
@@ -163,13 +161,16 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
     } finally { busy.value = false; starting.value = false; }
   }
 
-  async function resumeLesson(attemptId, { onAdmitted = null } = {}) {
-    if (busy.value) return null;
-    const scope = capture();
+  async function resume(attemptId, scope, onAdmitted) {
     busy.value = true;
     try {
-      return await prepare(`${TRAINING_PATH}/attempts/${encodeURIComponent(attemptId)}/resume`, {}, scope, { attemptId, onAdmitted });
+      return await prepare(VIBE64_LEARNING_ROUTES.lessonResume(attemptId), {}, scope, { attemptId, onAdmitted });
     } finally { busy.value = false; }
+  }
+
+  async function resumeLesson(attemptId, { onAdmitted = null } = {}) {
+    if (busy.value) return null;
+    return resume(attemptId, capture(), onAdmitted);
   }
 
   // Owner-only custom course through the original catalogue action; it admits
@@ -179,7 +180,7 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
     capture();
     busy.value = true;
     try {
-      const result = await command.run({ path: `${TRAINING_PATH}/courses`, body: { title, topics, expectedRevision } });
+      const result = await command.run({ path: VIBE64_LEARNING_ROUTES.courses, body: { title, topics, expectedRevision } });
       if (result?.ok !== true || !result.course?.courseId) {
         throw new Error(result?.error || "The new course was not confirmed. Refresh courses before trying again.");
       }
@@ -201,7 +202,7 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
     // The server reports per-topic progress on the catalogue read meanwhile.
     const poll = setInterval(() => { void availableResource.reload(); }, 1500);
     try {
-      const result = await command.run({ path: `${TRAINING_PATH}/courses/install`, body: { courseId, release } });
+      const result = await command.run({ path: VIBE64_LEARNING_ROUTES.courseInstall, body: { courseId, release } });
       if (result?.ok !== true || result.course?.courseId !== courseId || result.course.release !== release) {
         throw new Error(result?.error || "The course installation was not confirmed. Refresh courses, then retry.");
       }
@@ -224,10 +225,7 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
     if (busy.value) return null;
     const scope = Object.freeze({ ...capture(), authorPreviewAttemptId: attemptId });
     if (!attemptId || !current(scope)) throw new Error("Read this owner's exact saved author trial before reopening it.");
-    busy.value = true;
-    try {
-      return await prepare(`${TRAINING_PATH}/attempts/${encodeURIComponent(attemptId)}/resume`, {}, scope, { attemptId });
-    } finally { busy.value = false; }
+    return resume(attemptId, scope, null);
   }
 
   return Object.freeze({ active: open,

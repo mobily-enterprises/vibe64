@@ -9,6 +9,7 @@ teacher conversation.
 
 - Main: `packages/vibe64-training/src/server/actions.js`
 - `packages/vibe64-training/src/server/stepActions.js`
+- `packages/vibe64-training/src/server/errors.js`
 - `packages/vibe64-training/src/server/stepChecks.js`
 - `packages/vibe64-training/src/server/preparation.js`
 - `packages/vibe64-training/src/server/Vibe64TrainingProvider.js`

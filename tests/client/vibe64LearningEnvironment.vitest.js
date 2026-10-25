@@ -1172,7 +1172,7 @@ describe("Courses overlay", () => {
     const HostKeys = await import("../../src/lib/vibe64AssistantHost.js");
     const LearnerEvents = await import("../../packages/vibe64-training/src/shared/learnerEvents.js");
     const stub = (test, tag = "section") => ({ default: { props: ["learning", "courses", "archived"],
-      setup: props => () => Vue.h(tag, { "data-test": test, own: props.learning === learning || props.learning === courses, archived: props.archived }) } });
+      setup: props => () => Vue.h(tag, { "data-test": test, own: props.learning === learning || props.courses === courses, archived: props.archived }) } });
     const overlay = compiledUi(path.resolve("src/components/learning/Vibe64LearningOverlay.vue"), {
       vue: Vue,
       "vue-router": { useRoute: () => route, useRouter: () => ({ replace }) },

@@ -187,7 +187,7 @@ function keydown(event) {
     </header>
     <div class="vibe64-learning__content">
       <div v-if="surface === 'courses'" class="vibe64-learning__scroll">
-        <Vibe64LearningCourses :learning="courses" />
+        <Vibe64LearningCourses :courses="courses" />
         <!-- The learner's own teacher notes (C7), below the courses. -->
         <Vibe64LearningTeacherNotes :learning="learning" />
       </div>

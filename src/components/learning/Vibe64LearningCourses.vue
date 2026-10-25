@@ -6,33 +6,33 @@ import { aiOnboardingAvailable, aiOnboardingNeeded, requestVibe64AiOnboarding } 
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { VIBE64_LEARNING_AI_REQUIRED_CODE } from "@/lib/vibe64Learning.js";
 
-// The Courses surface. `learning` is the Courses adapter
+// The Courses surface. `courses` is the Courses adapter
 // (useVibe64LearningCourses); a confirmed start or Continue lesson opens the
-// lesson through the shared controller, which also asks once before a start
-// archives a different lesson in progress.
+// lesson through the shared controller (`learning`), which also asks once
+// before a start archives a different lesson in progress.
 const props = defineProps({
-  learning: { type: Object, required: true }
+  courses: { type: Object, required: true }
 });
-const controller = useVibe64Learning();
-const opened = operation => request(async owner => controller.opened(await operation(owner, { onAdmitted: controller.admitted })));
+const learning = useVibe64Learning();
+const opened = operation => request(async owner => learning.opened(await operation(owner, { onAdmitted: learning.admitted })));
 // A Courses start reports failure on its card; Retry lesson start reports it here.
-const start = (selection, kind = "start") => request(owner => controller.startLesson(selection, owner.startLesson), kind);
+const start = (selection, kind = "start") => request(owner => learning.startLesson(selection, owner.startLesson), kind);
 const route = useRoute();
 const error = ref("");
 const errorLearner = ref("");
 // A failed lesson start is shown on the course card that requested it.
 const errorKind = ref("");
-const courses = computed(() => toValue(props.learning.coursesResource.data));
-const progress = computed(() => toValue(props.learning.learningResource.data));
-const busy = computed(() => toValue(props.learning.busy));
-const retry = computed(() => toValue(props.learning.startRetry));
-const starting = computed(() => toValue(props.learning.starting) === true);
-const trial = computed(() => toValue(props.learning.savedAuthorPreview));
-const installState = computed(() => toValue(props.learning.installState) || null);
-const trialResource = computed(() => props.learning.authorPreviewResource);
-const trialEnabled = computed(() => toValue(props.learning.authorPreviewEnabled) === true);
-const errorVisible = computed(() => Boolean(errorLearner.value && errorLearner.value === toValue(props.learning.learnerId)
-  && toValue(props.learning.active)));
+const catalogue = computed(() => toValue(props.courses.coursesResource.data));
+const progress = computed(() => toValue(props.courses.learningResource.data));
+const busy = computed(() => toValue(props.courses.busy));
+const retry = computed(() => toValue(props.courses.startRetry));
+const starting = computed(() => toValue(props.courses.starting) === true);
+const trial = computed(() => toValue(props.courses.savedAuthorPreview));
+const installState = computed(() => toValue(props.courses.installState) || null);
+const trialResource = computed(() => props.courses.authorPreviewResource);
+const trialEnabled = computed(() => toValue(props.courses.authorPreviewEnabled) === true);
+const errorVisible = computed(() => Boolean(errorLearner.value && errorLearner.value === toValue(props.courses.learnerId)
+  && toValue(props.courses.active)));
 // The lesson in progress waits for the learner's AI (its saved preparation
 // failure says why); before any lesson, a learner with no AI is told first.
 const aiFailure = computed(() => {
@@ -41,16 +41,16 @@ const aiFailure = computed(() => {
 });
 const aiNotice = computed(() => aiFailure.value?.message ||
   (aiOnboardingNeeded.value ? "Lessons use your AI: the coding agent in each practice project and Colleague, your teacher, both need it. Set up your AI before you start." : ""));
-const canRequest = computed(() => Boolean(toValue(props.learning.learnerId) && toValue(props.learning.active)));
+const canRequest = computed(() => Boolean(toValue(props.courses.learnerId) && toValue(props.courses.active)));
 let feedbackGeneration = 0;
-watch(() => [toValue(props.learning.learnerId), toValue(props.learning.active), route.fullPath, trialEnabled.value], () => {
+watch(() => [toValue(props.courses.learnerId), toValue(props.courses.active), route.fullPath, trialEnabled.value], () => {
   feedbackGeneration += 1;
   error.value = "";
   errorLearner.value = "";
 }, { flush: "sync" });
 
 async function request(operation, kind = "") {
-  const owner = props.learning;
+  const owner = props.courses;
   const learner = toValue(owner.learnerId);
   const target = route.fullPath;
   const generation = feedbackGeneration;
@@ -64,7 +64,7 @@ async function request(operation, kind = "") {
       await owner.learningResource.reload();
       return null;
     }
-    if (props.learning === owner && generation === feedbackGeneration && learner === toValue(owner.learnerId) && target === route.fullPath) {
+    if (props.courses === owner && generation === feedbackGeneration && learner === toValue(owner.learnerId) && target === route.fullPath) {
       error.value = String(cause?.message || "The lesson request was not confirmed. Read saved progress before trying again.");
     }
     return null;
@@ -83,7 +83,7 @@ async function request(operation, kind = "") {
         Set up your AI
       </v-btn>
     </v-alert>
-    <v-btn v-if="retry" class="vibe64-learning-launcher__retry" variant="tonal" rounded="pill" min-height="48" :disabled="busy || !canRequest" @click="start(toValue(learning.startRetry), '')">
+    <v-btn v-if="retry" class="vibe64-learning-launcher__retry" variant="tonal" rounded="pill" min-height="48" :disabled="busy || !canRequest" @click="start(toValue(courses.startRetry), '')">
       Retry lesson start
     </v-btn>
     <section v-if="trialEnabled && trialResource" class="vibe64-learning-launcher__trial" aria-label="Saved author trial" :aria-busy="toValue(trialResource.isLoading)">
@@ -110,19 +110,19 @@ async function request(operation, kind = "") {
       </p>
     </section>
     <TrainingLessonPicker
-      :catalogue-result="courses"
+      :catalogue-result="catalogue"
       :learning-result="progress"
-      :catalogue-loading="toValue(learning.coursesResource.isLoading)"
-      :learning-loading="toValue(learning.learningResource.isLoading)"
-      :catalogue-error="toValue(learning.coursesResource.loadError)"
-      :learning-error="toValue(learning.learningResource.loadError)"
+      :catalogue-loading="toValue(courses.coursesResource.isLoading)"
+      :learning-loading="toValue(courses.learningResource.isLoading)"
+      :catalogue-error="toValue(courses.coursesResource.loadError)"
+      :learning-error="toValue(courses.learningResource.loadError)"
       :busy="busy"
       :can-start="canRequest"
       :can-resume="canRequest"
       :create-course="input => request(owner => owner.createCourse(input))"
-      :available-result="toValue(learning.availableResource?.data)"
-      :available-loading="toValue(learning.availableResource?.isLoading) === true"
-      :available-error="toValue(learning.availableResource?.loadError) || ''"
+      :available-result="toValue(courses.availableResource?.data)"
+      :available-loading="toValue(courses.availableResource?.isLoading) === true"
+      :available-error="toValue(courses.availableResource?.loadError) || ''"
       :install-state="installState"
       :starting="starting"
       :start-unconfirmed="Boolean(retry)"

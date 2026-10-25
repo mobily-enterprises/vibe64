@@ -3,11 +3,14 @@ import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { practiceLearnerKey } from "@local/vibe64-core/server/learningSpace";
+import { TRAINING_LESSON_IN_PROGRESS_CODE, TRAINING_PRACTICE_AI_REQUIRED_CODE } from "../shared/learnerContract.js";
 import { lessonTitle } from "./learningSpace.js";
 import { lessonAvailableTo } from "./lessonAvailability.js";
+import { trainingFailure } from "./errors.js";
+import { pinnedLessonKey } from "./installedContent.js";
 
 function trainingError(code, message) {
-  return Object.assign(new Error(message), { code, statusCode: 409 });
+  return trainingFailure(code, message, { statusCode: 409 });
 }
 
 const revisionConflict = () => trainingError("VIBE64_TRAINING_STATE_REVISION_CONFLICT",
@@ -20,7 +23,7 @@ const missingAttempt = () => Object.assign(trainingError("VIBE64_TRAINING_ATTEMP
 // asks the learner to set up their AI and continue the same saved lesson.
 const AI_UNAVAILABLE_CODES = new Set(["vibe64_assistant_workflow_unavailable", "vibe64_assistant_role_unconfigured"]);
 const AI_REQUIRED_MESSAGE = "This lesson's practice project needs your AI, which isn't set up yet. Set up your AI, then press Continue lesson: your lesson waits where it is.";
-const aiRequired = cause => Object.assign(trainingError("VIBE64_TRAINING_PRACTICE_AI_REQUIRED", AI_REQUIRED_MESSAGE), { cause });
+const aiRequired = cause => Object.assign(trainingError(TRAINING_PRACTICE_AI_REQUIRED_CODE, AI_REQUIRED_MESSAGE), { cause });
 
 function requireSuccess(result) {
   if (result?.ok === false) {
@@ -36,7 +39,7 @@ function createTrainingService({ catalogue, content, learners, learningSpace = n
   // A lesson starts only in the current lesson format and when this learner
   // can take every required step here (its places exist and are open to them).
   async function requireStartable(actor, pin) {
-    const taught = await content.readLesson({ ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash });
+    const taught = await content.readLesson(pinnedLessonKey(pin));
     if (taught.lesson.schemaVersion !== 3) {
       throw trainingError("VIBE64_TRAINING_LESSON_RETIRED", "This lesson's course needs an update before it can start. Update the course in Courses, then start the lesson again.");
     }
@@ -78,7 +81,7 @@ function createTrainingService({ catalogue, content, learners, learningSpace = n
       if (archiveCurrent !== true) {
         // An AppError: the HTTP error response carries only an AppError's details.
         throw new AppError(409, "Another lesson is in progress. Archive it to start this one, or continue it.", {
-          code: "VIBE64_TRAINING_LESSON_IN_PROGRESS",
+          code: TRAINING_LESSON_IN_PROGRESS_CODE,
           details: { attemptId: current.attemptId, lessonTitle: await lessonTitle(content, current.pin) } });
       }
       if (expectedRevision !== saved.revision) throw revisionConflict();
@@ -165,8 +168,7 @@ function createTrainingService({ catalogue, content, learners, learningSpace = n
     let setupRun = null;
     const prepared = await learners.runPreparationExclusive({ actor, attemptId }, async () => {
       let saved = await learners.resumeAttempt({ actor, attemptId });
-      const lesson = await content.readLesson({ ...saved.attempt.pin.topic,
-        lessonCode: saved.attempt.pin.lesson.code, lessonHash: saved.attempt.pin.lesson.hash });
+      const lesson = await content.readLesson(pinnedLessonKey(saved.attempt.pin));
       if (!lesson.lesson.exercise) return { ...saved, previewReady: false };
       if (typeof projectRepositoryService?.createManagedGitProject !== "function" ||
           typeof projectRepositoryService?.verifyTrainingProjectSource !== "function") {
@@ -177,7 +179,7 @@ function createTrainingService({ catalogue, content, learners, learningSpace = n
       const initialSessionId = attempt.preparation.initialSessionId;
       let stage = "project";
       try {
-        const exercise = await content.readExercise({ ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
+        const exercise = await content.readExercise(pinnedLessonKey(attempt.pin));
         // The marker keeps its field name practiceId; its value is the attemptId.
         const training = {
           schemaVersion: 2, learnerKey: practiceLearnerKey(actor), practiceId: attemptId,

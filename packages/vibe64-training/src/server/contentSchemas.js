@@ -85,6 +85,9 @@ const lessonSchemas = new Map([[1, lessonSchema], [2, lessonSchemaV2], [3, lesso
 
 // Formats 2 and 3 are made of steps (v3 adds the lesson's stage).
 const lessonHasSteps = lesson => lesson?.schemaVersion === 2 || lesson?.schemaVersion === 3;
+// A step's declared automatic check in its lesson, or null.
+const declaredStepCheck = (lesson, step) =>
+  step?.check?.kind === "auto" ? lesson.checks?.find(value => value.id === step.check.check) : null;
 
 // Select the authored lesson format by its declared version before validating.
 function validateLesson(value, label) {
@@ -126,4 +129,4 @@ function validateContent(schema, value, label) {
   return validated;
 }
 
-export { courseSchema, id, lessonHasSteps, list, text, topicSchema, visualSchema, validateContent, validateLesson };
+export { courseSchema, declaredStepCheck, id, lessonHasSteps, list, text, topicSchema, visualSchema, validateContent, validateLesson };

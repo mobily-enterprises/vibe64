@@ -395,4 +395,7 @@ function createInstalledTrainingContent({ systemRoot, allowDraftLessons = false 
   return { readTopic, readLesson, readAdmissionIdentity, readVisual, readCheck, readExercise, readChoiceAnswer };
 }
 
-export { compareChoiceAnswer, createInstalledTrainingContent, validateInstalledTopicPin };
+// The content key the readers below take for an attempt's pinned lesson.
+const pinnedLessonKey = pin => ({ ...pin.topic, lessonCode: pin.lesson.code, lessonHash: pin.lesson.hash });
+
+export { compareChoiceAnswer, createInstalledTrainingContent, pinnedLessonKey, validateInstalledTopicPin };

@@ -1,12 +1,13 @@
 import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { canonicalJson } from "./content.js";
-import { compareChoiceAnswer } from "./installedContent.js";
-import { validateContent } from "./contentSchemas.js";
+import { compareChoiceAnswer, pinnedLessonKey } from "./installedContent.js";
+import { declaredStepCheck, validateContent } from "./contentSchemas.js";
 import { lessonSteps, MAX_STEP_RESULTS } from "./learnerState.js";
 import { trainingStepObservationSchema } from "../shared/practicalSchemas.js";
 import { readLearningFact } from "./learningFacts.js";
 import { availableStepIds } from "./lessonAvailability.js";
+import { trainingFailure } from "./errors.js";
 
 const idPattern = /^[a-zA-Z][a-zA-Z0-9-]{0,63}$/u;
 const uuidPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
@@ -14,7 +15,7 @@ const requestPattern = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/u;
 const sha256 = bytes => createHash("sha256").update(bytes).digest("hex");
 
 function stepFailure(message, code = "VIBE64_TRAINING_STEP_INVALID", statusCode = 409) {
-  return Object.assign(new Error(message), { code, statusCode });
+  return trainingFailure(code, message, { statusCode });
 }
 
 function requireResult(result, failure) {
@@ -98,7 +99,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     if (active && (state.progress.activeAttemptId !== attemptId || attempt.ended)) {
       throw stepFailure("Continue this lesson before recording its steps; an ended attempt keeps its results read-only.", "VIBE64_TRAINING_ATTEMPT_INACTIVE");
     }
-    const lesson = await content.readLesson({ ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
+    const lesson = await content.readLesson(pinnedLessonKey(attempt.pin));
     const steps = lessonSteps(lesson);
     if (!steps) throw stepFailure("This lesson uses assessments, not steps.", "VIBE64_TRAINING_LESSON_VERSION");
     const step = steps.find(value => value.id === stepId);
@@ -107,7 +108,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
   }
 
   function declaredCheck(lesson, step) {
-    const check = step.check?.kind === "auto" ? lesson.lesson.checks?.find(value => value.id === step.check.check) : null;
+    const check = declaredStepCheck(lesson.lesson, step);
     if (!check) throw stepFailure("This step has no automatic check.", "VIBE64_TRAINING_CHECK_UNDECLARED");
     return check;
   }
@@ -273,8 +274,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
     if (typeof content.readChoiceAnswer !== "function") {
       throw stepFailure("This installation cannot compare the answer for this step.", "VIBE64_TRAINING_CHECK_UNDECLARED");
     }
-    const { answer: expected } = await content.readChoiceAnswer({ ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code,
-      lessonHash: attempt.pin.lesson.hash, stepId });
+    const { answer: expected } = await content.readChoiceAnswer({ ...pinnedLessonKey(attempt.pin), stepId });
     const chosen = [...selected].sort((left, right) => left - right);
     // The content owner's comparator: exactly the authored answer indexes, in any order.
     const outcome = compareChoiceAnswer(expected, chosen) ? "passed" : "not-yet-passed";
@@ -360,7 +360,7 @@ function createTrainingStepChecks({ learners, content, checks, authorship, actio
   async function read({ actor, attemptId } = {}) {
     if (!uuidPattern.test(attemptId || "")) throw stepFailure("Use an exact saved attempt ID.", "ACTION_VALIDATION_FAILED", 400);
     const { entry, revision, attempt } = await learners.readStepProgress({ actor, attemptId });
-    const lesson = await content.readLesson({ ...attempt.pin.topic, lessonCode: attempt.pin.lesson.code, lessonHash: attempt.pin.lesson.hash });
+    const lesson = await content.readLesson(pinnedLessonKey(attempt.pin));
     const steps = lessonSteps(lesson);
     if (!steps) throw stepFailure("This lesson uses assessments, not steps.", "VIBE64_TRAINING_LESSON_VERSION");
     const results = entry.results.map(result => structuredClone(result));

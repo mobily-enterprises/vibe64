@@ -1,8 +1,8 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { boundedTrainingResult } from "./errors.js";
 import { lessonAvailableTo } from "./lessonAvailability.js";
 
-const MAX_RESULT_BYTES = 128 * 1024;
 const text = { type: "string", required: true, noTrim: true, minLength: 1, maxLength: 256 };
 const revision = { type: "integer", required: true, min: 0, max: Number.MAX_SAFE_INTEGER };
 const id = { ...text, maxLength: 64, pattern: "^[a-zA-Z][a-zA-Z0-9-]{0,63}$" };
@@ -32,7 +32,8 @@ const resultOutput = {
   })
 };
 
-function pick(value, fields) {
+// Records may omit optional parts; a missing part projects as {}.
+function pick(value = {}, fields) {
   return Object.fromEntries(fields.filter(field => Object.hasOwn(value, field)).map(field => [field, value[field]]));
 }
 
@@ -64,14 +65,8 @@ function completion(value) {
   return value ? pick(value, ["lessonCode", "lessonHash", "required", "passed", "completed"]) : null;
 }
 
-function boundedResult(result) {
-  if (Buffer.byteLength(JSON.stringify(result)) > MAX_RESULT_BYTES) {
-    throw Object.assign(new Error("The training result exceeds 128 KiB. Ask the owner to inspect the content; no teaching text or progress was silently omitted."), {
-      code: "VIBE64_TRAINING_ACTION_RESULT_TOO_LARGE"
-    });
-  }
-  return structuredClone(result);
-}
+const boundedResult = result => boundedTrainingResult(result, {
+  message: "The training result exceeds 128 KiB. Ask the owner to inspect the content; no teaching text or progress was silently omitted." });
 
 function operationError(cause) {
   if (cause.code === "VIBE64_TRAINING_PREPARATION_BUSY") {

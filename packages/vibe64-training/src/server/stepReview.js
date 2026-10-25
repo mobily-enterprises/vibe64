@@ -1,5 +1,6 @@
 import { createRetainedConversationHelper } from "@local/vibe64-terminals/server/retainedConversationHelper";
 import { VIBE64_AGENT_EXECUTION_WORKLOAD_IDS } from "@local/vibe64-runtime/shared";
+import { trainingFailure } from "./errors.js";
 
 // A review check's verdict: the learner's own AI (their Helper route for the
 // lesson_review workload, never a Vibe64 account) reads the step's bounded
@@ -26,7 +27,7 @@ const OUTPUT_SCHEMA = Object.freeze({ type: "object", additionalProperties: fals
 } });
 
 function reviewFailure(message, code = "VIBE64_TRAINING_REVIEW_FAILED") {
-  return Object.assign(new Error(message), { code, statusCode: 409 });
+  return trainingFailure(code, message, { statusCode: 409 });
 }
 
 // One line of saved text: the learner store refuses control characters.

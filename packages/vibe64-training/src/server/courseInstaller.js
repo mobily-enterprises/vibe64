@@ -7,6 +7,7 @@ import { canonicalJson } from "./content.js";
 import { courseSchema, id, list, text, validateContent } from "./contentSchemas.js";
 import { createTrainingContentInstaller } from "./contentInstaller.js";
 import { createInstalledTrainingContent } from "./installedContent.js";
+import { trainingFailure } from "./errors.js";
 
 // The official catalogue is the only source this facility reads. Arbitrary
 // repositories, local directories and author snapshots stay with the operator
@@ -52,7 +53,7 @@ const lockSchema = createSchema({
 });
 
 function failure(code, message, statusCode, cause) {
-  return Object.assign(new Error(message), { code, ...(statusCode ? { statusCode } : {}), ...(cause ? { cause } : {}) });
+  return trainingFailure(code, message, { statusCode, ...(cause ? { cause } : {}) });
 }
 
 function compareReleases(left, right) {

@@ -21,6 +21,7 @@ Training actions.
 - `packages/vibe64-training/src/client/TrainingVisualPlayer.vue`
 - `packages/vibe64-training/src/client/trainingGuide.js`
 - `packages/vibe64-training/src/shared/learnerEvents.js`
+- `packages/vibe64-training/src/shared/learnerContract.js`
 - `src/composables/useVibe64OutputControlsSurface.js`
 - `packages/vibe64-core/src/server/learningMode.js`
 - `packages/vibe64-training/src/server/learningSpace.js`
