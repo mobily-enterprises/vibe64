@@ -1,9 +1,9 @@
 <script setup>
 import { computed, ref } from "vue";
 import { mdiPin, mdiPinOutline } from "@mdi/js";
-import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
-import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
-import { vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
+import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
+import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
+import { VIBE64_SESSIONS_API_SUFFIX, VIBE64_SURFACE_ID, vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 
 const props = defineProps({
   session: { type: Object, required: true },
@@ -21,17 +21,22 @@ const label = computed(() => {
   return pinned.value ? "Unpin session" : "Pin session as project source";
 });
 const path = vibe64SessionPath(props.sessionsApiPath, props.session.sessionId, "/pin");
-const resource = useEndpointResource({ path, queryKey: ["vibe64.sessionPin", path], enabled: false });
-const feedback = useUiFeedback({ source: "vibe64.sessions.pin" });
+const command = useCommand({
+  access: "never", apiSuffix: VIBE64_SESSIONS_API_SUFFIX, placementSource: "vibe64.sessions.pin",
+  buildRawPayload: () => ({ pinned: !pinned.value }),
+  buildCommandOptions: () => ({ method: "PATCH", path }),
+  fallbackRunError: "The session pin could not be changed.", suppressSuccessMessage: true,
+  ownershipFilter: ROUTE_VISIBILITY_PUBLIC, surfaceId: VIBE64_SURFACE_ID, writeMethod: "PATCH"
+});
 
 async function toggle() {
   if (pending.value || anotherPinned.value) return;
   pending.value = true;
   try {
-    await resource.save({ pinned: !pinned.value }, { method: "PATCH" });
+    await command.run();
     await props.refresh?.();
-  } catch (error) {
-    feedback.error(error, "The session pin could not be changed.");
+  } catch {
+    // useCommand has already shown the failure.
   } finally {
     pending.value = false;
   }

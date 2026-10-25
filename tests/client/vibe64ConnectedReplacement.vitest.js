@@ -30,6 +30,8 @@ it("requires review and explicit confirmation, and retains that review after an 
   await state.inspect();
   expect(state.review).toEqual(review);
   expect(mocks.request).toHaveBeenCalledTimes(1);
+  expect(mocks.request.mock.lastCall[0]).toBe(
+    "/api/app/consumer/vibe64/sessions/task/connected/replacement?repository=example%2Flibrary");
   mocks.request.mockRejectedValueOnce(new Error("Connection lost after allocation"));
   await state.replace();
   expect(state.review).toEqual(review);

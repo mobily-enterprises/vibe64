@@ -111,6 +111,7 @@
 import { computed, nextTick, ref, watch } from "vue";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
+import { VIBE64_SESSIONS_API_SUFFIX, vibe64RepositoryApiPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { mdiClose } from "@mdi/js";
 import { requestVibe64AiOnboarding, useModelRouting } from "@local/vibe64-accounts/client";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
@@ -143,7 +144,8 @@ const branchChoices = computed(() => [
 ]);
 const branchRepository = computed(() => branchProject.value.githubRepository?.fullName ||
   branchProject.value.repository?.github?.fullName || branchProject.value.slug);
-const branchPath = computed(() => scopedDevelopmentApiUrl("/api/vibe64/repository/branches", branchProject.value.slug));
+const branchPath = computed(() => scopedDevelopmentApiUrl(
+  `${vibe64RepositoryApiPath(`/api${VIBE64_SESSIONS_API_SUFFIX}`)}/branches`, branchProject.value.slug));
 const branches = useEndpointResource({
   path: branchPath,
   queryKey: computed(() => ["vibe64.branches", branchPath.value]),

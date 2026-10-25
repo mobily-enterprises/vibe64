@@ -3,12 +3,21 @@ import { renderToString } from "vue/server-renderer";
 import { createVuetify } from "vuetify";
 import { afterEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ save: vi.fn(), error: vi.fn(), resource: vi.fn() }));
-vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({ useEndpointResource: (options) => {
-  mocks.resource(options);
-  return { save: mocks.save };
+// useCommand's real behaviour: it reports a failure through its own feedback,
+// then rethrows.
+const mocks = vi.hoisted(() => ({ save: vi.fn(), error: vi.fn(), command: vi.fn() }));
+vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({ useCommand: (options) => {
+  mocks.command(options);
+  return { run: async () => {
+    const payload = options.buildRawPayload();
+    try {
+      return await mocks.save(payload, options.buildCommandOptions());
+    } catch (error) {
+      mocks.error(error, options.fallbackRunError);
+      throw error;
+    }
+  } };
 } }));
-vi.mock("@jskit-ai/http-web/client/composables/useUiFeedback", () => ({ useUiFeedback: () => ({ error: mocks.error }) }));
 import Pin from "../../src/components/studio/vibe64-session/Vibe64SessionPin.vue";
 let app;
 afterEach(() => {
@@ -35,8 +44,11 @@ it("pins the exact mounted session once and waits for its refreshed status", asy
   expect(state.label).toBe("Updating session pin…");
   await state.toggle();
   expect(mocks.save).toHaveBeenCalledTimes(1);
-  expect(mocks.save).toHaveBeenCalledWith({ pinned: true }, { method: "PATCH" });
-  expect(mocks.resource).toHaveBeenCalledWith(expect.objectContaining({ path: "/api/project/test/vibe64/sessions/visible/pin" }));
+  expect(mocks.save).toHaveBeenCalledWith({ pinned: true },
+    { method: "PATCH", path: "/api/project/test/vibe64/sessions/visible/pin" });
+  expect(mocks.command).toHaveBeenCalledWith(expect.objectContaining({
+    placementSource: "vibe64.sessions.pin", writeMethod: "PATCH"
+  }));
   finish({ pinnedSessionId: "visible" });
   await pending;
   expect(props.refresh).toHaveBeenCalledOnce();
@@ -47,7 +59,8 @@ it("unpins only this session and does not overwrite another session's pin", asyn
   mocks.save.mockResolvedValue({});
   const pinned = mount("visible");
   await pinned.state.toggle();
-  expect(mocks.save).toHaveBeenLastCalledWith({ pinned: false }, { method: "PATCH" });
+  expect(mocks.save).toHaveBeenLastCalledWith({ pinned: false },
+    { method: "PATCH", path: "/api/project/test/vibe64/sessions/visible/pin" });
   app.unmount();
   mocks.save.mockClear();
   const other = mount("other");
@@ -56,12 +69,13 @@ it("unpins only this session and does not overwrite another session's pin", asyn
   expect(other.state.label).toContain("Unpin the project's pinned session first");
 });
 
-it("restores the control after an error through existing feedback", async () => {
+it("restores the control after an error through the command's feedback", async () => {
   mocks.save.mockRejectedValue(new Error("Project closed"));
-  const { state } = mount();
+  const { props, state } = mount();
   await state.toggle();
   expect(state.pending).toBe(false);
   expect(mocks.error).toHaveBeenCalledOnce();
+  expect(props.refresh).not.toHaveBeenCalled();
 });
 
 it("exposes the pin state accessibly without adding a text banner", async () => {

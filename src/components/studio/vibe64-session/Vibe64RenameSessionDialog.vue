@@ -1,8 +1,8 @@
 <script setup>
 import { computed, ref } from "vue";
-import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
-import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
-import { vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
+import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
+import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
+import { VIBE64_SESSIONS_API_SUFFIX, VIBE64_SURFACE_ID, vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 
 const props = defineProps({
   session: { type: Object, required: true },
@@ -13,8 +13,13 @@ const name = ref(props.session.sessionName || "");
 const pending = ref(false);
 // Capture the selected session and project for the lifetime of this dialog.
 const path = vibe64SessionPath(props.sessionsApiPath, props.session.sessionId, "/name");
-const resource = useEndpointResource({ path, queryKey: ["vibe64.renameSession", path], enabled: false });
-const feedback = useUiFeedback({ source: "vibe64.sessions.rename" });
+const command = useCommand({
+  access: "never", apiSuffix: VIBE64_SESSIONS_API_SUFFIX, placementSource: "vibe64.sessions.rename",
+  buildRawPayload: () => ({ name: normalizedName.value }),
+  buildCommandOptions: () => ({ method: "PATCH", path }),
+  fallbackRunError: "The session could not be renamed.", suppressSuccessMessage: true,
+  ownershipFilter: ROUTE_VISIBILITY_PUBLIC, surfaceId: VIBE64_SURFACE_ID, writeMethod: "PATCH"
+});
 const normalizedName = computed(() => name.value.trim());
 const canSave = computed(() => Boolean(normalizedName.value) && normalizedName.value !== props.session.sessionName && !pending.value);
 
@@ -22,11 +27,11 @@ async function submit() {
   if (!canSave.value) return;
   pending.value = true;
   try {
-    await resource.save({ name: normalizedName.value }, { method: "PATCH" });
+    await command.run();
     emit("renamed");
     emit("close");
-  } catch (error) {
-    feedback.error(error, "The session could not be renamed.");
+  } catch {
+    // useCommand has already shown the failure.
   } finally {
     pending.value = false;
   }

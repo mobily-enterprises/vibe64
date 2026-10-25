@@ -4,6 +4,7 @@ import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
+import { VIBE64_SESSIONS_API_SUFFIX, vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 
 const props = defineProps({
   projectSlug: { type: String, required: true },
@@ -19,7 +20,7 @@ const replacement = ref(null);
 const available = computed(() => ["vibe64_contribution_discarded", "vibe64_connected_integration_discarded"]
   .includes(props.failure?.code) && Boolean(props.failure?.details?.repository));
 const endpoint = computed(() => scopedDevelopmentApiUrl(
-  `/api/vibe64/sessions/${encodeURIComponent(props.sessionId)}/connected/replacement`, props.projectSlug));
+  vibe64SessionPath(`/api${VIBE64_SESSIONS_API_SUFFIX}`, props.sessionId, "/connected/replacement"), props.projectSlug));
 watch(() => [props.projectSlug, props.sessionId], () => {
   review.value = null;
   error.value = "";
