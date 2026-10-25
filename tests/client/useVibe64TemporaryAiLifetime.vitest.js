@@ -122,6 +122,44 @@ describe("temporary AI mounted lifetime", () => {
     expect(reloaded.temporary.open.value).toBe(true);
   });
 
+  it("sends a draft still waiting for its save when the view is removed", async () => {
+    http.request.mockImplementation(async (_path, options) => options?.method === "PATCH"
+      ? { ok: true }
+      : { conversations: [{ conversationId: "conversation-1", status: "completed", messages: [] }] });
+    const mounted = mountTemporaryAi({ openTask: false });
+    await vi.waitFor(() => expect(mounted.temporary.tasks.value).toHaveLength(1));
+    mounted.temporary.updateDraft("conversation-1", "Typed just before leaving.");
+    await vi.advanceTimersByTimeAsync(100);
+    mounted.unmount();
+    await vi.advanceTimersByTimeAsync(300);
+    const patches = http.request.mock.calls.filter(([, options]) => options?.method === "PATCH");
+    expect(patches).toHaveLength(1);
+    expect(patches[0][1].body.presentation.draft).toBe("Typed just before leaving.");
+  });
+
+  it("sends a save queued behind an unfinished one when the session changes", async () => {
+    let finishFirst;
+    http.request.mockImplementation((_path, options) => {
+      if (options?.method !== "PATCH") return Promise.resolve({ conversations: [{ conversationId: "conversation-1", status: "completed", messages: [] }] });
+      const patches = http.request.mock.calls.filter(([, call]) => call?.method === "PATCH");
+      return patches.length === 1 ? new Promise((resolve) => { finishFirst = resolve; }) : Promise.resolve({ ok: true });
+    });
+    const sessionId = ref("session-1");
+    const { temporary } = mountTemporaryAi({ openTask: false, sessionId: () => sessionId.value });
+    await vi.waitFor(() => expect(temporary.tasks.value).toHaveLength(1));
+    temporary.updateDraft("conversation-1", "First draft.");
+    await vi.advanceTimersByTimeAsync(300);
+    temporary.updateDraft("conversation-1", "Second draft.");
+    await vi.advanceTimersByTimeAsync(300);
+    temporary.updateDraft("conversation-1", "Last draft.");
+    sessionId.value = "session-2";
+    finishFirst({ ok: true });
+    await vi.advanceTimersByTimeAsync(300);
+    const drafts = http.request.mock.calls.filter(([, options]) => options?.method === "PATCH")
+      .map(([path, options]) => [path, options.body.presentation.draft]);
+    expect(drafts).toEqual([[CONVERSATION_PATH, "First draft."], [CONVERSATION_PATH, "Last draft."]]);
+  });
+
   it("saves a routed draft without submitting the previous model as an override", async () => {
     http.request.mockImplementation(async (_path, options) => options?.method === "PATCH"
       ? { ok: true }

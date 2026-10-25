@@ -71,6 +71,9 @@ function useVibe64TemporaryAi({
   const restorations = new Map();
   const saveTimers = new Map();
   const pendingSaveFields = new Map();
+  // Fields of queued saves that have not sent their PATCH yet; a flush on view
+  // removal sends them, since those saves stop once the view is gone.
+  const unsentSaveFields = new Map();
   const saveVersions = new Map();
   const creations = new Map();
   const saves = new Map();
@@ -270,30 +273,45 @@ function useVibe64TemporaryAi({
     }, delayMs));
   }
 
-  async function saveTask(taskId) {
+  // A flush is the last save of a view being removed or switched away: it reads
+  // everything it sends now, before the bindings are released, and sends it
+  // without the view-current checks. Responses are never applied to the view.
+  async function saveTask(taskId, { flush = false } = {}) {
     const currentTask = tasks.value.find((candidate) => candidate.id === taskId);
     // Keep the original queued PATCH's invocation snapshot now that draft and
     // attachments are accessors over the retained binding.
     const task = currentTask && { ...currentTask };
-    if (!task || disposed || closingTaskIds.has(taskId) || task.state === "closing") return;
-    const fields = pendingSaveFields.get(taskId);
-    if (!fields?.size) return;
+    if (!task || (disposed && !flush) || closingTaskIds.has(taskId) || task.state === "closing") return;
+    const fields = new Set(pendingSaveFields.get(taskId) || []);
+    if (flush) for (const queued of unsentSaveFields.get(taskId) || []) for (const key of queued) fields.add(key);
+    if (!fields.size) return;
     const version = saveVersions.get(taskId);
     pendingSaveFields.delete(taskId);
+    const unsent = unsentSaveFields.get(taskId) || new Set();
+    unsent.add(fields);
+    unsentSaveFields.set(taskId, unsent);
+    const markSent = () => {
+      unsent.delete(fields);
+      if (!unsent.size && unsentSaveFields.get(taskId) === unsent) unsentSaveFields.delete(taskId);
+    };
+    const savedPresentation = taskPresentation(task, fields);
+    const savedSettings = fields.has("agentSettings") && task.settingsToSave;
+    const attachmentIds = fields.has("attachments") ? task.attachments.map((attachment) => attachment.attachmentId) : null;
+    const flushConversation = flush ? ensureConversation(task) : null;
+    flushConversation?.catch(() => {});
     const previous = saves.get(taskId);
     const operation = (async () => {
       await previous;
-      if (!canApplyTaskResponse(task) || tasks.value.find(candidate => candidate.id === taskId)?.state === "closing") return false;
-      const conversationId = await ensureConversation(task);
-      if (!canApplyTaskResponse(task)) return;
-      const savedPresentation = taskPresentation(task, fields);
-      const savedSettings = fields.has("agentSettings") && task.settingsToSave;
+      if (!flush && (!canApplyTaskResponse(task) || tasks.value.find(candidate => candidate.id === taskId)?.state === "closing")) return false;
+      const conversationId = await (flushConversation || ensureConversation(task));
+      if (!flush && !canApplyTaskResponse(task)) return;
+      markSent();
       const saved = await request(vibe64TemporaryConversationPath(task.apiPath, task.sessionId, conversationId), {
         method: "PATCH",
         body: {
           ...(Object.keys(savedPresentation).length ? { presentation: savedPresentation } : {}),
           ...(savedSettings ? { agentSettings: savedSettings } : {}),
-          ...(fields.has("attachments") ? { attachmentIds: task.attachments.map((attachment) => attachment.attachmentId) } : {})
+          ...(attachmentIds ? { attachmentIds } : {})
         }
       });
       if (saved?.routingMetadata && canApplyTaskResponse(task)) {
@@ -339,8 +357,15 @@ function useVibe64TemporaryAi({
     try {
       return await operation;
     } finally {
+      markSent();
       if (saves.get(taskId) === operation) saves.delete(taskId);
     }
+  }
+
+  // Saves still waiting for their timer or for an earlier save. A Send cancels
+  // its draft's timer because the dispatched message carries that draft.
+  function flushPendingSaves() {
+    for (const taskId of new Set([...saveTimers.keys(), ...unsentSaveFields.keys()])) void saveTask(taskId, { flush: true });
   }
 
   async function restoreTasks() {
@@ -961,6 +986,7 @@ function useVibe64TemporaryAi({
     if (ownerSessionId !== previousSessionId || apiPath !== previousApiPath || actor !== previousActor) {
       restoreGeneration += 1;
       restoreError.value = "";
+      flushPendingSaves();
       for (const timer of saveTimers.values()) clearTimeout(timer);
       saveTimers.clear();
       pendingSaveFields.clear();
@@ -975,8 +1001,9 @@ function useVibe64TemporaryAi({
   watch([currentSessionId, currentSessionsApiPath, actorKey, () => readRefOrGetterValue(assistantReady)],
     () => void restoreTasks(), { immediate: true });
   onBeforeUnmount(() => {
-    // Removing a view never closes a conversation or interrupts native work.
-    for (const taskId of saveTimers.keys()) void saveTask(taskId);
+    // Removing a view never closes a conversation or interrupts native work,
+    // and it still sends the drafts and settings its pending saves hold.
+    flushPendingSaves();
     disposed = true;
     clearTimeout(restoreRetryTimer);
     restoreGeneration += 1;

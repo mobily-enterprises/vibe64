@@ -140,7 +140,8 @@ message is sent. A tab that lost its connection catches up when it reconnects.
 Every open tab shows the same progress: when the reply arrives, “AI is working…”
 clears in each tab, including tabs that did not send the message.
 
-Leaving the view does not stop work or close a chat. Use **Stop** to interrupt
+Leaving the view does not stop work or close a chat, and it still saves the
+draft and settings you just changed. Use **Stop** to interrupt
 work while retaining the conversation, or **Close** to remove that chat after
 cleanup succeeds. Colleague can explain the current state and perform supported
 chat actions when you request them.
