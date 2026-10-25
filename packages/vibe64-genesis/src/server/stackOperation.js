@@ -168,6 +168,43 @@ function httpReadinessLine(source, code, operationPath, label, line) {
   };
 }
 
+const COMMAND_TAIL = /^with (.+?):[ \t]+(.+)$/u;
+const WAIT_SUFFIX = /^(.*?)[ \t]+when `([^`\r\n]+)` exists$/u;
+const SKIP_SUFFIX = /^(.*?)[ \t]+if `([^`\r\n]+)` exists$/u;
+const WORKDIR_SUFFIX = /^(.*?)[ \t]+in `([^`\r\n]+)`$/u;
+
+// The command an entry runs, from the text after its label:
+// with `runtime`... [in `workdir`] [when|if `path` exists]: `command` `argument`...
+// Errors name the caller's label ("Workspace setup command") and, for an
+// unreadable entry, the caller's own entry form. A condition is returned for
+// the caller to accept or refuse.
+function stackCommand(source, code, operationPath, label, line, { form, observed = source }) {
+  const entry = String(source || "").match(COMMAND_TAIL);
+  if (!entry) {
+    invalidStackOperation(code, operationPath, `Every ${label} entry must use: ${form}`, line, { observed });
+  }
+  const wait = entry[1].match(WAIT_SUFFIX);
+  const skip = wait ? null : entry[1].match(SKIP_SUFFIX);
+  const unconditional = wait ? wait[1] : skip ? skip[1] : entry[1];
+  const conditionPath = wait?.[2] || skip?.[2] || "";
+  const workdirEntry = unconditional.match(WORKDIR_SUFFIX);
+  return {
+    argv: processArguments(entry[2], code, operationPath, `${label} command`, line),
+    runtimeRequirements: runtimeArguments(
+      workdirEntry ? workdirEntry[1] : unconditional, code, operationPath, `${label} runtimes`, line
+    ),
+    workdir: projectPath(workdirEntry ? workdirEntry[2] : ".", code, operationPath, `${label} workdir`, line),
+    ...(conditionPath
+      ? {
+          condition: {
+            pathExists: projectPath(conditionPath, code, operationPath, `${label} condition path`, line, { allowRoot: false }),
+            onMissing: wait ? "wait" : "skip"
+          }
+        }
+      : {})
+  };
+}
+
 function stable(value) {
   if (Array.isArray(value)) return value.map(stable);
   if (value && typeof value === "object") {
@@ -211,6 +248,7 @@ export {
   processArguments,
   projectPath,
   runtimeArguments,
+  stackCommand,
   stackOperationHash,
   uniqueSorted,
   unknownEntryMessage,

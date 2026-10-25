@@ -132,3 +132,25 @@ test("Genesis transports the connected recipe without executing it or creating l
     await assert.rejects(readFile(path.join(projectRoot, "vibe64.connections.json")), { code: "ENOENT" });
   });
 });
+
+test("connected development step errors describe its own grammar, never Workspace setup conditions", () => {
+  const rejection = (line) => {
+    try {
+      vibe64ConnectedDevelopmentInspection({ status: "ready", lines: [lines[0], line] });
+    } catch (error) {
+      assert.equal(error.code, "VIBE64_CONNECTED_DEVELOPMENT_INVALID");
+      return error.message;
+    }
+    assert.fail(`accepted: ${line}`);
+  };
+  const malformedVerify = rejection("- Verify `Check` `sh` `check.sh`");
+  assert.match(malformedVerify, /Every Connected development Verify entry must use: - Verify `label` with `runtime` \[in `workdir`\]: `command`/u);
+  const malformedRunner = rejection("- Custom runner `node` `run.mjs`");
+  assert.match(malformedRunner, /Every Connected development Custom runner entry must use: - Custom runner with/u);
+  const unsafeCommand = rejection("- Verify `Check` with `shell`: `../escape.sh`");
+  assert.match(unsafeCommand, /Connected development Verify command/u);
+  for (const message of [malformedVerify, malformedRunner, unsafeCommand]) {
+    assert.doesNotMatch(message, /Workspace setup|when\|if/u);
+  }
+  assert.match(rejection("- Verify `Check` with `shell` if `ready.txt` exists: `sh` `check.sh`"), /must run unconditionally/u);
+});

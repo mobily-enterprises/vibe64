@@ -55,7 +55,9 @@ scripts, symbolic-link escapes, and non-custom connections carrying a script fai
 Custom source checks do not replace Verify commands when non-custom types exist.
 One `Sources file`
 declares the project-relative input location. Ordered `Prepare` and `Verify`
-entries reuse the Workspace setup argv, runtime and working-directory grammar.
+entries and the Custom runner reuse the Workspace setup argv, runtime and
+working-directory grammar through one command parser in `stackOperation.js`;
+their errors name the Connected development entry and its own form.
 Prepare entries precede verification. Every non-custom source type requires a
 Verify entry (`vibe64_connected_verification_required`), because Vibe64 runs no
 ecosystem command of its own; custom-only recipes may use the Custom runner's
