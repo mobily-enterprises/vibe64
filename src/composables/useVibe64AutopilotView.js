@@ -1,4 +1,4 @@
-import { chatTurnsWithRouting, routedChatMessage } from "@/lib/vibe64ChatDelivery.js";
+import { chatTurnsWithRouting, draftWithRestoredMessage, routedChatMessage } from "@/lib/vibe64ChatDelivery.js";
 import { assistantRoutingRequestForDisplay, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced } from "@local/vibe64-runtime/shared/assistantRouting";
 import { computed, inject, reactive, ref, unref, watch } from "vue";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
@@ -395,9 +395,7 @@ function useVibe64AutopilotView(props, emit, {
     const message = messageDelivery.value?.find(messageId);
     if (!message || discardingMessageIds.has(messageId) ||
         !unmatchedOptimisticMessages(props.conversationLog?.turns, [message]).length) return;
-    const text = message.payload.draftSnapshot || message.text;
-    const draft = composerDraft.value;
-    composerDraft.value = !draft || draft.startsWith(text) ? draft || text : `${text}\n\n${draft}`;
+    composerDraft.value = draftWithRestoredMessage(message.payload.draftSnapshot || message.text, composerDraft.value);
     messageDelivery.value?.remove(messageId);
   }
   const conversationFollowLatestKey = ref(0);
@@ -802,9 +800,7 @@ function useVibe64AutopilotView(props, emit, {
       return false;
     }
     if (!await cancelOptimisticMessage(messageId)) return false;
-    const current = String(composerDraft.value || "");
-    const draft = !current || current.startsWith(message.text) ? current || message.text : `${message.text}\n\n${current}`;
-    composerDraft.value = draft;
+    composerDraft.value = draftWithRestoredMessage(message.text, String(composerDraft.value || ""));
     return true;
   }
 

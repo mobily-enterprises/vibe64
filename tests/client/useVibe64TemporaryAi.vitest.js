@@ -322,6 +322,19 @@ describe("useVibe64TemporaryAi", () => {
     expect(await temporary.cancelMessage(task.id, "missing-message")).toBe(false);
   });
 
+  it("editing a failed request the draft already starts with does not repeat it", async () => {
+    const route = { messageId: "failed-1", status: "failed", delivery: "failed", error: "Not delivered.",
+      input: { message: "Fix the build.", displayMessage: "Fix the build." } };
+    mocks.responses.push({ conversations: [{ conversationId: createdId, status: "failed", messages: [],
+      draft: "Fix the build.\n\nAlso the tests.", routingMetadata: { assistant_routing_request: JSON.stringify(route) } }] });
+    const temporary = await mountTemporaryAi({ assistantReady: () => true });
+    await flushPromises();
+    const task = temporary.activeTask.value;
+    mocks.responses.push({ ok: true, status: "interrupted" });
+    expect(await temporary.editMessage(task.id, route.messageId)).toBe(true);
+    expect(temporary.activeTask.value.draft).toBe("Fix the build.\n\nAlso the tests.");
+  });
+
   it("checks a restored unconfirmed request without changing its ID or the newer draft", async () => {
     const route = { messageId: "interrupted-1", status: "waiting", delivery: "uncertain", input: { message: "Original prompt.", displayMessage: "Original prompt." } };
     mocks.responses.push({ conversations: [{ conversationId: createdId, status: "uncertain", messages: [],

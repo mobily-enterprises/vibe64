@@ -279,7 +279,10 @@ to the existing delivery record, which retains the full prompt separately from
 its displayed bubble. Failure leaves that request available through Retry/Edit;
 it does not copy the prompt back into the composer. Retry resends the saved
 payload and identity without reading or clearing the draft, including after
-reload. Edit explicitly places the visible request text into the composer.
+reload. Edit explicitly places the visible request text into the composer,
+before the draft unless the draft already starts with it, by the same rule as
+Main chat and JSKIT's delivery edit; a cancelled routed request returns the same
+way.
 Dedicated merge repairs keep their own instructions. Their mode menu exposes
 Senior and Choose model; Junior and Auto cannot be selected. Stop an active or
 pending repair before changing its model. Existing idle repair records receive

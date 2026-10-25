@@ -137,7 +137,8 @@ need to send it again. This applies to Codex and Claude on desktop and mobile.
 Stopped, cancelled, failed or unverified turns do not authorize this recovery.
 Other rejected **Steer** messages return to the composer; **Retry** retains the
 request ID and any newer draft text. Use **Cancel** or **Edit** before changing
-the request. Colleague can explain the status; browser recovery controls require
+the request. **Edit** puts the words before your draft, once: in Main chat and in
+temporary chats, a draft that already starts with them is left as it is. Colleague can explain the status; browser recovery controls require
 your interaction.
 After changing the signed-in person or AI connection, resolve that change before
 checking the original request; a different account cannot confirm it was not sent.

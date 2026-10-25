@@ -1,4 +1,4 @@
-import { routedChatMessage } from "@/lib/vibe64ChatDelivery.js";
+import { draftWithRestoredMessage, routedChatMessage } from "@/lib/vibe64ChatDelivery.js";
 import { computed, hasInjectionContext, inject, markRaw, onBeforeUnmount, ref, watch } from "vue";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
@@ -815,7 +815,7 @@ function useVibe64TemporaryAi({
         const text = payload.displayMessage || payload.message;
         task.delivery.remove(messageId);
         updateTask(taskId, { busy: false, pendingMessageId: "", error: "", errorCode: "", status: "interrupted",
-          draft: current.draft ? `${text}\n\n${current.draft}` : text });
+          draft: draftWithRestoredMessage(text, current.draft) });
         updateTask(taskId, { draft: tasks.value.find(candidate => candidate.id === taskId).draft });
         return false;
       }
@@ -856,8 +856,7 @@ function useVibe64TemporaryAi({
     const task = tasks.value.find((candidate) => candidate.id === taskId);
     const message = pendingMessage(task, messageId);
     if (!message || !await cancelMessage(taskId, messageId)) return false;
-    const draft = task.draft;
-    updateDraft(taskId, draft ? `${message.text}\n\n${draft}` : message.text);
+    updateDraft(taskId, draftWithRestoredMessage(message.text, task.draft));
     return true;
   }
 

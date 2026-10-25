@@ -52,4 +52,11 @@ function chatTurnsWithDelivery(turns, request, checking) {
   });
 }
 
-export { chatTurnsWithRouting, routedChatMessage };
+// JSKIT assistant-core's draftWithRestoredMessage rule, which its delivery
+// edit() applies: the returned message leads the draft unless the draft already
+// starts with it. Import that export instead once the pinned release has it.
+function draftWithRestoredMessage(text = "", draft = "") {
+  return !draft || draft.startsWith(text) ? draft || text : `${text}\n\n${draft}`;
+}
+
+export { chatTurnsWithRouting, draftWithRestoredMessage, routedChatMessage };
