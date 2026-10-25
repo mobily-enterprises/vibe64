@@ -20,7 +20,7 @@
         </v-btn>
         <v-btn
           color="primary"
-          :disabled="!changed || loading || saving"
+          :disabled="!changed || stale || loading || saving"
           size="small"
           type="button"
           variant="flat"
@@ -53,6 +53,11 @@
         </div>
 
         <div class="preview-identity-settings__list">
+          <v-alert v-if="stale" type="warning" variant="tonal">
+            The saved identities changed while you were editing. Reload the saved identities
+            and review your changes before saving.
+            <v-btn variant="text" @click="resetDraft">Reload saved identities</v-btn>
+          </v-alert>
           <div
             v-for="(identity, index) in identities"
             :key="index"
@@ -232,13 +237,31 @@ const changed = computed(() => (
   JSON.stringify(identities.value) !== JSON.stringify(savedIdentities.value)
 ));
 
-watch(() => resource.data.value?.identities, (value) => {
-  const next = cloneIdentities(value);
-  identities.value = next;
-  savedIdentities.value = cloneIdentities(next);
+// The draft belongs to one project source. A newer saved list replaces it
+// only while it has no unsaved edits; otherwise the person chooses to reload.
+const stale = ref(false);
+let draftSource = "";
+watch(() => [resource.data.value?.identities, projectSlug.value, selectedSessionId.value || ""], ([value, slug, sessionId]) => {
+  const source = JSON.stringify([slug, sessionId]);
+  const dirty = changed.value;
+  const previous = JSON.stringify(savedIdentities.value);
+  savedIdentities.value = cloneIdentities(value);
+  const saved = JSON.stringify(savedIdentities.value);
+  if (source !== draftSource || !dirty) {
+    resetDraft();
+  } else if (saved !== previous) {
+    // Saving the draft itself is not a conflict.
+    stale.value = saved !== JSON.stringify(identities.value);
+  }
+  draftSource = source;
 }, {
   immediate: true
 });
+
+function resetDraft() {
+  identities.value = cloneIdentities(savedIdentities.value);
+  stale.value = false;
+}
 
 function cloneIdentities(value = []) {
   return (Array.isArray(value) ? value : []).map((identity) => ({

@@ -11,6 +11,10 @@ Adding a name here does not create an application account.
    **Application value** to refer to an existing account in the application.
 3. Review the default and any requested removal, then choose **Save** and wait
    for the saved result.
+   If the saved list changes elsewhere (another tab, Colleague or the coding
+   agent) while you have unsaved edits, the page keeps your edits, says the saved
+   identities changed and disables Save: choose **Reload saved identities**,
+   then reapply and review your changes.
 4. Use Preview's available identity controls for the browser exchange. Merely
    saving identity configuration does not sign that browser in.
 

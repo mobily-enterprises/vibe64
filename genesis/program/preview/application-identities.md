@@ -49,6 +49,11 @@ the existing owner validates unique names, supported selectors and the 32-entry
 limit. Responses contain selectors without filesystem paths or authentication
 secrets. Configuring this list does not prove account existence, application
 support or an authenticated browser session.
+App access keeps an unsaved draft per project source (project and selected
+session). A newer saved list from another tab, Colleague or the agent replaces
+the draft only while it has no edits; under edits the page shows that the saved
+identities changed, disables Save and offers **Reload saved identities**
+(`tests/client/previewIdentitySettings.vitest.js`).
 
 When a
 web-presented Vibe64 Outputs target declares
