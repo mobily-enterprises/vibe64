@@ -1,7 +1,8 @@
+// Session-change reasons, as the sessions and terminals servers publish them,
+// after which a session's repository status may differ.
 const REPOSITORY_STATUS_SESSION_REASONS = new Set([
+  "claude-stream-turn-idle",
   "codex-app-server-turn-idle",
-  "codex-turn-checkpoint-failed",
-  "codex-turn-checkpoint-updated",
   "opencode-server-turn-idle",
   "repository-canonical-changed",
   "session-pull-request",
@@ -9,17 +10,19 @@ const REPOSITORY_STATUS_SESSION_REASONS = new Set([
   "session-save-completed",
   "session-save-failed",
   "session-save-started",
+  "session-save-update-required",
+  "session-turn-checkpoint-failed",
+  "session-turn-checkpoint-updated",
   "session-update-completed",
   "session-update-failed",
-  "session-update-started",
-  "session-work-saved",
-  "session-work-updated"
+  "session-update-started"
 ]);
 
 const REPOSITORY_CANONICAL_RECHECK_REASONS = new Set([
   "repository-canonical-changed",
   "session-pull-request",
   "session-save-failed",
+  "session-save-update-required",
   "session-update-failed"
 ]);
 
@@ -36,6 +39,8 @@ function repositoryStatusRealtimeNeedsCanonicalCheck(payload = {}) {
 }
 
 export {
+  REPOSITORY_CANONICAL_RECHECK_REASONS,
+  REPOSITORY_STATUS_SESSION_REASONS,
   repositoryStatusRealtimeNeedsCanonicalCheck,
   repositoryStatusRealtimeShouldRefresh,
   repositoryStatusSessionId

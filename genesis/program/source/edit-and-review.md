@@ -732,8 +732,11 @@ open an exact changed file without exposing staging mechanics to the user.
 Current changes opens outside the dashboard navigation shell, using the full
 project pane like Files. Back to dashboard restores the last dashboard page;
 a direct link returns to Env when there is no previous dashboard page.
-Current changes refreshes when an assistant turn becomes idle and when Vibe64
-observes editor, Save, or repository-status events, so work completed during a
+Current changes and the toolbar repository status refresh when a Claude, Codex
+or OpenCode turn becomes idle, when a turn checkpoint is recorded or fails, and
+when Vibe64 observes editor, Save, Update or repository-status events. Every
+refresh reason the client names must be one a server publishes
+(`tests/server/repositoryStatusRealtimeReasons.unit.test.js`), so work completed during a
 turn appears without a manual reload. Arbitrary filesystem writes that produce
 none of those events are not promised to appear immediately.
 Current Changes first renders from the last locally proven canonical version

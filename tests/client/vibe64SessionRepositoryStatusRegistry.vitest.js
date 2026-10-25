@@ -424,7 +424,10 @@ describe("session repository status registry", () => {
   it("invalidates only meaningful work events for their exact session", () => {
     expect(repositoryStatusSessionId({ session: { sessionId: "session-a" } })).toBe("session-a");
     expect(repositoryStatusRealtimeShouldRefresh({ reason: "codex-app-server-turn-idle" })).toBe(true);
-    expect(repositoryStatusRealtimeShouldRefresh({ reason: "codex-turn-checkpoint-updated" })).toBe(true);
+    expect(repositoryStatusRealtimeShouldRefresh({ reason: "claude-stream-turn-idle" })).toBe(true);
+    expect(repositoryStatusRealtimeShouldRefresh({ reason: "session-turn-checkpoint-updated" })).toBe(true);
+    expect(repositoryStatusRealtimeShouldRefresh({ reason: "session-turn-checkpoint-failed" })).toBe(true);
+    expect(repositoryStatusRealtimeShouldRefresh({ reason: "session-save-update-required" })).toBe(true);
     expect(repositoryStatusRealtimeShouldRefresh({ reason: "opencode-server-turn-idle" })).toBe(true);
     expect(repositoryStatusRealtimeShouldRefresh({ reason: "session-save-completed" })).toBe(true);
     expect(repositoryStatusRealtimeShouldRefresh({ reason: "repository-canonical-changed" })).toBe(true);
