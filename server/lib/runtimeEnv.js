@@ -71,6 +71,8 @@ function resolveRuntimeEnv() {
     [VIBE64_PROJECTS_ROOT_ENV]: String(process.env[VIBE64_PROJECTS_ROOT_ENV] || "").trim(),
     [VIBE64_SERVICE_DATA_ROOT_ENV]: String(process.env[VIBE64_SERVICE_DATA_ROOT_ENV] || "").trim(),
     [VIBE64_SYSTEM_ROOT_ENV]: selfTargetSystemRoot || undefined,
+    // The official Learning catalogue's repository (owner/name); unset uses the default.
+    VIBE64_LEARNING_CATALOG_REPOSITORY: String(process.env.VIBE64_LEARNING_CATALOG_REPOSITORY || "").trim() || undefined,
     SERVER_SURFACE: serverSurface,
     JSKIT_REALTIME_DEBUG: process.env.JSKIT_REALTIME_DEBUG,
     PORT: rawPort ? toPort(rawPort, 3000) : null,

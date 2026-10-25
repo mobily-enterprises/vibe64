@@ -40,6 +40,19 @@ test("server defaults to loopback host", () => {
   }
 });
 
+test("runtime env carries the Learning catalogue repository the Training provider installs from", () => {
+  const previous = process.env.VIBE64_LEARNING_CATALOG_REPOSITORY;
+  try {
+    delete process.env.VIBE64_LEARNING_CATALOG_REPOSITORY;
+    assert.equal(resolveRuntimeEnv().VIBE64_LEARNING_CATALOG_REPOSITORY, undefined);
+    process.env.VIBE64_LEARNING_CATALOG_REPOSITORY = " example/catalogue ";
+    assert.equal(resolveRuntimeEnv().VIBE64_LEARNING_CATALOG_REPOSITORY, "example/catalogue");
+  } finally {
+    if (previous == null) delete process.env.VIBE64_LEARNING_CATALOG_REPOSITORY;
+    else process.env.VIBE64_LEARNING_CATALOG_REPOSITORY = previous;
+  }
+});
+
 test("runtime env files load broadly while runtime config stays explicit", async () => {
   const keys = [
     "HOST",
