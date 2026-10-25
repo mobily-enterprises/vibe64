@@ -19,7 +19,6 @@ Genesis without creating another interpretation of the application.
 - `packages/vibe64-system-graph/src/server/registerRoutes.js`
 - `tests/server/vibe64SystemGraphRoutes.unit.test.js`
 - `packages/vibe64-system-graph/src/client/components/Vibe64UiStoryboardView.vue`
-- `packages/vibe64-system-graph/src/client/components/Vibe64LayerDiagram.vue`
 - `packages/vibe64-system-graph/src/client/architectureModel.js`
 - `packages/vibe64-system-graph/src/client/components/Vibe64SubsystemInspector.vue`
 - `packages/vibe64-system-graph/src/client/components/Vibe64ProgramInspector.vue`
@@ -27,7 +26,6 @@ Genesis without creating another interpretation of the application.
 - `packages/vibe64-system-graph/src/client/layeredGraph.js`
 - `packages/vibe64-genesis/src/server/architectureInspection.js`
 - `packages/vibe64-genesis/src/server/architectureLayout.js`
-- `packages/vibe64-system-graph/src/client/subsystemsModel.js`
 - `src/composables/useVibe64AutopilotView.js`
 - `src/composables/useVibe64TemporaryAiRepairs.js`
 - `src/composables/useVibe64SessionToolPane.js`
@@ -36,8 +34,10 @@ Genesis without creating another interpretation of the application.
 
 ## Public contract
 
-The System Graph operations (subsystems, status, Machine City, Program City
-and refresh) run through named `vibe64.system-graph.*` actions. HTTP and direct
+The System Graph operations (Architecture, status, refresh, refresh status and
+refresh cancellation) run through named `vibe64.system-graph.*` actions. The
+Architecture read is the only projection of the Machine City; there are no raw
+City, subsystem-map or retained-prototype reads. HTTP and direct
 callers share required session inputs and fresh actor/project authorization.
 The existing service remains responsible for resolving the selected source and
 validating Genesis results. These engineering views are not direct Colleague
@@ -52,7 +52,7 @@ through runtime events; the client filters project/session identity and rereads
 status. Mount, reactivation and socket reconnect reconcile independently of the
 view which submitted the request. A local timer advances elapsed display from
 the server start; inactive/disposed views release timers and listeners. Terminal
-status refreshes the existing City readers. No persisted state format changes or
+status refreshes the status and Architecture readers. No persisted state format changes or
 restart replay are introduced.
 
 `inspectGenesisStackComponents` validates the current project format and requires
@@ -168,7 +168,8 @@ and open their participating files. Automatic reads follow the visible tool;
 retained inactive sessions do not admit hidden reads. An explicit refresh can
 finish while hidden, while subsequent reads wait for activation. Managed commands
 retain the bundled, pinned Genesis invocation and selected Stack catalog.
-The three-dimensional City presentation and its camera controls are retired.
+The three-dimensional City presentation, its camera controls and the earlier
+subsystem-list and layer-diagram prototype have been removed.
 
 Architecture is the sole subsystem and Program presentation. It reuses the
 canonical directory-bound owners and descriptions from `genesis/subsystems.md`.

@@ -1,5 +1,4 @@
 import {
-  inspectGenesisSubsystems,
   inspectVibe64ArchitectureInspection,
   inspectVibe64ArchitectureLayout,
   mergeArchitectureObservations,
@@ -226,7 +225,6 @@ function relationView(relation) {
 
 function createService({
   cityReader = readGenesisCity,
-  subsystemReader = inspectGenesisSubsystems,
   inspectorReader = inspectVibe64ArchitectureInspection,
   layoutReader = inspectVibe64ArchitectureLayout,
   runCommand = runVibe64Command,
@@ -285,26 +283,7 @@ function createService({
     };
   }
 
-  async function readCity(sessionId, kind) {
-    const context = await systemContext(sessionId);
-    const record = await cityReader(context.sourceRoot, kind);
-    return {
-      city: requireGenesisCity(record, kind),
-      kind,
-      ok: true,
-      path: record.path
-    };
-  }
-
   return Object.freeze({
-    async readSubsystems(input = {}) {
-      return systemResult(async () => {
-        const context = await systemContext(input.sessionId);
-        const map = await subsystemReader({ projectRoot: context.sourceRoot });
-        return { ok: true, ...map };
-      });
-    },
-
     async readStatus(input = {}) {
       return systemResult(async () => {
         const context = await systemContext(input.sessionId);
@@ -322,10 +301,6 @@ function createService({
           status: combinedStatus(cities)
         };
       });
-    },
-
-    async readMachineCity(input = {}) {
-      return systemResult(() => readCity(input.sessionId, "machine"));
     },
 
     async readArchitecture(input = {}) {
@@ -352,7 +327,6 @@ function createService({
           const source = native.files.find(candidate => candidate.path === file);
           return { file, fileId: source?.id || null, subsystemId: source?.subsystemId || null, resolution: source ? 'resolved' : 'unresolved' };
         });
-        // The complete native artifact remains available to existing callers.
         const architecture = native ? {
           ...native,
           layout,
@@ -364,12 +338,8 @@ function createService({
           symbols: native.symbols.filter(symbol => symbol.visibility === 'public').map(publicSymbolView),
           relations: native.relations.map(relationView),
         } : null;
-        return { ok: true, architecture, legacy: !native };
+        return { ok: true, architecture };
       });
-    },
-
-    async readProgramCity(input = {}) {
-      return systemResult(() => readCity(input.sessionId, "program"));
     },
 
     async readRefreshStatus(input = {}) {

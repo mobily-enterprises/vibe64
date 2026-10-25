@@ -3,10 +3,7 @@ import { withVibe64ActionContext } from "@local/vibe64-core/server/actionContext
 
 function createSystemGraphActions({ systemGraph }) {
   return [
-    ["subsystems.read", "readSubsystems"],
     ["status.read", "readStatus"],
-    ["machine.read", "readMachineCity"],
-    ["program.read", "readProgramCity"],
     ["architecture.read", "readArchitecture"],
     ["refresh.cancel", "cancelRefresh"],
     ["refresh.status", "readRefreshStatus"],

@@ -37,8 +37,8 @@ test('a retained inactive graph reader cannot break the visible reader sharing i
   const active = vue.ref(true);
   const sessionId = vue.ref('one');
   const { visible, retained } = app.runWithContext(() => scope.run(() => ({
-    visible: module.exports.useVibe64SystemGraph({ active, sessionId, projection: 'architecture' }),
-    retained: module.exports.useVibe64SystemGraph({ active: false, sessionId, projection: 'architecture' })
+    visible: module.exports.useVibe64SystemGraph({ active, sessionId }),
+    retained: module.exports.useVibe64SystemGraph({ active: false, sessionId })
   })));
   await visible.reload();
   assert.equal(visible.error.value, '');
@@ -96,7 +96,7 @@ test('fresh and retained viewers reconcile scan progress, completion and failure
   const scopes = [];
   function mount(active = vue.ref(true)) {
     const scope = vue.effectScope(); scopes.push(scope);
-    return app.runWithContext(() => scope.run(() => module.exports.useVibe64SystemGraph({ active, sessionId, projection: 'architecture' })));
+    return app.runWithContext(() => scope.run(() => module.exports.useVibe64SystemGraph({ active, sessionId })));
   }
   async function settle() { for (let n = 0; n < 12; n++) { await new Promise(resolve => setImmediate(resolve)); await vue.nextTick(); } }
   t.after(() => { scopes.forEach(scope => scope.stop()); queryClient.clear(); queryClient.unmount(); });

@@ -17,20 +17,17 @@ import {
   withRouteProject
 } from "./vibe64RouteTestHelpers.js";
 
-test("System graph retains native reads and refresh and authorizes Architecture read and cancellation", async () => {
+test("System graph registers only Architecture, status and refresh routes and authorizes each", async () => {
   await withLocalRequestBypass(async () => {
     await withRouteProject(async ({ apiRouteBase, projectContext, slug }) => {
       const calls = [];
       const user = { username: "member", role: "member" };
       let allowed = true;
       const service = Object.fromEntries([
-        "readSubsystems",
         "readArchitecture",
         "cancelRefresh",
         "readStatus",
         "readRefreshStatus",
-        "readMachineCity",
-        "readProgramCity",
         "refresh"
       ].map((method) => [method, async (input) => {
         const project = currentProjectRequestContext();
@@ -58,13 +55,10 @@ test("System graph retains native reads and refresh and authorizes Architecture 
       });
 
       const routes = [
-        ["GET", "/subsystems", "readSubsystems", "subsystems.read"],
         ["GET", "/status", "readStatus", "status.read"],
         ["GET", "/refresh/status", "readRefreshStatus", "refresh.status"],
         ["GET", "/architecture", "readArchitecture", "architecture.read"],
         ["POST", "/refresh/cancel", "cancelRefresh", "refresh.cancel"],
-        ["GET", "/cities/machine", "readMachineCity", "machine.read"],
-        ["GET", "/cities/program", "readProgramCity", "program.read"],
         ["POST", "/refresh", "refresh", "refresh"]
       ];
       for (const [method, suffix, serviceMethod, operation] of routes) {
@@ -97,8 +91,11 @@ test("System graph retains native reads and refresh and authorizes Architecture 
         await assert.rejects(execute({ projectSlug: slug }), { code: "ACTION_VALIDATION_FAILED" });
         await assert.rejects(execute({ projectSlug: slug, sessionId: "session-1", vibe64User: { role: "owner" } }), { code: "ACTION_VALIDATION_FAILED" });
       }
-      assert.equal(calls.length, 16);
-      assert.equal(app.registeredRoutes.length, 8);
+      assert.equal(calls.length, 10);
+      assert.equal(app.registeredRoutes.length, 5);
+      for (const retired of ["/subsystems", "/cities/machine", "/cities/program"]) {
+        assert.equal(findRegisteredRoute(app, { method: "GET", path: `${apiRouteBase}/vibe64/system-graph/sessions/:sessionId${retired}` }), null);
+      }
     });
   });
 });

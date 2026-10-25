@@ -43,28 +43,22 @@ protocol/scope and separate receiving-file ports. Calls are hidden initially;
 page selection focuses its own calls. Unresolved observations stay explicit.
 Receives UI calls opens the evidenced receiving file and exact declaration when
 supplied. No source parsing, language or transport discovery lives in the
-renderer. The previous architecture prototype remains reviewable but is not
-opened by the loader. Three-dimensional City presentation is retired.
+renderer. The earlier subsystem list, layer diagram and three-dimensional City
+presentation have been removed.
 
 Genesis owns native file/symbol/dependency facts, one-root ownership, observation
-validation and neutral controller joins. Historical Machine/Program JSON paths
-remain readable. Older snapshots expose unavailable architecture capabilities
+validation and neutral controller joins. Older snapshots expose unavailable architecture capabilities
 until explicit refresh. The browser lays out facts and selections; it never
 parses project source or guesses pages from a directory.
 
 The Architecture read response projects file ownership, public declaration ranges
 and dependency evidence from the validated native artifact. It omits internal
-symbols and duplicate parser details; existing Machine reads retain the complete
-artifact. Large subsystem interfaces search available declarations and render at
+symbols and duplicate parser details; it is the only read of the Machine City. Large subsystem interfaces search available declarations and render at
 most 200 matches, with an explicit count and notice; Files retains access to the
 remaining declarations.
-The retained Engine prototype uses the following behavior (not the current
-storyboard): type-only facts remain in that response; the default diagram excludes them from
-ranks and cycles. Include type-only dependencies deliberately includes them and
-labels their source evidence. Layers are relative to the selected scope, with
-disconnected nodes explicit. File scopes retain cross-subsystem cycle membership;
-Show cycle opens the overview and Back restores the file scope. Retained hidden
-views suspend geometry observers and pending animation frames until reactivation.
+Type-only facts remain in that response; dependency ranking excludes them from
+ranks and cycles unless a caller asks to include them. Retained hidden views
+suspend geometry observers and pending animation frames until reactivation.
 
 The existing session-scoped service validates reads. Explicit refresh holds the
 original source-work admission, invokes declared finite `Architecture inspection`

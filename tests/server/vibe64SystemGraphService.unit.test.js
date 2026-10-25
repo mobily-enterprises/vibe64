@@ -205,17 +205,15 @@ test("Genesis City status reports both missing documents without scanning source
         state: "missing"
       }
     });
-    const missing = await service.readMachineCity({ sessionId: "session-1" });
+    const missing = await service.readArchitecture({ sessionId: "session-1" });
     assert.equal(missing.ok, false);
     assert.equal(missing.code, "vibe64_genesis_city_missing");
   });
 });
 
-test("Genesis Machine and Program Cities are returned without projection or invented fields", async () => {
+test("Genesis City status reports both ready documents and the service exposes no raw City reads", async () => {
   await withTempRoot(async (root) => {
-    const machine = machineCityFixture();
-    const program = programCityFixture();
-    await writeCities(root, { machine, program });
+    await writeCities(root, { machine: machineCityFixture(), program: programCityFixture() });
     const service = createService({
       projectService: projectServiceFor(root)
     });
@@ -224,21 +222,8 @@ test("Genesis Machine and Program Cities are returned without projection or inve
     assert.equal(status.status, "ready");
     assert.equal(status.cities.machine.status, "current");
     assert.equal(status.cities.program.status, "current");
-
-    const machineResult = await service.readMachineCity({ sessionId: "session-1" });
-    const programResult = await service.readProgramCity({ sessionId: "session-1" });
-    assert.deepEqual(machineResult, {
-      city: machine,
-      kind: "machine",
-      ok: true,
-      path: GENESIS_MACHINE_CITY_PATH
-    });
-    assert.deepEqual(programResult, {
-      city: program,
-      kind: "program",
-      ok: true,
-      path: GENESIS_PROGRAM_CITY_PATH
-    });
+    for (const retired of ["readSubsystems", "readMachineCity", "readProgramCity"]) assert.equal(service[retired], undefined);
+    assert.deepEqual(await service.readArchitecture({ sessionId: "session-1" }), { ok: true, architecture: null });
   });
 });
 
@@ -257,7 +242,7 @@ test("Genesis City schema validation rejects corrupt documents and broken refere
     assert.equal(status.cities.machine.state, "invalid");
     assert.equal(status.cities.machine.error.code, "vibe64_invalid_genesis_city");
 
-    const response = await service.readMachineCity({ sessionId: "session-1" });
+    const response = await service.readArchitecture({ sessionId: "session-1" });
     assert.equal(response.ok, false);
     assert.equal(response.code, "vibe64_invalid_genesis_city");
 
@@ -311,17 +296,6 @@ test("refresh delegates to Genesis exactly once and validates its native result"
       GENESIS_MACHINE_CITY_PATH,
       GENESIS_PROGRAM_CITY_PATH
     ]);
-  });
-});
-
-test("subsystems read the authored Genesis map for the selected source without refreshing Cities", async () => {
-  await withTempRoot(async (root) => {
-    const map = { contract: "genesis.subsystems.v0", status: "missing", subsystems: [] };
-    const service = createService({ projectService: projectServiceFor(root),
-      subsystemReader: async ({ projectRoot }) => { assert.equal(projectRoot, root); return map; },
-      refresher: async () => { throw new Error("Reading subsystems must not write indexes"); }
-    });
-    assert.deepEqual(await service.readSubsystems({ sessionId: "session-1" }), { ok: true, ...map });
   });
 });
 
@@ -426,7 +400,7 @@ test('cancel waits for managed cleanup, keeps the last artifact and prevents ove
     assert.equal((await refresh).code, 'vibe64_architecture_cancelled'); assert.equal((await cancel).cancelled, true);
     assert.deepEqual(calls.map(input => input.write), [true]);
     assert.equal((await service.readArchitecture({ sessionId: 'session-1' })).architecture.snapshotId, machine.architecture.snapshotId);
-    assert.deepEqual((await service.readMachineCity({ sessionId: 'session-1' })).city.architecture, machine.architecture);
+    assert.deepEqual((await readGenesisCity(root, 'machine')).city.architecture, machine.architecture);
     assert.equal((await service.cancelRefresh({ sessionId: 'session-1' })).cancelled, false);
     assert.equal((await service.readRefreshStatus({ sessionId: 'session-1' })).refresh.status, 'cancelled');
   });
@@ -489,7 +463,7 @@ test('Architecture view keeps public ranges and complete dependency evidence wit
     assert.equal(response.architecture.files[0].dependencies, undefined);
     assert.deepEqual(response.architecture.relations[0].evidence, evidence);
     assert.equal(response.architecture.relations[0].typeOnly, true);
-    assert.deepEqual((await service.readMachineCity({sessionId:'session-1'})).city.architecture, machine.architecture);
+    assert.deepEqual((await readGenesisCity(root, 'machine')).city.architecture, machine.architecture);
   });
 });
 
@@ -506,7 +480,7 @@ test('Architecture projects hash-matched source size and declared entry files wi
     assert.equal(response.ok, true, response.error);
     assert.equal(response.architecture.files[0].sourceLines, 2);
     assert.equal(response.architecture.layout.groups[0].title, 'Application work');
-    assert.deepEqual((await service.readMachineCity({sessionId:'session-1'})).city.architecture, machine.architecture, 'presentation declarations do not rewrite native ownership or evidence');
+    assert.deepEqual((await readGenesisCity(root, 'machine')).city.architecture, machine.architecture, 'presentation declarations do not rewrite native ownership or evidence');
     assert.deepEqual(response.architecture.entryPoints, [
       { file: 'src/catalog.js', fileId: 'file:src/catalog.js', subsystemId: 'directory:.', resolution: 'resolved' },
       { file: 'missing/Main.kt', fileId: null, subsystemId: null, resolution: 'unresolved' }
@@ -570,6 +544,6 @@ test('scan status and notifications survive readers leaving, duplicate admission
     assert.equal(failure.message, 'Inspector failed after navigation');
     assert.equal(events.at(-1).refresh.status, 'failed');
     assert.equal(calls, 2);
-    assert.equal((await service.readMachineCity({ sessionId: 'session-1' })).ok, true, 'failure retains the last valid artifact');
+    assert.equal((await readGenesisCity(root, 'machine')).exists, true, 'failure retains the last valid artifact');
   });
 });

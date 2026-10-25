@@ -57,7 +57,7 @@ function endpointResource(data = null) {
   };
 }
 
-describe("Genesis City client resources", () => {
+describe("Architecture client resources", () => {
   beforeEach(() => {
     endpointMocks.calls.length = 0;
     endpointMocks.live = false;
@@ -69,12 +69,9 @@ describe("Genesis City client resources", () => {
         },
         status: "partial"
       }),
-      endpointResource({ city: { schema: "genesis.machine-city.v1" } }),
+      endpointResource({ architecture: { schema: "genesis.architecture.v1" } }),
       endpointResource(null),
       endpointResource(null),
-      endpointResource(null),
-      endpointResource(null),
-      endpointResource({ status: "missing", subsystems: [] }),
       endpointResource(null)
     ];
     endpointMocks.useEndpointResource.mockReset();
@@ -84,28 +81,32 @@ describe("Genesis City client resources", () => {
     });
   });
 
-  it("defers a subsystem map reload until the retained view becomes active", async () => {
+  it("defers an Architecture reload until the retained view becomes active", async () => {
     const active = ref(false);
     const reloadVersion = ref(0);
     const scope = effectScope();
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
     scope.run(() => useVibe64SystemGraph({ active, reloadVersion, sessionId: "session-1" }));
     reloadVersion.value += 1;
     await nextTick();
-    expect(endpointMocks.resources[6].reload).not.toHaveBeenCalled();
+    await settle();
+    expect(endpointMocks.resources[1].reload).not.toHaveBeenCalled();
     active.value = true;
     await nextTick();
-    expect(endpointMocks.resources[6].reload).toHaveBeenCalledOnce();
+    await settle();
+    expect(endpointMocks.resources[1].reload).toHaveBeenCalledOnce();
     active.value = false;
     await nextTick();
     active.value = true;
     await nextTick();
-    expect(endpointMocks.resources[6].reload).toHaveBeenCalledOnce();
+    await settle();
+    expect(endpointMocks.resources[1].reload).toHaveBeenCalledOnce();
     scope.stop();
   });
 
   it.each([
     { component: "Vibe64DatabaseWorkspace", pane: "database", useTool: useVibe64DatabaseTools, resources: 1 },
-    { component: "Vibe64ArchitectureView", pane: "system", useTool: useVibe64SystemGraph, resources: 8 }
+    { component: "Vibe64ArchitectureView", pane: "system", useTool: useVibe64SystemGraph, resources: 5 }
   ])("pauses $component resource admission through the actual retained-session binding", async ({ component, pane, useTool, resources }) => {
     const autopilot = readFileSync(new URL(
       "../../src/components/studio/vibe64-session/Vibe64AutopilotView.vue", import.meta.url
@@ -160,8 +161,8 @@ describe("Genesis City client resources", () => {
     const scope = effectScope();
     let graph;
     scope.run(() => { graph = useVibe64SystemGraph({ sessionId: "session-1" }); });
-    const refresh = endpointMocks.resources[4];
-    const status = endpointMocks.calls[7];
+    const refresh = endpointMocks.resources[2];
+    const status = endpointMocks.calls[4];
     expect(unref(status.enabled)).toBe(true);
     expect(status.realtime.event).toBe("vibe64.session.changed");
     const pending = Promise.withResolvers();
@@ -173,9 +174,9 @@ describe("Genesis City client resources", () => {
     });
     const result = graph.refresh();
     expect(unref(status.enabled)).toBe(true);
-    endpointMocks.resources[7].data.value = { refresh: { status: "running", startedAt: Date.now() - 12000, message: "Running UI inspector…", elapsedSeconds: 12 } };
+    endpointMocks.resources[4].data.value = { refresh: { status: "running", startedAt: Date.now() - 12000, message: "Running UI inspector…", elapsedSeconds: 12 } };
     expect(graph.refreshProgress.value.message).toBe("Running UI inspector…");
-    endpointMocks.resources[7].data.value = { refresh: { status: "failed", message: "UI inspector failed.", commandOutput: "Required file missing." } };
+    endpointMocks.resources[4].data.value = { refresh: { status: "failed", message: "UI inspector failed.", commandOutput: "Required file missing." } };
     pending.reject(Object.assign(new Error("UI inspector failed."), { details: { commandOutput: "Required file missing." } }));
     await expect(result).resolves.toBeNull();
     expect(graph.error.value).toBe("UI inspector failed.");
@@ -186,7 +187,7 @@ describe("Genesis City client resources", () => {
     scope.stop();
   });
 
-  it("reads status and native Cities, then refreshes synchronously", async () => {
+  it("reads status and Architecture, then refreshes synchronously", async () => {
     const scope = effectScope();
     let graph;
     scope.run(() => {
@@ -196,46 +197,38 @@ describe("Genesis City client resources", () => {
       });
     });
 
-    expect(endpointMocks.calls).toHaveLength(8);
     expect(endpointMocks.calls.map((call) => call.path.value)).toEqual([
       "/api/vibe64/system-graph/sessions/session%2Fa/status",
-      "/api/vibe64/system-graph/sessions/session%2Fa/cities/machine",
       "/api/vibe64/system-graph/sessions/session%2Fa/architecture",
-      "/api/vibe64/system-graph/sessions/session%2Fa/cities/program",
       "/api/vibe64/system-graph/sessions/session%2Fa/refresh",
       "/api/vibe64/system-graph/sessions/session%2Fa/refresh/cancel",
-      "/api/vibe64/system-graph/sessions/session%2Fa/subsystems",
       "/api/vibe64/system-graph/sessions/session%2Fa/refresh/status"
     ]);
     expect(endpointMocks.calls[1].enabled.value).toBe(true);
-    expect(endpointMocks.calls[3].enabled.value).toBe(false);
-    expect(endpointMocks.calls[4].enabled).toBe(false);
-    expect(graph.machineCity.value).toEqual({ schema: "genesis.machine-city.v1" });
-    expect(graph.programCity.value).toBeNull();
+    expect(endpointMocks.calls[2].enabled).toBe(false);
+    expect(graph.architecture.value).toEqual({ schema: "genesis.architecture.v1" });
+    for (const retired of ["machineCity", "programCity", "subsystemMap"]) expect(graph[retired]).toBeUndefined();
 
     await graph.refresh();
 
-    expect(endpointMocks.resources[4].save).toHaveBeenCalledOnce();
-    expect(endpointMocks.resources[4].save).toHaveBeenCalledWith({}, { method: "POST", options: { timeoutMs: 600_000 } });
+    expect(endpointMocks.resources[2].save).toHaveBeenCalledOnce();
+    expect(endpointMocks.resources[2].save).toHaveBeenCalledWith({}, { method: "POST", options: { timeoutMs: 600_000 } });
     expect(endpointMocks.resources[0].reload).toHaveBeenCalledOnce();
     expect(endpointMocks.resources[1].reload).toHaveBeenCalledOnce();
-    expect(endpointMocks.resources[3].reload).not.toHaveBeenCalled();
     scope.stop();
   });
 
   it.each([
     { label: "Database schema", family: "database", useTool: useVibe64DatabaseTools },
-    { label: "Cities", family: "system-graph", useTool: useVibe64SystemGraph },
-    { label: "Cities status", family: "system-graph", useTool: useVibe64SystemGraph, holdStatus: true },
-    { label: "Architecture", family: "system-graph", useTool: useVibe64SystemGraph, projection: "architecture" },
-    { label: "Architecture status", family: "system-graph", useTool: useVibe64SystemGraph, projection: "architecture", holdStatus: true }
-  ])("finishes a held $label refresh while hidden without a path error and reads fresh data on return", async ({ family, useTool, holdStatus = false, projection = "native" }) => {
+    { label: "Architecture", family: "system-graph", useTool: useVibe64SystemGraph },
+    { label: "Architecture status", family: "system-graph", useTool: useVibe64SystemGraph, holdStatus: true }
+  ])("finishes a held $label refresh while hidden without a path error and reads fresh data on return", async ({ family, useTool, holdStatus = false }) => {
     endpointMocks.live = true;
     const database = family === "database";
     const sessionPath = `/api/vibe64/${family}/sessions/session%2Fa`;
     const readPaths = database
       ? [sessionPath]
-      : (projection === "architecture" ? ["/status", "/architecture"] : ["/status", "/cities/machine", "/cities/program"]).map((suffix) => `${sessionPath}${suffix}`);
+      : ["/status", "/architecture"].map((suffix) => `${sessionPath}${suffix}`);
     const writePath = `${sessionPath}${database ? "/schema/refresh" : "/refresh"}`;
     const reads = [];
     const writes = [];
@@ -259,7 +252,6 @@ describe("Genesis City client resources", () => {
         }
         expect(options.method).toBe("GET");
         if (!database && url === `${sessionPath}/refresh/status`) return Promise.resolve({ refresh: { message: "Scanning source…", elapsedSeconds: 2 } });
-        if (!database && url === `${sessionPath}/subsystems`) return Promise.resolve({ subsystems: [], status: "missing" });
         expect(readPaths).toContain(url);
         reads.push(url);
         if (database) return Promise.resolve({ revision, schema: { tables: [] } });
@@ -270,7 +262,7 @@ describe("Genesis City client resources", () => {
             cities: { machine: { available: true }, program: { available: true } }
           });
         }
-        return Promise.resolve(projection === "architecture" ? { architecture: { revision } } : { city: { revision } });
+        return Promise.resolve({ architecture: { revision } });
       }
     });
     const app = createRenderer({
@@ -281,7 +273,7 @@ describe("Genesis City client resources", () => {
       remove() {}
     }).createApp({
       setup() {
-        tool = useTool({ active, sessionId: ref("session/a"), projection });
+        tool = useTool({ active, sessionId: ref("session/a") });
         return () => null;
       }
     });
@@ -335,14 +327,7 @@ describe("Genesis City client resources", () => {
         expect(tool.state.value.revision).toBe(2);
       } else {
         expect(tool.systemStatus.value.revision).toBe(2);
-        if (projection === "architecture") {
-          expect(tool.architecture.value.revision).toBe(2);
-          expect(tool.machineCity.value).toBeNull();
-          expect(tool.programCity.value).toBeNull();
-        } else {
-          expect(tool.machineCity.value.revision).toBe(2);
-          expect(tool.programCity.value.revision).toBe(2);
-        }
+        expect(tool.architecture.value.revision).toBe(2);
       }
       expect(writes).toEqual([writePath]);
       expect(hiddenError).toBe("");

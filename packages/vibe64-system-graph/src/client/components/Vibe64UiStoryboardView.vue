@@ -131,7 +131,7 @@ import { architectureOverview, subsystemOutline } from '../architectureModel.js'
 
 const props = defineProps({ active: { type: Boolean, default: true }, sessionId: { type: String, default: '' }, reloadVersion: { type: Number, default: 0 }, openProgramRequest: Object });
 const { architecture, error, loading, refreshing, refreshProgress, refreshOutput, refresh, reload, cancelRefresh } = useVibe64SystemGraph({
-  active: toRef(props, 'active'), sessionId: toRef(props, 'sessionId'), reloadVersion: toRef(props, 'reloadVersion'), projection: 'architecture'
+  active: toRef(props, 'active'), sessionId: toRef(props, 'sessionId'), reloadVersion: toRef(props, 'reloadVersion')
 });
 const emit = defineEmits(['inspect-file', 'open-source-file']);
 const canvas = ref(null);

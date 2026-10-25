@@ -811,7 +811,7 @@ const interfaceSymbolId = ref('');
 const symbolPresentation = ref('description');
 // Architecture supplies its existing snapshot at mount. Only
 // standalone file browsing owns another graph reader.
-const interfaceGraph = props.architectureFacts ? null : useVibe64SystemGraph({ active: toRef(props, 'active'), sessionId: toRef(props, 'sessionId'), projection: 'architecture' });
+const interfaceGraph = props.architectureFacts ? null : useVibe64SystemGraph({ active: toRef(props, 'active'), sessionId: toRef(props, 'sessionId') });
 const interfaceArchitecture = computed(() => props.architectureFacts || interfaceGraph?.architecture.value);
 const interfaceFile = computed(() => interfaceArchitecture.value?.files?.find(file => file.path === editor.selectedPath.value));
 const interfaceCurrent = computed(() => interfaceFile.value?.hash === `sha256:${editor.savedHash.value}` && !editor.dirty.value);

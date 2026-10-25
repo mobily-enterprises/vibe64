@@ -105,7 +105,7 @@ test("remaining Vibe64 features use named capabilities and register direct route
       "explanation.create", "explanations.cleanup", "explanation.delete", "explanation.stop", "explanation.followup",
       "file.read", "file.create", "file.save"
     ].map((name) => `vibe64.source-editor.${name}`),
-    ...["subsystems.read", "status.read", "machine.read", "program.read", "architecture.read", "refresh", "refresh.cancel", "refresh.status"].map((name) => `vibe64.system-graph.${name}`)
+    ...["status.read", "architecture.read", "refresh", "refresh.cancel", "refresh.status"].map((name) => `vibe64.system-graph.${name}`)
   ].sort());
   for (const action of actions.listDefinitions().filter(({ id }) => id.startsWith("vibe64.source-editor."))) {
     assert.equal(action.input.mode, "create");
@@ -113,9 +113,9 @@ test("remaining Vibe64 features use named capabilities and register direct route
       !["vibe64.source-editor.integrations.read", "vibe64.source-editor.integrations.providers.read", "vibe64.source-editor.integrations.save", "vibe64.source-editor.integrations.setup"].includes(action.id),
       "Only integration product controls are exposed; source tools belong to coding sessions.");
   }
-  // 45 project routes (Health's tool check included). Learning v2: a practice project uses these ordinary
+  // 42 project routes (Health's tool check included). Learning v2: a practice project uses these ordinary
   // project routes, so none is mirrored under /api/learning/:learningAttemptId.
-  assert.equal(routes.length, 45);
+  assert.equal(routes.length, 42);
   assert.equal(routes.filter((route) => String(route.path || route.url || "").startsWith("/api/learning/")).length, 0);
   for (const [method, suffix] of [
     ["GET", "/source-editor/download"],
@@ -124,7 +124,6 @@ test("remaining Vibe64 features use named capabilities and register direct route
     ["GET", "/sessions/:sessionId/files/:area/archive"],
     ["POST", "/sessions/:sessionId/integrations/:integrationId/setup"],
     ["GET", "/sessions/:sessionId/integrations/providers"],
-    ["GET", "/system-graph/sessions/:sessionId/subsystems"],
     ["GET", "/system-graph/sessions/:sessionId/architecture"],
     ["POST", "/system-graph/sessions/:sessionId/refresh/cancel"],
     ["GET", "/system-graph/sessions/:sessionId/refresh/status"]
