@@ -31,7 +31,6 @@ const {
   chatToggleIcon,
   chatToggleTitle,
   dashboardRouteActive,
-  emitPageTitle,
   emptySection,
   handleProjectSelectionDeleted,
   handleProjectSelectionError,
@@ -123,19 +122,6 @@ const {
             :id="githubActorHostId"
             class="studio-home-shell-github-actor-host"
           />
-          <!--
-          <h1
-            v-if="pageTitle"
-            class="studio-home-shell-title"
-            :title="pageTitle"
-            aria-live="polite"
-          >
-            {{ pageTitle }}
-          </h1>
-          <span v-else class="studio-home-shell-surface-label">
-            Sessions
-          </span>
-          -->
         </div>
 
         <div class="studio-home-shell-project-controls">
@@ -253,7 +239,6 @@ const {
               :project-context="projectSelectionSlotProps?.projectSelection?.currentProject || {}"
               :preview-toolbar-teleport-target="previewToolbarTeleportTarget"
               :project-pane="projectPane"
-              @title-change="emitPageTitle"
               @chat-attention="setChatCollapsed(false)"
               @project-attention="showProjectPane"
             >
@@ -422,49 +407,6 @@ const {
 .studio-home-shell-local-remotes-host:empty,
 .studio-home-shell-create-session-host:empty {
   display: none;
-}
-
-.studio-home-shell-title {
-  color: rgb(var(--v-theme-on-surface));
-  font-size: 1.2rem;
-  flex: 1 1 auto;
-  font-weight: 720;
-  line-height: 1.2;
-  margin: 0;
-  max-width: 100%;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.studio-home-shell-surface-label {
-  color: rgb(var(--v-theme-on-surface));
-  display: block;
-  flex: 1 1 auto;
-  font-size: 0.95rem;
-  font-weight: 650;
-  line-height: 1.2;
-  max-width: 12rem;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.studio-home-shell-target-folder {
-  color: rgb(var(--v-theme-on-surface));
-  display: block;
-  flex: 1 1 auto;
-  font-size: 1.2rem;
-  font-weight: 760;
-  line-height: 1.2;
-  margin: 0;
-  max-width: 100%;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .studio-home-shell-project-controls {
@@ -696,16 +638,6 @@ const {
 }
 
 @media (max-width: 600px) {
-  .studio-home-shell-title {
-    font-size: 1.05rem;
-    max-width: calc(100vw - 14rem);
-  }
-
-  .studio-home-shell-target-folder {
-    font-size: 1.05rem;
-    max-width: calc(100vw - 16rem);
-  }
-
   /* Phone bar budget: the heading takes only the space the L plate and the
      account/Colleague buttons leave. The pane switch and session controls
      keep their size; the project name gives way with an ellipsis, so nothing

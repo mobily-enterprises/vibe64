@@ -129,7 +129,7 @@ const SessionRuntimeHost = componentFromSfcTemplate(
 const SessionPanel = componentFromSfcTemplate(
   "../../src/components/studio/Vibe64SessionPanel.vue",
   {
-    emits: ["chat-attention", "title-change", "project-attention"],
+    emits: ["chat-attention", "project-attention"],
     name: "Vibe64SessionPanel",
     props: {
       chatCollapsed: { default: false, type: Boolean },
@@ -200,7 +200,6 @@ function projectPage(setChatCollapsed, chatCollapsed) {
         chatToggleIcon: "",
         chatToggleTitle: "Show chat",
         dashboardRouteActive: ref(false),
-        emitPageTitle: vi.fn(),
         handleProjectSelectionError: vi.fn(),
         handleProjectSelectionMissing: vi.fn(),
         handleProjectSelectionReady: vi.fn(),

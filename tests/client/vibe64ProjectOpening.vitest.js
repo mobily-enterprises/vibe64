@@ -12,7 +12,7 @@ vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({ useRe
 vi.mock("@/composables/useVibe64ProjectsResource.js", () => ({
   useVibe64ProjectsResource: () => ({
     loadError: Vue.ref(""), projects: Vue.ref([]), isLoading: Vue.ref(false),
-    targetRoot: Vue.ref("/projects/dogandgroom"), selfTargetAutoSelectProjectRepro: Vue.ref({})
+    targetRoot: Vue.ref("/projects/dogandgroom")
   })
 }));
 vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({
@@ -165,6 +165,24 @@ describe("opening a routed project", () => {
     expect(view.issues.draft.value).toBe("An unsent comment");
     expect(view.router.currentRoute.value.query).toEqual(filters);
     expect(view.issues.selectedLabels.value).toEqual(["bug", "help wanted"]);
+    mocks.requests[0].resolve(success);
+    await flush();
+  });
+
+  it("keeps project pane navigation scoped to the selected project", async () => {
+    const view = await mountPage();
+    expect(view.page.projectPaneNavigationVisible.value).toBe(false);
+    view.page.handleProjectSelectionReady({ currentProject: { slug: "compas-next" } });
+    expect(view.page.projectPaneNavigationVisible.value).toBe(false);
+    view.page.handleProjectSelectionReady({ currentProject: { slug: "dogandgroom" } });
+    expect(view.page.projectPaneNavigationVisible.value).toBe(true);
+    await view.router.push("/app/project/other");
+    await flush();
+    expect(view.page.projectPaneNavigationVisible.value).toBe(false);
+    view.page.handleProjectSelectionReady({ projectSlug: "other" });
+    expect(view.page.projectPaneNavigationVisible.value).toBe(true);
+    view.page.handleProjectSelectionError("Selection failed.");
+    expect(view.page.projectPaneNavigationVisible.value).toBe(false);
     mocks.requests[0].resolve(success);
     await flush();
   });

@@ -50,12 +50,6 @@ function useVibe64ProjectsResource({
   const projectsRoot = computed(() => String(resource.data.value?.projectsRoot || ""));
   const targetRoot = computed(() => String(resource.data.value?.targetRoot || ""));
   const projects = computed(() => Array.isArray(resource.data.value?.projects) ? resource.data.value.projects : []);
-  const selfTargetAutoSelectProjectRepro = computed(() => {
-    const config = resource.data.value?.repro?.selfTargetAutoSelectProject || {};
-    return config && typeof config === "object" && !Array.isArray(config)
-      ? config
-      : {};
-  });
 
   return {
     currentProject,
@@ -69,7 +63,6 @@ function useVibe64ProjectsResource({
     projectsRoot,
     reload: resource.reload,
     resource,
-    selfTargetAutoSelectProjectRepro,
     targetRoot
   };
 }

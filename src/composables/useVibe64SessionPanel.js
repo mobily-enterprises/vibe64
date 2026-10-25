@@ -34,7 +34,6 @@ import {
 const vibe64SessionPanelEmits = [
   "chat-attention",
   "execution-attention",
-  "title-change",
   "project-attention"
 ];
 const vibe64SessionPanelProps = {
@@ -77,11 +76,7 @@ function useVibe64SessionPanel(props, emit) {
   const dismissedPageError = ref("");
   const mountedRuntimeSessionIds = ref([]);
   const runtimeStateBySessionId = reactive({});
-  const sessionData = useVibe64SessionData({
-    onTitleChange(title) {
-      emit("title-change", title);
-    }
-  });
+  const sessionData = useVibe64SessionData();
   const projectSettingsKey = computed(() => projectSettingsQueryKey(
     VIBE64_SURFACE_ID,
     ROUTE_VISIBILITY_PUBLIC,

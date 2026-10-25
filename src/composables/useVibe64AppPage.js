@@ -12,7 +12,8 @@ import { useQueryClient } from "@tanstack/vue-query";
 import { useShellWebErrorRuntime } from "@jskit-ai/shell-web/client/error";
 import { vibe64RealtimePayloadFromCurrentTab } from "@/lib/vibe64BrowserTabOrigin.js";
 import { VIBE64_COLLEAGUE_LAYOUT_KEY } from "@/lib/vibe64AssistantHost.js";
-import { invalidateGithubIssueQueries } from "@/lib/vibe64GithubProject.js";
+import { invalidateGithubIssueQueries, invalidateGithubProjectQueries } from "@/lib/vibe64GithubProject.js";
+import { normalizeRoutePath, routePathContainsSection } from "@/lib/routeActiveState.js";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useStudioShellDrawer } from "@/composables/useStudioShellDrawer.js";
@@ -36,15 +37,12 @@ import { isPracticeProjectSlug, projectDisplayName } from "@/lib/vibe64PracticeP
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { lessonShownIn, withoutLesson } from "@/lib/vibe64Learning.js";
 import {
-  vibe64SessionDebugDurationMs,
   vibe64SessionDebugError,
   vibe64SessionDebugLog
 } from "@/lib/vibe64SessionDebugLog.js";
 
 const HOME_SHELL_CLASS = "studio-home-shell-active";
-const SELF_TARGET_AUTO_SELECT_DELAY_MS = 3000;
 const PREVIEW_TOOLBAR_HOST_ID = "studio-home-shell-preview-toolbar";
-const PROJECT_RUNTIME_CLOSE_API_PATH = "/api/vibe64/project-runtime/close";
 const PROJECT_RUNTIME_OPEN_API_PATH = "/api/vibe64/project-runtime/open";
 // The project panes the header's Preview | Dash switch chooses between. Learn
 // mode's lesson is not one of them: it is its own on/off flag (the Lesson
@@ -71,11 +69,9 @@ function nextProjectPane(tabs = [], pane = "") {
 function useVibe64AppPage() {
   const route = useRoute();
   const router = useRouter();
-  const pageTitle = ref("");
   const pageError = ref("");
   const chatCollapsed = ref(false);
   const mobilePaneLayout = ref(false);
-  const projectSelectionReady = ref(false);
   const projectPaneNavigationReadySlug = ref("");
   const lastDashboardRoutePath = ref("");
   let mobilePaneMediaQuery = null;
@@ -96,27 +92,6 @@ function useVibe64AppPage() {
     fallbackLoadError: "Project selection could not load.",
     projectSlug,
     requestRecoveryLabel: "Project selection"
-  });
-  const closeProjectRuntimeCommand = useCommand({
-    access: "never",
-    apiSuffix: "/vibe64/project-runtime/close",
-    buildCommandOptions: (_payload, { context }) => ({
-      method: "POST",
-      path: scopedDevelopmentApiUrl(PROJECT_RUNTIME_CLOSE_API_PATH, context?.projectSlug)
-    }),
-    buildRawPayload: (_model, { context }) => ({
-      reason: String(context?.reason || "project-close")
-    }),
-    clearOnRouteChange: false,
-    fallbackRunError: "Project runtime could not close.",
-    messages: {
-      error: "Project runtime could not close."
-    },
-    ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
-    placementSource: "vibe64.project-runtime.close",
-    suppressSuccessMessage: true,
-    surfaceId: VIBE64_SURFACE_ID,
-    writeMethod: "POST"
   });
   const openProjectRuntimeCommand = useCommand({
     access: "never",
@@ -141,7 +116,6 @@ function useVibe64AppPage() {
   });
   const projectLoadError = projectSelection.loadError;
   const projects = projectSelection.projects;
-  const selfTargetAutoSelectProjectRepro = projectSelection.selfTargetAutoSelectProjectRepro;
   const learning = useVibe64Learning();
   // A practice project is named by its lesson (the current lesson, or the
   // read lesson when it owns this project), never by its training-<id> slug.
@@ -157,7 +131,8 @@ function useVibe64AppPage() {
   });
   const developmentBasePath = computed(() => projectAppPath(projectSlug.value));
   const dashboardBasePath = computed(() => `${developmentBasePath.value}/dashboard`);
-  const dashboardRouteActive = computed(() => normalizedPath(route.path).startsWith(`${dashboardBasePath.value}/`));
+  const dashboardRouteActive = computed(() => routePathContainsSection(route.path, dashboardBasePath.value) &&
+    normalizeRoutePath(route.path) !== normalizeRoutePath(dashboardBasePath.value));
   // Learn mode's current lesson has a Lesson sheet: over a practice project's
   // Preview or Dash while its flag is on (?lesson=1, the Lesson toggle); the
   // whole area without a project.
@@ -173,7 +148,6 @@ function useVibe64AppPage() {
   const projectTabs = computed(() => projectPaneTabs({ projectSlug: projectSlug.value, lesson: lessonPaneAvailable.value }));
   // A lesson without a practice project has no coding session, so no chat column.
   const chatColumnVisible = computed(() => Boolean(projectSlug.value) || !lessonPaneAvailable.value);
-  const sortedProjects = computed(() => [...projects.value].sort((left, right) => left.slug.localeCompare(right.slug)));
   // Learn lists only the current lesson's practice project, beside Courses.
   const learnMode = computed(() => Boolean(learning?.learnMode));
   const switcherProjects = computed(() => {
@@ -193,11 +167,8 @@ function useVibe64AppPage() {
     return chatCollapsed.value ? "Show chat" : "Collapse chat";
   });
   const mobileProjectAction = computed(() => nextProjectPane(projectTabs.value, projectPane.value));
-  const projectPaneNavigationVisible = computed(() => projectTabs.value.length > 1 && (!projectSlug.value || projectPaneNavigationReady({
-    selectionReady: projectSelectionReady.value,
-    projectSlug: projectSlug.value,
-    readyProjectSlug: projectPaneNavigationReadySlug.value
-  })));
+  const projectPaneNavigationVisible = computed(() => projectTabs.value.length > 1 &&
+    (!projectSlug.value || projectPaneNavigationReadySlug.value === projectSlug.value));
   const mobileProjectActionVisible = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value &&
     (chatCollapsed.value || !chatColumnVisible.value));
   const mobilePaneSwipeEnabled = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value &&
@@ -226,8 +197,6 @@ function useVibe64AppPage() {
   const previewToolbarTeleportTarget = computed(() => (
     previewToolbarHostVisible.value ? `#${PREVIEW_TOOLBAR_HOST_ID}` : ""
   ));
-  let selfTargetAutoSelectTimer = 0;
-  let selfTargetAutoSelectAttemptKey = "";
 
   useStudioShellDrawer({
     hidden: true
@@ -247,25 +216,8 @@ function useVibe64AppPage() {
   useRealtimeEvent({
     event: VIBE64_PROJECT_CHANGED_EVENT,
     matches: ({ payload = {} } = {}) => payload.projectSlug === projectSlug.value && payload.githubRefresh === true,
-    onEvent: async () => {
-      const issuesPath = scopedDevelopmentApiUrl("/api/vibe64/issues", projectSlug.value);
-      const labelsPath = scopedDevelopmentApiUrl("/api/vibe64/issue-labels", projectSlug.value);
-      const mentionsPath = scopedDevelopmentApiUrl("/api/vibe64/issue-mentions", projectSlug.value);
-      const prsPath = scopedDevelopmentApiUrl("/api/vibe64/pull-requests", projectSlug.value);
-      const incomingPath = scopedDevelopmentApiUrl("/api/vibe64/incoming", projectSlug.value);
-      await queryClient.invalidateQueries({
-        predicate: ({ queryKey }) => {
-          if (!Array.isArray(queryKey)) return false;
-          const [resource, path] = queryKey;
-          return (resource === "vibe64.issues" && path === issuesPath) ||
-          (resource === "vibe64.issue" && path?.startsWith(`${issuesPath}/`)) ||
-          (resource === "vibe64.issueLabels" && path === labelsPath) ||
-          (resource === "vibe64.issueMentions" && path === mentionsPath) ||
-          (["vibe64.pullRequests", "vibe64.pullRequest"].includes(resource) && path === prsPath) ||
-          (resource === "vibe64.incoming" && path === incomingPath);
-        }
-      });
-    }
+    onEvent: () => invalidateGithubProjectQueries(queryClient,
+      scopedDevelopmentApiUrl("/api/vibe64/issues", projectSlug.value))
   });
 
   useRealtimeEvent({
@@ -287,16 +239,6 @@ function useVibe64AppPage() {
       await invalidateGithubIssueQueries(queryClient, basePath, `${basePath}/${comment.number}`);
     }
   });
-
-  watch(
-    () => route.path,
-    (path) => {
-      if (normalizedPath(path) !== normalizedPath(developmentBasePath.value)) {
-        setPageTitle();
-      }
-    },
-    { immediate: true }
-  );
 
   watch(projectSlug, retryProjectRuntime, { flush: "sync" });
   // A phone shows one surface: showing the lesson (a started lesson,
@@ -338,7 +280,6 @@ function useVibe64AppPage() {
   onBeforeUnmount(() => {
     if (colleagueLayout?.value === layoutOwner) colleagueLayout.value = null;
     removeProjectNavigation();
-    clearSelfTargetAutoSelectTimer();
     setHomeShellActive(false);
     if (typeof mobilePaneMediaQuery?.removeEventListener === "function") {
       mobilePaneMediaQuery.removeEventListener("change", syncMobilePaneLayout);
@@ -349,24 +290,11 @@ function useVibe64AppPage() {
   });
 
   watch(() => [
-    projectSlug.value,
-    projectSelection.isLoading.value ? "loading" : "ready",
-    selfTargetAutoSelectProjectRepro.value?.enabled === true ? "enabled" : "disabled",
-    selfTargetAutoSelectProjectRepro.value?.selfTarget === true ? "self-target" : "normal",
-    selfTargetAutoSelectProjectRepro.value?.projectSlug || "",
-    sortedProjects.value.map((project) => project.slug).join("\0")
-  ].join("|"), () => {
-    scheduleSelfTargetProjectAutoSelect();
-  }, {
-    immediate: true
-  });
-
-  watch(() => [
     dashboardBasePath.value,
     route.path
   ].join("|"), () => {
     if (dashboardRouteActive.value) {
-      lastDashboardRoutePath.value = normalizedPath(route.path);
+      lastDashboardRoutePath.value = normalizeRoutePath(route.path);
     }
   }, {
     immediate: true
@@ -377,9 +305,7 @@ function useVibe64AppPage() {
     chatColumnVisible,
     chatToggleIcon,
     chatToggleTitle,
-    closeProjectRuntimeForSlug,
     dashboardRouteActive,
-    emitPageTitle,
     handleProjectSelectionDeleted,
     handleProjectSelectionError,
     handleProjectSelectionMissing,
@@ -391,7 +317,6 @@ function useVibe64AppPage() {
     mobileProjectActionVisible,
     openProject,
     pageError,
-    pageTitle,
     previewToolbarHostId: PREVIEW_TOOLBAR_HOST_ID,
     previewToolbarHostVisible,
     previewToolbarTeleportTarget,
@@ -420,14 +345,6 @@ function useVibe64AppPage() {
       return;
     }
     document.body.classList.toggle(HOME_SHELL_CLASS, Boolean(active));
-  }
-
-  function setPageTitle(title = "") {
-    pageTitle.value = String(title || "").trim();
-  }
-
-  function emitPageTitle(title = "") {
-    setPageTitle(title);
   }
 
   // The Lesson toggle pressed again: the flag goes off, uncovering the
@@ -465,41 +382,6 @@ function useVibe64AppPage() {
       retryProjectRuntime();
     }
     void router.push(projectAppPath(slug));
-  }
-
-  async function closeProjectRuntimeForSlug(slug = "", {
-    reason = "project-close"
-  } = {}) {
-    const project = String(slug || "").trim();
-    if (!project) {
-      return null;
-    }
-    const startedAtMs = Date.now();
-    vibe64SessionDebugLog("client.projectRuntime.close.start", {
-      projectSlug: project,
-      reason
-    });
-    try {
-      const result = await closeProjectRuntimeCommand.run({
-        projectSlug: project,
-        reason
-      });
-      vibe64SessionDebugLog("client.projectRuntime.close.done", {
-        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-        ok: result?.ok !== false,
-        projectSlug: project,
-        reason
-      });
-      return result;
-    } catch (error) {
-      vibe64SessionDebugLog("client.projectRuntime.close.error", {
-        durationMs: vibe64SessionDebugDurationMs(startedAtMs),
-        error: vibe64SessionDebugError(error),
-        projectSlug: project,
-        reason
-      });
-      return null;
-    }
   }
 
   async function openProjectRuntimeForSlug(slug = "", {
@@ -548,38 +430,6 @@ function useVibe64AppPage() {
     });
   }
 
-  function scheduleSelfTargetProjectAutoSelect() {
-    clearSelfTargetAutoSelectTimer();
-    const targetProject = selfTargetAutoSelectProjectTarget({
-      currentSlug: projectSlug.value,
-      loading: projectSelection.isLoading.value,
-      projects: sortedProjects.value,
-      repro: selfTargetAutoSelectProjectRepro.value
-    });
-    if (!targetProject) {
-      return;
-    }
-    const targetSlug = String(targetProject.slug || "").trim();
-    const attemptKey = `${projectSlug.value}->${targetSlug}`;
-    if (selfTargetAutoSelectAttemptKey === attemptKey || typeof globalThis.setTimeout !== "function") {
-      return;
-    }
-    selfTargetAutoSelectTimer = globalThis.setTimeout(() => {
-      selfTargetAutoSelectTimer = 0;
-      selfTargetAutoSelectAttemptKey = attemptKey;
-      openProject(targetProject);
-    }, SELF_TARGET_AUTO_SELECT_DELAY_MS);
-  }
-
-  function clearSelfTargetAutoSelectTimer() {
-    if (!selfTargetAutoSelectTimer || typeof globalThis.clearTimeout !== "function") {
-      selfTargetAutoSelectTimer = 0;
-      return;
-    }
-    globalThis.clearTimeout(selfTargetAutoSelectTimer);
-    selfTargetAutoSelectTimer = 0;
-  }
-
   function showProjectPane() {
     if (mobilePaneLayout.value) {
       setChatCollapsed(true);
@@ -598,30 +448,25 @@ function useVibe64AppPage() {
     pageError.value = "";
     const selectedSlug = selectedProjectSlug(selection);
     setProjectPaneNavigationReady(Boolean(selectedSlug && selectedSlug === projectSlug.value));
-    emitPageTitle();
   }
 
   function handleProjectSelectionMissing() {
     pageError.value = "";
     setProjectPaneNavigationReady(false);
-    emitPageTitle("Choose project");
   }
 
   // The gate shows the deleted practice project's own notice; no page alert.
   function handleProjectSelectionDeleted() {
     pageError.value = "";
     setProjectPaneNavigationReady(false);
-    emitPageTitle();
   }
 
   function handleProjectSelectionError(error) {
     pageError.value = String(error || "");
     setProjectPaneNavigationReady(false);
-    emitPageTitle();
   }
 
   function setProjectPaneNavigationReady(ready = false) {
-    projectSelectionReady.value = Boolean(ready);
     projectPaneNavigationReadySlug.value = ready ? projectSlug.value : "";
   }
 }
@@ -649,26 +494,6 @@ function openProjectSwitcherProjects(projects = []) {
     .sort((left, right) => String(left?.slug || "").localeCompare(String(right?.slug || "")));
 }
 
-function selfTargetAutoSelectProjectTarget({
-  currentSlug = "",
-  loading = false,
-  projects = [],
-  repro = {}
-} = {}) {
-  const targetSlug = String(repro?.projectSlug || "").trim();
-  if (
-    repro?.enabled !== true ||
-    repro?.selfTarget !== true ||
-    !targetSlug ||
-    loading ||
-    String(currentSlug || "").trim() === targetSlug ||
-    !Array.isArray(projects)
-  ) {
-    return null;
-  }
-  return projects.find((project) => project?.slug === targetSlug) || null;
-}
-
 function previewToolbarTargetVisible({
   chatCollapsed = false,
   mobilePaneLayout = false,
@@ -686,34 +511,9 @@ function dashboardReturnPath({
   dashboardBasePath = "",
   lastDashboardRoutePath = ""
 } = {}) {
-  const normalizedDashboardBasePath = normalizedPath(dashboardBasePath);
-  const normalizedLastDashboardRoutePath = normalizedPath(lastDashboardRoutePath);
-  const defaultDashboardPath = `${normalizedDashboardBasePath}/env`;
-  if (
-    normalizedLastDashboardRoutePath &&
-    (
-      normalizedLastDashboardRoutePath === normalizedDashboardBasePath ||
-      normalizedLastDashboardRoutePath.startsWith(`${normalizedDashboardBasePath}/`)
-    )
-  ) {
-    return normalizedLastDashboardRoutePath === normalizedDashboardBasePath
-      ? defaultDashboardPath
-      : normalizedLastDashboardRoutePath;
-  }
-  return defaultDashboardPath;
-}
-
-function projectPaneNavigationReady({
-  selectionReady = false,
-  projectSlug = "",
-  readyProjectSlug = ""
-} = {}) {
-  const currentSlug = String(projectSlug || "").trim();
-  return Boolean(
-    selectionReady &&
-    currentSlug &&
-    String(readyProjectSlug || "").trim() === currentSlug
-  );
+  const base = normalizeRoutePath(dashboardBasePath);
+  const last = normalizeRoutePath(lastDashboardRoutePath);
+  return routePathContainsSection(last, base) && last !== base ? last : `${base}/env`;
 }
 
 function selectedProjectSlug(selection = {}) {
@@ -728,24 +528,13 @@ function selectedProjectSlug(selection = {}) {
   ).trim();
 }
 
-function normalizedPath(pathValue = "") {
-  const path = String(pathValue || "").trim();
-  if (!path || path === "/") {
-    return path || "/";
-  }
-  return path.replace(/\/+$/u, "");
-}
-
 export {
   PREVIEW_TOOLBAR_HOST_ID,
-  SELF_TARGET_AUTO_SELECT_DELAY_MS,
   dashboardReturnPath,
   nextProjectPane,
   openProjectSwitcherProjects,
   projectPaneTabs,
-  projectPaneNavigationReady,
   projectRuntimeClosedPayloadMatches,
   previewToolbarTargetVisible,
-  selfTargetAutoSelectProjectTarget,
   useVibe64AppPage
 };

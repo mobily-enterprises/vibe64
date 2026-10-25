@@ -212,10 +212,7 @@ function refetchEndpointResource(resource) {
   return resource?.reload?.();
 }
 
-function useVibe64SessionData({
-  onTitleChange = null
-} = {}) {
-  const notifyTitleChange = typeof onTitleChange === "function" ? onTitleChange : () => null;
+function useVibe64SessionData() {
   const queryClient = useQueryClient();
   const projectSlug = useVibe64ProjectSlug();
   const route = useRoute();
@@ -888,12 +885,6 @@ function useVibe64SessionData({
     });
   }, {
     flush: "post",
-    immediate: true
-  });
-
-  watch(selectedSessionTitle, (title) => {
-    notifyTitleChange(title || "");
-  }, {
     immediate: true
   });
 

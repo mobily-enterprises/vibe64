@@ -6,10 +6,8 @@ import {
   nextProjectPane,
   openProjectSwitcherProjects,
   projectPaneTabs,
-  projectPaneNavigationReady,
   projectRuntimeClosedPayloadMatches,
-  previewToolbarTargetVisible,
-  selfTargetAutoSelectProjectTarget
+  previewToolbarTargetVisible
 } from "../../src/composables/useVibe64AppPage.js";
 
 describe("Vibe64 app page", () => {
@@ -31,54 +29,6 @@ describe("Vibe64 app page", () => {
       "alpha",
       "unknown"
     ]);
-  });
-
-  it("targets the configured self-target project only when the repro hook is active", () => {
-    const projects = [
-      { slug: "beepollen" },
-      { slug: "vibe64" }
-    ];
-
-    expect(selfTargetAutoSelectProjectTarget({
-      currentSlug: "vibe64",
-      projects,
-      repro: {
-        enabled: true,
-        projectSlug: "beepollen",
-        selfTarget: true
-      }
-    })).toEqual({ slug: "beepollen" });
-
-    expect(selfTargetAutoSelectProjectTarget({
-      currentSlug: "vibe64",
-      projects,
-      repro: {
-        enabled: true,
-        projectSlug: "beepollen",
-        selfTarget: false
-      }
-    })).toBeNull();
-
-    expect(selfTargetAutoSelectProjectTarget({
-      currentSlug: "beepollen",
-      projects,
-      repro: {
-        enabled: true,
-        projectSlug: "beepollen",
-        selfTarget: true
-      }
-    })).toBeNull();
-
-    expect(selfTargetAutoSelectProjectTarget({
-      currentSlug: "vibe64",
-      loading: true,
-      projects,
-      repro: {
-        enabled: true,
-        projectSlug: "beepollen",
-        selfTarget: true
-      }
-    })).toBeNull();
   });
 
   it("shows the preview toolbar target with the same pane visibility rule as project navigation", () => {
@@ -108,32 +58,6 @@ describe("Vibe64 app page", () => {
       mobilePaneLayout: true,
       projectPane: "dashboard",
       projectPaneNavigationVisible: true
-    })).toBe(false);
-  });
-
-  it("keeps project pane navigation scoped to the selected project", () => {
-    expect(projectPaneNavigationReady({
-      projectSlug: "beepollen",
-      selectionReady: true,
-      readyProjectSlug: "beepollen"
-    })).toBe(true);
-
-    expect(projectPaneNavigationReady({
-      projectSlug: "beepollen",
-      selectionReady: true,
-      readyProjectSlug: "compas-next"
-    })).toBe(false);
-
-    expect(projectPaneNavigationReady({
-      projectSlug: "beepollen",
-      selectionReady: false,
-      readyProjectSlug: "beepollen"
-    })).toBe(false);
-
-    expect(projectPaneNavigationReady({
-      projectSlug: "",
-      selectionReady: true,
-      readyProjectSlug: "beepollen"
     })).toBe(false);
   });
 
@@ -176,12 +100,11 @@ describe("Vibe64 app page", () => {
     })).toBe("/app/project/beepollen/dashboard/env");
   });
 
-  it("keeps project runtime close available without route-leave shutdown", () => {
+  it("opens the project runtime without route-leave shutdown", () => {
     const source = readFileSync(new URL("../../src/composables/useVibe64AppPage.js", import.meta.url), "utf8");
 
-    expect(source).toContain("closeProjectRuntimeForSlug");
-    expect(source).toContain("PROJECT_RUNTIME_CLOSE_API_PATH");
     expect(source).toContain("PROJECT_RUNTIME_OPEN_API_PATH");
+    expect(source).not.toContain("project-runtime/close");
     expect(source).not.toContain("onBeforeRouteLeave");
     expect(source).not.toContain("project-route-leave");
     expect(source).not.toContain("sessionStorage");
