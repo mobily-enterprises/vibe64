@@ -205,6 +205,21 @@ test("successor acknowledgement schema and parser bind the exact reviewed handov
     }),
     (error) => error?.code === "vibe64_session_renewal_acknowledgement_invalid"
   );
+  // The parser checks the expected hash as strictly as the schema does.
+  const notHex = "z".repeat(64);
+  assert.throws(
+    () => parseSessionRenewalAcknowledgement(output.replace(handoverHash, notHex), { handoverHash: notHex, source }),
+    { code: "vibe64_session_renewal_handover_hash_invalid" }
+  );
+});
+
+test("the manual template carries exactly the Saved source lines the handover validator requires", () => {
+  const template = sessionRenewalManualHandoverTemplate({ source });
+  for (const line of [`- Authority: ${source.authority}`, `- Repository: ${source.repository}`,
+    `- Ref: ${source.ref}`, `- Commit: ${source.commit}`]) {
+    assert.ok(template.split("\n").includes(line), line);
+  }
+  assert.ok(sessionRenewalHandoverPrompt({ source }).includes(`- Commit: ${source.commit}`));
 });
 
 test("renewal prompts carry only the trusted source and frozen handover contract", () => {

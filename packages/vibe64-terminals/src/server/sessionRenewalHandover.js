@@ -163,6 +163,36 @@ function defineSessionRenewalSourceEnvelope(value = {}) {
   });
 }
 
+// The canonical source facts a handover must carry, in their written order.
+function sessionRenewalSavedSourceFields(canonical) {
+  return [
+    ["Authority", canonical.authority],
+    ...(canonical.repository ? [["Repository", canonical.repository]] : []),
+    ["Ref", canonical.ref],
+    ["Commit", canonical.commit]
+  ];
+}
+
+// The exact lines under `## Saved source`.
+function sessionRenewalSavedSourceLines(canonical) {
+  return sessionRenewalSavedSourceFields(canonical).map(([label, value]) => `- ${label}: ${value}`);
+}
+
+function defineSessionRenewalHandoverHash(value = "") {
+  const hash = assertBoundedPlainText(value, {
+    code: "vibe64_session_renewal_handover_hash_invalid",
+    label: "Approved handover hash",
+    maxCharacters: 96
+  }).toLowerCase();
+  if (!/^[0-9a-f]{64}$/u.test(hash)) {
+    throw sessionRenewalProtocolError(
+      "vibe64_session_renewal_handover_hash_invalid",
+      "Approved handover hash is invalid."
+    );
+  }
+  return hash;
+}
+
 function defineSessionRenewalHandoverText(value = "", {
   requireStructure = false,
   source = null
@@ -225,12 +255,7 @@ function defineSessionRenewalHandoverText(value = "", {
     const savedSourceLines = handover
       .slice(savedSourceStart, savedSourceEnd)
       .split("\n");
-    for (const [label, text] of [
-      ["Authority", expected.authority],
-      ["Ref", expected.ref],
-      ["Commit", expected.commit],
-      ...(expected.repository ? [["Repository", expected.repository]] : [])
-    ]) {
+    for (const [label, text] of sessionRenewalSavedSourceFields(expected)) {
       if (!savedSourceLines.includes(`- ${label}: ${text}`)) {
         throw sessionRenewalProtocolError(
           "vibe64_session_renewal_handover_source_mismatch",
@@ -306,10 +331,7 @@ function sessionRenewalHandoverPrompt({
     "The handover must contain these headings, exactly once and in this order:",
     ...SESSION_RENEWAL_REQUIRED_HANDOVER_HEADINGS.map((heading) => `- ${heading}`),
     "Under `## Saved source`, copy these lines exactly:",
-    `- Authority: ${canonical.authority}`,
-    ...(canonical.repository ? [`- Repository: ${canonical.repository}`] : []),
-    `- Ref: ${canonical.ref}`,
-    `- Commit: ${canonical.commit}`,
+    ...sessionRenewalSavedSourceLines(canonical),
     "Cover the objective, durable decisions, touched areas, verification actually run, unresolved work or risks, and the single best next action.",
     "Do not claim unsaved work exists: this renewal begins only after Vibe64 has proven the source clean and canonical-current."
   ].join("\n");
@@ -329,10 +351,7 @@ function sessionRenewalManualHandoverTemplate({
     "List the durable decisions already made.",
     "",
     "## Saved source",
-    `- Authority: ${canonical.authority}`,
-    ...(canonical.repository ? [`- Repository: ${canonical.repository}`] : []),
-    `- Ref: ${canonical.ref}`,
-    `- Commit: ${canonical.commit}`,
+    ...sessionRenewalSavedSourceLines(canonical),
     "",
     "## Touched areas",
     "List the files or subsystems already involved.",
@@ -355,12 +374,8 @@ function defineSessionRenewalApprovedHandover({
 } = {}) {
   const normalizedHandover = defineSessionRenewalHandoverText(handover);
   const actualHash = sessionRenewalHandoverHash(normalizedHandover);
-  const expectedHash = assertBoundedPlainText(handoverHash, {
-    code: "vibe64_session_renewal_handover_hash_invalid",
-    label: "Approved handover hash",
-    maxCharacters: 96
-  }).toLowerCase();
-  if (!/^[0-9a-f]{64}$/u.test(expectedHash) || expectedHash !== actualHash) {
+  const expectedHash = defineSessionRenewalHandoverHash(handoverHash);
+  if (expectedHash !== actualHash) {
     throw sessionRenewalProtocolError(
       "vibe64_session_renewal_handover_hash_invalid",
       "Approved handover content no longer matches its frozen review hash.",
@@ -382,17 +397,7 @@ function sessionRenewalAcknowledgementOutputSchema({
   source = null
 } = {}) {
   const canonical = defineSessionRenewalSourceEnvelope(source);
-  const expectedHash = assertBoundedPlainText(handoverHash, {
-    code: "vibe64_session_renewal_handover_hash_invalid",
-    label: "Approved handover hash",
-    maxCharacters: 96
-  }).toLowerCase();
-  if (!/^[0-9a-f]{64}$/u.test(expectedHash)) {
-    throw sessionRenewalProtocolError(
-      "vibe64_session_renewal_handover_hash_invalid",
-      "Approved handover hash is invalid."
-    );
-  }
+  const expectedHash = defineSessionRenewalHandoverHash(handoverHash);
   return Object.freeze({
     additionalProperties: false,
     properties: {
@@ -439,10 +444,7 @@ function sessionRenewalSeedPrompt(input = {}) {
     "Return exactly the required structured acknowledgement.",
     "",
     "Trusted canonical source envelope:",
-    `Authority: ${approved.source.authority}`,
-    ...(approved.source.repository ? [`Repository: ${approved.source.repository}`] : []),
-    `Ref: ${approved.source.ref}`,
-    `Commit: ${approved.source.commit}`,
+    ...sessionRenewalSavedSourceFields(approved.source).map(([label, value]) => `${label}: ${value}`),
     `Approved handover hash: ${approved.handoverHash}`,
     "",
     "Approved handover:",
@@ -461,11 +463,7 @@ function parseSessionRenewalAcknowledgement(rawOutput = "", {
   source = null
 } = {}) {
   const canonical = defineSessionRenewalSourceEnvelope(source);
-  const expectedHash = assertBoundedPlainText(handoverHash, {
-    code: "vibe64_session_renewal_handover_hash_invalid",
-    label: "Approved handover hash",
-    maxCharacters: 96
-  }).toLowerCase();
+  const expectedHash = defineSessionRenewalHandoverHash(handoverHash);
   const { parsed, raw } = parseStructuredJson(rawOutput, {
     code: "vibe64_session_renewal_acknowledgement_invalid",
     label: "Session renewal acknowledgement",
@@ -547,30 +545,26 @@ function prepareSessionRenewalSeedRequest(input = {}) {
 const RENEWAL_SUCCESSOR_PROCESS_EXIT_PROOF_RELEASE_KIND =
   "vibe64.session_renewal_successor_process_exit_proof_release";
 
-function normalizeRenewalContextText(value) {
-  return String(value || "").trim();
-}
-
 function renewalCleanupContext(sessionId = "", options = {}) {
   const renewalCleanup = options?.renewalCleanup;
   if (!renewalCleanup) {
     return null;
   }
-  const normalizedSessionId = normalizeRenewalContextText(sessionId);
+  const normalizedSessionId = normalizeText(sessionId);
   const runtime = options.runtime;
   const session = options.session;
   const metadata = session?.metadata && typeof session.metadata === "object"
     ? session.metadata
     : {};
-  const cleanupKind = normalizeRenewalContextText(renewalCleanup.kind);
-  const renewalId = normalizeRenewalContextText(renewalCleanup.renewalId);
-  const sourceSessionId = normalizeRenewalContextText(renewalCleanup.sourceSessionId);
-  const status = normalizeRenewalContextText(session?.status);
+  const cleanupKind = normalizeText(renewalCleanup.kind);
+  const renewalId = normalizeText(renewalCleanup.renewalId);
+  const sourceSessionId = normalizeText(renewalCleanup.sourceSessionId);
+  const status = normalizeText(session?.status);
   const successorIsExact = cleanupKind === "successor" &&
     status === VIBE64_SESSION_STATUS.RENEWAL_PENDING &&
-    normalizeRenewalContextText(metadata.renewal_id) === renewalId &&
-    normalizeRenewalContextText(metadata.renewed_from) === sourceSessionId &&
-    Boolean(normalizeRenewalContextText(metadata.renewed_from));
+    normalizeText(metadata.renewal_id) === renewalId &&
+    normalizeText(metadata.renewed_from) === sourceSessionId &&
+    Boolean(normalizeText(metadata.renewed_from));
   // renewal_restored_id belongs to a completed rollback, not the next
   // transition. Current quiescence or renewed_to still owns the predecessor.
   const predecessorIsExact = cleanupKind === "predecessor" &&
@@ -578,17 +572,17 @@ function renewalCleanupContext(sessionId = "", options = {}) {
     (
       (
         status === VIBE64_SESSION_STATUS.ACTIVE &&
-        !normalizeRenewalContextText(metadata.renewal_quiesced_id) &&
-        !normalizeRenewalContextText(metadata.renewed_to)
+        !normalizeText(metadata.renewal_quiesced_id) &&
+        !normalizeText(metadata.renewed_to)
       ) ||
       (
         status === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED &&
-        normalizeRenewalContextText(metadata.renewal_quiesced_id) === renewalId
+        normalizeText(metadata.renewal_quiesced_id) === renewalId
       )
     );
   if (
     !runtime ||
-    normalizeRenewalContextText(session?.sessionId) !== normalizedSessionId ||
+    normalizeText(session?.sessionId) !== normalizedSessionId ||
     !renewalId ||
     (!successorIsExact && !predecessorIsExact)
   ) {
@@ -602,21 +596,21 @@ function renewalCleanupContext(sessionId = "", options = {}) {
 }
 
 function renewalArchivedPredecessorContext(sessionId = "", options = {}) {
-  const normalizedSessionId = normalizeRenewalContextText(sessionId);
+  const normalizedSessionId = normalizeText(sessionId);
   const runtime = options.runtime;
   const session = options.session;
   const metadata = session?.metadata && typeof session.metadata === "object"
     ? session.metadata
     : {};
-  const renewalId = normalizeRenewalContextText(options.renewalId);
+  const renewalId = normalizeText(options.renewalId);
   if (
     !runtime ||
     !renewalId ||
-    normalizeRenewalContextText(session?.sessionId) !== normalizedSessionId ||
+    normalizeText(session?.sessionId) !== normalizedSessionId ||
     session?.archived !== true ||
-    normalizeRenewalContextText(session?.status) !== VIBE64_SESSION_STATUS.ARCHIVED ||
-    normalizeRenewalContextText(metadata.renewal_id) !== renewalId ||
-    !normalizeRenewalContextText(metadata.renewed_to)
+    normalizeText(session?.status) !== VIBE64_SESSION_STATUS.ARCHIVED ||
+    normalizeText(metadata.renewal_id) !== renewalId ||
+    !normalizeText(metadata.renewed_to)
   ) {
     throw new TypeError("Renewal maintenance requires its exact archived predecessor and runtime.");
   }
@@ -628,31 +622,31 @@ function renewalArchivedPredecessorContext(sessionId = "", options = {}) {
 }
 
 function renewalSuccessorProcessExitProofReleaseContext(sessionId = "", options = {}) {
-  const normalizedSessionId = normalizeRenewalContextText(sessionId);
+  const normalizedSessionId = normalizeText(sessionId);
   const runtime = options.runtime;
   const session = options.session;
   const metadata = session?.metadata && typeof session.metadata === "object"
     ? session.metadata
     : {};
-  const renewalId = normalizeRenewalContextText(options.renewalId);
+  const renewalId = normalizeText(options.renewalId);
   const authorization = options.authorization && typeof options.authorization === "object"
     ? options.authorization
     : {};
-  const authorizedAt = normalizeRenewalContextText(authorization.authorizedAt);
+  const authorizedAt = normalizeText(authorization.authorizedAt);
   const authorizedAtMs = Date.parse(authorizedAt);
   if (
     !runtime ||
     !renewalId ||
-    normalizeRenewalContextText(session?.sessionId) !== normalizedSessionId ||
-    normalizeRenewalContextText(session?.status) !== VIBE64_SESSION_STATUS.RENEWAL_PENDING ||
-    normalizeRenewalContextText(metadata.renewal_id) !== renewalId ||
-    !normalizeRenewalContextText(metadata.renewed_from) ||
-    normalizeRenewalContextText(authorization.kind) !== RENEWAL_SUCCESSOR_PROCESS_EXIT_PROOF_RELEASE_KIND ||
+    normalizeText(session?.sessionId) !== normalizedSessionId ||
+    normalizeText(session?.status) !== VIBE64_SESSION_STATUS.RENEWAL_PENDING ||
+    normalizeText(metadata.renewal_id) !== renewalId ||
+    !normalizeText(metadata.renewed_from) ||
+    normalizeText(authorization.kind) !== RENEWAL_SUCCESSOR_PROCESS_EXIT_PROOF_RELEASE_KIND ||
     Number(authorization.schemaVersion) !== 1 ||
-    normalizeRenewalContextText(authorization.renewalId) !== renewalId ||
-    normalizeRenewalContextText(authorization.sourceSessionId) !== normalizeRenewalContextText(metadata.renewed_from) ||
-    normalizeRenewalContextText(authorization.successorSessionId) !== normalizedSessionId ||
-    normalizeRenewalContextText(authorization.runtimeDir) !== normalizeRenewalContextText(metadata.agent_transport_runtime_dir) ||
+    normalizeText(authorization.renewalId) !== renewalId ||
+    normalizeText(authorization.sourceSessionId) !== normalizeText(metadata.renewed_from) ||
+    normalizeText(authorization.successorSessionId) !== normalizedSessionId ||
+    normalizeText(authorization.runtimeDir) !== normalizeText(metadata.agent_transport_runtime_dir) ||
     !Number.isFinite(authorizedAtMs) ||
     new Date(authorizedAtMs).toISOString() !== authorizedAt
   ) {
