@@ -38,7 +38,9 @@ function useVibe64AssistantCatalog({
 } = {}) {
   const paths = usePaths();
   const selectedProjectSlug = useVibe64ProjectSlug();
-  const projectSlug = computed(() => normalizedText(catalogPath) || selectedProjectSlug.value);
+  // The query key's scope: the selected project, or a host-supplied catalog
+  // path, which then partitions the cache by that path instead.
+  const catalogScope = computed(() => normalizedText(catalogPath) || selectedProjectSlug.value);
   const apiPath = computed(() => normalizedText(catalogPath) || paths.api(VIBE64_ASSISTANTS_API_SUFFIX, {
     surface: VIBE64_SURFACE_ID
   }));
@@ -51,7 +53,7 @@ function useVibe64AssistantCatalog({
     queryKey: computed(() => vibe64AssistantCapabilitiesQueryKey(
       VIBE64_SURFACE_ID,
       ROUTE_VISIBILITY_PUBLIC,
-      projectSlug.value,
+      catalogScope.value,
       [
         "overview",
         value(configuredOnly) ? "configured" : normalizedText(engineId) || "all",
@@ -86,7 +88,7 @@ function useVibe64AssistantCatalog({
     queryKey: computed(() => vibe64AssistantCapabilitiesQueryKey(
       VIBE64_SURFACE_ID,
       ROUTE_VISIBILITY_PUBLIC,
-      projectSlug.value,
+      catalogScope.value,
       (normalizedText(providerSearch) || normalizedText(providerCursor) ? [
         "providers",
         value(providerConnectedOnly) ? "connected" : "all",
@@ -122,7 +124,7 @@ function useVibe64AssistantCatalog({
     queryKey: computed(() => vibe64AssistantCapabilitiesQueryKey(
       VIBE64_SURFACE_ID,
       ROUTE_VISIBILITY_PUBLIC,
-      projectSlug.value,
+      catalogScope.value,
       [
         "models",
         normalizedText(engineId),
