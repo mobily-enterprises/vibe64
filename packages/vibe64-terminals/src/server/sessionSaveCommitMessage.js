@@ -4,7 +4,7 @@ import {
   defineVibe64AgentExecutionProfileRequest
 } from "@local/vibe64-runtime/shared";
 
-import { cleanupSessionNamingHelper, runSessionNamingHelper } from "./sessionNamingHelper.js";
+import { cleanupBackgroundTaskHelper, runBackgroundTaskHelperTurn } from "./assistantHelperTurn.js";
 import { SESSION_SAVE_TASK_ID } from "./sessionWorkTasks.js";
 
 const MAX_COMMIT_SUBJECT_LENGTH = 72;
@@ -126,16 +126,16 @@ function normalizeSessionSaveCommitMessage(value = "") {
 }
 
 function cleanupSessionSaveCommitMessage({ agent, agentContext = {} } = {}) {
-  return cleanupSessionNamingHelper({ agent, agentContext, taskId: SESSION_SAVE_TASK_ID, namingError: commitMessageError });
+  return cleanupBackgroundTaskHelper({ agent, agentContext, taskId: SESSION_SAVE_TASK_ID, fail: commitMessageError, prefix: "naming" });
 }
 
 async function generateSessionSaveCommitMessage({ agent, agentContext = {}, changes = {} } = {}) {
-  const result = await runSessionNamingHelper({
+  const result = await runBackgroundTaskHelperTurn({
     agent, agentContext, taskId: SESSION_SAVE_TASK_ID,
     profile: SESSION_SAVE_COMMIT_EXECUTION_PROFILE, outputSchema: SESSION_SAVE_COMMIT_OUTPUT_SCHEMA,
     prompt: sessionSaveCommitMessagePrompt(changes), promptLabel: "Name saved work",
     stableContext: "Write only a commit subject from supplied changes. You have no tools or project access.",
-    namingError: commitMessageError
+    fail: commitMessageError, prefix: "naming"
   });
   return { executionProfile: result.executionProfile, subject: parseSessionSaveCommitMessage(result.text) };
 }

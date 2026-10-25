@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { constants as fsConstants } from "node:fs";
-import { mkdir, open, readdir, realpath, rm } from "node:fs/promises";
+import { open, readdir, realpath, rm } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -19,13 +19,13 @@ import {
   VIBE64_PROMPT_HINT_PROMPT_MAX_CHARACTERS,
   VIBE64_PROMPT_HINT_STATIC_STARTERS,
   normalizedPromptHintDraft,
-  normalizedPromptHintSuggestions,
-  vibe64AgentExecutionProfileAuditSnapshot
+  normalizedPromptHintSuggestions
 } from "@local/vibe64-runtime/shared";
 import {
   vibe64AgentRunStateIsActive
 } from "@local/vibe64-runtime/server/sessionStore";
 
+import { cleanupAssistantHelper, runAssistantHelperTurn } from "./assistantHelperTurn.js";
 import { openedFileWithin } from "./openedFileWithin.js";
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "./sessionWorkTasks.js";
 import {
@@ -54,6 +54,13 @@ const PROMPT_HINT_EXECUTION_PROFILE_REQUEST = Object.freeze({
   profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
   workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.PROMPT_HINT
 });
+
+const PROMPT_HINT_HELPER_PREFIX = "hints";
+const PROMPT_HINT_CLEANUP_REASONS = new Set(["cleanup_paths_invalid", "cleanup_failed"]);
+
+function promptHintFailure(message, code, reason, details) {
+  return Object.assign(new Error(message), { code, details, reason });
+}
 
 function isRecord(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
@@ -544,40 +551,35 @@ function createSessionPromptHintsService({
     return canonicalHash({ actorId, basis, identity, contextVersion: PROMPT_HINT_CONTEXT_VERSION, projectScope, sessionId });
   }
 
-  function helperOptions(job) {
+  // The prompt hint helper's durable record. No draft or prompt is ever stored in it.
+  function promptHintHelperRecord(context, artifact) {
+    const sessionId = context.session.sessionId || context.session.id;
+    const store = context.runtime.store;
     return {
-      assistantSelection: job.identity.selection,
-      expectedConnectionIdentity: job.identity.connectionIdentity,
-      vibe64User: job.vibe64User
+      async read() {
+        const saved = context.renewalCleanup
+          ? await store.readArtifactForRenewal(sessionId, artifact)
+          : await store.readArtifact(sessionId, artifact);
+        return saved ? JSON.parse(saved) : null;
+      },
+      write: (helper) => store.writeJsonArtifact(sessionId, artifact, helper),
+      async retire() {
+        const retire = (paths) => rm(path.join(paths.artifactsRoot, artifact), { force: true });
+        if (context.renewalCleanup) await store.mutateSessionForRenewal(sessionId, retire);
+        else await store.mutateSession(sessionId, retire);
+      }
     };
   }
 
-  async function cleanupHelper(context, artifact, vibe64User) {
-    const sessionId = context.session.sessionId || context.session.id;
-    const store = context.runtime.store;
-    const saved = context.renewalCleanup
-      ? await store.readArtifactForRenewal(sessionId, artifact)
-      : await store.readArtifact(sessionId, artifact);
-    const helper = saved ? JSON.parse(saved) : null;
-    if (!helper) return;
-    const root = path.join(context.runtime.stateRoot, "assistant-helpers", helper.scope.id);
-    if (!/^hints_[a-f0-9-]+$/u.test(helper.scope.id) || helper.scope.workdir !== path.join(root, "workdir") ||
-        helper.scope.runtimeRoot !== path.join(root, "runtime")) {
-      throw new Error("The saved prompt hint task has invalid cleanup paths.");
-    }
-    const result = await agent.deleteEphemeralConversation(helper.scope, {
-      conversationId: helper.conversationId, cleanupExecutionId: helper.executionId,
-      ...(helper.executionProfile ? { executionProfile: helper.executionProfile } : {})
-    }, { assistantSelection: helper.selection, vibe64User });
-    if (result?.ok !== true) throw Object.assign(new Error(result?.error || "Prompt hint cleanup was not confirmed."), {
-      code: result?.code, details: result?.details
+  function cleanupHelper(context, artifact, vibe64User) {
+    return cleanupAssistantHelper({
+      agent,
+      fail: promptHintFailure,
+      prefix: PROMPT_HINT_HELPER_PREFIX,
+      record: promptHintHelperRecord(context, artifact),
+      stateRoot: context.runtime.stateRoot,
+      vibe64User
     });
-    // Retire ownership after native cleanup, before removing the workdir needed
-    // for a cleanup retry. No draft or prompt is ever stored in this record.
-    const retire = (paths) => rm(path.join(paths.artifactsRoot, artifact), { force: true });
-    if (context.renewalCleanup) await store.mutateSessionForRenewal(sessionId, retire);
-    else await store.mutateSession(sessionId, retire);
-    await rm(root, { recursive: true, force: true });
   }
 
   function rememberOwnerJob(job) {
@@ -649,109 +651,65 @@ function createSessionPromptHintsService({
     if (job.cancelRequested) {
       return promptHintResponse("cancelled", { basis: job.snapshot.basis });
     }
-    let result = null;
-    let runError = null;
-    let cleanupError = null;
-    let profile;
     // Superseded requests already belong to this feature's per-actor job set.
     // Finish their cleanup before reusing that actor's durable task record.
     await Promise.all(job.previous.map((previous) => previous.promise));
     if (job.cancelRequested) return promptHintResponse("cancelled", { basis: job.snapshot.basis });
     const artifact = `${PROMPT_HINT_TASK_DIRECTORY}/${job.ownerKey.slice(7)}.json`;
-    try { await cleanupHelper(job.context, artifact, job.vibe64User); }
-    catch (error) {
-      reportDiagnostic("vibe64_prompt_hints_cleanup_failed", error, { sessionId: job.sessionId });
-      return promptHintResponse("unavailable", { basis: job.snapshot.basis });
-    }
+    let result;
     try {
-      const id = `hints_${crypto.randomUUID()}`;
-      const root = path.join(job.context.runtime.stateRoot, "assistant-helpers", id);
-      const helper = {
-        scope: { id, workdir: path.join(root, "workdir"), runtimeRoot: path.join(root, "runtime"), environment: {},
-          stableContext: "Suggest next prompts only from the supplied conversation and draft. You have no tools or project access." },
-        selection: job.identity.selection, connectionIdentity: job.identity.connectionIdentity,
-        conversationId: "", runId: "", executionId: ""
-      };
-      const retain = () => job.context.runtime.store.writeJsonArtifact(job.sessionId, artifact, helper);
-      await retain();
-      await mkdir(helper.scope.workdir, { recursive: true });
-      await mkdir(helper.scope.runtimeRoot, { recursive: true });
-      job.abort.signal.throwIfAborted();
-      const executionProfile = await agent.resolveEphemeralExecutionProfile(
-        helper.scope, PROMPT_HINT_EXECUTION_PROFILE_REQUEST, helperOptions(job)
-      );
-      profile = vibe64AgentExecutionProfileAuditSnapshot(executionProfile);
-      helper.executionProfile = profile;
-      await retain();
-      job.abort.signal.throwIfAborted();
-      const prompt = promptHintPrompt({
-        blueprint: job.snapshot.blueprint,
-        conversation: job.snapshot.conversation,
-        draft: job.snapshot.draft,
-        sessionState: job.context.sessionState,
-        subsystems: job.snapshot.subsystems
-      });
-      if (Array.from(prompt).length > profile.limits.maxInputCharacters) {
-        throw new Error("Prompt hint context exceeds the selected helper profile limit.");
-      }
-      result = await agent.runEphemeralChatTurn(helper.scope, {
-        executionProfile,
+      result = await runAssistantHelperTurn({
+        agent,
+        fail: promptHintFailure,
         outputSchema: VIBE64_PROMPT_HINT_OUTPUT_SCHEMA,
-        prompt,
-        promptLabel: "Vibe64 prompt hints"
-      }, {
-        ...helperOptions(job), signal: job.abort.signal,
-        async onEvent(event = {}) {
-          if (event.type === "thread") helper.conversationId = normalizeText(event.threadId);
-          else if (event.type === "turn") {
-            helper.conversationId = normalizeText(event.threadId);
-            helper.runId = normalizeText(event.turnId);
-          } else if (event.type === "helper-execution") helper.executionId = normalizeText(event.executionId);
-          else return;
-          await retain();
-        }
+        prefix: PROMPT_HINT_HELPER_PREFIX,
+        profile: PROMPT_HINT_EXECUTION_PROFILE_REQUEST,
+        prompt(profile) {
+          const prompt = promptHintPrompt({
+            blueprint: job.snapshot.blueprint,
+            conversation: job.snapshot.conversation,
+            draft: job.snapshot.draft,
+            sessionState: job.context.sessionState,
+            subsystems: job.snapshot.subsystems
+          });
+          if (Array.from(prompt).length > profile.limits.maxInputCharacters) {
+            throw new Error("Prompt hint context exceeds the selected helper profile limit.");
+          }
+          return prompt;
+        },
+        promptLabel: "Vibe64 prompt hints",
+        record: promptHintHelperRecord(job.context, artifact),
+        resolveIdentity: async () => job.identity,
+        signal: job.abort.signal,
+        stableContext: "Suggest next prompts only from the supplied conversation and draft. You have no tools or project access.",
+        stateRoot: job.context.runtime.stateRoot,
+        vibe64User: job.vibe64User
       });
-      if (result?.ok === true && !helper.conversationId) {
-        throw new Error("The prompt hint turn did not identify its native conversation.");
-      }
     } catch (error) {
-      runError = error;
-    } finally {
-      try { await cleanupHelper(job.context, artifact, job.vibe64User); }
-      catch (error) { cleanupError = error; }
-    }
-
-    if (cleanupError) {
-      reportDiagnostic("vibe64_prompt_hints_cleanup_failed", cleanupError, {
-        ...(isRecord(cleanupError.details) ? cleanupError.details : {}),
-        cleanupCode: normalizeText(cleanupError.code),
-        generationCode: normalizeText(result?.code || runError?.code),
-        generationError: normalizeText(result?.error || runError?.message),
-        generationOk: result?.ok === true,
-        sessionId: job.sessionId
-      });
+      if (PROMPT_HINT_CLEANUP_REASONS.has(error?.reason)) {
+        const generation = error.cause;
+        reportDiagnostic("vibe64_prompt_hints_cleanup_failed", error, {
+          ...(isRecord(error.details) ? error.details : {}),
+          cleanupCode: normalizeText(error.code),
+          generationCode: normalizeText(generation?.code),
+          generationError: normalizeText(generation?.message),
+          generationOk: !generation,
+          sessionId: job.sessionId
+        });
+        return promptHintResponse("unavailable", { basis: job.snapshot.basis });
+      }
+      if (job.cancelRequested) {
+        return promptHintResponse("cancelled", { basis: job.snapshot.basis });
+      }
+      if (error?.reason === "execution_profile_missing") {
+        reportDiagnostic("vibe64_prompt_hints_profile_mismatch", null, { sessionId: job.sessionId });
+      } else {
+        reportDiagnostic("vibe64_prompt_hints_generation_failed", error, { sessionId: job.sessionId });
+      }
       return promptHintResponse("unavailable", { basis: job.snapshot.basis });
     }
     if (job.cancelRequested) {
       return promptHintResponse("cancelled", { basis: job.snapshot.basis });
-    }
-    if (runError || result?.ok !== true) {
-      reportDiagnostic("vibe64_prompt_hints_generation_failed", runError || result?.error, {
-        sessionId: job.sessionId
-      });
-      return promptHintResponse("unavailable", { basis: job.snapshot.basis });
-    }
-    let observedProfile = null;
-    try {
-      observedProfile = vibe64AgentExecutionProfileAuditSnapshot(result?.executionProfile);
-    } catch {
-      observedProfile = null;
-    }
-    if (JSON.stringify(observedProfile) !== JSON.stringify(profile)) {
-      reportDiagnostic("vibe64_prompt_hints_profile_mismatch", null, {
-        sessionId: job.sessionId
-      });
-      return promptHintResponse("unavailable", { basis: job.snapshot.basis });
     }
     const suggestions = parsePromptHintSuggestions(result?.text);
     if (!suggestions) {

@@ -34,7 +34,7 @@ that turn without dropping either half. No saved history is rewritten.
 - `packages/vibe64-terminals/src/server/agentSpecs.js`
 - `packages/vibe64-source-editor/src/server/agentSpecs.js`
 - `tests/server/vibe64AgentSpecs.unit.test.js`
-- `packages/vibe64-terminals/src/server/sessionNamingHelper.js`
+- `packages/vibe64-terminals/src/server/assistantHelperTurn.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
 - `tests/server/sessionNaming.unit.test.js`
 - `tests/server/sessionRename.unit.test.js`

@@ -1255,6 +1255,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/assistantChangeover.js`
 - `packages/vibe64-terminals/src/server/sessionAttachments.js`
 - `packages/vibe64-terminals/src/server/sessionPromptHints.js`
+- `packages/vibe64-terminals/src/server/assistantHelperTurn.js`
 - `src/composables/useVibe64AssistantCatalog.js`
 - `src/composables/useVibe64AutopilotView.js`
 - `src/composables/useVibe64ConversationLog.js`

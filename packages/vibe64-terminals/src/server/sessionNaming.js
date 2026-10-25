@@ -5,7 +5,7 @@ import {
   VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
   defineVibe64AgentExecutionProfileRequest
 } from "@local/vibe64-runtime/shared";
-import { cleanupSessionNamingHelper, runSessionNamingHelper } from "./sessionNamingHelper.js";
+import { cleanupBackgroundTaskHelper, runBackgroundTaskHelperTurn } from "./assistantHelperTurn.js";
 
 const TASK_ID = "session-name";
 const PROFILE = defineVibe64AgentExecutionProfileRequest({
@@ -63,14 +63,15 @@ function createSessionNaming({ agent, publishSessionChanged, logger } = {}) {
       if (runtime.learningScope) {
         throw namingError("Lesson conversations from the earlier Learning mode are read-only and are not renamed.");
       }
-      const result = await runSessionNamingHelper({
+      const result = await runBackgroundTaskHelperTurn({
         agent,
         agentContext,
         taskId: TASK_ID,
         profile: PROFILE,
         outputSchema: OUTPUT_SCHEMA,
         promptLabel: "Name session",
-        namingError,
+        fail: namingError,
+        prefix: "naming",
         stableContext: "Name a chat from its first message. You have no tools or project access.",
         prompt: [
           "Choose one short, descriptive word naming the topic or intent of this chat.",
@@ -116,7 +117,7 @@ function createSessionNaming({ agent, publishSessionChanged, logger } = {}) {
     },
     async closeSession(agentContext) {
       await active.get(sessionKey(agentContext));
-      await cleanupSessionNamingHelper({ agent, agentContext, taskId: TASK_ID, namingError });
+      await cleanupBackgroundTaskHelper({ agent, agentContext, taskId: TASK_ID, fail: namingError, prefix: "naming" });
     },
     async close() {
       await Promise.all(active.values());
