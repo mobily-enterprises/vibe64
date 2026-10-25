@@ -70,4 +70,12 @@ describe("source file tree actions", () => {
     expect(html).toContain('title="New file here"');
     expect(html).toContain('title="Copy path"');
   });
+
+  it("offers the directory's own page size for the next batch", async () => {
+    const children = [{ name: "a.js", path: "a.js", type: "file" }, { name: "b.js", path: "b.js", type: "file" }];
+    const page = (limit, total) => renderTree({ node: { children, hasMore: true, limit, path: "", total } });
+
+    expect(await page(30, 100)).toContain("Load 30 more");
+    expect(await page(30, 12)).toContain("Load 10 more");
+  });
 });

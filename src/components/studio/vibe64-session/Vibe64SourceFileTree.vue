@@ -1,7 +1,7 @@
 <template>
   <ul class="vibe64-source-tree">
     <li
-      v-for="child in visibleNodes"
+      v-for="child in nodes"
       :key="child.path || child.name"
       class="vibe64-source-tree__item"
     >
@@ -114,7 +114,6 @@
           :expanded-paths="expandedPaths"
           :load-errors="loadErrors"
           :loading-paths="loadingPaths"
-          :depth="depth + 1"
           @load-more-directory="emit('load-more-directory', $event)"
           @open-file="emit('open-file', $event)"
           @toggle-star="emit('toggle-star', $event)"
@@ -183,8 +182,6 @@ import {
 } from "@mdi/js";
 import { normalizeSourceEditorPath } from "@/lib/vibe64SourceEditorLinks.js";
 
-const DIRECTORY_BATCH_SIZE = 20;
-
 const props = defineProps({
   starredPaths: { type: Array, default: () => [] },
   expandedPaths: {
@@ -207,10 +204,6 @@ const props = defineProps({
     default: "",
     type: String
   },
-  depth: {
-    default: 0,
-    type: Number
-  },
   assistantDraftAvailable: {
     default: false,
     type: Boolean
@@ -219,15 +212,13 @@ const props = defineProps({
 const emit = defineEmits(["ask-assistant", "copy-path", "directory-open-change", "download-file", "load-more-directory", "new-file", "open-file", "toggle-star"]);
 
 const nodes = computed(() => Array.isArray(props.node?.children) ? props.node.children : []);
-const visibleNodes = computed(() => nodes.value);
 const nodeHasMore = computed(() => props.node?.hasMore === true);
 const currentNodeLoading = computed(() => pathLoading(props.node?.path || ""));
 const nextHiddenNodeCount = computed(() => {
   const loadedCount = nodes.value.length;
   const totalCount = Number(props.node?.total || 0);
-  return totalCount > loadedCount
-    ? Math.min(DIRECTORY_BATCH_SIZE, totalCount - loadedCount)
-    : DIRECTORY_BATCH_SIZE;
+  const pageSize = Number(props.node?.limit || 0);
+  return totalCount > loadedCount ? Math.min(pageSize, totalCount - loadedCount) : pageSize;
 });
 const nodeLabel = computed(() => props.node?.path || props.node?.name || "source");
 const expandedPathSet = computed(() => new Set(
