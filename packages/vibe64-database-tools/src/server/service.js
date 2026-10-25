@@ -47,7 +47,6 @@ import {
   readWorkspace,
   recordQueryHistory,
   saveErdLayout,
-  saveLookupDisplayColumn,
   saveSnippet as saveStoredSnippet,
   writeSchemaSnapshot
 } from "./sessionState.js";
@@ -590,12 +589,8 @@ function createService({
       return databaseResult(async () => {
         const context = await sessionContext(input);
         const schema = await currentSchema(context);
-        const preferred = normalizeText(input.displayColumn) || (
-          await readWorkspace(context.store, context.sessionId, context.vibe64User)
-        ).lookupDisplayColumns?.[normalizeText(input.relationshipId)] || "";
-        const result = await withKnex(context.readEndpoint, ({ connection, knex }) => (
+        return withKnex(context.readEndpoint, ({ connection, knex }) => (
           searchDatabaseLookup({
-            displayColumn: preferred,
             engine: connection.engine,
             knex,
             relationshipId: input.relationshipId,
@@ -603,16 +598,6 @@ function createService({
             search: input.search
           })
         ));
-        if (normalizeText(input.displayColumn)) {
-          await saveLookupDisplayColumn(
-            context.store,
-            context.sessionId,
-            context.vibe64User,
-            input.relationshipId,
-            result.displayColumn
-          );
-        }
-        return result;
       });
     },
 

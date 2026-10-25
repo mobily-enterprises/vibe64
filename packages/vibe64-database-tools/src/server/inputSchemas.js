@@ -99,7 +99,6 @@ const databaseRowDeleteInputValidator = validator({
 
 const databaseLookupInputValidator = validator({
   ...sessionFields,
-  displayColumn: optionalText,
   relationshipId: requiredText,
   search: optionalText
 });

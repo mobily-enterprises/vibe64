@@ -64,7 +64,6 @@ function normalizedResultColumns(fields = [], schema = {}, engine = "postgresql"
       } : null,
       ...(relationship?.columns?.length === 1 ? {
         lookup: {
-          composite: relationship.columns.length > 1,
           relationshipId: relationship.id,
           referencedColumns: relationship.referencedColumns,
           referencedTable: relationship.referencedTable,
@@ -598,6 +597,7 @@ export {
   databaseValue,
   executeDatabaseQuery,
   insertDatabaseRow,
+  jsonSafeValue,
   normalizeRawResponse,
   updateDatabaseCell,
   validatedKey

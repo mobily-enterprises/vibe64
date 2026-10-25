@@ -67,7 +67,6 @@ async function writeSchemaSnapshot(store, sessionId = "", schema = {}) {
 function emptyWorkspace() {
   return {
     history: [],
-    lookupDisplayColumns: {},
     snippets: [],
     version: 1
   };
@@ -77,9 +76,6 @@ function normalizedWorkspace(value = null) {
   const record = isPlainObject(value) ? value : {};
   return {
     history: Array.isArray(record.history) ? record.history.slice(0, HISTORY_LIMIT) : [],
-    lookupDisplayColumns: isPlainObject(record.lookupDisplayColumns)
-      ? record.lookupDisplayColumns
-      : {},
     snippets: Array.isArray(record.snippets) ? record.snippets.slice(0, SNIPPET_LIMIT) : [],
     version: 1
   };
@@ -156,21 +152,6 @@ async function deleteSnippet(store, sessionId = "", vibe64User = null, snippetId
   return mutateWorkspace(store, sessionId, vibe64User, (workspace) => ({
     ...workspace,
     snippets: workspace.snippets.filter((snippet) => snippet.id !== id)
-  }));
-}
-
-async function saveLookupDisplayColumn(store, sessionId = "", vibe64User = null, relationshipId = "", column = "") {
-  const relationship = normalizeText(relationshipId);
-  const displayColumn = normalizeText(column);
-  if (!relationship || !displayColumn) {
-    return readWorkspace(store, sessionId, vibe64User);
-  }
-  return mutateWorkspace(store, sessionId, vibe64User, (workspace) => ({
-    ...workspace,
-    lookupDisplayColumns: {
-      ...workspace.lookupDisplayColumns,
-      [relationship]: displayColumn
-    }
   }));
 }
 
@@ -289,7 +270,6 @@ export {
   readWorkspace,
   recordQueryHistory,
   saveErdLayout,
-  saveLookupDisplayColumn,
   saveSnippet,
   workspaceArtifactPath,
   writeSchemaSnapshot
