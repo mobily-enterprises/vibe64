@@ -578,7 +578,7 @@ async function createSessionSource({
         referenceRoot: "",
         refresh: "not_applicable"
       };
-  let baseline = canonical.mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
+  const baseline = canonical.mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE
     ? await ensureLocalProjectBaseline(standaloneSourceRoot, {
         runCommand
       })
@@ -593,57 +593,50 @@ async function createSessionSource({
   const existingTopLevel = await optionalGitOutput(sourcePath, ["rev-parse", "--show-toplevel"], sourceRoots, {
     runCommand
   });
-  if (existingTopLevel && path.resolve(existingTopLevel) !== path.resolve(sourcePath)) {
-    throw sourceError(
-      `Session source path is already owned by another Git repository: ${sourcePath}`,
-      "vibe64_session_source_path_conflict"
-    );
-  }
+  // The path appeared after the lstat check above: never adopt it.
   if (existingTopLevel) {
-    throw sourceError("The session source appeared during creation. Existing work has been preserved; inspect its owner before retrying.",
-      "vibe64_session_source_exists");
+    throw path.resolve(existingTopLevel) === path.resolve(sourcePath)
+      ? sourceError("The session source appeared during creation. Existing work has been preserved; inspect its owner before retrying.",
+        "vibe64_session_source_exists")
+      : sourceError(`Session source path is already owned by another Git repository: ${sourcePath}`,
+        "vibe64_session_source_path_conflict");
   }
-  if (!existingTopLevel) {
-    if (canonical.mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
-      await runGit(sourceParent, [
-        "clone",
-        "--no-hardlinks",
-        "--single-branch",
-        "--branch", baseline.branch,
-        standaloneSourceRoot,
-        sourcePath
-      ], sourceRoots, {
-        runCommand
-      });
-    } else {
-      baseline = await cloneCanonicalSource({
-        branch: canonical.branch,
-        commandOptions: githubCommandOptions,
+  let resolvedBaseline;
+  if (canonical.mode === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
+    await runGit(sourceParent, [
+      "clone",
+      "--no-hardlinks",
+      "--single-branch",
+      "--branch", baseline.branch,
+      standaloneSourceRoot,
+      sourcePath
+    ], sourceRoots, {
+      runCommand
+    });
+    resolvedBaseline = {
+      ...baseline,
+      commit: await resolveExpectedSourceCommit({
+        allowedRoots: sourceRoots,
+        baselineCommit: baseline.commit,
+        commandOptions: {
+          runCommand
+        },
         expectedCommit,
-        referenceRoot: cache.referenceRoot,
-        source: canonical.source,
-        sourceParent,
         sourcePath
-      });
-    }
+      })
+    };
+  } else {
+    // The clone already resolved and verified any expected commit.
+    resolvedBaseline = await cloneCanonicalSource({
+      branch: canonical.branch,
+      commandOptions: githubCommandOptions,
+      expectedCommit,
+      referenceRoot: cache.referenceRoot,
+      source: canonical.source,
+      sourceParent,
+      sourcePath
+    });
   }
-  const resolvedBaseline = baseline || {
-    branch: canonical.branch,
-    cacheReferenceUsed: false,
-    commit: await runGit(sourcePath, ["rev-parse", "--verify", "HEAD"], sourceRoots, {
-      runCommand
-    }),
-    remoteUrl: canonical.remoteUrl
-  };
-  resolvedBaseline.commit = await resolveExpectedSourceCommit({
-    allowedRoots: sourceRoots,
-    baselineCommit: resolvedBaseline.commit,
-    commandOptions: {
-      runCommand
-    },
-    expectedCommit,
-    sourcePath
-  });
   await runGit(sourcePath, ["checkout", "-B", branch, resolvedBaseline.commit], sourceRoots, {
     runCommand
   });
