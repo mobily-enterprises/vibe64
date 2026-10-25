@@ -11,6 +11,7 @@ import {
   ROUTING_REASONS, assistantModeLabel, assistantModePrompt, assistantGoalObjective, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingFromMetadata,
   assistantRoutingPrompt, parseRoutingDecision, assistantWorkflowInstructions, assistantRoutingOutcomeNotice
 } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantReplyAsksPerson, latestAssistantMessageAwaitingUserReply } from "@local/vibe64-runtime/shared/conversationQuestions";
 
 const STATE_KEY = "assistant_routing_request";
 const PROFILE = Object.freeze({
@@ -448,6 +449,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
             !state.followup && state.delivery !== "uncertain" && !(state.delivery === "accepted" && (state.workflow || state.stage === "planning"))) {
           throw failure("There is no pending workflow to resume.");
         }
+        if (state.awaitingAnswer) throw failure("Answer the question in chat. Your reply starts the next step.");
         if (state.delivery !== "uncertain") {
           if (state.delivery === "accepted" || state.followup && !Array.isArray(state.followup.messages)) {
             const plan = usesWorkPlan(state) ? await readWorkPlan(context) : null;
@@ -832,6 +834,13 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       const live = liveFollowupRequests.get(key) === state.messageId;
       liveFollowupRequests.delete(key);
       if (!state.workflow && state.stage !== "planning") { state.status = run.state === "completed" ? "complete" : "waiting"; await save(context, state); return; }
+      // A final reply asking the person waits for their answer, whatever outcome
+      // was reported. Their reply is a new request; nothing resumes this one.
+      if (!state.stopped && run.state === "completed" && assistantReplyAsksPerson(latestAssistantMessageAwaitingUserReply(
+        await context.runtime.store.readConversationTail(sessionId, { userLimit: 1 })))) {
+        Object.assign(state, { status: "waiting", awaitingAnswer: true, error: "Waiting for your answer. Reply in chat to continue." });
+        await save(context, state); return;
+      }
       const outcome = state.outcome;
       const plan = usesWorkPlan(state) ? await readWorkPlan(context) : null;
       if (state.stopped || run.state !== "completed" || !outcome || outcome.turnId !== state.turnId ||

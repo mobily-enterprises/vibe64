@@ -35,7 +35,8 @@ const feedback = useShellWebErrorRuntime();
 const previousAttempt = computed(() => props.request?.stopped && props.request?.delivery === "uncertain" &&
   assistantRoutingRequestCanBeReplaced(props.request, props.selection));
 const label = computed(() => previousAttempt.value ? "Previous assistant delivery unconfirmed" : assistantRoutingStatusLabel(props.request));
-const followupNeedsAction = computed(() => Boolean(props.request?.status === "waiting" &&
+// While Auto waits for the person's answer only their reply (or Implement plan) moves on.
+const followupNeedsAction = computed(() => props.request?.awaitingAnswer ? canImplement.value : Boolean(props.request?.status === "waiting" &&
   (props.request?.followup || props.request?.delivery === "accepted" && (props.request?.workflow || props.request?.stage === "planning"))) ||
   Boolean(props.request?.delivery === "uncertain" && (props.request?.followup || previousAttempt.value)));
 const canImplement = computed(() => props.mode === "auto" && props.request?.stage === "planning" &&

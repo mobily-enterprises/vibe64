@@ -152,3 +152,13 @@ it("immediately labels the submitted action while preventing another submission"
   expect(await render({ ...value, delivery: "uncertain" }, null, { pendingAction: "continue" })).toContain("Checking…");
   expect(await render(value)).not.toContain("Continuing…");
 });
+
+it("offers no Continue while the workflow waits for the person's answer", async () => {
+  const value = request("implementation", "accepted", { followup: undefined, awaitingAnswer: true,
+    error: "Waiting for your answer. Reply in chat to continue." });
+  const html = await render(value);
+  expect(html).toContain(value.error); expect(html).not.toContain("Continue implementation"); app?.unmount();
+  const planning = await render(request("planning", "accepted", { followup: undefined, awaitingAnswer: true, error: value.error,
+    workPlan: { status: "active", revision: "saved-plan" } }));
+  expect(planning).toContain("Implement plan"); expect(planning).not.toContain("Continue planning");
+});

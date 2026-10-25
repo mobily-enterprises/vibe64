@@ -353,3 +353,30 @@ test("Stop during the first implementation resumes at implementation with a fres
   assert.equal(f.state().status, "working"); assert.equal(f.state().stage, "implementation"); assert.equal(f.state().stopped, false);
   assert.equal(f.sends.length, 2); assert.notEqual(f.sends[1].input.messageId, f.sends[0].input.messageId);
 });
+
+// The chat composer shows answer controls for this reply; Auto must wait for that answer.
+const question = "The agreed required-field rule is done.\n\n[1] Shall I also fix the unrelated findings now?\nPossible answers:\n- Yes, fix them\n- Not now";
+function askPerson(f) {
+  f.context.runtime.store.readConversationTail = async () => [{ user: { messageId: f.state().followup?.messageId || request.messageId, text: "Execute the plan" },
+    messages: [{ role: "assistant", text: question }] }];
+}
+
+for (const decision of ["continue", "handoff"]) test(`a final question waits for the person even when the agent reported ${decision}`, async t => {
+  const f = await fixture(t); await f.service.send("session-1", request, f.context);
+  await report(f, decision); askPerson(f);
+  await f.service.afterTurn("session-1", end(f.state()), f.context);
+  assert.equal(f.sends.length, 1, "no automatic turn may start before the person answers");
+  assert.equal(f.state().status, "waiting"); assert.equal(f.state().stage, "implementation"); assert.equal(f.state().awaitingAnswer, true);
+});
+
+test("a final question without an outcome is never resumed from the saved request; the reply starts the next request", async t => {
+  const f = await fixture(t); await f.service.send("session-1", request, f.context);
+  askPerson(f);
+  await f.service.afterTurn("session-1", end(f.state()), f.context);
+  assert.equal(f.state().status, "waiting"); assert.equal(f.state().followup, undefined);
+  await f.restart().reconcile("session-1", f.context);
+  await assert.rejects(f.service.send("session-1", { messageId: request.messageId, reviewAction: "retry" }, f.context), /Answer the question/);
+  assert.equal(f.sends.length, 1, "neither recovery nor Continue may resend the original request");
+  await f.service.send("session-1", { messageId: "answer-1", message: "Yes, fix them", submissionKind: "send" }, f.context);
+  assert.equal(f.sends.length, 2); assert.equal(f.sends[1].input.messageId, "answer-1"); assert.equal(f.state().messageId, "answer-1");
+});

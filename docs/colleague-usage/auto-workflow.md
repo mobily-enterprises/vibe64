@@ -34,6 +34,16 @@ The working agent reports one of four outcomes:
 - **Complete** is available only to Senior after verified review. Senior explicitly
   completes an involved plan before Auto archives it after the final explanation.
 
+A turn whose final reply asks you a question (numbered questions or **Possible
+answers** choices, the replies for which the composer shows answer controls)
+always waits for your answer, whatever outcome the agent reported. Auto never
+moves to Senior review, continues or completes past an open question. The notice
+says **Waiting for your answer. Reply in chat to continue.** and offers no stage
+**Continue** action; reopening the session or recovery after a restart sends
+nothing. Your reply is a new request that Router routes as usual, so answering
+"Yes, fix them" starts implementation followed by the normal Senior review. At
+Planning with an active saved plan, **Implement plan** remains available.
+
 The agent's concrete explanation appears as an ordinary **Status** message in
 chat. It is evidence of the reported work, not independent verification.
 Auto waits after two consecutive turns without reported progress or eight
