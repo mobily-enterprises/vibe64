@@ -1557,3 +1557,19 @@ and a retry after success changes nothing. A record still holding the field is
 unreadable until this upgrade runs. Focused evidence:
 `retiredProjectBootstrapUpgrade.unit.test.js`, `studioProjectContext.unit.test.js`
 and `stateUpgrades.unit.test.js`.
+
+## Workspace assistant name only (`20261025-workspace-assistant-name-only`)
+
+Workspace assistant settings (`assistant-settings.json`) now hold only the
+shared Colleague name. Avatar, voice, talk mode, send mode and narration values
+saved there are retired: each person's own assistant preferences hold avatar,
+voice, read-aloud and narration choices, and nothing edits the retired values.
+This upgrade follows `20261025-retired-project-bootstrap`. A file with other
+fields is rewritten to `{ "colleagueName": ... }` when it holds a name, and
+removed when it does not, so the default name applies; a name-only file and a
+missing file are not touched. It uses the backed-up publisher (backups under
+`upgrades/backups/20261025-workspace-assistant-name-only/`); check is read-only,
+a file that is not a JSON object stops the upgrade without changes, and a retry
+after success changes nothing. The settings reader refuses any other field, so a
+file still holding one is unreadable until this upgrade runs. Focused evidence:
+`workspaceAssistantNameOnlyUpgrade.unit.test.js` and `stateUpgrades.unit.test.js`.
