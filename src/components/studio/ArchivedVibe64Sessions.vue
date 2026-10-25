@@ -70,15 +70,15 @@
         <v-card-text class="studio-archived-sessions__card-body">
           <div class="studio-archived-sessions__card-heading">
             <div class="studio-archived-sessions__icon">
-              <v-icon :icon="archiveIcon" size="22" />
+              <v-icon :icon="mdiArchiveOutline" size="22" />
             </div>
             <div class="studio-archived-sessions__identity">
               <div class="studio-archived-sessions__session-id">
-                {{ session.sessionName || shortSessionId(session.sessionId) }}
+                {{ session.sessionName || shortVibe64SessionId(session.sessionId) }}
               </div>
               <div class="studio-archived-sessions__meta">
-                <v-chip :color="statusColor(session.status)" size="x-small" variant="tonal">
-                  {{ statusLabel(session.status || "archived") }}
+                <v-chip :color="vibe64SessionStatusColor(session.status)" size="x-small" variant="tonal">
+                  {{ vibe64SessionStatusLabel(session.status || "archived") }}
                 </v-chip>
                 <v-chip v-if="session.sourceReady" color="success" size="x-small" variant="tonal">
                   source available
@@ -108,7 +108,17 @@
 </template>
 
 <script setup>
+import {
+  mdiArchiveOutline,
+  mdiEyeOutline,
+  mdiRefresh
+} from "@mdi/js";
 import Vibe64UnavailableSessions from "@/components/studio/Vibe64UnavailableSessions.vue";
+import {
+  shortVibe64SessionId,
+  vibe64SessionStatusColor,
+  vibe64SessionStatusLabel
+} from "@/lib/vibe64SessionViewModel.js";
 import {
   archivedVibe64SessionsEmits,
   archivedVibe64SessionsProps,
@@ -119,19 +129,13 @@ defineProps(archivedVibe64SessionsProps);
 const emit = defineEmits(archivedVibe64SessionsEmits);
 
 const {
-  archiveIcon,
   error,
   formatArchivedAt,
   loadSessions,
   loading,
-  mdiEyeOutline,
-  mdiRefresh,
   sessionRoute,
   sessions,
-  unavailableSessions,
-  shortSessionId,
-  statusColor,
-  statusLabel
+  unavailableSessions
 } = useArchivedVibe64Sessions(emit);
 
 defineExpose({

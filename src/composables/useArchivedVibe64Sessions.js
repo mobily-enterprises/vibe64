@@ -4,10 +4,7 @@ import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEn
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 import { useRoute } from "vue-router";
 import {
-  mdiArchiveOutline,
-  mdiEyeOutline,
   mdiFileDocumentOutline,
-  mdiRefresh,
   mdiSourceBranch,
   mdiSourceCommit
 } from "@mdi/js";
@@ -29,9 +26,7 @@ import {
   enrichVibe64SessionForDisplay
 } from "@/lib/vibe64SessionPanelModel.js";
 import {
-  shortVibe64SessionId,
-  vibe64SessionStatusColor,
-  vibe64SessionStatusLabel
+  isArchivedVibe64Session
 } from "@/lib/vibe64SessionViewModel.js";
 import {
   projectAppPath
@@ -93,7 +88,7 @@ function useArchivedVibe64Sessions(emit) {
     const items = Array.isArray(payload?.sessions) ? payload.sessions : [];
     return items
       .map(enrichVibe64SessionForDisplay)
-      .filter(sessionIsInArchive);
+      .filter(isArchivedVibe64Session);
   });
 
   watch(loading, (isLoading) => {
@@ -103,25 +98,14 @@ function useArchivedVibe64Sessions(emit) {
   });
 
   return {
-    archiveIcon: mdiArchiveOutline,
     unavailableSessions: computed(() => sessionListResource.data.value?.unavailableSessions || []),
     error,
     loadSessions,
     loading,
     formatArchivedAt,
-    mdiEyeOutline,
-    mdiRefresh,
-    mdiSourceBranch,
     sessionRoute,
-    sessions,
-    shortSessionId,
-    statusColor,
-    statusLabel
+    sessions
   };
-
-  function sessionIsInArchive(session = {}) {
-    return String(session.status || "") === "archived";
-  }
 
   async function loadSessions() {
     await sessionListResource.reload();
@@ -175,7 +159,7 @@ function useArchivedVibe64SessionDetail() {
       return null;
     }
     const enrichedSession = enrichVibe64SessionForDisplay(payload);
-    return String(enrichedSession.status || "") === "archived" ? enrichedSession : null;
+    return isArchivedVibe64Session(enrichedSession) ? enrichedSession : null;
   });
   const backTo = computed(() => ({
     path: `${projectAppPath(projectSlug.value)}/dashboard/history`
@@ -190,25 +174,12 @@ function useArchivedVibe64SessionDetail() {
     conversationLog,
     error: computed(() => String(sessionResource.loadError.value || "")),
     loading: computed(() => Boolean(sessionResource.isLoading.value || sessionResource.isInitialLoading?.value)),
-    mdiRefresh,
     reload: sessionResource.reload,
     session,
     sessionId,
     sessionsApiPath,
     projectSlug
   };
-}
-
-function shortSessionId(sessionId) {
-  return shortVibe64SessionId(sessionId);
-}
-
-function statusLabel(status) {
-  return vibe64SessionStatusLabel(status);
-}
-
-function statusColor(status) {
-  return vibe64SessionStatusColor(status);
 }
 
 function formatArchivedAt(value = "") {
@@ -263,7 +234,6 @@ export {
   archivedSessionDetailRoute,
   archivedVibe64SessionsEmits,
   archivedVibe64SessionsProps,
-  shortSessionId,
   useArchivedVibe64Sessions,
   useArchivedVibe64SessionDetail
 };

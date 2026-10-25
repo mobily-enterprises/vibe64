@@ -136,9 +136,7 @@ const props = defineProps({
   promptHintPolicy: {
     default: () => ({
       enabled: true,
-      ready: false,
-      revision: 0,
-      version: 0
+      ready: false
     }),
     type: Object
   },
@@ -212,24 +210,5 @@ const selectedAssistantTerminal = computed(() => (
 .studio-ai-sessions__tab-terminal :deep(.studio-ai-sessions__codex-terminal-shell),
 .studio-ai-sessions__tab-terminal :deep(.studio-ai-sessions__codex-terminal) {
   height: 100%;
-}
-
-.studio-ai-sessions__terminal-unavailable {
-  align-content: center;
-  color: rgba(var(--v-theme-on-surface), 0.68);
-  display: grid;
-  gap: 0.4rem;
-  height: 100%;
-  justify-items: center;
-  padding: 2rem;
-  text-align: center;
-}
-
-.studio-ai-sessions__terminal-unavailable strong {
-  color: rgb(var(--v-theme-on-surface));
-}
-
-.studio-ai-sessions__terminal-unavailable span {
-  max-width: 32rem;
 }
 </style>

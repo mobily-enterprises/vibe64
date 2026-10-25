@@ -9,7 +9,7 @@
       <div class="studio-archived-session-detail__title">
         <v-icon :icon="archiveIcon" size="20" />
         <div>
-          <h2>Archived session {{ shortSessionId(session.sessionId) }}</h2>
+          <h2>Archived session {{ shortVibe64SessionId(session.sessionId) }}</h2>
           <p>Read-only history. Source restore is not available from archived sessions.</p>
         </div>
       </div>
@@ -88,10 +88,8 @@ import {
   mdiArrowLeft
 } from "@mdi/js";
 import Vibe64ConversationLog from "@/components/studio/vibe64-session/Vibe64ConversationLog.vue";
-import {
-  archiveFactRows,
-  shortSessionId
-} from "@/composables/useArchivedVibe64Sessions.js";
+import { archiveFactRows } from "@/composables/useArchivedVibe64Sessions.js";
+import { shortVibe64SessionId } from "@/lib/vibe64SessionViewModel.js";
 
 const props = defineProps({
   sessionsApiPath: { type: String, default: "" },
