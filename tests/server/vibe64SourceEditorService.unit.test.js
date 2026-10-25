@@ -265,12 +265,21 @@ test("interface explanations separate Description and Steps caches and reject ch
   const cached = await run("description", "exp_interface_cached");
   assert.equal(description.find(event => event.type === "source-explanation.finished").explanation.sourceRange.presentation, "description");
   assert.equal(steps.find(event => event.type === "source-explanation.finished").explanation.sourceRange.presentation, "steps");
+  assert.match(description.find(event => event.type === "source-explanation.finished").explanation.promptVersion, /:description:.*:overview-v6$/u);
+  assert.match(steps.find(event => event.type === "source-explanation.finished").explanation.promptVersion, /:steps:.*:pseudocode-v6$/u);
   assert.equal(cached.find(event => event.type === "source-explanation.finished").explanation.engine, "agent-cache");
   assert.equal(prompts.length, 2);
   assert.match(prompts[0], /Do not emit pseudocode or pseudo-variables/u);
   assert.match(prompts[1], /numbered steps in English as pseudocode/u);
   for (const prompt of prompts) assert.doesNotMatch(prompt, /Include \*\*Inputs\*\* and \*\*Outputs and use\*\* only when/u);
   assert.match(prompts[1], /\*\*Steps\*\* with at most 12 concise numbered steps/u);
+  for (const prompt of prompts) {
+    // Genesis supplies the bounded-context rule and the opening overview sentence once.
+    assert.equal(prompt.match(/Do not use tools/gu)?.length, 1);
+    assert.doesNotMatch(prompt, /Use only the bounded source context supplied below/u);
+    assert.doesNotMatch(prompt, /Start with (a short purpose statement|one purpose sentence)/u);
+    assert.match(prompt, /Start with one concrete overview sentence/u);
+  }
   await writeFile(path.join(fixture.sourceRoot, "src/app.js"), "console.log('two');\n");
   const stale = await fixture.service.explainSelection({ path: "src/app.js", sessionId: "session-1", startLine: 1, endLine: 1, presentation: "description", expectedHash });
   assert.equal(stale.ok, false);

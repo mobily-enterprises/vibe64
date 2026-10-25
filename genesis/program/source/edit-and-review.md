@@ -1593,7 +1593,10 @@ results and observable effects remain distinct; missing real contracts are expli
 File overviews describe scope, responsibilities, parts and behavior without
 function input/output sections, including files containing callable exports.
 Changed explanation guidance marks saved interpretations out of date without
-starting a Helper request. No chat
+starting a Helper request: each presentation's instructions and interpretation
+version are defined together in `explanations.js`, and Genesis's shared source
+explanation guidance supplies the bounded-context rule and the opening overview
+sentence once. No chat
 transcript or composer is embedded in these fields. Their progress, Stop and
 retry reuse the existing Helper lifecycle; an update retains preceding saved text.
 A file explanation reads the saved file without the project index or generating
