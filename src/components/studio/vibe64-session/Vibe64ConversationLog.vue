@@ -524,7 +524,6 @@ const adapter = computed(() => ({
   overflow-wrap: anywhere;
 }
 /* Chat bubbles follow the M3 chat shape: a tighter corner at the author side. */
-:deep(.assistant-transcript__message-row--assistant) { max-width: min(30rem, 92%); }
 :deep(.assistant-transcript__message--assistant) {
   margin-left: 2.15rem;
   max-width: calc(100% - 2.15rem);
