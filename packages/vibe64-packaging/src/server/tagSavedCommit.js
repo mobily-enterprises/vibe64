@@ -7,17 +7,13 @@ import { runProjectSourceExclusive } from "@local/vibe64-project/server/projectS
 import path from "node:path";
 
 import { publishError } from "./errors.js";
-import { COMMIT_ID } from "./git.js";
+import { COMMIT_ID, releaseGit } from "./git.js";
 import { RELEASE_TAG } from "./release/version.js";
 
 const REF = /^refs\/[A-Za-z0-9._/-]+$/u;
 
 function refuse(code, message, details) {
   throw publishError(code, message, details);
-}
-
-function safeText(value = "") {
-  return String(value).replace(/(https?:\/\/)[^\s/@]+@/gu, "$1[credentials]@").slice(0, 3000);
 }
 
 async function tagSavedCommit({
@@ -41,20 +37,7 @@ async function tagSavedCommit({
     refuse("VIBE64_PUBLISH_TAG_INVALID", "Release tags look like v1.5.0 or package@1.5.0.");
   }
 
-  async function git(args, { optional = false, stdin } = {}) {
-    const result = await runCommand({
-      actor: "daemon", allowedRoots: [root], command: "git", args, cwd: root,
-      envPolicy: "project", gitSafeDirectories: [root], inheritProcessEnv: true,
-      mode: "capture", purpose: "source", runtimes: ["git"],
-      timeout: 60_000, maxBuffer: 2 * 1024 * 1024,
-      ...(stdin === undefined ? {} : { input: stdin })
-    });
-    if (result?.ok !== true) {
-      if (optional) return null;
-      refuse("VIBE64_PUBLISH_TAG_FAILED", safeText(result?.stderr || result?.error || "Git could not create the release tag."));
-    }
-    return String(result.stdout ?? result.output ?? "").trim();
-  }
+  const git = (args, options = {}) => releaseGit(root, args, { code: "VIBE64_PUBLISH_TAG_FAILED", maxBuffer: 2 * 1024 * 1024, runCommand, ...options });
 
   return runExclusive(projectRuntimeRoot, async () => {
     const baseline = await git(["rev-parse", "--verify", "--end-of-options", `${baselineRef}^{commit}`], { optional: true });

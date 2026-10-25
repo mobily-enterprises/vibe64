@@ -1,11 +1,9 @@
 // The local publishing service: one per running Vibe64. The person's keys,
 // licences and toolchains are theirs (one set on this computer); targets,
 // history, confirmations and results are each project's own state.
-import { execFile } from "node:child_process";
-import { stat } from "node:fs/promises";
+import { mkdir, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
 
 import {
   CAPACITOR_SHELL_TEMPLATE,
@@ -22,6 +20,7 @@ import {
 import { createAgeStore, createRecoveryKit, restoreRecoveryKit } from "@local/vibe64-packaging/server/keys";
 import { gatherCredentialFacts } from "@local/vibe64-packaging/server/preflight/registries";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { runVibe64Command } from "@local/vibe64-execution/server";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { resolveDefaultLocalEditorSystemRoot } from "@local/vibe64-core/server/studioRoots";
 
@@ -37,7 +36,6 @@ import { createTargetsStore } from "./state/targetsStore.js";
 import { createToolchainManager } from "./toolchainLicence.js";
 import { createVerificationRunner } from "./verificationRunner.js";
 
-const run = promisify(execFile);
 const TWINE_VERSION = "6.1.0";
 
 function serviceError(message, code) {
@@ -68,7 +66,21 @@ async function result(operation) {
   }
 }
 
-function createPublishingService({ project, sourceEditor, env = process.env, roots = null, now = () => new Date().toISOString() } = {}) {
+// The Python publishing tools install through Vibe64's command gateway, with
+// the Python Vibe64 finds for project commands.
+async function installTool(toolchainsRoot, command, args, timeout, runCommand) {
+  await mkdir(toolchainsRoot, { recursive: true });
+  const result = await runCommand({
+    actor: "daemon", allowedRoots: [toolchainsRoot], command, args, cwd: toolchainsRoot,
+    envPolicy: "project", inheritProcessEnv: true, mode: "capture", purpose: "workspace-cache",
+    runtimes: ["python"], timeout, maxBuffer: 4 * 1024 * 1024
+  });
+  if (result?.ok !== true) {
+    throw Object.assign(new Error(`Installing the Python publishing tools failed: ${String(result?.stderr || result?.error || "").trim().slice(-600)}`), { code: "vibe64_publishing_toolchain_failed" });
+  }
+}
+
+function createPublishingService({ project, sourceEditor, env = process.env, roots = null, now = () => new Date().toISOString(), runCommand = runVibe64Command } = {}) {
   if (!project || typeof project.readCurrentProject !== "function") throw new TypeError("Publishing needs the project service.");
   const { personalRoot, toolchainsRoot, cacheRoot } = roots || publishingRoots(env);
   const keys = createAgeStore({ directory: path.join(personalRoot, "keys") });
@@ -272,8 +284,8 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
     })),
     installAndroidToolchain: () => result(async () => ({ install: await toolchains.installAndroid() })),
     installPythonTools: () => result(async () => {
-      await run("python3", ["-m", "venv", pythonTools], { timeout: 120_000 });
-      await run(path.join(pythonTools, "bin", "python"), ["-m", "pip", "install", "--quiet", "--disable-pip-version-check", `twine==${TWINE_VERSION}`], { timeout: 300_000 });
+      await installTool(toolchainsRoot, "python3", ["-m", "venv", pythonTools], 120_000, runCommand);
+      await installTool(toolchainsRoot, path.join(pythonTools, "bin", "python"), ["-m", "pip", "install", "--quiet", "--disable-pip-version-check", `twine==${TWINE_VERSION}`], 300_000, runCommand);
       return { python: { ready: true, folder: pythonTools } };
     }),
     shareInstall: (input = {}) => result(async () => ({ share: await lanShare.start(await signedApk(input)) })),

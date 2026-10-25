@@ -1,38 +1,23 @@
 // The project's saved baseline as a release sees it: which repository holds the
 // saved work, which commit is saved, whether it is pushed, and the remote that
-// release tags go to. Reads use Git without prompts; only pushing tags uses the
-// person's own Git sign-in (their credential helper), exactly as their own
-// `git push` would.
-import { execFile } from "node:child_process";
+// release tags go to. Git runs through the release Git helper, without prompts;
+// pushing uses the person's own Git sign-in (their credential helper), exactly
+// as their own `git push` would.
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
 
-import { COMMIT_ID } from "@local/vibe64-packaging/server/git";
+import { COMMIT_ID, releaseGit } from "@local/vibe64-packaging/server/git";
 import { tagSavedCommit } from "@local/vibe64-packaging/server/tagSavedCommit";
 import { readSourceVersion } from "@local/vibe64-packaging/server/release";
 import { inspectVibe64Packaging } from "@local/vibe64-genesis/server";
-
-const run = promisify(execFile);
 
 function repositoryError(message, code = "vibe64_publishing_repository_unavailable") {
   return Object.assign(new Error(message), { code });
 }
 
-async function git(root, args, { optional = false, interactiveCredentials = false, timeout = 60_000 } = {}) {
-  try {
-    const { stdout } = await run("git", ["-C", root, ...args], {
-      env: { ...process.env, GIT_TERMINAL_PROMPT: "0", ...(interactiveCredentials ? {} : { GIT_ASKPASS: "", SSH_ASKPASS: "" }) },
-      maxBuffer: 8 * 1024 * 1024,
-      timeout
-    });
-    return stdout.trim();
-  } catch (error) {
-    if (optional) return null;
-    const detail = String(error?.stderr || error?.message || "").replace(/(https?:\/\/)[^\s/@]+@/gu, "$1[credentials]@").trim();
-    throw repositoryError(`Git: ${detail.slice(0, 600)}`, "vibe64_publishing_git_failed");
-  }
+function git(root, args, options = {}) {
+  return releaseGit(root, args, { code: "vibe64_publishing_git_failed", ...options });
 }
 
 // "owner/name" for a GitHub remote address, or null.
@@ -103,7 +88,7 @@ function createProjectRepository({ readProject } = {}) {
     const parent = await mkdtemp(path.join(os.tmpdir(), "vibe64-release-checkout-"));
     const root = path.join(parent, "project");
     try {
-      await run("git", ["clone", "--quiet", "--no-checkout", "--shared", repositoryRoot, root], { env: { ...process.env, GIT_TERMINAL_PROMPT: "0" } });
+      await git(repositoryRoot, ["clone", "--quiet", "--no-checkout", "--shared", repositoryRoot, root]);
       await git(root, ["-c", "advice.detachedHead=false", "checkout", "--quiet", "--detach", commit]);
       return await operation(root);
     } finally {
@@ -152,10 +137,7 @@ function createProjectRepository({ readProject } = {}) {
   // cloning) sees them. Uses the person's own Git sign-in; never forced.
   async function pushTags(facts, tags) {
     if (!facts.remote || !tags.length) return { pushed: [] };
-    await git(facts.repositoryRoot, ["push", "--quiet", facts.remote.name, ...tags.map((tag) => `refs/tags/${tag}:refs/tags/${tag}`)], {
-      interactiveCredentials: true,
-      timeout: 120_000
-    });
+    await git(facts.repositoryRoot, ["push", "--quiet", facts.remote.name, ...tags.map((tag) => `refs/tags/${tag}:refs/tags/${tag}`)], { timeout: 120_000 });
     return { pushed: tags };
   }
 
@@ -164,10 +146,7 @@ function createProjectRepository({ readProject } = {}) {
   async function pushSaved(facts) {
     if (!facts.remote || facts.pushed) return { pushed: false };
     const upstreamBranch = facts.upstreamRef.split("/").slice(3).join("/");
-    await git(facts.repositoryRoot, ["push", "--quiet", facts.remote.name, `${facts.commit}:refs/heads/${upstreamBranch}`], {
-      interactiveCredentials: true,
-      timeout: 120_000
-    });
+    await git(facts.repositoryRoot, ["push", "--quiet", facts.remote.name, `${facts.commit}:refs/heads/${upstreamBranch}`], { timeout: 120_000 });
     // Keep the remote-tracking branch current, so "pushed" reads true at once.
     await git(facts.repositoryRoot, ["update-ref", facts.upstreamRef, facts.commit]);
     return { pushed: true, remote: facts.remote.name, branch: upstreamBranch };

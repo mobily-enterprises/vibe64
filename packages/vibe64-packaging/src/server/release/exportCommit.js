@@ -2,27 +2,17 @@
 // This writes that commit's files into a fresh folder through a private Git index
 // (the repository's own index, HEAD and worktree are untouched) and gives every
 // file the commit's time, so builds that record file times are reproducible.
-import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readdir, rm, stat, utimes } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { promisify } from "node:util";
 
 import { publishError } from "../errors.js";
-import { COMMIT_ID } from "../git.js";
+import { COMMIT_ID, releaseGit } from "../git.js";
 
-const run = promisify(execFile);
-
-async function git(projectRoot, args, env = {}, { workTree = null } = {}) {
-  try {
-    const { stdout } = await run("git", ["-C", projectRoot, ...(workTree ? [`--work-tree=${workTree}`] : []), ...args], {
-      env: { ...process.env, GIT_TERMINAL_PROMPT: "0", ...env },
-      maxBuffer: 16 * 1024 * 1024
-    });
-    return stdout.trim();
-  } catch (error) {
-    throw publishError("VIBE64_PUBLISH_EXPORT_FAILED", `Git could not export the saved commit: ${String(error?.stderr || error?.message).trim()}`);
-  }
+function git(projectRoot, args, env = {}, { workTree = null } = {}) {
+  return releaseGit(projectRoot, [...(workTree ? [`--work-tree=${workTree}`] : []), ...args], {
+    code: "VIBE64_PUBLISH_EXPORT_FAILED", env, maxBuffer: 16 * 1024 * 1024
+  });
 }
 
 async function setTimes(root, seconds) {
