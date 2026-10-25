@@ -10,11 +10,13 @@ import {
   publishConfirmationTokenMatches,
   redeemPublishConfirmation
 } from "@local/vibe64-packaging/server/confirmationToken";
+import { publishPlanDisplayId } from "@local/vibe64-packaging/server/plan";
 
 import { readJsonFile, serialized, writeJsonFile } from "./state/jsonFile.js";
 
 const CONFIRMATIONS_CONTRACT = "vibe64.publishing-confirmations.v1";
 const PLAN_HASH = /^sha256:[0-9a-f]{64}$/u;
+const TARGET_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const KEEP = 20;
 
 function confirmationError(message, code) {
@@ -51,12 +53,21 @@ function createConfirmationService({ runtimeRoot, now = () => Date.now(), ttlMs 
       return (await read()).pendingRequest || null;
     },
     // An assistant (or the person) asks for the confirmation prompt to open for
-    // this plan. Nothing runs; the Publish page shows the request.
-    request({ planHash, requestedBy = "assistant" } = {}) {
+    // this plan and its targets. Nothing runs; the Publish page shows the request.
+    request({ planHash, targetIds, requestedBy = "assistant" } = {}) {
       return exclusive(async () => {
         if (!PLAN_HASH.test(planHash || "")) throw confirmationError("A confirmation request needs the plan hash.", "vibe64_publishing_confirmation_invalid");
+        if (!Array.isArray(targetIds) || !targetIds.length || !targetIds.every((id) => TARGET_ID.test(id))) {
+          throw confirmationError("A confirmation request needs the plan's target ids.", "vibe64_publishing_confirmation_invalid");
+        }
         const value = await read();
-        value.pendingRequest = { planHash, requestedBy: requestedBy === "person" ? "person" : "assistant", requestedAt: new Date(now()).toISOString() };
+        value.pendingRequest = {
+          planHash,
+          planId: publishPlanDisplayId(planHash),
+          targetIds: [...targetIds],
+          requestedBy: requestedBy === "person" ? "person" : "assistant",
+          requestedAt: new Date(now()).toISOString()
+        };
         await write(value);
         return value.pendingRequest;
       });

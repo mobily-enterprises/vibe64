@@ -223,6 +223,13 @@ test("an unfinished app release keeps its build number, so the same plan resumes
 
 test("an assistant can only ask; the person confirms the exact current plan", async (t) => {
   const { orchestrator, calls, targets, confirmations } = await fixture(t);
+  const subset = await orchestrator.plan({ targetIds: ["sdk-npm"] });
+  await orchestrator.requestPublish({ planHash: subset.planHash, targetIds: ["sdk-npm"] });
+  const askedSubset = (await orchestrator.readState()).pendingConfirmation;
+  assert.deepEqual(askedSubset.targetIds, ["sdk-npm"], "the request keeps the targets it was asked for");
+  assert.equal(askedSubset.planId, subset.planId);
+  assert.equal((await orchestrator.plan({ targetIds: askedSubset.targetIds })).planHash, askedSubset.planHash, "the page reviews the very plan that was asked for");
+
   const plan = await orchestrator.plan();
   const asked = await orchestrator.requestPublish({ planHash: plan.planHash });
   assert.equal(asked.pendingConfirmation.planHash, plan.planHash);

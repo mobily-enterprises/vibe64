@@ -119,7 +119,7 @@ Colleague can read the Publish state, suggest and write a version bump into
 the session, read the plan and preflight, start a dry run, read history and
 logs, and **ask** to publish. Asking only shows a banner, **Your Colleague asked
 to publish plan …**, with **Review** and **Dismiss**; **Review** opens the same
-confirmation. Only your **Publish** press publishes. Colleague never sees a
+confirmation for the targets Colleague asked about. Only your **Publish** press publishes. Colleague never sees a
 token, key, passphrase or file path, and cannot add accounts, unlock keys,
 accept a licence or confirm.
 

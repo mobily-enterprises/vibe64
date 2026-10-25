@@ -81,7 +81,7 @@ it("reads the project's publishing state and asks the person to review an assist
 });
 
 it("refuses an assistant's request whose plan no longer matches the saved work", async () => {
-  const state = publishingState({ pendingConfirmation: { planHash: `sha256:${"b".repeat(64)}`, targetIds: [] } });
+  const state = publishingState({ pendingConfirmation: { planHash: `sha256:${"b".repeat(64)}`, planId: "bbbb", targetIds: ["sdk-npm"] } });
   const page = mount(PublishPage, { request: async (suffix) => (suffix === "/plan" ? { ok: true, plan: PLAN } : state) });
   await vi.waitFor(() => expect(page.state).toBeTruthy());
   await page.reviewRequest();

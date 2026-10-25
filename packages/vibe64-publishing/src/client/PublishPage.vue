@@ -157,9 +157,9 @@ function planAgain() {
 
 // An assistant asked for a release: show the person the current plan for it.
 const reviewRequest = () => act("review", async () => {
-  const { plan } = await call("/plan", { body: { targetIds: pending.value.targetIds || [] }, refreshAfter: false });
+  const { plan } = await call("/plan", { body: { targetIds: pending.value.targetIds }, refreshAfter: false });
   if (plan.planHash !== pending.value.planHash) throw new Error("The saved work changed since this was asked for. Open Release to review the new plan.");
-  openConfirm({ plan, targetIds: pending.value.targetIds || [], requestedBy: "assistant" });
+  openConfirm({ plan, targetIds: pending.value.targetIds, requestedBy: "assistant" });
 });
 const dismissRequest = () => act("dismiss", () => call("/confirmation/request", { method: "DELETE" }));
 
@@ -220,7 +220,7 @@ function openInstall({ releaseId, targetId }) {
       <div v-if="pending" class="publish-banner publish-banner--ask" role="status">
         <v-icon :icon="mdiRobotOutline" size="22" />
         <div>
-          <strong>Your Colleague asked to publish plan {{ pending.planId || String(pending.planHash || "").slice(7, 11) }}</strong>
+          <strong>Your Colleague asked to publish plan {{ pending.planId }}</strong>
           <span>Nothing is published until you review and confirm it here.</span>
         </div>
         <v-btn :loading="working === 'dismiss'" rounded="pill" variant="text" @click="dismissRequest">Dismiss</v-btn>

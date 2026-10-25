@@ -554,7 +554,7 @@ function createReleaseOrchestrator({
   // An assistant (or the page) asks for the confirmation prompt for this plan.
   async function requestPublish({ planHash, targetIds = [], requestedBy = "assistant" }) {
     const current = await requireCurrentPlan({ planHash, targetIds });
-    const request = await confirmations.request({ planHash: current.planHash, requestedBy });
+    const request = await confirmations.request({ planHash: current.planHash, targetIds: current.plan.targets.map(({ id }) => id), requestedBy });
     return { pendingConfirmation: request, planId: current.planId, message: "The person confirms this plan on the Publish page. Nothing is published until they do." };
   }
 

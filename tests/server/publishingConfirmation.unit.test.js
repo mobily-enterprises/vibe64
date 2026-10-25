@@ -41,8 +41,11 @@ test("confirmation actions accept only the person's own page requests", () => {
 
 test("an assistant request only waits for the person; it confirms nothing", async (t) => {
   const confirmations = await service(t);
-  const pending = await confirmations.request({ planHash: PLAN });
+  await assert.rejects(confirmations.request({ planHash: PLAN }), { code: "vibe64_publishing_confirmation_invalid" }, "a request names the plan's targets");
+  const pending = await confirmations.request({ planHash: PLAN, targetIds: ["sdk-npm"] });
   assert.equal(pending.requestedBy, "assistant");
+  assert.deepEqual(pending.targetIds, ["sdk-npm"]);
+  assert.equal(pending.planId, PLAN.slice(7, 11));
   await assert.rejects(confirmations.open({ planHash: PLAN, actor: { kind: "assistant", id: "assistant" } }), { code: "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON" });
   await assert.rejects(confirmations.redeem({ planHash: PLAN, token: "x".repeat(43), actor: { kind: "assistant", id: "assistant" } }), { code: "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON" });
   assert.equal((await confirmations.pendingRequest()).planHash, PLAN);
@@ -56,7 +59,7 @@ test("a token is one-shot, bound to the plan and person, and never stored", asyn
   await assert.rejects(confirmations.redeem({ planHash: OTHER_PLAN, token, actor: person }), { code: "VIBE64_PUBLISH_CONFIRMATION_PLAN_CHANGED" });
   await assert.rejects(confirmations.redeem({ planHash: PLAN, token, actor: { kind: "person", id: "bob" } }), { code: "VIBE64_PUBLISH_CONFIRMATION_INVALID" });
   await assert.rejects(confirmations.redeem({ planHash: PLAN, token: "y".repeat(43), actor: person }), { code: "VIBE64_PUBLISH_CONFIRMATION_INVALID" });
-  await confirmations.request({ planHash: PLAN });
+  await confirmations.request({ planHash: PLAN, targetIds: ["sdk-npm"] });
   const redeemed = await confirmations.redeem({ planHash: PLAN, token, actor: person });
   assert.ok(redeemed.usedAt);
   assert.equal(await confirmations.pendingRequest(), null, "confirming clears the request");
