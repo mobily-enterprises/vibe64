@@ -229,38 +229,18 @@ async function verifyCredential({ target, credentials }) {
   return { ok: true, account: settings.repository, message: `Can publish releases to ${settings.repository}.` };
 }
 
-// "Rollback" for a release: make an earlier release the latest one again.
-async function markLatest({ target, tag, credentials }) {
-  const settings = releaseSettings({ ...target, tag }, "0.0.0");
-  const token = await credentialToken(credentials);
-  const release = await findRelease({ ...settings, token });
-  if (!release || release.draft) throw publishError("VIBE64_PUBLISH_TARGET_INVALID", `${settings.tag} is not a published release.`);
-  await withToolHome((home) => runGh(settings, ["release", "edit", settings.tag, "--repo", settings.repository, "--latest"], {
-    token,
-    home,
-    failureMessage: `gh did not make ${settings.tag} the latest release.`
-  }));
-  if (await latestReleaseId({ ...settings, token }) !== release.id) {
-    throw publishError("VIBE64_PUBLISH_NOT_PROVEN", `GitHub does not show ${settings.tag} as the latest release yet.`);
-  }
-  return { tag: settings.tag };
-}
-
 const githubReleasesDestination = Object.freeze({
   id: "github-releases",
   label: "GitHub Releases",
   packers: Object.freeze(["npm", "python-dist", "capacitor"]),
   channels: CHANNELS,
-  modes: Object.freeze(["token"]),
   credentials: Object.freeze([CREDENTIAL]),
   readBackCredentials: Object.freeze([CREDENTIAL]),
-  implemented: true,
   expectedChecksum,
   dryRun,
   upload,
   readBack,
-  verifyCredential,
-  markLatest
+  verifyCredential
 });
 
 export { githubReleasesDestination };

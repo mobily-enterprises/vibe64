@@ -5,7 +5,7 @@
 import path from "node:path";
 
 import { spawnCommand } from "../stages.js";
-import { downloadVerified, exists, toolEnvironment, toolchainError, unpackInto } from "./download.js";
+import { downloadVerified, exists, toolchainEnvironment, toolchainError, unpackInto } from "./download.js";
 
 const REQUIRED_JAVA = 21;
 const TEMURIN_LICENCE = Object.freeze({
@@ -41,7 +41,7 @@ async function describeJdk({ javaHome, baseEnvironment = process.env } = {}, { r
   if (typeof javaHome !== "string" || !path.isAbsolute(javaHome)) return { ok: false, javaHome: null, message: "No Java home given." };
   const java = path.join(javaHome, "bin", "java");
   if (!await exists(java)) return { ok: false, javaHome, message: `${javaHome} has no bin/java.` };
-  const result = await runCommand({ command: java, args: ["-version"], cwd: javaHome, env: toolEnvironment(baseEnvironment) });
+  const result = await runCommand({ command: java, args: ["-version"], cwd: javaHome, env: toolchainEnvironment(baseEnvironment) });
   const match = /version "(\d+)(?:\.[^"]*)?"/u.exec(`${result?.stderr || ""}${result?.stdout || ""}`);
   if (result?.ok !== true || !match) return { ok: false, javaHome, message: `${java} did not report a version.` };
   const major = Number(match[1]);
@@ -58,7 +58,7 @@ async function javaHomeOnPath({ baseEnvironment = process.env } = {}, { runComma
     command: "java",
     args: ["-XshowSettings:properties", "-version"],
     cwd: "/",
-    env: toolEnvironment(baseEnvironment)
+    env: toolchainEnvironment(baseEnvironment)
   });
   const match = /^\s*java\.home = (.+)$/mu.exec(`${result?.stderr || ""}${result?.stdout || ""}`);
   return result?.ok === true && match ? match[1].trim() : null;

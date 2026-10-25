@@ -8,11 +8,11 @@ import path from "node:path";
 
 import { verifyGenesisProject } from "@local/vibe64-genesis/server";
 import { checkCommandRunner } from "@local/vibe64-packaging/server/projectCommands";
+import { passthroughEnvironment } from "@local/vibe64-packaging/server/stages";
 
 import { readJsonFile, serialized, writeJsonFile } from "./state/jsonFile.js";
 
 const VERIFICATION_CONTRACT = "vibe64.publishing-verification.v1";
-const PASSTHROUGH = ["PATH", "LANG", "LANGUAGE", "LC_ALL", "LC_CTYPE", "TZ", "TERM"];
 const KEEP = 10;
 const OUTPUT_TAIL = 4000;
 
@@ -24,9 +24,7 @@ function failureOutput(outcome, home) {
 }
 
 function checkEnvironment(home, base = process.env) {
-  const environment = {};
-  for (const name of PASSTHROUGH) if (typeof base[name] === "string") environment[name] = base[name];
-  return { ...environment, HOME: home, TMPDIR: home, CI: "1", GIT_TERMINAL_PROMPT: "0" };
+  return { ...passthroughEnvironment(base), HOME: home, TMPDIR: home, CI: "1", GIT_TERMINAL_PROMPT: "0" };
 }
 
 function createVerificationRunner({

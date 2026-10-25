@@ -30,6 +30,15 @@ const INSTANCES = Object.freeze({
   pypi: Object.freeze({ repository: "https://upload.pypi.org/legacy/", index: "https://pypi.org/simple/", web: "https://pypi.org/" }),
   testpypi: Object.freeze({ repository: "https://test.pypi.org/legacy/", index: "https://test.pypi.org/simple/", web: "https://test.pypi.org/" })
 });
+// Target settings for a PyPI account's upload address: one of INSTANCES, or a
+// private index whose simple index sits next to its upload address.
+function pypiSettingsForAddress(address = "") {
+  if (!address || /upload\.pypi\.org/u.test(address)) return { instance: "pypi" };
+  if (/test\.pypi\.org/u.test(address)) return { instance: "testpypi" };
+  const upload = address.endsWith("/") ? address : `${address}/`;
+  return { repository: upload, index: new URL("simple/", new URL("../", upload)).href };
+}
+
 const CREDENTIAL = Object.freeze({ id: "pypi-token", label: "PyPI token", delivery: "file" });
 const SIMPLE_JSON = "application/vnd.pypi.simple.v1+json";
 const SHA256_HEX = /^[0-9a-f]{64}$/u;
@@ -221,26 +230,17 @@ async function verifyCredential({ credentials }) {
   return { ok: true, verified: false, message: "PyPI cannot check a token without uploading; the upload proves it." };
 }
 
-// PyPI yanks only on its website: this is the page to do it, never an automatic action.
-function yankPage({ target, project, version }) {
-  const settings = pypiSettings(target);
-  return settings.web ? `${settings.web}manage/project/${normalizeProjectName(project)}/release/${version}/` : null;
-}
-
 const pypiDestination = Object.freeze({
   id: "pypi",
   label: "PyPI",
   packers: Object.freeze(["python-dist"]),
   channels: Object.freeze([]),
-  modes: Object.freeze(["token"]),
   credentials: Object.freeze([CREDENTIAL]),
-  implemented: true,
   expectedChecksum,
   dryRun,
   upload,
   readBack,
-  verifyCredential,
-  yankPage
+  verifyCredential
 });
 
-export { pypiDestination };
+export { pypiDestination, pypiSettingsForAddress };

@@ -92,7 +92,7 @@ test("a canary is released to a throwaway private repository's GitHub Releases",
     { code: "VIBE64_PUBLISH_VERSION_CONFLICT" }
   );
 
-  // A second release becomes latest; making the first latest again is the "rollback".
+  // A second release becomes latest.
   const next = await commitFiles(project.root, { "package.json": manifest("0.2.0") }, "Release 0.2.0");
   await run("git", ["-C", project.root, "tag", "v0.2.0", next.commit]);
   await push("main", "v0.2.0");
@@ -105,7 +105,4 @@ test("a canary is released to a throwaway private repository's GitHub Releases",
     obtainCredential
   });
   assert.equal(nextPublished.proof.channel, "latest");
-  await credentialed((credentials) => githubReleasesDestination.markLatest({ target, tag: "v0.1.0", credentials }));
-  const again = await credentialed((credentials) => githubReleasesDestination.readBack({ target: releaseTarget, version: "0.1.0", artifacts: built.artifacts, credentials }));
-  assert.equal(again.proof.channel, "latest");
 });

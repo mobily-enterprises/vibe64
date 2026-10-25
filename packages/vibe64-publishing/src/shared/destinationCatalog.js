@@ -71,8 +71,4 @@ const PUBLISH_ACCOUNT_KINDS = Object.freeze({
   github: Object.freeze({ id: "github", label: "GitHub", destination: "github-releases", tokenLabel: "GitHub token", addressLabel: "", defaultAddress: "" })
 });
 
-function publishDestinationInfo(id) {
-  return PUBLISH_DESTINATION_CATALOG.find((entry) => entry.id === id) || null;
-}
-
-export { PUBLISH_ACCOUNT_KINDS, PUBLISH_DESTINATION_CATALOG, publishDestinationInfo };
+export { PUBLISH_ACCOUNT_KINDS, PUBLISH_DESTINATION_CATALOG };

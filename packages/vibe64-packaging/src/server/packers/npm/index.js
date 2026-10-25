@@ -65,7 +65,6 @@ const npmPacker = Object.freeze({
   id: "npm",
   label: "npm package",
   produces: Object.freeze(["npm tarball"]),
-  implemented: true,
   buildRecipe,
   // After Stage 1: exactly one tarball whose package.json has the planned version.
   checkArtifacts: async ({ artifacts, version = null }) => {

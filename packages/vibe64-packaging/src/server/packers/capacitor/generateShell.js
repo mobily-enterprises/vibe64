@@ -8,6 +8,7 @@ import path from "node:path";
 
 import { canonicalJson } from "../../canonical.js";
 import { publishError } from "../../errors.js";
+import { pathWithin } from "../../paths.js";
 import { androidPermissionNames } from "./permissions.js";
 import { CAPACITOR_SHELL_TEMPLATE, SHELL_RUNTIME_PACKAGES, SHELL_TOOL_PACKAGES } from "./shellTemplate/index.js";
 
@@ -19,11 +20,6 @@ const MAX_VERSION_CODE = 2_100_000_000;
 
 function shellError(message, details) {
   return publishError("VIBE64_PUBLISH_BUILD_INVALID", message, details);
-}
-
-function within(root, candidate) {
-  const relative = path.relative(root, candidate);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 async function readJson(file) {
@@ -38,11 +34,11 @@ async function readJson(file) {
 // above it (a workspace keeps one lockfile at its root), never outside the source.
 async function readContentDependencies({ sourceRoot, content }) {
   const root = path.resolve(sourceRoot, content.workdir || ".");
-  if (!within(sourceRoot, root)) throw shellError(`Package ${content.id} Workdir leaves the project.`);
+  if (!pathWithin(sourceRoot, root, { allowRoot: true })) throw shellError(`Package ${content.id} Workdir leaves the project.`);
   const manifest = await readJson(path.join(root, "package.json"));
   let lockDirectory = root;
   let lockfile = null;
-  while (within(sourceRoot, lockDirectory)) {
+  while (pathWithin(sourceRoot, lockDirectory, { allowRoot: true })) {
     lockfile = await readJson(path.join(lockDirectory, "package-lock.json"));
     if (lockfile) break;
     if (lockDirectory === path.resolve(sourceRoot)) break;

@@ -1,10 +1,8 @@
 // The npm destination publishes the exact Stage 1 tarball to an npm registry and
 // proves it by reading the registry's own integrity value back.
 //
-// One credential, an npm user config file ("npm sign-in"), serves both modes:
-// - attended: the person signs in with npmLoginArgv in a terminal the caller
-//   opens, writing the session into a config file the caller keeps;
-// - token: the caller turns a token into that file with npmTokenUserconfig.
+// The credential is an npm user config file ("npm sign-in"); the caller turns a
+// token into that file with npmTokenUserconfig.
 // Settings on the target: { registry, access: "public" | "restricted" } and
 // { npm: argv prefix } (default `npm`) for a host that runs its own npm.
 import { createHash } from "node:crypto";
@@ -61,16 +59,6 @@ function registryToken(userconfig, registry) {
   const key = `${registryKey(registry)}:_authToken=`;
   const line = userconfig.split(/\r?\n/u).map((value) => value.trim()).find((value) => value.startsWith(key));
   return line ? line.slice(key.length).trim() : "";
-}
-
-// argv for an attended sign-in in a terminal the caller opens; the session lands
-// only in `userconfig`, a private file the caller then supplies as the credential.
-function npmLoginArgv({ registry = DEFAULT_REGISTRY, userconfig, authType = "web" } = {}) {
-  if (typeof userconfig !== "string" || !path.isAbsolute(userconfig)) {
-    throw publishError("VIBE64_PUBLISH_TARGET_INVALID", "npm sign-in needs an absolute config file path.");
-  }
-  if (!["web", "legacy"].includes(authType)) throw publishError("VIBE64_PUBLISH_TARGET_INVALID", "npm sign-in is web or legacy.");
-  return ["npm", "login", "--registry", httpUrl(registry, "The npm registry"), "--userconfig", userconfig, "--auth-type", authType];
 }
 
 function packumentUrl(registry, name) {
@@ -255,44 +243,18 @@ async function verifyCredential({ target, credentials }) {
   return { ok: true, account: response.json.username, message: `Signed in to npm as ${response.json.username}.` };
 }
 
-// Points a channel (dist-tag) back at an earlier published version, such as
-// moving `latest` back after a bad release.
-async function moveChannel({ target, packageName, version, credentials }) {
-  const { registry, channel, npm } = npmSettings(target);
-  const { file: userconfig, token } = await credentialToken(credentials, registry);
-  if (!userconfig) throw publishError("VIBE64_PUBLISH_CREDENTIAL_MISSING", "Moving an npm tag needs an npm sign-in.");
-  const packument = await readPackument({ registry, name: packageName, token });
-  if (!packument?.versions?.[version]) {
-    throw publishError("VIBE64_PUBLISH_TARGET_INVALID", `${packageName}@${version} is not published, so ${channel} cannot point to it.`);
-  }
-  await runNpm(["dist-tag", "add", `${packageName}@${version}`, channel, "--registry", registry], {
-    npm,
-    userconfig,
-    secrets: [token],
-    failureMessage: `npm did not move ${channel} to ${version}.`
-  });
-  const after = await readPackument({ registry, name: packageName, token });
-  if (after?.["dist-tags"]?.[channel] !== version) {
-    throw publishError("VIBE64_PUBLISH_NOT_PROVEN", `npm does not show ${channel} at ${version} yet.`);
-  }
-  return { channel, version };
-}
-
 const npmDestination = Object.freeze({
   id: "npm",
   label: "npm",
   packers: Object.freeze(["npm"]),
   channels: Object.freeze(["latest", "next"]),
-  modes: Object.freeze(["attended", "token"]),
   credentials: Object.freeze([CREDENTIAL]),
   readBackCredentials: (target) => (settingsOf(target).access === "restricted" ? [CREDENTIAL] : []),
-  implemented: true,
   expectedChecksum,
   dryRun,
   upload,
   readBack,
-  verifyCredential,
-  moveChannel
+  verifyCredential
 });
 
-export { npmDestination, npmLoginArgv, npmTokenUserconfig };
+export { npmDestination, npmTokenUserconfig };

@@ -7,7 +7,7 @@ import path from "node:path";
 
 import { canonicalJson, sha256 } from "../canonical.js";
 import { publishError } from "../errors.js";
-import { BUILD_ENVIRONMENT_PASSTHROUGH, spawnCommand } from "../stages.js";
+import { passthroughEnvironment, spawnCommand } from "../stages.js";
 
 const HTTP_TIMEOUT_MS = 30_000;
 
@@ -68,12 +68,8 @@ function commandPrefix(value, fallback, label) {
 // Publishing tools see PATH and locale, a private HOME, and nothing they could
 // mistake for an ambient login.
 function toolEnvironment({ home, baseEnvironment = process.env, extra = {} }) {
-  const environment = {};
-  for (const name of BUILD_ENVIRONMENT_PASSTHROUGH) {
-    if (typeof baseEnvironment[name] === "string") environment[name] = baseEnvironment[name];
-  }
   return {
-    ...environment,
+    ...passthroughEnvironment(baseEnvironment),
     HOME: home,
     TMPDIR: home,
     XDG_CONFIG_HOME: path.join(home, ".config"),

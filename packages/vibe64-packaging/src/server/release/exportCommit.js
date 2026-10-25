@@ -34,11 +34,6 @@ async function setTimes(root, seconds) {
   await utimes(root, seconds, seconds);
 }
 
-// Resolves a revision (default HEAD) to its full commit id.
-async function resolveCommit({ projectRoot, revision = "HEAD" }) {
-  return git(projectRoot, ["rev-parse", "--verify", `${revision}^{commit}`]);
-}
-
 // `exclude` names top-level-relative paths (folders or files) left out of the
 // export, such as the project's Genesis and agent files for a package build.
 async function exportSavedCommit({ projectRoot, commit, directory, exclude = [] } = {}) {
@@ -69,4 +64,4 @@ async function exportSavedCommit({ projectRoot, commit, directory, exclude = [] 
   return { directory, commit, commitTime };
 }
 
-export { exportSavedCommit, resolveCommit };
+export { exportSavedCommit };

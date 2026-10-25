@@ -20,8 +20,8 @@ import {
   publishPlanDisplayId,
   runPreflight
 } from "@local/vibe64-packaging/server";
-import { VIBE64_REGISTRY_PREFLIGHT_CHECKS } from "@local/vibe64-packaging/server/preflight/registries";
-import { VIBE64_ANDROID_PREFLIGHT_CHECKS } from "@local/vibe64-packaging/server/preflight/android";
+import { REGISTRY_CHECKS } from "@local/vibe64-packaging/server/preflight/registries";
+import { ANDROID_CHECKS } from "@local/vibe64-packaging/server/preflight/android";
 import { publishingKeysUnlocked, recoveryKitCovers } from "@local/vibe64-packaging/server/keys";
 
 import { sideloadKeyEntryId } from "./credentialBroker.js";
@@ -30,11 +30,6 @@ const SEMVER = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+
 
 function releaseError(message, code, details) {
   return Object.assign(new Error(message), { code, ...(details ? { details } : {}) });
-}
-
-function uniqueChecks(...lists) {
-  const seen = new Set();
-  return lists.flat().filter((check) => !seen.has(check.id) && seen.add(check.id));
 }
 
 // Local custody rules that sit on top of the shared checks.
@@ -72,7 +67,7 @@ const githubRepositoryMatches = definePreflightCheck({
 });
 
 const LOCAL_CHECKS = Object.freeze([publishingKeysUnlocked, sideloadKeyReady, githubRepositoryMatches]);
-const RELEASE_CHECKS = uniqueChecks(VIBE64_PREFLIGHT_CHECKS, VIBE64_REGISTRY_PREFLIGHT_CHECKS, VIBE64_ANDROID_PREFLIGHT_CHECKS, LOCAL_CHECKS);
+const RELEASE_CHECKS = Object.freeze([...VIBE64_PREFLIGHT_CHECKS, ...REGISTRY_CHECKS, ...ANDROID_CHECKS, ...LOCAL_CHECKS]);
 
 // The part of a long tool output that says why: tools such as npm name the
 // problem first and then print usage, while others such as Gradle sum up at

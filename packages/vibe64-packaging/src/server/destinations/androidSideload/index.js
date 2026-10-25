@@ -6,19 +6,17 @@
 // signature and the bytes. Settings on the target:
 //   { certificateSha256: the key phones already trust (update continuity),
 //     keyAlias: the key's alias when it is not Vibe64's own }.
-import { createHash, randomUUID } from "node:crypto";
-import { createReadStream } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { chmod, copyFile, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { canonicalJson } from "../../canonical.js";
 import { publishError } from "../../errors.js";
-import { nextVersionCode } from "../../packers/capacitor/generateShell.js";
-import { spawnCommand } from "../../stages.js";
+import { fileSha256Hex, spawnCommand } from "../../stages.js";
 import { describeAndroidSdk } from "../../toolchains/androidSdk.js";
-import { toolEnvironment } from "../../toolchains/download.js";
+import { toolchainEnvironment } from "../../toolchains/download.js";
 import { artifactFiles, settingsOf, withToolHome } from "../registryCommon.js";
-import { SIDELOAD_KEY_ALIAS, generateSideloadKey } from "./key.js";
+import { SIDELOAD_KEY_ALIAS, exportCertificateSha256, generateSideloadKey } from "./key.js";
 
 const SIDELOAD_PROOF_CONTRACT = "vibe64.android-sideload-proof.v1";
 const KEYSTORE = Object.freeze({ id: "android-sideload-keystore", label: "Sideload distribution key", delivery: "file" });
@@ -58,23 +56,16 @@ async function signingTools(toolchains = {}) {
   return {
     zipalign: sdk.buildTools.zipalign,
     aapt2: sdk.buildTools.aapt2,
-    apksigner: [java, "-jar", path.join(sdk.buildTools.root, "lib", "apksigner.jar")],
-    keytool: path.join(toolchains.javaHome, "bin", "keytool")
+    apksigner: [java, "-jar", path.join(sdk.buildTools.root, "lib", "apksigner.jar")]
   };
 }
 
 async function run(argv, { cwd, home, failure, code = "VIBE64_PUBLISH_SIGN_FAILED", runCommand = spawnCommand }) {
-  const result = await runCommand({ command: argv[0], args: argv.slice(1), cwd, env: toolEnvironment(process.env, { HOME: home }) });
+  const result = await runCommand({ command: argv[0], args: argv.slice(1), cwd, env: toolchainEnvironment(process.env, { HOME: home }) });
   if (result?.ok !== true) {
     throw sideloadError(code, failure, { exitCode: result?.exitCode ?? null, output: `${result?.stdout || ""}${result?.stderr || ""}${result?.error || ""}`.slice(-4000) });
   }
   return result;
-}
-
-async function fileSha256(file) {
-  const hash = createHash("sha256");
-  for await (const chunk of createReadStream(file)) hash.update(chunk);
-  return hash.digest("hex");
 }
 
 // apksigner's own verdict and the signer's certificate digest.
@@ -123,7 +114,7 @@ async function readBack({ target, artifacts, toolchains }) {
   const proof = await readProof(directory);
   if (!proof) return { published: false };
   const file = path.join(directory, proof.file);
-  if (!await stat(file).catch(() => null) || await fileSha256(file) !== proof.signedSha256) {
+  if (!await stat(file).catch(() => null) || await fileSha256Hex(file) !== proof.signedSha256) {
     throw sideloadError("VIBE64_PUBLISH_ARTIFACT_CHANGED", "The signed APK changed after it was signed.");
   }
   const tools = await signingTools(toolchains);
@@ -182,7 +173,7 @@ async function upload({ target, version, artifacts, credentials, toolchains }) {
     if (version && manifest.versionName !== version) {
       throw sideloadError("VIBE64_PUBLISH_VERSION_MISMATCH", `The APK is version ${manifest.versionName}, not ${version}.`);
     }
-    const signedSha256 = await fileSha256(signed);
+    const signedSha256 = await fileSha256Hex(signed);
     const proof = {
       contract: SIDELOAD_PROOF_CONTRACT,
       target: target.id,
@@ -232,18 +223,16 @@ async function verifyCredential({ target, credentials, toolchains }) {
   const password = credentials?.files?.[KEY_PASSWORD.id];
   if (!keystore || !password) return { ok: false, message: "No sideload distribution key is set up." };
   const { certificateSha256: expected, keyAlias } = sideloadSettings(target);
-  const tools = await signingTools(toolchains);
+  await signingTools(toolchains);
   return withToolHome(async (home) => {
-    const certificate = path.join(home, "certificate.der");
     const passwordText = (await readFile(password, "utf8")).trim();
-    const result = await spawnCommand({
-      command: tools.keytool,
-      args: ["-exportcert", "-keystore", keystore, "-storetype", "PKCS12", "-alias", keyAlias, "-storepass:env", "VIBE64_SIDELOAD_KEY_PASSWORD", "-file", certificate],
-      cwd: home,
-      env: toolEnvironment(process.env, { HOME: home, VIBE64_SIDELOAD_KEY_PASSWORD: passwordText })
-    });
-    if (result?.ok !== true) return { ok: false, verified: true, message: "The sideload key or its password does not open." };
-    const certificateSha256 = createHash("sha256").update(await readFile(certificate)).digest("hex");
+    let certificateSha256;
+    try {
+      certificateSha256 = await exportCertificateSha256({ javaHome: toolchains.javaHome, keystore, alias: keyAlias, password: passwordText, cwd: home });
+    } catch (error) {
+      if (error?.code !== "VIBE64_PUBLISH_KEY_FAILED") throw error;
+      return { ok: false, verified: true, message: "The sideload key or its password does not open." };
+    }
     if (expected && expected !== certificateSha256) {
       return { ok: false, verified: true, certificateSha256, message: "This is not the key phones already trust for this app." };
     }
@@ -257,7 +246,6 @@ const androidSideloadDestination = Object.freeze({
   packers: Object.freeze(["capacitor"]),
   channels: Object.freeze([]),
   credentials: Object.freeze([KEYSTORE, KEY_PASSWORD]),
-  implemented: true,
   dryRun,
   upload,
   readBack,
@@ -269,6 +257,5 @@ export {
   KEY_PASSWORD as ANDROID_SIDELOAD_KEY_PASSWORD,
   SIDELOAD_PROOF_CONTRACT,
   androidSideloadDestination,
-  generateSideloadKey,
-  nextVersionCode
+  generateSideloadKey
 };

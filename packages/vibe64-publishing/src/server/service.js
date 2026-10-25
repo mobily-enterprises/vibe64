@@ -10,10 +10,12 @@ import { promisify } from "node:util";
 import {
   CAPACITOR_SHELL_TEMPLATE,
   buildPackage,
+  credentialSpecs,
   gatherAndroidFacts,
   generateSideloadKey,
   npmTokenUserconfig,
   publishTarget,
+  pypiSettingsForAddress,
   vibe64Destination,
   withStageCredentials
 } from "@local/vibe64-packaging/server";
@@ -87,6 +89,7 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
   const packaging = Object.freeze({
     androidTemplate: CAPACITOR_SHELL_TEMPLATE,
     buildPackage,
+    credentialSpecs,
     gatherAndroidFacts,
     gatherCredentialFacts,
     generateSideloadKey,
@@ -137,13 +140,7 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
     const accounts = await broker.accounts();
     const chosen = accounts.find((entry) => entry.id === account) || null;
     if (destination === "npm") return { registry: chosen?.address || PUBLISH_ACCOUNT_KINDS.npm.defaultAddress };
-    if (destination === "pypi") {
-      const address = chosen?.address || "";
-      if (!address || /upload\.pypi\.org/u.test(address)) return { instance: "pypi" };
-      if (/test\.pypi\.org/u.test(address)) return { instance: "testpypi" };
-      const upload = address.endsWith("/") ? address : `${address}/`;
-      return { repository: upload, index: new URL("simple/", new URL("../", upload)).href };
-    }
+    if (destination === "pypi") return pypiSettingsForAddress(chosen?.address || "");
     if (destination === "github-releases") {
       const baseline = await repository.baseline();
       if (!baseline.remote?.githubRepository) throw serviceError("GitHub Releases needs this project's remote on GitHub.", "vibe64_publishing_github_remote_missing");

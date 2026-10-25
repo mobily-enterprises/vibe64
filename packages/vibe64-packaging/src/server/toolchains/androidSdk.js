@@ -14,7 +14,7 @@ import path from "node:path";
 import { publishError } from "../errors.js";
 import { CAPACITOR_SHELL_TEMPLATE } from "../packers/capacitor/shellTemplate/index.js";
 import { spawnCommand } from "../stages.js";
-import { downloadVerified, exists, runOrFail, toolEnvironment, toolchainError, unpackInto } from "./download.js";
+import { downloadVerified, exists, runOrFail, toolchainEnvironment, toolchainError, unpackInto } from "./download.js";
 
 const ANDROID_REPOSITORY_URL = "https://dl.google.com/android/repository/repository2-3.xml";
 const ANDROID_TERMS_URL = "https://developer.android.com/studio/terms";
@@ -173,7 +173,7 @@ async function installAndroidSdk({
       ...SDK_PACKAGES
     ], {
       cwd: home,
-      env: toolEnvironment(baseEnvironment, { HOME: home, JAVA_HOME: javaHome, ANDROID_USER_HOME: path.join(home, ".android") }),
+      env: toolchainEnvironment(baseEnvironment, { HOME: home, JAVA_HOME: javaHome, ANDROID_USER_HOME: path.join(home, ".android") }),
       label: "Installing the Android SDK",
       runCommand
     });

@@ -8,6 +8,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { publishError } from "../../errors.js";
+import { pathWithin } from "../../paths.js";
 import { readSourceVersion } from "../../release/prepareChange.js";
 import { describeAndroidSdk } from "../../toolchains/androidSdk.js";
 import { describeJdk } from "../../toolchains/jdk.js";
@@ -16,11 +17,6 @@ import { generateShell, writeShell } from "./generateShell.js";
 import { iconProblems, iconStep } from "./icons.js";
 
 const SHELL_PATCH = fileURLToPath(new URL("./shellPatch.js", import.meta.url));
-
-function inside(root, candidate) {
-  const relative = path.relative(root, candidate);
-  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
-}
 
 async function requireToolchains(toolchains = {}) {
   const jdk = await describeJdk({ javaHome: toolchains.javaHome });
@@ -55,7 +51,7 @@ async function capacitorRecipe({
   if (!contentArtifacts) throw publishError("VIBE64_PUBLISH_BUILD_INVALID", `Package ${entry.id} needs its ${entry.content} content built first.`);
   const { javaHome, androidHome } = await requireToolchains(toolchains);
   const icon = path.join(sourceRoot, entry.application.icon);
-  if (!inside(sourceRoot, icon)) throw publishError("VIBE64_PUBLISH_BUILD_INVALID", "The app icon must be inside the project.");
+  if (!pathWithin(sourceRoot, icon, { allowRoot: false })) throw publishError("VIBE64_PUBLISH_BUILD_INVALID", "The app icon must be inside the project.");
   const iconBytes = await readFile(icon).catch(() => null);
   if (!iconBytes) throw publishError("VIBE64_PUBLISH_BUILD_INVALID", `The app icon ${entry.application.icon} is not in the saved commit.`);
   const problems = iconProblems(iconBytes);

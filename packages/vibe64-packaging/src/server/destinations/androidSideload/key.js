@@ -10,7 +10,7 @@ import path from "node:path";
 
 import { publishError } from "../../errors.js";
 import { spawnCommand } from "../../stages.js";
-import { toolEnvironment } from "../../toolchains/download.js";
+import { toolchainEnvironment } from "../../toolchains/download.js";
 
 const SIDELOAD_KEY_ALIAS = "vibe64-sideload";
 const SIDELOAD_KEY_VALIDITY_DAYS = 10_000;
@@ -35,7 +35,7 @@ async function runKeytool(javaHome, args, { cwd, password, runCommand = spawnCom
     command: keytool(javaHome),
     args,
     cwd,
-    env: toolEnvironment(process.env, { HOME: cwd, [PASSWORD_VARIABLE]: password })
+    env: toolchainEnvironment(process.env, { HOME: cwd, [PASSWORD_VARIABLE]: password })
   });
   if (result?.ok !== true) {
     // keytool never echoes the password; its output is still kept short.
@@ -49,6 +49,16 @@ function certificateDigest(der) {
   return createHash("sha256").update(der).digest("hex");
 }
 
+// The SHA-256 of the certificate of `alias` in a PKCS#12 key store; keytool
+// writes the certificate into `cwd`, a private folder the caller removes.
+async function exportCertificateSha256({ javaHome, keystore, alias, password, cwd }, { runCommand = spawnCommand } = {}) {
+  const certificate = path.join(cwd, "certificate.der");
+  await runKeytool(javaHome, [
+    "-exportcert", "-keystore", keystore, "-storetype", "PKCS12", "-alias", alias, "-storepass:env", PASSWORD_VARIABLE, "-file", certificate
+  ], { cwd, password, runCommand });
+  return certificateDigest(await readFile(certificate));
+}
+
 // Creates a PKCS#12 key store holding a new RSA-4096 sideload key and gives the
 // caller's sink { keystore, password, alias, certificateSha256 } (buffers it may
 // keep; they are zeroed after the sink returns). Returns only public facts.
@@ -60,7 +70,6 @@ async function generateSideloadKey({ javaHome, commonName, sink, tempRoot = os.t
   try {
     await chmod(directory, 0o700);
     const store = path.join(directory, "sideload.p12");
-    const certificate = path.join(directory, "sideload.der");
     const passwordText = password.toString("utf8");
     const common = ["-keystore", store, "-storetype", "PKCS12", "-alias", SIDELOAD_KEY_ALIAS, "-storepass:env", PASSWORD_VARIABLE];
     await runKeytool(javaHome, [
@@ -71,8 +80,9 @@ async function generateSideloadKey({ javaHome, commonName, sink, tempRoot = os.t
       "-dname", distinguishedName(commonName),
       "-noprompt"
     ], { cwd: directory, password: passwordText, runCommand });
-    await runKeytool(javaHome, ["-exportcert", ...common, "-file", certificate], { cwd: directory, password: passwordText, runCommand });
-    const certificateSha256 = certificateDigest(await readFile(certificate));
+    const certificateSha256 = await exportCertificateSha256({
+      javaHome, keystore: store, alias: SIDELOAD_KEY_ALIAS, password: passwordText, cwd: directory
+    }, { runCommand });
     keystore = await readFile(store);
     await sink({ keystore, password, alias: SIDELOAD_KEY_ALIAS, certificateSha256 });
     return { alias: SIDELOAD_KEY_ALIAS, certificateSha256, algorithm: "RSA-4096", validityDays: SIDELOAD_KEY_VALIDITY_DAYS };
@@ -83,4 +93,4 @@ async function generateSideloadKey({ javaHome, commonName, sink, tempRoot = os.t
   }
 }
 
-export { PASSWORD_VARIABLE, SIDELOAD_KEY_ALIAS, certificateDigest, generateSideloadKey };
+export { PASSWORD_VARIABLE, SIDELOAD_KEY_ALIAS, certificateDigest, exportCertificateSha256, generateSideloadKey };

@@ -3,7 +3,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 import { publishError } from "../errors.js";
-import { BUILD_ENVIRONMENT_PASSTHROUGH } from "../stages.js";
+import { passthroughEnvironment } from "../stages.js";
 
 const run = promisify(execFile);
 
@@ -25,11 +25,8 @@ function sourceDateEnvironment(entry, commitTime) {
 
 // A tool's version for the plan's toolchain record, or "missing".
 async function toolVersion(argv, baseEnvironment = process.env) {
-  const env = Object.fromEntries(BUILD_ENVIRONMENT_PASSTHROUGH
-    .filter((name) => typeof baseEnvironment[name] === "string")
-    .map((name) => [name, baseEnvironment[name]]));
   try {
-    const { stdout, stderr } = await run(argv[0], argv.slice(1), { env, timeout: 30_000 });
+    const { stdout, stderr } = await run(argv[0], argv.slice(1), { env: passthroughEnvironment(baseEnvironment), timeout: 30_000 });
     const match = /(\d+\.\d+(?:\.\d+)?(?:[0-9A-Za-z.+_-]*)?)/u.exec(`${stdout} ${stderr}`);
     return match ? match[1] : "unknown";
   } catch {

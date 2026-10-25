@@ -2,7 +2,7 @@
 // pure over facts the caller gathered; gatherCredentialFacts is the one helper
 // that asks each destination, read-only, whether its sign-in works.
 import { vibe64Destination } from "../destinations/index.js";
-import { withStageCredentials } from "../stages.js";
+import { credentialSpecs, withStageCredentials } from "../stages.js";
 import { VIBE64_PREFLIGHT_CHECKS, definePreflightCheck } from "./index.js";
 
 // facts.tags: [{ tag, commit }] for every existing tag the plan would create.
@@ -52,7 +52,9 @@ const credentialsValid = definePreflightCheck({
   }
 });
 
-const VIBE64_REGISTRY_PREFLIGHT_CHECKS = Object.freeze([...VIBE64_PREFLIGHT_CHECKS, releaseTagsFree, verificationPassed, credentialsValid]);
+// The registry checks alone, and composed after the shared checks.
+const REGISTRY_CHECKS = Object.freeze([releaseTagsFree, verificationPassed, credentialsValid]);
+const VIBE64_REGISTRY_PREFLIGHT_CHECKS = Object.freeze([...VIBE64_PREFLIGHT_CHECKS, ...REGISTRY_CHECKS]);
 
 // targets: the plan's targets with their settings; obtainCredential as for Stage 2.
 async function gatherCredentialFacts({ targets = [], obtainCredential, tempRoot, toolchains = {} } = {}) {
@@ -63,9 +65,12 @@ async function gatherCredentialFacts({ targets = [], obtainCredential, tempRoot,
       facts[target.id] = { ok: false, message: `${destination.label} cannot be released to yet.` };
       continue;
     }
-    const specs = typeof destination.credentials === "function" ? destination.credentials(target) : destination.credentials || [];
     try {
-      facts[target.id] = await withStageCredentials({ credentials: specs, obtainCredential, tempRoot }, (credentials) => destination.verifyCredential({ target, credentials, toolchains }));
+      facts[target.id] = await withStageCredentials({
+        credentials: credentialSpecs(destination, "credentials", target),
+        obtainCredential,
+        tempRoot
+      }, (credentials) => destination.verifyCredential({ target, credentials, toolchains }));
     } catch (error) {
       facts[target.id] = { ok: false, message: error?.message || `${destination.label} sign-in could not be checked.` };
     }
@@ -73,4 +78,4 @@ async function gatherCredentialFacts({ targets = [], obtainCredential, tempRoot,
   return facts;
 }
 
-export { VIBE64_REGISTRY_PREFLIGHT_CHECKS, gatherCredentialFacts };
+export { REGISTRY_CHECKS, VIBE64_REGISTRY_PREFLIGHT_CHECKS, gatherCredentialFacts };

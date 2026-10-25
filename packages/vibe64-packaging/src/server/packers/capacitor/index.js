@@ -26,7 +26,6 @@ const capacitorPacker = Object.freeze({
   id: "capacitor",
   label: "Mobile app",
   produces: Object.freeze(["Android APK"]),
-  implemented: true,
   buildRecipe: capacitorRecipe,
   // After Stage 1: exactly one unsigned APK.
   checkArtifacts: async ({ artifacts }) => {

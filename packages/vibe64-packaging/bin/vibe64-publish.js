@@ -235,7 +235,7 @@ async function confirmInTerminal(displayId, summary) {
 }
 
 async function publish(options) {
-  const [{ createPublishPlan, publishPlanDisplayId }, { buildPackage }, { vibe64Destination }, { publishTarget, withStageCredentials }] = await Promise.all([
+  const [{ createPublishPlan, publishPlanDisplayId }, { buildPackage }, { vibe64Destination }, { credentialSpecs, publishTarget, withStageCredentials }] = await Promise.all([
     import("../src/server/plan.js"),
     import("../src/server/release/buildPackage.js"),
     import("../src/server/destinations/index.js"),
@@ -270,8 +270,7 @@ async function publish(options) {
   if (options.dryRun) {
     const reports = [];
     for (const { target, entry, destination } of targets) {
-      const specs = typeof destination.credentials === "function" ? destination.credentials(target) : destination.credentials;
-      const available = specs.filter((spec) => options.credentials[spec.id]);
+      const available = credentialSpecs(destination, "credentials", target).filter((spec) => options.credentials[spec.id]);
       reports.push({
         target: target.id,
         ...await withStageCredentials({ credentials: available, obtainCredential }, (credentials) => destination.dryRun({

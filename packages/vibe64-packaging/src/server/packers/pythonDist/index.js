@@ -78,7 +78,6 @@ const pythonDistPacker = Object.freeze({
   id: "python-dist",
   label: "Python distributions",
   produces: Object.freeze(["sdist", "wheel"]),
-  implemented: true,
   buildRecipe,
   // After Stage 1: the stored artifacts are one release of one project.
   checkArtifacts: async ({ artifacts, version = null }) => checkPythonDistributions(

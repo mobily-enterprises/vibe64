@@ -131,8 +131,8 @@ const androidDeveloperVerification = definePreflightCheck({
     }
 });
 
-const VIBE64_ANDROID_PREFLIGHT_CHECKS = Object.freeze([
-  ...VIBE64_PREFLIGHT_CHECKS,
+// The Android checks alone, and composed after the shared checks.
+const ANDROID_CHECKS = Object.freeze([
   androidTargetSdk,
   androidIcon,
   androidPermissions,
@@ -140,5 +140,6 @@ const VIBE64_ANDROID_PREFLIGHT_CHECKS = Object.freeze([
   androidToolchain,
   androidDeveloperVerification
 ]);
+const VIBE64_ANDROID_PREFLIGHT_CHECKS = Object.freeze([...VIBE64_PREFLIGHT_CHECKS, ...ANDROID_CHECKS]);
 
-export { REQUIRED_TARGET_SDK, VIBE64_ANDROID_PREFLIGHT_CHECKS, gatherAndroidFacts };
+export { ANDROID_CHECKS, REQUIRED_TARGET_SDK, VIBE64_ANDROID_PREFLIGHT_CHECKS, gatherAndroidFacts };

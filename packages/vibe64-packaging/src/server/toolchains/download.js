@@ -11,7 +11,7 @@ import { pipeline } from "node:stream/promises";
 import { inflateRawSync } from "node:zlib";
 
 import { publishError } from "../errors.js";
-import { BUILD_ENVIRONMENT_PASSTHROUGH, spawnCommand } from "../stages.js";
+import { passthroughEnvironment, spawnCommand } from "../stages.js";
 
 function toolchainError(message, details) {
   return publishError("VIBE64_PUBLISH_TOOLCHAIN_FAILED", message, details);
@@ -63,12 +63,8 @@ async function downloadVerified(archive, directory, { fetchImpl = fetch, signal 
   }
 }
 
-function toolEnvironment(baseEnvironment = process.env, extra = {}) {
-  const environment = {};
-  for (const name of BUILD_ENVIRONMENT_PASSTHROUGH) {
-    if (typeof baseEnvironment[name] === "string") environment[name] = baseEnvironment[name];
-  }
-  return { ...environment, ...extra };
+function toolchainEnvironment(baseEnvironment = process.env, extra = {}) {
+  return { ...passthroughEnvironment(baseEnvironment), ...extra };
 }
 
 async function runOrFail(argv, { cwd, env, label, runCommand = spawnCommand }) {
@@ -136,7 +132,7 @@ async function unpackInto(archiveFile, destination, { inner, kind, baseEnvironme
     if (kind === "zip") {
       await extractZip(archiveFile, staging);
     } else {
-      const env = toolEnvironment(baseEnvironment, { HOME: staging });
+      const env = toolchainEnvironment(baseEnvironment, { HOME: staging });
       await runOrFail(["tar", "-xzf", archiveFile, "-C", staging, "--no-same-owner"], { cwd: staging, env, label: `Unpacking ${path.basename(archiveFile)}`, runCommand });
     }
     const source = path.join(staging, inner);
@@ -149,4 +145,4 @@ async function unpackInto(archiveFile, destination, { inner, kind, baseEnvironme
   }
 }
 
-export { downloadVerified, exists, extractZip, runOrFail, toolEnvironment, toolchainError, unpackInto };
+export { downloadVerified, exists, extractZip, runOrFail, toolchainEnvironment, toolchainError, unpackInto };

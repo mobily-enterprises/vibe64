@@ -6,6 +6,8 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
+import { ANDROID_SIDELOAD_KEYSTORE, ANDROID_SIDELOAD_KEY_PASSWORD } from "@local/vibe64-packaging/server";
+
 const run = promisify(execFile);
 const ACCOUNT_ID = /^[a-z0-9][a-z0-9-]{0,62}$/u;
 const ACCOUNT_KINDS = Object.freeze(["npm", "pypi", "github"]);
@@ -93,19 +95,15 @@ function createCredentialBroker({ keys, packaging, now = () => new Date().toISOS
   // destination expects, or the app's install key.
   function obtainFor(target) {
     return async (spec) => {
-      if (spec.id === "android-sideload-keystore" || spec.id === "android-sideload-key-password") {
+      if (spec.id === ANDROID_SIDELOAD_KEYSTORE.id || spec.id === ANDROID_SIDELOAD_KEY_PASSWORD.id) {
         const stored = JSON.parse(keys.read(sideloadKeyEntryId(target)).toString("utf8"));
-        return spec.id === "android-sideload-keystore" ? Buffer.from(stored.keystore, "base64") : stored.password;
+        return spec.id === ANDROID_SIDELOAD_KEYSTORE.id ? Buffer.from(stored.keystore, "base64") : stored.password;
       }
       if (!target.account) throw brokerError(`Choose a publishing account for ${target.id}.`, "vibe64_publishing_account_missing");
       const token = keys.read(accountEntryId(target.account)).toString("utf8");
       if (spec.id === "npm-userconfig") return packaging.npmTokenUserconfig({ registry: target.settings?.registry || undefined, token });
       return token;
     };
-  }
-
-  function specsOf(destination, target) {
-    return typeof destination.credentials === "function" ? destination.credentials(target) : destination.credentials || [];
   }
 
   async function facts({ targets = [], toolchains = {} } = {}) {
@@ -118,7 +116,7 @@ function createCredentialBroker({ keys, packaging, now = () => new Date().toISOS
 
   async function dryRun({ target, version, artifacts, toolchains = {} }) {
     const destination = packaging.vibe64Destination(target.destination);
-    return packaging.withStageCredentials({ credentials: specsOf(destination, target), obtainCredential: obtainFor(target) },
+    return packaging.withStageCredentials({ credentials: packaging.credentialSpecs(destination, "credentials", target), obtainCredential: obtainFor(target) },
       (credentials) => destination.dryRun({ target, version, artifacts, credentials, toolchains }));
   }
 

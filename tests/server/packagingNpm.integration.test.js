@@ -141,14 +141,6 @@ test("an npm library is built once, dry-run, published, read back and re-release
   const nextPublished = await publishTarget({ destination: npmDestination, target, version: "0.2.0", artifacts: nextBuilt.artifacts, obtainCredential });
   assert.equal(nextPublished.proof.channelVersion, "0.2.0");
 
-  // "Rollback": move `latest` back to 0.1.0.
-  await withStageCredentials({ credentials: npmDestination.credentials, obtainCredential }, (credentials) => npmDestination.moveChannel({
-    target, packageName: "vibe64-canary-sdk", version: "0.1.0", credentials
-  }));
-  const packument = await (await fetch(new URL("vibe64-canary-sdk", registry.url))).json();
-  assert.equal(packument["dist-tags"].latest, "0.1.0");
-  assert.deepEqual(Object.keys(packument.versions).sort(), ["0.1.0", "0.2.0"]);
-
   // The CLI, outside the editor, builds the same tarball bytes from the same commit.
   const cliStore = await temporaryFolder(t, "vibe64-npm-cli-results-");
   const { stdout } = await run(process.execPath, [CLI, "build", "sdk", "--project", project.root, "--commit", project.commit, "--version", "sdk=0.1.0", "--result-store", cliStore, "--json"], {

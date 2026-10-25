@@ -57,16 +57,20 @@ function issuePublishConfirmation({ planHash, actor, now = Date.now(), ttlMs = D
   };
 }
 
+// Whether `token` is the one this record was issued for (constant-time hash
+// comparison). It says nothing about expiry, use, plan or person.
+function publishConfirmationTokenMatches(record, token) {
+  if (record?.contract !== VIBE64_PUBLISH_CONFIRMATION_CONTRACT || typeof token !== "string" || !token) return false;
+  const expected = Buffer.from(String(record.tokenHash || "").replace(/^sha256:/u, ""), "hex");
+  const supplied = tokenHash(token);
+  return expected.length === supplied.length && timingSafeEqual(expected, supplied);
+}
+
 // Returns the redeemed record; the caller must persist it (usedAt set) before the
 // irreversible step, so a second redemption of the same record is refused.
 function redeemPublishConfirmation({ token, planHash, actor, record, now = Date.now() } = {}) {
   const id = personId(actor);
-  if (record?.contract !== VIBE64_PUBLISH_CONFIRMATION_CONTRACT || typeof token !== "string" || !token) {
-    refuse("VIBE64_PUBLISH_CONFIRMATION_INVALID", "This publish confirmation is not valid.");
-  }
-  const expected = Buffer.from(String(record.tokenHash || "").replace(/^sha256:/u, ""), "hex");
-  const supplied = tokenHash(token);
-  if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) {
+  if (!publishConfirmationTokenMatches(record, token)) {
     refuse("VIBE64_PUBLISH_CONFIRMATION_INVALID", "This publish confirmation is not valid.");
   }
   if (record.usedAt) refuse("VIBE64_PUBLISH_CONFIRMATION_USED", "This publish confirmation was already used. Confirm again to publish again.");
@@ -84,5 +88,6 @@ function redeemPublishConfirmation({ token, planHash, actor, record, now = Date.
 export {
   VIBE64_PUBLISH_CONFIRMATION_CONTRACT,
   issuePublishConfirmation,
+  publishConfirmationTokenMatches,
   redeemPublishConfirmation
 };

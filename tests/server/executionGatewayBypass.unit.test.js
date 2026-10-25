@@ -90,7 +90,7 @@ const ENV_POLICY_PATTERNS = Object.freeze([
 ]);
 
 const ENV_POLICY_ALLOWLIST = new Map([
-  ["packages/vibe64-packaging/src/server/destinations/androidSideload/index.js", { "HOME object key": { count: 2, reason: TOOL_HOME } }],
+  ["packages/vibe64-packaging/src/server/destinations/androidSideload/index.js", { "HOME object key": { count: 1, reason: TOOL_HOME } }],
   ["packages/vibe64-packaging/src/server/destinations/androidSideload/key.js", { "HOME object key": { count: 1, reason: TOOL_HOME } }],
   ["packages/vibe64-packaging/src/server/toolchains/androidSdk.js", { "HOME object key": { count: 1, reason: TOOL_HOME } }],
   ["packages/vibe64-packaging/src/server/toolchains/download.js", { "HOME object key": { count: 1, reason: TOOL_HOME } }],

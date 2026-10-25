@@ -14,6 +14,7 @@ import path from "node:path";
 
 import { canonicalJson, sha256 } from "./canonical.js";
 import { publishError } from "./errors.js";
+import { pathWithin } from "./paths.js";
 import { runStageCommand } from "./projectCommands.js";
 
 const VIBE64_PUBLISH_ARTIFACTS_CONTRACT = "vibe64.publish-artifacts.v1";
@@ -32,18 +33,19 @@ function absolute(value, label) {
   return path.resolve(value);
 }
 
-function within(root, candidate) {
-  const relative = path.relative(root, candidate);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+// The fixed variables every Vibe64-run tool inherits from its base environment.
+function passthroughEnvironment(baseEnvironment = process.env) {
+  const environment = {};
+  for (const name of BUILD_ENVIRONMENT_PASSTHROUGH) {
+    if (typeof baseEnvironment[name] === "string") environment[name] = baseEnvironment[name];
+  }
+  return environment;
 }
 
 // Stage 1 environment: a fixed passthrough (PATH and locale), a fresh credential-free
 // HOME, and the package's declared non-secret build Environment. Nothing else.
 function buildStageEnvironment({ baseEnvironment = process.env, declared = [], home, cacheDirectory = "" } = {}) {
-  const environment = {};
-  for (const name of BUILD_ENVIRONMENT_PASSTHROUGH) {
-    if (typeof baseEnvironment[name] === "string") environment[name] = baseEnvironment[name];
-  }
+  const environment = passthroughEnvironment(baseEnvironment);
   Object.assign(environment, {
     HOME: home,
     TMPDIR: path.join(home, "tmp"),
@@ -90,10 +92,14 @@ function spawnCommand({ command, args, cwd, env, stdin = null, signal }) {
   });
 }
 
-async function fileSha256(file) {
+async function fileSha256Hex(file) {
   const hash = createHash("sha256");
   for await (const chunk of createReadStream(file)) hash.update(chunk);
-  return `sha256:${hash.digest("hex")}`;
+  return hash.digest("hex");
+}
+
+async function fileSha256(file) {
+  return `sha256:${await fileSha256Hex(file)}`;
 }
 
 async function listFiles(root, prefix = "") {
@@ -165,17 +171,16 @@ async function runBuildStage({
 } = {}, {
   runCommand = runStageCommand
 } = {}) {
-  const directory = resultDirectory(resultStore, planHash, packageId);
   // Resumable: a completed build for this plan and package is reused after verification.
-  if (await stat(path.join(directory, "manifest.json")).catch(() => null)) {
-    return { ...await verifyArtifacts(await readArtifacts(directory)), reused: true };
-  }
+  const stored = await storedArtifacts({ resultStore, planHash, packageId });
+  if (stored) return stored;
+  const directory = resultDirectory(resultStore, planHash, packageId);
   const roots = allowedRoots.map((root) => absolute(root, "Allowed root"));
   if (!roots.length) throw stageError("VIBE64_PUBLISH_STAGE_INVALID", "A build stage needs the roots it may run in.");
   const outputPaths = outputs.map((output) => absolute(output, "Build output"));
   if (!outputPaths.length) throw stageError("VIBE64_PUBLISH_STAGE_INVALID", "A build stage needs at least one output.");
   for (const candidate of [...outputPaths, ...steps.map((step) => absolute(step.cwd, "Build step directory"))]) {
-    if (!roots.some((root) => within(root, candidate))) {
+    if (!roots.some((root) => pathWithin(root, candidate, { allowRoot: true }))) {
       throw stageError("VIBE64_PUBLISH_STAGE_INVALID", `${candidate} is outside the build's allowed roots.`);
     }
   }
@@ -334,6 +339,9 @@ export {
   VIBE64_PUBLISH_ARTIFACTS_CONTRACT,
   artifactsDigest,
   buildStageEnvironment,
+  credentialSpecs,
+  fileSha256Hex,
+  passthroughEnvironment,
   publishTarget,
   readArtifacts,
   readBackTarget,

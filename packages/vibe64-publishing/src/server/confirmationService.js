@@ -7,6 +7,7 @@ import path from "node:path";
 
 import {
   issuePublishConfirmation,
+  publishConfirmationTokenMatches,
   redeemPublishConfirmation
 } from "@local/vibe64-packaging/server/confirmationToken";
 
@@ -87,7 +88,7 @@ function createConfirmationService({ runtimeRoot, now = () => Date.now(), ttlMs 
         }
         const value = await read();
         const index = value.records.findIndex((record) => !record.usedAt && record.actorId === actor.id &&
-          Date.parse(record.expiresAt) > now() && record.tokenHash && tokenMatches(record, token));
+          Date.parse(record.expiresAt) > now() && record.tokenHash && publishConfirmationTokenMatches(record, token));
         const record = index === -1 ? value.records.filter((candidate) => candidate.actorId === actor.id).at(-1) : value.records[index];
         if (!record) throw confirmationError("Open the confirmation on the Publish page first.", "VIBE64_PUBLISH_CONFIRMATION_INVALID");
         const redeemed = redeemPublishConfirmation({ token, planHash, actor, record, now: now() });
@@ -98,15 +99,6 @@ function createConfirmationService({ runtimeRoot, now = () => Date.now(), ttlMs 
       });
     }
   });
-}
-
-function tokenMatches(record, token) {
-  try {
-    redeemPublishConfirmation({ token, planHash: record.planHash, actor: { kind: "person", id: record.actorId }, record, now: Date.parse(record.issuedAt) });
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 export { createConfirmationService, confirmingActor };

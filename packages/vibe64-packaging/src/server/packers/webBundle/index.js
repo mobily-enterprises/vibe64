@@ -4,12 +4,8 @@
 import path from "node:path";
 
 import { publishError } from "../../errors.js";
+import { pathWithin } from "../../paths.js";
 import { recipeSteps, sourceDateEnvironment, toolVersion } from "../registryRecipe.js";
-
-function inside(root, candidate) {
-  const relative = path.relative(root, candidate);
-  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
-}
 
 // context: { sourceRoot: the exported saved commit, entry, commitTime }.
 async function buildRecipe({ sourceRoot, entry, commitTime = null } = {}) {
@@ -17,7 +13,7 @@ async function buildRecipe({ sourceRoot, entry, commitTime = null } = {}) {
     throw publishError("VIBE64_PUBLISH_BUILD_INVALID", "The web-bundle packer needs the exported source folder.");
   }
   const output = path.join(sourceRoot, entry.output || "");
-  if (!entry.output || !inside(sourceRoot, output)) {
+  if (!entry.output || !pathWithin(sourceRoot, output, { allowRoot: false })) {
     throw publishError("VIBE64_PUBLISH_BUILD_INVALID", `Package ${entry.id} needs an Output folder inside the project.`);
   }
   return {
@@ -42,7 +38,6 @@ const webBundlePacker = Object.freeze({
   id: "web-bundle",
   label: "Static web bundle",
   produces: Object.freeze(["static client build"]),
-  implemented: true,
   buildRecipe,
   checkArtifacts: async ({ artifacts }) => ({ root: webRoot(artifacts).name, files: artifacts.manifest.files.map((file) => file.path) }),
   toolVersions: async ({ baseEnvironment = process.env } = {}) => ({
