@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import http from "node:http";
 import crypto from "node:crypto";
 import { existsSync } from "node:fs";
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
@@ -17,6 +18,7 @@ import {
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";
 import {
+  createLaunchPreviewProxyRegistry,
   previewPublicSocketPath
 } from "../../packages/vibe64-terminals/src/server/launchPreviewProxy.js";
 import {
@@ -25,7 +27,7 @@ import {
   launchRestartState,
   outputTargetExecutionDescriptor,
   previewIdentityCommandRunnerForLaunchTerminal,
-  editorOriginForRequest,
+  previewEditorOrigin,
   previewPublicOriginForLaunch
 } from "../../packages/vibe64-terminals/src/server/outputTargetTerminal.js";
 import {
@@ -1080,23 +1082,57 @@ test("web launch rejects preview identity executable symlinks", async () => {
   }
 });
 
-test("the editor origin that may frame a Preview comes from the editor's own request", () => {
-  assert.equal(editorOriginForRequest({ env: {}, publicHost: "localhost:3000", publicProtocol: "http" }),
+test("the browser's own editor origin wins over rewritten routing headers", async () => {
+  // A dev container rewrites Host to a hosted name while the browser shows the
+  // editor on an outer Preview origin; the bridge must talk to the latter.
+  const editorOrigin = previewEditorOrigin({
+    editorOrigin: "https://v64preview-abc.acme.users.example",
+    env: { VIBE64_PUBLIC_PROTOCOL: "https" },
+    publicHost: "acme.users.example",
+    publicProtocol: "https"
+  });
+  assert.equal(editorOrigin, "https://v64preview-abc.acme.users.example");
+  assert.equal(previewEditorOrigin({ editorOrigin: "javascript:alert(1)", env: {}, publicHost: "localhost:3000",
+    publicProtocol: "http" }), "http://localhost:3000", "an unusable browser origin falls back to the request host");
+
+  const target = http.createServer((_request, response) => {
+    response.writeHead(200, { "Content-Type": "text/html" });
+    response.end("<!doctype html><html><head></head><body>app</body></html>");
+  });
+  await new Promise(resolve => target.listen(0, "127.0.0.1", resolve));
+  const registry = createLaunchPreviewProxyRegistry();
+  try {
+    const preview = await registry.ensure({
+      editorOrigin,
+      sessionId: "session-browser-origin",
+      targetHref: `http://127.0.0.1:${target.address().port}/`,
+      terminalSessionId: "terminal-browser-origin"
+    });
+    const body = await (await fetch(preview.href, { redirect: "follow" })).text();
+    assert.match(body, /"parentOrigins":\["https:\/\/v64preview-abc\.acme\.users\.example"\]/u);
+  } finally {
+    await registry.closeAll();
+    await new Promise(resolve => target.close(resolve));
+  }
+});
+
+test("without a browser origin the editor origin comes from the editor's own request", () => {
+  assert.equal(previewEditorOrigin({ env: {}, publicHost: "localhost:3000", publicProtocol: "http" }),
     "http://localhost:3000");
-  assert.equal(editorOriginForRequest({
+  assert.equal(previewEditorOrigin({
     env: { VIBE64_PUBLIC_PROTOCOL: "https" },
     publicHost: "acme.users.example",
     publicProtocol: "http"
   }), "https://acme.users.example", "a configured public protocol wins for a public editor host");
-  assert.equal(editorOriginForRequest({
+  assert.equal(previewEditorOrigin({
     env: { VIBE64_PUBLIC_PROTOCOL: "https" },
     publicHost: "127.0.0.1:3000",
     publicProtocol: "http"
   }), "http://127.0.0.1:3000", "a loopback editor keeps its request protocol");
   for (const publicHost of ["", "evil.example/path", "user@evil.example", "evil.example?x"]) {
-    assert.equal(editorOriginForRequest({ env: {}, publicHost, publicProtocol: "https" }), "");
+    assert.equal(previewEditorOrigin({ env: {}, publicHost, publicProtocol: "https" }), "");
   }
-  assert.equal(editorOriginForRequest({ env: {}, publicHost: "acme.example", publicProtocol: "javascript" }), "");
+  assert.equal(previewEditorOrigin({ env: {}, publicHost: "acme.example", publicProtocol: "javascript" }), "");
 });
 
 test("preview public origin nests the Preview under its editor host", () => {

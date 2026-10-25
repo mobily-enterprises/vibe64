@@ -95,7 +95,8 @@ import {
   executionEnvFingerprint
 } from "./projectExecutionEnv.js";
 import {
-  createLaunchPreviewProxyRegistry
+  createLaunchPreviewProxyRegistry,
+  normalizePreviewEditorOrigin
 } from "./launchPreviewProxy.js";
 import {
   createPreviewIdentityCommandRunner
@@ -1697,14 +1698,21 @@ async function readyLaunchPreview({
   }
 }
 
-// The editor that asked for the Preview is the page that frames it: its
-// request's public host and protocol name that origin. A configured public
-// protocol wins for public hosts, as it does for the Preview's own origin.
-function editorOriginForRequest({
+// The editor that asked for the Preview is the page that frames it. The
+// browser names its own origin; routing headers can be rewritten on the way
+// (a dev container's Host, for one), so they are only the fallback for callers
+// that send none. A configured public protocol wins for public hosts there, as
+// it does for the Preview's own origin.
+function previewEditorOrigin({
+  editorOrigin = "",
   env = process.env,
   publicHost = "",
   publicProtocol = ""
 } = {}) {
+  const browserOrigin = normalizePreviewEditorOrigin(editorOrigin);
+  if (browserOrigin) {
+    return browserOrigin;
+  }
   const host = String(publicHost || "").trim();
   const configuredProtocol = isLoopbackAddress(normalizeHostName(host))
     ? ""
@@ -1730,7 +1738,8 @@ async function ensureLaunchPreviewProxy({
   terminal = null
 } = {}) {
   return launchPreviewProxies.ensure({
-    editorOrigin: editorOriginForRequest({
+    editorOrigin: previewEditorOrigin({
+      editorOrigin: options.editorOrigin,
       env: options.env,
       publicHost: options.publicHost,
       publicProtocol: options.publicProtocol
@@ -3305,13 +3314,13 @@ export {
   OUTPUT_METADATA,
   cleanupSupersededLaunchTerminals,
   createLaunchRestartBaseline,
-  editorOriginForRequest,
   launchActionsFromOutput,
   launchReadinessMarkerLineSeen,
   launchRestartState,
   listOutputTargets,
   outputTargetExecutionDescriptor,
   previewIdentityCommandRunnerForLaunchTerminal,
+  previewEditorOrigin,
   previewPublicOriginForLaunch,
   workspaceSetupLaunchDisabledReason,
   createOutputTargetTerminalController

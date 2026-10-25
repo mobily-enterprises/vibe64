@@ -2069,8 +2069,8 @@ function previewResponseHeaders(response, options = {}) {
   return headers;
 }
 
-// An editor origin is the scheme, host and port the editor's own request
-// arrived on; anything else cannot name a page that frames the Preview.
+// An editor origin is the scheme, host and port of the page that shows the
+// Preview; anything else cannot name a page that frames it.
 function normalizePreviewEditorOrigin(value = "") {
   try {
     const url = new URL(String(value || "").trim());
@@ -2112,6 +2112,7 @@ export {
   createLaunchPreviewProxyRegistry,
   injectLaunchPreviewBridge,
   listenOnPreviewPort,
+  normalizePreviewEditorOrigin,
   normalizePreviewTargetHref,
   previewPublicSocketPath,
   previewProxyListenHost,

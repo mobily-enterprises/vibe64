@@ -1010,7 +1010,9 @@ it.each(["succeeded", "failed", "invalid-contract"])("waits for workspace setup 
     expect(controls.loadError.value).toContain(outcome === "failed" ? "Dependency installation failed."
       : outcome === "invalid-contract" ? "Unknown Stack component." : "");
     expect(requests.every(request => request.options.method === "GET")).toBe(true);
-    expect(requests.every(request => request.url === `${api}/preparing/outputs`)).toBe(true);
+    // The browser names the editor origin the Preview bridge talks to.
+    expect(requests.every(request => request.url ===
+      `${api}/preparing/outputs?editorOrigin=${encodeURIComponent(window.location.origin)}`)).toBe(true);
   } finally {
     app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals();
   }

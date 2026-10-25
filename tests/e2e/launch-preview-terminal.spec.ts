@@ -287,7 +287,7 @@ for (const width of [1440, 390]) {
         const launch = await mockLaunchSession(page);
         publishReady = launch.publishLaunchReady;
         let starts = 0;
-        await page.route("**/outputs", async (route) => {
+        await page.route("**/outputs?*", async (route) => {
           await fulfillJson(route, await fixture.terminals.outputTargetStatus(fixture.sessionId));
         });
         await page.route("**/output-runs", async (route) => {

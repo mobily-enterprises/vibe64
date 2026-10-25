@@ -728,6 +728,14 @@ function useVibe64OutputControls({
   const outputTargetsPath = computed(() => {
     return sessionId.value ? vibe64OutputsPath(sessionsApiPath.value, sessionId.value) : "";
   });
+  // The browser names the editor origin that frames the Preview; routing
+  // headers can be rewritten before the request reaches the server.
+  const outputTargetsRequestPath = computed(() => {
+    const origin = typeof window === "undefined" ? "" : String(window.location?.origin || "");
+    return outputTargetsPath.value && origin
+      ? `${outputTargetsPath.value}?editorOrigin=${encodeURIComponent(origin)}`
+      : outputTargetsPath.value;
+  });
   const terminalWindowStorageKey = computed(() => launchTerminalStorageKey(
     selectedSession.value || {},
     projectSlug.value
@@ -763,7 +771,7 @@ function useVibe64OutputControls({
   const outputTargetsResource = useEndpointResource({
     enabled: canLoadOutputs,
     fallbackLoadError: "Outputs could not be loaded.",
-    path: outputTargetsPath,
+    path: outputTargetsRequestPath,
     queryOptions: {
       retry: launchStatusShouldRetry,
       retryDelay: launchStatusRetryDelay
