@@ -4,6 +4,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   rm,
   stat,
   symlink,
@@ -14,10 +15,13 @@ import path from "node:path";
 import test from "node:test";
 
 import {
+  OUTPUT_RESULTS_RETAINED_MAX_BYTES,
+  OUTPUT_RESULTS_RETAINED_RUNS,
   listOutputResults,
   outputResultsRoot,
   readOutputResult,
   removeOutputResults,
+  retainedOutputRuns,
   snapshotDeclaredOutputResults
 } from "../../packages/vibe64-terminals/src/server/outputResults.js";
 import {
@@ -184,4 +188,38 @@ test("output-result removal deletes only the session-owned result store", async 
 
   await assert.rejects(stat(outputResultsRoot(fixture.session)), { code: "ENOENT" });
   assert.equal(await readFile(sourcePath, "utf8"), "keep source\n");
+});
+
+test("a session keeps only its newest output runs and removes the dropped run files", async (t) => {
+  const fixture = await outputResultFixture(t);
+  await writeFile(path.join(fixture.sourceRoot, "dist", "hello"), "build\n");
+  const runIds = [];
+  for (let index = 0; index <= OUTPUT_RESULTS_RETAINED_RUNS; index += 1) {
+    const captured = await snapshotDeclaredOutputResults({
+      downloads: [download()],
+      outputTargetId: "build",
+      session: fixture.session,
+      terminalSessionId: `terminal-${index}`
+    });
+    runIds.push(captured.run.id);
+  }
+  const runs = await listOutputResults(fixture.session);
+  assert.equal(runs.length, OUTPUT_RESULTS_RETAINED_RUNS);
+  assert.deepEqual(runs.map((run) => run.id), runIds.slice(1).reverse());
+  const runDirectories = (await readdir(outputResultsRoot(fixture.session)))
+    .filter((name) => name.startsWith("run-"));
+  assert.equal(runDirectories.length, OUTPUT_RESULTS_RETAINED_RUNS);
+  assert.equal(runDirectories.includes(`run-${runIds[0]}`), false);
+});
+
+test("output run retention stays within its byte budget but always keeps the newest run", () => {
+  const run = (id, size) => ({ id, results: [{ size }] });
+  const half = OUTPUT_RESULTS_RETAINED_MAX_BYTES / 2;
+  const { dropped, kept } = retainedOutputRuns([run("newest", half), run("middle", half), run("oldest", 1)]);
+  assert.deepEqual(kept.map(({ id }) => id), ["newest", "middle"]);
+  assert.deepEqual(dropped.map(({ id }) => id), ["oldest"]);
+  const oversized = retainedOutputRuns([run("huge", OUTPUT_RESULTS_RETAINED_MAX_BYTES * 2), run("older", 1)]);
+  assert.deepEqual(oversized.kept.map(({ id }) => id), ["huge"]);
+  const gap = retainedOutputRuns([run("newest", 1), run("huge", OUTPUT_RESULTS_RETAINED_MAX_BYTES), run("small", 1)]);
+  assert.deepEqual(gap.kept.map(({ id }) => id), ["newest"], "an older small run is not kept past a dropped one");
 });

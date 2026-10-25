@@ -21,6 +21,11 @@ const OUTPUT_RESULTS_DIRECTORY = "output-results";
 const OUTPUT_RESULTS_INDEX = "index.json";
 const OUTPUT_RESULT_MAX_BYTES = 256 * 1024 * 1024;
 const OUTPUT_RUN_MAX_BYTES = 512 * 1024 * 1024;
+// A session keeps its newest runs within both bounds; each new snapshot drops
+// older runs and their files. The newest run is always kept, so one run can use
+// its full OUTPUT_RUN_MAX_BYTES.
+const OUTPUT_RESULTS_RETAINED_RUNS = 20;
+const OUTPUT_RESULTS_RETAINED_MAX_BYTES = 2 * 1024 * 1024 * 1024;
 const COPY_BUFFER_BYTES = 64 * 1024;
 const RESULT_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const STORAGE_NAME_PATTERN = /^[0-9a-f-]{36}\.blob$/u;
@@ -338,8 +343,13 @@ async function snapshotDeclaredOutputResults({
         results,
         terminalSessionId: normalizedTerminalSessionId
       };
-      index.runs.unshift(run);
+      const { dropped, kept } = retainedOutputRuns([run, ...index.runs]);
+      index.runs = kept;
       await writeOutputResultsIndex(root, index);
+      await Promise.all(dropped
+        .filter((droppedRun) => RESULT_ID_PATTERN.test(String(droppedRun?.id || "")))
+        .map((droppedRun) => rm(path.join(root, `run-${droppedRun.id}`), { force: true, recursive: true })
+          .catch(() => null)));
       return {
         captured: true,
         results: results.map(publicOutputResult),
@@ -353,6 +363,33 @@ async function snapshotDeclaredOutputResults({
       throw error;
     }
   });
+}
+
+function outputRunBytes(run = {}) {
+  return (Array.isArray(run.results) ? run.results : [])
+    .reduce((total, result) => total + Math.max(0, Number(result?.size) || 0), 0);
+}
+
+// Splits newest-first runs into the newest ones within the retention bounds
+// and every older one, which is dropped.
+function retainedOutputRuns(runs = []) {
+  const kept = [];
+  const dropped = [];
+  let keptBytes = 0;
+  for (const run of runs) {
+    const bytes = outputRunBytes(run);
+    if (kept.length === 0 || (
+      dropped.length === 0 &&
+      kept.length < OUTPUT_RESULTS_RETAINED_RUNS &&
+      keptBytes + bytes <= OUTPUT_RESULTS_RETAINED_MAX_BYTES
+    )) {
+      kept.push(run);
+      keptBytes += bytes;
+    } else {
+      dropped.push(run);
+    }
+  }
+  return { dropped, kept };
 }
 
 async function listOutputResults(session = {}) {
@@ -427,11 +464,14 @@ async function removeOutputResults(session = {}) {
 
 export {
   OUTPUT_RESULT_MAX_BYTES,
+  OUTPUT_RESULTS_RETAINED_MAX_BYTES,
+  OUTPUT_RESULTS_RETAINED_RUNS,
   OUTPUT_RESULTS_DIRECTORY,
   OUTPUT_RUN_MAX_BYTES,
   listOutputResults,
   outputResultsRoot,
   readOutputResult,
   removeOutputResults,
+  retainedOutputRuns,
   snapshotDeclaredOutputResults
 };

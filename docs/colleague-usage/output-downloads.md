@@ -14,6 +14,9 @@ Use the offered download control for the exact result and finish any browser
 download/save interaction. The result comes from the completed build snapshot,
 not a live source path. A different successful build can produce a different result;
 check its name and originating target before sharing it.
+Each session keeps the results of its newest twenty successful builds, up to
+2 GB in total; a new build removes older ones. Download a result you want to
+keep before running many more builds, or rebuild it if it is gone.
 
 If a build fails, inspect its output and prerequisites before retrying. No offered
 result can mean the target declares none or the build has not produced it yet.

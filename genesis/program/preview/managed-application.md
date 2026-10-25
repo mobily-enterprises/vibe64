@@ -330,6 +330,8 @@ status polling. Later status inspection verifies the bound socket identity and
 republishes a missing or replaced socket. Finite runs snapshot only their
 declared regular files into bounded immutable result storage and expose
 downloads by generated result identity rather than a caller-supplied path.
+A session keeps its newest twenty runs within 2 GB in total (the newest run is
+always kept); each new snapshot removes older runs and their files.
 
 New output runs describe one managed accounting workflow to the execution
 provider; ready interactive outputs transition from startup to running.
