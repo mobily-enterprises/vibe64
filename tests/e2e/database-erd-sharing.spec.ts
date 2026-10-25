@@ -567,7 +567,7 @@ for (const provider of ["codex", "opencode"]) {
       await expect.poll(() => turns.length).toBe(1);
       expect(created[0]).not.toHaveProperty("policy");
       expect(turns[0]).not.toHaveProperty("policy");
-      expect(turns[0].message).toContain("vibe64-database overview --json");
+      expect(turns[0].message).toContain("vibe64-helper database overview --json");
       expect(turns[0].message).toContain("data-overview.json");
       expect(turns[0].message).toContain("several relationships away");
       expect(turns[0].message).toContain("do not change database records");
