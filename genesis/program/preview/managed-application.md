@@ -82,7 +82,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `packages/vibe64-genesis/src/server/outputs.js`
 - Main: `packages/vibe64-terminals/src/server/vibe64OutputTargets.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
-- `packages/studio-terminal-core/src/server/launchTargetTerminal.js`
+- `packages/vibe64-terminals/src/server/launchTargetTerminal.js`
 - `packages/vibe64-terminals/src/server/resourceWorkflow.js`
 - `packages/vibe64-terminals/src/server/agentPreviewCommand.js`
 - `packages/vibe64-terminals/src/server/browserTestCleanup.js`

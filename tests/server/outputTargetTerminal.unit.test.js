@@ -12,7 +12,7 @@ import {
   commandWithHttpReadiness,
   createVibe64WebLaunchTargetTerminalSpec,
   httpReadinessProbeCommand
-} from "@local/studio-terminal-core/server/launchTargetTerminal";
+} from "../../packages/vibe64-terminals/src/server/launchTargetTerminal.js";
 import {
   VIBE64_RUNTIME_NAMESPACE_ENV
 } from "@local/studio-terminal-core/server/studioRuntimeIdentity";

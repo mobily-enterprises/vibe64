@@ -8,7 +8,7 @@ import {
 } from "@local/vibe64-execution/server";
 import {
   studioUserStartupScript
-} from "./studioToolHome.js";
+} from "@local/studio-terminal-core/server/studioToolHome";
 import {
   normalizeText
 } from "@local/vibe64-core/server/core";
@@ -31,7 +31,7 @@ import {
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
   terminalNoGithubActorMetadata
-} from "./terminalOwnership.js";
+} from "@local/studio-terminal-core/server/terminalOwnership";
 
 const DEFAULT_WEB_LAUNCH_TARGET_PORT = 4100;
 const WEB_LAUNCH_READINESS_TIMEOUT_SECONDS = 300;
@@ -57,30 +57,13 @@ function canListenOnPort(port) {
   });
 }
 
-async function launchTargetPortIsAvailable(port) {
-  return canListenOnPort(port);
-}
-
-async function findAvailableWebLaunchTargetPort(preferredPort = DEFAULT_WEB_LAUNCH_TARGET_PORT) {
-  const startPort = normalizePort(preferredPort);
-  for (let port = startPort; port <= 65535; port += 1) {
-    if (reservedWebLaunchTargetPorts.has(port)) {
-      continue;
-    }
-    if (await launchTargetPortIsAvailable(port)) {
-      return port;
-    }
-  }
-  throw new Error(`No localhost port is available at or after ${startPort}.`);
-}
-
 async function reserveAvailableWebLaunchTargetPort(preferredPort = DEFAULT_WEB_LAUNCH_TARGET_PORT) {
   const startPort = normalizePort(preferredPort);
   for (let port = startPort; port <= 65535; port += 1) {
     if (reservedWebLaunchTargetPorts.has(port)) {
       continue;
     }
-    if (!await launchTargetPortIsAvailable(port)) {
+    if (!await canListenOnPort(port)) {
       continue;
     }
     if (reservedWebLaunchTargetPorts.has(port)) {
@@ -158,46 +141,6 @@ function launchReadinessMarker({
     sessionId
   ].join(":"));
   return `[[${LAUNCH_READY_MARKER_PREFIX}:${markerId}]]`;
-}
-
-function tcpReadinessProbeCommand({
-  host = "127.0.0.1",
-  marker = "",
-  port,
-  timeoutSeconds = WEB_LAUNCH_READINESS_TIMEOUT_SECONDS
-} = {}) {
-  const script = [
-    "const net = require('node:net');",
-    "const host = process.argv[1];",
-    "const port = Number(process.argv[2]);",
-    "const marker = process.argv[3];",
-    "const timeoutMs = Number(process.argv[4]) * 1000;",
-    "const deadline = Date.now() + timeoutMs;",
-    "function retry() {",
-    "  if (Date.now() >= deadline) {",
-    "    console.error(`[studio] Launch target did not become ready on ${host}:${port}.`);",
-    "    process.exit(1);",
-    "  }",
-    "  setTimeout(probe, 250);",
-    "}",
-    "function probe() {",
-    "  const socket = net.connect({ host, port });",
-    "  socket.setTimeout(1000);",
-    "  socket.once('connect', () => { socket.end(); console.log(marker); });",
-    "  socket.once('error', retry);",
-    "  socket.once('timeout', () => { socket.destroy(); retry(); });",
-    "}",
-    "probe();"
-  ].join("\n");
-  return [
-    "node",
-    "-e",
-    shellQuote(script),
-    shellQuote(host),
-    shellQuote(String(port)),
-    shellQuote(marker),
-    shellQuote(String(timeoutSeconds))
-  ].join(" ");
 }
 
 function httpReadinessProbeCommand({
@@ -728,15 +671,8 @@ async function createVibe64WebLaunchTargetTerminalSpec({
 }
 
 export {
-  DEFAULT_WEB_LAUNCH_TARGET_PORT,
   WEB_LAUNCH_READINESS_TIMEOUT_SECONDS,
   createVibe64WebLaunchTargetTerminalSpec,
-  findAvailableWebLaunchTargetPort,
-  reserveAvailableWebLaunchTargetPort,
   commandWithHttpReadiness,
-  httpReadinessProbeCommand,
-  normalizeHttpLaunchReadiness,
-  launchReadinessMarker,
-  tcpReadinessProbeCommand,
-  webLaunchTargetStartupScript
+  httpReadinessProbeCommand
 };

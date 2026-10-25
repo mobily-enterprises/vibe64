@@ -156,14 +156,29 @@ function walkSourceFiles(directory, files = []) {
   return files;
 }
 
+// A relative import that resolves outside its package bypasses the target
+// package's exports map.
+function relativeImportLeavesPackage(specifier, filePath, packageDirectory) {
+  if (!specifier.startsWith(".")) {
+    return false;
+  }
+  const target = path.relative(packageDirectory, path.resolve(path.dirname(filePath), specifier));
+  return target === ".." || target.startsWith(`..${path.sep}`) || path.isAbsolute(target);
+}
+
 function collectPackageImports(packageDirectory) {
   const imports = new Map();
+  const escapingImports = [];
   const sourceDirectory = path.join(packageDirectory, "src");
 
   for (const filePath of walkSourceFiles(sourceDirectory)) {
     const source = stripJavaScriptComments(fs.readFileSync(filePath, "utf8"));
     for (const match of source.matchAll(IMPORT_SPECIFIER_PATTERN)) {
       const specifier = match[1] || match[2] || match[3] || match[4] || "";
+      if (relativeImportLeavesPackage(specifier, filePath, packageDirectory)) {
+        escapingImports.push(`${relativePath(filePath)} imports ${specifier}`);
+        continue;
+      }
       const packageName = packageNameFromSpecifier(specifier);
       if (!packageName) {
         continue;
@@ -175,7 +190,7 @@ function collectPackageImports(packageDirectory) {
     }
   }
 
-  return imports;
+  return { escapingImports, imports };
 }
 
 function workspacePackageDirectories(rootManifest) {
@@ -297,6 +312,7 @@ function verifyPackageContract({
 }) {
   const {
     directImports,
+    escapingImports,
     manifest,
     packageDirectory,
     packageJsonPath
@@ -334,6 +350,12 @@ function verifyPackageContract({
 
   if (manifest.private !== true) {
     errors.push(`${relativePath(packageJsonPath)} must remain private while it is named ${manifest.name}.`);
+  }
+
+  for (const escapingImport of escapingImports) {
+    errors.push(
+      `${escapingImport}, outside ${manifest.name}; import the other package by its name.`
+    );
   }
 
   for (const [packageName, files] of directImports) {
@@ -393,8 +415,10 @@ function main() {
   for (const packageDirectory of packageDirectories) {
     const packageJsonPath = path.join(packageDirectory, "package.json");
     const manifest = readJson(packageJsonPath);
+    const { escapingImports, imports } = collectPackageImports(packageDirectory);
     const packageInfo = {
-      directImports: collectPackageImports(packageDirectory),
+      directImports: imports,
+      escapingImports,
       manifest,
       packageDirectory,
       packageJsonPath

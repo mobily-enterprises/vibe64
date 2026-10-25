@@ -12,7 +12,6 @@ import {
   shellQuote
 } from "@local/vibe64-execution/server";
 
-const STUDIO_MYSQL_CLIENT_CONFIG_DIR = "/tmp/vibe64-mysql-client";
 const STUDIO_MYSQL_CLIENT_CONFIG_DIR_ENV = "VIBE64_MYSQL_CLIENT_CONFIG_DIR";
 
 function requiredLine(name) {
@@ -93,10 +92,8 @@ function studioUserStartupScript(commandArgs = ["bash"], {
 }
 
 export {
-  STUDIO_MYSQL_CLIENT_CONFIG_DIR,
   STUDIO_MYSQL_CLIENT_CONFIG_DIR_ENV,
   studioMysqlClientConfigSetupLines,
-  studioUserCommand,
   studioToolHomeSetupLines,
   studioUserStartupScript
 };

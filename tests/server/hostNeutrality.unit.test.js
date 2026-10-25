@@ -181,7 +181,7 @@ test("processes started from a file never read the in-process host profile", () 
   assert.ok(entries.includes("packages/vibe64-execution/src/server/engines/stdioBridge.js"));
   assert.ok(entries.includes("packages/vibe64-runtime/src/server/codexAppServerProcess.js"));
   assert.ok(entries.includes("packages/vibe64-terminals/src/server/sessionWorkOperationCommand.js"));
-  assert.ok(!entries.includes("packages/studio-terminal-core/src/server/launchTargetTerminal.js"));
+  assert.ok(!entries.includes("packages/vibe64-terminals/src/server/launchTargetTerminal.js"));
   // An entry that reads the profile must receive it from its parent first.
   const offenders = entries
     .filter((entry) => reachableModules(entry).has(HOST_PROFILE_FILE))

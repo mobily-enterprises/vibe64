@@ -14,7 +14,7 @@ import {
 } from "@local/vibe64-execution/server";
 import {
   createVibe64WebLaunchTargetTerminalSpec
-} from "@local/studio-terminal-core/server/launchTargetTerminal";
+} from "./launchTargetTerminal.js";
 import {
   terminalNoGithubActorMetadata
 } from "@local/studio-terminal-core/server/terminalOwnership";

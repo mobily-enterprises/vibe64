@@ -4,7 +4,7 @@ import process from "node:process";
 
 import {
   VIBE64_SYSTEM_ROOT_ENV
-} from "../../../vibe64-core/src/server/studioRoots.js";
+} from "@local/vibe64-core/server/studioRoots";
 import {
   commandCallerEnv,
   envRecord,

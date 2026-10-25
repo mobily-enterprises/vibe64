@@ -6,7 +6,7 @@ import path from "node:path";
 
 import {
   WEB_LAUNCH_READINESS_TIMEOUT_SECONDS
-} from "@local/studio-terminal-core/server/launchTargetTerminal";
+} from "./launchTargetTerminal.js";
 import {
   logOperationalEvent,
   sanitizeLogText
