@@ -133,18 +133,26 @@ function normalizeResolvedSourceEditorPath(value = {}) {
   };
 }
 
+function normalizeExplanationEntry(entry, { status } = {}) {
+  return {
+    createdAt: String(entry?.createdAt || ""),
+    id: String(entry?.id || ""),
+    role: String(entry?.role || ""),
+    ...(status === undefined ? {} : { status }),
+    text: String(entry?.text || "")
+  };
+}
+
+function explanationEntryVisible(entry) {
+  return Boolean(entry.id && ["assistant", "user"].includes(entry.role) && entry.text);
+}
+
 function normalizeExplanationMessages(value = [], {
   body = "",
   followups = []
 } = {}) {
   const messages = (Array.isArray(value) ? value : [])
-    .map((entry) => ({
-      createdAt: String(entry?.createdAt || ""),
-      id: String(entry?.id || ""),
-      role: String(entry?.role || ""),
-      status: String(entry?.status || "complete"),
-      text: String(entry?.text || "")
-    }))
+    .map((entry) => normalizeExplanationEntry(entry, { status: String(entry?.status || "complete") }))
     .filter((entry) => entry.id && ["assistant", "user"].includes(entry.role) && (entry.text || entry.status !== "complete"));
   if (messages.length) {
     return messages;
@@ -162,14 +170,8 @@ function normalizeExplanationMessages(value = [], {
   return [
     ...fallback,
     ...(Array.isArray(followups) ? followups : [])
-      .map((entry) => ({
-        createdAt: String(entry?.createdAt || ""),
-        id: String(entry?.id || ""),
-        role: String(entry?.role || ""),
-        status: "complete",
-        text: String(entry?.text || "")
-      }))
-      .filter((entry) => entry.id && ["assistant", "user"].includes(entry.role) && entry.text)
+      .map((entry) => normalizeExplanationEntry(entry, { status: "complete" }))
+      .filter(explanationEntryVisible)
   ];
 }
 
@@ -193,16 +195,10 @@ function normalizeExplanation(value = null) {
     return null;
   }
   const followups = (Array.isArray(value.followups) ? value.followups : [])
-    .map((entry) => ({
-      createdAt: String(entry?.createdAt || ""),
-      id: String(entry?.id || ""),
-      role: String(entry?.role || ""),
-      text: String(entry?.text || "")
-    }))
-    .filter((entry) => entry.id && ["assistant", "user"].includes(entry.role) && entry.text);
+    .map((entry) => normalizeExplanationEntry(entry))
+    .filter(explanationEntryVisible);
   return {
     agentThreadId: String(value.agentThreadId || ""),
-    agentSettings: null,
     agentTurnId: String(value.agentTurnId || ""),
     body: String(value.body || ""),
     createdAt: String(value.createdAt || ""),
@@ -502,7 +498,6 @@ function localSourceExplanation({
   };
   return normalizeExplanation({
     agentThreadId: "",
-    agentSettings: null,
     agentTurnId: "",
     body: "",
     createdAt,

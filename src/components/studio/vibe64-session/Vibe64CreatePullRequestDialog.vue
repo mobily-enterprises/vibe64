@@ -5,7 +5,8 @@ import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedba
 import { mdiClose, mdiSourcePull } from "@mdi/js";
 import { vibe64SessionDisplayTitle, vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
-import { githubProjectRepositoryName } from "@/lib/vibe64GithubProject.js";
+import { vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
+import { GITHUB_BODY_MAX_LENGTH, githubProjectRepositoryName } from "@/lib/vibe64GithubProject.js";
 
 const props = defineProps({ modelValue: Boolean, dashboardContext: { type: Object, default: () => ({}) } });
 const emit = defineEmits(["update:modelValue", "created"]);
@@ -27,7 +28,11 @@ const branch = computed(() => {
   return `vibe64/pr-${props.dashboardContext.sessionId}`;
 });
 const base = computed(() => source.value?.baseBranch || props.dashboardContext.projectContext?.repository?.defaultBranch || "");
-const path = computed(() => `${readRefOrGetterValue(props.dashboardContext.sessionsApiPath)}/${props.dashboardContext.sessionId}/pull-request`);
+const path = computed(() => vibe64SessionPath(
+  readRefOrGetterValue(props.dashboardContext.sessionsApiPath),
+  props.dashboardContext.sessionId,
+  "/pull-request"
+));
 const resource = useEndpointResource({ path, queryKey: computed(() => ["vibe64.createPullRequest", path.value]), enabled: false });
 watch(() => props.modelValue, (open) => {
   if (open) destinationReview.value = props.dashboardContext.workState?.destination
@@ -71,7 +76,7 @@ async function submit() {
         <v-text-field v-model="title" label="Title" variant="outlined" maxlength="256" :disabled="pending" hide-details />
         <v-textarea
           v-model="body" label="Description" placeholder="What changed, and how did you check it?" variant="outlined"
-          rows="3" auto-grow maxlength="65536" :disabled="pending" hide-details
+          rows="3" auto-grow :maxlength="GITHUB_BODY_MAX_LENGTH" :disabled="pending" hide-details
         />
         <v-switch v-model="draft" color="primary" label="Create as draft" :disabled="pending" hide-details />
         <details class="pr-details text-body-small">

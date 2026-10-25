@@ -5,7 +5,13 @@ import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEn
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { projectSlugFromRoute } from "@/lib/vibe64ProjectScope.js";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
-import { githubProjectAvailable, githubProjectRepositoryName, invalidateGithubIssueQueries } from "@/lib/vibe64GithubProject.js";
+import {
+  GITHUB_BODY_MAX_LENGTH,
+  githubIssueLabelsPath,
+  githubProjectAvailable,
+  githubProjectRepositoryName,
+  invalidateGithubIssueQueries
+} from "@/lib/vibe64GithubProject.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 
 // Unsent comments belong to this browser tab, not project source or GitHub.
@@ -41,7 +47,7 @@ export function useVibe64Issues(context) {
     enabled: computed(() => active.value && !number.value), queryOptions: { retry: false },
     requestRecoveryLabel: "GitHub issues", fallbackLoadError: "Issues could not load."
   });
-  const labelsPath = computed(() => basePath.value.replace(/\/issues$/u, "/issue-labels"));
+  const labelsPath = computed(() => githubIssueLabelsPath(basePath.value));
   const labelCatalog = useEndpointResource({
     path: labelsPath, queryKey: computed(() => ["vibe64.issueLabels", labelsPath.value]),
     enabled: computed(() => active.value && !number.value), queryOptions: { retry: false },
@@ -106,7 +112,7 @@ export function useVibe64Issues(context) {
     const requestPath = detailPath.value;
     if (kind === "comment") {
       const submitted = draft.value;
-      if (!submitted.trim() || submitted.length > 65536) return;
+      if (!submitted.trim() || submitted.length > GITHUB_BODY_MAX_LENGTH) return;
       const comment = reactive({
         id: crypto.randomUUID(),
         body: submitted,

@@ -5,7 +5,8 @@ import {
 } from "@jskit-ai/assistant-core/shared/conversation";
 import {
   markdownDocumentLinkTarget,
-  sourceEditorLinkTarget
+  sourceEditorLinkTarget,
+  sourcePathReferenceAtLineColumn
 } from "../../src/lib/vibe64SourceEditorLinks.js";
 
 describe("source editor chat links", () => {
@@ -118,5 +119,17 @@ describe("links inside a rendered Markdown file", () => {
     for (const href of ["#install", "https://example.test/", "mailto:a@example.test", "javascript:alert(1)", ""]) {
       expect(markdownDocumentLinkTarget("README.md", href)).toBe("");
     }
+  });
+
+  it("finds relative source path references in quoted strings and CSS url()", () => {
+    const line = 'import x from "./app.js"; a { background: url(../img/bg.png); } "https://example.test/"';
+    expect(sourcePathReferenceAtLineColumn(line, line.indexOf("./app.js") + 2)).toEqual({
+      from: line.indexOf("./app.js"),
+      target: "./app.js",
+      to: line.indexOf("./app.js") + "./app.js".length
+    });
+    expect(sourcePathReferenceAtLineColumn(line, line.indexOf("../img") + 3)?.target).toBe("../img/bg.png");
+    expect(sourcePathReferenceAtLineColumn(line, line.indexOf("https") + 2)).toBeNull();
+    expect(sourcePathReferenceAtLineColumn('"a\\"b"', 1)).toBeNull();
   });
 });

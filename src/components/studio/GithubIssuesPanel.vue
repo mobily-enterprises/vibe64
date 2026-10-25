@@ -5,6 +5,7 @@ import { useRoute } from "vue-router";
 import { mdiArrowRight, mdiCheck, mdiCommentOutline,
   mdiOpenInNew, mdiRecordCircleOutline, mdiRefresh, mdiRestore, mdiMagnify, mdiPlus, mdiLabelOutline, mdiPencilOutline } from "@mdi/js";
 import { useVibe64Issues } from "@/composables/useVibe64Issues.js";
+import { GITHUB_BODY_MAX_LENGTH } from "@/lib/vibe64GithubProject.js";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
 import GithubIssueEditorDialog from "./GithubIssueEditorDialog.vue";
 import GithubCommentEditor from "./GithubCommentEditor.vue";
@@ -274,8 +275,8 @@ function date(value) {
           <p v-if="issue.locked" class="text-body-small text-medium-emphasis ma-0">This conversation is locked. GitHub limits comments to permitted collaborators.</p>
           <GithubMentionTextarea
             v-model="draft" label="Add a comment" placeholder="Share an update or ask a question…" variant="outlined" rounded="lg"
-            rows="4" auto-grow :counter="draft.length > 65000 ? 65536 : undefined"
-            :error-messages="draft.length > 65536 ? 'Keep your comment under 65,536 characters.' : []"
+            rows="4" auto-grow :counter="draft.length > 65000 ? GITHUB_BODY_MAX_LENGTH : undefined"
+            :error-messages="draft.length > GITHUB_BODY_MAX_LENGTH ? 'Keep your comment under 65,536 characters.' : []"
             :base-path="basePath" :issue="issue" :enabled="dashboardContext.active !== false"
           />
           <div class="d-flex flex-wrap align-center justify-space-between ga-3">
@@ -288,7 +289,7 @@ function date(value) {
             </v-btn>
             <v-btn
               type="submit" color="primary" variant="flat" rounded="pill" height="48"
-              :disabled="!draft.trim() || draft.length > 65536 || Boolean(pending)"
+              :disabled="!draft.trim() || draft.length > GITHUB_BODY_MAX_LENGTH || Boolean(pending)"
             >
               {{ pending === 'comment' ? 'Posting…' : 'Comment' }}
             </v-btn>

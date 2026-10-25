@@ -899,7 +899,7 @@ describe("useVibe64SourceEditor", () => {
     expect(editor.activeExplanation.value.sourceRange.symbolId).toBe("symbol:app:start");
     expect(editor).not.toHaveProperty("explanationAgentSettings");
     expect(editor).not.toHaveProperty("updateExplanationAgentSetting");
-    expect(editor.activeExplanation.value.agentSettings).toBeNull();
+    expect(editor.activeExplanation.value).not.toHaveProperty("agentSettings");
     expect(editor.activeExplanation.value.executionProfile).toEqual(expect.objectContaining(executionProfile));
   });
 

@@ -107,6 +107,7 @@ import { mdiArrowLeft, mdiContentCopy, mdiDeleteOutline, mdiDotsVertical, mdiDow
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
+import { vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import { writeClipboardText } from "@/lib/clipboard.js";
 
@@ -126,7 +127,7 @@ const areaDescription = computed(() => props.area === "backups"
   ? "Shared across this project · Files automatically deleted after 2 weeks without changes"
   : props.area === "session" ? "Session runtime files · Read only"
   : "Temporary file exchange · Deleted when this session is archived");
-const base = computed(() => `${props.sessionsApiPath}/${encodeURIComponent(props.sessionId)}/files/${encodeURIComponent(props.area)}`);
+const base = computed(() => vibe64SessionPath(props.sessionsApiPath, props.sessionId, `/files/${encodeURIComponent(props.area)}`));
 const directory = ref("");
 const entries = ref([]);
 const location = ref("");

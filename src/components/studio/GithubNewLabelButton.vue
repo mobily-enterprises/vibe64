@@ -5,6 +5,7 @@ import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEn
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { mdiCheck, mdiClose, mdiPlus } from "@mdi/js";
 import GithubLabelChip from "./GithubLabelChip.vue";
+import { githubIssueLabelsPath } from "@/lib/vibe64GithubProject.js";
 
 const props = defineProps({
   basePath: { type: String, required: true },
@@ -36,7 +37,7 @@ const preview = computed(() => ({
   color: validColor.value ? normalizedColor.value : defaultColor
 }));
 const canSubmit = computed(() => !props.disabled && !pending.value && Boolean(trimmedName.value) && !nameError.value && validColor.value);
-const labelsPath = computed(() => props.basePath.replace(/\/issues$/u, "/issue-labels"));
+const labelsPath = computed(() => githubIssueLabelsPath(props.basePath));
 const resource = useEndpointResource({ path: labelsPath, enabled: false,
   queryKey: computed(() => ["vibe64.newLabel", labelsPath.value]) });
 const queryClient = useQueryClient();

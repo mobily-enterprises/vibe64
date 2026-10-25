@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, ref, useId, watch } from "vue";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
+import { githubIssueMentionsPath } from "@/lib/vibe64GithubProject.js";
 
 defineOptions({ inheritAttrs: false });
 const props = defineProps({
@@ -15,7 +16,7 @@ const field = ref(null);
 const mention = ref(null);
 const selected = ref(0);
 const listId = `github-mentions-${useId()}`;
-const path = computed(() => props.basePath.replace(/\/issues$/u, "/issue-mentions"));
+const path = computed(() => githubIssueMentionsPath(props.basePath));
 const number = computed(() => props.issue?.number || null);
 const catalog = useEndpointResource({
   path, readQuery: computed(() => number.value ? { number: number.value } : {}),

@@ -6,6 +6,7 @@ import { mdiClose, mdiLabelOutline, mdiPencilOutline, mdiPlus } from "@mdi/js";
 import GithubLabelChip from "./GithubLabelChip.vue";
 import GithubNewLabelButton from "./GithubNewLabelButton.vue";
 import GithubMentionTextarea from "./GithubMentionTextarea.vue";
+import { GITHUB_BODY_MAX_LENGTH, githubIssueLabelsPath } from "@/lib/vibe64GithubProject.js";
 
 const props = defineProps({
   modelValue: Boolean,
@@ -22,7 +23,7 @@ const body = ref("");
 const selectedLabels = ref([]);
 const pending = ref(false);
 const feedback = useUiFeedback({ source: "vibe64.issues.editor" });
-const labelsPath = computed(() => props.basePath.replace(/\/issues$/u, "/issue-labels"));
+const labelsPath = computed(() => githubIssueLabelsPath(props.basePath));
 const catalog = useEndpointResource({
   path: labelsPath,
   queryKey: computed(() => ["vibe64.issueLabels", labelsPath.value]),
@@ -98,7 +99,7 @@ async function submit() {
           <v-text-field v-model="title" label="Title" variant="outlined" maxlength="256" :disabled="pending" hide-details autofocus />
           <GithubMentionTextarea
             v-model="body" label="Description" placeholder="What needs to happen?" variant="outlined" rows="5"
-            auto-grow maxlength="65536" :base-path="basePath" :issue="issue" :enabled="modelValue" :disabled="pending"
+            auto-grow :maxlength="GITHUB_BODY_MAX_LENGTH" :base-path="basePath" :issue="issue" :enabled="modelValue" :disabled="pending"
           />
         </template>
         <template v-if="mode !== 'content'">

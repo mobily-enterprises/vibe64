@@ -547,28 +547,47 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
     }
   }
 
+  const sessionUpdateLabel = computed(() => {
+    const branch = (updates.payload || changes.payload)?.branch;
+    return branch ? `Update session from ${branch}` : "Update session";
+  });
+  const saveWorkBlockedReason = computed(() => {
+    if (sourceOperationsSuspended.value) {
+      return "Session renewal is safely using this session’s source";
+    }
+    if (updates.applying || saving.value) {
+      return "Wait for the current repository operation to finish";
+    }
+    if (updates.checking || updates.canonicalChangePending) {
+      return "Checking the latest saved project version";
+    }
+    if (updates.error || !updates.payload || changes.error) {
+      return "Repository status is unavailable; check for updates before saving";
+    }
+    if (updates.payload.updateAvailable === true) {
+      return `${sessionUpdateLabel.value} before saving`;
+    }
+    if (changes.loading) {
+      return "Checking whether this session has work to save";
+    }
+    if (changes.payload?.unsaved !== true) {
+      return "No work to save";
+    }
+    return "";
+  });
+  const saveWorkBlocked = computed(() => Boolean(
+    saveWorkBlockedReason.value ||
+    !sessionId.value ||
+    typeof context.value.requestSaveWork !== "function"
+  ));
+
   async function saveWork() {
-    const requestSaveWork = context.value.requestSaveWork;
-    if (
-      !sessionId.value ||
-      sourceOperationsSuspended.value ||
-      saving.value ||
-      updates.checking ||
-      updates.applying ||
-      updates.canonicalChangePending ||
-      updates.error ||
-      !updates.payload ||
-      updates.payload?.updateAvailable === true ||
-      changes.error ||
-      changes.loading ||
-      changes.payload?.unsaved !== true ||
-      typeof requestSaveWork !== "function"
-    ) {
+    if (saveWorkBlocked.value) {
       return false;
     }
     saving.value = true;
     try {
-      return await requestSaveWork();
+      return await context.value.requestSaveWork();
     } finally {
       saving.value = false;
     }
@@ -735,6 +754,8 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
     loadHistory,
     loadMoreVersionFiles,
     saveWork,
+    saveWorkBlocked,
+    saveWorkBlockedReason,
     saving,
     selectCurrentFile,
     selectedCurrentPath,
@@ -743,6 +764,7 @@ function useVibe64RepositoryWorkspace(dashboardContext, { view = "changes" } = {
     selectVersion,
     selectVersionFile,
     sessionId,
+    sessionUpdateLabel,
     sourceOperationsSuspended,
     updates,
     versionDiff,

@@ -111,7 +111,7 @@
           </v-btn>
           <v-btn
             :color="changes.payload?.unsaved === true ? 'error' : undefined"
-            :disabled="saveWorkDisabled"
+            :disabled="saveWorkBlocked"
             :loading="saving"
             :prepend-icon="mdiSourceCommit"
             size="small"
@@ -429,6 +429,8 @@ const {
   loadChanges,
   loadMoreVersionFiles,
   saveWork,
+  saveWorkBlocked,
+  saveWorkBlockedReason,
   saving,
   selectCurrentFile,
   selectedCurrentPath,
@@ -437,6 +439,7 @@ const {
   selectVersion,
   selectVersionFile,
   sessionId,
+  sessionUpdateLabel,
   sourceOperationsSuspended,
   updates,
   versionDiff,
@@ -469,10 +472,6 @@ const pageDescription = computed(() => view.value === "history"
   ? "The project's saved versions and their file differences."
   : "Files this session changed since the project's saved version.");
 const repositoryStatus = computed(() => updates.payload || changes.payload || null);
-const sessionUpdateLabel = computed(() => {
-  const branch = repositoryStatus.value?.branch;
-  return branch ? `Update session from ${branch}` : "Update session";
-});
 const repositoryOperationBusy = computed(() => Boolean(
   !sessionId.value ||
   sourceOperationsSuspended.value ||
@@ -480,41 +479,7 @@ const repositoryOperationBusy = computed(() => Boolean(
   updates.applying ||
   saving.value
 ));
-const saveWorkDisabled = computed(() => Boolean(
-  repositoryOperationBusy.value ||
-  updates.canonicalChangePending ||
-  updates.error ||
-  !updates.payload ||
-  repositoryStatus.value?.updateAvailable === true ||
-  changes.error ||
-  changes.loading ||
-  changes.payload?.unsaved !== true ||
-  typeof dashboard.value.requestSaveWork !== "function"
-));
-const saveWorkTitle = computed(() => {
-  if (sourceOperationsSuspended.value) {
-    return "Session renewal is safely using this session’s source";
-  }
-  if (updates.applying || saving.value) {
-    return "Wait for the current repository operation to finish";
-  }
-  if (updates.checking || updates.canonicalChangePending) {
-    return "Checking the latest saved project version";
-  }
-  if (updates.error || !updates.payload || changes.error) {
-    return "Repository status is unavailable; check for updates before saving";
-  }
-  if (repositoryStatus.value?.updateAvailable === true) {
-    return `${sessionUpdateLabel.value} before saving`;
-  }
-  if (changes.loading) {
-    return "Checking whether this session has work to save";
-  }
-  if (changes.payload?.unsaved !== true) {
-    return "No work to save";
-  }
-  return "Review changes and choose where to commit them";
-});
+const saveWorkTitle = computed(() => saveWorkBlockedReason.value || "Review changes and choose where to commit them");
 
 const repositorySummaryTitle = computed(() => {
   if (!sessionId.value) {

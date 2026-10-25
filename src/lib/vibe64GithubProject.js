@@ -1,3 +1,6 @@
+// GitHub rejects issue, comment and pull request bodies longer than this.
+const GITHUB_BODY_MAX_LENGTH = 65536;
+
 function githubProjectRepositoryName(project) {
   return project?.githubRepository?.fullName || project?.repository?.github?.fullName || "";
 }
@@ -6,22 +9,33 @@ function githubProjectAvailable(project) {
   return Boolean(githubProjectRepositoryName(project)) && project?.repositoryMode !== "managed_git";
 }
 
+// The project's GitHub API paths sit beside its scoped issues path.
+function githubIssuesSiblingPath(issuesPath, name) {
+  return issuesPath.replace(/\/issues$/u, `/${name}`);
+}
+
+function githubIssueLabelsPath(issuesPath) {
+  return githubIssuesSiblingPath(issuesPath, "issue-labels");
+}
+
+function githubIssueMentionsPath(issuesPath) {
+  return githubIssuesSiblingPath(issuesPath, "issue-mentions");
+}
+
 function invalidateGithubIssueQueries(queryClient, basePath, issuePath) {
   return Promise.all([
     queryClient.invalidateQueries({ queryKey: ["vibe64.issue", issuePath] }),
     queryClient.invalidateQueries({ queryKey: ["vibe64.issues", basePath] }),
-    queryClient.invalidateQueries({ queryKey: ["vibe64.issueMentions", basePath.replace(/\/issues$/u, "/issue-mentions")] })
+    queryClient.invalidateQueries({ queryKey: ["vibe64.issueMentions", githubIssueMentionsPath(basePath)] })
   ]);
 }
 
 // A GitHub refresh for the project: every GitHub list and item view rereads.
-// The project's GitHub API paths sit beside its scoped issues path.
 function invalidateGithubProjectQueries(queryClient, issuesPath) {
-  const apiPath = name => issuesPath.replace(/\/issues$/u, `/${name}`);
-  const labelsPath = apiPath("issue-labels");
-  const mentionsPath = apiPath("issue-mentions");
-  const prsPath = apiPath("pull-requests");
-  const incomingPath = apiPath("incoming");
+  const labelsPath = githubIssueLabelsPath(issuesPath);
+  const mentionsPath = githubIssueMentionsPath(issuesPath);
+  const prsPath = githubIssuesSiblingPath(issuesPath, "pull-requests");
+  const incomingPath = githubIssuesSiblingPath(issuesPath, "incoming");
   return queryClient.invalidateQueries({
     predicate: ({ queryKey }) => {
       if (!Array.isArray(queryKey)) return false;
@@ -36,4 +50,12 @@ function invalidateGithubProjectQueries(queryClient, issuesPath) {
   });
 }
 
-export { githubProjectAvailable, githubProjectRepositoryName, invalidateGithubIssueQueries, invalidateGithubProjectQueries };
+export {
+  GITHUB_BODY_MAX_LENGTH,
+  githubIssueLabelsPath,
+  githubIssueMentionsPath,
+  githubProjectAvailable,
+  githubProjectRepositoryName,
+  invalidateGithubIssueQueries,
+  invalidateGithubProjectQueries
+};

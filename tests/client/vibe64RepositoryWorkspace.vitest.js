@@ -680,7 +680,7 @@ describe("Vibe64 Repository workspace", () => {
     expect(repositoryWorkspace).toContain("Someone saved new project work after this session started");
     expect(repositoryWorkspace).toContain("Saved versions this session needs");
     expect(repositoryWorkspace).toContain("repositoryIncomingVersions");
-    expect(repositoryWorkspace).toContain('return branch ? `Update session from ${branch}` : "Update session"');
+    expect(repositoryComposable).toContain('return branch ? `Update session from ${branch}` : "Update session"');
     expect(repositoryWorkspace).toContain("replay its unsaved work on the latest saved version");
     expect(repositoryWorkspace).toContain("will move it to the latest saved version");
     expect(repositoryWorkspace).toContain('changes.payload?.unsaved === true');

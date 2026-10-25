@@ -132,7 +132,81 @@ function markdownDocumentLinkTarget(documentPath = "", href = "") {
   return parts.join("/");
 }
 
+function sourcePathReferenceAtLineColumn(lineText = "", column = 0) {
+  return sourcePathReferencesInLine(lineText)
+    .find((reference) => column >= reference.from && column <= reference.to) || null;
+}
+
+function sourcePathReferencesInLine(lineText = "") {
+  const references = [];
+  collectQuotedSourcePathReferences(lineText, references);
+  collectUrlSourcePathReferences(lineText, references);
+  return references;
+}
+
+function collectQuotedSourcePathReferences(lineText = "", references = []) {
+  for (let index = 0; index < lineText.length; index += 1) {
+    const quote = lineText[index];
+    if (!["\"", "'", "`"].includes(quote)) {
+      continue;
+    }
+    let cursor = index + 1;
+    let value = "";
+    while (cursor < lineText.length) {
+      const character = lineText[cursor];
+      if (character === "\\") {
+        value += lineText[cursor + 1] || "";
+        cursor += 2;
+        continue;
+      }
+      if (character === quote) {
+        const target = sourcePathReferenceTarget(value);
+        if (target) {
+          references.push({
+            from: index + 1,
+            target,
+            to: cursor
+          });
+        }
+        index = cursor;
+        break;
+      }
+      value += character;
+      cursor += 1;
+    }
+  }
+}
+
+function collectUrlSourcePathReferences(lineText = "", references = []) {
+  const urlPattern = /url\(\s*([^"'`\s)]+)\s*\)/giu;
+  for (const match of lineText.matchAll(urlPattern)) {
+    const rawTarget = match[1] || "";
+    const target = sourcePathReferenceTarget(rawTarget);
+    if (!target) {
+      continue;
+    }
+    const from = Number(match.index || 0) + match[0].indexOf(rawTarget);
+    references.push({
+      from,
+      target,
+      to: from + rawTarget.length
+    });
+  }
+}
+
+function sourcePathReferenceTarget(value = "") {
+  const target = String(value || "").trim();
+  if (!target || target.startsWith("//") || /^[a-z][a-z0-9+.-]*:/iu.test(target)) {
+    return "";
+  }
+  if (target.startsWith("./") || target.startsWith("../") || target.startsWith("/")) {
+    return target;
+  }
+  return "";
+}
+
 export {
   markdownDocumentLinkTarget,
-  sourceEditorLinkTarget
+  sourceEditorLinkTarget,
+  sourcePathReferenceAtLineColumn
 };

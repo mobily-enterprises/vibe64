@@ -18,7 +18,6 @@
     v-else
     :aria-busy="busy || closing ? 'true' : 'false'"
     class="vibe64-source-explanation"
-    :class="{ 'vibe64-source-explanation--embedded': embedded }"
     aria-label="Source explanation"
   >
     <header class="vibe64-source-explanation__header">
@@ -49,7 +48,6 @@
         </v-chip>
       </div>
       <v-btn
-        v-if="!embedded"
         class="vibe64-source-explanation__action-target"
         aria-label="Collapse explanation"
         :icon="mdiChevronRight"
@@ -351,9 +349,7 @@ const followupAvailable = computed(() => Boolean(
   )
 ));
 const sourceRange = computed(() => props.explanation?.sourceRange || {});
-const sourceRangeFullLabel = computed(() => sourceRangeDisplayLabel(sourceRange.value, {
-  compact: false
-}));
+const sourceRangeFullLabel = computed(() => sourceRangeDisplayLabel(sourceRange.value));
 const sourceRangePathLabel = computed(() => sourceRangePathDisplayLabel(sourceRange.value));
 const sourceRangeSuffixLabel = computed(() => sourceRangeLineSuffix(sourceRange.value));
 const threadScrollKey = computed(() => chatMessages.value
@@ -411,15 +407,12 @@ function sourceRangePathDisplayLabel(range = {}) {
   return compactSourcePath(path);
 }
 
-function sourceRangeDisplayLabel(range = {}, {
-  compact = true
-} = {}) {
+function sourceRangeDisplayLabel(range = {}) {
   const path = normalizePanelSourcePath(range?.path);
   if (!path) {
     return "Source";
   }
-  const displayPath = compact ? compactSourcePath(path) : path;
-  return `${displayPath}${sourceRangeLineSuffix(range)}`;
+  return `${path}${sourceRangeLineSuffix(range)}`;
 }
 
 function submitFollowup() {
@@ -511,8 +504,6 @@ watch(threadScrollKey, (value, previous) => {
   overflow: hidden;
   padding: 0.52rem 0.64rem 2px;
 }
-.vibe64-source-explanation--embedded { block-size: auto; height: auto; max-block-size: none; border: 1px solid #dbe6e3; border-radius: 8px; grid-template-rows: auto auto minmax(80px, auto) auto auto; }
-.vibe64-source-explanation--embedded .vibe64-source-explanation__thread { max-height: 420px; }
 
 .vibe64-source-explanation__header {
   align-items: center;

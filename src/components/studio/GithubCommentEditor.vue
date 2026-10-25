@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import GithubMentionTextarea from "./GithubMentionTextarea.vue";
+import { GITHUB_BODY_MAX_LENGTH } from "@/lib/vibe64GithubProject.js";
 
 const props = defineProps({
   comment: { type: Object, required: true },
@@ -16,7 +17,7 @@ const pending = ref(false);
 const feedback = useUiFeedback({ source: "vibe64.issues.commentEditor" });
 const path = computed(() => `${props.basePath}/${props.issue.number}/comments/${encodeURIComponent(props.comment.id)}`);
 const resource = useEndpointResource({ path, enabled: false });
-const canSubmit = computed(() => !pending.value && Boolean(body.value.trim()) && body.value.length <= 65536);
+const canSubmit = computed(() => !pending.value && Boolean(body.value.trim()) && body.value.length <= GITHUB_BODY_MAX_LENGTH);
 
 function edit() {
   body.value = props.comment.body;
@@ -43,7 +44,7 @@ async function submit() {
   <form v-if="editing" class="d-flex flex-column ga-2" @submit.prevent="submit">
     <GithubMentionTextarea
       v-model="body" label="Edit comment" :base-path="basePath" :issue="issue" :disabled="pending"
-      :enabled="editing" variant="outlined" rows="4" auto-grow maxlength="65536"
+      :enabled="editing" variant="outlined" rows="4" auto-grow :maxlength="GITHUB_BODY_MAX_LENGTH"
     />
     <div class="d-flex flex-wrap justify-end ga-2">
       <v-btn variant="text" height="48" :disabled="pending" @click="editing = false">Cancel</v-btn>

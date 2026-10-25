@@ -16,6 +16,7 @@
       v-bind="$attrs"
       class="vibe64-session-files__content"
       :active="active && area === 'repo'"
+      :agent-active="agentActive"
       :session-id="sessionId"
       :sessions-api-path="sessionsApiPath"
       :project-slug="projectSlug"
@@ -34,7 +35,7 @@
       :session-id="sessionId"
       :sessions-api-path="sessionsApiPath"
       :project-slug="projectSlug"
-      :agent-active="$attrs.agentActive ?? $attrs['agent-active'] ?? false"
+      :agent-active="agentActive"
     />
   </section>
 </template>
@@ -44,6 +45,7 @@ import { computed, onScopeDispose, ref, watch } from "vue";
 import { mdiArchiveClockOutline, mdiSourceRepository, mdiTrayArrowUp } from "@mdi/js";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
+import { vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import Vibe64SessionSourceEditor from "./Vibe64SessionSourceEditor.vue";
 import Vibe64SessionFileArea from "./Vibe64SessionFileArea.vue";
 
@@ -53,6 +55,7 @@ const props = defineProps({
   repoAvailable: { type: Boolean, default: true },
   archived: { type: Boolean, default: false },
   active: { type: Boolean, default: true },
+  agentActive: { type: Boolean, default: false },
   sessionId: { type: String, required: true },
   sessionsApiPath: { type: String, required: true },
   projectSlug: { type: String, default: "" },
@@ -74,7 +77,7 @@ async function loadAreas() {
   areaError.value = "";
   loadingAreas.value = true;
   try {
-    const result = await getHttpWebClient().request(`${props.sessionsApiPath}/${encodeURIComponent(props.sessionId)}/files`);
+    const result = await getHttpWebClient().request(vibe64SessionPath(props.sessionsApiPath, props.sessionId, "/files"));
     if (result?.ok === false) throw new Error(vibe64ApiResponseError(result, "File areas could not load."));
     if (current !== generation) return;
     areas.value = result.areas;
