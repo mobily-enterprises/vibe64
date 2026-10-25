@@ -232,12 +232,6 @@ function vibe64AgentTerminalControlTextPath(
   )}/control/text`;
 }
 
-function vibe64GlobalCodexTerminalPath(vibe64ApiPath = "", terminalSessionId = "") {
-  return terminalSessionId
-    ? `${vibe64ApiPath}/codex-terminal/${encodePathSegment(terminalSessionId)}`
-    : `${vibe64ApiPath}/codex-terminal`;
-}
-
 function vibe64AgentSessionsReconcilePath(vibe64ApiPath = "") {
   return `${vibe64ApiPath}/agent-sessions/reconcile`;
 }
@@ -443,7 +437,6 @@ export {
   vibe64SessionPromptHintsCancelPath,
   vibe64SessionPromptHintsPath,
   vibe64SessionPreviewStatePath,
-  vibe64GlobalCodexTerminalPath,
   vibe64OutputOpenPath,
   vibe64OutputResultPath,
   vibe64OutputRunPath,

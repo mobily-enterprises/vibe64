@@ -23,10 +23,8 @@ vi.mock("@jskit-ai/shell-web/client/navigation/usePaths", () => ({
 vi.mock("@/composables/useVibe64TerminalCommands.js", () => ({
   useVibe64TerminalCommands: () => ({
     closeAgentTerminal: vi.fn(),
-    closeGlobalCodexTerminal: vi.fn(),
     sendAgentTerminalText: vi.fn(),
-    startAgentTerminal: vi.fn(),
-    startGlobalCodexTerminal: vi.fn()
+    startAgentTerminal: vi.fn()
   })
 }));
 

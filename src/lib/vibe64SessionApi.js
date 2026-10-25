@@ -7,7 +7,6 @@ import {
 } from "@/lib/vibe64BrowserTabOrigin.js";
 import {
   vibe64AgentTerminalPath,
-  vibe64GlobalCodexTerminalPath,
   vibe64OutputRunPath
 } from "@/lib/vibe64SessionRequestConfig.js";
 
@@ -32,10 +31,6 @@ function vibe64AgentTerminalWebSocketUrl(sessionId, terminalSessionId) {
   return resolveWebSocketUrl(endpoint);
 }
 
-function vibe64GlobalCodexTerminalWebSocketUrl(_scopeId, terminalSessionId) {
-  return resolveWebSocketUrl(`${vibe64GlobalCodexTerminalPath(VIBE64_ENDPOINT, terminalSessionId)}/ws`);
-}
-
 function vibe64OutputTerminalWebSocketUrl(sessionId, terminalSessionId, sessionsEndpoint = VIBE64_SESSIONS_ENDPOINT) {
   return resolveWebSocketUrl(
     `${vibe64OutputRunPath(sessionsEndpoint, sessionId, terminalSessionId)}/ws`
@@ -44,6 +39,5 @@ function vibe64OutputTerminalWebSocketUrl(sessionId, terminalSessionId, sessions
 
 export {
   vibe64AgentTerminalWebSocketUrl,
-  vibe64GlobalCodexTerminalWebSocketUrl,
   vibe64OutputTerminalWebSocketUrl
 };

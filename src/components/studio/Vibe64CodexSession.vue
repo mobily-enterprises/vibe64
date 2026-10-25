@@ -165,8 +165,7 @@ import Vibe64InteractiveTerminal from "@/components/studio/Vibe64InteractiveTerm
 import Vibe64AttachmentQueue from "@/components/studio/vibe64-session/Vibe64AttachmentQueue.vue";
 import { useVibe64Terminal } from "@/composables/useVibe64Terminal.js";
 import {
-  vibe64AgentTerminalWebSocketUrl,
-  vibe64GlobalCodexTerminalWebSocketUrl
+  vibe64AgentTerminalWebSocketUrl
 } from "@/lib/vibe64SessionApi.js";
 import { useVibe64CodexCommands } from "@/composables/useVibe64CodexCommands.js";
 import { useAgentTerminalAttachments } from "@/composables/useAgentTerminalAttachments.js";
@@ -212,23 +211,9 @@ const props = defineProps({
   listenWhenHidden: {
     type: Boolean,
     default: false
-  },
-  autoFocus: {
-    type: Boolean,
-    default: false
-  },
-  scope: {
-    type: String,
-    default: "session",
-    validator: (value) => ["session", "global"].includes(value)
-  },
-  terminal: {
-    type: Object,
-    default: null
   }
 });
 const emit = defineEmits([
-  "activity-change",
   "session-update"
 ]);
 const codexCommands = useVibe64CodexCommands();
@@ -239,20 +224,14 @@ const terminalAttachmentFileInput = ref(null);
 const staleTerminalSessionIds = ref(new Set());
 let terminalStartPromise = null;
 
-const globalScope = computed(() => props.scope === "global");
 const sessionId = computed(() => props.session?.sessionId || "");
-const terminalScopeId = computed(() => (globalScope.value ? "global" : sessionId.value));
 const terminalAttachmentsEnabled = computed(() => Boolean(
-  !globalScope.value &&
   !props.readOnly &&
   sessionId.value
 ));
 const sessionSource = computed(() => vibe64SessionSourcePath(props.session || {}));
 const terminalDisplayActive = computed(() => props.visible && props.displayMode !== "headless");
 const rawServerCodexTerminal = computed(() => {
-  if (props.terminal && typeof props.terminal === "object" && !Array.isArray(props.terminal)) {
-    return props.terminal;
-  }
   const terminal = props.session?.agentSession?.terminal;
   return terminal && typeof terminal === "object" && !Array.isArray(terminal) ? terminal : {};
 });
@@ -299,49 +278,34 @@ const hasTerminalSession = computed(() => Boolean(
   serverTerminalSession.value.id
 ));
 
-const canUseTerminal = computed(() => {
-  if (globalScope.value) {
-    return Boolean(
-      terminalStreamActive.value &&
-      terminalScopeId.value &&
-      (props.allowStart || serverTerminalSession.value.id)
-    );
-  }
-  return Boolean(
-    terminalStreamActive.value &&
-    sessionId.value &&
-    (
-      serverTerminalSession.value.id ||
-      (props.allowStart && sessionSource.value)
-    )
-  );
-});
-const canStartTerminal = computed(() => {
-  if (globalScope.value) {
-    return Boolean(props.allowStart && terminalDisplayActive.value && terminalScopeId.value);
-  }
-  return Boolean(props.allowStart && terminalDisplayActive.value && sessionId.value && sessionSource.value);
-});
+const canUseTerminal = computed(() => Boolean(
+  terminalStreamActive.value &&
+  sessionId.value &&
+  (
+    serverTerminalSession.value.id ||
+    (props.allowStart && sessionSource.value)
+  )
+));
+const canStartTerminal = computed(() => Boolean(
+  props.allowStart &&
+  terminalDisplayActive.value &&
+  sessionId.value &&
+  sessionSource.value
+));
 
 const {
   appendTerminalOutput: noteTerminalOutputChunk,
   clearCodexBusy,
   clearCodexWorking,
-  codexBusy,
-  codexWorking,
   markCodexBusy,
   resetTerminalOutput,
-  terminalStreaming,
   writeTerminalOutput: noteTerminalOutputSnapshot
-} = useCodexTerminalOutput({
-  emitBusyChanged: emitCodexActivityChanged,
-  sessionId: terminalScopeId
-});
+} = useCodexTerminalOutput();
 const terminalController = useVibe64Terminal({
   driver: createWebSocketTerminalDriver({
     closeSession: closeCodexTerminalDriverSession,
     webSocketUrl(terminalId) {
-      return webSocketUrlForScope(terminalScopeId.value, terminalId);
+      return vibe64AgentTerminalWebSocketUrl(sessionId.value, terminalId);
     }
   }),
   fitOnResize: true,
@@ -360,7 +324,7 @@ const {
   focusTerminal: focusTerminalUi,
   resetTerminalDisplay,
   resetTerminalSessionState,
-    sendTerminalData: sendTerminalBytes,
+  sendTerminalData: sendTerminalBytes,
   terminalFocused,
   terminalCommandPreview,
   terminalConnectionStatus,
@@ -422,10 +386,10 @@ const {
   deleteAttachment: codexCommands.deleteAttachment,
   ensureTerminalReady,
   focusTerminal,
-  sendAttachmentPath: sendAttachmentPathForScope,
-  sessionId: terminalScopeId,
+  sendAttachmentPath,
+  sessionId,
   terminalSessionId,
-  uploadAttachment: uploadAttachmentForScope
+  uploadAttachment: codexCommands.uploadAttachment
 });
 const terminalAttachmentActionLabel = computed(() => (
   attachmentCanAddFiles.value
@@ -490,7 +454,6 @@ function handleTerminalAttachmentDrop(event) {
 }
 const terminalCanStart = computed(() => Boolean(canStartTerminal.value));
 const sessionSourcePending = computed(() => Boolean(
-  !globalScope.value &&
   terminalDisplayActive.value &&
   sessionId.value &&
   !sessionSource.value &&
@@ -584,31 +547,16 @@ function ensureTerminalReady() {
   });
 }
 
-function emitCodexActivityChanged(payload = {}) {
-  const busy = Object.hasOwn(payload, "busy") ? Boolean(payload.busy) : Boolean(codexBusy.value);
-  const working = Object.hasOwn(payload, "working") ? Boolean(payload.working) : Boolean(codexWorking.value);
-  const streaming = Object.hasOwn(payload, "streaming") ? Boolean(payload.streaming) : Boolean(terminalStreaming.value);
-  emit("activity-change", {
-    active: Boolean(streaming),
-    busy,
-    scope: props.scope,
-    sessionId: String(payload.sessionId || terminalScopeId.value || ""),
-    streaming,
-    terminalSessionId: terminalSessionId.value || serverTerminalSession.value.id || "",
-    working
-  });
-}
-
 function emitTerminalSessionState(extra = {}) {
   const currentTerminalId = String(extra.agentTerminalSessionId || terminalSessionId.value || "");
-  if (!terminalScopeId.value || !currentTerminalId) {
+  if (!sessionId.value || !currentTerminalId) {
     return;
   }
   emit("session-update", {
     agentTerminalCommandPreview: terminalCommandPreview.value,
     agentTerminalSessionId: currentTerminalId,
     agentTerminalStatus: terminalStatus.value,
-    sessionId: terminalScopeId.value,
+    sessionId: sessionId.value,
     ...extra
   });
 }
@@ -651,20 +599,8 @@ function handleTerminalUserData(data) {
   }
 }
 
-function startTerminalSessionForScope(currentScopeId) {
-  return globalScope.value
-    ? codexCommands.startGlobalCodexTerminal()
-    : codexCommands.startAgentTerminal(currentScopeId);
-}
-
-function closeTerminalSessionForScope(currentScopeId, terminalId) {
-  return globalScope.value
-    ? codexCommands.closeGlobalCodexTerminal(currentScopeId, terminalId)
-    : codexCommands.closeAgentTerminal(currentScopeId, terminalId);
-}
-
 async function closeCodexTerminalDriverSession(terminalId) {
-  const result = await closeTerminalSessionForScope(terminalScopeId.value, terminalId);
+  const result = await codexCommands.closeAgentTerminal(sessionId.value, terminalId);
   if (result?.ok === false) {
     throw new Error(vibe64TerminalErrorMessage(result, "Codex terminal process could not be stopped."));
   }
@@ -712,12 +648,6 @@ async function applyCodexTerminalSession(session = {}, {
   };
 }
 
-function webSocketUrlForScope(currentScopeId, terminalId) {
-  return globalScope.value
-    ? vibe64GlobalCodexTerminalWebSocketUrl(currentScopeId, terminalId)
-    : vibe64AgentTerminalWebSocketUrl(currentScopeId, terminalId);
-}
-
 function openCodexReconnectDialog() {
   requestVibe64AccountConnectionsDialog({
     codexReconnectRequired: true,
@@ -755,15 +685,8 @@ useRealtimeEvent({
   }
 });
 
-async function uploadAttachmentForScope(currentScopeId, file, options = {}) {
-  if (globalScope.value) {
-    throw new Error("Temporary attachments are available in session Codex terminals.");
-  }
-  return codexCommands.uploadAttachment(currentScopeId, file, options);
-}
-
-async function sendAttachmentPathForScope(text, attachmentIds = [], target = {}) {
-  if (globalScope.value || !sessionId.value || !terminalSessionId.value) {
+async function sendAttachmentPath(text, attachmentIds = [], target = {}) {
+  if (!sessionId.value || !terminalSessionId.value) {
     throw new Error("Codex terminal is not ready for attachments.");
   }
   const response = await codexCommands.sendAgentTerminalText(
@@ -821,13 +744,6 @@ async function focusWritableTerminalWhenShown(visible) {
   }
   await nextTick();
   focusTerminal();
-  for (const delayMs of [50, 150, 300]) {
-    globalThis.setTimeout(() => {
-      if (terminalDisplayActive.value && props.autoFocus && !props.readOnly && !terminalFocused.value) {
-        focusTerminal();
-      }
-    }, delayMs);
-  }
 }
 
 async function connectAttachedTerminal() {
@@ -863,7 +779,7 @@ async function startTerminalOnce() {
   terminalStarting.value = true;
   terminalError.value = "";
   try {
-    const session = await startTerminalSessionForScope(terminalScopeId.value);
+    const session = await codexCommands.startAgentTerminal(sessionId.value);
     if (session?.ok === false) {
       if (codexReconnectRequiredResult(session)) {
         terminalError.value = CODEX_RECONNECT_REQUIRED_MESSAGE;
@@ -1029,7 +945,7 @@ watch([
 });
 
 watch(terminalDisplayActive, (visible, previousVisible) => {
-  if (visible && (previousVisible === false || props.autoFocus)) {
+  if (visible && previousVisible === false) {
     void focusWritableTerminalWhenShown(visible);
   }
 }, {

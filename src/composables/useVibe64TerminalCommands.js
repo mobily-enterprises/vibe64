@@ -7,8 +7,7 @@ import {
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
   vibe64AgentTerminalControlTextPath,
-  vibe64AgentTerminalPath,
-  vibe64GlobalCodexTerminalPath
+  vibe64AgentTerminalPath
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
   readRefOrGetterValue
@@ -41,14 +40,10 @@ function useProvidedPath(providedPath, fallback) {
 }
 
 function useVibe64TerminalCommands({
-  sessionsApiPath: providedSessionsApiPath = null,
-  vibe64ApiPath: providedVibe64ApiPath = null
+  sessionsApiPath: providedSessionsApiPath = null
 } = {}) {
   const paths = usePaths();
   const sessionsApiPath = useProvidedPath(providedSessionsApiPath, () => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
-    surface: VIBE64_SURFACE_ID
-  }));
-  const vibe64ApiPath = useProvidedPath(providedVibe64ApiPath, () => paths.api(VIBE64_API_SUFFIX, {
     surface: VIBE64_SURFACE_ID
   }));
 
@@ -140,10 +135,6 @@ function useVibe64TerminalCommands({
     );
   }
 
-  async function startGlobalCodexTerminal() {
-    return await runStart(vibe64GlobalCodexTerminalPath(vibe64ApiPath.value));
-  }
-
   async function closeAgentTerminal(sessionId = "", terminalSessionId = "") {
     const normalizedSessionId = normalizedId(sessionId);
     const normalizedTerminalSessionId = normalizedId(terminalSessionId);
@@ -182,21 +173,11 @@ function useVibe64TerminalCommands({
     });
   }
 
-  async function closeGlobalCodexTerminal(scopeIdOrTerminalSessionId = "", terminalSessionId = "") {
-    const normalizedTerminalSessionId = normalizedId(terminalSessionId || scopeIdOrTerminalSessionId);
-    if (!normalizedTerminalSessionId) {
-      return commandMissingResponse("Codex terminal id is required.");
-    }
-    return await runClose(vibe64GlobalCodexTerminalPath(vibe64ApiPath.value, normalizedTerminalSessionId));
-  }
-
   return {
     closeAgentTerminal,
-    closeGlobalCodexTerminal,
     closeTerminalCommand,
     sendAgentTerminalText,
     startAgentTerminal,
-    startGlobalCodexTerminal,
     startTerminalCommand,
     writeTerminalCommand
   };

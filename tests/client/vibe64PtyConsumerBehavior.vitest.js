@@ -106,11 +106,9 @@ vi.mock("@/components/studio/vibe64-session/Vibe64AttachmentQueue.vue", () => ({
 vi.mock("@/composables/useVibe64CodexCommands.js", () => ({
   useVibe64CodexCommands: () => ({
     closeAgentTerminal: vi.fn().mockResolvedValue({ ok: true }),
-    closeGlobalCodexTerminal: vi.fn().mockResolvedValue({ ok: true }),
     deleteAttachment: vi.fn(),
     sendAgentTerminalText: vi.fn().mockResolvedValue({ ok: true }),
     startAgentTerminal: vi.fn(),
-    startGlobalCodexTerminal: vi.fn(),
     uploadAttachment: vi.fn()
   })
 }));
@@ -152,11 +150,8 @@ vi.mock("@/composables/useCodexTerminalOutput.js", () => ({
     appendTerminalOutput: vi.fn(),
     clearCodexBusy: vi.fn(),
     clearCodexWorking: vi.fn(),
-    codexBusy: ref(false),
-    codexWorking: ref(false),
     markCodexBusy: vi.fn(),
     resetTerminalOutput: vi.fn(),
-    terminalStreaming: ref(false),
     writeTerminalOutput: vi.fn()
   })
 }));
@@ -164,9 +159,6 @@ vi.mock("@/composables/useCodexTerminalOutput.js", () => ({
 vi.mock("@/lib/vibe64SessionApi.js", () => ({
   vibe64AgentTerminalWebSocketUrl: (sessionId, terminalId) => (
     `ws://codex/${sessionId}/${terminalId}`
-  ),
-  vibe64GlobalCodexTerminalWebSocketUrl: (scopeId, terminalId) => (
-    `ws://codex/${scopeId}/${terminalId}`
   )
 }));
 
@@ -431,15 +423,13 @@ describe("visible PTY consumer behavior", () => {
     });
   });
 
-  it("does not render attachment actions for global or read-only terminals", async () => {
+  it("does not render attachment actions for session-less or read-only terminals", async () => {
     for (const terminalProps of [
       {
         readOnly: true,
         session: { sessionId: "read-only-session" }
       },
-      {
-        scope: "global"
-      }
+      {}
     ]) {
       const container = terminalHostNode("root");
       const app = testRenderer.createApp({
