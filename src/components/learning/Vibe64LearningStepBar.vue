@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router";
 import { mdiApplicationOutline, mdiBookOpenPageVariantOutline, mdiChevronLeft, mdiChevronRight, mdiPause, mdiPlay } from "@mdi/js";
 import { aiOnboardingAvailable, aiOnboardingNeeded, requestVibe64AiOnboarding } from "@local/vibe64-accounts/client";
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
+import { STEP_STATUS_LABELS, checkNote, reviewRunNote } from "@/lib/vibe64Learning.js";
 import { projectAppPath, projectSlugFromPathname } from "@/lib/vibe64ProjectScope.js";
 import Vibe64LessonToggle from "./Vibe64LessonToggle.vue";
 
@@ -33,7 +34,6 @@ const visible = computed(() => Boolean(learning?.stepBarVisible));
 const ended = computed(() => Boolean(lesson.value?.attempt?.ended));
 const aiRequired = computed(() => Boolean(learning?.aiRequired));
 const busy = computed(() => learning?.state.busy || "");
-const statusLabel = Object.freeze({ passed: "Passed", "not-yet-passed": "Not yet passed", "not-started": "Not checked yet" });
 const status = computed(() => step.value ? learning.stepStatus(step.value.id) : "not-started");
 const beats = computed(() => player.value?.beats.value || []);
 const beat = computed(() => player.value?.beat.value || null);
@@ -74,7 +74,7 @@ async function check() {
   const stepId = step.value.id;
   note.value = "";
   const result = await learning.runCheck(stepId);
-  if (step.value?.id === stepId && result?.outcome === "not-yet-passed" && result.reason) note.value = `Not yet: ${result.reason}`;
+  if (step.value?.id === stepId) note.value = checkNote(result);
 }
 // Check my work on a review step: the reviewer's verdict, or why it could not review.
 const reviewing = computed(() => Boolean(step.value && busy.value === `review:${step.value.id}`));
@@ -84,7 +84,7 @@ async function checkReview() {
   const result = await learning.review(stepId);
   // A pass on a step with beats is said on the beat's line itself.
   if (step.value?.id !== stepId || (result?.outcome === "passed" && beats.value.length)) return;
-  note.value = result ? learning.reviewNote(result) : learning.state.lessonError || "Your work could not be checked. Try again.";
+  note.value = reviewRunNote(result, learning.state.lessonError);
 }
 async function showMe() {
   note.value = "";
@@ -182,7 +182,7 @@ const openPractice = () => router?.push(projectAppPath(practiceSlug.value));
       <div v-else class="vibe64-learning-step-bar__line">
         <span v-if="beats.length" class="vibe64-learning-step-bar__beat" aria-live="polite" data-test="learning-step-bar-beat">{{ beatText }}</span>
         <span v-else-if="step.required || status === 'passed'" class="vibe64-learning-step-bar__status" :class="`is-${status}`">
-          {{ step.required ? statusLabel[status] : "Done" }}
+          {{ step.required ? STEP_STATUS_LABELS[status] : "Done" }}
         </span>
         <v-btn
           v-if="canDoIt" color="primary" variant="flat" rounded="pill" min-height="40" data-test="learning-step-bar-do-it"

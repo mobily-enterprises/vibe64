@@ -3,7 +3,7 @@ import { computed, nextTick, ref, shallowRef, watch } from "vue";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import TrainingVisualPlayer from "@local/vibe64-training/client/visual-player";
 import { resolveStudioRequestUrl } from "@/lib/studioUrls.js";
-import { VIBE64_LEARNING_ROUTES } from "@/lib/vibe64Learning.js";
+import { STEP_STATUS_LABELS, VIBE64_LEARNING_ROUTES, checkNote, reviewRunNote } from "@/lib/vibe64Learning.js";
 import Vibe64LearningMarkdown from "./Vibe64LearningMarkdown.vue";
 
 // One lesson step exactly as the reader shows it: label, title, Markdown body,
@@ -33,7 +33,6 @@ const index = computed(() => steps.value.findIndex(value => value.id === step.va
 const ended = computed(() => Boolean(lesson.value?.attempt?.ended));
 const busy = computed(() => props.learning.state.busy);
 const statusOf = stepId => props.learning.stepStatus(stepId);
-const statusLabel = Object.freeze({ passed: "Passed", "not-yet-passed": "Not yet passed", "not-started": "Not checked yet" });
 const kind = computed(() => step.value?.check?.kind || "none");
 
 // Choice: the selection is local until Check answer; the answer key never reaches the browser.
@@ -119,18 +118,11 @@ async function play() {
 const checkReason = ref("");
 // Separate sources: a lesson reread after the check keeps the same IDs and must not clear it.
 watch([() => props.learning.state.attemptId, () => step.value?.id], () => { checkReason.value = ""; });
-// A step passed earlier in this attempt keeps its pass: the server neither
-// checks nor records a later answer or check, so say so instead of a bare "Passed".
-const ALREADY_PASSED = "You already passed this step, so this was not checked again. Your earlier pass counts.";
-function resultNote(result) {
-  if (result?.alreadyPassed) return ALREADY_PASSED;
-  return result?.outcome === "not-yet-passed" && result.reason ? String(result.reason) : "";
-}
 async function runCheck() {
   const stepId = step.value.id;
   checkReason.value = "";
   const result = await props.learning.runCheck(stepId);
-  if (step.value?.id === stepId) checkReason.value = resultNote(result);
+  if (step.value?.id === stepId) checkReason.value = checkNote(result);
 }
 // A review step: the reviewer's verdict, or why it could not review.
 async function runReview() {
@@ -138,14 +130,14 @@ async function runReview() {
   checkReason.value = "";
   const result = await props.learning.review(stepId);
   if (step.value?.id === stepId) {
-    checkReason.value = result ? props.learning.reviewNote(result) : props.learning.state.lessonError || "Your work could not be checked. Try again.";
+    checkReason.value = reviewRunNote(result, props.learning.state.lessonError);
   }
 }
 async function answer() {
   const stepId = step.value.id;
   checkReason.value = "";
   const result = await props.learning.answer(stepId, selected.value);
-  if (step.value?.id === stepId) checkReason.value = resultNote(result);
+  if (step.value?.id === stepId) checkReason.value = checkNote(result);
 }
 
 async function showMe() {
@@ -263,7 +255,7 @@ async function markRead() {
         @click="learning.done(step.id)">Done</v-btn>
     </section>
     <p v-if="kind !== 'none'" class="vibe64-learning-step__status" :class="`is-${statusOf(step.id)}`" role="status" data-test="learning-step-status">
-      {{ statusLabel[statusOf(step.id)] }}
+      {{ STEP_STATUS_LABELS[statusOf(step.id)] }}
     </p>
     <template v-else-if="readingDone">
       <p class="vibe64-learning-step__status is-passed" role="status" data-test="learning-step-status">Done</p>

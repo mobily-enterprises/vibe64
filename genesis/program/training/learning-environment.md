@@ -121,7 +121,11 @@ guide overlay 3000 above L 2400 above Colleague.
   your work with your AI…" (no Cancel); the result shows Passed ✓ with the
   comment, Not yet with comment and Hint (Check again), or the server's reason
   (No changes yet) or failure message; a passed review step shows its saved
-  comment. The step view offers the same.
+  comment. The step view offers the same. The bar, the step view and the
+  reader's step list share `STEP_STATUS_LABELS`, `checkNote(result)` (an
+  answer or check: the earlier pass kept, or the bare not-passed reason) and
+  `reviewRunNote(result, lessonError)`, so every surface says a result the
+  same way.
 - I'm stuck (`stuck(stepId)`): offered until the step passes, by the bar on a
   do beat and in the final state of an `auto` or `review` step, and by the step
   view on such steps (focus also reports `learningBeat`, the bar's beat index); it records a Colleague request of kind

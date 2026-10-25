@@ -206,17 +206,37 @@ function modeRedirect({ mode = null, slug = "", path = "" } = {}) {
   return null;
 }
 
+// A step's status, as the Lesson pane, its step list and the step bar say it.
+const STEP_STATUS_LABELS = Object.freeze({ passed: "Passed", "not-yet-passed": "Not yet passed", "not-started": "Not checked yet" });
+
+// A step passed earlier in this attempt keeps its pass: the server neither
+// checks nor records a later answer, check or review.
+const ALREADY_PASSED_NOTE = "You already passed this step, so this was not checked again. Your earlier pass counts.";
+
+// The words for an answer or check result (step.answer, step.check): an
+// earlier pass kept, or why it did not pass. A pass says nothing more.
+function checkNote(result) {
+  if (result?.alreadyPassed) return ALREADY_PASSED_NOTE;
+  return result?.outcome === "not-yet-passed" && result.reason ? String(result.reason) : "";
+}
+
 // The words for a review result (step.review.run, or a saved review result):
 // its verdict with the reviewer's comment, and a Not yet's hint.
 function reviewNote(result) {
   if (!result) return "";
-  if (result.alreadyPassed) return "You already passed this step, so your work was not reviewed again. Your earlier pass counts.";
+  if (result.alreadyPassed) return ALREADY_PASSED_NOTE;
   const comment = String(result.review?.comment || "").trim();
   const hint = String(result.review?.hint || "").trim();
   if (result.outcome === "passed") return comment ? `Passed ✓ ${comment}` : "Passed ✓";
   // No review (for example no changes yet): the server's reason as it is.
   if (!comment) return String(result.reason || "").trim();
   return `Not yet: ${comment}${hint ? ` Hint: ${hint}` : ""}`;
+}
+
+// The words after Check my work on a review step: its result, or why the
+// review could not run (the lesson's error from step.review.run).
+function reviewRunNote(result, lessonError = "") {
+  return result ? reviewNote(result) : lessonError || "Your work could not be checked. Try again.";
 }
 
 // passed wins over any later not-yet-passed (a pass is final); otherwise the latest outcome.
@@ -1217,4 +1237,4 @@ function revealCurrentStep(list) {
   return true;
 }
 
-export { VIBE64_DEVELOP_MODE_NOTE, VIBE64_LEARNING_AI_REQUIRED_CODE, VIBE64_LEARNING_MODE_NOTE, VIBE64_LEARNING_MODE_PROJECT_CODE, VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_PAGE_PATH, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_STUCK_MESSAGE, VIBE64_LEARNING_TEACH_MESSAGE, VIBE64_LESSON_IN_PROGRESS_CODE, createVibe64Learning, lessonShownIn, modeRedirect, normalizePractice, openLessonLink, orientationSelection, reviewNote, revealCurrentStep, setLearningStudioHome, showMeCommand, stepStatus, withLesson, withoutLesson };
+export { STEP_STATUS_LABELS, VIBE64_DEVELOP_MODE_NOTE, VIBE64_LEARNING_AI_REQUIRED_CODE, VIBE64_LEARNING_MODE_NOTE, VIBE64_LEARNING_MODE_PROJECT_CODE, VIBE64_LEARNING_NOTES_MAX, VIBE64_LEARNING_PAGE_PATH, VIBE64_LEARNING_ROUTES, VIBE64_LEARNING_STUCK_MESSAGE, VIBE64_LEARNING_TEACH_MESSAGE, VIBE64_LESSON_IN_PROGRESS_CODE, checkNote, createVibe64Learning, lessonShownIn, modeRedirect, normalizePractice, openLessonLink, orientationSelection, reviewNote, reviewRunNote, revealCurrentStep, setLearningStudioHome, showMeCommand, stepStatus, withLesson, withoutLesson };

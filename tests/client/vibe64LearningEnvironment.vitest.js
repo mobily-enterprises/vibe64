@@ -1698,7 +1698,7 @@ function mountStepBar(learning, accounts = { aiOnboardingAvailable: Vue.ref(true
   const bar = compiledUi(path.resolve("src/components/learning/Vibe64LearningStepBar.vue"), {
     vue: Vue, "@mdi/js": STEP_BAR_ICONS, "vue-router": { useRoute: () => route, useRouter: () => router },
     "@/lib/vibe64ProjectScope.js": ProjectScope, "./Vibe64LessonToggle.vue": { default: toggle },
-    "@/composables/useVibe64Learning.js": learningImport,
+    "@/composables/useVibe64Learning.js": learningImport, "@/lib/vibe64Learning.js": LearningLib,
     "@local/vibe64-accounts/client": accounts });
   const root = { children: [] };
   const app = uiRenderer().createApp({ render: () => Vue.h(bar) });
@@ -1805,6 +1805,29 @@ describe("Lesson step bar", () => {
       expect(LearningLib.reviewNote({ outcome: "not-yet-passed", recorded: false, reason: "No changes yet. Change your practice project first, then check your work again." }))
         .toBe("No changes yet. Change your practice project first, then check your work again.");
     } finally { app.unmount(); }
+  });
+
+  it("says a check result in the same words as the Lesson pane", async () => {
+    const reason = "No App interaction has been captured for this step yet. Press the App's control in this lesson's Preview first.";
+    const { learning } = controller({ posts: () => ({ ok: true, stepId: "preview", outcome: "not-yet-passed", recorded: false, reason }) });
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT, stepId: "preview" });
+    await flush();
+    const { root, app } = mountStepBar(learning);
+    try {
+      learning.selectStep("preview");
+      await flush();
+      expect(textOf(byTest(root, "learning-step-bar-verdict")).trim()).toBe("Check my work");
+      await byTest(root, "learning-step-bar-verdict").props.onClick();
+      await flush();
+      expect(textOf(byTest(root, "learning-step-bar-note"))).toBe(reason);
+    } finally { app.unmount(); }
+    const kept = "You already passed this step, so this was not checked again. Your earlier pass counts.";
+    expect([LearningLib.checkNote({ outcome: "passed", alreadyPassed: true }), LearningLib.reviewNote({ outcome: "passed", alreadyPassed: true })])
+      .toEqual([kept, kept]);
+    expect([LearningLib.checkNote({ outcome: "passed" }), LearningLib.checkNote(null)]).toEqual(["", ""]);
+    expect(LearningLib.reviewRunNote(null, "Network")).toBe("Network");
+    expect(LearningLib.reviewRunNote(null)).toBe("Your work could not be checked. Try again.");
   });
 
   it("opens Colleague for an open request without sending anything", async () => {

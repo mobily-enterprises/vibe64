@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
-import { revealCurrentStep } from "@/lib/vibe64Learning.js";
+import { STEP_STATUS_LABELS, revealCurrentStep } from "@/lib/vibe64Learning.js";
 import Vibe64LearningMarkdown from "./Vibe64LearningMarkdown.vue";
 import Vibe64LearningStep from "./Vibe64LearningStep.vue";
 
@@ -22,7 +22,6 @@ const lesson = computed(() => props.learning.lesson.value);
 const steps = computed(() => lesson.value?.steps || []);
 const step = computed(() => props.learning.currentStep.value);
 const statusOf = stepId => props.learning.stepStatus(stepId);
-const statusLabel = Object.freeze({ passed: "Passed", "not-yet-passed": "Not yet passed", "not-started": "Not checked yet" });
 const requiredDone = computed(() => props.learning.complete);
 
 // Scroll: the reader returns to the saved place of the current step.
@@ -86,7 +85,7 @@ watch([() => step.value?.id, () => props.visible], async ([, shown]) => {
             >
               <span class="vibe64-learning-reader__step-mark" aria-hidden="true">{{ statusOf(value.id) === 'passed' ? '✓' : position + 1 }}</span>
               <span class="vibe64-learning-reader__step-title">{{ value.title }}</span>
-              <span class="vibe64-learning-reader__step-status">{{ value.required ? statusLabel[statusOf(value.id)] : statusOf(value.id) === 'passed' ? 'Done' : 'Optional' }}</span>
+              <span class="vibe64-learning-reader__step-status">{{ value.required ? STEP_STATUS_LABELS[statusOf(value.id)] : statusOf(value.id) === 'passed' ? 'Done' : 'Optional' }}</span>
             </button>
           </li>
         </ol>
