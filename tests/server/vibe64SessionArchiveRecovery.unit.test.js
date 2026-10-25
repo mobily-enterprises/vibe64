@@ -104,6 +104,29 @@ test("failure is durable, announced, and not repeatedly retried at startup", asy
   assert.deepEqual(f.calls, ["stop", "resources", "source"]);
 });
 
+test("an unreadable archive marker is reported per session and recovery continues", async () => {
+  const f = fixture({ status: "running", phase: "source" });
+  const corrupt = { sessionId: "session-corrupt", sourceReady: true, status: "active",
+    metadata: { session_archive_operation: "{not json", session_closing_reason: "archived" } };
+  f.runtime.listSessionSummaries = async () => [structuredClone(corrupt), structuredClone(f.session)];
+  const report = await f.service().resumeSessionArchives();
+  assert.deepEqual(report.failures.map(({ sessionId, code }) => ({ sessionId, code })),
+    [{ sessionId: "session-corrupt", code: "vibe64_session_archive_state_invalid" }]);
+  assert.deepEqual(f.calls, ["source"]);
+  assert.equal(f.session.status, "archived");
+});
+
+test("archiving refuses an archive marker with an unknown phase and keeps it", async () => {
+  const f = fixture({ status: "running", phase: "elsewhere" });
+  const marker = f.session.metadata.session_archive_operation;
+  const result = await f.service().archiveSession("session-a");
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "vibe64_session_archive_state_invalid");
+  assert.match(result.error, /recovery evidence was preserved/u);
+  assert.equal(f.session.metadata.session_archive_operation, marker);
+  assert.deepEqual(f.calls, []);
+});
+
 test("structured cleanup refusal never removes source", async () => {
   const f = fixture();
   f.project.releaseSessionResources = async () => ({ ok: false, error: "Cleanup refused" });

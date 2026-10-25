@@ -61,6 +61,24 @@ function record(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+// A session's persisted archive progress. Unreadable progress is refused with
+// one coded error so recovery never guesses at what was already removed.
+const SESSION_ARCHIVE_STATUSES = new Set(["running", "failed"]);
+const SESSION_ARCHIVE_PHASES = new Set(["stopping", "resources", "source"]);
+function readSessionArchiveOperation(metadata = {}) {
+  const stored = text(metadata?.session_archive_operation);
+  if (!stored) return null;
+  let operation = null;
+  try { operation = JSON.parse(stored); } catch { operation = null; }
+  if (!operation || typeof operation !== "object" || Array.isArray(operation) ||
+    !SESSION_ARCHIVE_STATUSES.has(operation.status) || !SESSION_ARCHIVE_PHASES.has(operation.phase)) {
+    throw Object.assign(new Error("Session archive state is invalid; its recovery evidence was preserved."), {
+      code: "vibe64_session_archive_state_invalid"
+    });
+  }
+  return operation;
+}
+
 const REPOSITORY_UPDATE_CHECK_METADATA = "repository_update_check";
 const REPOSITORY_UPDATE_CHECK_CACHE_MS = 25_000;
 // A starter's workspace preparation waits this long for a busy session.
@@ -861,12 +879,7 @@ function createService({
           }
           const sourceCreationFailed = currentSession.sourceReady !== true &&
             text(currentSession.metadata?.source_creation_failed).toLowerCase() === "yes";
-          const stored = text(currentSession.metadata?.session_archive_operation);
-          const previous = stored ? JSON.parse(stored) : {};
-          if (stored && (!["running", "failed"].includes(previous.status) ||
-            !["stopping", "resources", "source"].includes(previous.phase))) {
-            throw new Error("Session archive state is invalid; its recovery evidence was preserved.");
-          }
+          const previous = readSessionArchiveOperation(currentSession.metadata) || {};
           const operation = {
             phase: previous.status === "failed" && !currentSession.metadata?.session_closing_reason
               ? "stopping"
@@ -1437,8 +1450,14 @@ function createService({
       for (const session of sessions) {
         if (signal?.aborted) break;
         if (session.status === "archived") continue;
-        const stored = text(session.metadata?.session_archive_operation);
-        const operation = stored ? JSON.parse(stored) : null;
+        let operation;
+        try {
+          operation = readSessionArchiveOperation(session.metadata);
+        } catch (error) {
+          // One unreadable marker must not stop recovery of the other sessions.
+          failures.push({ sessionId: session.sessionId, ok: false, code: error.code, error: error.message });
+          continue;
+        }
         if (operation?.status === "failed") continue;
         if (operation?.status !== "running" && session.metadata?.session_closing_reason !== "archived") continue;
         const result = await archiveSession(session.sessionId);

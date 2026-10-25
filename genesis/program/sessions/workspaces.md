@@ -409,7 +409,9 @@ context when interrupting its assistant,
 including a cold manager after restart; cleanup must not default to another
 engine merely because the conversation has not been opened in this process.
 Durable stopping, resources, and source stages let startup resume interrupted
-archives. A failure retains its
+archives. An unreadable or unknown stage is refused with
+`vibe64_session_archive_state_invalid` and kept as evidence; startup reports it
+for that session and continues resuming the others. A failure retains its
 stage and error for explicit retry; source recovery evidence keeps its protection
 marker. Startup also finalizes interrupted archive publication from the immutable
 closing tree. Start, each durable stage transition, completion, and failure publish `vibe64.session.changed` to
