@@ -477,7 +477,7 @@ test("agent Env wrapper forwards stdin over its authenticated session socket", a
     assert.equal(prepared.env[VIBE64_AGENT_ENV_COMMAND_SESSION_ID_ENV], sessionId);
     assert.equal(prepared.env[VIBE64_AGENT_ENV_COMMAND_CONTRACT_VERSION_ENV], "1");
     assert.equal(prepared.env[VIBE64_AGENT_ENV_COMMAND_SOCKET_ENV], prepared.hostSocketPath);
-    assert.match(prepared.env[VIBE64_AGENT_ENV_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
+    assert.match(prepared.env[VIBE64_AGENT_ENV_COMMAND_TOKEN_ENV], /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u);
 
     await prepareAgentHelperCommand({ wrapperHostDir: root });
     const executed = await runWithInput(path.join(root, "vibe64-helper"), [

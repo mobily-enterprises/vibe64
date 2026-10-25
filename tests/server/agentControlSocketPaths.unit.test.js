@@ -10,6 +10,7 @@ import { prepareAgentPreviewCommand } from "../../packages/vibe64-terminals/src/
 import { prepareAgentEnvCommand } from "../../packages/vibe64-terminals/src/server/agentEnvCommand.js";
 import { prepareAgentDatabaseCommand } from "../../packages/vibe64-terminals/src/server/agentDatabaseCommand.js";
 import { prepareAgentSessionCommand } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
+import { agentSessionCommandEnvironmentIsHealthy } from "../../packages/vibe64-terminals/src/server/agentCommandEnvironment.js";
 import { requestUnixJsonCommand, unixCommandSocketPath, unixJsonCommandServerIsHealthy } from "../../packages/vibe64-terminals/src/server/unixJsonCommand.js";
 
 test("a timed-out control health probe retains the listener and its credentials for retry", async (t) => {
@@ -99,6 +100,10 @@ test("all assistant controls connect with long workspace paths and stay isolated
           body: { ...body, sessionId: "another-session" }, path: route, socketPath: prepared.hostSocketPath
         });
         assert.equal(denied.payload.ok, false);
+        assert.equal(await agentSessionCommandEnvironmentIsHealthy(prepared.env), true, prefix);
+        assert.equal(await agentSessionCommandEnvironmentIsHealthy({
+          ...prepared.env, [`${prefix}_GENERATION`]: "stale-generation"
+        }), false, `${prefix} refuses a stale generation`);
       }
       assert.equal(sockets.has(preview.hostBrowserSocketPath), false);
       sockets.add(preview.hostBrowserSocketPath);

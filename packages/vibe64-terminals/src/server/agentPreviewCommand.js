@@ -1,5 +1,4 @@
 import crypto from "node:crypto";
-import http from "node:http";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -47,18 +46,11 @@ import {
   drainBrowserTestExecutions
 } from "./browserTestCleanup.js";
 import {
-  closeUnixJsonCommandServer,
-  closeUnixJsonCommandServersForSession,
-  listenUnixJsonCommandServer,
-  readJsonCommandRequest,
-  reportUnixCommandControlChange,
+  createSessionCommandServers,
   removeDeadUnixJsonCommandSocket,
   requestUnixJsonCommand,
-  sendJsonCommandResponse,
-  shortCommandHash,
   unixCommandSocketPath,
-  unixCommandSocketIsPresent,
-  unixJsonCommandServerIsHealthy
+  unixCommandSocketIsPresent
 } from "./unixJsonCommand.js";
 
 const AGENT_PREVIEW_COMMAND_NAME = "vibe64-preview";
@@ -73,16 +65,6 @@ const AGENT_PREVIEW_BROWSER_METADATA_NAME = "preview-browser.json";
 const AGENT_PREVIEW_COMMAND_SOCKET_NAME = "preview-command.sock";
 const AGENT_PREVIEW_COMMAND_CONTRACT_VERSION = "11";
 const AGENT_PREVIEW_COMMAND_REQUEST_MAX_BYTES = 1024 * 1024;
-const AGENT_PREVIEW_COMMAND_ROUTES = new Set([
-  "/agent-preview-command/browser-start",
-  "/agent-preview-command/browser-stop",
-  "/agent-preview-command/health",
-  "/agent-preview-command/identity",
-  "/agent-preview-command/playwright-run",
-  "/agent-preview-command/playwright-status",
-  "/agent-preview-command/playwright-cancel",
-  "/agent-preview-command/run"
-]);
 const DEFAULT_PLAYWRIGHT_RUN_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_PREVIEW_BROWSER_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_PREVIEW_LOG_LINES = 200;
@@ -97,8 +79,45 @@ const VIBE64_AGENT_PREVIEW_COMMAND_CONTRACT_VERSION_ENV = "VIBE64_AGENT_PREVIEW_
 const VIBE64_AGENT_PREVIEW_COMMAND_GENERATION_ENV = "VIBE64_AGENT_PREVIEW_COMMAND_GENERATION";
 const VIBE64_PREVIEW_BROWSER_WORKER_TOKEN_ENV = "VIBE64_PREVIEW_BROWSER_WORKER_TOKEN";
 
-const commandServers = new Map();
-const commandServerPrepares = new Map();
+const commandServers = createSessionCommandServers({
+  routePrefix: "/agent-preview-command",
+  routes: {
+    "/agent-preview-command/identity": {
+      handle: ({ commandService, input, sessionId }) => commandService.authorizeBrowserIdentity(sessionId, input.identity),
+      status: vibe64StatusCode
+    },
+    "/agent-preview-command/playwright-status": {
+      handle: ({ commandService, sessionId }) => commandService.playwrightStatus(sessionId)
+    },
+    "/agent-preview-command/playwright-cancel": {
+      handle: ({ commandService, input, sessionId }) => commandService.cancelPlaywrightRun(sessionId, normalizeText(input.runId)),
+      status: vibe64StatusCode
+    },
+    "/agent-preview-command/browser-start": {
+      handle: ({ commandService, input, sessionId }) => commandService.browserStart(sessionId, input),
+      status: vibe64StatusCode
+    },
+    "/agent-preview-command/browser-stop": {
+      handle: ({ commandService, input, sessionId }) => commandService.browserStop(sessionId, input),
+      status: vibe64StatusCode
+    },
+    "/agent-preview-command/playwright-run": { handle: streamPlaywrightRun },
+    "/agent-preview-command/run": { handle: ({ commandService, input }) => commandService.run(input) }
+  },
+  label: "preview",
+  maxBytes: AGENT_PREVIEW_COMMAND_REQUEST_MAX_BYTES,
+  invalidJsonError: { code: "vibe64_agent_preview_command_invalid_json", message: "Vibe64 preview command input must be valid JSON." },
+  tooLargeError: { code: "vibe64_agent_preview_command_input_too_large", message: "Vibe64 preview command input is too large." },
+  notFound: responseError("Unknown Vibe64 preview command route.", "vibe64_agent_preview_command_route_not_found"),
+  rejection: {
+    statusCode: 409,
+    payload: responseError("Managed preview control generation is no longer current. Reconnect the assistant.", "vibe64_agent_control_unavailable")
+  },
+  requestFailure: {
+    fallbackCode: "vibe64_agent_preview_command_request_failed",
+    fallbackMessage: "Vibe64 preview command request failed."
+  }
+});
 
 function delay(ms) {
   return new Promise((resolve) => {
@@ -128,20 +147,6 @@ function browserWorkerHostPath(wrapperHostDir = "") {
 
 function browserMetadataHostPath(wrapperHostDir = "") {
   return path.join(wrapperHostDir, AGENT_PREVIEW_BROWSER_METADATA_NAME);
-}
-
-async function readRequestJson(request) {
-  return readJsonCommandRequest(request, {
-    invalidJsonError: {
-      code: "vibe64_agent_preview_command_invalid_json",
-      message: "Vibe64 preview command input must be valid JSON."
-    },
-    maxBytes: AGENT_PREVIEW_COMMAND_REQUEST_MAX_BYTES,
-    tooLargeError: {
-      code: "vibe64_agent_preview_command_input_too_large",
-      message: "Vibe64 preview command input is too large."
-    }
-  });
 }
 
 async function writeWrapper({
@@ -792,7 +797,7 @@ function createAgentPreviewCommandService({
       });
       closed += 1;
     }
-    await closeAgentPreviewCommandServersForSession(normalizedSessionId);
+    await commandServers.closeForSession(normalizedSessionId);
     return closed;
   }
 
@@ -1191,23 +1196,6 @@ function createAgentPreviewCommandService({
     releaseControlForSession,
     run
   });
-}
-
-function verifyRequestToken(input = {}, expectedToken = "") {
-  return normalizeText(input.token) && normalizeText(input.token) === normalizeText(expectedToken);
-}
-
-function commandServerToken({
-  sessionId = "",
-  socketPath = "",
-  wrapperHostDir = ""
-} = {}) {
-  return shortCommandHash([
-    "agent-preview-command-token",
-    normalizeText(sessionId),
-    normalizeText(socketPath),
-    normalizeText(wrapperHostDir)
-  ].join("\n"));
 }
 
 function browserWorkerToken({
@@ -1852,226 +1840,45 @@ async function stopRegisteredBrowserWorkerForInput(sessionId = "", input = {}, {
   });
 }
 
-async function closeAgentPreviewCommandServersForSession(sessionId = "") {
-  await Promise.all([...commandServerPrepares.values()].map((preparation) => (
-    preparation.catch(() => null)
-  )));
-  return closeUnixJsonCommandServersForSession(commandServers, sessionId);
-}
-
-async function ensureAgentPreviewCommandServer({
-  commandService,
-  sessionId = "",
-  socketPath,
-  wrapperHostDir = ""
-} = {}) {
-  const pending = commandServerPrepares.get(socketPath);
-  if (pending) {
-    await pending.catch(() => null);
-    return ensureAgentPreviewCommandServer({
-      commandService,
-      sessionId,
-      socketPath,
-      wrapperHostDir
-    });
-  }
-  const preparation = ensureAgentPreviewCommandServerUnlocked({
-    commandService,
-    sessionId,
-    socketPath,
-    wrapperHostDir
+// Streams the browser-test output as NDJSON frames, ending with its result.
+async function streamPlaywrightRun({ commandService, input, response, sessionId }) {
+  const cancellation = new AbortController();
+  response.once("close", () => {
+    if (!response.writableEnded) cancellation.abort(new Error("Browser-test command was cancelled or disconnected."));
   });
-  commandServerPrepares.set(socketPath, preparation);
-  try {
-    return await preparation;
-  } finally {
-    if (commandServerPrepares.get(socketPath) === preparation) {
-      commandServerPrepares.delete(socketPath);
-    }
-  }
-}
-
-async function ensureAgentPreviewCommandServerUnlocked({
-  commandService,
-  sessionId = "",
-  socketPath,
-  wrapperHostDir = ""
-} = {}) {
-  let existing = commandServers.get(socketPath);
-  if (existing?.promise) {
-    await existing.promise.catch(() => null);
-    existing = commandServers.get(socketPath);
-  }
-  if (
-    existing?.commandService === commandService &&
-    await unixJsonCommandServerIsHealthy(existing, {
-      healthPath: "/agent-preview-command/health",
-      sessionId,
-      socketPath
-    })
-  ) {
-    return existing;
-  }
-  await closeUnixJsonCommandServer(commandServers, socketPath, existing);
-  const promise = (async () => {
-    await mkdir(path.dirname(socketPath), {
-      recursive: true
-    });
-    await removeDeadUnixJsonCommandSocket(socketPath, {
-      healthPath: "/agent-preview-command/health",
-      ownerErrorMessage: "The managed preview socket is owned by an unverified listener."
-    });
-    const token = commandServerToken({
-      sessionId,
-      socketPath,
-      wrapperHostDir
-    });
-    const generationId = crypto.randomUUID();
-    const server = http.createServer(async (request, response) => {
-      try {
-        if (request.method !== "POST" || !AGENT_PREVIEW_COMMAND_ROUTES.has(request.url)) {
-          sendJsonCommandResponse(response, 404, responseError("Unknown Vibe64 preview command route.", "vibe64_agent_preview_command_route_not_found"));
-          return;
-        }
-        const input = await readRequestJson(request);
-        if (
-          !verifyRequestToken(input, token) ||
-          normalizeText(input.sessionId) !== normalizeText(sessionId) ||
-          normalizeText(input.generationId) !== generationId
-        ) {
-          if (verifyRequestToken(input, token) && normalizeText(input.sessionId) === normalizeText(sessionId)) {
-            reportUnixCommandControlChange({ commandService, sessionId, socketPath, generationId }, "rejected", normalizeText(input.generationId));
-          }
-          sendJsonCommandResponse(response, 409, responseError(
-            "Managed preview control generation is no longer current. Reconnect the assistant.",
-            "vibe64_agent_control_unavailable"
-          ));
-          return;
-        }
-        if (request.url === "/agent-preview-command/health") {
-          sendJsonCommandResponse(response, 200, {
-            generationId,
-            ok: true,
-            sessionId: normalizeText(sessionId)
-          });
-          return;
-        }
-        if (request.url === "/agent-preview-command/identity") {
-          const payload = await commandService.authorizeBrowserIdentity(
-            sessionId,
-            input.identity
-          );
-          sendJsonCommandResponse(response, vibe64StatusCode(payload), payload);
-          return;
-        }
-        if (request.url === "/agent-preview-command/playwright-status") {
-          sendJsonCommandResponse(response, 200, commandService.playwrightStatus(sessionId));
-          return;
-        }
-        if (request.url === "/agent-preview-command/playwright-cancel") {
-          const payload = await commandService.cancelPlaywrightRun(sessionId, normalizeText(input.runId));
-          sendJsonCommandResponse(response, vibe64StatusCode(payload), payload);
-          return;
-        }
-        if (request.url === "/agent-preview-command/browser-start") {
-          const payload = await commandService.browserStart(sessionId, input);
-          sendJsonCommandResponse(response, vibe64StatusCode(payload), payload);
-          return;
-        }
-        if (request.url === "/agent-preview-command/browser-stop") {
-          const payload = await commandService.browserStop(sessionId, input);
-          sendJsonCommandResponse(response, vibe64StatusCode(payload), payload);
-          return;
-        }
-        if (request.url === "/agent-preview-command/playwright-run") {
-          const cancellation = new AbortController();
-          response.once("close", () => {
-            if (!response.writableEnded) cancellation.abort(new Error("Browser-test command was cancelled or disconnected."));
-          });
-          response.writeHead(200, {
-            "Content-Type": "application/x-ndjson; charset=utf-8"
-          });
-          const writeFrame = (payload = {}) => {
-            if (!response.destroyed && !response.writableEnded) {
-              response.write(`${JSON.stringify(payload)}\n`);
-            }
-          };
-          let payload;
-          try {
-            payload = await commandService.playwrightRun(sessionId, input, {
-              signal: cancellation.signal,
-              onOutput: (chunk) => writeFrame({
-                data: Buffer.from(String(chunk || ""), "utf8").toString("base64"),
-                type: "output"
-              })
-            });
-          } catch (error) {
-            payload = vibe64ErrorResponse(error, {
-              fallbackCode: "vibe64_managed_playwright_run_failed",
-              fallbackMessage: "Vibe64 browser-test execution failed."
-            });
-          }
-          writeFrame({
-            code: normalizeText(payload?.code),
-            error: normalizeText(payload?.error || payload?.stderr),
-            ...(isRecord(payload?.details?.admission) ? { details: { admission: payload.details.admission } } : {}),
-            exitCode: Number.isInteger(payload?.exitCode) ? payload.exitCode : (payload?.ok === false ? 1 : 0),
-            ok: payload?.ok !== false,
-            timedOut: payload?.timedOut === true,
-            type: "result"
-          });
-          response.end();
-          return;
-        }
-        if (request.url === "/agent-preview-command/run") {
-          sendJsonCommandResponse(response, 200, await commandService.run(input));
-          return;
-        }
-      } catch (error) {
-        const payload = vibe64ErrorResponse(error, {
-          fallbackCode: "vibe64_agent_preview_command_request_failed",
-          fallbackMessage: "Vibe64 preview command request failed."
-        });
-        sendJsonCommandResponse(response, vibe64StatusCode(payload), payload);
-      }
-    });
-    await listenUnixJsonCommandServer(server, socketPath);
-    const stored = {
-      commandService,
-      generationId,
-      server,
-      sessionId: normalizeText(sessionId),
-      socketPath,
-      token
-    };
-    commandServers.set(socketPath, stored);
-    if (!await unixJsonCommandServerIsHealthy(stored, {
-      healthPath: "/agent-preview-command/health",
-      sessionId,
-      socketPath
-    })) {
-      await closeUnixJsonCommandServer(commandServers, socketPath, stored);
-      await rm(socketPath, {
-        force: true
-      }).catch(() => null);
-      const error = new Error("Managed preview control did not pass its ownership health check.");
-      error.code = "vibe64_agent_control_unavailable";
-      throw error;
-    }
-    return stored;
-  })();
-  commandServers.set(socketPath, {
-    commandService,
-    promise
+  response.writeHead(200, {
+    "Content-Type": "application/x-ndjson; charset=utf-8"
   });
+  const writeFrame = (payload = {}) => {
+    if (!response.destroyed && !response.writableEnded) {
+      response.write(`${JSON.stringify(payload)}\n`);
+    }
+  };
+  let payload;
   try {
-    return await promise;
+    payload = await commandService.playwrightRun(sessionId, input, {
+      signal: cancellation.signal,
+      onOutput: (chunk) => writeFrame({
+        data: Buffer.from(String(chunk || ""), "utf8").toString("base64"),
+        type: "output"
+      })
+    });
   } catch (error) {
-    if (commandServers.get(socketPath)?.promise === promise) {
-      commandServers.delete(socketPath);
-    }
-    throw error;
+    payload = vibe64ErrorResponse(error, {
+      fallbackCode: "vibe64_managed_playwright_run_failed",
+      fallbackMessage: "Vibe64 browser-test execution failed."
+    });
   }
+  writeFrame({
+    code: normalizeText(payload?.code),
+    error: normalizeText(payload?.error || payload?.stderr),
+    ...(isRecord(payload?.details?.admission) ? { details: { admission: payload.details.admission } } : {}),
+    exitCode: Number.isInteger(payload?.exitCode) ? payload.exitCode : (payload?.ok === false ? 1 : 0),
+    ok: payload?.ok !== false,
+    timedOut: payload?.timedOut === true,
+    type: "result"
+  });
+  response.end();
 }
 
 async function prepareAgentPreviewCommand({
@@ -2135,11 +1942,10 @@ async function prepareAgentPreviewCommand({
     }),
     wrapperHostDir: normalizedWrapperHostDir
   });
-  const server = await ensureAgentPreviewCommandServer({
+  const server = await commandServers.ensure({
     commandService,
     sessionId: normalizedSessionId,
-    socketPath: controlSocketPath,
-    wrapperHostDir: normalizedWrapperHostDir
+    socketPath: controlSocketPath
   });
   const token = browserWorkerToken({
     commandToken: server.token,

@@ -1,6 +1,3 @@
-import http from "node:http";
-import { randomUUID } from "node:crypto";
-import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -25,8 +22,7 @@ import {
   runtimeConfigKeyLooksSecret
 } from "@local/vibe64-core/server/runtimeConfig";
 import {
-  vibe64ErrorResponse,
-  vibe64StatusCode
+  vibe64ErrorResponse
 } from "@local/vibe64-core/server/serverResponses";
 import {
   agentEnvWrapperSource
@@ -34,17 +30,10 @@ import {
 import {
   writeExecutableFileIfChanged
 } from "./writeExecutableFileIfChanged.js";
+import { createAgentCommandProjectBinding } from "./agentCommandProjectBinding.js";
 import {
-  closeUnixJsonCommandServer,
-  closeUnixJsonCommandServersForSession,
-  listenUnixJsonCommandServer,
-  readJsonCommandRequest,
-  reportUnixCommandControlChange,
-  removeDeadUnixJsonCommandSocket,
-  sendJsonCommandResponse,
-  shortCommandHash,
-  unixCommandSocketPath,
-  unixJsonCommandServerIsHealthy
+  createSessionCommandServers,
+  unixCommandSocketPath
 } from "./unixJsonCommand.js";
 
 const AGENT_ENV_COMMAND_NAME = "vibe64-env";
@@ -59,14 +48,6 @@ const VIBE64_AGENT_ENV_COMMAND_TOKEN_ENV = "VIBE64_AGENT_ENV_COMMAND_TOKEN";
 const ENV_SCOPE_DEVELOPMENT = "development";
 const ENV_SCOPE_PRODUCTION = "production";
 const ENV_SCOPE_ALL = "all";
-
-const commandServers = new Map();
-const commandServerPrepares = new Map();
-
-function normalizedProjectContextRoot(project = {}) {
-  const root = normalizeText(project?.projectRoot || project?.path);
-  return root ? path.resolve(root) : "";
-}
 
 function commandWrapperHostPath(wrapperHostDir = "") {
   return path.join(wrapperHostDir, AGENT_ENV_COMMAND_NAME);
@@ -353,196 +334,26 @@ function assertRecordEditable(record = null, scope = "", key = "") {
   );
 }
 
-function commandServerToken({
-  sessionId = "",
-  socketPath = "",
-  wrapperHostDir = ""
-} = {}) {
-  return shortCommandHash([
-    "agent-env-command-token",
-    normalizeText(sessionId),
-    normalizeText(socketPath),
-    normalizeText(wrapperHostDir)
-  ].join("\n"));
-}
-
-function verifyRequestToken(input = {}, expectedToken = "") {
-  return normalizeText(input.token) && normalizeText(input.token) === normalizeText(expectedToken);
-}
-
-async function readRequestJson(request) {
-  return readJsonCommandRequest(request, {
-    invalidJsonError: {
-      code: "vibe64_agent_env_command_invalid_json",
-      message: "Vibe64 Env command input must be valid JSON."
-    },
-    maxBytes: AGENT_ENV_COMMAND_REQUEST_MAX_BYTES,
-    tooLargeError: {
-      code: "vibe64_agent_env_command_input_too_large",
-      message: "Vibe64 Env command input is too large."
-    }
-  });
-}
-
-async function closeAgentEnvCommandServersForSession(sessionId = "") {
-  await Promise.all([...commandServerPrepares.values()].map((preparation) => (
-    preparation.catch(() => null)
-  )));
-  return closeUnixJsonCommandServersForSession(commandServers, sessionId);
-}
-
-async function ensureAgentEnvCommandServer({
-  commandService,
-  sessionId = "",
-  wrapperHostDir = ""
-} = {}) {
-  const socketPath = commandSocketHostPath(wrapperHostDir);
-  const pending = commandServerPrepares.get(socketPath);
-  if (pending) {
-    await pending.catch(() => null);
-    return ensureAgentEnvCommandServer({
-      commandService,
-      sessionId,
-      wrapperHostDir
-    });
-  }
-  const preparation = ensureAgentEnvCommandServerUnlocked({
-    commandService,
-    sessionId,
-    wrapperHostDir
-  });
-  commandServerPrepares.set(socketPath, preparation);
-  try {
-    return await preparation;
-  } finally {
-    if (commandServerPrepares.get(socketPath) === preparation) {
-      commandServerPrepares.delete(socketPath);
-    }
-  }
-}
-
-async function ensureAgentEnvCommandServerUnlocked({
-  commandService,
-  sessionId = "",
-  wrapperHostDir = ""
-} = {}) {
-  const socketPath = commandSocketHostPath(wrapperHostDir);
-  let existing = commandServers.get(socketPath);
-  if (existing?.promise) {
-    await existing.promise.catch(() => null);
-    existing = commandServers.get(socketPath);
-  }
-  if (
-    existing?.commandService === commandService &&
-    await unixJsonCommandServerIsHealthy(existing, {
-      healthPath: "/agent-env-command/health",
-      sessionId,
-      socketPath
-    })
-  ) {
-    return existing;
-  }
-  await closeUnixJsonCommandServer(commandServers, socketPath, existing);
-  const promise = (async () => {
-    await mkdir(path.dirname(socketPath), {
-      recursive: true
-    });
-    await removeDeadUnixJsonCommandSocket(socketPath, {
-      healthPath: "/agent-env-command/health",
-      ownerErrorMessage: "The managed Env socket is owned by an unverified listener."
-    });
-    const token = commandServerToken({
-      sessionId,
-      socketPath,
-      wrapperHostDir
-    });
-    const generationId = randomUUID();
-    const server = http.createServer(async (request, response) => {
-      try {
-        if (request.method !== "POST" || ![
-          "/agent-env-command/health",
-          "/agent-env-command/run"
-        ].includes(request.url)) {
-          sendJsonCommandResponse(response, 404, responseError(
-            "Unknown Vibe64 Env command route.",
-            "vibe64_agent_env_command_route_not_found"
-          ));
-          return;
-        }
-        const input = await readRequestJson(request);
-        if (
-          !verifyRequestToken(input, token) ||
-          normalizeText(input.sessionId) !== normalizeText(sessionId) ||
-          normalizeText(input.generationId) !== generationId
-        ) {
-          if (verifyRequestToken(input, token) && normalizeText(input.sessionId) === normalizeText(sessionId)) {
-            reportUnixCommandControlChange({ commandService, sessionId, socketPath, generationId }, "rejected", normalizeText(input.generationId));
-          }
-          sendJsonCommandResponse(response, 409, responseError(
-            "Managed Env control generation is no longer current. Reconnect the assistant.",
-            "vibe64_agent_control_unavailable"
-          ));
-          return;
-        }
-        if (request.url === "/agent-env-command/health") {
-          sendJsonCommandResponse(response, 200, {
-            generationId,
-            ok: true,
-            sessionId: normalizeText(sessionId)
-          });
-          return;
-        }
-        sendJsonCommandResponse(response, 200, await commandService.run(input));
-      } catch (error) {
-        const payload = vibe64ErrorResponse(error, {
-          fallbackCode: "vibe64_agent_env_command_request_failed",
-          fallbackMessage: "Vibe64 Env command request failed."
-        });
-        sendJsonCommandResponse(response, vibe64StatusCode(payload), {
-          ...payload,
-          exitCode: 1,
-          stderr: `${payload.error}\n`
-        });
-      }
-    });
-    await listenUnixJsonCommandServer(server, socketPath);
-    const stored = {
-      commandService,
-      generationId,
-      server,
-      sessionId: normalizeText(sessionId),
-      socketPath,
-      token
-    };
-    commandServers.set(socketPath, stored);
-    if (!await unixJsonCommandServerIsHealthy(stored, {
-      healthPath: "/agent-env-command/health",
-      sessionId,
-      socketPath
-    })) {
-      await closeUnixJsonCommandServer(commandServers, socketPath, stored);
-      await rm(socketPath, {
-        force: true
-      }).catch(() => null);
-      const error = new Error("Managed Env control did not pass its ownership health check.");
-      error.code = "vibe64_agent_control_unavailable";
-      throw error;
-    }
-    return stored;
-  })();
-  commandServers.set(socketPath, {
-    commandService,
-    promise
-  });
-  try {
-    return await promise;
-  } catch (error) {
-    if (commandServers.get(socketPath)?.promise === promise) {
-      commandServers.delete(socketPath);
-    }
-    throw error;
-  }
-}
+const commandServers = createSessionCommandServers({
+  routePrefix: "/agent-env-command",
+  routes: {
+    "/agent-env-command/run": { handle: ({ commandService, input }) => commandService.run(input) }
+  },
+  label: "Env",
+  maxBytes: AGENT_ENV_COMMAND_REQUEST_MAX_BYTES,
+  invalidJsonError: { code: "vibe64_agent_env_command_invalid_json", message: "Vibe64 Env command input must be valid JSON." },
+  tooLargeError: { code: "vibe64_agent_env_command_input_too_large", message: "Vibe64 Env command input is too large." },
+  notFound: responseError("Unknown Vibe64 Env command route.", "vibe64_agent_env_command_route_not_found"),
+  rejection: {
+    statusCode: 409,
+    payload: responseError("Managed Env control generation is no longer current. Reconnect the assistant.", "vibe64_agent_control_unavailable")
+  },
+  requestFailure: {
+    fallbackCode: "vibe64_agent_env_command_request_failed",
+    fallbackMessage: "Vibe64 Env command request failed."
+  },
+  errorBody: (payload) => ({ ...payload, exitCode: 1, stderr: `${payload.error}\n` })
+});
 
 function createAgentEnvCommandService({
   logger = null,
@@ -559,7 +370,14 @@ function createAgentEnvCommandService({
     throw new TypeError("createAgentEnvCommandService requires the Vibe64 Project Env API.");
   }
 
-  const sessionProjects = new Map();
+  // The person whose request prepared this agent; a host's saved values
+  // apply that person's permissions.
+  const projectBinding = createAgentCommandProjectBinding(projectService, {
+    sessionRequired: ["Vibe64 Env command session id is required.", "vibe64_agent_env_command_session_required"],
+    projectRequired: ["Vibe64 Env command could not bind this session to a project.", "vibe64_agent_env_command_project_required"],
+    unbound: ["Vibe64 Env command is not bound to this session project.", "vibe64_agent_env_command_project_binding_missing"],
+    changed: ["Vibe64 Env command session project no longer matches its bound project.", "vibe64_agent_env_command_project_binding_changed"]
+  }, { capture: () => ({ actor: currentProjectRequestContext()?.vibe64User || null }) });
   let productionProvider = null;
   let savedValueProvider = null;
 
@@ -584,61 +402,16 @@ function createAgentEnvCommandService({
   setProductionEnvironmentProvider(productionEnvironmentProvider);
 
   async function bindSession(sessionId = "") {
-    const normalizedSessionId = normalizeText(sessionId);
-    if (!normalizedSessionId) {
-      throw vibe64Error(
-        "Vibe64 Env command session id is required.",
-        "vibe64_agent_env_command_session_required"
-      );
-    }
-    const project = await projectService.readCurrentProject();
-    const projectSlug = normalizeText(project?.slug || project?.name);
-    if (!projectSlug) {
-      throw vibe64Error(
-        "Vibe64 Env command could not bind this session to a project.",
-        "vibe64_agent_env_command_project_required"
-      );
-    }
-    // The person whose request prepared this agent; a host's saved values
-    // apply that person's permissions.
-    const binding = {
-      actor: currentProjectRequestContext()?.vibe64User || null,
-      projectContextRoot: normalizedProjectContextRoot(project),
-      projectSlug
-    };
-    sessionProjects.set(normalizedSessionId, binding);
+    const binding = await projectBinding.bind(sessionId);
     return {
       ok: true,
       projectContextRoot: binding.projectContextRoot,
-      projectSlug,
-      sessionId: normalizedSessionId
+      projectSlug: binding.projectSlug,
+      sessionId: normalizeText(sessionId)
     };
   }
 
-  async function runInSessionProject(sessionId = "", operation) {
-    const binding = sessionProjects.get(normalizeText(sessionId));
-    if (!binding?.projectSlug) {
-      throw vibe64Error(
-        "Vibe64 Env command is not bound to this session project.",
-        "vibe64_agent_env_command_project_binding_missing"
-      );
-    }
-    return projectService.runInProjectContext(binding.projectSlug, async () => {
-      const currentProject = await projectService.readCurrentProject();
-      const currentSlug = normalizeText(currentProject?.slug || currentProject?.name);
-      const currentProjectContextRoot = normalizedProjectContextRoot(currentProject);
-      if (
-        currentSlug !== binding.projectSlug ||
-        binding.projectContextRoot && currentProjectContextRoot !== binding.projectContextRoot
-      ) {
-        throw vibe64Error(
-          "Vibe64 Env command session project no longer matches its bound project.",
-          "vibe64_agent_env_command_project_binding_changed"
-        );
-      }
-      return operation(binding);
-    });
-  }
+  const runInSessionProject = (sessionId, operation) => projectBinding.run(sessionId, operation);
 
   // This command owns agent policy and transport, not persistence. These two
   // delegates are the complete boundary to the services that own each scope.
@@ -940,8 +713,8 @@ function createAgentEnvCommandService({
 
   async function closeAllForSession(sessionId = "") {
     const normalizedSessionId = normalizeText(sessionId);
-    const bound = sessionProjects.delete(normalizedSessionId);
-    const closed = await closeAgentEnvCommandServersForSession(normalizedSessionId);
+    const bound = Boolean(projectBinding.forget(normalizedSessionId));
+    const closed = await commandServers.closeForSession(normalizedSessionId);
     return {
       closed: closed + (bound && closed === 0 ? 1 : 0),
       ok: true
@@ -978,10 +751,10 @@ async function prepareAgentEnvCommand({
       contractVersion: AGENT_ENV_COMMAND_CONTRACT_VERSION
     })
   );
-  const server = await ensureAgentEnvCommandServer({
+  const server = await commandServers.ensure({
     commandService,
     sessionId: normalizedSessionId,
-    wrapperHostDir: normalizedWrapperHostDir
+    socketPath: commandSocketHostPath(normalizedWrapperHostDir)
   });
   return {
     controlGenerationId: server.generationId,

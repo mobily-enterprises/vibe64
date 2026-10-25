@@ -43,7 +43,8 @@ async function agentSessionCommandEnvironmentIsHealthy(env = {}) {
     ["VIBE64_CODEX_GIT_COMMAND", "codex-git-command"],
     ["VIBE64_AGENT_SESSION_COMMAND", "agent-session-command"],
     ["VIBE64_AGENT_PREVIEW_COMMAND", "agent-preview-command"],
-    ["VIBE64_AGENT_ENV_COMMAND", "agent-env-command"]
+    ["VIBE64_AGENT_ENV_COMMAND", "agent-env-command"],
+    ["VIBE64_AGENT_DATABASE_COMMAND", "agent-database-command"]
   ].filter(([prefix]) => names.some((key) => key.startsWith(`${prefix}_`)));
   const results = await Promise.all(controls.map(async ([prefix, route]) => {
     const socketPath = text(env[`${prefix}_SOCKET`]);

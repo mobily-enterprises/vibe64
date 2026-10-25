@@ -1,8 +1,3 @@
-import http from "node:http";
-import {
-  mkdir,
-  rm
-} from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -13,14 +8,12 @@ import {
   logOperationalEvent
 } from "@local/vibe64-core/server/logging";
 import {
-  vibe64ErrorResponse,
-  vibe64StatusCode
+  vibe64ErrorResponse
 } from "@local/vibe64-core/server/serverResponses";
 
+import { createAgentCommandProjectBinding } from "./agentCommandProjectBinding.js";
 import {
-  readJsonCommandRequest,
-  sendJsonCommandResponse,
-  shortCommandHash,
+  createSessionCommandServers,
   unixCommandSocketPath
 } from "./unixJsonCommand.js";
 import {
@@ -32,16 +25,10 @@ const AGENT_DATABASE_COMMAND_SOCKET_NAME = "database-command.sock";
 const AGENT_DATABASE_COMMAND_CONTRACT_VERSION = "1";
 const AGENT_DATABASE_COMMAND_REQUEST_MAX_BYTES = 528 * 1024;
 const VIBE64_AGENT_DATABASE_COMMAND_CONTRACT_VERSION_ENV = "VIBE64_AGENT_DATABASE_COMMAND_CONTRACT_VERSION";
+const VIBE64_AGENT_DATABASE_COMMAND_GENERATION_ENV = "VIBE64_AGENT_DATABASE_COMMAND_GENERATION";
 const VIBE64_AGENT_DATABASE_COMMAND_SESSION_ID_ENV = "VIBE64_AGENT_DATABASE_COMMAND_SESSION_ID";
 const VIBE64_AGENT_DATABASE_COMMAND_SOCKET_ENV = "VIBE64_AGENT_DATABASE_COMMAND_SOCKET";
 const VIBE64_AGENT_DATABASE_COMMAND_TOKEN_ENV = "VIBE64_AGENT_DATABASE_COMMAND_TOKEN";
-const commandServers = new Map();
-
-function normalizedProjectContextRoot(project = {}) {
-  const root = normalizeText(project?.projectRoot || project?.path);
-  return root ? path.resolve(root) : "";
-}
-
 function wrapperHostPath(wrapperHostDir = "") {
   return path.join(wrapperHostDir, AGENT_DATABASE_COMMAND_NAME);
 }
@@ -127,6 +114,7 @@ const expectedVersion = ${JSON.stringify(AGENT_DATABASE_COMMAND_CONTRACT_VERSION
 const socketPath = String(process.env.${VIBE64_AGENT_DATABASE_COMMAND_SOCKET_ENV} || "").trim();
 const sessionId = String(process.env.${VIBE64_AGENT_DATABASE_COMMAND_SESSION_ID_ENV} || "").trim();
 const token = String(process.env.${VIBE64_AGENT_DATABASE_COMMAND_TOKEN_ENV} || "").trim();
+const generationId = String(process.env.${VIBE64_AGENT_DATABASE_COMMAND_GENERATION_ENV} || "").trim();
 const version = String(process.env.${VIBE64_AGENT_DATABASE_COMMAND_CONTRACT_VERSION_ENV} || "").trim();
 
 function fail(message, code = 1) {
@@ -157,7 +145,7 @@ function requestSocket(body) {
 }
 
 if (commandName !== ${JSON.stringify(AGENT_DATABASE_COMMAND_NAME)}) fail("Unsupported Vibe64 database command wrapper.");
-if (!socketPath || !sessionId || !token) fail("Vibe64 database command identity is unavailable for this session.");
+if (!socketPath || !sessionId || !token || !generationId) fail("Vibe64 database command identity is unavailable for this session.");
 if (version !== expectedVersion) fail("Vibe64 database command contract does not match this session.");
 
 const args = process.argv.slice(2);
@@ -175,6 +163,7 @@ if (positionals[0]?.trim().toLowerCase() === "erd" && positionals[1] === "apply"
 const responseText = await requestSocket({
   args,
   changes,
+  generationId,
   sessionId,
   token
 }).catch((error) => fail(error?.message || error));
@@ -191,103 +180,37 @@ process.exit(Number.isInteger(payload.exitCode) ? payload.exitCode : (payload.ok
 `;
 }
 
-function commandServerToken({ sessionId = "", socketPath = "", wrapperHostDir = "" } = {}) {
-  return shortCommandHash([
-    "agent-database-command-token",
-    normalizeText(sessionId),
-    normalizeText(socketPath),
-    normalizeText(wrapperHostDir)
-  ].join("\n"));
-}
-
-async function closeCommandServersForSession(sessionId = "") {
-  const normalizedSessionId = normalizeText(sessionId);
-  let closed = 0;
-  for (const [socketPath, entryValue] of [...commandServers.entries()]) {
-    const entry = entryValue?.promise ? await entryValue.promise.catch(() => null) : entryValue;
-    if (normalizeText(entry?.sessionId) !== normalizedSessionId) continue;
-    if (entry?.server) {
-      await new Promise((resolve) => entry.server.close(() => resolve())).catch(() => null);
-      closed += 1;
-    }
-    commandServers.delete(socketPath);
-    await rm(socketPath, { force: true }).catch(() => null);
-  }
-  return closed;
-}
-
-async function ensureCommandServer({ commandService, sessionId = "", wrapperHostDir = "" } = {}) {
-  const socketPath = commandSocketHostPath(wrapperHostDir);
-  const existing = commandServers.get(socketPath);
-  if (existing?.commandService === commandService) return existing.promise || existing;
-  if (existing?.promise) {
-    await existing.promise.catch(() => null);
-    const current = commandServers.get(socketPath);
-    if (current?.commandService === commandService) return current.promise || current;
-  }
-  if (existing?.server) {
-    await new Promise((resolve) => existing.server.close(() => resolve())).catch(() => null);
-    commandServers.delete(socketPath);
-  }
-  const promise = (async () => {
-    await mkdir(path.dirname(socketPath), { recursive: true });
-    await rm(socketPath, { force: true });
-    const token = commandServerToken({ sessionId, socketPath, wrapperHostDir });
-    const server = http.createServer(async (request, response) => {
-      try {
-        if (request.method !== "POST" || request.url !== "/agent-database-command/run") {
-          sendJsonCommandResponse(response, 404, responseError("Unknown Vibe64 database command route.", "vibe64_agent_database_command_route_not_found"));
-          return;
-        }
-        const input = await readJsonCommandRequest(request, {
-          invalidJsonError: { code: "vibe64_agent_database_command_invalid_json", message: "Vibe64 database command input must be valid JSON." },
-          maxBytes: AGENT_DATABASE_COMMAND_REQUEST_MAX_BYTES,
-          tooLargeError: { code: "vibe64_agent_database_command_input_too_large", message: "Vibe64 database command input is too large." }
-        });
-        if (normalizeText(input.token) !== token || normalizeText(input.sessionId) !== normalizeText(sessionId)) {
-          sendJsonCommandResponse(response, 403, responseError("Vibe64 database command token is invalid.", "vibe64_agent_database_command_token_invalid"));
-          return;
-        }
-        sendJsonCommandResponse(response, 200, await commandService.run(input));
-      } catch (error) {
-        const payload = vibe64ErrorResponse(error, {
-          fallbackCode: "vibe64_agent_database_command_request_failed",
-          fallbackMessage: "Vibe64 database command request failed."
-        });
-        sendJsonCommandResponse(response, vibe64StatusCode(payload), {
-          ...payload,
-          exitCode: 1,
-          stderr: `${payload.error}\n`
-        });
-      }
-    });
-    await new Promise((resolve, reject) => {
-      const handleError = (error) => reject(error);
-      server.once("error", handleError);
-      server.listen(socketPath, () => {
-        server.off("error", handleError);
-        resolve();
-      });
-    });
-    server.unref?.();
-    const stored = { commandService, server, sessionId: normalizeText(sessionId), socketPath, token };
-    commandServers.set(socketPath, stored);
-    return stored;
-  })();
-  commandServers.set(socketPath, { commandService, promise });
-  try {
-    return await promise;
-  } catch (error) {
-    if (commandServers.get(socketPath)?.promise === promise) commandServers.delete(socketPath);
-    throw error;
-  }
-}
+const commandServers = createSessionCommandServers({
+  routePrefix: "/agent-database-command",
+  routes: {
+    "/agent-database-command/run": { handle: ({ commandService, input }) => commandService.run(input) }
+  },
+  label: "database",
+  maxBytes: AGENT_DATABASE_COMMAND_REQUEST_MAX_BYTES,
+  invalidJsonError: { code: "vibe64_agent_database_command_invalid_json", message: "Vibe64 database command input must be valid JSON." },
+  tooLargeError: { code: "vibe64_agent_database_command_input_too_large", message: "Vibe64 database command input is too large." },
+  notFound: responseError("Unknown Vibe64 database command route.", "vibe64_agent_database_command_route_not_found"),
+  rejection: {
+    statusCode: 409,
+    payload: responseError("Managed database control generation is no longer current. Reconnect the assistant.", "vibe64_agent_control_unavailable")
+  },
+  requestFailure: {
+    fallbackCode: "vibe64_agent_database_command_request_failed",
+    fallbackMessage: "Vibe64 database command request failed."
+  },
+  errorBody: (payload) => ({ ...payload, exitCode: 1, stderr: `${payload.error}\n` })
+});
 
 function createAgentDatabaseCommandService({ logger = null, projectService } = {}) {
   if (!projectService || typeof projectService.readCurrentProject !== "function" || typeof projectService.runInProjectContext !== "function") {
     throw new TypeError("createAgentDatabaseCommandService requires the Vibe64 Project API.");
   }
-  const sessionProjects = new Map();
+  const projectBinding = createAgentCommandProjectBinding(projectService, {
+    sessionRequired: ["Vibe64 database command session id is required.", "vibe64_agent_database_command_session_required"],
+    projectRequired: ["Vibe64 database command could not bind this session to a project.", "vibe64_agent_database_command_project_required"],
+    unbound: ["This database command is not bound to an active session.", "vibe64_agent_database_command_session_unbound"],
+    changed: ["Vibe64 database command session project no longer matches its bound project.", "vibe64_agent_database_command_project_binding_changed"]
+  });
   let databaseToolsProvider = null;
 
   function setDatabaseToolsProvider(provider = null) {
@@ -298,45 +221,16 @@ function createAgentDatabaseCommandService({ logger = null, projectService } = {
   }
 
   async function bindSession(sessionId = "") {
-    const normalizedSessionId = normalizeText(sessionId);
-    if (!normalizedSessionId) throw vibe64Error("Vibe64 database command session id is required.", "vibe64_agent_database_command_session_required");
-    const project = await projectService.readCurrentProject();
-    const projectSlug = normalizeText(project?.slug || project?.name);
-    if (!projectSlug) throw vibe64Error("Vibe64 database command could not bind this session to a project.", "vibe64_agent_database_command_project_required");
-    const binding = {
-      projectContextRoot: normalizedProjectContextRoot(project),
-      projectSlug
-    };
-    sessionProjects.set(normalizedSessionId, binding);
+    const binding = await projectBinding.bind(sessionId);
     return {
       ok: true,
       projectContextRoot: binding.projectContextRoot,
-      projectSlug,
-      sessionId: normalizedSessionId
+      projectSlug: binding.projectSlug,
+      sessionId: normalizeText(sessionId)
     };
   }
 
-  async function runInSessionProject(sessionId = "", operation) {
-    const binding = sessionProjects.get(normalizeText(sessionId));
-    if (!binding?.projectSlug) {
-      throw vibe64Error("This database command is not bound to an active session.", "vibe64_agent_database_command_session_unbound");
-    }
-    return projectService.runInProjectContext(binding.projectSlug, async () => {
-      const currentProject = await projectService.readCurrentProject();
-      const currentSlug = normalizeText(currentProject?.slug || currentProject?.name);
-      const currentProjectContextRoot = normalizedProjectContextRoot(currentProject);
-      if (
-        currentSlug !== binding.projectSlug ||
-        binding.projectContextRoot && currentProjectContextRoot !== binding.projectContextRoot
-      ) {
-        throw vibe64Error(
-          "Vibe64 database command session project no longer matches its bound project.",
-          "vibe64_agent_database_command_project_binding_changed"
-        );
-      }
-      return operation(binding);
-    });
-  }
+  const runInSessionProject = (sessionId, operation) => projectBinding.run(sessionId, operation);
 
   async function run(input = {}) {
     const startedAt = Date.now();
@@ -395,8 +289,8 @@ function createAgentDatabaseCommandService({ logger = null, projectService } = {
 
   async function closeAllForSession(sessionId = "") {
     const normalizedSessionId = normalizeText(sessionId);
-    const bound = sessionProjects.delete(normalizedSessionId);
-    const closed = await closeCommandServersForSession(normalizedSessionId);
+    const bound = Boolean(projectBinding.forget(normalizedSessionId));
+    const closed = await commandServers.closeForSession(normalizedSessionId);
     return { closed: closed + (bound && closed === 0 ? 1 : 0), ok: true };
   }
 
@@ -409,10 +303,13 @@ async function prepareAgentDatabaseCommand({ commandService, sessionId = "", wra
   if (!commandService || !normalizedSessionId || !normalizedWrapperHostDir) return { env: {}, ok: false };
   await commandService.bindSession(normalizedSessionId);
   await writeExecutableFileIfChanged(wrapperHostPath(normalizedWrapperHostDir), commandWrapperSource());
-  const server = await ensureCommandServer({ commandService, sessionId: normalizedSessionId, wrapperHostDir: normalizedWrapperHostDir });
+  const server = await commandServers.ensure({
+    commandService, sessionId: normalizedSessionId, socketPath: commandSocketHostPath(normalizedWrapperHostDir)
+  });
   return {
     env: {
       [VIBE64_AGENT_DATABASE_COMMAND_CONTRACT_VERSION_ENV]: AGENT_DATABASE_COMMAND_CONTRACT_VERSION,
+      [VIBE64_AGENT_DATABASE_COMMAND_GENERATION_ENV]: server.generationId,
       [VIBE64_AGENT_DATABASE_COMMAND_SESSION_ID_ENV]: normalizedSessionId,
       [VIBE64_AGENT_DATABASE_COMMAND_SOCKET_ENV]: commandSocketHostPath(normalizedWrapperHostDir),
       [VIBE64_AGENT_DATABASE_COMMAND_TOKEN_ENV]: server.token
@@ -426,6 +323,7 @@ async function prepareAgentDatabaseCommand({ commandService, sessionId = "", wra
 export {
   AGENT_DATABASE_COMMAND_NAME,
   VIBE64_AGENT_DATABASE_COMMAND_CONTRACT_VERSION_ENV,
+  VIBE64_AGENT_DATABASE_COMMAND_GENERATION_ENV,
   VIBE64_AGENT_DATABASE_COMMAND_SESSION_ID_ENV,
   VIBE64_AGENT_DATABASE_COMMAND_SOCKET_ENV,
   VIBE64_AGENT_DATABASE_COMMAND_TOKEN_ENV,

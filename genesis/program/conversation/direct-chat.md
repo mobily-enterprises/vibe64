@@ -1207,6 +1207,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/agentCommandEnvironment.js`
 - `packages/vibe64-terminals/src/server/agentHelperCommand.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
+- `packages/vibe64-terminals/src/server/agentCommandProjectBinding.js`
 - `packages/vibe64-terminals/src/server/conversationActor.js`
 - `packages/vibe64-terminals/src/server/agent/providers/opencodeSessionAgentProvider.js`
 - `packages/vibe64-terminals/src/server/agent/providers/codexSessionAgentProvider.js`
@@ -2242,8 +2243,12 @@ notifications revive completed turns or overwrite a successor. An active goal
 alone does not override a confirmed inactive, interrupted turn.
 
 
-Managed tool readiness checks native observation and the live Git, shell, Preview
-and Env control identities. A connection check that overlaps deliberate closure or
+Every agent command control (Git, shell session, Preview, Env and Database) is
+one shared per-session Unix control: each listener gets a random token and
+generation when it starts, accepts only requests carrying both with its session,
+answers its own health route, and never removes a socket that a live, unverified
+listener still owns. Managed tool readiness checks native observation and the
+live Git, shell, Preview, Env and Database control identities. A connection check that overlaps deliberate closure or
 changeover cannot announce readiness or turn that closure into observation loss.
 Late replies recheck the same connection before recovery and before publication;
 the existing close operation retains ownership of Stop. A failed control check

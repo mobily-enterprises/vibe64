@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdtemp, rm, stat } from "node:fs/promises";
+import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -8,12 +9,17 @@ import test from "node:test";
 import {
   AGENT_DATABASE_COMMAND_NAME,
   VIBE64_AGENT_DATABASE_COMMAND_CONTRACT_VERSION_ENV,
+  VIBE64_AGENT_DATABASE_COMMAND_GENERATION_ENV,
   VIBE64_AGENT_DATABASE_COMMAND_SESSION_ID_ENV,
   VIBE64_AGENT_DATABASE_COMMAND_SOCKET_ENV,
   VIBE64_AGENT_DATABASE_COMMAND_TOKEN_ENV,
   createAgentDatabaseCommandService,
   prepareAgentDatabaseCommand
 } from "../../packages/vibe64-terminals/src/server/agentDatabaseCommand.js";
+import { agentSessionCommandEnvironmentIsHealthy } from "../../packages/vibe64-terminals/src/server/agentCommandEnvironment.js";
+import { requestUnixJsonCommand } from "../../packages/vibe64-terminals/src/server/unixJsonCommand.js";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 
 function projectService() {
   const state = {
@@ -197,7 +203,8 @@ test("agent database wrapper authenticates to its session socket", async () => {
     assert.equal(prepared.env[VIBE64_AGENT_DATABASE_COMMAND_SESSION_ID_ENV], sessionId);
     assert.equal(prepared.env[VIBE64_AGENT_DATABASE_COMMAND_CONTRACT_VERSION_ENV], "1");
     assert.equal(prepared.env[VIBE64_AGENT_DATABASE_COMMAND_SOCKET_ENV], prepared.hostSocketPath);
-    assert.match(prepared.env[VIBE64_AGENT_DATABASE_COMMAND_TOKEN_ENV], /^[a-f0-9]{16}$/u);
+    assert.match(prepared.env[VIBE64_AGENT_DATABASE_COMMAND_TOKEN_ENV], UUID);
+    assert.match(prepared.env[VIBE64_AGENT_DATABASE_COMMAND_GENERATION_ENV], UUID);
 
     const executed = await run(prepared.hostWrapperPath, ["refresh"], {
       ...process.env,
@@ -210,4 +217,54 @@ test("agent database wrapper authenticates to its session socket", async () => {
     await command.closeAllForSession(sessionId);
     await rm(root, { force: true, recursive: true });
   }
+});
+
+test("agent database control has random credentials, a generation and a health check", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-database-control-"));
+  const command = createAgentDatabaseCommandService({ projectService: projectService() });
+  const sessionId = "database-control-session";
+  command.setDatabaseToolsProvider({ async refreshSchema() { return { ok: true, schema: { tables: [] } }; } });
+  try {
+    const first = await prepareAgentDatabaseCommand({ commandService: command, sessionId, wrapperHostDir: root });
+    assert.equal(await agentSessionCommandEnvironmentIsHealthy(first.env), true);
+    const body = {
+      args: ["refresh"], sessionId,
+      generationId: first.env[VIBE64_AGENT_DATABASE_COMMAND_GENERATION_ENV],
+      token: first.env[VIBE64_AGENT_DATABASE_COMMAND_TOKEN_ENV]
+    };
+    const socketPath = first.hostSocketPath;
+    const stale = await requestUnixJsonCommand({ body: { ...body, generationId: "" }, path: "/agent-database-command/run", socketPath });
+    assert.equal(stale.statusCode, 409);
+    assert.equal(stale.payload.code, "vibe64_agent_control_unavailable");
+
+    await command.closeAllForSession(sessionId);
+    assert.equal(await agentSessionCommandEnvironmentIsHealthy(first.env), false);
+    const second = await prepareAgentDatabaseCommand({ commandService: command, sessionId, wrapperHostDir: root });
+    assert.notEqual(second.env[VIBE64_AGENT_DATABASE_COMMAND_TOKEN_ENV], first.env[VIBE64_AGENT_DATABASE_COMMAND_TOKEN_ENV],
+      "the token cannot be recomputed from the session and its paths");
+    const replayed = await requestUnixJsonCommand({ body, path: "/agent-database-command/run", socketPath });
+    assert.equal(replayed.statusCode, 409);
+  } finally {
+    await command.closeAllForSession(sessionId);
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("agent database control never removes a socket owned by another live listener", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-database-owner-"));
+  const command = createAgentDatabaseCommandService({ projectService: projectService() });
+  const sessionId = "database-owner-session";
+  const probe = await prepareAgentDatabaseCommand({ commandService: command, sessionId, wrapperHostDir: root });
+  await command.closeAllForSession(sessionId);
+  const other = http.createServer((_request, response) => response.end("{}"));
+  await new Promise((resolve) => other.listen(probe.hostSocketPath, resolve));
+  t.after(async () => {
+    await new Promise((resolve) => other.close(resolve));
+    await rm(root, { force: true, recursive: true });
+  });
+  await assert.rejects(
+    prepareAgentDatabaseCommand({ commandService: command, sessionId, wrapperHostDir: root }),
+    { code: "vibe64_agent_control_owner_unverified" }
+  );
+  assert.equal((await stat(probe.hostSocketPath)).isSocket(), true);
 });
