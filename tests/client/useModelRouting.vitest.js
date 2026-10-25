@@ -70,3 +70,23 @@ it("shares one query and derives the setups, viewer decisions, team and connecte
   expect(first.viewerDecisions.value.senior.available).toBe(true);
   expect(first.team.value.memberCount).toBe(2);
 });
+
+it("gives main chat the owner's Senior, falling back to its recommendation", async () => {
+  configureHttpWebClient({ request });
+  const recommended = { engineId: "codex", modelId: "recommended" };
+  const saved = { engineId: "codex", modelId: "saved" };
+  request.mockResolvedValueOnce({ ok: true, setups: { owner: { roles: { senior: { effective: null, recommendation: recommended } } } } });
+  let routing;
+  const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+  app = renderer.createApp({ setup() { routing = useModelRouting(); return () => null; } });
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  app.use(VueQueryPlugin, { queryClient });
+  app.provide(VIBE64_ASSISTANT_VIEWER_KEY, ref({ actorKey: "owner", projectSlug: "first" }));
+  app.mount({});
+  await flush();
+  expect(routing.mainChatSelection.value).toEqual(recommended);
+  queryClient.setQueryData(JSON.parse(routing.scopeKey.value),
+    { ok: true, setups: { owner: { roles: { senior: { effective: saved, recommendation: recommended } } } } });
+  await flush();
+  expect(routing.mainChatSelection.value).toEqual(saved);
+});

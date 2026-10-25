@@ -20,7 +20,9 @@ runtime invalidation and change publication. HTTP field selection derives from
 the action schema; a URL provider takes precedence over body input. Login
 WebSockets retain their transport adapter and the four retired Helper endpoints
 remain 410 notices with no operation to expose. Model routing read/preview/save
-have bounded Colleague presentations. The existing connection list also supplies
+have bounded Colleague presentations. `useModelRouting` owns main chat's
+selection (`mainChatSelection`: the owner's effective Senior, else its
+recommendation), which session creation and renewal dialogs share. The existing connection list also supplies
 an owner-only assistant projection of regular Z.AI saved connection, preferred
 provider, default model and model-access mode, without key hints, fingerprints,
 other connections or credential paths. Its HTTP result remains the original

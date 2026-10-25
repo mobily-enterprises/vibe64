@@ -119,8 +119,7 @@ const props = defineProps({ modelValue: Boolean, toolbar: { type: Object, defaul
 const emit = defineEmits(["created", "update:model-value"]);
 // Main chat starts on the owner's Senior from AI setup.
 const routing = useModelRouting({ enabled: computed(() => props.modelValue) });
-const mainSelection = computed(() => routing.setups.value?.owner?.roles?.senior?.effective ||
-  routing.setups.value?.owner?.roles?.senior?.recommendation || null);
+const mainSelection = routing.mainChatSelection;
 const openConnectionSettings = () => requestVibe64AccountConnectionsDialog({ section: "ai" });
 // The guided setup also explains installing an AI tool; it closes this dialog first.
 function setUpAi() {

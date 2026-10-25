@@ -18,9 +18,13 @@ function useModelRouting({ enabled = true } = {}) {
     fallbackLoadError: "Models could not be loaded.", requestRecoveryLabel: "Models"
   });
   const engines = computed(() => resource.data.value?.engines || []);
+  const setups = computed(() => resource.data.value?.setups || null);
   return { resource, scopeKey: computed(() => JSON.stringify(queryKey.value)), engines,
     connectedEngines: computed(() => engines.value.filter((engine) => engine.connected)),
-    setups: computed(() => resource.data.value?.setups || null),
+    setups,
+    // Main chat runs on the owner's Senior: its saved choice, else its recommendation.
+    mainChatSelection: computed(() => setups.value?.owner?.roles?.senior?.effective ||
+      setups.value?.owner?.roles?.senior?.recommendation || null),
     viewerDecisions: computed(() => resource.data.value?.viewer || {}),
     team: computed(() => resource.data.value?.team || { available: false, ownerName: "", memberCount: 0 }),
     loadError: computed(() => resource.loadError.value || (resource.data.value?.ok === false ? resource.data.value.error : "")) };

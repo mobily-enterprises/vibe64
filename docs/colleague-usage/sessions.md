@@ -125,6 +125,11 @@ renewal dialog opens it. Reloading or bookmarking the updated link opens the fre
 conversation, including after another renewal. Your chat and project-view choices
 in the link stay unchanged. This works on desktop and mobile.
 
+The renewal dialog offers the same main AI as **Start an AI session**: the
+owner's Senior, or its recommendation when Senior has no saved choice. Keeping
+that AI leaves the fresh chat on the main AI; picking a different model makes
+it Custom.
+
 If you choose another session or navigate away while the link is opening,
 Vibe64 keeps your newer choice. Ordinary session-tab selection keeps its existing
 behavior. Colleague can explain renewal and inspect the saved result; opening a

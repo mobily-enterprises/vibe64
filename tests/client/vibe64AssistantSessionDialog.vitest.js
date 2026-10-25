@@ -10,7 +10,8 @@ vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
 }));
 vi.mock("@local/vibe64-accounts/client", () => ({
   useModelRouting: () => ({ resource: mocks.resource, loadError: ref(""),
-    setups: computed(() => mocks.resource.data.value?.setups || null) })
+    mainChatSelection: computed(() => mocks.resource.data.value?.setups?.owner?.roles?.senior?.effective ||
+      mocks.resource.data.value?.setups?.owner?.roles?.senior?.recommendation || null) })
 }));
 vi.mock("@/lib/vibe64AccountConnectionsDialog.js", () => ({ requestVibe64AccountConnectionsDialog: mocks.openSettings }));
 import AssistantSessionDialog from "../../src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue";

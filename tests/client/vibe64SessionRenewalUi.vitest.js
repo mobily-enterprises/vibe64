@@ -73,7 +73,7 @@ vi.mock("@/components/studio/StudioErrorNotice.vue", () => ({
 }));
 vi.mock("@local/vibe64-accounts/client", () => ({
   useModelRouting: () => ({ resource: { isInitialLoading: VueRuntime.ref(false) },
-    setups: VueRuntime.ref({ owner: { roles: { senior: { effective: renewalUiHarness.assistantSelection } } } }) })
+    mainChatSelection: VueRuntime.computed(() => renewalUiHarness.assistantSelection) })
 }));
 vi.mock("@/components/studio/vibe64-session/Vibe64RenewalAssistantSelector.vue", () => ({
   default: defineComponent({
