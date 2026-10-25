@@ -19,7 +19,7 @@ import {
 import {
   assertActorHomeEnv,
   assertManagedSourceFilesystemActor,
-  isManagedWorkspaceRuntime,
+  hostIsManaged,
   realUserActorRequiresInstalledHelper
 } from "../../packages/vibe64-execution/src/server/policy/permissionPolicy.js";
 import { pathInsideOrEqual } from "../../packages/vibe64-execution/src/server/normalize.js";
@@ -43,13 +43,16 @@ import { resolveCommandEnv } from "../../packages/vibe64-execution/src/server/en
 import { currentActorUser } from "../../packages/vibe64-execution/src/server/actor/userIdentity.js";
 import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
 
-// These tests describe a host with pinned tool packs, a shared cache and a
-// privileged helper; every one of those lives in a temporary directory.
+// These tests describe a host with pinned tool packs and a shared cache; a
+// managed host adds a privileged helper. Each lives in a temporary directory.
 const HOST_ROOT = await mkdtemp(path.join(os.tmpdir(), "v64-gateway-host-"));
 const RUNTIME_PACKS = path.join(HOST_ROOT, "runtime-packs");
 const PACK_HOST = Object.freeze({
   runtimePackRoot: RUNTIME_PACKS,
-  sharedCacheRoot: path.join(HOST_ROOT, "cache"),
+  sharedCacheRoot: path.join(HOST_ROOT, "cache")
+});
+const MANAGED_HOST = Object.freeze({
+  ...PACK_HOST,
   execHelperPath: path.join(HOST_ROOT, "exec-helper")
 });
 configureVibe64Host(PACK_HOST);
@@ -58,9 +61,13 @@ after(async () => {
   await rm(HOST_ROOT, { recursive: true, force: true });
 });
 
-function usePackRoot(t, runtimePackRoot) {
-  configureVibe64Host({ ...PACK_HOST, runtimePackRoot });
+function useHost(t, profile) {
+  configureVibe64Host(profile);
   t.after(() => configureVibe64Host(PACK_HOST));
+}
+
+function usePackRoot(t, runtimePackRoot) {
+  useHost(t, { ...PACK_HOST, runtimePackRoot });
 }
 
 const execFileAsync = promisify(execFile);
@@ -456,7 +463,7 @@ test("execution gateway forbids a human filesystem actor inside managed session 
 
     assert.equal(result.ok, false);
     assert.equal(result.code, "vibe64_command_managed_source_real_user_forbidden");
-    assert.match(result.error, /workspace daemon filesystem identity/u);
+    assert.match(result.error, /must run as the editor's own user/u);
   } finally {
     await rm(sourceRoot, {
       force: true,
@@ -503,7 +510,7 @@ test("execution path containment treats a \"..name\" child as inside", () => {
   assert.equal(pathInsideOrEqual(root, ""), false);
 });
 
-test("execution gateway permits same-user direct execution only outside managed workspace runtime", () => {
+test("execution gateway permits same-user direct execution only on a host without a helper", (t) => {
   const currentUser = os.userInfo();
   const actor = {
     requiresRealUser: true,
@@ -515,57 +522,43 @@ test("execution gateway permits same-user direct execution only outside managed 
     }
   };
 
-  assert.equal(isManagedWorkspaceRuntime({}), false);
-  assert.equal(realUserActorRequiresInstalledHelper(actor, {
-    env: {}
-  }), false);
-  assert.equal(isManagedWorkspaceRuntime({
-    VIBE64_WORKSPACE: "sas"
-  }), true);
-  assert.equal(realUserActorRequiresInstalledHelper(actor, {
-    env: {
-      VIBE64_WORKSPACE: "sas"
-    }
-  }), true);
-  assert.equal(isManagedWorkspaceRuntime({
-    VIBE64_WORKSPACE_DAEMON_USER: "sas-daemon"
-  }), true);
-  assert.equal(realUserActorRequiresInstalledHelper(actor, {
-    env: {
-      VIBE64_WORKSPACE_DAEMON_USER: "sas-daemon"
-    }
-  }), true);
-});
-
-test("execution gateway bars same-user detached real-user commands in managed workspace runtime", async () => {
-  const currentUser = os.userInfo();
+  assert.equal(hostIsManaged(), false);
+  assert.equal(realUserActorRequiresInstalledHelper(actor), false);
+  // Workspace env names say nothing about the host; only its profile does.
   const previousWorkspace = process.env.VIBE64_WORKSPACE;
   process.env.VIBE64_WORKSPACE = "sas";
-  try {
-    const result = await runVibe64Command({
-      actor: "owner-user",
-      command: process.execPath,
-      args: [
-        "-e",
-        "console.log('should-not-run')"
-      ],
-      execution: {
-        ownerId: "managed-detached-test"
-      },
-      mode: "detached",
-      userKey: currentUser.username
-    });
+  t.after(() => {
+    if (previousWorkspace === undefined) delete process.env.VIBE64_WORKSPACE;
+    else process.env.VIBE64_WORKSPACE = previousWorkspace;
+  });
+  assert.equal(hostIsManaged(), false);
+  assert.equal(realUserActorRequiresInstalledHelper(actor), false);
+  useHost(t, MANAGED_HOST);
+  assert.equal(hostIsManaged(), true);
+  assert.equal(realUserActorRequiresInstalledHelper(actor), true);
+  assert.equal(realUserActorRequiresInstalledHelper({ ...actor, requiresRealUser: false }), false);
+});
 
-    assert.equal(result.ok, false);
-    assert.equal(result.code, "vibe64_command_detached_real_user_unsupported");
-    assert.match(result.error, /helper is required/u);
-  } finally {
-    if (previousWorkspace === undefined) {
-      delete process.env.VIBE64_WORKSPACE;
-    } else {
-      process.env.VIBE64_WORKSPACE = previousWorkspace;
-    }
-  }
+test("execution gateway bars same-user detached real-user commands on a managed host", async (t) => {
+  const currentUser = os.userInfo();
+  useHost(t, MANAGED_HOST);
+  const result = await runVibe64Command({
+    actor: "owner-user",
+    command: process.execPath,
+    args: [
+      "-e",
+      "console.log('should-not-run')"
+    ],
+    execution: {
+      ownerId: "managed-detached-test"
+    },
+    mode: "detached",
+    userKey: currentUser.username
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.code, "vibe64_command_detached_real_user_unsupported");
+  assert.match(result.error, /helper is required/u);
 });
 
 test("execution gateway gives terminal and Codex the same shared Playwright runtime env", async () => {
@@ -655,6 +648,58 @@ test("standalone capture and dynamic PTY find tools on the launching shell PATH"
   }
 });
 
+test("PTY terminals get exactly the gateway env, never the server's own variables", async (t) => {
+  const saved = { GH_TOKEN: process.env.GH_TOKEN, VIBE64_TEST_SERVER_ONLY: process.env.VIBE64_TEST_SERVER_ONLY };
+  process.env.GH_TOKEN = "server-github-token";
+  process.env.VIBE64_TEST_SERVER_ONLY = "server-only";
+  t.after(() => {
+    for (const [name, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  });
+  const namespace = `gateway-pty-exact-env-${Date.now()}`;
+  const terminal = await runVibe64Command({
+    command: process.execPath,
+    args: ["-e", "console.log('PTY_ENV:' + JSON.stringify({ token: process.env.GH_TOKEN || '', " +
+      "serverOnly: process.env.VIBE64_TEST_SERVER_ONLY || '', term: process.env.TERM || '' }))"],
+    inheritProcessEnv: false,
+    baseEnv: { PATH: "/usr/bin:/bin" },
+    mode: "pty",
+    runtimes: [],
+    terminal: { namespace }
+  });
+  try {
+    assert.equal(terminal.ok, true, terminal.output || terminal.error);
+    const snapshot = await waitForTerminalOutput(terminal.id, namespace, "PTY_ENV:");
+    const match = String(snapshot.output || "").match(/PTY_ENV:(\{[^\r\n]+\})/u);
+    assert.ok(match, snapshot.output);
+    assert.deepEqual(JSON.parse(match[1]), { token: "", serverOnly: "", term: "xterm-color" });
+  } finally {
+    if (terminal.id) await closeTerminalSession(terminal.id, { namespace });
+  }
+});
+
+test("PTY env factories see the execution id like every other gateway command", async () => {
+  const namespace = `gateway-pty-execution-id-${Date.now()}`;
+  const terminal = await runVibe64Command({
+    command: process.execPath,
+    args: ["-e", "console.log('PTY_IDS:' + process.env.VIBE64_EXECUTION_ID + '|' + process.env.TERMINAL_ID)"],
+    env: ({ id }) => ({ TERMINAL_ID: id }),
+    mode: "pty",
+    runtimes: [],
+    terminal: { namespace }
+  });
+  try {
+    assert.equal(terminal.ok, true, terminal.output || terminal.error);
+    assert.ok(terminal.execution?.id);
+    const snapshot = await waitForTerminalOutput(terminal.id, namespace, "PTY_IDS:");
+    assert.ok(snapshot.output.includes(`PTY_IDS:${terminal.execution.id}|${terminal.id}`), snapshot.output);
+  } finally {
+    if (terminal.id) await closeTerminalSession(terminal.id, { namespace });
+  }
+});
+
 test("managed execution does not inherit the launching shell PATH", async () => {
   const customPath = "/tmp/standalone-only-tools";
   const release = installVibe64ManagedExecutionProvider({
@@ -670,14 +715,20 @@ test("managed execution does not inherit the launching shell PATH", async () => 
   } finally {
     release();
   }
-  const workspace = await runVibe64Command({
-    command: process.execPath,
-    args: ["-e", "console.log(process.env.PATH)"],
-    runtimes: [],
-    baseEnv: { PATH: customPath, VIBE64_WORKSPACE: "example" }
-  });
-  assert.equal(workspace.ok, true, workspace.output);
-  assert.ok(!workspace.stdout.trim().split(":").includes(customPath));
+  // A host whose profile declares a helper is managed without any provider.
+  configureVibe64Host(MANAGED_HOST);
+  try {
+    const managedHost = await runVibe64Command({
+      command: process.execPath,
+      args: ["-e", "console.log(process.env.PATH)"],
+      runtimes: [],
+      baseEnv: { PATH: customPath }
+    });
+    assert.equal(managedHost.ok, true, managedHost.output);
+    assert.ok(!managedHost.stdout.trim().split(":").includes(customPath));
+  } finally {
+    configureVibe64Host(PACK_HOST);
+  }
 });
 
 test("execution gateway preserves database env names without projecting aliases", async () => {
@@ -2171,6 +2222,7 @@ test("execution gateway rejects function env outside pty mode", async () => {
 });
 
 test("execution gateway pty mode spools real-user helper payloads centrally", async (t) => {
+  useHost(t, MANAGED_HOST);
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-exec-pty-helper-"));
   const namespace = `v64-exec-pty-helper-${Date.now()}`;
   const actorUid = process.getuid() === 1001 ? 1002 : 1001;
@@ -2209,12 +2261,12 @@ test("execution gateway pty mode spools real-user helper payloads centrally", as
         }
       },
       cwd: "/home/ada",
-      env: {
+      resolveEnv: () => ({
         GH_PROMPT_DISABLED: "1",
         HOME: "/home/ada",
         LOGNAME: "ada",
         USER: "ada"
-      }
+      })
     });
   } finally {
     if (previousPath === undefined) delete process.env.PATH;
@@ -2240,6 +2292,7 @@ test("execution gateway pty mode spools real-user helper payloads centrally", as
 });
 
 test("execution gateway helper-backed pty evaluates terminal args and env factories", async (t) => {
+  useHost(t, MANAGED_HOST);
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-exec-pty-helper-dynamic-"));
   const namespace = `v64-exec-pty-helper-dynamic-${Date.now()}`;
   const actorUid = process.getuid() === 1001 ? 1002 : 1001;
@@ -2281,11 +2334,13 @@ test("execution gateway helper-backed pty evaluates terminal args and env factor
         }
       },
       cwd: "/home/ada",
-      env: {
+      // The gateway resolves the factory per terminal id.
+      resolveEnv: (input = {}) => ({
         HOME: "/home/ada",
         LOGNAME: "ada",
+        TERMINAL_ID: input.id || "",
         USER: "ada"
-      }
+      })
     });
   } finally {
     if (previousPath === undefined) delete process.env.PATH;

@@ -24,7 +24,7 @@ import {
 import {
   assertActorHomeEnv,
   assertManagedSourceFilesystemActor,
-  isManagedWorkspaceRuntime,
+  hostIsManaged,
   processMatchesActor,
   realUserActorRequiresInstalledHelper
 } from "./policy/permissionPolicy.js";
@@ -41,11 +41,10 @@ import {
 
 async function runLocalVibe64Command(request, {
   actor,
-  baseEnv,
-  localPath,
   cwd,
   env,
-  requiresHelper
+  requiresHelper,
+  resolveEnv
 } = {}) {
   if (request.releaseEnvironmentFile) {
     return commandErrorResult("Release environment execution requires a managed host.",
@@ -54,10 +53,8 @@ async function runLocalVibe64Command(request, {
   if (request.mode === "pty") {
     return runPtyCommand(request, {
       actor,
-      baseEnv,
-      localPath,
       cwd,
-      env
+      resolveEnv
     });
   }
   if (request.mode === "detached") {
@@ -129,10 +126,10 @@ async function runVibe64Command(input = {}) {
     const managedRequired = vibe64ManagedExecutionRequired(baseEnv) ||
       vibe64ManagedExecutionRequired(process.env);
     const requiresHelper = realUserActorRequiresInstalledHelper(actor);
-    // A standalone editor uses the tools on its owner's shell PATH. Managed
-    // execution and commands crossing Unix identities keep their host policy.
-    const localPath = !provider && !managedRequired && !requiresHelper &&
-      !isManagedWorkspaceRuntime(baseEnv) && !isManagedWorkspaceRuntime(process.env) && processMatchesActor(actor)
+    // A standalone editor uses the tools on its owner's shell PATH. A managed
+    // host and commands crossing Unix identities keep the host policy.
+    const managedHost = Boolean(provider) || managedRequired || hostIsManaged();
+    const localPath = !managedHost && processMatchesActor(actor)
       ? [baseEnv.PATH, process.env.PATH].filter(Boolean).join(":")
       : "";
     const env = executionEnv(resolveCommandEnv({
@@ -166,11 +163,10 @@ async function runVibe64Command(input = {}) {
       localRequest,
       {
         actor,
-        baseEnv,
-        localPath,
         cwd,
         env,
         requiresHelper,
+        resolveEnv,
         ...localContext
       }
     );

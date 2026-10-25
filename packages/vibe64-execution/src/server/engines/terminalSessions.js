@@ -6,6 +6,10 @@ import { createRequire } from "node:module";
 import {
   drainProcessGroup
 } from "./detached.js";
+import {
+  pathInsideOrEqual,
+  recordValue
+} from "../normalize.js";
 
 const MAX_TERMINAL_BUFFER_LENGTH = 256 * 1024;
 const MAX_TERMINAL_BUFFER_ROWS = 300;
@@ -582,17 +586,6 @@ function countRunningTerminalSessions({
   }).filter((entry) => terminalSessionMatchesFilter(entry.session, filter)).length;
 }
 
-function pathIsWithinRoot(pathValue = "", rootValue = "") {
-  const root = String(rootValue || "").trim();
-  const source = String(pathValue || "").trim();
-  if (!root || !source) {
-    return false;
-  }
-  const normalizedRoot = path.resolve(root);
-  const normalizedSource = path.resolve(source);
-  return normalizedSource === normalizedRoot || normalizedSource.startsWith(`${normalizedRoot}${path.sep}`);
-}
-
 function listTerminalSessions({
   namespace = "",
   namespacePrefix = "",
@@ -833,13 +826,12 @@ function startTerminalSession({
     })
     : metadata;
   // Offline state upgrades share command capture, but never need a native PTY.
+  // The child gets exactly the env it was given, like capture and detached
+  // commands: nothing the policy left out comes back from this server process.
   const terminal = requirePty("node-pty").spawn(command, resolvedArgs, {
     cols: DEFAULT_TERMINAL_COLS,
     cwd,
-    env: {
-      ...process.env,
-      ...(resolvedEnv && typeof resolvedEnv === "object" && !Array.isArray(resolvedEnv) ? resolvedEnv : {})
-    },
+    env: recordValue(resolvedEnv),
     name: "xterm-color",
     rows: DEFAULT_TERMINAL_ROWS
   });
@@ -1304,7 +1296,7 @@ async function closeTerminalSessionsForCwdRoot(cwdRoot = "") {
   }
   const targets = listStoredSessions({
     runningOnly: true
-  }).filter((entry) => pathIsWithinRoot(entry.session?.cwd, normalizedCwdRoot));
+  }).filter((entry) => pathInsideOrEqual(normalizedCwdRoot, entry.session?.cwd));
   const namespaces = [...new Set(targets.map((entry) => entry.namespace))].sort();
   const closed = await closeTerminalSessionTargets(targets.map((entry) => ({
     id: entry.session.id,

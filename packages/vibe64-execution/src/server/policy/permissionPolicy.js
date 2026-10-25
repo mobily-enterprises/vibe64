@@ -4,6 +4,9 @@ import {
   currentProcessIdentity
 } from "../actor/userIdentity.js";
 import {
+  vibe64Host
+} from "../hostProfile.js";
+import {
   normalizeAbsolutePath,
   pathInsideOrEqual
 } from "../normalize.js";
@@ -15,24 +18,20 @@ function processMatchesActor(actor = {}) {
     (current.uid === actor.user?.uid && current.gid === actor.user?.gid);
 }
 
-function isManagedWorkspaceRuntime(env = process.env) {
-  return Boolean(
-    String(env?.VIBE64_WORKSPACE || "").trim() ||
-    String(env?.VIBE64_WORKSPACE_DAEMON_USER || "").trim()
-  );
+// A host that provisions its own machines declares a privileged helper in its
+// host profile. Such a host is managed: it never borrows the launching shell's
+// PATH, and every real-user command goes through the helper.
+function hostIsManaged() {
+  return Boolean(vibe64Host().execHelperPath);
 }
 
-function realUserActorRequiresInstalledHelper(actor = {}, {
-  env = process.env
-} = {}) {
+function realUserActorRequiresInstalledHelper(actor = {}) {
   if (!actor.requiresRealUser) {
     return false;
   }
-  // Managed workspace hosts set VIBE64_WORKSPACE* even when the process UID
-  // already matches the target user, such as localhost dogfooding. Keep those
-  // runtimes on the installed helper path so dev and managed-workspace
-  // permission policy cannot drift apart.
-  return isManagedWorkspaceRuntime(env) || !processMatchesActor(actor);
+  // The helper is used even when this process already is the target user, so
+  // the permission policy is the same on every managed host.
+  return hostIsManaged() || !processMatchesActor(actor);
 }
 
 function assertManagedSourceFilesystemActor(actor = {}, request = {}, cwd = "") {
@@ -50,7 +49,7 @@ function assertManagedSourceFilesystemActor(actor = {}, request = {}, cwd = "") 
     return;
   }
   const error = new Error(
-    "Managed session source commands must retain the workspace daemon filesystem identity."
+    "Commands in a session's source must run as the editor's own user, not as a person's account."
   );
   error.code = "vibe64_command_managed_source_real_user_forbidden";
   throw error;
@@ -73,7 +72,7 @@ function assertActorHomeEnv(actor = {}, env = {}) {
 export {
   assertActorHomeEnv,
   assertManagedSourceFilesystemActor,
-  isManagedWorkspaceRuntime,
+  hostIsManaged,
   realUserActorRequiresInstalledHelper,
   processMatchesActor
 };

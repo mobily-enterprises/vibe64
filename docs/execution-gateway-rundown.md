@@ -60,7 +60,10 @@ const cwd = assertCwdAllowed(request.cwd, { allowedRoots: request.allowedRoots }
 Then it chooses:
 
 - `mode: "capture"`: run and collect output.
-- `mode: "pty"`: start a tracked terminal session.
+- `mode: "pty"`: start a tracked terminal session. Like every engine, the
+  terminal gets exactly the resolved environment, never the server process's
+  own variables, and a function `env` is resolved per terminal id with the
+  same `VIBE64_EXECUTION_ID` stamp.
 - `mode: "detached"`: spawn a background process.
 - real-user mismatch: run through the host's privileged helper via sudo. A
   person's own computer has no helper and never builds such an actor.
@@ -135,6 +138,9 @@ Examples:
 
 `owner-user` and `named-user` require a real OS user. If the Node process is not
 already running as that user, the gateway routes through the host exec helper.
+A host whose profile declares a helper is a managed host: it routes every
+real-user command through the helper, even one for the process's own user, and
+never adds the launching shell's `PATH`.
 
 ### `purpose`
 

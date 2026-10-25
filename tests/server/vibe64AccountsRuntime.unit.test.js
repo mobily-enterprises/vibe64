@@ -90,6 +90,8 @@ async function withTempDir(callback) {
   }
 }
 
+// Stands in for the gateway, whose resolved env always carries a PATH: a
+// terminal gets exactly the env it is given.
 function startGatewayAuthTestTerminal(input = {}, overrides = {}) {
   const terminal = input.terminal || {};
   return startTerminalSession({
@@ -97,7 +99,7 @@ function startGatewayAuthTestTerminal(input = {}, overrides = {}) {
     command: input.command,
     commandPreview: terminal.commandPreview,
     cwd: input.cwd,
-    env: input.env,
+    env: { PATH: process.env.PATH, ...input.env },
     maxRunning: terminal.maxRunning,
     metadata: terminal.metadata,
     namespace: terminal.namespace,

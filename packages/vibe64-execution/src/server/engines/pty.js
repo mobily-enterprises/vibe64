@@ -6,11 +6,8 @@ import {
   commandErrorResult
 } from "../result.js";
 import {
-  envRecord
-} from "../normalize.js";
-import {
-  resolveCommandEnv
-} from "../env/resolveCommandEnv.js";
+  DEFAULT_SYSTEM_PATH
+} from "../runtime/resolveRuntimePath.js";
 import {
   closeTerminalSession,
   startTerminalSession
@@ -41,35 +38,26 @@ function ptyHelperPayloadPath(root = "") {
   return path.join(payloadRoot, `${process.pid}-${Date.now()}-${randomUUID()}.json`);
 }
 
+// The gateway resolves the env (a factory runs per terminal id) and stamps the
+// execution id on it, so every PTY command sees the same env a provider would.
 function terminalSessionInputForRequest(request = {}, {
   actor,
-  baseEnv,
-  localPath,
   cwd,
-  env
+  resolveEnv
 } = {}) {
   const terminal = request.terminal || {};
+  const env = request.envFactory ? resolveEnv : resolveEnv();
   if (!realUserActorRequiresInstalledHelper(actor)) {
     return {
       args: request.args,
       command: request.command,
       cwd,
-      env: terminalEnvForRequest(request, {
-        actor,
-        baseEnv,
-        localPath,
-        policyEnv: env
-      })
+      env
     };
   }
   return {
     args: (input = {}) => {
       const payloadPath = ptyHelperPayloadPath(terminal.helperPayloadRoot);
-      const payloadEnv = terminalEnvForRequest(request, {
-        actor,
-        baseEnv,
-        policyEnv: env
-      });
       const payloadArgs = typeof request.args === "function"
         ? request.args(input)
         : request.args;
@@ -78,7 +66,7 @@ function terminalSessionInputForRequest(request = {}, {
         args: payloadArgs,
         command: request.command,
         cwd,
-        env: typeof payloadEnv === "function" ? payloadEnv(input) : payloadEnv,
+        env: typeof env === "function" ? env(input) : env,
         input: request.input,
         operation: helperOperationForRequest(request)
       });
@@ -94,49 +82,23 @@ function terminalSessionInputForRequest(request = {}, {
     },
     command: "sudo",
     cwd: terminal.helperPayloadRoot,
-    env: {}
-  };
-}
-
-function terminalEnvForRequest(request = {}, {
-  actor = {},
-  baseEnv = {},
-  localPath = "",
-  policyEnv = {}
-} = {}) {
-  if (typeof request.envFactory !== "function") {
-    return policyEnv;
-  }
-  return (input = {}) => {
-    return resolveCommandEnv({
-      actor,
-      baseEnv,
-      localPath,
-      request: {
-        ...request,
-        env: envRecord(request.envFactory(input)),
-        envFactory: null
-      }
-    });
+    // The command's env travels in the payload; sudo itself needs only PATH.
+    env: { PATH: process.env.PATH || DEFAULT_SYSTEM_PATH }
   };
 }
 
 async function runPtyCommand(request = {}, {
   actor,
-  baseEnv,
-  localPath,
   cwd,
-  env
+  resolveEnv
 } = {}) {
   try {
     const terminal = request.terminal || {};
     const executionId = request.execution?.id || "";
     const sessionInput = terminalSessionInputForRequest(request, {
       actor,
-      baseEnv: baseEnv || env,
-      localPath,
       cwd,
-      env
+      resolveEnv
     });
     const result = startTerminalSession({
       args: sessionInput.args,
