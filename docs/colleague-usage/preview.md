@@ -154,12 +154,17 @@ have separate Preview addresses. Use the current editor’s **Preview** controls
 an address from a discarded environment is no longer valid. No namespace or port
 field is required. Colleague uses the current Preview result rather than
 constructing an address.
-An HTTPS Preview can also appear inside another editor's iframe. Its first
+An HTTPS Preview can also appear inside a previewed editor's iframe. Its first
 navigation saves a secure Preview cookie, then removes the token from the address;
 the nested app should load without a token error. If the browser blocks that
 cookie, open the Preview in its own tab and ask the coding agent to check the
 browser's cookie policy and the current Preview address. Colleague can explain
 those steps but cannot change the browser's cookie settings.
+Only the editor that showed you the Preview can embed it. Another website that
+puts the Preview address in its own frame gets a refused frame and none of the
+app's captured console or network details. If an embedded Preview stays blank
+with a framing error, reopen it from the editor's **Preview** controls so the
+editor's current address is used.
 If two temporary editors show the same address, their host routing configuration
 needs correction. Restart the affected Previews after the host update; changing
 an application's listening port is not required.

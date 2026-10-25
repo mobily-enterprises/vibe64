@@ -15,8 +15,12 @@ import {
   PREVIEW_IDENTITY_CONTROL_PATH
 } from "@local/vibe64-core/server/previewAuth";
 
+// The bridge talks only to the editors that asked for this Preview: it ignores
+// messages from any other parent origin and addresses every reply to those
+// editor origins, so a foreign page that frames the Preview learns nothing.
 function launchPreviewBridgeScript({
   debug = false,
+  parentOrigins = [],
   targetOrigin = ""
 } = {}) {
   const config = JSON.stringify({
@@ -29,6 +33,9 @@ function launchPreviewBridgeScript({
     identityRequestMessageType: PREVIEW_IDENTITY_REQUEST_MESSAGE_TYPE,
     identityResponseMessageType: PREVIEW_IDENTITY_RESPONSE_MESSAGE_TYPE,
     locationMessageType: PREVIEW_LOCATION_MESSAGE_TYPE,
+    parentOrigins: [...new Set((Array.isArray(parentOrigins) ? parentOrigins : [])
+      .map((origin) => String(origin || "").trim())
+      .filter(Boolean))],
     queryMessageType: PREVIEW_QUERY_MESSAGE_TYPE,
     resourceFailureMessageType: PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE,
     targetOrigin: String(targetOrigin || ""),
@@ -42,6 +49,11 @@ function launchPreviewBridgeScript({
     return;
   }
   let lastHref = "";
+  function postToParent(message) {
+    for (const origin of config.parentOrigins) {
+      window.parent.postMessage(message, origin);
+    }
+  }
   let consoleCharacterCount = 0;
   let consoleDroppedEntryCount = 0;
   let consoleSequence = 0;
@@ -365,14 +377,14 @@ function launchPreviewBridgeScript({
     if (!candidate || !failure) {
       return;
     }
-    window.parent.postMessage({
+    postToParent({
       failure,
       method: candidate.method,
       pathTemplate: candidate.pathTemplate,
       status: code,
       type: config.appRequestMessageType,
       version: config.version
-    }, "*");
+    });
   }
   const originalFetch = window.fetch;
   if (typeof originalFetch === "function") {
@@ -617,14 +629,14 @@ function launchPreviewBridgeScript({
       if (applicationResource && resourceFailureCount++ < 50) {
         const recover = !resourceFailurePublished;
         resourceFailurePublished = true;
-        window.parent.postMessage({
+        postToParent({
           recover,
           href: safeResourceUrl,
           kind: resourceKind,
           timestamp: new Date().toISOString(),
           type: config.resourceFailureMessageType,
           version: config.version
-        }, "*");
+        });
       }
     }
   }, true);
@@ -691,13 +703,13 @@ function launchPreviewBridgeScript({
       href,
       reason: String(reason || "location")
     });
-    window.parent.postMessage({
+    postToParent({
       href,
       reason: String(reason || "location"),
       title: String(document.title || ""),
       type: config.locationMessageType,
       version: config.version
-    }, "*");
+    });
   }
   function wrapHistoryMethod(methodName) {
     const original = window.history && window.history[methodName];
@@ -715,7 +727,7 @@ function launchPreviewBridgeScript({
   window.addEventListener("hashchange", () => publishLocation("hashchange"));
   window.addEventListener("popstate", () => publishLocation("popstate"));
   window.addEventListener("message", (event) => {
-    if (event.source !== window.parent) {
+    if (event.source !== window.parent || !config.parentOrigins.includes(event.origin)) {
       return;
     }
     if (event.data?.type === config.queryMessageType) {
@@ -755,15 +767,15 @@ function launchPreviewBridgeScript({
               signedOut: payload?.signedOut === true
             });
           }
-          window.parent.postMessage({
+          postToParent({
             identity: payload?.identity || null,
             ok: true,
             requestId,
             type: config.identityResponseMessageType,
             version: config.version
-          }, "*");
+          });
         } catch (error) {
-          window.parent.postMessage({
+          postToParent({
             code: String(error?.code || "vibe64_preview_identity_exchange_failed"),
             error: String(error?.message || error || "Preview identity exchange failed."),
             ok: false,
@@ -771,13 +783,13 @@ function launchPreviewBridgeScript({
             signedOut: error?.signedOut === true,
             type: config.identityResponseMessageType,
             version: config.version
-          }, "*");
+          });
         }
       })();
       return;
     }
     if (event.data?.type === config.diagnosticsRequestMessageType) {
-      window.parent.postMessage({
+      postToParent({
         diagnostics: {
           capturedAt: new Date().toISOString(),
           console: {
@@ -795,7 +807,7 @@ function launchPreviewBridgeScript({
         requestId: String(event.data?.requestId || ""),
         type: config.diagnosticsResponseMessageType,
         version: config.version
-      }, "*");
+      });
       return;
     }
   });
@@ -806,10 +818,10 @@ function launchPreviewBridgeScript({
   // This handshake means the bridge listeners are installed, not that the app
   // has rendered. It must remain independent of application modules and
   // DOMContentLoaded so a stalled module graph cannot strand preview controls.
-  window.parent.postMessage({
+  postToParent({
     type: config.bridgeReadyMessageType,
     version: config.version
-  }, "*");
+  });
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => {
       publishLocation("ready");

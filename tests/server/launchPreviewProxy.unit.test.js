@@ -94,7 +94,7 @@ test("launch preview bearer cookies are host-only __Host- cookies on hosted HTTP
   const hostedCookie = previewTokenCookie("secret", {
     proxyOrigin: "https://v64preview-abc123def456.workspace.studio.example"
   });
-  assert.match(hostedCookie, /^__Host-vibe64_preview_token_443=secret; Path=\/; SameSite=None; HttpOnly; Secure$/u);
+  assert.match(hostedCookie, /^__Host-vibe64_preview_token_443=secret; Path=\/; SameSite=Lax; HttpOnly; Secure$/u);
   assert.doesNotMatch(hostedCookie, /Domain=/iu);
   const localCookie = previewTokenCookie("secret", {
     proxyOrigin: "http://127.0.0.1:49000"
@@ -336,6 +336,33 @@ test("launch preview proxy preserves the canonical target host when using an alt
       assert.equal(response.status, 200);
       assert.match(await response.text(), /Target home/u);
       assert.equal(target.requests.at(-1)?.host, "127.0.0.1:4101");
+    } finally {
+      await registry.closeAll();
+    }
+  });
+});
+
+test("an injected Preview page may be framed and addressed only by the editors that asked for it", async () => {
+  await withTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry();
+    const input = {
+      sessionId: "session-editor-origin",
+      targetHref: `${target.origin}/home`,
+      terminalSessionId: "terminal-editor-origin"
+    };
+    try {
+      const unknown = await registry.ensure(input);
+      const silent = await fetch(unknown.href, { redirect: "follow" });
+      assert.equal(silent.headers.get("content-security-policy"), "frame-ancestors 'none'");
+      assert.match(await silent.text(), /"parentOrigins":\[\]/u);
+
+      await registry.ensure({ ...input, editorOrigin: "http://LOCALHOST:3000/ignored" });
+      const preview = await registry.ensure({ ...input, editorOrigin: "javascript:alert(1)" });
+      const response = await fetch(preview.href, { redirect: "follow" });
+      assert.equal(response.headers.get("content-security-policy"), "frame-ancestors http://localhost:3000");
+      const body = await response.text();
+      assert.match(body, /"parentOrigins":\["http:\/\/localhost:3000"\]/u);
+      assert.doesNotMatch(body, /postMessage\([^)]*"\*"/u);
     } finally {
       await registry.closeAll();
     }
@@ -2194,7 +2221,10 @@ test("Preview bridge reports bounded module failures while requesting only one a
   const window = { location: new URL("https://preview.example/jobs"), history: {},
     parent: { postMessage: value => messages.push(value) },
     addEventListener: (type, listener) => listeners.set(type, listener) };
-  const html = injectLaunchPreviewBridge("<head></head>", { targetOrigin: "http://127.0.0.1:4000" });
+  const html = injectLaunchPreviewBridge("<head></head>", {
+    parentOrigins: ["https://acme.users.example"],
+    targetOrigin: "http://127.0.0.1:4000"
+  });
   const script = html.match(/<script[^>]*>([\s\S]*?)<\/script>/u)[1];
   vm.runInNewContext(script, { window, document: { readyState: "complete", title: "Jobs" }, URL,
     ErrorEvent: class ErrorEvent {}, queueMicrotask });

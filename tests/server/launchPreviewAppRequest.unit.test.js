@@ -4,21 +4,27 @@ import test from "node:test";
 
 import {
   PREVIEW_APP_REQUEST_MESSAGE_TYPE,
-  PREVIEW_BRIDGE_VERSION
+  PREVIEW_BRIDGE_READY_MESSAGE_TYPE,
+  PREVIEW_BRIDGE_VERSION,
+  PREVIEW_DIAGNOSTICS_REQUEST_MESSAGE_TYPE,
+  PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE
 } from "../../packages/vibe64-terminals/src/shared/launchPreviewProtocol.js";
 import { injectLaunchPreviewBridge } from "../../packages/vibe64-terminals/src/server/launchPreviewBridge.js";
 
 // Runs the real injected bridge against a fake frame: only the reduced
 // app-request projection may reach the parent, never bodies, queries or text.
-function bridgeFrame({ fetchResult } = {}) {
+const EDITOR_ORIGIN = "https://acme.users.example";
+
+function bridgeFrame({ fetchResult, parentOrigins = [EDITOR_ORIGIN] } = {}) {
   const messages = [];
+  const targetOrigins = [];
   const listeners = new Map();
   let clock = 10000;
   const window = {
     location: new URL("https://preview.example/notes"),
     history: {},
     console: { log() {}, info() {}, warn() {}, error() {}, debug() {} },
-    parent: { postMessage: value => messages.push(value) },
+    parent: { postMessage: (value, targetOrigin) => { messages.push(value); targetOrigins.push(targetOrigin); } },
     addEventListener(type, listener) {
       if (!listeners.has(type)) listeners.set(type, []);
       listeners.get(type).push(listener);
@@ -29,12 +35,16 @@ function bridgeFrame({ fetchResult } = {}) {
         headers: { get: () => "application/json" }, clone() { return { headers: this.headers, body: null, text: async () => "{\"error\":\"secret body\"}" }; } };
     }
   };
-  const html = injectLaunchPreviewBridge("<head></head>", { targetOrigin: "http://127.0.0.1:4000" });
+  const html = injectLaunchPreviewBridge("<head></head>", { parentOrigins, targetOrigin: "http://127.0.0.1:4000" });
   const script = html.match(/<script[^>]*>([\s\S]*?)<\/script>/u)[1];
   vm.runInNewContext(script, { window, document: { readyState: "complete", title: "Notes" }, URL, Headers,
     ErrorEvent: class ErrorEvent {}, queueMicrotask, performance: { now: () => clock } });
   return {
     messages,
+    targetOrigins,
+    post(data, origin) {
+      for (const listener of listeners.get("message") || []) listener({ data, origin, source: window.parent });
+    },
     appRequests: () => messages.filter(message => message.type === PREVIEW_APP_REQUEST_MESSAGE_TYPE),
     gesture(type = "submit", isTrusted = true) {
       for (const listener of listeners.get(type) || []) listener({ type, isTrusted });
@@ -91,4 +101,23 @@ test("a server error and a network failure after a trusted click map to their fa
     [{ method: "DELETE", status: 503, failure: "http-5xx" }]);
   assert.deepEqual(network.appRequests().map(({ method, status, failure }) => ({ method, status, failure })),
     [{ method: "PUT", status: 0, failure: "network" }]);
+});
+
+test("the bridge answers only its editor origins and never addresses a wildcard", async () => {
+  const frame = bridgeFrame();
+  frame.post({ type: PREVIEW_DIAGNOSTICS_REQUEST_MESSAGE_TYPE, requestId: "foreign" }, "https://evil.example");
+  frame.post({ type: PREVIEW_DIAGNOSTICS_REQUEST_MESSAGE_TYPE, requestId: "editor" }, EDITOR_ORIGIN);
+  await settle();
+  const responses = frame.messages.filter(message => message.type === PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE);
+  assert.deepEqual(responses.map(message => message.requestId), ["editor"]);
+  assert.ok(frame.messages.some(message => message.type === PREVIEW_BRIDGE_READY_MESSAGE_TYPE));
+  assert.ok(frame.targetOrigins.length > 0);
+  assert.ok(frame.targetOrigins.every(origin => origin === EDITOR_ORIGIN), "no reply uses targetOrigin *");
+});
+
+test("a bridge with no known editor stays silent and ignores every parent", async () => {
+  const frame = bridgeFrame({ parentOrigins: [] });
+  frame.post({ type: PREVIEW_DIAGNOSTICS_REQUEST_MESSAGE_TYPE, requestId: "any" }, EDITOR_ORIGIN);
+  await settle();
+  assert.deepEqual(frame.messages, []);
 });

@@ -1173,3 +1173,15 @@ it("a page from a preview that stopped running is removed rather than left looki
   f.outputs.previewState.value = "idle";
   expect(f.state.previewUrl.value).toBe("");
 });
+
+it("Preview bridge requests go only to the origin whose bridge announced itself", async () => {
+  const f = mountPreviewSurface({ projectSlug: "practice" });
+  f.load();
+  f.announce({ type: PREVIEW_BRIDGE_READY_MESSAGE_TYPE, version: PREVIEW_BRIDGE_VERSION });
+  const diagnostics = f.state.requestPreviewDiagnostics();
+  const request = f.posts.at(-1);
+  expect(request.origin).toBe("https://preview.example.test");
+  expect(f.posts.some(post => post.origin === "*")).toBe(false);
+  f.announce({ type: PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE, requestId: request.data.requestId, diagnostics: { title: "App" } });
+  expect(await diagnostics).toEqual({ title: "App" });
+});

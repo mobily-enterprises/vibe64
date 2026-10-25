@@ -276,7 +276,9 @@ function previewTokenCookie(token = "", {
   proxyOrigin = ""
 } = {}) {
   const https = previewOriginUsesHttps(proxyOrigin);
-  const policy = https ? "SameSite=None; HttpOnly; Secure" : "SameSite=Lax; HttpOnly";
+  // The Preview is same-site with its editor, so Lax suffices; a foreign site
+  // that frames the Preview gets no token cookie and so no application page.
+  const policy = https ? "SameSite=Lax; HttpOnly; Secure" : "SameSite=Lax; HttpOnly";
   return `${previewTokenCookieName(proxyOrigin)}=${encodeURIComponent(String(token || ""))}; Path=/; ${policy}`;
 }
 
@@ -913,6 +915,7 @@ function queryParamName(rawName = "") {
 async function proxyPreviewRequest(request, response, {
   connectOrigin = "",
   consumeIdentityGrant = null,
+  editorOrigins = [],
   executePreviewIdentityCommand = null,
   previewAuth = null,
   proxyOrigin = "",
@@ -1009,9 +1012,11 @@ async function proxyPreviewRequest(request, response, {
         : html;
       const body = injectLaunchPreviewBridge(page, {
         debug: previewProxyDebugEnabled(),
+        parentOrigins: editorOrigins,
         targetOrigin
       });
       response.writeHead(targetResponse.statusCode || 200, previewResponseHeaders(targetResponse, {
+        editorOrigins,
         injected: true,
         proxyOrigin,
         targetOrigin,
@@ -1348,6 +1353,7 @@ function createLaunchPreviewProxyRegistry({
         targetHref: targetUrl.toString(),
         terminalSessionId: String(scope.terminalSessionId || "")
       });
+      existing.allowEditorOrigin(input.editorOrigin);
       return proxyDescriptor(existing, targetUrl);
     }
     const pending = pendingStarts.get(key);
@@ -1362,6 +1368,7 @@ function createLaunchPreviewProxyRegistry({
           terminalSessionId: String(scope.terminalSessionId || "")
         });
         const proxy = await pending.promise;
+        proxy.allowEditorOrigin(input.editorOrigin);
         return proxyDescriptor(proxy, targetUrl);
       }
       previewProxyDebugLog("server.launchPreviewProxy.awaitPendingReplacement", {
@@ -1427,6 +1434,7 @@ function createLaunchPreviewProxyRegistry({
     })();
     try {
       const proxy = await pendingEntry.promise;
+      proxy.allowEditorOrigin(input.editorOrigin);
       proxies.set(key, proxy);
       previewProxyDebugLog("server.launchPreviewProxy.created", {
         key,
@@ -1617,10 +1625,13 @@ async function startLaunchPreviewProxy({
     ? createPreviewIdentityGrantConsumer(previewAuth)
     : null;
   let proxyOrigin = "";
+  // Editors that were handed this Preview; only they may frame and talk to it.
+  const editorOrigins = new Set();
   server.on("request", (request, response) => {
     void proxyPreviewRequest(request, response, {
       connectOrigin,
       consumeIdentityGrant,
+      editorOrigins: [...editorOrigins],
       executePreviewIdentityCommand,
       previewAuth,
       proxyOrigin: requestPreviewOrigin(request, proxyOrigin),
@@ -1667,6 +1678,12 @@ async function startLaunchPreviewProxy({
     terminalSessionId: String(scope.terminalSessionId || "")
   });
   return {
+    allowEditorOrigin(value = "") {
+      const origin = normalizePreviewEditorOrigin(value);
+      if (origin) {
+        editorOrigins.add(origin);
+      }
+    },
     close: () => closePreviewServer({
       listen,
       server,
@@ -2032,7 +2049,26 @@ function previewProxyPublicHost(listenHost = LOOPBACK_HOST, env = process.env) {
 function previewResponseHeaders(response, options = {}) {
   const headers = responseHeaders(response, options);
   appendResponseHeader(headers, "set-cookie", previewTokenCookie(options.token, options));
+  if (options.injected) {
+    const editorOrigins = Array.isArray(options.editorOrigins) ? options.editorOrigins : [];
+    appendResponseHeader(
+      headers,
+      "content-security-policy",
+      `frame-ancestors ${editorOrigins.length > 0 ? editorOrigins.join(" ") : "'none'"}`
+    );
+  }
   return headers;
+}
+
+// An editor origin is the scheme, host and port the editor's own request
+// arrived on; anything else cannot name a page that frames the Preview.
+function normalizePreviewEditorOrigin(value = "") {
+  try {
+    const url = new URL(String(value || "").trim());
+    return ["http:", "https:"].includes(url.protocol) ? url.origin : "";
+  } catch {
+    return "";
+  }
 }
 
 function appendResponseHeader(headers, name, value) {

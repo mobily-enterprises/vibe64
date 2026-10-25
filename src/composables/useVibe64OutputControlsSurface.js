@@ -430,11 +430,12 @@ function createPreviewBridgeRequestRegistry() {
     frameRequestId = 0,
     message = {},
     signal = null,
+    targetOrigin = "",
     targetWindow = null,
     timeoutMessage = "The application preview did not respond in time.",
     timeoutMs = 3000
   } = {}) {
-    if (!targetWindow || typeof targetWindow.postMessage !== "function") {
+    if (!targetOrigin || !targetWindow || typeof targetWindow.postMessage !== "function") {
       return Promise.reject(new Error("The application preview is not ready."));
     }
     if (signal?.aborted) {
@@ -468,7 +469,7 @@ function createPreviewBridgeRequestRegistry() {
       targetWindow.postMessage({
         ...message,
         requestId
-      }, "*");
+      }, targetOrigin);
     } catch (error) {
       reject(requestId, error);
     }
@@ -684,6 +685,9 @@ function useVibe64OutputControlsSurface(props) {
   let orientation = null;
   const previewSuspended = ref(false);
   const previewBridgeVersion = ref(0);
+  // The origin whose bridge announced itself in the frame. Requests go only to
+  // it, so a frame that navigated elsewhere never receives a grant or query.
+  let previewBridgeOrigin = "";
   const previewBridgeRequests = createPreviewBridgeRequestRegistry();
   const previewDiagnosticsBusy = ref(false);
   const previewIdentityBusy = ref(false);
@@ -1165,6 +1169,7 @@ function useVibe64OutputControlsSurface(props) {
 
   function resetPreviewBridge(reason = "") {
     previewBridgeVersion.value = 0;
+    previewBridgeOrigin = "";
     previewBridgeRequests.rejectAll("The application preview changed.");
     previewDiagnosticsBusy.value = false;
     previewDebugLog("bridge.reset", {
@@ -1673,7 +1678,7 @@ function useVibe64OutputControlsSurface(props) {
   }
   
   function requestPreviewState() {
-    if (!previewPaneDisplayed.value || !previewFrame.value?.contentWindow || !previewUrl.value) {
+    if (!previewPaneDisplayed.value || !previewFrame.value?.contentWindow || !previewUrl.value || !previewBridgeOrigin) {
       if (previewUrl.value) {
         previewDebugLog("query.skipped", {
           hasContentWindow: Boolean(previewFrame.value?.contentWindow),
@@ -1685,7 +1690,7 @@ function useVibe64OutputControlsSurface(props) {
     previewDebugLog("query.post");
     previewFrame.value.contentWindow.postMessage({
       type: PREVIEW_QUERY_MESSAGE_TYPE
-    }, "*");
+    }, previewBridgeOrigin);
   }
 
   async function requestPreviewDiagnostics({ signal = null } = {}) {
@@ -1703,6 +1708,7 @@ function useVibe64OutputControlsSurface(props) {
           type: PREVIEW_DIAGNOSTICS_REQUEST_MESSAGE_TYPE
         },
         signal,
+        targetOrigin: previewBridgeOrigin,
         targetWindow: previewFrame.value?.contentWindow,
         timeoutMessage: "The proxied app did not return its diagnostics in time.",
         timeoutMs: PREVIEW_DIAGNOSTICS_TIMEOUT_MS
@@ -1722,6 +1728,7 @@ function useVibe64OutputControlsSurface(props) {
         grant: String(grant || ""),
         type: PREVIEW_IDENTITY_REQUEST_MESSAGE_TYPE
       },
+      targetOrigin: previewBridgeOrigin,
       targetWindow: previewFrame.value?.contentWindow,
       timeoutMessage: "The application preview did not complete the identity exchange in time.",
       timeoutMs: PREVIEW_IDENTITY_TIMEOUT_MS
@@ -2083,6 +2090,7 @@ function useVibe64OutputControlsSurface(props) {
       Math.max(0, Number(event?.data?.version) || 0)
     );
     if (bridgeReady) {
+      previewBridgeOrigin = String(event.origin || "");
       // The bridge announces readiness as soon as its listeners are installed.
       // Application modules and rendering may still be pending.
       markPreviewFrameReady(previewFrameRequestId.value, "bridge-ready");

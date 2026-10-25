@@ -1697,6 +1697,29 @@ async function readyLaunchPreview({
   }
 }
 
+// The editor that asked for the Preview is the page that frames it: its
+// request's public host and protocol name that origin. A configured public
+// protocol wins for public hosts, as it does for the Preview's own origin.
+function editorOriginForRequest({
+  env = process.env,
+  publicHost = "",
+  publicProtocol = ""
+} = {}) {
+  const host = String(publicHost || "").trim();
+  const configuredProtocol = isLoopbackAddress(normalizeHostName(host))
+    ? ""
+    : env?.[VIBE64_PUBLIC_PROTOCOL_ENV];
+  const protocol = String(configuredProtocol || publicProtocol || "").trim().toLowerCase().replace(/:$/u, "");
+  if (!host || /[\s/\\@?#]/u.test(host) || !["http", "https"].includes(protocol)) {
+    return "";
+  }
+  try {
+    return new URL(`${protocol}://${host}`).origin;
+  } catch {
+    return "";
+  }
+}
+
 async function ensureLaunchPreviewProxy({
   context = {},
   launchPreviewProxies = null,
@@ -1707,6 +1730,11 @@ async function ensureLaunchPreviewProxy({
   terminal = null
 } = {}) {
   return launchPreviewProxies.ensure({
+    editorOrigin: editorOriginForRequest({
+      env: options.env,
+      publicHost: options.publicHost,
+      publicProtocol: options.publicProtocol
+    }),
     executePreviewIdentityCommand: terminal?.metadata?.previewIdentity
       ? async ({ selection }) => {
           const runner = previewIdentityCommandRunnerForLaunchTerminal({
@@ -3277,6 +3305,7 @@ export {
   OUTPUT_METADATA,
   cleanupSupersededLaunchTerminals,
   createLaunchRestartBaseline,
+  editorOriginForRequest,
   launchActionsFromOutput,
   launchReadinessMarkerLineSeen,
   launchRestartState,

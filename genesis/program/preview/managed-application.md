@@ -93,6 +93,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `packages/vibe64-terminals/src/server/workspaceSetup.js`
 - `packages/vibe64-terminals/src/server/outputResults.js`
 - `packages/vibe64-terminals/src/server/launchPreviewProxy.js`
+- `packages/vibe64-terminals/src/server/launchPreviewBridge.js`
 - `src/components/studio/Vibe64LongRunningTerminal.vue`
 - `src/components/studio/Vibe64OutputControls.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
@@ -431,10 +432,19 @@ address.
 Redirects from the target's ordinary origin or
 its forwarded-scheme origin stay on the preview origin. Foreign,
 opaque and absent origins are preserved so application origin checks still apply.
-The preview proxy's own bearer cookie uses `SameSite=None; Secure` on hosted
-HTTPS origins so a nested cross-site Preview iframe can complete token
-bootstrap. Local HTTP Preview keeps `SameSite=Lax`; both cookies remain
-HTTP-only and scoped to the proxy host.
+The preview proxy's own bearer cookie uses `SameSite=Lax` (plus `Secure` and the
+`__Host-` prefix on HTTPS). A Preview, including one nested inside a previewed
+editor, is same-site with the editor that frames it, so token bootstrap works;
+a foreign site that frames the Preview sends no cookie and gets no application
+page. Both cookies remain HTTP-only and scoped to the proxy host.
+Each Preview proxy remembers the editor origins that were handed its address:
+the scheme and host of the editor's own output-status request, with the
+configured public protocol winning for a public host. Injected pages carry
+`Content-Security-Policy: frame-ancestors` naming only those origins, and the
+injected bridge ignores messages from any other parent origin and addresses
+every location, diagnostics, identity and app-request message to those origins,
+never `*`. The editor in turn addresses its queries, diagnostics requests and
+identity grants only to the origin whose bridge announced itself in the frame.
 This lets a previewed editor authenticate realtime connections through the proxy.
 Each upstream HTTP request restores the configured Preview idle timeout on a
 pooled socket. A pool's short free-socket timer must not terminate a later active

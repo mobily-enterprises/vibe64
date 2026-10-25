@@ -25,6 +25,7 @@ import {
   launchRestartState,
   outputTargetExecutionDescriptor,
   previewIdentityCommandRunnerForLaunchTerminal,
+  editorOriginForRequest,
   previewPublicOriginForLaunch
 } from "../../packages/vibe64-terminals/src/server/outputTargetTerminal.js";
 import {
@@ -1077,6 +1078,25 @@ test("web launch rejects preview identity executable symlinks", async () => {
   } finally {
     await fixture.cleanup();
   }
+});
+
+test("the editor origin that may frame a Preview comes from the editor's own request", () => {
+  assert.equal(editorOriginForRequest({ env: {}, publicHost: "localhost:3000", publicProtocol: "http" }),
+    "http://localhost:3000");
+  assert.equal(editorOriginForRequest({
+    env: { VIBE64_PUBLIC_PROTOCOL: "https" },
+    publicHost: "acme.users.example",
+    publicProtocol: "http"
+  }), "https://acme.users.example", "a configured public protocol wins for a public editor host");
+  assert.equal(editorOriginForRequest({
+    env: { VIBE64_PUBLIC_PROTOCOL: "https" },
+    publicHost: "127.0.0.1:3000",
+    publicProtocol: "http"
+  }), "http://127.0.0.1:3000", "a loopback editor keeps its request protocol");
+  for (const publicHost of ["", "evil.example/path", "user@evil.example", "evil.example?x"]) {
+    assert.equal(editorOriginForRequest({ env: {}, publicHost, publicProtocol: "https" }), "");
+  }
+  assert.equal(editorOriginForRequest({ env: {}, publicHost: "acme.example", publicProtocol: "javascript" }), "");
 });
 
 test("preview public origin nests the Preview under its editor host", () => {
