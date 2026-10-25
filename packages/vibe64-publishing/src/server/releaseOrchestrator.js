@@ -17,6 +17,7 @@ import {
   assertPreflightAllowsRelease,
   createPublishPlan,
   definePreflightCheck,
+  nextVersionCode,
   publishPlanDisplayId,
   runPreflight
 } from "@local/vibe64-packaging/server";
@@ -27,6 +28,8 @@ import { publishingKeysUnlocked, recoveryKitCovers } from "@local/vibe64-packagi
 import { sideloadKeyEntryId } from "./credentialBroker.js";
 
 const SEMVER = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
+
+const UNFINISHED = Object.freeze(["failed", "partial", "interrupted"]);
 
 function releaseError(message, code, details) {
   return Object.assign(new Error(message), { code, ...(details ? { details } : {}) });
@@ -279,12 +282,22 @@ function createReleaseOrchestrator({
     };
   }
 
-  async function nextBuildNumbers(packages) {
+  // Android refuses an update whose build number (versionCode) does not grow, so
+  // each app package gets one above every number a release has used, from the
+  // whole history. Retrying an unfinished release of the same saved version
+  // keeps its number, so its plan (and confirmation) stays the same.
+  async function nextBuildNumbers(packages, savedCommit) {
     const numbers = {};
-    const records = await history.list({ limit: 200 });
+    const releases = (await history.list({ limit: Infinity })).filter((record) => record.kind === "release").map(interruptedOr);
     for (const entry of packages.filter((candidate) => candidate.packer === "capacitor")) {
-      const used = records.map((record) => record.buildNumbers?.[entry.id]).filter(Number.isInteger);
-      numbers[entry.id] = (used.length ? Math.max(...used) : 0) + 1;
+      const unfinished = releases.find((record) => UNFINISHED.includes(record.status) && record.savedCommit === savedCommit
+        && (record.versions?.[entry.id] ?? null) === entry.version && Number.isInteger(record.buildNumbers?.[entry.id]));
+      if (unfinished) {
+        numbers[entry.id] = unfinished.buildNumbers[entry.id];
+        continue;
+      }
+      const used = releases.map((record) => record.buildNumbers?.[entry.id]).filter(Number.isInteger);
+      numbers[entry.id] = nextVersionCode(used.length ? Math.max(...used) : null);
     }
     return numbers;
   }
@@ -325,7 +338,7 @@ function createReleaseOrchestrator({
       savedCommit: baseline.commit,
       packaging: release.packaging,
       versions,
-      buildNumbers: await nextBuildNumbers(built),
+      buildNumbers: await nextBuildNumbers(built.map((entry) => ({ ...entry, version: versions[entry.id] ?? null })), baseline.commit),
       targets: chosen.map(({ id, destination, package: packageId, channel, settings, account }) => ({ id, destination, package: packageId, channel, settings, account })),
       toolchain: {
         node: process.versions.node,
@@ -561,8 +574,8 @@ function createReleaseOrchestrator({
     const current = await requireCurrentPlan({ planHash, targetIds, acknowledged });
     assertPreflightAllowsRelease(current.preflight, acknowledged);
     const redeemed = await confirmations.redeem({ planHash: current.planHash, token, actor });
-    const unfinished = (await history.list({ limit: 50 })).map(interruptedOr)
-      .find((record) => record.kind === "release" && record.planHash === current.planHash && ["failed", "partial", "interrupted"].includes(record.status));
+    const unfinished = (await history.list({ limit: Infinity })).map(interruptedOr)
+      .find((record) => record.kind === "release" && record.planHash === current.planHash && UNFINISHED.includes(record.status));
     const record = unfinished
       ? await history.update(unfinished.id, (entry) => {
         entry.status = "running";

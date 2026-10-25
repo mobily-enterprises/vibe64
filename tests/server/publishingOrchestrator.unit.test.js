@@ -32,11 +32,29 @@ const PACKAGING = vibe64PackagingInspection({
   ] }
 });
 
-async function fixture(t, { failing = new Set(), failingBuilds = new Set(), verification = "passed" } = {}) {
+const APP_PACKAGING = vibe64PackagingInspection({
+  environment: { stackHash: "sha256:s", environmentDefaults: [] },
+  section: { status: "ready", stackHash: "sha256:s", lines: [
+    "### Package `web`: Notes web",
+    "- Packer: `web-bundle`",
+    "- Build `Build`: `npm` `run` `build`",
+    "- Output: `dist`",
+    "### Package `app`: Notes",
+    "- Packer: `capacitor`",
+    "- Content: package `web`",
+    "- Platforms: `android`",
+    "- Id: `com.example.notes`",
+    "- Name: `Notes`",
+    "- Icon: `icon.png`",
+    "- Version from: `package.json`"
+  ] }
+});
+
+async function fixture(t, { failing = new Set(), failingBuilds = new Set(), verification = "passed", app = false } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-publishing-orchestrator-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const runtimeRoot = path.join(root, "publishing");
-  const calls = { builds: [], publishes: [], tags: [], pushes: [], dryRuns: [] };
+  const calls = { builds: [], publishes: [], tags: [], pushes: [], dryRuns: [], versionCodes: [] };
   const baseline = {
     supported: true, mode: "local_source", repositoryRoot: path.join(root, "project"), branch: "main",
     baselineRef: "refs/heads/main", upstreamRef: "refs/remotes/origin/main", commit: COMMIT, saved: true, pushed: true,
@@ -44,7 +62,7 @@ async function fixture(t, { failing = new Set(), failingBuilds = new Set(), veri
   };
   const repository = {
     baseline: async () => baseline,
-    readRelease: async () => ({ packaging: PACKAGING, versions: { sdk: "1.2.0", py: "1.2.0" } }),
+    readRelease: async () => (app ? { packaging: APP_PACKAGING, versions: { app: "1.2.0" } } : { packaging: PACKAGING, versions: { sdk: "1.2.0", py: "1.2.0" } }),
     existingTags: async () => [],
     subjectsSince: async () => ["Add offline drafts", "Release 1.1.0"],
     withCheckout: async (_root, _commit, operation) => operation(root),
@@ -66,8 +84,9 @@ async function fixture(t, { failing = new Set(), failingBuilds = new Set(), veri
   const packaging = {
     androidTemplate: { id: "vibe64.capacitor-android.v1", capacitor: "8.5.3", buildTools: "35.0.0" },
     gatherAndroidFacts: async () => null,
-    buildPackage: async ({ packageId, version, planHash }) => {
+    buildPackage: async ({ packageId, version, planHash, versionCode }) => {
       calls.builds.push(packageId);
+      if (versionCode) calls.versionCodes.push(versionCode);
       if (failingBuilds.has(packageId)) throw Object.assign(new Error("Build failed with exit code 1."), { code: "VIBE64_PUBLISH_BUILD_FAILED" });
       return { artifacts: { digest: `sha256:${packageId}-${version}`, manifest: { planHash, files: [{ path: `${packageId}-${version}.tgz`, size: 100, sha256: `sha256:${packageId}` }] }, reused: false } };
     }
@@ -90,10 +109,14 @@ async function fixture(t, { failing = new Set(), failingBuilds = new Set(), veri
     sourceWriter: { prepareAndWrite: async ({ entry, version }) => ({ package: entry.id, previousVersion: "1.1.0", version, files: [{ path: "package.json" }, { path: "CHANGELOG.md" }] }) },
     packaging
   });
-  await targets.add({ destination: "npm", package: "sdk", channel: "latest", account: "npm-main", settings: { registry: "http://127.0.0.1:4873/" } });
-  await targets.add({ destination: "github-releases", package: "sdk", channel: "latest", account: "github-main", settings: { repository: "ada/notes" } });
-  await targets.add({ destination: "pypi", package: "py", account: "pypi-main", settings: { repository: "http://127.0.0.1:8080/", index: "http://127.0.0.1:8080/simple/" } });
-  return { orchestrator, history, targets, confirmations, calls, runtimeRoot };
+  if (app) {
+    await targets.add({ destination: "github-releases", package: "app", channel: "latest", account: "github-main", settings: { repository: "ada/notes" } });
+  } else {
+    await targets.add({ destination: "npm", package: "sdk", channel: "latest", account: "npm-main", settings: { registry: "http://127.0.0.1:4873/" } });
+    await targets.add({ destination: "github-releases", package: "sdk", channel: "latest", account: "github-main", settings: { repository: "ada/notes" } });
+    await targets.add({ destination: "pypi", package: "py", account: "pypi-main", settings: { repository: "http://127.0.0.1:8080/", index: "http://127.0.0.1:8080/simple/" } });
+  }
+  return { orchestrator, history, targets, confirmations, calls, runtimeRoot, baseline };
 }
 
 async function confirm(orchestrator, plan, actor = PERSON) {
@@ -172,6 +195,30 @@ test("a failing target leaves the release partial and the same confirmed plan re
     "proven targets are handed their proof so they finish at once"
   );
   assert.equal((await orchestrator.listHistory()).length, 1);
+});
+
+test("an unfinished app release keeps its build number, so the same plan resumes; later releases count past all history", async (t) => {
+  const failing = new Set(["app-github-releases"]);
+  const { orchestrator, calls, history, baseline } = await fixture(t, { failing, app: true });
+  const plan = await orchestrator.plan();
+  assert.equal(plan.preflight.ready, true, JSON.stringify(plan.preflight.checks.filter(({ ok }) => !ok)));
+  assert.deepEqual(plan.packages.map(({ id, buildNumber }) => [id, buildNumber ?? null]), [["web", null], ["app", 1]]);
+  const first = await confirm(orchestrator, plan);
+  assert.equal((await orchestrator.readRelease(first.releaseId)).status, "failed");
+
+  failing.clear();
+  const retry = await orchestrator.plan();
+  assert.equal(retry.planHash, plan.planHash, "retrying the unfinished release is the same plan");
+  const again = await confirm(orchestrator, retry);
+  assert.equal(again.resumed, true);
+  assert.equal(again.releaseId, first.releaseId);
+  assert.deepEqual(calls.versionCodes, [1, 1], "the retry builds with the same build number");
+  assert.equal((await orchestrator.readRelease(first.releaseId)).status, "succeeded");
+
+  for (let index = 0; index < 205; index += 1) await history.create({ kind: "dry-run", savedCommit: baseline.commit, buildNumbers: {}, steps: [], targets: {} });
+  baseline.commit = "d".repeat(40);
+  const next = await orchestrator.plan();
+  assert.equal(next.packages.find(({ id }) => id === "app").buildNumber, 2, "build numbers keep growing however many newer records exist");
 });
 
 test("an assistant can only ask; the person confirms the exact current plan", async (t) => {

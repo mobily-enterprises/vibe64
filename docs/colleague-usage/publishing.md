@@ -177,8 +177,9 @@ Package registries Vibe64 releases to:
   lost key (and no recovery kit) means everyone must uninstall and reinstall.
   On the command line, `vibe64-publish keygen app --out <folder>` creates a key
   as two private files.
-- Every build gets a build number one higher than the last; it is never stored
-  in the project. After a release the card shows **Install on phone**: a QR
+- Every app release gets a build number one higher than any earlier release
+  of it; it is never stored in the project. Finishing an unfinished release
+  of the same saved version keeps its number, so it stays the same plan. After a release the card shows **Install on phone**: a QR
   code your phone scans on the same Wi-Fi. Opened on an Android phone itself,
   it offers **Download** directly, with **Show a QR code for another phone**. This computer shares only that one
   APK, at an unguessable address, for 10 minutes or until you close the
