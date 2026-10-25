@@ -66,6 +66,7 @@ Git commands.
 - `src/components/studio/repository/Vibe64LocalRemoteControls.vue`
 - `src/components/studio/repository/Vibe64RepositoryWorkspace.vue`
 - `packages/vibe64-sessions/src/server/service.js`
+- `packages/vibe64-sessions/src/server/connectedContributions.js`
 - `packages/vibe64-sessions/src/server/actions.js`
 - `packages/vibe64-sessions/src/server/inputSchemas.js`
 - `packages/vibe64-sessions/src/server/assistantContracts.js`

@@ -19,6 +19,9 @@ that turn without dropping either half. No saved history is rewritten.
 - `packages/vibe64-core/src/server/projectState.js`
 
 - Main: `packages/vibe64-sessions/src/server/service.js`
+- `packages/vibe64-sessions/src/server/sessionArchive.js`
+- `packages/vibe64-sessions/src/server/connectedContributions.js`
+- `packages/vibe64-sessions/src/server/sessionResults.js`
 - `packages/vibe64-sessions/src/server/sessionRenewal.js`
 - `src/components/studio/vibe64-session/Vibe64ConnectedReplacement.vue`
 - `packages/vibe64-runtime/src/server/runtime.js`
@@ -419,6 +422,10 @@ stage and error for explicit retry; source recovery evidence keeps its protectio
 marker. Startup also finalizes interrupted archive publication from the immutable
 closing tree. Start, each durable stage transition, completion, and failure publish `vibe64.session.changed` to
 all clients with a list-refresh hint. Reconnecting clients read persisted state.
+
+Archive lives in Sessions' archive module, one function per durable phase;
+connected-source orchestration lives in its connected-contributions module.
+Both are composed into the one session service, as renewal is.
 
 The session service exposes optional `setArchivePreparation(callback)` for host
 preparation after terminal shutdown, under the existing agent-write lock and
