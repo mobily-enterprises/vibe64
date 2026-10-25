@@ -18,7 +18,7 @@ async function withDatabaseTools(run) {
           tables: [{ schema: "public", name: "private-table", columns: [{ name: "private-column" }] }] },
         activeQueries: [{ queryId: "query-1", readOnly: true, startedAt: "2026-09-29T00:01:00.000Z", cancellable: false,
           sql: "private-sql", connection: "private-driver" }],
-        defaultQuery: "private-sql", workspace: { snippets: ["private-sql"] }, layout: "private-layout", rows: ["private-row"]
+        workspace: { snippets: ["private-sql"] }, layout: "private-layout", rows: ["private-row"]
       }
     };
     const calls = [];

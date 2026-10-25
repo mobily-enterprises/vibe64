@@ -51,13 +51,11 @@ import {
   saveSnippet as saveStoredSnippet,
   writeSchemaSnapshot
 } from "./sessionState.js";
-import {
-  quoteQualifiedTable
-} from "./sqlPolicy.js";
 import { checkDatabaseServer } from "./serverCheck.js";
 import { thisComputerToolFamily } from "@local/vibe64-execution/server";
 import { dataOverviewDefinition, dataOverviewReference, readDataOverview } from "./dataOverview.js";
 import { inspectErdLayout, moveErdTables } from "./erdLayout.js";
+import { defaultTableQuery } from "../shared/sqlQuoting.js";
 import { DATA_OVERVIEW_INSTRUCTIONS, DATA_OVERVIEW_MAX_BYTES, DATA_OVERVIEW_PATH, dataOverviewCoverage, validateDataOverview } from "../shared/dataOverview.js";
 
 function databaseResult(operation) {
@@ -83,10 +81,6 @@ function safeConnectionDescriptor(connection = {}, context = {}) {
     label: connection.label,
     sourceLabel: normalizeText(context.source?.label)
   };
-}
-
-function defaultQuery(table = {}, engine = "postgresql") {
-  return `SELECT *\nFROM ${quoteQualifiedTable(table, engine)};`;
 }
 
 function historyEntry(sql = "", result = {}, readOnly = true) {
@@ -423,9 +417,6 @@ function createService({
             .map(([queryId, query]) => ({ queryId, readOnly: query.readOnly, startedAt: query.startedAt, cancellable: Boolean(query.cancel) })),
           assistant: databaseAssistantAvailability(decision),
           connection: safeConnectionDescriptor(context.writeConnection, context),
-          defaultQuery: schema.tables[0]
-            ? defaultQuery(schema.tables[0], schema.engine)
-            : "",
           layout,
           overview,
           ok: true,
@@ -483,7 +474,7 @@ function createService({
         const schema = await currentSchema(context);
         const readOnly = input.readOnly !== false;
         const automaticDefault = input.automatic === true && schema.tables.some((table) => (
-          String(input.sql || "").trim() === defaultQuery(table, schema.engine)
+          String(input.sql || "").trim() === defaultTableQuery(table, schema.engine)
         ));
         if (!readOnly) {
           assertWriteQueryConfirmed(context, input);
@@ -807,6 +798,5 @@ function createService({
 }
 
 export {
-  createService,
-  defaultQuery
+  createService
 };

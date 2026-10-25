@@ -1,6 +1,7 @@
 // The one home of SQL identifier and string-literal quoting for every engine
 // the database tools support. The server dialect, the editor dialect and the
-// local-server setup guide all quote through these rules.
+// local-server setup guide all quote through these rules, and the editor and
+// server build a table's default query here.
 
 function quotedIdentifier(value = "", delimiter = "\"") {
   const name = String(value || "");
@@ -30,6 +31,15 @@ const SQL_QUOTING = Object.freeze({
   })
 });
 
+// The query a table opens with. A MySQL table's schema is the connection's own
+// database, so it is named without it; other engines qualify it by schema.
+function defaultTableQuery(table = {}, engine = "") {
+  const { quoteIdentifier } = SQL_QUOTING[engine];
+  const parts = engine === "mysql" ? [table.name] : [table.schema, table.name];
+  return `SELECT *\nFROM ${parts.filter(Boolean).map(quoteIdentifier).join(".")};`;
+}
+
 export {
-  SQL_QUOTING
+  SQL_QUOTING,
+  defaultTableQuery
 };

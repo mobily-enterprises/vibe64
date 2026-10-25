@@ -580,6 +580,7 @@ import DatabaseTableList from "./DatabaseTableList.vue";
 import DatabaseErd from "./DatabaseErd.vue";
 import DatabaseOverview from "./DatabaseOverview.vue";
 import { DATA_OVERVIEW_ABSTRACTIONS } from "../../shared/dataOverview.js";
+import { defaultTableQuery } from "../../shared/sqlQuoting.js";
 import DatabaseSqlEditor from "./DatabaseSqlEditor.vue";
 
 const props = defineProps({
@@ -927,13 +928,8 @@ function quoteIdentifier(name = "") {
   return databaseClientDialect(schema.value.engine).quoteIdentifier(name);
 }
 
-function qualifiedTable(table = {}) {
-  return [table.schema, table.name].filter(Boolean).map(quoteIdentifier).join(".");
-}
-
 function defaultTableSql(table = {}) {
-  const name = ["mysql", "mariadb"].includes(schema.value.engine) ? quoteIdentifier(table.name) : qualifiedTable(table);
-  return `SELECT *\nFROM ${name};`;
+  return defaultTableQuery(table, schema.value.engine);
 }
 
 function rememberSelectedTableState() {

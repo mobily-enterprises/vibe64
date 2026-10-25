@@ -13,6 +13,7 @@ requiring every table and field to be read at once.
 - `packages/vibe64-database-tools/src/client/composables/useVibe64DatabaseTools.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `packages/vibe64-database-tools/src/shared/erdModel.js`
+- `packages/vibe64-database-tools/src/shared/sqlQuoting.js`
 - `packages/vibe64-database-tools/src/shared/erdRelationships.js`
 - `packages/vibe64-database-tools/src/shared/erdRouting.js`
 - `packages/vibe64-database-tools/src/client/workers/erdLayout.js`
@@ -74,6 +75,10 @@ keeps its mounted SQL draft and results rather than running that table again.
 Putting Copilot SQL, a snippet or a history entry into the editor preserves that
 SQL on the first Data visit. It waits for Run; initial table selection cannot
 replace it with a default query or execute it automatically.
+The editor and server build a table's default query with the same shared
+`defaultTableQuery()`: MySQL names the table alone, other engines qualify it by
+schema. The server recognises an automatic run of that exact query and leaves it
+out of query history.
 When a command finishes after the workspace is hidden, its follow-up state
 reload also defers to normal activation. The command keeps its result without
 creating an unavailable-resource error behind the hidden pane.

@@ -67,8 +67,10 @@ import {
   searchDatabaseSchema
 } from "../../packages/vibe64-database-tools/src/server/schemaAccess.js";
 import {
-  createService as createDatabaseService,
-  defaultQuery
+  defaultTableQuery
+} from "../../packages/vibe64-database-tools/src/shared/sqlQuoting.js";
+import {
+  createService as createDatabaseService
 } from "../../packages/vibe64-database-tools/src/server/service.js";
 import {
   assertSingleStatement,
@@ -375,6 +377,13 @@ test("MySQL result provenance uses the same normalized query contract", () => {
   assert.equal(select.command, "SELECT");
   const procedure = normalizeRawResponse([[[7]], [{ name: "id", type: 8 }]], schema, { engine: "mysql" }, "CALL list_books()");
   assert.equal(procedure.command, "CALL");
+});
+
+test("the editor and server share one default table query, naming MySQL tables without their database", () => {
+  const table = { name: "book`s", schema: "catalogue" };
+  assert.equal(defaultTableQuery(table, "mysql"), "SELECT *\nFROM `book``s`;");
+  assert.equal(defaultTableQuery(table, "postgresql"), 'SELECT *\nFROM "catalogue"."book`s";');
+  assert.equal(defaultTableQuery({ name: "people", schema: "main" }, "sqlite"), 'SELECT *\nFROM "main"."people";');
 });
 
 test("statement commands come from the SQL, and a writing WITH is never a SELECT", () => {
@@ -1337,7 +1346,7 @@ test("database members can browse, run SQL and use a shared assistant through th
     queryId: "automatic-table-query",
     readOnly: true,
     sessionId: "service-session",
-    sql: defaultQuery(schema.tables[0], schema.engine),
+    sql: defaultTableQuery(schema.tables[0], schema.engine),
     vibe64User: { role: "member", username: "member" }
   });
   assert.equal(automaticRead.ok, true);
@@ -1349,6 +1358,7 @@ test("database members can browse, run SQL and use a shared assistant through th
     stateAfterAutomaticRead.workspace.history.map((entry) => entry.sql),
     ["SELECT * FROM public.books;"]
   );
+  assert.equal("defaultQuery" in stateAfterAutomaticRead, false);
 
   const explicitReadClaimingToBeAutomatic = await service.runQuery({
     automatic: true,

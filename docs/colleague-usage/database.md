@@ -23,6 +23,8 @@ on mobile.
 Default table SELECTs use the table name without the physical database prefix
 on MySQL/MariaDB. PostgreSQL keeps its schema prefix so tables in different
 schemas remain distinct. **Reset to SELECT \*** restores the same default query.
+The automatic read that opens a table is not added to query history on any
+engine; running the same SQL yourself is.
 
 Queries and deliberate edits use Database's existing controls, unlock rules and
 confirmations. Check the exact selected database and table before changing data.
