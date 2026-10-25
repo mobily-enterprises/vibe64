@@ -168,11 +168,7 @@ async function ensureLocalProjectBaseline(standaloneSourceRoot = "", commandOpti
   let commit = await optionalGitOutput(standaloneSourceRoot, ["rev-parse", "--verify", "HEAD"], roots, commandOptions);
   if (!commit) {
     await runGit(standaloneSourceRoot, ["add", "-A"], roots, commandOptions);
-    await runGit(standaloneSourceRoot, [
-      "-c", "user.name=Vibe64",
-      "-c", "user.email=vibe64@localhost",
-      "commit", "--allow-empty", "-m", "Initial commit"
-    ], roots, commandOptions);
+    await runGit(standaloneSourceRoot, ["commit", "--allow-empty", "-m", "Initial commit"], roots, commandOptions);
     commit = await runGit(standaloneSourceRoot, ["rev-parse", "--verify", "HEAD"], roots, commandOptions);
     branch = await optionalGitOutput(standaloneSourceRoot, ["branch", "--show-current"], roots, commandOptions) || branch;
   }

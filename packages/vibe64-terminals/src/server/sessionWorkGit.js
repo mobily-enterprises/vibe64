@@ -533,7 +533,6 @@ async function mergeTrees(runCommand, context, {
   canonicalCommit,
   checkpointTree,
   commandOptions,
-  identity,
   project,
   virtualCommit = "",
   explicitBase = false
@@ -541,7 +540,6 @@ async function mergeTrees(runCommand, context, {
   const mergeInputCommit = virtualCommit || await createVirtualCommit(runCommand, context, {
     baseCommit,
     commandOptions,
-    identity,
     message: "Vibe64 session rebase input",
     project,
     tree: checkpointTree
@@ -613,14 +611,11 @@ function conflictWorktreeTree(runCommand, context, { conflictTree, conflictPaths
 async function createVirtualCommit(runCommand, context, {
   baseCommit,
   commandOptions,
-  identity,
   message,
   project,
   tree
 }) {
   return gitOutput(runCommand, context, [
-    "-c", `user.name=${identity.name}`,
-    "-c", `user.email=${identity.email}`,
     "commit-tree",
     tree,
     "-p",
@@ -697,7 +692,6 @@ async function regenerateDerivedArtifactTree(runCommand, context, {
   baseCommit,
   commandOptions,
   derivedArtifactPaths = [],
-  identity,
   project,
   refreshDerivedArtifacts,
   tree
@@ -715,7 +709,6 @@ async function regenerateDerivedArtifactTree(runCommand, context, {
   const sourceCommit = await createVirtualCommit(runCommand, context, {
     baseCommit,
     commandOptions,
-    identity,
     message: "Vibe64 derived artifact input",
     project,
     tree

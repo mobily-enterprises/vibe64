@@ -207,10 +207,6 @@ test("Save uses two foreground managed jobs and defers disposable cache maintena
     const result = await saveManagedSessionWorkImplementation({
       checkpoint: saveMessageInput.checkpoint,
       derivedArtifactPaths: [],
-      identity: {
-        email: "vibe64@example.test",
-        name: "Vibe64 Test"
-      },
       message: "Save through bounded managed stages",
       onCacheMaintenance: finishMaintenance,
       onProgress: async ({ stage }) => {
@@ -1570,10 +1566,6 @@ test("Save refuses canonical advances until explicit Update rebases the session"
     });
     session.metadata.base_commit = updated.canonicalCommit;
     const result = await saveSessionWork({
-      identity: {
-        email: "person@example.test",
-        name: "Person"
-      },
       operationId: "save-1",
       project,
       runCommand: commandRunner,

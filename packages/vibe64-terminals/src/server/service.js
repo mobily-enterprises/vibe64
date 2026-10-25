@@ -1497,7 +1497,6 @@ function createService({
       checkpoint: saveMessageInput.checkpoint,
       commandOptions: execution.commandOptions,
       derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
-      identity: execution.identity,
       message: commitTitle.subject,
       onCacheMaintenance(cacheMaintenance = {}) {
         if (cacheMaintenance.retryable !== true) {
@@ -2825,7 +2824,6 @@ function createService({
           historyReview: input.historyReview,
           conflictRecovery: input.conflictRecovery,
           reviewedConflictId: input.reviewedConflictId,
-          identity: execution.identity,
           onProgress: input.onProgress,
           operationId: input.operationId,
           project: await projectService.readCurrentProject(),
@@ -2953,7 +2951,7 @@ function createService({
           const { execution } = await sessionWorkExecution(sessionId, { ...context, session }, "incoming-contribution");
           return changeManagedIncomingContribution({ project, session, action: input.action,
             derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
-            id: input.id, review: input.review, repairReview: input.repairReview, identity: execution.identity,
+            id: input.id, review: input.review, repairReview: input.repairReview,
             commandOptions: execution.commandOptions, runCommand: execution.runCommand });
         }, { operation: `incoming-${input.action}` }));
     },

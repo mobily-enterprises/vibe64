@@ -438,7 +438,6 @@ async function rememberPreparedSaveCommit(runCommand, context, operationId, comm
 async function createSaveCommit(runCommand, context, {
   canonicalCommit,
   commandOptions,
-  identity,
   mergedTree,
   message,
   project
@@ -451,8 +450,6 @@ async function createSaveCommit(runCommand, context, {
     );
   }
   return gitOutput(runCommand, context, [
-    "-c", `user.name=${identity.name}`,
-    "-c", `user.email=${identity.email}`,
     "commit-tree",
     mergedTree,
     "-p",
@@ -884,7 +881,6 @@ async function prepareSessionWorkSave(runCommand, context, {
   commandOptions = {},
   connectedWorkSnapshots = [],
   derivedArtifactPaths = [],
-  identity = {},
   message = "",
   operationId,
   project = {},
@@ -938,10 +934,6 @@ async function prepareSessionWorkSave(runCommand, context, {
       "vibe64_session_save_no_changes"
     );
   }
-  const author = {
-    email: text(identity.email) || "vibe64@localhost",
-    name: text(identity.name) || "Vibe64 Save"
-  };
   const sourceTree = await treeWithDerivedArtifactsFromCommit(runCommand, context, {
     commandOptions,
     derivedArtifactPaths,
@@ -953,7 +945,6 @@ async function prepareSessionWorkSave(runCommand, context, {
     baseCommit: canonicalCommit,
     commandOptions,
     derivedArtifactPaths,
-    identity: author,
     project,
     refreshDerivedArtifacts,
     tree: sourceTree
@@ -961,7 +952,6 @@ async function prepareSessionWorkSave(runCommand, context, {
   const saveCommit = await createSaveCommit(runCommand, context, {
     canonicalCommit,
     commandOptions,
-    identity: author,
     mergedTree,
     message,
     project
@@ -1123,7 +1113,6 @@ async function saveSessionWorkDirect({
   connectedWorkSnapshots: suppliedConnectedSnapshots = [],
   deferCacheMaintenance = false,
   derivedArtifactPaths = [],
-  identity = {},
   message = "",
   operationId = crypto.randomUUID(),
   project = {},
@@ -1182,7 +1171,6 @@ async function saveSessionWorkDirect({
       commandOptions,
       connectedWorkSnapshots: snapshots,
       derivedArtifactPaths,
-      identity,
       message,
       operationId,
       project,
@@ -1305,7 +1293,6 @@ async function saveSessionWork({
   checkpoint = {},
   commandOptions = {},
   derivedArtifactPaths = [],
-  identity = {},
   message = "",
   onCacheMaintenance = async () => null,
   operationId = crypto.randomUUID(),
@@ -1336,7 +1323,6 @@ async function saveSessionWork({
         checkpoint,
         connectedWorkSnapshots: snapshots,
         derivedArtifactPaths,
-        identity,
         message
       },
       label: "Saving session work",

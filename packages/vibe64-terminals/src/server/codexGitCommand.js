@@ -785,10 +785,6 @@ function createCodexGitCommandService({
       return {
         actor,
         commandOptions: {},
-        identity: {
-          email: "vibe64@localhost",
-          name: "Vibe64 Save"
-        },
         ok: true,
         runCommand: gatewayCommandRunner
       };
@@ -816,7 +812,6 @@ function createCodexGitCommandService({
       session,
       toolHome
     });
-    const actorLabel = normalizeText(actor.actorUserKey) || "Vibe64 user";
     return {
       actor,
       commandOptions: {
@@ -826,10 +821,6 @@ function createCodexGitCommandService({
         ...(personGitIdentity ? { personGitIdentity } : {}),
         purpose: "github",
         userKey: gatewayGitIdentityUserKey(session, actor, toolHome)
-      },
-      identity: {
-        email: `${actorLabel.replace(/[^a-z0-9._-]+/giu, "-")}@users.noreply.vibe64.dev`,
-        name: actorLabel
       },
       ok: true,
       runCommand: gatewayCommandRunner

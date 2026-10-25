@@ -343,12 +343,11 @@ async function captureSessionWorkUpdateCheckpointDirect({
 
 async function prepareSessionWorkUpdateDirect({
   checkpoint = {}, commandOptions = {}, conflictRecovery = null, derivedArtifactPaths = [],
-  historyReview = null, identity = {}, operationId, project = {}, reviewedConflictId = "",
+  historyReview = null, operationId, project = {}, reviewedConflictId = "",
   runCommand = runVibe64Command, session = {}
 } = {}) {
   const context = repositoryContext(session, project);
   const { checkpointCommit, checkpointTree, oldHead, oldIndexTree } = checkpoint;
-  const author = { email: text(identity.email) || "vibe64@localhost", name: text(identity.name) || "Vibe64 Update" };
   const { commit: canonicalCommit } = await readCanonical(runCommand, context, operationId, { commandOptions, project });
   const historyRewritten = await savedHistoryRewritten(runCommand, context, canonicalCommit, oldHead, {
     commandOptions,
@@ -420,7 +419,6 @@ async function prepareSessionWorkUpdateDirect({
       canonicalCommit,
       checkpointTree: checkpointTreeForMerge,
       commandOptions,
-      identity: author,
       project
     });
     const currentRecovery = mergeResult.conflictPaths.length > 0
@@ -461,20 +459,19 @@ async function prepareSessionWorkUpdateDirect({
 }
 
 async function regenerateSessionWorkUpdateDirect({
-  commandOptions = {}, derivedArtifactPaths = [], identity = {}, prepared = {}, project = {},
+  commandOptions = {}, derivedArtifactPaths = [], prepared = {}, project = {},
   refreshDerivedArtifacts = null, runCommand = runVibe64Command, session = {}
 } = {}) {
   const context = repositoryContext(session, project);
-  const author = { email: text(identity.email) || "vibe64@localhost", name: text(identity.name) || "Vibe64 Update" };
   const mergedTree = await regenerateDerivedArtifactTree(runCommand, context, {
     baseCommit: prepared.canonicalCommit,
-    commandOptions, derivedArtifactPaths, identity: author, project, refreshDerivedArtifacts,
+    commandOptions, derivedArtifactPaths, project, refreshDerivedArtifacts,
     tree: prepared.mergedSourceTree
   });
   const mergedCommit = mergedTree === prepared.canonicalTree
     ? prepared.canonicalCommit
     : await createVirtualCommit(runCommand, context, {
-        baseCommit: prepared.canonicalCommit, commandOptions, identity: author,
+        baseCommit: prepared.canonicalCommit, commandOptions,
         message: "Vibe64 session update result", project, tree: mergedTree
       });
   return { ...prepared, mergedCommit, mergedTree };

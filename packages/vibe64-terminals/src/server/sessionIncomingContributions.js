@@ -129,7 +129,7 @@ async function inspectIncomingContributions({ project = {}, session = {}, offset
 }
 
 async function changeIncomingContributionDirect({ project = {}, session = {}, action = "", id = "", review = {}, repairReview = null,
-  identity = {}, derivedArtifactPaths = [], refreshDerivedArtifacts, commandOptions = {},
+  derivedArtifactPaths = [], refreshDerivedArtifacts, commandOptions = {},
   operationId = crypto.randomUUID(), runCommand = runVibe64Command } = {}) {
   if (!["merge", "discard", "review-repair"].includes(action) || !id) {
     throw saveError("Choose Merge or Discard for an exact contribution.", "vibe64_incoming_input_invalid");
@@ -167,7 +167,7 @@ async function changeIncomingContributionDirect({ project = {}, session = {}, ac
         commandOptions, derivedArtifactPaths, project, sourceCommit: current.targetHead, tree: contributionTree
       });
       const mergeInput = sourceTree === contributionTree ? entry.head : await createVirtualCommit(runCommand, context, {
-        baseCommit: entry.head, commandOptions, identity, message: "Vibe64 incoming authored source", project, tree: sourceTree
+        baseCommit: entry.head, commandOptions, message: "Vibe64 incoming authored source", project, tree: sourceTree
       });
       const merged = await mergeTrees(runCommand, context, { canonicalCommit: current.targetHead,
         virtualCommit: mergeInput, commandOptions, project });
@@ -185,7 +185,7 @@ async function changeIncomingContributionDirect({ project = {}, session = {}, ac
         repairedTree = await conflictWorktreeTree(runCommand, context, { conflictTree: merged.conflictTree,
           conflictPaths: merged.conflictPaths, project });
         repairedTree = await regenerateDerivedArtifactTree(runCommand, context, {
-          baseCommit: current.targetHead, commandOptions, derivedArtifactPaths, identity, project,
+          baseCommit: current.targetHead, commandOptions, derivedArtifactPaths, project,
           refreshDerivedArtifacts, tree: repairedTree
         });
         const currentRepair = { tree: repairedTree, worktreeTree: checkpoint.checkpointTree,
@@ -205,11 +205,10 @@ async function changeIncomingContributionDirect({ project = {}, session = {}, ac
         throw saveError("These heads no longer need conflict repair. Refresh and review the contribution normally.", "vibe64_incoming_review_changed");
       }
       const mergedTree = repairedTree || await regenerateDerivedArtifactTree(runCommand, context, {
-        baseCommit: current.targetHead, commandOptions, derivedArtifactPaths, identity, project,
+        baseCommit: current.targetHead, commandOptions, derivedArtifactPaths, project,
         refreshDerivedArtifacts, tree: merged.mergedTree
       });
-      mergedCommit = await gitOutput(runCommand, context, ["-c", `user.name=${text(identity.name) || "Vibe64 Merge"}`,
-        "-c", `user.email=${text(identity.email) || "vibe64@localhost"}`, "commit-tree", mergedTree,
+      mergedCommit = await gitOutput(runCommand, context, ["commit-tree", mergedTree,
         "-p", current.targetHead, "-p", entry.head], { ...options, input: `Merge contribution ${id}\n` });
     }
     // Recheck the contribution as well as using an exact target lease. Its ref
@@ -268,11 +267,11 @@ async function changeIncomingContributionDirect({ project = {}, session = {}, ac
   return { ok: true, status: entry.status === "merged" ? "merged" : "discarded", head: entry.head };
 }
 
-async function changeIncomingContribution({ project = {}, session = {}, action = "", id = "", review = {}, repairReview = null, identity = {},
+async function changeIncomingContribution({ project = {}, session = {}, action = "", id = "", review = {}, repairReview = null,
   derivedArtifactPaths = [], commandOptions = {}, runCommand = runVibe64Command, runProjectSourceExclusive = async operation => operation() } = {}) {
   const context = incomingRepositoryContext(project, session);
   return runProjectSourceExclusive(() => runSessionWorkOperation({ context, project, commandOptions, runCommand,
-    input: { action, id, review, repairReview, identity, derivedArtifactPaths }, label: "Updating incoming contribution", operation: "incoming-change" }),
+    input: { action, id, review, repairReview, derivedArtifactPaths }, label: "Updating incoming contribution", operation: "incoming-change" }),
   { operation: `incoming-${action}:${id}` });
 }
 
