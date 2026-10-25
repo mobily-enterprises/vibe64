@@ -398,6 +398,13 @@ visible semantic state and selected Data table identity to the Colleague host.
 Runtime activity comes from the executor's
 existing project/session query reservations, without a separate persisted tracker.
 
+It keeps its files rather than tables: session artifacts
+`database/schema.json`, `database/erd-layout.json` and
+`database/workspace-<actorKey>.json` (`server/sessionState.js`), copilot helper
+cleanup references in `database/assistant-tasks/<actorKey>.json`
+(`server/service.js`), and project source `data-overview.json`, written through
+the source editor (`shared/dataOverview.js`).
+
 ### Source
 - Directory `packages/vibe64-database-tools`
 
@@ -406,12 +413,7 @@ existing project/session query reservations, without a separate persisted tracke
 - `genesis/program/database/query-execution.md`
 
 ### Data owned
-- Session artifacts `database/schema.json`, `database/erd-layout.json` and
-  `database/workspace-<actorKey>.json` (owned by `server/sessionState.js`).
-- Session artifacts `database/assistant-tasks/<actorKey>.json`: copilot helper
-  cleanup references (owned by `server/service.js`).
-- Project source `data-overview.json`, written through the source editor
-  (path and format owned by `shared/dataOverview.js`).
+- Nothing.
 
 ### Data used
 - Nothing.
@@ -447,6 +449,13 @@ blocks in `packages/vibe64-packaging` (including the passphrase key store and
 recovery kit) and
 the Packaging contract owned by the Genesis boundary.
 
+It keeps files rather than tables: project runtime `publishing/` (targets,
+release history, confirmations, verification and build results) and the
+personal `publishing/` folder (the age-encrypted keys file and its index, and
+licence acceptances). It reads the project's saved Git commit and Packaging
+section, and session source through the source editor for prepared version
+changes.
+
 ### Source
 - Directory `packages/vibe64-publishing`
 
@@ -454,14 +463,10 @@ the Packaging contract owned by the Genesis boundary.
 - Nothing.
 
 ### Data owned
-- Project runtime `publishing/`: targets, release history,
-  confirmations, verification results and build results.
-- Personal `publishing/` folder: the age-encrypted keys file and its index,
-  and licence acceptances.
+- Nothing.
 
 ### Data used
-- The project's saved Git commit and Packaging section; session source through
-  the source editor for prepared version changes.
+- Nothing.
 
 ## `packages-vibe64-packaging` Packaging building blocks
 
