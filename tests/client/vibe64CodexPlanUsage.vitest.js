@@ -114,7 +114,9 @@ it("shows Claude's native blocked reason and offers explicit Pause and Resume wi
   mocks.goal = null;
 });
 it("shows only the weekly percentage with explanatory details", async () => {
-  const html = await render({ status: "available", windows: [
+  // The server labels native plan usage with the engine's plan and usage page.
+  const html = await render({ status: "available", providerLabel: "Codex",
+    managementUrl: "https://chatgpt.com/codex/settings/usage", windows: [
     { id: "primary", remainingPercent: 72, windowDurationMins: 300, resetsAt: 2000000000 },
     { id: "secondary", remainingPercent: 0, windowDurationMins: 10080, resetsAt: null }
   ] });
@@ -364,7 +366,7 @@ it("explains Auto before goal creation or resume while keeping pause and cancel 
 it("shows Claude allowance and native goal controls without an unsupported token budget", async () => {
   mocks.goal = { status: "available", goal: null };
   const props = { session: { sessionId: "one", assistantSelection: { engineId: "claude" } } };
-  const html = await render({ status: "available", windows: [
+  const html = await render({ status: "available", providerLabel: "Claude", managementUrl: "https://claude.ai/settings/usage", windows: [
     { id: "seven_day_opus", remainingPercent: 5, windowDurationMins: 10080 },
     { id: "seven_day", remainingPercent: 61, windowDurationMins: 10080 },
     { id: "five_hour", remainingPercent: 20, windowDurationMins: 300 }

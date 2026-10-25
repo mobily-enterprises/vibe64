@@ -1,19 +1,17 @@
+import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 
 const PROVIDERS = {
   deepseek: {
     url: "https://api.deepseek.com/user/balance",
-    label: "DeepSeek",
     managementUrl: "https://platform.deepseek.com/top_up"
   },
   zai: {
     url: "https://api.z.ai/api/biz/account/query-customer-account-report",
-    label: "GLM",
     managementUrl: "https://z.ai/manage-apikey/billing"
   },
   "zai-coding-plan": {
     url: "https://api.z.ai/api/monitor/usage/quota/limit",
-    label: "GLM",
     managementUrl: "https://z.ai/subscribe"
   }
 };
@@ -87,7 +85,7 @@ function createProviderUsage({ resolveConnection, fetchImpl = fetch } = {}) {
     } catch { /* Usage is informational; failures never affect a turn. */ }
     if (accounts.get(key) !== account) return;
     account.apiKey = apiKey;
-    account.usage = { ...usage, checkedAt: Date.now(), providerLabel: provider.label, managementUrl: provider.managementUrl };
+    account.usage = { ...usage, checkedAt: Date.now(), providerLabel: curatedCodexProvider(selection.modelProviderId)?.shortLabel, managementUrl: provider.managementUrl };
   }
 
   return {

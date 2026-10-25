@@ -7,7 +7,7 @@ const model = (providerId, id, label, defaultThinking) => {
 };
 const CURATED_CODEX_PROVIDERS = Object.freeze([
   Object.freeze({
-    ...nativeAiProvider("deepseek"), label: "DeepSeek",
+    ...nativeAiProvider("deepseek"), label: "DeepSeek", shortLabel: "DeepSeek",
     description: "DeepSeek API key · usage-based billing",
     keyUrl: "https://platform.deepseek.com/api_keys",
     guideUrl: "https://api-docs.deepseek.com/quick_start/agent_integrations/codex/",
@@ -18,7 +18,7 @@ const CURATED_CODEX_PROVIDERS = Object.freeze([
     ])
   }),
   Object.freeze({
-    ...nativeAiProvider("zai-coding-plan"), label: "GLM · Coding Plan",
+    ...nativeAiProvider("zai-coding-plan"), label: "GLM · Coding Plan", shortLabel: "GLM",
     description: "Z.AI Coding Plan key · uses your subscription quota",
     keyUrl: "https://z.ai/manage-apikey/apikey-list",
     guideUrl: "https://docs.z.ai/devpack/tool/codex",
@@ -28,7 +28,7 @@ const CURATED_CODEX_PROVIDERS = Object.freeze([
     ])
   }),
   Object.freeze({
-    ...nativeAiProvider("zai"), label: "GLM · Pay-as-you-go API",
+    ...nativeAiProvider("zai"), label: "GLM · Pay-as-you-go API", shortLabel: "GLM",
     description: "Z.AI API key · pay-as-you-go account",
     keyUrl: "https://z.ai/manage-apikey/apikey-list",
     guideUrl: "https://docs.z.ai/guides/overview/quick-start",

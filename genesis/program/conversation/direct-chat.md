@@ -792,8 +792,8 @@ Vibe64 supplies the existing active execution state as `conversation.working`;
 the renderer previews only trailing progress while working. No provider-turn
 association or history rewrite is required for grouping, including goal
 continuation and loading older history.
-For DeepSeek and GLM under Codex or Claude, the presentation adapter maps recorded
-commentary to thinking and excludes raw thinking from the chat display entirely.
+For DeepSeek and both GLM billing modes under Codex or Claude, the presentation
+adapter maps recorded commentary to thinking and excludes raw thinking from the chat display entirely.
 Only the latest commentary is previewed while working; saved roles and final
 answers are unchanged. Unknown model attribution retains the ordinary presentation.
 Isolated Codex assistants obtain their native hook, feature and MCP restrictions
@@ -1139,6 +1139,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `src/composables/useStoredSelection.js`
 
 - `src/lib/vibe64ThinkingPresentation.js`
+- `packages/vibe64-runtime/src/shared/assistantLabels.js`
 - `src/lib/vibe64ChatDelivery.js`
 - `src/components/studio/vibe64-session/Vibe64ConversationStatus.vue`
 
@@ -2416,7 +2417,11 @@ session invalidation, not a balance. The browser matches readings to the selecte
 engine/provider and never polls these providers. Its compact indicator shows
 only the currency symbol and amount, or the weekly GLM percentage when supplied
 (otherwise the supplied coding window). The details show the provider, currency,
-check time and provider usage link. The native subscription Refresh control is
+check time and provider usage link. Every reading carries its provider label and
+usage link from the server: curated providers' short labels, and the Codex or
+Claude plan named by the engine definition. Provider presentation (short label,
+key usage, commentary as thinking) is one runtime-shared reader over the curated
+provider list. The native subscription Refresh control is
 not shown for turn-boundary snapshots. Missing or expired readings hide the value;
 zero is displayed only when supplied by the provider. GPT API keys have no
 snapshot implementation.

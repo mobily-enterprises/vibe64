@@ -9,7 +9,8 @@ import {
   resolveVibe64AssistantSelection,
   serializeVibe64AssistantSelection,
   vibe64AssistantSelectionLabel,
-  vibe64AssistantSelectionFromMetadata
+  vibe64AssistantSelectionFromMetadata,
+  vibe64ProviderPresentation
 } from "@local/vibe64-runtime/shared";
 
 const revision = `sha256:${"a".repeat(64)}`;
@@ -21,6 +22,18 @@ test("assistant names share orchestrator, model and saved effort formatting", ()
     ["claude", "opus", "", "Claude Code (opus default)"],
     ["codex", "gpt-6-astra", undefined, "Codex (gpt-6-astra not recorded)"]
   ]) assert.equal(vibe64AssistantSelectionLabel({ engineId, modelId, variantId }), expected);
+});
+
+test("every curated key provider shares one presentation, including GLM pay-as-you-go", () => {
+  for (const [engineId, modelProviderId, expected] of [
+    ["codex", "deepseek", { label: "DeepSeek", keyUsage: true, commentaryAsThinking: true }],
+    ["claude", "zai-coding-plan", { label: "GLM", keyUsage: true, commentaryAsThinking: true }],
+    ["codex", "zai", { label: "GLM", keyUsage: true, commentaryAsThinking: true }],
+    ["opencode", "zai-coding-plan", { label: "GLM", keyUsage: true, commentaryAsThinking: false }],
+    ["opencode", "openai", { label: "OpenCode", keyUsage: false, commentaryAsThinking: false }],
+    ["codex", "openai", { label: "Codex", keyUsage: false, commentaryAsThinking: false }]
+  ]) assert.deepEqual({ ...vibe64ProviderPresentation({ engineId, modelProviderId }) }, expected);
+  assert.deepEqual({ ...vibe64ProviderPresentation(undefined) }, { label: "", keyUsage: false, commentaryAsThinking: false });
 });
 
 function capabilities(overrides = {}) {

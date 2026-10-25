@@ -1743,6 +1743,9 @@ test("plan allowance is private to authorized native plan users", async () => {
         const allowed = engineId !== "opencode" && ownerOnly && role === "owner";
         assert.equal(reads, allowed ? 1 : 0);
         assert.equal(result.status, allowed ? "available" : "unsupported");
+        // The engine's plan names the allowance and its usage page.
+        if (allowed) assert.deepEqual([result.providerLabel, result.managementUrl], engineId === "claude"
+          ? ["Claude", "https://claude.ai/settings/usage"] : ["Codex", "https://chatgpt.com/codex/settings/usage"]);
       }
     }
   }

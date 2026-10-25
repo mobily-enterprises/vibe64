@@ -11,6 +11,7 @@ import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
+import { findVibe64AgentProvider, vibe64ProviderPresentation } from "@local/vibe64-runtime/shared";
 
 const props = defineProps({
   active: Boolean,
@@ -25,10 +26,9 @@ const sessionId = computed(() => props.session?.sessionId || "");
 const sessionsPath = computed(() => String(readRefOrGetterValue(props.sessionsApiPath) || "").trim());
 const engineId = computed(() => props.session?.assistantSelection?.engineId || "");
 const modelProviderId = computed(() => props.session?.assistantSelection?.modelProviderId || "");
-const keyUsage = computed(() => ["deepseek", "zai", "zai-coding-plan"].includes(modelProviderId.value));
-const engineLabel = computed(() => engineId.value === "claude" ? "Claude" : "Codex");
+const keyUsage = computed(() => vibe64ProviderPresentation(props.session?.assistantSelection).keyUsage);
 const goalEnabled = computed(() => props.active && Boolean(sessionId.value && sessionsPath.value && actorKey.value));
-const enabled = computed(() => goalEnabled.value && (["codex", "claude"].includes(engineId.value) || keyUsage.value));
+const enabled = computed(() => goalEnabled.value && (Boolean(findVibe64AgentProvider(engineId.value)?.planUsage) || keyUsage.value));
 const scopeKey = computed(() => JSON.stringify([projectSlug.value, sessionsPath.value, sessionId.value, actorKey.value]));
 const connectionsRealtime = { events: [VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT], matches: () => true };
 const path = computed(() => vibe64SessionPath(sessionsPath.value, sessionId.value, "/agent-plan-usage"));
@@ -102,12 +102,11 @@ const summary = computed(() => {
   if (balance.value) return formatBalance(balance.value);
   return `${Math.floor(allowance.value.remainingPercent)}%`;
 });
-const usageLabel = computed(() => currentUsage.value?.providerLabel || engineLabel.value);
+const usageLabel = computed(() => currentUsage.value?.providerLabel || "");
 const usageTitle = computed(() => `${usageLabel.value} ${balance.value ? "balance" : "plan allowance"}`);
 const summaryLabel = computed(() => balance.value ? `${usageLabel.value} balance remaining: ${summary.value}`
   : `${weekly.value ? "Weekly " : ""}${usageLabel.value} allowance remaining: ${summary.value}`);
-const managementUrl = computed(() => currentUsage.value?.managementUrl ||
-  (engineId.value === "claude" ? "https://claude.ai/settings/usage" : "https://chatgpt.com/codex/settings/usage"));
+const managementUrl = computed(() => currentUsage.value?.managementUrl || "");
 const details = computed(() => {
   if (!available.value) return "";
   const snapshot = currentUsage.value;

@@ -1,6 +1,7 @@
+import { vibe64ProviderPresentation } from "@local/vibe64-runtime/shared";
+
 function usesCommentaryForThinking(selection) {
-  return ["codex", "claude"].includes(selection?.engineId) &&
-    ["deepseek", "zai-coding-plan"].includes(selection?.modelProviderId);
+  return vibe64ProviderPresentation(selection).commentaryAsThinking;
 }
 
 function thinkingMessagePresentation(message, selection) {

@@ -1023,6 +1023,7 @@
 <script setup>
 import Vibe64DashboardBackButton from "../Vibe64DashboardBackButton.vue";
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
+import { vibe64ProviderPresentation } from "@local/vibe64-runtime/shared";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, reactive, ref, useId, watch, watchEffect } from "vue";
 import {
@@ -1227,10 +1228,7 @@ const selectedAssistantSessionId = computed(() => String(
   props.session?.sessionId || ""
 ).trim());
 const openCodeProgressLabel = ref("");
-const openCodeProviderLabel = computed(() => ({
-  deepseek: "DeepSeek",
-  "zai-coding-plan": "Z.AI"
-})[String(props.session?.assistantSelection?.modelProviderId || "").trim()] || "OpenCode");
+const openCodeProviderLabel = computed(() => vibe64ProviderPresentation(props.session?.assistantSelection).label || "OpenCode");
 
 function visibleOpenCodeProgressLabel(progress = {}) {
   if (String(progress.tool || "").trim()) {

@@ -18,6 +18,7 @@ import {
   defineVibe64AssistantCapabilities,
   defineVibe64AssistantSelection,
   defineVibe64AgentExecutionProfileRequest,
+  findVibe64AgentProvider,
   resolveVibe64AssistantSelection,
   serializeVibe64AssistantSelection,
   vibe64AssistantSelectionFromMetadata,
@@ -1108,10 +1109,12 @@ function createSessionAgentManager({
       if (!access.canUse) return { status: "unsupported", windows: [] };
       const usage = await readProviderUsage?.(sessionAssistantSelection(options));
       if (usage) return usage;
-      if (typeof provider.readPlanUsage !== "function" || !access.ownerOnly) {
+      const planUsage = findVibe64AgentProvider(provider.id)?.planUsage;
+      if (typeof provider.readPlanUsage !== "function" || !access.ownerOnly || !planUsage) {
         return { status: "unsupported", windows: [] };
       }
-      return provider.readPlanUsage({ sessionId, runtime: options.runtime, session: options.session });
+      return { ...await provider.readPlanUsage({ sessionId, runtime: options.runtime, session: options.session }),
+        providerLabel: planUsage.label, managementUrl: planUsage.managementUrl };
     },
     async readGoal(sessionId, options = {}) {
       options = goalOptions(options);

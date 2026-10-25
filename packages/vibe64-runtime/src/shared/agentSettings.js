@@ -37,6 +37,8 @@ const VIBE64_AGENT_PROVIDERS = Object.freeze([
     id: VIBE64_ASSISTANT_ENGINE_IDS.CODEX,
     implemented: true,
     label: "Codex",
+    // The subscription allowance the owner's own sign-in reports.
+    planUsage: Object.freeze({ label: "Codex", managementUrl: "https://chatgpt.com/codex/settings/usage" }),
     terminal: "codex",
     terminalAttachments: false,
     parameters: Object.freeze([
@@ -107,6 +109,7 @@ const VIBE64_AGENT_PROVIDERS = Object.freeze([
     id: VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE,
     implemented: true,
     label: "Claude Code",
+    planUsage: Object.freeze({ label: "Claude", managementUrl: "https://claude.ai/settings/usage" }),
     parameters: Object.freeze([]),
     terminal: "native",
     terminalAttachments: false

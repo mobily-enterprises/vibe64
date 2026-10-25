@@ -3,7 +3,7 @@ import { thinkingMessagePresentation, usesCommentaryForThinking } from "../../sr
 
 describe("provider thinking presentation", () => {
   for (const engineId of ["codex", "claude"]) {
-    for (const modelProviderId of ["deepseek", "zai-coding-plan"]) {
+    for (const modelProviderId of ["deepseek", "zai-coding-plan", "zai"]) {
       it(`${engineId}/${modelProviderId} presents commentary as thinking and omits raw reasoning`, () => {
         const selection = { engineId, modelProviderId };
         const commentary = { role: "commentary", text: "Checking the sources.", messageId: "progress" };
