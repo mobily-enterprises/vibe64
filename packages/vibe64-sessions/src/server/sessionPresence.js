@@ -2,10 +2,10 @@ import {
   VIBE64_SESSION_PRESENCE_CHANGED_EVENT,
   VIBE64_SESSION_PRESENCE_IDLE_MS
 } from "@local/vibe64-runtime/shared";
+import { BROWSER_KEY_PATTERN } from "./inputPatterns.js";
 
 const SESSION_PRESENCE_IDLE_MS = VIBE64_SESSION_PRESENCE_IDLE_MS;
 const SESSION_PRESENCE_MAX_ENTRIES = 2_048;
-const SESSION_PRESENCE_ORIGIN_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u;
 
 function presenceText(value = "") {
   return String(value ?? "").trim();
@@ -49,7 +49,7 @@ function assertPresenceInput(input = {}) {
   if (!actorId || !projectSlug || !sessionId) {
     throw new TypeError("Session presence requires an actor, project, and session.");
   }
-  if (!SESSION_PRESENCE_ORIGIN_PATTERN.test(originId)) {
+  if (!BROWSER_KEY_PATTERN.test(originId)) {
     const error = new Error("Session presence origin is invalid.");
     error.code = "vibe64_session_presence_origin_invalid";
     error.statusCode = 400;

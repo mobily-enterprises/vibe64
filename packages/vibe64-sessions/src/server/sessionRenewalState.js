@@ -1,5 +1,6 @@
 import { assistantRoutingPreferences } from "@local/vibe64-runtime/shared/assistantRouting";
 import crypto from "node:crypto";
+import { BROWSER_KEY_PATTERN } from "./inputPatterns.js";
 
 import {
   isPlainObject,
@@ -87,7 +88,7 @@ function renewalTimestamp(value = "") {
 
 function renewalOperationKey(value = "") {
   const key = normalizeText(value);
-  if (!/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u.test(key)) {
+  if (!BROWSER_KEY_PATTERN.test(key)) {
     throw renewalStateError(
       "Session renewal requires a valid operation key.",
       "vibe64_session_renewal_operation_key_invalid",

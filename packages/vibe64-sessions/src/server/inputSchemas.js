@@ -1,9 +1,15 @@
-import { createSchema } from "json-rest-schema";
+import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
 import { ASSISTANT_MODES } from "@local/vibe64-runtime/shared/assistantRouting";
 import { VIBE64_ASSISTANT_ENGINE_IDS } from "@local/vibe64-runtime/shared";
 
 import { SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS } from "@local/vibe64-terminals/server/sessionRenewalHandover";
+import { BROWSER_KEY_PATTERN, UUID_V4_PATTERN } from "./inputPatterns.js";
+
+// Every action names its session the same way; an optional one may be empty.
+const sessionIdField = { type: "string", noTrim: false, minLength: 1, maxLength: 256, required: true };
+const optionalSessionIdField = { type: "string", noTrim: false, maxLength: 256, required: false };
+const withSessionId = (fields) => ({ ...fields, sessionId: sessionIdField });
 
 const optionalOrigin = {
   originId: {
@@ -20,7 +26,7 @@ const renewalOperationFields = {
     noTrim: false,
     minLength: 1,
     maxLength: 128,
-    pattern: /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u,
+    pattern: BROWSER_KEY_PATTERN,
     required: true
   }
 };
@@ -65,6 +71,7 @@ const renewalConfirmationFields = {
   }
 };
 
+// Route bodies choose their mode: a patch accepts any subset of its fields.
 function patchSchema(fields) {
   return deepFreeze({
     schema: createSchema(fields),
@@ -79,15 +86,17 @@ function requiredInputSchema(fields) {
   });
 }
 
+// An action always validates its complete input; action() supplies the mode.
+function actionInput(fields) {
+  return deepFreeze({ schema: createSchema(fields) });
+}
+
 const sessionRenameFields = {
   name: { type: "string", noTrim: false, minLength: 1, maxLength: 120, required: true },
   ...optionalOrigin
 };
 const sessionRenameInputValidator = requiredInputSchema(sessionRenameFields);
-const sessionRenameActionInputValidator = requiredInputSchema({
-  ...sessionRenameFields,
-  sessionId: { type: "string", noTrim: false, minLength: 1, required: true }
-});
+const sessionRenameActionInputValidator = actionInput(withSessionId(sessionRenameFields));
 
 const agentMessageFields = {
   clientId: { type: "string", noTrim: false, minLength: 1, maxLength: 128, required: false },
@@ -142,14 +151,7 @@ const agentMessageFields = {
 };
 
 const agentMessageInputValidator = patchSchema(agentMessageFields);
-const agentMessageActionInputValidator = requiredInputSchema({
-  ...agentMessageFields,
-  sessionId: {
-    type: "string",
-    noTrim: false,
-    required: true
-  }
-});
+const agentMessageActionInputValidator = actionInput(withSessionId(agentMessageFields));
 
 const mainChatApprovalFields = {
   expectedRevision: { type: "integer", min: 1, required: true },
@@ -157,20 +159,13 @@ const mainChatApprovalFields = {
   note: { type: "string", noTrim: false, maxLength: 500, required: false }
 };
 const mainChatApprovalInputValidator = patchSchema(mainChatApprovalFields);
-const mainChatApprovalActionInputValidator = requiredInputSchema({
+const mainChatApprovalActionInputValidator = actionInput({
   ...mainChatApprovalFields,
-  sessionId: { type: "string", noTrim: false, minLength: 1, required: true },
+  sessionId: sessionIdField,
   approvalId: { type: "string", noTrim: false, minLength: 8, maxLength: 128, pattern: /^[A-Za-z0-9_-]+$/u, required: true }
 });
 
-const assistantAccessActionInputValidator = patchSchema({
-  sessionId: {
-    type: "string",
-    noTrim: false,
-    minLength: 1,
-    required: true
-  }
-});
+const assistantAccessActionInputValidator = actionInput(withSessionId({}));
 
 const agentTurnInterruptFields = {
   ...optionalOrigin,
@@ -182,16 +177,9 @@ const agentTurnInterruptFields = {
 };
 
 const agentTurnInterruptInputValidator = patchSchema(agentTurnInterruptFields);
-const agentTurnInterruptActionInputValidator = requiredInputSchema({
-  ...agentTurnInterruptFields,
-  sessionId: {
-    type: "string",
-    noTrim: false,
-    required: true
-  }
-});
+const agentTurnInterruptActionInputValidator = actionInput(withSessionId(agentTurnInterruptFields));
 
-const sessionPreviewStateInputValidator = patchSchema({
+const sessionPreviewStateInputValidator = actionInput({
   ...optionalOrigin,
   projectSlug: {
     type: "string",
@@ -203,11 +191,7 @@ const sessionPreviewStateInputValidator = patchSchema({
     noTrim: false,
     required: true
   },
-  sessionId: {
-    type: "string",
-    noTrim: false,
-    required: true
-  },
+  sessionId: sessionIdField,
   title: {
     type: "string",
     noTrim: false,
@@ -229,7 +213,7 @@ const sessionPresenceFields = {
     noTrim: false,
     minLength: 1,
     maxLength: 128,
-    pattern: /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u,
+    pattern: BROWSER_KEY_PATTERN,
     required: true
   },
   sequence: {
@@ -244,21 +228,14 @@ const sessionPresenceFields = {
 };
 
 const sessionPresenceInputValidator = requiredInputSchema(sessionPresenceFields);
-const sessionPresenceActionInputValidator = requiredInputSchema({
-  ...sessionPresenceFields,
-  sessionId: {
-    type: "string",
-    noTrim: false,
-    required: true
-  }
-});
+const sessionPresenceActionInputValidator = actionInput(withSessionId(sessionPresenceFields));
 
-const sessionListInputValidator = patchSchema({
+const sessionListInputValidator = actionInput({
   sessionOffset: { type: "integer", min: 0, required: false }
 });
 
 const sessionRepositoryReviewSchema = createSchema({
-  sessionId: { type: "string", minLength: 1, maxLength: 256, required: true },
+  sessionId: sessionIdField,
   mode: { type: "string", enum: ["github", "managed_git", "local_source"], required: true },
   repository: { type: "string", minLength: 1, maxLength: 4096, required: true, noTrim: true },
   branch: { type: "string", minLength: 1, maxLength: 4096, required: true, noTrim: true }
@@ -273,9 +250,9 @@ const sessionHistoryReviewSchema = createSchema({
   changedPaths: { type: "array", items: { type: "string", noTrim: true }, required: false }
 });
 
-const sessionPullRequestInputValidator = patchSchema({
+const sessionPullRequestInputValidator = actionInput({
   destinationReview: { type: "object", schema: sessionRepositoryReviewSchema, required: true },
-  sessionId: { type: "string", required: true, minLength: 1 },
+  sessionId: sessionIdField,
   title: { type: "string", required: true, minLength: 1, maxLength: 256 },
   body: { type: "string", required: false, maxLength: 65536, noTrim: true },
   draft: { type: "boolean", required: false },
@@ -285,21 +262,21 @@ const sessionPullRequestInputValidator = patchSchema({
 const incomingReviewSchema = createSchema({
   repository: { type: "string", required: true, minLength: 1, maxLength: 256 },
   targetBranch: { type: "string", required: true, minLength: 1, maxLength: 255, noTrim: true },
-  id: { type: "string", required: true, pattern: /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u },
+  id: { type: "string", required: true, pattern: UUID_V4_PATTERN },
   ...Object.fromEntries(["targetHead", "activeHead", "discardedHead"].map(key => [key, {
     type: "string", required: true, pattern: key === "targetHead" ? /^[a-f0-9]{40,64}$/u : /^(?:[a-f0-9]{40,64})?$/u
   }]))
 });
-const incomingInspectionInputValidator = patchSchema({
-  sessionId: { type: "string", required: true, minLength: 1, maxLength: 256 },
-  id: { type: "string", required: false, pattern: /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u },
+const incomingInspectionInputValidator = actionInput({
+  sessionId: sessionIdField,
+  id: { type: "string", required: false, pattern: UUID_V4_PATTERN },
   state: { type: "string", required: false, enum: ["pending", "merged", "discarded", "unresolved", "all"] },
   offset: { type: "integer", required: false, min: 0 },
   limit: { type: "integer", required: false, min: 1, max: 50 }
 });
-const incomingChangeInputValidator = patchSchema({
-  sessionId: { type: "string", required: true, minLength: 1, maxLength: 256 },
-  id: { type: "string", required: true, pattern: /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u },
+const incomingChangeInputValidator = actionInput({
+  sessionId: sessionIdField,
+  id: { type: "string", required: true, pattern: UUID_V4_PATTERN },
   action: { type: "string", required: true, enum: ["merge", "discard", "review-repair"] },
   review: { type: "object", required: true, schema: incomingReviewSchema },
   repairReview: { type: "object", required: false, schema: createSchema(Object.fromEntries(
@@ -308,28 +285,28 @@ const incomingChangeInputValidator = patchSchema({
     }])) ) }
 });
 
-const connectedSourceAllocationInputValidator = patchSchema({
+const connectedSourceAllocationInputValidator = actionInput({
   contribution: { type: "object", additionalProperties: true, required: true },
   sessionName: { type: "string", required: false, minLength: 1, maxLength: 120 }
 });
 
-const connectedReplacementInspectionInputValidator = patchSchema({
-  sessionId: { type: "string", required: true, minLength: 1, maxLength: 256 },
+const connectedReplacementInspectionInputValidator = actionInput({
+  sessionId: sessionIdField,
   repository: { type: "string", required: true, pattern: /^[a-z0-9_-]+\/[a-z0-9_.-]+$/u }
 });
-const connectedReplacementInputValidator = patchSchema({
-  sessionId: { type: "string", required: true, minLength: 1, maxLength: 256 },
+const connectedReplacementInputValidator = actionInput({
+  sessionId: sessionIdField,
   repository: { type: "string", required: true, pattern: /^[a-z0-9_-]+\/[a-z0-9_.-]+$/u },
   review: { type: "object", required: true, schema: incomingReviewSchema }
 });
 
-const connectedWorkInputValidator = patchSchema({
+const connectedWorkInputValidator = actionInput({
   contribution: { type: "object", additionalProperties: true, required: true },
   submittedCommit: { type: "string", pattern: /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u, required: false },
   destinationReview: { type: "object", schema: sessionRepositoryReviewSchema, required: false }
 });
 
-const sessionCreateInputValidator = patchSchema({
+const sessionCreateInputValidator = actionInput({
   repositoryBranch: { type: "object", required: false, schema: createSchema({
     name: { type: "string", minLength: 1, maxLength: 255, noTrim: true, required: true },
     fromBranch: { type: "string", minLength: 1, maxLength: 255, noTrim: true, required: false },
@@ -344,7 +321,7 @@ const sessionCreateInputValidator = patchSchema({
   ...optionalOrigin,
 });
 
-const assistantCapabilitiesInputValidator = patchSchema({
+const assistantCapabilitiesInputValidator = actionInput({
   allConnectedModels: { type: "string", required: false },
   configuredOnly: {
     type: "string",
@@ -402,7 +379,7 @@ const assistantModelAccessFields = {
 };
 
 const assistantModelAccessUpdateInputValidator = patchSchema(assistantModelAccessFields);
-const assistantModelAccessUpdateActionInputValidator = patchSchema({
+const assistantModelAccessUpdateActionInputValidator = actionInput({
   ...assistantModelAccessFields,
 });
 
@@ -424,56 +401,31 @@ const assistantSelectionUpdateInputValidator = patchSchema({
   ...optionalOrigin
 });
 
-const assistantSelectionUpdateActionInputValidator = patchSchema({
+const assistantSelectionUpdateActionInputValidator = actionInput({
   assistantRouting: assistantRoutingField,
   assistantSelection: assistantSelectionField,
   ...optionalOrigin,
-  sessionId: {
-    type: "string",
-    noTrim: false,
-    minLength: 1,
-    required: true
-  }
+  sessionId: sessionIdField
 });
 
 const sessionPinFields = { ...optionalOrigin, pinned: { type: "boolean", required: true } };
 const sessionPinInputValidator = requiredInputSchema(sessionPinFields);
-const sessionPinActionInputValidator = requiredInputSchema({
-  ...sessionPinFields,
-  sessionId: { type: "string", noTrim: false, minLength: 1, required: true }
+const sessionPinActionInputValidator = actionInput(withSessionId(sessionPinFields));
+
+const currentSessionInputValidator = actionInput({
+  sessionId: optionalSessionIdField
 });
 
-const currentSessionInputValidator = patchSchema({
-  sessionId: {
-    type: "string",
-    noTrim: false,
-    required: false
-  }
-});
+const sessionIdInputValidator = actionInput(withSessionId(optionalOrigin));
 
-const sessionIdInputValidator = patchSchema({
-  ...optionalOrigin,
-  sessionId: {
-    type: "string",
-    noTrim: false,
-    minLength: 1,
-    required: true
-  }
-});
-
-const sessionSaveInputValidator = patchSchema({
+const sessionSaveInputValidator = actionInput({
   destinationReview: { type: "object", schema: sessionRepositoryReviewSchema, required: true },
   connectedReview: { type: "array", maxItems: 64, items: connectedWorkReviewSchema, required: false },
   ...optionalOrigin,
-  sessionId: {
-    type: "string",
-    noTrim: false,
-    minLength: 1,
-    required: true
-  }
+  sessionId: sessionIdField
 });
 
-const sessionUpdateInputValidator = patchSchema({
+const sessionUpdateInputValidator = actionInput({
   historyReview: { type: "object", schema: sessionHistoryReviewSchema, required: false },
   requestId: { type: "string", pattern: /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/u, required: false },
   ...optionalOrigin,
@@ -485,89 +437,31 @@ const sessionUpdateInputValidator = patchSchema({
     type: "boolean",
     required: false
   },
-  sessionId: {
-    type: "string",
-    noTrim: false,
-    minLength: 1,
-    required: true
-  }
+  sessionId: sessionIdField
 });
 
-const sessionInspectInputValidator = patchSchema({
-  sessionId: {
-    type: "string",
-    noTrim: false,
-    required: true
-  }
-});
+const sessionInspectInputValidator = actionInput(withSessionId({}));
 
-const sessionRenewalInspectActionInputValidator = requiredInputSchema({
-  sessionId: {
-    type: "string",
-    noTrim: false,
-    minLength: 1,
-    required: true
-  }
-});
+const sessionRenewalInspectActionInputValidator = actionInput(withSessionId({}));
 
 const sessionRenewalDraftRequestInputValidator = requiredInputSchema(renewalOperationFields);
-const sessionRenewalDraftRequestActionInputValidator = requiredInputSchema({
-  ...renewalOperationFields,
-  sessionId: {
-    type: "string",
-    noTrim: false,
-    minLength: 1,
-    required: true
-  }
-});
+const sessionRenewalDraftRequestActionInputValidator = actionInput(withSessionId(renewalOperationFields));
 
 const sessionRenewalDraftUpdateInputValidator = requiredInputSchema(renewalDraftFields);
-const sessionRenewalDraftUpdateActionInputValidator = requiredInputSchema({
-  ...renewalDraftFields,
-  sessionId: {
-    type: "string",
-    noTrim: false,
-    minLength: 1,
-    required: true
-  }
-});
+const sessionRenewalDraftUpdateActionInputValidator = actionInput(withSessionId(renewalDraftFields));
 
 const sessionRenewalDraftGuardInputValidator = requiredInputSchema(renewalDraftGuardFields);
-const sessionRenewalDraftGuardActionInputValidator = requiredInputSchema({
-  ...renewalDraftGuardFields,
-  sessionId: {
-    type: "string",
-    noTrim: false,
-    minLength: 1,
-    required: true
-  }
-});
+const sessionRenewalDraftGuardActionInputValidator = actionInput(withSessionId(renewalDraftGuardFields));
 
 const sessionRenewalConfirmationInputValidator = requiredInputSchema(
   renewalConfirmationFields
 );
-const sessionRenewalConfirmationActionInputValidator = requiredInputSchema({
-  ...renewalConfirmationFields,
-  sessionId: {
-    type: "string",
-    noTrim: false,
-    minLength: 1,
-    required: true
-  }
-});
+const sessionRenewalConfirmationActionInputValidator = actionInput(withSessionId(renewalConfirmationFields));
 
 const sessionRenewalRetryInputValidator = requiredInputSchema(renewalOperationFields);
-const sessionRenewalRetryActionInputValidator = requiredInputSchema({
-  ...renewalOperationFields,
-  sessionId: {
-    type: "string",
-    noTrim: false,
-    minLength: 1,
-    required: true
-  }
-});
+const sessionRenewalRetryActionInputValidator = actionInput(withSessionId(renewalOperationFields));
 
-const sessionChangesInputValidator = patchSchema({
+const sessionChangesInputValidator = actionInput({
   limit: {
     type: "string",
     noTrim: false,
@@ -578,14 +472,10 @@ const sessionChangesInputValidator = patchSchema({
     noTrim: false,
     required: false
   },
-  sessionId: {
-    type: "string",
-    noTrim: false,
-    required: true
-  }
+  sessionId: sessionIdField
 });
 
-const sessionChangeDiffInputValidator = patchSchema({
+const sessionChangeDiffInputValidator = actionInput({
   lineLimit: {
     type: "string",
     noTrim: false,
@@ -596,14 +486,10 @@ const sessionChangeDiffInputValidator = patchSchema({
     noTrim: true,
     required: true
   },
-  sessionId: {
-    type: "string",
-    noTrim: false,
-    required: true
-  }
+  sessionId: sessionIdField
 });
 
-const sessionConversationLogInputValidator = requiredInputSchema({
+const sessionConversationLogInputValidator = actionInput({
   beforeTurnId: {
     type: "string",
     noTrim: false,
@@ -614,33 +500,29 @@ const sessionConversationLogInputValidator = requiredInputSchema({
     noTrim: false,
     required: false
   },
-  sessionId: {
-    type: "string",
-    noTrim: false,
-    required: true
-  }
+  sessionId: sessionIdField
 });
 
-const repositoryHistoryInputValidator = patchSchema({
+const repositoryHistoryInputValidator = actionInput({
   cursor: { type: "string", noTrim: false, required: false },
   limit: { type: "string", noTrim: false, required: false },
-  sessionId: { type: "string", noTrim: false, required: false }
+  sessionId: optionalSessionIdField
 });
 
-const repositoryVersionFilesInputValidator = patchSchema({
+const repositoryVersionFilesInputValidator = actionInput({
   commit: { type: "string", noTrim: false, required: true },
   historySnapshotCommit: { type: "string", noTrim: false, required: true },
   limit: { type: "string", noTrim: false, required: false },
   offset: { type: "string", noTrim: false, required: false },
-  sessionId: { type: "string", noTrim: false, required: false }
+  sessionId: optionalSessionIdField
 });
 
-const repositoryVersionFileDiffInputValidator = patchSchema({
+const repositoryVersionFileDiffInputValidator = actionInput({
   commit: { type: "string", noTrim: false, required: true },
   historySnapshotCommit: { type: "string", noTrim: false, required: true },
   lineLimit: { type: "string", noTrim: false, required: false },
   path: { type: "string", noTrim: true, required: true },
-  sessionId: { type: "string", noTrim: false, required: false }
+  sessionId: optionalSessionIdField
 });
 
 const integrationSetupRequestFields = {
@@ -648,10 +530,7 @@ const integrationSetupRequestFields = {
   requestId: { type: "string", required: true, minLength: 64, maxLength: 64, pattern: /^[a-f0-9]{64}$/u }
 };
 const integrationSetupRequestInputValidator = requiredInputSchema(integrationSetupRequestFields);
-const integrationSetupRequestActionInputValidator = requiredInputSchema({
-  ...integrationSetupRequestFields,
-  sessionId: { type: "string", required: true, maxLength: 200 }
-});
+const integrationSetupRequestActionInputValidator = actionInput(withSessionId(integrationSetupRequestFields));
 
 export {
   incomingReviewSchema,

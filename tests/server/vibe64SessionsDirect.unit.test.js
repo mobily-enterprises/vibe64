@@ -310,6 +310,26 @@ test("sessions expose only direct chat and source actions", () => {
   assert.equal(validated.errors.sessionId.code, "FIELD_NOT_ALLOWED");
 });
 
+test("every session action names its session with one shared definition", async () => {
+  const actions = createSessionActions({ sessions: {} });
+  const required = { type: "string", noTrim: false, minLength: 1, maxLength: 256, required: true };
+  let named = 0;
+  for (const action of actions) {
+    assert.equal(action.input.mode, "create", action.id);
+    const field = action.input.schema.getFieldDefinitions().sessionId;
+    if (!field) continue;
+    named += 1;
+    const optional = { type: "string", noTrim: false, maxLength: 256, required: false };
+    assert.deepEqual(field, field.required ? required : optional, action.id);
+  }
+  assert.ok(named > 20);
+  const inspect = actions.find(action => action.id === ACTION_INSPECT_ASSISTANT_ACCESS);
+  for (const sessionId of ["", "s".repeat(257)]) {
+    const { errors } = await inspect.input.schema.create({ sessionId });
+    assert.ok(errors.sessionId, JSON.stringify(sessionId));
+  }
+});
+
 test("typing presence trusts the authenticated request user and never accepts a draft", async () => {
   const updates = [];
   const sessionPresence = {

@@ -13,6 +13,7 @@ that turn without dropping either half. No saved history is rewritten.
 
 - `packages/vibe64-sessions/src/server/actions.js`
 - `packages/vibe64-sessions/src/server/inputSchemas.js`
+- `packages/vibe64-sessions/src/server/inputPatterns.js`
 - `packages/vibe64-sessions/src/server/assistantContracts.js`
 - `packages/vibe64-core/src/server/actionContext.js`
 - `packages/vibe64-core/src/server/projectState.js`
@@ -344,7 +345,9 @@ remain. The assistant connection owner separately prepares an unverified provide
 after first loading, a real reconnection or an assistant-configuration change.
 An admitted internal creator can supply a server-reserved session ID and optional
 verified complete Git commit through the service's second options argument.
-HTTP/action inputs cannot select that ID or internal commit. A commit requires
+HTTP/action inputs cannot select that ID or internal commit. Every session
+action names an existing session with one shared field (1 to 256 characters;
+an optional one may be empty) and validates its complete input. A commit requires
 the reserved ID and excludes caller branch/PR selections. Under the original
 project policy lock, the store must prove creation state absent before any new
 session metadata is written; missing authority or retained lifecycle evidence
