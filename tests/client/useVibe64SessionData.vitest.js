@@ -97,6 +97,41 @@ describe("current session selection", () => {
     expect(calls).toEqual(["session-1", "session-3"]);
   });
 
+  it("skips a selection that is already published, across paths", async () => {
+    const calls = [];
+    const publisher = createVibe64CurrentSessionPublisher({ publish: async publication => { calls.push(publication); } });
+    publisher.request({ apiPath: "/project-a/current", sessionId: "session-a" });
+    await publisher.request({ apiPath: "/project-b/current", sessionId: "session-b" });
+    expect(calls).toEqual([{ apiPath: "/project-b/current", sessionId: "session-b" }]);
+    await publisher.request({ apiPath: "/project-b/current", sessionId: "session-b" });
+    expect(calls).toHaveLength(1);
+    await publisher.request({ apiPath: "/project-b/current", sessionId: "" });
+    await publisher.request({ apiPath: "/project-b/current", sessionId: "session-b" });
+    expect(calls).toHaveLength(3);
+  });
+
+  it("discards pending publications once stopped", async () => {
+    const calls = [];
+    let release;
+    let started;
+    const gate = new Promise(resolve => { release = resolve; });
+    const firstStarted = new Promise(resolve => { started = resolve; });
+    const publisher = createVibe64CurrentSessionPublisher({
+      async publish(publication) {
+        calls.push(publication);
+        if (calls.length === 1) { started(); await gate; }
+      }
+    });
+    publisher.request({ apiPath: "/a/current", sessionId: "session-a" });
+    await firstStarted;
+    const pending = publisher.request({ apiPath: "/a/current", sessionId: "never-published" });
+    publisher.stop();
+    release();
+    await pending;
+    await publisher.request({ apiPath: "/a/current", sessionId: "also-not-published" });
+    expect(calls).toEqual([{ apiPath: "/a/current", sessionId: "session-a" }]);
+  });
+
   it("drops another project's session from the URL, with its chat", () => {
     const sessions = [{ sessionId: "inspector-session" }];
     const route = (session, slug = "mercbot-inspector") => ({

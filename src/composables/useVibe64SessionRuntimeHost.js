@@ -374,8 +374,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
       selectedSession: selectedSession.value,
       selectedSessionId: selectedSessionId.value,
       sessions: props.toolbarSessions
-    })),
-    shortSessionId: props.sessionData.shortSessionId
+    }))
   });
   const pageError = computed(() => String(
     mounted.detailState.value?.error ||
