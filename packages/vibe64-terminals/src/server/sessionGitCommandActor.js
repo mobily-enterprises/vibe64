@@ -8,6 +8,7 @@ import {
   resolveGithubHomeForActor,
   resolveGithubHomeForStoredActor
 } from "@local/vibe64-execution/server";
+import { PROJECT_REPOSITORY_MODE_LOCAL_SOURCE } from "@local/vibe64-core/server/projectRepository";
 import {
   terminalOwnerFromGithubToolHome
 } from "@local/studio-terminal-core/server/terminalOwnership";
@@ -332,8 +333,11 @@ async function resolveSessionGitCommandActorTerminalHome({
   };
 }
 
+// A local-source session only exchanges work with its local folder; that
+// folder's own upstream, even on GitHub, never makes it a GitHub session.
 function sessionRequiresGithubActor(session = {}) {
   const metadata = session.metadata || {};
+  if (normalizeText(metadata.repository_mode) === PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) return false;
   const repository = normalizeText(metadata.github_repository || session.github_repository);
   const remoteUrl = normalizeText(metadata.source_remote_url);
   return Boolean(repository || /(?:^|[.@/:])github\.com(?:[/:]|$)/iu.test(remoteUrl));

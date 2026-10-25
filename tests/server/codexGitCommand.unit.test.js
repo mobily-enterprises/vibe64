@@ -1151,3 +1151,29 @@ test("Genesis verification stays current through the actual Git wrapper until so
     assert.equal(proof.exitCode, 0, proof.stderr);
   });
 });
+
+test("a local-source session with a GitHub upstream saves without the GitHub actor", async () => {
+  await withTemporaryRoot(async (root) => {
+    // The session clone's origin is the local folder's own GitHub upstream.
+    const session = sessionSource(root, "local-session", {
+      repository_mode: "local_source",
+      source_remote_url: "https://github.com/owner/repo.git"
+    });
+    await mkdir(session.metadata.source_path, { recursive: true });
+    const gatewayCalls = [];
+    const metadataReads = [];
+    const service = serviceForSession(session, {
+      metadataReads,
+      async runGatewayCommand(request) {
+        gatewayCalls.push(request);
+        return { exitCode: 0, ok: true, stdout: "" };
+      }
+    });
+    const context = await service.sessionWorkSaveContext({ sessionId: session.sessionId });
+    assert.equal(context.ok, true, context.error);
+    assert.equal(context.actor.githubRequired, false);
+    assert.deepEqual(context.commandOptions, {});
+    assert.equal(gatewayCalls.length, 0, "no gh auth token lookup");
+    assert.ok(metadataReads.includes("repository_mode"));
+  });
+});

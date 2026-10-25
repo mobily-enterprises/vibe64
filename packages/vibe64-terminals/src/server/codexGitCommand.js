@@ -149,6 +149,7 @@ const CODEX_GIT_COMMAND_METADATA_NAMES = Object.freeze([
   ...SESSION_GIT_COMMAND_ACTOR_METADATA_KEYS,
   "agent_identity_conversation_id",
   "github_repository",
+  "repository_mode",
   "source_remote_url"
 ]);
 

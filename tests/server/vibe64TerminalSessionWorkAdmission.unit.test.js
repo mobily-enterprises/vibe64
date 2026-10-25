@@ -1680,20 +1680,21 @@ test("purpose access sends a member's main chat to the owner and keeps their hel
   assert.equal(provider.promptCalls.length, 0);
 });
 
-test("local Git work records the local command actor before any AI interaction", async (t) => {
+test("local-source Git work with a GitHub upstream needs no GitHub actor", async (t) => {
   const { service, session, projectService } = await terminalServiceFixture(t, { store: {} });
+  // The session clone's origin is the local folder's own GitHub upstream.
   session.metadata.source_remote_url = "https://github.com/example/project.git";
   const actors = [];
   projectService.authorizeCodexGitActorAccess = async ({ actor }) => {
     actors.push(actor);
     return { ok: false, code: "fixture_access_denied", error: "Stop before credentials or Git." };
   };
-  await assert.rejects(service.checkSessionUpdates(session.sessionId), { code: "fixture_access_denied" });
-  assert.equal(actors.length, 1);
-  assert.equal(actors[0].actorScope, "local");
-  assert.equal(actors[0].actorUserKey, "local");
-  assert.equal(session.metadata.session_git_command_actor_source_root, session.metadata.source_path);
-  assert.equal(session.metadata.session_git_command_actor_session_id, session.sessionId);
+  projectService.runProjectSourceExclusive = async (operation) => operation();
+  // The fixture has no repository authority, so the check stops at the
+  // repository owner, past the point where a GitHub actor would be required.
+  await assert.rejects(service.checkSessionUpdates(session.sessionId), { code: "vibe64_session_save_context_incomplete" });
+  assert.equal(actors.length, 0);
+  assert.equal(session.metadata.session_git_command_actor_source_root, undefined);
 });
 
 for (const replacement of [false, true]) {

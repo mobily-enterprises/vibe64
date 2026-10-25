@@ -56,6 +56,7 @@ Git commands.
 - `packages/vibe64-terminals/src/server/assistantHelperTurn.js`
 - `packages/vibe64-terminals/src/server/sessionWorkOperationCommand.js`
 - Main: `packages/vibe64-terminals/src/server/sessionWorkSave.js`
+- `packages/vibe64-terminals/src/server/sessionGitCommandActor.js`
 - `packages/vibe64-terminals/src/server/sessionWorkGit.js`
 - `packages/vibe64-terminals/src/server/sessionWorkAuthority.js`
 - `packages/vibe64-terminals/src/server/sessionWorkUpdate.js`
@@ -594,6 +595,11 @@ inspection or account refresh. Work and Changes reads both carry the policy and
 the complete reviewed repository/branch, including across the Git subprocess
 boundary. Local Git operations can establish their local command identity
 before any AI conversation has started.
+A local-source session's Save and Update exchange work only with the local
+folder, so its Git work, the agent's Git commands included, runs as the local
+command actor without the GitHub actor or a `gh` login, even when that folder's
+own upstream (and so the session clone's origin) is on GitHub. Fetch, Pull and
+Push of that upstream stay with the original folder.
 
 ## Implementation map
 
