@@ -5,16 +5,13 @@ import {
   VIBE64_ASSISTANT_ENGINE_IDS,
   VIBE64_ASSISTANT_TRANSPORT_IDS
 } from "@local/vibe64-runtime/shared";
+import { normalizeText as text } from "@local/vibe64-core/server/core";
 
 const OPENCODE_CAPABILITY_PAGE_LIMIT = 25;
 const OPENCODE_CAPABILITY_PAGE_LIMIT_MAXIMUM = 100;
 const OPENCODE_ZEN_PROVIDER_ID = "opencode";
 // Zen's free model is never offered, even to an account with a Zen key.
 const RETIRED_ZEN_MODEL_ID = "big-pickle";
-
-function text(value = "") {
-  return String(value ?? "").trim();
-}
 
 function record(value = null) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};

@@ -10,10 +10,7 @@ import { conversationMessageId, upstreamMessageId } from "./openCodeConversation
 import { openCodeMessageError } from "./openCodeConversationEvents.js";
 import { OPENCODE_HELPER_AGENT_ID, OPENCODE_EPHEMERAL_AGENT_ID } from "./opencodeServerProcess.js";
 import { openCodeError, openCodeRuntimeFailure as runtimeFailure } from "./terminalShared.js";
-
-function text(value = "") {
-  return String(value ?? "").trim();
-}
+import { normalizeText as text } from "@local/vibe64-core/server/core";
 
 function openCodeExecutionProfile(input = {}) {
   if (!input?.executionProfile) {

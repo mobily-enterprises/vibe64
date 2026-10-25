@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
+import { normalizeText } from "@local/vibe64-core/server/core";
 
 const SESSION_RENEWAL_HANDOVER_SCHEMA_VERSION =
   "vibe64.session-renewal-handover.v1";
@@ -17,10 +18,6 @@ const SESSION_RENEWAL_REQUIRED_HANDOVER_HEADINGS = Object.freeze([
   "## Unresolved work",
   "## Next action"
 ]);
-
-function normalizeText(value = "") {
-  return String(value ?? "").trim();
-}
 
 function textHasDisallowedControlCharacter(value = "") {
   return Array.from(value).some((character) => {

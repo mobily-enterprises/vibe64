@@ -7,12 +7,9 @@ import {
 } from "./agent/providers/opencodeAssistantCatalog.js";
 import { openCodeError } from "./terminalShared.js";
 import { requireOpenCodeConnection } from "./opencodeServerProcess.js";
+import { normalizeText as text } from "@local/vibe64-core/server/core";
 
 const OPENCODE_CATALOG_CACHE_MS = 10 * 60 * 1000;
-
-function text(value = "") {
-  return String(value ?? "").trim();
-}
 
 function record(value = null) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};

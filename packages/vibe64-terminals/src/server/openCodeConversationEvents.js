@@ -8,10 +8,7 @@ import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
 import { openCodeError } from "./terminalShared.js";
 import { openCodeFingerprint as fingerprint } from "./opencodeServerProcess.js";
 import { conversationMessageId, upstreamMessageId, OPENCODE_AGENT_RUN_ID } from "./openCodeConversationPresentation.js";
-
-function text(value = "") {
-  return String(value ?? "").trim();
-}
+import { normalizeText as text } from "@local/vibe64-core/server/core";
 
 function openCodeMessageError(message = {}) {
   const failure = readOpenCodeMessageError(message);

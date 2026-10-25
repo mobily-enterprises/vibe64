@@ -7,6 +7,7 @@ import {
   defineVibe64AgentExecutionProfileRequest,
   vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
+import { normalizeText } from "@local/vibe64-core/server/core";
 
 const PROFILE_KEYS = Object.freeze([
   "limits",
@@ -35,10 +36,6 @@ const PROFILE_REQUEST_KEYS = Object.freeze([
   "reasoning",
   "summary"
 ]);
-
-function normalizeText(value) {
-  return String(value ?? "").trim();
-}
 
 function isRecord(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));

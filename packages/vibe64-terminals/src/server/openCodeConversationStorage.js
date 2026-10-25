@@ -1,5 +1,6 @@
 import { VIBE64_ASSISTANT_ENGINE_IDS, VIBE64_ASSISTANT_TRANSPORT_IDS } from "@local/vibe64-runtime/shared";
 import { createHash, randomUUID } from "node:crypto";
+import { normalizeText as text } from "@local/vibe64-core/server/core";
 
 function openCodeFingerprint(...values) {
   return createHash("sha256").update(values.map((value) => String(value ?? "")).join("\0")).digest("hex");
@@ -13,10 +14,6 @@ function upstreamMessageId(value = "") {
 
 function conversationMessageId(...values) {
   return `oc_${fingerprint(...values).slice(0, 48)}`;
-}
-
-function text(value = "") {
-  return String(value ?? "").trim();
 }
 
 function renewalSession(context = {}) {

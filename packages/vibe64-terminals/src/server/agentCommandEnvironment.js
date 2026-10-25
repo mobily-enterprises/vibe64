@@ -21,16 +21,13 @@ import {
 import {
   prepareCodexGitCommand
 } from "./codexGitCommand.js";
+import { normalizeText as text } from "@local/vibe64-core/server/core";
 
 const preparations = new Map();
 const closures = new Map();
 
 function record(value = null) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
-}
-
-function text(value = "") {
-  return String(value ?? "").trim();
 }
 
 function commandBoundaryError(name = "") {

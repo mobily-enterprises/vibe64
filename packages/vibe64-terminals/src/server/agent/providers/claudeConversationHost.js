@@ -32,10 +32,10 @@ import {
   completeClaudeSessionRenewalHandover, completeClaudeSessionRenewalSeed
 } from "../../sessionRenewalReceipts.js";
 import { claudeConversationError as error, claudeTerminalNamespace } from "../../terminalShared.js";
+import { normalizeText as text } from "@local/vibe64-core/server/core";
 
 const ENGINE = VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE;
 const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
-const text = (value) => String(value ?? "").trim();
 const now = () => new Date().toISOString();
 
 function createClaudeConversationHost({

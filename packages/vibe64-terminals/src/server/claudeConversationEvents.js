@@ -3,10 +3,10 @@ import { VIBE64_ASSISTANT_ENGINE_IDS, VIBE64_ASSISTANT_TRANSPORT_IDS } from "@lo
 import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
 import { claudeConversationError as error } from "./terminalShared.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
+import { normalizeText as text } from "@local/vibe64-core/server/core";
 
 const ENGINE = VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE;
 const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
-const text = (value) => String(value ?? "").trim();
 const now = () => new Date().toISOString();
 
 // The native owner emits once; Vibe64 persists and publishes its existing effects.

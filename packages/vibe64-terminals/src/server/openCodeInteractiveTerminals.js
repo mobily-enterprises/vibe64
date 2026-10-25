@@ -3,12 +3,9 @@ import {
   subscribeTerminalSession, terminalNamespaceAdmissionFailure, writeTerminalSessionText
 } from "@local/vibe64-execution/server/terminalSessions";
 import { opencodeTerminalNamespace, terminalSessionSourceRoot, vibe64Result } from "./terminalShared.js";
+import { normalizeText as text } from "@local/vibe64-core/server/core";
 
 const OPENCODE_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH = 256 * 1024;
-
-function text(value = "") {
-  return String(value ?? "").trim();
-}
 
 export function createOpenCodeInteractiveTerminals({ sharedRuntime, contextFor, hostPreparation, env, recordGitActor }) {
   const { processes } = sharedRuntime;

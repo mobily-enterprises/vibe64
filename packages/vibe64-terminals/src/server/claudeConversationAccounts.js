@@ -11,10 +11,10 @@ import {
 import { CLAUDE_CODE_VERSION } from "./claudeCodeProcess.js";
 import { claudeConversationError as error } from "./terminalShared.js";
 import { sanitizeOperationText } from "@local/vibe64-core/server/logging";
+import { normalizeText as text } from "@local/vibe64-core/server/core";
 
 const ENGINE = VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE;
 const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
-const text = (value) => String(value ?? "").trim();
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 /** Original provider-key pin, retained for stopped historical conversion. */
 function claudeProviderAccountIdentity(configRoot, providerId, apiKey) {

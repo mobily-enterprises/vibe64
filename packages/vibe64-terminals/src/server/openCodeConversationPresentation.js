@@ -6,6 +6,7 @@ import { VIBE64_AGENT_EXECUTION_PROFILE_IDS, VIBE64_AGENT_EXECUTION_WORKLOAD_IDS
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { conversationMessageId, upstreamMessageId } from "./openCodeConversationStorage.js";
 import { renewalCleanupContext } from "./sessionRenewalHandover.js";
+import { normalizeText as text } from "@local/vibe64-core/server/core";
 
 const OPENCODE_AGENT_RUN_ID = "opencode_server";
 const OPENCODE_PROGRESS_PUBLISH_INTERVAL_MS = 1_000;
@@ -13,10 +14,6 @@ const OPENCODE_REASONING_HEADLINE_MAX_CHARS = 120;
 const OPENCODE_REASONING_SUMMARY_TIMEOUT_MS = 12_000;
 const OPENCODE_REASONING_SUMMARY_MAX_INPUT_CHARS = 1_200;
 const OPENCODE_REASONING_SUMMARY_MIN_INPUT_CHARS = 40;
-
-function text(value = "") {
-  return String(value ?? "").trim();
-}
 
 function openCodeReasoningHeadline(value = "") {
   const normalized = String(value ?? "").replace(/\r\n?/gu, " ").replace(/\s+/gu, " ").trim();

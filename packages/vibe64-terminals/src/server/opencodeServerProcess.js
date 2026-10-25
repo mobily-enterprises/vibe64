@@ -33,6 +33,7 @@ import {
   readOpenCodeZenModelIds as readNativeOpenCodeZenModelIds,
   verifyOpenCodeApiKey as verifyNativeOpenCodeApiKey
 } from "@jskit-ai/assistant-core/server/opencode-process";
+import { normalizeText as text } from "@local/vibe64-core/server/core";
 const OPENCODE_HELPER_AGENT_ID = "vibe64-helper";
 const OPENCODE_HELPER_SUBAGENT_PREFIX = "vibe64-helper-";
 const OPENCODE_EPHEMERAL_AGENT_ID = "vibe64-ephemeral";
@@ -81,10 +82,6 @@ const OPENCODE_INLINE_CONFIG_BASE = Object.freeze({
   },
   snapshot: false
 });
-
-function text(value = "") {
-  return String(value ?? "").trim();
-}
 
 function connectionIdentity(connection = {}, apiKey = "") {
   const value = text(connection.fingerprint);
