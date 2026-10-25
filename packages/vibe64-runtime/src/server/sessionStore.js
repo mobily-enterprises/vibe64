@@ -1849,8 +1849,8 @@ function createVibe64SessionStore({
   }
 
   async function writeStatus(sessionId, status) {
-    if (!OPEN_VIBE64_SESSION_STATUSES.has(status)) await assertSessionNotPinned(sessionId);
     const normalizedStatus = assertVibe64SessionStatus(status);
+    if (!OPEN_VIBE64_SESSION_STATUSES.has(normalizedStatus)) await assertSessionNotPinned(sessionId);
     if (RENEWAL_TRANSITION_VIBE64_SESSION_STATUSES.has(normalizedStatus)) {
       throw vibe64Error(
         `Renewal session status requires a renewal transition: ${normalizedStatus}`,

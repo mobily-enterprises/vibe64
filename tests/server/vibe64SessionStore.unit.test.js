@@ -2744,6 +2744,10 @@ test("pinning retains the server-selected source across tab selections and prote
     assert.equal(await createStore(root, options).readPinnedSessionId(), "pinned-source");
     await assert.rejects(store.updatePinnedSession("other-tab", true), { code: "vibe64_session_already_pinned" });
     await assert.rejects(store.writeStatus("pinned-source", "archived"), { code: "vibe64_session_pinned" });
+    await assert.rejects(store.writeStatus("pinned-source", " archived "), { code: "vibe64_session_pinned" });
+    await store.writeStatus("pinned-source", "");
+    await store.writeStatus("pinned-source", " active ");
+    assert.equal(await store.readStatus("pinned-source"), "active");
     await assert.rejects(store.assertSessionNotPinned("pinned-source"), { code: "vibe64_session_pinned" });
     await store.updatePinnedSession("pinned-source", false);
     await store.updateCurrentSession("other-tab");
