@@ -52,7 +52,12 @@ test("agent shell commands run as session-owned managed executions and drain on 
     slug: projectSlug
   };
   await writeFile(path.join(temporaryRoot, ".keep"), "");
+  const setupRetries = [];
   const service = createAgentSessionCommandService({
+    async retryWorkspaceSetup(id) {
+      setupRetries.push(id);
+      return { state: { status: "running", currentLabel: "Install dependencies" } };
+    },
     projectService: {
       async createSessionStore() {
         return {
@@ -207,6 +212,17 @@ test("agent shell commands run as session-owned managed executions and drain on 
     assert.equal(summary.tools.browserTests, "vibe64-helper playwright status");
     assert.equal(summary.tools.browserTestReadiness, "vibe64-helper playwright readiness");
     assert.equal(JSON.stringify(summary).includes("managed_writer"), false);
+    assert.equal(summary.tools.setupRetry, "vibe64-helper session setup retry");
+    const retried = JSON.parse((await promisify(execFile)(path.join(wrapperHostDir, "vibe64-session"), ["setup", "retry"], {
+      cwd: sourceRoot, env: { ...process.env, ...prepared.env }
+    })).stdout);
+    assert.deepEqual(setupRetries, [sessionId], "setup retry runs this session's preparation once");
+    assert.deepEqual(retried.workspaceSetup, { status: "running", currentLabel: "Install dependencies", diagnostic: "" });
+    assert.match(retried.next, /session status --json/);
+    await assert.rejects(promisify(execFile)(path.join(wrapperHostDir, "vibe64-session"), ["setup"], {
+      cwd: sourceRoot, env: { ...process.env, ...prepared.env }
+    }), (error) => error.code === 2 && /setup retry/.test(error.stderr));
+    assert.equal(setupRetries.length, 1);
     environmentStatus = "ready";
     summary = JSON.parse((await readStatus()).stdout);
     assert.equal(summary.environment.status, "ready", "The helper reads current state without restarting the conversation.");

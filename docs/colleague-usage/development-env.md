@@ -67,7 +67,9 @@ no preparation. Repeat it after changing resource declarations. A
 credentials. Starting Preview (`vibe64-helper preview ensure --wait`) prepares
 the workspace, so the agent rereads the status before reporting preparation. In
 the session chat, **Prepare workspace** or **Retry** on a failed preparation
-does the same once the assistant has finished. Adding a resource
+does the same once the assistant has finished. A failed setup is never reused:
+a deliberate Preview start, **Retry setup** in the Preview pane or
+`vibe64-helper session setup retry` runs it again. Adding a resource
 requires preparation even if the dependency-install command has not changed.
 An earlier successful preparation does not cover a changed setup recipe or newly
 unprepared resources. Preparation retry checks the current requirements before

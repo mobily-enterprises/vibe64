@@ -47,6 +47,8 @@ import { startResourceWorkflow } from "./resourceWorkflow.js";
 const WORKSPACE_SETUP_COMMAND_TIMEOUT_MS = 15 * 60 * 1000;
 const WORKSPACE_SETUP_RUN_NAMESPACE = "vibe64-workspace-setup";
 const CONNECTED_PREPARATION_LABEL = "Preparing connected projects";
+const WORKSPACE_SETUP_DIAGNOSTIC_LENGTH = 1600;
+const DIAGNOSTIC_OMISSION_MARKER = "\n[…]\n";
 
 function diagnosticText(diagnostics = []) {
   return (Array.isArray(diagnostics) ? diagnostics : [])
@@ -157,6 +159,18 @@ function stepStatus(label = "", status = "", secrets = []) {
   return `[${safeSetupLabel(label, secrets) || "Workspace preparation"}] ${status}.`;
 }
 
+// A long failure keeps its opening (where most tools state the error) and its
+// end, joined by a visible marker; the tail starts on a whole line, never
+// mid-word.
+function boundedDiagnostic(output = "", maxLength = WORKSPACE_SETUP_DIAGNOSTIC_LENGTH) {
+  if (output.length <= maxLength) return output;
+  const half = Math.floor((maxLength - DIAGNOSTIC_OMISSION_MARKER.length) / 2);
+  const tail = output.slice(-half);
+  const lineStart = tail.indexOf("\n");
+  return `${output.slice(0, half).trimEnd()}${DIAGNOSTIC_OMISSION_MARKER}${
+    lineStart >= 0 && lineStart < tail.length - 1 ? tail.slice(lineStart + 1) : tail}`;
+}
+
 function commandDiagnostic(result = {}, label = "", secrets = []) {
   const output = normalizeText(sanitizeOperationText(
     result.stderr || result.error || result.output,
@@ -168,7 +182,7 @@ function commandDiagnostic(result = {}, label = "", secrets = []) {
     return `Vibe64 couldn't find ${absent.split("/").pop()} on this computer, so this step couldn't run.`;
   }
   if (output) {
-    return output.slice(-1600);
+    return boundedDiagnostic(output);
   }
   const safeLabel = safeSetupLabel(label, secrets) || "Workspace preparation";
   if (result.timedOut === true) {
@@ -566,7 +580,9 @@ function createWorkspaceSetupRunner({
     };
   }
 
-  async function start({ renewal = false, retry = false, runtime, session } = {}) {
+  // `rerunFailed` is an explicit start (Preview Start, ensure or restart): it
+  // runs a failed recipe again instead of reporting the stored failure.
+  async function start({ renewal = false, rerunFailed = false, retry = false, runtime, session } = {}) {
     const sessionId = normalizeText(session?.sessionId || session?.id);
     if (!sessionId || !runtime?.store) {
       throw new TypeError("Workspace preparation requires a stored Vibe64 session.");
@@ -646,7 +662,7 @@ function createWorkspaceSetupRunner({
     }
 
     const run = {
-      migrationStartedAt, migrationTranscript, projectContext, renewal, retry,
+      migrationStartedAt, migrationTranscript, projectContext, renewal, rerunFailed, retry,
       runKey, runtime, session, sessionId, setup, sourcePath, stateBase
     };
     if (runtime.learningScope || !setup?.connectedDevelopment || retry !== true) return startRecipe(run);
@@ -671,7 +687,7 @@ function createWorkspaceSetupRunner({
   }
 
   async function startRecipe({
-    migrationStartedAt, migrationTranscript, onProgress = null, projectContext, renewal, retry,
+    migrationStartedAt, migrationTranscript, onProgress = null, projectContext, renewal, rerunFailed = false, retry,
     runKey, runtime, session, sessionId, setup, sourcePath, stateBase
   }) {
     let connectedUpdates = [];
@@ -739,7 +755,7 @@ function createWorkspaceSetupRunner({
       !migrationTranscript &&
       retry !== true &&
       stateBase.recipeHash === recipe.recipeHash &&
-      ["succeeded", "failed"].includes(stateBase.status)
+      (stateBase.status === "succeeded" || (stateBase.status === "failed" && rerunFailed !== true))
     ) {
       if (stateBase.status === "failed" || typeof projectService.projectEnvironmentStatus !== "function") {
         return { completion: null, state: stateBase };
@@ -783,7 +799,7 @@ function createWorkspaceSetupRunner({
     const attemptLabel = migrationTranscript
       ? ""
       : stateBase.transcript
-      ? (retry === true
+      ? (retry === true || (rerunFailed === true && stateBase.status === "failed")
           ? "Workspace preparation retry started."
           : "Workspace preparation started for updated configuration.")
       : "Workspace preparation started.";

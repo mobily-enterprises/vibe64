@@ -10,7 +10,7 @@ import path from "node:path";
 import { manageWorkPlan } from "./assistantWorkPlan.js";
 import { planCommandSource } from "./agentPlanCommand.js";
 import { loadProjectExecutionEnv } from "./projectExecutionEnv.js";
-import { WORKSPACE_SETUP_METADATA_NAME, workspaceSetupStateFromMetadata } from "@local/vibe64-runtime/server/workspaceSetupState";
+import { WORKSPACE_SETUP_METADATA_NAME, workspaceSetupState, workspaceSetupStateFromMetadata } from "@local/vibe64-runtime/server/workspaceSetupState";
 
 import {
   normalizeText,
@@ -193,12 +193,13 @@ function sessionRenameCommandSource() {
 import http from "node:http";
 
 const args = process.argv.slice(2);
-const usage = 'Usage: vibe64-helper session status [--json] | rename "Name" | message-project <project> [--session <session-id>] <message> [message-id] | project-preview <project> [--session <session-id>]';
+const usage = 'Usage: vibe64-helper session status [--json] | setup retry | rename "Name" | message-project <project> [--session <session-id>] <message> [message-id] | project-preview <project> [--session <session-id>]';
 if (!args.length || args[0] === "--help" || args[0] === "-h") {
   console.log(usage);
   process.exit(0);
 }
 const status = args[0] === "status" && (args.length === 1 || args.length === 2 && args[1] === "--json");
+const setupRetry = args[0] === "setup" && args[1] === "retry" && args.length === 2;
 const explicitSession = ["message-project", "project-preview"].includes(args[0]) && args[2] === "--session";
 const messageIndex = explicitSession ? 4 : 2;
 const messageProject = args[0] === "message-project" &&
@@ -206,7 +207,7 @@ const messageProject = args[0] === "message-project" &&
   args[1]?.trim() && args[messageIndex]?.trim() && (!explicitSession || args[3]?.trim());
 const projectPreview = args[0] === "project-preview" && args.length === (explicitSession ? 4 : 2) &&
   args[1]?.trim() && (!explicitSession || args[3]?.trim());
-if (!status && !messageProject && !projectPreview && (args[0] !== "rename" || args.length !== 2 || !args[1].trim())) {
+if (!status && !setupRetry && !messageProject && !projectPreview && (args[0] !== "rename" || args.length !== 2 || !args[1].trim())) {
   console.error(usage);
   process.exit(2);
 }
@@ -222,7 +223,7 @@ try {
   });
   const result = await new Promise((resolve, reject) => {
     const request = http.request({
-      socketPath: control.socketPath, method: "POST", path: messageProject ? "/agent-session-command/message-project" : projectPreview ? "/agent-session-command/project-preview" : status ? "/agent-session-command/status" : "/agent-session-command/rename", timeout: 15000,
+      socketPath: control.socketPath, method: "POST", path: messageProject ? "/agent-session-command/message-project" : projectPreview ? "/agent-session-command/project-preview" : status ? "/agent-session-command/status" : setupRetry ? "/agent-session-command/setup-retry" : "/agent-session-command/rename", timeout: 15000,
       headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) }
     }, (response) => {
       let text = "";
@@ -236,7 +237,7 @@ try {
     request.end(body);
   });
   if (result.ok !== true) throw new Error(result.error || "The session command failed.");
-  console.log(projectPreview ? result.url : JSON.stringify(status || messageProject ? result : { sessionName: result.sessionName }));
+  console.log(projectPreview ? result.url : JSON.stringify(status || setupRetry || messageProject ? result : { sessionName: result.sessionName }));
 } catch (error) {
   console.error(error.message);
   process.exitCode = 1;
@@ -383,6 +384,10 @@ const commandServers = createSessionCommandServers({
       handle: ({ commandService, input, sessionId }) => commandService.renameSession(sessionId, input.name),
       status: vibe64StatusCode, token: "controlToken"
     },
+    "/agent-session-command/setup-retry": {
+      handle: ({ commandService, sessionId }) => commandService.retrySetup(sessionId),
+      status: vibe64StatusCode, token: "controlToken"
+    },
     "/agent-session-command/status": {
       handle: ({ commandService, sessionId }) => commandService.sessionStatus(sessionId),
       status: vibe64StatusCode, token: "controlToken"
@@ -425,6 +430,7 @@ function createAgentSessionCommandService({
   sendProjectMessage = null,
   readProjectPreview = null,
   reportWorkflowOutcome = null,
+  retryWorkspaceSetup = null,
   logger = null,
   projectService,
   publishSessionChanged = () => {},
@@ -586,13 +592,16 @@ function createAgentSessionCommandService({
         },
         tools: {
           environment: "vibe64-helper env status development",
+          setupRetry: "vibe64-helper session setup retry",
           preview: "vibe64-helper preview status",
           browser: "vibe64-helper preview browser eval (Playwright code on stdin)",
           browserTests: "vibe64-helper playwright status",
           browserTestReadiness: "vibe64-helper playwright readiness",
           database: "vibe64-helper database refresh"
         },
-        recovery: environment.status === "not-prepared"
+        recovery: state.status === "failed"
+          ? "Workspace setup failed. Fix its cause, then run vibe64-helper session setup retry (a deliberate preview ensure also reruns it) and read this status again."
+          : environment.status === "not-prepared"
           // The assistant reads this mid-turn; starting Preview prepares the
           // workspace, so stale "not prepared" advice must not reach the person.
           ? "Run vibe64-helper preview ensure --wait: starting Preview prepares the workspace and its managed resources. Read this status again before reporting preparation to the person. If preparation fails, fix the cause; the person can use Retry on its card."
@@ -600,6 +609,27 @@ function createAgentSessionCommandService({
           ? "Supply the missing application resource configuration through Development Env."
           : environment.status === "unavailable"
           ? "Correct the project environment declaration and retry."
+          : ""
+      };
+    });
+  }
+
+  // Runs the session's complete declared setup again, like Retry on its card.
+  // It returns once preparation starts; session status reports the result.
+  async function retrySetup(sessionId) {
+    return runInSessionProject(sessionId, async () => {
+      if (typeof retryWorkspaceSetup !== "function") {
+        throw vibe64Error("Workspace setup retry is unavailable in this session.", "vibe64_workspace_setup_retry_unavailable");
+      }
+      const setup = await retryWorkspaceSetup(sessionId);
+      if (setup?.ok === false) return setup;
+      const state = workspaceSetupState(setup?.state);
+      return {
+        ok: true,
+        sessionId,
+        workspaceSetup: { status: state.status, currentLabel: state.currentLabel, diagnostic: state.diagnostic },
+        next: state.status === "running"
+          ? "Workspace setup is running. Read vibe64-helper session status --json until workspaceSetup.status is no longer running."
           : ""
       };
     });
@@ -834,6 +864,7 @@ function createAgentSessionCommandService({
     messageProject,
     projectPreview,
     sessionStatus,
+    retrySetup,
     managePlan,
     run
   });

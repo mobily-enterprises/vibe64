@@ -1038,6 +1038,68 @@ test("command failure records a short diagnostic and leaves the session active",
   });
 });
 
+test("a failed setup runs again on an explicit start; a success stays cached", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const { runtime, session } = await workspaceSession(targetRoot);
+    let shouldFail = true;
+    let commandCount = 0;
+    const runner = createWorkspaceSetupRunner({
+      inspect: () => readySetup(),
+      projectService: {},
+      async runCommand() {
+        commandCount += 1;
+        return shouldFail
+          ? { exitCode: 1, ok: false, stderr: "The shared database has newer migrations." }
+          : { exitCode: 0, ok: true };
+      }
+    });
+    const current = () => runtime.getSession(session.sessionId, { inspectSource: false });
+
+    assert.equal((await (await runner.start({ runtime, session })).completion).status, "failed");
+    // An implicit start (after a turn or an update) reports the stored failure.
+    const implicit = await runner.start({ runtime, session: await current() });
+    assert.equal(implicit.completion, null);
+    assert.equal(implicit.state.status, "failed");
+    assert.equal(commandCount, 1);
+
+    // Preview Start, ensure or restart runs the same recipe again.
+    shouldFail = false;
+    const explicit = await runner.start({ rerunFailed: true, runtime, session: await current() });
+    assert.equal(explicit.state.status, "running");
+    const succeeded = await explicit.completion;
+    assert.equal(succeeded.status, "succeeded");
+    assert.match(succeeded.transcript, /Workspace preparation retry started\./u);
+    assert.equal(commandCount, 2);
+
+    const cached = await runner.start({ rerunFailed: true, runtime, session: await current() });
+    assert.equal(cached.completion, null);
+    assert.equal(cached.state.status, "succeeded");
+    assert.equal(commandCount, 2, "an explicit start reuses a successful setup");
+  });
+});
+
+test("a long failure keeps its first line intact and marks the omitted middle", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const { runtime, session } = await workspaceSession(targetRoot);
+    const frame = "/srv/source/node_modules/knex/lib/migrations/migrate/Migrator.js:733\n    throw new Error(\n          ^\n\n";
+    const missing = Array.from({ length: 17 }, (_, index) => `202610${String(index).padStart(2, "0")}120000_step.cjs`).join(", ");
+    const stack = Array.from({ length: 16 }, (_, index) => `    at frame${index} (/srv/source/node_modules/knex/lib/migrations/migrate/Migrator.js:${index}:7)`).join("\n");
+    const stderr = `${frame}Error: The migration directory is corrupt, the following files are missing: ${missing}\n${stack}\n\nNode.js v26.5.0`;
+    assert.ok(stderr.length > 1600);
+    const runner = createWorkspaceSetupRunner({
+      inspect: () => readySetup(),
+      projectService: {},
+      runCommand: async () => ({ exitCode: 1, ok: false, stderr })
+    });
+    const { diagnostic } = await (await runner.start({ runtime, session })).completion;
+    assert.ok(diagnostic.length <= 1600);
+    assert.match(diagnostic, /\nError: The migration directory is corrupt/u);
+    assert.ok(diagnostic.startsWith("/srv/source/"));
+    assert.match(diagnostic, /\n\[…\]\n {4}at frame\d/u, "the kept end starts on a whole line");
+    assert.ok(diagnostic.endsWith("Node.js v26.5.0"));
+  });
+});
+
 test("an active preparation is shared instead of starting another run", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const { runtime, session } = await workspaceSession(targetRoot);

@@ -1015,3 +1015,40 @@ it.each(["succeeded", "failed", "invalid-contract"])("waits for workspace setup 
     app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals();
   }
 });
+
+it("Preview Retry setup reruns only a failed Workspace setup", async () => {
+  const Vue = await import("vue");
+  const { QueryClient, VueQueryPlugin } = await import("@tanstack/vue-query");
+  const { configureHttpWebClient, resetHttpWebClientForTests } = await import("@jskit-ai/http-web/client/lib/httpClient");
+  const { useVibe64OutputControls } = await import("../../src/composables/useVibe64OutputControls.js");
+  const retries = [];
+  vi.stubGlobal("window", { location: new URL("http://localhost/app/project/retry"),
+    localStorage: fakeStorage(), addEventListener() {}, removeEventListener() {} });
+  configureHttpWebClient({ request(url, options) {
+    if (url.endsWith("/workspace-setup/retry")) {
+      retries.push({ url, method: options.method });
+      return Promise.resolve({ ok: true });
+    }
+    return Promise.resolve({ outputTargets: [], preview: { state: "idle" } });
+  } });
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const session = Vue.ref({ sessionId: "retry-setup", workspaceSetup: { status: "failed" } });
+  let controls;
+  const renderer = Vue.createRenderer({ createElement: () => ({}), createComment: () => ({}), createText: () => ({}),
+    insert() {}, remove() {}, setElementText() {}, setText() {}, patchProp() {}, parentNode() {}, nextSibling() {} });
+  const app = renderer.createApp({ setup() {
+    controls = useVibe64OutputControls({ session });
+    return () => Vue.h("div");
+  } });
+  provideConversationFixture(app, { on() {}, off() {} }, "local");
+  app.provide("jskit.shell-web.runtime.web-error.client", { dismiss() {}, report() { return { skipped: true }; } });
+  app.use(VueQueryPlugin, { queryClient }); app.mount({});
+  try {
+    await expect(controls.startNewlyConfiguredWorkspaceSetup()).resolves.toBe(false);
+    await expect(controls.retryFailedWorkspaceSetup()).resolves.toBe(true);
+    expect(retries).toEqual([{ url: "/api/vibe64/sessions/retry-setup/workspace-setup/retry", method: "POST" }]);
+    session.value = { ...session.value, workspaceSetup: { status: "succeeded" } };
+    await expect(controls.retryFailedWorkspaceSetup()).resolves.toBe(false);
+    expect(retries).toHaveLength(1);
+  } finally { app.unmount(); queryClient.clear(); resetHttpWebClientForTests(); vi.unstubAllGlobals(); }
+});

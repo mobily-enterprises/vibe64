@@ -587,13 +587,15 @@ async function writeLaunchMetadata(store, sessionId, terminalSession = {}) {
 async function createLaunchContext(projectService, sessionId, {
   awaitWorkspacePrepared = false,
   ensureWorkspacePrepared = null,
-  prepareEnvironment = false
+  prepareEnvironment = false,
+  rerunFailedSetup = false
 } = {}) {
   const runtime = await projectService.createRuntime();
   let session = await runtime.getSession(sessionId);
   assertSourceInspectionHealthy(session.sourceInspection);
   if (typeof ensureWorkspacePrepared === "function") {
     const setup = await ensureWorkspacePrepared(sessionId, {
+      rerunFailedSetup,
       runtime,
       session
     });
@@ -2576,7 +2578,10 @@ function createOutputTargetTerminalController({
           const context = await createLaunchContext(projectService, sessionId, {
             awaitWorkspacePrepared: true,
             ensureWorkspacePrepared,
-            prepareEnvironment: true
+            prepareEnvironment: true,
+            // An explicit start runs a failed setup again; an automatic one
+            // reports the stored failure instead of rerunning it unasked.
+            rerunFailedSetup: input.automatic !== true
           });
           const unavailable = launchAdmissionFailure(sessionId, context.session);
           if (unavailable) {

@@ -662,7 +662,20 @@
           Start preview
         </v-btn>
         <v-btn
-          v-if="previewCheckAgainVisible"
+          v-if="previewSetupRetryVisible"
+          :disabled="operationBusy || loading"
+          color="primary"
+          data-vibe64-preview-setup-retry
+          :prepend-icon="mdiRefresh"
+          size="small"
+          title="Run the session's declared setup steps again"
+          variant="flat"
+          @click="retryPreviewWorkspaceSetup"
+        >
+          Retry setup
+        </v-btn>
+        <v-btn
+          v-else-if="previewCheckAgainVisible"
           :disabled="operationBusy || loading"
           :prepend-icon="mdiRefresh"
           size="small"
@@ -1023,6 +1036,7 @@ const {
   previewCanRestart,
   previewCanShowLog,
   previewCheckAgainVisible,
+  previewSetupRetryVisible,
   previewBrowserControlsVisible,
   previewDisplayedAddress,
   previewDiagnosticsAvailable,
@@ -1070,6 +1084,7 @@ const {
   suspendPreview,
   resumePreview,
   retryLaunchStatus,
+  retryPreviewWorkspaceSetup,
   requestPreviewDiagnostics,
   resetPreviewAddressDraft,
   selectPreviewConfiguredIdentity,

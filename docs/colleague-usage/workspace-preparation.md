@@ -32,6 +32,33 @@ An actual failed command or failure to start preparation still displays an error
 and its diagnostic. Use the available retry or **Fix it with AI** action to deal
 with that failure; do not assume a required preparation step has already failed.
 
+## Retrying a failed setup
+
+Only a successful setup is reused. A failed one is never treated as done:
+starting Preview yourself (**Start preview**, or the assistant's
+`vibe64-helper preview ensure`/`restart`) runs the complete declared setup again
+once, and only a success lets Preview start. An automatic Preview start, the end
+of an assistant turn or a source update do not rerun a failure on their own.
+While setup has failed, the Preview pane shows its diagnostic with **Retry
+setup**, which does the same; **Retry** on the failed preparation card and
+**Prepare workspace** in the session header also rerun it. The coding assistant
+can run `vibe64-helper session setup retry`; it returns once preparation starts,
+and `vibe64-helper session status --json` reports the result.
+
+A long failure keeps its opening lines and its end, joined by `[…]`; **Expand**
+on the preparation card shows the whole output.
+
+### Database migrations from another session
+
+When the project uses **One database shared by this project** (Project
+settings), every session prepares the same development database. If another
+session has already applied migrations that this session's branch does not
+contain yet, database preparation can fail with the migration tool's own
+message, for example Knex's "The migration directory is corrupt, the following
+files are missing: …". The database is not damaged: it is ahead of this branch.
+Update the session's branch (for example, bring in the main branch that holds
+those migrations), then retry setup. A database per session avoids this.
+
 Colleague can explain the notice and, when explicitly asked, use the session's
 authorized workspace-preparation operation. It should inspect the current
 result before saying preparation succeeded.

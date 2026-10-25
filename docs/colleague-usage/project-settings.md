@@ -38,6 +38,11 @@ updates after saving without reloading the page. Changing the database scope
 itself still requires closed sessions. Colleague can explain or, when requested,
 save this override through the same authorized settings action.
 
+Sessions sharing the database also share its migrations. A session whose branch
+is older than migrations another session applied can fail Workspace setup with
+the migration tool's "files are missing" message; update that session's branch,
+then retry setup (see **Prepare a session after updating its source**).
+
 If a load or save fails, read its error, retry the read and inspect the saved state
 before sending the change again. Disabled controls may reflect missing authority
 or active work; changing pages does not bypass those restrictions.

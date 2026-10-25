@@ -181,6 +181,28 @@ test("invalid saved Preview Stop state refuses startup without preparation or me
   }
 });
 
+test("an explicit Preview start reruns a failed setup; an automatic one does not", async (t) => {
+  const requests = [];
+  const controller = createOutputTargetTerminalController({
+    ensureWorkspacePrepared(_sessionId, context) {
+      requests.push(context.rerunFailedSetup);
+      return { ok: false, error: "Workspace preparation failed." };
+    },
+    projectService: { async createRuntime() { return {
+      store: {},
+      async getSession(sessionId) { return { sessionId, metadata: {} }; }
+    }; } }
+  });
+  t.after(() => controller.close());
+  const sessionId = `setup-rerun-${crypto.randomUUID()}`;
+  for (const input of [{ automatic: true }, {}, { ensurePreview: true }]) {
+    const result = await controller.startTerminal(sessionId, input);
+    assert.equal(result.ok, false);
+    assert.match(result.error, /Workspace preparation failed/u);
+  }
+  assert.deepEqual(requests, [false, true, true]);
+});
+
 test("failed Preview browser cleanup retains Stop across controllers and retries through its owner", async (t) => {
   const sessionId = `stop-recovery-${crypto.randomUUID()}`;
   const metadata = {};

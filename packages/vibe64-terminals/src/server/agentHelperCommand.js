@@ -47,7 +47,7 @@ Groups:
   env          Project environment settings
   database     Database refresh, overview and diagram operations
   github       GitHub view refresh
-  session      Session status, rename and messaging another open project
+  session      Session status, setup retry, rename and messaging another open project
   plan         Read and maintain the current plan and archived plans
   training     Validate, bundle and pin local teaching content
   spec         Exact Vibe64 contracts: Stack sections and command protocols

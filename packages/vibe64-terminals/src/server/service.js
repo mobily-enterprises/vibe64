@@ -602,7 +602,9 @@ function createService({
       if (await workspaceSetup.isPrepared(context)) {
         return { completion: null, state: context.session.workspaceSetup };
       }
-      return prepareWorkspaceSetup(sessionId, { publish: true, waitForCompletion: true });
+      return prepareWorkspaceSetup(sessionId, {
+        publish: true, rerunFailed: context.rerunFailedSetup === true, waitForCompletion: true
+      });
     },
     projectService,
     stopPreviewBrowsers: (sessionId) => agentPreviewCommand.stopBrowsersForSession(sessionId),
@@ -624,6 +626,7 @@ function createService({
     projectService
   });
   const agentSessionCommand = createAgentSessionCommandService({
+    retryWorkspaceSetup: sessionId => prepareWorkspaceSetup(sessionId, { publish: true, retry: true }),
     readProjectPreview: input => readProjectPreview(input, {
       projectService,
       authorize: (actor, slug) => assistantRuntime.authorizeProjectMessage(actor, slug),
@@ -1574,6 +1577,7 @@ function createService({
   async function prepareWorkspaceSetupInsideAgentWrite(sessionId = "", {
     publish = false,
     renewal = false,
+    rerunFailed = false,
     retry = false,
     runtime: existingRuntime = null,
     session: existingSession = null
@@ -1587,6 +1591,7 @@ function createService({
     });
     const setup = await workspaceSetup.start({
       renewal,
+      rerunFailed,
       retry,
       runtime,
       session

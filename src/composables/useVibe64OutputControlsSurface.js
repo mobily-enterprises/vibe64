@@ -636,6 +636,7 @@ function useVibe64OutputControlsSurface(props) {
     rememberParameters,
     run,
     startNewlyConfiguredWorkspaceSetup,
+    retryFailedWorkspaceSetup,
     stopTerminal,
     terminal,
     terminalCanStop,
@@ -969,6 +970,11 @@ function useVibe64OutputControlsSurface(props) {
     !terminalVisible.value &&
     outputSetupUnavailableReason.value &&
     !loadError.value
+  ));
+  // A failed Workspace setup blocks Start; its message gets Retry setup here.
+  const previewSetupRetryVisible = computed(() => Boolean(
+    previewCheckAgainVisible.value &&
+    String(props.session?.workspaceSetup?.status || "").trim() === "failed"
   ));
   const previewBrowserControlsVisible = computed(() => Boolean(
     previewSuspended.value || loading.value || loadError.value || previewUrl.value ||
@@ -1468,6 +1474,11 @@ function useVibe64OutputControlsSurface(props) {
 
   async function retryLaunchStatus() {
     await startNewlyConfiguredWorkspaceSetup?.();
+    await refreshOutputs();
+  }
+
+  async function retryPreviewWorkspaceSetup() {
+    await retryFailedWorkspaceSetup?.();
     await refreshOutputs();
   }
   
@@ -2313,6 +2324,7 @@ function useVibe64OutputControlsSurface(props) {
     previewCanShowLog,
     previewCanStart,
     previewCheckAgainVisible,
+    previewSetupRetryVisible,
     previewBrowserControlsVisible,
     previewDisplayedAddress,
     previewDisplayedUrl,
@@ -2367,6 +2379,7 @@ function useVibe64OutputControlsSurface(props) {
     suspendPreview,
     resumePreview,
     retryLaunchStatus,
+    retryPreviewWorkspaceSetup,
     requestPreviewDiagnostics,
     resetPreviewAddressDraft,
     selectPreviewConfiguredIdentity,

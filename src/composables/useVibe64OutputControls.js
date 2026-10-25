@@ -1277,9 +1277,11 @@ function useVibe64OutputControls({
       : outputTargetsResource.reload();
   }
 
-  async function startNewlyConfiguredWorkspaceSetup() {
+  // Runs the session's declared setup when its stored state is `status`: a
+  // newly configured recipe, or the Preview's Retry setup after a failure.
+  async function startWorkspaceSetupWhen(status = "") {
     if (
-      String(selectedSession.value?.workspaceSetup?.status || "").trim() !== "unconfigured" ||
+      String(selectedSession.value?.workspaceSetup?.status || "").trim() !== status ||
       !sessionId.value
     ) {
       return false;
@@ -1301,6 +1303,9 @@ function useVibe64OutputControls({
       return false;
     }
   }
+
+  const startNewlyConfiguredWorkspaceSetup = () => startWorkspaceSetupWhen("unconfigured");
+  const retryFailedWorkspaceSetup = () => startWorkspaceSetupWhen("failed");
 
   async function publishPreviewDiagnostic(record) {
     if (!sessionId.value || !projectSlug.value) return false;
@@ -1910,6 +1915,7 @@ function useVibe64OutputControls({
     sendCtrlC,
     stopTerminal,
     startNewlyConfiguredWorkspaceSetup,
+    retryFailedWorkspaceSetup,
     terminal,
     terminalCanClose,
     terminalCanCopyLog,
