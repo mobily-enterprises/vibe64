@@ -10,9 +10,6 @@ import {
   vibe64AgentTerminalPath
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
-  readRefOrGetterValue
-} from "@/lib/vueRefOrGetterValue.js";
-import {
   vibe64RealtimeOriginPayload
 } from "@/lib/vibe64BrowserTabOrigin.js";
 import {
@@ -35,15 +32,9 @@ function commandMissingResponse(message) {
   };
 }
 
-function useProvidedPath(providedPath, fallback) {
-  return computed(() => String(readRefOrGetterValue(providedPath) || fallback() || ""));
-}
-
-function useVibe64TerminalCommands({
-  sessionsApiPath: providedSessionsApiPath = null
-} = {}) {
+function useVibe64TerminalCommands() {
   const paths = usePaths();
-  const sessionsApiPath = useProvidedPath(providedSessionsApiPath, () => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
+  const sessionsApiPath = computed(() => paths.api(VIBE64_SESSIONS_API_SUFFIX, {
     surface: VIBE64_SURFACE_ID
   }));
 

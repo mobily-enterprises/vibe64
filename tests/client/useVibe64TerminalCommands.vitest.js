@@ -44,9 +44,7 @@ describe("useVibe64TerminalCommands", () => {
   });
 
   it("sends terminal attachment paths and ids through the atomic control-text route", async () => {
-    const commands = useVibe64TerminalCommands({
-      sessionsApiPath: "/api/app/example/vibe64/sessions"
-    });
+    const commands = useVibe64TerminalCommands();
 
     await expect(commands.sendAgentTerminalText(
       "session-1",
@@ -60,7 +58,7 @@ describe("useVibe64TerminalCommands", () => {
     ));
     expect(run.context).toEqual({
       attachmentIds: ["attachment-1"],
-      path: "/api/app/example/vibe64/sessions/session-1/agent-terminal/terminal-1/control/text",
+      path: "/api/vibe64/sessions/session-1/agent-terminal/terminal-1/control/text",
       text: "[/tmp/example.png] "
     });
     expect(run.options.buildRawPayload(null, { context: run.context })).toEqual({
@@ -78,9 +76,7 @@ describe("useVibe64TerminalCommands", () => {
       },
       status: 409
     };
-    const commands = useVibe64TerminalCommands({
-      sessionsApiPath: "/api/app/example/vibe64/sessions"
-    });
+    const commands = useVibe64TerminalCommands();
 
     await expect(commands.startAgentTerminal("session-1")).rejects.toMatchObject({
       code: "vibe64_stale_command_start",
