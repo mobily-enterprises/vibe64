@@ -5,6 +5,7 @@ import {
   isOpenVibe64Session,
   shortVibe64SessionId,
   vibe64SessionDisplayTitle,
+  vibe64SessionShortLabel,
   vibe64SessionStatusColor,
   vibe64SessionStatusLabel
 } from "../../src/lib/vibe64SessionViewModel.js";
@@ -16,6 +17,12 @@ describe("plain Vibe64 session view", () => {
       sessionId: "2026-session-1"
     })).toBe("Improve search");
     expect(vibe64SessionDisplayTitle({ sessionId: "2026-session-1" })).toBe("Session session-1");
+    expect(vibe64SessionDisplayTitle({ sessionName: "Fix login", metadata: { label: "Old" }, sessionId: "2026-s" }))
+      .toBe("Fix login");
+    expect(vibe64SessionDisplayTitle({ metadata: { issue_word: "legacy" }, sessionId: "2026-session-1" }))
+      .toBe("Session session-1");
+    expect(vibe64SessionShortLabel({ metadata: { label: "Improve search" } })).toBe("Improve search");
+    expect(vibe64SessionShortLabel({ metadata: { issue_word: "legacy" } })).toBe("");
     expect(shortVibe64SessionId("2026-session-1")).toBe("session-1");
   });
 

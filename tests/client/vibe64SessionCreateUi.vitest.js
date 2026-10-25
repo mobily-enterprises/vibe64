@@ -276,7 +276,7 @@ describe("session creation controls", () => {
 
       tabs[0].props.onClick();
       await VueRuntime.nextTick();
-      const info = nodes.find((node) => node.props["aria-label"] === "Session info: session-1");
+      const info = nodes.find((node) => node.props["aria-label"] === "Session info: Session session-1");
       info.props.onClick({ stopPropagation() {} });
       await VueRuntime.nextTick();
       expect(visible(0)).toBe(true);
@@ -439,6 +439,6 @@ describe("session toolbar archive and repository controls", () => {
     expect(html).toContain('aria-label="Archive session"');
     expect(html).toContain("studio-ai-sessions__repository-state");
     expect(html).toContain("Checking whether work is saved");
-    expect(html).toContain("Session info: work");
+    expect(html).toContain("Session info: Session work");
   });
 });

@@ -13,18 +13,19 @@ function vibe64SessionPullRequest(session = {}) {
   } catch { return null; }
 }
 
+// A session's own name, or "" when it has none.
+function vibe64SessionShortLabel(session = {}) {
+  return text(session?.sessionName || session?.metadata?.label);
+}
+
+// The one title a session shows everywhere: its name, else its short id.
 function vibe64SessionDisplayTitle(session = {}) {
-  const label = text(session.sessionName || session.metadata?.label);
+  const label = vibe64SessionShortLabel(session);
   if (label) {
     return label;
   }
-  const shortId = shortVibe64SessionId(session.sessionId);
+  const shortId = shortVibe64SessionId(session?.sessionId);
   return shortId ? `Session ${shortId}` : "";
-}
-
-// The name a session shows in compact places: its own name or issue word.
-function vibe64SessionShortLabel(session = {}) {
-  return text(session?.sessionName || session?.metadata?.issue_word);
 }
 
 function vibe64SessionStatusLabel(status = "") {

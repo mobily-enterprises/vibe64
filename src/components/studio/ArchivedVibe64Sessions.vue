@@ -74,7 +74,7 @@
             </div>
             <div class="studio-archived-sessions__identity">
               <div class="studio-archived-sessions__session-id">
-                {{ session.sessionName || shortVibe64SessionId(session.sessionId) }}
+                {{ vibe64SessionDisplayTitle(session) }}
               </div>
               <div class="studio-archived-sessions__meta">
                 <v-chip :color="vibe64SessionStatusColor(session.status)" size="x-small" variant="tonal">
@@ -115,7 +115,7 @@ import {
 } from "@mdi/js";
 import Vibe64UnavailableSessions from "@/components/studio/Vibe64UnavailableSessions.vue";
 import {
-  shortVibe64SessionId,
+  vibe64SessionDisplayTitle,
   vibe64SessionStatusColor,
   vibe64SessionStatusLabel
 } from "@/lib/vibe64SessionViewModel.js";
