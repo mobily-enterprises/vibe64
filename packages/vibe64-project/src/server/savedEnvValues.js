@@ -8,9 +8,9 @@ import {
   RUNTIME_CONFIG_SCOPES,
   runtimeConfigKeyIsVibe64Reserved
 } from "@local/vibe64-core/server/runtimeConfig";
+import { SAVED_ENV_VALUE_SOURCE } from "../shared/contracts.js";
 
 const SAVED_ENV_VALUES_CONTRACT = "vibe64.saved-env-values.v1";
-const SAVED_ENV_VALUE_SOURCE = "vibe64-host:saved-value";
 const KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 const LABEL_MAX_LENGTH = 200;
 

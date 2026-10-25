@@ -6,6 +6,7 @@ import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealt
 import { validateIntegrationConfiguration } from "@jskit-ai/connectors-core/shared/configuration";
 import { connectorDefinitions } from "@jskit-ai/connectors-catalog/shared";
 import { googleCalendarDefinition } from "@jskit-ai/connector-google-calendar/shared";
+import { OAUTH_CLIENT_REGISTRATION_PROVIDERS } from "@local/vibe64-source-editor/shared/oauthClientRegistration";
 import { vibe64BrowserTabOriginId } from "@/lib/vibe64BrowserTabOrigin.js";
 import { vibe64SessionPath, VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT } from "@/lib/vibe64SessionRequestConfig.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
@@ -112,7 +113,7 @@ export function useVibe64Integrations(context, selectedId) {
     const selected = configuration.value?.integrations[selectedId.value];
     if (!active.value || production.value || changedElsewhere.value || context.value.sourceOperationsSuspended ||
       context.value.owner === false || registrationNeedsReview.value || command.isRunning || setupCommand.isRunning ||
-      discoveryCommand.isRunning || registrationCommand.isRunning || !["n8n", "amplitude", "atlassian", "confidence-exp", "confidence-flags", "sanity", "sentry", "granola", "hex", "heygen"].includes(selected?.provider)) return;
+      discoveryCommand.isRunning || registrationCommand.isRunning || !OAUTH_CLIENT_REGISTRATION_PROVIDERS.includes(selected?.provider)) return;
     const requestPath = path.value;
     const id = selectedId.value;
     const snapshot = JSON.stringify(configuration.value);

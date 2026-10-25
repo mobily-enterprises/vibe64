@@ -9,8 +9,7 @@ import test from "node:test";
 import {
   acquireProjectSessionPolicyLock,
   acquireProjectSourceMutationLock,
-  releaseProjectSessionPolicyLock,
-  releaseProjectSourceMutationLock,
+  releaseProjectLock,
   runProjectSessionPolicyExclusive,
   runProjectSourceExclusive
 } from "../../packages/vibe64-project/src/server/projectSourceMutationLock.js";
@@ -22,17 +21,17 @@ const lockModuleUrl = pathToFileURL(path.resolve(
 function lockChild(root, mode) {
   const source = mode === "hold"
     ? `
-      import { acquireProjectSourceMutationLock, releaseProjectSourceMutationLock } from ${JSON.stringify(lockModuleUrl)};
+      import { acquireProjectSourceMutationLock, releaseProjectLock } from ${JSON.stringify(lockModuleUrl)};
       const lock = await acquireProjectSourceMutationLock(process.argv[1], { timeoutMs: 5000 });
       process.stdout.write("READY\\n");
       await new Promise((resolve) => process.stdin.once("data", resolve));
-      await releaseProjectSourceMutationLock(lock);
+      await releaseProjectLock(lock);
     `
     : `
-      import { acquireProjectSourceMutationLock, releaseProjectSourceMutationLock } from ${JSON.stringify(lockModuleUrl)};
+      import { acquireProjectSourceMutationLock, releaseProjectLock } from ${JSON.stringify(lockModuleUrl)};
       const lock = await acquireProjectSourceMutationLock(process.argv[1], { timeoutMs: 5000 });
       process.stdout.write("ACQUIRED\\n");
-      await releaseProjectSourceMutationLock(lock);
+      await releaseProjectLock(lock);
     `;
   return spawn(process.execPath, ["--input-type=module", "--eval", source, root], {
     stdio: ["pipe", "pipe", "pipe"]
@@ -42,17 +41,17 @@ function lockChild(root, mode) {
 function sessionPolicyLockChild(root, mode) {
   const source = mode === "hold"
     ? `
-      import { acquireProjectSessionPolicyLock, releaseProjectSessionPolicyLock } from ${JSON.stringify(lockModuleUrl)};
+      import { acquireProjectSessionPolicyLock, releaseProjectLock } from ${JSON.stringify(lockModuleUrl)};
       const lock = await acquireProjectSessionPolicyLock(process.argv[1], { timeoutMs: 5000 });
       process.stdout.write("READY\\n");
       await new Promise((resolve) => process.stdin.once("data", resolve));
-      await releaseProjectSessionPolicyLock(lock);
+      await releaseProjectLock(lock);
     `
     : `
-      import { acquireProjectSessionPolicyLock, releaseProjectSessionPolicyLock } from ${JSON.stringify(lockModuleUrl)};
+      import { acquireProjectSessionPolicyLock, releaseProjectLock } from ${JSON.stringify(lockModuleUrl)};
       const lock = await acquireProjectSessionPolicyLock(process.argv[1], { timeoutMs: 5000 });
       process.stdout.write("ACQUIRED\\n");
-      await releaseProjectSessionPolicyLock(lock);
+      await releaseProjectLock(lock);
     `;
   return spawn(process.execPath, ["--input-type=module", "--eval", source, root], {
     stdio: ["pipe", "pipe", "pipe"]
@@ -156,10 +155,10 @@ test("session policy operations use a distinct lock from source mutations", asyn
     assert.equal(path.basename(sessionPolicyLock.lockPath), "session-policy.lock");
   } finally {
     if (sessionPolicyLock) {
-      await releaseProjectSessionPolicyLock(sessionPolicyLock);
+      await releaseProjectLock(sessionPolicyLock);
     }
     if (sourceLock) {
-      await releaseProjectSourceMutationLock(sourceLock);
+      await releaseProjectLock(sourceLock);
     }
     await rm(root, { force: true, recursive: true });
   }
@@ -222,9 +221,9 @@ test("a dead lock owner is reclaimed without a recursive repair", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-project-lock-"));
   try {
     const first = await acquireProjectSourceMutationLock(root);
-    await releaseProjectSourceMutationLock(first);
+    await releaseProjectLock(first);
     const second = await acquireProjectSourceMutationLock(root);
-    assert.equal(await releaseProjectSourceMutationLock(second), true);
+    assert.equal(await releaseProjectLock(second), true);
   } finally {
     await rm(root, { force: true, recursive: true });
   }

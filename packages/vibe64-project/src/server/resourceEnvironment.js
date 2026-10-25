@@ -155,6 +155,35 @@ function satisfiedAlternative(resource = {}, environment = {}) {
   return null;
 }
 
+// The alternative a resource still needs: none when one is already satisfied,
+// otherwise the one with the most bindings present, preferred first.
+function requiredAlternative(resource = {}, environment = {}) {
+  const alternatives = Array.isArray(resource.environmentAlternatives)
+    ? resource.environmentAlternatives
+    : [];
+  if (satisfiedAlternative(resource, environment)) {
+    return null;
+  }
+  return alternatives
+    .map((alternative, index) => ({
+      alternative,
+      index,
+      preferred: alternative.preferred === true,
+      present: Object.entries(alternative.bindings || {}).filter(([semantic, name]) => (
+        bindingValuePresent(environment, semantic, name, alternative.allowEmpty || [])
+      )).length
+    }))
+    .sort((left, right) => (
+      right.present - left.present ||
+      Number(right.preferred) - Number(left.preferred) ||
+      left.index - right.index
+    ))[0]?.alternative || preferredAlternative(resource);
+}
+
+function resourceKindIsDatabase(kind = "") {
+  return DATABASE_RESOURCE_KINDS.has(kind);
+}
+
 function normalizedConnectionEndpoint(value = {}, kind = "") {
   const endpoint = objectRecord(value);
   if (!endpoint) {
@@ -535,10 +564,13 @@ export {
   DATABASE_TOOL_ENVIRONMENT_CONTRACT,
   RESOURCE_ENVIRONMENT_CONTRACT,
   applicationDatabaseToolEnvironment,
+  bindingValuePresent,
   localDatabaseServerDeclarations,
   normalizeDatabaseToolEnvironment,
   normalizeResourceEnvironment,
   preferredAlternative,
+  requiredAlternative,
+  resourceKindIsDatabase,
   resourceSemanticIsSecret,
   satisfiedAlternative
 };

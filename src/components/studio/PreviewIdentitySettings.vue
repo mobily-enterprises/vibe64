@@ -141,6 +141,12 @@ import { computed, ref, watch } from "vue";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
+import {
+  PREVIEW_IDENTITY_SELECTOR_EMAIL,
+  PREVIEW_IDENTITY_SELECTOR_LOGIN,
+  PREVIEW_IDENTITY_SELECTOR_TYPES,
+  PREVIEW_IDENTITY_SELECTOR_USER_ID
+} from "@local/vibe64-core/shared/previewIdentity";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
 import {
   useVibe64ProjectSlug
@@ -158,20 +164,15 @@ import {
   VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
 
-const identityTypes = Object.freeze([
-  {
-    label: "Email",
-    value: "email"
-  },
-  {
-    label: "Login name",
-    value: "login"
-  },
-  {
-    label: "User ID",
-    value: "user-id"
-  }
-]);
+const identityTypeLabels = Object.freeze({
+  [PREVIEW_IDENTITY_SELECTOR_EMAIL]: "Email",
+  [PREVIEW_IDENTITY_SELECTOR_LOGIN]: "Login name",
+  [PREVIEW_IDENTITY_SELECTOR_USER_ID]: "User ID"
+});
+const identityTypes = Object.freeze(PREVIEW_IDENTITY_SELECTOR_TYPES.map((value) => ({
+  label: identityTypeLabels[value],
+  value
+})));
 
 const projectSlug = useVibe64ProjectSlug();
 const sessionSelection = useVibe64SessionSelection({

@@ -10,9 +10,9 @@ import {
   isConnectedPackageType
 } from "@local/vibe64-genesis/shared/connectedPackageTypes";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
+import { CONNECTED_PROJECTS_LIMIT } from "../shared/contracts.js";
 
 const CONNECTED_PROJECTS_FILE = "vibe64.connections.json";
-const CONNECTED_PROJECTS_LIMIT = 64;
 const CONNECTED_PROJECTS_MAX_BYTES = 64 * 1024;
 
 function invalid(message) {

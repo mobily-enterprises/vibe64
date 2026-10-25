@@ -5,6 +5,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./shared/contracts": "./src/shared/contracts.js",
     "./shared/onboardingRequest": "./src/shared/onboardingRequest.js",
     "./server/actions": "./src/server/actions.js",
     "./server/managedProject": "./src/server/managedProject.js",

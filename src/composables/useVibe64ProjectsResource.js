@@ -5,14 +5,9 @@ import {
   VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
 import {
-  PROJECT_SELECTION_ENDPOINT
-} from "@/lib/studioGateApi.js";
-import {
+  projectSelectionGateEndpoint,
   projectSelectionGateQueryKey
 } from "@/composables/useProjectSelectionGate.js";
-import {
-  scopedDevelopmentApiUrl
-} from "@/lib/studioUrls.js";
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
@@ -27,11 +22,10 @@ function useVibe64ProjectsResource({
   requestRecoveryLabel = "Projects"
 } = {}) {
   const slug = computed(() => normalizeText(readRefOrGetterValue(projectSlug)));
-  const selectionPath = computed(() => slug.value
-    ? scopedDevelopmentApiUrl(PROJECT_SELECTION_ENDPOINT, slug.value, {
-        scopeGlobalPaths: true
-      })
-    : PROJECT_SELECTION_ENDPOINT);
+  const selectionPath = computed(() => projectSelectionGateEndpoint({
+    projectSlug: slug.value,
+    scopeSelectionToCurrentProject: Boolean(slug.value)
+  }));
   const resource = useEndpointResource({
     enabled,
     fallbackLoadError,

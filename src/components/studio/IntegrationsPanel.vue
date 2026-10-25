@@ -5,6 +5,7 @@ import { IntegrationConfigurationFields } from "@jskit-ai/connectors-web/client"
 import { getProviderClientAuthenticationMethods, getProviderScopes } from "@jskit-ai/connectors-core/shared/configuration";
 import { connectorDefinitions } from "@jskit-ai/connectors-catalog/shared";
 import { googleCalendarDefinition } from "@jskit-ai/connector-google-calendar/shared";
+import { OAUTH_CLIENT_REGISTRATION_PROVIDERS } from "@local/vibe64-source-editor/shared/oauthClientRegistration";
 import { useVibe64Integrations } from "@/composables/useVibe64Integrations.js";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import { integrationCallbackUrl } from "@/lib/integrationCallbackUrl.js";
@@ -13,16 +14,10 @@ import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
 import { VIBE64_COLLEAGUE_INTEGRATIONS_KEY } from "@/lib/vibe64AssistantHost.js";
 import { useVibe64SavedEnvValues } from "@/lib/vibe64SavedEnvValues.js";
 import GoogleAdsSearchPanel from "@/components/studio/GoogleAdsSearchPanel.vue";
-import googleAdsSearchGuide from "@local/vibe64-source-editor/docs/application-google-ads.md?raw";
 import PaymentConfigurationPanel from "@/components/studio/PaymentConfigurationPanel.vue";
-import integrationSetupGuide from "@local/vibe64-source-editor/docs/application-integration-setup.md?raw";
-import laravelPaymentsGuide from "@local/vibe64-source-editor/docs/application-payments-laravel.md?raw";
-import paymentSchema from "@jskit-ai/payments-core/configuration.schema.json";
-import paymentConformance from "@jskit-ai/payments-core/conformance.json";
-import paymentContract from "@jskit-ai/payments-core/docs/contract.md?raw";
-import paymentConformanceGuide from "@jskit-ai/payments-core/docs/conformance.md?raw";
 import IntegrationServiceLogo from "./IntegrationServiceLogo.vue";
 import { groupIntegrationProviders } from "@/lib/integrationCatalogue.js";
+import { integrationSetupPrompt } from "@/lib/integrationSetupPrompt.js";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
 
 const props = defineProps({ dashboardContext: { type: Object, required: true } });
@@ -123,42 +118,23 @@ watchEffect(() => {
   if (selected.value) integrationDetail.value.scrollIntoView({ block: "start", inline: "nearest", behavior: "instant" });
 }, { flush: "post" });
 const provider = computed(() => providers.find((entry) => entry.id === selected.value?.provider));
+// n8n registers through its own discovery section above.
+const registersClientDirectly = computed(() => provider.value?.id !== "n8n" &&
+  OAUTH_CLIENT_REGISTRATION_PROVIDERS.includes(provider.value?.id));
 const configurationOnly = computed(() => provider.value?.configurationOnly || provider.value?.configurationOnlyForSettings?.(selected.value?.settings || {}));
 const verificationIncomplete = computed(() => provider.value?.verificationFields?.some((field) =>
   field.required && !String(verificationInput.value[field.name] || "").trim()) === true);
-const setupPrompt = computed(() => [
-  `Implement the saved integration ${JSON.stringify(selectedId.value)} (${JSON.stringify(selected.value?.provider)}) from integrations.json.`,
-  "Use this project's selected framework and existing backend composition. Keep credentials, connections, callbacks and refresh owned by this application so it runs independently of Vibe64.",
-  ...(provider.value?.setup ? [
-    `Selected provider setup instructions:\n\n${(provider.value.setup.stepsForSettings?.(selected.value?.settings || {}, selected.value?.authentication.method) || provider.value.setup.stepsByAuthentication?.[selected.value?.authentication.method] || provider.value.setup.steps || []).join("\n\n")}`,
-    `Provider setup guide: ${provider.value.setup.urlForSettings?.(selected.value?.settings || {}, selected.value?.authentication.method) || provider.value.setup.urlByAuthentication?.[selected.value?.authentication.method] || provider.value.setup.url}`
-  ] : []),
-  configurationOnly.value
-    ? "Use the saved public settings to implement this integration through the selected framework. Do not create a connection command, OAuth flow or provider verification request. For Analytics, preserve existing tag-manager and consent behavior, avoid duplicate tags, and do not send test tracking events."
-    : selected.value?.accountMode === "per-user"
-    ? "Implement connection settings inside this application's authenticated user account screen: status, connect, reconnect, cancel and disconnect. Derive each connection owner from the authenticated app user, isolate their grants, and bind OAuth callbacks to the initiating user. This configures individual accounts, not a shared administrator connection or a new application login method."
-    : "Implement the Integration setup command using the documented application-owned contract, with safe status, connect, cancel and disconnect results.",
-  ...(['stripe', 'paddle'].includes(selected.value?.provider) && configuration.value?.extensions?.payments ? [
-    `Selected provider payment setup:\n\n${provider.value.paymentSetup.steps.join("\n\n")}\n\n${provider.value.paymentSetup.url}`,
-    "Implement the saved extensions.payments contract as well as credential verification. Use the selected framework's existing billing owner; do not add a parallel billing system. Plans and Env references stay in integrations.json; customers, subscriptions, credits and catalogue mappings stay in this application's database.",
-    "Implement authenticated billing-account reads, checkout and customer portal routes, raw-byte signed provider webhooks, current-state subscription reconciliation, feature enforcement and transactional renewal credits. Derive the billable subject from authenticated app membership. A checkout redirect is not payment proof. Keep sandbox/live accounts, mappings and credentials isolated.",
-    "Extend the existing Integration setup command with payments-preview, payments-publish, payments-readiness, payments-recover and payments-history using the documented vibe64.integration-setup.command.v1 payment contract. Preserve other operations. Read the public application-integration-setup.md contract: paymentEnvironment and reviewed reviewId inputs; bounded payments results with providerAccountId, changes, drift, removed and pending. Preview must be read-only; publish must revalidate the review and retain partial-write recovery and historical price mappings.",
-    "For JSKIT, compose payments-core and the optional payments-web component using normal app routes, storage and HTTP hooks. For Laravel, follow application-payments-laravel.md and the same portable configuration/operation semantics using native framework libraries. Do not add PHP to JSKIT or require Node payment execution from Laravel. Neither implementation may call Vibe64 to authorize customer billing.",
-    selected.value?.provider === 'paddle'
-      ? "Paddle needs a separate public client-side token and an app-owned Paddle.js checkout page; keep the private API key and signing secret server-side. Domain and merchant approval remain explicit provider steps."
-      : "Stripe needs the environment's own webhook destination/signing secret and configured customer portal. Handle invoice payment failures and subscription lifecycle updates without granting unpaid renewal credits.",
-    "Expose the app billing screen with plans, credits, subscription status, customer-scoped subscription/invoice/transaction history and management actions. Authorize history separately, resolve the customer from this app's subject binding and preserve provider status; invoice/transaction totals are not proof of payment. Use controlled fixtures for authorization, webhook signatures, retries, plan/credit behavior and management output; report unimplemented capabilities honestly. Do not apply catalogue changes to the provider or perform charges during implementation.",
-    `Portable payment semantics (applies to every framework):\n\n${paymentContract}`,
-    `Payment configuration JSON Schema (validate extensions.payments; no JSKIT runtime required):\n\n${JSON.stringify(paymentSchema, null, 2)}`,
-    `Portable conformance instructions:\n\n${paymentConformanceGuide}`,
-    `Portable conformance JSON (translate these fixtures into this framework's native tests; do not install a Node sidecar for another framework):\n\n${JSON.stringify(paymentConformance, null, 2)}`,
-    `Public app-operation contract (apply its payment section as well as the command envelope):\n\n${integrationSetupGuide}`,
-    `Native Laravel guidance (only when this project selects Laravel; other frameworks implement the same contract with their own libraries):\n\n${laravelPaymentsGuide}`
-  ] : []),
-  ...(selected.value?.provider === "google-ads" ? [googleAdsSearchGuide] : []),
-  "Use the saved Env references without putting secret values in source or chat.",
-  "Preserve the existing configuration and implement controlled tests. Do not register provider accounts, perform live consent, send real messages or deploy."
-].join("\n\n"));
+// The Env key an "env:NAME" configuration reference names.
+function envReferenceKey(reference) {
+  return /^env:([A-Z_][A-Z0-9_]*)$/u.exec(reference || "")?.[1];
+}
+const setupPrompt = computed(() => integrationSetupPrompt({
+  id: selectedId.value,
+  integration: selected.value,
+  provider: provider.value,
+  configuration: configuration.value,
+  configurationOnly: configurationOnly.value
+}));
 const callbackOverride = ref(null);
 const setupCopyMessage = ref("");
 const registration = computed(() => configuration.value?.registrations[selected.value?.authentication.registrationRef]);
@@ -169,14 +145,14 @@ const permissionLabels = computed(() => Object.fromEntries(
 const credentials = computed(() => {
   const reference = selected.value?.authentication.method === "oauth2"
     ? registration.value?.clientSecretRef : selected.value?.authentication.secretRef;
-  const primaryKey = /^env:([A-Z_][A-Z0-9_]*)$/u.exec(reference || "")?.[1];
+  const primaryKey = envReferenceKey(reference);
   const entries = primaryKey ? [{ key: primaryKey, label: "Application credential", public: false }] : [];
   // A shared account connected outside the app arrives as a refresh token in Env.
-  const refreshTokenKey = /^env:([A-Z_][A-Z0-9_]*)$/u.exec(selected.value?.authentication.refreshTokenRef || "")?.[1];
+  const refreshTokenKey = envReferenceKey(selected.value?.authentication.refreshTokenRef);
   if (refreshTokenKey) entries.push({ key: refreshTokenKey, label: "Connected account", public: false });
   for (const field of provider.value?.settingsFields || []) {
     if (!field.environmentCredential) continue;
-    const key = /^env:([A-Z_][A-Z0-9_]*)$/u.exec(selected.value?.settings?.[field.name] || "")?.[1];
+    const key = envReferenceKey(selected.value?.settings?.[field.name]);
     if (key) entries.push({ key, ...field.environmentCredential });
   }
   return entries;
@@ -190,7 +166,7 @@ function credentialLinked(key) {
 function setCredentialLinked(key, linked) {
   linkedCredentials.value = { ...linkedCredentials.value, [`${environment.value}:${key}`]: linked === true };
 }
-const callbackKey = computed(() => /^env:([A-Z_][A-Z0-9_]*)$/u.exec(registration.value?.callbackUrlRef || "")?.[1] || "");
+const callbackKey = computed(() => envReferenceKey(registration.value?.callbackUrlRef) || "");
 const callbackUrl = computed({
   get: () => callbackOverride.value ?? integrationCallbackUrl(props.dashboardContext.applicationPublicUrl,
     provider.value?.setup?.callbackPath || `/integrations/${selected.value?.authentication.registrationRef}/callback`),
@@ -481,7 +457,7 @@ onUnmounted(() => window.removeEventListener("beforeunload", warnBeforeUnload));
                 </template>
               </template>
             </section>
-            <section v-if="['amplitude', 'atlassian', 'confidence-exp', 'confidence-flags', 'sanity', 'sentry', 'granola', 'hex', 'heygen'].includes(provider?.id) && selected?.authentication.method === 'oauth2' && !production && (!registration?.clientId || registration.clientId === 'MISSING')"
+            <section v-if="registersClientDirectly && selected?.authentication.method === 'oauth2' && !production && (!registration?.clientId || registration.clientId === 'MISSING')"
               :aria-label="`${provider.name} client registration`" class="mt-4">
               <p>Choose permissions above (and Region for Amplitude or workspace endpoint for Hex), then set the Suggested callback URL below. Registering creates a {{ provider.name }} OAuth client and saves its ID in configuration and its secret, callback and recovery ID in development Env. Existing Env values will not be replaced. Your application must implement the callback and setup command to complete consent.</p>
               <v-btn height="48" color="primary"

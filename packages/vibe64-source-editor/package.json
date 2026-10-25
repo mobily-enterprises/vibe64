@@ -13,7 +13,8 @@
     "./docs/application-integration-setup.md": "./docs/application-integration-setup.md",
     "./docs/application-payments-laravel.md": "./docs/application-payments-laravel.md",
     "./docs/application-google-ads.md": "./docs/application-google-ads.md",
-    "./server/search-index-worker": "./src/server/searchIndexWorker.js"
+    "./server/search-index-worker": "./src/server/searchIndexWorker.js",
+    "./shared/oauthClientRegistration": "./src/shared/oauthClientRegistration.js"
   },
   "jskit": {
     "kind": "runtime",

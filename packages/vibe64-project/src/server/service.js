@@ -39,9 +39,6 @@ import {
   saveEnvUserValues
 } from "@local/vibe64-core/server/envUserValues";
 import {
-  resolveStudioTargetRoot
-} from "@local/vibe64-core/server/studioRoots";
-import {
   vibe64Error
 } from "@local/vibe64-core/server/core";
 import {
@@ -94,9 +91,11 @@ import {
 } from "./projectEnvironmentFiles.js";
 import {
   applicationDatabaseToolEnvironment,
+  bindingValuePresent,
   localDatabaseServerDeclarations,
   normalizeResourceEnvironment,
-  preferredAlternative,
+  requiredAlternative,
+  resourceKindIsDatabase,
   resourceSemanticIsSecret,
   satisfiedAlternative
 } from "./resourceEnvironment.js";
@@ -113,10 +112,8 @@ import {
   runProjectSourceExclusive as runProjectSourceMutationExclusive
 } from "./projectSourceMutationLock.js";
 
-function resolveVibe64TargetRoot(targetRoot) {
-  return resolveStudioTargetRoot({
-    explicitRoot: targetRoot
-  });
+function envScope(input = {}) {
+  return input.environment || input.scope || RUNTIME_CONFIG_SCOPES.DEV;
 }
 
 function projectResult(operation) {
@@ -168,40 +165,6 @@ function publicProject(project = {}, {
     sourceConfigRoot: context?.sourceConfigRoot || project.sourceConfigRoot || "",
     sourceRoot: context?.sourceRoot || project.sourceRoot || ""
   };
-}
-
-function valuePresent(environment = {}, name = "", allowEmpty = false) {
-  if (!Object.hasOwn(environment, name) || typeof environment[name] !== "string") {
-    return false;
-  }
-  const value = environment[name].trim();
-  if (value === `$${name}` || value === `\${${name}}`) {
-    return false;
-  }
-  return value.length > 0 || allowEmpty;
-}
-
-function requiredAlternative(resource = {}, environment = {}) {
-  const alternatives = Array.isArray(resource.environmentAlternatives)
-    ? resource.environmentAlternatives
-    : [];
-  if (satisfiedAlternative(resource, environment)) {
-    return null;
-  }
-  return alternatives
-    .map((alternative, index) => ({
-      alternative,
-      index,
-      preferred: alternative.preferred === true,
-      present: Object.entries(alternative.bindings || {}).filter(([semantic, name]) => (
-        valuePresent(environment, name, (alternative.allowEmpty || []).includes(semantic))
-      )).length
-    }))
-    .sort((left, right) => (
-      right.present - left.present ||
-      Number(right.preferred) - Number(left.preferred) ||
-      left.index - right.index
-    ))[0]?.alternative || preferredAlternative(resource);
 }
 
 function stackResourceRecords(resources = [], environment = {}, defaults = {}) {
@@ -276,7 +239,7 @@ function projectEnvironmentResult(resolved, input, userRecords) {
   if (input.includeResourceConfiguration !== true) return resolved.projectEnvironment;
   const values = [];
   const userByKey = new Map(runtimeConfigRecordsForScope([...(resolved.savedRecords || []), ...userRecords],
-    input.environment || input.scope || RUNTIME_CONFIG_SCOPES.DEV,
+    envScope(input),
     { target: input.target }).map((record) => [record.key, record]));
   for (const [key, value] of Object.entries(resolved.projectEnvironment)) {
     // Managed resource addresses/credentials vary by session, not app size.
@@ -314,7 +277,7 @@ function createService({
   listTemplates = listGenesisTemplates,
   applyTemplate = applyGenesisTemplate,
   projectContext = null,
-  publishProjectChanged = null,
+  publishProjectChanged = async () => null,
   setCollaboration = setGenesisCollaboration,
   setEngineeringProfile = setGenesisEngineeringProfile,
   targetRoot = ""
@@ -471,7 +434,7 @@ function createService({
   // Development Env variable. A failing provider fails the read instead of
   // silently dropping values.
   async function savedEnvRecords(input = {}) {
-    const scope = input.environment || input.scope || RUNTIME_CONFIG_SCOPES.DEV;
+    const scope = envScope(input);
     if (!savedEnvValueProvider || scope !== RUNTIME_CONFIG_SCOPES.DEV) return [];
     return savedEnvValueRecords(savedEnvValueProvider, {
       projectContextRoot: selectedTargetRoot(),
@@ -486,7 +449,7 @@ function createService({
     const source = await sourceForInput(input);
     const sourceRoot = source.sourceRoot;
     const savedRecords = await savedEnvRecords(input);
-    const envOptions = { scope: input.environment || input.scope || RUNTIME_CONFIG_SCOPES.DEV, target: input.target };
+    const envOptions = { scope: envScope(input), target: input.target };
     // Typed values, then linked saved values over them.
     const personEnvironment = {
       ...runtimeConfigEnv(userRecords, envOptions),
@@ -635,7 +598,7 @@ function createService({
       ...stack.records,
       ...userRecords
     ], {
-      scope: input.environment || input.scope,
+      scope: envScope(input),
       target: input.target
     });
     return {
@@ -726,7 +689,7 @@ function createService({
       }
     }
     await saveEnvUserValues({
-      environment: input.environment || input.scope,
+      environment: envScope(input),
       projectRuntimeRoot: selectedProjectRuntimeRoot(),
       values
     });
@@ -787,7 +750,7 @@ function createService({
 
   async function notifyGithubChanged(project, payload = { githubRefresh: true }, reason = "github-refreshed") {
     try {
-      await publishProjectChanged?.({ ...payload, projectSlug: project.slug }, { reason });
+      await publishProjectChanged({ ...payload, projectSlug: project.slug }, { reason });
     } catch (error) {
       // Publication is already confirmed; a notification failure must not invite a duplicate write.
       logger?.warn?.({ error: String(error?.message || error) }, "GitHub change notification could not be published.");
@@ -893,16 +856,7 @@ function createService({
         "vibe64_owner_required"
       );
     }
-    let sourceInput = input;
-    if (!String(input.sessionId || "").trim() && !selectedSourceRoot()) {
-      const session = await sessionStore().readCurrentSession();
-      if (session?.sessionId) {
-        sourceInput = {
-          ...input,
-          sessionId: session.sessionId
-        };
-      }
-    }
+    const sourceInput = await settingsSourceInput(input);
     return runSessionSourceWorkExclusive(sourceInput, async () => {
       const source = await genesisSettingsSourceForInput(sourceInput);
       if (!source.sourceRoot) {
@@ -968,28 +922,18 @@ function createService({
     return resourceEnvironmentProvider?.managedDevelopmentDatabase === true;
   }
 
-  async function managedDevelopmentDatabaseDefaults(input = {}) {
-    if (!managedDevelopmentDatabaseAvailable()) {
-      return {};
-    }
+  async function managedProjectDatabaseName({ projectContextRoot, slug }) {
     if (typeof resourceEnvironmentProvider?.developmentDatabaseNameForProject !== "function") {
       throw vibe64Error(
         "This Vibe64 installation cannot name a managed project database.",
         "vibe64_managed_development_database_name_unavailable"
       );
     }
-    const projectContextRoot = String(input.projectContextRoot || "").trim();
-    if (!path.isAbsolute(projectContextRoot)) {
-      throw vibe64Error(
-        "Managed project database defaults require an absolute project context root.",
-        "vibe64_managed_development_database_project_root_invalid"
-      );
-    }
     const developmentDatabaseName = normalizeDevelopmentDatabaseName(
       await resourceEnvironmentProvider.developmentDatabaseNameForProject({
         projectContextRoot,
         serviceDataRoot: String(studioProjectContext.serviceDataRoot || "").trim(),
-        slug: String(input.slug || path.basename(projectContextRoot)).trim()
+        slug
       })
     );
     if (!developmentDatabaseName) {
@@ -998,8 +942,25 @@ function createService({
         "vibe64_managed_development_database_name_unavailable"
       );
     }
+    return developmentDatabaseName;
+  }
+
+  async function managedDevelopmentDatabaseDefaults(input = {}) {
+    if (!managedDevelopmentDatabaseAvailable()) {
+      return {};
+    }
+    const projectContextRoot = String(input.projectContextRoot || "").trim();
+    if (!path.isAbsolute(projectContextRoot)) {
+      throw vibe64Error(
+        "Managed project database defaults require an absolute project context root.",
+        "vibe64_managed_development_database_project_root_invalid"
+      );
+    }
     return {
-      developmentDatabaseName,
+      developmentDatabaseName: await managedProjectDatabaseName({
+        projectContextRoot,
+        slug: String(input.slug || path.basename(projectContextRoot)).trim()
+      }),
       developmentDatabaseScope: "project"
     };
   }
@@ -1048,25 +1009,10 @@ function createService({
           currentProject?.developmentDatabaseName
         );
         if (scope === "project" && !developmentDatabaseName) {
-          if (typeof resourceEnvironmentProvider?.developmentDatabaseNameForProject !== "function") {
-            throw vibe64Error(
-              "This Vibe64 installation cannot name a managed project database.",
-              "vibe64_managed_development_database_name_unavailable"
-            );
-          }
-          developmentDatabaseName = normalizeDevelopmentDatabaseName(
-            await resourceEnvironmentProvider.developmentDatabaseNameForProject({
-              projectContextRoot: requireSelectedTargetRoot(),
-              serviceDataRoot: String(studioProjectContext.serviceDataRoot || "").trim(),
-              slug
-            })
-          );
-          if (!developmentDatabaseName) {
-            throw vibe64Error(
-              "The managed project database name is empty.",
-              "vibe64_managed_development_database_name_unavailable"
-            );
-          }
+          developmentDatabaseName = await managedProjectDatabaseName({
+            projectContextRoot: requireSelectedTargetRoot(),
+            slug
+          });
         }
         await studioProjectContext.updateWorkspaceProjectMetadata({
           ...(developmentDatabaseName ? { developmentDatabaseName } : {}),
@@ -1088,6 +1034,18 @@ function createService({
 
   async function promptEnvironment() {
     return (await resolvedProjectEnvironment({}, await userEnvRecords())).effectiveEnvironment;
+  }
+
+  // A settings write without a session or standalone source targets the
+  // current session's source.
+  async function settingsSourceInput(input = {}) {
+    if (String(input.sessionId || "").trim() || selectedSourceRoot()) {
+      return input;
+    }
+    const session = await sessionStore().readCurrentSession();
+    return session?.sessionId
+      ? { ...input, sessionId: session.sessionId }
+      : input;
   }
 
   async function genesisSettingsSourceForInput(input = {}) {
@@ -1167,7 +1125,7 @@ function createService({
       for (const { resource } of resourcesToCheck) {
         const alternative = requiredAlternative(resource, resolved.effectiveEnvironment);
         for (const [semantic, name] of Object.entries(alternative?.bindings || {})) {
-          if (!valuePresent(resolved.effectiveEnvironment, name, (alternative.allowEmpty || []).includes(semantic))) {
+          if (!bindingValuePresent(resolved.effectiveEnvironment, semantic, name, alternative.allowEmpty || [])) {
             missingKeys.add(name);
           }
         }
@@ -1214,16 +1172,7 @@ function createService({
   }
 
   async function saveEngineeringProfileState(input = {}) {
-    let sourceInput = input;
-    if (!String(input.sessionId || "").trim() && !selectedSourceRoot()) {
-      const session = await sessionStore().readCurrentSession();
-      if (session?.sessionId) {
-        sourceInput = {
-          ...input,
-          sessionId: session.sessionId
-        };
-      }
-    }
+    const sourceInput = await settingsSourceInput(input);
     return runSessionSourceWorkExclusive(sourceInput, async () => {
       const source = await genesisSettingsSourceForInput(sourceInput);
       if (!source.sourceRoot) {
@@ -1486,7 +1435,7 @@ function createService({
         { provisionResources: false }
       );
       if (!resolved.resourcesPrepared && !resolved.databaseToolEnvironment &&
-          resolved.resources.some(({ resource }) => ["mysql", "postgresql", "sqlite"].includes(resource.kind))) {
+          resolved.resources.some(({ resource }) => resourceKindIsDatabase(resource.kind))) {
         throw vibe64Error(
           "Database not prepared. Let the assistant finish, then choose Prepare workspace in the session chat, or Retry on its failed preparation. Vibe64 prepares the managed database and credentials; the application runs its declared migrations.",
           "vibe64_session_database_not_prepared"
@@ -1829,6 +1778,5 @@ function createService({
 }
 
 export {
-  createService,
-  resolveVibe64TargetRoot
+  createService
 };

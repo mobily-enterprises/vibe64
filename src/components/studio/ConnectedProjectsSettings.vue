@@ -25,7 +25,7 @@
         <p v-if="state.exists && !draft.length">No connected projects.</p>
         <p class="text-body-small">Removing a connection preserves its existing contributions and pending work.</p>
         <div class="connection-actions">
-          <v-btn :disabled="!state.canEdit || saving || draft.length >= 64" variant="outlined" @click="draft.push({ name: '', repository: '', relationship: 'dependency' })">Add project</v-btn>
+          <v-btn :disabled="!state.canEdit || saving || draft.length >= CONNECTED_PROJECTS_LIMIT" variant="outlined" @click="draft.push({ name: '', repository: '', relationship: 'dependency' })">Add project</v-btn>
           <v-btn :disabled="!state.canEdit || saving || stale || (!changed && state.exists)" color="primary" variant="flat" @click="save">{{ saving ? 'Saving…' : 'Save connected projects' }}</v-btn>
         </div>
       </template>
@@ -38,6 +38,7 @@ import { computed, ref, watch } from "vue";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { CONNECTED_PACKAGE_TYPES, connectedPackageTypeUsesScript } from "@local/vibe64-genesis/shared/connectedPackageTypes";
+import { CONNECTED_PROJECTS_LIMIT } from "@local/vibe64-project/shared/contracts";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import { VIBE64_SURFACE_ID } from "@/lib/vibe64RequestConfig.js";
 

@@ -1,4 +1,5 @@
 import { computed, inject, isRef } from "vue";
+import { SAVED_ENV_VALUE_SOURCE } from "@local/vibe64-project/shared/contracts";
 
 // A host that keeps saved values (the vibe64.saved-env-values.v1 contract) may
 // let the person fill an Env variable from one. It provides { label, component }
@@ -11,8 +12,7 @@ import { computed, inject, isRef } from "vue";
 // saved value. Without a provider nothing is rendered.
 export const VIBE64_SAVED_ENV_VALUES_KEY = Symbol("vibe64.saved-env-values");
 
-// The source a host gives Env records whose value it supplies from a saved value.
-export const SAVED_ENV_VALUE_SOURCE = "vibe64-host:saved-value";
+export { SAVED_ENV_VALUE_SOURCE };
 
 export function recordIsSavedEnvValue(record = {}) {
   return record?.source === SAVED_ENV_VALUE_SOURCE && record?.editable !== true;

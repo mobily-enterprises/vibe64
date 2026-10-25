@@ -133,21 +133,13 @@ async function acquireProjectSessionPolicyLock(projectRuntimeRoot, options = {})
   });
 }
 
-async function releaseProjectOperationLock(lock = {}) {
+async function releaseProjectLock(lock = {}) {
   const owner = await lockOwner(lock.lockPath);
   if (owner?.token === lock.token && owner?.pid === process.pid) {
     await rm(lock.lockPath, { force: true });
     return true;
   }
   return false;
-}
-
-async function releaseProjectSourceMutationLock(lock = {}) {
-  return releaseProjectOperationLock(lock);
-}
-
-async function releaseProjectSessionPolicyLock(lock = {}) {
-  return releaseProjectOperationLock(lock);
 }
 
 async function runProjectSourceExclusive(projectRuntimeRoot, operation, options = {}) {
@@ -158,7 +150,7 @@ async function runProjectSourceExclusive(projectRuntimeRoot, operation, options 
   try {
     return await operation();
   } finally {
-    await releaseProjectSourceMutationLock(lock);
+    await releaseProjectLock(lock);
   }
 }
 
@@ -170,15 +162,14 @@ async function runProjectSessionPolicyExclusive(projectRuntimeRoot, operation, o
   try {
     return await operation();
   } finally {
-    await releaseProjectSessionPolicyLock(lock);
+    await releaseProjectLock(lock);
   }
 }
 
 export {
   acquireProjectSessionPolicyLock,
   acquireProjectSourceMutationLock,
-  releaseProjectSessionPolicyLock,
-  releaseProjectSourceMutationLock,
+  releaseProjectLock,
   runProjectSessionPolicyExclusive,
   runProjectSourceExclusive
 };
