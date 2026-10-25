@@ -257,6 +257,51 @@ function assertSafeBackgroundTaskId(taskId) {
   return normalizedTaskId;
 }
 
+// Renewal markers a predecessor archive never keeps, and the handoff record it
+// always carries; the prepared snapshot and the committed archive share both.
+const RENEWAL_ARCHIVE_RESET_METADATA_NAMES = Object.freeze([
+  "renewal_activated_at",
+  "renewal_archived_at",
+  "renewal_finalized_at",
+  "renewal_restored_at",
+  "renewal_restored_id",
+  "renewal_rolled_back_at"
+]);
+
+function renewalArchiveMetadata(fromMetadata = {}, {
+  archivedAt = "",
+  renewalId = "",
+  selectedBeforeArchive = "",
+  successorSessionId = ""
+} = {}) {
+  return {
+    renewal_acknowledged_at: normalizeText(fromMetadata.renewal_acknowledged_at),
+    renewal_actor_display_name: normalizeText(fromMetadata.renewal_actor_display_name),
+    renewal_actor_id: normalizeText(fromMetadata.renewal_actor_id),
+    renewal_archived_at: archivedAt,
+    renewal_confirmed_at: normalizeText(fromMetadata.renewal_confirmed_at),
+    renewal_handover_delivered_at: normalizeText(fromMetadata.renewal_handover_delivered_at),
+    renewal_id: renewalId,
+    renewal_started_at: normalizeText(fromMetadata.renewal_started_at),
+    renewal_successor_created_at: normalizeText(fromMetadata.renewal_successor_created_at),
+    renewed_at: normalizeText(fromMetadata.renewed_at),
+    renewed_to: successorSessionId,
+    [RENEWAL_ARCHIVE_SELECTION_METADATA]: selectedBeforeArchive
+  };
+}
+
+function assertRenewalSuccessorLink(metadata = {}, { renewalId = "", sourceSessionId = "", successorSessionId = "" } = {}) {
+  if (
+    normalizeText(metadata.renewal_id) !== renewalId ||
+    normalizeText(metadata.renewed_from) !== sourceSessionId
+  ) {
+    throw vibe64Error(
+      `Renewal successor does not match renewal ${renewalId}: ${successorSessionId}`,
+      "vibe64_session_renewal_link_mismatch"
+    );
+  }
+}
+
 function sessionIsUnfinishedRenewalRecord(session = {}) {
   const metadata = isPlainObject(session.metadata) ? session.metadata : {};
   const renewalId = session.status === VIBE64_SESSION_STATUS.RENEWAL_QUIESCED
@@ -3314,31 +3359,16 @@ function createVibe64SessionStore({
         filter: (source) => source !== sourcePaths.dropZoneRoot
       });
       const snapshotPaths = pathsForSessionRoot(normalizedSourceSessionId, snapshotRoot);
+      await Promise.all(RENEWAL_ARCHIVE_RESET_METADATA_NAMES.map((name) => (
+        rm(metadataFilePath(snapshotPaths, name), { force: true })
+      )));
       await Promise.all([
-        "renewal_activated_at",
-        "renewal_archived_at",
-        "renewal_finalized_at",
-        "renewal_restored_at",
-        "renewal_restored_id",
-        "renewal_rolled_back_at"
-      ].map((name) => rm(metadataFilePath(snapshotPaths, name), { force: true })));
-      await Promise.all([
-        ...Object.entries({
-          renewal_acknowledged_at: normalizeText(successorMetadata.renewal_acknowledged_at),
-          renewal_actor_display_name: normalizeText(successorMetadata.renewal_actor_display_name),
-          renewal_actor_id: normalizeText(successorMetadata.renewal_actor_id),
-          renewal_archived_at: archivedAt,
-          renewal_confirmed_at: normalizeText(successorMetadata.renewal_confirmed_at),
-          renewal_handover_delivered_at: normalizeText(
-            successorMetadata.renewal_handover_delivered_at
-          ),
-          renewal_id: normalizedRenewalId,
-          renewal_started_at: normalizeText(successorMetadata.renewal_started_at),
-          renewal_successor_created_at: normalizeText(successorMetadata.renewal_successor_created_at),
-          renewed_at: normalizeText(successorMetadata.renewed_at),
-          renewed_to: normalizedSuccessorSessionId,
-          [RENEWAL_ARCHIVE_SELECTION_METADATA]: selectedBeforeArchive
-        }).map(([name, value]) => (
+        ...Object.entries(renewalArchiveMetadata(successorMetadata, {
+          archivedAt,
+          renewalId: normalizedRenewalId,
+          selectedBeforeArchive,
+          successorSessionId: normalizedSuccessorSessionId
+        })).map(([name, value]) => (
           writeTextFile(metadataFilePath(snapshotPaths, name), `${value}\n`)
         )),
         writeTextFile(
@@ -3700,32 +3730,15 @@ function createVibe64SessionStore({
               "vibe64_session_renewal_archive_status_invalid"
             );
           }
-          for (const name of [
-            "renewal_activated_at",
-            "renewal_archived_at",
-            "renewal_finalized_at",
-            "renewal_restored_at",
-            "renewal_restored_id",
-            "renewal_rolled_back_at"
-          ]) {
+          for (const name of RENEWAL_ARCHIVE_RESET_METADATA_NAMES) {
             await rm(metadataFilePath(closingPaths, name), { force: true });
           }
-          for (const [name, value] of Object.entries({
-            renewal_acknowledged_at: normalizeText(preparedSession.metadata.renewal_acknowledged_at),
-            renewal_actor_display_name: normalizeText(preparedSession.metadata.renewal_actor_display_name),
-            renewal_actor_id: normalizeText(preparedSession.metadata.renewal_actor_id),
-            renewal_archived_at: normalizeText(preparedSession.metadata.renewal_archived_at),
-            renewal_confirmed_at: normalizeText(preparedSession.metadata.renewal_confirmed_at),
-            renewal_handover_delivered_at: normalizeText(
-              preparedSession.metadata.renewal_handover_delivered_at
-            ),
-            renewal_id: normalizedRenewalId,
-            renewal_started_at: normalizeText(preparedSession.metadata.renewal_started_at),
-            renewal_successor_created_at: normalizeText(preparedSession.metadata.renewal_successor_created_at),
-            renewed_at: normalizeText(preparedSession.metadata.renewed_at),
-            renewed_to: normalizedSuccessorSessionId,
-            [RENEWAL_ARCHIVE_SELECTION_METADATA]: ownership.selectedBeforeArchive
-          })) {
+          for (const [name, value] of Object.entries(renewalArchiveMetadata(preparedSession.metadata, {
+            archivedAt: normalizeText(preparedSession.metadata.renewal_archived_at),
+            renewalId: normalizedRenewalId,
+            selectedBeforeArchive: ownership.selectedBeforeArchive,
+            successorSessionId: normalizedSuccessorSessionId
+          }))) {
             await writeTextFile(metadataFilePath(closingPaths, name), `${value}\n`);
             await renewalArchiveCommitStep({
               metadataName: name,
@@ -4734,15 +4747,11 @@ function createVibe64SessionStore({
           readStatusFromPaths(successorPaths),
           readMetadataFromPaths(successorPaths)
         ]);
-        if (
-          normalizeText(metadata.renewal_id) !== normalizedRenewalId ||
-          normalizeText(metadata.renewed_from) !== normalizedSourceSessionId
-        ) {
-          throw vibe64Error(
-            `Renewal successor does not match renewal ${normalizedRenewalId}: ${normalizedSuccessorSessionId}`,
-            "vibe64_session_renewal_link_mismatch"
-          );
-        }
+        assertRenewalSuccessorLink(metadata, {
+          renewalId: normalizedRenewalId,
+          sourceSessionId: normalizedSourceSessionId,
+          successorSessionId: normalizedSuccessorSessionId
+        });
         if (status === VIBE64_SESSION_STATUS.RENEWAL_ACTIVATING) {
           if (!normalizeText(metadata.renewal_activation_prepared_at)) {
             throw vibe64Error(
@@ -4787,15 +4796,11 @@ function createVibe64SessionStore({
           readStatusFromPaths(successorPaths),
           readMetadataFromPaths(successorPaths)
         ]);
-        if (
-          normalizeText(metadata.renewal_id) !== normalizedRenewalId ||
-          normalizeText(metadata.renewed_from) !== normalizedSourceSessionId
-        ) {
-          throw vibe64Error(
-            `Renewal successor does not match renewal ${normalizedRenewalId}: ${normalizedSuccessorSessionId}`,
-            "vibe64_session_renewal_link_mismatch"
-          );
-        }
+        assertRenewalSuccessorLink(metadata, {
+          renewalId: normalizedRenewalId,
+          sourceSessionId: normalizedSourceSessionId,
+          successorSessionId: normalizedSuccessorSessionId
+        });
         if (status === VIBE64_SESSION_STATUS.RENEWAL_PENDING) {
           await rm(
             metadataFilePath(successorPaths, "renewal_activation_prepared_at"),
@@ -4846,15 +4851,11 @@ function createVibe64SessionStore({
           readStatusFromPaths(successorPaths),
           readMetadataFromPaths(successorPaths)
         ]);
-        if (
-          normalizeText(metadata.renewal_id) !== normalizedRenewalId ||
-          normalizeText(metadata.renewed_from) !== normalizedSourceSessionId
-        ) {
-          throw vibe64Error(
-            `Renewal successor does not match renewal ${normalizedRenewalId}: ${normalizedSuccessorSessionId}`,
-            "vibe64_session_renewal_link_mismatch"
-          );
-        }
+        assertRenewalSuccessorLink(metadata, {
+          renewalId: normalizedRenewalId,
+          sourceSessionId: normalizedSourceSessionId,
+          successorSessionId: normalizedSuccessorSessionId
+        });
         if (status === VIBE64_SESSION_STATUS.ACTIVE) {
           if (normalizeText(metadata.renewal_activated_at) !== normalizedCommittedAt) {
             throw vibe64Error(
