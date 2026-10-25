@@ -54,8 +54,6 @@ function useAiConnections({
       retry: false
     },
     readQuery: computed(() => ({
-      engineId: "opencode",
-      limit: "100",
       modelProviderId: normalizedCatalogProviderId.value
     })),
     requestRecoveryLabel: "OpenCode providers"
@@ -76,9 +74,6 @@ function useAiConnections({
       refetchOnWindowFocus: false,
       retry: false
     },
-    readQuery: computed(() => ({
-      engineId: "opencode"
-    })),
     requestRecoveryLabel: "OpenCode providers"
   });
   const saveCommand = useCommand({

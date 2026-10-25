@@ -5,13 +5,15 @@ import {
 import {
   vibe64ProjectQueryScope
 } from "/src/lib/vibe64ProjectScope.js";
+import {
+  VIBE64_ACCOUNTS_CHANGED_EVENT,
+  VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT,
+  VIBE64_CONNECTIONS_CHANGED_EVENT
+} from "../../shared/accountEvents.js";
 
 const VIBE64_ACCOUNTS_AUTH_API_SUFFIX = "/vibe64/accounts/auth";
 const VIBE64_ACCOUNTS_GIT_IDENTITY_API_SUFFIX = "/vibe64/accounts/git-identity";
 const VIBE64_ACCOUNTS_PERSONAL_AI_PROFILE_API_SUFFIX = "/vibe64/accounts/personal-ai-profile";
-const VIBE64_ACCOUNTS_CHANGED_EVENT = "vibe64.accounts.changed";
-const VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT = "vibe64.accounts.auth-session.changed";
-const VIBE64_CONNECTIONS_CHANGED_EVENT = "vibe64.connections.changed";
 
 const ACCOUNTS_ENDPOINT = studioApiPath("vibe64/accounts");
 const AI_CONNECTIONS_ENDPOINT = `${ACCOUNTS_ENDPOINT}/ai-connections`;

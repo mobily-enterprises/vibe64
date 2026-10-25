@@ -1,4 +1,8 @@
+import { aiConnectionError } from "./aiConnectionError.js";
+
 const OPENCODE_NATIVE_ENDPOINT_CODE = "opencode-native";
+// The Z.AI model Vibe64 starts on: free, and verified directly against Z.AI.
+const ZAI_FREE_MODEL_ID = "glm-4.7-flash";
 
 const ASSISTANT_PROVIDER_POLICIES = Object.freeze({
   anthropic: Object.freeze({
@@ -28,12 +32,12 @@ const ASSISTANT_PROVIDER_POLICIES = Object.freeze({
   }),
   zai: Object.freeze({
     billingLabel: "Free and usage-based API",
-    defaultModelId: "glm-4.7-flash",
+    defaultModelId: ZAI_FREE_MODEL_ID,
     managementUrl: "https://z.ai/manage-apikey/billing",
     modelAccess: Object.freeze({
       configurable: true,
       label: "Unlock all Z.AI models",
-      recommendedModelId: "glm-4.7-flash",
+      recommendedModelId: ZAI_FREE_MODEL_ID,
       warning: "Other Z.AI models use paid API credit. Unlock them only if this Z.AI account has billing or credit available."
     }),
     ownerOnly: false,
@@ -55,17 +59,10 @@ function text(value = "") {
   return String(value ?? "").trim();
 }
 
-function assistantProviderError(code = "", message = "", statusCode = 400) {
-  const error = new Error(message);
-  error.code = code;
-  error.statusCode = statusCode;
-  return error;
-}
-
 function assistantProviderPolicy(provider = {}) {
   const modelProviderId = text(provider.id || provider.modelProviderId);
   if (!modelProviderId) {
-    throw assistantProviderError(
+    throw aiConnectionError(
       "vibe64_ai_provider_unknown",
       "Choose a provider from the current OpenCode catalog."
     );
@@ -73,7 +70,7 @@ function assistantProviderPolicy(provider = {}) {
   const configured = ASSISTANT_PROVIDER_POLICIES[modelProviderId] || {};
   const defaultModelId = text(configured.defaultModelId || provider.defaultModelId);
   if (!defaultModelId) {
-    throw assistantProviderError(
+    throw aiConnectionError(
       "vibe64_ai_provider_default_model_missing",
       "OpenCode did not identify a default model for this provider.",
       409
@@ -100,5 +97,6 @@ function assistantProviderPolicy(provider = {}) {
 
 export {
   OPENCODE_NATIVE_ENDPOINT_CODE,
+  ZAI_FREE_MODEL_ID,
   assistantProviderPolicy
 };

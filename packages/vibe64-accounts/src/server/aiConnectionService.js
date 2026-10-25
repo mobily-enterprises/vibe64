@@ -1,9 +1,6 @@
-import { AI_CONNECTION_PROVIDER_PATTERN } from "./aiConnectionStore.js";
+import { aiConnectionError } from "./aiConnectionError.js";
+import { AI_CONNECTION_PROVIDER_PATTERN } from "../shared/aiConnectionIdentity.js";
 import { assistantProviderPolicy } from "./assistantProviderPolicy.js";
-
-function aiConnectionError(code, message, statusCode = 400) {
-  return Object.assign(new Error(message), { code, statusCode });
-}
 
 function createAiConnectionService({ aiConnections, readAssistantCapabilities, initializeModelRouting } = {}) {
   function requireConnectionStore() {

@@ -1,8 +1,10 @@
 import { createEntityChangedActionEvent } from "@jskit-ai/kernel/server/actions";
 
-const VIBE64_ACCOUNTS_CHANGED_EVENT = "vibe64.accounts.changed";
-const VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT = "vibe64.accounts.auth-session.changed";
-const VIBE64_CONNECTIONS_CHANGED_EVENT = "vibe64.connections.changed";
+import {
+  VIBE64_ACCOUNTS_CHANGED_EVENT,
+  VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT,
+  VIBE64_CONNECTIONS_CHANGED_EVENT
+} from "../shared/accountEvents.js";
 const VIBE64_ACCOUNT_EVENT_ENTITY = "account";
 const VIBE64_ACCOUNT_EVENT_SOURCE = "vibe64";
 const VIBE64_ACCOUNT_REALTIME_AUDIENCE = "all_clients";
@@ -11,13 +13,44 @@ function normalizeAccountValue(value = "") {
   return String(value || "").trim();
 }
 
+function plainObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
+}
+
+// Every account, connection and auth-session change is a global
+// entity.changed event; only the actor, entity and realtime parts differ.
+function publishGlobalEntityChanged(events, {
+  actorId,
+  audience = VIBE64_ACCOUNT_REALTIME_AUDIENCE,
+  entity,
+  entityId,
+  event,
+  operation,
+  payload
+}) {
+  return events.publish({
+    ...(actorId === undefined ? {} : { actorId }),
+    source: VIBE64_ACCOUNT_EVENT_SOURCE,
+    entity,
+    operation: normalizeAccountValue(operation) || "updated",
+    entityId,
+    scope: {
+      kind: "global",
+      id: null
+    },
+    occurredAt: new Date().toISOString(),
+    realtime: {
+      event,
+      audience,
+      payload
+    },
+    type: "entity.changed"
+  });
+}
+
 function accountIdFromResult(result = {}) {
-  const source = result && typeof result === "object" && !Array.isArray(result)
-    ? result
-    : {};
-  const account = source.account && typeof source.account === "object" && !Array.isArray(source.account)
-    ? source.account
-    : null;
+  const source = plainObject(result) || {};
+  const account = plainObject(source.account);
   return normalizeAccountValue(
     source.accountId ||
     account?.id ||
@@ -27,16 +60,12 @@ function accountIdFromResult(result = {}) {
 }
 
 function accountIdFromInput(input = {}) {
-  const source = input && typeof input === "object" && !Array.isArray(input)
-    ? input
-    : {};
+  const source = plainObject(input) || {};
   return normalizeAccountValue(source.accountId || "");
 }
 
 function authSessionIdFromResult(result = {}) {
-  const source = result && typeof result === "object" && !Array.isArray(result)
-    ? result
-    : {};
+  const source = plainObject(result) || {};
   return normalizeAccountValue(source.id || source.sessionId || "");
 }
 
@@ -46,9 +75,7 @@ function accountIdFromExecution({ input = {}, result = {} } = {}) {
 
 function vibe64AccountsRealtimePayload({ input = {}, result = {} } = {}) {
   const accountId = accountIdFromResult(result) || accountIdFromInput(input);
-  const source = result && typeof result === "object" && !Array.isArray(result)
-    ? result
-    : {};
+  const source = plainObject(result) || {};
   return {
     ...(accountId ? { accountId } : {}),
     ...(typeof source.account?.connected === "boolean" ? { connected: source.account.connected } : {}),
@@ -66,9 +93,7 @@ function vibe64ConnectionsRealtimePayload(execution = {}) {
 }
 
 function vibe64AccountAuthSessionRealtimePayload(session = {}) {
-  const source = session && typeof session === "object" && !Array.isArray(session)
-    ? session
-    : {};
+  const source = plainObject(session) || {};
   const accountId = normalizeAccountValue(source.account?.id || source.account || "");
   const sessionId = normalizeAccountValue(source.id || source.sessionId || "");
   return {
@@ -148,11 +173,9 @@ function createVibe64AccountsChangedPublisher({ events = null } = {}) {
       return null;
     }
     const result = {
-      account: account && typeof account === "object" && !Array.isArray(account)
-        ? account
-        : {
-            id: normalizedAccountId
-          },
+      account: plainObject(account) || {
+        id: normalizedAccountId
+      },
       ...(authSessionId ? { id: authSessionId } : {}),
       ...(status || resultStatusFromAccount(account) ? { status: status || resultStatusFromAccount(account) } : {})
     };
@@ -166,44 +189,24 @@ function createVibe64AccountsChangedPublisher({ events = null } = {}) {
       ...(reason ? { reason } : {})
     };
 
-    const accountEvent = await events.publish({
+    const accountEvent = await publishGlobalEntityChanged(events, {
       actorId,
-      source: VIBE64_ACCOUNT_EVENT_SOURCE,
       entity: VIBE64_ACCOUNT_EVENT_ENTITY,
-      operation: normalizeAccountValue(operation) || "updated",
       entityId: normalizedAccountId,
-      scope: {
-        kind: "global",
-        id: null
-      },
-      occurredAt: new Date().toISOString(),
-      realtime: {
-        event: VIBE64_ACCOUNTS_CHANGED_EVENT,
-        audience: VIBE64_ACCOUNT_REALTIME_AUDIENCE,
-        payload: realtimePayload
-      },
-      type: "entity.changed"
+      event: VIBE64_ACCOUNTS_CHANGED_EVENT,
+      operation,
+      payload: realtimePayload
     });
-    await events.publish({
+    await publishGlobalEntityChanged(events, {
       actorId,
-      source: VIBE64_ACCOUNT_EVENT_SOURCE,
       entity: "connection",
-      operation: normalizeAccountValue(operation) || "updated",
       entityId: normalizedAccountId,
-      scope: {
-        kind: "global",
-        id: null
-      },
-      occurredAt: new Date().toISOString(),
-      realtime: {
-        event: VIBE64_CONNECTIONS_CHANGED_EVENT,
-        audience: VIBE64_ACCOUNT_REALTIME_AUDIENCE,
-        payload: {
-          ...realtimePayload,
-          connectionId: normalizedAccountId
-        }
-      },
-      type: "entity.changed"
+      event: VIBE64_CONNECTIONS_CHANGED_EVENT,
+      operation,
+      payload: {
+        ...realtimePayload,
+        connectionId: normalizedAccountId
+      }
     });
     return accountEvent;
   };
@@ -226,27 +229,17 @@ function createVibe64ConnectionsChangedPublisher({ events = null } = {}) {
     if (!normalizedConnectionId) {
       return null;
     }
-    return events.publish({
-      source: VIBE64_ACCOUNT_EVENT_SOURCE,
+    return publishGlobalEntityChanged(events, {
       entity: "connection",
-      operation: normalizeAccountValue(operation) || "updated",
       entityId: normalizedConnectionId,
-      scope: {
-        kind: "global",
-        id: null
-      },
-      occurredAt: new Date().toISOString(),
-      realtime: {
-        event: VIBE64_CONNECTIONS_CHANGED_EVENT,
-        audience: VIBE64_ACCOUNT_REALTIME_AUDIENCE,
-        payload: {
-          connectionId: normalizedConnectionId,
-          ...(typeof connected === "boolean" ? { connected } : {}),
-          ...(reason ? { reason: normalizeAccountValue(reason) } : {}),
-          ...(status ? { status: normalizeAccountValue(status) } : {})
-        }
-      },
-      type: "entity.changed"
+      event: VIBE64_CONNECTIONS_CHANGED_EVENT,
+      operation,
+      payload: {
+        connectionId: normalizedConnectionId,
+        ...(typeof connected === "boolean" ? { connected } : {}),
+        ...(reason ? { reason: normalizeAccountValue(reason) } : {}),
+        ...(status ? { status: normalizeAccountValue(status) } : {})
+      }
     });
   };
 }
@@ -268,34 +261,23 @@ function createVibe64AccountAuthSessionChangedPublisher({ events = null } = {}) 
     if (!payload.sessionId) {
       return null;
     }
-    return events.publish({
-      source: VIBE64_ACCOUNT_EVENT_SOURCE,
-      entity: "account-auth-session",
-      operation: normalizeAccountValue(operation) || "updated",
-      entityId: payload.sessionId,
+    return publishGlobalEntityChanged(events, {
       actorId: normalizedActorId || null,
-      scope: {
-        kind: "global",
-        id: null
-      },
-      occurredAt: new Date().toISOString(),
-      realtime: {
-        event: VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT,
-        audience: normalizedActorId ? "actor_user" : VIBE64_ACCOUNT_REALTIME_AUDIENCE,
-        payload: {
-          ...payload,
-          ...(reason ? { reason } : {})
-        }
-      },
-      type: "entity.changed"
+      audience: normalizedActorId ? "actor_user" : VIBE64_ACCOUNT_REALTIME_AUDIENCE,
+      entity: "account-auth-session",
+      entityId: payload.sessionId,
+      event: VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT,
+      operation,
+      payload: {
+        ...payload,
+        ...(reason ? { reason } : {})
+      }
     });
   };
 }
 
 function resultStatusFromAccount(account = null) {
-  return account && typeof account === "object" && !Array.isArray(account)
-    ? normalizeAccountValue(account.status)
-    : "";
+  return plainObject(account) ? normalizeAccountValue(account.status) : "";
 }
 
 export {

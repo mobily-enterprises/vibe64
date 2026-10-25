@@ -1,5 +1,6 @@
+import { ZAI_FREE_MODEL_ID } from "./assistantProviderPolicy.js";
+
 const ZAI_CHAT_COMPLETIONS_URL = "https://api.z.ai/api/paas/v4/chat/completions";
-const ZAI_FREE_MODEL_ID = "glm-4.7-flash";
 const ZAI_VERIFICATION_TIMEOUT_MS = 15_000;
 const ZAI_RETRYABLE_ERROR_CODES = new Set([
   "500",
@@ -74,6 +75,5 @@ async function verifyZaiConnection({ apiKey = "" } = {}) {
 }
 
 export {
-  verifyZaiConnection,
-  ZAI_FREE_MODEL_ID
+  verifyZaiConnection
 };

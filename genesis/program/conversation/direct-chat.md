@@ -1146,7 +1146,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-core/src/server/stateUpgrades/20261010-assistant-workflow.js`
 - `packages/vibe64-terminals/src/shared/assistantWorkPlan.js`
 - `packages/vibe64-terminals/src/server/agentPlanCommand.js`
-- `packages/vibe64-accounts/src/server/assistantPlanUpgrade.js`
+- `packages/vibe64-terminals/src/server/assistantPlanUpgrade.js`
 - `src/components/studio/vibe64-session/Vibe64WorkPlan.vue`
 - `packages/vibe64-terminals/src/server/actions.js`
 - `packages/vibe64-terminals/src/server/registerRoutes.js`

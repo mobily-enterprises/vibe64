@@ -11,9 +11,11 @@ import { createAiConnectionRuntime, configureAiConnectionRuntime } from "./aiCon
 import { createAiConnectionService } from "./aiConnectionService.js";
 import { createTeamAiReadiness } from "./teamAiReadiness.js";
 import {
+  blockedReason,
   createAccountsRuntime,
   createService,
-  GITHUB_ACCOUNT_MODE_LOCAL
+  GITHUB_ACCOUNT_MODE_LOCAL,
+  hasAccountSelection
 } from "./service.js";
 import {
   OPERATOR_CLIS,
@@ -51,19 +53,8 @@ function createDefaultAccountRuntime({
   });
 }
 
-function firstBlockedConnectionMessage(connections = []) {
-  const firstMissing = connections.find((connection) => connection.required && connection.connected !== true);
-  return firstMissing ? String(firstMissing.message || "") : "";
-}
-
-function inputHasProviderSelection(input = {}) {
-  return Object.hasOwn(input, "providerIds") ||
-    Object.hasOwn(input, "providers") ||
-    Object.hasOwn(input, "accountIds");
-}
-
 async function connectionAccountStatusInput(input = {}, project) {
-  if (inputHasProviderSelection(input)) {
+  if (hasAccountSelection(input)) {
     return input;
   }
   const currentProject = await project.readCurrentProject();
@@ -93,7 +84,7 @@ function createConnections({ accounts, project, listAssistantCapabilities = null
         return status;
       }
       const connections = Array.isArray(status?.accounts) ? [...status.accounts] : [];
-      if (!inputHasProviderSelection(input) && listAssistantCapabilities) {
+      if (!hasAccountSelection(input) && listAssistantCapabilities) {
         const catalog = await listAssistantCapabilities({ configuredOnly: "true", vibe64User: input.vibe64User });
         if (catalog?.ok === false) return catalog;
         const connected = (catalog.engines || []).some((engine) =>
@@ -108,7 +99,7 @@ function createConnections({ accounts, project, listAssistantCapabilities = null
       const ready = connections.every((connection) => connection.required !== true || connection.connected === true);
       return {
         ...status,
-        blockedReason: ready ? "" : firstBlockedConnectionMessage(connections),
+        blockedReason: ready ? "" : blockedReason(connections),
         connections,
         ready
       };
@@ -178,7 +169,6 @@ const Vibe64AccountsFeature = defineFeature({
         }
         return null;
       },
-      projectService: project,
       publishAccountChanged: createVibe64AccountsChangedPublisher({ events }),
       publishAuthSessionChanged: createVibe64AccountAuthSessionChangedPublisher({ events })
     });

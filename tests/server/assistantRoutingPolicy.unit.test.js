@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
-import { createService } from "@local/vibe64-accounts/server/service";
+import { createAccountsRuntime, createService } from "@local/vibe64-accounts/server/service";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { runWithPracticeProjectContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
@@ -326,9 +326,10 @@ test("Accounts reads and saves both setups for the owner only and refuses person
       { id: "opencode", transportId: "opencode_server", async capabilities() { return catalog(["deepseek"], "opencode"); } }],
     readAssistantAccess: async ({ modelProviderId }) => ({ available: true, ownerOnly: modelProviderId === "openai", connectionIdentity: `fixture-${modelProviderId}` })
   });
-  const service = createService({ systemRoot: root, targetRoot: root,
-    inspectRoutingConfiguration: (configuration, options) => manager.inspectRoutingConfiguration(configuration, options),
-    canManageCodex: ({ vibe64User } = {}) => vibe64User?.role === "owner" ? null : { ok: false, error: "Owner required" } });
+  const service = createService({
+    accountRuntime: createAccountsRuntime({ systemRoot: root, targetRoot: root,
+      canManageCodex: ({ vibe64User } = {}) => vibe64User?.role === "owner" ? null : { ok: false, error: "Owner required" } }),
+    inspectRoutingConfiguration: (configuration, options) => manager.inspectRoutingConfiguration(configuration, options) });
   assert.equal(service.readModelRoutingWorkflows, undefined, "the per-tool workflow read is gone");
   const owner = { role: "owner" };
   const data = await service.readModelRouting();

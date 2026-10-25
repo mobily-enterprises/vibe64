@@ -23,6 +23,8 @@
     "./server/assistantClaudeCommandUpgrade": "./src/server/assistantClaudeCommandUpgrade.js",
     "./server/assistantClaudeDeliveryUpgrade": "./src/server/assistantClaudeDeliveryUpgrade.js",
     "./server/assistantPlanProgressUpgrade": "./src/server/assistantPlanProgressUpgrade.js",
+    "./server/assistantPlanUpgrade": "./src/server/assistantPlanUpgrade.js",
+    "./server/completedDiscussionPlanUpgrade": "./src/server/completedDiscussionPlanUpgrade.js",
     "./server/teamSetupSessionUpgrade": "./src/server/teamSetupSessionUpgrade.js",
     "./server/sessionWorkTasks": "./src/server/sessionWorkTasks.js"
   },

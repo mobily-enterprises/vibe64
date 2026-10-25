@@ -1,6 +1,7 @@
 import path from "node:path";
 import { createAiConnectionStore } from "./aiConnectionStore.js";
-import { verifyZaiConnection, ZAI_FREE_MODEL_ID } from "./zaiConnectionVerifier.js";
+import { ZAI_FREE_MODEL_ID } from "./assistantProviderPolicy.js";
+import { verifyZaiConnection } from "./zaiConnectionVerifier.js";
 
 function createAiConnectionRuntime({ systemRoot, terminals, publishConnectionChanged = async () => null } = {}) {
   return createAiConnectionStore({

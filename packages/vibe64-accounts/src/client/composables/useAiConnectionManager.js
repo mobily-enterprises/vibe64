@@ -6,9 +6,8 @@ import { useVibe64Accounts } from "./useVibe64Accounts.js";
 import { AI_CONNECTIONS_ENDPOINT } from "../lib/accountsGateApi.js";
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { useAiConnections } from "./useAiConnections.js";
+import { AI_CONNECTION_PROVIDER_PATTERN, AI_CONNECTION_REVISION_PATTERN } from "../../shared/aiConnectionIdentity.js";
 
-const PROVIDER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
-const PROVIDER_REVISION_PATTERN = /^sha256:[a-f0-9]{64}$/u;
 const AI_CONNECTION_MANAGER_KEY = Symbol("vibe64.aiConnectionManager");
 
 // Every AI connection the owner has, and the state behind adding, managing,
@@ -102,7 +101,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
     if (!followRoute) return null;
     const id = queryText(route.query.providerId);
     const providerRevision = queryText(route.query.providerRevision);
-    if (!PROVIDER_ID_PATTERN.test(id) || !PROVIDER_REVISION_PATTERN.test(providerRevision)) {
+    if (!AI_CONNECTION_PROVIDER_PATTERN.test(id) || !AI_CONNECTION_REVISION_PATTERN.test(providerRevision)) {
       return null;
     }
     return {
@@ -315,7 +314,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
   });
   const editorCanSave = computed(() => Boolean(
     editorProviderId.value &&
-    PROVIDER_REVISION_PATTERN.test(editorProviderRevision.value) &&
+    AI_CONNECTION_REVISION_PATTERN.test(editorProviderRevision.value) &&
     editorConnectionPolicy.value &&
     editorApiKey.value.trim() &&
     !editorError.value &&
@@ -518,7 +517,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
       catalogFailed ||
       catalogLoadError.value ||
       provider?.id !== id ||
-      !PROVIDER_REVISION_PATTERN.test(String(provider.definitionRevision || ""))
+      !AI_CONNECTION_REVISION_PATTERN.test(String(provider.definitionRevision || ""))
     ) {
       catalogPreparationError.value = String(
         catalogLoadError.value || "The live OpenCode catalog did not return this provider."
@@ -741,7 +740,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
   });
 
   function openProvider(providerId, { providerLabel = "", providerRevision = "" } = {}) {
-    if (PROVIDER_ID_PATTERN.test(providerId) && PROVIDER_REVISION_PATTERN.test(providerRevision)) {
+    if (AI_CONNECTION_PROVIDER_PATTERN.test(providerId) && AI_CONNECTION_REVISION_PATTERN.test(providerRevision)) {
       void chooseProvider({ id: providerId, label: providerLabel || providerId, providerRevision });
     } else if (["codex", "claude"].includes(providerId)) manageConfiguredAi({ kind: providerId });
     else if (curatedCodexProvider(providerId)) manageConfiguredAi({ kind: "codex-provider", id: providerId });

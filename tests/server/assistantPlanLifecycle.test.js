@@ -9,7 +9,7 @@ import { promisify } from "node:util";
 import { manageWorkPlan, readWorkPlan, readWorkPlanPage, readWorkPlanHistory, workPlanPath, workPlanInstructions, planProgressUpgradeChanges } from "../../packages/vibe64-terminals/src/server/assistantWorkPlan.js";
 import { createAgentSessionCommandService, prepareAgentSessionCommand } from "../../packages/vibe64-terminals/src/server/agentSessionCommand.js";
 import { upgradePlanProgress } from "../../packages/vibe64-terminals/src/server/assistantPlanProgressUpgrade.js";
-import { upgradePlanSession, upgradeAssistantPlans } from "../../packages/vibe64-accounts/src/server/assistantPlanUpgrade.js";
+import { upgradePlanSession, upgradeAssistantPlans } from "../../packages/vibe64-terminals/src/server/assistantPlanUpgrade.js";
 import { createVibe64SessionStore, VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 
 async function fixture(t) {

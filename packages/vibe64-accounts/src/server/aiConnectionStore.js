@@ -3,6 +3,11 @@ import { chmod, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promi
 import path from "node:path";
 
 import {
+  AI_CONNECTION_PROVIDER_PATTERN,
+  AI_CONNECTION_REVISION_PATTERN
+} from "../shared/aiConnectionIdentity.js";
+import { aiConnectionError } from "./aiConnectionError.js";
+import {
   OPENCODE_NATIVE_ENDPOINT_CODE,
   assistantProviderPolicy
 } from "./assistantProviderPolicy.js";
@@ -24,8 +29,6 @@ const ZEN_MODEL_CHECK_STATUSES = new Set([
   "starting"
 ]);
 const ZAI_PROVIDER_ID = "zai";
-const AI_CONNECTION_PROVIDER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
-const AI_CONNECTION_REVISION_PATTERN = /^sha256:[a-f0-9]{64}$/u;
 const AI_CONNECTION_KEY_MAXIMUM_CHARACTERS = 16_384;
 const AI_CONNECTION_LABEL_MAXIMUM_CHARACTERS = 160;
 
@@ -43,10 +46,7 @@ function containsControlCharacter(value = "") {
 function providerId(value = "") {
   const id = text(value);
   if (!AI_CONNECTION_PROVIDER_PATTERN.test(id)) {
-    const error = new Error("AI provider id is invalid.");
-    error.code = "vibe64_ai_provider_invalid";
-    error.statusCode = 400;
-    throw error;
+    throw aiConnectionError("vibe64_ai_provider_invalid", "AI provider id is invalid.", 400);
   }
   return id;
 }
@@ -54,10 +54,7 @@ function providerId(value = "") {
 function providerRevision(value = "") {
   const revision = text(value);
   if (!AI_CONNECTION_REVISION_PATTERN.test(revision)) {
-    const error = new Error("Refresh the provider catalog before saving this API key.");
-    error.code = "vibe64_ai_provider_revision_invalid";
-    error.statusCode = 409;
-    throw error;
+    throw aiConnectionError("vibe64_ai_provider_revision_invalid", "Refresh the provider catalog before saving this API key.", 409);
   }
   return revision;
 }
@@ -69,10 +66,7 @@ function apiKey(value = "") {
     Array.from(key).length > AI_CONNECTION_KEY_MAXIMUM_CHARACTERS ||
     containsControlCharacter(key)
   ) {
-    const error = new Error("API key is invalid.");
-    error.code = "vibe64_ai_api_key_invalid";
-    error.statusCode = 400;
-    throw error;
+    throw aiConnectionError("vibe64_ai_api_key_invalid", "API key is invalid.", 400);
   }
   return key;
 }
@@ -87,10 +81,7 @@ function connectionLabel(value = "", fallback = "") {
     Array.from(label).length > AI_CONNECTION_LABEL_MAXIMUM_CHARACTERS ||
     containsControlCharacter(label)
   ) {
-    const error = new Error("AI provider label is invalid.");
-    error.code = "vibe64_ai_provider_label_invalid";
-    error.statusCode = 400;
-    throw error;
+    throw aiConnectionError("vibe64_ai_provider_label_invalid", "AI provider label is invalid.", 400);
   }
   return label;
 }
@@ -286,16 +277,6 @@ function stateConnection(state = {}, id = "") {
   return stored ? { ...stored, preferred: state.preferredProviderId === id } : null;
 }
 
-function connectionVerificationError(code, message, statusCode, fieldErrors = null) {
-  const error = new Error(message);
-  error.code = code;
-  error.statusCode = statusCode;
-  if (fieldErrors) {
-    error.fieldErrors = fieldErrors;
-  }
-  return error;
-}
-
 async function verifyOpenCodeConnection({
   apiKey: key,
   policy,
@@ -319,7 +300,7 @@ async function verifyOpenCodeConnection({
       Number(error?.statusCode) === 409 ||
       error?.code === "vibe64_assistant_catalog_stale"
     ) {
-      throw connectionVerificationError(
+      throw aiConnectionError(
         "vibe64_ai_provider_policy_stale",
         `${policy.productLabel} changed in OpenCode. Refresh its setup before connecting.`,
         409
@@ -336,7 +317,7 @@ async function verifyOpenCodeConnection({
     const unavailable = error?.retryable === true || Number(error?.statusCode) >= 500;
     if (unavailable) {
       const message = `${providerReason || `${policy.productLabel} could not be reached to verify this key.`} Nothing was saved; try again later.`;
-      throw connectionVerificationError(
+      throw aiConnectionError(
         "vibe64_ai_key_verification_unavailable",
         message,
         503,
@@ -346,7 +327,7 @@ async function verifyOpenCodeConnection({
     const message = providerReason
       ? `${providerReason} Nothing was saved. Check billing and quota, then try again.`
       : `${policy.productLabel} rejected this key or could not complete a test request. Check the key, billing, and quota, then try again.`;
-    throw connectionVerificationError(
+    throw aiConnectionError(
       "vibe64_ai_api_key_rejected",
       message,
       422,
@@ -381,10 +362,7 @@ function createAiConnectionStore({
         return normalizedState({});
       }
       if (error instanceof SyntaxError) {
-        const malformed = new Error("AI connection state is not valid JSON.");
-        malformed.code = "vibe64_ai_connection_state_malformed";
-        malformed.statusCode = 500;
-        throw malformed;
+        throw aiConnectionError("vibe64_ai_connection_state_malformed", "AI connection state is not valid JSON.", 500);
       }
       throw error;
     }
@@ -414,7 +392,7 @@ function createAiConnectionStore({
     const pending = mutation.catch(() => null).then(async () => {
       const state = await readState();
       if (Object.values(state.connections).some((connection) => Object.hasOwn(connection, "helperModelId"))) {
-        throw connectionVerificationError("vibe64_ai_routing_upgrade_required",
+        throw aiConnectionError("vibe64_ai_routing_upgrade_required",
           "Stop the services and run the application state upgrade before changing AI connections.", 409);
       }
       return operation();
@@ -610,12 +588,7 @@ function createAiConnectionStore({
       }
       const route = connectionPolicy(connection, id);
       if (!route) {
-        const error = new Error(
-          "The owner must choose this provider's billing endpoint before it can be used."
-        );
-        error.code = "vibe64_ai_endpoint_selection_required";
-        error.statusCode = 409;
-        throw error;
+        throw aiConnectionError("vibe64_ai_endpoint_selection_required", "The owner must choose this provider's billing endpoint before it can be used.", 409);
       }
       return {
         apiKey: connection.apiKey,
@@ -632,7 +605,7 @@ function createAiConnectionStore({
       const key = apiKey(input.apiKey);
       const revision = providerRevision(input.providerRevision);
       if (id === OPENCODE_ZEN_PROVIDER_ID && key === "public") {
-        throw connectionVerificationError(
+        throw aiConnectionError(
           "vibe64_ai_public_key_unsupported",
           "Vibe64 does not use OpenCode Zen's account-free access. Paste your Zen API key.",
           400,
@@ -643,10 +616,7 @@ function createAiConnectionStore({
         text(provider?.id) !== id ||
         text(provider?.definitionRevision) !== revision
       ) {
-        const error = new Error("Refresh the provider catalogue before saving this API key.");
-        error.code = "vibe64_ai_provider_revision_changed";
-        error.statusCode = 409;
-        throw error;
+        throw aiConnectionError("vibe64_ai_provider_revision_changed", "Refresh the provider catalogue before saving this API key.", 409);
       }
       const route = assistantProviderPolicy(provider);
       return mutate(async () => {
@@ -701,10 +671,7 @@ function createAiConnectionStore({
         const change = { modelProviderId: id, reason: previous ? "replaced" : "created" };
         await withConnectionChange(change, () => writeState(state));
         await onConnectionChanged(change);
-        return publicConnection({
-          ...connection,
-          preferred: state.preferredProviderId === id
-        }, id);
+        return publicConnection(stateConnection(state, id), id);
       });
     },
     async updateModelAccess(value = "", options = {}) {
@@ -715,34 +682,22 @@ function createAiConnectionStore({
           : ""
       );
       if (![ZAI_PROVIDER_ID, OPENCODE_ZEN_PROVIDER_ID].includes(id)) {
-        const error = new Error("This provider does not have configurable model access.");
-        error.code = "vibe64_ai_model_access_not_configurable";
-        error.statusCode = 400;
-        throw error;
+        throw aiConnectionError("vibe64_ai_model_access_not_configurable", "This provider does not have configurable model access.", 400);
       }
 
       if (id === ZAI_PROVIDER_ID) {
         if (!["disable-additional", "enable-all"].includes(requestedOperation)) {
-          const error = new Error("Choose whether all Z.AI models should be unlocked.");
-          error.code = "vibe64_ai_model_access_invalid";
-          error.statusCode = 400;
-          throw error;
+          throw aiConnectionError("vibe64_ai_model_access_invalid", "Choose whether all Z.AI models should be unlocked.", 400);
         }
         return mutate(async () => {
           const state = await readState();
           const connection = state.connections[id];
           if (!connection) {
-            const error = new Error("Connect a Z.AI API key before changing model access.");
-            error.code = "vibe64_ai_connection_required";
-            error.statusCode = 409;
-            throw error;
+            throw aiConnectionError("vibe64_ai_connection_required", "Connect a Z.AI API key before changing model access.", 409);
           }
           const nextUnlocked = requestedOperation === "enable-all";
           if (connection.modelAccessUnlocked === nextUnlocked) {
-            return publicConnection({
-              ...connection,
-              preferred: state.preferredProviderId === id
-            }, id);
+            return publicConnection(stateConnection(state, id), id);
           }
           const now = new Date().toISOString();
           connection.modelAccessUnlocked = nextUnlocked;
@@ -753,42 +708,27 @@ function createAiConnectionStore({
             modelProviderId: id,
             reason: "model-access-updated"
           });
-          return publicConnection({
-            ...connection,
-            preferred: state.preferredProviderId === id
-          }, id);
+          return publicConnection(stateConnection(state, id), id);
         });
       }
 
       if (!["cancel-check", "check-available", "disable-additional", "enable-all"].includes(requestedOperation)) {
-        const error = new Error("Choose how OpenCode Zen models should be enabled.");
-        error.code = "vibe64_ai_model_access_invalid";
-        error.statusCode = 400;
-        throw error;
+        throw aiConnectionError("vibe64_ai_model_access_invalid", "Choose how OpenCode Zen models should be enabled.", 400);
       }
 
       if (requestedOperation === "check-available") {
         if (typeof readModelIds !== "function") {
-          const error = new Error("This Vibe64 host cannot read the current Zen model list.");
-          error.code = "vibe64_ai_model_check_unavailable";
-          error.statusCode = 503;
-          throw error;
+          throw aiConnectionError("vibe64_ai_model_check_unavailable", "This Vibe64 host cannot read the current Zen model list.", 503);
         }
         let startedJob = null;
         const connection = await mutate(async () => {
           const state = await readState();
           const current = state.connections[id];
           if (!current) {
-            const error = new Error("Add a Zen API key before checking model access.");
-            error.code = "vibe64_ai_connection_required";
-            error.statusCode = 409;
-            throw error;
+            throw aiConnectionError("vibe64_ai_connection_required", "Add a Zen API key before checking model access.", 409);
           }
           if (zenModelChecks.has(id)) {
-            return publicConnection({
-              ...current,
-              preferred: state.preferredProviderId === id
-            }, id, { activeZenCheck: true });
+            return publicConnection(stateConnection(state, id), id, { activeZenCheck: true });
           }
           const now = new Date().toISOString();
           startedJob = {
@@ -817,10 +757,7 @@ function createAiConnectionStore({
           current.updatedAt = now;
           state.updatedAt = now;
           await writeState(state);
-          return publicConnection({
-            ...current,
-            preferred: state.preferredProviderId === id
-          }, id, { activeZenCheck: true });
+          return publicConnection(stateConnection(state, id), id, { activeZenCheck: true });
         });
         if (startedJob) {
           try {
@@ -851,10 +788,7 @@ function createAiConnectionStore({
           const state = await readState();
           const connection = state.connections[id];
           if (!connection) {
-            const error = new Error("Add a Zen API key before changing model access.");
-            error.code = "vibe64_ai_connection_required";
-            error.statusCode = 409;
-            throw error;
+            throw aiConnectionError("vibe64_ai_connection_required", "Add a Zen API key before changing model access.", 409);
           }
           const now = new Date().toISOString();
           if (connection.zenModelCheck) {
@@ -868,10 +802,7 @@ function createAiConnectionStore({
             state.updatedAt = now;
             await writeState(state);
           }
-          return publicConnection({
-            ...connection,
-            preferred: state.preferredProviderId === id
-          }, id, { activeZenCheck: Boolean(running) });
+          return publicConnection(stateConnection(state, id), id, { activeZenCheck: Boolean(running) });
         });
       }
 
@@ -884,10 +815,7 @@ function createAiConnectionStore({
         const state = await readState();
         const connection = state.connections[id];
         if (!connection) {
-          const error = new Error("Add a Zen API key before changing model access.");
-          error.code = "vibe64_ai_connection_required";
-          error.statusCode = 409;
-          throw error;
+          throw aiConnectionError("vibe64_ai_connection_required", "Add a Zen API key before changing model access.", 409);
         }
         const mode = requestedOperation === "enable-all" ? "all" : "recommended";
         const now = new Date().toISOString();
@@ -911,10 +839,7 @@ function createAiConnectionStore({
           modelProviderId: id,
           reason: "model-access-updated"
         });
-        return publicConnection({
-          ...connection,
-          preferred: state.preferredProviderId === id
-        }, id, { activeZenCheck: false });
+        return publicConnection(stateConnection(state, id), id, { activeZenCheck: false });
       });
     }
   });
@@ -923,8 +848,6 @@ function createAiConnectionStore({
 export {
   AI_CONNECTION_KEY_MAXIMUM_CHARACTERS,
   AI_CONNECTION_LABEL_MAXIMUM_CHARACTERS,
-  AI_CONNECTION_PROVIDER_PATTERN,
-  AI_CONNECTION_REVISION_PATTERN,
   AI_CONNECTION_STORE_VERSION,
   OPENCODE_ZEN_PROVIDER_ID,
   RETIRED_ZEN_MODEL_ID,

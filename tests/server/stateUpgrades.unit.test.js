@@ -10,8 +10,8 @@ import { BASELINE_LEDGER_EXISTS, BASELINE_STATE_WITHOUT_LEDGER, recordStateUpgra
 import { upgradeSessionConversations, inspectConversationUndoRetirement } from "../../packages/vibe64-runtime/src/server/conversationStorageUpgrade.js";
 import { upgradeColleagueConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeContinuity, upgradeColleagueNativeInstructions, repairColleagueRetiredOperation, upgradeColleagueHistoricalInteractiveContinuity } from "../../packages/vibe64-colleague/src/server/conversationUpgrade.js";
 import { upgradeAssistantHelpers } from "../../packages/vibe64-accounts/src/server/assistantHelperUpgrade.js";
-import { upgradeAssistantPlans } from "../../packages/vibe64-accounts/src/server/assistantPlanUpgrade.js";
-import { upgradeCompletedDiscussionPlan } from "../../packages/vibe64-accounts/src/server/completedDiscussionPlanUpgrade.js";
+import { upgradeAssistantPlans } from "../../packages/vibe64-terminals/src/server/assistantPlanUpgrade.js";
+import { upgradeCompletedDiscussionPlan } from "../../packages/vibe64-terminals/src/server/completedDiscussionPlanUpgrade.js";
 import { upgradeAssistantRoles } from "../../packages/vibe64-accounts/src/server/assistantRoleUpgrade.js";
 import { upgradeAssistantRouting } from "../../packages/vibe64-accounts/src/server/assistantRoutingUpgrade.js";
 import { upgradeIndependentProviderCredentials as clearProviderCredentials } from "../../packages/vibe64-accounts/src/server/providerCredentialsUpgrade.js";

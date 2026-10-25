@@ -2,7 +2,8 @@ import { ASSISTANT_SETUP_ROLES } from "@local/vibe64-runtime/shared/assistantRou
 import { CURATED_CODEX_PROVIDERS } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { createSchema } from "json-rest-schema";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
-import { AI_CONNECTION_PROVIDER_PATTERN } from "./aiConnectionStore.js";
+import { VIBE64_ASSISTANT_CATALOG_REVISION_PATTERN } from "@local/vibe64-runtime/shared";
+import { AI_CONNECTION_PROVIDER_PATTERN } from "../shared/aiConnectionIdentity.js";
 
 const accountsReadInputValidator = deepFreeze({
   schema: createSchema({
@@ -73,7 +74,7 @@ const modelRoutingSelectionSchema = createSchema({
   engineId: { ...routingEngine, required: true },
   agentId: routingIdentifier, modelProviderId: routingIdentifier, modelId: routingIdentifier,
   variantId: { ...routingIdentifier, minLength: 0 },
-  catalogRevision: { type: "string", pattern: /^sha256:[a-f0-9]{64}$/u, required: true },
+  catalogRevision: { type: "string", pattern: VIBE64_ASSISTANT_CATALOG_REVISION_PATTERN, required: true },
   selectionSource: { type: "string", enum: ["recommended", "explicit"], required: true }
 });
 // A role value is a selection, null (off) or { follows }; the routing store validates which.

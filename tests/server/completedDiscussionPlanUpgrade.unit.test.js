@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import test from "node:test";
-import { completeDiscussionPlan } from "../../packages/vibe64-accounts/src/server/completedDiscussionPlanUpgrade.js";
+import { completeDiscussionPlan } from "../../packages/vibe64-terminals/src/server/completedDiscussionPlanUpgrade.js";
 
 const digest = text => createHash("sha256").update(text).digest("hex");
 const plan = "Status: drafting\n# Approved work\n\nImplementation evidence stays verbatim.\n";

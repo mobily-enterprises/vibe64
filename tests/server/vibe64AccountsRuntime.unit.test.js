@@ -2106,9 +2106,10 @@ test("without runtime packs a missing Claude Code is reported with its installer
   try {
     await withTempDir(async (root) => {
       const requests = [];
+      const env = { ...process.env, HOME: path.join(root, "home"), VIBE64_CLAUDE_COMMAND: path.join(root, "absent", "claude") };
       const service = createService({
-        daemonHome: path.join(root, "home"), systemRoot: path.join(root, "system"),
-        env: { ...process.env, HOME: path.join(root, "home"), VIBE64_CLAUDE_COMMAND: path.join(root, "absent", "claude") },
+        accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "home"), env, systemRoot: path.join(root, "system") }),
+        env,
         runAuthTerminalCommand: async (input) => { requests.push(input); return { ok: true }; }
       });
       const status = await service.getStatus({ accountIds: ["claude"] });
@@ -2133,7 +2134,7 @@ test("Claude authentication is owner-only and launches native login after runtim
     const invalidations = [];
     let cleanupAllowed = true;
     const service = createService({
-      daemonHome: path.join(root, "home"), systemRoot: path.join(root, "system"),
+      accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "home"), systemRoot: path.join(root, "system") }),
       invalidateAgentRuntimes: async (input) => {
         invalidations.push(input);
         return { ok: cleanupAllowed, code: cleanupAllowed ? "" : "cleanup_unconfirmed" };
@@ -2172,7 +2173,7 @@ test("Claude login receives its browser link as JSON and accepts code input only
     const manualUrl = new URL(authUrl);
     manualUrl.searchParams.set("redirect_uri", "https://platform.claude.com/oauth/code/callback");
     const service = createService({
-      daemonHome: path.join(root, "home"), systemRoot: path.join(root, "system"),
+      accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "home"), systemRoot: path.join(root, "system") }),
       runAuthTerminalCommand: async (input) => {
         launches += 1;
         request = input;
@@ -2227,7 +2228,7 @@ test("Claude login announces its browser link when it lands, after the CLI's las
   await withTempDir(async (root) => {
     const published = [];
     const service = createService({
-      daemonHome: path.join(root, "home"), systemRoot: path.join(root, "system"),
+      accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "home"), systemRoot: path.join(root, "system") }),
       publishAuthSessionChanged: async (session) => { published.push(session); },
       // Like the real CLI: print the prompt, then run BROWSER, then wait silently.
       runAuthTerminalCommand: (input) => startGatewayAuthTestTerminal(input, {
