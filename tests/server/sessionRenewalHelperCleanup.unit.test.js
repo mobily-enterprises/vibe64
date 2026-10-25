@@ -41,6 +41,7 @@ for (const kind of ["hints", "database"]) {
         return cleanupReady ? { ok: true } : { ok: false, code: "cleanup_pending", error: "Native process still owned" };
       };
       const projectService = { createRuntime: async () => runtime, createSessionStore: async () => store,
+        localDatabaseServers: async () => ({ managed: true, databases: [] }),
         sessionDatabaseEnvironment: () => assert.fail("Cleanup must not connect to a database") };
       const service = kind === "hints"
         ? createSessionPromptHintsService({ projectService, agent: { deleteEphemeralConversation: remove,

@@ -5,6 +5,8 @@
 // else is behind the guide link, which opens this computer's setup guide.
 // Checked on 2026-10-23.
 
+import { SQL_QUOTING } from "./sqlQuoting.js";
+
 const SUDO_NOTE = "You'll be asked for your computer password. Nothing shows while you type.";
 const SETUP_GUIDES = Object.freeze({
   apt: "https://github.com/mobily-enterprises/vibe64/blob/main/docs/colleague-usage/set-up-linux.md#databases",
@@ -44,21 +46,8 @@ const SERVERS = Object.freeze({
   }
 });
 
-function mysqlName(value = "") {
-  return `\`${String(value).replaceAll("`", "``")}\``;
-}
-
-function mysqlString(value = "") {
-  return `'${String(value).replaceAll("\\", "\\\\").replaceAll("'", "''")}'`;
-}
-
-function pgName(value = "") {
-  return `"${String(value).replaceAll("\"", "\"\"")}"`;
-}
-
-function pgString(value = "") {
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
+const { quoteIdentifier: mysqlName, stringLiteral: mysqlString } = SQL_QUOTING.mysql;
+const { quoteIdentifier: pgName, stringLiteral: pgString } = SQL_QUOTING.postgresql;
 
 function mysqlStatements({ database, username, password, testDatabases }) {
   const user = `${mysqlString(username)}@'%'`;

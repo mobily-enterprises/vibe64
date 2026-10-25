@@ -7,7 +7,8 @@ import {
 } from "@local/vibe64-core/server/core";
 
 import {
-  databaseDialect
+  databaseDialect,
+  driverText as text
 } from "./databaseDialect.js";
 import {
   assertSingleStatement,
@@ -18,12 +19,8 @@ const QUERY_TIMEOUT_MS = 20_000;
 const QUERY_ROW_LIMIT = 500;
 const QUERY_RESPONSE_BYTES = 2 * 1024 * 1024;
 
-function text(value = "") {
-  if (Buffer.isBuffer(value) || value instanceof Uint8Array) {
-    return Buffer.from(value).toString("utf8");
-  }
-  return String(value ?? "").trim();
-}
+// The object kinds that hold their own rows, so accept row insert and delete.
+const PHYSICAL_TABLE_KINDS = new Set(["table", "partitioned-table", "foreign-table"]);
 
 function tableKey(schema = "", name = "") {
   return `${text(schema)}\u0000${text(name)}`;
@@ -295,7 +292,7 @@ function rowEditMetadata(row = [], columns = []) {
     if (
       !identity.key ||
       ambiguousTables.has(table.qualifiedName) ||
-      !["foreign-table", "partitioned-table", "table"].includes(table.kind)
+      !PHYSICAL_TABLE_KINDS.has(table.kind)
     ) {
       return [];
     }
@@ -547,7 +544,7 @@ async function insertDatabaseRow({
   values = {}
 } = {}) {
   const table = schemaTable(schema, tableInput);
-  if (table.kind !== "table" && table.kind !== "partitioned-table" && table.kind !== "foreign-table") {
+  if (!PHYSICAL_TABLE_KINDS.has(table.kind)) {
     throw vibe64Error("Insert requires a physical table.", "vibe64_database_insert_table_required");
   }
   const record = insertRecord(table, values, knex);
@@ -573,7 +570,7 @@ async function deleteDatabaseRow({
     throw vibe64Error("Confirm the source-row deletion first.", "vibe64_database_delete_confirmation_required");
   }
   const table = schemaTable(schema, tableInput);
-  if (table.kind !== "table" && table.kind !== "partitioned-table" && table.kind !== "foreign-table") {
+  if (!PHYSICAL_TABLE_KINDS.has(table.kind)) {
     throw vibe64Error("Delete requires a physical table.", "vibe64_database_delete_table_required");
   }
   const identity = validatedKey(table, key);

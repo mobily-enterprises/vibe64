@@ -4,13 +4,7 @@ import {
   SQLite
 } from "@codemirror/lang-sql";
 
-function quotedIdentifier(value = "", delimiter = "\"") {
-  const name = String(value || "");
-  if (!name) {
-    throw new TypeError("A database identifier is missing.");
-  }
-  return `${delimiter}${name.replaceAll(delimiter, delimiter.repeat(2))}${delimiter}`;
-}
+import { SQL_QUOTING } from "../shared/sqlQuoting.js";
 
 function defineDatabaseClientDialect(definition = {}) {
   if (
@@ -25,21 +19,16 @@ function defineDatabaseClientDialect(definition = {}) {
 
 const DATABASE_CLIENT_DIALECTS = Object.freeze({
   sqlite: defineDatabaseClientDialect({
-    codeMirrorDialect: SQLite,
-    quoteIdentifier: (value) => quotedIdentifier(value),
-    stringLiteral: (value) => `'${String(value).replaceAll("'", "''")}'`
+    ...SQL_QUOTING.sqlite,
+    codeMirrorDialect: SQLite
   }),
   mysql: defineDatabaseClientDialect({
-    codeMirrorDialect: MariaSQL,
-    quoteIdentifier: (value) => quotedIdentifier(value, "`"),
-    stringLiteral: (value) => `'${String(value)
-      .replaceAll("\\", "\\\\")
-      .replaceAll("'", "''")}'`
+    ...SQL_QUOTING.mysql,
+    codeMirrorDialect: MariaSQL
   }),
   postgresql: defineDatabaseClientDialect({
-    codeMirrorDialect: PostgreSQL,
-    quoteIdentifier: (value) => quotedIdentifier(value, "\""),
-    stringLiteral: (value) => `'${String(value).replaceAll("'", "''")}'`
+    ...SQL_QUOTING.postgresql,
+    codeMirrorDialect: PostgreSQL
   })
 });
 

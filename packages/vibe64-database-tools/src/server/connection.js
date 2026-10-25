@@ -3,6 +3,7 @@ import path from "node:path";
 import { SQLiteClient } from "./sqliteClient.js";
 
 import {
+  normalizeText,
   vibe64Error
 } from "@local/vibe64-core/server/core";
 
@@ -12,10 +13,6 @@ import {
 
 const DATABASE_POOL_MAX = 3;
 const DATABASE_POOL_ACQUIRE_TIMEOUT_MS = 8_000;
-
-function text(value = "") {
-  return String(value ?? "").trim();
-}
 
 function urlProtocol(value = "") {
   if (!value) {
@@ -50,9 +47,9 @@ function safeConnectionUrl(connectionUrl = "", engine = "") {
 }
 
 function structuredConnection(endpoint = {}, dialect = {}) {
-  const host = text(endpoint.host);
-  const database = text(endpoint.database);
-  const user = text(endpoint.username);
+  const host = normalizeText(endpoint.host);
+  const database = normalizeText(endpoint.database);
+  const user = normalizeText(endpoint.username);
   const password = String(endpoint.password ?? "");
   const port = Number(endpoint.port);
   if (!host || !database || !user || !Number.isInteger(port) || port < 1 || port > 65535) {
@@ -74,7 +71,7 @@ function structuredConnection(endpoint = {}, dialect = {}) {
 function resolveDatabaseConnection(endpoint = {}) {
   const dialect = databaseDialect(endpoint.kind);
   if (dialect.engine === "sqlite") {
-    if (!path.isAbsolute(text(endpoint.database)) || text(endpoint.database).includes("\0") ||
+    if (!path.isAbsolute(normalizeText(endpoint.database)) || normalizeText(endpoint.database).includes("\0") ||
         typeof endpoint.readOnly !== "boolean" ||
         Object.keys(endpoint).some((name) => !["kind", "database", "readOnly"].includes(name))) {
       throw vibe64Error("SQLite requires an absolute filename and explicit access mode.", "vibe64_session_database_configuration_incomplete");
@@ -87,7 +84,7 @@ function resolveDatabaseConnection(endpoint = {}) {
       label: dialect.label
     });
   }
-  const connectionUrl = text(endpoint.url);
+  const connectionUrl = normalizeText(endpoint.url);
   if (connectionUrl) {
     const protocol = urlProtocol(connectionUrl);
     if (!dialect.urlProtocols.includes(protocol) || Object.keys(endpoint).some((name) => !["kind", "url"].includes(name))) {
@@ -111,7 +108,7 @@ function resolveDatabaseConnection(endpoint = {}) {
   }
   const name = connectionUrl
     ? databaseNameFromUrl(connectionUrl)
-    : text(endpoint.database);
+    : normalizeText(endpoint.database);
   if (!name) {
     throw vibe64Error(
       "The session database name is missing.",

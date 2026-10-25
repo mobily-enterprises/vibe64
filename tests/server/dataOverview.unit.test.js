@@ -174,6 +174,7 @@ test("real source-editor persistence creates complete JSON, detects stale edits 
   const projectService = {
     createRuntime: async () => ({ getSession: async () => session, store: { runSessionExclusive: async (_id, _lock, operation) => ({ acquired: true, value: await operation() }) } }),
     createSessionStore: async () => ({ readSession: async () => session, readArtifact: async (_id, key) => key === "database/schema.json" ? JSON.stringify(schema) : "" }),
+    localDatabaseServers: async () => ({ managed: true, databases: [] }),
     sessionDatabaseEnvironment: async () => ({ databaseToolEnvironment: { contract: "vibe64.database-tool-environment.v1", kind: "postgresql", read: { host: "127.0.0.1", port: 5432, database: "erd_test", username: "reader" }, write: { host: "127.0.0.1", port: 5432, database: "erd_test", username: "writer" } } })
   };
   const sourceEditor = createSourceEditor({ projectService, temporaryRoot: root });
@@ -276,6 +277,7 @@ test("one persisted MySQL overview survives session database changes, UI saves a
       readSession: async (id) => sessions.get(id),
       readArtifact: async (id, key) => key === "database/schema.json" ? JSON.stringify(schemas.get(id)) : ""
     }),
+    localDatabaseServers: async () => ({ managed: true, databases: [] }),
     sessionDatabaseEnvironment: async ({ sessionId }) => {
       const endpoint = { host: "127.0.0.1", port: 3306, database: schemas.get(sessionId).database };
       return { databaseToolEnvironment: {

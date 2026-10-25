@@ -32,7 +32,7 @@ to Prepare workspace or Retry in session chat. Derived bindings or existing
 service metadata alone do not establish provisioned database users. Application
 migrations still belong to declared Workspace setup, not schema refresh.
 
-All thirteen database HTTP operations invoke their named actions. Those actions
+All fourteen database HTTP operations invoke their named actions. Those actions
 own the input contract, including required session/query identities and explicit
 read-only/confirmation fields. The shared host context resolves project access
 and the acting person for HTTP and automation; request bodies cannot choose an

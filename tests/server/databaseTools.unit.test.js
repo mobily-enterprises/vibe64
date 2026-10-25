@@ -40,7 +40,6 @@ const sharedDatabaseSelection = { engineId: "opencode", agentId: "build", modelP
 
 import {
   DATABASE_ASSISTANT_OUTPUT_SCHEMA,
-  DATABASE_ASSISTANT_SCHEMA_SEARCH_MAX_CHARACTERS,
   DATABASE_ASSISTANT_TURN_TIMEOUT_MS,
   databaseSchemaPrompt,
   databaseAssistantAvailability,
@@ -63,6 +62,7 @@ import {
 import {
   MAX_DATABASE_SCHEMA_MATCHES,
   MAX_DATABASE_SCHEMA_RESULT_BYTES,
+  MAX_DATABASE_SCHEMA_SEARCH_CHARACTERS,
   databaseSchemaSummary,
   searchDatabaseSchema
 } from "../../packages/vibe64-database-tools/src/server/schemaAccess.js";
@@ -809,7 +809,7 @@ test("database assistant uses one selected-provider secondary conversation and a
   assert.equal(finalSchema.properties.answer.maxLength, 1_200);
   assert.equal(
     schemaTool.properties.arguments.properties.search.maxLength,
-    DATABASE_ASSISTANT_SCHEMA_SEARCH_MAX_CHARACTERS
+    MAX_DATABASE_SCHEMA_SEARCH_CHARACTERS
   );
   assert.equal(finalSchema.properties.sql.maxLength, 1_000);
   assert.equal(queryTool.properties.arguments.properties.sql.maxLength, 1_000);
@@ -1111,7 +1111,7 @@ test("schema access lists and bounds normalized objects identically across engin
   assert.equal(matches.truncated, true);
   assert.equal(matches.objects.every((table) => table.schema === "catalogue"), true);
   assert.throws(
-    () => searchDatabaseSchema(schema, "x".repeat(DATABASE_ASSISTANT_SCHEMA_SEARCH_MAX_CHARACTERS + 1)),
+    () => searchDatabaseSchema(schema, "x".repeat(MAX_DATABASE_SCHEMA_SEARCH_CHARACTERS + 1)),
     { code: "vibe64_database_assistant_schema_search_too_large" }
   );
 });
@@ -1163,6 +1163,7 @@ test("database members can browse, run SQL and use a shared assistant through th
     async createSessionStore() {
       return store;
     },
+    localDatabaseServers: async () => ({ managed: true, databases: [] }),
     async sessionDatabaseEnvironment({ sessionId }) {
       assert.equal(sessionId, "service-session");
       return {
@@ -1494,6 +1495,7 @@ for (const { name, scenario } of [
             }
           };
         },
+        localDatabaseServers: async () => ({ managed: true, databases: [] }),
         async sessionDatabaseEnvironment() {
           const endpoint = {
             database: "catalogue", host: "127.0.0.1", password: "fixture-only",
@@ -1756,6 +1758,7 @@ test("database copilot keeps failed cleanup for restart and closes a late cancel
   };
   const endpoint = { database: "catalogue", host: "127.0.0.1", username: "reader", password: "private-password", port: 5432 };
   const projectService = { createSessionStore: async () => store, createRuntime: async () => runtime,
+    localDatabaseServers: async () => ({ managed: true, databases: [] }),
     sessionDatabaseEnvironment: async () => ({ databaseToolEnvironment: {
       contract: "vibe64.database-tool-environment.v1", kind: "postgresql", read: endpoint, write: endpoint
     } }) };
@@ -1870,6 +1873,7 @@ test("database assistant denial happens before schema inspection or its read-que
       async createSessionStore() {
         return store;
       },
+      localDatabaseServers: async () => ({ managed: true, databases: [] }),
       async sessionDatabaseEnvironment() {
         return {
           databaseToolEnvironment: {
@@ -1948,6 +1952,7 @@ test("database service replaces a schema snapshot owned by a different database"
     async createSessionStore() {
       return store;
     },
+    localDatabaseServers: async () => ({ managed: true, databases: [] }),
     async sessionDatabaseEnvironment() {
       return {
         databaseToolEnvironment: {

@@ -1,4 +1,5 @@
 import {
+  normalizeText,
   vibe64Error
 } from "@local/vibe64-core/server/core";
 
@@ -7,23 +8,33 @@ import {
   inspectPostgresSchema,
   inspectSqliteSchema
 } from "./schemaInspector.js";
+import { SQL_QUOTING } from "../shared/sqlQuoting.js";
 
-function text(value = "") {
-  if (Buffer.isBuffer(value)) {
-    return value.toString("utf8");
+// Text from a driver value: binary values (mysql2 Buffers, worker-transferred
+// Uint8Arrays) decode as UTF-8; anything else is trimmed.
+function driverText(value = "") {
+  if (Buffer.isBuffer(value) || value instanceof Uint8Array) {
+    return Buffer.from(value).toString("utf8");
   }
   return String(value ?? "").trim();
 }
 
-function quotedIdentifier(value = "", delimiter = "\"") {
-  const name = String(value || "");
-  if (!name) {
-    throw vibe64Error(
-      "A database identifier is missing.",
-      "vibe64_database_identifier_missing"
-    );
-  }
-  return `${delimiter}${name.replaceAll(delimiter, delimiter.repeat(2))}${delimiter}`;
+// The shared quoting rules, with a missing identifier reported as a Vibe64 error.
+function serverQuoting(engine) {
+  const { quoteIdentifier, stringLiteral } = SQL_QUOTING[engine];
+  return {
+    quoteIdentifier(value) {
+      try {
+        return quoteIdentifier(value);
+      } catch {
+        throw vibe64Error(
+          "A database identifier is missing.",
+          "vibe64_database_identifier_missing"
+        );
+      }
+    },
+    stringLiteral
+  };
 }
 
 function postgresEscapeStringAt(sql = "", index = 0) {
@@ -35,7 +46,7 @@ function postgresEscapeStringAt(sql = "", index = 0) {
 }
 
 function postgresOrigin(field = {}, maps = {}) {
-  const table = maps.byId.get(text(field.tableID));
+  const table = maps.byId.get(driverText(field.tableID));
   if (!table || !Number(field.columnID)) {
     return null;
   }
@@ -46,9 +57,9 @@ function postgresOrigin(field = {}, maps = {}) {
 }
 
 function mysqlOrigin(field = {}, maps = {}) {
-  const schemaName = text(field.db);
-  const tableName = text(field.orgTable);
-  const columnName = text(field.orgName);
+  const schemaName = driverText(field.db);
+  const tableName = driverText(field.orgTable);
+  const columnName = driverText(field.orgName);
   if (!tableName || !columnName) {
     return null;
   }
@@ -74,10 +85,10 @@ const DATABASE_DIALECT_FUNCTIONS = Object.freeze([
 
 function defineDatabaseDialect(definition = {}) {
   if (
-    !text(definition.client) ||
-    !text(definition.engine) ||
-    !text(definition.label) ||
-    !text(definition.readOnlyBeginSql) ||
+    !normalizeText(definition.client) ||
+    !normalizeText(definition.engine) ||
+    !normalizeText(definition.label) ||
+    !normalizeText(definition.readOnlyBeginSql) ||
     !Array.isArray(definition.urlProtocols) ||
     definition.urlProtocols.length < 1 ||
     !definition.queryOptions ||
@@ -90,12 +101,13 @@ function defineDatabaseDialect(definition = {}) {
 }
 
 const POSTGRESQL_DIALECT = defineDatabaseDialect({
+  ...serverQuoting("postgresql"),
   binaryLiteral: (hex) => `decode('${hex}', 'hex')`,
   client: "pg",
   commandResult(raw = {}) {
     return {
       affectedRows: Number(raw?.rowCount || 0),
-      command: text(raw?.command || "COMMAND"),
+      command: driverText(raw?.command || "COMMAND"),
       kind: "command",
       warnings: []
     };
@@ -110,7 +122,6 @@ const POSTGRESQL_DIALECT = defineDatabaseDialect({
     builder[method]("CAST(?? AS TEXT) ILIKE ?", [column, pattern]);
   },
   queryOptions: Object.freeze({ rowMode: "array" }),
-  quoteIdentifier: (value) => quotedIdentifier(value, "\""),
   readOnlyBeginSql: "BEGIN READ ONLY",
   resultSet(raw = {}) {
     if (!Array.isArray(raw?.fields) || raw.fields.length < 1) {
@@ -118,7 +129,7 @@ const POSTGRESQL_DIALECT = defineDatabaseDialect({
     }
     const rows = Array.isArray(raw.rows) ? raw.rows : [];
     return {
-      command: text(raw.command),
+      command: driverText(raw.command),
       fields: raw.fields,
       fullRowCount: Number(raw.rowCount ?? rows.length),
       rows
@@ -126,11 +137,11 @@ const POSTGRESQL_DIALECT = defineDatabaseDialect({
   },
   sanitizeConnectionUrl: (connectionUrl) => connectionUrl,
   singleQuoteBackslashEscapes: postgresEscapeStringAt,
-  stringLiteral: (value) => `'${String(value).replaceAll("'", "''")}'`,
   urlProtocols: Object.freeze(["postgres", "postgresql"])
 });
 
 const MYSQL_DIALECT = defineDatabaseDialect({
+  ...serverQuoting("mysql"),
   binaryLiteral: (hex) => `X'${hex}'`,
   client: "mysql2",
   commandResult(raw = {}, jsonSafeValue = (value) => value) {
@@ -138,13 +149,13 @@ const MYSQL_DIALECT = defineDatabaseDialect({
     const warningCount = Number(response.warningStatus || response.warningCount || 0);
     return {
       affectedRows: Number(response.affectedRows || 0),
-      command: text(response.constructor?.name || "COMMAND").replace(/Packet$/u, "").toUpperCase(),
+      command: driverText(response.constructor?.name || "COMMAND").replace(/Packet$/u, "").toUpperCase(),
       insertId: response.insertId == null ? null : jsonSafeValue(response.insertId),
       kind: "command",
       warnings: warningCount > 0
         ? [`The database reported ${warningCount} warning(s).`]
         : [],
-      ...(text(response.info) ? { message: text(response.info) } : {})
+      ...(driverText(response.info) ? { message: driverText(response.info) } : {})
     };
   },
   connectionOptions: () => ({
@@ -162,7 +173,6 @@ const MYSQL_DIALECT = defineDatabaseDialect({
     builder[method]("CAST(?? AS CHAR) LIKE ?", [column, pattern]);
   },
   queryOptions: Object.freeze({ rowsAsArray: true }),
-  quoteIdentifier: (value) => quotedIdentifier(value, "`"),
   readOnlyBeginSql: "START TRANSACTION READ ONLY",
   resultSet(raw = {}) {
     const rows = Array.isArray(raw) ? raw[0] : null;
@@ -182,14 +192,12 @@ const MYSQL_DIALECT = defineDatabaseDialect({
     return parsed.toString();
   },
   singleQuoteBackslashEscapes: () => true,
-  stringLiteral: (value) => `'${String(value)
-    .replaceAll("\\", "\\\\")
-    .replaceAll("'", "''")}'`,
   urlProtocols: Object.freeze(["maria", "mariadb", "mysql"])
 });
 
 const DATABASE_DIALECTS = Object.freeze({
   sqlite: defineDatabaseDialect({
+    ...serverQuoting("sqlite"),
     binaryLiteral: (hex) => `X'${hex}'`,
     client: "sqlite3",
     commandResult: (raw = {}, jsonSafeValue = (value) => value) => ({
@@ -200,10 +208,10 @@ const DATABASE_DIALECTS = Object.freeze({
       warnings: []
     }),
     connectionOptions: () => ({}),
-    databaseType: (field = {}) => text(field.type),
+    databaseType: (field = {}) => driverText(field.type),
     engine: "sqlite",
     fieldOrigin(field = {}, maps = {}) {
-      const table = maps.byKey.get(`${text(field.database)}\u0000${text(field.table)}`);
+      const table = maps.byKey.get(`${driverText(field.database)}\u0000${driverText(field.table)}`);
       const column = table?.columns.find((entry) => entry.name === field.column);
       return table && column ? { table, column } : null;
     },
@@ -213,7 +221,6 @@ const DATABASE_DIALECTS = Object.freeze({
       builder[method]("CAST(?? AS TEXT) LIKE ?", [column, pattern]);
     },
     queryOptions: Object.freeze({ sqliteResultSet: true }),
-    quoteIdentifier: (value) => quotedIdentifier(value),
     readOnlyBeginSql: "BEGIN",
     resultSet: (raw = {}) => raw.fields?.length ? {
       command: raw.command,
@@ -223,7 +230,6 @@ const DATABASE_DIALECTS = Object.freeze({
     } : null,
     sanitizeConnectionUrl: (value) => value,
     singleQuoteBackslashEscapes: () => false,
-    stringLiteral: (value) => `'${String(value).replaceAll("'", "''")}'`,
     urlProtocols: Object.freeze(["file"])
   }),
   mysql: MYSQL_DIALECT,
@@ -231,7 +237,7 @@ const DATABASE_DIALECTS = Object.freeze({
 });
 
 function databaseDialect(kind = "") {
-  const candidate = text(kind).toLowerCase();
+  const candidate = normalizeText(kind).toLowerCase();
   const dialect = DATABASE_DIALECTS[candidate];
   if (dialect) {
     return dialect;
@@ -260,5 +266,6 @@ export {
   DATABASE_DIALECTS,
   databaseDialect,
   defineDatabaseDialect,
+  driverText,
   inspectDatabaseSchema
 };

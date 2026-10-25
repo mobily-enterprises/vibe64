@@ -1,4 +1,5 @@
 import {
+  normalizeText,
   vibe64Error
 } from "@local/vibe64-core/server/core";
 
@@ -12,13 +13,9 @@ import {
 const LOOKUP_LIMIT = 25;
 const DISPLAY_COLUMN_NAMES = Object.freeze(["name", "title", "label", "code"]);
 
-function text(value = "") {
-  return String(value ?? "").trim();
-}
-
 function relationship(schema = {}, relationshipId = "") {
   const found = (Array.isArray(schema?.relationships) ? schema.relationships : []).find((candidate) => (
-    candidate.id === text(relationshipId)
+    candidate.id === normalizeText(relationshipId)
   ));
   if (!found) {
     throw vibe64Error(
@@ -31,7 +28,7 @@ function relationship(schema = {}, relationshipId = "") {
 
 function schemaTable(schema = {}, qualifiedName = "") {
   const found = (Array.isArray(schema?.tables) ? schema.tables : []).find((candidate) => (
-    candidate.qualifiedName === text(qualifiedName)
+    candidate.qualifiedName === normalizeText(qualifiedName)
   ));
   if (!found) {
     throw vibe64Error(
@@ -44,7 +41,7 @@ function schemaTable(schema = {}, qualifiedName = "") {
 
 function displayColumn(table = {}, preferred = "") {
   const columns = Array.isArray(table.columns) ? table.columns : [];
-  const preferredName = text(preferred);
+  const preferredName = normalizeText(preferred);
   if (preferredName && columns.some((column) => column.name === preferredName)) {
     return preferredName;
   }
@@ -67,7 +64,7 @@ function searchableColumns(table = {}, keyColumns = [], selectedDisplayColumn = 
 }
 
 function addSearch(query, columns = [], search = "", engine = "postgresql") {
-  const term = text(search);
+  const term = normalizeText(search);
   if (!term || columns.length < 1) {
     return query;
   }

@@ -4,6 +4,8 @@ import {
 } from "node:crypto";
 
 import {
+  isPlainObject,
+  normalizeText,
   vibe64Error
 } from "@local/vibe64-core/server/core";
 import { ERD_LAYOUT_MAX_BYTES } from "../shared/erdModel.js";
@@ -15,12 +17,8 @@ const SNIPPET_LIMIT = 100;
 const LAYOUT_NODE_LIMIT = 2_000;
 const writes = new Map();
 
-function text(value = "") {
-  return String(value ?? "").trim();
-}
-
 function actorIdentity(vibe64User = null) {
-  return text(
+  return normalizeText(
     vibe64User?.username ||
     vibe64User?.id ||
     vibe64User?.email ||
@@ -76,10 +74,10 @@ function emptyWorkspace() {
 }
 
 function normalizedWorkspace(value = null) {
-  const record = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const record = isPlainObject(value) ? value : {};
   return {
     history: Array.isArray(record.history) ? record.history.slice(0, HISTORY_LIMIT) : [],
-    lookupDisplayColumns: record.lookupDisplayColumns && typeof record.lookupDisplayColumns === "object" && !Array.isArray(record.lookupDisplayColumns)
+    lookupDisplayColumns: isPlainObject(record.lookupDisplayColumns)
       ? record.lookupDisplayColumns
       : {},
     snippets: Array.isArray(record.snippets) ? record.snippets.slice(0, SNIPPET_LIMIT) : [],
@@ -124,10 +122,10 @@ async function recordQueryHistory(store, sessionId = "", vibe64User = null, entr
     ...workspace,
     history: [{
       affectedRows: Number(entry.affectedRows || 0),
-      at: text(entry.at) || new Date().toISOString(),
+      at: normalizeText(entry.at) || new Date().toISOString(),
       durationMs: Number(entry.durationMs || 0),
       id: randomUUID(),
-      kind: text(entry.kind),
+      kind: normalizeText(entry.kind),
       ok: entry.ok !== false,
       readOnly: entry.readOnly !== false,
       sql: String(entry.sql || "")
@@ -140,8 +138,8 @@ async function saveSnippet(store, sessionId = "", vibe64User = null, input = {})
   if (!sql) {
     throw vibe64Error("Snippet SQL is required.", "vibe64_database_snippet_sql_required");
   }
-  const id = text(input.id) || randomUUID();
-  const name = text(input.name) || "Untitled query";
+  const id = normalizeText(input.id) || randomUUID();
+  const name = normalizeText(input.name) || "Untitled query";
   return mutateWorkspace(store, sessionId, vibe64User, (workspace) => ({
     ...workspace,
     snippets: [{
@@ -154,7 +152,7 @@ async function saveSnippet(store, sessionId = "", vibe64User = null, input = {})
 }
 
 async function deleteSnippet(store, sessionId = "", vibe64User = null, snippetId = "") {
-  const id = text(snippetId);
+  const id = normalizeText(snippetId);
   return mutateWorkspace(store, sessionId, vibe64User, (workspace) => ({
     ...workspace,
     snippets: workspace.snippets.filter((snippet) => snippet.id !== id)
@@ -162,8 +160,8 @@ async function deleteSnippet(store, sessionId = "", vibe64User = null, snippetId
 }
 
 async function saveLookupDisplayColumn(store, sessionId = "", vibe64User = null, relationshipId = "", column = "") {
-  const relationship = text(relationshipId);
-  const displayColumn = text(column);
+  const relationship = normalizeText(relationshipId);
+  const displayColumn = normalizeText(column);
   if (!relationship || !displayColumn) {
     return readWorkspace(store, sessionId, vibe64User);
   }
@@ -184,7 +182,7 @@ function finiteCoordinate(value) {
 }
 
 function normalizedDiagram(value = null) {
-  const record = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const record = isPlainObject(value) ? value : {};
   const nodes = Array.isArray(record.nodes) ? record.nodes : [];
   if (nodes.length > LAYOUT_NODE_LIMIT) {
     throw vibe64Error("The ERD layout contains too many nodes.", "vibe64_database_erd_layout_too_large");
@@ -195,17 +193,17 @@ function normalizedDiagram(value = null) {
       collapsed: node?.collapsed === true,
       expanded: node?.expanded === true,
       pinned: node?.pinned === true,
-      group: text(node?.group).slice(0, 80),
+      group: normalizeText(node?.group).slice(0, 80),
       hidden: node?.hidden === true,
-      table: text(node?.table).slice(0, 512),
+      table: normalizeText(node?.table).slice(0, 512),
       x: finiteCoordinate(node?.x),
       y: finiteCoordinate(node?.y)
     })).filter((node) => node.table),
     columnMode: record.columnMode === "all" ? "all" : "keys",
-    focusTable: text(record.focusTable).slice(0, 512),
-    activeGroup: text(record.activeGroup).slice(0, 524),
+    focusTable: normalizeText(record.focusTable).slice(0, 512),
+    activeGroup: normalizeText(record.activeGroup).slice(0, 524),
     groups: (Array.isArray(record.groups) ? record.groups : []).slice(0, 50)
-      .map((group) => ({ id: text(group?.id).slice(0, 80), name: text(group?.name).slice(0, 80) }))
+      .map((group) => ({ id: normalizeText(group?.id).slice(0, 80), name: normalizeText(group?.name).slice(0, 80) }))
       .filter((group) => group.id && group.name),
     viewport: {
       x: finiteCoordinate(record.viewport?.x),
@@ -220,12 +218,12 @@ function normalizedRoutes(value = []) {
     throw vibe64Error("The ERD connection paths are too large.", "vibe64_database_erd_layout_too_large");
   }
   return value.map((route) => {
-    if (!text(route?.id) || !["left", "right"].includes(route.sourcePosition) || !["left", "right"].includes(route.targetPosition) ||
+    if (!normalizeText(route?.id) || !["left", "right"].includes(route.sourcePosition) || !["left", "right"].includes(route.targetPosition) ||
       !Array.isArray(route.points) || route.points.length < 2 || route.points.length > 512 ||
       route.points.some((point) => !Number.isFinite(point?.x) || !Number.isFinite(point?.y))) {
       throw vibe64Error("The ERD connection path is invalid.", "vibe64_database_erd_route_invalid");
     }
-    return { id: text(route.id).slice(0, 1024), sourcePosition: route.sourcePosition, targetPosition: route.targetPosition,
+    return { id: normalizeText(route.id).slice(0, 1024), sourcePosition: route.sourcePosition, targetPosition: route.targetPosition,
       points: route.points.map(({ x, y }) => ({ x: finiteCoordinate(x), y: finiteCoordinate(y) })), obstructed: route.obstructed === true };
   });
 }
@@ -235,10 +233,10 @@ function normalizedLayout(value = null) {
     ...normalizedDiagram(value),
     views: (Array.isArray(value?.views) ? value.views : []).slice(0, 20).map((view) => ({
       ...normalizedDiagram(view),
-      id: text(view?.id).slice(0, 80),
-      name: text(view?.name).slice(0, 80)
+      id: normalizeText(view?.id).slice(0, 80),
+      name: normalizeText(view?.name).slice(0, 80)
     })).filter((view) => view.id && view.name),
-    updatedAt: text(value?.updatedAt),
+    updatedAt: normalizeText(value?.updatedAt),
     revision: Number.isSafeInteger(value?.revision) ? value.revision : 0,
     version: 1
   };
@@ -282,6 +280,7 @@ export {
   LAYOUT_NODE_LIMIT,
   SCHEMA_ARTIFACT_PATH,
   SNIPPET_LIMIT,
+  actorIdentity,
   actorKey,
   deleteSnippet,
   mutateWorkspace,

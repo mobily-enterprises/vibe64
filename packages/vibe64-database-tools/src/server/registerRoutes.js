@@ -1,4 +1,7 @@
 import {
+  isPlainObject
+} from "@local/vibe64-core/server/core";
+import {
   createVibe64FeatureRoutes
 } from "@local/vibe64-core/server/featureRoutes";
 import {
@@ -23,7 +26,7 @@ function withSession(request, input = {}) {
   const {
     vibe64User: _ignoredUser,
     ...safeInput
-  } = input && typeof input === "object" && !Array.isArray(input) ? input : {};
+  } = isPlainObject(input) ? input : {};
   void _ignoredUser;
   return {
     ...safeInput,

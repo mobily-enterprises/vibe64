@@ -217,6 +217,7 @@ import Vibe64CopyCommand from "/src/components/common/Vibe64CopyCommand.vue";
 import { VIBE64_SURFACE_ID } from "/src/lib/vibe64RequestConfig.js";
 import { ENV_USER_VALUES_ENDPOINT, VIBE64_ENV_USER_VALUES_API_SUFFIX } from "/src/lib/studioGateApi.js";
 import { databaseServerGuide, isAdminUser } from "../../shared/serverGuide.js";
+import { DATABASE_API_SUFFIX, databaseSessionPath } from "../composables/useVibe64DatabaseTools.js";
 
 const props = defineProps({
   sessionId: { type: String, required: true },
@@ -226,7 +227,7 @@ const props = defineProps({
 const emit = defineEmits(["retry"]);
 
 const paths = usePaths();
-const serverPath = computed(() => `${paths.api("/vibe64/database", { surface: "app" })}/sessions/${encodeURIComponent(props.sessionId)}/server`);
+const serverPath = computed(() => databaseSessionPath(paths.api(DATABASE_API_SUFFIX, { surface: "app" }), props.sessionId, "/server"));
 const resource = useEndpointResource({
   enabled: computed(() => Boolean(props.active && props.sessionId)),
   fallbackLoadError: "The database check could not run.",

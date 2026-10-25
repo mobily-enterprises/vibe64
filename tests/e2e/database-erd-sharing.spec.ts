@@ -114,6 +114,7 @@ async function sharedDiagramServer(frontend: string, { largeTable = false, schem
         const projectService = {
             createSessionStore: async () => store,
             createRuntime: async () => ({ getSession: store.readSession, store: { runSessionExclusive: async (_id, _lock, operation) => ({ acquired: true, value: await operation() }) } }),
+            localDatabaseServers: async () => ({ managed: true, databases: [] }),
             sessionDatabaseEnvironment: async () => ({ databaseToolEnvironment: {
               contract: "vibe64.database-tool-environment.v1", kind: schema.engine,
               read: { host: "127.0.0.1", port: 5432, database: schema.database, username: "reader" },

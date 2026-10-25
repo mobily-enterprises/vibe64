@@ -389,7 +389,7 @@ coordinator and shared application-tool executor. Calls are explicitly transient
 and never resume after restart; native cleanup remains in the existing parent
 artifact. The action callbacks retain the original reader, data bounds and host
 errors, without exposing database operations to native tools or general automation.
-Its thirteen ordinary HTTP operations share their named action contracts and
+Its fourteen ordinary HTTP operations share their named action contracts and
 trusted actor/project context; the database services own query and mutation safety.
 Colleague uses bounded presentations of the existing status, schema refresh and
 exact-query cancellation actions. The Database workspace owns URL-backed view
@@ -406,7 +406,12 @@ existing project/session query reservations, without a separate persisted tracke
 - `genesis/program/database/query-execution.md`
 
 ### Data owned
-- Nothing.
+- Session artifacts `database/schema.json`, `database/erd-layout.json` and
+  `database/workspace-<actorKey>.json` (owned by `server/sessionState.js`).
+- Session artifacts `database/assistant-tasks/<actorKey>.json`: copilot helper
+  cleanup references (owned by `server/service.js`).
+- Project source `data-overview.json`, written through the source editor
+  (path and format owned by `shared/dataOverview.js`).
 
 ### Data used
 - Nothing.

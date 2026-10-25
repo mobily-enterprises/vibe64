@@ -40,6 +40,7 @@ import {
 } from "./queryExecutor.js";
 import {
   deleteSnippet as deleteStoredSnippet,
+  actorIdentity,
   actorKey,
   readErdLayout,
   readSchemaSnapshot,
@@ -70,15 +71,6 @@ function databaseError(message, code, details = {}) {
   const error = vibe64Error(message, code);
   error.details = details;
   return error;
-}
-
-function actorId(vibe64User = null) {
-  return normalizeText(
-    vibe64User?.username ||
-    vibe64User?.id ||
-    vibe64User?.email ||
-    "local-owner"
-  );
 }
 
 function safeConnectionDescriptor(connection = {}, context = {}) {
@@ -123,6 +115,7 @@ function createService({
   if (
     !projectService ||
     typeof projectService.createSessionStore !== "function" ||
+    typeof projectService.localDatabaseServers !== "function" ||
     typeof projectService.sessionDatabaseEnvironment !== "function"
   ) {
     throw new TypeError("createService requires the Vibe64 Project API with session database resolution.");
@@ -133,6 +126,10 @@ function createService({
 
   const activeQueries = new Map();
   const activeAssistants = new Set();
+
+  function sessionQueryKey(sessionId = "") {
+    return `${currentProjectScopeKey()}\0${normalizeText(sessionId)}`;
+  }
 
   async function assistantDecision(context) {
     return terminalService.resolveAssistantPurpose({ purpose: "database_assistant" }, {
@@ -165,7 +162,7 @@ function createService({
     const scope = currentProjectScopeKey();
     const tasks = [...activeAssistants].filter((task) => task.sessionId === sessionId && task.projectScope === scope);
     for (const task of tasks) task.controller.abort();
-    const queries = activeQueries.get(`${scope}\0${normalizeText(sessionId)}`);
+    const queries = activeQueries.get(sessionQueryKey(sessionId));
     await Promise.allSettled([...(queries?.values() || [])].filter((query) => query.cancel).map((query) => query.cancel()));
     await Promise.allSettled(tasks.map((task) => task.promise));
     const runtime = options.runtime || await projectService.createRuntime({ inspectSource: false });
@@ -182,7 +179,7 @@ function createService({
   }
 
   function sessionQueries(sessionId = "") {
-    const key = `${currentProjectScopeKey()}\0${normalizeText(sessionId)}`;
+    const key = sessionQueryKey(sessionId);
     if (!activeQueries.has(key)) {
       activeQueries.set(key, new Map());
     }
@@ -190,7 +187,7 @@ function createService({
   }
 
   function releaseSessionQueries(sessionId = "", queries) {
-    const key = `${currentProjectScopeKey()}\0${normalizeText(sessionId)}`;
+    const key = sessionQueryKey(sessionId);
     if (queries?.size === 0 && activeQueries.get(key) === queries) {
       activeQueries.delete(key);
     }
@@ -247,7 +244,7 @@ function createService({
     const writeConnection = resolveDatabaseConnection(writeEndpoint);
     return {
       ...database,
-      actor: actorId(input.vibe64User),
+      actor: actorIdentity(input.vibe64User),
       readConnection,
       readEndpoint,
       session,
@@ -363,8 +360,8 @@ function createService({
   // this computer. Nothing when the Stack declares none or the host supplies it.
   async function checkServer(input = {}) {
     const sessionId = normalizeText(input.sessionId);
-    if (!sessionId || typeof projectService.localDatabaseServers !== "function") {
-      return { ok: true, managed: true, databases: [] };
+    if (!sessionId) {
+      throw databaseError("Missing Vibe64 session id.", "vibe64_invalid_session_id");
     }
     const store = await projectService.createSessionStore();
     const session = await store.readSession(sessionId);
@@ -422,7 +419,7 @@ function createService({
         try { decision = await assistantDecision(context); }
         catch (error) { decision = { available: false, message: error.message }; }
         return {
-          activeQueries: [...(activeQueries.get(`${currentProjectScopeKey()}\0${context.sessionId}`) || [])]
+          activeQueries: [...(activeQueries.get(sessionQueryKey(context.sessionId)) || [])]
             .map(([queryId, query]) => ({ queryId, readOnly: query.readOnly, startedAt: query.startedAt, cancellable: Boolean(query.cancel) })),
           assistant: databaseAssistantAvailability(decision),
           connection: safeConnectionDescriptor(context.writeConnection, context),
@@ -506,8 +503,6 @@ function createService({
               context.vibe64User,
               historyEntry(input.sql, result, readOnly)
             );
-          }
-          if (!automaticDefault) {
             logOperation(context, {
               affectedRows: Number(result.affectedRows || 0),
               durationMs: result.durationMs,
@@ -532,6 +527,7 @@ function createService({
               }, readOnly)
             ).catch(() => null);
           }
+          // Failures are logged even for the automatic default-table load.
           logOperation(context, {
             code: error?.code,
             durationMs: Date.now() - startedAt,

@@ -382,7 +382,7 @@
               @click="copilotOpen = false"
             />
           </header>
-          <div v-if="assistantCanRun" class="database-workspace__copilot-body">
+          <div v-if="assistantConfigured" class="database-workspace__copilot-body">
             <div class="database-workspace__assistant-note">
               Looks up bounded parts of the refreshed schema as needed. Database credentials stay server-side, schema metadata is untrusted, and it can run only read-only queries.
             </div>
@@ -592,10 +592,6 @@ const props = defineProps({
     default: true,
     type: Boolean
   },
-  assistantUnavailableMessage: {
-    default: "",
-    type: String
-  },
   projectSlug: {
     default: "",
     type: String
@@ -603,10 +599,6 @@ const props = defineProps({
   sessionId: {
     default: "",
     type: String
-  },
-  sessionsApiPath: {
-    default: "",
-    type: [String, Object, Function]
   }
 });
 const emit = defineEmits(["request-overview-assistant"]);
@@ -716,7 +708,6 @@ const databaseScopeLabel = computed(() => (
       : "Resolved database"
 ));
 const assistantConfigured = computed(() => Boolean(state.value?.assistant?.available));
-const assistantCanRun = computed(() => assistantConfigured.value);
 const assistantStatusLabel = computed(() => {
   const assistant = state.value?.assistant;
   if (!assistantConfigured.value) return "Unavailable";
@@ -762,7 +753,7 @@ const assistantBinding = useAssistantConversation({
       }
     }
   },
-  active: assistantCanRun,
+  active: assistantConfigured,
   data: () => ({ table: assistantTableName.value }),
   presentation: computed(() => ({
     assistantLabel: "Copilot", visible: true, variant: "task",

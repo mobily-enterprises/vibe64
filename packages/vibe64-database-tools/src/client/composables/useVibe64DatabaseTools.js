@@ -231,7 +231,6 @@ function useVibe64DatabaseTools({
 
   function deleteSnippet(snippetId = "") {
     return snippetDeleteCommand.run({
-      method: "DELETE",
       path: `${sessionPath.value}/snippets/${encodeSegment(snippetId)}`
     });
   }

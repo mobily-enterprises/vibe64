@@ -2,6 +2,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { createServiceToolCatalog, runBoundedAssistantToolLoop } from "@jskit-ai/assistant-core/server";
 import {
+  normalizeText,
   vibe64Error
 } from "@local/vibe64-core/server/core";
 import {
@@ -13,6 +14,7 @@ import {
 } from "@local/vibe64-runtime/shared";
 
 import {
+  MAX_DATABASE_SCHEMA_SEARCH_CHARACTERS,
   databaseSchemaSummary,
   searchDatabaseSchema
 } from "./schemaAccess.js";
@@ -24,7 +26,6 @@ const MAX_ASSISTANT_QUERY_RESULT_BYTES = 2 * 1024 * 1024;
 const MAX_ASSISTANT_TOOL_TURNS = 4;
 const DATABASE_ASSISTANT_TURN_TIMEOUT_MS = 90_000;
 const DATABASE_ASSISTANT_ANSWER_MAX_CHARACTERS = 1_200;
-const DATABASE_ASSISTANT_SCHEMA_SEARCH_MAX_CHARACTERS = 300;
 const DATABASE_ASSISTANT_SQL_MAX_CHARACTERS = 1_000;
 const DATABASE_ASSISTANT_EXECUTION_PROFILE = defineVibe64AgentExecutionProfileRequest({
   profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
@@ -52,23 +53,19 @@ const DATABASE_ASSISTANT_OUTPUT_SCHEMA = Object.freeze({
   type: "object"
 });
 
-function text(value = "") {
-  return String(value ?? "").trim();
-}
-
 function databaseAssistantAvailability(decision = {}) {
   const selection = decision.effectiveSelection;
   return {
     available: decision.available === true,
-    engineId: text(selection?.engineId),
-    model: text(selection?.modelId),
-    variantId: text(selection?.variantId),
-    message: text(decision.message)
+    engineId: normalizeText(selection?.engineId),
+    model: normalizeText(selection?.modelId),
+    variantId: normalizeText(selection?.variantId),
+    message: normalizeText(decision.message)
   };
 }
 
 function databaseSchemaPrompt(schema = {}) {
-  if (!text(schema.engine) || !Array.isArray(schema.tables)) {
+  if (!normalizeText(schema.engine) || !Array.isArray(schema.tables)) {
     throw vibe64Error(
       "Refresh the database schema before using the database assistant.",
       "vibe64_database_schema_refresh_required"
@@ -111,7 +108,7 @@ function normalizedConversation(messages = [], schema = {}) {
         "vibe64_database_assistant_message_too_large"
       );
     }
-    const table = role === "user" ? text(message.table) : "";
+    const table = role === "user" ? normalizeText(message.table) : "";
     if (table.length > 512) throw vibe64Error("The selected table name is too long.", "vibe64_database_assistant_table_invalid");
     return { content, role, ...(table ? { table } : {}) };
   }).filter(Boolean);
@@ -147,8 +144,8 @@ function assistantQueryView(result = {}) {
   if (result.kind !== "result-set") {
     return {
       affectedRows: Number(result.affectedRows || 0),
-      command: text(result.command),
-      kind: text(result.kind)
+      command: normalizeText(result.command),
+      kind: normalizeText(result.kind)
     };
   }
   return {
@@ -172,8 +169,8 @@ function assistantQueryResult(sql = "", result = {}) {
 }
 
 function contextLimitError(error = {}) {
-  const code = text(error?.code || error?.error?.code).toLowerCase();
-  const message = text(error?.message || error?.error?.message).toLowerCase();
+  const code = normalizeText(error?.code || error?.error?.code).toLowerCase();
+  const message = normalizeText(error?.message || error?.error?.message).toLowerCase();
   const details = error?.details || error?.error?.details || {};
   const boundedInputExceeded = (
     code === VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.UNBOUNDED &&
@@ -201,19 +198,19 @@ async function deleteAssistantThread(
   agentContext = {},
   executionProfile = null
 ) {
-  if (!text(threadId)) {
+  if (!normalizeText(threadId)) {
     return { ok: true };
   }
   const deleted = await deleteThread({
-    conversationId: text(threadId),
+    conversationId: normalizeText(threadId),
     ephemeral: true,
     executionProfile: executionProfile || { ...DATABASE_ASSISTANT_EXECUTION_PROFILE },
-    threadId: text(threadId)
+    threadId: normalizeText(threadId)
   }, agentContext);
   if (deleted?.ok !== true) {
     throw vibe64Error(
-      text(deleted?.error) || "The temporary database assistant conversation could not be removed.",
-      text(deleted?.code) || "vibe64_database_assistant_cleanup_failed"
+      normalizeText(deleted?.error) || "The temporary database assistant conversation could not be removed.",
+      normalizeText(deleted?.code) || "vibe64_database_assistant_cleanup_failed"
     );
   }
   return deleted;
@@ -256,11 +253,11 @@ async function runDatabaseAssistant({
       id: "vibe64.database.assistant.schema.search",
       extensions: { assistant: { description: "Search the refreshed schema for complete SQL-relevant definitions. Use * to list object names and kinds; otherwise use business terms, column names or exact qualified object names. Results explicitly report truncation." } },
       input: { schema: createSchema({ search: { type: "string", required: true, noTrim: true,
-        minLength: 1, maxLength: DATABASE_ASSISTANT_SCHEMA_SEARCH_MAX_CHARACTERS } }), mode: "replace" },
+        minLength: 1, maxLength: MAX_DATABASE_SCHEMA_SEARCH_CHARACTERS } }), mode: "replace" },
       output: { schema: createSchema({ search: { type: "string", required: true, noTrim: true },
         result: { type: "object", required: true, additionalProperties: true } }), mode: "replace" },
       execute({ search }) {
-        if (!text(search)) throw invalidResponseError;
+        if (!normalizeText(search)) throw invalidResponseError;
         const schemaResult = searchDatabaseSchema(schema, search);
         schemaLookups.push({
           matchedCount: schemaResult.matchedCount,
@@ -279,7 +276,7 @@ async function runDatabaseAssistant({
       output: { schema: createSchema({ sql: { type: "string", required: true, noTrim: true },
         result: { type: "object", required: true, additionalProperties: true } }), mode: "replace" },
       async execute({ sql }) {
-        if (!text(sql)) throw invalidResponseError;
+        if (!normalizeText(sql)) throw invalidResponseError;
         const queryResult = assistantQueryView(await executeReadQuery(sql));
         queries.push({ result: queryResult, sql });
         return assistantQueryResult(sql, queryResult);
@@ -321,13 +318,13 @@ async function runDatabaseAssistant({
           ...agentContext,
           async onEvent(event = {}) {
             if (event.type === "thread") {
-              threadId = text(event.threadId) || threadId;
+              threadId = normalizeText(event.threadId) || threadId;
             }
             observedExecutionProfile ||= executionProfileSnapshot(event.executionProfile);
             await agentContext.onEvent?.(event);
           }
         });
-        threadId = text(result?.threadId || result?.conversationId) || threadId;
+        threadId = normalizeText(result?.threadId || result?.conversationId) || threadId;
         observedExecutionProfile ||= executionProfileSnapshot(result?.executionProfile);
         return result;
       },
@@ -336,7 +333,7 @@ async function runDatabaseAssistant({
         "vibe64_database_assistant_tool_limit"
       )
     });
-    if (!text(response.answer)) throw invalidResponseError;
+    if (!normalizeText(response.answer)) throw invalidResponseError;
   } catch (error) {
     failure = contextLimitError(error)
       ? vibe64Error(
@@ -357,7 +354,7 @@ async function runDatabaseAssistant({
     } catch (error) {
       if (
         !failure ||
-        text(error?.code) !== "vibe64_codex_helper_thread_unavailable"
+        normalizeText(error?.code) !== "vibe64_codex_helper_thread_unavailable"
       ) {
         if (failure && error !== failure) {
           error.cause = failure;
@@ -381,9 +378,9 @@ async function runDatabaseAssistant({
   }
   return {
     answer: response.answer,
-    engineId: text(observedExecutionProfile?.providerId || assistant.engineId),
+    engineId: normalizeText(observedExecutionProfile?.providerId || assistant.engineId),
     intent: response.intent,
-    model: text(observedExecutionProfile?.model || assistant.model),
+    model: normalizeText(observedExecutionProfile?.model || assistant.model),
     ok: true,
     queries,
     schemaLookups,
@@ -394,7 +391,6 @@ async function runDatabaseAssistant({
 export {
   DATABASE_ASSISTANT_EXECUTION_PROFILE,
   DATABASE_ASSISTANT_OUTPUT_SCHEMA,
-  DATABASE_ASSISTANT_SCHEMA_SEARCH_MAX_CHARACTERS,
   DATABASE_ASSISTANT_TURN_TIMEOUT_MS,
   MAX_ASSISTANT_MESSAGES,
   MAX_ASSISTANT_SCHEMA_PROMPT_BYTES,

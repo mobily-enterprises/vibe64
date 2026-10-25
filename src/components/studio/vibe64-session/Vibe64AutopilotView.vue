@@ -819,11 +819,9 @@
           v-if="rightPaneTabMounted('database')"
           :active="props.active && props.projectPane === 'dashboard' && rightPaneTab === 'database'"
           :assistant-available="assistantCanUsePurpose('fix')"
-          :assistant-unavailable-message="assistantFixRestrictionMessage"
           class="studio-autopilot__session-tool-content"
           :project-slug="projectSlug"
           :session-id="sessionId"
-          :sessions-api-path="props.sessionsApiPath"
           @request-overview-assistant="assistantCanUsePurpose('fix') ? startTemporaryAiTask($event) : prefillComposer($event.message, { append: true })"
         />
       </section>

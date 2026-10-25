@@ -80,6 +80,7 @@ test("agent ERD moves retain exact routed paths, reject stale batches and preser
   const service = createService({
     projectService: {
       createSessionStore: async () => store,
+      localDatabaseServers: async () => ({ managed: true, databases: [] }),
       sessionDatabaseEnvironment: async () => ({ databaseToolEnvironment: {
         contract: "vibe64.database-tool-environment.v1", kind: "postgresql",
         read: { host: "127.0.0.1", port: 5432, database: schema.database, username: "reader" },
@@ -151,6 +152,7 @@ test("service publishes a scoped hint only after a successful shared save, witho
   const service = createService({
     projectService: {
       createSessionStore: async () => store,
+      localDatabaseServers: async () => ({ managed: true, databases: [] }),
       sessionDatabaseEnvironment: async () => ({ databaseToolEnvironment: {
         contract: "vibe64.database-tool-environment.v1", kind: "postgresql",
         read: { host: "127.0.0.1", port: 5432, database: "test", username: "reader" },

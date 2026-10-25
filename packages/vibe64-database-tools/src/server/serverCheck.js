@@ -1,6 +1,8 @@
 import mysql from "mysql2/promise";
 import pg from "pg";
 
+import { normalizeText } from "@local/vibe64-core/server/core";
+
 // One real sign-in to the database server a project uses, with the values the
 // project's processes get. Nothing counts as working unless the server
 // answered, accepted the login and opened the database. Every failure becomes
@@ -8,10 +10,6 @@ import pg from "pg";
 const CHECK_TIMEOUT_MS = 5_000;
 
 const LABELS = Object.freeze({ mysql: "MySQL or MariaDB", postgresql: "PostgreSQL" });
-
-function text(value = "") {
-  return String(value ?? "").trim();
-}
 
 function where(endpoint = {}) {
   if (endpoint.url) {
@@ -22,11 +20,11 @@ function where(endpoint = {}) {
       return "the address in your settings";
     }
   }
-  return `${text(endpoint.host)}:${endpoint.port}`;
+  return `${normalizeText(endpoint.host)}:${endpoint.port}`;
 }
 
 function nameIn(endpoint = {}, field = "") {
-  if (!endpoint.url) return text(endpoint[field]);
+  if (!endpoint.url) return normalizeText(endpoint[field]);
   try {
     const url = new URL(endpoint.url);
     return decodeURIComponent(field === "database" ? url.pathname.replace(/^\/+/u, "") : url.username);
@@ -67,7 +65,7 @@ function describeFailure(error = {}, { kind, endpoint }) {
     return { state: "not-running", message: `Nothing is answering at ${address}. Start your ${label} server, or put its address in the settings below.` };
   }
   if (code === "ENOTFOUND" || code === "EAI_AGAIN") {
-    return { state: "unreachable", message: `Vibe64 can't find a computer called ${text(endpoint.host) || address}. Check the host in the settings below.` };
+    return { state: "unreachable", message: `Vibe64 can't find a computer called ${normalizeText(endpoint.host) || address}. Check the host in the settings below.` };
   }
   if (NETWORK_UNREACHABLE.has(code)) {
     return { state: "unreachable", message: `${address} didn't answer in time. Check that the server is running and the host and port are right.` };
