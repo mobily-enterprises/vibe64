@@ -611,73 +611,44 @@ function listTerminalSessions({
   }));
 }
 
-async function runCloseHook(session, reason) {
-  if (!session || session.closeHookStarted) {
-    return;
-  }
-  session.closeHookStarted = true;
-  if (typeof session.onClose !== "function") {
-    return null;
-  }
-  try {
-    await session.onClose({
-      exitCode: session.exitCode,
-      id: session.id,
-      output: session.output,
-      reason,
-      status: session.status
-    });
-    return null;
-  } catch (error) {
-    const message = String(error?.message || error || "Terminal finalization failed.");
-    const failure = error instanceof Error ? error : new Error(message);
-    failure.code ||= "terminal_close_hook_failed";
-    const chunk = `\r\n[studio] Terminal finalization failed: ${message}\r\n`;
-    session.closeError = message;
-    session.output = trimBuffer(`${session.output}${chunk}`);
-    sendToSubscribers(session, {
-      chunk,
-      type: "output"
-    });
-    sendToSubscribers(session, {
-      error: message,
-      type: "error"
-    });
-    return failure;
-  }
+function appendTerminalFailure(session, message, chunkMessage = message) {
+  const chunk = `\r\n[studio] ${chunkMessage}\r\n`;
+  session.closeError = message;
+  session.output = trimBuffer(`${session.output}${chunk}`);
+  sendToSubscribers(session, {
+    chunk,
+    type: "output"
+  });
+  sendToSubscribers(session, {
+    error: message,
+    type: "error"
+  });
 }
 
-async function runStopHook(session, reason) {
-  if (!session || session.stopHookStarted) {
-    return;
+// Runs a stop or close hook once; resolves to null, or the hook's failure.
+async function runLifecycleHook(session, {
+  code,
+  flag,
+  hook,
+  label,
+  payload
+}) {
+  if (session[flag]) {
+    return null;
   }
-  session.stopHookStarted = true;
-  if (typeof session.onStop !== "function") {
+  session[flag] = true;
+  const handler = session[hook];
+  if (typeof handler !== "function") {
     return null;
   }
   try {
-    await session.onStop({
-      id: session.id,
-      output: session.output,
-      reason,
-      status: session.status
-    });
+    await handler(payload);
     return null;
   } catch (error) {
-    const message = String(error?.message || error || "Terminal stop failed.");
+    const message = String(error?.message || error || `${label}.`);
     const failure = error instanceof Error ? error : new Error(message);
-    failure.code ||= "terminal_stop_hook_failed";
-    const chunk = `\r\n[studio] Terminal stop failed: ${message}\r\n`;
-    session.closeError = message;
-    session.output = trimBuffer(`${session.output}${chunk}`);
-    sendToSubscribers(session, {
-      chunk,
-      type: "output"
-    });
-    sendToSubscribers(session, {
-      error: message,
-      type: "error"
-    });
+    failure.code ||= code;
+    appendTerminalFailure(session, message, `${label}: ${message}`);
     return failure;
   }
 }
@@ -689,18 +660,7 @@ function reportTerminalLifecycleFailure(session, error) {
     return error;
   }
   session.reportedLifecycleFailures.add(key);
-  const message = String(error?.message || error || "Terminal cleanup failed.");
-  const chunk = `\r\n[studio] ${message}\r\n`;
-  session.closeError = message;
-  session.output = trimBuffer(`${session.output}${chunk}`);
-  sendToSubscribers(session, {
-    chunk,
-    type: "output"
-  });
-  sendToSubscribers(session, {
-    error: message,
-    type: "error"
-  });
+  appendTerminalFailure(session, String(error?.message || error || "Terminal cleanup failed."));
   return error;
 }
 
@@ -718,14 +678,37 @@ function terminalCloseAggregateFailure(session, failures = []) {
 
 function beginTerminalStopHook(session, reason) {
   if (!session.stopHookCompletion) {
-    session.stopHookCompletion = Promise.resolve().then(() => runStopHook(session, reason));
+    session.stopHookCompletion = Promise.resolve().then(() => runLifecycleHook(session, {
+      code: "terminal_stop_hook_failed",
+      flag: "stopHookStarted",
+      hook: "onStop",
+      label: "Terminal stop failed",
+      payload: {
+        id: session.id,
+        output: session.output,
+        reason,
+        status: session.status
+      }
+    }));
   }
   return session.stopHookCompletion;
 }
 
 function beginTerminalCloseHook(session, reason) {
   if (!session.closeHookCompletion) {
-    session.closeHookCompletion = Promise.resolve().then(() => runCloseHook(session, reason));
+    session.closeHookCompletion = Promise.resolve().then(() => runLifecycleHook(session, {
+      code: "terminal_close_hook_failed",
+      flag: "closeHookStarted",
+      hook: "onClose",
+      label: "Terminal finalization failed",
+      payload: {
+        exitCode: session.exitCode,
+        id: session.id,
+        output: session.output,
+        reason,
+        status: session.status
+      }
+    }));
   }
   return session.closeHookCompletion;
 }

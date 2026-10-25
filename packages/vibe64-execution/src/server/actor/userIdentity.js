@@ -46,10 +46,6 @@ function homeEnvForUser(user = {}, env = {}) {
   };
 }
 
-function actorHomeEnv(user = {}, env = {}) {
-  return homeEnvForUser(user, env);
-}
-
 function currentProcessIdentity() {
   return {
     gid: typeof process.getgid === "function" ? process.getgid() : null,
@@ -58,7 +54,6 @@ function currentProcessIdentity() {
 }
 
 export {
-  actorHomeEnv,
   currentActorUser,
   currentProcessIdentity,
   homeEnvForUser,

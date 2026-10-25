@@ -25,14 +25,10 @@ export {
   resolveGithubHomeForStoredActor
 } from "./credentialHomes.js";
 export {
-  actorHomeEnv,
   currentActorUser,
-  currentProcessIdentity,
-  normalizeActorUser,
-  resolvedActorUser
+  homeEnvForUser
 } from "./actor/userIdentity.js";
 export {
-  EXEC_HELPER_PAYLOAD_SCHEMA,
   EXEC_HELPER_PAYLOAD_SCHEMA_VERSION,
   helperOperationForRequest,
   helperPayload,
@@ -40,7 +36,6 @@ export {
   runHelperCommand
 } from "./engines/helperClient.js";
 export {
-  FILE_LOCK_ERROR_CODE,
   tryAcquireExclusiveFileLock
 } from "./engines/fileLock.js";
 export {
@@ -78,25 +73,17 @@ export {
 } from "./env/resolveCommandEnv.js";
 export {
   ISOLATED_PROCESS_BASE_ENV_NAMES,
-  ISOLATED_PROCESS_RESERVED_ENV_NAMES,
   isolatedProcessEnv
 } from "./env/isolatedProcessEnv.js";
-export {
-  DEFAULT_SUPERVISED_LOG_LIMIT_BYTES,
-  DEFAULT_SUPERVISED_STOP_TIMEOUT_MS,
-  startSupervisedProcess
-} from "./engines/supervised.js";
 export {
   GITHUB_SSH_TO_HTTPS_GIT_CONFIG,
   absoluteUniqueGitPaths,
   applyGitConfigEntriesToEnv,
   applyGitSafeDirectoriesToEnv,
-  gitSafeDirectoryArgs,
   gitSafeDirectoryEntries,
   githubCredentialHelperGitEnv,
   githubGitNonInteractiveEnv,
-  githubHttpsGitTransportEnv,
-  githubSshToHttpsGitEnv
+  githubHttpsGitTransportEnv
 } from "./env/gitConfigEnv.js";
 export {
   githubGitAuthScript
@@ -109,14 +96,12 @@ export {
   databaseEnv
 } from "./env/databaseEnv.js";
 export {
-  POLICY_OWNED_CALLER_ENV_NAMES,
   RESERVED_CALLER_ENV_NAMES,
   commandCallerEnv,
   rejectCallerEnvPolicy
 } from "./env/callerEnv.js";
 export {
   NPM_CONFIG_PREFIX_ENV,
-  npmConfigPrefix,
   npmToolBinDirs,
   npmToolEnv
 } from "./env/npmToolEnv.js";
@@ -125,17 +110,12 @@ export {
   GIT_AUTHOR_NAME_ENV,
   GIT_COMMITTER_EMAIL_ENV,
   GIT_COMMITTER_NAME_ENV,
-  fallbackGitIdentity,
   GIT_IDENTITY_COMMANDS,
   gitIdentityEnv,
-  gitIdentityReadiness,
   isFallbackGitIdentityEmail,
-  personGitConfigIdentity,
-  resolveGitIdentity,
-  sanitizeEmailLabel
+  resolveGitIdentity
 } from "./env/gitIdentityEnv.js";
 export {
-  describeGitFailure,
   gitFailureError,
   gitInstallCommand
 } from "./gitFailure.js";
@@ -145,7 +125,6 @@ export {
 } from "./shellText.js";
 export {
   CANONICAL_REPOSITORY_BACKUP_NAME,
-  CANONICAL_REPOSITORY_PRE_RECEIVE_HOOK_SOURCE,
   CANONICAL_REPOSITORY_PUSH_OPTION,
   GITHUB_MIRROR_REFRESH_SCRIPT,
   canonicalRepositoryBackupPath,
@@ -177,11 +156,9 @@ export {
   RUNTIME_PACKS,
   VIBE64_INTERACTIVE_RUNTIME_PACKS,
   managedCommandRuntimeEntries,
-  managedCommandsForRuntimePacks,
   runtimePackBinPaths,
   runtimePackGuardBinPaths,
   runtimePackPolicyBinPaths,
-  runtimePackManagedCommands,
   runtimePackRoot
 } from "./runtime/runtimePacks.js";
 export {

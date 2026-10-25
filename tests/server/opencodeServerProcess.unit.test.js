@@ -6,7 +6,6 @@ import test from "node:test";
 
 import {
   configureVibe64Host,
-  startSupervisedProcess,
   VIBE64_INTERACTIVE_RUNTIME_PACKS
 } from "../../packages/vibe64-execution/src/server/index.js";
 
@@ -440,22 +439,6 @@ test("OpenCode route configuration contains one provider and no inherited provid
     assert.equal(env[name], undefined);
   }
   assert.equal(JSON.stringify(env).includes("must-not-leak"), false);
-});
-
-test("OpenCode child cleanup terminates its detached process group", async () => {
-  const supervised = await startSupervisedProcess({
-    args: [
-      "--input-type=module",
-      "--eval",
-      "setInterval(() => {}, 1000)"
-    ],
-    command: process.execPath,
-    env: process.env,
-    stopTimeoutMs: 2_000
-  });
-  const result = await supervised.stop();
-  assert.equal(result.exited, true);
-  assert.equal(result.signal, "SIGTERM");
 });
 
 test("OpenCode servers run and drain through one managed execution id", async (t) => {

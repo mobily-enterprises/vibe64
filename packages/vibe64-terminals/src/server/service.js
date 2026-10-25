@@ -99,9 +99,9 @@ import { vibe64Error } from "@local/vibe64-core/server/core";
 import { readProjectPreview, sendProjectMessage } from "./projectMessage.js";
 import { createProjectServices } from "./projectServices.js";
 import {
-  actorHomeEnv,
   appCredentialContext,
   createVibe64ConversationExecution,
+  homeEnvForUser,
   operatorCliCommand,
   runVibe64Command
 } from "@local/vibe64-execution/server";
@@ -3963,7 +3963,7 @@ function createService({
       return {
         workdir: scope.workdir, stateDirectory: path.join(scope.runtimeRoot, "native"),
         allowAccountChange: scope.allowAccountChange === true,
-        env: { ...actorHomeEnv(credentialHome, env),
+        env: { ...homeEnvForUser(credentialHome, env),
           CODEX_HOME: path.join(codexProviderOptions.toolHomeSource, ".codex") },
         commands: { codex: codexProviderOptions.codexCommand || operatorCliCommand("codex", { env }),
           claude: operatorCliCommand("claude", { env }),

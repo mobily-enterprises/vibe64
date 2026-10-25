@@ -7,7 +7,7 @@ import {
   applyGitSafeDirectoriesToEnv,
   gitSafeDirectoryArgs,
   githubSshToHttpsGitEnv
-} from "@local/vibe64-execution/server";
+} from "../../packages/vibe64-execution/src/server/env/gitConfigEnv.js";
 
 test("Git config environment entries append without replacing existing entries", () => {
   const env = applyGitConfigEntriesToEnv({

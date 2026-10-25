@@ -228,15 +228,10 @@ function managedCommandRuntimeEntries() {
   }));
 }
 
-function managedCommandsForRuntimePacks() {
-  return managedCommandRuntimeEntries().map((entry) => entry.command);
-}
-
 export {
   RUNTIME_PACKS,
   VIBE64_INTERACTIVE_RUNTIME_PACKS,
   managedCommandRuntimeEntries,
-  managedCommandsForRuntimePacks,
   runtimePackBinPaths,
   runtimePackGuardBinPaths,
   runtimePackPolicyBinPaths,

@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { managedExecutionState, managedExecutionOomBoundary, managedExecutionTaskLimitCounters,
+import { helperChildEnv, managedExecutionState, managedExecutionOomBoundary, managedExecutionTaskLimitCounters,
   managedExecutionTaskLimitJournal } from "../../packages/vibe64-execution/src/host/execHelper.js";
+import {
+  RUNTIME_PACKS,
+  VIBE64_INTERACTIVE_RUNTIME_PACKS
+} from "../../packages/vibe64-execution/src/server/runtime/runtimePacks.js";
 
 const HELPER_SOURCE_URL = new URL("../../packages/vibe64-execution/src/host/execHelper.js", import.meta.url);
 
@@ -360,4 +364,21 @@ test("managed executions can traverse their private workspace runtime directory"
   assert.match(source, /function managedExecutionRuntimeBase\(owner = \{\}\)/u);
   assert.match(source, /runRootCommand\("install", \[/u);
   assert.match(source, /"2750",\s+runtimeBase,\s+path\.join\(runtimeBase, "executions"\)/u);
+});
+
+test("runtime pack lists stay in step: interactive order and the helper PATH cover every pack", () => {
+  assert.deepEqual([...VIBE64_INTERACTIVE_RUNTIME_PACKS].sort(), Object.keys(RUNTIME_PACKS).sort());
+
+  const packRoot = "/opt/vibe64/runtime-packs/";
+  const helperPackDirs = helperChildEnv({}, { home: "/home/alice", username: "alice" }, "v64d_alice", "command")
+    .PATH.split(":")
+    .filter((entry) => entry.startsWith(packRoot))
+    .map((entry) => entry.slice(packRoot.length));
+  const packBinDirs = new Set(Object.values(RUNTIME_PACKS).flatMap((pack) => pack.binDirs));
+  for (const dir of helperPackDirs) {
+    assert.ok(packBinDirs.has(dir) || dir === "policy-bin" || dir === "guard-bin", `unknown helper PATH entry ${dir}`);
+  }
+  for (const [runtime, pack] of Object.entries(RUNTIME_PACKS)) {
+    assert.ok(pack.binDirs.some((dir) => helperPackDirs.includes(dir)), `helper PATH misses runtime ${runtime}`);
+  }
 });

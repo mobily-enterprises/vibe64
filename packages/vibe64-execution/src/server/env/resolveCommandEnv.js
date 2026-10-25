@@ -1,7 +1,7 @@
 import path from "node:path";
 import { processMatchesActor } from "../policy/permissionPolicy.js";
 import {
-  actorHomeEnv
+  homeEnvForUser
 } from "../actor/userIdentity.js";
 import {
   databaseEnv
@@ -128,7 +128,7 @@ function resolveCommandEnv({
   const callerEnv = commandCallerEnv(request.env, request);
   const runtimeDir = String(baseEnv.XDG_RUNTIME_DIR || "").trim();
   const env = {
-    ...actorHomeEnv(actor.user, commandBaseEnv(baseEnv)),
+    ...homeEnvForUser(actor.user, commandBaseEnv(baseEnv)),
     // Runtime sockets belong to the OS identity, not its configurable HOME.
     ...(processMatchesActor(actor) && path.isAbsolute(runtimeDir)
       ? { XDG_RUNTIME_DIR: runtimeDir } : {}),

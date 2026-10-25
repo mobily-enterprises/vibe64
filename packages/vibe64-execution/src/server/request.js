@@ -7,11 +7,9 @@ import {
   recordValue,
   uniqueStrings
 } from "./normalize.js";
+import { rejectCallerEnvPolicy } from "./env/callerEnv.js";
 import {
-  RESERVED_CALLER_ENV_NAMES,
-  rejectCallerEnvPolicy
-} from "./env/callerEnv.js";
-import {
+  RUNTIME_PACKS,
   VIBE64_INTERACTIVE_RUNTIME_PACKS
 } from "./runtime/runtimePacks.js";
 
@@ -70,31 +68,6 @@ const VIBE64_EXECUTION_LIFECYCLES = Object.freeze([
   "finite",
   "interactive",
   "service"
-]);
-const VIBE64_COMMAND_RUNTIMES = Object.freeze([
-  "node26",
-  "git",
-  "gh",
-  "mysql",
-  "mariadb",
-  "postgresql",
-  "sqlite",
-  "ripgrep",
-  "bubblewrap",
-  "bun",
-  "php",
-  "composer",
-  "awsebcli",
-  "cpp",
-  "python",
-  "ruby",
-  "go",
-  "java",
-  "kotlin",
-  "csharp",
-  "rust",
-  "playwright",
-  "operator-clis"
 ]);
 const DEFAULT_COMMAND_MAX_BUFFER_BYTES = 1000 * 1000 * 100;
 const DEFAULT_INTERACTIVE_RUNTIME_PURPOSES = new Set([
@@ -170,7 +143,7 @@ function normalizeTerminalOptions(value = {}) {
   return {
     commandPreview: terminal.commandPreview,
     detachedIdleTimeoutMs: terminal.detachedIdleTimeoutMs,
-    helperPayloadRoot: normalizeAbsolutePath(terminal.helperPayloadRoot || terminal.payloadRoot),
+    helperPayloadRoot: normalizeAbsolutePath(terminal.helperPayloadRoot),
     maxRunning: terminal.maxRunning,
     metadata: terminal.metadata,
     namespace: normalizeText(terminal.namespace),
@@ -352,13 +325,13 @@ function normalizeVibe64CommandRequest(input = {}) {
     throw commandRequestError("Cancellation signals require a finite capture command.", "vibe64_command_signal_invalid");
   }
   const baseEnv = envRecord(request.baseEnv);
-  const normalizedEnv = normalizeCommandEnv(request.env !== undefined ? request.env : request.extraEnv, {
+  const normalizedEnv = normalizeCommandEnv(request.env, {
     mode
   });
   const purpose = normalizeEnum(request.purpose, VIBE64_COMMAND_PURPOSES, "terminal", "purpose");
   const runtimes = normalizeRequestedRuntimes(request, purpose);
   for (const runtime of runtimes) {
-    if (!VIBE64_COMMAND_RUNTIMES.includes(runtime)) {
+    if (!Object.hasOwn(RUNTIME_PACKS, runtime)) {
       throw commandRequestError(`Unsupported Vibe64 runtime: ${runtime}.`, "vibe64_command_runtime_unsupported");
     }
   }
@@ -390,15 +363,15 @@ function normalizeVibe64CommandRequest(input = {}) {
       session
     }),
     credentialHome: normalizeCredentialHome(request.credentialHome),
-    gitAuthToken: normalizeText(request.gitAuthToken || request.gitCredentials?.token),
-    gitSafeDirectories: normalizeAbsolutePaths(request.gitSafeDirectories || request.safeDirectories),
+    gitAuthToken: normalizeText(request.gitAuthToken),
+    gitSafeDirectories: normalizeAbsolutePaths(request.gitSafeDirectories),
     personGitIdentity: {
       email: normalizeText(request.personGitIdentity?.email),
       name: normalizeText(request.personGitIdentity?.name)
     },
-    gitTransport: normalizeEnum(request.gitTransport, VIBE64_COMMAND_GIT_TRANSPORTS, request.githubTransport ? "github-https" : "none", "git_transport"),
+    gitTransport: normalizeEnum(request.gitTransport, VIBE64_COMMAND_GIT_TRANSPORTS, "none", "git_transport"),
     inheritProcessEnv: !releaseEnvironmentFile && request.inheritProcessEnv !== false,
-    input: request.stdin ?? request.input,
+    input: request.input,
     logPath: normalizeAbsolutePath(request.logPath),
     maxBuffer: Number.isSafeInteger(Number(request.maxBuffer)) && Number(request.maxBuffer) > 0
       ? Number(request.maxBuffer)
@@ -417,7 +390,7 @@ function normalizeVibe64CommandRequest(input = {}) {
     session,
     signal: request.signal ?? null,
     shimDirs: normalizeAbsolutePaths(request.shimDirs),
-    terminal: normalizeTerminalOptions(request.terminal || request.pty),
+    terminal: normalizeTerminalOptions(request.terminal),
     timeout: Number.isSafeInteger(Number(request.timeout)) && Number(request.timeout) > 0
       ? Number(request.timeout)
       : 15_000,
@@ -427,16 +400,13 @@ function normalizeVibe64CommandRequest(input = {}) {
 
 export {
   DEFAULT_COMMAND_MAX_BUFFER_BYTES,
-  RESERVED_CALLER_ENV_NAMES,
   VIBE64_COMMAND_ACTORS,
   VIBE64_COMMAND_ENV_POLICIES,
   VIBE64_COMMAND_GIT_TRANSPORTS,
   VIBE64_COMMAND_MODES,
   VIBE64_COMMAND_PURPOSES,
-  VIBE64_COMMAND_RUNTIMES,
   VIBE64_EXECUTION_KINDS,
   VIBE64_EXECUTION_LIFECYCLES,
   normalizeExecutionDescriptor,
-  normalizeVibe64CommandRequest,
-  rejectCallerEnvPolicy
+  normalizeVibe64CommandRequest
 };
