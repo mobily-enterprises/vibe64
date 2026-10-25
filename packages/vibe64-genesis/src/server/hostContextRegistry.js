@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -24,10 +25,16 @@ export async function createVibe64HostContextRegistry(runtimeDirectory = "") {
   let pending = Promise.resolve();
   let closed = false;
 
+  // A unique temporary name: processes sharing one runtime directory never
+  // write or rename each other's partial registry.
   async function save(next) {
-    const temporary = path.join(directory, "sessions.tmp");
-    await writeFile(temporary, JSON.stringify({ sessions: [...next.values()] }), { mode: 0o600 });
-    await rename(temporary, registryPath);
+    const temporary = path.join(directory, `.sessions.${process.pid}.${randomUUID()}.tmp`);
+    try {
+      await writeFile(temporary, JSON.stringify({ sessions: [...next.values()] }), { flag: "wx", mode: 0o600 });
+      await rename(temporary, registryPath);
+    } finally {
+      await rm(temporary, { force: true });
+    }
   }
 
   await save(sessions);

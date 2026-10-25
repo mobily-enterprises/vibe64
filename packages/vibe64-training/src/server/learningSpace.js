@@ -2,7 +2,7 @@ import { lstat, mkdir, readdir, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
 import { practiceSlug } from "@local/vibe64-core/server/learningSpace";
 import { learnThreadFile, releaseLearnThread } from "@local/vibe64-core/server/learnThreads";
-import { writeJsonFileAtomic } from "@local/vibe64-core/server/projectRecordMetadata";
+import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { learnerIdentity } from "./learnerState.js";
 import { pinnedLessonKey } from "./installedContent.js";
 

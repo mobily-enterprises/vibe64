@@ -3,7 +3,7 @@ import { lstat, mkdir, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { tryAcquireExclusiveFileLock } from "@jskit-ai/kernel/server/support";
-import { writeJsonFileAtomic } from "@local/vibe64-core/server/projectRecordMetadata";
+import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { createCourseLock } from "./catalogue.js";
 import { canonicalJson } from "./content.js";
 import { courseSchema, list, validateContent } from "./contentSchemas.js";

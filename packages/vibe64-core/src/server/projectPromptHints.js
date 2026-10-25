@@ -1,13 +1,6 @@
-import { randomUUID } from "node:crypto";
-import {
-  chmod,
-  mkdir,
-  readFile,
-  rename,
-  rm,
-  writeFile
-} from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { writeJsonFileAtomic } from "./atomicFile.js";
 
 import {
   isMissingPathError,
@@ -71,22 +64,7 @@ async function saveProjectPromptHints({
 } = {}) {
   const filePath = projectPromptHintsPath(projectRuntimeRoot);
   const normalized = normalizeProjectPromptHints(settings);
-  await mkdir(path.dirname(filePath), { recursive: true });
-  const temporaryPath = path.join(
-    path.dirname(filePath),
-    `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`
-  );
-  try {
-    await writeFile(temporaryPath, `${JSON.stringify(normalized, null, 2)}\n`, {
-      encoding: "utf8",
-      flag: "wx",
-      mode: vibe64SharedModes().file
-    });
-    await rename(temporaryPath, filePath);
-    await chmod(filePath, vibe64SharedModes().file);
-  } finally {
-    await rm(temporaryPath, { force: true });
-  }
+  await writeJsonFileAtomic(filePath, normalized, { fileMode: vibe64SharedModes().file });
   return { filePath, settings: normalized };
 }
 

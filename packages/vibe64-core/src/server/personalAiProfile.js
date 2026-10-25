@@ -1,13 +1,6 @@
-import { randomUUID } from "node:crypto";
-import {
-  chmod,
-  mkdir,
-  readFile,
-  rename,
-  rm,
-  writeFile
-} from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { writeJsonFileAtomic } from "./atomicFile.js";
 
 import {
   isMissingPathError,
@@ -86,28 +79,7 @@ function createPersonalAiProfileStore({
   async function write(profile = {}) {
     const normalized = normalizePersonalAiProfile(profile);
     const operation = pendingWrite.catch(() => {}).then(async () => {
-      const directory = path.dirname(filePath);
-      const temporaryPath = path.join(
-        directory,
-        `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`
-      );
-      await mkdir(directory, {
-        mode: 0o700,
-        recursive: true
-      });
-      try {
-        await writeFile(temporaryPath, `${JSON.stringify(normalized, null, 2)}\n`, {
-          encoding: "utf8",
-          flag: "wx",
-          mode: 0o600
-        });
-        await rename(temporaryPath, filePath);
-        await chmod(filePath, 0o600);
-      } finally {
-        await rm(temporaryPath, {
-          force: true
-        });
-      }
+      await writeJsonFileAtomic(filePath, normalized, { directoryMode: 0o700, fileMode: 0o600 });
       return normalized;
     });
     pendingWrite = operation;

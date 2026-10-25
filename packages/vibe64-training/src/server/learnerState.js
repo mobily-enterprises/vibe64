@@ -4,7 +4,7 @@ import path from "node:path";
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { tryAcquireExclusiveFileLock } from "@jskit-ai/kernel/server/support";
 import { practiceSlug } from "@local/vibe64-core/server/learningSpace";
-import { writeJsonFileAtomic } from "@local/vibe64-core/server/projectRecordMetadata";
+import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { assertValidVibe64SessionId } from "@local/vibe64-runtime/server/sessionStore";
 import { LEARNER_NOTES_MAX_CHARS as MAX_NOTES_CHARS, TRAINING_LESSON_IN_PROGRESS_CODE, TRAINING_NOTES_CHANGED_CODE } from "../shared/learnerContract.js";
 import { canonicalJson } from "./content.js";

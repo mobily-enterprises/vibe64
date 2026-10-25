@@ -6,8 +6,9 @@ import {
 } from "@jskit-ai/assistant-core/server/codex-configuration";
 import { verifyClaudeProviderKey } from "@jskit-ai/assistant-core/server/claude-process";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
+import { serializeByKey, writeFileAtomic } from "./atomicFile.js";
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider } from "../shared/curatedCodexProviders.js";
 import { codexAuthMarkerPath, clearCodexAuthStatus, markCodexAuthReconnecting, readCodexAuthStatus } from "./codexAuthState.js";
 
@@ -27,15 +28,8 @@ function codexProviderPaths(systemRoot, providerId, engineId = "codex") {
   };
 }
 
-async function privateFile(filePath, contents) {
-  await mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
-  const temporary = `${filePath}.${randomUUID()}.tmp`;
-  try {
-    await writeFile(temporary, contents, { mode: 0o600, flag: "wx" });
-    await rename(temporary, filePath);
-  } finally {
-    await rm(temporary, { force: true });
-  }
+function privateFile(filePath, contents) {
+  return writeFileAtomic(filePath, contents, { directoryMode: 0o700, fileMode: 0o600 });
 }
 
 function codexProviderModelCatalog(provider) {
@@ -128,8 +122,7 @@ function createCodexProviderConnectionStore({
     const provider = curatedCodexProvider(providerId);
     const engineId = input.engineId || "codex";
     const paths = codexProviderPaths(systemRoot, providerId, engineId);
-    const previous = changes.get(paths.connectionPath) || Promise.resolve();
-    const operation = previous.catch(() => null).then(async () => {
+    return serializeByKey(changes, paths.connectionPath, async () => {
       const previousConnection = await read(providerId, engineId);
       const removing = input.remove === true;
       if (!["codex", "claude"].includes(engineId)) throw new Error("Choose Codex or Claude Code.");
@@ -183,12 +176,6 @@ function createCodexProviderConnectionStore({
       if (!published) throw new Error("Claude Code did not complete the connection change. Retry before changing its key.");
       return list();
     });
-    changes.set(paths.connectionPath, operation);
-    try {
-      return await operation;
-    } finally {
-      if (changes.get(paths.connectionPath) === operation) changes.delete(paths.connectionPath);
-    }
   }
   return { change, list, read, runtimeOptions, threadConfig, claudeProviderSettings };
 }

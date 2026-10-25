@@ -1,7 +1,8 @@
 import { codexAuthOutputRequiresReconnect } from "@jskit-ai/assistant-core/server/codex-configuration";
 import { createHash, randomUUID } from "node:crypto";
-import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
+import { writeJsonFileAtomic } from "./atomicFile.js";
 
 import {
   CODEX_RECONNECT_REQUIRED_CODE,
@@ -89,17 +90,7 @@ async function clearCodexAuthStatus(systemRoot = "") {
 }
 
 async function writeCodexAuthRecord(statusPath, status) {
-  const tempPath = `${statusPath}.${process.pid}.${randomUUID()}.tmp`;
-  await mkdir(path.dirname(statusPath), {
-    mode: 0o700,
-    recursive: true
-  });
-  await writeFile(tempPath, `${JSON.stringify(status, null, 2)}\n`, {
-    mode: 0o600
-  });
-  await chmod(tempPath, 0o600).catch(() => null);
-  await rename(tempPath, statusPath);
-  await chmod(statusPath, 0o600).catch(() => null);
+  await writeJsonFileAtomic(statusPath, status, { directoryMode: 0o700, fileMode: 0o600 });
   return status;
 }
 

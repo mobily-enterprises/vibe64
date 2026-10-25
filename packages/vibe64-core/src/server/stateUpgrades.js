@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
-import { lstat, mkdir, open, readdir, readFile, realpath, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdir, open, readdir, readFile, realpath, rm } from "node:fs/promises";
 import path from "node:path";
+import { writeJsonFileAtomic } from "./atomicFile.js";
 import codexLoginId from "./stateUpgrades/20260923-codex-login-id.js";
 import routingV2 from "./stateUpgrades/20260923-routing-v2.js";
 import nativeConversationLifecycle from "./stateUpgrades/20260925-native-conversation-lifecycle.js";
@@ -108,14 +108,8 @@ async function withUpgradeLock(upgradeRoot, operation, { busy = null } = {}) {
   }
 }
 
-async function writeLedger(ledgerPath, ledger) {
-  const temporaryPath = `${ledgerPath}.${randomUUID()}.tmp`;
-  try {
-    await writeFile(temporaryPath, `${JSON.stringify(ledger, null, 2)}\n`, { flag: "wx", mode: 0o600 });
-    await rename(temporaryPath, ledgerPath);
-  } finally {
-    await rm(temporaryPath, { force: true });
-  }
+function writeLedger(ledgerPath, ledger) {
+  return writeJsonFileAtomic(ledgerPath, ledger, { fileMode: 0o600 });
 }
 
 function ledgerExists(ledgerPath) {

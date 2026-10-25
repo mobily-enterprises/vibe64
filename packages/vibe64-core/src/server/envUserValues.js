@@ -1,5 +1,7 @@
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+
+import { serializeByKey, writeJsonFileAtomic } from "./atomicFile.js";
 
 import {
   isMissingPathError,
@@ -18,6 +20,8 @@ const ENV_USER_VALUES_DIR = "env";
 const ENV_USER_VALUES_FILE = "user-values.json";
 const ENV_USER_VALUES_VERSION = 1;
 const ENV_USER_VALUE_SOURCE = "user";
+// Every session of a project shares its one values file; changes queue per file.
+const envUserValuesUpdates = new Map();
 
 function envUserValuesPath(projectRuntimeRoot = "") {
   const root = normalizeText(projectRuntimeRoot);
@@ -126,7 +130,17 @@ async function saveEnvUserValues({
     );
   }
   const filePath = envUserValuesPath(projectRuntimeRoot);
-  const state = normalizeEnvUserValuesState(await readEnvUserValuesFile(filePath));
+  await serializeByKey(envUserValuesUpdates, filePath, async () => {
+    const state = normalizeEnvUserValuesState(await readEnvUserValuesFile(filePath));
+    applyEnvUserValues(state, environment, values);
+    await writeJsonFileAtomic(filePath, normalizeEnvUserValuesState(state), { fileMode: 0o600 });
+  });
+  return readEnvUserValues({
+    projectRuntimeRoot
+  });
+}
+
+function applyEnvUserValues(state, environment, values) {
   const normalizedEnvironment = normalizeRuntimeConfigScope(environment);
   const scopeValues = {
     ...(state.environments[normalizedEnvironment] || {})
@@ -154,21 +168,6 @@ async function saveEnvUserValues({
 
   state.environments[normalizedEnvironment] = Object.fromEntries(Object.entries(scopeValues)
     .sort(([left], [right]) => left.localeCompare(right)));
-  await writeEnvUserValuesFile(filePath, state);
-  return readEnvUserValues({
-    projectRuntimeRoot
-  });
-}
-
-async function writeEnvUserValuesFile(filePath = "", state = {}) {
-  const normalizedState = normalizeEnvUserValuesState(state);
-  await mkdir(path.dirname(filePath), {
-    recursive: true
-  });
-  await writeFile(filePath, `${JSON.stringify(normalizedState, null, 2)}\n`, {
-    mode: 0o600
-  });
-  await chmod(filePath, 0o600);
 }
 
 export {

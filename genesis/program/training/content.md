@@ -38,6 +38,7 @@ infrastructure or prove a delivered lesson.
 - `src/components/learning/Vibe64LearningTeacherNotes.vue`
 - `packages/vibe64-training/src/server/preparation.js`
 - `packages/vibe64-core/src/server/projectRecordMetadata.js`
+- `packages/vibe64-core/src/server/atomicFile.js`
 - `packages/vibe64-core/src/server/stateUpgrades.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261006-training-preparation.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261006-training-assessments.js`

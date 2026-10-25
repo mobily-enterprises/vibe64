@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { access, mkdir, mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { access, chmod, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
+import path from "node:path";
 import test from "node:test";
 
 import { createVibe64HostContextRegistry } from "../../packages/vibe64-genesis/src/server/hostContextRegistry.js";
@@ -87,14 +88,18 @@ test("failed ownership writes retain the durable binding and can be retried", as
   const registry = await createVibe64HostContextRegistry();
   t.after(() => registry.close());
   await registry.register("native-main", context("main"), "/workspace");
-  const temporary = registry.registryPath.replace(/sessions\.json$/u, "sessions.tmp");
-  await mkdir(temporary);
-  await assert.rejects(registry.register("native-main", context("temporary"), "/workspace"));
+  const directory = path.dirname(registry.registryPath);
+  await chmod(directory, 0o500);
+  try {
+    await assert.rejects(registry.register("native-main", context("temporary"), "/workspace"));
+  } finally {
+    await chmod(directory, 0o700);
+  }
   assert.deepEqual(registry.get("native-main").promptContext, context("main"));
   assert.deepEqual(JSON.parse(await readFile(registry.registryPath, "utf8")).sessions[0].promptContext, context("main"));
-  await rm(temporary, { recursive: true });
   await registry.register("native-main", context("temporary"), "/workspace");
   assert.deepEqual(registry.get("native-main").promptContext, context("temporary"));
+  assert.deepEqual(await readdir(directory), ["sessions.json"], "no temporary registry file outlives a write");
 });
 
 test("Genesis context survives a controller restart at the same native runtime path", async (t) => {

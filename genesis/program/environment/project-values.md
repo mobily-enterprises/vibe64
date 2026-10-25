@@ -19,6 +19,9 @@ host provide managed system values separately.
 - `packages/vibe64-terminals/src/server/agentCommandEnvironment.js`
 - `packages/vibe64-terminals/src/server/agentEnvCommand.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
+- `packages/vibe64-core/src/server/envUserValues.js`
+- `packages/vibe64-core/src/server/atomicFile.js`
+- `tests/server/atomicFile.unit.test.js`
 - `src/components/studio/EnvPanel.vue`
 - `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
 - `src/components/studio/RuntimeConfigRecordsTable.vue`
@@ -45,6 +48,10 @@ and applies values to session preparation, checks, launches, and agent work.
 Agents store an application secret they generate (such as an application key)
 by piping it to `vibe64-helper env set <scope> <KEY> --secret`, never by editing a
 generated environment file, which Vibe64 rewrites from Env.
+Saved user values live in one private (`0600`) file per project that every
+session shares. Saves queue per file, so concurrent saves from different
+sessions keep each other's values, and each one replaces the file atomically:
+an interrupted save leaves the previous values readable.
 Codex, Claude, and OpenCode session commands receive the resolved development
 environment. The authenticated shell broker reads current project Env for every
 command using its bound project and exact session source, then supplies it through

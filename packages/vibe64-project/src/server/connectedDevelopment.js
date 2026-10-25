@@ -5,7 +5,7 @@ import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { vibe64Error } from "@local/vibe64-core/server/core";
 import { sessionConnectedContribution, sessionConnectedSources } from "@local/vibe64-core/server/projectRepository";
-import { writeJsonFileAtomic } from "@local/vibe64-core/server/projectRecordMetadata";
+import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import {

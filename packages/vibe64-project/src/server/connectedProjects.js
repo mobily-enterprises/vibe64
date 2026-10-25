@@ -3,7 +3,7 @@ import { constants } from "node:fs";
 import { lstat, open } from "node:fs/promises";
 import path from "node:path";
 import { isPlainObject, vibe64Error } from "@local/vibe64-core/server/core";
-import { writeJsonFileAtomic } from "@local/vibe64-core/server/projectRecordMetadata";
+import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import {
   connectedPackageTypeListText,
   connectedPackageTypeUsesScript,

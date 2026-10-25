@@ -1,6 +1,6 @@
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
-import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { writeFileAtomic } from "./atomicFile.js";
 import {
   isPlainObject,
   normalizeText
@@ -42,15 +42,8 @@ async function saveProjectRepositoryWorkflow(projectRuntimeRoot, requirePullRequ
   if (!path.isAbsolute(projectRuntimeRoot || "") || typeof requirePullRequest !== "boolean") {
     throw new Error("Choose whether to require pull requests.");
   }
-  const directory = path.join(projectRuntimeRoot, "settings");
-  await mkdir(directory, { recursive: true });
-  const temporary = path.join(directory, `.repository-workflow.${randomUUID()}.tmp`);
-  try {
-    await writeFile(temporary, JSON.stringify({ requirePullRequest }) + "\n", { flag: "wx", mode: vibe64SharedModes().file });
-    await rename(temporary, path.join(directory, "repository-workflow.json"));
-  } finally {
-    await rm(temporary, { force: true });
-  }
+  await writeFileAtomic(path.join(projectRuntimeRoot, "settings", "repository-workflow.json"),
+    JSON.stringify({ requirePullRequest }) + "\n", { fileMode: vibe64SharedModes().file });
   return { requirePullRequest };
 }
 

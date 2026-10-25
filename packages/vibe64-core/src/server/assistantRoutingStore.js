@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { serializeByKey, writeFileAtomic } from "./atomicFile.js";
 
 const writes = new Map();
 const setupRoles = Object.freeze({
@@ -67,23 +67,15 @@ function createAssistantRoutingStore({ systemRoot } = {}) {
     }
   }
   async function write({ owner, nonOwner }, expectedRevision) {
-    const previous = writes.get(filePath) || Promise.resolve();
-    const operation = previous.catch(() => null).then(async () => {
+    return serializeByKey(writes, filePath, async () => {
       const current = await read();
       if (current.revision !== expectedRevision) throw Object.assign(new Error("Model routing changed in another tab. Reload and review the current choices."), {
         code: "vibe64_assistant_routing_stale", statusCode: 409
       });
       const next = validateAssistantRoutingConfiguration({ schemaVersion: 5, revision: current.revision + 1, owner, nonOwner });
-      await mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
-      const temporary = `${filePath}.${randomUUID()}.tmp`;
-      try {
-        await writeFile(temporary, `${JSON.stringify(next)}\n`, { mode: 0o600, flag: "wx" });
-        await rename(temporary, filePath);
-      } finally { await rm(temporary, { force: true }); }
+      await writeFileAtomic(filePath, `${JSON.stringify(next)}\n`, { directoryMode: 0o700, fileMode: 0o600 });
       return next;
     });
-    writes.set(filePath, operation);
-    try { return await operation; } finally { if (writes.get(filePath) === operation) writes.delete(filePath); }
   }
   return { read, write };
 }
