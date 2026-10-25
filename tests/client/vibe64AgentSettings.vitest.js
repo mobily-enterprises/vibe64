@@ -128,3 +128,14 @@ describe("vibe64AgentSettings", () => {
     )).toBe("vibe64:agent-settings:project:example-target-app:user:owner@example.com");
   });
 });
+
+describe("agent provider terminals", () => {
+  it("names each engine's terminal and only OpenCode accepts terminal attachments", async () => {
+    const { findVibe64AgentProvider } = await import("@local/vibe64-runtime/shared");
+    expect(findVibe64AgentProvider("codex")).toMatchObject({ terminal: "codex", terminalAttachments: false });
+    expect(findVibe64AgentProvider("claude")).toMatchObject({ label: "Claude Code", terminal: "native", terminalAttachments: false });
+    expect(findVibe64AgentProvider("opencode")).toMatchObject({ label: "OpenCode", terminal: "native", terminalAttachments: true });
+    expect(findVibe64AgentProvider("")).toBeNull();
+    expect(findVibe64AgentProvider("unknown")).toBeNull();
+  });
+});

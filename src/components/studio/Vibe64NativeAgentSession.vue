@@ -38,11 +38,11 @@
       <template #actions-before>
         <v-btn
           v-if="showAttachmentAction"
-          aria-label="Attach files to OpenCode terminal"
+          :aria-label="`Attach files to ${assistantLabel} terminal`"
           :disabled="!attachmentCanAddFiles"
           :icon="mdiPaperclip"
           size="small"
-          title="Attach files to OpenCode terminal"
+          :title="`Attach files to ${assistantLabel} terminal`"
           type="button"
           variant="text"
           @click="attachmentFileInput?.click()"
@@ -66,7 +66,7 @@
         <div v-if="attachmentDragActive" class="vibe64-native-agent-session__drop-overlay" role="status">
           <v-sheet class="vibe64-native-agent-session__drop-card" elevation="4" rounded="lg">
             <v-icon :icon="mdiPaperclip" size="28" />
-            <span>Drop files for OpenCode</span>
+            <span>Drop files for {{ assistantLabel }}</span>
           </v-sheet>
         </div>
         <div v-if="showStartPanel" class="vibe64-native-agent-session__start-panel">
@@ -128,6 +128,7 @@ import { createWebSocketTerminalDriver } from "@/lib/vibe64TerminalDriver.js";
 import { vibe64AgentTerminalWebSocketUrl } from "@/lib/vibe64SessionApi.js";
 import { vibe64TerminalErrorMessage } from "@/lib/vibe64TerminalErrors.js";
 import { vibe64SessionSourcePath } from "@/lib/vibe64SessionPaths.js";
+import { findVibe64AgentProvider } from "@local/vibe64-runtime/shared";
 
 const props = defineProps({
   allowStart: {
@@ -160,7 +161,9 @@ const emit = defineEmits(["session-update"]);
 const terminalCommands = useVibe64TerminalCommands();
 const attachmentCommands = useVibe64AttachmentCommands();
 const attachmentFileInput = ref(null);
-const assistantLabel = computed(() => props.session?.assistantSelection?.engineId === "claude" ? "Claude Code" : "OpenCode");
+const assistantProvider = computed(() => findVibe64AgentProvider(props.session?.assistantSelection?.engineId));
+const assistantLabel = computed(() => assistantProvider.value?.label || "");
+const assistantAcceptsAttachments = computed(() => assistantProvider.value?.terminalAttachments === true);
 const sessionId = computed(() => String(props.session?.sessionId || ""));
 const sessionSource = computed(() => vibe64SessionSourcePath(props.session || {}));
 const displayActive = computed(() => props.visible && props.displayMode !== "headless");
@@ -211,7 +214,7 @@ const {
 } = terminalController;
 
 const showAttachmentAction = computed(() => Boolean(
-  props.session?.assistantSelection?.engineId === "opencode" && !props.readOnly && displayActive.value
+  assistantAcceptsAttachments.value && !props.readOnly && displayActive.value
 ));
 const attachmentsEnabled = computed(() => Boolean(
   showAttachmentAction.value && sessionId.value && terminalSessionId.value && terminalStatus.value === "running"
@@ -242,7 +245,7 @@ const {
       target.sessionId, target.terminalSessionId, text, { attachmentIds }
     );
     if (result?.ok === false) {
-      throw new Error(vibe64TerminalErrorMessage(result, "The attachment could not be sent to OpenCode."));
+      throw new Error(vibe64TerminalErrorMessage(result, `The attachment could not be sent to ${assistantLabel.value}.`));
     }
     return true;
   },
@@ -259,7 +262,7 @@ function handleAttachmentSelection(event) {
 }
 
 function handleTerminalPaste(event) {
-  if (props.session?.assistantSelection?.engineId !== "opencode") return;
+  if (!assistantAcceptsAttachments.value) return;
   const files = assistantAttachmentFilesFromPasteEvent(event);
   if (!files.length) return;
   // Keep file pastes out of xterm, including accompanying clipboard text that

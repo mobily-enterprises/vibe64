@@ -87,8 +87,8 @@ describe("Vibe64 terminal consumers", () => {
     expect(temporaryAction).toContain(":show-close=\"canDismiss\"");
     expect(temporaryAction).toContain("if (active && !previousActive)");
 
-    expect(runtimeHost).toContain("selectedAssistantEngineId === 'codex'");
-    expect(runtimeHost).toContain("['claude', 'opencode'].includes(selectedAssistantEngineId)");
+    expect(runtimeHost).toContain("selectedAssistantTerminal === 'codex'");
+    expect(runtimeHost).toContain("selectedAssistantTerminal === 'native'");
     expect(runtimeHost).not.toContain('engineId || "codex"');
     expect(runtimeHost).not.toMatch(/<Vibe64NativeAgentSession\s+v-else(?:\s|>)/u);
     expect(autopilotState).not.toContain("assistantEngineId === 'codex'");

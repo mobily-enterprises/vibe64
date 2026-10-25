@@ -41,7 +41,7 @@
     >
       <template #ai-terminal="{ active: tabActive }">
         <Vibe64CodexSession
-          v-if="selectedAssistantEngineId === 'codex'"
+          v-if="selectedAssistantTerminal === 'codex'"
           class="studio-ai-sessions__tab-terminal"
           :allow-start="tabActive && codexTerminalCanStart"
           :display-mode="tabActive ? 'full' : 'headless'"
@@ -54,7 +54,7 @@
           @session-update="agentTerminal.sessionUpdate"
         />
         <Vibe64NativeAgentSession
-          v-else-if="['claude', 'opencode'].includes(selectedAssistantEngineId)"
+          v-else-if="selectedAssistantTerminal === 'native'"
           class="studio-ai-sessions__tab-terminal"
           :allow-start="tabActive"
           :display-mode="tabActive ? 'full' : 'headless'"
@@ -83,6 +83,7 @@
 
 <script setup>
 import { computed } from "vue";
+import { findVibe64AgentProvider } from "@local/vibe64-runtime/shared";
 import Vibe64AutopilotView from "@/components/studio/vibe64-session/Vibe64AutopilotView.vue";
 import Vibe64CodexSession from "@/components/studio/Vibe64CodexSession.vue";
 import Vibe64NativeAgentSession from "@/components/studio/Vibe64NativeAgentSession.vue";
@@ -187,8 +188,8 @@ const {
   updateSessionWork,
   workState
 } = useVibe64SessionRuntimeHost(props, emit);
-const selectedAssistantEngineId = computed(() => String(
-  selection.selectedSession?.assistantSelection?.engineId || ""
+const selectedAssistantTerminal = computed(() => (
+  findVibe64AgentProvider(selection.selectedSession?.assistantSelection?.engineId)?.terminal || ""
 ));
 </script>
 

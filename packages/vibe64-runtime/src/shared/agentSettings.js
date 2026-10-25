@@ -37,6 +37,8 @@ const VIBE64_AGENT_PROVIDERS = Object.freeze([
     id: VIBE64_ASSISTANT_ENGINE_IDS.CODEX,
     implemented: true,
     label: "Codex",
+    terminal: "codex",
+    terminalAttachments: false,
     parameters: Object.freeze([
       Object.freeze({
         id: VIBE64_AGENT_PARAMETER_IDS.MODEL,
@@ -105,16 +107,27 @@ const VIBE64_AGENT_PROVIDERS = Object.freeze([
     id: VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE,
     implemented: true,
     label: "Claude Code",
-    parameters: Object.freeze([])
+    parameters: Object.freeze([]),
+    terminal: "native",
+    terminalAttachments: false
   }),
   Object.freeze({
     executionProfiles: Object.freeze([]),
     id: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
     implemented: false,
     label: "OpenCode",
-    parameters: Object.freeze([])
+    parameters: Object.freeze([]),
+    terminal: "native",
+    terminalAttachments: true
   })
 ]);
+
+// The provider an engine id names, or null. Unlike agentProviderDefinition it
+// neither defaults an empty id nor throws, so a UI can branch on it directly.
+function findVibe64AgentProvider(engineId = "") {
+  const normalizedEngineId = normalizeAgentSettingText(engineId);
+  return VIBE64_AGENT_PROVIDERS.find((candidate) => candidate.id === normalizedEngineId) || null;
+}
 
 function agentProviderDefinition(providerId = "") {
   const normalizedProviderId = normalizeAgentSettingText(providerId) || VIBE64_DEFAULT_AGENT_PROVIDER_ID;
@@ -307,6 +320,7 @@ export {
   displayVibe64AgentSetting,
   effectiveVibe64AgentExecutionSettings,
   effectiveVibe64AgentSettings,
+  findVibe64AgentProvider,
   normalizeVibe64AgentSettings,
   publicVibe64AgentSettings,
   vibe64AgentSettingParameters
