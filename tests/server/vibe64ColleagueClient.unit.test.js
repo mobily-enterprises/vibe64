@@ -2102,111 +2102,114 @@ test("window focus and clicks never refresh Colleague while explicit refresh sti
 });
 
 
-test("the local Colleague host hands Colleague its own browser navigator", async t => {
+// The local host and its shared navigation composable, compiled from source.
+async function mountLocalColleagueHost(t, { route, push = async target => { Object.assign(route, typeof target === "string" ? { path: target } : target); },
+  projectSlugFromRoute = () => "demo", provide = () => {} } = {}) {
   const hostKeys = await import("../../src/lib/vibe64AssistantHost.js");
   const hostFilename = new URL("../../src/components/Vibe64LocalColleagueHost.vue", import.meta.url);
   const { descriptor } = parse(await readFile(hostFilename, "utf8"), { filename: String(hostFilename) });
-  const { code } = await transform(compileScript(descriptor, { id: "colleague-navigate-prop", inlineTemplate: true }).content, { format: "cjs" });
+  const { code } = await transform(compileScript(descriptor, { id: "local-colleague-host", inlineTemplate: true }).content, { format: "cjs" });
+  const navigationSource = await readFile(new URL("../../src/composables/useVibe64ColleagueNavigation.js", import.meta.url), "utf8");
+  const navigationCode = (await transform(navigationSource, { format: "cjs" })).code;
   let received = null;
-  const route = vue.reactive({ path: "/app/project/demo", query: {} });
   const imports = {
-    vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
+    vue, "vue-router": { useRoute: () => route, useRouter: () => ({ push, replace: push }),
+      isNavigationFailure: () => false, NavigationFailureType: { duplicated: 16 } },
     "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
     "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
     "@local/vibe64-colleague/shared/learning-focus": learningFocus,
     "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request"],
       setup(props) { received = props; return () => null; } } },
     "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: async () => ({}) }) },
-    "@/lib/vibe64ProjectScope.js": { projectAppPath: (slug, suffix = "") => `/app/project/${slug}${suffix}`, projectSlugFromRoute: () => "demo" },
+    "@/lib/vibe64ProjectScope.js": { projectAppPath: (slug, suffix = "") => `/app/project/${slug}${suffix}`, projectSlugFromRoute },
     "@/lib/studioUrls.js": { resolveStudioRequestUrl: value => value },
-    "@/lib/vibe64AccountConnectionsDialog.js": { requestVibe64AccountConnectionsDialog: () => true },
     "@/lib/vibe64AssistantHost.js": hostKeys
   };
-  const module = { exports: {} };
-  new Function("require", "module", "exports", code)(name => {
-    assert.ok(Object.hasOwn(imports, name), name); return imports[name];
-  }, module, module.exports);
+  const load = (source) => {
+    const module = { exports: {} };
+    new Function("require", "module", "exports", source)(name => {
+      assert.ok(Object.hasOwn(imports, name), name); return imports[name];
+    }, module, module.exports);
+    return module.exports;
+  };
+  imports["@/composables/useVibe64ColleagueNavigation.js"] = load(navigationCode);
+  const component = load(code).default;
   const renderer = vue.createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
     setText() {}, setElementText() {}, patchProp() {}, insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
   const navigation = vue.shallowRef(null);
-  const host = renderer.createApp(module.exports.default);
+  const host = renderer.createApp(component);
   for (const key of Object.values(hostKeys)) host.provide(key, vue.ref(null));
   host.provide(hostKeys.VIBE64_BROWSER_NAVIGATION_KEY, navigation);
   host.provide(hostKeys.VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
+  provide(host, hostKeys);
   host.mount({}); t.after(() => host.unmount());
   await flush();
-  assert.equal(typeof received?.navigate, "function", "Colleague must receive a callable navigator");
-  assert.equal(received.navigate, navigation.value);
-  assert.ok(Object.keys(await received.navigate({ route: "/app/manage/accounts" })).includes("route"));
+  return { navigation, received: () => received };
+}
+
+test("the local Colleague host hands Colleague its own browser navigator", async t => {
+  const route = vue.reactive({ path: "/app/project/demo", query: {} });
+  const { navigation, received } = await mountLocalColleagueHost(t, { route });
+  assert.equal(typeof received()?.navigate, "function", "Colleague must receive a callable navigator");
+  assert.equal(received().navigate, navigation.value);
+  assert.ok(Object.keys(await received().navigate({ route: "/app/manage/accounts" })).includes("route"));
 });
 
-test("the local Colleague host never carries this project's session to another project", async t => {
-  const hostKeys = await import("../../src/lib/vibe64AssistantHost.js");
-  const hostFilename = new URL("../../src/components/Vibe64LocalColleagueHost.vue", import.meta.url);
-  const { descriptor } = parse(await readFile(hostFilename, "utf8"), { filename: String(hostFilename) });
-  const { code } = await transform(compileScript(descriptor, { id: "colleague-project-switch", inlineTemplate: true }).content, { format: "cjs" });
+test("the local Colleague host never carries this project's session to another project, and a newer navigation supersedes an older one", async t => {
   const route = vue.reactive({ path: "/app/project/demo", query: { session: "demo-session", chat: "main" } });
   const pushed = [];
-  const imports = {
-    vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { pushed.push(target); Object.assign(route, target); } }) },
-    "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
-    "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
-    "@local/vibe64-colleague/shared/learning-focus": learningFocus,
-    "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request"], setup() { return () => null; } } },
-    "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: async () => ({}) }) },
-    "@/lib/vibe64ProjectScope.js": { projectAppPath: (slug, suffix = "") => `/app/project/${slug}${suffix}`,
-      projectSlugFromRoute: value => /^\/app\/project\/([^/]+)/u.exec(value.path)?.[1] || "" },
-    "@/lib/studioUrls.js": { resolveStudioRequestUrl: value => value },
-    "@/lib/vibe64AccountConnectionsDialog.js": { requestVibe64AccountConnectionsDialog: () => true },
-    "@/lib/vibe64AssistantHost.js": hostKeys
-  };
-  const module = { exports: {} };
-  new Function("require", "module", "exports", code)(name => {
-    assert.ok(Object.hasOwn(imports, name), name); return imports[name];
-  }, module, module.exports);
-  const renderer = vue.createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
-    setText() {}, setElementText() {}, patchProp() {}, insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
-  const navigation = vue.shallowRef(null);
-  const host = renderer.createApp(module.exports.default);
-  for (const key of Object.values(hostKeys)) host.provide(key, vue.ref(null));
-  host.provide(hostKeys.VIBE64_BROWSER_NAVIGATION_KEY, navigation);
-  host.provide(hostKeys.VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
-  host.mount({}); t.after(() => host.unmount());
-  await flush();
+  const { navigation } = await mountLocalColleagueHost(t, { route,
+    push: async target => { pushed.push(target); Object.assign(route, typeof target === "string" ? { path: target } : target); },
+    projectSlugFromRoute: value => /^\/app\/project\/([^/]+)/u.exec(value.path)?.[1] || "" });
   const opening = navigation.value({ id: "other", status: "pending", projectSlug: "other" }).catch(error => error);
   await flush();
   assert.deepEqual(pushed.at(-1), { path: "/app/project/other", query: {} });
-  // A newer navigation supersedes the one still waiting for its view.
   await navigation.value({ route: "/app/manage/accounts" });
   assert.match((await opening).message, /changed before it opened/u);
 });
 
-test("the local Colleague host reports the shared Learning state, opens Courses and shows its exact lesson step in the Lesson pane", async t => {
-  const hostKeys = await import("../../src/lib/vibe64AssistantHost.js");
-  const hostFilename = new URL("../../src/components/Vibe64LocalColleagueHost.vue", import.meta.url);
-  const { descriptor } = parse(await readFile(hostFilename, "utf8"), { filename: String(hostFilename) });
-  const { code } = await transform(compileScript(descriptor, { id: "colleague-learning-focus", inlineTemplate: true }).content, { format: "cjs" });
-  let received = null;
+test("the local Colleague host opens a session's Main chat itself, without carrying the conversation in the URL", async t => {
   const route = vue.reactive({ path: "/app/project/demo", query: {} });
-  const imports = {
-    vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
-    "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
-    "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
-    "@local/vibe64-colleague/shared/learning-focus": learningFocus,
-    "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request"],
-      setup(props) { received = props; return () => null; } } },
-    "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: async () => ({}) }) },
-    "@/lib/vibe64ProjectScope.js": { projectAppPath: (slug, suffix = "") => `/app/project/${slug}${suffix}`, projectSlugFromRoute: () => "demo" },
-    "@/lib/studioUrls.js": { resolveStudioRequestUrl: value => value },
-    "@/lib/vibe64AccountConnectionsDialog.js": { requestVibe64AccountConnectionsDialog: () => true },
-    "@/lib/vibe64AssistantHost.js": hostKeys
-  };
-  const module = { exports: {} };
-  new Function("require", "module", "exports", code)(name => {
-    assert.ok(Object.hasOwn(imports, name), name); return imports[name];
-  }, module, module.exports);
-  const renderer = vue.createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
-    setText() {}, setElementText() {}, patchProp() {}, insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+  const opened = [];
+  const view = vue.ref(null);
+  const layout = vue.reactive({ ready: true, projectSlug: "demo", projectVisible: true, chatVisible: false, lessonVisible: false,
+    showChat() { this.chatVisible = true; this.projectVisible = false; }, showProject() { this.projectVisible = true; this.chatVisible = false; } });
+  const pushed = [];
+  const { navigation } = await mountLocalColleagueHost(t, { route,
+    push: async target => { pushed.push(target); Object.assign(route, target); },
+    provide(host, keys) {
+      host.provide(keys.VIBE64_COLLEAGUE_VIEW_KEY, view);
+      host.provide(keys.VIBE64_COLLEAGUE_LAYOUT_KEY, vue.ref(layout));
+    } });
+  const pending = navigation.value({ projectSlug: "demo", sessionId: "s1" });
+  await flush();
+  assert.deepEqual(pushed.at(-1), { path: "/app/project/demo", query: { session: "s1" } });
+  view.value = vue.reactive({ projectSlug: "demo", sessionId: "s1", ready: true, conversationId: "", hostConversationSelected: false,
+    temporarySelected: true, async openConversation(id) { opened.push(id); this.temporarySelected = false; } });
+  const focus = await pending;
+  assert.deepEqual(opened, [""]);
+  assert.equal(focus.pane, "chat");
+  assert.equal(focus.sessionId, "s1");
+});
+
+test("the local Colleague host refuses views it has no page for, and invalid combinations before routing", async t => {
+  const route = vue.reactive({ path: "/app/project/demo", query: {} });
+  const pushed = [];
+  const { navigation } = await mountLocalColleagueHost(t, { route, push: async target => { pushed.push(target); } });
+  for (const pane of ["repository-settings", "resources", "deploy", "system-repair"]) {
+    await assert.rejects(navigation.value({ projectSlug: "demo", pane }), /This project view is unavailable/u);
+  }
+  await assert.rejects(navigation.value({ projectSlug: "demo", pane: "database", databaseView: "data", databaseTable: "public.users" }),
+    /exact session and Database Data view/u);
+  await assert.rejects(navigation.value({ projectSlug: "demo", pane: "integrations", integrationEnvironment: "development" }),
+    /development session or the production environment/u);
+  await assert.rejects(navigation.value({ projectSlug: "demo", sessionId: "s1", pane: "files", planView: "current" }),
+    /plan viewer requires/u);
+  assert.deepEqual(pushed, []);
+});
+
+test("the local Colleague host reports the shared Learning state, opens Courses and shows its exact lesson step in the Lesson pane", async t => {
+  const route = vue.reactive({ path: "/app/project/demo", query: {} });
   const attemptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
   const layout = vue.ref({ ready: true, projectSlug: "demo", projectVisible: true, lessonVisible: false, showProject() {} });
   const controller = vue.reactive({ coursesOpen: false, surface: "courses", mode: { on: true, currentAttemptId: attemptId }, stepId: "one",
@@ -2217,20 +2220,15 @@ test("the local Colleague host reports the shared Learning state, opens Courses 
       layout.value = { ...layout.value, lessonVisible: true };
     },
     minimise() { this.coursesOpen = false; } });
-  const navigation = vue.shallowRef(null);
-  const host = renderer.createApp(module.exports.default);
-  for (const key of Object.values(hostKeys)) host.provide(key, vue.ref(null));
-  host.provide(hostKeys.VIBE64_BROWSER_NAVIGATION_KEY, navigation);
-  host.provide(hostKeys.VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
-  host.provide(hostKeys.VIBE64_LEARNING_KEY, vue.shallowRef(controller));
-  host.provide(hostKeys.VIBE64_COLLEAGUE_LAYOUT_KEY, layout);
-  host.mount({}); t.after(() => host.unmount());
-  await flush();
-  assert.equal(received.focus.learningOpen, false);
-  assert.equal(received.focus.pane, "preview");
-  assert.equal(received.focus.learningSurface, undefined, "closed Courses shows no surface");
-  assert.equal(received.focus.learningAttemptId, attemptId, "the current step stays known while Courses is closed");
-  assert.equal(received.focus.learningStepId, "one");
+  const { navigation, received } = await mountLocalColleagueHost(t, { route, provide(host, keys) {
+    host.provide(keys.VIBE64_LEARNING_KEY, vue.shallowRef(controller));
+    host.provide(keys.VIBE64_COLLEAGUE_LAYOUT_KEY, layout);
+  } });
+  assert.equal(received().focus.learningOpen, false);
+  assert.equal(received().focus.pane, "preview");
+  assert.equal(received().focus.learningSurface, undefined, "closed Courses shows no surface");
+  assert.equal(received().focus.learningAttemptId, attemptId, "the current step stays known while Courses is closed");
+  assert.equal(received().focus.learningStepId, "one");
   const courses = await navigation.value({ id: "courses", status: "pending", learning: { open: true } });
   assert.deepEqual([courses.learningOpen, courses.learningSurface], [true, "courses"]);
   const opened = await navigation.value({ id: "learning", status: "pending", learning: { attemptId, stepId: "two" } });
@@ -2241,39 +2239,8 @@ test("the local Colleague host reports the shared Learning state, opens Courses 
 });
 
 test("the local Colleague host refuses a Learning command when no Learning controller is provided", async t => {
-  const hostKeys = await import("../../src/lib/vibe64AssistantHost.js");
-  const hostFilename = new URL("../../src/components/Vibe64LocalColleagueHost.vue", import.meta.url);
-  const { descriptor } = parse(await readFile(hostFilename, "utf8"), { filename: String(hostFilename) });
-  const { code } = await transform(compileScript(descriptor, { id: "colleague-learning-absent", inlineTemplate: true }).content, { format: "cjs" });
-  let received = null;
   const route = vue.reactive({ path: "/app/project/demo", query: {} });
-  const imports = {
-    vue, "vue-router": { useRoute: () => route, useRouter: () => ({ async push(target) { Object.assign(route, target); } }) },
-    "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
-    "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
-    "@local/vibe64-colleague/shared/learning-focus": learningFocus,
-    "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request"],
-      setup(props) { received = props; return () => null; } } },
-    "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: async () => ({}) }) },
-    "@/lib/vibe64ProjectScope.js": { projectAppPath: (slug, suffix = "") => `/app/project/${slug}${suffix}`, projectSlugFromRoute: () => "demo" },
-    "@/lib/studioUrls.js": { resolveStudioRequestUrl: value => value },
-    "@/lib/vibe64AccountConnectionsDialog.js": { requestVibe64AccountConnectionsDialog: () => true },
-    "@/lib/vibe64AssistantHost.js": hostKeys
-  };
-  const module = { exports: {} };
-  new Function("require", "module", "exports", code)(name => {
-    assert.ok(Object.hasOwn(imports, name), name); return imports[name];
-  }, module, module.exports);
-  const renderer = vue.createRenderer({ createElement: () => ({}), createText: () => ({}), createComment: () => ({}),
-    setText() {}, setElementText() {}, patchProp() {}, insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
-  const navigation = vue.shallowRef(null);
-  const host = renderer.createApp(module.exports.default);
-  for (const key of Object.values(hostKeys)) host.provide(key, vue.ref(null));
-  host.provide(hostKeys.VIBE64_BROWSER_NAVIGATION_KEY, navigation);
-  host.provide(hostKeys.VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
-  host.mount({}); t.after(() => host.unmount());
-  await flush();
-  assert.equal(Object.hasOwn(received.focus, "learningOpen"), false, "no controller, no Learning focus");
+  const { navigation, received } = await mountLocalColleagueHost(t, { route });
+  assert.equal(Object.hasOwn(received().focus, "learningOpen"), false, "no controller, no Learning focus");
   await assert.rejects(navigation.value({ id: "learning", status: "pending", learning: { open: true } }), /Courses is unavailable/u);
 });
-

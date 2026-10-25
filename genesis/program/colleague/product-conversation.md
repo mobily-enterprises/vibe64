@@ -58,6 +58,8 @@ registers current focus only, without replaying stale focus or resuming watches.
 - `packages/vibe64-colleague/src/shared/learningFocus.js`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
 - `packages/vibe64-colleague/src/client/colleagueNavigation.js`
+- `src/composables/useVibe64ColleagueNavigation.js`
+- `src/components/Vibe64LocalColleagueHost.vue`
 - `packages/vibe64-colleague/src/client/colleagueLearningRequests.js`
 - `src/components/Vibe64ColleagueLauncherTarget.vue`
 - `src/lib/vibe64AssistantHost.js`
@@ -208,7 +210,15 @@ The product drains them into the next completed response together, retaining
 cumulative authored IDs as application authority. Its internal native response
 has a distinct verified receipt; app acceptance never fabricates native user ACKs.
 Browser navigators share one result contract: navigation returns the settled
-focus itself, which the shared receipt builder acknowledges unchanged.
+focus itself, which the shared receipt builder acknowledges unchanged. Every
+host builds its page focus and browser navigator with one composable,
+`useVibe64ColleagueNavigation`: it validates a command's pane, session,
+Database, Integrations and Plan combination before routing, starts the
+requested view from a clean query, waits up to 15 seconds for that exact view,
+and lets a newer navigation supersede an older one. A host may add its own
+dashboard panes, name the pane of a non-project page by its route, require one
+signed-in actor across a navigation, and keep the selected conversation in the
+URL; without that, navigation opens the conversation itself.
 A failed Colleague turn shows its product error even when the native snapshot
 reports none.
 Before parsing or executing, the product settlement checks pending rows and
