@@ -8,7 +8,6 @@ import {
   launcherProblem,
   quoteShellArg,
   serverShellCommand,
-  serverWindowsCommand,
   targetNameFromCwd,
   terminalLaunchCandidates,
   terminalShellScript,
@@ -44,9 +43,8 @@ test("run launcher treats an npm bin symlink as direct CLI execution", () => {
   }), true);
 });
 
-test("run launcher derives target names using the launch platform path rules", () => {
-  assert.equal(targetNameFromCwd("/workspace/example-app", "linux"), "example-app");
-  assert.equal(targetNameFromCwd("C:\\workspace\\example-app", "win32"), "example-app");
+test("run launcher derives target names from the directory name", () => {
+  assert.equal(targetNameFromCwd("/workspace/example-app"), "example-app");
 });
 
 test("run launcher detects WSL only for linux WSL environments", () => {
@@ -148,34 +146,6 @@ test("run launcher shell script pauses before closing after server errors", () =
   assert.match(script, /Vibe64 server exited/u);
   assert.match(script, /IFS= read -r _/u);
   assert.doesNotMatch(script, /\bexec\b/u);
-});
-
-test("run launcher windows command pauses before closing after server errors", () => {
-  const command = serverWindowsCommand({
-    cwd: "C:\\workspace\\example-app",
-    nodePath: "C:\\node\\node.exe",
-    serverPath: "C:\\pkg\\bin\\server.js"
-  });
-  const candidates = terminalLaunchCandidates({
-    cwd: "C:\\workspace\\example-app",
-    nodePath: "C:\\node\\node.exe",
-    platform: "win32",
-    serverPath: "C:\\pkg\\bin\\server.js"
-  });
-
-  assert.match(command, /if errorlevel 1/u);
-  assert.match(command, /Vibe64 server exited with status !VIBE64_STATUS!/u);
-  assert.match(command, /set \/p VIBE64_PAUSE=Press Enter to close this terminal/u);
-  assert.match(command, /exit \/b !VIBE64_STATUS!/u);
-  assert.deepEqual(candidates[0].args.slice(0, 7), [
-    "/c",
-    "start",
-    "Vibe64 - example-app",
-    "cmd.exe",
-    "/v:on",
-    "/c",
-    command
-  ]);
 });
 
 test("run launcher shell script preserves failed server output until enter", () => {

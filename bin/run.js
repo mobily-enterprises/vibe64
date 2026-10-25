@@ -50,9 +50,8 @@ function isDirectCliExecution({
   return realCliPath(cliPath, realpath) === realCliPath(entrypointPath, realpath);
 }
 
-function targetNameFromCwd(cwd = process.cwd(), platform = process.platform) {
-  const targetName = platform === "win32" ? path.win32.basename(cwd) : path.basename(cwd);
-  return targetName || "target";
+function targetNameFromCwd(cwd = process.cwd()) {
+  return path.basename(cwd) || "target";
 }
 
 function isWslEnvironment({
@@ -81,26 +80,6 @@ function serverShellCommand({
     quoteShellArg(serverPath),
     ...serverArgs.map((arg) => quoteShellArg(arg))
   ].join(" ");
-}
-
-function serverWindowsCommand({
-  cwd = process.cwd(),
-  nodePath = process.execPath,
-  serverPath = SERVER_ENTRYPOINT,
-  serverArgs = []
-} = {}) {
-  const command = [
-    quoteWindowsArg(nodePath),
-    quoteWindowsArg(serverPath),
-    ...serverArgs.map((arg) => quoteWindowsArg(arg))
-  ].join(" ");
-  return [
-    `cd /d ${quoteWindowsArg(cwd)}`,
-    "if errorlevel 1 (set VIBE64_STATUS=!ERRORLEVEL! & echo. & echo Vibe64 could not enter the target directory. Exit status !VIBE64_STATUS!. & set /p VIBE64_PAUSE=Press Enter to close this terminal... & exit /b !VIBE64_STATUS!)",
-    command,
-    "if errorlevel 1 (set VIBE64_STATUS=!ERRORLEVEL! & echo. & echo Vibe64 server exited with status !VIBE64_STATUS!. & set /p VIBE64_PAUSE=Press Enter to close this terminal... & exit /b !VIBE64_STATUS!)",
-    "exit /b 0"
-  ].join("\r\n");
 }
 
 function terminalShellScript({
@@ -154,7 +133,7 @@ function wslTerminalLaunchCandidates({
   cwd = process.cwd(),
   env = process.env,
   shellScript = "",
-  title = `Vibe64 - ${targetNameFromCwd(cwd, "linux")}`
+  title = `Vibe64 - ${targetNameFromCwd(cwd)}`
 } = {}) {
   const wslArgs = wslServerCommandArgs({
     distroName: env.WSL_DISTRO_NAME,
@@ -185,7 +164,7 @@ function terminalLaunchCandidates({
   serverArgs = [],
   serverPath = SERVER_ENTRYPOINT
 } = {}) {
-  const title = `Vibe64 - ${targetNameFromCwd(cwd, platform)}`;
+  const title = `Vibe64 - ${targetNameFromCwd(cwd)}`;
   const shellScript = terminalShellScript({
     cwd,
     nodePath,
@@ -205,28 +184,6 @@ function terminalLaunchCandidates({
       {
         command: "osascript",
         args: ["-e", appleScript]
-      }
-    ];
-  }
-
-  if (platform === "win32") {
-    return [
-      {
-        command: "cmd.exe",
-        args: [
-          "/c",
-          "start",
-          title,
-          "cmd.exe",
-          "/v:on",
-          "/c",
-          serverWindowsCommand({
-            cwd,
-            nodePath,
-            serverArgs,
-            serverPath
-          })
-        ]
       }
     ];
   }
@@ -453,7 +410,6 @@ export {
   quoteShellArg,
   runLauncher,
   serverShellCommand,
-  serverWindowsCommand,
   targetNameFromCwd,
   terminalLaunchCandidates,
   terminalShellScript,

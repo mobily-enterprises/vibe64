@@ -32,7 +32,6 @@ function expectedCurrentDirectoryStartupSlug() {
 test("server CLI starts local editor mode for the current directory with no target", () => {
   assert.deepEqual(parseStartupArgs([]), {
     openOnStart: true,
-    runtimeMode: "local",
     startupSlug: expectedCurrentDirectoryStartupSlug(),
     targetRoot: path.resolve(".")
   });
@@ -50,31 +49,26 @@ test("server CLI starts local editor mode for the current directory with no targ
 test("server CLI accepts one target directory and opens local editor mode", () => {
   assert.deepEqual(parseStartupArgs(["alpha_1"]), {
     openOnStart: true,
-    runtimeMode: "local",
     startupSlug: "alpha_1",
     targetRoot: path.resolve("alpha_1")
   });
   assert.deepEqual(parseStartupArgs(["--no-open", "beta-2"]), {
     openOnStart: false,
-    runtimeMode: "local",
     startupSlug: "beta-2",
     targetRoot: path.resolve("beta-2")
   });
   assert.deepEqual(parseStartupArgs(["--open", "beta-2"]), {
     openOnStart: true,
-    runtimeMode: "local",
     startupSlug: "beta-2",
     targetRoot: path.resolve("beta-2")
   });
   assert.deepEqual(parseStartupArgs(["--project", "beta-2"]), {
     openOnStart: true,
-    runtimeMode: "local",
     startupSlug: "beta-2",
     targetRoot: path.resolve("beta-2")
   });
   assert.deepEqual(parseStartupArgs(["--project=beta-2"]), {
     openOnStart: true,
-    runtimeMode: "local",
     startupSlug: "beta-2",
     targetRoot: path.resolve("beta-2")
   });
@@ -98,25 +92,21 @@ test("server CLI accepts one target directory and opens local editor mode", () =
 test("server CLI accepts target paths as local editor mode", () => {
   assert.deepEqual(parseStartupArgs(["."]), {
     openOnStart: true,
-    runtimeMode: "local",
     startupSlug: expectedCurrentDirectoryStartupSlug(),
     targetRoot: path.resolve(".")
   });
   assert.deepEqual(parseStartupArgs(["/tmp/My App"]), {
     openOnStart: true,
-    runtimeMode: "local",
     startupSlug: "my-app",
     targetRoot: path.resolve("/tmp/My App")
   });
   assert.deepEqual(parseStartupArgs(["--no-open", "."]), {
     openOnStart: false,
-    runtimeMode: "local",
     startupSlug: expectedCurrentDirectoryStartupSlug(),
     targetRoot: path.resolve(".")
   });
   assert.deepEqual(parseStartupArgs(["--open", "../app"]), {
     openOnStart: true,
-    runtimeMode: "local",
     startupSlug: "app",
     targetRoot: path.resolve("../app")
   });
@@ -151,7 +141,6 @@ test("server CLI enables browser lifecycle shutdown for local editor mode", () =
   assert.deepEqual(serverStartOptions({
     env: {},
     openOnStart: true,
-    runtimeMode: "local",
     startupSlug: "vibe64",
     targetRoot: "/workspace/vibe64"
   }), {
@@ -165,7 +154,6 @@ test("server CLI enables browser lifecycle shutdown for local editor mode", () =
   assert.deepEqual(serverStartOptions({
     env: {},
     openOnStart: false,
-    runtimeMode: "local",
     startupSlug: "vibe64",
     targetRoot: "/workspace/vibe64"
   }), {
@@ -181,7 +169,6 @@ test("server CLI enables browser lifecycle shutdown for local editor mode", () =
       PORT: "4567"
     },
     openOnStart: true,
-    runtimeMode: "local",
     startupSlug: "vibe64",
     targetRoot: "/workspace/vibe64"
   }), {
@@ -197,8 +184,7 @@ test("server CLI enables browser lifecycle shutdown for local editor mode", () =
 test("server CLI supplies a reserved local runtime namespace only when env is missing", () => {
   const missingEnv = {};
   assert.equal(applyLocalCliRuntimeNamespace({
-    env: missingEnv,
-    runtimeMode: "local"
+    env: missingEnv
   }), VIBE64_LOCAL_RUNTIME_NAMESPACE);
   assert.equal(missingEnv[VIBE64_RUNTIME_NAMESPACE_ENV], VIBE64_LOCAL_RUNTIME_NAMESPACE);
 
@@ -206,17 +192,9 @@ test("server CLI supplies a reserved local runtime namespace only when env is mi
     [VIBE64_RUNTIME_NAMESPACE_ENV]: "owner-a"
   };
   assert.equal(applyLocalCliRuntimeNamespace({
-    env: configuredEnv,
-    runtimeMode: "local"
+    env: configuredEnv
   }), "owner-a");
   assert.equal(configuredEnv[VIBE64_RUNTIME_NAMESPACE_ENV], "owner-a");
-
-  const onlineEnv = {};
-  assert.equal(applyLocalCliRuntimeNamespace({
-    env: onlineEnv,
-    runtimeMode: "composed"
-  }), "");
-  assert.equal(Object.hasOwn(onlineEnv, VIBE64_RUNTIME_NAMESPACE_ENV), false);
 });
 
 test("server accepts an explicit runtime profile from a composed product", () => {
@@ -230,15 +208,6 @@ test("server accepts an explicit runtime profile from a composed product", () =>
 
   assert.deepEqual(resolveServerRuntimeProfile({
     runtimeProfile: externalProfile
-  }), externalProfile);
-
-  assert.deepEqual(resolveServerRuntimeProfile({
-    createRuntimeProfile({ mode, targetRoot }) {
-      assert.equal(mode, "composed");
-      assert.equal(targetRoot, "");
-      return externalProfile;
-    },
-    runtimeMode: "composed"
   }), externalProfile);
 });
 
@@ -266,6 +235,5 @@ test("server CLI creates the default local state folder before starting, and onl
   assert.equal(await prepareLocalSystemRoot({ env: {}, home: "/home/person", platform: "linux", makeDirectory }), root);
   assert.deepEqual(made, [[root, { recursive: true, mode: 0o700 }]]);
   assert.equal(await prepareLocalSystemRoot({ env: { VIBE64_SYSTEM_ROOT: "/srv/state" }, home: "/home/person", makeDirectory }), "");
-  assert.equal(await prepareLocalSystemRoot({ env: {}, runtimeMode: "hosted", home: "/home/person", makeDirectory }), "");
   assert.equal(made.length, 1);
 });

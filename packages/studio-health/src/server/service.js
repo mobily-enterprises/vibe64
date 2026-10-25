@@ -123,7 +123,7 @@ function playwrightTool() {
     install: localToolInstall("playwright", { family: process.platform === "darwin" ? "brew" : "apt" }) };
 }
 
-function plural(name = "") {
+function notInstalledVerb(name = "") {
   return /s$/u.test(name) ? "aren't" : "isn't";
 }
 
@@ -134,7 +134,7 @@ function localToolRow(tool, { group, id = tool.id, need, explanation }) {
   const observed = {
     ready: found,
     broken: `${tool.name} is at ${tool.path} but didn't start.`,
-    missing: `${tool.name} ${plural(tool.name)} installed on this computer.`
+    missing: `${tool.name} ${notInstalledVerb(tool.name)} installed on this computer.`
   }[tool.status];
   return {
     id, label: tool.name, group, need, explanation,
@@ -280,6 +280,72 @@ async function inspectAccounts({ connectionsService, input, packs = true }) {
   }
 }
 
+// The pinned runtime packs' own tools, checked only when the packs exist.
+function packCommandChecks(check, { runCommand, studioRoot }) {
+  return [
+    check({
+      id: "node",
+      label: "Node.js",
+      command: "node",
+      args: ["--version"],
+      runtimes: ["node26"],
+      runCommand,
+      studioRoot,
+      expected: "The pinned Node.js 26 runtime pack is available.",
+      isValid: (output) => /^v26\./u.test(compactOutput(output)),
+      explanation: "Vibe64 itself runs on its pinned Node.js runtime."
+    }),
+    check({
+      id: "git",
+      label: "Git",
+      command: "git",
+      args: ["--version"],
+      runtimes: ["git"],
+      runCommand,
+      studioRoot,
+      expected: "The managed Git runtime pack is available.",
+      isValid: (output) => /^git version\s+/u.test(compactOutput(output)),
+      explanation: "Vibe64 owns Git credentials and repository operations."
+    }),
+    check({
+      id: "github-cli",
+      label: "GitHub CLI",
+      command: "gh",
+      args: ["--version"],
+      runtimes: ["gh"],
+      runCommand,
+      studioRoot,
+      expected: "The managed GitHub CLI runtime pack is available.",
+      isValid: (output) => /^gh version\s+/u.test(compactOutput(output)),
+      explanation: "Vibe64 uses its pinned GitHub CLI for authenticated GitHub operations."
+    }),
+    check({
+      id: "ripgrep",
+      label: "ripgrep",
+      command: "rg",
+      args: ["--version"],
+      runtimes: ["ripgrep"],
+      runCommand,
+      studioRoot,
+      expected: "The managed ripgrep runtime pack is available.",
+      isValid: (output) => /^ripgrep\s+/u.test(compactOutput(output)),
+      explanation: "Codex uses ripgrep for fast local source discovery."
+    }),
+    check({
+      id: "codex",
+      label: "Codex CLI",
+      command: "codex",
+      args: ["--version"],
+      runtimes: ["operator-clis", "node26"],
+      runCommand,
+      studioRoot,
+      expected: "The managed operator CLI pack exposes Codex.",
+      isValid: (output) => /codex/iu.test(compactOutput(output)),
+      explanation: "Direct chat delegates project work to the pinned Codex command."
+    })
+  ];
+}
+
 function createService({
   connectionsService,
   projectService,
@@ -299,69 +365,7 @@ function createService({
       // person's own tools come from the shared check.
       const commandChecks = [
         ...(packs ? [] : [gitIdentityCheck({ runCommand, studioRoot })]),
-        ...(packs ? [
-        check({
-          id: "node",
-          label: "Node.js",
-          command: "node",
-          args: ["--version"],
-          runtimes: ["node26"],
-          runCommand,
-          studioRoot,
-          expected: packs ? "The pinned Node.js 26 runtime pack is available." : `Node.js ${nodeMajor || "(any version)"} is installed.`,
-          isValid: (output) => new RegExp(`^v${nodeMajor || "\\d+"}\\.`, "u").test(compactOutput(output)),
-          explanation: packs ? "Vibe64 itself runs on its pinned Node.js runtime." : "Vibe64 and your projects use the Node.js installed on this computer."
-        }),
-        check({
-          id: "git",
-          label: "Git",
-          command: "git",
-          args: ["--version"],
-          runtimes: ["git"],
-          runCommand,
-          studioRoot,
-          expected: packs ? "The managed Git runtime pack is available." : "Git is installed.",
-          isValid: (output) => /^git version\s+/u.test(compactOutput(output)),
-          explanation: "Vibe64 owns Git credentials and repository operations."
-        }),
-        check({
-          id: "github-cli",
-          label: "GitHub CLI",
-          command: "gh",
-          args: ["--version"],
-          runtimes: ["gh"],
-          runCommand,
-          studioRoot,
-          expected: packs ? "The managed GitHub CLI runtime pack is available." : "The GitHub CLI is installed.",
-          isValid: (output) => /^gh version\s+/u.test(compactOutput(output)),
-          explanation: packs ? "Vibe64 uses its pinned GitHub CLI for authenticated GitHub operations."
-            : "Vibe64 uses the GitHub CLI installed on this computer for GitHub operations."
-        }),
-        check({
-          id: "ripgrep",
-          label: "ripgrep",
-          command: "rg",
-          args: ["--version"],
-          runtimes: ["ripgrep"],
-          runCommand,
-          studioRoot,
-          expected: packs ? "The managed ripgrep runtime pack is available." : "ripgrep is installed.",
-          isValid: (output) => /^ripgrep\s+/u.test(compactOutput(output)),
-          explanation: "Codex uses ripgrep for fast local source discovery."
-        }),
-        check({
-              id: "codex",
-              label: "Codex CLI",
-              command: "codex",
-              args: ["--version"],
-              runtimes: ["operator-clis", "node26"],
-              runCommand,
-              studioRoot,
-              expected: "The managed operator CLI pack exposes Codex.",
-              isValid: (output) => /codex/iu.test(compactOutput(output)),
-              explanation: "Direct chat delegates project work to the pinned Codex command."
-            })
-        ] : []),
+        ...(packs ? packCommandChecks(check, { runCommand, studioRoot }) : []),
         check({
           id: "genesis",
           label: "Genesis",

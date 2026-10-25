@@ -5,9 +5,6 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
-  resolveStudioTargetRoot
-} from "@local/vibe64-core/server/studioRoots";
-import {
   projectServiceSourceRoot
 } from "@local/vibe64-core/server/projectServiceSelection";
 import {
@@ -18,12 +15,6 @@ const EXPECTED_UNCONFIGURED_CODES = new Set([
   "BLUEPRINT_REQUIRED",
   "STACK_REQUIRED"
 ]);
-
-function resolveCurrentAppRoot(appRoot) {
-  return resolveStudioTargetRoot({
-    explicitRoot: appRoot
-  });
-}
 
 function currentAppResult(operation) {
   return vibe64Result(operation, {
@@ -64,7 +55,6 @@ function outputsView(root = "", outputs = {}) {
 }
 
 function createService({
-  appRoot = "",
   env = process.env,
   inspectOutputs = inspectVibe64Outputs,
   projectService
@@ -77,17 +67,10 @@ function createService({
     throw new TypeError("createService requires the Vibe64 Project API.");
   }
 
-  function selectedProjectRoot() {
-    if (String(appRoot || "").trim()) {
-      return resolveCurrentAppRoot(appRoot);
-    }
-    return projectServiceSourceRoot(projectService);
-  }
-
   async function rootForInput(input = {}) {
     const sessionId = String(input.sessionId || "").trim();
     if (!sessionId) {
-      return selectedProjectRoot();
+      return projectServiceSourceRoot(projectService);
     }
     const runtime = await projectService.createRuntime({
       inspectSource: false
@@ -149,6 +132,5 @@ function createService({
 }
 
 export {
-  createService,
-  resolveCurrentAppRoot
+  createService
 };

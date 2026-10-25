@@ -402,6 +402,27 @@ function browserUrlForPublicOrigin(origin = "", options = {}) {
   return `${url.origin}${startupBrowserPath(options)}`;
 }
 
+// Sets these process env values (undefined deletes) while fn runs, then
+// restores what was there before.
+async function withProcessEnv(values, fn) {
+  const previous = Object.fromEntries(Object.keys(values).map((key) => [key, process.env[key]]));
+  const assign = (entries) => {
+    for (const [key, value] of Object.entries(entries)) {
+      if (value == null) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  };
+  assign(values);
+  try {
+    return await fn();
+  } finally {
+    assign(previous);
+  }
+}
+
 function resolveServerRuntimeProfile(options = {}, {
   defaultLocalTargetRoot = process.cwd()
 } = {}) {
@@ -411,12 +432,6 @@ function resolveServerRuntimeProfile(options = {}, {
     });
   }
   const explicitTargetRoot = String(options?.targetRoot || "").trim();
-  if (typeof options?.createRuntimeProfile === "function") {
-    return options.createRuntimeProfile({
-      mode: options.runtimeMode,
-      targetRoot: explicitTargetRoot
-    });
-  }
   return createVibe64RuntimeProfile({
     mode: options?.runtimeMode,
     targetRoot: explicitTargetRoot || String(defaultLocalTargetRoot || "").trim()
@@ -554,57 +569,26 @@ async function createServer(options = {}) {
     [VIBE64_SYSTEM_ROOT_ENV]: systemRoot,
     ...(targetRoot ? { [VIBE64_TARGET_ROOT_ENV]: targetRoot } : {})
   };
-  const previousStudioAppRoot = process.env[VIBE64_APP_ROOT_ENV];
-  const previousVibe64SystemRoot = process.env[VIBE64_SYSTEM_ROOT_ENV];
-  const previousStudioProjectsRoot = process.env[VIBE64_PROJECTS_ROOT_ENV];
-  const previousStudioTargetRoot = process.env[VIBE64_TARGET_ROOT_ENV];
-  process.env[VIBE64_APP_ROOT_ENV] = appRoot;
-  process.env[VIBE64_PROJECTS_ROOT_ENV] = projectContext.projectsRoot;
-  process.env[VIBE64_SYSTEM_ROOT_ENV] = systemRoot;
-  if (targetRoot) {
-    process.env[VIBE64_TARGET_ROOT_ENV] = targetRoot;
-  } else {
-    delete process.env[VIBE64_TARGET_ROOT_ENV];
-  }
-  let runtime;
   const createRuntime = typeof options?.createInstalledRuntime === "function"
     ? options.createInstalledRuntime
     : createInstalledRuntime;
-  try {
-    runtime = await createRuntime({
-      appRoot,
-      profile: resolveRuntimeProfileFromSurface({
-        surfaceRuntime,
-        serverSurface: runtimeEnv.SERVER_SURFACE
-      }),
-      config: await loadAppConfigFromAppRoot({ appRoot }),
-      env: providerEnv,
-      logger: app.log,
-      fastify: app
-    });
-    app.vibe64CapabilityRuntime = runtime?.runtime || null;
-  } finally {
-    if (previousStudioAppRoot == null) {
-      delete process.env[VIBE64_APP_ROOT_ENV];
-    } else {
-      process.env[VIBE64_APP_ROOT_ENV] = previousStudioAppRoot;
-    }
-    if (previousVibe64SystemRoot == null) {
-      delete process.env[VIBE64_SYSTEM_ROOT_ENV];
-    } else {
-      process.env[VIBE64_SYSTEM_ROOT_ENV] = previousVibe64SystemRoot;
-    }
-    if (previousStudioProjectsRoot == null) {
-      delete process.env[VIBE64_PROJECTS_ROOT_ENV];
-    } else {
-      process.env[VIBE64_PROJECTS_ROOT_ENV] = previousStudioProjectsRoot;
-    }
-    if (previousStudioTargetRoot == null) {
-      delete process.env[VIBE64_TARGET_ROOT_ENV];
-    } else {
-      process.env[VIBE64_TARGET_ROOT_ENV] = previousStudioTargetRoot;
-    }
-  }
+  const runtime = await withProcessEnv({
+    [VIBE64_APP_ROOT_ENV]: appRoot,
+    [VIBE64_PROJECTS_ROOT_ENV]: projectContext.projectsRoot,
+    [VIBE64_SYSTEM_ROOT_ENV]: systemRoot,
+    [VIBE64_TARGET_ROOT_ENV]: targetRoot || undefined
+  }, async () => createRuntime({
+    appRoot,
+    profile: resolveRuntimeProfileFromSurface({
+      surfaceRuntime,
+      serverSurface: runtimeEnv.SERVER_SURFACE
+    }),
+    config: await loadAppConfigFromAppRoot({ appRoot }),
+    env: providerEnv,
+    logger: app.log,
+    fastify: app
+  }));
+  app.vibe64CapabilityRuntime = runtime?.runtime || null;
 
   registerSurfaceRequestConstraint({
     fastify: app,
@@ -724,7 +708,6 @@ async function startServer(options = {}) {
     logLevel: options?.logLevel,
     managedSourceRoot: options?.managedSourceRoot,
     projectsRoot: options?.projectsRoot,
-    resourceCleanupIntervalMs: options?.resourceCleanupIntervalMs,
     runtimeProfile,
     runtimeMode: runtimeProfile.mode,
     systemRoot: options?.systemRoot,

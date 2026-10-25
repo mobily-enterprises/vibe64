@@ -26,24 +26,26 @@ import {
 const SERVER_ENTRYPOINT = fileURLToPath(import.meta.url);
 const DEFAULT_LOCAL_EDITOR_BROWSER_PORT = 3001;
 
+// Every accepted browser-open spelling: true opens, false suppresses.
+const OPEN_FLAGS = new Map([
+  ["--open", true],
+  ["--open=true", true],
+  ["--open=1", true],
+  ["--no-open", false],
+  ["--open=false", false],
+  ["--open=0", false]
+]);
+
+function openFlagGiven(args, value) {
+  return args.some((arg) => OPEN_FLAGS.get(String(arg || "").trim().toLowerCase()) === value);
+}
+
 function shouldOpenBrowser(args = process.argv.slice(2)) {
-  for (const arg of args) {
-    const normalized = String(arg || "").trim().toLowerCase();
-    if (normalized === "--open" || normalized === "--open=true" || normalized === "--open=1") {
-      return true;
-    }
-  }
-  return false;
+  return openFlagGiven(args, true);
 }
 
 function shouldSuppressBrowserOpen(args = process.argv.slice(2)) {
-  for (const arg of args) {
-    const normalized = String(arg || "").trim().toLowerCase();
-    if (normalized === "--no-open" || normalized === "--open=false" || normalized === "--open=0") {
-      return true;
-    }
-  }
-  return false;
+  return openFlagGiven(args, false);
 }
 
 function realCliPath(filePath, realpath = realpathSync) {
@@ -90,14 +92,7 @@ function parseStartupArgs(args = process.argv.slice(2)) {
       continue;
     }
     const normalized = arg.toLowerCase();
-    if (
-      normalized === "--open" ||
-      normalized === "--open=true" ||
-      normalized === "--open=1" ||
-      normalized === "--no-open" ||
-      normalized === "--open=false" ||
-      normalized === "--open=0"
-    ) {
+    if (OPEN_FLAGS.has(normalized)) {
       continue;
     }
     if (normalized === "--project") {
@@ -136,7 +131,6 @@ function parseStartupArgs(args = process.argv.slice(2)) {
     openOnStart: shouldOpenStartupBrowser(args, {
       targetRoot
     }),
-    runtimeMode: VIBE64_RUNTIME_MODE_LOCAL,
     startupSlug,
     targetRoot
   };
@@ -179,16 +173,14 @@ async function openBrowser(url) {
 function serverStartOptions({
   env = process.env,
   openOnStart = false,
-  runtimeMode = VIBE64_RUNTIME_MODE_LOCAL,
   startupSlug = "",
   targetRoot = ""
 } = {}) {
-  const localBrowserOpen = runtimeMode === VIBE64_RUNTIME_MODE_LOCAL && openOnStart === true;
   const envPortConfigured = Boolean(String(env.PORT || "").trim());
   return {
-    browserLifecycleShutdown: runtimeMode === VIBE64_RUNTIME_MODE_LOCAL,
-    port: localBrowserOpen && !envPortConfigured ? DEFAULT_LOCAL_EDITOR_BROWSER_PORT : undefined,
-    runtimeMode,
+    browserLifecycleShutdown: true,
+    port: openOnStart === true && !envPortConfigured ? DEFAULT_LOCAL_EDITOR_BROWSER_PORT : undefined,
+    runtimeMode: VIBE64_RUNTIME_MODE_LOCAL,
     strictPort: envPortConfigured,
     startupSlug,
     targetRoot
@@ -196,12 +188,8 @@ function serverStartOptions({
 }
 
 function applyLocalCliRuntimeNamespace({
-  env = process.env,
-  runtimeMode = VIBE64_RUNTIME_MODE_LOCAL
+  env = process.env
 } = {}) {
-  if (runtimeMode !== VIBE64_RUNTIME_MODE_LOCAL) {
-    return String(env[VIBE64_RUNTIME_NAMESPACE_ENV] || "").trim();
-  }
   const configured = String(env[VIBE64_RUNTIME_NAMESPACE_ENV] || "").trim();
   if (configured) {
     return configured;
@@ -240,10 +228,9 @@ async function prepareLocalSystemRoot({
   env = process.env,
   home = os.homedir(),
   makeDirectory = mkdir,
-  platform = process.platform,
-  runtimeMode = VIBE64_RUNTIME_MODE_LOCAL
+  platform = process.platform
 } = {}) {
-  if (runtimeMode !== VIBE64_RUNTIME_MODE_LOCAL || String(env[VIBE64_SYSTEM_ROOT_ENV] || "").trim()) {
+  if (String(env[VIBE64_SYSTEM_ROOT_ENV] || "").trim()) {
     return "";
   }
   const root = resolveDefaultLocalEditorSystemRoot(home, platform);
@@ -260,17 +247,13 @@ async function main() {
   }
   const {
     openOnStart,
-    runtimeMode,
     startupSlug,
     targetRoot
   } = parseStartupArgs();
-  applyLocalCliRuntimeNamespace({
-    runtimeMode
-  });
-  await prepareLocalSystemRoot({ runtimeMode });
+  applyLocalCliRuntimeNamespace();
+  await prepareLocalSystemRoot();
   const app = await startServer(serverStartOptions({
     openOnStart,
-    runtimeMode,
     startupSlug,
     targetRoot
   }));
