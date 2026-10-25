@@ -303,6 +303,16 @@ function createService({
     return studioProjectContext.requireSelectedTargetRoot();
   }
 
+  // The project's address: the request's slug, else the selected project's
+  // (a local directory's name normalized, never the raw directory name).
+  function currentProjectSlug() {
+    return String(currentProjectRequestContext()?.slug || studioProjectContext.selectedProject?.slug || "").trim();
+  }
+
+  function serviceDataRoot() {
+    return String(studioProjectContext.serviceDataRoot || "").trim();
+  }
+
   function selectedSourceRoot() {
     const requestSource = currentProjectSourceRoot();
     if (requestSource) {
@@ -439,7 +449,7 @@ function createService({
     return savedEnvValueRecords(savedEnvValueProvider, {
       projectContextRoot: selectedTargetRoot(),
       projectRuntimeRoot: selectedProjectRuntimeRoot(),
-      projectSlug: String(currentProjectRequestContext()?.slug || studioProjectContext.selectedProject?.slug || "").trim()
+      projectSlug: currentProjectSlug()
     });
   }
 
@@ -522,7 +532,7 @@ function createService({
           ...developmentDatabase,
           projectRuntimeRoot: selectedProjectRuntimeRoot(),
           resources: declaration.resources,
-          serviceDataRoot: String(studioProjectContext.serviceDataRoot || "").trim(),
+          serviceDataRoot: serviceDataRoot(),
           sessionId: source.sessionId,
           projectContextRoot: selectedTargetRoot(),
           sourceRoot
@@ -881,7 +891,7 @@ function createService({
           return {
             collaboration,
             ok: true,
-            projectSlug: String(currentProjectRequestContext()?.slug || path.basename(requireSelectedTargetRoot())).trim()
+            projectSlug: currentProjectSlug()
           };
         },
         { operation: "save-collaboration-guidance" }
@@ -902,7 +912,7 @@ function createService({
     });
     return {
       ok: true,
-      projectSlug: String(currentProjectRequestContext()?.slug || path.basename(requireSelectedTargetRoot())).trim(),
+      projectSlug: currentProjectSlug(),
       promptHints: {
         canEdit: true,
         enabled: settings.promptHints
@@ -932,7 +942,7 @@ function createService({
     const developmentDatabaseName = normalizeDevelopmentDatabaseName(
       await resourceEnvironmentProvider.developmentDatabaseNameForProject({
         projectContextRoot,
-        serviceDataRoot: String(studioProjectContext.serviceDataRoot || "").trim(),
+        serviceDataRoot: serviceDataRoot(),
         slug
       })
     );
@@ -1003,7 +1013,7 @@ function createService({
             "vibe64_development_database_scope_busy"
           );
         }
-        const slug = path.basename(requireSelectedTargetRoot());
+        const slug = currentProjectSlug();
         const currentProject = await currentProjectState();
         let developmentDatabaseName = normalizeDevelopmentDatabaseName(
           currentProject?.developmentDatabaseName
@@ -1165,7 +1175,7 @@ function createService({
         return {
           ok: true,
           application,
-          projectSlug: String(currentProjectRequestContext()?.slug || path.basename(requireSelectedTargetRoot())).trim()
+          projectSlug: currentProjectSlug()
         };
       }, { operation: "apply-project-template" });
     }, "apply-project-template", { waitMs: 10_000 });
@@ -1192,7 +1202,7 @@ function createService({
           return {
             engineering: await engineeringProfileState(sourceInput),
             ok: true,
-            projectSlug: path.basename(requireSelectedTargetRoot())
+            projectSlug: currentProjectSlug()
           };
         },
         {
@@ -1324,9 +1334,7 @@ function createService({
     currentProjectSessionSourceRoot: selectedSessionSourceRoot,
     currentProjectSourceConfigRoot: selectedSourceConfigRoot,
     currentProjectSourceRoot: selectedSourceRoot,
-    currentServiceDataRoot() {
-      return String(studioProjectContext.serviceDataRoot || "").trim();
-    },
+    currentServiceDataRoot: serviceDataRoot,
     currentTargetRoot: selectedTargetRoot,
 
     async developmentDatabasePolicy(input = {}) {
@@ -1675,7 +1683,7 @@ function createService({
         projectRuntimeRoot: selectedProjectRuntimeRoot(),
         projectContextRoot: selectedTargetRoot(),
         sessionId,
-        serviceDataRoot: String(studioProjectContext.serviceDataRoot || "").trim(),
+        serviceDataRoot: serviceDataRoot(),
         sourceRoot: source.sourceRoot
       });
     },

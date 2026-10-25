@@ -81,3 +81,8 @@ not receive source paths or environment credentials from this settings view.
   project work and delegates validation and writing to Genesis.
 - `savePromptHintsState()` changes only the independent Vibe64 prompt-hints
   record.
+- Every project settings save (collaboration, prompt hints, engineering,
+  template, development database scope) reports `projectSlug` from the service's
+  one `currentProjectSlug()`: the request's slug, else the selected project's
+  normalized slug, never a raw directory name, so the project-changed refresh
+  reaches the page of that address (`tests/server/vibe64ProjectService.unit.test.js`).

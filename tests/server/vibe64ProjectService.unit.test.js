@@ -771,6 +771,23 @@ test("project settings keep Genesis collaboration and Vibe64 prompt hints separa
   });
 });
 
+test("project settings saves report the project's slug, not its raw directory name", async () => {
+  await withTemporaryRoot(async (root) => {
+    const targetRoot = path.join(root, "My App");
+    await mkdir(targetRoot, { recursive: true });
+    const service = projectService(targetRoot, collaborationHarness());
+    const owner = { role: "owner" };
+    const collaboration = await service.saveCollaborationSettings({
+      experience: "expert", explanationStyle: "conclusions", requirements: "",
+      responseLength: "very_short", tone: "direct", vibe64User: owner
+    });
+    assert.equal(collaboration.ok, true);
+    assert.equal(collaboration.projectSlug, "my-app");
+    const promptHints = await service.savePromptHints({ promptHints: false, vibe64User: owner });
+    assert.equal(promptHints.projectSlug, "my-app");
+  });
+});
+
 test("prompt-hint settings never inspect or mutate Genesis collaboration", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = projectService(targetRoot, {
