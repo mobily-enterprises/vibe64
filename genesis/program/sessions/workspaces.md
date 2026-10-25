@@ -48,6 +48,7 @@ that turn without dropping either half. No saved history is rewritten.
 - `src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionToolbar.vue`
 - `src/composables/useVibe64SessionPanel.js`
+- `src/lib/vibe64SessionRepositoryWorkState.js`
 - `src/lib/vibe64SessionPanelModel.js`
 - `tests/client/vibe64SessionPanelModel.vitest.js`
 - `tests/client/useVibe64SessionPanel.vitest.js`

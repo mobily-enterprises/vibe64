@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { attachConversationRuntime } from "./helpers/conversationRuntimeFixture.js";
 
-import { sessionRepositoryWorkState } from "../../src/composables/useVibe64SessionPanel.js";
+import { sessionRepositoryWorkState } from "../../src/lib/vibe64SessionRepositoryWorkState.js";
 import { createVibe64SessionRepositoryStatusQueue } from "../../src/composables/useVibe64SessionRepositoryStatusRegistry.js";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "../../src/lib/vibe64AssistantHost.js";
 

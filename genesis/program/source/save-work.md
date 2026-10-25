@@ -75,6 +75,7 @@ Git commands.
 - `src/composables/useVibe64SessionSaveWork.js`
 - `src/composables/useVibe64TemporaryAiRepairs.js`
 - `src/composables/useVibe64SessionPanel.js`
+- `src/lib/vibe64SessionRepositoryWorkState.js`
 - `src/composables/useVibe64SessionRepositoryStatusRegistry.js`
 
 ## Public contract

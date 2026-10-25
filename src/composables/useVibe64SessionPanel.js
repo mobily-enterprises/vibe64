@@ -19,6 +19,7 @@ import {
 import {
   sessionRecordHasActiveAgentWork
 } from "@/lib/vibe64MountedSessionState.js";
+import { sessionRepositoryWorkState } from "@/lib/vibe64SessionRepositoryWorkState.js";
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
@@ -380,60 +381,6 @@ function useVibe64SessionPanel(props, emit) {
   }
 }
 
-function sessionRepositoryWorkState(workState = null) {
-  const source = workState && typeof workState === "object" ? workState : {};
-  const freshness = {
-    checkedAt: String(source.checkedAt || ""),
-    ...(source.updateStatusPending === true ? { updateStatusPending: true } : {})
-  };
-  const operationStatus = String(source.operation?.status || "").trim();
-  const operationCode = String(source.operation?.code || "").trim();
-  const updateStatus = String(source.updateOperation?.status || "").trim();
-  if (operationStatus === "running") {
-    return {
-      ...freshness,
-      state: "saving"
-    };
-  }
-  if (updateStatus === "running") {
-    return {
-      ...freshness,
-      state: "updating"
-    };
-  }
-  if (
-    (operationStatus === "failed" && operationCode !== "vibe64_session_save_update_required") ||
-    updateStatus === "failed"
-  ) {
-    return {
-      ...freshness,
-      state: "needs_help",
-      updateAvailable: source.updateAvailable === true
-    };
-  }
-  if ((source.loading || source.unsaved === null || source.unsaved === undefined) && source.updateAvailable !== true) {
-    return {
-      ...freshness,
-      state: source.error ? "unavailable" : "checking"
-    };
-  }
-  const changedCount = Array.isArray(source.changedPaths) ? source.changedPaths.length : 0;
-  if (source.unsaved === true || source.connectedSaveRequired === true) {
-    return {
-      changedCount,
-      ...freshness,
-      state: "unsaved",
-      updateAvailable: source.updateAvailable === true
-    };
-  }
-  return {
-    ...freshness,
-    state: source.error
-      ? "unavailable"
-      : (source.updateAvailable === true ? "update_available" : "saved")
-  };
-}
-
 function normalizeProjectPane(value = "") {
   return value === "dashboard" ? value : "preview";
 }
@@ -552,7 +499,6 @@ export {
   sessionPanelEmptyStateActivity,
   sessionPanelRuntimeHostDiagnostics,
   sessionPanelSelectedSessionArchiving,
-  sessionRepositoryWorkState,
   sessionPanelToolbarSessions,
   useVibe64SessionPanel,
   vibe64SessionPanelEmits,

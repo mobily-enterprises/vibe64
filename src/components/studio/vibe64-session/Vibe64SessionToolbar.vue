@@ -32,10 +32,10 @@
           <span class="studio-ai-sessions__tab-label">{{ sessionItem.archiving ? `${sessionTabLabel(sessionItem)} · Archiving…` : sessionTabLabel(sessionItem) }}</span>
           <v-icon
             class="studio-ai-sessions__repository-state studio-ai-sessions__repository-state--desktop"
-            :class="`studio-ai-sessions__repository-state--${repositoryState(sessionItem)}`"
-            :icon="repositoryStateIcon(sessionItem)"
+            :class="`studio-ai-sessions__repository-state--${repositoryWorkState(sessionItem)}`"
+            :icon="repositoryWorkStateIcon(sessionItem)"
             size="14"
-            :title="repositoryStateLabel(sessionItem)"
+            :title="repositoryWorkStateLabel(sessionItem)"
           />
           <v-btn
             class="studio-ai-sessions__tab-info"
@@ -137,12 +137,7 @@
 <script setup>
 import { computed, inject, onMounted, ref, useId, watch } from "vue";
 import {
-  mdiAlertCircleOutline,
   mdiArchiveOutline,
-  mdiCheckCircleOutline,
-  mdiCloudDownloadOutline,
-  mdiContentSaveAlertOutline,
-  mdiDotsHorizontalCircleOutline,
   mdiPencilOutline,
   mdiInformationOutline
 } from "@mdi/js";
@@ -152,6 +147,11 @@ import Vibe64CreateSessionButton from "@/components/studio/vibe64-session/Vibe64
 import { vibe64SessionInfoFacts } from "@/lib/vibe64SessionInfo.js";
 import { vibe64SessionShortLabel, vibe64SessionStatusLabel } from "@/lib/vibe64SessionViewModel.js";
 import { VIBE64_SESSION_TOOLTIP_KEY } from "@/lib/vibe64SessionTooltip.js";
+import {
+  repositoryWorkState,
+  repositoryWorkStateIcon,
+  repositoryWorkStateLabel
+} from "@/lib/vibe64SessionRepositoryWorkState.js";
 import {
   visibleVibe64ToolbarSessions
 } from "@/lib/vibe64SessionToolbarVisibility.js";
@@ -258,7 +258,7 @@ function sessionInfoFacts(sessionItem) {
       value: assistant?.label || selection.engineId
     },
     { key: "model", label: "Model", value: selection.modelId },
-    { key: "saved-work", label: "Work", value: repositoryStateLabel(sessionItem) },
+    { key: "saved-work", label: "Work", value: repositoryWorkStateLabel(sessionItem) },
     ...details
   ].filter((fact) => fact.value);
 }
@@ -275,57 +275,11 @@ function sessionTabLabel(sessionItem = {}) {
     props.toolbar.shortSessionId?.(sessionItem.sessionId) || String(sessionItem.sessionId || "");
 }
 
-function repositoryState(sessionItem = {}) {
-  const state = String(sessionItem?.repositoryWorkState?.state || "checking");
-  return [
-    "needs_help",
-    "saved",
-    "saving",
-    "unavailable",
-    "unsaved",
-    "update_available",
-    "updating"
-  ].includes(state) ? state : "checking";
-}
-
-function repositoryStateLabel(sessionItem = {}) {
-  const state = repositoryState(sessionItem);
-  if (state === "unsaved") {
-    const changedCount = Number(sessionItem?.repositoryWorkState?.changedCount || 0);
-    const changeLabel = changedCount === 1 ? "1 change" : `${changedCount || "Unsaved"} changes`;
-    return sessionItem?.repositoryWorkState?.updateAvailable
-      ? `${changeLabel}; update available`
-      : changeLabel;
-  }
-  return ({
-    checking: "Checking whether work is saved",
-    needs_help: "Repository needs help",
-    saved: "All work is saved",
-    saving: "Saving work",
-    unavailable: "Save status is unavailable",
-    update_available: "Update available",
-    updating: "Updating session"
-  })[state];
-}
-
-function repositoryStateIcon(sessionItem = {}) {
-  return ({
-    checking: mdiDotsHorizontalCircleOutline,
-    needs_help: mdiAlertCircleOutline,
-    saved: mdiCheckCircleOutline,
-    saving: mdiDotsHorizontalCircleOutline,
-    unavailable: mdiAlertCircleOutline,
-    unsaved: mdiContentSaveAlertOutline,
-    update_available: mdiCloudDownloadOutline,
-    updating: mdiDotsHorizontalCircleOutline
-  })[repositoryState(sessionItem)];
-}
-
 function sessionTabAriaLabel(sessionItem = {}) {
   if (sessionItem.archiving) {
     return `${sessionTabLabel(sessionItem)}. Inactive. Archiving session.`;
   }
-  return `${sessionTabLabel(sessionItem)}. ${repositoryStateLabel(sessionItem)}.`;
+  return `${sessionTabLabel(sessionItem)}. ${repositoryWorkStateLabel(sessionItem)}.`;
 }
 
 const allSessions = computed(() => Array.isArray(props.toolbar.sessions) ? props.toolbar.sessions : []);

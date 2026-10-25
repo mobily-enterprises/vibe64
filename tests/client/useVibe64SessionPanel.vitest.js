@@ -5,9 +5,9 @@ import {
   sessionPanelEmptyStateActivity,
   sessionPanelRuntimeHostDiagnostics,
   sessionPanelSelectedSessionArchiving,
-  sessionPanelToolbarSessions,
-  sessionRepositoryWorkState
+  sessionPanelToolbarSessions
 } from "../../src/composables/useVibe64SessionPanel.js";
+import { sessionRepositoryWorkState } from "../../src/lib/vibe64SessionRepositoryWorkState.js";
 
 describe("useVibe64SessionPanel", () => {
   it("uses the empty-state loader for both initial loading and session creation", () => {
@@ -358,5 +358,24 @@ describe("mounted session hosts", () => {
         expect(g.panel.runtimeHostSessionIds.value).toEqual([]);
       } finally { g.scope.stop(); }
     } finally { f.scope.stop(); panelHarness.route = { query: {} }; }
+  });
+});
+
+describe("repository work state presentation", () => {
+  it("labels and icons every derived state and falls back to checking", async () => {
+    const {
+      repositoryWorkState,
+      repositoryWorkStateIcon,
+      repositoryWorkStateLabel
+    } = await import("../../src/lib/vibe64SessionRepositoryWorkState.js");
+    expect(repositoryWorkState({ repositoryWorkState: { state: "bogus" } })).toBe("checking");
+    expect(repositoryWorkStateLabel({ repositoryWorkState: { state: "saved" } })).toBe("All work is saved");
+    expect(repositoryWorkStateLabel({ repositoryWorkState: { changedCount: 1, state: "unsaved" } })).toBe("1 change");
+    expect(repositoryWorkStateLabel({
+      repositoryWorkState: { changedCount: 0, state: "unsaved", updateAvailable: true }
+    })).toBe("Unsaved changes; update available");
+    for (const state of ["checking", "needs_help", "saved", "saving", "unavailable", "unsaved", "update_available", "updating"]) {
+      expect(repositoryWorkStateIcon({ repositoryWorkState: { state } })).toMatch(/^M/u);
+    }
   });
 });
