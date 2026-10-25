@@ -38,15 +38,16 @@ function ptyHelperPayloadPath(root = "") {
   return path.join(payloadRoot, `${process.pid}-${Date.now()}-${randomUUID()}.json`);
 }
 
-// The gateway resolves the env (a factory runs per terminal id) and stamps the
-// execution id on it, so every PTY command sees the same env a provider would.
+// A terminal gets the env its caller resolved; only an env factory goes through
+// the gateway's resolver, once per terminal id, with the execution id stamp.
 function terminalSessionInputForRequest(request = {}, {
   actor,
   cwd,
+  env: resolvedEnv,
   resolveEnv
 } = {}) {
   const terminal = request.terminal || {};
-  const env = request.envFactory ? resolveEnv : resolveEnv();
+  const env = request.envFactory ? resolveEnv : resolvedEnv;
   if (!realUserActorRequiresInstalledHelper(actor)) {
     return {
       args: request.args,
@@ -90,6 +91,7 @@ function terminalSessionInputForRequest(request = {}, {
 async function runPtyCommand(request = {}, {
   actor,
   cwd,
+  env,
   resolveEnv
 } = {}) {
   try {
@@ -98,6 +100,7 @@ async function runPtyCommand(request = {}, {
     const sessionInput = terminalSessionInputForRequest(request, {
       actor,
       cwd,
+      env,
       resolveEnv
     });
     const result = startTerminalSession({

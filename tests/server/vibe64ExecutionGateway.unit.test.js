@@ -700,6 +700,56 @@ test("PTY env factories see the execution id like every other gateway command", 
   }
 });
 
+test("a provider's runLocal sets a PTY's env exactly", async () => {
+  const namespace = `gateway-pty-runlocal-env-${Date.now()}`;
+  const release = installVibe64ManagedExecutionProvider({
+    runCommand: async (request, context) => {
+      policyEnv = context.env;
+      return context.runLocal({
+        ...request,
+        env: {},
+        envFactory: null,
+        command: process.execPath,
+        args: ["-e", "console.log('PTY_ENV:' + JSON.stringify(process.env))"]
+      }, {
+        actor: { actor: "daemon", requiresRealUser: false },
+        env: { ONLY: "1" },
+        requiresHelper: false
+      });
+    },
+    stopExecution: async () => ({ ok: true })
+  });
+  let policyEnv = {};
+  let terminal = {};
+  try {
+    terminal = await runVibe64Command({
+      command: "tool",
+      env: () => ({ FACTORY_OUTPUT: "factory" }),
+      mode: "pty",
+      project: {
+        databaseEnv: { DB_CLIENT: "mysql2", DB_PASSWORD: "policy-secret" },
+        workspace: "sas"
+      },
+      purpose: "codex",
+      runtimes: [],
+      terminal: { namespace }
+    });
+    assert.equal(terminal.ok, true, terminal.output || terminal.error);
+    assert.equal(policyEnv.DB_PASSWORD, "policy-secret");
+    const snapshot = await waitForTerminalOutput(terminal.id, namespace, "PTY_ENV:");
+    const match = String(snapshot.output || "").match(/PTY_ENV:(\{[^\r\n]+\})/u);
+    assert.ok(match, snapshot.output);
+    const childEnv = JSON.parse(match[1]);
+    assert.equal(childEnv.ONLY, "1");
+    assert.equal(childEnv.FACTORY_OUTPUT, undefined);
+    assert.equal(childEnv.DB_PASSWORD, undefined);
+    assert.equal(childEnv.VIBE64_EXECUTION_ID, undefined);
+  } finally {
+    release();
+    if (terminal.id) await closeTerminalSession(terminal.id, { namespace });
+  }
+});
+
 test("managed execution does not inherit the launching shell PATH", async () => {
   const customPath = "/tmp/standalone-only-tools";
   const release = installVibe64ManagedExecutionProvider({
@@ -2261,12 +2311,12 @@ test("execution gateway pty mode spools real-user helper payloads centrally", as
         }
       },
       cwd: "/home/ada",
-      resolveEnv: () => ({
+      env: {
         GH_PROMPT_DISABLED: "1",
         HOME: "/home/ada",
         LOGNAME: "ada",
         USER: "ada"
-      })
+      }
     });
   } finally {
     if (previousPath === undefined) delete process.env.PATH;

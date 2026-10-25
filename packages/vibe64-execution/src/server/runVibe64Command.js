@@ -54,6 +54,7 @@ async function runLocalVibe64Command(request, {
     return runPtyCommand(request, {
       actor,
       cwd,
+      env,
       resolveEnv
     });
   }

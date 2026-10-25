@@ -63,7 +63,8 @@ Then it chooses:
 - `mode: "pty"`: start a tracked terminal session. Like every engine, the
   terminal gets exactly the resolved environment, never the server process's
   own variables, and a function `env` is resolved per terminal id with the
-  same `VIBE64_EXECUTION_ID` stamp.
+  same `VIBE64_EXECUTION_ID` stamp. A provider's `runLocal` context `env` is
+  exactly the env its PTY starts with.
 - `mode: "detached"`: spawn a background process.
 - real-user mismatch: run through the host's privileged helper via sudo. A
   person's own computer has no helper and never builds such an actor.
