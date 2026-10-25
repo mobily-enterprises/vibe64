@@ -51,7 +51,7 @@
               v-bind="checkingProps"
               :aria-busy="saveWorkSending || saveWorkChecking ? 'true' : undefined"
               :aria-label="saveWorkChecking ? 'Checking repository status' : saveWorkCheckAvailable ? 'Check for updates' : saveWorkHeaderAriaLabel"
-              class="studio-autopilot__save-work studio-autopilot__header-fixed"
+              class="studio-autopilot__save-work"
               :class="{ 'studio-autopilot__save-work--check': saveWorkCheckAvailable }"
               data-vibe64-guide="save"
               :color="saveWorkRequiresUpdate ? 'warning' : (saveWorkUnsaved ? 'error' : undefined)"
@@ -1186,7 +1186,7 @@ function measureHeaderActionRoom() {
     const natural = chip.offsetWidth - (label?.clientWidth || 0) + (label?.scrollWidth || 0);
     return total + Math.min(natural, SESSION_NAME_MAX_WIDTH) + 6;
   }, 0);
-  const fixed = [...header.querySelectorAll(".studio-autopilot__header-fixed")]
+  const fixed = [...header.querySelectorAll(".studio-autopilot__save-work, .studio-autopilot__header-fixed")]
     .reduce((total, element) => total + element.offsetWidth + 2, 0);
   const actionSize = (parseFloat(style.getPropertyValue("--session-action-size")) || 36) + 2;
   const room = header.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - names - fixed - 8;
@@ -1902,6 +1902,14 @@ function requestSessionRenewal(returnFocusTarget = null) {
 }
 
 // The selected app layer is shared with host-owned companions; retained sessions cannot claim it.
+// Session names, Save and the available actions change the header's room.
+watch(() => [
+  (props.sessionToolbar?.sessions || []).map((session) => session?.sessionName || session?.sessionId).join("\n"),
+  headerActionsAvailable.value.join(),
+  saveWorkHeaderVisible.value,
+  mainChatApprovals.waitingCount
+].join("|"), () => nextTick(measureHeaderActionRoom));
+
 const assistantHost = inject(VIBE64_ASSISTANT_HOST_KEY, null);
 // A Learning environment "Show me" for one file opens it in this session's
 // ordinary Dashboard -> Files editor, as a source link does.
@@ -1931,13 +1939,6 @@ onBeforeUnmount(() => {
   }
 });
 
-// Session names, Save and the available actions change the header's room.
-watch(() => [
-  (props.sessionToolbar?.sessions || []).map((session) => session?.sessionName || session?.sessionId).join("\n"),
-  headerActionsAvailable.value.join(),
-  saveWorkHeaderVisible.value,
-  mainChatApprovals.waitingCount
-].join("|"), () => nextTick(measureHeaderActionRoom));
 </script>
 
 <style scoped>
