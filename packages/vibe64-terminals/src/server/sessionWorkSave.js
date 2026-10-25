@@ -1098,6 +1098,25 @@ async function deletePreparedSaveRef(runCommand, context, operationId, options =
   }
 }
 
+// Called once the caller has durably recorded a completed or recovered Save.
+// Its prepared ref is then no longer recovery evidence. Left behind, it would
+// pin its commit and make a later absent contribution branch look like a lost
+// publication.
+async function retireSessionWorkSave({
+  commandOptions = {},
+  operationId = "",
+  project = {},
+  runCommand = runVibe64Command,
+  session = {}
+} = {}) {
+  const context = repositoryContext(session, project);
+  runCommand = scopedSessionWorkCommand(runCommand, context, project, {
+    label: "Retiring a recorded Save",
+    operationId: text(operationId) || crypto.randomUUID()
+  });
+  await deletePreparedSaveRef(runCommand, context, operationId, { commandOptions, project });
+}
+
 async function saveSessionWorkDirect({
   checkpoint: suppliedCheckpoint = null,
   commandOptions = {},
@@ -1238,6 +1257,9 @@ async function saveSessionWorkDirect({
         stage: "cache-maintenance-warning"
       });
     }
+    // A deferred Save is finished by its caller: the prepared ref stays as
+    // recovery evidence until the caller has recorded this result, and then
+    // retireSessionWorkSave removes it.
     if (!deferCacheMaintenance) {
       await deletePreparedSaveRef(runCommand, context, operationId, {
         commandOptions,
@@ -1464,7 +1486,6 @@ async function recoverSessionWorkSave({
       cacheMaintenance,
       ok: true,
       recovered: true,
-      preparedRef,
       saveCommit: proposedCommit,
       status: reconciliation.status,
       verifiedCommit: proposedCommit,
@@ -1487,6 +1508,7 @@ export {
   prepareSessionWorkSaveMessageDirect,
   recoverSessionWorkSave,
   refreshSessionWorkSaveCacheDirect,
+  retireSessionWorkSave,
   saveSessionWork,
   saveSessionWorkDirect
 };

@@ -162,6 +162,10 @@ This lets an unpublished first contribution retry after its prerequisite is
 fixed. Once push or local baseline merge has been attempted, failure retains
 the prepared evidence; remote absence cannot prove that a first push never
 succeeded or authorize recreating a deleted branch.
+A successful or recovered Save keeps its prepared ref only until the sessions
+service has recorded the ready outcome; it then calls `retireSessionWorkSave`
+to delete it, so no completed Save leaves evidence that later reads as a lost
+contribution publication.
 The chat Save control uses a branch icon and connected destination review while
 submission is required, including when the main source is clean. It reports
 confirmed receiving pushes on success or partial failure, then returns to ordinary

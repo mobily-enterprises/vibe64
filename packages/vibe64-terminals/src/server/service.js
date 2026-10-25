@@ -80,6 +80,7 @@ import {
   prepareSessionPullRequestBranch,
   prepareSessionWorkSaveMessage as prepareManagedSessionWorkSaveMessage,
   recoverSessionWorkSave as recoverManagedSessionWorkSave,
+  retireSessionWorkSave as retireManagedSessionWorkSave,
   saveSessionWork as saveManagedSessionWork
 } from "./sessionWorkSave.js";
 import {
@@ -2876,6 +2877,28 @@ function createService({
           runProjectSourceExclusive: projectService.runProjectSourceExclusive.bind(projectService),
           session
         });
+      });
+    },
+
+    async retireSessionWorkSave(sessionId, input = {}) {
+      return runSessionRepositoryWrite(sessionId, input, { operation: "retire-session-save" }, async ({ session }) => {
+        const execution = await codexGitCommand.sessionWorkSaveContext({
+          session,
+          sessionId: String(sessionId || "").trim()
+        });
+        if (execution?.ok === false) {
+          throw Object.assign(new Error(execution.error || "The Git actor for retiring this Save is not available."), {
+            code: execution.code || "vibe64_session_save_actor_unavailable"
+          });
+        }
+        await retireManagedSessionWorkSave({
+          commandOptions: execution.commandOptions,
+          operationId: input.operationId,
+          project: await projectService.readCurrentProject(),
+          runCommand: execution.runCommand,
+          session
+        });
+        return { ok: true };
       });
     },
 

@@ -630,6 +630,20 @@ function createService({
     }
   }
 
+  // Once a Save's outcome is recorded, its prepared ref is no longer recovery
+  // evidence. Retiring is best effort: a later recovery still reads the record.
+  async function retireRecordedSave(sessionId, operationId, context) {
+    if (!text(operationId) || typeof terminals.retireSessionWorkSave !== "function") return;
+    try {
+      await terminals.retireSessionWorkSave(sessionId, { ...context, operationId });
+    } catch (error) {
+      vibe64SessionDebugLog("server.sessions.save.retire.error", {
+        error: vibe64SessionDebugError(error),
+        sessionId
+      });
+    }
+  }
+
   async function recoverInterruptedSave(runtime, session, task) {
     const failedPublication = task?.status === "failed" && (
       task.stage === "publishing" || task.code === "vibe64_session_save_publication_unknown"
@@ -650,7 +664,7 @@ function createService({
       if (result.reconciled === true) {
         await runtime.store.writeMetadataValue(session.sessionId, "base_commit", result.saveCommit);
       }
-      return runtime.store.writeBackgroundTaskEvent(session.sessionId, SESSION_SAVE_TASK_ID, {
+      const recorded = await runtime.store.writeBackgroundTaskEvent(session.sessionId, SESSION_SAVE_TASK_ID, {
         event: {
           kind: "save-recovered",
           message: result.cacheMaintenance?.retryable === true
@@ -667,6 +681,8 @@ function createService({
           status: "ready"
         }
       });
+      await retireRecordedSave(session.sessionId, task.operationId, { runtime });
+      return recorded;
     } catch (error) {
       // A prepared-ref check can prove this failed attempt never published.
       // Preserve its actionable original rejection instead of replacing it
@@ -1934,6 +1950,7 @@ function createService({
               status: "ready"
             }
           });
+          await retireRecordedSave(sessionId, operationId, { runtime });
           await resolveSupersededUpdateFailure(runtime, sessionId, result, { knownNewer: true });
           await publishSessionChanged(sessionId, {
             operation: "updated",

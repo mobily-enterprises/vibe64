@@ -990,6 +990,7 @@ test("work inspection reconciles an interrupted published Save exactly once", as
     }
   };
   let recoverCalls = 0;
+  const retired = [];
   const service = createService({
     project: {
       async createRuntime() {
@@ -1008,6 +1009,10 @@ test("work inspection reconciles an interrupted published Save exactly once", as
           saveCommit: "saved",
           status: "saved"
         };
+      },
+      async retireSessionWorkSave(_sessionId, input) {
+        assert.equal(saveTask.status, "ready", "the recovered outcome is recorded before retirement");
+        retired.push(input.operationId);
       }
     }
   });
@@ -1016,6 +1021,7 @@ test("work inspection reconciles an interrupted published Save exactly once", as
   assert.equal(result.ok, true);
   assert.equal(result.operation.status, "ready");
   assert.equal(recoverCalls, 1);
+  assert.deepEqual(retired, ["save-1"]);
   assert.deepEqual(metadata, [
     ["session-1", "canonical_commit", "saved"],
     ["session-1", "base_commit", "saved"]
@@ -1257,6 +1263,7 @@ test("members can Save and create pull requests independently of AI access", asy
   const taskEvents = [];
   const metadataWrites = [];
   let saveCalls = 0;
+  const retired = [];
   const denied = new Error("Only the workspace owner can use this personal AI connection.");
   denied.code = "vibe64_assistant_owner_required";
   denied.statusCode = 403;
@@ -1292,6 +1299,11 @@ test("members can Save and create pull requests independently of AI access", asy
         saveCalls += 1;
         return { reconciled: true, saveCommit: "member-save", status: "saved" };
       },
+      async retireSessionWorkSave(_sessionId, input) {
+        // The prepared ref is retired only after the outcome is recorded.
+        assert.equal(taskEvents.at(-1)[2].patch.status, "ready");
+        retired.push(input.operationId);
+      },
       async createSessionPullRequest(_sessionId, input) {
         assert.equal(input.vibe64User.username, "member");
         assert.equal(input.title, "Member changes");
@@ -1307,6 +1319,8 @@ test("members can Save and create pull requests independently of AI access", asy
   assert.equal(result.ok, true, result.error);
   assert.equal(saveCalls, 1);
   assert.equal(taskEvents.at(-1)[2].patch.status, "ready");
+  assert.ok(taskEvents[0][2].patch.operationId);
+  assert.deepEqual(retired, [taskEvents[0][2].patch.operationId]);
   assert.deepEqual(metadataWrites, [
     ["session-1", "canonical_commit", "member-save"],
     ["session-1", "base_commit", "member-save"]

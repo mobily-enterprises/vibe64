@@ -16,6 +16,7 @@ import {
   prepareSessionWorkSaveMessage,
   prepareSessionPullRequestBranch,
   recoverSessionWorkSave,
+  retireSessionWorkSave,
   saveSessionWork as saveManagedSessionWorkImplementation,
   saveSessionWorkDirect as saveSessionWorkImplementation
 } from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
@@ -241,6 +242,11 @@ test("Save uses two foreground managed jobs and defers disposable cache maintena
     assert.ok(payloads.every((payload) => JSON.stringify(payload.hostProfile) === JSON.stringify(vibe64Host())));
     assert.deepEqual(progressStages, ["publishing"]);
     assert.deepEqual(saveMessageInput.changes.files.map((file) => file.path), ["saved.txt"]);
+    const saveRefs = () => git(session.sourcePath, ["for-each-ref", "--format=%(refname)", "refs/vibe64/save"]);
+    // The prepared ref is recovery evidence until the caller records the result.
+    assert.match(await saveRefs(), /\/prepared$/u);
+    await retireSessionWorkSave({ operationId: "save-managed-stages", project, runCommand: commandRunner, session });
+    assert.equal(await saveRefs(), "");
   } finally {
     await rm(root, { force: true, recursive: true });
   }
