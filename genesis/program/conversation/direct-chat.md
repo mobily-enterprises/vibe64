@@ -209,6 +209,15 @@ run for every event; actual access revocation still removes the subscriber.
 No browser opener accepts an incoming replacement for this captured
 identity.
 
+Main, temporary and Colleague conversations share one browser transport, so its
+data and selection schemas are the union of each product's own definitions: a
+shared field's enums and nested fields combine (for example `assistantRouting`
+accepts Main's Auto and automatic save and a temporary chat's Fix it with AI),
+length bounds loosen, and a field is required only where every product requires
+it. Two products declaring one field incompatibly fail setup instead of one
+silently replacing the other. Each product's original action still validates
+its complete input strictly.
+
 The configured normal CLI adds only the existing SDK
 MCP declaration, preserving original source tools and permission defaults.
 
@@ -1261,6 +1270,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-sessions/src/server/mainBrowserConversations.js`
 - `packages/vibe64-sessions/src/server/mainConversationAuthority.js`
 - `packages/vibe64-sessions/src/server/Vibe64ConversationsProvider.js`
+- `packages/vibe64-sessions/src/server/conversationTransportSchema.js`
 - `packages/vibe64-sessions/src/shared/conversationIdentity.js`
 - `packages/vibe64-terminals/src/server/providerUsage.js`
 - `packages/vibe64-terminals/src/server/assistantChangeover.js`

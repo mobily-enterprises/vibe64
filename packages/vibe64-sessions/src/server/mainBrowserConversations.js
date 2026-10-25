@@ -1,4 +1,5 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
+import { conversationTransportSchema } from "./conversationTransportSchema.js";
 import { mainConversationRequestContext } from "./mainConversationAuthority.js";
 import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { ACTION_READ_CANONICAL_AGENT_GOAL, ACTION_UPDATE_CANONICAL_AGENT_GOAL } from "@local/vibe64-terminals/server/actions";
@@ -45,12 +46,10 @@ function createMainBrowserConversations({ actions, terminals } = {}) {
     throw new TypeError("Main browser conversations require the original action catalogue and terminal conversation owner.");
   }
   return Object.freeze({
-    conversationDataSchema: terminals.temporaryConversationDataSchema ? createSchema({
-      ...mainConversationDataSchema.getFieldDefinitions(), ...terminals.temporaryConversationDataSchema.getFieldDefinitions()
-    }) : mainConversationDataSchema,
-    conversationSelectionSchema: terminals.temporaryConversationSelectionSchema ? createSchema({
-      ...terminals.temporaryConversationSelectionSchema.getFieldDefinitions(), ...mainConversationSelectionSchema.getFieldDefinitions()
-    }) : mainConversationSelectionSchema,
+    // Main and temporary conversations share one transport; each accepts its own envelope.
+    conversationDataSchema: conversationTransportSchema([mainConversationDataSchema, terminals.temporaryConversationDataSchema]),
+    conversationSelectionSchema: conversationTransportSchema([mainConversationSelectionSchema,
+      terminals.temporaryConversationSelectionSchema]),
     async open({ id, context } = {}) {
       const temporary = temporaryConversationTarget(id);
       const target = temporary || mainConversationTarget(id);

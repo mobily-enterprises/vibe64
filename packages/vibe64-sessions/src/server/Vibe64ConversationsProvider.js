@@ -1,17 +1,8 @@
 import { defineFeature } from "@jskit-ai/kernel/server/features";
-import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { isTrustedStudioWebSocketRequest, requireLocalStudioRequest } from "@local/vibe64-core/server/localStudioRequest";
 import { mainConversationTarget, temporaryConversationTarget } from "../shared/conversationIdentity.js";
-
-function conversationSchema(main, colleague) {
-  if (!colleague) return main;
-  // Each product's original action still validates its complete input. The
-  // common transport accepts either declared product envelope.
-  return createSchema(Object.fromEntries(Object.entries({
-    ...main.getFieldDefinitions(), ...colleague.getFieldDefinitions()
-  }).map(([key, field]) => [key, { ...field, required: false }])));
-}
+import { conversationTransportSchema } from "./conversationTransportSchema.js";
 
 // The original browser hosting owner is shared by Main and optional Colleague.
 // AssistantFeature still owns all routes, subscriptions and client contracts.
@@ -32,8 +23,9 @@ const Vibe64ConversationsProvider = defineFeature({
           if (product) return product.open(input);
           throw Object.assign(new Error("This conversation is unavailable."), { code: "conversation_forbidden", statusCode: 403 });
         },
-        conversationDataSchema: conversationSchema(main.conversationDataSchema, product?.conversationDataSchema),
-        conversationSelectionSchema: conversationSchema(main.conversationSelectionSchema, product?.conversationSelectionSchema)
+        conversationDataSchema: conversationTransportSchema([main.conversationDataSchema, product?.conversationDataSchema]),
+        conversationSelectionSchema: conversationTransportSchema([main.conversationSelectionSchema,
+          product?.conversationSelectionSchema])
       },
       access: {
         subscribeActionId, requestPolicy: "host",
