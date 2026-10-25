@@ -12,7 +12,6 @@ import test from "node:test";
 import { vibe64PackagingInspection } from "../../packages/vibe64-genesis/src/server/packaging.js";
 import { createConfirmationService } from "../../packages/vibe64-publishing/src/server/confirmationService.js";
 import { changelogSection, createReleaseOrchestrator, outputExcerpt } from "../../packages/vibe64-publishing/src/server/releaseOrchestrator.js";
-import { createBuilderMap } from "../../packages/vibe64-publishing/src/server/state/builderMap.js";
 import { createReleaseHistoryStore } from "../../packages/vibe64-publishing/src/server/state/releaseHistoryStore.js";
 import { createTargetsStore } from "../../packages/vibe64-publishing/src/server/state/targetsStore.js";
 
@@ -99,7 +98,6 @@ async function fixture(t, { failing = new Set(), failingBuilds = new Set(), veri
     resultStore: path.join(runtimeRoot, "results"),
     targets,
     history,
-    builders: createBuilderMap({ runtimeRoot }),
     confirmations,
     keys: { status: async () => keyStatus },
     toolchains: { status: async () => ({ java: { ready: false } }), androidToolchains: async () => null, registryTools: async () => ({}) },

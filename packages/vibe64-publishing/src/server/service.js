@@ -32,7 +32,6 @@ import { createLanShare } from "./lanShare.js";
 import { createProjectRepository } from "./projectRepository.js";
 import { createReleaseOrchestrator } from "./releaseOrchestrator.js";
 import { createSessionReleaseWriter } from "./sessionReleaseWriter.js";
-import { createBuilderMap } from "./state/builderMap.js";
 import { createReleaseHistoryStore } from "./state/releaseHistoryStore.js";
 import { createTargetsStore } from "./state/targetsStore.js";
 import { createToolchainManager } from "./toolchainLicence.js";
@@ -120,7 +119,6 @@ function createPublishingService({ project, sourceEditor, env = process.env, roo
         cacheDirectory: cacheRoot,
         targets,
         history,
-        builders: createBuilderMap({ runtimeRoot: publishingRoot }),
         confirmations,
         keys,
         toolchains,

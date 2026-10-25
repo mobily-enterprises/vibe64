@@ -147,7 +147,6 @@ function createReleaseOrchestrator({
   cacheDirectory = "",
   targets,
   history,
-  builders,
   confirmations,
   keys,
   toolchains,
@@ -200,13 +199,12 @@ function createReleaseOrchestrator({
     } catch (error) {
       releaseProblem = error?.message || "The saved project could not be read.";
     }
-    const [targetList, { records, latest }, keyStatus, toolchainStatus, pending, builderMap] = await Promise.all([
+    const [targetList, { records, latest }, keyStatus, toolchainStatus, pending] = await Promise.all([
       targets.list(),
       lastOutcomes(),
       keys.status(),
       toolchains.status(),
-      confirmations.pendingRequest(),
-      builders.read()
+      confirmations.pendingRequest()
     ]);
     const checks = baseline.commit ? await verification.status(baseline.commit) : null;
     const packages = release?.packaging?.status === "ready"
@@ -238,7 +236,6 @@ function createReleaseOrchestrator({
         problem: releaseProblem
       },
       targets: targetList.map((target) => ({ ...target, latest: latest[target.id] || null, ...(target.destination === "android-sideload" ? { installKey: installKey(target, keyStatus) } : {}) })),
-      builders: builderMap,
       keys: { ...keyStatus, entries: (keyStatus.entries || []).map((entry) => ({ ...entry, coveredByRecoveryKit: recoveryKitCovers(keyStatus, entry.id) })) },
       toolchains: toolchainStatus,
       checks,
@@ -610,7 +607,6 @@ function createReleaseOrchestrator({
         buildNumbers: Object.fromEntries(current.plan.packages.filter((entry) => entry.buildNumber).map((entry) => [entry.id, entry.buildNumber])),
         toolchain: current.plan.toolchain,
         templates: current.plan.templates,
-        builders: await builders.read(),
         confirmedBy: redeemed.actorId,
         confirmedAt: redeemed.usedAt,
         acknowledged: current.preflight.acknowledged,

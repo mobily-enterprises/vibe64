@@ -454,7 +454,7 @@ the Packaging contract owned by the Genesis boundary.
 - Nothing.
 
 ### Data owned
-- Project runtime `publishing/`: targets, builder map, release history,
+- Project runtime `publishing/`: targets, release history,
   confirmations, verification results and build results.
 - Personal `publishing/` folder: the age-encrypted keys file and its index,
   and licence acceptances.
