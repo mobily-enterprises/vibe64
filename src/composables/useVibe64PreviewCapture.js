@@ -98,7 +98,7 @@ function previewCaptureError(message, code = "") {
   return error;
 }
 
-function previewCaptureErrorMessage(error) {
+function previewCaptureErrorMessage(error, fallback = "Preview capture failed.") {
   if (error?.name === "NotAllowedError") {
     return "Preview capture was not allowed. Click the eye again and choose This Tab.";
   }
@@ -108,7 +108,7 @@ function previewCaptureErrorMessage(error) {
   if (error?.name === "NotReadableError") {
     return "The browser could not read the shared tab. Stop another screen capture and try again.";
   }
-  return String(error?.message || error || "Preview capture failed.").trim() || "Preview capture failed.";
+  return String((typeof error === "string" ? error : error?.message) || "").trim() || fallback;
 }
 
 function previewCaptureAvailable({
@@ -405,58 +405,78 @@ function useVibe64PreviewCapture({
     refreshVisibility();
   }
 
+  const canDeliver = typeof prepareFile === "function" || typeof attachFile === "function";
+
   const supported = computed(() => session.supported());
   const buttonVisible = computed(() => previewCaptureAvailable({
-    canAttach: typeof prepareFile === "function" || typeof attachFile === "function",
+    canAttach: canDeliver,
     displayed: readRefOrGetterValue(previewDisplayed) === true,
     loaded: readRefOrGetterValue(previewLoaded) === true,
     supported: supported.value,
     visible: visible.value
   }));
 
-  async function capturePreview() {
-    if (
-      busy.value ||
-      !currentVisibleRect() ||
-      (typeof prepareFile !== "function" && typeof attachFile !== "function")
-    ) {
+  // Hands one Preview file to the message: through prepareFile when the host
+  // offers it, where a falsy result means the person cancelled, otherwise
+  // straight to attachFile, where it means the attachment failed.
+  async function deliverPreviewFile({
+    attachFailureMessage = "The preview file could not be attached to the current message.",
+    busy: deliveryBusy,
+    failureMessage = "The preview file could not be attached.",
+    fileName,
+    produce
+  }) {
+    if (deliveryBusy.value || !canDeliver) {
       return false;
     }
-    busy.value = true;
+    deliveryBusy.value = true;
     noticeVisible.value = false;
     try {
       const result = typeof prepareFile === "function"
-        ? await prepareFile({
-            fileName: "Preview screenshot",
-            produce: ({ signal } = {}) => {
-              const stopCapture = () => session.stop();
-              signal?.addEventListener?.("abort", stopCapture, { once: true });
-              return session.capture(currentVisibleRect).finally(() => {
-                signal?.removeEventListener?.("abort", stopCapture);
-              });
-            }
-          })
-        : await session.capture(currentVisibleRect).then(attachFile);
+        ? await prepareFile({ fileName, produce })
+        : await attachFile(await produce({}));
       const attached = Array.isArray(result) ? result.length > 0 : Boolean(result);
       if (!attached) {
         if (typeof prepareFile === "function") {
           return false;
         }
-        throw previewCaptureError("The preview image could not be attached to the current message.", "attach_failed");
+        throw new Error(attachFailureMessage);
       }
       noticeText.value = "";
       noticeVisible.value = false;
       return true;
     } catch (error) {
-      if (error?.code === "capture_cancelled") {
+      if (error?.name === "AbortError" || error?.code === "capture_cancelled") {
         return false;
       }
       noticeColor.value = "error";
-      noticeText.value = previewCaptureErrorMessage(error);
+      noticeText.value = previewCaptureErrorMessage(error, failureMessage);
       noticeVisible.value = true;
       return false;
     } finally {
-      busy.value = false;
+      deliveryBusy.value = false;
+    }
+  }
+
+  async function capturePreview() {
+    if (busy.value || !currentVisibleRect()) {
+      return false;
+    }
+    try {
+      return await deliverPreviewFile({
+        attachFailureMessage: "The preview image could not be attached to the current message.",
+        busy,
+        failureMessage: "Preview capture failed.",
+        fileName: "Preview screenshot",
+        produce: ({ signal } = {}) => {
+          const stopCapture = () => session.stop();
+          signal?.addEventListener?.("abort", stopCapture, { once: true });
+          return session.capture(currentVisibleRect).finally(() => {
+            signal?.removeEventListener?.("abort", stopCapture);
+          });
+        }
+      });
+    } finally {
       refreshVisibility();
     }
   }
@@ -498,6 +518,7 @@ function useVibe64PreviewCapture({
     busy,
     buttonVisible,
     capturePreview,
+    deliverPreviewFile,
     noticeColor,
     noticeText,
     noticeVisible,

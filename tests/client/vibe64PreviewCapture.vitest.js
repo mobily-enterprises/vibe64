@@ -508,6 +508,70 @@ describe("Vibe64 visible preview capture", () => {
     session.stop();
   });
 
+  it("delivers every Preview file with one attached rule and one cancel rule", async () => {
+    function mountDelivery(options) {
+      let previewCapture = null;
+      const app = testRenderer().createApp({
+        setup() {
+          previewCapture = useVibe64PreviewCapture({
+            captureSession: { capture: vi.fn(), stop: vi.fn(), supported: () => true },
+            previewDisplayed: ref(true),
+            previewFrame: ref(null),
+            previewLoaded: ref(true),
+            scopeKey: ref("session-1"),
+            windowObject: { innerHeight: 600, innerWidth: 1000 },
+            ...options
+          });
+          return () => h("div");
+        }
+      });
+      app.mount({ children: [] });
+      return { app, previewCapture };
+    }
+    const busy = ref(false);
+    const delivery = {
+      attachFailureMessage: "The diagnostics file could not be attached.",
+      busy,
+      failureMessage: "Diagnostics could not be attached.",
+      fileName: "Preview diagnostics",
+      produce: vi.fn(async () => ({ name: "diagnostics.json" }))
+    };
+
+    // Direct attachment: an empty result is a failed attachment, not success.
+    const attachFile = vi.fn(async () => []);
+    const direct = mountDelivery({ attachFile });
+    expect(await direct.previewCapture.deliverPreviewFile(delivery)).toBe(false);
+    expect(attachFile).toHaveBeenCalledWith({ name: "diagnostics.json" });
+    expect(direct.previewCapture.noticeText.value).toBe("The diagnostics file could not be attached.");
+    expect(direct.previewCapture.noticeColor.value).toBe("error");
+    expect(busy.value).toBe(false);
+    attachFile.mockResolvedValueOnce([{ attachmentId: "a" }]);
+    expect(await direct.previewCapture.deliverPreviewFile(delivery)).toBe(true);
+    expect(direct.previewCapture.noticeVisible.value).toBe(false);
+    direct.app.unmount();
+
+    // Prepared delivery: an empty result is the person cancelling, and both
+    // cancellation errors stay silent.
+    const prepareFile = vi.fn(async () => []);
+    const prepared = mountDelivery({ prepareFile });
+    expect(await prepared.previewCapture.deliverPreviewFile(delivery)).toBe(false);
+    expect(prepareFile).toHaveBeenCalledWith({ fileName: "Preview diagnostics", produce: delivery.produce });
+    for (const cancel of [Object.assign(new Error("Aborted"), { name: "AbortError" }),
+      Object.assign(new Error("Cancelled"), { code: "capture_cancelled" })]) {
+      prepareFile.mockRejectedValueOnce(cancel);
+      expect(await prepared.previewCapture.deliverPreviewFile(delivery)).toBe(false);
+    }
+    expect(prepared.previewCapture.noticeVisible.value).toBe(false);
+    prepareFile.mockRejectedValueOnce({});
+    expect(await prepared.previewCapture.deliverPreviewFile(delivery)).toBe(false);
+    expect(prepared.previewCapture.noticeText.value).toBe("Diagnostics could not be attached.");
+    expect(prepared.previewCapture.noticeVisible.value).toBe(true);
+    busy.value = true;
+    expect(await prepared.previewCapture.deliverPreviewFile(delivery)).toBe(false);
+    expect(prepareFile).toHaveBeenCalledTimes(4);
+    prepared.app.unmount();
+  });
+
   it("uses clear permission guidance and deterministic file names", () => {
     const denied = new Error("Permission denied");
     denied.name = "NotAllowedError";

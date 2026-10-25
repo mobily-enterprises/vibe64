@@ -1162,6 +1162,7 @@ const {
   busy: previewCaptureBusy,
   buttonVisible: previewCaptureButtonVisible,
   capturePreview: captureVisiblePreview,
+  deliverPreviewFile,
   noticeColor: previewAttachmentNoticeColor,
   noticeText: previewAttachmentNoticeText,
   noticeVisible: previewAttachmentNoticeVisible
@@ -1226,50 +1227,18 @@ watch(previewIdentityError, (error) => {
 });
 
 async function attachPreviewDiagnostics() {
-  if (
-    previewDiagnosticsAttachmentBusy.value ||
-    !previewDiagnosticsAttachmentAvailable.value
-  ) {
+  if (!previewDiagnosticsAttachmentAvailable.value) {
     return false;
   }
-  previewDiagnosticsAttachmentBusy.value = true;
-  previewAttachmentNoticeVisible.value = false;
-  try {
-    const attached = typeof props.preparePreviewFile === "function"
-      ? await props.preparePreviewFile({
-          fileName: "Preview diagnostics",
-          produce: async ({ signal } = {}) => {
-            const snapshot = await requestPreviewDiagnostics({ signal });
-            previewDiagnosticsAttachmentSequence += 1;
-            return previewDiagnosticsFile(snapshot, {
-              sequence: previewDiagnosticsAttachmentSequence
-            });
-          }
-        })
-      : await requestPreviewDiagnostics().then((snapshot) => {
-          previewDiagnosticsAttachmentSequence += 1;
-          return props.attachPreviewFile(previewDiagnosticsFile(snapshot, {
-            sequence: previewDiagnosticsAttachmentSequence
-          }));
-        });
-    if (!attached) {
-      if (typeof props.preparePreviewFile === "function") {
-        return false;
-      }
-      throw new Error("The preview diagnostics file could not be attached to the current message.");
-    }
-    return true;
-  } catch (error) {
-    if (error?.name === "AbortError") {
-      return false;
-    }
-    previewAttachmentNoticeColor.value = "error";
-    previewAttachmentNoticeText.value = String(error?.message || error || "Preview diagnostics could not be attached.");
-    previewAttachmentNoticeVisible.value = true;
-    return false;
-  } finally {
-    previewDiagnosticsAttachmentBusy.value = false;
-  }
+  return deliverPreviewFile({
+    attachFailureMessage: "The preview diagnostics file could not be attached to the current message.",
+    busy: previewDiagnosticsAttachmentBusy,
+    failureMessage: "Preview diagnostics could not be attached.",
+    fileName: "Preview diagnostics",
+    produce: async ({ signal } = {}) => previewDiagnosticsFile(await requestPreviewDiagnostics({ signal }), {
+      sequence: ++previewDiagnosticsAttachmentSequence
+    })
+  });
 }
 
 watch(
