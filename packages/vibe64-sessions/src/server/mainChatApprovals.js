@@ -1,8 +1,6 @@
 import crypto from "node:crypto";
-import { readdir, readFile } from "node:fs/promises";
-import path from "node:path";
 import { isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
-import { resolveVibe64SessionPaths } from "@local/vibe64-runtime/server/sessionStore";
+import { readActiveSessionMetadataValues } from "@local/vibe64-runtime/server/sessionStore";
 import { readWorkspaceTeam } from "@local/vibe64-core/server/workspaceTeam";
 import { currentProjectRequestContext, currentRequestIsPracticeProject } from "@local/vibe64-core/server/projectRequestContext";
 
@@ -51,16 +49,9 @@ function prune(entries) {
 // its session state so project lists never start a project runtime.
 async function countWaitingMainChatApprovals({ projectRuntimeRoot = "" } = {}) {
   if (!projectRuntimeRoot) return 0;
-  const { activeSessionsRoot } = resolveVibe64SessionPaths({ projectRuntimeRoot });
-  const sessions = await readdir(activeSessionsRoot, { withFileTypes: true }).catch((error) => {
-    if (error?.code === "ENOENT") return [];
-    throw error;
-  });
+  const queues = await readActiveSessionMetadataValues({ projectRuntimeRoot, name: MAIN_CHAT_APPROVALS_METADATA });
   let waiting = 0;
-  for (const session of sessions) {
-    if (!session.isDirectory()) continue;
-    const raw = await readFile(path.join(activeSessionsRoot, session.name, "metadata", MAIN_CHAT_APPROVALS_METADATA), "utf8")
-      .catch((error) => error?.code === "ENOENT" ? "" : Promise.reject(error));
+  for (const { value: raw } of queues) {
     try {
       waiting += parseApprovals(raw).entries.filter((entry) => entry.status === "waiting").length;
     } catch {

@@ -5,6 +5,7 @@ import {
 } from "@local/vibe64-runtime/shared";
 
 import { cleanupSessionNamingHelper, runSessionNamingHelper } from "./sessionNamingHelper.js";
+import { SESSION_SAVE_TASK_ID } from "./sessionWorkTasks.js";
 
 const MAX_COMMIT_SUBJECT_LENGTH = 72;
 const MAX_PROMPT_FILES = 40;
@@ -125,12 +126,12 @@ function normalizeSessionSaveCommitMessage(value = "") {
 }
 
 function cleanupSessionSaveCommitMessage({ agent, agentContext = {} } = {}) {
-  return cleanupSessionNamingHelper({ agent, agentContext, taskId: "save-work", namingError: commitMessageError });
+  return cleanupSessionNamingHelper({ agent, agentContext, taskId: SESSION_SAVE_TASK_ID, namingError: commitMessageError });
 }
 
 async function generateSessionSaveCommitMessage({ agent, agentContext = {}, changes = {} } = {}) {
   const result = await runSessionNamingHelper({
-    agent, agentContext, taskId: "save-work",
+    agent, agentContext, taskId: SESSION_SAVE_TASK_ID,
     profile: SESSION_SAVE_COMMIT_EXECUTION_PROFILE, outputSchema: SESSION_SAVE_COMMIT_OUTPUT_SCHEMA,
     prompt: sessionSaveCommitMessagePrompt(changes), promptLabel: "Name saved work",
     stableContext: "Write only a commit subject from supplied changes. You have no tools or project access.",

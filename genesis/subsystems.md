@@ -547,7 +547,7 @@ Coordinates the selected project’s working conversations through the original 
 
 Sessions exposes explicit source pinning and its lifecycle guards. Browsing another session does not change a pinned server selection.
 
-Runtime owns the stored session descriptors and source workspaces. Terminals owns native conversation admission, provider preparation and execution. Training may supply an admitted immutable learning scope; that does not give the session UI authority to change lesson content, access or grading.
+Runtime owns the stored session descriptors and source workspaces. Sessions owns the session metadata records it writes through Runtime's session store (`main_chat_approvals`, `connected_sources`, `connected_submissions`, `connected_session_name`, `session_archive_operation`, `repository_update_check`) and the session renewal state record. Terminals owns native conversation admission, provider preparation and execution. Training may supply an admitted immutable learning scope; that does not give the session UI authority to change lesson content, access or grading.
 Sessions coordinates explicit and workspace-driven connected-source preparation through receiving
 project actions and the existing session creation owner. It retains reserved
 source bindings in the originating session before creating receiving source,

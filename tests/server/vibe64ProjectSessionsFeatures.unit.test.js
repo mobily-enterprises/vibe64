@@ -294,6 +294,7 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
       renewalWorkClosed = true;
       shutdownEvents.push("close-renewal-admission");
     },
+    closeSessionPresence() {},
     async resumeSessionArchives() { return { failures: [] }; },
     async resumeSessionRenewals() {
       resumeCalls += 1;
@@ -398,7 +399,8 @@ test("sessions reject a fulfilled but unsuccessful agent-runtime shutdown", asyn
     }, {
       outputs: {
         sessions: {
-          async closeSessionRenewalWork() {}
+          async closeSessionRenewalWork() {},
+          closeSessionPresence() {}
         }
       }
     }),

@@ -7,14 +7,6 @@ import {
   SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS
 } from "./sessionRenewalState.js";
 
-const optionalUser = {
-  vibe64User: {
-    type: "object",
-    additionalProperties: true,
-    required: false
-  }
-};
-
 const optionalOrigin = {
   originId: {
     type: "string",
@@ -154,7 +146,6 @@ const agentMessageFields = {
 const agentMessageInputValidator = patchSchema(agentMessageFields);
 const agentMessageActionInputValidator = requiredInputSchema({
   ...agentMessageFields,
-  ...optionalUser,
   sessionId: {
     type: "string",
     noTrim: false,
@@ -170,13 +161,11 @@ const mainChatApprovalFields = {
 const mainChatApprovalInputValidator = patchSchema(mainChatApprovalFields);
 const mainChatApprovalActionInputValidator = requiredInputSchema({
   ...mainChatApprovalFields,
-  ...optionalUser,
   sessionId: { type: "string", noTrim: false, minLength: 1, required: true },
   approvalId: { type: "string", noTrim: false, minLength: 8, maxLength: 128, pattern: /^[A-Za-z0-9_-]+$/u, required: true }
 });
 
 const assistantAccessActionInputValidator = patchSchema({
-  ...optionalUser,
   sessionId: {
     type: "string",
     noTrim: false,
@@ -197,7 +186,6 @@ const agentTurnInterruptFields = {
 const agentTurnInterruptInputValidator = patchSchema(agentTurnInterruptFields);
 const agentTurnInterruptActionInputValidator = requiredInputSchema({
   ...agentTurnInterruptFields,
-  ...optionalUser,
   sessionId: {
     type: "string",
     noTrim: false,
@@ -268,7 +256,6 @@ const sessionPresenceActionInputValidator = requiredInputSchema({
 });
 
 const sessionListInputValidator = patchSchema({
-  ...optionalUser,
   sessionOffset: { type: "integer", min: 0, required: false }
 });
 
@@ -295,7 +282,6 @@ const sessionPullRequestInputValidator = patchSchema({
   body: { type: "string", required: false, maxLength: 65536, noTrim: true },
   draft: { type: "boolean", required: false },
   ...optionalOrigin,
-  ...optionalUser
 });
 
 const incomingReviewSchema = createSchema({
@@ -358,12 +344,10 @@ const sessionCreateInputValidator = patchSchema({
     required: false
   },
   ...optionalOrigin,
-  ...optionalUser
 });
 
 const assistantCapabilitiesInputValidator = patchSchema({
   allConnectedModels: { type: "string", required: false },
-  ...optionalUser,
   configuredOnly: {
     type: "string",
     noTrim: false,
@@ -422,7 +406,6 @@ const assistantModelAccessFields = {
 const assistantModelAccessUpdateInputValidator = patchSchema(assistantModelAccessFields);
 const assistantModelAccessUpdateActionInputValidator = patchSchema({
   ...assistantModelAccessFields,
-  ...optionalUser
 });
 
 const assistantSelectionField = { type: "object", required: false, schema: createSchema({
@@ -447,7 +430,6 @@ const assistantSelectionUpdateActionInputValidator = patchSchema({
   assistantRouting: assistantRoutingField,
   assistantSelection: assistantSelectionField,
   ...optionalOrigin,
-  ...optionalUser,
   sessionId: {
     type: "string",
     noTrim: false,
@@ -464,7 +446,6 @@ const sessionPinActionInputValidator = requiredInputSchema({
 });
 
 const currentSessionInputValidator = patchSchema({
-  ...optionalUser,
   sessionId: {
     type: "string",
     noTrim: false,
@@ -474,7 +455,6 @@ const currentSessionInputValidator = patchSchema({
 
 const sessionIdInputValidator = patchSchema({
   ...optionalOrigin,
-  ...optionalUser,
   sessionId: {
     type: "string",
     noTrim: false,
@@ -487,7 +467,6 @@ const sessionSaveInputValidator = patchSchema({
   destinationReview: { type: "object", schema: sessionRepositoryReviewSchema, required: true },
   connectedReview: { type: "array", maxItems: 64, items: connectedWorkReviewSchema, required: false },
   ...optionalOrigin,
-  ...optionalUser,
   sessionId: {
     type: "string",
     noTrim: false,
@@ -500,7 +479,6 @@ const sessionUpdateInputValidator = patchSchema({
   historyReview: { type: "object", schema: sessionHistoryReviewSchema, required: false },
   requestId: { type: "string", pattern: /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/u, required: false },
   ...optionalOrigin,
-  ...optionalUser,
   reviewedConflictId: {
     type: "string",
     required: false
@@ -518,7 +496,6 @@ const sessionUpdateInputValidator = patchSchema({
 });
 
 const sessionInspectInputValidator = patchSchema({
-  ...optionalUser,
   sessionId: {
     type: "string",
     noTrim: false,
@@ -593,7 +570,6 @@ const sessionRenewalRetryActionInputValidator = requiredInputSchema({
 });
 
 const sessionChangesInputValidator = patchSchema({
-  ...optionalUser,
   limit: {
     type: "string",
     noTrim: false,
@@ -612,7 +588,6 @@ const sessionChangesInputValidator = patchSchema({
 });
 
 const sessionChangeDiffInputValidator = patchSchema({
-  ...optionalUser,
   lineLimit: {
     type: "string",
     noTrim: false,
@@ -631,7 +606,6 @@ const sessionChangeDiffInputValidator = patchSchema({
 });
 
 const sessionConversationLogInputValidator = requiredInputSchema({
-  ...optionalUser,
   beforeTurnId: {
     type: "string",
     noTrim: false,
@@ -650,14 +624,12 @@ const sessionConversationLogInputValidator = requiredInputSchema({
 });
 
 const repositoryHistoryInputValidator = patchSchema({
-  ...optionalUser,
   cursor: { type: "string", noTrim: false, required: false },
   limit: { type: "string", noTrim: false, required: false },
   sessionId: { type: "string", noTrim: false, required: false }
 });
 
 const repositoryVersionFilesInputValidator = patchSchema({
-  ...optionalUser,
   commit: { type: "string", noTrim: false, required: true },
   historySnapshotCommit: { type: "string", noTrim: false, required: true },
   limit: { type: "string", noTrim: false, required: false },
@@ -666,7 +638,6 @@ const repositoryVersionFilesInputValidator = patchSchema({
 });
 
 const repositoryVersionFileDiffInputValidator = patchSchema({
-  ...optionalUser,
   commit: { type: "string", noTrim: false, required: true },
   historySnapshotCommit: { type: "string", noTrim: false, required: true },
   lineLimit: { type: "string", noTrim: false, required: false },

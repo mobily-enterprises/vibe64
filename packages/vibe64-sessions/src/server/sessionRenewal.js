@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import { ASSISTANT_ROUTING_METADATA, assistantRoutingPreferences } from "@local/vibe64-runtime/shared/assistantRouting";
+import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "@local/vibe64-terminals/server/sessionWorkTasks";
 
 import {
   normalizeText,
@@ -33,8 +34,6 @@ import {
   writeSessionRenewalState
 } from "./sessionRenewalState.js";
 
-const SESSION_SAVE_TASK_ID = "save-work";
-const SESSION_UPDATE_TASK_ID = "update-session";
 const SESSION_RENEWAL_THREAD_UNREADABLE_CODE =
   "vibe64_session_renewal_thread_unreadable";
 const SESSION_RENEWAL_MANUAL_DRAFT_CODES = new Set([
@@ -394,7 +393,7 @@ function createSessionRenewalController({
   prepareArchive = null,
   project,
   publishSessionChanged = async () => null,
-  resolveRenewalActor = null,
+  renewalActorResolver = () => null,
   resolveSuccessorAssistant = null,
   setTimeoutFn = setTimeout,
   setupRunner,
@@ -2163,47 +2162,38 @@ function createSessionRenewalController({
         vibe64User: input.vibe64User
       };
     }
-    try {
-      if (typeof resolveRenewalActor !== "function") {
-        if (!requestActor) {
-          return input;
-        }
-        throw renewalError(
-          "The persisted session-renewal actor cannot be restored.",
-          "vibe64_session_renewal_actor_resolver_unavailable",
-          { retryable: true }
-        );
-      }
-      const resolved = await resolveRenewalActor(
-        persistedActor,
-        {
-          renewalId: state.renewalId,
-          sessionId: state.sessionId,
-          stage: state.stage
-        }
-      );
-      if (!renewalActorsMatch(resolved, persistedActor)) {
-        throw renewalError(
-          "The restored session-renewal actor does not match the persisted workflow actor.",
-          "vibe64_session_renewal_actor_mismatch",
-          { retryable: true, statusCode: 500 }
-        );
-      }
-      return {
-        ...input,
-        vibe64User: resolved
-      };
-    } catch (error) {
-      if (
-        error?.code === "vibe64_session_renewal_actor_resolver_unavailable" &&
-        !requestActor
-      ) {
-        // Standalone Vibe64 runs as the local user and needs no user-store
-        // resolver. A multi-user host installs one before boot.
+    const resolver = renewalActorResolver();
+    if (!resolver) {
+      // Standalone Vibe64 runs as the local user and needs no user-store
+      // resolver. A multi-user host installs one before boot.
+      if (!requestActor) {
         return input;
       }
-      throw error;
+      throw renewalError(
+        "The current Vibe64 host cannot restore the user identity required to continue this session renewal.",
+        "vibe64_session_renewal_actor_resolver_unavailable",
+        { retryable: true }
+      );
     }
+    const resolved = await resolver(
+      persistedActor,
+      {
+        renewalId: state.renewalId,
+        sessionId: state.sessionId,
+        stage: state.stage
+      }
+    );
+    if (!renewalActorsMatch(resolved, persistedActor)) {
+      throw renewalError(
+        "The restored session-renewal actor does not match the persisted workflow actor.",
+        "vibe64_session_renewal_actor_mismatch",
+        { retryable: true, statusCode: 500 }
+      );
+    }
+    return {
+      ...input,
+      vibe64User: resolved
+    };
   }
 
   async function runPersistedRenewalWorkflow(sessionId = "", input = {}) {

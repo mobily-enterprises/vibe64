@@ -38,7 +38,7 @@ function normalizeConnectedProjects(value) {
     if (!match || [".", ".."].includes(match[2])) {
       invalid("Use a GitHub HTTPS repository URL without credentials, query or fragment.");
     }
-    const repository = `https://github.com/${match[1]}/${match[2]}`.toLowerCase();
+    const repository = `${GITHUB_REPOSITORY_URL_PREFIX}${match[1]}/${match[2]}`.toLowerCase();
     if (repositories.has(repository)) invalid("A repository may appear only once, regardless of its display name.");
     repositories.add(repository);
     if (!["dependency", "composition"].includes(entry.relationship)) invalid("Relationship must be dependency or composition.");
@@ -106,4 +106,12 @@ async function saveConnectedProjects(sourceRoot, value, expectedRevision) {
   return readConnectedProjects(sourceRoot);
 }
 
-export { CONNECTED_PROJECTS_FILE, CONNECTED_PROJECTS_LIMIT, normalizeConnectedProjects, readConnectedProjects, saveConnectedProjects };
+const GITHUB_REPOSITORY_URL_PREFIX = "https://github.com/";
+
+// The owner/name of a normalized connected repository URL.
+function githubRepositoryFullName(repository) {
+  return repository.slice(GITHUB_REPOSITORY_URL_PREFIX.length);
+}
+
+export { CONNECTED_PROJECTS_FILE, CONNECTED_PROJECTS_LIMIT, githubRepositoryFullName, normalizeConnectedProjects, readConnectedProjects,
+  saveConnectedProjects };

@@ -23,7 +23,8 @@
     "./server/assistantClaudeCommandUpgrade": "./src/server/assistantClaudeCommandUpgrade.js",
     "./server/assistantClaudeDeliveryUpgrade": "./src/server/assistantClaudeDeliveryUpgrade.js",
     "./server/assistantPlanProgressUpgrade": "./src/server/assistantPlanProgressUpgrade.js",
-    "./server/teamSetupSessionUpgrade": "./src/server/teamSetupSessionUpgrade.js"
+    "./server/teamSetupSessionUpgrade": "./src/server/teamSetupSessionUpgrade.js",
+    "./server/sessionWorkTasks": "./src/server/sessionWorkTasks.js"
   },
   "jskit": {
     "kind": "runtime",

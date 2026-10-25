@@ -5,9 +5,6 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./server/actions": "./src/server/actions.js",
-    "./server/main-conversation-authority": "./src/server/mainConversationAuthority.js",
-    "./server/routes": "./src/server/registerRoutes.js",
     "./shared/conversation": "./src/shared/conversationIdentity.js"
   },
   "jskit": {
@@ -49,8 +46,8 @@
       "apiSummary": {
         "surfaces": [
           {
-            "subpath": "./server/actions",
-            "summary": "Exports direct chat, workspace preparation, conversation, diff, interrupt, and close action identifiers."
+            "subpath": "./shared/conversation",
+            "summary": "Exports main and temporary conversation identities and targets."
           }
         ],
         "capabilities": [
@@ -64,13 +61,11 @@
   "dependencies": {
     "@jskit-ai/kernel": "0.1.245",
     "@local/vibe64-core": "0.1.0",
-    "@local/vibe64-execution": "0.1.0",
     "@local/vibe64-project": "0.1.0",
     "@local/vibe64-runtime": "0.1.0",
     "@local/vibe64-terminals": "0.1.0",
     "json-rest-schema": "^1.0.17",
     "@local/vibe64-source-editor": "0.1.0",
-    "@local/vibe64-accounts": "0.1.0",
-    "@jskit-ai/assistant-runtime": "0.1.234"
+    "@local/vibe64-accounts": "0.1.0"
   }
 }

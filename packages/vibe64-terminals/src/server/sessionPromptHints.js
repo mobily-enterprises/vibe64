@@ -27,6 +27,7 @@ import {
 } from "@local/vibe64-runtime/server/sessionStore";
 
 import { openedFileWithin } from "./openedFileWithin.js";
+import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "./sessionWorkTasks.js";
 import {
   pathInsideOrEqual,
   terminalProjectScopeKey,
@@ -46,8 +47,8 @@ const PROMPT_HINT_SUBSYSTEMS_MAX_CHARACTERS = 3_000;
 const PROMPT_HINT_OPERATION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$/u;
 const PROMPT_HINT_ORIGIN_ID_MAX_CHARACTERS = 128;
 const PROMPT_HINT_ACTIVE_TASK_IDS = Object.freeze([
-  "save-work",
-  "update-session"
+  SESSION_SAVE_TASK_ID,
+  SESSION_UPDATE_TASK_ID
 ]);
 const PROMPT_HINT_EXECUTION_PROFILE_REQUEST = Object.freeze({
   profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,

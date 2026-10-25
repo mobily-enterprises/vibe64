@@ -682,6 +682,23 @@ function resolveVibe64SessionPaths({
   });
 }
 
+// One metadata value of every active session, read without a store instance so
+// project lists never start a project runtime.
+async function readActiveSessionMetadataValues({ projectRuntimeRoot = "", name = "" } = {}) {
+  const { activeSessionsRoot } = resolveVibe64SessionPaths({ projectRuntimeRoot });
+  const entries = await readdir(activeSessionsRoot, { withFileTypes: true }).catch((error) => {
+    if (error?.code === "ENOENT") return [];
+    throw error;
+  });
+  const values = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const sessionPaths = sessionPathsFromRoot({ sessionRoot: path.join(activeSessionsRoot, entry.name) });
+    values.push({ sessionId: entry.name, value: await readTextIfExists(metadataFilePath(sessionPaths, name)) });
+  }
+  return values;
+}
+
 function createClockNow(clock) {
   if (typeof clock === "function") {
     return () => toDate(clock());
@@ -5331,6 +5348,7 @@ export {
   validateLearningSessionScope,
   isValidVibe64SessionId,
   normalizeVibe64AgentRunState,
+  readActiveSessionMetadataValues,
   resolveVibe64SessionPaths,
   vibe64AgentRunStateIsActive,
   vibe64AgentRunStateIsTerminal,

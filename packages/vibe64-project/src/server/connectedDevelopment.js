@@ -13,7 +13,7 @@ import {
   connectedPackageTypeUsesScript,
   isConnectedPackageType
 } from "@local/vibe64-genesis/shared/connectedPackageTypes";
-import { readConnectedProjects } from "./connectedProjects.js";
+import { githubRepositoryFullName, readConnectedProjects } from "./connectedProjects.js";
 import { assertProjectionPath, writeManagedGitExcludes } from "./projectEnvironmentFiles.js";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 
@@ -48,7 +48,7 @@ async function readConnectedDevelopmentInputs({ session, projects, inspection, e
   const resolved = [];
   for (const connection of configured.projects) {
     const receiving = projects.find(project => project.repository === connection.repository);
-    const binding = bindings.find(item => `https://github.com/${item.contribution.repository}` === connection.repository);
+    const binding = bindings.find(item => item.contribution.repository === githubRepositoryFullName(connection.repository));
     const contribution = sessionConnectedContribution(receiving?.session);
     const receivingRoot = sessionSourcePath(receiving?.session);
     if (!binding || !receiving || receiving.projectSlug !== binding.projectSlug ||
@@ -125,7 +125,7 @@ async function inspectConnectedWorkspaceSetup({ session, setup, inspection, env,
       relativePath: inspection.sourcesFile, env, runCommand });
     const bindings = sessionConnectedSources(session);
     const expected = configured.projects.map(connection => {
-      const binding = bindings.find(item => `https://github.com/${item.contribution.repository}` === connection.repository);
+      const binding = bindings.find(item => item.contribution.repository === githubRepositoryFullName(connection.repository));
       const entry = existing?.projects?.find(item => item.repository === connection.repository);
       if (!binding || typeof entry?.sourceRoot !== "string" || !path.isAbsolute(entry.sourceRoot)) return null;
       return { ...connection, type: connectedPackageType(connection, inspection),

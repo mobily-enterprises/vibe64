@@ -16,8 +16,8 @@ function withoutFields(schema, excluded) {
 }
 
 const messageFields = withoutFields(agentMessageActionInputValidator.schema,
-  ["sessionId", "vibe64User", "message", "messageId", "attachmentIds", "submissionKind"]);
-const selectionFields = withoutFields(assistantSelectionUpdateActionInputValidator.schema, ["sessionId", "vibe64User"]);
+  ["sessionId", "message", "messageId", "attachmentIds", "submissionKind"]);
+const selectionFields = withoutFields(assistantSelectionUpdateActionInputValidator.schema, ["sessionId"]);
 const mainConversationDataSchema = createSchema(messageFields);
 const mainConversationSelectionSchema = createSchema(selectionFields);
 

@@ -250,6 +250,11 @@ function sessionConnectedContribution(session = {}) {
   return { ...value, repository: value.repository.toLowerCase(), baseCommit: value.baseCommit.toLowerCase() };
 }
 
+// Validates an in-memory contribution binding exactly as its saved metadata.
+function parseSessionConnectedContribution(value) {
+  return sessionConnectedContribution({ metadata: { connected_contribution: JSON.stringify(value) } });
+}
+
 function sessionConnectedSubmissions(session = {}) {
   const serialized = session.metadata?.connected_submissions;
   if (serialized === undefined) return [];
@@ -263,7 +268,7 @@ function sessionConnectedSubmissions(session = {}) {
   return value.submissions.map(entry => {
     if (!isPlainObject(entry) || Object.keys(entry).some(key => !["contribution", "submittedCommit"].includes(key)) ||
         typeof entry.submittedCommit !== "string" || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/iu.test(entry.submittedCommit)) throw invalid();
-    const contribution = sessionConnectedContribution({ metadata: { connected_contribution: JSON.stringify(entry.contribution) } });
+    const contribution = parseSessionConnectedContribution(entry.contribution);
     if (!contribution || identities.has(contribution.id)) throw invalid();
     identities.add(contribution.id);
     return { contribution, submittedCommit: entry.submittedCommit.toLowerCase() };
@@ -283,11 +288,25 @@ function sessionConnectedSources(session = {}) {
   return value.sources.map(entry => {
     if (!isPlainObject(entry) || Object.keys(entry).some(key => !["projectSlug", "contribution"].includes(key)) ||
         typeof entry.projectSlug !== "string" || !/^[a-z0-9][a-z0-9_-]{0,47}$/u.test(entry.projectSlug)) throw invalid();
-    const contribution = sessionConnectedContribution({ metadata: { connected_contribution: JSON.stringify(entry.contribution) } });
+    const contribution = parseSessionConnectedContribution(entry.contribution);
     if (!contribution || repositories.has(contribution.repository)) throw invalid();
     repositories.add(contribution.repository);
     return { projectSlug: entry.projectSlug, contribution };
   });
+}
+
+// The saved connected_submissions text, validated before it is written.
+function serializeSessionConnectedSubmissions(submissions) {
+  const serialized = JSON.stringify({ schemaVersion: 1, submissions });
+  sessionConnectedSubmissions({ metadata: { connected_submissions: serialized } });
+  return serialized;
+}
+
+// The saved connected_sources text, validated before it is written.
+function serializeSessionConnectedSources(sources) {
+  const serialized = JSON.stringify({ schemaVersion: 1, sources });
+  sessionConnectedSources({ metadata: { connected_sources: serialized } });
+  return serialized;
 }
 
 function sessionRepositoryProject(project = {}, session = {}, { sourcePreparation = false } = {}) {
@@ -400,6 +419,9 @@ export {
   projectRequiresGithubConnection,
   projectRepositoryMetadataFromInput,
   sessionRepositoryProject,
+  parseSessionConnectedContribution,
+  serializeSessionConnectedSources,
+  serializeSessionConnectedSubmissions,
   sessionConnectedContribution,
   sessionConnectedSubmissions,
   sessionConnectedSources,

@@ -79,11 +79,11 @@ function registerRoutes(http, {
     actionId: ACTION_INSPECT_REPOSITORY_HISTORY,
     buildInput(request) {
       const query = routes.requestQuery(request);
-      return withoutVibe64User({
+      return {
         cursor: firstValue(query.cursor),
         limit: firstValue(query.limit),
         sessionId: firstValue(query.sessionId)
-      });
+      };
     },
     summary: "Read a pinned page of project version history."
   });
@@ -92,13 +92,13 @@ function registerRoutes(http, {
     actionId: ACTION_INSPECT_REPOSITORY_VERSION_FILES,
     buildInput(request) {
       const query = routes.requestQuery(request);
-      return withoutVibe64User({
+      return {
         commit: request.params.commit,
         historySnapshotCommit: firstValue(query.historySnapshotCommit),
         limit: firstValue(query.limit),
         offset: firstValue(query.offset),
         sessionId: firstValue(query.sessionId)
-      });
+      };
     },
     summary: "List files changed by one project version."
   });
@@ -107,13 +107,13 @@ function registerRoutes(http, {
     actionId: ACTION_INSPECT_REPOSITORY_VERSION_FILE_DIFF,
     buildInput(request) {
       const query = routes.requestQuery(request);
-      return withoutVibe64User({
+      return {
         commit: request.params.commit,
         historySnapshotCommit: firstValue(query.historySnapshotCommit),
         lineLimit: firstValue(query.lineLimit),
         path: firstValue(query.path),
         sessionId: firstValue(query.sessionId)
-      });
+      };
     },
     summary: "Read one file diff from a project version."
   });
@@ -141,7 +141,7 @@ function registerRoutes(http, {
     actionId: ACTION_LIST_ASSISTANT_CAPABILITIES,
     buildInput(request) {
       const query = routes.requestQuery(request);
-      return withoutVibe64User({
+      return {
         allConnectedModels: firstValue(query.allConnectedModels),
         configuredOnly: firstValue(query.configuredOnly),
         connectedOnly: firstValue(query.connectedOnly),
@@ -150,7 +150,7 @@ function registerRoutes(http, {
         limit: firstValue(query.limit),
         modelProviderId: firstValue(query.modelProviderId),
         search: firstValue(query.search)
-      });
+      };
     },
     summary: "Read the live assistant engine, provider, model, agent, and variant catalog."
   });
@@ -186,7 +186,7 @@ function registerRoutes(http, {
 
   routes.actionRoute("GET", "/sessions/:sessionId", {
     actionId: ACTION_INSPECT_SESSION,
-    buildInput: (request) => withoutVibe64User({
+    buildInput: (request) => ({
       sessionId: request.params.sessionId
     }),
     summary: "Inspect a Vibe64 chat session."
@@ -276,7 +276,7 @@ function registerRoutes(http, {
 
   routes.actionRoute("GET", "/sessions/:sessionId/work", {
     actionId: ACTION_INSPECT_SESSION_WORK,
-    buildInput: (request) => withoutVibe64User({
+    buildInput: (request) => ({
       sessionId: request.params.sessionId
     }),
     summary: "Inspect whether a Vibe64 session has work to save."
@@ -324,11 +324,11 @@ function registerRoutes(http, {
     actionId: ACTION_INSPECT_SESSION_CHANGES,
     buildInput(request) {
       const query = routes.requestQuery(request);
-      return withoutVibe64User({
+      return {
         limit: firstValue(query.limit),
         offset: firstValue(query.offset),
         sessionId: request.params.sessionId
-      });
+      };
     },
     summary: "List the files that differ from this session's canonical project version."
   });
@@ -337,11 +337,11 @@ function registerRoutes(http, {
     actionId: ACTION_INSPECT_SESSION_CHANGE_DIFF,
     buildInput(request) {
       const query = routes.requestQuery(request);
-      return withoutVibe64User({
+      return {
         lineLimit: firstValue(query.lineLimit),
         path: firstValue(query.path),
         sessionId: request.params.sessionId
-      });
+      };
     },
     summary: "Read the bounded diff for one current project file."
   });
@@ -397,11 +397,11 @@ function registerRoutes(http, {
     actionId: ACTION_READ_SESSION_CONVERSATION_LOG,
     buildInput(request) {
       const query = routes.requestQuery(request);
-      return withoutVibe64User({
+      return {
         beforeTurnId: firstValue(query.beforeTurnId || query.before),
         limit: firstValue(query.limit),
         sessionId: request.params.sessionId
-      });
+      };
     },
     summary: "Read a Vibe64 session conversation."
   });
@@ -418,7 +418,7 @@ function registerRoutes(http, {
 
   routes.actionRoute("GET", "/sessions/:sessionId/main-chat-approvals", {
     actionId: ACTION_READ_MAIN_CHAT_APPROVALS,
-    buildInput: (request) => withoutVibe64User({ sessionId: request.params.sessionId }),
+    buildInput: (request) => ({ sessionId: request.params.sessionId }),
     summary: "Read the team members' main-chat messages waiting for the owner's approval."
   });
 
@@ -442,7 +442,7 @@ function registerRoutes(http, {
 
   routes.actionRoute("GET", "/sessions/:sessionId/assistant-access", {
     actionId: ACTION_INSPECT_ASSISTANT_ACCESS,
-    buildInput: (request) => withoutVibe64User({
+    buildInput: (request) => ({
       sessionId: request.params.sessionId
     }),
     summary: "Inspect whether the current identity may use this session's selected assistant."

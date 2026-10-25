@@ -136,13 +136,11 @@ function createVibe64SessionsFeature() {
     async shutdown({ terminals }, { outputs }) {
       const sessions = outputs.sessions;
       stoppedServices.add(sessions);
-      const closing = typeof sessions.closeSessionRenewalWork === "function"
-        ? sessions.closeSessionRenewalWork()
-        : null;
+      const closing = sessions.closeSessionRenewalWork();
       const task = recoveryTasks.get(sessions);
       const operations = [
         Promise.resolve(closing),
-        Promise.resolve(sessions.closeSessionPresence?.()),
+        Promise.resolve(sessions.closeSessionPresence()),
         ...(task ? [task.stop()] : []),
         Promise.resolve().then(async () => {
           const result = await terminals.invalidateAgentRuntimes({

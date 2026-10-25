@@ -86,8 +86,10 @@ test("connected preparation reauthorizes the receiver and retries its reserved s
       async connectedProjectTargets() {
         const receivingProject = currentProjectRequestContext().slug === "library" ? slug : "library";
         return [
-        { name: "Connected", repository: `https://github.com/example/${receivingProject}`, relationship: "dependency", projectSlug: receivingProject },
-        ...(includeOther ? [{ name: "Other", repository: "https://github.com/example/other", relationship: "dependency", projectSlug: "other" }] : [])
+        { name: "Connected", repository: `https://github.com/example/${receivingProject}`, fullName: `example/${receivingProject}`,
+          relationship: "dependency", projectSlug: receivingProject },
+        ...(includeOther ? [{ name: "Other", repository: "https://github.com/example/other", fullName: "example/other",
+          relationship: "dependency", projectSlug: "other" }] : [])
       ]; },
       async connectedContributionSource() {
         assert.notEqual(currentProjectRequestContext().slug, preparingProject);

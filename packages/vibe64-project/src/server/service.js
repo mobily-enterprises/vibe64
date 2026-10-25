@@ -1,4 +1,4 @@
-import { normalizeConnectedProjects, readConnectedProjects, saveConnectedProjects } from "./connectedProjects.js";
+import { githubRepositoryFullName, normalizeConnectedProjects, readConnectedProjects, saveConnectedProjects } from "./connectedProjects.js";
 import { inspectConnectedDevelopmentInputs, inspectConnectedWorkspaceSetup, materializeConnectedDevelopmentInputs } from "./connectedDevelopment.js";
 import path from "node:path";
 import { createHash } from "node:crypto";
@@ -830,7 +830,7 @@ function createService({
         // Configuration declares intent; actual write access comes from the actor's account.
         if (normalized.projects.length) {
           for (const entry of normalized.projects) {
-            const fullName = entry.repository.slice("https://github.com/".length);
+            const fullName = githubRepositoryFullName(entry.repository);
             const repository = await inspectConnectedRepository(fullName, input);
             if (!repository.permissions?.push || repository.archived || repository.disabled) {
               throw vibe64Error(`Write access to ${fullName} is required to connect it. Check your GitHub account and repository permissions.`, "vibe64_connections_access_required");
@@ -1515,13 +1515,13 @@ function createService({
       if (!connections.available) throw vibe64Error(connections.unavailableReason, "vibe64_connections_source_required");
       const listed = await listProjectsState();
       return connections.projects.map(connection => {
-        const repository = connection.repository.slice("https://github.com/".length);
+        const fullName = githubRepositoryFullName(connection.repository);
         const matches = listed.projects.filter(candidate => candidate.repositoryMode === "github" &&
-          String(candidate.githubRepository?.fullName || candidate.repository?.github?.fullName || "").toLowerCase() === repository);
+          String(candidate.githubRepository?.fullName || candidate.repository?.github?.fullName || "").toLowerCase() === fullName);
         if (matches.length !== 1) throw vibe64Error(
-          `Register one accessible GitHub project for ${repository} before preparing this connection. Existing source and access are unchanged.`,
+          `Register one accessible GitHub project for ${fullName} before preparing this connection. Existing source and access are unchanged.`,
           "vibe64_connected_project_registration_required");
-        return { ...connection, projectSlug: matches[0].slug };
+        return { ...connection, fullName, projectSlug: matches[0].slug };
       });
     },
     async inspectWorkspaceSetup({ session, projectRoot = sessionSourcePath(session), environment = env } = {}) {

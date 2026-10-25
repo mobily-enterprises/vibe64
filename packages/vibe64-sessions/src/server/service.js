@@ -1,7 +1,8 @@
 import crypto from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { createMainBrowserConversations } from "./mainBrowserConversations.js";
-import { assertSessionRepositoryReview, sessionConnectedContribution, sessionConnectedSources, sessionConnectedSubmissions, sessionRepositoryDestination, sessionRepositoryProject } from "@local/vibe64-core/server/projectRepository";
+import { assertSessionRepositoryReview, parseSessionConnectedContribution, serializeSessionConnectedSources, serializeSessionConnectedSubmissions, sessionConnectedContribution,
+  sessionConnectedSources, sessionConnectedSubmissions, sessionRepositoryDestination, sessionRepositoryProject } from "@local/vibe64-core/server/projectRepository";
 import { ASSISTANT_ROUTING_METADATA, assistantRoutingAutomation, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingStatusIsPending,
   isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
 
@@ -50,6 +51,7 @@ import { readSessionRenewalState, SESSION_RENEWAL_STATUS } from "./sessionRenewa
 import { createSessionRenewalController } from "./sessionRenewal.js";
 import { presenceActor } from "./sessionPresence.js";
 import { createMainChatApprovals } from "./mainChatApprovals.js";
+import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "@local/vibe64-terminals/server/sessionWorkTasks";
 
 function text(value = "") {
   return String(value || "").trim();
@@ -204,16 +206,6 @@ function sessionCreationLimitError(policy = {}) {
   return error;
 }
 
-function renewalActorResolverUnavailableError() {
-  const error = new Error(
-    "The current Vibe64 host cannot restore the user identity required to continue this session renewal."
-  );
-  error.code = "vibe64_session_renewal_actor_resolver_unavailable";
-  error.retryable = true;
-  error.statusCode = 409;
-  return error;
-}
-
 function assertRenewalActorResolver(resolver = null) {
   if (resolver !== null && typeof resolver !== "function") {
     throw new TypeError("Vibe64 session renewal actor resolver must be a function or null.");
@@ -221,8 +213,6 @@ function assertRenewalActorResolver(resolver = null) {
   return resolver;
 }
 
-const SESSION_SAVE_TASK_ID = "save-work";
-const SESSION_UPDATE_TASK_ID = "update-session";
 const LEGACY_CODEX_CATALOG_REVISION =
   "sha256:cd4f63e20cf4c9a130dc9581a295517e1273bc501b166d9d4a0ba8e6bec54729";
 
@@ -268,9 +258,6 @@ function createService({
   const setupRunner = workspaceSetupRunner || Object.freeze({
     isRunning: (sessionId) => typeof terminals.workspaceSetupIsRunning === "function" &&
       terminals.workspaceSetupIsRunning(sessionId),
-    isPrepared: (sessionId) => typeof terminals.workspaceSetupIsPrepared === "function"
-      ? terminals.workspaceSetupIsPrepared(sessionId)
-      : undefined,
     start: ({ retry = false, runtime, session, waitMs }) => terminals.prepareWorkspaceSetup(
       session.sessionId,
       { retry, runtime, session, waitMs }
@@ -293,12 +280,6 @@ function createService({
     deliver: (sessionId, input, options) => service.sendAgentMessage(sessionId, input, options)
   });
   let configuredRenewalActorResolver = renewalActorResolver;
-  async function resolveRenewalActor(actor = {}, context = {}) {
-    if (typeof configuredRenewalActorResolver !== "function") {
-      throw renewalActorResolverUnavailableError();
-    }
-    return configuredRenewalActorResolver(actor, context);
-  }
 
   function trustedAssistantUser(input = {}) {
     return currentProjectVibe64User() || input.vibe64User || null;
@@ -436,8 +417,7 @@ function createService({
         const previous = submissions.findIndex(value => value.contribution.id === item.contribution.id);
         if (previous < 0) submissions.push(entry);
         else submissions[previous] = entry;
-        const serialized = JSON.stringify({ schemaVersion: 1, submissions });
-        sessionConnectedSubmissions({ metadata: { connected_submissions: serialized } });
+        const serialized = serializeSessionConnectedSubmissions(submissions);
         const completed = { projectSlug: item.projectSlug, repository: item.contribution.repository,
           sessionId: item.sessionId, saveCommit: publication.saveCommit,
           status: publication.status, reconciled: publication.reconciled, recorded: false };
@@ -459,7 +439,7 @@ function createService({
     prepareArchive: (context) => archivePreparation?.(context),
     project,
     publishSessionChanged,
-    resolveRenewalActor,
+    renewalActorResolver: () => configuredRenewalActorResolver,
     resolveSuccessorAssistant: resolveSessionStart,
     setupRunner,
     terminals
@@ -968,7 +948,7 @@ function createService({
             }
             await cancel.call(terminals, sessionId, conversationId
               ? { conversationId, messageId: request.messageId }
-              : request.messageId, { runtime, vibe64User: input.vibe64User });
+              : request.messageId, { runtime, vibe64User: trustedAssistantUser(input) });
             cancelledRouting.set(conversationId || "", request.messageId);
           }
           routingCancelled = true;
@@ -1049,7 +1029,7 @@ function createService({
       // time. Reservations are written one at a time, each with every binding
       // reserved so far; results are still reported in target order.
       const allocated = await Promise.allSettled(targets.map(async (target, index) => {
-        const repository = target.repository.slice("https://github.com/".length);
+        const repository = target.fullName;
         const source = await executeConnectedAction(target.projectSlug, "vibe64.sessions.connected.source", {}, requestContext);
         if (source.repository !== repository) throw Object.assign(new Error(
           "The receiving project changed repositories. Review the connection before preparing it."), {
@@ -1069,8 +1049,7 @@ function createService({
           // Reserve the exact identity before creation, so a lost response or
           // partial preparation retries the same source instead of cloning again.
           const write = reservation.then(() => {
-            const serialized = JSON.stringify({ schemaVersion: 1, sources });
-            sessionConnectedSources({ metadata: { connected_sources: serialized } });
+            const serialized = serializeSessionConnectedSources(sources);
             return runtime.store.writeMetadataValue(sessionId, "connected_sources", serialized);
           });
           reservation = write.catch(() => {});
@@ -1174,7 +1153,7 @@ function createService({
     });
     const targets = await project.connectedProjectTargets({ sessionId: session.sessionId, vibe64User: trustedAssistantUser(input) });
     if (!targets.some(target => target.projectSlug === binding.projectSlug &&
-        target.repository === `https://github.com/${binding.contribution.repository}`)) {
+        target.fullName === binding.contribution.repository)) {
       throw Object.assign(new Error("Restore this repository's connection before replacing its contribution."), {
         code: "vibe64_connected_replacement_changed"
       });
@@ -1229,8 +1208,7 @@ function createService({
             id: crypto.randomUUID(), replaces: binding.contribution.id, baseCommit: entry.discardedHead
           } };
           sources[sources.indexOf(previous)] = replacement;
-          const serialized = JSON.stringify({ schemaVersion: 1, sources });
-          sessionConnectedSources({ metadata: { connected_sources: serialized } });
+          const serialized = serializeSessionConnectedSources(sources);
           await runtime.store.writeMetadataValue(sessionId, "connected_sources", serialized);
         }
         const current = await runtime.getSession(sessionId, { inspectSource: false });
@@ -1249,7 +1227,7 @@ function createService({
         const bindings = sessionConnectedSources(session);
         const projects = [];
         for (const target of targets) {
-          const binding = bindings.find(item => `https://github.com/${item.contribution.repository}` === target.repository);
+          const binding = bindings.find(item => item.contribution.repository === target.fullName);
           if (!binding || binding.projectSlug !== target.projectSlug) throw Object.assign(new Error(
             "The connected project list no longer matches this task. Prepare connected sources again."), {
             code: "vibe64_connected_inputs_required"
@@ -1265,9 +1243,7 @@ function createService({
     },
     async connectedContributionWork(operation, input = {}, requestContext = {}) {
       return sessionResult(async () => {
-        const contribution = sessionConnectedContribution({ metadata: {
-          connected_contribution: JSON.stringify(input.contribution)
-        } });
+        const contribution = parseSessionConnectedContribution(input.contribution);
         if (!contribution) throw new TypeError("Connected work requires its exact saved contribution binding.");
         const source = await project.connectedContributionSource(input);
         const runtime = await project.createRuntime({ inspectSource: false });
@@ -1301,7 +1277,7 @@ function createService({
       return sessionResult(async () => {
         assertProjectEffectAdmission();
         if (currentProjectRequestContext()?.learningScope) throw new TypeError("Learning cannot allocate working contribution sources.");
-        const contribution = sessionConnectedContribution({ metadata: { connected_contribution: JSON.stringify(input.contribution) } });
+        const contribution = parseSessionConnectedContribution(input.contribution);
         if (!contribution) throw new TypeError("Contribution allocation requires an exact saved binding.");
         const source = await project.connectedContributionSource(input);
         if (source.repository !== contribution.repository || source.integrationBranch !== contribution.integrationBranch) {
@@ -1493,7 +1469,7 @@ function createService({
         }
         let contribution = null;
         if (connectedContribution !== undefined) {
-          contribution = sessionConnectedContribution({ metadata: { connected_contribution: JSON.stringify(connectedContribution) } });
+          contribution = parseSessionConnectedContribution(connectedContribution);
           if (!sessionId || !expectedCommit || contribution.baseCommit !== expectedCommit.toLowerCase() ||
               currentProjectRequestContext()?.learningScope) {
             throw new TypeError("Contribution creation requires a reserved working session and its exact source commit.");
@@ -1684,7 +1660,7 @@ function createService({
           };
         }
         return terminals.listAssistantCapabilities(input, {
-          vibe64User: input.vibe64User || null
+          vibe64User: trustedAssistantUser(input)
         });
       }, "Vibe64 could not read the current assistant catalog.");
     },
@@ -2399,9 +2375,10 @@ function createService({
       }
       // A team member's main-chat message waits for the owner's approval,
       // except in their own lesson, which runs on the team setup.
-      if (input.vibe64User && !isAssistantRoutingOwner(input.vibe64User) && !currentRequestIsPracticeProject()) {
+      const vibe64User = trustedAssistantUser(input);
+      if (vibe64User && !isAssistantRoutingOwner(vibe64User) && !currentRequestIsPracticeProject()) {
         return { ...await mainChatApprovals.enqueue(sessionId, { message: request, messageId: text(input.messageId),
-          attachmentIds: input.attachmentIds || [] }, { vibe64User: input.vibe64User }), sessionId };
+          attachmentIds: input.attachmentIds || [] }, { vibe64User }), sessionId };
       }
       const startedAt = Date.now();
       await setupRunner.wait(sessionId);
@@ -2422,7 +2399,7 @@ function createService({
         }, {
           ...(options.browserAuthority ? { browserAuthority: options.browserAuthority } : {}),
           runtime,
-          vibe64User: input.vibe64User || null
+          vibe64User
         });
         const accepted = result?.ok !== false;
         await publishSessionChanged(sessionId, {
@@ -2450,24 +2427,24 @@ function createService({
     },
 
     readMainChatApprovals(sessionId, input = {}) {
-      return mainChatApprovals.read(sessionId, { vibe64User: input.vibe64User || null });
+      return mainChatApprovals.read(sessionId, { vibe64User: trustedAssistantUser(input) });
     },
 
     editMainChatApproval(sessionId, approvalId, input = {}) {
-      return mainChatApprovals.edit(sessionId, approvalId, input, { vibe64User: input.vibe64User || null });
+      return mainChatApprovals.edit(sessionId, approvalId, input, { vibe64User: trustedAssistantUser(input) });
     },
 
     withdrawMainChatApproval(sessionId, approvalId, input = {}) {
-      return mainChatApprovals.withdraw(sessionId, approvalId, input, { vibe64User: input.vibe64User || null });
+      return mainChatApprovals.withdraw(sessionId, approvalId, input, { vibe64User: trustedAssistantUser(input) });
     },
 
     declineMainChatApproval(sessionId, approvalId, input = {}) {
-      return mainChatApprovals.decline(sessionId, approvalId, input, { vibe64User: input.vibe64User || null });
+      return mainChatApprovals.decline(sessionId, approvalId, input, { vibe64User: trustedAssistantUser(input) });
     },
 
     approveMainChatApproval(sessionId, approvalId, input = {}, options = {}) {
       return mainChatApprovals.approve(sessionId, approvalId, input, {
-        vibe64User: input.vibe64User || null, browserAuthority: options.browserAuthority || null
+        vibe64User: trustedAssistantUser(input), browserAuthority: options.browserAuthority || null
       });
     },
 

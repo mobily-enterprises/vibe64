@@ -1202,7 +1202,7 @@ function fixture({
   const newController = (overrides = {}) => createSessionRenewalController({
     project,
     publishSessionChanged: async (_sessionId, event) => events.push(event),
-    resolveRenewalActor,
+    renewalActorResolver: () => resolveRenewalActor,
     resolveSuccessorAssistant: async (input, options) => {
       const requested = input.assistantSelection;
       calls.selectionRequests.push({ requested, ...options });
