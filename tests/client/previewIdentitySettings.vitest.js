@@ -2,11 +2,11 @@ import { readFileSync } from "node:fs";
 import * as Vue from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ data: null, sessionId: null, slug: null }));
+const mocks = vi.hoisted(() => ({ data: null, reload: null, run: null, sessionId: null, slug: null }));
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
-  useEndpointResource: () => ({ data: mocks.data, isLoading: Vue.ref(false), loadError: Vue.ref(""), reload: vi.fn() })
+  useEndpointResource: () => ({ data: mocks.data, isLoading: Vue.ref(false), loadError: Vue.ref(""), reload: () => mocks.reload?.() })
 }));
-vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({ useCommand: () => ({ run: vi.fn() }) }));
+vi.mock("@jskit-ai/http-web/client/composables/useCommand", () => ({ useCommand: () => ({ run: (context) => mocks.run?.(context) }) }));
 vi.mock("@/composables/useVibe64ProjectScope.js", () => ({ useVibe64ProjectSlug: () => mocks.slug }));
 vi.mock("@/composables/useVibe64SessionSelection.js", () => ({
   useVibe64SessionSelection: () => ({ selectedId: mocks.sessionId })
@@ -69,7 +69,11 @@ describe("managed app identity settings", () => {
 
 describe("an unsaved managed app identity draft", () => {
   let app;
-  afterEach(() => app?.unmount());
+  afterEach(() => {
+    app?.unmount();
+    mocks.reload = null;
+    mocks.run = null;
+  });
   const admin = { name: "admin", type: "email", value: "admin@example.test" };
   const editor = { name: "editor", type: "login", value: "editor" };
 
@@ -118,6 +122,32 @@ describe("an unsaved managed app identity draft", () => {
     await Vue.nextTick();
     expect(state.stale).toBe(false);
     expect(state.changed).toBe(false);
+  });
+
+  it("takes the server's normalized list as the draft after the person's own save", async () => {
+    const state = mount([admin]);
+    state.addIdentity();
+    Object.assign(state.identities[1], { name: "Editor ", type: "login", value: "editor" });
+    mocks.run = async () => ({ ok: true });
+    mocks.reload = async () => {
+      mocks.data.value = { identities: [admin, editor] };
+      await Vue.nextTick();
+    };
+    await state.save();
+    await Vue.nextTick();
+    expect(state.stale).toBe(false);
+    expect(state.changed).toBe(false);
+    expect(state.identities).toEqual([admin, editor]);
+  });
+
+  it("keeps the draft when the save did not run", async () => {
+    const state = mount([admin]);
+    state.addIdentity();
+    Object.assign(state.identities[1], editor);
+    mocks.run = async () => null;
+    await state.save();
+    expect(state.changed).toBe(true);
+    expect(state.identities).toEqual([admin, editor]);
   });
 
   it("starts a fresh draft for another session's source", async () => {

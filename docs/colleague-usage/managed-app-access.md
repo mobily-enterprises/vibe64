@@ -10,7 +10,8 @@ Adding a name here does not create an application account.
 2. Configure each identity's **Name**, supported **App identifier** and
    **Application value** to refer to an existing account in the application.
 3. Review the default and any requested removal, then choose **Save** and wait
-   for the saved result.
+   for the saved result. The page then shows the list as it was stored, with
+   names trimmed and lowercased.
    If the saved list changes elsewhere (another tab, Colleague or the coding
    agent) while you have unsaved edits, the page keeps your edits, says the saved
    identities changed and disables Save: choose **Reload saved identities**,

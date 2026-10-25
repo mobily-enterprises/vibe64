@@ -250,7 +250,6 @@ watch(() => [resource.data.value?.identities, projectSlug.value, selectedSession
   if (source !== draftSource || !dirty) {
     resetDraft();
   } else if (saved !== previous) {
-    // Saving the draft itself is not a conflict.
     stale.value = saved !== JSON.stringify(identities.value);
   }
   draftSource = source;
@@ -303,10 +302,15 @@ async function refresh() {
 }
 
 async function save() {
-  await saveCommand.run({
+  const saved = await saveCommand.run({
     identities: cloneIdentities(identities.value)
   });
   await resource.reload();
+  // The server normalizes what it stores, so a successful save makes the
+  // stored list the new draft instead of comparing it with what was typed.
+  if (saved !== null) {
+    resetDraft();
+  }
 }
 
 function reloadPage() {
