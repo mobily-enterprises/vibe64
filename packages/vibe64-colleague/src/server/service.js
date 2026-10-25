@@ -1512,7 +1512,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         if (!watch || !["active", "pending"].includes(watch.status)) throw failure("Only an active watch can be paused.");
         if (watch.assignmentId) throw failure("Pause the assignment through its retained assignment controls.");
         watch.status = "paused";
-        watch.error = "Watching paused by the learner.";
+        watch.error = "Watching paused.";
         await suppressWatchObservation(state, input.watchId);
         return { ok: true, watch: publicWatch(watch) };
       });

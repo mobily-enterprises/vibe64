@@ -35,7 +35,7 @@ your own step actions (an answer, **Done**, or an automatic check from your App
 press or a code step's **Check now**) record step results directly; see
 [The Learning environment (L)](learning-environment.md). In Learn mode your
 teacher can watch your lesson's practice project for you (its agent, or its
-deployment where offered) and nothing else; that watch ends with the lesson
+releases where offered) and nothing else; that watch ends with the lesson
 attempt. Watches in Develop stay in Develop's conversation.
 
 You can ask “Which projects do I have?” from any page, including AI Accounts;

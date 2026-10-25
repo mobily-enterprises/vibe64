@@ -1307,6 +1307,22 @@ test("missed events reconcile by code polling; current access revocation pauses 
   assert.equal((await f.service.read({}, f.context)).watches[0].status, "cancelled");
 });
 
+test("a paused watch says it is paused without naming who paused it", async (t) => {
+  const f = await fixture(t, [], { watching: true });
+  await watchAction(f, "watch.create", watchInput);
+  await watchAction(f, "watch.pause", { watchId: "watch-1" });
+  const [watch] = (await f.service.read({}, f.context)).watches;
+  assert.equal(watch.status, "paused");
+  assert.equal(watch.error, "Watching paused.");
+});
+
+test("Colleague's watch guidance gives only examples public itself registers", () => {
+  const sourcesRead = createColleagueActions({}).find(action => action.id === "vibe64.colleague.watch.sources.read");
+  for (const text of [colleagueInstructions, learnInstructions, sourcesRead.extensions.assistant.description]) {
+    assert.doesNotMatch(text, /deployment/u);
+  }
+});
+
 test("restart restores watch cursors but waits for fresh authentication before reconciling", async (t) => {
   const f = await fixture(t, [], { watching: true });
   await watchAction(f, "watch.create", watchInput);

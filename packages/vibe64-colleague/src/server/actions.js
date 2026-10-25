@@ -169,7 +169,7 @@ function createColleagueActions(colleague, { usage = createColleagueUsageKnowled
       description: "List your watches with their exact target, condition and active/paused state. Paused reads need attention; silence does not prove an agent is blocked.", output: watchOutput
     }),
     definition("watch.sources.read", {}, () => colleague.listWatchSources(), {
-      description: "List what this installation lets you watch besides coding conversations (for example a project's deployment): each source's input fields and conditions. Use watch.source.create with one of them.",
+      description: "List what this installation lets you watch besides coding conversations (for example a project's publication): each source's input fields and conditions. Use watch.source.create with one of them.",
       output: { mode: "replace", schema: createSchema({ ok: { type: "boolean", required: true },
         sources: { type: "array", maxItems: 32, required: true, items: createSchema({ source: { ...text, required: true },
           label: { ...text, required: true }, description: { ...text, maxLength: 1000, required: true }, scope: { ...text, required: true },
