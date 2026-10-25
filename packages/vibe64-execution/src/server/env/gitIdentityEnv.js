@@ -145,16 +145,36 @@ function personGitConfigIdentity({ cwd = "", env = null } = {}) {
   };
 }
 
+// The person's Git identity read as that person, supplied by a caller whose
+// command runs under another Unix identity (such as a Save run by the
+// workspace service for a signed-in person), where reading the command's own
+// HOME would find someone else's settings.
+function suppliedPersonGitIdentity(value = {}) {
+  const record = recordValue(value);
+  const name = normalizeText(record.name);
+  const email = normalizeText(record.email);
+  if (!name || !email) return null;
+  return {
+    authorEmail: email,
+    authorName: name,
+    committerEmail: email,
+    committerName: name,
+    source: "git-config"
+  };
+}
+
 function isFallbackGitIdentityEmail(email = "") {
   return normalizeText(email).toLowerCase().endsWith(FALLBACK_EMAIL_DOMAIN);
 }
 
-// Order: explicit project/session identity, the person's Git config, the
+// Order: explicit project/session identity, the person's Git config (as read
+// for them by the caller, else by git with the command's own env), the
 // connected GitHub account, then a clearly marked stand-in.
 function resolveGitIdentity({
   actor = {},
   env = process.env,
   gitConfig = null,
+  personGitIdentity = null,
   project = {},
   session = {},
   userKey = ""
@@ -170,6 +190,7 @@ function resolveGitIdentity({
       email: env.VIBE64_GIT_USER_EMAIL
     }
   ) ||
+    suppliedPersonGitIdentity(personGitIdentity) ||
     personGitConfigIdentity(gitConfig || {}) ||
     githubGitIdentity(project.githubUser || session.githubUser || metadata.github_user) ||
     fallbackGitIdentity({

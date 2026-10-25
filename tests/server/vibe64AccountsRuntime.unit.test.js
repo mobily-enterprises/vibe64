@@ -1321,6 +1321,43 @@ test("GitHub status retries transient host read failures before requiring reconn
   });
 });
 
+// Hosted incident 2026-10-25: the cached "connected as @login" card showed
+// empty Git name and email fields although the person's Git config had both.
+test("a hosted GitHub card shows the person's current Git name and email", async () => {
+  await withTempDir(async (root) => {
+    const vibe64User = {
+      github: { connectedAt: "2026-07-05T16:11:03.389Z", id: 2128734, login: "mercmobily" },
+      home: path.join(root, "homes", "mercmobily"),
+      gid: 1001,
+      uid: 1001,
+      username: "mercmobily"
+    };
+    const reads = [];
+    const service = createService({
+      accountRuntime: createAccountsRuntime({
+        githubAccountMode: GITHUB_ACCOUNT_MODE_USER,
+        previousGithub: (input = {}) => input.vibe64User?.github || null,
+        requireExplicitRoots: true,
+        systemRoot: path.join(root, "system")
+      }),
+      runHostToolCommand: async (args = [], options = {}) => {
+        reads.push({ args, username: options.username });
+        if (args.join(" ") === "git config --global --get user.name") return { ok: true, stdout: "Merc Mobily\n" };
+        if (args.join(" ") === "git config --global --get user.email") return { ok: true, stdout: "merc@example.test\n" };
+        throw new Error(`Unexpected host command: ${args.join(" ")}`);
+      }
+    });
+
+    const status = await service.getStatus({ providerIds: ["github"], vibe64User });
+    const github = status.accounts.find((account) => account.id === "github");
+
+    assert.equal(github.status, "connected");
+    assert.equal(github.username, "mercmobily");
+    assert.deepEqual(github.gitIdentity, { email: "merc@example.test", name: "Merc Mobily" });
+    assert.deepEqual(reads.map(({ username }) => username), ["mercmobily", "mercmobily"]);
+  });
+});
+
 test("GitHub transient host read failures are not classified as reconnect-required", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");
@@ -1508,7 +1545,11 @@ test("cached GitHub status preserves proven invalid and logout states until live
         vibe64User
       });
       assert.equal(initialStatus.accounts.find((account) => account.id === "github")?.connected, true);
-      assert.equal(commands.length, 0);
+      // The cached card reads only the person's Git name and email, no live auth.
+      assert.deepEqual(commands.splice(0), [
+        ["git", "config", "--global", "--get", "user.name"],
+        ["git", "config", "--global", "--get", "user.email"]
+      ]);
 
       const invalid = await service.recordGithubAuthInvalid({
         reason: "repository-owners",
@@ -1543,7 +1584,7 @@ test("cached GitHub status preserves proven invalid and logout states until live
         vibe64User
       });
       assert.equal(clearedStatus.accounts.find((account) => account.id === "github")?.connected, true);
-      assert.equal(commands.length, 5);
+      assert.equal(commands.length, 7);
 
       const logout = await service.logout({
         accountId: "github",
@@ -1551,14 +1592,14 @@ test("cached GitHub status preserves proven invalid and logout states until live
       });
       assert.equal(logout.ok, true);
       assert.equal(logout.account.connected, false);
-      assert.equal(commands.length, 6);
+      assert.equal(commands.length, 8);
 
       const loggedOutStatus = await service.getStatus({
         providerIds: ["github"],
         vibe64User
       });
       assert.equal(loggedOutStatus.accounts.find((account) => account.id === "github")?.connected, false);
-      assert.equal(commands.length, 6);
+      assert.equal(commands.length, 8);
     } finally {
       await chmod(githubHome, 0o700);
     }

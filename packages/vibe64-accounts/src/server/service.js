@@ -856,6 +856,18 @@ async function runDefaultHostCommand(commandArgs, options = {}) {
   });
 }
 
+// The person's current Git name and email, read as that person in their tool
+// home, so a hosted card shows what their next Save will use.
+async function readPersonGitIdentity(runHostToolCommand, githubContext) {
+  const options = hostCommandOptionsForCredentialContext(githubContext);
+  const [nameResult, emailResult] = await Promise.all(["user.name", "user.email"].map((key) =>
+    runGithubStatusProbe(runHostToolCommand, ["git", "config", "--global", "--get", key], options)));
+  return {
+    email: emailResult?.ok ? String(emailResult.stdout || "").trim() : "",
+    name: nameResult?.ok ? String(nameResult.stdout || "").trim() : ""
+  };
+}
+
 async function readGithubStatus({
   githubContext,
   previousGithub = null,
@@ -989,6 +1001,7 @@ async function readGithubStatus({
 async function readGithubAccountStatus({
   githubContext,
   previousGithub = null,
+  readGitIdentity = true,
   runHostToolCommand = runDefaultHostCommand,
   systemRoot = ""
 } = {}) {
@@ -997,6 +1010,12 @@ async function readGithubAccountStatus({
     previousGithub,
     systemRoot
   });
+  if (readGitIdentity && stored?.connected === true && isUserCredentialContext(githubContext)) {
+    return {
+      ...stored,
+      gitIdentity: await readPersonGitIdentity(runHostToolCommand, githubContext)
+    };
+  }
   if (stored) {
     return stored;
   }
@@ -1826,6 +1845,7 @@ function createService({
           : readGithubAccountStatus({
               githubContext,
               previousGithub,
+              readGitIdentity: input.readGitIdentity !== false,
               runHostToolCommand: accountRunHostCommand,
               systemRoot: resolvedSystemRoot
             });

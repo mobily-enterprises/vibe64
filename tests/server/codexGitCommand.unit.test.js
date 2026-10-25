@@ -10,6 +10,8 @@ import { prepareAgentHelperCommand } from "../../packages/vibe64-terminals/src/s
 import { pathToFileURL } from "node:url";
 
 import { runVibe64Command } from "../../packages/vibe64-execution/src/server/runVibe64Command.js";
+import { normalizeVibe64CommandRequest } from "../../packages/vibe64-execution/src/server/request.js";
+import { resolveCommandEnv } from "../../packages/vibe64-execution/src/server/env/resolveCommandEnv.js";
 import { initializeGenesisProject } from "../../packages/vibe64-genesis/src/server/index.js";
 import { createService as createProjectService } from "../../packages/vibe64-project/src/server/service.js";
 import { createVibe64ProjectChangedPublisher } from "../../packages/vibe64-project/src/server/actions.js";
@@ -967,6 +969,56 @@ test("Codex separates GitHub authorization from the Git filesystem identity", as
     assert.equal(gatewayCalls[1].userKey, user.username);
     assert.equal(gatewayCalls[1].project.ownerUserKey, user.username);
     assert.equal(gatewayCalls[1].session.metadata.session_git_command_actor_user_key, user.username);
+  });
+});
+
+// Hosted incident 2026-10-25: Save runs as the workspace service, whose HOME
+// holds no Git identity and which cannot read the person's home, so every
+// hosted Save carried the stand-in although the person's own ~/.gitconfig had
+// their name. The person's identity is read as the person and given to Save.
+test("Save run by the workspace service commits under the person's own Git identity", async () => {
+  await withTemporaryRoot(async (root) => {
+    const session = githubSession(root);
+    await mkdir(session.metadata.source_path, { recursive: true });
+    const daemonHome = path.join(root, "daemon-home");
+    const personHome = path.join(root, "person-home");
+    await mkdir(daemonHome, { recursive: true });
+    await mkdir(personHome, { recursive: true });
+    await writeFile(path.join(personHome, ".gitconfig"), "[user]\n\tname = Ana Diaz\n\temail = ana@example.test\n");
+    const gatewayCalls = [];
+    const service = serviceForSession(session, {
+      async runGatewayCommand(request) {
+        gatewayCalls.push(request);
+        if (request.command === "gh") return { exitCode: 0, ok: true, stdout: "token\n" };
+        // The owner-user read runs git as the person, in the person's home.
+        const result = await runProcessWithInput("git", request.args, {
+          cwd: personHome,
+          env: { GIT_CONFIG_NOSYSTEM: "1", HOME: personHome, PATH: process.env.PATH }
+        });
+        return { exitCode: result.exitCode, ok: result.exitCode === 0, stdout: result.stdout };
+      }
+    });
+    const user = currentOsUser();
+    const daemon = { actor: "app", requiresRealUser: false, user: { home: daemonHome, username: "v64d_unit" } };
+    const saveEnv = (commandOptions) => resolveCommandEnv({
+      actor: daemon,
+      baseEnv: { PATH: process.env.PATH },
+      request: normalizeVibe64CommandRequest({ args: ["commit-tree"], command: "git", cwd: daemonHome, ...commandOptions })
+    });
+
+    // Without the person's identity the service's own HOME yields the stand-in.
+    assert.equal(saveEnv({ userKey: user.username }).GIT_AUTHOR_NAME, `${user.username} via Vibe64`);
+
+    const context = await service.sessionWorkSaveContext({ session });
+    assert.equal(context.ok, true);
+    const read = gatewayCalls.find((call) => call.command === "git");
+    assert.equal(read.actor, "owner-user");
+    assert.equal(read.cwd, user.home);
+    assert.deepEqual(context.commandOptions.personGitIdentity, { email: "ana@example.test", name: "Ana Diaz" });
+    const env = saveEnv(context.commandOptions);
+    assert.equal(env.GIT_AUTHOR_NAME, "Ana Diaz");
+    assert.equal(env.GIT_AUTHOR_EMAIL, "ana@example.test");
+    assert.equal(env.GIT_COMMITTER_EMAIL, "ana@example.test");
   });
 });
 

@@ -392,6 +392,10 @@ function normalizeVibe64CommandRequest(input = {}) {
     credentialHome: normalizeCredentialHome(request.credentialHome),
     gitAuthToken: normalizeText(request.gitAuthToken || request.gitCredentials?.token),
     gitSafeDirectories: normalizeAbsolutePaths(request.gitSafeDirectories || request.safeDirectories),
+    personGitIdentity: {
+      email: normalizeText(request.personGitIdentity?.email),
+      name: normalizeText(request.personGitIdentity?.name)
+    },
     gitTransport: normalizeEnum(request.gitTransport, VIBE64_COMMAND_GIT_TRANSPORTS, request.githubTransport ? "github-https" : "none", "git_transport"),
     inheritProcessEnv: !releaseEnvironmentFile && request.inheritProcessEnv !== false,
     input: request.stdin ?? request.input,

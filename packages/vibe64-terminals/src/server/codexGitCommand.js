@@ -638,6 +638,47 @@ async function readGithubToken({
   };
 }
 
+// Save runs as the workspace service, so the person's own Git settings are
+// read as the person, in their tool home, the same way their GitHub token is.
+// An unreadable or unset identity leaves the command env's own resolution.
+async function readPersonGitIdentity({
+  actor = {},
+  gatewayCommandRunner,
+  session = {},
+  toolHome = {}
+} = {}) {
+  const credentialRoot = normalizeText(toolHome.toolHomeSource);
+  if (!credentialRoot) return null;
+  const result = await gatewayCommandRunner({
+    actor: "owner-user",
+    allowedRoots: [credentialRoot],
+    args: ["config", "--get-regexp", "^user\\.(name|email)$"],
+    command: "git",
+    cwd: credentialRoot,
+    envPolicy: "auth",
+    gitTransport: "none",
+    mode: "capture",
+    project: {
+      ownerUserKey: toolHome.ownerUserKey
+    },
+    purpose: "account",
+    runtimes: ["git"],
+    session: {
+      metadata: session.metadata || {},
+      sessionId: actor.sessionId
+    },
+    timeout: CODEX_GIT_COMMAND_TIMEOUT_MS,
+    userKey: gatewayGitIdentityUserKey(session, actor, toolHome)
+  });
+  if (result?.ok !== true) return null;
+  const values = {};
+  for (const line of String(result.stdout || "").split("\n")) {
+    const match = /^user\.(name|email) (.+)$/iu.exec(line.trim());
+    if (match) values[match[1].toLowerCase()] = normalizeText(match[2]);
+  }
+  return values.name && values.email ? { email: values.email, name: values.name } : null;
+}
+
 function logGitCommandResult(logger, result = {}, fields = {}) {
   const ok = result?.ok !== false && Number(result?.exitCode || 0) === 0;
   const args = Array.isArray(fields.args) ? fields.args : [];
@@ -750,6 +791,12 @@ function createCodexGitCommandService({
     if (githubToken.ok === false) {
       return githubToken;
     }
+    const personGitIdentity = await readPersonGitIdentity({
+      actor,
+      gatewayCommandRunner,
+      session,
+      toolHome
+    });
     const actorLabel = normalizeText(actor.actorUserKey) || "Vibe64 user";
     return {
       actor,
@@ -757,6 +804,7 @@ function createCodexGitCommandService({
         actor: "app",
         gitAuthToken: githubToken.token,
         gitTransport: "github-token",
+        ...(personGitIdentity ? { personGitIdentity } : {}),
         purpose: "github",
         userKey: gatewayGitIdentityUserKey(session, actor, toolHome)
       },

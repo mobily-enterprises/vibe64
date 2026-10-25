@@ -165,6 +165,7 @@ function resolveCommandEnv({
       actor,
       env: baseEnv,
       gitConfig: { cwd: request.cwd, env: commandEnv },
+      personGitIdentity: request.personGitIdentity,
       project: request.project,
       session: request.session,
       userKey: request.userKey

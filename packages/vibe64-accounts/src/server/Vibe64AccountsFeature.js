@@ -86,7 +86,9 @@ function createConnections({ accounts, project, listAssistantCapabilities = null
   return Object.freeze({
     async getStatus(input = {}) {
       const accountInput = await connectionAccountStatusInput(input, project);
-      const status = await accounts.getStatus(accountInput);
+      // Readiness needs only whether GitHub is connected, not the Git name
+      // the Account card reads for the person.
+      const status = await accounts.getStatus({ ...accountInput, readGitIdentity: false });
       if (status?.ok === false) {
         return status;
       }
