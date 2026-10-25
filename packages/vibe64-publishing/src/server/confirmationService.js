@@ -16,7 +16,6 @@ import { readJsonFile, serialized, writeJsonFile } from "./state/jsonFile.js";
 
 const CONFIRMATIONS_CONTRACT = "vibe64.publishing-confirmations.v1";
 const PLAN_HASH = /^sha256:[0-9a-f]{64}$/u;
-const TARGET_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const KEEP = 20;
 
 function confirmationError(message, code) {
@@ -57,7 +56,7 @@ function createConfirmationService({ runtimeRoot, now = () => Date.now(), ttlMs 
     request({ planHash, targetIds, requestedBy = "assistant" } = {}) {
       return exclusive(async () => {
         if (!PLAN_HASH.test(planHash || "")) throw confirmationError("A confirmation request needs the plan hash.", "vibe64_publishing_confirmation_invalid");
-        if (!Array.isArray(targetIds) || !targetIds.length || !targetIds.every((id) => TARGET_ID.test(id))) {
+        if (!Array.isArray(targetIds) || !targetIds.length || !targetIds.every((id) => typeof id === "string" && id)) {
           throw confirmationError("A confirmation request needs the plan's target ids.", "vibe64_publishing_confirmation_invalid");
         }
         const value = await read();
