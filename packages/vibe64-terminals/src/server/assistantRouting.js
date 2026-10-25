@@ -103,7 +103,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
   async function save(context, state) {
     await context.runtime.store.writeMetadataValue(context.session.sessionId, STATE_KEY, JSON.stringify(state));
     await publish(context.session.sessionId, { reason: "assistant-routing-changed", payload: {
-      assistantRoutingRequest: state, ...(context.routingConversationId ? { conversationId: context.routingConversationId } : {})
+      assistantRoutingRequest: state, clientRefresh: { includeList: false }, ...(context.routingConversationId ? { conversationId: context.routingConversationId } : {})
     } });
   }
   async function writeNotice(context, state, notice) {
@@ -113,7 +113,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     const scope = conversationId ? { sessionId, conversationId } : sessionId;
     const turn = await context.runtime.store.writeConversationSystemMessage(scope, notice);
     if (turn) await publish(sessionId, { reason: "assistant-routing-changed", payload: {
-      assistantRoutingRequest: state, conversationLogPatch: { type: "upsert-turn", turn }, ...(conversationId ? { conversationId } : {})
+      assistantRoutingRequest: state, clientRefresh: { includeList: false }, conversationLogPatch: { type: "upsert-turn", turn }, ...(conversationId ? { conversationId } : {})
     } });
   }
   async function currentGoal(sessionId, context) {

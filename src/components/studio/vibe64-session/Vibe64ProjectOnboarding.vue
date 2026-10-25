@@ -117,6 +117,13 @@ import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
 import { VIBE64_COLLEAGUE_PREVIEW_KEY } from "@/lib/vibe64AssistantHost.js";
 import { resolveStudioRequestUrl } from "@/lib/studioUrls.js";
 import { vibe64ResourceResponseError } from "@/lib/vibe64ApiResponses.js";
+import { VIBE64_PROJECT_CHANGED_EVENT } from "@/lib/studioGateApi.js";
+import {
+  VIBE64_SESSION_CHANGED_EVENT,
+  VIBE64_SURFACE_ID,
+  vibe64SessionEventMatchesScope,
+  vibe64SessionQueryKey
+} from "@/lib/vibe64SessionRequestConfig.js";
 import Vibe64TemporaryAiFixAction from "@/components/studio/Vibe64TemporaryAiFixAction.vue";
 
 const props = defineProps({
@@ -138,15 +145,17 @@ const resource = useEndpointResource({
   enabled,
   path: computed(() => resolveStudioRequestUrl("/api/vibe64/onboarding")),
   readQuery: computed(() => ({ sessionId: props.sessionId })),
-  queryKey: computed(() => ["vibe64", "project-onboarding", projectSlug.value, props.sessionId]),
+  queryKey: computed(() => [
+    ...vibe64SessionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, projectSlug.value),
+    props.sessionId,
+    "project-onboarding"
+  ]),
   queryOptions: { refetchOnMount: "always", refetchOnWindowFocus: true },
   realtime: {
-    events: ["vibe64.project.changed", "vibe64.session.changed"],
-    matches: ({ event, payload = {} } = {}) => {
-      if (event === "vibe64.project.changed") return !payload.projectSlug || payload.projectSlug === projectSlug.value;
-      return payload.projectSlug === projectSlug.value && payload.sessionId === props.sessionId &&
-        payload.reason === "temporary-agent-turn-idle";
-    }
+    events: [VIBE64_PROJECT_CHANGED_EVENT, VIBE64_SESSION_CHANGED_EVENT],
+    matches: ({ event, payload = {} } = {}) => vibe64SessionEventMatchesScope(payload, { projectSlug: projectSlug.value }) &&
+      (event === VIBE64_PROJECT_CHANGED_EVENT ||
+        (payload.sessionId === props.sessionId && payload.reason === "temporary-agent-turn-idle"))
   },
   refreshOnPull: true,
   fallbackLoadError: "Project setup could not be read."
@@ -160,7 +169,7 @@ const command = useCommand({
   messages: { success: "Starter added to this session. Use Save to keep it in the project.", error: "The starter could not be applied." },
   ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
   placementSource: "vibe64.project.templates.apply",
-  surfaceId: "app",
+  surfaceId: VIBE64_SURFACE_ID,
   writeMethod: "POST"
 });
 const onboarding = computed(() => resource.data.value?.ok === true ? resource.data.value : null);

@@ -13,7 +13,9 @@ import * as Vue from "vue";
 import { renderToString } from "@vue/server-renderer";
 import { routeLocationKey } from "vue-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { VIBE64_COLLEAGUE_PREVIEW_KEY } from "../../src/lib/vibe64AssistantHost.js";
+import { VIBE64_SURFACE_ID, vibe64SessionQueryKey } from "../../src/lib/vibe64SessionRequestConfig.js";
 import { provideConversationFixture } from "./helpers/conversationRuntimeFixture.js";
 import { createTemporaryConversationFixture, temporaryRequestBody } from "./helpers/temporaryConversationFixture.js";
 
@@ -229,7 +231,11 @@ function mountOnboarding({ active = true, projectPane = "preview", live = true, 
       const request = reads[index];
       const query = queryClient.getQueryCache().find({
         exact: true,
-        queryKey: ["vibe64", "project-onboarding", "project-a", request.options.query.sessionId]
+        queryKey: [
+          ...vibe64SessionQueryKey(VIBE64_SURFACE_ID, ROUTE_VISIBILITY_PUBLIC, "project-a"),
+          request.options.query.sessionId,
+          "project-onboarding"
+        ]
       });
       const pending = query?.promise;
       request.resolve(data);
@@ -279,7 +285,7 @@ describe("Preview project onboarding", () => {
       await fixture.settleRead(0, opening("new"));
       for (const payload of [
         { ...finished, projectSlug: "project-b" },
-        { ...finished, projectSlug: undefined },
+        { ...finished, learningAttemptId: "attempt-1", projectSlug: undefined },
         { ...finished, sessionId: "session-b" },
         { ...finished, reason: "assistant-stream" }
       ]) await fixture.sessionChanged(payload);

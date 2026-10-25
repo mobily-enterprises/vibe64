@@ -486,6 +486,25 @@ test("deferred session changes publish modern top-level realtime events", async 
   assert.equal(Object.hasOwn(events[0], "meta"), false);
 });
 
+test("session publications name the client reads each change invalidates", async () => {
+  const events = [];
+  const publish = createSessionChangedPublisher({ async publish(event) { events.push(event); } });
+  const refreshFor = async (reason, payload = null) => {
+    events.length = 0;
+    await publish("session-1", { reason, payload });
+    return events[0].realtime.payload.clientRefresh;
+  };
+  assert.equal(await refreshFor("session-created"), undefined);
+  assert.deepEqual(await refreshFor("opencode-server-progress"),
+    { includeAccess: false, includeDetail: false, includeList: false });
+  assert.deepEqual(await refreshFor("codex-app-server-turn-idle", { clientRefresh: { includeOutputs: true } }),
+    { includeDetail: false, includeList: false, includeOutputs: true });
+  assert.deepEqual(await refreshFor("agent-terminal-closed"), { includeList: false });
+  assert.deepEqual(await refreshFor("claude-stream-message"), { includeAccess: false });
+  assert.deepEqual(await refreshFor("opencode-server-progress", { clientRefresh: { includeList: true } }),
+    { includeAccess: false, includeDetail: false, includeList: true });
+});
+
 test("session publications use the trusted project context and actions do not republish service completions", async () => {
   const published = [];
   const publish = createSessionChangedPublisher({ async publish(event) { published.push(event); } });

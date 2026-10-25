@@ -11,24 +11,12 @@ import { mountedSessionRealtimeShouldRefresh } from "@/lib/vibe64MountedSessionS
 import {
   VIBE64_SESSION_CHANGED_EVENT,
   VIBE64_SURFACE_ID,
+  vibe64SessionEventMatchesScope,
   vibe64SessionPath,
   vibe64SessionQueryKey
 } from "@/lib/vibe64SessionRequestConfig.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
-
-const ASSISTANT_ACCESS_IGNORED_REALTIME_REASONS = new Set([
-  "assistant-stream",
-  "opencode-credential-failure",
-  "opencode-provider-failure",
-  "opencode-server-assistant-message",
-  "opencode-server-message-delivered",
-  "opencode-server-progress",
-  "opencode-server-reasoning",
-  "opencode-server-tool",
-  "claude-stream-message",
-  "claude-stream-message-delivered"
-]);
 
 function assistantAccessText(value = "") {
   return String(value ?? "").trim();
@@ -68,13 +56,8 @@ function useVibe64AssistantAccess({
       if (event === VIBE64_CONNECTIONS_CHANGED_EVENT || event === VIBE64_ACCOUNTS_CHANGED_EVENT) {
         return true;
       }
-      const reason = assistantAccessText(payload.reason);
-      if (["codex-app-server-turn-active", "codex-app-server-turn-idle", "opencode-server-turn-active",
-        "opencode-server-turn-idle", "claude-stream-turn-active", "claude-stream-turn-idle"].includes(reason)) {
-        return mountedSessionRealtimeShouldRefresh({ payload: { ...payload, reason: "" } }, currentSessionId.value);
-      }
-      return !ASSISTANT_ACCESS_IGNORED_REALTIME_REASONS.has(reason) &&
-        mountedSessionRealtimeShouldRefresh({ payload }, currentSessionId.value);
+      return vibe64SessionEventMatchesScope(payload, { projectSlug: projectSlug.value }) &&
+        mountedSessionRealtimeShouldRefresh({ payload }, currentSessionId.value, "includeAccess");
     }
   };
   const accessResource = useEndpointResource({

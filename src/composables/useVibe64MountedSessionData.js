@@ -31,6 +31,7 @@ import {
 import {
   VIBE64_SESSION_CHANGED_EVENT,
   VIBE64_SURFACE_ID,
+  vibe64SessionEventMatchesScope,
   vibe64SessionPath,
   vibe64SessionQueryKey
 } from "@/lib/vibe64SessionRequestConfig.js";
@@ -99,10 +100,8 @@ function useVibe64MountedSessionData({
     readMethod: "GET",
     realtime: {
       event: VIBE64_SESSION_CHANGED_EVENT,
-      matches: ({ payload = {} } = {}) => (!payload.projectSlug || payload.projectSlug === projectSlug.value) && mountedSessionRealtimeShouldRefresh(
-        { payload },
-        activeSessionId.value
-      )
+      matches: ({ payload = {} } = {}) => vibe64SessionEventMatchesScope(payload, { projectSlug: projectSlug.value }) &&
+        mountedSessionRealtimeShouldRefresh({ payload }, activeSessionId.value)
     },
     refreshOnPull: true,
     requestRecoveryLabel: "Vibe64 session"
@@ -390,7 +389,7 @@ function useVibe64MountedSessionData({
     enabled: computed(() => Boolean(activeSessionId.value)),
     event: VIBE64_SESSION_CHANGED_EVENT,
     matches: ({ payload = {} } = {}) => (
-      payload.projectSlug === projectSlug.value &&
+      vibe64SessionEventMatchesScope(payload, { projectSlug: projectSlug.value }) &&
       payload.sessionId === activeSessionId.value &&
       payload.reason === "session-assistant-selection-updated"
     ),

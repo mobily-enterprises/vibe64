@@ -2034,7 +2034,10 @@ describe("ProjectSettingsPanel AI behaviour", () => {
     });
     const sessionRealtime = projectSettingsMocks.realtimeOptions[0];
     expect(sessionRealtime.event).toBe("vibe64.session.changed");
-    expect(sessionRealtime.matches).toBe(projectSettingsMocks.sessionEventMatches);
+    const changed = { payload: { projectSlug: projectSettingsMocks.projectSlug.value, sessionId: "session-1" } };
+    expect(sessionRealtime.matches(changed)).toBe(true);
+    expect(projectSettingsMocks.sessionEventMatches)
+      .toHaveBeenCalledWith(changed, projectSettingsMocks.projectSlug.value);
 
     await findButton(container, "Refresh").props.onClick();
     sessionRealtime.onEvent();

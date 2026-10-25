@@ -215,25 +215,17 @@ describe("mounted direct session state", () => {
     })).toBe(false);
   });
 
-  it("refreshes detail for durable changes but not transient turn or preview events", () => {
-    for (const reason of [
-      "codex-app-server-turn-active",
-      "codex-app-server-turn-idle",
-      "codex-app-server-commentary",
-      "opencode-server-message-delivered",
-      "opencode-server-progress",
-      "opencode-server-reasoning",
-      "opencode-server-turn-active",
-      "opencode-server-turn-idle",
-      "output-target-ready"
-    ]) {
-      expect(mountedSessionRealtimeShouldRefresh({
-        payload: { reason, sessionId: "session-1" }
-      }, "session-1")).toBe(false);
-    }
+  it("refreshes detail unless the server's clientRefresh excludes it", () => {
     expect(mountedSessionRealtimeShouldRefresh({
-      payload: { reason: "session-agent-message-accepted", sessionId: "session-1" }
+      payload: { reason: "codex-app-server-turn-idle", sessionId: "session-1", clientRefresh: { includeDetail: false } }
+    }, "session-1")).toBe(false);
+    expect(mountedSessionRealtimeShouldRefresh({
+      payload: { reason: "any-new-reason", sessionId: "session-1" }
     }, "session-1")).toBe(true);
+    expect(mountedSessionRealtimeShouldRefresh({
+      payload: { reason: "codex-app-server-turn-idle", sessionId: "session-1",
+        clientRefresh: { includeAccess: true, includeDetail: false } }
+    }, "session-1", "includeAccess")).toBe(true);
     expect(mountedSessionRealtimeShouldRefresh({
       payload: { reason: "session-agent-message-accepted", sessionId: "session-2" }
     }, "session-1")).toBe(false);
@@ -306,127 +298,21 @@ describe("direct assistant realtime state", () => {
     }, completed).revision).toBe(12);
   });
 
-  it("keeps list refreshes bounded to durable session changes", () => {
+  it("refreshes the list for its own project unless the server's clientRefresh excludes it", () => {
     expect(sessionListRealtimeShouldRefresh({
-      payload: { projectSlug: "other-project", reason: "session-created", clientRefresh: { includeList: true } }
+      payload: { projectSlug: "other-project", reason: "session-created" }
+    }, "current-project")).toBe(false);
+    expect(sessionListRealtimeShouldRefresh({
+      payload: { learningAttemptId: "attempt-1", reason: "session-created" }
     }, "current-project")).toBe(false);
     expect(sessionListRealtimeShouldRefresh({
       payload: { projectSlug: "current-project", reason: "session-created" }
     }, "current-project")).toBe(true);
     expect(sessionListRealtimeShouldRefresh({
-      payload: { reason: "codex-app-server-commentary", sessionId: "session-1" }
-    })).toBe(false);
+      payload: { reason: "opencode-server-progress", sessionId: "session-1", clientRefresh: { includeList: false } }
+    }, "current-project")).toBe(false);
     expect(sessionListRealtimeShouldRefresh({
-      payload: { sessionId: "session-1" }
-    })).toBe(true);
-  });
-
-  it.each([
-    "opencode-server-assistant-message",
-    "opencode-server-message-delivered",
-    "opencode-server-progress",
-    "opencode-server-reasoning",
-    "opencode-server-tool",
-    "opencode-server-turn-active",
-    "opencode-server-turn-idle"
-  ])("does not reload the session list for %s", (reason) => {
-    const payload = { projectSlug: "project", sessionId: "session-1", reason };
-    expect(sessionListRealtimeShouldRefresh({ payload }, "project")).toBe(false);
-    expect(sessionListRealtimeShouldRefresh({
-      payload: { ...payload, clientRefresh: { includeList: true } }
-    }, "project")).toBe(true);
-  });
-
-  it("keeps routing progress in the chat without suppressing goal or explicit list refreshes", () => {
-    const payload = { reason: "assistant-routing-changed", sessionId: "session-1" };
-    expect(sessionListRealtimeShouldRefresh({ payload })).toBe(true);
-    const routingProgress = { ...payload, assistantRoutingRequest: { status: "preparing" } };
-    expect(sessionListRealtimeShouldRefresh({ payload: routingProgress })).toBe(false);
-    expect(sessionListRealtimeShouldRefresh({
-      payload: { ...routingProgress, clientRefresh: { includeList: true } }
-    })).toBe(true);
-    expect(mountedSessionRealtimeShouldRefresh({ payload: routingProgress }, "session-1")).toBe(true);
-  });
-});
-
-
-describe("Learning and Working current shortcut publication", () => {
-  it("retains distinct paths on one serialized chain while coalescing only each path's latest selection", async () => {
-    const calls = [];
-    let releaseFirst;
-    let firstStarted;
-    let active = 0;
-    let maxActive = 0;
-    const gate = new Promise(resolve => { releaseFirst = resolve; });
-    const started = new Promise(resolve => { firstStarted = resolve; });
-    const publisher = createVibe64CurrentSessionPublisher({
-      coalesceByPath: true,
-      async publish(publication) {
-        active += 1;
-        maxActive = Math.max(maxActive, active);
-        calls.push(publication);
-        if (calls.length === 1) { firstStarted(); await gate; }
-        active -= 1;
-      }
-    });
-    publisher.request({ apiPath: "/working/current", sessionId: "working-first" });
-    await started;
-    publisher.request({ apiPath: "/learning/attempt-a/current", sessionId: "learning-first" });
-    publisher.request({ apiPath: "/working/current", sessionId: "working-old" });
-    publisher.request({ apiPath: "/learning/attempt-a/current", sessionId: "learning-latest" });
-    const finished = publisher.request({ apiPath: "/working/current", sessionId: "working-latest" });
-    releaseFirst();
-    await finished;
-    expect(calls).toEqual([
-      { apiPath: "/working/current", sessionId: "working-first" },
-      { apiPath: "/learning/attempt-a/current", sessionId: "learning-latest" },
-      { apiPath: "/working/current", sessionId: "working-latest" }
-    ]);
-    expect(maxActive).toBe(1);
-  });
-
-  it("retains clear/re-entry across actual attempt paths and discards pending work only when stopped", async () => {
-    const calls = [];
-    let release;
-    let started;
-    const gate = new Promise(resolve => { release = resolve; });
-    const firstStarted = new Promise(resolve => { started = resolve; });
-    const publisher = createVibe64CurrentSessionPublisher({
-      coalesceByPath: () => true,
-      async publish(publication) {
-        calls.push(publication);
-        if (calls.length === 1) { started(); await gate; }
-      }
-    });
-    publisher.request({ apiPath: "/learning/a/current", sessionId: "session-a" });
-    await firstStarted;
-    publisher.request({ apiPath: "/learning/a/current", sessionId: "" });
-    const switched = publisher.request({ apiPath: "/learning/b/current", sessionId: "session-b" });
-    release();
-    await switched;
-    await publisher.request({ apiPath: "/learning/a/current", sessionId: "session-a" });
-    expect(calls).toEqual([
-      { apiPath: "/learning/a/current", sessionId: "session-a" },
-      { apiPath: "/learning/a/current", sessionId: "" },
-      { apiPath: "/learning/b/current", sessionId: "session-b" },
-      { apiPath: "/learning/a/current", sessionId: "session-a" }
-    ]);
-    const pending = publisher.request({ apiPath: "/working/current", sessionId: "never-published" });
-    publisher.stop();
-    await pending;
-    await publisher.request({ apiPath: "/learning/a/current", sessionId: "also-not-published" });
-    expect(calls).toHaveLength(4);
-  });
-
-  it("keeps original global latest coalescing when path coalescing is omitted or its configured getter is false", async () => {
-    for (const options of [{}, { coalesceByPath: () => false }]) {
-      const calls = [];
-      const publisher = createVibe64CurrentSessionPublisher({ ...options, publish: async publication => { calls.push(publication); } });
-      publisher.request({ apiPath: "/project-a/current", sessionId: "session-a" });
-      await publisher.request({ apiPath: "/project-b/current", sessionId: "session-b" });
-      expect(calls).toEqual([{ apiPath: "/project-b/current", sessionId: "session-b" }]);
-      await publisher.request({ apiPath: "/project-b/current", sessionId: "session-b" });
-      expect(calls).toHaveLength(1);
-    }
+      payload: { reason: "any-new-reason", sessionId: "session-1" }
+    }, "current-project")).toBe(true);
   });
 });

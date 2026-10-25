@@ -2,40 +2,6 @@ import {
   vibe64SessionRevision
 } from "@/lib/vibe64SessionViewModel.js";
 
-const MOUNTED_SESSION_IGNORED_REALTIME_REASONS = new Set([
-  "assistant-stream",
-  "assistant-response-bundle",
-  "codex-app-server-commentary",
-  "codex-app-server-prompt-injected",
-  "codex-app-server-ready",
-  "codex-app-server-final-assistant-message",
-  "codex-app-server-live-progress",
-  "codex-app-server-reasoning-summary",
-  "codex-app-server-running",
-  "codex-app-server-terminal-assistant-message",
-  "codex-app-server-terminal-thinking-message",
-  "codex-app-server-terminal-user-message",
-  "codex-app-server-turn-active",
-  "codex-app-server-turn-claimed",
-  "codex-app-server-turn-finalizing",
-  "codex-app-server-turn-idle",
-  "codex-app-server-turn-state",
-  "codex-app-server-message-delivered",
-  "codex-context-replaced",
-  "codex-prompt-injected",
-  "opencode-server-assistant-message",
-  "opencode-server-message-delivered",
-  "opencode-server-progress",
-  "opencode-server-reasoning",
-  "opencode-server-tool",
-  "opencode-server-turn-active",
-  "opencode-server-turn-idle",
-  "output-target-started",
-  "output-target-ready",
-  "output-target-closed",
-  "output-target-stopped"
-]);
-
 function sessionRecordHasDetailProjection(session = null) {
   return Boolean(
     session &&
@@ -188,13 +154,14 @@ function mountedSessionDetailLoadState({
   };
 }
 
-function mountedSessionRealtimeShouldRefresh({ payload = {} } = {}, sessionId = "") {
+// The server's clientRefresh names the reads a change invalidates; a read it
+// does not mention is invalidated. `read` is the session read this caller owns.
+function mountedSessionRealtimeShouldRefresh({ payload = {} } = {}, sessionId = "", read = "includeDetail") {
   const changedSessionId = String(payload.sessionId || payload.entityId || "").trim();
   if (!changedSessionId || changedSessionId !== String(sessionId || "").trim()) {
     return false;
   }
-  const reason = String(payload?.reason || "").trim();
-  return !reason || !MOUNTED_SESSION_IGNORED_REALTIME_REASONS.has(reason);
+  return payload?.clientRefresh?.[read] !== false;
 }
 
 export {

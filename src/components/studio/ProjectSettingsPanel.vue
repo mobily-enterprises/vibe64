@@ -682,7 +682,7 @@ watch([projectSlug, engineering], ([slug, value]) => {
 
 useRealtimeEvent({
   event: VIBE64_SESSION_CHANGED_EVENT,
-  matches: sessionListRealtimeShouldRefresh,
+  matches: (event) => sessionListRealtimeShouldRefresh(event, projectSlug.value),
   onEvent() {
     void resource.reload();
     void engineeringResource.reload();

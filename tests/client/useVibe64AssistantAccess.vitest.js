@@ -125,6 +125,7 @@ describe("useVibe64AssistantAccess", () => {
       event: "vibe64.session.changed",
       payload: {
         assistantProgress: { type: "tool" },
+        clientRefresh: { includeAccess: false, includeDetail: false, includeList: false },
         reason: "opencode-server-progress",
         sessionId: "session-b"
       }
@@ -132,10 +133,15 @@ describe("useVibe64AssistantAccess", () => {
     expect(endpointMocks.options[0].realtime.matches({
       event: "vibe64.session.changed",
       payload: {
+        clientRefresh: { includeDetail: false, includeList: false },
         reason: "opencode-server-turn-idle",
         sessionId: "session-b"
       }
     })).toBe(true);
+    expect(endpointMocks.options[0].realtime.matches({
+      event: "vibe64.session.changed",
+      payload: { learningAttemptId: "attempt-1", sessionId: "session-b" }
+    })).toBe(false);
     scope.stop();
   });
 

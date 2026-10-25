@@ -23,6 +23,7 @@ import {
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
   vibe64SessionPath,
+  vibe64SessionEventMatchesScope,
   vibe64SessionQueryKey,
   vibe64SessionsQueryKey
 } from "@/lib/vibe64SessionRequestConfig.js";
@@ -50,9 +51,6 @@ import {
   vibe64RealtimeOriginPayload
 } from "@/lib/vibe64BrowserTabOrigin.js";
 import {
-  vibe64SessionListRefreshRequested
-} from "@/lib/vibe64SessionClientRefresh.js";
-import {
   mountedSessionRealtimeShouldRefresh
 } from "@/lib/vibe64MountedSessionState.js";
 import {
@@ -61,47 +59,6 @@ import {
 } from "@/lib/vibe64AgentTurnRealtimeOverlay.js";
 
 
-const SESSION_LIST_IGNORED_REALTIME_REASONS = new Set([
-  "assistant-stream",
-  "assistant-response-bundle",
-  "codex-app-server-ready",
-  "codex-app-server-agent-result",
-  "codex-app-server-agent-result-invalid",
-  "codex-app-server-agent-result-missing",
-  "codex-app-server-agent-result-provider-failed",
-  "codex-app-server-blocked",
-  "codex-app-server-commentary",
-  "codex-app-server-failed",
-  "codex-app-server-final-assistant-message",
-  "codex-app-server-live-progress",
-  "codex-app-server-prompt-injected",
-  "codex-app-server-reasoning-summary",
-  "codex-app-server-running",
-  "codex-app-server-terminal-assistant-message",
-  "codex-app-server-terminal-thinking-message",
-  "codex-app-server-terminal-user-message",
-  "codex-app-server-turn-active",
-  "codex-app-server-turn-claimed",
-  "codex-app-server-turn-finalizing",
-  "codex-app-server-turn-idle",
-  "codex-app-server-turn-state",
-  "codex-app-server-message-delivered",
-  "codex-prompt-injected",
-  "codex-context-replaced",
-  "opencode-server-assistant-message",
-  "opencode-server-message-delivered",
-  "opencode-server-progress",
-  "opencode-server-reasoning",
-  "opencode-server-tool",
-  "opencode-server-turn-active",
-  "opencode-server-turn-idle",
-  "agent-terminal-started",
-  "agent-terminal-closed",
-  "output-target-started",
-  "output-target-ready",
-  "output-target-closed",
-  "output-target-stopped"
-]);
 function sessionIdExistsInList(sessionId = "", nextSessions = []) {
   const normalizedSessionId = String(sessionId || "").trim();
   return Boolean(normalizedSessionId) && nextSessions.some((session) => session.sessionId === normalizedSessionId);
@@ -171,22 +128,9 @@ function selectedSessionIdForCurrentAlias({
   return "";
 }
 
-function sessionChangedReason(payload = {}) {
-  return String(payload?.reason || "").trim();
-}
-
 function sessionListRealtimeShouldRefresh({ payload = {} } = {}, projectSlug = "") {
-  if (payload.projectSlug && payload.projectSlug !== projectSlug) {
-    return false;
-  }
-  if (vibe64SessionListRefreshRequested(payload)) {
-    return true;
-  }
-  const reason = sessionChangedReason(payload);
-  if (reason === "assistant-routing-changed" && payload.assistantRoutingRequest) {
-    return false;
-  }
-  return !reason || !SESSION_LIST_IGNORED_REALTIME_REASONS.has(reason);
+  return vibe64SessionEventMatchesScope(payload, { projectSlug }) &&
+    payload?.clientRefresh?.includeList !== false;
 }
 
 function useVibe64SessionData() {
@@ -224,8 +168,7 @@ function useVibe64SessionData() {
     requestRecoveryLabel: "Vibe64 sessions",
     realtime: {
       events: [VIBE64_SESSION_CHANGED_EVENT, VIBE64_PROJECT_CHANGED_EVENT, "connect"],
-      // Server events for a lesson attempt carry no project; they never refresh a project list.
-      matches: (event) => !event?.payload?.learningAttemptId && sessionListRealtimeShouldRefresh(event, projectSlug.value)
+      matches: (event) => sessionListRealtimeShouldRefresh(event, projectSlug.value)
     }
   });
   const sessionList = proxyRefs({
@@ -542,7 +485,7 @@ function useVibe64SessionData() {
   });
   useRealtimeEvent({
     event: VIBE64_SESSION_CHANGED_EVENT,
-    matches: ({ payload = {} } = {}) => payload.projectSlug === projectSlug.value,
+    matches: ({ payload = {} } = {}) => vibe64SessionEventMatchesScope(payload, { projectSlug: projectSlug.value }),
     onEvent: ({ payload = {} } = {}) => {
       const id = String(payload.sessionId || "");
       if (!id) return;

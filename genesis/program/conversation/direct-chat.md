@@ -885,8 +885,14 @@ share the mutation queue; AI changeover still compares content to preserve
 corrections and missed history.
 
 Session detail has its own query key, so a realtime detail refresh does not also
-invalidate access, suggestions and renewal queries. Session lists ignore events
-identified as belonging to another project. Deleting a temporary Claude chat
+invalidate access, suggestions and renewal queries. The session-changed
+publisher (`sessionRealtimeEvents.js`) owns which client reads a change
+invalidates: its `clientRefresh` flags (`includeDetail`, `includeList`,
+`includeAccess`, `includeOutputs`) narrow streaming and turn-activity reasons,
+and an emitter's explicit flags win. The list, detail and AI-access readers only
+read those flags, treating an unmentioned read as invalidated, and accept events
+through the one project scope check, `vibe64SessionEventMatchesScope`, so lists
+ignore events identified as belonging to another project. Deleting a temporary Claude chat
 removes its metadata record instead of accumulating empty files that every
 session read would reopen.
 Claude process restoration reads current saved session metadata, rather than a

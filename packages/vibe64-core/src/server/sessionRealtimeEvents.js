@@ -10,12 +10,62 @@ function record(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+// clientRefresh names the client reads a session change invalidates: the
+// session's detail, its list entry, its AI access and its outputs. A change
+// invalidates detail, list and access unless it says otherwise (clients treat
+// a missing flag as true); outputs are refreshed only on request. Streaming and
+// turn-activity changes carry their own presentation in the payload, so their
+// reasons narrow the reads here; an emitter's explicit flags take precedence.
+const CLIENT_REFRESH_READS = Object.freeze(["includeAccess", "includeDetail", "includeList", "includeOutputs"]);
+const PRESENTATION_ONLY = Object.freeze({ includeAccess: false, includeDetail: false, includeList: false });
+const ACCESS_ONLY = Object.freeze({ includeDetail: false, includeList: false });
+const NOT_LIST = Object.freeze({ includeList: false });
+const NOT_ACCESS = Object.freeze({ includeAccess: false });
+const CLIENT_REFRESH_BY_REASON = new Map([
+  ...[
+    "assistant-stream",
+    "assistant-response-bundle",
+    "codex-app-server-commentary",
+    "codex-app-server-live-progress",
+    "codex-app-server-message-delivered",
+    "codex-app-server-ready",
+    "codex-app-server-reasoning-summary",
+    "codex-app-server-running",
+    "codex-app-server-terminal-assistant-message",
+    "codex-app-server-terminal-user-message",
+    "codex-app-server-turn-claimed",
+    "codex-app-server-turn-finalizing",
+    "codex-app-server-turn-state",
+    "opencode-server-assistant-message",
+    "opencode-server-message-delivered",
+    "opencode-server-progress",
+    "opencode-server-reasoning",
+    "output-target-closed",
+    "output-target-ready",
+    "output-target-started",
+    "output-target-stopped"
+  ].map((reason) => [reason, PRESENTATION_ONLY]),
+  ...[
+    "codex-app-server-turn-active",
+    "codex-app-server-turn-idle",
+    "opencode-server-turn-active",
+    "opencode-server-turn-idle"
+  ].map((reason) => [reason, ACCESS_ONLY]),
+  ...["agent-terminal-closed", "codex-app-server-blocked", "codex-app-server-failed"]
+    .map((reason) => [reason, NOT_LIST]),
+  ...[
+    "claude-stream-message",
+    "claude-stream-message-delivered",
+    "opencode-credential-failure",
+    "opencode-provider-failure"
+  ].map((reason) => [reason, NOT_ACCESS])
+]);
+
 function normalizedClientRefresh(value = {}) {
   const source = record(value);
-  return {
-    ...(source.includeOutputs === true ? { includeOutputs: true } : {}),
-    ...(source.includeList === true ? { includeList: true } : {})
-  };
+  return Object.fromEntries(CLIENT_REFRESH_READS
+    .filter((read) => typeof source[read] === "boolean")
+    .map((read) => [read, source[read]]));
 }
 
 function sessionRealtimePayload(sessionId, { session: sessionValue, originId, reason, payload }) {
@@ -38,6 +88,7 @@ function sessionRealtimePayload(sessionId, { session: sessionValue, originId, re
   void _clientRefresh;
   const context = currentProjectRequestContext();
   const clientRefresh = {
+    ...CLIENT_REFRESH_BY_REASON.get(String(reason || "").trim()),
     ...sessionRefresh,
     ...additionalRefresh
   };
