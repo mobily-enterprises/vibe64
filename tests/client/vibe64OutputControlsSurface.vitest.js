@@ -777,9 +777,9 @@ function mountPreviewSurface({ learning = null, projectSlug = "project-a" } = {}
     "previewCanStart", "previewStoppedIntent", "previewMessage", "previewIdentity", "outputExecution", "outputResults", "outputRuns", "visible", "launchStatusAttempt"
   ].map(name => [name, ref(false)]));
   const target = { id: "app", presentation: { kind: "web" } };
-  Object.assign(outputs, { activeOutputTarget: ref(target), outputTargets: ref([target]), previewState: ref("ready"),
+  Object.assign(outputs, { activeOutputTarget: ref(target), activeOutputTargetId: ref("app"), outputTargets: ref([target]), previewState: ref("ready"),
     previewTestNotice: ref(null), resourceAdmissionId: ref(""), testApproval: ref(null), run: vi.fn(async () => ({ ok: true })),
-    terminal: ref({ metadata: { outputTargetId: "app" } }), terminalSessionId: ref("terminal-a"),
+    terminal: { metadata: ref({ outputTargetId: "app" }) }, terminalSessionId: ref("terminal-a"),
     launchActions: ref([{ href: "https://preview.example.test/" }]), requestPreviewIdentityGrant: vi.fn(), publishPreviewState: vi.fn(), publishPreviewDiagnostic: vi.fn(async () => true), refresh: vi.fn(async () => {}), restartTerminal: vi.fn(async () => ({ ok: true })) });
   surfaceHost.outputs = outputs;
   surfaceHost.projectSlug = ref(projectSlug);
@@ -1184,4 +1184,19 @@ it("Preview bridge requests go only to the origin whose bridge announced itself"
   expect(f.posts.some(post => post.origin === "*")).toBe(false);
   f.announce({ type: PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE, requestId: request.data.requestId, diagnostics: { title: "App" } });
   expect(await diagnostics).toEqual({ title: "App" });
+});
+
+it("keeps the running output's identity while its target is missing from the reloading list", async () => {
+  const f = mountPreviewSurface();
+  const frameRequestId = f.state.previewFrameRequestId.value;
+  f.state.previewIdentityError.value = "Identity request failed.";
+  // The list reloads, or the target was removed, while the output keeps running.
+  f.outputs.activeOutputTarget.value = null;
+  f.outputs.outputTargets.value = [];
+  await nextTick();
+  expect(f.state.previewIdentityError.value).toBe("Identity request failed.");
+  expect(f.state.previewFrameRequestId.value).toBe(frameRequestId);
+  f.outputs.activeOutputTargetId.value = "worker";
+  await nextTick();
+  expect(f.state.previewIdentityError.value).toBe("");
 });

@@ -597,6 +597,7 @@ function launchPreviewAddressNavigationUrl({
 function useVibe64OutputControlsSurface(props) {
   const {
     activeOutputTarget,
+    activeOutputTargetId,
     previewTestNotice,
     expandTerminal,
     launchActions,
@@ -900,7 +901,7 @@ function useVibe64OutputControlsSurface(props) {
     previewIdentityCapability.value?.identities
   ));
   const previewIdentityLifecycleKey = computed(() => previewIdentityLifecycleIdentity({
-    outputTargetId: activeOutputTarget.value?.id || terminal.value?.metadata?.outputTargetId,
+    outputTargetId: activeOutputTargetId.value,
     previewBaseUrl: previewBaseUrl.value,
     projectSlug: projectSlug.value,
     sessionId: props.session?.sessionId,
@@ -1416,7 +1417,7 @@ function useVibe64OutputControlsSurface(props) {
       visitedUrl: visitedUrl || previewDisplayBaseUrl.value || previewBaseUrl.value
     });
     const nextIdentity = previewFrameLifecycleIdentity({
-      outputTargetId: activeOutputTarget.value?.id,
+      outputTargetId: activeOutputTargetId.value,
       sessionId: props.session?.sessionId,
       src: nextSrc,
       terminalSessionId: terminalSessionId.value
