@@ -181,6 +181,7 @@ import {
 } from "@/lib/vibe64CodexTerminalAttention.js";
 import {
   terminalOwnerAccessDenied,
+  terminalSessionMissingError,
   vibe64TerminalErrorMessage
 } from "@/lib/vibe64TerminalErrors.js";
 import {
@@ -928,10 +929,6 @@ async function attachTerminalSession(session = {}) {
     terminalError.value = terminalError.value || message;
     return false;
   }
-}
-
-function terminalSessionMissingError(message = "") {
-  return /terminal session not found/iu.test(String(message || ""));
 }
 
 function markTerminalSessionStale(terminalId = "", message = "") {

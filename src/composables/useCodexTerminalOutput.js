@@ -14,7 +14,6 @@ function useCodexTerminalOutput({
   let codexIdleTimer = null;
   let terminalStreamingTimer = null;
   let codexBusyOutputVersion = 0;
-  let terminalOutput = "";
   let terminalOutputVersion = 0;
 
   function clearCodexIdleTimer() {
@@ -111,9 +110,7 @@ function useCodexTerminalOutput({
     scheduleCodexIdleWhenQuiet();
   }
 
-  function writeTerminalOutput(output) {
-    const nextOutput = String(output || "");
-    terminalOutput = nextOutput;
+  function writeTerminalOutput() {
     noteTerminalOutput();
   }
 
@@ -123,7 +120,6 @@ function useCodexTerminalOutput({
       return;
     }
     markTerminalStreaming();
-    terminalOutput += outputChunk;
     noteTerminalOutput();
   }
 
@@ -132,7 +128,6 @@ function useCodexTerminalOutput({
     setTerminalStreaming(false);
     clearCodexBusy();
     clearCodexWorking();
-    terminalOutput = "";
     terminalOutputVersion += 1;
   }
 
@@ -142,7 +137,6 @@ function useCodexTerminalOutput({
     clearCodexWorking,
     codexBusy,
     codexWorking,
-    getTerminalOutput: () => terminalOutput,
     markCodexBusy,
     resetTerminalOutput,
     terminalStreaming,

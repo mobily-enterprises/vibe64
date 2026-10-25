@@ -2,6 +2,7 @@ import {
   CODEX_RECONNECT_REQUIRED_CODE,
   CODEX_RECONNECT_REQUIRED_MESSAGE
 } from "@local/vibe64-core/shared";
+import { terminalSessionMissingError } from "@/lib/vibe64TerminalErrors.js";
 
 const VIBE64_CODEX_APP_SERVER_TASK_ID = "codex_app_server";
 
@@ -17,10 +18,6 @@ const CODEX_TURN_ATTENTION_STATUSES = new Set([
   "error",
   "failed"
 ]);
-
-function terminalSessionMissingError(message = "") {
-  return /terminal session not found/iu.test(String(message || ""));
-}
 
 function normalizedText(value = "") {
   return String(value || "").trim();

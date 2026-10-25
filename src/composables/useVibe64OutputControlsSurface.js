@@ -489,14 +489,10 @@ function createPreviewBridgeRequestRegistry() {
   });
 }
 
-function previewUrlForDebug(value = "") {
-  return previewUrlWithoutDisplayParams(value);
-}
-
 function redactPreviewDebugDetails(value) {
   if (typeof value === "string") {
     return value.includes(PREVIEW_PROXY_TOKEN_QUERY_PARAM)
-      ? previewUrlForDebug(value)
+      ? previewUrlWithoutDisplayParams(value)
       : value;
   }
   if (Array.isArray(value)) {

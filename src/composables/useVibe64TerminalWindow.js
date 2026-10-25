@@ -1,8 +1,5 @@
 import { computed, nextTick, onBeforeUnmount, ref, unref, watch } from "vue";
 import {
-  useFloatingTerminalMinimizedDock
-} from "@/composables/useFloatingTerminalMinimizedDock.js";
-import {
   readLocalStorageJson,
   writeLocalStorageJson
 } from "@/lib/browserLocalStorage.js";
@@ -16,8 +13,6 @@ function positiveNumber(value) {
 
 function useVibe64TerminalWindow({
   active,
-  minimized,
-  minimizedWidth,
   storageKey
 } = {}) {
   const panel = ref(null);
@@ -29,24 +24,11 @@ function useVibe64TerminalWindow({
     height: 0,
     width: 0
   });
-  const dockActive = computed(() => Boolean(unref(active) && unref(minimized)));
-  const {
-    rightOffset,
-    updateWidth: updateDockWidth
-  } = useFloatingTerminalMinimizedDock(dockActive);
   let drag = null;
   let resizeObserver = null;
   let trackingViewport = false;
 
   const style = computed(() => {
-    if (unref(minimized)) {
-      return {
-        "--vibe64-terminal-minimized-right": `${Math.round(rightOffset.value)}px`,
-        "--vibe64-terminal-minimized-width": String(
-          unref(minimizedWidth) || "min(28rem, calc(100vw - 1.5rem))"
-        )
-      };
-    }
     const value = {
       left: `${Math.round(position.value.left)}px`,
       top: `${Math.round(position.value.top)}px`
@@ -108,7 +90,7 @@ function useVibe64TerminalWindow({
 
   function save() {
     const key = String(unref(storageKey) || "");
-    if (!key || !unref(active) || unref(minimized)) {
+    if (!key || !unref(active)) {
       return;
     }
     const size = panelSize();
@@ -121,7 +103,7 @@ function useVibe64TerminalWindow({
   }
 
   function place() {
-    if (!unref(active) || unref(minimized) || restore()) {
+    if (!unref(active) || restore()) {
       return;
     }
     const viewport = viewportSize();
@@ -158,7 +140,7 @@ function useVibe64TerminalWindow({
   }
 
   function startDrag(event) {
-    if (unref(minimized) || event.button !== 0 || typeof window === "undefined") {
+    if (event.button !== 0 || typeof window === "undefined") {
       return;
     }
     event.preventDefault();
@@ -177,10 +159,6 @@ function useVibe64TerminalWindow({
 
   function clampCurrent() {
     if (!unref(active)) {
-      return;
-    }
-    if (unref(minimized)) {
-      updateDockWidth(panel.value?.offsetWidth || 0);
       return;
     }
     position.value = clamp(position.value);
@@ -213,10 +191,6 @@ function useVibe64TerminalWindow({
       if (!panel.value) {
         return;
       }
-      if (unref(minimized)) {
-        updateDockWidth(panel.value.offsetWidth || 0);
-        return;
-      }
       dimensions.value = {
         height: panel.value.offsetHeight,
         width: panel.value.offsetWidth
@@ -227,8 +201,8 @@ function useVibe64TerminalWindow({
   }
 
   watch(
-    () => [Boolean(unref(active)), Boolean(unref(minimized))],
-    async ([isActive, isMinimized]) => {
+    () => Boolean(unref(active)),
+    async (isActive) => {
       stopDrag();
       if (!isActive) {
         resizeObserver?.disconnect?.();
@@ -238,11 +212,7 @@ function useVibe64TerminalWindow({
       }
       startViewportTracking();
       await nextTick();
-      if (isMinimized) {
-        updateDockWidth(panel.value?.offsetWidth || 0);
-      } else {
-        place();
-      }
+      place();
       observePanel();
     },
     { immediate: true }

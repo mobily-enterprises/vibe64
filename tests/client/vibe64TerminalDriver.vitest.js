@@ -1,28 +1,20 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-  createPollingTerminalDriver,
   createWebSocketTerminalDriver,
   validateTerminalDriver
 } from "../../src/lib/vibe64TerminalDriver.js";
 
 describe("Vibe64 terminal drivers", () => {
   let originalWebSocket;
-  let originalWindow;
 
   beforeEach(() => {
     originalWebSocket = globalThis.WebSocket;
-    originalWindow = globalThis.window;
     FakeWebSocket.instances.length = 0;
     globalThis.WebSocket = FakeWebSocket;
-    globalThis.window = {
-      clearTimeout: globalThis.clearTimeout,
-      setTimeout: globalThis.setTimeout
-    };
   });
 
   afterEach(() => {
     globalThis.WebSocket = originalWebSocket;
-    globalThis.window = originalWindow;
   });
 
   it("normalizes the Studio websocket protocol behind one connection contract", async () => {
@@ -94,64 +86,6 @@ describe("Vibe64 terminal drivers", () => {
         type: "disconnected"
       }
     ]);
-  });
-
-  it("polls through the same connection contract and stops after exit", async () => {
-    vi.useFakeTimers();
-    const events = [];
-    const readSession = vi.fn()
-      .mockResolvedValueOnce({
-        id: "terminal-1",
-        output: "working",
-        status: "running"
-      })
-      .mockResolvedValueOnce({
-        exitCode: 0,
-        id: "terminal-1",
-        output: "done",
-        status: "exited"
-      });
-    const writeInput = vi.fn().mockResolvedValue(undefined);
-    const driver = createPollingTerminalDriver({
-      pollIntervalMs: 100,
-      readSession,
-      writeInput
-    });
-    const connection = driver.openConnection({
-      onEvent: (event) => events.push(event),
-      sessionId: "terminal-1"
-    });
-
-    await expect(connection.ready).resolves.toBe(true);
-    await connection.sendInput("yes\n");
-    await vi.advanceTimersByTimeAsync(100);
-    await vi.runAllTimersAsync();
-
-    expect(readSession).toHaveBeenCalledTimes(2);
-    expect(writeInput).toHaveBeenCalledWith("terminal-1", "yes\n");
-    expect(events).toEqual([
-      {
-        replaceOutput: false,
-        session: {
-          id: "terminal-1",
-          output: "working",
-          status: "running"
-        },
-        type: "snapshot"
-      },
-      { type: "connected" },
-      {
-        replaceOutput: true,
-        session: {
-          exitCode: 0,
-          id: "terminal-1",
-          output: "done",
-          status: "exited"
-        },
-        type: "snapshot"
-      }
-    ]);
-    vi.useRealTimers();
   });
 
   it("rejects incomplete drivers at the composition boundary", () => {

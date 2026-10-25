@@ -43,9 +43,6 @@
     <div
       v-if="visible"
       class="vibe64-terminal__floating-layer"
-      :class="{
-        'vibe64-terminal__floating-layer--minimized': minimized
-      }"
     >
       <div
         ref="floatingPanel"
@@ -181,8 +178,7 @@ const props = defineProps({
       "floating",
       "fullscreen",
       "headless",
-      "inline",
-      "minimized"
+      "inline"
     ].includes(value)
   },
   retryable: {
@@ -230,10 +226,6 @@ const props = defineProps({
     type: String
   },
   subtitle: {
-    default: "",
-    type: String
-  },
-  summaryLine: {
     default: "",
     type: String
   },
@@ -288,8 +280,7 @@ const expanded = computed(() => {
     ? Boolean(terminalValue("terminalExpanded", false))
     : Boolean(props.expanded);
 });
-const minimized = computed(() => props.presentation === "minimized");
-const floatingPresentation = computed(() => ["floating", "minimized"].includes(props.presentation));
+const floatingPresentation = computed(() => props.presentation === "floating");
 const dialogPresentation = computed(() => ["dialog", "fullscreen"].includes(props.presentation));
 const launcherVisible = computed(() => props.showLauncher && !visible.value);
 const running = computed(() => {
@@ -325,14 +316,11 @@ const surfaceProps = computed(() => ({
   starting: starting.value,
   status: props.status || String(terminalValue("terminalStatus", "")),
   subtitle: props.subtitle,
-  summaryLine: props.summaryLine || String(terminalValue("terminalSummaryLine", "")),
   title: props.title
 }));
 
 const floatingWindow = useVibe64TerminalWindow({
   active: computed(() => visible.value && floatingPresentation.value),
-  minimized,
-  minimizedWidth: "min(28rem, calc(100vw - 1.5rem))",
   storageKey: computed(() => props.floatingStorageKey)
 });
 const floatingPanel = floatingWindow.panel;
@@ -522,26 +510,10 @@ onBeforeUnmount(() => {
   width: min(92vw, 72rem);
 }
 
-.vibe64-terminal__floating-layer--minimized .vibe64-terminal__floating-panel {
-  bottom: 0.75rem;
-  height: auto;
-  min-height: 0;
-  min-width: 0;
-  resize: none;
-  right: calc(0.75rem + var(--vibe64-terminal-minimized-right, 0px));
-  width: var(--vibe64-terminal-minimized-width);
-}
-
 @media (max-width: 700px) {
   .vibe64-terminal__floating-panel {
     height: min(78vh, 42rem);
     width: calc(100vw - 1.5rem);
-  }
-
-  .vibe64-terminal__floating-layer--minimized .vibe64-terminal__floating-panel {
-    left: 0.75rem;
-    right: 0.75rem;
-    width: auto;
   }
 }
 </style>

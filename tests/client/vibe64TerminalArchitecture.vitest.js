@@ -116,7 +116,7 @@ describe("Vibe64 terminal architecture", () => {
     expect(element).toContain('openErrorDetails: props.openErrorDetails');
     expect(element).toContain('stage: props.stage');
     expect(element).toContain("fill: expanded.value && (props.fill || floatingPresentation.value || dialogPresentation.value)");
-    expect(element).toContain('terminalValue("terminalSummaryLine", "")');
+    expect(element).not.toContain("terminalSummaryLine");
     expect(element).toContain('starting ? "Opening…" : launcherLabel');
     expect(element).not.toContain(':loading="starting"');
   });

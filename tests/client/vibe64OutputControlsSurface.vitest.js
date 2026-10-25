@@ -629,14 +629,13 @@ describe("Vibe64 launch controls surface", () => {
 
 const mountedSurfaces = [];
 
-it("keeps the same preview frame usable during edits, interruptions and goals", async () => {
+it("keeps the same preview frame usable during edits and interruptions", async () => {
   const f = mountPreviewSurface();
   const generation = f.state.previewFrameRequestId.value;
   f.props.busy = true;
   expect(f.state.previewWorkNotice.value).toBe("Work in progress");
   expect(f.state.previewFrameRequestId.value).toBe(generation);
   expect(f.state.previewFrame.value).toBe(f.frame);
-  f.props.previewGoalState = { enabled: true, pending: false, goal: { status: "active" } };
   f.props.session.agentSession = { turn: { state: "interrupted" } };
   f.props.busy = false;
   await nextTick();

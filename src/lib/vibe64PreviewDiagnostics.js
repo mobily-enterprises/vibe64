@@ -1,3 +1,5 @@
+import { PREVIEW_PROXY_TOKEN_QUERY_PARAM } from "@local/vibe64-terminals/shared/launchPreviewProtocol";
+
 const PREVIEW_DIAGNOSTICS_MAX_TEXT_CHARACTERS = 700000;
 const PREVIEW_DIAGNOSTICS_MAX_VALUE_CHARACTERS = 24000;
 
@@ -12,7 +14,7 @@ function diagnosticsUrl(value = "") {
   const text = clippedDiagnosticsValue(value, 12000);
   try {
     const url = new URL(text);
-    url.searchParams.delete("vibe64_preview_token");
+    url.searchParams.delete(PREVIEW_PROXY_TOKEN_QUERY_PARAM);
     return url.toString();
   } catch {
     return text;

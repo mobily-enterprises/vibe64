@@ -41,6 +41,7 @@ import {
   stableLocalStorageKeyPart
 } from "@/lib/browserLocalStorage.js";
 import { createWebSocketTerminalDriver } from "@/lib/vibe64TerminalDriver.js";
+import { terminalSessionMissingError } from "@/lib/vibe64TerminalErrors.js";
 import {
   vibe64RealtimeOriginPayload,
   vibe64RealtimePayloadFromCurrentTab
@@ -231,9 +232,7 @@ function outputTargetWorktreePath(session = {}) {
 }
 
 function launchControlsSessionCanRun(session = {}) {
-  const metadata = session?.metadata && typeof session.metadata === "object" && !Array.isArray(session.metadata)
-    ? session.metadata
-    : {};
+  const metadata = plainObject(session?.metadata);
   return Boolean(
     String(session?.sessionId || "").trim() &&
     !isArchivedVibe64Session(session) &&
@@ -462,10 +461,6 @@ function launchPreviewRequiresProxy(metadata = {}) {
   return Boolean(String(metadata?.previewAuth || "").trim());
 }
 
-function terminalSessionMissingError(message = "") {
-  return /terminal session not found/iu.test(String(message || ""));
-}
-
 function localPreviewBrowserHref() {
   if (typeof window === "undefined") {
     return "";
@@ -522,7 +517,7 @@ function resolveLaunchPreviewDestination(actions = [], {
 }
 
 function normalizeLaunchPreview(preview = {}) {
-  const source = preview && typeof preview === "object" && !Array.isArray(preview) ? preview : {};
+  const source = plainObject(preview);
   const state = [
     "idle",
     "starting",
@@ -543,9 +538,7 @@ function normalizeLaunchPreview(preview = {}) {
           : state === "project_closed"
             ? "Project is closed."
             : "Preview could not be opened.";
-  const recovery = source.recovery && typeof source.recovery === "object" && !Array.isArray(source.recovery)
-    ? source.recovery
-    : null;
+  const recovery = isPlainObject(source.recovery) ? source.recovery : null;
   return {
     canRestart: source.canRestart === true,
     canShowLog: source.canShowLog === true,
@@ -561,8 +554,12 @@ function normalizeLaunchPreview(preview = {}) {
   };
 }
 
+function isPlainObject(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
 function plainObject(value) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return isPlainObject(value) ? value : {};
 }
 
 function launchPreviewTestNotice(status = {}, activeTarget = null) {
@@ -894,7 +891,7 @@ function useVibe64OutputControls({
   const preview = computed(() => launchPreviewFromStatus(status.value));
   const previewIdentity = computed(() => {
     const value = status.value.previewIdentity;
-    return value && typeof value === "object" && !Array.isArray(value)
+    return isPlainObject(value)
       ? value
       : {
           available: false,
@@ -917,9 +914,7 @@ function useVibe64OutputControls({
   const previewCanStart = computed(() => preview.value.canStart);
   const previewRecovery = computed(() => preview.value.recovery);
   const previewTarget = computed(() => (
-    status.value.previewTarget && typeof status.value.previewTarget === "object" && !Array.isArray(status.value.previewTarget)
-      ? status.value.previewTarget
-      : null
+    isPlainObject(status.value.previewTarget) ? status.value.previewTarget : null
   ));
   const outputTargets = computed(() => {
     return Array.isArray(status.value.outputTargets) ? status.value.outputTargets : [];
@@ -937,7 +932,7 @@ function useVibe64OutputControls({
   )));
   const outputExecution = computed(() => {
     const value = status.value.output;
-    return value && typeof value === "object" && !Array.isArray(value)
+    return isPlainObject(value)
       ? value
       : {
           error: null,
@@ -961,9 +956,7 @@ function useVibe64OutputControls({
   });
   const activeTerminal = computed(() => {
     const terminalStatusValue = status.value.activeTerminal;
-    return terminalStatusValue && typeof terminalStatusValue === "object" && !Array.isArray(terminalStatusValue)
-      ? terminalStatusValue
-      : null;
+    return isPlainObject(terminalStatusValue) ? terminalStatusValue : null;
   });
   const activeOutputTargetId = computed(() => String(
     terminalMetadata.value.outputTargetId ||
@@ -1157,18 +1150,12 @@ function useVibe64OutputControls({
     ignoreExternalBusy = false,
     outputParameters
   } = {}) {
-    const currentSession = selectedSession.value || {};
     const externalBusy = readRefOrGetterValue(busy);
     const currentSessionId = sessionId.value;
     const startedScopeKey = launchScopeKey.value;
     if (
       !currentSessionId ||
-      !launchControlsCanLoadTargets({
-        displayed: terminalDisplayed.value,
-        session: currentSession,
-        sourceOperationsSuspended: launchSourceOperationsSuspended.value
-      }) ||
-      !terminalDisplayed.value ||
+      !canLoadOutputs.value ||
       operationBusy.value ||
       (!forceRestart && terminalIsRunning.value) ||
       (!forceRestart && !ignoreExternalBusy && externalBusy) ||
@@ -1205,11 +1192,7 @@ function useVibe64OutputControls({
       if (
         disposed ||
         startedScopeKey !== launchScopeKey.value ||
-        !launchControlsCanLoadTargets({
-          displayed: terminalDisplayed.value,
-          session: selectedSession.value || {},
-          sourceOperationsSuspended: launchSourceOperationsSuspended.value
-        })
+        !canLoadOutputs.value
       ) {
         return false;
       }
@@ -1534,6 +1517,22 @@ function useVibe64OutputControls({
     }, Math.max(0, Number(remainingMs) || 0) + 50);
   }
 
+  function autoStartReady(key, target) {
+    return shouldScheduleLaunchAutoStart({
+      autoStartKey: autoStartKey.value,
+      externalBusy: readRefOrGetterValue(busy),
+      key,
+      loading: outputTargetsLoadingForAutoStart.value,
+      operationBusy: operationBusy.value,
+      sessionLaunchable: canLoadOutputs.value,
+      sessionId: sessionId.value,
+      stoppedIntent: previewStoppedIntent.value,
+      target,
+      terminalDisplayed: terminalDisplayed.value,
+      terminalVisible: terminalVisible.value
+    });
+  }
+
   function clearStaleLaunchTerminal() {
     attachedTerminalId = "";
     closeTerminalSocket();
@@ -1542,7 +1541,7 @@ function useVibe64OutputControls({
   }
 
   async function stopTerminal() {
-    if (!sessionId.value || (!terminalCanStop.value && !terminalSessionId.value)) {
+    if (!sessionId.value || !terminalSessionId.value) {
       return false;
     }
     operationBusy.value = true;
@@ -1578,7 +1577,7 @@ function useVibe64OutputControls({
     if (!terminalCanRestart.value) {
       return false;
     }
-    const target = activeOutputTarget.value || outputTargets.value.find((item) => item.id === activeOutputTargetId.value);
+    const target = activeOutputTarget.value;
     if (!target) {
       return false;
     }
@@ -1592,7 +1591,7 @@ function useVibe64OutputControls({
     if (!terminalCanRetry.value) {
       return false;
     }
-    const target = activeOutputTarget.value || outputTargets.value.find((item) => item.id === activeOutputTargetId.value);
+    const target = activeOutputTarget.value;
     return target ? run(target, {
       applyDefaultDisplay: false
     }) : false;
@@ -1608,10 +1607,7 @@ function useVibe64OutputControls({
         sessionId: sessionId.value,
         terminalSessionId: terminalSessionId.value
       });
-      closeTerminalSocket();
-      resetTerminalSessionState();
-      resetTerminalDisplay();
-      attachedTerminalId = "";
+      clearStaleLaunchTerminal();
       terminalExpanded.value = false;
       await refresh();
       return true;
@@ -1804,19 +1800,7 @@ function useVibe64OutputControls({
       clearAutoStartTimer();
       return;
     }
-    const ready = shouldScheduleLaunchAutoStart({
-      autoStartKey: autoStartKey.value,
-      externalBusy: readRefOrGetterValue(busy),
-      key,
-      loading: outputTargetsLoadingForAutoStart.value,
-      operationBusy: operationBusy.value,
-      sessionLaunchable: canLoadOutputs.value,
-      sessionId: sessionId.value,
-      stoppedIntent: previewStoppedIntent.value,
-      target,
-      terminalDisplayed: terminalDisplayed.value,
-      terminalVisible: terminalVisible.value
-    });
+    const ready = autoStartReady(key, target);
     if (scheduledAutoStartKey === key && ready) {
       return;
     }
@@ -1836,19 +1820,7 @@ function useVibe64OutputControls({
       const currentTarget = autoStartTarget.value;
       if (previewStoppedIntent.value) return;
       const currentKey = `${launchScopeKey.value}:${currentTarget?.id || ""}`;
-      if (!shouldScheduleLaunchAutoStart({
-        autoStartKey: autoStartKey.value,
-        externalBusy: readRefOrGetterValue(busy),
-        key: currentKey,
-        loading: outputTargetsLoadingForAutoStart.value,
-        operationBusy: operationBusy.value,
-        sessionLaunchable: canLoadOutputs.value,
-        sessionId: sessionId.value,
-        stoppedIntent: previewStoppedIntent.value,
-        target: currentTarget,
-        terminalDisplayed: terminalDisplayed.value,
-        terminalVisible: terminalVisible.value
-      })) {
+      if (!autoStartReady(currentKey, currentTarget)) {
         return;
       }
       const currentCooldownMs = readLaunchAutoStartAttemptCooldown(currentKey);

@@ -903,7 +903,6 @@
             button-size="small"
             button-variant="tonal"
             :busy="agentActive || Boolean(props.page?.busy || props.page?.launchBusy)"
-            :preview-goal-state="props.conversationRuntime?.goalState"
             class="studio-autopilot__preview-launch"
             embedded-preview
             :preview-displayed="props.projectPane === 'preview' && !lessonShown"

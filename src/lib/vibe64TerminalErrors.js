@@ -35,6 +35,10 @@ function terminalOwnerAccessDenied(source = {}) {
     message.includes("recorded terminal ownership");
 }
 
+function terminalSessionMissingError(message = "") {
+  return /terminal session not found/iu.test(String(message || ""));
+}
+
 function vibe64TerminalErrorMessage(source = {}, fallback = "Terminal action failed.") {
   const code = terminalErrorCode(source);
   if (code === "vibe64_terminal_owner_mismatch") {
@@ -61,5 +65,6 @@ export {
   terminalErrorCode,
   terminalErrorText,
   terminalOwnerAccessDenied,
+  terminalSessionMissingError,
   vibe64TerminalErrorMessage
 };
