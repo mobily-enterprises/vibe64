@@ -14,11 +14,8 @@ import {
 } from "../../packages/vibe64-core/src/server/previewAuth.js";
 import {
   sourceEditorFilePolicy,
-  sourceEditorSourceContractPathExcluded
+  sourceEditorPathExcluded
 } from "../../packages/vibe64-source-editor/src/server/filePolicy.js";
-import {
-  pathMatchesPolicyPattern
-} from "../../packages/vibe64-source-editor/src/server/service.js";
 
 import {
   BASE_URL,
@@ -4906,14 +4903,9 @@ function createSourceEditorMock(initialFiles: Record<string, string>) {
     return `${path}:${version}`;
   }
 
-  function sourceEditorPathExcluded(filePath: string) {
-    return sourceEditorSourceContractPathExcluded(filePath) ||
-      policy.exclude.some((pattern) => pathMatchesPolicyPattern(filePath, pattern));
-  }
-
   function sortedFilePaths() {
     return Array.from(files.keys())
-      .filter((filePath) => !sourceEditorPathExcluded(filePath))
+      .filter((filePath) => !sourceEditorPathExcluded(policy, filePath))
       .sort((left, right) => left.localeCompare(right));
   }
 
@@ -5021,7 +5013,7 @@ function createSourceEditorMock(initialFiles: Record<string, string>) {
       ? target.slice(1)
       : normalizeSourceEditorMockPath(`${fromDirectory}/${target}`);
     for (const candidatePath of sourceEditorResolveMockCandidates(basePath)) {
-      if (files.has(candidatePath) && !sourceEditorPathExcluded(candidatePath)) {
+      if (files.has(candidatePath) && !sourceEditorPathExcluded(policy, candidatePath)) {
         return {
           file: {
             language: candidatePath.endsWith(".js") ? "javascript" : "text",
