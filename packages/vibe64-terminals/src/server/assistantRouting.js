@@ -6,11 +6,11 @@ import path from "node:path";
 import { readWorkPlan, manageWorkPlan, workPlanInstructions } from "./assistantWorkPlan.js";
 import { vibe64AgentRunStateIsActive } from "@local/vibe64-runtime/server/sessionStore";
 import { VIBE64_ASSISTANT_SELECTION_METADATA, VIBE64_AGENT_EXECUTION_PROFILE_IDS, VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
-  serializeVibe64AssistantSelection, vibe64AssistantSelectionLabel, vibe64AssistantSelectionFromMetadata, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
+  serializeVibe64AssistantSelection, sameVibe64AssistantSelection, vibe64AssistantSelectionLabel, vibe64AssistantSelectionFromMetadata, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import {
   ROUTING_REASONS, assistantModeLabel, assistantModePrompt, assistantGoalObjective, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingFromMetadata,
   assistantRoutingPrompt, parseRoutingDecision, assistantWorkflowInstructions, assistantRoutingOutcomeNotice,
-  assistantRoutingGoalFromMetadata, goalStatusIsComplete
+  assistantRoutingGoalFromMetadata, assistantGoalIsActive, assistantWorkflowStateIsSupported, assistantWorkflowRole, assistantWorkflowMessageIds
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { assistantReplyAsksPerson, latestAssistantMessageAwaitingUserReply } from "@local/vibe64-runtime/shared/conversationQuestions";
 
@@ -29,8 +29,6 @@ const OUTPUT_SCHEMA = {
   }
 };
 const MAX_WORKFLOW_STEPS = 8;
-const activeGoal = (goal) => goal && !goalStatusIsComplete(goal.status);
-const workflowRole = state => state.stage === "review" && state.followup ? "senior" : state.resolvedMode;
 const activeMessage = state => state.followup || state.input;
 const usesWorkPlan = state => state.planInvolved === true;
 function failure(message, code = "vibe64_assistant_routing_unavailable") {
@@ -39,11 +37,15 @@ function failure(message, code = "vibe64_assistant_routing_unavailable") {
 function parseRequest(value) {
   const request = value ? JSON.parse(value) : null;
   if (request && request.schemaVersion !== 5) throw failure("Saved workflow needs the candidate stopped-service state upgrade.", "vibe64_assistant_workflow_upgrade_required");
-  if (request && (!["working", "waiting", "complete"].includes(request.status) ||
-      !["routing", "pending", "sending", "uncertain", "accepted", "failed"].includes(request.delivery))) {
+  if (request && !assistantWorkflowStateIsSupported(request)) {
     throw failure("Saved workflow has an unsupported state. Inspect it before continuing.", "vibe64_assistant_workflow_invalid");
   }
   return request;
+}
+/** The saved request whose routed message or automatic follow-up is the given turn. */
+export function assistantRoutingRequestForMessage(metadata = {}, isMessage) {
+  const request = parseRequest(metadata?.[STATE_KEY]);
+  return request && assistantWorkflowMessageIds(request).some(isMessage) ? request : null;
 }
 function read(store, sessionId) {
   return store.readMetadataValue(sessionId, STATE_KEY).then(parseRequest);
@@ -243,7 +245,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
 
   async function resolve(context, state, followup = false) {
     let purpose = state.mode;
-    if (followup) purpose = state.stage === "review" ? "review" : workflowRole(state);
+    if (followup) purpose = state.stage === "review" ? "review" : assistantWorkflowRole(state);
     else if (state.mode !== "custom" && state.task === "deslop") {
       purpose = state.resolvedMode === "senior" ? "deslop" : state.resolvedMode;
     }
@@ -253,8 +255,6 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     if (!decision.available) throw failure(decision.message, decision.reasonCode);
     return decision;
   }
-  const sameSelection = (left, right) => ["engineId", "modelProviderId", "modelId", "agentId", "variantId"]
-    .every((name) => left?.[name] === right?.[name]);
   function destinations(decision) {
     return decision.seniorJuniorPair
       ? { ...decision.seniorJuniorPair, ...(decision.router ? { router: {
@@ -266,7 +266,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     const current = destinations(await resolve(context, state, followup));
     for (const [role, captured] of Object.entries(destinations(state.decision))) {
       if ((followup || state.task === "deslop") && role === "router") continue;
-      if (!sameSelection(current[role]?.effectiveSelection, captured.effectiveSelection) ||
+      if (!sameVibe64AssistantSelection(current[role]?.effectiveSelection, captured.effectiveSelection) ||
           current[role]?.connectionIdentity !== captured.connectionIdentity) {
         throw failure("The selected AI connection changed. Cancel this request and send it again.");
       }
@@ -289,7 +289,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     if (!allowAuto && state.mode === "auto") throw failure("Auto is available in Main chat only. Cancel this request and choose Senior or Junior.");
     const store = context.runtime.store;
     context = { ...context, vibe64User: state.submittedBy };
-    const modelRole = workflowRole(state);
+    const modelRole = assistantWorkflowRole(state);
     const role = state.stage === "review" && modelRole === "senior" ? "review" : modelRole;
     const implementing = state.stage === "implementation";
     const followupLabel = state.stage === "review" ? "Senior review" : state.stage === "planning" ? "Continue planning" : "Continue implementation";
@@ -327,16 +327,16 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     const currentSelection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
     const expected = followup ? state.deliverySelection : state.observedSelection;
     const { goal, pinned } = await currentGoal(sessionId, context);
-    const workflow = activeGoal(goal) && pinned?.workflowEngineId;
+    const workflow = assistantGoalIsActive(goal) && pinned?.workflowEngineId;
     if ((workflow && workflow !== state.workflowEngineId) ||
-        !sameSelection(currentSelection, expected) && !sameSelection(currentSelection, state.deliverySelection)) {
+        !sameVibe64AssistantSelection(currentSelection, expected) && !sameVibe64AssistantSelection(currentSelection, state.deliverySelection)) {
       throw failure("The orchestrator changed while this request was being prepared. Cancel it and send a new request.");
     }
     if (state.helper) throw failure("The routing helper still needs cleanup before this request can be delivered.");
     const native = await agent.sessionState(sessionId, context);
     if (native?.turn?.active) throw failure("Wait for the current turn to finish before sending a new request.");
     // The goal read above is already inside this same exclusive section.
-    if (followup && activeGoal(goal)) {
+    if (followup && assistantGoalIsActive(goal)) {
       state.status = "waiting"; state.error = "Finish or cancel the goal before resuming this workflow."; await save(context, state);
       return { ok: true, skipped: true };
     }
@@ -401,7 +401,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     return { ...result, assistantRoutingRequest: state };
   }
   function attribution(state, followup) {
-    const modelRole = workflowRole(state);
+    const modelRole = assistantWorkflowRole(state);
     const destination = destinations(state.decision || {})[modelRole];
     let resolvedMode = state.resolvedMode;
     if (state.stage === "review") resolvedMode = "review";
@@ -504,8 +504,8 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         // saved Chat mode (or Custom model) differs. A goal's own mode governs its turns.
         const goalPin = assistantRoutingGoalFromMetadata(context.session.metadata);
         const runningRequest = state?.status === "working" && state.delivery === "accepted" && !state.stopped;
-        if (runningRequest && !options.purpose && !activeGoal(goalPin) && (state.mode !== preferences.mode ||
-            state.mode === "custom" && state.override?.selection && !sameSelection(state.override.selection, preferences.override))) {
+        if (runningRequest && !options.purpose && !assistantGoalIsActive(goalPin) && (state.mode !== preferences.mode ||
+            state.mode === "custom" && state.override?.selection && !sameVibe64AssistantSelection(state.override.selection, preferences.override))) {
           const [runs, chosen] = state.mode === preferences.mode
             ? [state.override.selection, preferences.override].map(selection => vibe64AssistantSelectionLabel(selection))
             : [state.mode, preferences.mode].map(assistantModeLabel);
@@ -551,11 +551,11 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
         const { goal, pinned: savedGoal } = await currentGoal(sessionId, context);
         mark(input.messageId, "goal-read");
-        if (explicitDeslop && activeGoal(goal)) throw failure("Finish or cancel the current goal before starting Deslop.");
-        if (!options.purpose && preferences.mode === "auto" && activeGoal(goal) && !savedGoal) throw failure("Choose Senior or Junior before working on a goal.");
+        if (explicitDeslop && assistantGoalIsActive(goal)) throw failure("Finish or cancel the current goal before starting Deslop.");
+        if (!options.purpose && preferences.mode === "auto" && assistantGoalIsActive(goal) && !savedGoal) throw failure("Choose Senior or Junior before working on a goal.");
         const saved = await createAssistantRoutingStore({ systemRoot }).read();
-        const pinnedGoal = activeGoal(goal) && savedGoal;
-        if (options.purpose && activeGoal(goal) && pinnedGoal?.mode !== options.purpose) {
+        const pinnedGoal = assistantGoalIsActive(goal) && savedGoal;
+        if (options.purpose && assistantGoalIsActive(goal) && pinnedGoal?.mode !== options.purpose) {
           throw failure("Finish or cancel the current goal before starting this Junior task.");
         }
         const mode = pinnedGoal?.mode || options.purpose || preferences.mode;
@@ -568,7 +568,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         let resolvedMode = mode;
         if (explicitDeslop) resolvedMode = ["custom", "fix"].includes(mode) ? mode : "senior";
         else if (mode === "auto") resolvedMode = "";
-        const review = mode === "auto" && !explicitDeslop && !options.purpose && !activeGoal(goal);
+        const review = mode === "auto" && !explicitDeslop && !options.purpose && !assistantGoalIsActive(goal);
         state = {
           messageId: input.messageId,
           input: { ...Object.fromEntries(Object.entries(input).filter(([name]) => [
@@ -610,12 +610,12 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         // The tool at admission; main chat's is the owner's Senior and Junior tool.
         state.workflowEngineId = pinnedGoal?.workflowEngineId || state.decision.engineId;
         mark(input.messageId, "resolved");
-        if (activeGoal(goal) && !pinnedGoal && !sameSelection(destinations(state.decision)[mode]?.effectiveSelection, selection)) {
+        if (assistantGoalIsActive(goal) && !pinnedGoal && !sameVibe64AssistantSelection(destinations(state.decision)[mode]?.effectiveSelection, selection)) {
           throw failure("Finish or cancel the current goal before changing its AI.");
         }
         // A goal pins its model, not a login that may have been replaced. This
         // new request captures current access; validateDecision still fences delivery.
-        if (pinnedGoal?.selection && !sameSelection(destinations(state.decision)[mode]?.effectiveSelection, pinnedGoal.selection)) {
+        if (pinnedGoal?.selection && !sameVibe64AssistantSelection(destinations(state.decision)[mode]?.effectiveSelection, pinnedGoal.selection)) {
           throw failure("The goal's pinned AI is no longer available. Choose its destination before resuming.");
         }
         state.assignments = Object.fromEntries(Object.entries(destinations(state.decision)).map(([role, destination]) => [role, destination.effectiveSelection]));
@@ -713,9 +713,9 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         // access below; a hosted resolver must reject an unavailable actor.
         const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
         const { goal, pinned } = await currentGoal(sessionId, context);
-        const workflow = activeGoal(goal) && pinned?.workflowEngineId;
+        const workflow = assistantGoalIsActive(goal) && pinned?.workflowEngineId;
         if (workflow && workflow !== state.workflowEngineId ||
-            !sameSelection(selection, state.observedSelection) && !sameSelection(selection, state.deliverySelection)) return null;
+            !sameVibe64AssistantSelection(selection, state.observedSelection) && !sameVibe64AssistantSelection(selection, state.deliverySelection)) return null;
         await validateDecision(context, state);
         const native = await agent.sessionState(sessionId, context);
         if (!native || native.ok === false || native.status === "working" || native.turn?.active || native.turn?.waitingForInput ||
@@ -790,7 +790,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         throw failure("Report continue, handoff, wait or complete with a concrete explanation and progress boolean.");
       }
       if (state.stage === "planning" && !["continue", "wait"].includes(input.decision)) throw failure("Planning alone does not authorise implementation or plan completion.");
-      if (input.decision === "complete" && (state.stage !== "review" || workflowRole(state) !== "senior")) throw failure("Only Senior can complete a verified review.");
+      if (input.decision === "complete" && (state.stage !== "review" || assistantWorkflowRole(state) !== "senior")) throw failure("Only Senior can complete a verified review.");
       const plan = await readWorkPlan(context);
       const involvesPlan = input.expectedRevision !== undefined || state.planInvolved;
       if (involvesPlan && (!plan || input.expectedRevision !== plan.revision ||
@@ -879,7 +879,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       }
       let nextStage = state.stage;
       if (outcome.decision === "handoff") {
-        const returningToJunior = state.stage === "review" && workflowRole(state) === "senior";
+        const returningToJunior = state.stage === "review" && assistantWorkflowRole(state) === "senior";
         nextStage = returningToJunior ? "implementation" : "review";
         if (returningToJunior) state.resolvedMode = "junior";
       }
@@ -960,7 +960,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
   async function applyGoalSelection(sessionId, selection, preferences, context) {
     const observed = await agent.readGoal(sessionId, context);
     if (observed?.status !== "available") return "unobserved";
-    if (!activeGoal(observed.goal)) return "none";
+    if (!assistantGoalIsActive(observed.goal)) return "none";
     const previous = assistantRoutingGoalFromMetadata(context.session.metadata);
     const current = previous?.selection || vibe64AssistantSelectionFromMetadata(context.session.metadata);
     if ((selection?.engineId || current.engineId) !== current.engineId || preferences.mode === "auto") return "after-goal";
@@ -978,7 +978,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     if (result?.ok === false) throw Object.assign(new Error(result.error), result);
     // Preserve a concurrent pause/cancel or replacement's objective and status.
     return context.runtime.store.mutateSession(sessionId, async () => {
-      const latest = JSON.parse(await context.runtime.store.readMetadataValue(sessionId, "assistant_routing_goal") || "null");
+      const latest = assistantRoutingGoalFromMetadata({ assistant_routing_goal: await context.runtime.store.readMetadataValue(sessionId, "assistant_routing_goal") });
       if (latest?.objective !== previous?.objective || latest?.selection && latest.selection.engineId !== current.engineId) return "after-goal";
       await context.runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify({
         ...prepared.pinned, ...(latest?.status !== previous?.status ? { status: latest.status } : {})
@@ -998,7 +998,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     const current = vibe64AssistantSelectionFromMetadata(context.session.metadata);
     const resume = input.action === "resume" && previous;
     const changedPreferences = resume && (preferences.mode !== previous.mode ||
-      (preferences.override ? !sameSelection(preferences.override, previous.selection) : Boolean(previous.override)));
+      (preferences.override ? !sameVibe64AssistantSelection(preferences.override, previous.selection) : Boolean(previous.override)));
     const retainGoalSettings = resume && (!changedPreferences || preferences.mode === "auto" ||
       current.engineId !== (previous.workflowEngineId || previous.selection.engineId));
     const mode = retainGoalSettings ? previous.mode : preferences.mode;
@@ -1010,11 +1010,11 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     const selection = decision.effectiveSelection;
     const workflowEngineId = (retainGoalSettings && previous.workflowEngineId) || decision.engineId;
     if (resume && (previous.selection.engineId !== selection.engineId ||
-        retainGoalSettings && !sameSelection(previous.selection, selection))) {
+        retainGoalSettings && !sameVibe64AssistantSelection(previous.selection, selection))) {
       throw failure("The goal's pinned AI changed. Select the intended model again before resuming.");
     }
     if (rebind) {
-      if (selection.engineId !== current.engineId || input.selection && !sameSelection(selection, input.selection)) {
+      if (selection.engineId !== current.engineId || input.selection && !sameVibe64AssistantSelection(selection, input.selection)) {
         throw failure("The goal's selected model changed. Choose its model again.");
       }
       return { pinned: { ...previous, objective: input.goal.objective, mode, workflowEngineId, selection, configuration: state.configuration, override: state.override,

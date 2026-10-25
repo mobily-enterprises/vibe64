@@ -12,7 +12,11 @@ import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionSt
 import { assistantModePrompt, assistantGoalManagementMessage, assistantRoutingPrompt, assistantWorkflowInstructions, parseRoutingDecision, recommendedRoutingAssignments,
   routingAssignmentSelection, routingModelChoices, routingModelScore, routingRunsInChoices, resolveAssistantPurpose, assistantRoutingPreferences, assistantRoutingAutomation,
   assistantRoutingSetupFor, assistantMainAiChanged, ASSISTANT_PURPOSE_ROLES, MAIN_CHAT_PURPOSES,
-  assistantRoutingGoalFromMetadata, assistantRoutingRequestFromMetadata, assistantRoutingRequestForDisplay, goalStatusIsComplete } from "@local/vibe64-runtime/shared/assistantRouting";
+  assistantRoutingGoalFromMetadata, assistantRoutingRequestFromMetadata, assistantRoutingRequestForDisplay, goalStatusIsComplete,
+  assistantGoalIsActive, assistantWorkflowStateIsSupported, assistantWorkflowRole, assistantWorkflowMessageIds, assistantRoutingStatusLabel,
+  assistantRoutingRequestCanBeReplaced, assistantWorkflowUpgradeChanges } from "@local/vibe64-runtime/shared/assistantRouting";
+import { sameVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
+import { assistantRoutingRequestForMessage } from "../../packages/vibe64-terminals/src/server/assistantRouting.js";
 import { curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import routingScores from "../../packages/vibe64-runtime/src/shared/assistantRoutingScores.json" with { type: "json" };
 
@@ -713,4 +717,53 @@ test("routing metadata readers and goal completion share one definition", () => 
   assert.throws(() => assistantRoutingRequestFromMetadata(unreadable), SyntaxError);
   assert.equal(assistantRoutingRequestForDisplay(unreadable), null);
   assert.deepEqual(assistantRoutingRequestForDisplay(metadata), { status: "working", delivery: "accepted" });
+});
+
+test("an unreadable pinned goal is refused with one coded error, and goal activity has one rule", () => {
+  for (const raw of ["{not json", "[]", "\"text\"", "7"]) {
+    assert.throws(() => assistantRoutingGoalFromMetadata({ assistant_routing_goal: raw }),
+      (error) => error.code === "vibe64_assistant_goal_invalid" && error.statusCode === 409);
+  }
+  assert.equal(assistantRoutingGoalFromMetadata({ assistant_routing_goal: "null" }), null);
+  assert.equal(assistantGoalIsActive(null), false);
+  assert.equal(assistantGoalIsActive({ status: "completed" }), false);
+  assert.equal(assistantGoalIsActive({ status: "paused" }), true);
+});
+
+test("workflow state, role, sent messages and selection identity each have one owner", () => {
+  assert.equal(assistantWorkflowStateIsSupported({ status: "waiting", delivery: "pending" }), true);
+  assert.equal(assistantWorkflowStateIsSupported({ status: "reviewing", delivery: "pending" }), false);
+  assert.equal(assistantWorkflowStateIsSupported({ status: "waiting", delivery: "sent" }), false);
+  // The upgrade refuses exactly the v5 states the coordinator refuses.
+  assert.throws(() => assistantWorkflowUpgradeChanges({ metadata: { assistant_routing_request: JSON.stringify({ schemaVersion: 5, status: "waiting", delivery: "sent" }) } }),
+    /unsupported state/u);
+  const assignments = { senior: { engineId: "codex", modelId: "senior-model" }, junior: { engineId: "codex", modelId: "junior-model" } };
+  const followup = { messageId: "followup-1" };
+  assert.equal(assistantWorkflowRole({ stage: "review", followup, resolvedMode: "junior" }), "senior");
+  assert.equal(assistantWorkflowRole({ stage: "review", resolvedMode: "junior" }), "junior");
+  assert.match(assistantRoutingStatusLabel({ stage: "review", followup, resolvedMode: "junior", status: "working", delivery: "accepted", assignments }), /senior-model/u);
+  assert.deepEqual(assistantWorkflowMessageIds({ messageId: "message-1", followup }), ["message-1", "followup-1"]);
+  assert.deepEqual(assistantWorkflowMessageIds({ messageId: "message-1" }), ["message-1"]);
+  const selection = { engineId: "codex", modelProviderId: "openai", modelId: "gpt", agentId: "", variantId: "high" };
+  assert.equal(sameVibe64AssistantSelection(selection, { ...selection, agentId: undefined }), true);
+  assert.equal(sameVibe64AssistantSelection(selection, { ...selection, modelId: " gpt " }), true);
+  assert.equal(sameVibe64AssistantSelection(selection, { ...selection, variantId: "low" }), false);
+  assert.equal(assistantRoutingRequestCanBeReplaced({ stopped: true, deliverySelection: selection }, { ...selection, variantId: "low" }), true);
+});
+
+test("a restored automatic follow-up turn is recognised as the routed request's own", () => {
+  const request = { schemaVersion: 5, status: "working", delivery: "accepted", messageId: "message-1",
+    followup: { messageId: "followup-1" }, submittedBy: { id: "owner", username: "owner", role: "owner" } };
+  const metadata = { assistant_routing_request: JSON.stringify(request) };
+  const upstream = (id) => `upstream:${id}`;
+  for (const id of ["message-1", "followup-1"]) {
+    assert.deepEqual(assistantRoutingRequestForMessage(metadata, (messageId) => upstream(messageId) === upstream(id))?.submittedBy, request.submittedBy);
+  }
+  assert.equal(assistantRoutingRequestForMessage(metadata, (messageId) => messageId === "other"), null);
+  assert.equal(assistantRoutingRequestForMessage({}, () => true), null);
+  // The retired v4 field is not a routed message.
+  const legacy = { assistant_routing_request: JSON.stringify({ ...request, followup: undefined, reviewMessageId: "review-1" }) };
+  assert.equal(assistantRoutingRequestForMessage(legacy, (messageId) => messageId === "review-1"), null);
+  assert.throws(() => assistantRoutingRequestForMessage({ assistant_routing_request: JSON.stringify({ ...request, schemaVersion: 4 }) }, () => true),
+    (error) => error.code === "vibe64_assistant_workflow_upgrade_required");
 });

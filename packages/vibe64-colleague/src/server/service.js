@@ -8,6 +8,7 @@ import { isDeepStrictEqual } from "node:util";
 import { createConversationRuntime, createConversationTranscript, createConversationStorage } from "@jskit-ai/assistant-core/server/conversation";
 import { codexAppServerTurnStateFromAgentRun } from "@jskit-ai/assistant-core/server/codex-turn";
 import { createServiceToolCatalog, runBoundedAssistantToolLoop, readAssistantResponseEnvelope, readPartialAssistantReply } from "@jskit-ai/assistant-core/server";
+import { sameVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 import { authenticatedVibe64User } from "@local/vibe64-core/server/actionContext";
 import { readLearningModeFor } from "@local/vibe64-core/server/learningMode";
 import { learnThreadFile, learnThreadLearnerKey, registerLearnThreadReleaser } from "@local/vibe64-core/server/learnThreads";
@@ -1546,8 +1547,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         if (!input.assistantSelection) throw failure("Choose a model for Colleague.");
         const selected = await chooseSelection(context, input.assistantSelection);
         const settings = await terminals.resolveConversationConfiguration(selected, promptFor(state), { vibe64User: authenticatedVibe64User(context) });
-        const changed = ["engineId", "modelProviderId", "modelId", "agentId", "variantId"]
-          .some(key => (state.record.assistantSelection?.[key] || "") !== (selected[key] || ""));
+        const changed = !sameVibe64AssistantSelection(state.record.assistantSelection, selected);
         const pendingRequest = state.record.conversationMetadata?.runtime?.replacement?.request;
         state.requestContext = context;
         const scoped = { ...actionContext(state, { clientId: "", focus: null }), assistantSelection: selected };

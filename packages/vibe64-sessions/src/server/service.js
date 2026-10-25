@@ -4,7 +4,7 @@ import { createMainBrowserConversations } from "./mainBrowserConversations.js";
 import { assertSessionRepositoryReview, parseSessionConnectedContribution, serializeSessionConnectedSources, serializeSessionConnectedSubmissions, sessionConnectedContribution,
   sessionConnectedSources, sessionConnectedSubmissions, sessionRepositoryDestination, sessionRepositoryProject } from "@local/vibe64-core/server/projectRepository";
 import { ASSISTANT_ROUTING_METADATA, assistantRoutingAutomation, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingRequestFromMetadata, assistantRoutingStatusIsPending,
-  isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
+  isAssistantRoutingOwner, assistantRoutingGoalFromMetadata, assistantGoalIsActive } from "@local/vibe64-runtime/shared/assistantRouting";
 
 import { vibe64Result } from "@local/vibe64-core/server/serverResponses";
 import {
@@ -2490,9 +2490,9 @@ function createService({
               // catches up on the next message. Only an active goal rebinds now.
               const observed = typeof terminals.readAgentGoal === "function"
                 ? await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User }) : null;
-              const pinned = JSON.parse(session.metadata.assistant_routing_goal || "null");
+              const pinned = assistantRoutingGoalFromMetadata(session.metadata);
               const goal = observed?.status === "available" ? observed.goal : observed?.goal || pinned;
-              if (!goal || ["complete", "completed"].includes(goal.status)) {
+              if (!assistantGoalIsActive(goal)) {
                 await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(preferences));
                 return { assistantSelection: current, session: await runtime.getSession(sessionId, { inspectSource: false }) };
               }
@@ -2523,11 +2523,11 @@ function createService({
             const observedGoal = typeof terminals.readAgentGoal === "function"
               ? await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User }) : null;
             const goal = observedGoal?.status === "available" ? observedGoal.goal
-              : observedGoal?.goal || agentSession?.goal || JSON.parse(session.metadata.assistant_routing_goal || "null");
+              : observedGoal?.goal || agentSession?.goal || assistantRoutingGoalFromMetadata(session.metadata);
             const nextPreferences = preferences || {
               mode: "custom", review: false, override: next
             };
-            if (deferred || agentSession?.turn?.active || goal && !["complete", "completed"].includes(goal.status)) {
+            if (deferred || agentSession?.turn?.active || assistantGoalIsActive(goal)) {
               await terminals.applyGoalSelection(sessionId, next, nextPreferences, { runtime, session, vibe64User });
               await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(nextPreferences));
               return { assistantSelection: current, session: await runtime.getSession(sessionId, { inspectSource: false }) };

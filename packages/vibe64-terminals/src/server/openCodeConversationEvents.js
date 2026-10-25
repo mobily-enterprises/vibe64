@@ -2,7 +2,7 @@ import { openCodeMessageError as readOpenCodeMessageError } from "@jskit-ai/assi
 import { openCodeModel } from "@jskit-ai/assistant-core/server/opencode-process";
 import { VIBE64_AGENT_RUN_STATE, vibe64AgentRunStateIsActive } from "@local/vibe64-runtime/server";
 import { VIBE64_ASSISTANT_ENGINE_IDS } from "@local/vibe64-runtime/shared";
-import { assistantRoutingRequestFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantRoutingRequestForMessage } from "./assistantRouting.js";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { captureProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
@@ -243,8 +243,8 @@ function createOpenCodeConversationEvents({ projectService, publishSessionChange
       runInContext: operation => runWithProjectRequestContext(projectContext || {}, operation),
       prepare(admitted, options) {
         const previous = context.session?.agentRuns?.find((run) => run.id === OPENCODE_AGENT_RUN_ID && run.turnId === admitted.id);
-        const route = assistantRoutingRequestFromMetadata(context.session?.metadata);
-        const routed = route && [route.messageId, route.reviewMessageId].filter(Boolean).some((id) => upstreamMessageId(id) === admitted.id);
+        const route = assistantRoutingRequestForMessage(context.session?.metadata, (id) => upstreamMessageId(id) === admitted.id);
+        const routed = Boolean(route);
         const actorKnown = !admitted.restored || Object.hasOwn(previous || {}, "submittedBy") || routed;
         const actor = Object.hasOwn(previous || {}, "submittedBy") ? previous.submittedBy : routed ? route.submittedBy : options.vibe64User;
         const submittedBy = actor ? Object.fromEntries(["id", "username", "role"].filter((key) => actor[key] !== undefined)

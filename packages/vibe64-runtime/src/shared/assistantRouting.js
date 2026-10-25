@@ -1,4 +1,4 @@
-import { defineVibe64AssistantSelection, resolveVibe64AssistantSelection } from "./assistantSelection.js";
+import { defineVibe64AssistantSelection, resolveVibe64AssistantSelection, sameVibe64AssistantSelection } from "./assistantSelection.js";
 import { curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import routingScores from "./assistantRoutingScores.json" with { type: "json" };
 import { VIBE64_AGENT_EXECUTION_WORKLOAD_IDS } from "./agentExecutionProfiles.js";
@@ -93,7 +93,19 @@ function assistantRoutingFromMetadata(metadata = {}) {
 }
 
 // The pinned goal and the latest routed request a session's metadata records.
-const assistantRoutingGoalFromMetadata = (metadata = {}) => JSON.parse(metadata?.assistant_routing_goal || "null");
+// A pin that is not a record is refused with one coded error, wherever it is read.
+function assistantRoutingGoalFromMetadata(metadata = {}) {
+  const raw = metadata?.assistant_routing_goal;
+  if (!raw) return null;
+  let goal;
+  try { goal = JSON.parse(raw); } catch { goal = undefined; }
+  if (goal === null) return null;
+  if (!goal || typeof goal !== "object" || Array.isArray(goal)) {
+    throw Object.assign(new Error("Saved goal is unreadable. Inspect it before continuing."),
+      { code: "vibe64_assistant_goal_invalid", statusCode: 409 });
+  }
+  return goal;
+}
 const assistantRoutingRequestFromMetadata = (metadata = {}) => JSON.parse(metadata?.assistant_routing_request || "null");
 // Views and summaries show an unreadable saved request as none; guards use the
 // strict reader above and refuse to act on it.
@@ -103,6 +115,17 @@ function assistantRoutingRequestForDisplay(metadata = {}) {
 
 // Engines report a finished goal as either "complete" or "completed".
 const goalStatusIsComplete = (status) => status === "complete" || status === "completed";
+const assistantGoalIsActive = (goal) => Boolean(goal) && !goalStatusIsComplete(goal.status);
+
+// The saved workflow request's own states (schema version 5).
+const ASSISTANT_WORKFLOW_STATUSES = Object.freeze(["working", "waiting", "complete"]);
+const ASSISTANT_WORKFLOW_DELIVERIES = Object.freeze(["routing", "pending", "sending", "uncertain", "accepted", "failed"]);
+const assistantWorkflowStateIsSupported = (request) =>
+  ASSISTANT_WORKFLOW_STATUSES.includes(request?.status) && ASSISTANT_WORKFLOW_DELIVERIES.includes(request?.delivery);
+// Senior reviews an automatic follow-up; otherwise the routed role works.
+const assistantWorkflowRole = (request) => request.stage === "review" && request.followup ? "senior" : request.resolvedMode;
+// The routed message and its automatic follow-up, the turns this request sent.
+const assistantWorkflowMessageIds = (request) => [request?.messageId, request?.followup?.messageId].filter(Boolean);
 
 const isAssistantRoutingOwner = (actor) => !actor || actor.role === "owner";
 
@@ -154,9 +177,7 @@ function assistantRoutingStatusIsPending(request) {
 function assistantRoutingRequestCanBeReplaced(request, selection) {
   if (request?.helper) return false;
   const previous = request?.deliverySelection || request?.observedSelection;
-  if (request?.stopped && previous && selection &&
-      ["engineId", "modelProviderId", "modelId", "agentId", "variantId"].some(
-        key => String(previous[key] || "").trim() !== String(selection[key] || "").trim())) return true;
+  if (request?.stopped && previous && selection && !sameVibe64AssistantSelection(previous, selection)) return true;
   return request?.delivery === "pending" && (request.status === "waiting" || Boolean(request.error)) && !request.attemptedMessageId;
 }
 
@@ -551,7 +572,7 @@ function assistantRoutingOutcomeNotice(request) {
 
 function assistantRoutingStatusLabel(request) {
   if (!request) return "";
-  const selection = request.assignments?.[request.stage === "review" && request.followup ? "senior" : request.resolvedMode];
+  const selection = request.assignments?.[assistantWorkflowRole(request)];
   const recipient = selection ? vibe64AssistantSelectionLabel(selection) : "";
   const stage = { planning: "Planning", implementation: "Implementing", review: "Reviewing" }[request.stage] || assistantModeLabel(request.resolvedMode);
   if (request.delivery === "uncertain") return `Delivery unconfirmed · ${recipient}`;
@@ -572,7 +593,7 @@ function assistantWorkflowUpgradeChanges({ metadata = {}, conversations = [] }) 
     try { previous = JSON.parse(raw); } catch { throw new Error("Saved routing request is unreadable. Inspect it before upgrading."); }
     if (!previous || typeof previous !== "object" || Array.isArray(previous)) throw new Error("Saved routing request must be an object.");
     if (previous.schemaVersion === 5) {
-      if (!["working", "waiting", "complete"].includes(previous.status) || !["routing", "pending", "sending", "uncertain", "accepted", "failed"].includes(previous.delivery)) throw new Error("Saved workflow has an unsupported state.");
+      if (!assistantWorkflowStateIsSupported(previous)) throw new Error("Saved workflow has an unsupported state.");
       return raw;
     }
     const statuses = ["routing", "sending", "uncertain", "sent", "failed", "cancelled", "done", "review_pending", "review_sending", "review_uncertain", "reviewing", "planning_pending", "planning_sending", "planning_uncertain", "planning", "implementation_pending", "implementation_sending", "implementation_uncertain"];
@@ -607,7 +628,7 @@ export { ASSISTANT_MODES, ASSISTANT_FIX_MODE, ASSISTANT_ROUTING_METADATA, ASSIST
   ASSISTANT_ROUTING_ROLE_DEFINITIONS, ASSISTANT_ROLE_DEFAULT_FOLLOWS, ASSISTANT_PURPOSE_ROLES, ASSISTANT_ROLE_PURPOSES, MAIN_CHAT_PURPOSES, ROUTING_REASONS,
   routingModelScore, resolveAssistantPurpose, assistantRoutingPreferences, assistantRoutingAutomation, assistantRoutingSetupFor, assistantRoutingSetupValues, assistantSetupRoleValue, assistantMainAiChanged,
   isAssistantRoutingOwner, isMainChatPurpose, needsMainChatApproval, routingRunsInChoices,
-  assistantRoutingFromMetadata, assistantRoutingGoalFromMetadata, assistantRoutingRequestFromMetadata, assistantRoutingRequestForDisplay, goalStatusIsComplete, hasConnectedAssistantModels, routingModelChoices, recommendedRoutingAssignments, routingAssignmentSelection,
+  assistantRoutingFromMetadata, assistantRoutingGoalFromMetadata, assistantRoutingRequestFromMetadata, assistantRoutingRequestForDisplay, goalStatusIsComplete, assistantGoalIsActive, hasConnectedAssistantModels, routingModelChoices, recommendedRoutingAssignments, routingAssignmentSelection,
   parseRoutingDecision, assistantRoutingPrompt, assistantWorkflowInstructions,
   assistantModeLabel, assistantModePrompt, assistantGoalObjective, assistantGoalManagementMessage, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel,
-  assistantRoutingOutcomeNotice, assistantWorkflowUpgradeChanges };
+  assistantRoutingOutcomeNotice, assistantWorkflowUpgradeChanges, assistantWorkflowStateIsSupported, assistantWorkflowRole, assistantWorkflowMessageIds };

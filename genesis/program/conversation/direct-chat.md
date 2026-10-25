@@ -3149,8 +3149,11 @@ answer without waiting for a model request. Turn closure cancels outstanding
 summaries and deletes the native helper session. The native run retains only its
 exact helper scope, destination, connection identity and execution reference;
 failed cleanup is retried before another summary or on session closure, including
-by a fresh controller after restart. A restored turn without an evidenced actor
-uses mechanical headlines instead of requesting a model summary. Full provider
+by a fresh controller after restart. A restored turn takes its actor from its
+previous run or, when the saved routing request sent it (the routed message or
+its automatic follow-up), from that request; the routing coordinator answers
+that question with its validated request reader. A restored turn without an
+evidenced actor uses mechanical headlines instead of requesting a model summary. Full provider
 reasoning is not persisted.
 
 Tool-free helper turns run without the session source lock, while provider

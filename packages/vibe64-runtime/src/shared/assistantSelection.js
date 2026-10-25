@@ -449,6 +449,14 @@ function assertVibe64AssistantSelectionUpdate(currentValue = {}, nextValue = {},
   return next;
 }
 
+// The fields that name one assistant: its tool, provider, model, agent and thinking level.
+const VIBE64_ASSISTANT_SELECTION_IDENTITY_FIELDS = Object.freeze(["engineId", "modelProviderId", "modelId", "agentId", "variantId"]);
+// An absent field and an empty one name the same assistant.
+function sameVibe64AssistantSelection(left, right) {
+  return VIBE64_ASSISTANT_SELECTION_IDENTITY_FIELDS.every(
+    (key) => String(left?.[key] ?? "").trim() === String(right?.[key] ?? "").trim());
+}
+
 function vibe64AssistantConversationKey(selection = {}) {
   return selection.engineId === "codex" && selection.modelProviderId && selection.modelProviderId !== "openai"
     ? `codex/${selection.modelProviderId}` : selection.engineId;
@@ -461,6 +469,7 @@ export {
   VIBE64_ASSISTANT_ENGINE_IDS,
   VIBE64_ASSISTANT_ENGINE_ID_SET,
   VIBE64_ASSISTANT_SELECTION_ERROR_CODES,
+  VIBE64_ASSISTANT_SELECTION_IDENTITY_FIELDS,
   VIBE64_ASSISTANT_SELECTION_METADATA,
   VIBE64_ASSISTANT_SELECTION_SCHEMA,
   VIBE64_ASSISTANT_TRANSPORT_IDS,
@@ -468,6 +477,7 @@ export {
   defineVibe64AssistantCapabilities,
   defineVibe64AssistantSelection,
   resolveVibe64AssistantSelection,
+  sameVibe64AssistantSelection,
   serializeVibe64AssistantSelection,
   vibe64AssistantSelectionFromMetadata
 };
