@@ -29,8 +29,11 @@ function createLanShare({ now = () => Date.now(), host = "0.0.0.0", addresses = 
     share = null;
     if (!current) return { sharing: false };
     clearTimeout(current.timer);
-    await new Promise((resolve) => current.server.close(() => resolve()));
-    current.server.closeAllConnections?.();
+    // Close first, then end every open connection (a phone mid-download
+    // included), so stopping never waits for a download to finish.
+    const closed = new Promise((resolve) => current.server.close(() => resolve()));
+    current.server.closeAllConnections();
+    await closed;
     return { sharing: false };
   }
 
