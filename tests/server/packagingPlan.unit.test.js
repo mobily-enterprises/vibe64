@@ -130,10 +130,10 @@ test("one versioned package tags v<version>; independent packages tag <package>@
 });
 
 test("invalid plans are refused", () => {
-  const refuses = (overrides, pattern) => assert.throws(
+  const refuses = (overrides, pattern, message = pattern.source) => assert.throws(
     () => createPublishPlan(input(overrides)),
     (error) => error.code === "VIBE64_PUBLISH_PLAN_INVALID" && pattern.test(error.message),
-    pattern.source
+    message
   );
   refuses({ savedCommit: "abc123" }, /full saved commit/u);
   refuses({ packaging: { ...APP, status: "blocked" } }, /ready Packaging/u);
@@ -143,6 +143,7 @@ test("invalid plans are refused", () => {
   refuses({ targets: [{ id: "x", destination: "npm", package: "sdk", channel: "beta" }], versions: { sdk: "1.0.0" } }, /no channel beta/u);
   refuses({ targets: [input().targets[0], input().targets[0]] }, /appears twice/u);
   refuses({ versions: { app: "1.5", sdk: "0.9.1" } }, /needs its release version/u);
+  refuses({ versions: { app: "1.5.0", sdk: "0.9.1+ci" } }, /build metadata/u, "a version its release tag cannot hold is refused at plan time, before any build");
   refuses({ versions: { app: "1.5.0", sdk: "0.9.1", web: "1.0.0" } }, /does not publish/u);
   refuses({ toolchain: { node: "latest version" } }, /exact version/u);
   refuses({ buildNumbers: {} }, /needs its build number/u);

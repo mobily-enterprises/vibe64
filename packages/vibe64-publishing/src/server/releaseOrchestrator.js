@@ -17,6 +17,7 @@ import {
   assertPreflightAllowsRelease,
   createPublishPlan,
   definePreflightCheck,
+  isReleaseVersion,
   nextVersionCode,
   publishPlanDisplayId,
   runPreflight
@@ -27,7 +28,6 @@ import { publishingKeysUnlocked, recoveryKitCovers } from "@local/vibe64-packagi
 
 import { sideloadKeyEntryId } from "./credentialBroker.js";
 
-const SEMVER = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
 
 const UNFINISHED = Object.freeze(["failed", "partial", "interrupted"]);
 
@@ -279,7 +279,7 @@ function createReleaseOrchestrator({
     for (const [packageId, version] of entries) {
       const entry = release.packaging.packages.find((candidate) => candidate.id === packageId);
       if (!entry?.versionFrom) throw releaseError(`${packageId} has no version Vibe64 manages.`, "vibe64_publishing_prepare_invalid");
-      if (!SEMVER.test(version || "")) throw releaseError(`${version} is not a version such as 1.5.0.`, "vibe64_publishing_prepare_invalid");
+      if (!isReleaseVersion(version)) throw releaseError(`${version} is not a version such as 1.5.0.`, "vibe64_publishing_prepare_invalid");
       prepared.push(await sourceWriter.prepareAndWrite({ sessionId, entry, version, notes, user }));
     }
     return {

@@ -9,9 +9,9 @@ import path from "node:path";
 import { promisify } from "node:util";
 
 import { publishError } from "../errors.js";
+import { COMMIT_ID } from "../git.js";
 
 const run = promisify(execFile);
-const COMMIT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 
 async function git(projectRoot, args, env = {}, { workTree = null } = {}) {
   try {
@@ -40,7 +40,7 @@ async function exportSavedCommit({ projectRoot, commit, directory, exclude = [] 
   if (typeof projectRoot !== "string" || !path.isAbsolute(projectRoot)) {
     throw publishError("VIBE64_PUBLISH_EXPORT_FAILED", "The project root must be an absolute path.");
   }
-  if (!COMMIT.test(commit || "")) throw publishError("VIBE64_PUBLISH_EXPORT_FAILED", "Export needs a full commit id.");
+  if (!COMMIT_ID.test(commit || "")) throw publishError("VIBE64_PUBLISH_EXPORT_FAILED", "Export needs a full commit id.");
   if (typeof directory !== "string" || !path.isAbsolute(directory)) {
     throw publishError("VIBE64_PUBLISH_EXPORT_FAILED", "The export folder must be an absolute path.");
   }

@@ -2,7 +2,13 @@
 // spelling of the same version (1.5.0-rc.1 -> 1.5.0rc1).
 import { publishError } from "../errors.js";
 
-const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
+// major.minor.patch with an optional prerelease; a semantic version may add
+// build metadata (+build.1), which a release version (and its tag) never has.
+const RELEASE_CORE = String.raw`(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?`;
+const SEMVER = new RegExp(`^${RELEASE_CORE}(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$`, "u");
+const RELEASE_VERSION = new RegExp(`^${RELEASE_CORE}$`, "u");
+// `v1.5.0`, or `<package>@1.5.0` when packages version independently.
+const RELEASE_TAG = new RegExp(`^(?:v|[a-z0-9]+(?:-[a-z0-9]+)*@)${RELEASE_CORE}$`, "u");
 const PEP440_PRE = Object.freeze({ alpha: "a", a: "a", beta: "b", b: "b", rc: "rc", dev: ".dev", post: ".post" });
 
 function parseSemver(version) {
@@ -20,6 +26,10 @@ function parseSemver(version) {
 
 function isSemver(version) {
   return SEMVER.test(version || "");
+}
+
+function isReleaseVersion(version) {
+  return RELEASE_VERSION.test(version || "");
 }
 
 function compareIdentifiers(left, right) {
@@ -67,4 +77,4 @@ function pep440FromSemver(version) {
   return `${release}${suffix}${Number(number)}`;
 }
 
-export { compareSemver, isSemver, parseSemver, pep440FromSemver };
+export { RELEASE_TAG, compareSemver, isReleaseVersion, isSemver, parseSemver, pep440FromSemver };

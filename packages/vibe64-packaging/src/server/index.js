@@ -39,7 +39,7 @@ export { VIBE64_REGISTRY_PREFLIGHT_CHECKS, gatherCredentialFacts } from "./prefl
 export { buildPackage } from "./release/buildPackage.js";
 export { exportSavedCommit } from "./release/exportCommit.js";
 export { prepareReleaseChange, readSourceVersion } from "./release/prepareChange.js";
-export { compareSemver, isSemver, pep440FromSemver } from "./release/version.js";
+export { compareSemver, isReleaseVersion, isSemver, pep440FromSemver } from "./release/version.js";
 export { npmTokenUserconfig } from "./destinations/npm/index.js";
 export { pypiSettingsForAddress } from "./destinations/pypi/index.js";
 export {

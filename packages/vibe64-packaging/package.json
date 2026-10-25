@@ -15,6 +15,7 @@
     "./server/confirmationToken": "./src/server/confirmationToken.js",
     "./server/keys": "./src/server/keys/index.js",
     "./server/tagSavedCommit": "./src/server/tagSavedCommit.js",
+    "./server/git": "./src/server/git.js",
     "./server/packers": "./src/server/packers/index.js",
     "./server/destinations": "./src/server/destinations/index.js",
     "./server/preflight": "./src/server/preflight/index.js",

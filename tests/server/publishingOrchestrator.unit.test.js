@@ -296,6 +296,8 @@ test("prepare writes the version change into the session; release notes come fro
   const prepared = await orchestrator.prepareRelease({ sessionId: "s1", versions: { sdk: "1.3.0" }, notes: "- Faster sync." });
   assert.deepEqual(prepared.packages, [{ id: "sdk", previousVersion: "1.1.0", version: "1.3.0", files: ["package.json", "CHANGELOG.md"] }]);
   await assert.rejects(orchestrator.prepareRelease({ sessionId: "s1", versions: { sdk: "next" }, notes: "x" }), { code: "vibe64_publishing_prepare_invalid" });
+  await assert.rejects(orchestrator.prepareRelease({ sessionId: "s1", versions: { sdk: "1.3.0+ci" }, notes: "x" }), { code: "vibe64_publishing_prepare_invalid" },
+    "a version no release tag can hold is never written");
   assert.equal(changelogSection("## 2.0.0 - d\n\n- B\n\n## 1.0.0 - d\n\n- A\n", "1.0.0"), "- A");
   assert.equal(changelogSection("# Changelog\n", "1.0.0"), null);
 });

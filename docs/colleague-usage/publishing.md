@@ -66,6 +66,8 @@ Vibe64 for this project on this computer, not in the project's files.
    saved commits in **What's new**) into the session as an ordinary change;
    review it and **Save** it. Without a session the dialog says so and offers
    **Release as saved** while the saved version is still unpublished.
+   A version with build metadata, such as `1.5.0+ci`, cannot be released:
+   its tag could not hold it, so the plan refuses it before anything builds.
 2. **Review & publish**: choose targets, unlock your keys if asked, and read
    **Before publishing**: saved and pushed work, Packaging, tags still free,
    checks passed, every sign-in valid, install key and recovery kit, Android

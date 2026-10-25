@@ -7,9 +7,9 @@ import { runProjectSourceExclusive } from "@local/vibe64-project/server/projectS
 import path from "node:path";
 
 import { publishError } from "./errors.js";
+import { COMMIT_ID } from "./git.js";
+import { RELEASE_TAG } from "./release/version.js";
 
-const COMMIT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
-const TAG_NAME = /^(?:v|[a-z0-9]+(?:-[a-z0-9]+)*@)(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
 const REF = /^refs\/[A-Za-z0-9._/-]+$/u;
 
 function refuse(code, message, details) {
@@ -36,8 +36,8 @@ async function tagSavedCommit({
   if (!REF.test(baselineRef || "") || !REF.test(upstreamRef || "")) {
     refuse("VIBE64_PUBLISH_TAG_INVALID", "Tagging needs the baseline and upstream refs.");
   }
-  if (!COMMIT.test(expectedCommit || "")) refuse("VIBE64_PUBLISH_TAG_INVALID", "Tagging needs the full saved commit id.");
-  if (!Array.isArray(tags) || !tags.length || tags.some((tag) => !TAG_NAME.test(tag || "")) || new Set(tags).size !== tags.length) {
+  if (!COMMIT_ID.test(expectedCommit || "")) refuse("VIBE64_PUBLISH_TAG_INVALID", "Tagging needs the full saved commit id.");
+  if (!Array.isArray(tags) || !tags.length || tags.some((tag) => !RELEASE_TAG.test(tag || "")) || new Set(tags).size !== tags.length) {
     refuse("VIBE64_PUBLISH_TAG_INVALID", "Release tags look like v1.5.0 or package@1.5.0.");
   }
 

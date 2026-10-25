@@ -9,12 +9,12 @@ import os from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
+import { COMMIT_ID } from "@local/vibe64-packaging/server/git";
 import { tagSavedCommit } from "@local/vibe64-packaging/server/tagSavedCommit";
 import { readSourceVersion } from "@local/vibe64-packaging/server/release";
 import { inspectVibe64Packaging } from "@local/vibe64-genesis/server";
 
 const run = promisify(execFile);
-const COMMIT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 
 function repositoryError(message, code = "vibe64_publishing_repository_unavailable") {
   return Object.assign(new Error(message), { code });
@@ -99,7 +99,7 @@ function createProjectRepository({ readProject } = {}) {
   // A real Git checkout of exactly the saved commit (shared objects, so cheap),
   // for reading Packaging and versions and for running the project's checks.
   async function withCheckout(repositoryRoot, commit, operation) {
-    if (!COMMIT.test(commit || "")) throw repositoryError("A checkout needs a full commit id.");
+    if (!COMMIT_ID.test(commit || "")) throw repositoryError("A checkout needs a full commit id.");
     const parent = await mkdtemp(path.join(os.tmpdir(), "vibe64-release-checkout-"));
     const root = path.join(parent, "project");
     try {

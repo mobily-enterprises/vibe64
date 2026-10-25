@@ -7,12 +7,12 @@ import { VIBE64_PACKAGING_CONTRACT } from "@local/vibe64-genesis/server/packagin
 import { canonicalJson, sha256 } from "./canonical.js";
 import { vibe64Destination } from "./destinations/index.js";
 import { publishError } from "./errors.js";
+import { COMMIT_ID } from "./git.js";
+import { isReleaseVersion, isSemver } from "./release/version.js";
 
 const VIBE64_PUBLISH_PLAN_CONTRACT = "vibe64.publish-plan.v1";
-const COMMIT = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u;
 const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const ACCOUNT = /^[a-z0-9][a-z0-9-]{0,62}$/u;
-const SEMVER = /^(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/u;
 const TOOL_NAME = /^[@a-z0-9][a-z0-9@/._-]*$/u;
 const VERSION_TEXT = /^[0-9A-Za-z][0-9A-Za-z.+_-]*$/u;
 
@@ -37,7 +37,8 @@ function versionMap(values, label) {
 // `v1.5.0` for a project with one versioned package; `<package>@1.5.0` when
 // several packages version independently.
 function releaseTagName({ packageId, version, independent }) {
-  if (!SEMVER.test(version || "")) invalid(`Version ${version} is not a semantic version such as 1.5.0.`);
+  if (!isSemver(version)) invalid(`Version ${version} is not a semantic version such as 1.5.0.`);
+  if (!isReleaseVersion(version)) invalid(`Version ${version} has build metadata (+…), which a release tag such as v1.5.0 cannot hold. Choose a version without it.`);
   return independent ? `${packageId}@${version}` : `v${version}`;
 }
 
@@ -121,7 +122,7 @@ function createPublishPlan({
   toolchain = {},
   templates = {}
 } = {}) {
-  if (!COMMIT.test(savedCommit || "")) invalid("A publish plan needs the full saved commit id.");
+  if (!COMMIT_ID.test(savedCommit || "")) invalid("A publish plan needs the full saved commit id.");
   const packages = packagingPackages(packaging);
   const normalizedTargets = normalizeTargets(targets, packages);
   const versionedCount = [...packages.values()].filter((entry) => entry.versionFrom).length;
@@ -129,7 +130,7 @@ function createPublishPlan({
     const entry = packages.get(id);
     if (!entry.versionFrom) return { id, packer: entry.packer, version: null, tag: null };
     const version = versions[id];
-    if (!SEMVER.test(version || "")) invalid(`Package ${id} needs its release version, such as 1.5.0.`);
+    if (!isSemver(version)) invalid(`Package ${id} needs its release version, such as 1.5.0.`);
     return {
       id,
       packer: entry.packer,
