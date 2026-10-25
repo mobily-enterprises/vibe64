@@ -1006,8 +1006,8 @@ describe("Vibe64 direct session view", () => {
     expect(temporaryAiComposable).not.toContain("beforeunload");
     expect(temporaryAiComposable).toContain("watch([currentSessionId, currentSessionsApiPath, actorKey, () => readRefOrGetterValue(assistantReady)]");
     expect(temporaryAiComposable).toContain("() => void restoreTasks(), { immediate: true });");
-    expect(temporaryAiComposable).toContain("for (const taskId of saveTimers.keys()) void saveTask(taskId);");
-    expect(temporaryAiComposable).toContain("attachmentIds: task.attachments.map((attachment) => attachment.attachmentId)");
+    expect(temporaryAiComposable).toContain("for (const taskId of new Set([...saveTimers.keys(), ...unsentSaveFields.keys()])) void saveTask(taskId, { flush: true });");
+    expect(temporaryAiComposable).toContain("task.attachments.map((attachment) => attachment.attachmentId)");
     expect(temporaryAiComposable).toContain("attachments: record.attachments || []");
     expect(temporaryAiComposable).toContain("function showWorkspace()");
     expect(temporaryAiComposable).toContain("async function startTask(options = {})");
