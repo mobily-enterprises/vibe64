@@ -109,6 +109,9 @@ async function request(operation, kind = "") {
         Ask Colleague to admit the exact clean committed lesson snapshot from your authoring session first.
       </p>
     </section>
+    <!-- A host's own Courses content (for example its own saved lessons) sits
+         above the picker; opened() opens a lesson it resumes like any other. -->
+    <slot :courses="courses" :opened="opened" :busy="busy" :can-request="canRequest" />
     <TrainingLessonPicker
       :catalogue-result="catalogue"
       :learning-result="progress"

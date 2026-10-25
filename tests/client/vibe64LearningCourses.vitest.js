@@ -292,3 +292,94 @@ it("refreshes a newly admitted author trial when Learning reopens without reload
   expect(read.mock.calls.filter(([path]) => path.endsWith("/author-preview"))).toHaveLength(1);
   expect(harness.command).not.toHaveBeenCalled();
 });
+
+// A host's own saved lessons beside the courses: its read is made through the
+// same original actor-tagged resource (hostRead) and a lesson it lists resumes
+// through original Resume only while that read still shows it (savedIn).
+let host;
+async function mountHostSaved(saved = B) {
+  app.unmount(); queryClient.clear();
+  const enabled = ref(true);
+  read.mockImplementation(async path => path === "/api/host/saved"
+    ? { ok: true, active: { attemptId: saved } }
+    : path.endsWith("/learning") ? progress(`learner-${viewer.value.actorKey}`) : { ok: true, courses: [] });
+  app = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} })
+    .createApp({ setup() {
+      courses = useVibe64LearningCourses({ active: open });
+      const resource = courses.hostRead("host-saved", "/api/host/saved", enabled);
+      const attempt = () => resource.data.value?.ok === true ? resource.data.value.active?.attemptId || "" : "";
+      host = { resource, attempt, savedIn: attemptId => ({ current: () => attempt() === attemptId && !resource.loadError.value,
+        reload: () => resource.reload() }) };
+      return () => null;
+    } });
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  app.use(VueQueryPlugin, { queryClient }); app.provide(VIBE64_ASSISTANT_VIEWER_KEY, viewer); app.mount({});
+  await flush(); return enabled;
+}
+const resumeSaved = attemptId => courses.resumeLesson(attemptId, { savedIn: host.savedIn(attemptId) });
+
+it("resumes only a lesson the host's own read still shows, through original Resume", async () => {
+  await mountHostSaved();
+  const normal = JSON.parse(JSON.stringify(courses.learningResource.data.value));
+  harness.command.mockResolvedValueOnce({ ok: true, available: true, active: { attemptId: B } });
+  const outcome = await resumeSaved(B);
+  expect(harness.command.mock.calls).toEqual([[`/api/vibe64/training/attempts/${B}/resume`, {}]]);
+  expect(outcome).toMatchObject({ attemptId: B, current: true, ended: false });
+  expect(courses.learningResource.data.value).toEqual(normal);
+  await expect(resumeSaved(A)).rejects.toThrow("exact saved lesson");
+  expect(harness.command).toHaveBeenCalledTimes(1);
+});
+
+it("masks a host read immediately when it is disabled and refuses its Resume without effects", async () => {
+  const enabled = await mountHostSaved();
+  const hostReads = () => read.mock.calls.filter(([path]) => path === "/api/host/saved").length;
+  const count = hostReads();
+  enabled.value = false;
+  expect(host.resource.data.value).toBeNull(); expect(host.attempt()).toBe("");
+  await host.resource.reload(); await host.resource.query.refetch(); await courses.refresh();
+  expect(hostReads()).toBe(count);
+  await expect(resumeSaved(B)).rejects.toThrow("exact saved lesson");
+  expect(harness.command).not.toHaveBeenCalled();
+});
+
+it.each(["disabled", "actor", "attempt"])("keeps a saved Resume admitted but not current when the host read is %s", async change => {
+  const enabled = await mountHostSaved(); const admitted = Promise.withResolvers();
+  harness.command.mockReturnValueOnce(admitted.promise); const pending = resumeSaved(B);
+  if (change === "disabled") enabled.value = false;
+  if (change === "actor") viewer.value = { actorKey: "another-owner" };
+  if (change === "attempt") {
+    read.mockImplementation(async path => path === "/api/host/saved" ? { ok: true, active: { attemptId: A } }
+      : path.endsWith("/learning") ? progress("learner-owner") : { ok: true, courses: [] });
+    await host.resource.reload();
+  }
+  admitted.resolve({ ok: true, available: true, active: { attemptId: B } });
+  expect(await pending).toMatchObject({ attemptId: B, current: false });
+  expect(harness.command).toHaveBeenCalledTimes(1);
+});
+
+it("retries an uncertain saved Resume exactly and reports it not current after the host read is revoked", async () => {
+  await mountHostSaved();
+  harness.command.mockRejectedValueOnce(new Error("Resume acknowledgement lost"));
+  await expect(resumeSaved(B)).rejects.toThrow("Resume acknowledgement lost");
+  read.mockImplementation(async path => {
+    if (path === "/api/host/saved") throw Object.assign(new Error("owner revoked"), { status: 403 });
+    return path.endsWith("/learning") ? progress("learner-owner") : { ok: true, courses: [] };
+  });
+  harness.command.mockResolvedValueOnce({ ok: true, available: true, active: { attemptId: B } });
+  const outcome = await resumeSaved(B);
+  expect(outcome).toMatchObject({ attemptId: B, current: false });
+  expect(harness.command.mock.calls[1]).toEqual(harness.command.mock.calls[0]);
+  expect(host.attempt()).toBe("");
+});
+
+it("rereads a host read with the courses when Learning reopens without reload", async () => {
+  await mountHostSaved();
+  open.value = false; await flush();
+  read.mockImplementation(async path => path === "/api/host/saved" ? { ok: true, active: { attemptId: A } }
+    : path.endsWith("/learning") ? progress("learner-owner") : { ok: true, courses: [] });
+  read.mockClear();
+  open.value = true; await flush();
+  expect(host.attempt()).toBe(A);
+  expect(read.mock.calls.filter(([path]) => path === "/api/host/saved")).toHaveLength(1);
+  expect(harness.command).not.toHaveBeenCalled();
+});

@@ -58,8 +58,10 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
   const availableResource = readResource("available", VIBE64_LEARNING_ROUTES.available, open);
   const authorPreviewEnabled = computed(() => toValue(authorPreview) === true);
   const authorPreviewResource = authorPreview === false ? null : readResource("author-preview", VIBE64_LEARNING_ROUTES.authorPreview, authorPreviewEnabled);
-  // Colleague may admit an author trial while L is closed. Opening L must
-  // reread the saved attempt, not reuse that earlier empty picker result.
+  // A host's own reads beside the courses (hostRead), reread with them.
+  const hostReads = new Set();
+  // Saved lessons may change while L is closed. Opening L rereads them, not
+  // reusing an earlier picker result.
   watch(open, (value, previous) => {
     if (value && !previous) void refresh();
   });
@@ -94,12 +96,23 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
   const current = scope => !disposed && scope.actor === actorKey.value && scope.learnerId === learnerId.value
     && scope.generation === generation && open.value
     && (!scope.authorPreviewAttemptId || (authorPreviewEnabled.value &&
-      savedAuthorPreview.value?.attemptId === scope.authorPreviewAttemptId && !authorPreviewResource.loadError.value));
+      savedAuthorPreview.value?.attemptId === scope.authorPreviewAttemptId && !authorPreviewResource.loadError.value))
+    && (!scope.savedIn || scope.savedIn.current() === true);
 
   async function refresh() {
     if (!actorKey.value || disposed) return null;
     return Promise.all([coursesResource.reload(), learningResource.reload(), availableResource.reload(),
-      ...(authorPreviewResource ? [authorPreviewResource.reload()] : [])]);
+      ...(authorPreviewResource ? [authorPreviewResource.reload()] : []), ...[...hostReads].map(read => read.reload())]);
+  }
+
+  // A host's own actor-scoped read shown beside the courses, made in the
+  // calling component's setup with the same reader tagging and reread by
+  // refresh() while that component is mounted.
+  function hostRead(name, path, enabled = null) {
+    const resource = readResource(name, path, enabled);
+    hostReads.add(resource);
+    onScopeDispose(() => hostReads.delete(resource));
+    return resource;
   }
 
   // onAdmitted(attemptId): called once the server confirms an attempt that is
@@ -125,6 +138,7 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
     if (stillCurrent()) {
       await learningResource.reload();
       if (scope.authorPreviewAttemptId) await authorPreviewResource.reload();
+      if (scope.savedIn) await scope.savedIn.reload();
     }
     return { result, attemptId: admitted.attemptId, learnerId: scope.learnerId,
       ended: Boolean(admitted.ended), current: stillCurrent() };
@@ -168,9 +182,14 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
     } finally { busy.value = false; }
   }
 
-  async function resumeLesson(attemptId, { onAdmitted = null } = {}) {
+  // savedIn: a saved lesson a host lists from its own read ({ current(),
+  // reload() }). It is resumed only while that read still shows it, and
+  // reread after the resume.
+  async function resumeLesson(attemptId, { onAdmitted = null, savedIn = null } = {}) {
     if (busy.value) return null;
-    return resume(attemptId, capture(), onAdmitted);
+    const scope = Object.freeze({ ...capture(), ...(savedIn ? { savedIn } : {}) });
+    if (savedIn && (!attemptId || !current(scope))) throw new Error("Read this exact saved lesson before reopening it.");
+    return resume(attemptId, scope, onAdmitted);
   }
 
   // Owner-only custom course through the original catalogue action; it admits
@@ -230,5 +249,5 @@ export function useVibe64LearningCourses({ authorPreview = false, active } = {})
 
   return Object.freeze({ active: open,
     coursesResource, learningResource, availableResource, installState, installCourse, learnerId, busy, starting, startRetry,
-    refresh, startLesson, resumeLesson, createCourse, authorPreviewEnabled, authorPreviewResource, savedAuthorPreview, resumeAuthorPreview });
+    refresh, hostRead, startLesson, resumeLesson, createCourse, authorPreviewEnabled, authorPreviewResource, savedAuthorPreview, resumeAuthorPreview });
 }

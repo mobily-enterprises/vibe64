@@ -399,4 +399,6 @@ function createTrainingAuthorPreviewActions({ preview } = {}) {
   ]);
 }
 
-export { attemptId, attemptSummary, createTrainingActions, createTrainingAuthorPreviewActions, id, operationError, pick, practiceSlug, requestId, revision, text };
+// The bounded projections and schema a host's own Training actions reuse.
+export { active as attemptProjection, attemptId, attemptSummary, boundedResult, completion as completionProjection, createTrainingActions,
+  createTrainingAuthorPreviewActions, id, operationError, pick, practiceSlug, prepared as preparedResult, requestId, resultOutput, revision, text };

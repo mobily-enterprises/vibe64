@@ -44,7 +44,7 @@ function uiRenderer() {
 const uiWidget = { setup: (_props, { attrs, slots }) => () => Vue.h("div", attrs, slots.default?.()) };
 function nodes(root) { return [root, ...root.children.flatMap(nodes)]; }
 
-async function mountCourses({ authorTrial = null, accounts = { aiOnboardingAvailable: Vue.ref(true), aiOnboardingNeeded: Vue.ref(false),
+async function mountCourses({ authorTrial = null, slot = null, accounts = { aiOnboardingAvailable: Vue.ref(true), aiOnboardingNeeded: Vue.ref(false),
   requestVibe64AiOnboarding: vi.fn(() => true) } } = {}) {
   const route = Vue.reactive({ fullPath: "/app" });
   const calls = { pickerProps: null, opened: [] };
@@ -75,7 +75,7 @@ async function mountCourses({ authorTrial = null, accounts = { aiOnboardingAvail
     "@local/vibe64-accounts/client": accounts, "@/lib/vibe64Learning.js": LearningEnvironment
   });
   const root = { children: [] };
-  const app = uiRenderer().createApp({ render: () => Vue.h(component, { courses: owner }) });
+  const app = uiRenderer().createApp({ render: () => Vue.h(component, { courses: owner }, slot ? { default: slot } : undefined) });
   for (const tag of ["v-btn", "v-alert", "v-skeleton-loader"]) app.component(tag, uiWidget);
   app.mount(root); await Vue.nextTick();
   return { app, root, owner, calls, route, accounts };
@@ -167,6 +167,19 @@ it("adds one saved author-trial control beside the courses without released-cour
     expect(view.calls.authorPreview).toBe("saved-preview"); expect(view.calls.start).toBeUndefined();
     expect(view.calls.opened).toEqual([{ attemptId: "saved-preview", current: true }]);
     expect(view.calls.pickerProps.learningResult).toBe(view.owner.learningResource.data.value);
+  } finally { view.app.unmount(); }
+});
+
+it("gives a host's Courses content the courses owner, its request state and the shared open", async () => {
+  let scope = null;
+  const view = await mountCourses({ slot: value => { scope = value; return [Vue.h("button", { "data-test": "host-resume",
+    onClick: () => value.opened(owner => owner.resumeLesson("saved-lesson")) })]; } });
+  try {
+    expect([scope.courses, scope.busy, scope.canRequest]).toEqual([view.owner, false, true]);
+    nodes(view.root).find(node => node.props?.["data-test"] === "host-resume").props.onClick();
+    await Vue.nextTick(); await Vue.nextTick();
+    expect(view.calls.resume).toBe("saved-lesson");
+    expect(view.calls.opened).toEqual([{ attemptId: "saved-lesson", current: true }]);
   } finally { view.app.unmount(); }
 });
 
