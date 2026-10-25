@@ -7,10 +7,14 @@ import {
   subscribeTerminalSession, terminalNamespaceAdmissionFailure, writeTerminalSessionText
 } from "@local/vibe64-execution/server/terminalSessions";
 import {
-  codexSessionWorktreeUnavailableFailure, codexSessionWorkdirAllowed,
-  codexTerminalNamespace, directoryExists, ensureTerminalSessionSourceGitSelfContained,
-  globalCodexTerminalNamespace, nonRetryableTerminalFailure, terminalSessionSourceRoot,
-  terminalWorktreePath, vibe64Result
+  codexSessionWorktreeUnavailableFailure,
+  codexSessionWorkdirAllowed,
+  codexTerminalNamespace,
+  directoryExists,
+  ensureTerminalSessionSourceGitSelfContained,
+  globalCodexTerminalNamespace,
+  nonRetryableTerminalFailure,
+  vibe64Result
 } from "./terminalShared.js";
 import { codexAppServerEndpointForTarget } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { codexAgentSettingsFromSession } from "./codexRuntimeHost.js";
@@ -20,6 +24,7 @@ import { cleanupCodexAttachments, prepareCodexAttachmentRoot } from "./codexAtta
 import { executionEnvFingerprint, loadProjectExecutionEnv } from "./projectExecutionEnv.js";
 import { recordSessionGitCommandActor } from "./sessionGitCommandActor.js";
 import { errorMessage } from "./codexStartupHealth.js";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 const GLOBAL_CODEX_TERMINAL_SCOPE = "global";
 const CODEX_VISIBLE_TERMINAL_DETACHED_IDLE_TIMEOUT_MS = 5_000;
@@ -93,14 +98,14 @@ function createCodexInteractiveTerminals({
   async function startCodexTerminalSession(sessionId) {
     const runtime = await createRuntimeForSession();
     const session = await runtime.getSession(sessionId);
-    const executionRoot = terminalSessionSourceRoot(session);
+    const executionRoot = sessionSourcePath(session);
     if (!executionRoot) {
       return nonRetryableTerminalFailure({
         ok: false,
         error: "Vibe64 Codex execution root is not available."
       });
     }
-    const workdir = terminalWorktreePath(session);
+    const workdir = sessionSourcePath(session);
     if (codexSessionWorktreeIsUnavailable(session)) {
       return blockCodexAppServerForUnavailableWorktree(
         runtime,
@@ -148,7 +153,7 @@ function createCodexInteractiveTerminals({
     try {
       return await withCodexSessionStartupGate({
         operation: async (currentSession) => {
-          const currentWorkdir = terminalWorktreePath(currentSession);
+          const currentWorkdir = sessionSourcePath(currentSession);
           const baseTerminalEnv = await codexProjectTerminalEnv({
             runtime,
             session: currentSession,
@@ -372,7 +377,7 @@ function createCodexInteractiveTerminals({
         ok: false
       };
     }
-    const executionRoot = terminalSessionSourceRoot(session);
+    const executionRoot = sessionSourcePath(session);
     if (!executionRoot) {
       return {
         code: "vibe64_codex_terminal_source_root_missing",
@@ -380,7 +385,7 @@ function createCodexInteractiveTerminals({
         ok: false
       };
     }
-    const workdir = terminalWorktreePath(session);
+    const workdir = sessionSourcePath(session);
     const vibe64User = input?.vibe64User || input?.request?.vibe64User || null;
     const actorMetadata = await recordSessionGitCommandActor({
       env,

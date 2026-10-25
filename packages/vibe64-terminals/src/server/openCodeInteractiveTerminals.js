@@ -2,8 +2,9 @@ import {
   closeTerminalSession, readTerminalSession, resizeTerminalSession,
   subscribeTerminalSession, terminalNamespaceAdmissionFailure, writeTerminalSessionText
 } from "@local/vibe64-execution/server/terminalSessions";
-import { opencodeTerminalNamespace, terminalSessionSourceRoot, vibe64Result } from "./terminalShared.js";
+import { opencodeTerminalNamespace, vibe64Result } from "./terminalShared.js";
 import { normalizeText as text } from "@local/vibe64-core/server/core";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 const OPENCODE_TERMINAL_OUTPUT_SNAPSHOT_MAX_LENGTH = 256 * 1024;
 
@@ -81,7 +82,7 @@ export function createOpenCodeInteractiveTerminals({ sharedRuntime, contextFor, 
         reason: "opencode-terminal-input",
         runtime: context.runtime,
         session: context.session,
-        sourceRoot: terminalSessionSourceRoot(context.session),
+        sourceRoot: sessionSourcePath(context.session),
         threadId: target?.upstreamSessionId || storedUpstreamSessionId(context),
         vibe64User: options.vibe64User || null,
         workdir: context.workdir

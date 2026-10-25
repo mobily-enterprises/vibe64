@@ -6,7 +6,7 @@ import { normalizeVibe64AgentRunState } from "@local/vibe64-runtime/server/sessi
 import { codexAppServerThreadIdForSession, codexAppServerToolSchemaIdentityForSession } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import { agentTerminalIdentityForWorkdir, agentTerminalIdentityState } from "./agentTerminalIdentity.js";
 import { activeCodexTerminal } from "./codexTerminalAccess.js";
-import { terminalWorktreePath } from "./terminalShared.js";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 const CODEX_AGENT_PROVIDER = "codex";
 const CODEX_STATE_METADATA_NAMES = Object.freeze([
@@ -32,7 +32,7 @@ function normalizeText(value) {
 // Presentation of an admitted native descriptor is separate from source access.
 // Starting/reacquiring execution still validates the active root through Runtime.
 function nativeStateWorkdir(session) {
-  return session?.purpose === "learning" ? session.nativeExecutionRoot || "" : terminalWorktreePath(session);
+  return session?.purpose === "learning" ? session.nativeExecutionRoot || "" : sessionSourcePath(session);
 }
 
 function codexAppServerTurnState(session = {}) {
@@ -65,7 +65,7 @@ function codexThreadIdForWorkdir(session = {}, workdir = "") {
 }
 
 function codexReadyIdentityForWorkdir(session = {}, workdir = "") {
-  const normalizedWorkdir = workdir ? path.resolve(workdir) : terminalWorktreePath(session);
+  const normalizedWorkdir = workdir ? path.resolve(workdir) : sessionSourcePath(session);
   return agentTerminalIdentityForWorkdir(session, {
     provider: CODEX_AGENT_PROVIDER,
     validateConversationId: normalizeCodexThreadId,
@@ -74,7 +74,7 @@ function codexReadyIdentityForWorkdir(session = {}, workdir = "") {
 }
 
 function codexAgentIdentityState(session = {}, workdir = "") {
-  const normalizedWorkdir = workdir ? path.resolve(workdir) : terminalWorktreePath(session);
+  const normalizedWorkdir = workdir ? path.resolve(workdir) : sessionSourcePath(session);
   const readyIdentity = codexReadyIdentityForWorkdir(session, workdir);
   if (readyIdentity) {
     return readyIdentity;

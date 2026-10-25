@@ -14,9 +14,16 @@ import {
 import { sessionClosingReason, sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { terminalNamespaceAdmissionFailure } from "@local/vibe64-execution/server/terminalSessions";
 import {
-  claudeConversationError, codexTerminalNamespace, codexSessionWorktreeWasRemoved,
-  codexSessionWorktreeUnavailableFailure, codexSessionWorkdirAllowed, directoryExists,
-  openCodeError, throwVibe64OpenCodeError as runtimeFailure, openCodeSessionId, nonRetryableTerminalFailure, terminalSessionSourceRoot, terminalWorktreePath
+  claudeConversationError,
+  codexTerminalNamespace,
+  codexSessionWorktreeWasRemoved,
+  codexSessionWorktreeUnavailableFailure,
+  codexSessionWorkdirAllowed,
+  directoryExists,
+  openCodeError,
+  throwVibe64OpenCodeError as runtimeFailure,
+  openCodeSessionId,
+  nonRetryableTerminalFailure
 } from "./terminalShared.js";
 import { VIBE64_SESSION_STATUS, conversationMessageIdentity, conversationMessageVersion } from "@local/vibe64-runtime/server/sessionStore";
 import {
@@ -26,6 +33,7 @@ import {
   codexAppServerTurnSettings,
   writeCodexAppServerIdentityMetadata
 } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 export const MAIN_CONVERSATION_STATE_KEY = "assistant_changeover";
 const STATE_KEY = MAIN_CONVERSATION_STATE_KEY;
@@ -116,7 +124,7 @@ export async function readSessionConversationContext(engine, projectService, ses
     if (!session) {
       throw openCodeError("vibe64_session_not_found", "Vibe64 session is not available.", { sessionId: id }, 404);
     }
-    const workdir = await learningSessionExecutionRoot(runtime, id, { allowClosing: options.allowClosing === true }) || terminalSessionSourceRoot(session);
+    const workdir = await learningSessionExecutionRoot(runtime, id, { allowClosing: options.allowClosing === true }) || sessionSourcePath(session);
     if (!workdir || !String(session.sessionRoot ?? "").trim() || !String(runtime.stateRoot ?? "").trim()) {
       throw openCodeError(
         "vibe64_opencode_session_roots_missing",
@@ -130,7 +138,7 @@ export async function readSessionConversationContext(engine, projectService, ses
   if (!scope && !session) throw claudeConversationError("This session is unavailable.");
   const selection = options.assistantSelection || vibe64AssistantSelectionFromMetadata(session?.metadata);
   if (selection?.engineId !== "claude") throw claudeConversationError("This session does not have a Claude Code selection.");
-  const workdir = scope?.workdir || await learningSessionExecutionRoot(runtime, id, { allowClosing: options.allowClosing === true }) || terminalSessionSourceRoot(session);
+  const workdir = scope?.workdir || await learningSessionExecutionRoot(runtime, id, { allowClosing: options.allowClosing === true }) || sessionSourcePath(session);
   if (!path.isAbsolute(workdir || "") || !runtime.stateRoot) throw claudeConversationError("Claude requires a prepared session workspace.");
   return { ...options, runtime, session, assistantSelection: selection, selection, sessionId: id, workdir,
     key: `${path.resolve(runtime.stateRoot)}\0${id}` };
@@ -172,17 +180,17 @@ async function prepareCodexConversationContext(sessionId, runtime, session, allo
     if (error?.code !== "vibe64_session_source_required" || runtime.learningScope?.noExercise !== false ||
         !codexSessionWorktreeWasRemoved(session)) throw error;
     return codexHost.unavailableWorktree(runtime, sessionId, codexSessionWorktreeUnavailableFailure({
-      session, workdir: terminalWorktreePath(session)
+      session, workdir: sessionSourcePath(session)
     }));
   }
-  const executionRoot = learningRoot || terminalSessionSourceRoot(session);
+  const executionRoot = learningRoot || sessionSourcePath(session);
   if (!executionRoot) {
     return nonRetryableTerminalFailure({
       ok: false,
       error: "Vibe64 Codex execution root is not available."
     });
   }
-  const workdir = learningRoot || terminalWorktreePath(session);
+  const workdir = learningRoot || sessionSourcePath(session);
   if (!learningRoot && codexSessionWorktreeWasRemoved(session)) {
     return codexHost.unavailableWorktree(
       runtime,
@@ -826,7 +834,7 @@ export function createOpenCodeMainMessagePreparation({ projectService, env, reco
             reason: "agent-message",
             runtime: context.runtime,
             session: context.session,
-            sourceRoot: terminalSessionSourceRoot(context.session),
+            sourceRoot: sessionSourcePath(context.session),
             threadId,
             vibe64User: options.vibe64User || null,
             workdir: context.workdir
@@ -1011,7 +1019,7 @@ export function createMainConversationBinding(store, sessionId, context) {
           identity: {
             ...binding.identity,
             read: workdir => codexAppServerThreadIdForSession(session, workdir),
-            async readToolSchemaIdentity(workdir = session.nativeExecutionRoot || terminalWorktreePath(session)) {
+            async readToolSchemaIdentity(workdir = session.nativeExecutionRoot || sessionSourcePath(session)) {
               return codexAppServerToolSchemaIdentityForSession({ metadata: await store.readMetadata(sessionId) }, workdir);
             },
             write({ appServerRuntime, threadId, toolSchemaIdentity, workdir }) {

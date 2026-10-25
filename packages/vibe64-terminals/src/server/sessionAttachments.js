@@ -8,7 +8,7 @@ import {
   conversationAttachmentReference,
   normalizeVibe64ConversationAttachments
 } from "@local/vibe64-runtime/shared";
-import { terminalSessionSourceRoot, vibe64Result } from "./terminalShared.js";
+import { vibe64Result } from "./terminalShared.js";
 import { sessionClosingReason, sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { vibe64SessionStatusIsOpen } from "@local/vibe64-runtime/server/sessionStore";
 import {
@@ -18,6 +18,7 @@ import {
   withUploadedAgentAttachment
 } from "./codexAttachments.js";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 function attachmentDirectory(paths, id) {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(id)) {
@@ -51,7 +52,7 @@ function createSessionAttachments({ projectService, env = process.env }) {
   async function attachmentContext(context) {
     const runtime = context.runtime || await projectService.createRuntime({ inspectSource: false });
     const session = context.session || await runtime.getSession(context.sessionId, { inspectSource: false });
-    const executionRoot = terminalSessionSourceRoot(session);
+    const executionRoot = sessionSourcePath(session);
     if (!executionRoot) throw new Error("The attachment session source is unavailable.");
     return { runtime, session, executionRoot, sessionId: context.sessionId };
   }
@@ -163,7 +164,7 @@ function createSessionAttachments({ projectService, env = process.env }) {
       return runtime.store.withReadableSessionPaths(sessionId, async (paths) => {
         const saved = await readSavedAttachment(paths, id);
         if (!saved) {
-          const executionRoot = terminalSessionSourceRoot(session);
+          const executionRoot = sessionSourcePath(session);
           if (!executionRoot || !vibe64SessionStatusIsOpen(session.status)) {
             throw Object.assign(new Error("This session has no such attachment."), { statusCode: 404 });
           }
@@ -199,7 +200,7 @@ function createCodexSessionAttachmentRenewal({ sessionRuntimeHost, sessionEnviro
       }
       const runtime = await createRuntimeForSession();
       const session = await runtime.getSession(sessionId);
-      const executionRoot = terminalSessionSourceRoot(session);
+      const executionRoot = sessionSourcePath(session);
       if (!executionRoot) {
         return {
           code: "vibe64_agent_attachment_source_root_missing",

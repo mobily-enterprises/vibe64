@@ -1,11 +1,10 @@
-import path from "node:path";
-
 import {
   homeEnvForUser
 } from "../actor/userIdentity.js";
 import {
   normalizeAbsolutePath,
-  normalizeText
+  normalizeText,
+  pathInsideOrEqual
 } from "../normalize.js";
 
 function pathIsHomeDirectory(value = "") {
@@ -13,15 +12,6 @@ function pathIsHomeDirectory(value = "") {
   return normalized === "/home" || normalized.startsWith("/home/");
 }
 
-function pathIsInsideOrEqual(child = "", parent = "") {
-  const normalizedChild = normalizeAbsolutePath(child);
-  const normalizedParent = normalizeAbsolutePath(parent);
-  if (!normalizedChild || !normalizedParent) {
-    return false;
-  }
-  const relative = path.relative(normalizedParent, normalizedChild);
-  return !relative || (!relative.startsWith("..") && !path.isAbsolute(relative));
-}
 
 function credentialEnv({ actor = {}, request = {} } = {}) {
   const credentialHome = request.credentialHome || {};
@@ -35,7 +25,7 @@ function credentialEnv({ actor = {}, request = {} } = {}) {
     error.code = "vibe64_command_credential_home_actor_mismatch";
     throw error;
   }
-  if (!actor.requiresRealUser && pathIsHomeDirectory(home) && actorHome && !pathIsInsideOrEqual(home, actorHome)) {
+  if (!actor.requiresRealUser && pathIsHomeDirectory(home) && actorHome && !pathInsideOrEqual(actorHome, home)) {
     const error = new Error("A /home credential directory requires a matching real-user actor.");
     error.code = "vibe64_command_credential_home_real_user_required";
     throw error;
@@ -66,6 +56,5 @@ function credentialEnv({ actor = {}, request = {} } = {}) {
 
 export {
   credentialEnv,
-  pathIsHomeDirectory,
-  pathIsInsideOrEqual
+  pathIsHomeDirectory
 };

@@ -2,8 +2,8 @@ import { createGitTurnCheckpoint } from "@local/vibe64-execution/server";
 import { codexAppServerTurnState } from "@jskit-ai/assistant-core/server/codex-turn";
 import { normalizeVibe64AgentRunState } from "@local/vibe64-runtime/server/sessionStore";
 import { CODEX_TURN_OUTCOME } from "./codexTurnOutcomeNotice.js";
-import { terminalWorktreePath } from "./terminalShared.js";
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 // Retain the existing persisted task identity; checkpoints now cover every
 // session assistant, including writable temporary conversations.
@@ -29,7 +29,7 @@ async function checkpointSessionTurn({
       outerTurnId, outcome, timestamp, sessionId,
       project: typeof projectService.readCurrentProject === "function"
         ? await projectService.readCurrentProject() : projectService.selectedProject || {},
-      worktreePath: terminalWorktreePath(session)
+      worktreePath: sessionSourcePath(session)
     });
   } catch (error) {
     failure = error.message || "A recovery checkpoint could not be created.";

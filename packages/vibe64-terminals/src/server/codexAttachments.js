@@ -14,10 +14,8 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 
 import {
+  tryAcquireExclusiveFileLock,
   stableHash
-} from "./terminalShared.js";
-import {
-  tryAcquireExclusiveFileLock
 } from "@local/vibe64-execution/server";
 import {
   targetRuntimeIdentity

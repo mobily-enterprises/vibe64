@@ -14,7 +14,7 @@ import { codexAgentSettingsFromSession } from "./codexRuntimeHost.js";
 import {
   codexAppServerTurnState, codexConversationIdForWorkdir, codexThreadIdForWorkdir, withCodexState
 } from "./codexConversationStorage.js";
-import { terminalWorktreePath } from "./terminalShared.js";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -105,7 +105,7 @@ function createCodexConversationPreparation({
         store: runtime.store,
         getSession: id => runtime.getSession(id, { inspectSource: false })
       }, session, {
-        threadId: current => codexThreadIdForWorkdir(current, learningRoot || terminalWorktreePath(current)),
+        threadId: current => codexThreadIdForWorkdir(current, learningRoot || sessionSourcePath(current)),
         providerOptions: current => codexAppServerControlRuntimeOptionsForSession(current, { runtime })
       });
     }, { operation: "recover-codex-observation", waitMs: 10_000 });
@@ -129,7 +129,7 @@ function createCodexConversationPreparation({
     return {
       session,
       get connection() {
-        const workdir = learningRoot || terminalWorktreePath(session);
+        const workdir = learningRoot || sessionSourcePath(session);
         const threadId = codexThreadIdForWorkdir(session, workdir);
         return {
           workdir, threadId,

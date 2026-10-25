@@ -22,6 +22,7 @@ import {
   isManagedWorkspaceRuntime,
   realUserActorRequiresInstalledHelper
 } from "../../packages/vibe64-execution/src/server/policy/permissionPolicy.js";
+import { pathInsideOrEqual } from "../../packages/vibe64-execution/src/server/normalize.js";
 import {
   helperOperationForRequest,
   helperPayload,
@@ -478,6 +479,28 @@ test("managed source actor policy permits the daemon and rejects a real user", (
   }, path.join(sourceRoot, "nested")), {
     code: "vibe64_command_managed_source_real_user_forbidden"
   });
+  // A child whose name starts with ".." is still inside the source.
+  assert.throws(() => assertManagedSourceFilesystemActor({
+    requiresRealUser: true
+  }, {
+    session: { sourceRoot }
+  }, path.join(sourceRoot, "..cache")), {
+    code: "vibe64_command_managed_source_real_user_forbidden"
+  });
+  assert.doesNotThrow(() => assertManagedSourceFilesystemActor({
+    requiresRealUser: true
+  }, {
+    session: { sourceRoot }
+  }, path.join(sourceRoot, "..", "sibling")));
+});
+
+test("execution path containment treats a \"..name\" child as inside", () => {
+  const root = path.join(os.tmpdir(), "vibe64-containment");
+  assert.equal(pathInsideOrEqual(root, root), true);
+  assert.equal(pathInsideOrEqual(root, path.join(root, "..cache", "file")), true);
+  assert.equal(pathInsideOrEqual(root, path.join(root, "..")), false);
+  assert.equal(pathInsideOrEqual(root, path.join(root, "..", "sibling")), false);
+  assert.equal(pathInsideOrEqual(root, ""), false);
 });
 
 test("execution gateway permits same-user direct execution only outside managed workspace runtime", () => {

@@ -10,7 +10,8 @@ import { effectiveVibe64AgentSettings } from "@local/vibe64-runtime/shared";
 import { withGenesisCommandShim } from "@local/vibe64-genesis/server";
 import { VIBE64_CODEX_GIT_COMMAND_WRAPPER_DIR_ENV } from "./codexGitCommand.js";
 import { listTerminalSessions } from "@local/vibe64-execution/server/terminalSessions";
-import { codexTerminalNamespace, globalCodexTerminalNamespace, terminalWorktreePath } from "./terminalShared.js";
+import { codexTerminalNamespace, globalCodexTerminalNamespace } from "./terminalShared.js";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 const MAX_OPEN_CODEX_TERMINALS = 3;
 
@@ -168,7 +169,7 @@ function activeCodexTerminalSnapshots(session = {}) {
   if (!sessionId) {
     return [];
   }
-  const workdir = terminalWorktreePath(session);
+  const workdir = sessionSourcePath(session);
   return listTerminalSessions({
     namespace: codexTerminalNamespace(sessionId)
   })

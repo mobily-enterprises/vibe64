@@ -14,6 +14,16 @@ function normalizeAbsolutePath(value = "") {
   return normalized ? path.resolve(normalized) : "";
 }
 
+// Whether candidate is root or inside it. A child named like "..cache" is
+// inside; only ".." itself or a "../" prefix leaves the root.
+function pathInsideOrEqual(root = "", candidate = "") {
+  const normalizedRoot = normalizeAbsolutePath(root);
+  const normalizedCandidate = normalizeAbsolutePath(candidate);
+  if (!normalizedRoot || !normalizedCandidate) return false;
+  const relative = path.relative(normalizedRoot, normalizedCandidate);
+  return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
+
 function recordValue(value = {}) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? value
@@ -59,6 +69,7 @@ export {
   normalizeAbsolutePath,
   normalizeInteger,
   normalizeText,
+  pathInsideOrEqual,
   recordValue,
   uniqueStrings
 };

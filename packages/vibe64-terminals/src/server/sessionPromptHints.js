@@ -29,10 +29,8 @@ import {
 import { cleanupAssistantHelper, runAssistantHelperTurn } from "./assistantHelperTurn.js";
 import { openedFileWithin } from "./openedFileWithin.js";
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "./sessionWorkTasks.js";
-import {
-  terminalProjectScopeKey,
-  terminalWorktreePath
-} from "./terminalShared.js";
+import { currentProjectScopeKey } from "@local/vibe64-core/server/projectRequestContext";
+import { sessionSourcePath as savedSessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 const PROMPT_HINT_CONTEXT_VERSION = "vibe64.prompt-hints.context.v3";
 const PROMPT_HINT_TASK_DIRECTORY = "assistant/prompt-hint-tasks";
@@ -413,7 +411,7 @@ function createSessionPromptHintsService({
   publishSessionChanged = async () => {},
   readBlueprintText = readPromptHintBlueprint,
   readSubsystemsText = readPromptHintSubsystems,
-  sessionSourcePath = terminalWorktreePath
+  sessionSourcePath = savedSessionSourcePath
 } = {}) {
   if (!projectService || typeof projectService.createRuntime !== "function") {
     throw new TypeError("Prompt hints require the Vibe64 project service.");
@@ -937,7 +935,7 @@ function createSessionPromptHintsService({
     const normalizedSessionId = normalizeText(sessionId);
     const operationId = definePromptHintOperationId(input.operationId);
     const originId = definePromptHintOriginId(input.originId);
-    const projectScope = terminalProjectScopeKey();
+    const projectScope = currentProjectScopeKey();
     const vibe64User = input.vibe64User || null;
     const actorId = promptHintActorId(vibe64User);
     const subscriberKey = promptHintSubscriberKey({
@@ -987,7 +985,7 @@ function createSessionPromptHintsService({
     const normalizedSessionId = normalizeText(sessionId);
     const operationId = definePromptHintOperationId(input.operationId);
     const originId = definePromptHintOriginId(input.originId);
-    const projectScope = terminalProjectScopeKey();
+    const projectScope = currentProjectScopeKey();
     const vibe64User = input.vibe64User || null;
     const actorId = promptHintActorId(vibe64User);
     const subscriberKey = promptHintSubscriberKey({
@@ -1008,7 +1006,7 @@ function createSessionPromptHintsService({
 
   async function cancelSessionPromptHintsForSession(sessionId = "", options = {}) {
     const normalizedSessionId = normalizeText(sessionId);
-    const projectScope = terminalProjectScopeKey();
+    const projectScope = currentProjectScopeKey();
     const sessionKey = promptHintSessionKey({
       projectScope,
       sessionId: normalizedSessionId

@@ -10,6 +10,7 @@ import {
   vibe64ManagedExecutionProvider,
   vibe64ManagedExecutionRequired
 } from "@local/vibe64-execution/server";
+import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { openedFileWithin } from "./openedFileWithin.js";
 
@@ -21,11 +22,6 @@ function digest(value) {
   return createHash("sha256").update(value).digest("hex");
 }
 
-function within(root, file) {
-  const relative = path.relative(root, file);
-  return !path.isAbsolute(relative) && relative !== ".." && !relative.startsWith(`..${path.sep}`);
-}
-
 async function dependencyIdentity(root, file, budget) {
   let actual;
   try {
@@ -34,10 +30,10 @@ async function dependencyIdentity(root, file, budget) {
     if (error.code === "ENOENT") return "absent";
     throw error;
   }
-  if (!within(root, actual)) throw new Error("dependency_outside_source");
+  if (!pathInsideOrEqual(root, actual)) throw new Error("dependency_outside_source");
   const handle = await open(actual, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
-    if (!await openedFileWithin(handle, actual, (openedPath) => within(root, openedPath))) {
+    if (!await openedFileWithin(handle, actual, (openedPath) => pathInsideOrEqual(root, openedPath))) {
       throw new Error("dependency_outside_source");
     }
     const before = await handle.stat({ bigint: true });
@@ -112,7 +108,7 @@ async function resourceWorkflowIdentity({ sourceRoot, operation, runtimes = [], 
   const runtimeNames = [...new Set(runtimes)].sort();
   const commandSteps = steps.map((step) => {
     const cwd = path.resolve(root, step.workdir || ".");
-    if (!within(root, cwd)) throw new Error("Workflow work directory is outside its source.");
+    if (!pathInsideOrEqual(root, cwd)) throw new Error("Workflow work directory is outside its source.");
     return { argv: step.argv, workdir: path.relative(root, cwd) || ".", role: step.role || "" };
   });
   const description = {

@@ -18,9 +18,10 @@ import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shar
 import { agentSessionCommandEnvironmentIsHealthy } from "./agentCommandEnvironment.js";
 import { codexThreadIdForWorkdir } from "./codexConversationStorage.js";
 import { codexAgentSettingsFromSession } from "./codexRuntimeHost.js";
-import { codexTerminalNamespace, terminalWorktreePath } from "./terminalShared.js";
+import { codexTerminalNamespace } from "./terminalShared.js";
 import { subscribeUnixCommandControlChanges } from "./unixJsonCommand.js";
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -192,7 +193,7 @@ function createCodexSessionProviderHost(host) {
         if (learningRoot && normalizeText(params.cwd) && normalizeText(params.cwd) !== learningRoot) {
           throw new Error("The learning thread belongs to a different native execution root.");
         }
-        const workdir = learningRoot || normalizeText(params.cwd || options.workdir) || terminalWorktreePath(session);
+        const workdir = learningRoot || normalizeText(params.cwd || options.workdir) || sessionSourcePath(session);
         if (!learningRoot) {
           const registry = await vibe64HostContextRegistry(runtimeRoot);
           await registry.register(

@@ -8,9 +8,9 @@ import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import {
   CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE,
   codexSessionWorktreeUnavailableFailure,
-  codexSessionWorktreeWasRemoved,
-  terminalWorktreePath
+  codexSessionWorktreeWasRemoved
 } from "./terminalShared.js";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -86,7 +86,7 @@ function createCodexSessionEnvironment({
       project,
       runtime,
       sessionId,
-      worktreePath: terminalWorktreePath(session)
+      worktreePath: sessionSourcePath(session)
     });
     return prepared.env;
   }
@@ -103,7 +103,7 @@ function createCodexSessionEnvironment({
       if (codexSessionWorktreeIsUnavailable(currentSession)) {
         const failure = codexSessionWorktreeUnavailableFailure({
           session: currentSession,
-          workdir: terminalWorktreePath(currentSession)
+          workdir: sessionSourcePath(currentSession)
         });
         const error = new Error(failure.error);
         error.code = failure.code;

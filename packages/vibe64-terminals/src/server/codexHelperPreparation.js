@@ -2,7 +2,8 @@ import { CODEX_APP_SERVER_EXECUTION_MODES } from "@local/vibe64-runtime/server/c
 import { VIBE64_SESSION_STATUS } from "@local/vibe64-runtime/server/sessionStore";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { captureProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
-import { codexTerminalNamespace, terminalSessionSourceRoot, terminalWorktreePath } from "./terminalShared.js";
+import { codexTerminalNamespace } from "./terminalShared.js";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -30,7 +31,7 @@ function createCodexHelperPreparation({ runtimeHost, sessionRuntimeHost, account
       record.projectRuntimeRoot !== projectRuntimeRoot ||
       normalizeText(session?.sessionId || session?.id) !== record.sessionId ||
       normalizeText(runtime?.projectContextRoot) !== record.projectContextRoot ||
-      terminalWorktreePath(session) !== record.workdir
+      sessionSourcePath(session) !== record.workdir
     ) {
       throw codexAppServerHelperOwnershipError(
         "Persisted Codex helper ownership does not match the current project session.",
@@ -55,7 +56,7 @@ function createCodexHelperPreparation({ runtimeHost, sessionRuntimeHost, account
         }
         const providerOptions = await codexAppServerHelperRuntimeOptionsForSession(session, {
           runtime,
-          executionRoot: terminalSessionSourceRoot(session),
+          executionRoot: sessionSourcePath(session),
           toolHomeSource: toolHome.toolHomeSource,
           workdir: record.workdir
         });
@@ -158,8 +159,8 @@ function createCodexHelperPreparation({ runtimeHost, sessionRuntimeHost, account
       sessionId,
       projectRuntimeRoot,
       async prepareProvider() {
-        const executionRoot = terminalSessionSourceRoot(session);
-        const workdir = terminalWorktreePath(session);
+        const executionRoot = sessionSourcePath(session);
+        const workdir = sessionSourcePath(session);
         const toolHome = await codexToolHomeResult(session);
         if (toolHome.ok === false) {
           throw codexAppServerHelperOwnershipError(toolHome.error, { sessionId });

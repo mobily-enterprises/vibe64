@@ -117,9 +117,6 @@ import {
   directoryExists,
   ensureTerminalSessionSourceGitSelfContained,
   outputTargetTerminalNamespace,
-  terminalSessionSourceRoot,
-  terminalWorktreePath,
-  terminalProjectScopeKey,
   vibe64Result
 } from "./terminalShared.js";
 import {
@@ -138,7 +135,8 @@ import {
   captureProjectRequestContext,
   currentProjectActionRequestMeta,
   currentProjectRequestContext,
-  runWithProjectRequestContext
+  runWithProjectRequestContext,
+  currentProjectScopeKey
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
   logOperationalEvent
@@ -187,6 +185,7 @@ import {
 import {
   createSessionPromptHintsService
 } from "./sessionPromptHints.js";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 // The runtime proved this message never reached the assistant. Say so in the
 // response, so the browser shows the failure instead of an uncertain receipt.
@@ -543,7 +542,7 @@ function createService({
   });
   const publishAgentSessionChanged = async (sessionId, payload = {}) => {
     if (!closing) {
-      providerUsage.observe(terminalProjectScopeKey(), sessionId, payload, () => {
+      providerUsage.observe(currentProjectScopeKey(), sessionId, payload, () => {
         if (!closing) return publishSessionChanged.agentTerminal?.(sessionId, { reason: "agent-plan-usage" });
       });
     }
@@ -1069,7 +1068,7 @@ function createService({
   async function prepareAgentSkillsInsideAgentWrite(sessionId, context) {
     await sessionAgent.requireAssistantAccess(sessionId, context);
     if (sessionHasActiveAgentRun(context.session)) return;
-    const projectRoot = terminalWorktreePath(context.session);
+    const projectRoot = sessionSourcePath(context.session);
     if (!projectRoot || !existsSync(path.join(projectRoot, GENESIS_BLUEPRINT_PATH))) return;
     const temporary = await sessionAgent.hasActiveTemporaryConversation(sessionId, {}, context);
     if (temporary.active) return;
@@ -1700,7 +1699,7 @@ function createService({
   }
 
   async function sessionForSourceRepair(session = {}) {
-    if (terminalWorktreePath(session)) {
+    if (sessionSourcePath(session)) {
       return session;
     }
     const sessionId = sessionRecordId(session);
@@ -1724,7 +1723,7 @@ function createService({
       const sessionId = sessionRecordId(sessionEntry);
       try {
         const session = await sessionForSourceRepair(sessionEntry);
-        const workdir = terminalWorktreePath(session);
+        const workdir = sessionSourcePath(session);
         if (!workdir || !await directoryExists(workdir)) {
           continue;
         }
@@ -1886,7 +1885,7 @@ function createService({
 
   async function closeProjectScopedTerminalNamespaces({
     eventPrefix = "server.terminals.closeProjectRuntime",
-    projectScope = terminalProjectScopeKey()
+    projectScope = currentProjectScopeKey()
   } = {}) {
     const namespaces = projectScopedTerminalNamespaces(projectScope);
     let closed = 0;
@@ -1958,7 +1957,7 @@ function createService({
       ], {
         controllerOptions
       });
-    }).finally(() => providerUsage.forget(terminalProjectScopeKey(), sessionId));
+    }).finally(() => providerUsage.forget(currentProjectScopeKey(), sessionId));
   }
 
   function renewalTerminalAdmissionOwner(renewalId = "") {
@@ -2241,8 +2240,8 @@ function createService({
       sessionId: normalizedSessionId
     });
     if (execution?.ok === false) {
-      const sessionSourceRoot = terminalSessionSourceRoot(session);
-      const workdir = terminalWorktreePath(session);
+      const sessionSourceRoot = sessionSourcePath(session);
+      const workdir = sessionSourcePath(session);
       const recorded = sessionSourceRoot && workdir
         ? await writeSessionGitCommandActor({
             env,
@@ -2619,7 +2618,7 @@ function createService({
         };
       }
       const { runtime, session } = await sessionContext(normalizedSessionId, input);
-      const sessionSourceRoot = terminalSessionSourceRoot(session);
+      const sessionSourceRoot = sessionSourcePath(session);
       if (!sessionSourceRoot) {
         return {
           code: "vibe64_session_git_command_actor_source_root_missing",
@@ -2627,7 +2626,7 @@ function createService({
           ok: false
         };
       }
-      const workdir = terminalWorktreePath(session);
+      const workdir = sessionSourcePath(session);
       return writeSessionGitCommandActor({
         env,
         reason: input.reason || "session-interaction",
@@ -2694,7 +2693,7 @@ function createService({
         // project lock downstream; acquiring it here preserves that order.
         return projectService.runProjectSourceExclusive(async () => {
           const session = await context.runtime.getSession(id, { inspectSource: false });
-          const sourceRoot = terminalSessionSourceRoot(session);
+          const sourceRoot = sessionSourcePath(session);
           if (session.sessionId !== id || !sourceRoot) {
             throw Object.assign(new Error("This exact session has no available managed source."), {
               code: "vibe64_session_source_root_missing", statusCode: 409
@@ -2738,8 +2737,8 @@ function createService({
           reason: "create-pull-request",
           runtime,
           session,
-          sourceRoot: terminalSessionSourceRoot(session),
-          workdir: terminalWorktreePath(session),
+          sourceRoot: sessionSourcePath(session),
+          workdir: sessionSourcePath(session),
           threadId: session.metadata?.agent_identity_conversation_id || "",
           vibe64User: input.vibe64User || null
         });
@@ -3001,7 +3000,7 @@ function createService({
     async closeProjectRuntime(input = {}, { dormant = false } = {}) {
       const startedAtMs = Date.now();
       const context = projectRuntimeContext();
-      const projectScope = terminalProjectScopeKey();
+      const projectScope = currentProjectScopeKey();
       const projectContextRoot = context.projectContextRoot;
       const reason = String(input?.reason || "project-close").trim() || "project-close";
       const pinRuntime = await projectService.createRuntime({ inspectSource: false });

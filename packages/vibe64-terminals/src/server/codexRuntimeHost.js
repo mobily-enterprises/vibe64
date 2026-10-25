@@ -8,9 +8,9 @@ import { VIBE64_ASSISTANT_ENGINE_IDS, vibe64AssistantSelectionFromMetadata } fro
 import { stableHash } from "@local/vibe64-execution/server";
 import { codexGitCommandShimDirs } from "./codexTerminalAccess.js";
 import { executionEnvFingerprint, loadProjectExecutionEnv } from "./projectExecutionEnv.js";
-import { terminalSessionSourceRoot, terminalWorktreePath } from "./terminalShared.js";
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import { VIBE64_AGENT_ENV_COMMAND_SOCKET_ENV, VIBE64_AGENT_ENV_COMMAND_TOKEN_ENV } from "./agentEnvCommand.js";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 const CODEX_APP_SERVER_PROVIDER_KEY_DELIMITER = "\u001f";
 const CODEX_APP_SERVER_PROVIDER_TRANSIENT_ENV_KEYS = new Set([
@@ -180,7 +180,7 @@ function createCodexRuntimeHost({
     const metadataWorkdir = normalizeText(metadata.agent_identity_workdir) || metadataSourcePath ||
       normalizeText(fallbackOptions.workdir);
     const metadataExecutionRoot = normalizeText(fallbackOptions.executionRoot) ||
-      terminalSessionSourceRoot(session) ||
+      sessionSourcePath(session) ||
       metadataSourcePath;
     const selection = vibe64AssistantSelectionFromMetadata(metadata, { required: false });
     const providerId = session?.metadata?.codex_routing_home_provider || selection?.modelProviderId || curatedCodexModel(session?.agentSettings?.model)?.modelProviderId;
@@ -261,8 +261,8 @@ function createCodexSessionRuntimeHost({
     workdir = ""
   } = {}) {
     return {
-      get executionRoot() { return normalizeText(executionRoot) || terminalSessionSourceRoot(session); },
-      get workdir() { return normalizeText(workdir) || terminalWorktreePath(session); }
+      get executionRoot() { return normalizeText(executionRoot) || sessionSourcePath(session); },
+      get workdir() { return normalizeText(workdir) || sessionSourcePath(session); }
     };
   }
 
@@ -284,8 +284,8 @@ function createCodexSessionRuntimeHost({
         normalizeText(workdir) && path.resolve(workdir) !== learningRoot)) {
       throw new Error("Learning native execution must use its exact private session root.");
     }
-    const effectiveExecutionRoot = learningRoot || normalizeText(executionRoot) || terminalSessionSourceRoot(session);
-    const effectiveWorkdir = learningRoot || normalizeText(workdir) || terminalWorktreePath(session);
+    const effectiveExecutionRoot = learningRoot || normalizeText(executionRoot) || sessionSourcePath(session);
+    const effectiveWorkdir = learningRoot || normalizeText(workdir) || sessionSourcePath(session);
     const suppliedTerminalEnv = isRecord(terminalEnv);
     const baseTerminalEnv = suppliedTerminalEnv
       ? terminalEnv

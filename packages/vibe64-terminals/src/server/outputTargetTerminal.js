@@ -21,7 +21,8 @@ import {
   finishVibe64Workflow,
   setVibe64WorkflowPhase,
   stopVibe64Execution,
-  runVibe64Command
+  runVibe64Command,
+  stableHash
 } from "@local/vibe64-execution/server";
 import { startResourceWorkflow } from "./resourceWorkflow.js";
 import {
@@ -41,7 +42,8 @@ import {
 import {
   captureProjectRequestContext,
   currentProjectRequestContext,
-  runWithProjectRequestContext
+  runWithProjectRequestContext,
+  currentProjectScopeKey
 } from "@local/vibe64-core/server/projectRequestContext";
 import {
   VIBE64_PREVIEW_PUBLIC_DOMAIN_ENV,
@@ -84,10 +86,7 @@ import {
   commandInvocation,
   ensureTerminalSessionSourceGitSelfContained,
   vibe64Result,
-  outputTargetTerminalNamespace,
-  sessionTerminalCwd,
-  terminalProjectScopeKey,
-  stableHash
+  outputTargetTerminalNamespace
 } from "./terminalShared.js";
 import {
   projectExecutionEnvFromRecords,
@@ -121,6 +120,7 @@ import {
   snapshotDeclaredOutputResults
 } from "./outputResults.js";
 import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 const OUTPUT_METADATA = Object.freeze({
   agentHref: "output_target_agent_href",
@@ -196,7 +196,7 @@ async function writePreviewDiagnostic(session = {}, record = {}, {
     sessionId: String(record.sessionId || session.sessionId || session.id || "").trim(),
     sessionRoot,
     status: String(record.status || "failed").trim() || "failed",
-    sessionSourceRoot: String(record.sessionSourceRoot || sessionTerminalCwd(session) || "").trim(),
+    sessionSourceRoot: String(record.sessionSourceRoot || sessionSourcePath(session) || "").trim(),
     ...(record.reason ? { reason: String(record.reason) } : {}),
     ...(record.outputTargetId ? { outputTargetId: normalizeOutputTargetId(record.outputTargetId) } : {}),
     ...(record.cwd ? { cwd: String(record.cwd) } : {}),
@@ -605,7 +605,7 @@ async function createLaunchContext(projectService, sessionId, {
     }
     session = await runtime.getSession(sessionId);
   }
-  const sessionSourceRoot = sessionTerminalCwd(session);
+  const sessionSourceRoot = sessionSourcePath(session);
   const projectEnvironment = await loadProjectExecutionEnv({
     prepare: prepareEnvironment,
     reusePrepared: prepareEnvironment,
@@ -1097,7 +1097,7 @@ function previewAuthForLaunchTerminal(terminal = {}, {
       kind
     }),
     kind,
-    projectScope: String(metadata.projectScope || terminalProjectScopeKey()).trim(),
+    projectScope: String(metadata.projectScope || currentProjectScopeKey()).trim(),
     secret,
     sessionId,
     sessionRoot: String(metadata.sessionRoot || ""),
@@ -3183,7 +3183,7 @@ function previewPublicOriginForLaunch({
     return "";
   }
   const hashInput = [
-    terminalProjectScopeKey(),
+    currentProjectScopeKey(),
     sessionId
   ];
   // Independently hosted editors may share a preview domain and cloned project

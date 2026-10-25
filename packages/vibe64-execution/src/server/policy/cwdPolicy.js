@@ -1,18 +1,14 @@
 import { realpathSync } from "node:fs";
-import path from "node:path";
 
 import {
-  normalizeAbsolutePath
+  normalizeAbsolutePath,
+  pathInsideOrEqual
 } from "../normalize.js";
 
 function resolveCommandCwd(cwd = "") {
   return normalizeAbsolutePath(cwd || process.cwd());
 }
 
-function pathIsInsideOrEqual(root = "", candidate = "") {
-  const relative = path.relative(root, candidate);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-}
 
 function assertCwdAllowed(cwd = "", {
   allowedRoots = []
@@ -24,10 +20,10 @@ function assertCwdAllowed(cwd = "", {
   if (roots.length === 0) {
     return resolvedCwd;
   }
-  const matchingRoots = roots.filter((root) => pathIsInsideOrEqual(root, resolvedCwd));
+  const matchingRoots = roots.filter((root) => pathInsideOrEqual(root, resolvedCwd));
   if (matchingRoots.length > 0) {
     const canonicalCwd = realpathSync(resolvedCwd);
-    if (matchingRoots.some((root) => pathIsInsideOrEqual(realpathSync(root), canonicalCwd))) {
+    if (matchingRoots.some((root) => pathInsideOrEqual(realpathSync(root), canonicalCwd))) {
       return canonicalCwd;
     }
   }
@@ -38,6 +34,5 @@ function assertCwdAllowed(cwd = "", {
 
 export {
   assertCwdAllowed,
-  pathIsInsideOrEqual,
   resolveCommandCwd
 };

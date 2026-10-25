@@ -4,7 +4,8 @@ import {
   currentProcessIdentity
 } from "../actor/userIdentity.js";
 import {
-  normalizeAbsolutePath
+  normalizeAbsolutePath,
+  pathInsideOrEqual
 } from "../normalize.js";
 
 function processMatchesActor(actor = {}) {
@@ -45,8 +46,7 @@ function assertManagedSourceFilesystemActor(actor = {}, request = {}, cwd = "") 
   if (!sourceRoot || !commandCwd) {
     return;
   }
-  const relative = path.relative(sourceRoot, commandCwd);
-  if (relative && (relative.startsWith("..") || path.isAbsolute(relative))) {
+  if (!pathInsideOrEqual(sourceRoot, commandCwd)) {
     return;
   }
   const error = new Error(

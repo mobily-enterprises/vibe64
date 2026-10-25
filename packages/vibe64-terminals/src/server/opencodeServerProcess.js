@@ -23,7 +23,7 @@ import { requireCompletedNativeConversationReplacement } from "./assistantChange
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import { prepareOpenCodeSessionCommandEnvironment } from "./agentCommandEnvironment.js";
 import { openCodeFingerprint, recordOpenCodeSessionIdentity } from "./openCodeConversationStorage.js";
-import { normalizePlainObject as record, openCodeError, throwVibe64OpenCodeError } from "./terminalShared.js";
+import { openCodeError, throwVibe64OpenCodeError } from "./terminalShared.js";
 
 import {
   OPENCODE_EXPECTED_VERSION, OPENCODE_HOST, OPENCODE_READY_TIMEOUT_MS,
@@ -34,6 +34,8 @@ import {
   verifyOpenCodeApiKey as verifyNativeOpenCodeApiKey
 } from "@jskit-ai/assistant-core/server/opencode-process";
 import { normalizeText as text } from "@local/vibe64-core/server/core";
+import { normalizePlainObject as record } from "@local/vibe64-core/server/serverResponses";
+
 const OPENCODE_HELPER_AGENT_ID = "vibe64-helper";
 const OPENCODE_HELPER_SUBAGENT_PREFIX = "vibe64-helper-";
 const OPENCODE_EPHEMERAL_AGENT_ID = "vibe64-ephemeral";

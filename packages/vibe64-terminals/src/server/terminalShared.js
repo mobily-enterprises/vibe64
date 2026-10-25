@@ -3,11 +3,10 @@ import path from "node:path";
 import { sessionClosingReason } from "@local/vibe64-runtime/server/sessionLifecycle";
 
 import {
-  vibe64Result as sharedVibe64Result,
-  normalizePlainObject
+  vibe64Result as sharedVibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
-  sessionSourcePath as sharedSessionSourcePath
+  sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
   currentProjectScopeKey
@@ -16,8 +15,7 @@ import {
   ensureSessionSourceGitAlternatesDissociated
 } from "@local/vibe64-runtime/server/sessionSourceGit";
 import {
-  shellQuote,
-  stableHash
+  shellQuote
 } from "@local/vibe64-execution/server";
 
 const CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE = "vibe64_session_worktree_unavailable";
@@ -63,7 +61,7 @@ function codexSessionWorkdirAllowed({
   if (!workdir) {
     return false;
   }
-  const sessionWorktree = terminalWorktreePath(session);
+  const sessionWorktree = sessionSourcePath(session);
   return Boolean(sessionWorktree) && path.resolve(sessionWorktree) === path.resolve(workdir);
 }
 
@@ -106,14 +104,10 @@ function vibe64Result(operation) {
   });
 }
 
-function terminalProjectScopeKey() {
-  return currentProjectScopeKey();
-}
-
 function terminalNamespace(base = "", ...parts) {
   return [
     String(base || "").trim(),
-    terminalProjectScopeKey(),
+    currentProjectScopeKey(),
     ...parts.map((part) => String(part || "").trim())
   ].join(":");
 }
@@ -164,29 +158,12 @@ async function directoryExists(filePath = "") {
   }
 }
 
-function normalizedTerminalPath(value = "") {
-  const normalizedValue = String(value || "").trim();
-  return normalizedValue ? path.resolve(normalizedValue) : "";
-}
-
-function sessionTerminalCwd(session = {}) {
-  return String(sharedSessionSourcePath(session)).trim();
-}
-
-function terminalSessionSourceRoot(session = {}) {
-  return normalizedTerminalPath(sharedSessionSourcePath(session));
-}
-
-function terminalWorktreePath(session = {}) {
-  return sharedSessionSourcePath(session);
-}
-
 async function ensureTerminalSessionSourceGitSelfContained({
   runExclusive = null,
   session = {},
   workdir = ""
 } = {}) {
-  const worktreePath = terminalWorktreePath(session);
+  const worktreePath = sessionSourcePath(session);
   if (!worktreePath || !workdir || path.resolve(worktreePath) !== path.resolve(workdir)) {
     return {
       ok: true,
@@ -215,13 +192,6 @@ export {
   globalCodexTerminalNamespace,
   opencodeTerminalNamespace,
   outputTargetTerminalNamespace,
-  sessionTerminalCwd,
   ensureTerminalSessionSourceGitSelfContained,
-  terminalNamespace,
-  terminalSessionSourceRoot,
-  terminalWorktreePath,
-  terminalProjectScopeKey,
-  normalizePlainObject,
-  shellQuote,
-  stableHash
+  terminalNamespace
 };

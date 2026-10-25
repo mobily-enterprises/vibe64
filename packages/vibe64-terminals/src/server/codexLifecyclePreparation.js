@@ -7,8 +7,9 @@ import { codexAppServerControlDisabledResult } from "./codexConversationPreparat
 import { codexThreadIdForWorkdir, withCodexState } from "./codexConversationStorage.js";
 import { codexAgentSettingsFromSession } from "./codexRuntimeHost.js";
 import { renewalCleanupContext, renewalArchivedPredecessorContext } from "./sessionRenewalHandover.js";
-import { codexTerminalNamespace, terminalSessionSourceRoot, terminalWorktreePath } from "./terminalShared.js";
+import { codexTerminalNamespace } from "./terminalShared.js";
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
+import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -20,7 +21,7 @@ async function terminalSessionSourceRootForSession(projectService, sessionId) {
       inspectSource: false
     });
     const session = await runtime.getSession(sessionId);
-    return terminalSessionSourceRoot(session);
+    return sessionSourcePath(session);
   } catch {
     return "";
   }
@@ -72,7 +73,7 @@ function createCodexLifecyclePreparation({
     const providerOptions = providedProviderOptions ?? codexAppServerRuntimeOptionsFromSessionMetadata(session);
     const workdir = runtime.learningScope
       ? (await runtime.store.readSessionNativeDescriptor(normalizedSessionId)).nativeExecutionRoot
-      : terminalWorktreePath(session);
+      : sessionSourcePath(session);
     if (runtime.learningScope && !session.archived) {
       await learningSessionExecutionRoot(runtime, normalizedSessionId, { allowClosing: true });
     }
@@ -157,7 +158,7 @@ function createCodexLifecyclePreparation({
         const session = renewalCleanup?.session || await runtime.getSession(normalizedSessionId);
         const workdir = runtime.learningScope
           ? (await runtime.store.readSessionNativeDescriptor(normalizedSessionId)).nativeExecutionRoot
-          : terminalWorktreePath(session);
+          : sessionSourcePath(session);
         if (runtime.learningScope && !session.archived) {
           await learningSessionExecutionRoot(runtime, normalizedSessionId, { allowClosing: true });
         }
@@ -205,7 +206,7 @@ function createCodexLifecyclePreparation({
             }
             await closeTerminalSessionsForNamespace(codexTerminalNamespace(normalizedSessionId));
             const executionRoot = renewalCleanup
-              ? terminalSessionSourceRoot(session)
+              ? sessionSourcePath(session)
               : await terminalSessionSourceRootForSession(
                   projectService,
                   normalizedSessionId
@@ -240,7 +241,7 @@ function createCodexLifecyclePreparation({
     prepareCodexProjectCleanup,
     async releaseRenewalPredecessorAttachments(sessionId, options = {}) {
       const context = renewalArchivedPredecessorContext(sessionId, options);
-      const executionRoot = terminalSessionSourceRoot(context.session);
+      const executionRoot = sessionSourcePath(context.session);
       if (!executionRoot) {
         throw new TypeError(
           "Renewal attachment release requires the archived predecessor source identity."
