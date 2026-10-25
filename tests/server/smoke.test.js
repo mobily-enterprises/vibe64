@@ -175,6 +175,37 @@ test("server first start records the release baseline only for a fresh state roo
   }
 });
 
+test("composed server startup removes the private state of a project whose namespace is gone", async () => {
+  const root = await mkdtemp(path.join(tmpdir(), "vibe64-orphan-sweep-"));
+  const systemRoot = path.join(root, "system");
+  const projectsRoot = path.join(root, "projects");
+  const orphanRecord = path.join(systemRoot, "projects", "gone-app", "project.json");
+  const keptRecord = path.join(systemRoot, "projects", "kept-app", "project.json");
+  await mkdir(path.dirname(orphanRecord), { recursive: true });
+  await mkdir(path.dirname(keptRecord), { recursive: true });
+  await mkdir(path.join(projectsRoot, "kept-app"), { recursive: true });
+  await writeFile(orphanRecord, "{}\n");
+  await writeFile(keptRecord, "{}\n");
+  const app = await createServer({
+    projectsRoot,
+    runtimeProfile: Object.freeze({
+      authRequired: false,
+      local: false,
+      mode: "composed",
+      projectCatalogEnabled: true,
+      singleTargetRoot: ""
+    }),
+    systemRoot
+  });
+  try {
+    await assert.rejects(access(path.dirname(orphanRecord)), { code: "ENOENT" });
+    await access(keptRecord);
+  } finally {
+    await app.close();
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
 test("composed server does not redirect /app through local startup routing", async () => {
   const systemRoot = await mkdtemp(path.join(tmpdir(), "vibe64-composed-system-"));
   const app = await createServer({

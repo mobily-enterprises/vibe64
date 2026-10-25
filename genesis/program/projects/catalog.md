@@ -28,6 +28,7 @@ workspace.
 - `docs/colleague-usage/starter-apps.md`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `packages/vibe64-core/src/server/studioProjectContext.js`
+- `server.js`
 - `packages/vibe64-core/src/server/projectState.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261025-retired-project-bootstrap.js`
 - `tests/server/retiredProjectBootstrapUpgrade.unit.test.js`
@@ -221,13 +222,16 @@ source as a failed import. Pending UI state includes that separate refresh while
 Preview remains visible; an inspection failure uses the existing setup warning
 and recheck action.
 
-The hosted project namespace is the catalog authority. When that namespace has
-been removed outside Vibe64, the next catalog read removes its stale private
-project state so the deleted project cannot remain or block recreation. If it
-was selected, that read retires the selection as well; an explicit external
-source folder remains independent of the hosted catalog. Cleanup rechecks the
-exact namespace before deleting suspected orphan state, and a listing cannot
-retire a different target selected while it was reading.
+The hosted project namespace is the catalog authority. A catalog read never
+deletes anything: a project whose namespace has been removed outside Vibe64 is
+simply not listed, and if it was selected, that read retires the selection; an
+explicit external source folder remains independent of the hosted catalog, and
+a listing cannot retire a different target selected while it was reading.
+Server startup runs the one explicit maintenance step,
+`sweepOrphanProjectRuntimeRoots`, which removes the stale private state of each
+such project, one at a time and with a logged list of slugs, so the deleted
+project cannot keep blocking recreation after the next start. It rechecks the
+exact namespace and record before deleting suspected orphan state.
 
 Durable project mutations publish one shared project refresh event. Consumers
 use it only to invalidate their project list, selection, settings, repository,
@@ -286,7 +290,7 @@ process (`NODE_TEST_CONTEXT`) a context with neither `explicitManagedSourceRoot`
 nor `learningSpace.root` refuses to read or create practice storage instead of
 reaching the real space. `.learning` is not a valid slug, so the
 catalogue never lists it. `listWorkspaceProjects` never shows a practice
-project, and its orphan-runtime sweep leaves every `training-<hex>` runtime
+project, and the startup orphan-runtime sweep leaves every `training-<hex>` runtime
 whose record has a training marker (a warning when its learning-space project
 is missing). A catalogue entry whose record carries a retired or invalid
 training marker (an old hosted practice project awaiting the 20261022 scrap

@@ -553,6 +553,14 @@ async function createServer(options = {}) {
     explicitTargetRoot: requestedTargetRoot,
     runtimeProfile
   });
+  const orphanRuntimeSlugs = await projectContext.sweepOrphanProjectRuntimeRoots();
+  if (orphanRuntimeSlugs.length > 0) {
+    logOperationalEvent(app.log, "info", {
+      component: "project-catalogue",
+      event: "vibe64.projects.orphan_runtime_removed",
+      slugs: orphanRuntimeSlugs
+    }, "Removed the runtime state of projects whose project directory is gone.");
+  }
   const targetRoot = projectContext.targetRoot || "";
   const distRoot = path.resolve(appRoot, "dist");
   const indexFile = path.resolve(distRoot, SPA_INDEX_FILE);

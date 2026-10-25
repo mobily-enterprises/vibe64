@@ -1111,36 +1111,6 @@ function createStudioProjectContext({
           return false;
         }
       });
-    const projectSlugs = new Set(projectPaths.map((projectPath) => path.basename(projectPath)));
-    const runtimeProjectsRoot = path.join(systemRoot, EXTERNAL_PROJECT_LOCAL_ROOTS_DIR);
-    const runtimeEntries = await readdir(runtimeProjectsRoot, {
-      withFileTypes: true
-    }).catch((error) => {
-      if (error?.code === "ENOENT") {
-        return [];
-      }
-      throw error;
-    });
-    await Promise.all(runtimeEntries.map(async (entry) => {
-      if (!entry.isDirectory() || projectSlugs.has(entry.name)) {
-        return;
-      }
-      try {
-        normalizeProjectSlug(entry.name);
-      } catch {
-        return;
-      }
-      const runtimeRoot = projectRuntimeRootForSlug(entry.name);
-      if (await pathExists(resolveProjectRecordPath({
-        projectRuntimeRoot: runtimeRoot
-      })) && !await pathExists(projectContextRootForSlug(entry.name))) {
-        if (await isLearningSpaceRuntime(entry.name, runtimeRoot)) return;
-        await rm(runtimeRoot, {
-          force: true,
-          recursive: true
-        });
-      }
-    }));
     const projects = (await Promise.all(projectPaths.map((projectPath) => workspaceProjectRecordForPath({
       projectRecordPath: projectRecordPathForTarget(projectPath),
       path: projectPath,
@@ -1165,6 +1135,49 @@ function createStudioProjectContext({
       }))) : projects,
       projectsRoot
     };
+  }
+
+  // Startup maintenance, never a read: removes the runtime root of every
+  // catalogue project whose record survives but whose project directory is
+  // gone (a removal that stopped part-way). Practice runtimes of the learning
+  // space are kept. Returns the removed slugs, one at a time, for the caller's log.
+  async function sweepOrphanProjectRuntimeRoots() {
+    if (!projectCatalogEnabled) {
+      return [];
+    }
+    const runtimeEntries = await readdir(path.join(systemRoot, EXTERNAL_PROJECT_LOCAL_ROOTS_DIR), {
+      withFileTypes: true
+    }).catch((error) => {
+      if (error?.code === "ENOENT") {
+        return [];
+      }
+      throw error;
+    });
+    const removed = [];
+    for (const entry of runtimeEntries.sort((left, right) => left.name.localeCompare(right.name))) {
+      if (!entry.isDirectory()) {
+        continue;
+      }
+      try {
+        normalizeProjectSlug(entry.name);
+      } catch {
+        continue;
+      }
+      const runtimeRoot = projectRuntimeRootForSlug(entry.name);
+      if (
+        await pathExists(projectContextRootForSlug(entry.name)) ||
+        !await pathExists(resolveProjectRecordPath({ projectRuntimeRoot: runtimeRoot })) ||
+        await isLearningSpaceRuntime(entry.name, runtimeRoot)
+      ) {
+        continue;
+      }
+      await rm(runtimeRoot, {
+        force: true,
+        recursive: true
+      });
+      removed.push(entry.name);
+    }
+    return removed;
   }
 
   // The catalogue serves its own projects; without it only practice access does.
@@ -1539,6 +1552,7 @@ function createStudioProjectContext({
     readWorkspaceProjectState,
     requireSelectedTargetRoot,
     selectWorkspaceProject,
+    sweepOrphanProjectRuntimeRoots,
     updateWorkspaceProjectMetadata,
     projectRecordPathForSlug,
     projectRecordPathForTarget,

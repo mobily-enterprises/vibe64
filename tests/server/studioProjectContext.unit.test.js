@@ -782,7 +782,7 @@ test("Studio project context lists and creates projects without selecting one", 
   });
 });
 
-test("Studio project listing removes private state whose hosted namespace is gone", async () => {
+test("Studio project listing is read-only; startup maintenance removes private state whose hosted namespace is gone", async () => {
   await withTemporaryRoot(async (root) => {
     const projectsRoot = path.join(root, "projects");
     const context = createStudioProjectContext({
@@ -803,9 +803,12 @@ test("Studio project listing removes private state whose hosted namespace is gon
     const listed = await context.listWorkspaceProjects();
 
     assert.deepEqual(listed.projects, []);
+    assert.equal(await readFile(path.join(runtimeRoot, "sessions", "stale.txt"), "utf8"), "stale\n");
+    assert.deepEqual(await context.sweepOrphanProjectRuntimeRoots(), ["removed-project"]);
     await assert.rejects(() => access(runtimeRoot), {
       code: "ENOENT"
     });
+    assert.deepEqual(await context.sweepOrphanProjectRuntimeRoots(), []);
     const recreated = await context.createWorkspaceProjectRecord({
       slug: "removed-project"
     });
@@ -859,6 +862,8 @@ for (const selectionSource of ["workspace", "explicit"]) {
       assert.equal(context.selectedProject, null);
       assert.equal(context.hasSelection(), false);
       assert.throws(() => context.requireSelectedTargetRoot(), { code: "vibe64_project_not_selected" });
+      await access(staleSessionPath);
+      assert.deepEqual(await context.sweepOrphanProjectRuntimeRoots(), [slug]);
       await assert.rejects(() => access(runtimeRoot), { code: "ENOENT" });
 
       const recreated = await service.createProject({ slug });
@@ -968,7 +973,7 @@ test("Studio project context accepts explicit targets without treating them as w
     assert.equal(publicList.currentProject.path, externalTarget);
     assert.equal(publicList.currentProject.sourceRoot, externalTarget);
     assert.deepEqual(publicList.projects.map((project) => project.path), [externalTarget]);
-    await assert.rejects(() => access(context.projectRuntimeRootForSlug("removed-other-project")), { code: "ENOENT" });
+    await access(context.projectRuntimeRootForSlug("removed-other-project"));
 
     const requestContext = await resolveProjectRequestContext({
       projectContext: context,
@@ -1773,6 +1778,8 @@ test("a practice runtime root survives the catalogue sweep and bad learning-spac
     const misleading = "training-22345678123442348234123456789abc";
     await writeTestFile(context.projectRecordPathForSlug(misleading), JSON.stringify({ training: { schemaVersion: 1 } }));
     assert.deepEqual((await context.listWorkspaceProjects()).projects, [], "practice is never listed by the catalogue");
+    await access(context.projectRuntimeRootForSlug("ordinary-orphan"));
+    assert.deepEqual(await context.sweepOrphanProjectRuntimeRoots(), ["ordinary-orphan"]);
     await assert.rejects(() => access(context.projectRuntimeRootForSlug("ordinary-orphan")), { code: "ENOENT" });
     await access(context.projectRuntimeRootForSlug(misleading));
     assert.deepEqual(await readFile(practice.projectRecordPath), recordBefore);
@@ -1784,9 +1791,10 @@ test("a practice runtime root survives the catalogue sweep and bad learning-spac
     assert.ok(warn.mock.calls.some(call => String(call.arguments[0]).includes(misleading)));
     const misleadingWarnings = () => warn.mock.calls.filter(call => String(call.arguments[0]).includes(misleading)).length;
     const warned = misleadingWarnings();
+    assert.deepEqual(await context.sweepOrphanProjectRuntimeRoots(), []);
     await context.listWorkspaceProjects();
     await access(context.projectRuntimeRootForSlug(misleading));
-    assert.equal(misleadingWarnings(), warned, "a kept practice runtime warns once per process, not on every Projects page load");
+    assert.equal(misleadingWarnings(), warned, "a kept practice runtime warns once per process, not on every sweep or Projects page load");
     // Bad entries are skipped with a warning; they never reject either listing.
     await writeTestFile(path.join(context.learningSpaceRoot, "stray.txt"), "stray\n");
     await mkdir(path.join(context.learningSpaceRoot, "NDI", "not-a-practice-id"));
