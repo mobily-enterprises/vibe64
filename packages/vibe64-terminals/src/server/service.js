@@ -50,7 +50,7 @@ import {
   prepareSessionConversationStorage,
   CLAUDE_PREPARATION_DELIVERY_STAGES
 } from "./mainConversationBinding.js";
-import { rememberAssistantBeforeChangeover, replaceNativeConversation, requireCompletedConversationRewind, requireCompletedNativeConversationReplacement, sendWithAssistantChangeover } from "./assistantChangeover.js";
+import { rememberAssistantBeforeChangeover, replaceNativeConversation, requireCompletedConversationRewind, requireCompletedNativeConversationReplacement } from "./assistantChangeover.js";
 import { createSessionAttachments } from "./sessionAttachments.js";
 import { createProviderUsage } from "./providerUsage.js";
 import {
@@ -1005,9 +1005,7 @@ function createService({
     async dispatch(sessionId, input, context) {
       requireCompletedConversationRewind(context.session);
       await prepareAgentSkillsInsideAgentWrite(sessionId, context);
-      return ["codex", "claude", "opencode"].includes(vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId)
-        ? sessionAgent.sendMessage(sessionId, input, context)
-        : sendWithAssistantChangeover(sessionId, input, context, sessionAgent);
+      return sessionAgent.sendMessage(sessionId, input, context);
     }
   });
 
@@ -3321,8 +3319,7 @@ function createService({
           const temporary = await sessionAgent.hasActiveTemporaryConversation(sessionId, {}, context);
           if (temporary?.ok === false || temporary?.active) fail("Finish temporary assistant work before replacing native context.");
         }
-        const conversation = ["codex", "claude", "opencode"].includes(vibe64AssistantSelectionFromMetadata(context.session.metadata).engineId)
-          ? await mainConversations.open({ id: sessionId, context: { ...context, sessionId }, representation: "native" }) : null;
+        const conversation = await mainConversations.open({ id: sessionId, context: { ...context, sessionId }, representation: "native" });
         const result = await replaceNativeConversation(sessionId, input, context, sessionAgent, conversation);
         await publishAgentSessionChanged(sessionId, { reason: "native-conversation-replaced" });
         return result;
@@ -4074,11 +4071,6 @@ function createService({
         // The tool manifest resolves the saved selection, so it belongs to opening.
         const context = applicationToolManifest(saved);
         const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
-        if (!["codex", "claude", "opencode"].includes(selection.engineId)) {
-          throw Object.assign(new Error("This Main conversation's engine is not connected to the browser facade yet."), {
-            code: "conversation_unsupported", statusCode: 400
-          });
-        }
         const current = { ...context, sessionId, assistantSelection: selection, providerId: selection.engineId,
           browserProjectContext: captureProjectRequestContext() };
         const conversation = await mainConversations.open({ id: sessionId, context: current });
