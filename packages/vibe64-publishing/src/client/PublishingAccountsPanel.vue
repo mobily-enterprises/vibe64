@@ -42,7 +42,7 @@ const kinds = computed(() => props.state?.accountKinds || []);
 const kind = computed(() => kinds.value.find((entry) => entry.id === form.value.kind) || null);
 const installKeys = computed(() => (keys.value.entries || []).filter((entry) => entry.kind === "android-sideload-key"));
 const kitDate = computed(() => keys.value.recoveryKit?.createdAt || "");
-const kitStale = computed(() => (keys.value.entries || []).some((entry) => !kitDate.value || Date.parse(entry.createdAt) > Date.parse(kitDate.value)));
+const kitStale = computed(() => (keys.value.entries || []).some((entry) => !entry.coveredByRecoveryKit));
 const until = computed(() => keys.value.unlockedUntil ? new Date(keys.value.unlockedUntil).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "");
 
 watch(() => props.modelValue, (open) => {

@@ -306,7 +306,6 @@ function openInstall({ releaseId, targetId }) {
             :activity="activityByTarget[target.id]"
             :busy="working.endsWith(`:${target.id}`)"
             :destination="destinationById[target.destination]"
-            :keys="state.keys"
             :package-info="packageById[target.package]"
             :target="target"
             :toolchains="state.toolchains"

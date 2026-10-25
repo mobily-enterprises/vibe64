@@ -50,7 +50,7 @@ const APP_PACKAGING = vibe64PackagingInspection({
   ] }
 });
 
-async function fixture(t, { failing = new Set(), failingBuilds = new Set(), verification = "passed", app = false } = {}) {
+async function fixture(t, { failing = new Set(), failingBuilds = new Set(), verification = "passed", app = false, keyStatus = { exists: true, unlocked: true, entries: [], recoveryKit: null } } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-publishing-orchestrator-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const runtimeRoot = path.join(root, "publishing");
@@ -101,7 +101,7 @@ async function fixture(t, { failing = new Set(), failingBuilds = new Set(), veri
     history,
     builders: createBuilderMap({ runtimeRoot }),
     confirmations,
-    keys: { status: async () => ({ exists: true, unlocked: true, entries: [], recoveryKit: null }) },
+    keys: { status: async () => keyStatus },
     toolchains: { status: async () => ({ java: { ready: false } }), androidToolchains: async () => null, registryTools: async () => ({}) },
     repository,
     verification: { status: async (commit) => ({ commit, status: verification }) },
@@ -219,6 +219,27 @@ test("an unfinished app release keeps its build number, so the same plan resumes
   baseline.commit = "d".repeat(40);
   const next = await orchestrator.plan();
   assert.equal(next.packages.find(({ id }) => id === "app").buildNumber, 2, "build numbers keep growing however many newer records exist");
+});
+
+test("the page and preflight judge a phone install key and its recovery kit the same way", async (t) => {
+  const certificateSha256 = "ab".repeat(32);
+  // A kit saved after the key was made, but without it.
+  const keyStatus = { exists: true, unlocked: true, entries: [{ id: "android-sideload:app", kind: "android-sideload-key", createdAt: "2026-10-23T10:00:00Z" }],
+    recoveryKit: { createdAt: "2026-10-23T11:00:00Z", entryIds: [] } };
+  const { orchestrator, targets } = await fixture(t, { app: true, keyStatus });
+  await targets.add({ destination: "android-sideload", package: "app", settings: { certificateSha256 } });
+  const state = await orchestrator.readState();
+  const phone = state.targets.find((target) => target.destination === "android-sideload");
+  assert.deepEqual(phone.installKey, { entryId: "android-sideload:app", exists: true, coveredByRecoveryKit: false });
+  assert.equal(state.keys.entries[0].coveredByRecoveryKit, false);
+  const plan = await orchestrator.plan({ targetIds: [phone.id] });
+  assert.match(plan.preflight.checks.find(({ id }) => id === "phone-install-key").message, /Download a recovery kit that includes/u);
+
+  keyStatus.recoveryKit.entryIds = ["android-sideload:app"];
+  const covered = await orchestrator.readState();
+  assert.equal(covered.targets.find(({ id }) => id === phone.id).installKey.coveredByRecoveryKit, true);
+  assert.equal(covered.keys.entries[0].coveredByRecoveryKit, true);
+  assert.equal((await orchestrator.plan({ targetIds: [phone.id] })).preflight.checks.find(({ id }) => id === "phone-install-key").ok, true);
 });
 
 test("an assistant can only ask; the person confirms the exact current plan", async (t) => {

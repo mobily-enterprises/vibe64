@@ -124,18 +124,23 @@ it("shows a changed plan instead of publishing it", async () => {
 });
 
 it("walks a phone target through tools, install key and recovery kit before it offers the QR", async () => {
-  const target = { id: "app-android-sideload", destination: "android-sideload", package: "app", settings: {}, latest: null };
-  const fresh = await render(AndroidSideloadCard, { target, toolchains: {}, keys: { entries: [] } });
+  const installKey = { entryId: "android-sideload:app", exists: false, coveredByRecoveryKit: false };
+  const target = { id: "app-android-sideload", destination: "android-sideload", package: "app", settings: {}, latest: null, installKey };
+  const fresh = await render(AndroidSideloadCard, { target, toolchains: {} });
   expect(fresh).toContain("Android build tools");
   expect(fresh).toContain("Install key");
   expect(fresh).toContain("Recovery kit");
   expect(fresh).not.toContain("Install on phone");
 
-  const keyEntry = { id: "android-sideload:app", kind: "android-sideload-key", createdAt: "2026-10-23T10:00:00Z" };
+  const tools = { java: { ready: true }, androidSdk: { ready: true } };
+  const keyed = { ...target, settings: { certificateSha256: "ab".repeat(32) }, installKey: { ...installKey, exists: true } };
+  const uncovered = await render(AndroidSideloadCard, { target: keyed, toolchains: tools });
+  expect(uncovered, "a kit the server says lacks this key is not enough").toContain("Without it, a lost key means reinstalling the app.");
+  expect(uncovered).not.toContain("Your kit holds this key.");
+
   const ready = await render(AndroidSideloadCard, {
-    target: { ...target, settings: { certificateSha256: "ab".repeat(32) }, latest: { version: "1.0.0", at: "2026-10-23T11:00:00Z", downloadable: true, releaseId: "r-1", proof: { sha256: `sha256:${"d".repeat(64)}`, size: 4_200_000 } } },
-    toolchains: { java: { ready: true }, androidSdk: { ready: true } },
-    keys: { entries: [keyEntry], recoveryKit: { createdAt: "2026-10-23T10:05:00Z" } }
+    target: { ...keyed, installKey: { ...installKey, exists: true, coveredByRecoveryKit: true }, latest: { version: "1.0.0", at: "2026-10-23T11:00:00Z", downloadable: true, releaseId: "r-1", proof: { sha256: `sha256:${"d".repeat(64)}`, size: 4_200_000 } } },
+    toolchains: tools
   });
   expect(ready).not.toContain("One-time setup");
   expect(ready).toContain("Install on phone");

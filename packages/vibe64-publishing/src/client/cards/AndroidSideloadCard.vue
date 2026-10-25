@@ -8,14 +8,13 @@ import TargetCard from "./TargetCard.vue";
 const props = defineProps({
   target: { type: Object, required: true },
   toolchains: { type: Object, default: () => ({}) },
-  keys: { type: Object, default: () => ({}) },
   busy: { type: Boolean, default: false }
 });
 const emit = defineEmits(["remove", "change-account", "setup-tools", "create-key", "recovery-kit", "install", "show-release"]);
 
-const keyEntry = computed(() => (props.keys.entries || []).find((entry) => entry.id === `android-sideload:${props.target.package}`) || null);
-const kitCovers = computed(() => Boolean(keyEntry.value && props.keys.recoveryKit?.createdAt &&
-  Date.parse(props.keys.recoveryKit.createdAt) >= Date.parse(keyEntry.value.createdAt)));
+// The server judges the key the way preflight does.
+const keyExists = computed(() => Boolean(props.target.installKey?.exists));
+const kitCovers = computed(() => Boolean(props.target.installKey?.coveredByRecoveryKit));
 const installing = computed(() => props.toolchains.install?.status === "running");
 const toolsReady = computed(() => Boolean(props.toolchains.java?.ready && props.toolchains.androidSdk?.ready));
 const tasks = computed(() => [
@@ -31,9 +30,9 @@ const tasks = computed(() => [
   },
   {
     id: "key",
-    done: Boolean(keyEntry.value && props.target.settings?.certificateSha256),
+    done: keyExists.value,
     title: "Install key",
-    detail: keyEntry.value ? "Signs every version so your phone accepts updates." : "Vibe64 makes it and keeps it in your publishing keys.",
+    detail: keyExists.value ? "Signs every version so your phone accepts updates." : "Vibe64 makes it and keeps it in your publishing keys.",
     action: "Create", event: "create-key", needs: toolsReady.value ? "" : "Set up the tools first"
   },
   {
@@ -41,7 +40,7 @@ const tasks = computed(() => [
     done: kitCovers.value,
     title: "Recovery kit",
     detail: kitCovers.value ? "Your kit holds this key." : "Without it, a lost key means reinstalling the app.",
-    action: "Save kit", event: "recovery-kit", needs: keyEntry.value ? "" : "Create the key first"
+    action: "Save kit", event: "recovery-kit", needs: keyExists.value ? "" : "Create the key first"
   }
 ]);
 const ready = computed(() => tasks.value.every((task) => task.done));

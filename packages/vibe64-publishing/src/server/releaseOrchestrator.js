@@ -35,6 +35,16 @@ function releaseError(message, code, details) {
   return Object.assign(new Error(message), { code, ...(details ? { details } : {}) });
 }
 
+// A phone target's install key as preflight and the page judge it.
+function installKey(target, keys) {
+  const entryId = sideloadKeyEntryId(target);
+  return {
+    entryId,
+    exists: Boolean(target.settings?.certificateSha256 && (keys?.entries || []).some((entry) => entry.id === entryId)),
+    coveredByRecoveryKit: recoveryKitCovers(keys, entryId)
+  };
+}
+
 // Local custody rules that sit on top of the shared checks.
 const sideloadKeyReady = definePreflightCheck({
   id: "phone-install-key",
@@ -44,10 +54,10 @@ const sideloadKeyReady = definePreflightCheck({
   run: ({ plan, keys }) => {
     const problems = [];
     for (const target of plan.targets.filter((entry) => entry.destination === "android-sideload")) {
-      const entryId = sideloadKeyEntryId(target);
-      if (!target.settings?.certificateSha256 || !(keys?.entries || []).some((entry) => entry.id === entryId)) {
+      const key = installKey(target, keys);
+      if (!key.exists) {
         problems.push(`${target.id} has no install key yet. Create it on its card.`);
-      } else if (!recoveryKitCovers(keys, entryId)) {
+      } else if (!key.coveredByRecoveryKit) {
         problems.push(`Download a recovery kit that includes ${target.id}'s install key: without it, losing this computer means phones can never update the app.`);
       }
     }
@@ -227,9 +237,9 @@ function createReleaseOrchestrator({
         diagnostics: (release?.packaging?.diagnostics || []).map(({ message }) => message).slice(0, 20),
         problem: releaseProblem
       },
-      targets: targetList.map((target) => ({ ...target, latest: latest[target.id] || null })),
+      targets: targetList.map((target) => ({ ...target, latest: latest[target.id] || null, ...(target.destination === "android-sideload" ? { installKey: installKey(target, keyStatus) } : {}) })),
       builders: builderMap,
-      keys: keyStatus,
+      keys: { ...keyStatus, entries: (keyStatus.entries || []).map((entry) => ({ ...entry, coveredByRecoveryKit: recoveryKitCovers(keyStatus, entry.id) })) },
       toolchains: toolchainStatus,
       checks,
       pendingConfirmation: pending,
