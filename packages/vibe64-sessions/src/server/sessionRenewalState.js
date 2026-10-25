@@ -9,10 +9,13 @@ import {
 import {
   defineVibe64AssistantSelection
 } from "@local/vibe64-runtime/shared";
+import {
+  SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS,
+  normalizeSessionRenewalHandoverDraft
+} from "@local/vibe64-terminals/server/sessionRenewalHandover";
 
 const SESSION_RENEWAL_KIND = "vibe64.session_renewal";
 const SESSION_RENEWAL_SCHEMA_VERSION = 1;
-const SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS = 20_000;
 
 const SESSION_RENEWAL_STAGE = Object.freeze({
   CANCELLED: "cancelled",
@@ -97,42 +100,20 @@ function renewalOperationKey(value = "") {
 function renewalHandoverText(value = "", {
   allowEmpty = true
 } = {}) {
-  const handover = String(value ?? "")
-    .replaceAll("\r\n", "\n")
-    .replaceAll("\r", "\n");
-  const characterCount = Array.from(handover).length;
-  const hasDisallowedControlCharacter = Array.from(handover).some((character) => {
-    const codePoint = character.codePointAt(0);
-    return codePoint === 0x7f || (
-      codePoint < 0x20 &&
-      codePoint !== 0x09 &&
-      codePoint !== 0x0a
-    );
-  });
-  if (hasDisallowedControlCharacter) {
+  const { characterCount, handover, problem } = normalizeSessionRenewalHandoverDraft(value);
+  const details = { characterCount, maximumCharacters: SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS };
+  if (problem === "control_character") {
     throw renewalStateError(
       "Session handover must be plain text without control characters.",
       "vibe64_session_renewal_handover_invalid",
-      {
-        details: {
-          characterCount,
-          maximumCharacters: SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS
-        },
-        statusCode: 400
-      }
+      { details, statusCode: 400 }
     );
   }
-  if (characterCount > SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS) {
+  if (problem === "too_long") {
     throw renewalStateError(
-      `Session handover text cannot exceed ${SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS.toLocaleString("en")} characters.`,
+      `Session handover text cannot exceed ${SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS.toLocaleString("en")} characters.`,
       "vibe64_session_renewal_handover_too_long",
-      {
-        details: {
-          characterCount,
-          maximumCharacters: SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS
-        },
-        statusCode: 400
-      }
+      { details, statusCode: 400 }
     );
   }
   if (!allowEmpty && !handover.trim()) {
@@ -613,7 +594,6 @@ function publicSessionRenewalState(value = null) {
 }
 
 export {
-  SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS,
   SESSION_RENEWAL_KIND,
   SESSION_RENEWAL_MAINTENANCE_STEP,
   SESSION_RENEWAL_SCHEMA_VERSION,

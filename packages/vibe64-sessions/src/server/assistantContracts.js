@@ -1,7 +1,7 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { connectedWorkReviewSchema, incomingReviewSchema, sessionHistoryReviewSchema, sessionRepositoryReviewSchema } from "./inputSchemas.js";
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
-import { SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS } from "./sessionRenewalState.js";
+import { SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS } from "@local/vibe64-terminals/server/sessionRenewalHandover";
 
 const shortText = { type: "string", maxLength: 256, required: false };
 const sessionFields = {
@@ -313,7 +313,7 @@ function renewalTool(description, { includeDraft = false } = {}) {
       error: { ...shortText, maxLength: 512 }, maintenanceError: { ...shortText, maxLength: 512 },
       available: { type: "boolean", required: false }, manualRequired: { type: "boolean", required: false },
       draftRevision: { type: "integer", required: false },
-      draftText: { type: "string", noTrim: true, maxLength: SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS * 2, required: false }
+      draftText: { type: "string", noTrim: true, maxLength: SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS * 2, required: false }
     }) },
     transformResult(result) {
       const renewal = result.renewal;

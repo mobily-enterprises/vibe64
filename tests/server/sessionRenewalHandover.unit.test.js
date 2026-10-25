@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { renewalHandoverText } from "../../packages/vibe64-sessions/src/server/sessionRenewalState.js";
+
 import {
   SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS,
   defineSessionRenewalApprovedHandover,
   defineSessionRenewalOperationId,
+  normalizeSessionRenewalHandoverDraft,
   parseSessionRenewalAcknowledgement,
   parseSessionRenewalHandoverOutput,
   sessionRenewalAcknowledgementOutputSchema,
@@ -218,4 +221,15 @@ test("renewal prompts carry only the trusted source and frozen handover contract
   assert.match(generationPrompt, new RegExp(source.commit, "u"));
   assert.match(seedPrompt, new RegExp(handoverHash, "u"));
   assert.match(seedPrompt, /Do not edit files, run commands, begin the next action/u);
+});
+
+test("handover drafts and protocol text share one normalisation and limit", () => {
+  assert.deepEqual(normalizeSessionRenewalHandoverDraft(" a\r\nb\rc\t "), { characterCount: 8, handover: " a\nb\nc\t ", problem: "" });
+  assert.equal(normalizeSessionRenewalHandoverDraft("bell\u0007").problem, "control_character");
+  const tooLong = "x".repeat(SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS + 1);
+  assert.equal(normalizeSessionRenewalHandoverDraft(tooLong).problem, "too_long");
+  // The sessions draft owner keeps its own error codes on the same rule.
+  assert.equal(renewalHandoverText("x".repeat(SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS)).length, SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS);
+  assert.throws(() => renewalHandoverText(tooLong), { code: "vibe64_session_renewal_handover_too_long", statusCode: 400 });
+  assert.throws(() => renewalHandoverText("bell\u0007"), { code: "vibe64_session_renewal_handover_invalid" });
 });

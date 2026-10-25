@@ -3,9 +3,7 @@ import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
 import { ASSISTANT_MODES } from "@local/vibe64-runtime/shared/assistantRouting";
 import { VIBE64_ASSISTANT_ENGINE_IDS } from "@local/vibe64-runtime/shared";
 
-import {
-  SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS
-} from "./sessionRenewalState.js";
+import { SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS } from "@local/vibe64-terminals/server/sessionRenewalHandover";
 
 const optionalOrigin = {
   originId: {
@@ -51,7 +49,7 @@ const renewalDraftFields = {
     // counts Unicode code points. Two code units per allowed code point keeps
     // transport input bounded without rejecting 20,000 astral characters;
     // sessionRenewalState performs the exact domain check.
-    maxLength: SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS * 2,
+    maxLength: SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS * 2,
     type: "string",
     noTrim: true,
     required: true
@@ -671,7 +669,6 @@ export {
   integrationSetupRequestInputValidator,
   integrationSetupRequestActionInputValidator,
   assistantAccessActionInputValidator,
-  SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS,
   agentMessageActionInputValidator,
   agentMessageInputValidator,
   mainChatApprovalActionInputValidator,

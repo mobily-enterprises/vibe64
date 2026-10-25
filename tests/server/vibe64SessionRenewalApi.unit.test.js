@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
@@ -17,7 +18,6 @@ import {
   createSessionActions
 } from "../../packages/vibe64-sessions/src/server/actions.js";
 import {
-  SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS,
   sessionRenewalConfirmationActionInputValidator,
   sessionRenewalConfirmationInputValidator,
   sessionRenewalDraftGuardInputValidator,
@@ -191,8 +191,8 @@ test("renewal inputs require durable operation and optimistic draft guards", () 
 });
 
 test("renewal draft transport stays bounded without rejecting 20,000 astral code points", () => {
-  const exactDraft = `  ${"😀".repeat(SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS - 4)}  `;
-  assert.equal(Array.from(exactDraft).length, SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS);
+  const exactDraft = `  ${"😀".repeat(SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS - 4)}  `;
+  assert.equal(Array.from(exactDraft).length, SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS);
 
   const accepted = sessionRenewalDraftUpdateActionInputValidator.schema.create({
     draft: exactDraft,
@@ -204,7 +204,7 @@ test("renewal draft transport stays bounded without rejecting 20,000 astral code
   assert.deepEqual(accepted.errors, {});
   assert.equal(accepted.validatedObject.draft, exactDraft);
 
-  const transportMaximum = "x".repeat(SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS * 2);
+  const transportMaximum = "x".repeat(SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS * 2);
   const transportAccepted = sessionRenewalDraftUpdateActionInputValidator.schema.create({
     draft: transportMaximum,
     expectedHash: DRAFT_HASH,

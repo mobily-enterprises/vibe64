@@ -31,6 +31,22 @@ function textHasDisallowedControlCharacter(value = "") {
   });
 }
 
+// The one handover text rule: CR and CRLF become LF, tab and LF are the only
+// control characters, and the text holds at most
+// SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS characters. Whitespace is kept, since
+// it is part of the approved handover's hash. problem is "" when the text
+// passes, else "control_character" or "too_long"; callers choose their errors.
+function normalizeSessionRenewalHandoverDraft(value = "") {
+  const handover = String(value ?? "")
+    .replaceAll("\r\n", "\n")
+    .replaceAll("\r", "\n");
+  const characterCount = Array.from(handover).length;
+  const problem = textHasDisallowedControlCharacter(handover)
+    ? "control_character"
+    : characterCount > SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS ? "too_long" : "";
+  return { characterCount, handover, problem };
+}
+
 function sessionRenewalProtocolError(code, message, details = {}, {
   retryable = false
 } = {}) {
@@ -154,15 +170,8 @@ function defineSessionRenewalHandoverText(value = "", {
   // Draft review preserves the exact approved text. In particular, leading or
   // trailing whitespace is part of the frozen SHA-256 and must not be trimmed
   // while the handover crosses the provider boundary.
-  const handover = String(value ?? "")
-    .replaceAll("\r\n", "\n")
-    .replaceAll("\r", "\n");
-  const characterCount = Array.from(handover).length;
-  if (
-    !handover.trim() ||
-    characterCount > SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS ||
-    textHasDisallowedControlCharacter(handover)
-  ) {
+  const { characterCount, handover, problem } = normalizeSessionRenewalHandoverDraft(value);
+  if (!handover.trim() || problem) {
     throw sessionRenewalProtocolError(
       "vibe64_session_renewal_handover_invalid",
       `Session handover must be non-empty, plain text no longer than ${SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS.toLocaleString("en")} characters.`,
@@ -671,6 +680,7 @@ export {
   defineSessionRenewalHandoverText,
   defineSessionRenewalOperationId,
   defineSessionRenewalSourceEnvelope,
+  normalizeSessionRenewalHandoverDraft,
   parseSessionRenewalAcknowledgement,
   parseSessionRenewalHandoverOutput,
   prepareSessionRenewalHandoverRequest,

@@ -13,6 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import test from "node:test";
+import { SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
 import { promisify } from "node:util";
 
 import {
@@ -20,7 +21,6 @@ import {
 } from "../../packages/vibe64-runtime/src/server/sessionStore.js";
 
 import {
-  SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS,
   SESSION_RENEWAL_MAINTENANCE_STEP,
   SESSION_RENEWAL_STAGE,
   SESSION_RENEWAL_STATUS,
@@ -98,7 +98,7 @@ function memoryRuntime() {
 }
 
 test("renewal handovers count Unicode code points and normalize newlines without truncating", () => {
-  const maximum = "😀".repeat(SESSION_RENEWAL_HANDOVER_MAX_CHARACTERS);
+  const maximum = "😀".repeat(SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS);
   assert.equal(Array.from(renewalHandoverText(maximum)).length, 20_000);
   assert.equal(renewalHandoverText("one\r\ntwo\rthree"), "one\ntwo\nthree");
   assert.throws(
