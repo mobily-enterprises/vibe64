@@ -8,13 +8,29 @@ import {
   normalizeText,
   vibe64Error
 } from "./core.js";
-import {
-  normalizePreferredName
-} from "./vibe64MembershipStore.js";
 
 const PERSONAL_AI_PROFILE_DIRECTORY = "profile";
 const PERSONAL_AI_PROFILE_FILE = "personal.json";
 const PERSONAL_AI_PROFILE_VERSION = 1;
+const MAX_PREFERRED_NAME_LENGTH = 80;
+
+function normalizePreferredName(value = "") {
+  const preferredName = String(value || "")
+    .normalize("NFC")
+    .replace(/\s+/gu, " ")
+    .trim();
+  if (/\p{Cc}/u.test(preferredName)) {
+    const error = new Error("Preferred name cannot contain control characters.");
+    error.code = "vibe64_preferred_name_invalid";
+    throw error;
+  }
+  if ([...preferredName].length > MAX_PREFERRED_NAME_LENGTH) {
+    const error = new Error(`Preferred name cannot exceed ${MAX_PREFERRED_NAME_LENGTH} characters.`);
+    error.code = "vibe64_preferred_name_too_long";
+    throw error;
+  }
+  return preferredName;
+}
 
 function personalAiProfilePath(systemRoot = "") {
   const root = normalizeText(systemRoot);
@@ -94,10 +110,12 @@ function createPersonalAiProfileStore({
 }
 
 export {
+  MAX_PREFERRED_NAME_LENGTH,
   PERSONAL_AI_PROFILE_FILE,
   PERSONAL_AI_PROFILE_VERSION,
   createPersonalAiProfileStore,
   emptyPersonalAiProfile,
   normalizePersonalAiProfile,
+  normalizePreferredName,
   personalAiProfilePath
 };

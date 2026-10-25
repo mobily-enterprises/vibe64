@@ -6,9 +6,12 @@ import {
   assertSafeOsUsername,
   normalizeOsUsername
 } from "./osUserIdentity.js";
+import {
+  MAX_PREFERRED_NAME_LENGTH,
+  normalizePreferredName
+} from "./personalAiProfile.js";
 
 const MEMBERSHIP_RECORD_VERSION = 2;
-const MAX_PREFERRED_NAME_LENGTH = 80;
 const ACTIVE_MEMBERSHIP_STATUSES = new Set(["active"]);
 const membershipRecordMutations = new Map();
 
@@ -25,24 +28,6 @@ function normalizeMembershipRole(value = "") {
 
 function normalizeMembershipStatus(value = "") {
   return ACTIVE_MEMBERSHIP_STATUSES.has(String(value || "").trim()) ? "active" : "disabled";
-}
-
-function normalizePreferredName(value = "") {
-  const preferredName = String(value || "")
-    .normalize("NFC")
-    .replace(/\s+/gu, " ")
-    .trim();
-  if (/\p{Cc}/u.test(preferredName)) {
-    const error = new Error("Preferred name cannot contain control characters.");
-    error.code = "vibe64_preferred_name_invalid";
-    throw error;
-  }
-  if ([...preferredName].length > MAX_PREFERRED_NAME_LENGTH) {
-    const error = new Error(`Preferred name cannot exceed ${MAX_PREFERRED_NAME_LENGTH} characters.`);
-    error.code = "vibe64_preferred_name_too_long";
-    throw error;
-  }
-  return preferredName;
 }
 
 function normalizeMembershipRecord(record = {}, {
