@@ -192,34 +192,9 @@ function executionProfileSnapshot(value = null) {
   }
 }
 
-async function deleteAssistantThread(
-  deleteThread,
-  threadId = "",
-  agentContext = {},
-  executionProfile = null
-) {
-  if (!normalizeText(threadId)) {
-    return { ok: true };
-  }
-  const deleted = await deleteThread({
-    conversationId: normalizeText(threadId),
-    ephemeral: true,
-    executionProfile: executionProfile || { ...DATABASE_ASSISTANT_EXECUTION_PROFILE },
-    threadId: normalizeText(threadId)
-  }, agentContext);
-  if (deleted?.ok !== true) {
-    throw vibe64Error(
-      normalizeText(deleted?.error) || "The temporary database assistant conversation could not be removed.",
-      normalizeText(deleted?.code) || "vibe64_database_assistant_cleanup_failed"
-    );
-  }
-  return deleted;
-}
-
 async function runDatabaseAssistant({
   agentContext = {},
   assistant = {},
-  deleteThread,
   executeReadQuery,
   messages = [],
   runAgentTurn,
@@ -228,15 +203,11 @@ async function runDatabaseAssistant({
   if (typeof executeReadQuery !== "function") {
     throw new TypeError("runDatabaseAssistant requires a read-query executor.");
   }
-  if (
-    typeof deleteThread !== "function" ||
-    typeof runAgentTurn !== "function"
-  ) {
-    throw new TypeError("runDatabaseAssistant requires the session's ephemeral assistant lifecycle.");
+  if (typeof runAgentTurn !== "function") {
+    throw new TypeError("runDatabaseAssistant requires the session's ephemeral assistant turn runner.");
   }
   const queries = [];
   const schemaLookups = [];
-  let failure = null;
   let response = null;
   let threadId = "";
   let observedExecutionProfile = null;
@@ -335,36 +306,12 @@ async function runDatabaseAssistant({
     });
     if (!normalizeText(response.answer)) throw invalidResponseError;
   } catch (error) {
-    failure = contextLimitError(error)
+    throw contextLimitError(error)
       ? vibe64Error(
           "The database assistant request does not fit the selected assistant context. Start a shorter database conversation and try again.",
           "vibe64_database_assistant_context_too_large"
         )
       : error;
-  }
-
-  if (threadId) {
-    try {
-      await deleteAssistantThread(
-        deleteThread,
-        threadId,
-        agentContext,
-        observedExecutionProfile
-      );
-    } catch (error) {
-      if (
-        !failure ||
-        normalizeText(error?.code) !== "vibe64_codex_helper_thread_unavailable"
-      ) {
-        if (failure && error !== failure) {
-          error.cause = failure;
-        }
-        failure = error;
-      }
-    }
-  }
-  if (failure) {
-    throw failure;
   }
   if (
     !observedExecutionProfile ||

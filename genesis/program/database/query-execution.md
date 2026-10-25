@@ -82,7 +82,8 @@ the answer or request one schema/read-query operation. Operation four completes
 and its result is bounded before the original limit error; no fifth response or
 automatic recovery is attempted. Vibe64 supplies database instructions, a final
 answer schema and its two authorized actions. It retains schema and SQL
-permissions, result summaries, failure presentation and cleanup.
+permissions, result summaries and failure presentation; the database service is
+the only owner of helper cleanup, which it runs once after each question.
 The scoped Helper runner enters the same JSKIT runtime's original
 `runScopedTurn()` coordinator and retains one native conversation across responses.
 JSKIT derives closed final-or-tool response alternatives from that final schema
@@ -157,7 +158,9 @@ with no project environment, tools or database credentials. The database owner
 retains that scope, selection, native IDs and profile in
 `database/assistant-tasks/<actor>.json`; it stores no question, answer or query
 results there. Cleanup must confirm native deletion before removing ownership
-and the scope directory. Failed cleanup prevents another question for that actor
+and the scope directory. A cleanup failure fails an otherwise successful
+question; after a failed question the original error is kept and the cleanup
+failure is attached as its cause. Failed cleanup prevents another question for that actor
 and remains retryable on session close after restart. A late native start after
 Close is still retained and cleaned up. Closing never re-resolves a destination
 or starts inference. Cleanup uses the saved Helper selection, conversation and

@@ -241,7 +241,6 @@ test("database assistant structured schema stays inside the verified helper outp
   await runDatabaseAssistant({
     schema: testSchema(), messages: [{ role: "user", content: "Explain this database." }],
     executeReadQuery: async () => assert.fail("A final answer must not read rows"),
-    deleteThread: async () => ({ ok: true }),
     async runAgentTurn(input) {
       responses++;
       assert.doesNotThrow(() => codexAppServerHelperTurnSettings({
@@ -748,7 +747,6 @@ test("database assistant retains selected-table context per question and rejects
   const turns = [];
   const options = {
     schema, executeReadQuery: async () => assert.fail("Explanation should not query rows"),
-    deleteThread: async () => ({ ok: true }),
     runAgentTurn: async (input) => {
       turns.push(input);
       return { ok: true, executionProfile: databaseExecutionProfile(), threadId: "table-context", text: databaseFinalResponse({ answer: "Explanation", intent: "explain", sql: "" }) };
@@ -769,10 +767,9 @@ test("database assistant retains selected-table context per question and rejects
   assert.equal(turns.length, 1);
 });
 
-test("database assistant uses one selected-provider secondary conversation and always deletes it", async () => {
+test("database assistant uses one selected-provider secondary conversation", async () => {
   const schema = testSchema();
   const turns = [];
-  const deletions = [];
   const responses = [
     databaseToolResponse("vibe64_database_assistant_schema_search", { search: "books categories" }),
     databaseToolResponse("vibe64_database_assistant_query_read", { sql: "SELECT id, title FROM public.books;" }),
@@ -788,10 +785,6 @@ test("database assistant uses one selected-provider secondary conversation and a
   const answer = await runDatabaseAssistant({
     agentContext: { vibe64User: { username: "owner" } },
     assistant: { engineId: "opencode", model: "deepseek-chat" },
-    deleteThread: async (input, options) => {
-      deletions.push({ input, options });
-      return { deleted: true, ok: true };
-    },
     executeReadQuery: async (sql) => {
       executed.push(sql);
       return {
@@ -859,15 +852,6 @@ test("database assistant uses one selected-provider secondary conversation and a
     truncated: false
   }]);
   assert.equal(Object.hasOwn(answer.queries[0].result, "cellMeta"), false);
-  assert.deepEqual(deletions, [{
-    input: {
-      conversationId: "database-thread-1",
-      ephemeral: true,
-      executionProfile,
-      threadId: "database-thread-1"
-    },
-    options: { vibe64User: { username: "owner" } }
-  }]);
 });
 
 test("database assistant availability describes the resolved Helper destination", () => {
@@ -878,14 +862,9 @@ test("database assistant availability describes the resolved Helper destination"
   });
 });
 
-test("database assistant deletes its secondary conversation after a failed turn", async () => {
-  const deletions = [];
+test("database assistant reports a failed turn's original error", async () => {
   await assert.rejects(
     runDatabaseAssistant({
-      deleteThread: async (input) => {
-        deletions.push(input);
-        return { deleted: true, ok: true };
-      },
       executeReadQuery: async () => {
         throw new Error("A read query should not run.");
       },
@@ -903,25 +882,11 @@ test("database assistant deletes its secondary conversation after a failed turn"
       message: "The selected assistant failed."
     }
   );
-  assert.deepEqual(deletions, [{
-    conversationId: "failed-database-thread",
-    ephemeral: true,
-    executionProfile: {
-      profileId: "helper",
-      workloadId: "database_assistant"
-    },
-    threadId: "failed-database-thread"
-  }]);
 });
 
-test("database assistant rejects ambiguous schema actions and still removes the thread", async () => {
-  const deletions = [];
+test("database assistant rejects ambiguous schema actions", async () => {
   await assert.rejects(
     runDatabaseAssistant({
-      deleteThread: async (input) => {
-        deletions.push(input);
-        return { deleted: true, ok: true };
-      },
       executeReadQuery: async () => {
         throw new Error("A read query should not run.");
       },
@@ -941,18 +906,11 @@ test("database assistant rejects ambiguous schema actions and still removes the 
     }),
     { code: "vibe64_database_assistant_response_invalid" }
   );
-  assert.equal(deletions.length, 1);
-  assert.equal(deletions[0].threadId, "invalid-schema-thread");
 });
 
 test("database assistant fails closed when the selected provider omits its execution proof", async () => {
-  const deletions = [];
   await assert.rejects(
     runDatabaseAssistant({
-      deleteThread: async (input) => {
-        deletions.push(input);
-        return { deleted: true, ok: true };
-      },
       executeReadQuery: async () => {
         throw new Error("A read query should not run.");
       },
@@ -969,14 +927,11 @@ test("database assistant fails closed when the selected provider omits its execu
     }),
     { code: "vibe64_database_assistant_execution_profile_missing" }
   );
-  assert.equal(deletions.length, 1);
-  assert.equal(deletions[0].threadId, "unproved-database-thread");
 });
 
 test("database assistant reports a bounded conversation context failure", async () => {
   await assert.rejects(
     runDatabaseAssistant({
-      deleteThread: async () => ({ deleted: true, ok: true }),
       executeReadQuery: async () => {
         throw new Error("A read query should not run.");
       },
@@ -985,43 +940,6 @@ test("database assistant reports a bounded conversation context failure", async 
         const error = new Error("Codex helper prompt exceeds the resolved input limit.");
         error.code = "vibe64_agent_execution_profile_unbounded";
         throw error;
-      },
-      schema: testSchema()
-    }),
-    {
-      code: "vibe64_database_assistant_context_too_large",
-      message: /shorter database conversation/u
-    }
-  );
-});
-
-test("database assistant preserves a failed turn when its thread was already retired", async () => {
-  await assert.rejects(
-    runDatabaseAssistant({
-      deleteThread: async () => ({
-        code: "vibe64_codex_helper_thread_unavailable",
-        error: "This low-cost assistant thread is no longer available.",
-        ok: false
-      }),
-      executeReadQuery: async () => {
-        throw new Error("A read query should not run.");
-      },
-      messages: [{ content: "Explain the schema.", role: "user" }],
-      runAgentTurn: async (_input, options) => {
-        options.onEvent({
-          threadId: "already-retired-database-thread",
-          type: "thread"
-        });
-        return {
-          code: "vibe64_agent_execution_profile_unbounded",
-          details: {
-            inputCharacters: 1_000_001,
-            maxInputCharacters: 1_000_000
-          },
-          error: "Codex helper prompt exceeds the resolved input limit.",
-          ok: false,
-          threadId: "already-retired-database-thread"
-        };
       },
       schema: testSchema()
     }),
@@ -1865,6 +1783,49 @@ test("database copilot keeps failed cleanup for restart and closes a late cancel
   assert.deepEqual(await readdir(directory), []);
 });
 
+test("database copilot keeps a failed question's own error when its helper cleanup also fails", async (t) => {
+  const runtime = await databaseHelperRuntime(t);
+  const store = {
+    readSession: async (sessionId) => ({ sessionId, metadata: {} }),
+    readArtifact: async () => JSON.stringify(testSchema())
+  };
+  const endpoint = { database: "catalogue", host: "127.0.0.1", username: "reader", password: "private-password", port: 5432 };
+  const projectService = { createSessionStore: async () => store, createRuntime: async () => runtime,
+    localDatabaseServers: async () => ({ managed: true, databases: [] }),
+    sessionDatabaseEnvironment: async () => ({ databaseToolEnvironment: {
+      contract: "vibe64.database-tool-environment.v1", kind: "postgresql", read: endpoint, write: endpoint
+    } }) };
+  let starts = 0;
+  let deletes = 0;
+  const terminalService = {
+    resolveAssistantPurpose: async () => ({ available: true, effectiveSelection: sharedDatabaseSelection, connectionIdentity: "shared-connection" }),
+    resolveEphemeralAgentExecutionProfile: async () => databaseExecutionProfile(),
+    async runEphemeralAgentChatTurn(_scope, _input, options) {
+      starts += 1;
+      await options.onEvent({ type: "thread", threadId: "failed-question-thread" });
+      return { code: "provider_failed", error: "The selected assistant failed.", ok: false, threadId: "failed-question-thread" };
+    },
+    async deleteEphemeralAgentConversation(_scope, input) {
+      deletes += 1;
+      assert.equal(input.conversationId, "failed-question-thread");
+      return { ok: false, error: "Native cleanup unavailable" };
+    }
+  };
+  const service = createDatabaseService({ projectService, terminalService });
+  const request = { sessionId: "copilot-session", vibe64User: { username: "member", role: "member" },
+    messages: [{ role: "user", content: "Private question" }] };
+  const failed = await service.askAssistant(request);
+  assert.equal(failed.ok, false);
+  assert.equal(failed.code, "provider_failed");
+  assert.match(failed.error, /selected assistant failed/u);
+  assert.equal(deletes, 1, "the service cleans up once, after the question");
+  const blocked = await service.askAssistant(request);
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.error, /Native cleanup unavailable/u);
+  assert.equal(starts, 1);
+  assert.equal(deletes, 2);
+});
+
 test("database assistant denial happens before schema inspection or its read-query loop", async () => {
   let artifactReads = 0;
   let databaseConnections = 0;
@@ -2033,17 +1994,15 @@ test("database service replaces a schema snapshot owned by a different database"
   await service.close();
 });
 
-test("database assistant application tools preserve host exceptions and clean up their exact native conversation", async () => {
+test("database assistant application tools preserve host exceptions", async () => {
   for (const statusCode of [403, 503]) {
     const failure = Object.assign(new Error("Original read failure"), { code: "original_read_failure", statusCode });
     const executionProfile = databaseExecutionProfile();
     let nativeResponses = 0;
     let reads = 0;
-    const deletions = [];
     await assert.rejects(runDatabaseAssistant({
       agentContext: { vibe64User: { username: "owner" } },
       executeReadQuery: async () => { reads++; throw failure; },
-      deleteThread: async (input, options) => { deletions.push({ input, options }); return { ok: true }; },
       messages: [{ content: "Read the books.", role: "user" }],
       schema: testSchema(),
       async runAgentTurn(input, options) {
@@ -2056,9 +2015,6 @@ test("database assistant application tools preserve host exceptions and clean up
     }), error => error === failure);
     assert.equal(nativeResponses, 1);
     assert.equal(reads, 1);
-    assert.deepEqual(deletions, [{ input: {
-      conversationId: "exact-database-thread", ephemeral: true, executionProfile, threadId: "exact-database-thread"
-    }, options: { vibe64User: { username: "owner" } } }]);
   }
 });
 
@@ -2066,10 +2022,8 @@ test("database assistant application tools preserve the original result bound be
   const executionProfile = databaseExecutionProfile();
   let nativeResponses = 0;
   let reads = 0;
-  let deletions = 0;
   await assert.rejects(runDatabaseAssistant({
     executeReadQuery: async () => { reads++; return { kind: "result-set", columns: [], rows: [["x".repeat(2 * 1024 * 1024)]] }; },
-    deleteThread: async input => { deletions++; assert.equal(input.threadId, "bounded-result-thread"); return { ok: true }; },
     messages: [{ content: "Read the books.", role: "user" }],
     schema: testSchema(),
     async runAgentTurn(_input, options) {
@@ -2081,7 +2035,6 @@ test("database assistant application tools preserve the original result bound be
   }), { code: "vibe64_database_assistant_query_result_too_large" });
   assert.equal(nativeResponses, 1);
   assert.equal(reads, 1);
-  assert.equal(deletions, 1);
 });
 
 test("database assistant application tools finish operation four on the same native thread without response five", async () => {
@@ -2092,7 +2045,6 @@ test("database assistant application tools finish operation four on the same nat
   await assert.rejects(runDatabaseAssistant({
     executeReadQuery: async sql => { trace.push(`read:${++reads}`); assert.equal(sql, "SELECT id FROM public.books;");
       return { kind: "result-set", columns: [{ label: "id" }], rows: [[1]] }; },
-    deleteThread: async input => { trace.push("delete"); assert.equal(input.threadId, "four-response-thread"); return { ok: true }; },
     messages: [{ content: "Read the books.", role: "user" }],
     schema: testSchema(),
     async runAgentTurn(input, options) {
@@ -2108,5 +2060,5 @@ test("database assistant application tools finish operation four on the same nat
   }), { code: "vibe64_database_assistant_tool_limit" });
   assert.equal(nativeResponses, 4);
   assert.equal(reads, 4);
-  assert.deepEqual(trace, ["response:1", "read:1", "response:2", "read:2", "response:3", "read:3", "response:4", "read:4", "delete"]);
+  assert.deepEqual(trace, ["response:1", "read:1", "response:2", "read:2", "response:3", "read:3", "response:4", "read:4"]);
 });

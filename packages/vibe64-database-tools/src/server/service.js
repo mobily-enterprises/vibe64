@@ -704,12 +704,6 @@ function createService({
             conversationId: "", runId: "", executionId: "" };
           const retain = () => runtime.store.writeJsonArtifact(context.sessionId, artifact, helper);
           await retain();
-          let cleanupAttempted = false;
-          const cleanup = async () => {
-            cleanupAttempted = true;
-            await cleanupAssistant(runtime, context.sessionId, artifact, context.vibe64User);
-            return { ok: true };
-          };
           const options = { assistantSelection: helper.selection, vibe64User: context.vibe64User,
             expectedConnectionIdentity: helper.connectionIdentity, signal: task.controller.signal,
             async onEvent(event) {
@@ -720,6 +714,8 @@ function createService({
               await retain();
             } };
           const startedAt = Date.now();
+          let result = null;
+          let failure = null;
           try {
             await mkdir(helper.scope.workdir, { recursive: true, mode: 0o700 });
             await mkdir(helper.scope.runtimeRoot, { recursive: true, mode: 0o700 });
@@ -727,10 +723,9 @@ function createService({
             helper.executionProfile = vibe64AgentExecutionProfileAuditSnapshot(profile);
             await retain();
             task.controller.signal.throwIfAborted();
-            const result = await runDatabaseAssistant({
+            result = await runDatabaseAssistant({
               agentContext: options,
               assistant: databaseAssistantAvailability(decision),
-              deleteThread: cleanup,
               executeReadQuery: (sql) => {
                 task.controller.signal.throwIfAborted();
                 return executeSessionQuery(context, { schema, sql, signal: task.controller.signal });
@@ -740,26 +735,35 @@ function createService({
                 { ...turnInput, executionProfile: profile }, turnOptions),
               schema
             });
-            logOperation(context, {
-              durationMs: Date.now() - startedAt,
-              model: result.model,
-              operation: "assistant.ask",
-              queryCount: result.queries.length,
-              schemaLookupCount: result.schemaLookups.length,
-              status: "succeeded"
-            });
-            return result;
           } catch (error) {
-            logOperation(context, {
-              code: error?.code,
-              durationMs: Date.now() - startedAt,
-              operation: "assistant.ask",
-              status: "failed"
-            }, "warn");
-            throw error;
-          } finally {
-            if (!cleanupAttempted) await cleanup();
+            failure = error;
           }
+          // This service is the helper's only cleanup owner. A cleanup failure
+          // fails an otherwise successful question; after a failed question it
+          // is attached as the cause, so the original reason stays visible.
+          // Either way the retained artifact blocks the next question and is
+          // retried on session close.
+          try {
+            await cleanupAssistant(runtime, context.sessionId, artifact, context.vibe64User);
+          } catch (cleanupError) {
+            if (failure) failure.cause ??= cleanupError;
+            else failure = cleanupError;
+          }
+          logOperation(context, failure ? {
+            code: failure.code,
+            durationMs: Date.now() - startedAt,
+            operation: "assistant.ask",
+            status: "failed"
+          } : {
+            durationMs: Date.now() - startedAt,
+            model: result.model,
+            operation: "assistant.ask",
+            queryCount: result.queries.length,
+            schemaLookupCount: result.schemaLookups.length,
+            status: "succeeded"
+          }, failure ? "warn" : "info");
+          if (failure) throw failure;
+          return result;
         });
         if (!admitted.acquired) throw databaseError(admitted.value?.error || "The session is unavailable for a database question.",
           admitted.value?.code || "vibe64_database_assistant_busy");
