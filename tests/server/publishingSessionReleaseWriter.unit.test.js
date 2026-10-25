@@ -21,7 +21,12 @@ async function fixture(t, { editBeforeSave = null } = {}) {
   const sourceEditor = {
     async readFile({ path: file }) {
       if (editBeforeSave?.path === file) await writeFile(path.join(root, file), editBeforeSave.text);
-      const text = await readFile(path.join(root, file), "utf8");
+      let text;
+      try {
+        text = await readFile(path.join(root, file), "utf8");
+      } catch {
+        return { ok: false, error: `${file} is not there.` };
+      }
       return { ok: true, file: { path: file, text, hash: `hash-of-${text.length}` } };
     },
     async saveFile({ path: file, text, baseHash }) {
@@ -53,4 +58,13 @@ test("an edit made after the change was prepared is never overwritten", async (t
   await assert.rejects(writer.prepareAndWrite({ sessionId: "s1", entry: ENTRY, version: "1.1.0", notes: "- Faster." }), { code: "VIBE64_PUBLISH_PREPARE_STALE" });
   assert.equal(await readFile(path.join(root, "package.json"), "utf8"), edited, "the person's edit stays");
   assert.equal(saves.some(({ file }) => file === "package.json"), false);
+});
+
+test("an edit to a later file leaves every file as it was", async (t) => {
+  const edited = "# Changelog\n\nWritten meanwhile.\n";
+  const { root, saves, writer } = await fixture(t, { editBeforeSave: { path: "CHANGELOG.md", text: edited } });
+  await assert.rejects(writer.prepareAndWrite({ sessionId: "s1", entry: ENTRY, version: "1.1.0", notes: "- Faster." }), { code: "VIBE64_PUBLISH_PREPARE_STALE" });
+  assert.equal(JSON.parse(await readFile(path.join(root, "package.json"), "utf8")).version, "1.0.0");
+  assert.equal(await readFile(path.join(root, "CHANGELOG.md"), "utf8"), edited);
+  assert.deepEqual(saves, []);
 });
