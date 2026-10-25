@@ -63,7 +63,7 @@ function viewProps(overrides = {}) {
       },
       sessionId: "session-1",
       sessionRoot: "/tmp/state/session-1",
-      source: "/tmp/sessions/active/session-1/source"
+      sourcePath: "/tmp/sessions/active/session-1/source"
     },
     sessionArchive: {},
     sessionSelectionArchived: false,

@@ -2,9 +2,6 @@ import {
   isOpenVibe64Session,
   shortVibe64SessionId
 } from "@/lib/vibe64SessionViewModel.js";
-import {
-  vibe64SessionSourcePath
-} from "@/lib/vibe64SessionPaths.js";
 
 function visibleVibe64Sessions(sessions = []) {
   return sessions
@@ -49,14 +46,9 @@ function enrichVibe64SessionForDisplay(session = null) {
   if (!session) {
     return null;
   }
-  const metadata = session.metadata || {};
-  const source = vibe64SessionSourcePath(session);
-  const sourceRemoved = String(metadata.source_removed || "").trim().toLowerCase() === "yes";
   return {
     ...session,
-    sessionName: session.sessionName || metadata.label || "",
-    source,
-    sourceReady: !sourceRemoved && (session.sourceReady === true || Boolean(source))
+    sessionName: session.sessionName || session.metadata?.label || ""
   };
 }
 

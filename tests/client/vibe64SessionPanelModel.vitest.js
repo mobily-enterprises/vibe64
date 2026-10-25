@@ -16,21 +16,33 @@ describe("plain Vibe64 session presentation", () => {
     ]).map((session) => session.sessionId)).toEqual(["first", "second"]);
   });
 
-  it("derives the display source and label without workflow metadata", () => {
+  it("derives the display label and keeps the server-resolved source", () => {
     expect(enrichVibe64SessionForDisplay({
+      metadata: { label: "Improve search" },
+      sessionId: "session-1",
+      sourcePath: "/tmp/project/sessions/active/session-1/source",
+      sourceReady: true
+    })).toMatchObject({
+      sessionName: "Improve search",
+      sourcePath: "/tmp/project/sessions/active/session-1/source",
+      sourceReady: true
+    });
+  });
+
+  it("never revives a source the server did not resolve", () => {
+    const display = enrichVibe64SessionForDisplay({
       metadata: {
-        label: "Improve search",
         source_kind: "session_clone",
-        source_path: "/tmp/project/sessions/active/session-1/source",
+        source_path: "/tmp/project/sessions/active/session-1/../session-2/source",
         source_path_authority: "managed_session_source"
       },
       sessionId: "session-1",
-      sessionRoot: "/tmp/project/state/session-1"
-    })).toMatchObject({
-      sessionName: "Improve search",
-      source: "/tmp/project/sessions/active/session-1/source",
-      sourceReady: true
+      sourcePath: "",
+      sourceReady: false
     });
+    expect(display.sourceReady).toBe(false);
+    expect(display.sourcePath).toBe("");
+    expect(display).not.toHaveProperty("source");
   });
 
   it("reports session limits and only blocking page errors", () => {

@@ -183,9 +183,6 @@ import {
   terminalSessionMissingError,
   vibe64TerminalErrorMessage
 } from "@/lib/vibe64TerminalErrors.js";
-import {
-  vibe64SessionSourcePath
-} from "@/lib/vibe64SessionPaths.js";
 
 const props = defineProps({
   session: {
@@ -229,7 +226,7 @@ const terminalAttachmentsEnabled = computed(() => Boolean(
   !props.readOnly &&
   sessionId.value
 ));
-const sessionSource = computed(() => vibe64SessionSourcePath(props.session || {}));
+const sessionSource = computed(() => String(props.session?.sourcePath || ""));
 const terminalDisplayActive = computed(() => props.visible && props.displayMode !== "headless");
 const rawServerCodexTerminal = computed(() => {
   const terminal = props.session?.agentSession?.terminal;

@@ -24,9 +24,6 @@ import {
   projectAppPath
 } from "@/lib/vibe64ProjectScope.js";
 import {
-  vibe64SessionSourcePath
-} from "@/lib/vibe64SessionPaths.js";
-import {
   sessionGithubCommandActor
 } from "@/lib/vibe64GitCommandActor.js";
 import {
@@ -333,7 +330,7 @@ function useVibe64AutopilotView(props, emit, {
     sessionGithubActor.value.available &&
     String(props.githubActorTeleportTarget || "").trim()
   ));
-  const sessionSourceRoot = computed(() => vibe64SessionSourcePath(props.session || {}));
+  const sessionSourceRoot = computed(() => String(props.session?.sourcePath || ""));
   const activeAgentTurn = computed(() => {
     const turn = props.session?.agentSession?.turn;
     return turn && typeof turn === "object" && !Array.isArray(turn) ? turn : {};

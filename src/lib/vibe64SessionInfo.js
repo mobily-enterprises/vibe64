@@ -80,7 +80,7 @@ function vibe64SessionInfoFacts(session = null, project = {}) {
   const agentTurn = plainObject(agentSession.turn);
   const sessionId = text(session.sessionId);
   const sessionRoot = text(session.sessionRoot);
-  const sourcePath = text(session.sourcePath || session.source || metadata.source_path);
+  const sourcePath = text(session.sourcePath);
   const projectSource = text(project.sourceRoot);
   const branch = text(metadata.branch || session.branch);
   const baseBranch = text(metadata.base_branch || metadata.source_default_branch);

@@ -127,7 +127,6 @@ import { useVibe64TerminalCommands } from "@/composables/useVibe64TerminalComman
 import { createWebSocketTerminalDriver } from "@/lib/vibe64TerminalDriver.js";
 import { vibe64AgentTerminalWebSocketUrl } from "@/lib/vibe64SessionApi.js";
 import { vibe64TerminalErrorMessage } from "@/lib/vibe64TerminalErrors.js";
-import { vibe64SessionSourcePath } from "@/lib/vibe64SessionPaths.js";
 import { findVibe64AgentProvider } from "@local/vibe64-runtime/shared";
 
 const props = defineProps({
@@ -165,7 +164,7 @@ const assistantProvider = computed(() => findVibe64AgentProvider(props.session?.
 const assistantLabel = computed(() => assistantProvider.value?.label || "");
 const assistantAcceptsAttachments = computed(() => assistantProvider.value?.terminalAttachments === true);
 const sessionId = computed(() => String(props.session?.sessionId || ""));
-const sessionSource = computed(() => vibe64SessionSourcePath(props.session || {}));
+const sessionSource = computed(() => String(props.session?.sourcePath || ""));
 const displayActive = computed(() => props.visible && props.displayMode !== "headless");
 const serverTerminal = computed(() => {
   const terminal = props.session?.agentSession?.terminal;

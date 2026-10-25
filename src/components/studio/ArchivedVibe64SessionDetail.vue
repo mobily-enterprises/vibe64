@@ -64,7 +64,7 @@
         :load-more-error="conversationLoadMoreError"
         :reloadable="true"
         :reloading="conversationLoading"
-        :source-root="session.source || ''"
+        :source-root="session.sourcePath || ''"
         :turns="conversationTurns"
         :visible="true"
         @load-more="conversationLog.loadMore"

@@ -52,6 +52,19 @@ describe("Vibe64 session info", () => {
     expect(safeRepositoryRemote("not a remote token=secret")).toBe("");
   });
 
+  it("shows only the server-resolved source, never raw metadata paths", () => {
+    const facts = vibe64SessionInfoFacts({
+      metadata: { source_path: "/unvalidated/elsewhere/source" },
+      sessionId: "session-1",
+      source: "/unvalidated/alias/source",
+      sourcePath: "",
+      sourceReady: false,
+      status: "active"
+    });
+    expect(facts.find((fact) => fact.key === "source")?.visible).not.toBe(true);
+    expect(vibe64SessionInfoText(facts, { status: "active" })).not.toContain("/unvalidated/");
+  });
+
   it("has no facts without a selected session", () => {
     expect(vibe64SessionInfoFacts(null, { projectRoot: "/project" })).toEqual([]);
   });

@@ -26,9 +26,6 @@ import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 import {
-  vibe64SessionSourcePath
-} from "@/lib/vibe64SessionPaths.js";
-import {
   isArchivedVibe64Session,
   vibe64SessionRevision
 } from "@/lib/vibe64SessionViewModel.js";
@@ -228,7 +225,7 @@ function openReadyLaunchBrowserTarget(
 }
 
 function outputTargetWorktreePath(session = {}) {
-  return vibe64SessionSourcePath(session);
+  return String(session?.sourcePath || "");
 }
 
 function launchControlsSessionCanRun(session = {}) {

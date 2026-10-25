@@ -177,15 +177,14 @@ describe("Vibe64 launch controls", () => {
 
     expect(outputTargetWorktreePath({
       metadata: managedSourceMetadata,
+      sourcePath: managedSourceMetadata.source_path,
       sessionId: "session-1",
       sourceReady: true
     })).toBe(managedSourceMetadata.source_path);
 
     expect(outputTargetWorktreePath({
       completedSteps: ["source_created"],
-      metadata: {
-        source_path: "/old-workspace/vibe64-local-editor/state/projects/project-test/sessions/active/session-1/source"
-      },
+      metadata: managedSourceMetadata,
       sessionId: "session-1",
       sessionRoot: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/session-1",
       sourceReady: true
@@ -196,6 +195,7 @@ describe("Vibe64 launch controls", () => {
     const session = {
       completedSteps: ["source_created"],
       metadata: managedSourceMetadata,
+      sourcePath: managedSourceMetadata.source_path,
       sessionId: "session-1",
       sessionRoot: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/session-1",
       status: "active"
@@ -235,6 +235,7 @@ describe("Vibe64 launch controls", () => {
     const session = {
       completedSteps: ["source_created"],
       metadata: managedSourceMetadata,
+      sourcePath: managedSourceMetadata.source_path,
       sessionId: "session-1",
       sessionRoot: "/workspace/vibe64-local-editor/state/projects/project-test/sessions/active/session-1",
       sourceReady: true,
@@ -859,7 +860,7 @@ it("Working Ctrl-C sends raw FIFO input through the output terminal socket", asy
   let working;
   const workingApp = renderer.createApp({ setup() {
     working = useVibe64OutputControls({ session: Vue.ref({ sessionId: "working-one", metadata: { source_kind: "session_clone",
-      source_path: "/controlled/working/sessions/active/working-one/source", source_path_authority: "managed_session_source" } }) });
+      source_path: "/controlled/working/sessions/active/working-one/source", source_path_authority: "managed_session_source" }, sourcePath: "/controlled/working/sessions/active/working-one/source" }) });
     return () => Vue.h("div");
   } });
   provideConversationFixture(workingApp, { on() {}, off() {} }, "local");
@@ -892,7 +893,7 @@ it.each([
   const target = { id: "app", available: true, default: true, mode: "interactive", presentation: { kind: "web" } };
   const session = Vue.ref({ sessionId: "saved-initial", metadata: {
     source_kind: "session_clone", source_path: "/controlled/practice/sessions/active/saved-initial/source", source_path_authority: "managed_session_source"
-  } });
+  }, sourcePath: "/controlled/practice/sessions/active/saved-initial/source" });
   const requests = [];
   let starts = 0;
   class ControlledSocket {
@@ -973,7 +974,7 @@ it.each(["succeeded", "failed", "invalid-contract"])("waits for workspace setup 
   const api = "/api/vibe64/sessions";
   const session = Vue.ref({ sessionId: "preparing", workspaceSetup: { status: "running" }, metadata: {
     source_kind: "session_clone", source_path: "/controlled/sessions/active/preparing/source", source_path_authority: "managed_session_source"
-  } });
+  }, sourcePath: "/controlled/sessions/active/preparing/source" });
   const requests = [];
   vi.stubGlobal("window", { location: new URL("http://127.0.0.1:5173/app/project/exact-practice"),
     localStorage: fakeStorage(), addEventListener() {}, removeEventListener() {} });

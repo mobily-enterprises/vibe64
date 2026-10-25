@@ -155,7 +155,8 @@ describe("useVibe64AutopilotView route hydration", () => {
         source_kind: "session_clone",
         source_path: "/tmp/sessions/active/session-1/source",
         source_path_authority: "managed_session_source"
-      }
+      },
+      sourcePath: "/tmp/sessions/active/session-1/source"
     };
     const { useVibe64AutopilotView } = await import(
       "../../src/composables/useVibe64AutopilotView.js"
@@ -209,6 +210,7 @@ describe("useVibe64AutopilotView route hydration", () => {
       source_path: "/tmp/sessions/active/session-1/source",
       source_path_authority: "managed_session_source"
     };
+    props.session.sourcePath = "/tmp/sessions/active/session-1/source";
     const { useVibe64AutopilotView } = await import(
       "../../src/composables/useVibe64AutopilotView.js"
     );
@@ -311,7 +313,7 @@ describe("useVibe64AutopilotView route hydration", () => {
         source_path: "/tmp/sessions/active/session-1/source",
         source_path_authority: "managed_session_source"
       },
-      source: "/tmp/sessions/active/session-1/source"
+      sourcePath: "/tmp/sessions/active/session-1/source"
     };
     props.page.launchBusy = false;
     await nextTick();
@@ -410,7 +412,8 @@ describe("useVibe64AutopilotView route hydration", () => {
         source_kind: "session_clone",
         source_path: "/tmp/sessions/active/session-1/source",
         source_path_authority: "managed_session_source"
-      }
+      },
+      sourcePath: "/tmp/sessions/active/session-1/source"
     };
     props.page.launchBusy = false;
     await nextTick();
@@ -449,7 +452,8 @@ describe("useVibe64AutopilotView route hydration", () => {
         source_kind: "session_clone",
         source_path: "/tmp/sessions/active/session-2/source",
         source_path_authority: "managed_session_source"
-      }
+      },
+      sourcePath: "/tmp/sessions/active/session-2/source"
     };
     // The second retained host has its own scope but uses the same live route/router.
     const scopeB = scope.run(() => effectScope());
@@ -465,7 +469,8 @@ describe("useVibe64AutopilotView route hydration", () => {
           source_kind: "session_clone",
           source_path: "/tmp/sessions/active/session-1/source",
           source_path_authority: "managed_session_source"
-        }
+        },
+        sourcePath: "/tmp/sessions/active/session-1/source"
       } : {})
     };
     propsA.page.error = outcome === "error" ? "Session A could not load." : "";
@@ -507,7 +512,7 @@ describe("useVibe64AutopilotView route hydration", () => {
         source_path: "/tmp/sessions/active/session-1/source",
         source_path_authority: "managed_session_source"
       },
-      source: "/tmp/sessions/active/session-1/source"
+      sourcePath: "/tmp/sessions/active/session-1/source"
     };
     const { useVibe64AutopilotView } = await import(
       "../../src/composables/useVibe64AutopilotView.js"
