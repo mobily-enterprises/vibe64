@@ -42,7 +42,7 @@
           aria-label="Provider model access"
           class="vibe64-session-assistant-menu__section"
         >
-          <div class="vibe64-session-assistant-menu__label">Z.AI access</div>
+          <div class="vibe64-session-assistant-menu__label">{{ selectedProvider?.label || "Provider" }} access</div>
           <v-sheet
             class="vibe64-session-assistant-menu__access"
             :class="{ 'vibe64-session-assistant-menu__access--paid': modelAccessUnlocked }"
@@ -56,7 +56,7 @@
                 <strong>{{ modelAccessUnlocked ? "Paid models unlocked" : "Free-only mode" }}</strong>
                 <small>
                   {{ modelAccessUnlocked
-                    ? "Other Z.AI models can consume API credit."
+                    ? `Other ${selectedProvider?.label || "provider"} models can consume API credit.`
                     : `${recommendedModel?.label || "The recommended model"} stays available without paid credit.` }}
                 </small>
               </span>
@@ -103,7 +103,7 @@
         </template>
         <v-card-title>{{ modelAccess.label || "Unlock provider models" }}?</v-card-title>
         <v-card-subtitle class="vibe64-session-assistant-menu__confirm-subtitle">
-          GLM-4.7 Flash stays available either way.
+          {{ recommendedModel?.label || "The recommended model" }} stays available either way.
         </v-card-subtitle>
       </v-card-item>
       <v-card-text class="text-body-medium">
@@ -234,13 +234,15 @@ const modelAccessPendingLabel = computed(() => modelAccessUnlocked.value
 const selectedModel = computed(() => modelRows.value.find((model) => (
   model.key === modelKey.value
 )) || null);
-const compatibleAgents = computed(() => (
-  (currentModelEngine.value?.agents || []).filter((agent) => (
+// Primary agents that can run the given model of the selected provider.
+function agentsForModel(targetModelId = "") {
+  return (currentModelEngine.value?.agents || []).filter((agent) => (
     ["all", "primary"].includes(agent.mode) &&
     (!agent.modelProviderId || agent.modelProviderId === modelProviderId.value) &&
-    (!agent.modelId || agent.modelId === modelId.value)
-  ))
-));
+    (!agent.modelId || agent.modelId === targetModelId)
+  ));
+}
+const compatibleAgents = computed(() => agentsForModel(modelId.value));
 const selectedAgent = computed(() => compatibleAgents.value.find((agent) => (
   agent.id === agentId.value
 )) || null);
@@ -360,11 +362,7 @@ function selectionForModel(model = null) {
   if (!model || model.status !== "available" || !selectionRevision.value) {
     return null;
   }
-  const agents = (currentModelEngine.value?.agents || []).filter((agent) => (
-    ["all", "primary"].includes(agent.mode) &&
-    (!agent.modelProviderId || agent.modelProviderId === modelProviderId.value) &&
-    (!agent.modelId || agent.modelId === model.id)
-  ));
+  const agents = agentsForModel(model.id);
   const agent = agents.find((candidate) => (
     candidate.id === selectedOverviewEngine.value?.defaults?.agentId
   )) || agents[0] || null;
@@ -550,16 +548,12 @@ watch([selectedModel, selectedAgent], ([model, agent]) => {
 }
 
 .vibe64-session-assistant-menu__locked-note {
-  color: rgba(var(--v-theme-on-surface), 0.62);
-  font-size: 0.82rem;
-  padding: 0.35rem 0.12rem;
-}
-
-.vibe64-session-assistant-menu__locked-note {
   align-items: center;
+  color: rgba(var(--v-theme-on-surface), 0.62);
   display: flex;
+  font-size: 0.82rem;
   gap: 0.35rem;
-  padding-block: 0.1rem;
+  padding: 0.1rem 0.12rem;
 }
 
 .vibe64-session-assistant-menu__access {

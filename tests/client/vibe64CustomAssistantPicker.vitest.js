@@ -136,3 +136,13 @@ it("blocks Apply while the selected provider loads or fails and uses its refresh
     catalogRevision: refreshedRevision
   }) }));
 });
+
+it("names the selected provider and its recommended model rather than one provider's copy", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("../../src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue", import.meta.url), "utf8");
+  expect(source).not.toMatch(/Z\.AI|GLM-/u);
+  expect(source).toContain('{{ selectedProvider?.label || "Provider" }} access');
+  expect(source).toContain('{{ recommendedModel?.label || "The recommended model" }} stays available either way.');
+  const state = mount(); state.menuOpen = true; await nextTick();
+  expect(state.selectedProvider.label).toBe("zai");
+});
