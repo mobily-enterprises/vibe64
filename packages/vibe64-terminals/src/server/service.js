@@ -2235,6 +2235,20 @@ function createService({
     );
   }
 
+  // The Git actor an earlier Save already recorded, for its recovery or retirement.
+  async function saveExecution(session, sessionId, purpose) {
+    const execution = await codexGitCommand.sessionWorkSaveContext({
+      session,
+      sessionId: String(sessionId || "").trim()
+    });
+    if (execution?.ok === false) {
+      throw Object.assign(new Error(execution.error || `The Git actor for ${purpose} is not available.`), {
+        code: execution.code || "vibe64_session_save_actor_unavailable"
+      });
+    }
+    return execution;
+  }
+
   async function sessionWorkExecution(sessionId, input = {}, reason = "session-work") {
     const normalizedSessionId = String(sessionId || "").trim();
     const read = await sessionContext(normalizedSessionId, input);
@@ -2840,18 +2854,8 @@ function createService({
     },
 
     async recoverSessionWorkSave(sessionId, input = {}) {
-      return runSessionRepositoryWrite(sessionId, input, { operation: "recover-session-save" }, async (context) => {
-        const normalizedSessionId = String(sessionId || "").trim();
-        const { session } = context;
-        const execution = await codexGitCommand.sessionWorkSaveContext({
-          session,
-          sessionId: normalizedSessionId
-        });
-        if (execution?.ok === false) {
-          const error = new Error(execution.error || "The Git actor for Save recovery is not available.");
-          error.code = execution.code || "vibe64_session_save_actor_unavailable";
-          throw error;
-        }
+      return runSessionRepositoryWrite(sessionId, input, { operation: "recover-session-save" }, async ({ session }) => {
+        const execution = await saveExecution(session, sessionId, "Save recovery");
         return recoverManagedSessionWorkSave({
           commandOptions: execution.commandOptions,
           project: await projectService.readCurrentProject(),
@@ -2869,15 +2873,7 @@ function createService({
     // have started after Save finished.
     async retireSessionWorkSave(sessionId, input = {}) {
       const result = await runMainAgentWrite(sessionId, input, async ({ session }) => {
-        const execution = await codexGitCommand.sessionWorkSaveContext({
-          session,
-          sessionId: String(sessionId || "").trim()
-        });
-        if (execution?.ok === false) {
-          throw Object.assign(new Error(execution.error || "The Git actor for retiring this Save is not available."), {
-            code: execution.code || "vibe64_session_save_actor_unavailable"
-          });
-        }
+        const execution = await saveExecution(session, sessionId, "retiring this Save");
         await retireManagedSessionWorkSave({
           commandOptions: execution.commandOptions,
           operationId: input.operationId,

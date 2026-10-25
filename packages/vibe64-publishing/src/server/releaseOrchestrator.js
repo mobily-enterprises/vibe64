@@ -5,7 +5,7 @@
 //   3. plan: the exact plan for the saved commit, with preflight;
 //   4. dry run (optional): build once, ask every destination what would happen;
 //   5. the person confirms the exact plan on the Publish page (never in chat);
-//   6. release: tag the saved commit, build every package once, fan out to every
+//   6. release: build every package once, tag the saved commit, fan out to every
 //      target, read each one back, and record it all in the release history.
 // Every target is resumable: confirming the same plan again finishes what is
 // left, and what is already published with the same bytes counts as done.
@@ -13,6 +13,7 @@ import os from "node:os";
 import path from "node:path";
 
 import {
+  UNFINISHED_RELEASE_STATUSES,
   VIBE64_PREFLIGHT_CHECKS,
   assertPreflightAllowsRelease,
   createPublishPlan,
@@ -27,9 +28,6 @@ import { ANDROID_CHECKS } from "@local/vibe64-packaging/server/preflight/android
 import { publishingKeysUnlocked, recoveryKitCovers } from "@local/vibe64-packaging/server/keys";
 
 import { sideloadKeyEntryId } from "./credentialBroker.js";
-
-
-const UNFINISHED = Object.freeze(["failed", "partial", "interrupted"]);
 
 function releaseError(message, code, details) {
   return Object.assign(new Error(message), { code, ...(details ? { details } : {}) });
@@ -570,7 +568,7 @@ function createReleaseOrchestrator({
     assertPreflightAllowsRelease(current.preflight, acknowledged);
     const redeemed = await confirmations.redeem({ planHash: current.planHash, token, actor });
     const unfinished = (await history.list({ limit: Infinity })).map(interruptedOr)
-      .find((record) => record.kind === "release" && record.planHash === current.planHash && UNFINISHED.includes(record.status));
+      .find((record) => record.kind === "release" && record.planHash === current.planHash && UNFINISHED_RELEASE_STATUSES.includes(record.status));
     const record = unfinished
       ? await history.update(unfinished.id, (entry) => {
         entry.status = "running";
