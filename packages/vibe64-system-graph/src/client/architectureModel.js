@@ -229,6 +229,10 @@ export function engineOverview(architecture, order = []) {
   return { nodes, edges: [], decorations, width, height, applicationWidth, applicationHeight, externalCount: externalPackages.length };
 }
 
+function symbolSource(path, symbol) {
+  return { path, symbolId: symbol.id, symbol: symbol.qualifiedName || symbol.name, line: symbol.start?.line };
+}
+
 // File ownership and API declarations come from the index. Directory nesting is
 // presentation only; internal file exports do not define a subsystem's contract.
 export function subsystemOutline(architecture, subsystemId) {
@@ -269,7 +273,7 @@ export function subsystemOutline(architecture, subsystemId) {
           && (candidate.qualifiedName || candidate.name) === (symbol.sourceQualifiedName || symbol.sourceName || symbol.qualifiedName || symbol.name)
           && (!symbol.start || candidate.start?.line === symbol.start.line && candidate.start?.column === symbol.start.column));
         const source = candidates.length === 1 ? candidates[0] : null;
-        return { ...symbol, ...(source ? { source: { path: sourceFile.path, symbolId: source.id, symbol: source.qualifiedName || source.name, line: source.start?.line } } : {}) };
+        return { ...symbol, ...(source ? { source: symbolSource(sourceFile.path, source) } : {}) };
       }), conditions: entry.conditions || [],
         importPath: entry.importPath === '.' ? pkg.name : `${pkg.name}${entry.importPath?.startsWith('./') ? entry.importPath.slice(1) : '/' + (entry.importPath || '')}` };
     }));
@@ -302,7 +306,7 @@ export function subsystemOutline(architecture, subsystemId) {
       for (const id of relation.importedSymbolIds || []) {
         const symbol = symbolsById.get(id);
         if (!symbol || symbol.fileId !== to.id || symbol.visibility !== 'public') continue;
-        if (!observed.has(id)) observed.set(id, { ...symbol, consumers: new Map(), source: { path: to.path, symbolId: id, symbol: symbol.qualifiedName || symbol.name, line: symbol.start?.line } });
+        if (!observed.has(id)) observed.set(id, { ...symbol, consumers: new Map(), source: symbolSource(to.path, symbol) });
         observed.get(id).consumers.set(from.id, from);
       }
     }
@@ -312,10 +316,13 @@ export function subsystemOutline(architecture, subsystemId) {
       fileLinks.set(key, { fromId: from.id, toId: to.id, from: from.path, to: to.path || to.name });
     }
   }
+  const pages = architecture?.ui?.pages || [];
+  let callsByPage; // page id -> ids of the UI calls it reaches, built once when needed
   const operations = (architecture?.ui?.connections || []).filter(connection => connection.resolution === 'resolved' && localIds.has(connection.controllerFileId)).map(connection => {
     const file = files.get(connection.controllerFileId);
     addEntry(file, 'Receives UI calls');
-    return { ...connection, file, pages: (architecture?.ui?.pages || []).filter(page => pageConnections(architecture.ui, page.id).some(call => call.id === connection.id)) };
+    callsByPage ||= new Map(pages.map(page => [page.id, new Set(pageConnections(architecture.ui, page.id).map(call => call.id))]));
+    return { ...connection, file, pages: pages.filter(page => callsByPage.get(page.id).has(connection.id)) };
   });
   const entryFiles = [...entries.values()].map(entry => ({ ...entry, reasons: [...entry.reasons], consumers: [...entry.consumers.values()],
     symbols: symbolsByFile.get(entry.file.id) || []
@@ -360,11 +367,11 @@ export function subsystemOutline(architecture, subsystemId) {
     const exposed = publicSymbols.get(key);
     if (!exposed.importPaths.includes(entry.importPath)) exposed.importPaths.push(entry.importPath);
   }
-  const boundarySymbols = entryFiles.filter(entry => entry.consumers.length).flatMap(entry => entry.symbols.filter(symbol => !declaredSymbolIds.has(symbol.id) && !observed.has(symbol.id)).map(symbol => ({ ...symbol, consumers: entry.consumers, source: { path: entry.file.path, symbolId: symbol.id, symbol: symbol.qualifiedName || symbol.name, line: symbol.start?.line } })));
+  const boundarySymbols = entryFiles.filter(entry => entry.consumers.length).flatMap(entry => entry.symbols.filter(symbol => !declaredSymbolIds.has(symbol.id) && !observed.has(symbol.id)).map(symbol => ({ ...symbol, consumers: entry.consumers, source: symbolSource(entry.file.path, symbol) })));
   const observedSymbols = [...observed.values()].map(symbol => ({ ...symbol, declared: declaredSymbolIds.has(symbol.id), consumers: [...symbol.consumers.values()] }));
   const candidates = new Set(boundarySymbols.map(symbol => symbol.id));
   const availableSymbols = local.flatMap(file => (symbolsByFile.get(file.id) || []).filter(symbol => !declaredSymbolIds.has(symbol.id) && !observed.has(symbol.id) && !candidates.has(symbol.id))
-    .map(symbol => ({ ...symbol, source: { path: file.path, symbolId: symbol.id, symbol: symbol.qualifiedName || symbol.name, line: symbol.start?.line } })));
+    .map(symbol => ({ ...symbol, source: symbolSource(file.path, symbol) })));
   for (const symbol of [...publicSymbols.values(), ...observedSymbols, ...boundarySymbols, ...availableSymbols]) {
     if (!symbol.source) continue;
     const exact = [...(importsBySymbol.get(symbol.source.symbolId)?.values() || [])];

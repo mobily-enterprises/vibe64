@@ -1,7 +1,7 @@
 {
   "name": "@local/vibe64-source-editor",
   "version": "0.1.0",
-  "description": "Owns Vibe64 session source-editor file policy, navigation, selected-file sync, search, autosave, and source explanations.",
+  "description": "Owns Vibe64 session source-editor file policy, navigation, selected-file sync, search, autosave, Files areas, project integrations, and source explanations.",
   "private": true,
   "type": "module",
   "exports": {
@@ -55,7 +55,7 @@
           },
           {
             "subpath": "./server/service",
-            "summary": "Owns the neutral source-tree policy, selected-file observation, indexed filename and content search, file read/autosave operations, and session-scoped source explanation records."
+            "summary": "Composes the neutral source-tree policy, selected-file observation, indexed filename and content search, file read/autosave operations, Files areas, project integration configuration and development setup, and session-scoped source explanation records."
           }
         ]
       }

@@ -91,6 +91,139 @@ function settledCityStatus(result, kind) {
   return cityStatus({ kind }, result.reason);
 }
 
+function architectureCancelled() {
+  return systemError("Architecture analysis was cancelled.", "vibe64_architecture_cancelled");
+}
+
+function inspectorRuntime(inspector, runtimeReader) {
+  const runtime = runtimeReader(inspector.runtimeRequirements);
+  if (!runtime.available) throw systemError(runtime.disabledReason, "vibe64_architecture_runtime_unavailable");
+  return runtime;
+}
+
+// The inspector's workdir and each ancestor must be a real project directory.
+async function assertInspectorWorkdir(sourceRoot, inspector) {
+  const ancestors = inspector.workdir === "." ? [] : inspector.workdir.split("/").map((_, index, parts) => parts.slice(0, index + 1).join("/"));
+  for (const directory of ["", ...ancestors]) {
+    const info = await lstat(path.join(sourceRoot, directory));
+    if (!info.isDirectory() || info.isSymbolicLink()) throw systemError("An architecture inspector directory must be a real project directory.", "vibe64_architecture_directory_invalid");
+  }
+}
+
+// Prerequisites are explicit consumer facts, not command/language guesses.
+async function assertInspectorPrerequisites(sourceRoot, realSourceRoot, inspector, runtimeReader) {
+  inspectorRuntime(inspector, runtimeReader);
+  await assertInspectorWorkdir(sourceRoot, inspector);
+  for (const file of inspector.requiredFiles || []) {
+    try {
+      const resolved = await realpath(path.join(sourceRoot, file));
+      const relative = path.relative(realSourceRoot, resolved);
+      if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative) || !(await stat(resolved)).isFile()) throw new Error("Invalid required file");
+    } catch {
+      throw systemError(`${inspector.title} needs ${file}. Prepare this project's dependencies, then retry.`, "vibe64_architecture_prerequisite_missing");
+    }
+  }
+}
+
+function architectureInspectionRequest(architecture, inspection) {
+  const request = `${JSON.stringify({
+    schema: "vibe64.architecture-inspection-input.v1",
+    files: architecture.files.map(file => ({ path: file.path, hash: file.hash })),
+    packages: (architecture.packages || []).map(({ id, name, manifest, declarations, root, opaque, entryPoints }) => ({
+      id, name, manifest, declarations, root, opaque,
+      entryPoints: entryPoints.map(({ importPath, file }) => ({ importPath, file }))
+    })),
+    packageIdentity: architecture.packageIdentity,
+    uiDiscovery: architecture.uiDiscovery,
+    stackHash: inspection.stackHash
+  })}\n`;
+  if (Buffer.byteLength(request) > 4 * 1024 * 1024) throw systemError("Architecture inspection inputs exceed the supported bound.", "vibe64_architecture_input_too_large");
+  return request;
+}
+
+// Runs one declared inspector and returns its parsed observation document.
+async function runArchitectureInspector({ inspector, request, current, signal, progress, runCommand, projectService, runtimeReader }) {
+  if (signal.aborted) throw architectureCancelled();
+  const runtime = inspectorRuntime(inspector, runtimeReader);
+  await assertInspectorWorkdir(current.sourceRoot, inspector);
+  const [command, ...args] = inspector.argv;
+  await progress(`Running ${inspector.title}…`);
+  const execution = await runCommand({
+    actor: "app",
+    allowedRoots: [current.sourceRoot],
+    command,
+    args,
+    cwd: path.resolve(current.sourceRoot, inspector.workdir),
+    mode: "capture",
+    purpose: "source",
+    envPolicy: "project",
+    env: await projectService.projectInspectionEnvironment({ sessionId: current.sessionId }),
+    project: await projectService.readCurrentProject(),
+    session: current.session,
+    runtimes: runtime.runtimes,
+    input: request,
+    maxBuffer: inspector.maxBuffer,
+    timeout: inspector.timeout,
+    signal
+  });
+  if (signal.aborted) throw architectureCancelled();
+  if (!execution?.ok) throw systemError(execution?.timedOut ? `${inspector.title} timed out.` : `${inspector.title} failed${Number.isInteger(execution?.exitCode) ? ` (exit ${execution.exitCode})` : ''}.`, "vibe64_architecture_inspector_failed", { inspectorId: inspector.id, commandOutput: String(execution?.stderr || execution?.error || '').slice(-2000) });
+  if (typeof execution.stdout !== "string" || Buffer.byteLength(execution.stdout) > inspector.maxBuffer) throw systemError(`${inspector.title} returned oversized output.`, "vibe64_architecture_output_too_large");
+  try { return JSON.parse(execution.stdout); } catch { throw systemError(`${inspector.title} must return one JSON observation document.`, "vibe64_architecture_output_invalid"); }
+}
+
+// readArchitecture's view needs file ownership, public interfaces and source edges.
+function fileView(file, sourceMetrics) {
+  const metrics = sourceMetrics.get(file.id);
+  const lines = metrics?.hash === file.hash && Number.isSafeInteger(metrics.lines) && metrics.lines >= 0 ? metrics.lines : null;
+  return {
+    id: file.id,
+    path: file.path,
+    title: file.title,
+    language: file.language,
+    hash: file.hash,
+    lines: file.lines,
+    sourceLines: lines,
+    analysis: file.analysis,
+    subsystemId: file.subsystemId
+  };
+}
+
+function publicSymbolView(symbol) {
+  return {
+    id: symbol.id,
+    fileId: symbol.fileId,
+    name: symbol.name,
+    qualifiedName: symbol.qualifiedName,
+    kind: symbol.kind,
+    visibility: symbol.visibility,
+    visibilityScope: symbol.visibilityScope,
+    parameters: symbol.parameters,
+    returnType: symbol.returnType,
+    start: symbol.start,
+    end: symbol.end,
+    rangeAvailable: symbol.rangeAvailable
+  };
+}
+
+function relationView(relation) {
+  return {
+    id: relation.id,
+    fromFileId: relation.fromFileId,
+    targetFileId: relation.targetFileId,
+    targetPackageId: relation.targetPackageId,
+    importPath: relation.importPath,
+    kind: relation.kind,
+    typeOnly: relation.typeOnly,
+    specifier: relation.specifier,
+    resolution: relation.resolution,
+    reason: relation.reason,
+    evidence: relation.evidence,
+    importedNames: relation.importedNames,
+    importedSymbolIds: relation.importedSymbolIds
+  };
+}
+
 function createService({
   cityReader = readGenesisCity,
   subsystemReader = inspectGenesisSubsystems,
@@ -220,7 +353,6 @@ function createService({
           return { file, fileId: source?.id || null, subsystemId: source?.subsystemId || null, resolution: source ? 'resolved' : 'unresolved' };
         });
         // The complete native artifact remains available to existing callers.
-        // This view needs file ownership, public interfaces and source edges.
         const architecture = native ? {
           ...native,
           layout,
@@ -228,13 +360,9 @@ function createService({
           entryPoints,
           entryPointStatus: inspection?.status || 'unconfigured',
           entryPointDiagnostic,
-          files: native.files.map(file => {
-            const metrics = sourceMetrics.get(file.id);
-            const lines = metrics?.hash === file.hash && Number.isSafeInteger(metrics.lines) && metrics.lines >= 0 ? metrics.lines : null;
-            return { id: file.id, path: file.path, title: file.title, language: file.language, hash: file.hash, lines: file.lines, sourceLines: lines, analysis: file.analysis, subsystemId: file.subsystemId };
-          }),
-          symbols: native.symbols.filter(symbol => symbol.visibility === 'public').map(symbol => ({ id: symbol.id, fileId: symbol.fileId, name: symbol.name, qualifiedName: symbol.qualifiedName, kind: symbol.kind, visibility: symbol.visibility, visibilityScope: symbol.visibilityScope, parameters: symbol.parameters, returnType: symbol.returnType, start: symbol.start, end: symbol.end, rangeAvailable: symbol.rangeAvailable })),
-          relations: native.relations.map(relation => ({ id: relation.id, fromFileId: relation.fromFileId, targetFileId: relation.targetFileId, targetPackageId: relation.targetPackageId, importPath: relation.importPath, kind: relation.kind, typeOnly: relation.typeOnly, specifier: relation.specifier, resolution: relation.resolution, reason: relation.reason, evidence: relation.evidence, importedNames: relation.importedNames, importedSymbolIds: relation.importedSymbolIds })),
+          files: native.files.map(file => fileView(file, sourceMetrics)),
+          symbols: native.symbols.filter(symbol => symbol.visibility === 'public').map(publicSymbolView),
+          relations: native.relations.map(relationView),
         } : null;
         return { ok: true, architecture, legacy: !native };
       });
@@ -283,47 +411,16 @@ function createService({
             const current = await systemContext(context.sessionId);
             const inspection = await inspectorReader({ projectRoot: current.sourceRoot });
             if (inspection.status === "blocked") throw systemError("Architecture inspection declarations need attention.", "vibe64_architecture_inspection_blocked", { diagnostics: inspection.diagnostics });
-            // Prerequisites are explicit consumer facts, not command/language guesses.
-            const sourceRoot = await realpath(current.sourceRoot);
+            const realSourceRoot = await realpath(current.sourceRoot);
             for (const inspector of inspection.inspectors || []) {
-              const runtime = runtimeReader(inspector.runtimeRequirements);
-              if (!runtime.available) throw systemError(runtime.disabledReason, "vibe64_architecture_runtime_unavailable");
-              for (const directory of ["", ...(inspector.workdir === "." ? [] : inspector.workdir.split('/').map((_, index, parts) => parts.slice(0, index + 1).join('/')))]) {
-                const info = await lstat(path.join(current.sourceRoot, directory));
-                if (!info.isDirectory() || info.isSymbolicLink()) throw systemError("An architecture inspector directory must be a real project directory.", "vibe64_architecture_directory_invalid");
-              }
-              for (const file of inspector.requiredFiles || []) {
-                try {
-                  const resolved = await realpath(path.join(current.sourceRoot, file));
-                  const relative = path.relative(sourceRoot, resolved);
-                  if (relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative) || !(await stat(resolved)).isFile()) throw new Error('Invalid required file');
-                } catch {
-                  throw systemError(`${inspector.title} needs ${file}. Prepare this project's dependencies, then retry.`, "vibe64_architecture_prerequisite_missing");
-                }
-              }
+              await assertInspectorPrerequisites(current.sourceRoot, realSourceRoot, inspector, runtimeReader);
             }
             await progress("Scanning project source and existing Genesis documents…");
             const observations = inspection.inspectors?.length ? async architecture => {
-              const request = `${JSON.stringify({ schema: "vibe64.architecture-inspection-input.v1", files: architecture.files.map(file => ({ path: file.path, hash: file.hash })), packages: (architecture.packages || []).map(({ id, name, manifest, declarations, root, opaque, entryPoints }) => ({ id, name, manifest, declarations, root, opaque, entryPoints: entryPoints.map(({ importPath, file }) => ({ importPath, file })) })), packageIdentity: architecture.packageIdentity, uiDiscovery: architecture.uiDiscovery, stackHash: inspection.stackHash })}\n`;
-              if (Buffer.byteLength(request) > 4 * 1024 * 1024) throw systemError("Architecture inspection inputs exceed the supported bound.", "vibe64_architecture_input_too_large");
+              const request = architectureInspectionRequest(architecture, inspection);
               const documents = [];
               for (const inspector of inspection.inspectors) {
-                if (controller.signal.aborted) throw systemError("Architecture analysis was cancelled.", "vibe64_architecture_cancelled");
-                const runtime = runtimeReader(inspector.runtimeRequirements);
-                if (!runtime.available) throw systemError(runtime.disabledReason, "vibe64_architecture_runtime_unavailable");
-                for (const directory of ["", ...(inspector.workdir === "." ? [] : inspector.workdir.split('/').map((_, index, parts) => parts.slice(0, index + 1).join('/')))]) {
-                  const info = await lstat(path.join(current.sourceRoot, directory));
-                  if (!info.isDirectory() || info.isSymbolicLink()) throw systemError("An architecture inspector directory must be a real project directory.", "vibe64_architecture_directory_invalid");
-                }
-                const [command, ...args] = inspector.argv;
-                await progress(`Running ${inspector.title}…`);
-                const execution = await runCommand({ actor: "app", allowedRoots: [current.sourceRoot], command, args, cwd: path.resolve(current.sourceRoot, inspector.workdir), mode: "capture", purpose: "source", envPolicy: "project", env: await projectService.projectInspectionEnvironment({ sessionId: current.sessionId }), project: await projectService.readCurrentProject(), session: current.session, runtimes: runtime.runtimes, input: request, maxBuffer: inspector.maxBuffer, timeout: inspector.timeout, signal: controller.signal });
-                if (controller.signal.aborted) throw systemError("Architecture analysis was cancelled.", "vibe64_architecture_cancelled");
-                if (!execution?.ok) throw systemError(execution?.timedOut ? `${inspector.title} timed out.` : `${inspector.title} failed${Number.isInteger(execution?.exitCode) ? ` (exit ${execution.exitCode})` : ''}.`, "vibe64_architecture_inspector_failed", { inspectorId: inspector.id, commandOutput: String(execution?.stderr || execution?.error || '').slice(-2000) });
-                if (typeof execution.stdout !== "string" || Buffer.byteLength(execution.stdout) > inspector.maxBuffer) throw systemError(`${inspector.title} returned oversized output.`, "vibe64_architecture_output_too_large");
-                let document;
-                try { document = JSON.parse(execution.stdout); } catch { throw systemError(`${inspector.title} must return one JSON observation document.`, "vibe64_architecture_output_invalid"); }
-                documents.push(document);
+                documents.push(await runArchitectureInspector({ inspector, request, current, signal: controller.signal, progress, runCommand, projectService, runtimeReader }));
               }
               await progress("Validating UI observations…");
               const merged = mergeArchitectureObservations(documents, { files: architecture.files, packages: architecture.packages || [] });
@@ -332,7 +429,7 @@ function createService({
               await progress("Updating the browsing index…");
               return merged;
             } : null;
-            if (controller.signal.aborted) throw systemError("Architecture analysis was cancelled.", "vibe64_architecture_cancelled");
+            if (controller.signal.aborted) throw architectureCancelled();
             return refresher({ projectRoot: current.sourceRoot, write: true, ...(observations ? { observations } : {}), signal: controller.signal });
           }, { operation: "architecture-refresh" });
           if (!exclusive.acquired) throw systemError(exclusive.value?.error || "Source work is busy.", exclusive.value?.code || "vibe64_architecture_refresh_busy");
@@ -353,7 +450,7 @@ function createService({
           };
         } catch (error) {
           pending.cancelled = controller.signal.aborted;
-          const failure = pending.cancelled ? systemError("Architecture analysis was cancelled.", "vibe64_architecture_cancelled") : error;
+          const failure = pending.cancelled ? architectureCancelled() : error;
           pending.progress = { ...pending.progress, status: pending.cancelled ? "cancelled" : "failed", message: String(failure.message), code: String(failure.code || "vibe64_system_graph_failed"), commandOutput: String(failure.details?.commandOutput || "") };
           throw failure;
         } finally {

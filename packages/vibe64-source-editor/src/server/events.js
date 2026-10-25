@@ -3,17 +3,14 @@ import {
   sourceEditorFileRealtimePayload
 } from "@local/vibe64-core/server/sourceEditorRealtimeEvents";
 
-function createSourceEditorPublisher(events, {
-  realtimeEvent,
-  toPayload
-} = {}) {
+function createSourceEditorFileChangedPublisher(events) {
   if (!events || typeof events.publish !== "function") {
     throw new TypeError("Source editor event publication requires runtime.events.");
   }
   return async function publishSourceEditorEvent(result = {}, {
     operation = "updated"
   } = {}) {
-    const payload = toPayload({ result });
+    const payload = sourceEditorFileRealtimePayload({ result });
     const sessionId = String(payload.sessionId || "").trim();
     const path = String(payload.path || "").trim();
     if (!sessionId || !path) {
@@ -32,18 +29,11 @@ function createSourceEditorPublisher(events, {
       occurredAt: new Date().toISOString(),
       realtime: Object.freeze({
         audience: "all_clients",
-        event: realtimeEvent,
+        event: VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT,
         payload: Object.freeze(payload)
       })
     }));
   };
-}
-
-function createSourceEditorFileChangedPublisher(events) {
-  return createSourceEditorPublisher(events, {
-    realtimeEvent: VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT,
-    toPayload: sourceEditorFileRealtimePayload
-  });
 }
 
 export {

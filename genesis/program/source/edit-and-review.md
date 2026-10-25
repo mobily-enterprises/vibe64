@@ -19,6 +19,10 @@ from saved project work, and inspect one exact file change at a time.
 - `src/composables/useVibe64Integrations.js`
 - `src/pages/app/project/[slug]/dashboard/integrations/index.vue`
 - Main: `packages/vibe64-source-editor/src/server/service.js`
+- `packages/vibe64-source-editor/src/server/sourceFiles.js`
+- `packages/vibe64-source-editor/src/server/fileAreas.js`
+- `packages/vibe64-source-editor/src/server/integrations.js`
+- `packages/vibe64-source-editor/src/server/explanations.js`
 - `packages/vibe64-source-editor/src/server/fileIndex.js`
 - `packages/vibe64-source-editor/src/server/searchIndex.js`
 - `packages/vibe64-source-editor/src/server/searchIndexWorker.js`
@@ -1367,7 +1371,7 @@ explain that this browser token is distinct from the private backend API key.
 Sources: `src/components/studio/PaymentConfigurationPanel.vue`,
 `src/components/studio/IntegrationsPanel.vue`,
 `src/composables/useVibe64Integrations.js`,
-`packages/vibe64-source-editor/src/server/service.js`
+`packages/vibe64-source-editor/src/server/integrations.js`
 
 
 Payment preview/publication uses the existing Integration setup command runner.
