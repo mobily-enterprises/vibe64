@@ -10,7 +10,8 @@ import {
   studioUserStartupScript
 } from "@local/studio-terminal-core/server/studioToolHome";
 import {
-  normalizeText
+  normalizeText,
+  pathInsideOrEqual
 } from "@local/vibe64-core/server/core";
 import {
   currentProjectScopeKey
@@ -403,18 +404,6 @@ function writePreviewAuthSecret(secretPath = "", secret = "") {
   });
   chmodSync(normalizedPath, 0o600);
   return normalizedPath;
-}
-
-function pathInsideOrEqual(rootPath = "", candidatePath = "") {
-  if (!rootPath || !candidatePath) {
-    return false;
-  }
-  const relativePath = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
-  return relativePath === "" || (
-    relativePath !== ".."
-    && !relativePath.startsWith(`..${path.sep}`)
-    && !path.isAbsolute(relativePath)
-  );
 }
 
 function launchTargetTerminalArgs({

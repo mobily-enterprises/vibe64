@@ -9,10 +9,10 @@ import {
   getStudioProjectContext,
   localProjectKeyFromTargetRoot,
   normalizeProjectSlug,
-  pathInsideOrEqual,
   projectSlugFromName,
   resolveStudioProjectsRoot
 } from "./studioProjectContext.js";
+import { pathInsideOrEqual } from "./core.js";
 
 const LOCAL_PROJECT_KEY_PATTERN = /^([a-z0-9][a-z0-9_-]*)-([a-f0-9]{12})$/u;
 

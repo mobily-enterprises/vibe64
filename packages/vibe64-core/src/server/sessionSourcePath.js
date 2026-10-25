@@ -1,7 +1,8 @@
 import path from "node:path";
 
 import {
-  normalizeText
+  normalizeText,
+  pathInsideOrEqual
 } from "./core.js";
 
 const SESSION_SOURCE_PATH_AUTHORITY_MANAGED = "managed_session_source";
@@ -9,16 +10,6 @@ const SESSION_SOURCE_PATH_AUTHORITY_MANAGED = "managed_session_source";
 function normalizedSessionPath(value = "") {
   const normalizedValue = normalizeText(value);
   return normalizedValue ? path.resolve(normalizedValue) : "";
-}
-
-function pathInsideOrEqual(parentPath = "", childPath = "") {
-  const parent = normalizedSessionPath(parentPath);
-  const child = normalizedSessionPath(childPath);
-  if (!parent || !child) {
-    return false;
-  }
-  const relative = path.relative(parent, child);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 function managedSessionSourcePath(managedSessionSourceRoot = "", sessionId = "") {
@@ -79,7 +70,6 @@ export {
   explicitPathIsManagedSessionSource,
   explicitSessionSourcePath,
   managedSessionSourcePath,
-  pathInsideOrEqual,
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED,
   sessionHasSource,
   sessionSourcePath

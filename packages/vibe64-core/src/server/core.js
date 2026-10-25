@@ -28,6 +28,26 @@ function isMissingPathError(error) {
   return error?.code === "ENOENT" || error?.code === "ENOTDIR";
 }
 
+// The path from root to candidate, both resolved, when candidate is root or
+// inside it; null otherwise or for an empty input. A child named `..cache`
+// is inside; `..`, `../x` and another drive are not.
+function relativePathInside(rootPath = "", candidatePath = "") {
+  const root = normalizeText(rootPath);
+  const candidate = normalizeText(candidatePath);
+  if (!root || !candidate) return null;
+  const relative = path.relative(path.resolve(root), path.resolve(candidate));
+  return relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative) ? null : relative;
+}
+
+function pathInsideOrEqual(rootPath = "", candidatePath = "") {
+  return relativePathInside(rootPath, candidatePath) !== null;
+}
+
+// Strictly inside: root itself is not.
+function pathInside(rootPath = "", candidatePath = "") {
+  return Boolean(relativePathInside(rootPath, candidatePath));
+}
+
 async function pathExists(filePath) {
   try {
     await access(filePath);
@@ -47,5 +67,8 @@ export {
   normalizeText,
   normalizeTargetRoot,
   plainClone,
-  pathExists
+  pathExists,
+  pathInside,
+  pathInsideOrEqual,
+  relativePathInside
 };

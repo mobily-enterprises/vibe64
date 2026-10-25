@@ -1,11 +1,11 @@
 import path from "node:path";
 
 import {
-  pathInsideOrEqual,
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import {
-  normalizeText
+  normalizeText,
+  pathInsideOrEqual
 } from "@local/vibe64-core/server/core";
 import {
   captureProjectRequestContext,

@@ -6,6 +6,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import { publishError } from "../errors.js";
+import { pathWithin } from "../paths.js";
 import { compareSemver, isSemver, pep440FromSemver } from "./version.js";
 
 const CHANGELOG = "CHANGELOG.md";
@@ -190,7 +191,7 @@ async function applyReleaseChange({ projectRoot, change } = {}) {
   if (typeof projectRoot !== "string" || !path.isAbsolute(projectRoot)) throw prepareError("The project root must be an absolute path.");
   const resolved = change.files.map((file) => {
     const absolute = path.resolve(projectRoot, file.path);
-    if (path.relative(projectRoot, absolute).startsWith("..")) throw prepareError(`${file.path} is outside the project.`);
+    if (!pathWithin(projectRoot, absolute, { allowRoot: false })) throw prepareError(`${file.path} is outside the project.`);
     return { ...file, absolute };
   });
   for (const file of resolved) {

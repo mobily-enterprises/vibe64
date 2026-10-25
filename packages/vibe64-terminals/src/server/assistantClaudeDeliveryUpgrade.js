@@ -7,6 +7,7 @@ import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionSt
 import { claudeConfigRoot } from "./claudeCodeProcess.js";
 import { claudeNativeMessageId } from "@jskit-ai/assistant-core/server/claude-turn";
 import { readClaudeHistory } from "@jskit-ai/assistant-core/server/claude-history";
+import { relativePathInside } from "@local/vibe64-core/server/core";
 
 const rejectedBeforeWrite = "Claude has no active turn for this message.";
 const object = value => value && typeof value === "object" && !Array.isArray(value);
@@ -58,8 +59,8 @@ export async function upgradeClaudeRejectedInput(context) {
           // archives are inventoried by their owner but remain unchanged.
           const routePath = await store.withReadableSessionPaths(sessionId,
             paths => path.join(paths.metadataRoot, "assistant_routing_request"));
-          const relative = path.relative(context.systemRoot, routePath);
-          if (relative.startsWith("..") || path.isAbsolute(relative)) return {};
+          const relative = relativePathInside(context.systemRoot, routePath);
+          if (relative === null) return {};
           const beforePath = path.join(context.backupRoot, "before", relative);
           await verifyUpgradeParents(context.backupRoot, beforePath);
           const original = resuming ? await readUpgradeFile(beforePath) : null;

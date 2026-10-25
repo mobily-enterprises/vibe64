@@ -5,6 +5,7 @@ import { runVibe64Command } from "@local/vibe64-execution/server";
 import { vibe64AgentRunStateIsActive } from "@local/vibe64-runtime/server/sessionStore";
 import { PRACTICE_AGENT_GUIDANCE_EXCLUDES } from "@local/vibe64-terminals/server/practiceAgentGuidance";
 import { trainingFailure } from "./errors.js";
+import { pathInside } from "@local/vibe64-core/server/core";
 
 // The bounded evidence of one learner's practice work that a review check
 // (and Colleague's "I'm stuck" help) reads: the practice session's changes
@@ -69,8 +70,7 @@ function createTrainingStepEvidence({ project, actions, runCommand = runVibe64Co
   // Untracked work is new text the learner added; read it directly, bounded.
   async function untrackedSection(source, relative) {
     const filename = path.join(source, ...relative.split("/"));
-    const inside = path.relative(source, filename);
-    if (!inside || inside.startsWith("..") || path.isAbsolute(inside)) return { omitted: "unsafe" };
+    if (!pathInside(source, filename)) return { omitted: "unsafe" };
     const stat = await lstat(filename).catch(() => null);
     if (!stat?.isFile()) return { omitted: "not-a-file" };
     if (stat.size > EVIDENCE_LIMITS.untrackedFileBytes) return { omitted: "large" };

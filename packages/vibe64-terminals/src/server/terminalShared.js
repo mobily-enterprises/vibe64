@@ -169,14 +169,6 @@ function normalizedTerminalPath(value = "") {
   return normalizedValue ? path.resolve(normalizedValue) : "";
 }
 
-function pathInsideOrEqual(rootPath = "", candidatePath = "") {
-  if (!rootPath || !candidatePath) {
-    return false;
-  }
-  const relativePath = path.relative(rootPath, candidatePath);
-  return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
-}
-
 function sessionTerminalCwd(session = {}) {
   return String(sharedSessionSourcePath(session)).trim();
 }
@@ -223,7 +215,6 @@ export {
   globalCodexTerminalNamespace,
   opencodeTerminalNamespace,
   outputTargetTerminalNamespace,
-  pathInsideOrEqual,
   sessionTerminalCwd,
   ensureTerminalSessionSourceGitSelfContained,
   terminalNamespace,

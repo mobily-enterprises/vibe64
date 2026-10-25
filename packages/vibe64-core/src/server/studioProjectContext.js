@@ -40,7 +40,9 @@ import {
 } from "./projectRecordMetadata.js";
 import {
   isPlainObject,
-  pathExists
+  pathExists,
+  pathInsideOrEqual,
+  relativePathInside
 } from "./core.js";
 import {
   normalizeProjectDeletion
@@ -151,13 +153,6 @@ function assertHostedRepositoryMetadata(metadata = {}) {
   error.code = "vibe64_hosted_local_source_unsupported";
   error.statusCode = 409;
   throw error;
-}
-
-function pathInsideOrEqual(parentPath = "", childPath = "") {
-  const parent = normalizeRoot(parentPath);
-  const child = normalizeRoot(childPath, parent);
-  const relative = path.relative(parent, child);
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 function projectSlugFromName(value = "") {
@@ -877,8 +872,8 @@ function createStudioProjectContext({
     if (!projectCatalogEnabled || !projectsRoot) {
       return false;
     }
-    const relativePath = path.relative(normalizeRoot(projectsRoot), normalizeRoot(targetRoot));
-    if (!relativePath || relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
+    const relativePath = relativePathInside(normalizeRoot(projectsRoot), normalizeRoot(targetRoot));
+    if (!relativePath) {
       return false;
     }
     if (relativePath.includes(path.sep)) {
@@ -1587,7 +1582,6 @@ export {
   normalizeDevelopmentDatabaseName,
   normalizeDevelopmentDatabaseScope,
   normalizeProjectSlug,
-  pathInsideOrEqual,
   projectSlugFromName,
   registerApprovalCountReader,
   resolveStudioProjectsRoot,

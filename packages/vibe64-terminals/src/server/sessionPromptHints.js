@@ -5,7 +5,8 @@ import path from "node:path";
 
 import {
   isMissingPathError,
-  normalizeText
+  normalizeText,
+  pathInsideOrEqual
 } from "@local/vibe64-core/server/core";
 import {
   GENESIS_BLUEPRINT_PATH,
@@ -29,7 +30,6 @@ import { cleanupAssistantHelper, runAssistantHelperTurn } from "./assistantHelpe
 import { openedFileWithin } from "./openedFileWithin.js";
 import { SESSION_SAVE_TASK_ID, SESSION_UPDATE_TASK_ID } from "./sessionWorkTasks.js";
 import {
-  pathInsideOrEqual,
   terminalProjectScopeKey,
   terminalWorktreePath
 } from "./terminalShared.js";

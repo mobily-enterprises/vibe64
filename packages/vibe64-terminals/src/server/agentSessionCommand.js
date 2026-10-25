@@ -15,6 +15,7 @@ import { WORKSPACE_SETUP_METADATA_NAME, workspaceSetupStateFromMetadata } from "
 
 import {
   normalizeText,
+  pathInsideOrEqual,
   vibe64Error
 } from "@local/vibe64-core/server/core";
 import {
@@ -39,9 +40,6 @@ import {
   inspectVibe64WorkspaceSetup,
   withGenesisCommandShim
 } from "@local/vibe64-genesis/server";
-import {
-  pathInsideOrEqual
-} from "./terminalShared.js";
 import {
   closeUnixJsonCommandServer,
   closeUnixJsonCommandServersForSession,

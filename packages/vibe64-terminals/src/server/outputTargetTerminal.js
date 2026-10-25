@@ -120,6 +120,7 @@ import {
   removeOutputResults,
   snapshotDeclaredOutputResults
 } from "./outputResults.js";
+import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 
 const OUTPUT_METADATA = Object.freeze({
   agentHref: "output_target_agent_href",
@@ -315,11 +316,6 @@ async function dirtyRestartPaths(root = "", rules = null, options = {}) {
     changedPathsFromGit(root, ["ls-files", "-z", "--others", "--exclude-standard"], rules, options)
   ]);
   return [...new Set(pathGroups.flat())].sort();
-}
-
-function pathInsideOrEqual(rootPath = "", candidatePath = "") {
-  const relative = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
-  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
 }
 
 async function fileContentSignature(root = "", relativePath = "") {

@@ -2,7 +2,7 @@ import { rm } from "node:fs/promises";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
 import { PROJECT_REPOSITORY_MODE_MANAGED_GIT } from "@local/vibe64-core/server/projectRepository";
-import { pathExists } from "@local/vibe64-core/server/core";
+import { pathExists, pathInside } from "@local/vibe64-core/server/core";
 import { normalizeProjectSlug, resolveProjectContextRoot, projectSlugFromName } from "@local/vibe64-core/server/studioProjectContext";
 import { assertProjectEffectAdmission } from "@local/vibe64-core/server/projectRequestContext";
 import { initializeManagedProject as initializePublicManagedProject, verifyManagedProjectSource } from "./managedProject.js";
@@ -95,8 +95,7 @@ async function cleanupPreparedProjectDirectory(projectsRoot = "", projectContext
   }
   const resolvedProjectsRoot = path.resolve(projectsRoot);
   const resolvedProjectContextRoot = path.resolve(projectContextRoot);
-  const relativeProject = path.relative(resolvedProjectsRoot, resolvedProjectContextRoot);
-  if (!relativeProject || relativeProject.startsWith("..") || path.isAbsolute(relativeProject)) {
+  if (!pathInside(resolvedProjectsRoot, resolvedProjectContextRoot)) {
     return;
   }
   await rm(resolvedProjectContextRoot, {

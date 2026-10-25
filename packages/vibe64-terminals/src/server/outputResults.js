@@ -15,6 +15,7 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import { openedFileWithin } from "./openedFileWithin.js";
+import { pathInside } from "@local/vibe64-core/server/core";
 
 const OUTPUT_RESULTS_DIRECTORY = "output-results";
 const OUTPUT_RESULTS_INDEX = "index.json";
@@ -30,11 +31,6 @@ function outputResultError(code, message, statusCode = 409) {
   error.code = code;
   error.statusCode = statusCode;
   return error;
-}
-
-function pathInside(rootPath = "", candidatePath = "") {
-  const relative = path.relative(path.resolve(rootPath), path.resolve(candidatePath));
-  return relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative);
 }
 
 function canonicalDeclaredPath(value = "") {

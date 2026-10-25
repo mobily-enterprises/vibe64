@@ -16,10 +16,9 @@ import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionSt
 import {
   assertProjectDirectoryUsable,
   normalizeProjectSlug,
-  pathInsideOrEqual,
   resolveProjectContextRoot
 } from "@local/vibe64-core/server/studioProjectContext";
-import { pathExists } from "@local/vibe64-core/server/core";
+import { pathExists, pathInsideOrEqual } from "@local/vibe64-core/server/core";
 // Practice project slugs (the learning space). Outside its practice scope such
 // a slug resolves to catalogue paths while its record is shared, so the
 // archiver refuses it before writing any deletion marker.

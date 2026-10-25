@@ -24,12 +24,13 @@ import { constants as fsConstants } from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import {
-  vibe64Error,
-  isPlainObject,
   isMissingPathError,
+  isPlainObject,
   normalizeTargetRoot,
   normalizeText,
-  pathExists
+  pathExists,
+  pathInsideOrEqual,
+  vibe64Error
 } from "@local/vibe64-core/server/core";
 import { readProjectRuntimeOpenState } from "@local/vibe64-core/server/projectRuntimeOpenState";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
@@ -830,8 +831,7 @@ function artifactFilePath(sessionPaths, relativePath) {
   const safeRelativePath = assertSafeArtifactPath(relativePath);
   const artifactsRoot = path.resolve(sessionPaths.artifactsRoot);
   const artifactPath = path.resolve(artifactsRoot, ...safeRelativePath.split("/"));
-  const pathFromRoot = path.relative(artifactsRoot, artifactPath);
-  if (pathFromRoot.startsWith("..") || path.isAbsolute(pathFromRoot)) {
+  if (!pathInsideOrEqual(artifactsRoot, artifactPath)) {
     throw vibe64Error(`Invalid vibe64 artifact path: ${safeRelativePath}`, "vibe64_invalid_artifact_path");
   }
   return artifactPath;

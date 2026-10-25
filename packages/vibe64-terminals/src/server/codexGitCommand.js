@@ -28,9 +28,7 @@ import {
   codexAttachmentHostRoot,
   prepareCodexAttachmentRoot
 } from "@local/vibe64-runtime/server/codexAttachmentPaths";
-import {
-  pathInsideOrEqual
-} from "./terminalShared.js";
+import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";

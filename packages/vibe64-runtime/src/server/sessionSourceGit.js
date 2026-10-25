@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   normalizeText,
   pathExists,
+  pathInsideOrEqual,
   vibe64Error
 } from "@local/vibe64-core/server/core";
 import { runSourceCommand } from "./sourceCommand.js";
@@ -20,14 +21,6 @@ async function runGit(sourceRoot = "", args = [], {
     runtimes: ["git"],
     timeout
   });
-}
-
-function pathInsideOrEqual(rootPath = "", candidatePath = "") {
-  if (!rootPath || !candidatePath) {
-    return false;
-  }
-  const relativePath = path.relative(rootPath, candidatePath);
-  return relativePath === "" || (!relativePath.startsWith("..") && !path.isAbsolute(relativePath));
 }
 
 function resolveGitPath(sourceRoot = "", gitPath = "") {
