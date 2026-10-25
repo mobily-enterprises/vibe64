@@ -56,7 +56,9 @@ import {
 
 const LOOPBACK_HOST = "127.0.0.1";
 const HTML_CONTENT_TYPE_PATTERN = /\btext\/html\b/iu;
-const REQUEST_BODY_METHODS = new Set(["PATCH", "POST", "PUT"]);
+// An HTML page is buffered to inject the bridge; anything larger is refused
+// rather than held in the daemon's memory.
+const PREVIEW_HTML_INJECTION_LIMIT_BYTES = 16 * 1024 * 1024;
 const PREVIEW_PROXY_TOKEN_COOKIE = PREVIEW_PROXY_TOKEN_QUERY_PARAM;
 const PREVIEW_PROXY_SOCKET_DIR_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_DIR";
 const PREVIEW_PROXY_DEBUG_ENV = "VIBE64_PREVIEW_DEBUG";
@@ -91,7 +93,6 @@ function proxyRequestHeaders(headers = {}, targetUrl, {
   const nextHeaders = { ...headers };
   delete nextHeaders["accept-encoding"];
   delete nextHeaders.connection;
-  delete nextHeaders["content-length"];
   delete nextHeaders.host;
   delete nextHeaders.upgrade;
   if (freshDocument) {
@@ -471,8 +472,8 @@ async function readStreamBuffer(stream, {
 }
 
 function requestBody(request, {
-  maxBytes = 0
-} = {}) {
+  maxBytes
+}) {
   return readStreamBuffer(request, {
     maxBytes,
     tooLargeError: () => previewIdentityProxyError(
@@ -986,7 +987,8 @@ async function proxyPreviewRequest(request, response, {
   try {
     const targetUrl = targetRequestUrl(request.url, connectOrigin || targetOrigin);
     const method = String(request.method || "GET").toUpperCase();
-    const fetchOptions = {
+    const targetResponse = await requestPreviewTarget(targetUrl, {
+      body: request,
       headers: proxyRequestHeaders(request.headers, targetUrl, {
         clientAddress: request.socket?.remoteAddress || "",
         freshDocument: requestIsBrowserDocumentNavigation(request),
@@ -994,19 +996,13 @@ async function proxyPreviewRequest(request, response, {
         targetHost
       }),
       method,
-      redirect: "manual"
-    };
-    if (REQUEST_BODY_METHODS.has(method)) {
-      fetchOptions.body = await requestBody(request);
-    }
-
-    const targetResponse = await requestPreviewTarget(targetUrl, {
-      ...fetchOptions,
       tracker
     });
     const contentType = String(targetResponse.headers["content-type"] || "");
     if (HTML_CONTENT_TYPE_PATTERN.test(contentType)) {
-      const html = await streamText(targetResponse);
+      const html = await streamText(targetResponse, {
+        maxBytes: PREVIEW_HTML_INJECTION_LIMIT_BYTES
+      });
       const page = presentsOnLoopbackOrigin(request.headers, proxyOrigin)
         ? proxiedLoopbackHtml(html, { proxyOrigin, targetOrigin })
         : html;
@@ -1049,6 +1045,20 @@ async function proxyPreviewRequest(request, response, {
     });
     pipePreviewResponseBody(targetResponse, response);
   } catch (error) {
+    if (error?.code === "vibe64_preview_html_too_large") {
+      response.writeHead(error.statusCode, {
+        "Cache-Control": "no-store",
+        "Connection": "close",
+        "Content-Type": "text/plain; charset=utf-8",
+        "Set-Cookie": previewTokenCookie(token, { proxyOrigin })
+      });
+      response.end(error.message);
+      previewProxyDebugLog("server.launchPreviewProxy.request.htmlTooLarge", {
+        ...requestDetails,
+        durationMs: vibe64SessionDebugDurationMs(startedAtMs)
+      });
+      return;
+    }
     if (String(request.method || "GET").toUpperCase() === "GET" && requestAcceptsHtml(request)) {
       response.writeHead(503, {
         "Cache-Control": "no-store",
@@ -1093,22 +1103,30 @@ function requestPreviewTarget(targetUrl, {
     });
     tracker?.trackRequest?.(upstreamRequest, "upstream-http-request");
     upstreamRequest.once("error", reject);
-    if (body) {
-      upstreamRequest.end(body);
+    if (!body) {
+      upstreamRequest.end();
       return;
     }
-    upstreamRequest.end();
+    // The browser's body streams through for every method, keeping its own
+    // content-length or chunked framing; an aborted upload aborts upstream.
+    body.once("close", () => {
+      if (!body.readableEnded) {
+        upstreamRequest.destroy();
+      }
+    });
+    body.once("error", (error) => upstreamRequest.destroy(error));
+    body.pipe(upstreamRequest);
   });
 }
 
 async function streamText(stream, {
-  maxBytes = 0
-} = {}) {
+  maxBytes
+}) {
   return (await readStreamBuffer(stream, {
     maxBytes,
     tooLargeError: () => previewIdentityProxyError(
-      "Application preview identity response is too large.",
-      "vibe64_preview_identity_response_too_large",
+      "Preview page is too large to inject the bridge.",
+      "vibe64_preview_html_too_large",
       502
     )
   })).toString("utf8");

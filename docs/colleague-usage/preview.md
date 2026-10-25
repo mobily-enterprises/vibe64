@@ -160,6 +160,10 @@ the nested app should load without a token error. If the browser blocks that
 cookie, open the Preview in its own tab and ask the coding agent to check the
 browser's cookie policy and the current Preview address. Colleague can explain
 those steps but cannot change the browser's cookie settings.
+A single app page larger than 16 MB cannot be shown in Preview: it shows
+**Preview page is too large to inject the bridge.** Ask the coding agent to make
+that page smaller, for example by loading its data separately. Uploads of any
+size pass through to the app unchanged.
 Only the editor that showed you the Preview can embed it. Another website that
 puts the Preview address in its own frame gets a refused frame and none of the
 app's captured console or network details. If an embedded Preview stays blank

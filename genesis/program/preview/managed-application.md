@@ -446,6 +446,10 @@ every location, diagnostics, identity and app-request message to those origins,
 never `*`. The editor in turn addresses its queries, diagnostics requests and
 identity grants only to the origin whose bridge announced itself in the frame.
 This lets a previewed editor authenticate realtime connections through the proxy.
+Request bodies of every method stream to the application with the browser's own
+content-length or chunked framing; the proxy does not hold uploads in memory.
+HTML responses are buffered only to inject the bridge, up to 16 MB; a larger page
+fails with 502 `vibe64_preview_html_too_large` rather than the starting page.
 Each upstream HTTP request restores the configured Preview idle timeout on a
 pooled socket. A pool's short free-socket timer must not terminate a later active
 request; tracking and teardown listeners remain attached only once per socket.

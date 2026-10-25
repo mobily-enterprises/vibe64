@@ -342,6 +342,78 @@ test("launch preview proxy preserves the canonical target host when using an alt
   });
 });
 
+async function previewBootstrapCookie(href) {
+  const bootstrap = await fetch(href, { headers: { Accept: "text/html" }, redirect: "manual" });
+  assert.equal(bootstrap.status, 302);
+  return previewCookiePair(bootstrap.headers.get("set-cookie"), previewTokenCookieName(new URL(href).origin));
+}
+
+test("Preview streams every method's request body upstream with its own framing", async () => {
+  await withTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry();
+    try {
+      const preview = await registry.ensure({
+        sessionId: "session-request-body",
+        targetHref: `${target.origin}/home`,
+        terminalSessionId: "terminal-request-body"
+      });
+      const cookie = await previewBootstrapCookie(preview.href);
+      const echo = `${new URL(preview.href).origin}/echo-body`;
+      for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+        const response = await fetch(echo, { method, headers: { Cookie: cookie }, body: `${method} payload` });
+        assert.equal(response.status, 200, method);
+        assert.deepEqual(await response.json(), {
+          body: `${method} payload`,
+          contentLength: String(`${method} payload`.length),
+          method,
+          transferEncoding: ""
+        });
+      }
+      const chunked = await fetch(echo, {
+        body: new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode("first,"));
+            controller.enqueue(new TextEncoder().encode("second"));
+            controller.close();
+          }
+        }),
+        duplex: "half",
+        headers: { Cookie: cookie },
+        method: "POST"
+      });
+      assert.deepEqual(await chunked.json(), {
+        body: "first,second",
+        contentLength: "",
+        method: "POST",
+        transferEncoding: "chunked"
+      });
+    } finally {
+      await registry.closeAll();
+    }
+  });
+});
+
+test("Preview refuses an HTML page too large to inject the bridge", async () => {
+  await withTargetServer(async (target) => {
+    const registry = createLaunchPreviewProxyRegistry();
+    try {
+      const preview = await registry.ensure({
+        sessionId: "session-huge-html",
+        targetHref: `${target.origin}/home`,
+        terminalSessionId: "terminal-huge-html"
+      });
+      const cookie = await previewBootstrapCookie(preview.href);
+      const response = await fetch(`${new URL(preview.href).origin}/huge-html`, {
+        headers: { Accept: "text/html", Cookie: cookie }
+      });
+      assert.equal(response.status, 502);
+      assert.equal(await response.text(), "Preview page is too large to inject the bridge.");
+    } finally {
+      await registry.closeAll();
+    }
+  });
+});
+
 test("an injected Preview page may be framed and addressed only by the editors that asked for it", async () => {
   await withTargetServer(async (target) => {
     const registry = createLaunchPreviewProxyRegistry();
@@ -1768,6 +1840,27 @@ async function withTargetServer(callback) {
       const origin = `${request.headers["x-forwarded-proto"] || "http"}://${request.headers["x-forwarded-host"] || request.headers.host}`;
       response.writeHead(200, { "Content-Type": "text/html" });
       response.end(`<html><head><link rel="stylesheet" href="${origin}/app.css"></head><body><form action="${origin}/form-page"></form><a href="http://${request.headers.host}0/other">port</a><script>const app = ${JSON.stringify({ url: `${origin}/home` }).replaceAll("/", "\\/")};</script></body></html>`);
+      return;
+    }
+    if (request.url === "/echo-body") {
+      const chunks = [];
+      for await (const chunk of request) chunks.push(chunk);
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify({
+        body: Buffer.concat(chunks).toString("utf8"),
+        contentLength: request.headers["content-length"] || "",
+        method: request.method,
+        transferEncoding: request.headers["transfer-encoding"] || ""
+      }));
+      return;
+    }
+    if (request.url === "/huge-html") {
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      const chunk = "x".repeat(1024 * 1024);
+      for (let index = 0; index < 17; index += 1) {
+        if (!response.write(chunk)) await new Promise(resolve => response.once("drain", resolve));
+      }
+      response.end();
       return;
     }
     if (request.url === "/api/ping") {
