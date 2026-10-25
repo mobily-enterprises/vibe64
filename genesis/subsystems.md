@@ -438,8 +438,8 @@ Conversation identity, message admission and native inference stay with the conv
 
 Provides the local publishing experience: the project's Publish page, release
 orchestration (prepare a version change for Save, plan, preflight, dry run,
-the person's own confirmation, tag the saved commit, build once, fan out, read
-back), publishing targets and release history kept as local project state, and
+the person's own confirmation, build once, tag the saved commit, fan out and
+read back), publishing targets and release history kept as local project state, and
 the person's publishing keys, recovery kit and toolchain licence acceptance in
 their own Vibe64 folder. Assistants may read, prepare, plan, dry-run and ask;
 only the person's page request confirms. It composes the host-neutral building
