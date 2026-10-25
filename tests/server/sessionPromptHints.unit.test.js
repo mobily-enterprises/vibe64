@@ -2040,6 +2040,35 @@ test("changed routing during generation discards the result and the next request
   assert.equal(fixture.calls.run[1].options.assistantSelection.modelId, "gpt-6-luna");
 });
 
+test("cleanup failures report as cleanup, and one before the turn reports no generation", async () => {
+  let deletions = 0;
+  const fixture = createFixture({
+    deleteResult() {
+      deletions += 1;
+      // The second close throws instead of answering, as a failed native call does.
+      if (deletions === 1) return { ok: false, code: "unit_cleanup_failed", error: "Deletion unconfirmed." };
+      throw new Error("Native close crashed.");
+    },
+    async runAgentTurn({ options }) {
+      await options.onEvent({ threadId: "thread-kept", turnId: "turn-kept", type: "turn" });
+      return readyAgentResult({ threadId: "thread-kept", turnId: "turn-kept" });
+    }
+  });
+  assert.equal((await fixture.service.generateSessionPromptHints("session-1", generateInput("hint:after-turn"))).status,
+    "unavailable");
+  assert.equal((await fixture.service.generateSessionPromptHints("session-1", generateInput("hint:before-turn"))).status,
+    "unavailable");
+  assert.equal(fixture.calls.run.length, 1);
+  const [afterTurn, beforeTurn] = fixture.calls.diagnostic;
+  assert.equal(fixture.calls.diagnostic.length, 2);
+  assert.equal(afterTurn.code, "vibe64_prompt_hints_cleanup_failed");
+  assert.equal(afterTurn.details.cleanupCode, "unit_cleanup_failed");
+  assert.equal(afterTurn.details.generationOk, true);
+  assert.equal(beforeTurn.code, "vibe64_prompt_hints_cleanup_failed");
+  assert.equal(beforeTurn.error, "Native close crashed.");
+  assert.equal("generationOk" in beforeTurn.details, false);
+});
+
 test("failed hint cleanup survives restart without retaining a private draft or resolving another route", async () => {
   const draft = "PRIVATE DRAFT NEVER PERSISTED IN TASK";
   const first = createFixture({

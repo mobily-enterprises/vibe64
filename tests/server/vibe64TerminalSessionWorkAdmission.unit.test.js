@@ -1697,6 +1697,35 @@ test("local-source Git work with a GitHub upstream needs no GitHub actor", async
   assert.equal(session.metadata.session_git_command_actor_source_root, undefined);
 });
 
+test("retiring a recorded Save deletes its prepared ref while an assistant turn is active", async (t) => {
+  const lock = agentWriteLockHarness();
+  const { service, session, projectService, root } = await terminalServiceFixture(t, lock);
+  const git = async (cwd, args) => (await execFileAsync("git", args, { cwd })).stdout.trim();
+  const canonical = path.join(root, "canonical");
+  await mkdir(canonical);
+  await git(canonical, ["init", "--initial-branch=main"]);
+  await git(canonical, ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.test",
+    "commit", "--allow-empty", "-m", "base"]);
+  const sourcePath = session.metadata.source_path;
+  await rm(sourcePath, { recursive: true });
+  await git(root, ["clone", "--quiet", canonical, sourcePath]);
+  const baseCommit = await git(sourcePath, ["rev-parse", "HEAD"]);
+  session.metadata.base_commit = baseCommit;
+  projectService.readCurrentProject = async () => ({ slug: "test-project", repositoryMode: "local_source",
+    sourceRoot: canonical, repository: { mode: "local_source", defaultBranch: "main" } });
+  await git(sourcePath, ["update-ref", "refs/vibe64/save/fixture/prepared", baseCommit]);
+  const digest = (await import("node:crypto")).createHash("sha256")
+    .update(`${session.sessionId}\0recorded-save`).digest("hex").slice(0, 32);
+  await git(sourcePath, ["update-ref", `refs/vibe64/save/${digest}/prepared`, baseCommit]);
+  // The person sent a message right after Save finished.
+  session.agentRuns = [{ id: "run", state: "active" }];
+  assert.deepEqual(await service.retireSessionWorkSave(session.sessionId, { operationId: "recorded-save" }), { ok: true });
+  assert.equal(await git(sourcePath, ["for-each-ref", "--format=%(refname)", "refs/vibe64/save"]),
+    "refs/vibe64/save/fixture/prepared");
+  assert.equal(lock.attempts.at(-1).operationName, "agent-write-mode");
+  assert.equal(lock.held, false);
+});
+
 for (const replacement of [false, true]) {
   test(`${replacement ? "replacement" : "fresh"} contribution records its Git actor before any AI interaction`, async (t) => {
     const { service, session, runtime, projectService, root } = await terminalServiceFixture(t, { store: {} }, {

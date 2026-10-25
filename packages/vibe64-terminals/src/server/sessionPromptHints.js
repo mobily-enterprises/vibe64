@@ -691,9 +691,12 @@ function createSessionPromptHintsService({
         reportDiagnostic("vibe64_prompt_hints_cleanup_failed", error, {
           ...(isRecord(error.details) ? error.details : {}),
           cleanupCode: normalizeText(error.code),
-          generationCode: normalizeText(generation?.code),
-          generationError: normalizeText(generation?.message),
-          generationOk: !generation,
+          // A cleanup failing before the turn means no generation ran.
+          ...(error.beforeTurn ? {} : {
+            generationCode: normalizeText(generation?.code),
+            generationError: normalizeText(generation?.message),
+            generationOk: !generation
+          }),
           sessionId: job.sessionId
         });
         return promptHintResponse("unavailable", { basis: job.snapshot.basis });

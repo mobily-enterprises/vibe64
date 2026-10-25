@@ -9,7 +9,9 @@ import { vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/
 // record = { read() -> helper | null, write(helper), retire() }.
 // fail(message, code, reason, details) builds the feature's own error; reason is
 // one of cleanup_paths_invalid, cleanup_failed, failed, conversation_missing or
-// execution_profile_missing.
+// execution_profile_missing. Every cleanup error carries a cleanup reason; one
+// raised before the turn ran is marked beforeTurn, and one raised after a failed
+// turn keeps that failure as its cause.
 
 function text(value = "") {
   return String(value || "").trim();
@@ -27,7 +29,19 @@ function helperRoot(stateRoot, id) {
   return path.join(stateRoot, "assistant-helpers", id);
 }
 
-async function cleanupAssistantHelper({ agent, fail, prefix, record, stateRoot, vibe64User = null } = {}) {
+async function cleanupAssistantHelper(options = {}) {
+  try {
+    await closeAssistantHelper(options);
+  } catch (error) {
+    if (error?.reason === "cleanup_failed" || error?.reason === "cleanup_paths_invalid") throw error;
+    throw options.fail(
+      error?.message || "The assistant helper could not be closed. Cleanup will be retried when this session closes.",
+      error?.code, "cleanup_failed", error?.details
+    );
+  }
+}
+
+async function closeAssistantHelper({ agent, fail, prefix, record, stateRoot, vibe64User = null } = {}) {
   const helper = await record.read();
   if (!helper) return;
   const id = text(helper.scope?.id);
@@ -74,7 +88,12 @@ async function runAssistantHelperTurn({
   const cleanup = () => cleanupAssistantHelper({ agent, fail, prefix, record, stateRoot, vibe64User });
   // The record retains a failed cleanup across restarts. Close its exact
   // native conversation before starting another helper.
-  await cleanup();
+  try {
+    await cleanup();
+  } catch (error) {
+    error.beforeTurn = true;
+    throw error;
+  }
   const { connectionIdentity, selection } = await resolveIdentity();
   const id = `${prefix}_${randomUUID()}`;
   const root = helperRoot(stateRoot, id);

@@ -166,7 +166,10 @@ succeeded or authorize recreating a deleted branch.
 A successful or recovered Save keeps its prepared ref only until the sessions
 service has recorded the ready outcome; it then calls `retireSessionWorkSave`
 to delete it, so no completed Save leaves evidence that later reads as a lost
-contribution publication.
+contribution publication. Retiring takes only the session write lock, which
+serialises it with Save and recovery; it deletes a Vibe64-internal ref without
+touching the worktree, so an assistant turn started right after Save does not
+block it.
 The chat Save control uses a branch icon and connected destination review while
 submission is required, including when the main source is clean. It reports
 confirmed receiving pushes on success or partial failure, then returns to ordinary

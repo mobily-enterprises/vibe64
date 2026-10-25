@@ -2878,8 +2878,12 @@ function createService({
       });
     },
 
+    // Retiring deletes only a Vibe64-internal ref and never touches the
+    // worktree, so it takes the write lock (serialising with Save and its
+    // recovery) without waiting for an assistant turn the person may already
+    // have started after Save finished.
     async retireSessionWorkSave(sessionId, input = {}) {
-      return runSessionRepositoryWrite(sessionId, input, { operation: "retire-session-save" }, async ({ session }) => {
+      const result = await runMainAgentWrite(sessionId, input, async ({ session }) => {
         const execution = await codexGitCommand.sessionWorkSaveContext({
           session,
           sessionId: String(sessionId || "").trim()
@@ -2897,7 +2901,11 @@ function createService({
           session
         });
         return { ok: true };
-      });
+      }, { operation: "retire-session-save", waitMs: 10_000 });
+      if (result?.ok === false) {
+        throw Object.assign(new Error(result.error), { code: result.code, details: result.details, retryable: true });
+      }
+      return result;
     },
 
     async inspectSessionWork(sessionId, input = {}) {
