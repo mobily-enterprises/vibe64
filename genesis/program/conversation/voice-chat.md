@@ -6,12 +6,12 @@ runtime while retaining its own identity, authorization and conversation history
 ## Sources
 
 - `packages/vibe64-voice/src/client/Vibe64VoiceHost.vue`
-- `packages/vibe64-voice/src/client/Vibe64ProjectVoiceLauncher.vue`
 - `packages/vibe64-voice/src/client/MercAvatar.vue`
 - `packages/vibe64-voice/src/client/MercBlueMangaIllustratedAvatar.vue`
 - `packages/vibe64-voice/src/client/MercIllustratedAvatar.vue`
 - `packages/vibe64-voice/src/client/Vibe64AvatarSetting.vue`
 - `packages/vibe64-voice/src/shared/avatars.js`
+- `packages/vibe64-voice/src/shared/routes.js`
 - `src/components/Vibe64LocalVoiceHost.vue`
 - `src/components/Vibe64LocalVoiceSettings.vue`
 - `src/composables/useVibe64LocalAvatarPreferences.js`

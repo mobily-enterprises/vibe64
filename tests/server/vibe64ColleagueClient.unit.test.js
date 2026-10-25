@@ -942,6 +942,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     vuetify: { useDisplay: () => display },
     "vuetify/components": { VNavigationDrawer: {} },
     "@local/vibe64-voice/client": { useVibe64Voice: () => voice },
+    "@local/vibe64-voice/shared/routes": { COLLEAGUE_VOICE_SOCKET_URL: "/api/vibe64/colleague/voice/ws" },
     "./colleagueNavigation.js": { createColleagueNavigation },
     "@local/vibe64-training/client/guide": trainingGuideModule,
     "@jskit-ai/assistant-voice/client": { ConversationDialog: {}, VoiceConversationControls: {}, projectConversationVoiceState,
@@ -2027,9 +2028,9 @@ test("watch details preserve the conversation and use existing resume/cancel adm
   const original = view.state.conversation.runtime.value;
   view.state.draft.value = "Keep this draft";
   view.state.watchDetails.value = true;
-  await view.state.changeWatch("paused-watch", "resume");
+  await view.state.changeWatch(view.state.watches.value[0], "resume");
   assert.equal(view.state.watches.value[0].status, "active");
-  await view.state.changeWatch("paused-watch", "cancel");
+  await view.state.changeWatch(view.state.watches.value[0], "cancel");
   assert.equal(view.state.watches.value.length, 0);
   assert.equal(view.state.assignments.value.length, 1);
   assert.equal(view.state.watchDetails.value, true);

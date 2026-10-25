@@ -1,11 +1,11 @@
 // What Colleague can watch besides a project's own coding conversations,
 // which are built in (a watch without a source). Owners register the rest by
 // composition, through the Colleague service:
-// - a conversation source reads another conversation (Online's System
-//   repair), observed exactly like a coding one;
-// - a state source reads something that is not a conversation (a hosted
-//   deployment; local or hosted publication; app usage once something records
-//   it) and answers { fingerprint, summary, conditionsMet }.
+// - a conversation source reads another conversation a composing host
+//   registers, observed exactly like a coding one;
+// - a state source reads something that is not a conversation (for example
+//   publication, or app usage once something records it) and answers
+//   { fingerprint, summary, conditionsMet }.
 // A source only reads, under the watcher's own authority. Polling, debounce,
 // wakes and Learn scoping stay in the service, the same for every source.
 

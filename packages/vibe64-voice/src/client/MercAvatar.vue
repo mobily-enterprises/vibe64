@@ -1,6 +1,6 @@
 <script setup>
 import MercBlueMangaIllustratedAvatar from "./MercBlueMangaIllustratedAvatar.vue";
-import MercBlondBoyAvatar from "./MercBlondBoyAvatar.vue";
+import MercIllustratedAvatar from "./MercIllustratedAvatar.vue";
 
 defineProps({
   avatar: {
@@ -23,7 +23,7 @@ defineProps({
 </script>
 
 <template>
-  <MercBlondBoyAvatar
+  <MercIllustratedAvatar
     v-if="avatar === 'merc'"
     :mouth-level="mouthLevel"
     :mouth-pose="mouthPose"
@@ -31,7 +31,6 @@ defineProps({
   />
   <MercBlueMangaIllustratedAvatar
     v-else
-    appearance="blond-girl"
     :mouth-level="mouthLevel"
     :mouth-pose="mouthPose"
     :state="state"

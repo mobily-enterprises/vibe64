@@ -3,6 +3,7 @@ import { registerVoiceProxyRoute, resolveVoiceProxyConfig, readVoiceCatalogue } 
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { isTrustedStudioWebSocketRequest } from "@local/vibe64-core/server/localStudioRequest";
 import { resolveProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { COLLEAGUE_VOICE_SOCKET_URL } from "../shared/routes.js";
 import { ACTION_READ_VOICE_CATALOGUE, createVoiceActions } from "./actions.js";
 
 function registerVoiceCatalogueRoute(fastify, actions) {
@@ -36,7 +37,7 @@ const Vibe64VoiceProvider = defineFeature({
         }
       }
     });
-    registerVoiceProxyRoute(fastify, { proxyConfig, route: "/api/vibe64/colleague/voice/ws",
+    registerVoiceProxyRoute(fastify, { proxyConfig, route: COLLEAGUE_VOICE_SOCKET_URL,
       async authorize(request) {
         authorizeOrigin(request);
         await actionCatalogue.execute({ actionId: "vibe64.colleague.state.read", input: {},

@@ -39,8 +39,9 @@ const Vibe64ColleagueProvider = defineFeature({
   shutdown(_deps, { outputs }) { return outputs.colleague.close(); }
 });
 
-// Hosted authentication consumes Colleague, so the service cannot itself depend
-// on authenticated realtime. This adapter attaches only after both owners exist.
+// An authentication layer composed on top may consume Colleague, so the service
+// does not depend on authenticated realtime. This adapter attaches only after
+// both owners exist.
 const Vibe64ColleagueFocusProvider = defineFeature({
   id: "vibe64.colleague.browser-focus",
   requires: { colleague: "vibe64.colleague", realtime: "runtime.realtime" },

@@ -1,5 +1,6 @@
 <script setup>
 import { useVibe64Voice } from "@local/vibe64-voice/client";
+import { COLLEAGUE_VOICE_SOCKET_URL } from "@local/vibe64-voice/shared/routes";
 import { runTrainingGuideCommand } from "@local/vibe64-training/client/guide";
 import { ConversationDialog, VoiceConversationControls, VoiceConversationSettings, projectConversationVoiceState, useVoiceLauncher } from "@jskit-ai/assistant-voice/client";
 import { useDisplay } from "vuetify";
@@ -34,8 +35,9 @@ const emit = defineEmits(["message-submit", "voice-visual"]);
 const open = ref(false);
 const { xs } = useDisplay();
 const voice = useVibe64Voice();
+const isColleagueBinding = binding => binding?.socketUrl === COLLEAGUE_VOICE_SOCKET_URL;
 const inlineVoice = computed(() => voice?.controller.state.binding?.presentation === "inline"
-  && voice.controller.state.binding.socketUrl !== "/api/vibe64/colleague/voice/ws"
+  && !isColleagueBinding(voice.controller.state.binding)
   && !voice.controller.state.nextTarget);
 const shown = computed(() => open.value || Boolean(voice?.controller.state.visible && !inlineVoice.value));
 const minimizedVoice = computed(() => Boolean(voice?.controller.state.session && !shown.value && !inlineVoice.value));
@@ -147,7 +149,7 @@ async function openVoice() {
     setConversationTarget(element) { voicePanelTarget.value = element; },
     retain() { retained = target.retain(); },
     release() { retained?.release(); retained = null; },
-    socketUrl: "/api/vibe64/colleague/voice/ws",
+    socketUrl: COLLEAGUE_VOICE_SOCKET_URL,
     captureContext: () => ({ ...props.focus }),
     submitText(text, { messageId, context }) {
       return sendMessage(text, { messageId, focus: context || {} }, target);
@@ -286,7 +288,7 @@ const conversation = useAssistantConversation({
   api: { ...api, sendConversationMessage(id, input) {
     emit("message-submit", input.messageId);
     const activeVoice = voice?.controller.state;
-    if (activeVoice?.binding?.socketUrl === "/api/vibe64/colleague/voice/ws") activeVoice.session.inviteSpeech(input.messageId);
+    if (isColleagueBinding(activeVoice?.binding)) activeVoice.session.inviteSpeech(input.messageId);
     return api.sendConversationMessage(id, input);
   } },
   clearDraftOn: "accepted", queueWhileSending: true,
@@ -323,13 +325,13 @@ const conversation = useAssistantConversation({
 const voiceSession = computed(() => {
   const state = voice?.controller.state;
   const identity = conversation.runtime.value?.identity;
-  return state?.binding?.socketUrl === "/api/vibe64/colleague/voice/ws" &&
+  return isColleagueBinding(state?.binding) &&
     state.binding.conversationId === identity?.conversationId &&
     state.binding.id === JSON.stringify(["colleague", identity?.actorKey]) ? state.session : null;
 });
 // Colleague's voice controls belong to one conversation. After a thread switch
 // (L, another lesson) they still hold the previous thread's conversation.
-const staleVoice = computed(() => voice?.controller.state.binding?.socketUrl === "/api/vibe64/colleague/voice/ws" && !voiceSession.value);
+const staleVoice = computed(() => isColleagueBinding(voice?.controller.state.binding) && !voiceSession.value);
 // A shown Colleague stays shown and its voice controls follow to the new thread.
 watch(() => conversation.runtime.value?.identity.conversationId, (id, previous) => {
   if (!id || !previous || !staleVoice.value || !voice.controller.state.visible) return;
@@ -780,9 +782,8 @@ const colleagueModel = {
   }
 };
 let unregisterModel = null;
-async function changeWatch(item, operation) {
+async function changeWatch(watch, operation) {
   try {
-    const watch = typeof item === "string" ? watches.value.find(value => value.watchId === item) || { watchId: item } : item;
     await requestColleague(`/watches/${operation}`, { method: "POST", body: { watchId: watch.watchId } });
     await refresh();
   } catch (error) { reportFailure(error); }
@@ -848,7 +849,7 @@ onBeforeUnmount(() => {
   focusBinding.close();
   unregisterModel?.();
   mounted = false;
-  if (voice?.controller.state.binding?.socketUrl === "/api/vibe64/colleague/voice/ws") void voice.controller.end({ discard: true });
+  if (isColleagueBinding(voice?.controller.state.binding)) void voice.controller.end({ discard: true });
   cancelAvatarPress();
   revision += 1;
   window.removeEventListener("blur", cancelAvatarPress);

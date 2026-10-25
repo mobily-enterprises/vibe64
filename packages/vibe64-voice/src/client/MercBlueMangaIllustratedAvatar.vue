@@ -1,12 +1,7 @@
 <script setup>
-import { computed } from "vue";
 import { useVoiceAvatar } from "@jskit-ai/assistant-voice/client";
 
 const props = defineProps({
-  appearance: {
-    default: "original",
-    type: String
-  },
   mouthLevel: {
     default: 0,
     type: Number
@@ -21,24 +16,20 @@ const props = defineProps({
   }
 });
 
-const girlVariant = computed(() => props.appearance === "blond-girl");
 const { blinking, activeExpression, idleGesture, expression, visibleMouthPose } = useVoiceAvatar(props);
 </script>
 
 <template>
   <svg
-    :aria-label="girlVariant
-      ? 'Illustrated blue-haired manga girl AI avatar of Merc'
-      : 'Illustrated AI avatar of Merc'"
-    class="merc-avatar"
+    aria-label="Illustrated blue-haired manga girl AI avatar of Merc"
+    class="merc-avatar merc-avatar--blond-girl"
     :class="[
       `merc-avatar--${expression}`,
       `merc-avatar--mouth-${visibleMouthPose}`,
       idleGesture ? `merc-avatar--gesture-${idleGesture}` : '',
       activeExpression ? `merc-avatar--${expression}-${activeExpression}` : '',
       {
-        'merc-avatar--blinking': blinking,
-        'merc-avatar--blond-girl': girlVariant
+        'merc-avatar--blinking': blinking
       }
     ]"
     role="img"
@@ -48,44 +39,35 @@ const { blinking, activeExpression, idleGesture, expression, visibleMouthPose } 
     <g class="merc-avatar__body">
       <path
         class="merc-avatar__shirt"
-        :d="girlVariant
-          ? 'M48 320c5-36 24-62 59-78 15-7 32-11 53-11s38 4 53 11c35 16 54 42 59 78H48Z'
-          : 'M52 320c4-50 28-78 75-91h66c47 13 71 41 75 91H52Z'"
+        d="M48 320c5-36 24-62 59-78 15-7 32-11 53-11s38 4 53 11c35 16 54 42 59 78H48Z"
       />
 
       <path
-        v-if="girlVariant"
         class="merc-avatar__undershirt"
         d="M119 251c12 11 26 17 41 17s29-6 41-17l17 69H102l17-69Z"
       />
 
       <path
         class="merc-avatar__neck"
-        :d="girlVariant
-          ? 'M138 203h44v48c-7 13-37 13-44 0v-48Z'
-          : 'M130 205h60v50c-8 15-52 15-60 0v-50Z'"
+        d="M138 203h44v48c-7 13-37 13-44 0v-48Z"
       />
 
       <path
-        v-if="girlVariant"
         class="merc-avatar__hood"
         d="M92 246c15-9 29-14 45-16l23 28 23-28c16 2 30 7 45 16l-16 48-35-26-17 23-17-23-35 26-16-48Z"
       />
 
       <path
-        v-if="girlVariant"
         class="merc-avatar__hood-shadow"
         d="M103 252c13 5 26 13 40 24l17-18 17 18c14-11 27-19 40-24-9 17-18 29-28 39l-29-19-29 19c-10-10-19-22-28-39Z"
       />
 
       <path
-        v-if="girlVariant"
         class="merc-avatar__jacket-panel"
         d="M48 320c4-29 17-52 39-69l23 39-10 30H48Zm224 0c-4-29-17-52-39-69l-23 39 10 30h52Z"
       />
 
       <path
-        v-if="girlVariant"
         class="merc-avatar__shirt-neckline"
         d="M125 255q35 24 70 0"
       />
@@ -95,114 +77,93 @@ const { blinking, activeExpression, idleGesture, expression, visibleMouthPose } 
       <g class="merc-avatar__head">
         <path
           class="merc-avatar__hair merc-avatar__hair--back"
-          :d="girlVariant
-            ? 'M74 153C66 119 70 78 91 49c17-24 42-36 69-36 37 0 65 13 82 39 20 31 20 72 6 110-8 22-22 41-43 54H115c-22-14-34-34-41-63Z'
-            : 'M86 145c-11-35-4-68 18-90l-8-20 26 11 7-26 20 20 12-26 13 27 24-19 1 27 29-13-10 26h28l-21 20 25 12-23 10c5 12 7 25 5 39l-14-19c-5-43-28-68-59-69-34-2-58 24-62 69l-11 18Z'"
+          d="M74 153C66 119 70 78 91 49c17-24 42-36 69-36 37 0 65 13 82 39 20 31 20 72 6 110-8 22-22 41-43 54H115c-22-14-34-34-41-63Z"
         />
         <path
-          v-if="girlVariant"
           class="merc-avatar__hair merc-avatar__hair--crown-spikes"
           d="M87 82c12-33 38-55 72-62 32-6 62 1 82 19-17 2-30 7-41 16-12-7-25-10-39-9-15 1-29 7-40 16-11-3-22-2-34 0Z"
         />
         <path
-          v-if="girlVariant"
           class="merc-avatar__hair merc-avatar__hair--temples"
           d="M92 116c-18 12-25 31-21 56 4 23 15 41 35 54-8-24-8-47 1-68l-15-42Zm136 0c18 12 25 31 21 56-4 23-15 41-35 54 8-24 8-47-1-68l15-42Z"
         />
         <ellipse
           class="merc-avatar__ear"
-          :cx="girlVariant ? 94 : 91"
-          :cy="girlVariant ? 151 : 148"
-          :rx="girlVariant ? 10 : 16"
-          :ry="girlVariant ? 18 : 27"
+          cx="94"
+          cy="151"
+          rx="10"
+          ry="18"
         />
         <ellipse
           class="merc-avatar__ear"
-          :cx="girlVariant ? 226 : 229"
-          :cy="girlVariant ? 151 : 148"
-          :rx="girlVariant ? 10 : 16"
-          :ry="girlVariant ? 18 : 27"
+          cx="226"
+          cy="151"
+          rx="10"
+          ry="18"
         />
         <path
-          v-if="girlVariant"
           class="merc-avatar__face"
           d="M160 72c-41 0-67 24-67 67 0 45 27 82 67 85 40-3 67-40 67-85 0-43-26-67-67-67Z"
         />
-        <path
-          v-else
-          class="merc-avatar__face"
-          d="M160 48c-44 0-70 31-70 84 0 61 29 102 70 102s70-41 70-102c0-53-26-84-70-84Z"
-        />
 
         <path
-          v-if="girlVariant"
           class="merc-avatar__hair merc-avatar__hair--cap"
           d="M82 118c-5-31 2-58 22-79 19-20 42-28 68-27 34 1 60 14 75 38 13 21 17 47 10 76-18-13-40-21-66-22-38-2-74 3-109 14Z"
         />
         <path
           class="merc-avatar__hair merc-avatar__hair--fringe"
-          :d="girlVariant
-            ? 'M88 105c15 2 29-3 41-15 8-7 15-15 21-24 2 11 7 20 15 27 8-10 17-18 28-24 1 13 5 23 12 30 10-7 19-15 27-25 5 19 5 37 0 53-14-8-29-13-45-15-23-3-43-1-61 5-15 5-28 11-39 18-7-18-10-35-9-54Z'
-            : 'M91 115c5-38 29-61 66-65 35-3 61 15 72 50l-19-12-3 20-17-24-6 22-20-27-9 25-16-25-15 24-15-16-11 23-7 5Z'"
+          d="M88 105c15 2 29-3 41-15 8-7 15-15 21-24 2 11 7 20 15 27 8-10 17-18 28-24 1 13 5 23 12 30 10-7 19-15 27-25 5 19 5 37 0 53-14-8-29-13-45-15-23-3-43-1-61 5-15 5-28 11-39 18-7-18-10-35-9-54Z"
         />
         <path
-          v-if="!girlVariant"
-          class="merc-avatar__hair-lock"
-          d="M108 72c9-12 20-20 33-24M145 43l-2 29M176 42l5 31M204 54c9 8 15 19 18 31"
-        />
-        <path
-          v-if="girlVariant"
           class="merc-avatar__hair-swoops"
           d="M91 76c22-33 56-49 99-48M103 91c29-29 65-38 107-28M117 105c28-20 61-25 97-15"
         />
 
         <path
           class="merc-avatar__brow merc-avatar__brow--left"
-          :d="girlVariant ? 'M104 111c13-8 28-9 41-3' : 'M113 113c11-8 24-8 34-1'"
+          d="M104 111c13-8 28-9 41-3"
         />
         <path
           class="merc-avatar__brow merc-avatar__brow--right"
-          :d="girlVariant ? 'M175 108c13-6 28-5 41 3' : 'M173 112c11-7 24-7 34 1'"
+          d="M175 108c13-6 28-5 41 3"
         />
 
         <g class="merc-avatar__eyes" :class="{ 'merc-avatar__eyes--closed': blinking }">
           <g class="merc-avatar__eye">
             <ellipse
               class="merc-avatar__eye-white"
-              :cx="girlVariant ? 126 : 130"
-              :cy="girlVariant ? 145 : 132"
-              :rx="girlVariant ? 19 : 18"
-              :ry="girlVariant ? 23 : 11"
+              cx="126"
+              cy="145"
+              rx="19"
+              ry="23"
             />
             <ellipse
               class="merc-avatar__iris"
-              :cx="girlVariant ? 127 : 132"
-              :cy="girlVariant ? 145 : 132"
-              :rx="girlVariant ? 14.5 : 7.5"
-              :ry="girlVariant ? 19.5 : 7.5"
+              cx="127"
+              cy="145"
+              rx="14.5"
+              ry="19.5"
             />
             <ellipse
               class="merc-avatar__pupil"
-              :cx="girlVariant ? 128 : 133"
-              :cy="girlVariant ? 145 : 132"
-              :rx="girlVariant ? 9.5 : 3.6"
-              :ry="girlVariant ? 14 : 3.6"
+              cx="128"
+              cy="145"
+              rx="9.5"
+              ry="14"
             />
             <circle
               class="merc-avatar__eye-light"
               cx="121"
-              :cy="girlVariant ? 136 : 128"
-              :r="girlVariant ? 5.5 : 1.8"
+              cy="136"
+              r="5.5"
             />
             <circle
-              v-if="girlVariant"
               class="merc-avatar__eye-light"
               cx="133"
               cy="154"
               r="3"
             />
             <path
-              v-if="girlVariant"
               class="merc-avatar__eye-light merc-avatar__eye-star"
               d="M116 147l3 5 5 2-5 2-3 5-2-5-5-2 5-2 2-5Z"
             />
@@ -210,51 +171,47 @@ const { blinking, activeExpression, idleGesture, expression, visibleMouthPose } 
           <g class="merc-avatar__eye">
             <ellipse
               class="merc-avatar__eye-white"
-              :cx="girlVariant ? 194 : 190"
-              :cy="girlVariant ? 145 : 132"
-              :rx="girlVariant ? 19 : 18"
-              :ry="girlVariant ? 23 : 11"
+              cx="194"
+              cy="145"
+              rx="19"
+              ry="23"
             />
             <ellipse
               class="merc-avatar__iris"
-              :cx="girlVariant ? 193 : 188"
-              :cy="girlVariant ? 145 : 132"
-              :rx="girlVariant ? 14.5 : 7.5"
-              :ry="girlVariant ? 19.5 : 7.5"
+              cx="193"
+              cy="145"
+              rx="14.5"
+              ry="19.5"
             />
             <ellipse
               class="merc-avatar__pupil"
-              :cx="girlVariant ? 192 : 187"
-              :cy="girlVariant ? 145 : 132"
-              :rx="girlVariant ? 9.5 : 3.6"
-              :ry="girlVariant ? 14 : 3.6"
+              cx="192"
+              cy="145"
+              rx="9.5"
+              ry="14"
             />
             <circle
               class="merc-avatar__eye-light"
-              :cx="girlVariant ? 187 : 190"
-              :cy="girlVariant ? 136 : 128"
-              :r="girlVariant ? 5.5 : 1.8"
+              cx="187"
+              cy="136"
+              r="5.5"
             />
             <circle
-              v-if="girlVariant"
               class="merc-avatar__eye-light"
               cx="199"
               cy="154"
               r="3"
             />
             <path
-              v-if="girlVariant"
               class="merc-avatar__eye-light merc-avatar__eye-star"
               d="M181 147l3 5 5 2-5 2-3 5-2-5-5-2 5-2 2-5Z"
             />
           </g>
           <path
-            v-if="girlVariant"
             class="merc-avatar__eyeliner"
             d="M106 143q20-27 40 0M174 143q20-27 40 0"
           />
           <path
-            v-if="girlVariant"
             class="merc-avatar__eyelashes"
             d="M108 132l-9-5m14 0-6-9m7 5-2-10m100 19 9-5m-14 0 6-9m-7 5 2-10"
           />
@@ -262,42 +219,35 @@ const { blinking, activeExpression, idleGesture, expression, visibleMouthPose } 
 
         <path
           class="merc-avatar__nose"
-          :d="girlVariant
-            ? 'M159 164q-2 5 2 6'
-            : 'M158 132c-1 15-6 27-3 31 4 4 10 4 14 0'"
+          d="M159 164q-2 5 2 6"
         />
         <ellipse
           class="merc-avatar__cheek"
-          :cx="girlVariant ? 112 : 116"
-          :cy="girlVariant ? 180 : 166"
-          :rx="girlVariant ? 18 : 17"
+          cx="112"
+          cy="180"
+          rx="18"
           ry="9"
         />
         <ellipse
           class="merc-avatar__cheek"
-          :cx="girlVariant ? 208 : 204"
-          :cy="girlVariant ? 180 : 166"
-          :rx="girlVariant ? 18 : 17"
+          cx="208"
+          cy="180"
+          rx="18"
           ry="9"
         />
 
-        <g :transform="girlVariant ? 'translate(35 34) scale(.78)' : undefined">
+        <g transform="translate(35 34) scale(.78)">
           <g class="merc-avatar__mouth">
             <g v-if="visibleMouthPose === 'smile'" class="merc-avatar__mouth-pose">
               <path
                 class="merc-avatar__mouth-inside"
-                :d="girlVariant
-                  ? 'M134 183q26 12 52 0c-2 25-13 36-26 36s-24-11-26-36Z'
-                  : 'M132 183q28 24 56 0c-4 20-16 29-28 29s-24-9-28-29Z'"
+                d="M134 183q26 12 52 0c-2 25-13 36-26 36s-24-11-26-36Z"
               />
               <path
                 class="merc-avatar__teeth"
-                :d="girlVariant
-                  ? 'M139 184q21 8 42 0c-3 8-10 11-21 11s-18-3-21-11Z'
-                  : 'M137 185q23 14 46 0c-4 9-13 13-23 13s-19-4-23-13Z'"
+                d="M139 184q21 8 42 0c-3 8-10 11-21 11s-18-3-21-11Z"
               />
               <path
-                v-if="girlVariant"
                 class="merc-avatar__tongue"
                 d="M147 207q13-9 26 0c-4 7-8 10-13 10s-9-3-13-10Z"
               />
@@ -325,13 +275,6 @@ const { blinking, activeExpression, idleGesture, expression, visibleMouthPose } 
           </g>
         </g>
 
-        <circle
-          v-if="!girlVariant"
-          class="merc-avatar__earring"
-          cx="84"
-          cy="165"
-          r="5"
-        />
       </g>
     </g>
   </svg>

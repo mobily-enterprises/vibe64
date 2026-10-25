@@ -7,6 +7,7 @@
   "exports": {
     "./client": "./src/client/index.js",
     "./shared/avatars": "./src/shared/avatars.js",
+    "./shared/routes": "./src/shared/routes.js",
     "./server": "./src/server/Vibe64VoiceProvider.js"
   },
   "jskit": {

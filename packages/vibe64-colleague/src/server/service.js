@@ -14,7 +14,7 @@ import { COLLEAGUE_TOOL_PAYLOAD_LIMIT, instructions, learnInstructions, nativeIn
 import { conversationObservation, readWatchedConversation, watchUpdate } from "./attention.js";
 import { createWatchSources, stateObservation, stateWatchInput, stateWatchUpdate } from "./watchSources.js";
 import { createConversationSummary } from "./conversationSummary.js";
-import { assignmentCommands, assignmentSummary, createAssignmentOperations } from "./assignments.js";
+import { assignmentCommands, assignmentSummary, createAssignmentOperations, suspendAssignment } from "./assignments.js";
 import { validateColleagueConversationRecord } from "./conversationRecord.js";
 
 const COLLEAGUE_MODEL_UNAVAILABLE = "Connect an AI and choose an available Colleague model in AI setup before using Colleague.";
@@ -41,19 +41,31 @@ function publicWatch({ cursor, ...watch }) {
 // deployment). Turns saved before it was worded for every watch keep theirs.
 const WATCH_UPDATE_NOTICE = "An update from what you asked Colleague to watch.";
 const WATCH_UPDATE_NOTICES = new Set([WATCH_UPDATE_NOTICE, "An update from your watched conversations."]);
+// A watch notice stays only beside the reply it introduced.
+function keepsWatchNotice(turn, runtime) {
+  if (runtime) return runtime.origin === "application" && runtime.status === "complete";
+  return turn.messages.some(item => item.role === "assistant" && item.text?.trim());
+}
 function colleagueHistoryMessages(turn) {
   const runtime = turn.metadata?.runtime;
   if (runtime?.origin === "application" && runtime.completedEnvelope === true) return [];
   return turn.messages.flatMap(message => {
     if (message.role === "system") {
-      if (!WATCH_UPDATE_NOTICES.has(message.text) || (runtime
-        ? runtime.origin !== "application" || runtime.status !== "complete"
-        : !turn.messages.some(item => item.role === "assistant" && item.text?.trim()))) return [];
+      if (!WATCH_UPDATE_NOTICES.has(message.text) || !keepsWatchNotice(turn, runtime)) return [];
       // The original notice is presentation, never the wake's private data.
       return [{ messageId: message.messageId, role: message.role, text: message.text, at: message.at }];
     }
     return message.role === "user" || !runtime || runtime.status === "complete" ? [message] : [];
   });
+}
+// A completed reply delivered these observations: drop them and settle the
+// watches that were waiting on them.
+function markObservationsDelivered(record, observations) {
+  const delivered = new Set(observations.map(observation => observation.id));
+  record.observations = record.observations.filter(observation => !delivered.has(observation.id));
+  for (const watch of record.watches) {
+    if (watch.status === "pending" && observations.some(observation => observation.watchId === watch.watchId)) watch.status = watch.once ? "delivered" : "active";
+  }
 }
 function hasUserReceipt(chat, messageId) {
   return chat.conversationLog.some(turn => turn.messages.some(message =>
@@ -119,10 +131,12 @@ function colleagueBrowserState(current) {
     pendingRequest: current.pendingRequest?.origin === "application" ? null : current.pendingRequest,
     streaming: colleagueBrowserStream(current.streaming) };
 }
+// A streamed partial may end halfway through a surrogate pair.
+const trimIncompleteSurrogate = text => text.replace(/[\uD800-\uDBFF]$/, "");
 function colleagueBrowserStream(streaming) {
   return streaming ? { ...streaming, messages: streaming.messages.filter(message =>
     message.completedEnvelope !== true && (message.origin !== "application" || message.role !== "commentary")).map(message =>
-    message.status === "inProgress" ? { ...message, text: message.text.replace(/[\uD800-\uDBFF]$/, "") } : message) } : streaming;
+    message.status === "inProgress" ? { ...message, text: trimIncompleteSurrogate(message.text) } : message) } : streaming;
 }
 
 function createColleagueService({ actions, accounts, terminals, systemRoot, events, watchPollMs = 30000, watchDebounceMs = 250 }) {
@@ -477,7 +491,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         }
         observer.listener({ ...event, interimReply,
           ...(event.type === "message" && event.status === "inProgress"
-            ? { text: event.text.replace(/[\uD800-\uDBFF]$/, "") } : {}),
+            ? { text: trimIncompleteSurrogate(event.text) } : {}),
           ...(event.streaming ? { streaming: colleagueBrowserStream(event.streaming) } : {}) });
       });
       if (!state.browserObservers.has(observer)) release();
@@ -491,8 +505,8 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     state.streamRevision += 1;
     const user = authenticatedVibe64User(state.requestContext || {});
     const actorId = String(user?.uid || "");
-    // Hosted conversations are private to their authenticated actor. Local mode
-    // retains HTTP reconciliation when it has no authenticated realtime audience.
+    // Realtime replies go only to their authenticated actor; without one, the
+    // browser reconciles over HTTP.
     if (!actorId || !events?.publish) return;
     const publish = () => {
       clearTimeout(state.replyTimer);
@@ -664,11 +678,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       } catch (error) {
         const watch = state.record.watches.find(item => item.watchId === observation.watchId);
         if (watch?.status === "pending") { watch.status = "paused"; watch.error = `Watching paused: ${error.message}`.slice(0, 512); }
-        const assignment = state.record.assignments?.find(item => item.assignmentId === observation.assignmentId);
-        if (assignment && ["active", "waiting"].includes(assignment.status)) {
-          assignment.status = "needs-user";
-          assignment.summary = "Assignment access could not be verified. Resolve access before resuming.";
-        }
+        suspendAssignment(state.record, observation.assignmentId, "Assignment access could not be verified. Resolve access before resuming.");
         state.record.observations = state.record.observations.filter(item => item.id !== observation.id);
         await persist(state);
       }
@@ -786,7 +796,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         state.interimReply = null;
         state.streamingReply = { id: event.outputId || event.messageId, turnId: event.turnId,
           ...(event.outputId ? { outputId: event.outputId } : {}), role: "assistant",
-          text: event.status === "complete" ? event.text : event.text.replace(/[\uD800-\uDBFF]$/, ""),
+          text: event.status === "complete" ? event.text : trimIncompleteSurrogate(event.text),
           at: new Date().toISOString(), status: event.status === "complete" ? "completed" : "inProgress", streamId, autonomous };
         publishReply(state);
       }
@@ -803,11 +813,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       if (!isCurrent()) return;
       const turn = result.conversationLog.find(turn => turn.turnId === receipt.turnId);
       if (turn?.metadata?.runtime?.status !== "complete") throw failure(result.error || "Colleague's response did not complete. Your message is kept.");
-      const delivered = new Set(observations.map(observation => observation.id));
-      state.record.observations = state.record.observations.filter(observation => !delivered.has(observation.id));
-      for (const watch of state.record.watches) {
-        if (watch.status === "pending" && observations.some(observation => observation.watchId === watch.watchId)) watch.status = watch.once ? "delivered" : "active";
-      }
+      markObservationsDelivered(state.record, observations);
       state.record.status = "ready";
       state.record.error = "";
       state.streamingReply = null;
@@ -981,11 +987,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
             replyTurnId = turn.turnId;
           }
           const turn = await prepared.publishReply({ turnId: replyTurnId });
-          const delivered = new Set(currentContext.observations.map(observation => observation.id));
-          state.record.observations = state.record.observations.filter(observation => !delivered.has(observation.id));
-          for (const watch of state.record.watches) {
-            if (watch.status === "pending" && currentContext.observations.some(observation => observation.watchId === watch.watchId)) watch.status = watch.once ? "delivered" : "active";
-          }
+          markObservationsDelivered(state.record, currentContext.observations);
           scheduleWatches(state);
           // Original late-admission boundary: a final written while a new
           // request is entering does not end the shared response allowance.
@@ -1177,11 +1179,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           if (watch.status !== "active") continue;
           watch.status = "paused";
           watch.error = `Watching paused: ${error.message}`.slice(0, 512);
-          const assignment = state.record.assignments?.find((item) => item.assignmentId === watch.assignmentId);
-          if (assignment && ["active", "waiting"].includes(assignment.status)) {
-            assignment.status = "needs-user";
-            assignment.summary = "The assignment's conversation could not be read. Resolve the watch error before resuming.";
-          }
+          suspendAssignment(state.record, watch.assignmentId, "The assignment's conversation could not be read. Resolve the watch error before resuming.");
         }
       }
       await persist(state);
@@ -1201,6 +1199,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       (event.source === "vibe64" && event.entity === "session" || watchSources.readsEntity(event.entity)),
     handle(event) {
       // Publishers may still hold a session write lock. Never await a read here.
+      // A thread that fails to load reports to its own request, not here.
       const session = event.source === "vibe64" && event.entity === "session";
       for (const pending of users.values()) void pending.then((state) => {
         const payload = event.realtime?.payload || {};
@@ -1208,7 +1207,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           ? !watch.input && watch.sessionId === event.entityId && (!payload.projectSlug || watch.projectSlug === payload.projectSlug)
           : watchSources.get(watch.source)?.entity === event.entity && watch.projectSlug === event.entityId);
         if (state.record.watches.some(relevant)) scheduleWatches(state, watchDebounceMs);
-      });
+      }, () => {});
     }
   });
 
@@ -1499,11 +1498,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         const watch = state.record.watches.find((item) => item.watchId === input.watchId);
         if (watch) {
           watch.status = "cancelled";
-          const assignment = state.record.assignments?.find((item) => item.assignmentId === watch.assignmentId);
-          if (assignment && ["active", "waiting"].includes(assignment.status)) {
-            assignment.status = "needs-user";
-            assignment.summary = "Assignment watching was cancelled. Ask Colleague to resume or cancel the assignment.";
-          }
+          suspendAssignment(state.record, watch.assignmentId, "Assignment watching was cancelled. Ask Colleague to resume or cancel the assignment.");
         }
         await suppressWatchObservation(state, input.watchId);
         return { ok: true };
@@ -1728,8 +1723,6 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           if (previousMessage.text !== input.message) throw failure("This message ID belongs to a different request. Use a new message ID.");
           return { status: "accepted", messageId: input.messageId, turnId: previousTurn.turnId, duplicate: true };
         }
-        assertCurrentConversation(state, expected);
-        if (closed || state.stopping) throw failure("Colleague is stopping. Send again once it has stopped.");
         const engine = state.record.conversationMetadata?.runtime?.engine;
         const native = Boolean(engine && engine !== "api");
         if (!native && state.running) {
@@ -1780,10 +1773,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       for (const connection of state.connections.values()) connection.acknowledge?.({ ok: false, error: "Navigation was cancelled when Colleague stopped." });
       state.record.status = "interrupted";
       for (const assignment of state.record.assignments || []) {
-        if (!["active", "waiting"].includes(assignment.status)) continue;
-        assignment.status = "needs-user";
-        assignment.summary = "Colleague was stopped. Ask to resume this assignment when ready.";
-        for (const watch of state.record.watches) if (watch.assignmentId === assignment.assignmentId) watch.status = "paused";
+        suspendAssignment(state.record, assignment.assignmentId, "Colleague was stopped. Ask to resume this assignment when ready.", { pauseWatches: true });
       }
       state.requestContext = context;
       try {
@@ -1806,7 +1796,9 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       closed = true;
       unregisterReleaser();
       for (const pending of users.values()) {
-        const state = await pending;
+        // A thread that failed to load has nothing to stop.
+        const state = await pending.catch(() => null);
+        if (!state) continue;
         clearTimeout(state.watchTimer);
         clearTimeout(state.replyTimer);
         for (const observer of state.browserObservers) observer.release?.();
