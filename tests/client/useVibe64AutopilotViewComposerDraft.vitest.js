@@ -487,8 +487,8 @@ describe("useVibe64AutopilotView direct chat", () => {
     view.composerDraft.value = "Keep my draft.";
     expect(view.assistantDirectAllowed.value).toBe(false);
     expect(view.workspaceSetupAskDisabled.value).toBe(false);
-    expect(await view.askCodexToFixWorkspaceSetup()).toBe(true);
-    expect(await view.askCodexToFixPreviewIdentity({ error: "Login failed." })).toBe(true);
+    expect(await view.fixWorkspaceSetupWithTemporaryAi()).toBe(true);
+    expect(await view.fixPreviewIdentityWithTemporaryAi({ error: "Login failed." })).toBe(true);
     expect(await view.fixRepositoryError({ error: "Conflict" })).toBe(true);
     expect(await view.describeSubsystems()).toBe(true);
     expect(requestTemporaryAi).toHaveBeenCalledTimes(4);
@@ -496,7 +496,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.composerDraft.value).toBe("Keep my draft.");
     canCode.value = false;
     expect(view.workspaceSetupAskDisabled.value).toBe(true);
-    expect(await view.askCodexToFixPreviewIdentity({ error: "Login failed." })).toBe(false);
+    expect(await view.fixPreviewIdentityWithTemporaryAi({ error: "Login failed." })).toBe(false);
     expect(await view.fixRepositoryError({ error: "Conflict" })).toBe(false);
     expect(await view.describeSubsystems()).toBe(false);
     expect(requestTemporaryAi).toHaveBeenCalledTimes(4);
@@ -534,7 +534,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     const canChat = ref(true);
     const canNative = ref(false);
     const { view } = await createViewWithProps({}, { assistantCanUseAi: canChat, assistantCanUseNative: canNative });
-    const terminal = () => view.sessionToolControls.value.find((tool) => tool.id === "ai-terminal");
+    const terminal = () => view.dashboardSessionContext.value.activeSessionNav.tools.find((tool) => tool.id === "ai-terminal");
     expect(terminal().disabled).toBe(true);
     expect(terminal().title).toContain("current connection");
     canChat.value = false;
@@ -552,7 +552,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.composerSubmitMode.value).toBe("send");
     expect(view.connectionRecoveryVisible.value).toBe(false);
     expect(view.thinkingVisible.value).toBe(false);
-    expect(view.sessionToolControls.value.find((tool) => tool.id === "ai-terminal").disabled).toBe(true);
+    expect(view.dashboardSessionContext.value.activeSessionNav.tools.find((tool) => tool.id === "ai-terminal").disabled).toBe(true);
     canRoute.value = false;
     expect(view.composerCanSubmit.value).toBe(false);
     canRoute.value = true;
@@ -1015,7 +1015,6 @@ describe("useVibe64AutopilotView direct chat", () => {
     props.agentConnectionStatus = "disconnected";
     await nextTick();
     expect(view.composerSubmitMode.value).toBe("reconnecting");
-    expect(view.composerSubmitLabel.value).toBe("Reconnecting…");
     expect(view.composerCanSubmit.value).toBe(false);
 
     props.agentConnectionStatus = "connected";
@@ -1033,7 +1032,7 @@ describe("useVibe64AutopilotView direct chat", () => {
       expect(view.connectionRecoveryVisible.value).toBe(true);
       expect(view.composerDisabled.value).toBe(false);
       expect(view.composerCanSubmit.value).toBe(false);
-      expect(view.composerSubmitLabel.value).toBe(status === "disconnected" ? "Reconnecting…" : "Checking…");
+      expect(view.composerSubmitMode.value).toBe("reconnecting");
       await view.submitComposerMessage();
       expect(props.sendAgentMessage).not.toHaveBeenCalled();
       expect(view.composerDraft.value).toBe("Do not send this automatically.");
@@ -1052,7 +1051,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.assistantAccountMessage.value).toBe("Codex is not connected. Sign in through AI Accounts to continue.");
     expect(view.connectionRecoveryVisible.value).toBe(true);
     expect(view.thinkingVisible.value).toBe(false);
-    expect(view.composerSubmitLabel.value).toBe("Connect AI");
+    expect(view.composerSubmitMode.value).toBe("unavailable");
     expect(view.composerCanSubmit.value).toBe(false);
     expect(view.saveWorkTitle.value).not.toContain("Connect your AI account");
     await view.submitComposerMessage();
@@ -1070,7 +1069,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.connectionRecoveryVisible.value).toBe(true);
     expect(view.thinkingVisible.value).toBe(false);
     expect(view.composerDisabled.value).toBe(false);
-    expect(view.composerSubmitLabel.value).toBe("Unavailable");
+    expect(view.composerSubmitMode.value).toBe("failed");
     expect(view.composerCanSubmit.value).toBe(false);
     await view.submitComposerMessage();
     expect(props.sendAgentMessage).not.toHaveBeenCalled();
@@ -1086,7 +1085,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.connectionRecoveryVisible.value).toBe(false);
     expect(view.composerDisabled.value).toBe(false);
     expect(view.composerCanSubmit.value).toBe(false);
-    expect(view.composerSubmitLabel.value).toBe("Loading…");
+    expect(view.composerSubmitMode.value).toBe("initializing");
     expect(view.composerSubmitAriaLabel.value).toBe("Waiting for the assistant to load");
     await view.submitComposerMessage();
     expect(props.sendAgentMessage).not.toHaveBeenCalled();
@@ -1479,7 +1478,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     await vi.waitFor(() => expect(props.conversationRuntime.steerable.value).toBe(true));
     props.conversationLog.turns = [{ user: { messageId: "another-message", text: "Deslop commit 04f8283622d6." } }];
     await nextTick();
-    expect(view.composerSubmitLabel.value).toBe("Steer");
+    expect(view.composerSubmitMode.value).toBe("steer");
     expect(view.composerSending.value).toBe(true);
     props.conversationLog.turns = [{ user: { messageId, text: "Deslop commit 04f8283622d6." } }];
     await expect(sending).resolves.toBe(true);
@@ -1769,7 +1768,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     const originalTurns = [...view.chatTurns.value];
 
     expect(view.workspaceSetupTitle.value).toBe(title);
-    await expect(view.askCodexToFixWorkspaceSetup()).resolves.toBe(true);
+    await expect(view.fixWorkspaceSetupWithTemporaryAi()).resolves.toBe(true);
 
     expect(requestTemporaryAi).toHaveBeenCalledWith(expect.objectContaining({
       completionMessage: "AI repair finished. Vibe64 is verifying workspace preparation now.",
@@ -1807,7 +1806,7 @@ describe("useVibe64AutopilotView direct chat", () => {
       }
     }, { requestTemporaryAi });
 
-    await expect(view.askCodexToFixWorkspaceSetup()).resolves.toBe(true);
+    await expect(view.fixWorkspaceSetupWithTemporaryAi()).resolves.toBe(true);
     expect(requestTemporaryAi.mock.calls[0][0].message).toContain(
       "Recent preparation output:\n[Inspect deployment] Failed."
     );
@@ -1827,7 +1826,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     })).resolves.toBe(false);
     expect(retryWorkspaceSetup).toHaveBeenCalledTimes(1);
 
-    await expect(view.askCodexToFixWorkspaceSetup()).resolves.toBe(true);
+    await expect(view.fixWorkspaceSetupWithTemporaryAi()).resolves.toBe(true);
     await expect(view.handleTemporaryAiTaskFinished({
       id: "workspace-fix-1",
       status: "completed"
@@ -2142,10 +2141,10 @@ describe("useVibe64AutopilotView direct chat", () => {
       }
     }, { requestTemporaryAi });
 
-    const firstRequest = view.askCodexToFixWorkspaceSetup();
+    const firstRequest = view.fixWorkspaceSetupWithTemporaryAi();
     expect(view.workspaceSetupFixSending.value).toBe(true);
     expect(view.workspaceSetupAskDisabled.value).toBe(true);
-    await expect(view.askCodexToFixWorkspaceSetup()).resolves.toBe(false);
+    await expect(view.fixWorkspaceSetupWithTemporaryAi()).resolves.toBe(false);
     expect(requestTemporaryAi).toHaveBeenCalledTimes(1);
 
     resolveRecovery({ ok: true });
@@ -2159,7 +2158,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     const view = await createView({ sendAgentMessage }, { requestTemporaryAi });
     const originalTurns = [...view.chatTurns.value];
 
-    await expect(view.askCodexToFixPreviewIdentity({
+    await expect(view.fixPreviewIdentityWithTemporaryAi({
       error: "User not found.",
       identity: {
         name: "Admin",
@@ -2379,14 +2378,15 @@ describe("useVibe64AutopilotView direct chat", () => {
     const sendAgentMessage = vi.fn()
       .mockResolvedValueOnce(false)
       .mockResolvedValueOnce(true);
-    const view = await createView({ sendAgentMessage });
-    view.currentAgentSettings.value.model = "original-model";
+    const { view, props } = await createViewWithProps({ sendAgentMessage });
+    const agentSettings = props.conversationRuntime.agentSettings.settings.value;
+    agentSettings.model = "original-model";
     view.composerDraft.value = "Try this change.";
 
     await expect(view.submitComposerMessage()).resolves.toBe(false);
     const failedTurn = view.chatTurns.value.at(-1);
     expect(failedTurn.optimistic.status).toBe("failed");
-    view.currentAgentSettings.value.model = "new-model";
+    agentSettings.model = "new-model";
 
     await expect(view.resendOptimisticMessage(failedTurn.optimistic.id)).resolves.toBe(true);
     expect(sendAgentMessage).toHaveBeenCalledTimes(2);
@@ -2480,7 +2480,7 @@ describe("useVibe64AutopilotView direct chat", () => {
   it("exposes session tools while Git log remains in project navigation", async () => {
     const view = await createView();
 
-    expect(view.sessionToolControls.value.map((tool) => tool.id)).toEqual([
+    expect(view.dashboardSessionContext.value.activeSessionNav.tools.map((tool) => tool.id)).toEqual([
       "info",
       "changes",
       "editor",
@@ -2488,7 +2488,7 @@ describe("useVibe64AutopilotView direct chat", () => {
       "system",
       "ai-terminal"
     ]);
-    expect(view.sessionToolControls.value.map((tool) => tool.id)).not.toContain("session-details");
+    expect(view.dashboardSessionContext.value.activeSessionNav.tools.map((tool) => tool.id)).not.toContain("session-details");
 
     expect(view.selectSessionTool("info")).toBe(true);
     await nextTick();
@@ -2509,7 +2509,7 @@ describe("useVibe64AutopilotView direct chat", () => {
       }
     });
 
-    expect(view.sessionToolControls.value.map((tool) => tool.id)).toContain("ai-terminal");
+    expect(view.dashboardSessionContext.value.activeSessionNav.tools.map((tool) => tool.id)).toContain("ai-terminal");
     expect(view.rightPaneTab.value).toBe("ai-terminal");
     expect(view.selectSessionTool("ai-terminal")).toBe(true);
   });
@@ -2517,7 +2517,7 @@ describe("useVibe64AutopilotView direct chat", () => {
   it("prefills chat from source tools", async () => {
     const view = await createView();
 
-    expect(view.askCodexAboutSourceEditorFile("src/main.js")).toBe(true);
+    expect(view.askAssistantAboutFile("src/main.js")).toBe(true);
     expect(view.composerDraft.value).toBe("Please look at `src/main.js` and help me with this file.");
   });
 
@@ -2919,7 +2919,7 @@ describe("useVibe64AutopilotView direct chat", () => {
       }
     });
     expect(updatePending.saveWorkDisabled.value).toBe(false);
-    expect(updatePending.saveWorkActionLabel.value).toBe("Update session");
+    expect(updatePending.saveWorkHeaderAriaLabel.value).toBe("Update session");
     expect(updatePending.saveWorkTitle.value).toContain("preserving its unsaved work");
     await expect(updatePending.requestSaveWork()).resolves.toEqual({
       ok: true,
@@ -2947,7 +2947,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     });
 
     expect(view.saveWorkDisabled.value).toBe(true);
-    expect(view.saveWorkActionLabel.value).toBe("Review changes");
+    expect(view.saveWorkHeaderAriaLabel.value).toBe("Review selected session changes");
     expect(view.saveWorkActivityIsUpdate.value).toBe(true);
     expect(view.saveWorkActivityLabel.value).toBe("Update session");
     expect(view.saveWorkOperation.value).toStrictEqual(updateOperation);
@@ -3448,7 +3448,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     });
 
     expect(view.saveWorkDisabled.value).toBe(false);
-    expect(view.saveWorkActionLabel.value).toBe("Update session");
+    expect(view.saveWorkHeaderAriaLabel.value).toBe("Update session");
     expect(view.saveWorkTitle.value).toBe(
       "Update session to load its latest saved changes."
     );
@@ -3530,7 +3530,7 @@ describe("useVibe64AutopilotView direct chat", () => {
 
     expect(view.saveWorkUnsaved.value).toBe(true);
     expect(view.saveWorkDisabled.value).toBe(false);
-    expect(view.saveWorkActionLabel.value).toBe("Review changes");
+    expect(view.saveWorkHeaderAriaLabel.value).toBe("Review selected session changes");
     expect(view.saveWorkTitle.value).toBe("Review changes and choose where to commit them");
   });
 
@@ -3559,7 +3559,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     });
 
     expect(view.saveWorkRequiresUpdate.value).toBe(updateAvailable);
-    expect(view.saveWorkActionLabel.value).toBe(updateAvailable ? "Update session" : "Review changes");
+    expect(view.saveWorkHeaderAriaLabel.value).toBe(updateAvailable ? "Update session" : "Review selected session changes");
     expect(view.saveWorkDisabled.value).toBe(false);
     if (updateAvailable) {
       await view.requestSaveWork();
@@ -3645,7 +3645,7 @@ describe("useVibe64AutopilotView direct chat", () => {
       }
     });
 
-    expect(view.saveWorkActionLabel.value).toBe("Update session");
+    expect(view.saveWorkHeaderAriaLabel.value).toBe("Update session");
     expect(view.saveWorkDisabled.value).toBe(true);
     expect(view.saveWorkTitle.value).toBe("Wait for the current repository operation to finish");
   });

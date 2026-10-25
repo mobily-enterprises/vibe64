@@ -128,7 +128,6 @@ export {
   PROMPT_HINT_DEBOUNCE_MS,
   PROMPT_HINT_MIN_INTERVAL_MS,
   PROMPT_HINT_RECENT_VISIBLE_TURN_LIMIT,
-  normalizedPromptHintSuggestions,
   promptHintConversationFingerprint,
   useVibe64PromptHints
 };

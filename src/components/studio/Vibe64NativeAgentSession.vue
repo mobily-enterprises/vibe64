@@ -120,7 +120,7 @@ import { mdiPaperclip, mdiPlayCircleOutline, mdiRestart } from "@mdi/js";
 import Vibe64AttachmentQueue from "@/components/studio/vibe64-session/Vibe64AttachmentQueue.vue";
 import { useAgentTerminalAttachments } from "@/composables/useAgentTerminalAttachments.js";
 import { useVibe64AttachmentCommands } from "@/composables/useVibe64AttachmentCommands.js";
-import { codexAttachmentFilesFromPasteEvent } from "@/composables/useAgentAttachments.js";
+import { assistantAttachmentFilesFromPasteEvent } from "@jskit-ai/assistant-core/client/conversation-attachments";
 import Vibe64InteractiveTerminal from "@/components/studio/Vibe64InteractiveTerminal.vue";
 import { useVibe64Terminal } from "@/composables/useVibe64Terminal.js";
 import { useVibe64TerminalCommands } from "@/composables/useVibe64TerminalCommands.js";
@@ -260,7 +260,7 @@ function handleAttachmentSelection(event) {
 
 function handleTerminalPaste(event) {
   if (props.session?.assistantSelection?.engineId !== "opencode") return;
-  const files = codexAttachmentFilesFromPasteEvent(event);
+  const files = assistantAttachmentFilesFromPasteEvent(event);
   if (!files.length) return;
   // Keep file pastes out of xterm, including accompanying clipboard text that
   // could otherwise submit a prompt before its files finish uploading.

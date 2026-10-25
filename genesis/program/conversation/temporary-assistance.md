@@ -147,6 +147,7 @@ Changing the composer selection never rewrites historical attribution.
 - `src/components/studio/vibe64-session/Vibe64ChatModeControls.vue`
 
 - `src/lib/vibe64AssistantHost.js`
+- `src/lib/vibe64AssistantConversation.js`
 - `src/components/studio/Vibe64SessionPanel.vue`
 
 - `packages/vibe64-terminals/src/server/agent/providers/claudeConversationHost.js`
@@ -173,6 +174,7 @@ Changing the composer selection never rewrites historical attribution.
 - `src/composables/useVibe64TemporaryAi.js`
 - `src/composables/useVibe64MountedSessionData.js`
 - `src/composables/useVibe64AutopilotView.js`
+- `src/composables/useVibe64TemporaryAiRepairs.js`
 - `src/components/studio/Vibe64TemporaryAiFixAction.vue`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`

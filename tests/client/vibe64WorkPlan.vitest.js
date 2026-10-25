@@ -228,8 +228,8 @@ it("publishes only its active lifetime and does not clear a replacement owner on
 
 it("Plan and Progress select the same artifact and accumulate companion pages at exact paired revisions", async () => {
   const f = mount({ ...active, progressAvailable: true, progressRevision: "e".repeat(64), progressText: "# Progress\nVerified evidence" });
-  expect(f.state().document).toBe("plan");
-  f.state().document = "progress";
+  expect(f.state().planDocument).toBe("plan");
+  f.state().planDocument = "progress";
   await nextTick();
   expect(f.state().sections.flatMap(section => section.blocks)).not.toEqual([]);
   expect(f.state().archiveId).toBe("");
@@ -279,12 +279,12 @@ it("keeps Progress fully visible and resets expansion across documents, archives
   const text = "# Plan\n- [ ] Deliver\n## Technical details\nExact implementation instructions";
   const f = mount({ ...active, revision: "b".repeat(64), text, progressText: text, progressAvailable: true });
   f.state().technicalPanel = "technical";
-  f.state().document = "progress";
+  f.state().planDocument = "progress";
   await nextTick();
   expect(f.state().technicalPanel).toBe(null);
   expect(f.state().technicalSections).toEqual([]);
   expect(JSON.stringify(f.state().overviewSections)).toContain("Exact implementation instructions");
-  f.state().document = "plan";
+  f.state().planDocument = "plan";
   await nextTick();
   f.state().technicalPanel = "technical";
   f.state().archiveId = "a".repeat(64);

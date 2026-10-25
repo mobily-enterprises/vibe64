@@ -410,8 +410,8 @@
             :node="editor.tree.value"
             :selected-path="displayedPath"
             :starred-paths="fileBookmarks?.paths.value || []"
-            :ask-codex-available="askCodexAvailable"
-            @ask-codex="askCodexAboutPath"
+            :assistant-draft-available="assistantDraftAvailable"
+            @ask-assistant="askAssistantAboutPath"
             @copy-path="copySourcePath"
             @directory-open-change="handleDirectoryOpenChange"
             @load-more-directory="editor.loadMoreDirectory"
@@ -787,7 +787,7 @@ const props = defineProps({
     default: "",
     type: String
   },
-  askCodexAvailable: {
+  assistantDraftAvailable: {
     default: false,
     type: Boolean
   },
@@ -800,7 +800,7 @@ const props = defineProps({
     type: Boolean
   }
 });
-const emit = defineEmits(["ask-codex-about-file", "open-source-file", "interface-location", "open-program"]);
+const emit = defineEmits(["ask-assistant-about-file", "open-source-file", "interface-location", "open-program"]);
 
 const editorElement = ref(null);
 let editorView = null;
@@ -1249,12 +1249,12 @@ async function copySourcePath(path = "") {
   }
 }
 
-function askCodexAboutPath(path = "") {
+function askAssistantAboutPath(path = "") {
   const normalizedPath = normalizeTreePath(path);
-  if (!normalizedPath || !props.askCodexAvailable) {
+  if (!normalizedPath || !props.assistantDraftAvailable) {
     return;
   }
-  emit("ask-codex-about-file", normalizedPath);
+  emit("ask-assistant-about-file", normalizedPath);
 }
 
 function sourceEditorTreeStateStorageKey({

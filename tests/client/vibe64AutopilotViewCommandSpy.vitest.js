@@ -17,6 +17,9 @@ import { learningGuidancePresentation } from "@local/vibe64-training/shared/lear
 
 const componentPath = path.resolve("src/components/studio/vibe64-session/Vibe64AutopilotView.vue");
 const composablePath = path.resolve("src/composables/useVibe64AutopilotView.js");
+const saveWorkComposablePath = path.resolve("src/composables/useVibe64SessionSaveWork.js");
+const workspaceSetupComposablePath = path.resolve("src/composables/useVibe64WorkspaceSetupActivity.js");
+const temporaryAiRepairsPath = path.resolve("src/composables/useVibe64TemporaryAiRepairs.js");
 const promptTextareaPath = path.resolve(
   "src/components/studio/vibe64-session/Vibe64AutopilotPromptTextarea.vue"
 );
@@ -884,9 +887,10 @@ describe("Vibe64 direct session view", () => {
   it("offers native confirmed Save with temporary action output, not an AI prompt", () => {
     const component = fs.readFileSync(componentPath, "utf8");
     const composable = fs.readFileSync(composablePath, "utf8");
-    const combined = `${component}\n${composable}`;
+    const saveWork = fs.readFileSync(saveWorkComposablePath, "utf8");
+    const repairs = fs.readFileSync(temporaryAiRepairsPath, "utf8");
+    const combined = `${component}\n${composable}\n${saveWork}\n${repairs}`;
 
-    expect(composable).toContain("saveWorkActionLabel");
     expect(component).toContain('v-if="saveWorkHeaderVisible"');
     expect(component).toContain("saveWorkHeaderAriaLabel");
     expect(component).not.toContain("saveWorkHeaderLabel");
@@ -901,26 +905,26 @@ describe("Vibe64 direct session view", () => {
     );
     expect(component).toContain('#error-actions');
     expect(component).toContain("saveWorkRequiresUpdate ? 'warning' : (saveWorkUnsaved ? 'error' : undefined)");
-    expect(composable).toContain("const result = await props.saveSessionWork({ destinationReview: saveWorkReview.value,");
-    expect(composable).toContain("const result = await props.updateSessionWork(input);");
-    expect(composable).toContain("const saveWorkUnsaved = computed");
-    expect(composable).toContain("const saveWorkOperationActive = computed");
+    expect(saveWork).toContain('runRepositoryRequest("save", "Session work could not be saved.", () => props.saveSessionWork({');
+    expect(saveWork).toContain("() => props.updateSessionWork(input));");
+    expect(saveWork).toContain("const saveWorkUnsaved = computed");
+    expect(saveWork).toContain("const saveWorkOperationActive = computed");
     expect(component).toContain('class="studio-autopilot__activity"');
     expect(component).toContain(".studio-autopilot__activity:empty");
-    expect(composable).toContain("Vibe64—not Temporary AI—owns every repository operation");
+    expect(repairs).toContain("Vibe64—not Temporary AI—owns every repository operation");
     expect(component).toContain(':disabled="repositoryRecoverySending || !assistantFixAllowed"');
     expect(component).toContain(":title=\"assistantFixAllowed ? 'Open temporary AI to resolve this repository problem' : assistantFixRestrictionMessage\"");
     expect(component).toContain(":title=\"assistantFixAllowed ? 'Open temporary AI to resolve workspace preparation' : assistantFixRestrictionMessage\"");
     expect(component).toContain("assistantDirectAllowed: assistantDirectAllowed.value");
     expect(component).toContain("assistantRestrictionMessage: assistantRestrictionMessage.value");
-    expect(composable).toContain("Do not run git add, commit, checkout, switch, restore, reset, clean, stash, merge, rebase");
-    expect(composable).toContain("leave both byte-for-byte unchanged");
-    expect(composable).toContain("Resolve only by editing the conflicting working-tree files");
-    expect(composable).toContain("Preserve the intended behavior of both the latest saved work and this session");
+    expect(repairs).toContain("Do not run git add, commit, checkout, switch, restore, reset, clean, stash, merge, rebase");
+    expect(repairs).toContain("leave both byte-for-byte unchanged");
+    expect(repairs).toContain("Resolve only by editing the conflicting working-tree files");
+    expect(repairs).toContain("Preserve the intended behavior of both the latest saved work and this session");
     expect(component).toContain('@click="requestSessionSaveWork"');
     expect(component).toContain('@check-update="checkTemporaryAiUpdate"');
     expect(component).toContain("temporaryAiWorkspace.value?.updateRepairTask");
-    expect(component).toContain("{ force: true }");
+    expect(repairs).toContain("{ force: true }");
     expect(component).toContain(':active="saveWorkOperationActive || saveWorkSending"');
     expect(component).toContain(':dismissed="saveWorkActivityDismissed || updateHandledInRepair"');
     expect(component).toContain(':operation-key="saveWorkActivityKey"');
@@ -952,6 +956,7 @@ describe("Vibe64 direct session view", () => {
     const temporaryAi = fs.readFileSync(temporaryAiPath, "utf8");
     const temporaryAiComposable = fs.readFileSync(temporaryAiComposablePath, "utf8");
     const temporaryAiFixAction = fs.readFileSync(temporaryAiFixActionPath, "utf8");
+    const temporaryAiRepairs = fs.readFileSync(temporaryAiRepairsPath, "utf8");
 
     expect(component).toContain("Open temporary AI");
     expect(component).toContain("<Vibe64TemporaryAiFixAction");
@@ -967,8 +972,8 @@ describe("Vibe64 direct session view", () => {
     expect(component).not.toContain("activateRealSession");
     expect(component).toContain("@select-main-chat=\"showMainChat\"");
     expect(component).toContain("@task-finished=\"finishTemporaryAiTask\"");
-    expect(component).toContain("reportTaskRecovery");
-    expect(component).toContain("Workspace preparation succeeded. Vibe64 independently verified the AI repair.");
+    expect(temporaryAiRepairs).toContain("reportTaskRecovery");
+    expect(temporaryAiRepairs).toContain("Workspace preparation succeeded. Vibe64 independently verified the AI repair.");
     expect(component).toContain("temporaryAiWorkspace.value?.closeWorkspace?.()");
     expect(component).toContain("mainChat.value?.focus?.({ preventScroll: true })");
     expect(temporaryAi).toContain("Main chat");
@@ -1066,9 +1071,9 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain(':described-by="composerSupportStatusVisible ? thinkingStatusId : \'\'"');
     expect(component).toContain("<AssistantComposerSupport");
     expect(promptHints).toContain("@media (prefers-reduced-motion: reduce)");
-    expect(composable).toContain('waiting: "Waiting…"');
-    expect(composable).toContain('steering: "Steering…"');
-    expect(composable).toContain('retry: "Retry"');
+    expect(composable).toContain('waiting: "Waiting for the assistant to accept guidance"');
+    expect(composable).toContain('steering: "Sending guidance to assistant"');
+    expect(composable).toContain('retry: "Retry guidance to assistant"');
     expect(composable).toContain('state) === "active"');
     expect(composable).toContain('props.agentConnectionStatus === "connected"');
     expect(composable).not.toContain("Send guidance while the assistant is working.");
@@ -1128,7 +1133,8 @@ describe("Vibe64 direct session view", () => {
 
   it("keeps workspace preparation status in chat while routing recovery to Temporary AI", () => {
     const component = fs.readFileSync(componentPath, "utf8");
-    const composable = fs.readFileSync(composablePath, "utf8");
+    const workspaceSetup = fs.readFileSync(workspaceSetupComposablePath, "utf8");
+    const repairs = fs.readFileSync(temporaryAiRepairsPath, "utf8");
 
     const chatStart = component.indexOf("class=\"studio-autopilot__chat-panel\"");
     const projectStart = component.indexOf("class=\"studio-autopilot__project-panel\"");
@@ -1146,32 +1152,32 @@ describe("Vibe64 direct session view", () => {
     expect(preparationActions.match(/headerActions\.(?:inline|overflow)\.includes\('prepare-workspace'\)/gu)).toHaveLength(2);
     expect(preparationActions.match(/@click="retryWorkspaceSetup"/gu)).toHaveLength(3);
     expect(preparationActions).toContain('v-if="connectedUpdateActionVisible"');
-    expect(composable).toContain("workspaceSetupActionVisible.value && connectedRepositoryCount.value > 0");
+    expect(workspaceSetup).toContain("workspaceSetupActionVisible.value && connectedRepositoryCount.value > 0");
     expect(component).not.toContain(':error-messages="composerError"');
-    expect(composable).toContain("requestTemporaryAi({");
-    expect(composable).not.toContain('policy: "workspace_write"');
-    expect(composable).toContain("handleTemporaryAiTaskFinished");
-    expect(composable).toContain("Vibe64 will automatically rerun its deterministic workspace preparation");
-    expect(composable.match(/recoveryNotice: TEMPORARY_AI_RECOVERY_NOTICE/gu)).toHaveLength(4);
-    expect(composable).not.toContain("sendChatPayload(chatMessagePayload(workspaceSetupFixPrompt");
+    expect(repairs).toContain("requestTemporaryAi({");
+    expect(repairs).not.toContain('policy: "workspace_write"');
+    expect(repairs).toContain("handleTemporaryAiTaskFinished");
+    expect(repairs).toContain("Vibe64 will automatically rerun its deterministic workspace preparation");
+    expect(repairs.match(/recoveryNotice: TEMPORARY_AI_RECOVERY_NOTICE/gu)).toHaveLength(3);
+    expect(repairs).not.toContain("sendChatPayload");
     expect(component).not.toMatch(/workspace.*(?:dialog|stepper)|(?:dialog|stepper).*workspace/iu);
   });
 
   it("turns a rejected managed preview identity into a Temporary AI repair request", () => {
     const component = fs.readFileSync(componentPath, "utf8");
-    const composable = fs.readFileSync(composablePath, "utf8");
+    const repairs = fs.readFileSync(temporaryAiRepairsPath, "utf8");
     const launchControls = fs.readFileSync(
       path.resolve("src/components/studio/Vibe64OutputControls.vue"),
       "utf8"
     );
 
-    expect(component).toContain(":ask-codex-to-fix-preview-identity=\"assistantFixAllowed ? askCodexToFixPreviewIdentity : null\"");
+    expect(component).toContain(":fix-preview-identity-with-temporary-ai=\"assistantFixAllowed ? fixPreviewIdentityWithTemporaryAi : null\"");
     expect(launchControls).toContain("previewIdentityFixAvailable");
     expect(launchControls).toContain("<Vibe64TemporaryAiFixAction");
     expect(launchControls).toContain("previewIdentityFixSending");
-    expect(composable).not.toContain("sendChatPayload(chatMessagePayload(previewIdentityFixPrompt(input)))");
-    expect(composable).toContain("app-owned, idempotent development seed");
-    expect(composable).toContain("Keep preview authentication material host-managed");
+    expect(repairs).not.toContain("sendChatPayload");
+    expect(repairs).toContain("app-owned, idempotent development seed");
+    expect(repairs).toContain("Keep preview authentication material host-managed");
   });
 
   it("uses multiline Enter and moves Tab directly from chat input to Send", () => {
@@ -1195,7 +1201,7 @@ describe("Vibe64 direct session view", () => {
 });
 
 it("shows Save work for an active selected session even while source operations are suspended", () => {
-  const source = fs.readFileSync(composablePath, "utf8");
+  const source = fs.readFileSync(saveWorkComposablePath, "utf8");
   const expression = source.match(/const saveWorkHeaderVisible = computed\(\(\) => Boolean\(([\s\S]*?)\n {2}\)\);/u)?.[1];
   expect(expression).toBeTruthy();
   const visible = new Function("props", "sessionId", `return Boolean(${expression});`);

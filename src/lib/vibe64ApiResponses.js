@@ -19,8 +19,14 @@ function vibe64ResourceResponseError(response = null, fallback = "Vibe64 request
   return vibe64ApiResponseError(response, fallback);
 }
 
+// An action reports refusal as false or { ok: false }; anything else was accepted.
+function vibe64RequestAccepted(result) {
+  return result !== false && result?.ok !== false;
+}
+
 export {
   vibe64ApiError,
   vibe64ApiResponseError,
+  vibe64RequestAccepted,
   vibe64ResourceResponseError
 };

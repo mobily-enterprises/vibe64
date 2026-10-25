@@ -12,6 +12,7 @@ conversation, application preview, files and engineering tools.
 - `src/components/studio/Vibe64SessionPanel.vue`
 - `src/components/studio/Vibe64DashboardBackButton.vue`
 - `src/composables/useVibe64AutopilotView.js`
+- `src/composables/useVibe64SessionToolPane.js`
 - `packages/vibe64-system-graph/src/client/components/Vibe64UiStoryboardView.vue`
 
 ## Public contract

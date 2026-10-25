@@ -76,7 +76,7 @@
             :disabled="turn.pending || !integrationRequestsEnabled || Boolean(integrationActionPending)"
             :loading="integrationActionPending?.turnId === turn.turnId"
             min-height="48"
-            @click="emit(integrationConnections[turn.integrationSetup.requestId]?.status === 'pending' ? 'check-integration' : 'connect-integration', { sessionId, turnId: turn.turnId, requestId: turn.integrationSetup.requestId })"
+            @click="emit('integration-action', { action: integrationConnections[turn.integrationSetup.requestId]?.status === 'pending' ? 'check' : 'connect', sessionId, turnId: turn.turnId, requestId: turn.integrationSetup.requestId })"
           >
             {{ integrationConnections[turn.integrationSetup.requestId]?.status === 'pending' ? 'Check connection' : 'Connect' }}
           </v-btn>
@@ -85,7 +85,7 @@
             :disabled="turn.pending || !integrationRequestsEnabled || Boolean(integrationActionPending)"
             :loading="integrationActionPending?.turnId === turn.turnId"
             min-height="48"
-            @click="emit('resume-integration', { sessionId, turnId: turn.turnId, requestId: turn.integrationSetup.requestId })"
+            @click="emit('integration-action', { action: 'resume', sessionId, turnId: turn.turnId, requestId: turn.integrationSetup.requestId })"
           >
             Check continuation
           </v-btn>
@@ -94,7 +94,7 @@
             :disabled="turn.pending || !integrationRequestsEnabled || Boolean(integrationActionPending)"
             :loading="integrationActionPending?.turnId === turn.turnId"
             min-height="48"
-            @click="emit('skip-integration', { sessionId, turnId: turn.turnId, requestId: turn.integrationSetup.requestId })"
+            @click="emit('integration-action', { action: 'skip', sessionId, turnId: turn.turnId, requestId: turn.integrationSetup.requestId })"
           >
             Skip
           </v-btn>
@@ -107,7 +107,7 @@
             <v-btn
               :disabled="!integrationRequestsEnabled || Boolean(integrationActionPending)"
               min-height="48"
-              @click="emit('cancel-integration', { sessionId, turnId: turn.turnId, requestId: turn.integrationSetup.requestId })"
+              @click="emit('integration-action', { action: 'cancel', sessionId, turnId: turn.turnId, requestId: turn.integrationSetup.requestId })"
             >
               Cancel connection
             </v-btn>
@@ -245,11 +245,8 @@ const emit = defineEmits([
   "edit-turn",
   "load-more",
   "open-integration",
-  "skip-integration",
-  "resume-integration",
-  "connect-integration",
-  "check-integration",
-  "cancel-integration",
+  // { action: "connect" | "check" | "cancel" | "skip" | "resume", sessionId, turnId, requestId }
+  "integration-action",
   "open-source-file",
   "open-plan-history",
   "reload",
@@ -430,7 +427,7 @@ watch(() => [props.sessionId, props.visible, props.integrationRequestsEnabled,
     !recoveredRequests.has(`${entry.turnId}/${entry.integrationSetup.requestId}`));
   if (!turn) return;
   recoveredRequests.add(`${turn.turnId}/${turn.integrationSetup.requestId}`);
-  emit("check-integration", { sessionId: key, turnId: turn.turnId, requestId: turn.integrationSetup.requestId });
+  emit("integration-action", { action: "check", sessionId: key, turnId: turn.turnId, requestId: turn.integrationSetup.requestId });
 }, { immediate: true });
 function presentationMessage(message, turn) {
   if (!message || assistantGoalManagementMessage(message, turn)) return null;

@@ -62,16 +62,18 @@ vi.mock("@/composables/useVibe64ProjectScope.js", () => ({
 import {
   applyConversationLogPatch,
   conversationLogCompletedTurnKey,
-  conversationLogReadQuery,
   conversationLogRealtimePatch,
   conversationLogRecoveryStateKey,
   conversationLogRealtimeShouldRefresh,
-  mergeConversationLogPages,
   normalizeConversationLog,
-  normalizeConversationLogPage,
-  sessionIsAwaitingCodex,
+  sessionAgentTurnActive,
   useVibe64ConversationLog
 } from "../../src/composables/useVibe64ConversationLog.js";
+import {
+  conversationLogReadQuery,
+  mergeConversationLogPages,
+  normalizeConversationLogPage
+} from "@jskit-ai/assistant-core/shared/conversation";
 
 describe("useVibe64ConversationLog", () => {
   it("preserves saved attribution while normalizing conversation history", () => {
@@ -765,12 +767,12 @@ describe("useVibe64ConversationLog", () => {
   });
 
   it("derives pending state from the active direct Codex turn", () => {
-    expect(sessionIsAwaitingCodex({
+    expect(sessionAgentTurnActive({
       agentSession: {
         turn: { active: true }
       }
     })).toBe(true);
-    expect(sessionIsAwaitingCodex({
+    expect(sessionAgentTurnActive({
       agentSession: {
         turn: { active: false }
       }

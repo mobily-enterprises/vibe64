@@ -1,7 +1,6 @@
 import { computed, inject, proxyRefs, toValue } from "vue";
 import { useVibe64Voice } from "@local/vibe64-voice/client";
 import { useAssistantConversation } from "@jskit-ai/assistant-runtime/client";
-import { createAssistantApi } from "@jskit-ai/assistant-core/client";
 import { mainConversationId, mainConversationTarget } from "@local/vibe64-sessions/shared/conversation";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
@@ -11,6 +10,7 @@ import { useVibe64ConversationLog } from "./useVibe64ConversationLog.js";
 import { useVibe64AssistantAccess } from "./useVibe64AssistantAccess.js";
 import { useVibe64AgentSettings } from "./useVibe64AgentSettings.js";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
+import { vibe64AssistantConversationOptions } from "@/lib/vibe64AssistantConversation.js";
 import { agentTurnControlPayloadFromContext, VIBE64_SESSION_CHANGED_EVENT, vibe64SessionEventMatchesScope, vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { VIBE64_CONNECTIONS_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
@@ -146,16 +146,15 @@ function useVibe64ConversationRuntime({ sessionId, projectSlug, sessionsApiPath,
       sessionsApiPath: scopedDevelopmentApiUrl(String(toValue(sessionsApiPath) || ""), String(toValue(projectSlug) || "")) };
     return Object.freeze(target);
   });
-  const api = createAssistantApi({ request: (url, options) => getHttpWebClient().request(url, options),
-    resolveBasePath: () => "/api/assistant/app", resolveSurfaceId: () => "app" });
+  const { api, ...assistantOptions } = vibe64AssistantConversationOptions();
   const binding = useAssistantConversation({
+    ...assistantOptions,
     conversationId: () => {
       const target = identity.value;
       if (!target.sessionId || !target.actorKey || !target.projectSlug) return "";
       try { return mainConversationId(target); } catch { return ""; }
     },
-    actorKey: () => identity.value.actorKey, endpoint: "/api/assistant/app", surfaceId: "app", hostSurfaceId: "app",
-    workspaceSlug: "", active, goal: true, deferWhileWorking: true,
+    actorKey: () => identity.value.actorKey, active, goal: true, deferWhileWorking: true,
     draftStorage: () => browserDraftStorage(identity.value),
     api: { ...api, sendConversationMessage(id, input, ...options) {
       // As for Colleague, a new request from this page lifts speech silence left

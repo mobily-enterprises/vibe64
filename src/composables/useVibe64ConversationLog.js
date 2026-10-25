@@ -174,7 +174,7 @@ function applyConversationLogPatch(payload = {}, patch = null, options = {}) {
   });
 }
 
-function sessionIsAwaitingCodex(session = {}) {
+function sessionAgentTurnActive(session = {}) {
   const source = session && typeof session === "object" && !Array.isArray(session) ? session : {};
   return source.agentSession?.turn?.active === true;
 }
@@ -349,7 +349,7 @@ function useVibe64ConversationLog({
     surface: VIBE64_SURFACE_ID
   }));
   if (conversation) {
-    const turns = computed(() => conversationTurnsWithPending(conversation.turns.value, sessionIsAwaitingCodex(currentSession.value)));
+    const turns = computed(() => conversationTurnsWithPending(conversation.turns.value, sessionAgentTurnActive(currentSession.value)));
     const integrationActions = useConversationIntegrationActions({ turns, enabled, sessionId, projectSlug,
       sessionsApiPath, reloadConversationLog: conversation.reload, httpClient });
     // Product completion remains an independent reconciliation signal when a
@@ -620,7 +620,7 @@ function useVibe64ConversationLog({
   ));
   const turns = computed(() => {
     const savedTurns = normalizeConversationLog(mergeConversationLogPages(loadedPages.value), {
-      pending: sessionIsAwaitingCodex(currentSession.value)
+      pending: sessionAgentTurnActive(currentSession.value)
     });
     return mergeConversationStream(savedTurns, conversationStream.value);
   });
@@ -720,11 +720,7 @@ export {
   conversationLogRealtimePatch,
   conversationLogRecoveryStateKey,
   conversationLogRealtimeShouldRefresh,
-  conversationLogReadQuery,
-  mergeConversationLogPages,
   normalizeConversationLog,
-  normalizeConversationLogPage,
-  normalizeConversationLogPagination,
-  sessionIsAwaitingCodex,
+  sessionAgentTurnActive,
   useVibe64ConversationLog
 };

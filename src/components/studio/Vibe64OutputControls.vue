@@ -894,7 +894,7 @@ const emit = defineEmits([
 ]);
 
 const props = defineProps({
-  askCodexToFixPreviewIdentity: {
+  fixPreviewIdentityWithTemporaryAi: {
     default: null,
     type: Function
   },
@@ -1169,7 +1169,7 @@ const previewIdentityFixSending = ref(false);
 const previewIdentityFixAvailable = computed(() => Boolean(
   previewIdentityError.value &&
   previewIdentityFailedSelection.value &&
-  typeof props.askCodexToFixPreviewIdentity === "function"
+  typeof props.fixPreviewIdentityWithTemporaryAi === "function"
 ));
 const previewDiagnosticsAttachmentAvailable = computed(() => Boolean(
   previewDiagnosticsAvailable.value &&
@@ -1195,7 +1195,7 @@ async function requestCodexPreviewIdentityFix() {
   }
   previewIdentityFixSending.value = true;
   try {
-    return await props.askCodexToFixPreviewIdentity({
+    return await props.fixPreviewIdentityWithTemporaryAi({
       error: previewIdentityError.value,
       identity: previewIdentityFailedSelection.value
     });

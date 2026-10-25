@@ -253,9 +253,11 @@ function mountConversation({
         assistantLabel: state.assistantLabel.value,
         sessionId: state.scrollKey.value,
         integrationRequestsEnabled,
-        onSkipIntegration: (request) => integrationSkips.push(request),
-        onCheckIntegration: (request) => integrationChecks.push(request),
-        onResumeIntegration: (request) => integrationResumes.push(request),
+        onIntegrationAction: ({ action, ...request }) => ({
+          check: integrationChecks,
+          resume: integrationResumes,
+          skip: integrationSkips
+        })[action]?.push(request),
         onOpenIntegration: (request) => integrationRequests.push(request),
         error: state.error.value,
         followLatestKey: state.followLatestKey.value,

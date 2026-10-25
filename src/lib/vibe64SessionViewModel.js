@@ -22,6 +22,11 @@ function vibe64SessionDisplayTitle(session = {}) {
   return shortId ? `Session ${shortId}` : "";
 }
 
+// The name a session shows in compact places: its own name or issue word.
+function vibe64SessionShortLabel(session = {}) {
+  return text(session?.sessionName || session?.metadata?.issue_word);
+}
+
 function vibe64SessionStatusLabel(status = "") {
   return text(status || "active").replaceAll("_", " ");
 }
@@ -54,6 +59,7 @@ export {
   vibe64SessionDisplayTitle,
   vibe64SessionPullRequest,
   vibe64SessionRevision,
+  vibe64SessionShortLabel,
   vibe64SessionStatusColor,
   vibe64SessionStatusLabel
 };

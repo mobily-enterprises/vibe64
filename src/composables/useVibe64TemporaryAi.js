@@ -13,7 +13,7 @@ import {
 
 import { chatMessagePayload } from "@/lib/vibe64ChatMessage.js";
 import { useAssistantConversationFactory } from "@jskit-ai/assistant-runtime/client";
-import { createAssistantApi } from "@jskit-ai/assistant-core/client";
+import { vibe64AssistantConversationOptions } from "@/lib/vibe64AssistantConversation.js";
 import { temporaryConversationId } from "@local/vibe64-sessions/shared/conversation";
 import { assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
@@ -78,13 +78,9 @@ function useVibe64TemporaryAi({
   const projectSlug = useVibe64ProjectSlug();
   const viewer = hasInjectionContext() ? inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" }) : { actorKey: "local" };
   const actorKey = computed(() => readRefOrGetterValue(viewer)?.actorKey || "");
-  // Use the editor's HTTP client, as the main chat does; JSKIT's default
-  // assistant client needs a CSRF session route that a local editor lacks.
   const acquireConversation = useAssistantConversationFactory({
-    api: createAssistantApi({ request: (url, options) => getHttpWebClient().request(url, options),
-      resolveBasePath: () => "/api/assistant/app", resolveSurfaceId: () => "app" }),
-    actorKey: () => actorKey.value, endpoint: "/api/assistant/app", surfaceId: "app", hostSurfaceId: "app",
-    workspaceSlug: "", queueWhileSending: true, clearDraftOn: "dispatch",
+    ...vibe64AssistantConversationOptions(),
+    actorKey: () => actorKey.value, queueWhileSending: true, clearDraftOn: "dispatch",
     presentation: { assistantLabel: "Temporary AI", variant: "task", visible: true, userMessageFormat: "plain", systemLabel: "System" }
   });
   const restoreError = ref("");

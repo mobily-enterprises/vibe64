@@ -437,7 +437,7 @@
               :disabled="workspaceSetupAskDisabled"
               :pending="workspaceSetupFixSending"
               :title="assistantFixAllowed ? 'Open temporary AI to resolve workspace preparation' : assistantFixRestrictionMessage"
-              @click="askCodexToFixWorkspaceSetup"
+              @click="fixWorkspaceSetupWithTemporaryAi"
             />
           </template>
         </Vibe64TemporaryActionTerminal>
@@ -485,11 +485,7 @@
         @open-source-file="openSourceEditorFile"
         @open-plan-history="workPlanViewer?.showPlan('history')"
         @open-integration="openIntegrationRequest"
-        @skip-integration="skipIntegrationRequest"
-        @resume-integration="resumeIntegrationRequest"
-        @connect-integration="connectIntegrationRequest"
-        @check-integration="checkIntegrationRequest"
-        @cancel-integration="cancelIntegrationRequest"
+        @integration-action="runIntegrationRequest"
         @resend-turn="resendOptimisticMessage"
         @reload="reloadChatPane"
       >
@@ -791,13 +787,13 @@
           :file-bookmarks="fileBookmarks"
           :assistant-available="assistantCanUsePurpose('source_explanation')"
           :assistant-unavailable-message="assistantPurposes.source_explanation?.message || 'Source explanations are unavailable.'"
-          :ask-codex-available="sourceEditorAskCodexAvailable"
+          :assistant-draft-available="assistantDraftAvailable"
           class="studio-autopilot__session-tool-content"
           :open-request="sourceEditorOpenRequest"
           :project-slug="projectSlug"
           :session-id="sessionId"
           :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
-          @ask-codex-about-file="askCodexAboutSourceEditorFile"
+          @ask-assistant-about-file="askAssistantAboutFile"
           @open-program="architectureProgramRequest = { id: $event }; selectSessionTool('system')"
         />
       </section>
@@ -857,8 +853,8 @@
             <Vibe64SessionSourceEditor single-file :active="props.active && active" :agent-active="agentActive"
               :architecture-facts="architecture"
               :file-bookmarks="fileBookmarks"
-              :ask-codex-available="sourceEditorAskCodexAvailable"
-              @ask-codex-about-file="askCodexAboutSourceEditorFile"
+              :assistant-draft-available="assistantDraftAvailable"
+              @ask-assistant-about-file="askAssistantAboutFile"
               @open-program="openProgram"
               :open-request="request" :project-slug="projectSlug" :session-id="sessionId"
               :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
@@ -899,7 +895,7 @@
           :session-id="selectedAssistantSessionId"
         >
           <Vibe64OutputControls
-            :ask-codex-to-fix-preview-identity="assistantFixAllowed ? askCodexToFixPreviewIdentity : null"
+            :fix-preview-identity-with-temporary-ai="assistantFixAllowed ? fixPreviewIdentityWithTemporaryAi : null"
             :attach-preview-file="attachPreviewFile"
             :prepare-preview-file="attachPreviewFileProducer"
             :auto-start-managed-preview="!props.sessionSelectionArchived"
@@ -1217,7 +1213,6 @@ const sessionActionsLabel = computed(() => [
   headerActions.value.overflow.includes("renew") && sessionRenewalActionPresentation.value.attention ? sessionRenewalActionPresentation.value.label : "",
   headerActions.value.overflow.includes("temporary-ai") && temporaryAiHasUnreadMessages.value ? "Unread temporary AI messages" : ""
 ].filter(Boolean).join(": "));
-const workspaceRecoveryTaskId = ref("");
 const thinkingStatusId = `studio-autopilot-thinking-${useId()}`;
 const testApproval = ref(null);
 function updateTestApproval(value) {
@@ -1329,9 +1324,9 @@ const {
   agentStopVisible,
   answerChoices,
   prefillComposer,
-  askCodexAboutSourceEditorFile,
-  askCodexToFixPreviewIdentity,
-  askCodexToFixWorkspaceSetup,
+  askAssistantAboutFile,
+  fixPreviewIdentityWithTemporaryAi,
+  fixWorkspaceSetupWithTemporaryAi,
   attachPreviewDiagnostics,
   backToDashboard,
   backToSystemFromEditor,
@@ -1376,7 +1371,9 @@ const {
   emptyConversationWelcome,
   fixRepositoryActionError,
   fixRepositoryError,
-  handleTemporaryAiTaskFinished,
+  finishTemporaryAiTask,
+  checkTemporaryAiUpdate,
+  reportTemporaryRecovery,
   updateConflictRecovery,
   resolvedUpdateReview,
   reviewResolvedUpdate,
@@ -1386,11 +1383,7 @@ const {
   numberedQuestionSelectItems,
   numberedQuestions,
   openIntegrationRequest,
-  skipIntegrationRequest,
-  resumeIntegrationRequest,
-  connectIntegrationRequest,
-  checkIntegrationRequest,
-  cancelIntegrationRequest,
+  runIntegrationRequest,
   openSourceEditorFile,
   openSubsystemTable,
   describeSubsystems,
@@ -1443,7 +1436,7 @@ const {
   sessionSourceRoot,
   sessionToolbarVisible,
   selectedAnswerChoice,
-  sourceEditorAskCodexAvailable,
+  assistantDraftAvailable,
   sourceEditorOpenRequest,
   structuredQuestionActive,
   submitComposerMessage,
@@ -1482,7 +1475,8 @@ const {
   assistantProgressLabel: openCodeProgressLabel,
   mainChatApprovals,
   onAttachmentsAccepted: (attachmentIds) => composerInput.value?.clearAttachments?.({ attachmentIds }),
-  requestTemporaryAi: startTemporaryAiTask
+  requestTemporaryAi: startTemporaryAiTask,
+  temporaryAiWorkspace
 });
 const fileBookmarks = useVibe64StarredFiles({
   projectSlug,
@@ -1638,7 +1632,7 @@ const publicationLabel = computed(() => {
 const dashboardContext = computed(() => ({
   ...(dashboardSessionContext.value || {}),
   assistantDirectAllowed: assistantDirectAllowed.value,
-  assistantDraftAvailable: sourceEditorAskCodexAvailable.value,
+  assistantDraftAvailable: assistantDraftAvailable.value,
   assistantFixAllowed: assistantFixAllowed.value,
   assistantFixRestrictionMessage: assistantFixRestrictionMessage.value,
   assistantRestrictionMessage: assistantRestrictionMessage.value,
@@ -1763,61 +1757,6 @@ async function startTemporaryAiTask(options = {}) {
   return workspace.startTask(options);
 }
 
-function reportVerifiedWorkspaceRecovery() {
-  if (!workspaceRecoveryTaskId.value || workspaceSetupStatus.value !== "succeeded") {
-    return false;
-  }
-  const reported = temporaryAiWorkspace.value?.reportTaskRecovery?.(
-    workspaceRecoveryTaskId.value,
-    {
-      message: "Workspace preparation succeeded. Vibe64 independently verified the AI repair.",
-      status: "succeeded"
-    }
-  );
-  if (reported) {
-    workspaceRecoveryTaskId.value = "";
-  }
-  return Boolean(reported);
-}
-
-function reportTemporaryRecovery(taskId, outcome) {
-  if (!temporaryAiWorkspace.value) return false;
-  return outcome.status === "checking"
-    ? temporaryAiWorkspace.value.persistTaskRecovery?.(taskId, outcome) ?? false
-    : temporaryAiWorkspace.value.reportTaskRecovery?.(taskId, outcome) ?? false;
-}
-
-watch(() => [props.workState?.updateOperation, temporaryAiWorkspace.value?.updateRepairTask], ([operation, task]) => {
-  if (!task || task.sessionId !== sessionId.value || !task.recoveryRequestId ||
-      operation?.requestId !== task.recoveryRequestId ||
-      !["checking", "unconfirmed"].includes(task.recoveryOutcome)) return;
-  if (operation.status === "ready") {
-    reportTemporaryRecovery(task.id, { status: "succeeded",
-      message: "Session updated. Your changes were preserved. Nothing was pushed." });
-  } else if (operation.status === "failed") {
-    reportTemporaryRecovery(task.id, { status: "failed",
-      message: `Update still needs attention: ${operation.error || "The operation failed."}`,
-      recoveryConflictId: operation.conflictRecovery?.reviewId || "" });
-  }
-}, { flush: "post" });
-
-async function finishTemporaryAiTask(task = {}) {
-  const recovery = await handleTemporaryAiTaskFinished(task, reportTemporaryRecovery);
-  if (!recovery) {
-    return false;
-  }
-  if (recovery === "workspace-setup") {
-    workspaceRecoveryTaskId.value = String(task.id || "").trim();
-    reportVerifiedWorkspaceRecovery();
-  }
-  return true;
-}
-
-function checkTemporaryAiUpdate(task) {
-  if (updateWorkDisabled.value) return false;
-  return handleTemporaryAiTaskFinished(task, reportTemporaryRecovery, { force: true });
-}
-
 const saveWorkChecking = ref(false);
 const saveWorkCheckAvailable = computed(() => Boolean(
   saveWorkDisabled.value && !saveWorkRequiresUpdate.value &&
@@ -1864,14 +1803,6 @@ async function showMainChat() {
   await nextTick();
   mainChat.value?.focus?.({ preventScroll: true });
 }
-
-watch(workspaceSetupStatus, () => {
-  reportVerifiedWorkspaceRecovery();
-});
-
-watch(selectedAssistantSessionId, () => {
-  workspaceRecoveryTaskId.value = "";
-});
 
 async function attachPreviewFile(file) {
   const composer = temporaryAiWorkspace.value?.composer || composerInput.value;

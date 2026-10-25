@@ -1,8 +1,8 @@
 import { chatTurnsWithRouting, routedChatMessage } from "@/lib/vibe64ChatDelivery.js";
-import { assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel } from "@local/vibe64-runtime/shared/assistantRouting";
-import { computed, inject, nextTick, reactive, ref, unref, watch } from "vue";
+import { assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced } from "@local/vibe64-runtime/shared/assistantRouting";
+import { computed, inject, reactive, ref, unref, watch } from "vue";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
-import { useRoute, useRouter } from "vue-router";
+import { useRouter } from "vue-router";
 import {
   VIBE64_DEFAULT_AGENT_PROVIDER_ID
 } from "@local/vibe64-runtime/shared";
@@ -21,21 +21,11 @@ import {
   latestAssistantMessageAwaitingUserReply
 } from "@local/vibe64-runtime/shared/conversationQuestions";
 import {
-  VIBE64_SESSION_TOOL_DEFINITIONS,
-  vibe64SessionToolDashboardSuffix,
-  vibe64SessionToolIdFromRouteSegment
-} from "@/lib/vibe64SessionToolDefinitions.js";
-import {
-  normalizeProjectRoutePath,
   projectAppPath
 } from "@/lib/vibe64ProjectScope.js";
 import {
   vibe64SessionSourcePath
 } from "@/lib/vibe64SessionPaths.js";
-import {
-  vibe64SessionStatusColor,
-  vibe64SessionStatusLabel
-} from "@/lib/vibe64SessionViewModel.js";
 import {
   sessionGithubCommandActor
 } from "@/lib/vibe64GitCommandActor.js";
@@ -46,29 +36,18 @@ import {
   readLocalStorageJson,
   writeLocalStorageJson
 } from "@/lib/browserLocalStorage.js";
+import { vibe64RequestAccepted } from "@/lib/vibe64ApiResponses.js";
 import {
   useVibe64Accounts
 } from "@local/vibe64-accounts/client";
 import {
   VIBE64_WELCOME_NAME_KEY
 } from "@/lib/vibe64WelcomeName.js";
+import { useVibe64SessionSaveWork } from "@/composables/useVibe64SessionSaveWork.js";
+import { useVibe64SessionToolPane } from "@/composables/useVibe64SessionToolPane.js";
+import { useVibe64TemporaryAiRepairs } from "@/composables/useVibe64TemporaryAiRepairs.js";
+import { useVibe64WorkspaceSetupActivity } from "@/composables/useVibe64WorkspaceSetupActivity.js";
 
-const SAVE_WORK_STAGE_LABELS = Object.freeze({ published: "pushed", publishing: "pushing" });
-const DIRECT_SESSION_TOOL_IDS = new Set([
-  "info",
-  "changes",
-  "repository",
-  "editor",
-  "database",
-  "system",
-  "ai-terminal"
-]);
-const STANDALONE_SESSION_TOOL_IDS = new Set([
-  "changes",
-  "editor",
-  "database",
-  "system"
-]);
 const EMPTY_CONVERSATION_WELCOME = "Hi! 👋 I’m excited to build something with you. Tell me what you have in mind—even a half-formed idea is perfect. We’ll shape it together.";
 const EXISTING_PROJECT_CONVERSATION_WELCOME = "Hi! 👋 This is an existing project. Tell me what you’d like to change, check, or improve, and we’ll work through it together.";
 const RENEWED_SESSION_CONVERSATION_WELCOME = "Hi! 👋 I’ve received the handover from the previous session and I’m ready to continue. Tell me what you’d like to do next.";
@@ -257,87 +236,55 @@ function agentConnectionThinkingLabel({
     : "Assistant status could not be verified.";
 }
 
-function normalizeProjectPane(value = "") {
-  return value === "dashboard" ? value : "preview";
-}
+// Per session, the Save/Update, workspace setup and checkpoint activities the
+// person dismissed, kept in browser storage.
+function useShortActionDismissals(projectSlug, sessionId) {
+  const state = ref({
+    saveWork: "",
+    workspaceSetup: "",
+    checkpoint: ""
+  });
+  const storageKey = computed(() => {
+    const slug = normalizedAgentTurnText(projectSlug.value);
+    const selectedSessionId = sessionId.value;
+    return slug && selectedSessionId
+      ? `${SHORT_ACTION_DISMISSALS_STORAGE_PREFIX}:${encodeURIComponent(slug)}:${encodeURIComponent(selectedSessionId)}`
+      : "";
+  });
 
-function sessionNavLabel(session = {}) {
-  const name = normalizedAgentTurnText(
-    session?.sessionName || session?.metadata?.issue_word
-  );
-  if (name) {
-    return name;
+  watch(storageKey, (key) => {
+    const stored = readLocalStorageJson(key, {});
+    state.value = {
+      ...stored,
+      saveWork: normalizedAgentTurnText(stored?.saveWork),
+      workspaceSetup: normalizedAgentTurnText(stored?.workspaceSetup),
+      checkpoint: normalizedAgentTurnText(stored?.checkpoint)
+    };
+  }, { flush: "sync", immediate: true });
+
+  function dismiss(name, activityKey = "") {
+    const key = normalizedAgentTurnText(activityKey);
+    if (!key || !storageKey.value) {
+      return false;
+    }
+    state.value = {
+      ...readLocalStorageJson(storageKey.value, {}),
+      ...state.value,
+      // Save and Update can alternate; neither may forget a dismissed operation.
+      ...(name === "saveWork" ? { [key]: true } : { [name]: key })
+    };
+    writeLocalStorageJson(storageKey.value, state.value);
+    return true;
   }
-  const sessionId = normalizedAgentTurnText(session?.sessionId);
-  return sessionId.includes("_")
-    ? sessionId.split("_").slice(-2).join("_")
-    : sessionId.slice(0, 12);
-}
 
-function workspaceSetupFixPrompt(workspaceSetup = {}) {
-  const diagnostic = normalizedAgentTurnText(workspaceSetup?.diagnostic) ||
-    "Workspace preparation did not complete.";
-  const transcript = normalizedAgentTurnText(workspaceSetup?.transcript);
-  const recentTranscript = transcript.length > 12_000
-    ? `[Earlier preparation output omitted.]\n${transcript.slice(-12_000)}`
-    : transcript;
-  return [
-    "Workspace preparation needs attention.",
-    `Diagnostic:\n${diagnostic}`,
-    recentTranscript ? `Recent preparation output:\n${recentTranscript}` : "",
-    "Diagnose and repair the current workspace while preserving its existing work.",
-    "When your turn finishes, Vibe64 will automatically rerun its deterministic workspace preparation. Do not merely tell the user to retry.",
-    "If the repair needs information only the user can provide, ask for it in this temporary conversation."
-  ].filter(Boolean).join("\n\n");
-}
+  function clear(name) {
+    state.value = { ...state.value, [name]: "" };
+    if (storageKey.value) {
+      writeLocalStorageJson(storageKey.value, state.value);
+    }
+  }
 
-function previewIdentityFixPrompt({
-  error = "",
-  identity = {}
-} = {}) {
-  const name = normalizedAgentTurnText(identity?.name) || "configured identity";
-  const type = normalizedAgentTurnText(identity?.type) || "selector";
-  const value = normalizedAgentTurnText(identity?.value) || "unknown";
-  const diagnostic = normalizedAgentTurnText(error) || "The application rejected the identity.";
-  return [
-    `The managed preview could not sign in as \`${name}\` (${type}: \`${value}\`):`,
-    diagnostic,
-    "Please diagnose and fix this in the current application. Ensure its app-owned, idempotent development seed creates this user profile and any workspace membership the app requires in every fresh database, then run the normal database preparation command and verify the identity exchange. Keep preview authentication material host-managed; do not add, reveal, or hardcode Vibe64 secrets."
-  ].join("\n\n");
-}
-
-const REPOSITORY_TEMPORARY_AI_GIT_BOUNDARY = [
-  "Vibe64—not Temporary AI—owns every repository operation. The failed operation has already been rolled back.",
-  "You may inspect Git read-only and edit ordinary working-tree files in this session. Do not change HEAD, branches, refs, the index, stashes, remotes, commits, checkpoints, or repository configuration.",
-  "Do not run git add, commit, checkout, switch, restore, reset, clean, stash, merge, rebase, cherry-pick, revert, pull, push, fetch, or update-ref. Do not create a recovery ref or stash; Vibe64 already owns durable recovery.",
-  "Record the initial HEAD and index with read-only commands, leave both byte-for-byte unchanged, and do not push. Resolve only by editing the conflicting working-tree files; Vibe64 owns applying and verifying the repository operation.",
-  "Preserve the intended behavior of both the latest saved work and this session. Do not hand-edit generated Genesis maps; Vibe64 regenerates its derived artifacts. A clean index after rollback is not proof that the conflict is resolved."
-].join("\n");
-
-const UPDATE_REPAIR_MESSAGES = {
-  completion: "File repairs prepared. Vibe64 must check Update before this repair is finished.",
-  nextStep: "Vibe64 will check Update after the repair.",
-  handoff: [
-    "Review every listed conflict against both the saved and session versions, preserving their intended changes. Leave an already-correct file unchanged. Confirm the content is resolved before reporting completion; valid syntax alone is insufficient.",
-    "Your task is to prepare the file repair, not to run or complete the rebase yourself. Return kind=complete with a factual report as soon as the edits and focused checks are ready for Vibe64 to try Update. Vibe64 then runs Update automatically and returns remaining conflicts to this same conversation.",
-    "Return kind=continue only when you need an actual user decision, and ask that specific question. Do not wait for the user to click Rebase or tell them to open another repair chat.",
-    "Describe progress in terms of the user's features and remaining work. Keep HEAD/index/ref bookkeeping in the technical checks, not routine progress or the final reply. Passing application tests is not proof that Update succeeded."
-  ].join("\n")
-};
-
-const TEMPORARY_AI_RECOVERY_NOTICE = "This is a separate temporary chat. Temporary AI can edit this session to make the repair. Follow progress here and reply below if it needs a decision.";
-
-function repositoryTemporaryAiDedupeKey({
-  code = "",
-  diagnostic = "",
-  sessionId = ""
-} = {}) {
-  return [
-    "repository-recovery",
-    normalizedAgentTurnText(sessionId),
-    normalizedAgentTurnText(code),
-    normalizedAgentTurnText(diagnostic)
-  ].join("|");
+  return { clear, dismiss, state };
 }
 
 function useVibe64AutopilotView(props, emit, {
@@ -349,9 +296,9 @@ function useVibe64AutopilotView(props, emit, {
   assistantProgressLabel = null,
   mainChatApprovals = null,
   onAttachmentsAccepted = null,
-  requestTemporaryAi = null
+  requestTemporaryAi = null,
+  temporaryAiWorkspace = null
 } = {}) {
-  const route = useRoute();
   const router = useRouter();
   const projectSlug = useVibe64ProjectSlug();
   const Vibe64OutputControls = defineVibe64AsyncComponent({
@@ -364,7 +311,6 @@ function useVibe64AutopilotView(props, emit, {
     const accounts = useVibe64Accounts();
     return computed(() => accounts.status.value?.personalProfile?.preferredName);
   }, true);
-  const currentAgentSettings = computed(() => agentSettings.value?.settings.value || {});
   const requestAgentSettings = computed(() => agentSettings.value?.requestSettings.value || null);
   const sessionId = computed(() => normalizedAgentTurnText(props.session?.sessionId));
   const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
@@ -450,7 +396,6 @@ function useVibe64AutopilotView(props, emit, {
   const composerRoutingQueueing = computed(() => composerQueueing.value && composerSending.value &&
     Boolean(routingRequest.value?.messageId) &&
     messageDelivery.value?.find(routingRequest.value.messageId)?.status === "pending");
-  const routingStatusLabel = computed(() => assistantRoutingStatusLabel(routingRequest.value));
   function restoreCancelledMessage(messageId) {
     const message = messageDelivery.value?.find(messageId);
     if (!message || discardingMessageIds.has(messageId) ||
@@ -462,28 +407,7 @@ function useVibe64AutopilotView(props, emit, {
   }
   const conversationFollowLatestKey = ref(0);
   const interrupting = ref(false);
-  const saveWorkConfirmOpen = ref(false);
   const contextFullFailure = ref(null);
-  const saveWorkReview = ref(null);
-  const saveWorkConnectedReview = ref(null);
-  const saveWorkConnectedResults = ref([]);
-  // The last Save was recorded with the stand-in Git name and email.
-  const saveWorkStandInIdentity = ref(false);
-  const saveWorkError = ref("");
-  const saveWorkFailure = ref(null);
-  const saveWorkAttempt = ref(null);
-  const saveWorkSending = ref(false);
-  const shortActionDismissals = ref({
-    saveWork: "",
-    workspaceSetup: "",
-    checkpoint: ""
-  });
-  const workspaceSetupRetryError = ref("");
-  const workspaceSetupRetrying = ref(false);
-  const workspaceSetupFixSending = ref(false);
-  const workspaceSetupFixTaskId = ref("");
-  const repositoryRecoverySending = ref(false);
-  const checkedUpdateRepairRuns = new Map();
   const previewAttachmentState = ref({
     attachDiagnostics: null,
     capture: null,
@@ -493,41 +417,8 @@ function useVibe64AutopilotView(props, emit, {
     diagnosticsBusy: false
   });
   let messageSequence = 0;
-  let repositoryRequestSequence = 0;
 
-  const shortActionDismissalsStorageKey = computed(() => {
-    const slug = normalizedAgentTurnText(projectSlug.value);
-    const selectedSessionId = sessionId.value;
-    return slug && selectedSessionId
-      ? `${SHORT_ACTION_DISMISSALS_STORAGE_PREFIX}:${encodeURIComponent(slug)}:${encodeURIComponent(selectedSessionId)}`
-      : "";
-  });
-
-  watch(shortActionDismissalsStorageKey, (storageKey) => {
-    const stored = readLocalStorageJson(storageKey, {});
-    shortActionDismissals.value = {
-      ...stored,
-      saveWork: normalizedAgentTurnText(stored?.saveWork),
-      workspaceSetup: normalizedAgentTurnText(stored?.workspaceSetup),
-      checkpoint: normalizedAgentTurnText(stored?.checkpoint)
-    };
-  }, { flush: "sync", immediate: true });
-
-  function dismissShortAction(name, activityKey = "") {
-    const key = normalizedAgentTurnText(activityKey);
-    const storageKey = shortActionDismissalsStorageKey.value;
-    if (!key || !storageKey) {
-      return false;
-    }
-    shortActionDismissals.value = {
-      ...readLocalStorageJson(storageKey, {}),
-      ...shortActionDismissals.value,
-      // Save and Update can alternate; neither may forget a dismissed operation.
-      ...(name === "saveWork" ? { [key]: true } : { [name]: key })
-    };
-    writeLocalStorageJson(storageKey, shortActionDismissals.value);
-    return true;
-  }
+  const dismissals = useShortActionDismissals(projectSlug, sessionId);
 
   const checkpointTask = computed(() => (props.session?.backgroundTasks || [])
     .find((task) => task.id === "codex_turn_checkpoint" && task.status === "failed"));
@@ -536,13 +427,13 @@ function useVibe64AutopilotView(props, emit, {
     checkpointTask.value.checkpointTurnId, checkpointTask.value.updatedAt, checkpointFailure.value
   ]) : "");
   const checkpointFailureVisible = computed(() => Boolean(checkpointFailure.value &&
-    shortActionDismissals.value.checkpoint !== checkpointFailureKey.value));
+    dismissals.state.value.checkpoint !== checkpointFailureKey.value));
   const checkpointFailureReason = computed(() => /\bSIG(?:TERM|KILL|INT)\b/u.test(checkpointFailure.value)
     ? "The snapshot command was interrupted."
     : "Vibe64 could not create a recovery snapshot for an assistant turn.");
 
   function dismissCheckpointFailure() {
-    return dismissShortAction("checkpoint", checkpointFailureKey.value);
+    return dismissals.dismiss("checkpoint", checkpointFailureKey.value);
   }
 
   const questionState = useAssistantQuestions({
@@ -612,20 +503,6 @@ function useVibe64AutopilotView(props, emit, {
     }
     return composerRetryMatchesDraft.value ? "retry" : "send";
   });
-  const composerSubmitLabel = computed(() => ({
-    approval: "Send for approval",
-    "approval-sending": "Sending…",
-    routing: "Routing…",
-    failed: "Unavailable",
-    unavailable: "Connect AI",
-    initializing: "Loading…",
-    reconnecting: props.agentConnectionStatus === "disconnected" ? "Reconnecting…" : "Checking…",
-    retry: "Retry",
-    sending: "Sending…",
-    steer: "Steer",
-    steering: "Steering…",
-    waiting: "Waiting…"
-  })[composerSubmitMode.value] || "");
   const composerSubmitAriaLabel = computed(() => ({
     approval: `Send to ${approvalOwner.value} for approval`,
     "approval-sending": `Sending to ${approvalOwner.value} for approval`,
@@ -733,368 +610,41 @@ function useVibe64AutopilotView(props, emit, {
         ? "Choose an answer above, or type another answer…"
         : ""
   ));
-  const workspaceSetup = computed(() => {
-    const value = props.session?.workspaceSetup;
-    return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+
+  const saveWork = useVibe64SessionSaveWork(props, {
+    actorKey,
+    agentActive,
+    composerSending,
+    dismissals,
+    projectSlug,
+    reportActivity,
+    repositoryOperationActive,
+    sessionId,
+    sessionInteractionDisabled
   });
-  const workspaceSetupStatus = computed(() => {
-    const status = normalizedAgentTurnText(workspaceSetup.value?.status);
-    if (status === "required" && ["queued", "running", "starting"].includes(
-      normalizedAgentTurnText(props.workState?.updateOperation?.status)
-    )) return "pending";
-    return ["ambiguous", "failed", "required", "running", "succeeded"].includes(status)
-      ? status
-      : "unconfigured";
+  const workspaceSetupActivity = useVibe64WorkspaceSetupActivity(props, {
+    actorKey,
+    dismissals,
+    projectSlug,
+    retryBlocked: computed(() => Boolean(
+      repositoryOperationActive.value ||
+      saveWork.saveWorkSending.value ||
+      saveWork.saveWorkOperationActive.value ||
+      agentActive.value
+    )),
+    sessionId
   });
-  const workspaceSetupActivityKey = computed(() => {
-    const operationKey = normalizedAgentTurnText(
-      workspaceSetup.value?.startedAt || workspaceSetup.value?.updatedAt
-    );
-    return operationKey ? `workspace-setup:${operationKey}` : "";
+  const temporaryAiRepairs = useVibe64TemporaryAiRepairs(props, {
+    actorKey,
+    assistantFixAllowed,
+    projectSlug,
+    repositoryOperationActive,
+    requestTemporaryAi,
+    saveWork,
+    sessionId,
+    temporaryAiWorkspace,
+    workspaceSetupActivity
   });
-  const workspaceSetupDismissed = computed(() => Boolean(
-    workspaceSetupActivityKey.value &&
-    shortActionDismissals.value.workspaceSetup === workspaceSetupActivityKey.value
-  ));
-  const workspaceSetupRunning = computed(() => ["pending", "running"].includes(workspaceSetupStatus.value));
-  const workspaceSetupActionVisible = computed(() => Boolean(
-    sessionId.value && workspaceSetupStatus.value !== "unconfigured"
-  ));
-  // Preparation brings each connected repository up to its branch, so a
-  // consuming session offers it again under that name.
-  const connectedRepositoryCount = computed(() => {
-    try {
-      return JSON.parse(props.session?.metadata?.connected_sources || "null")?.sources?.length || 0;
-    } catch {
-      return 0;
-    }
-  });
-  const connectedUpdateActionVisible = computed(() => workspaceSetupActionVisible.value && connectedRepositoryCount.value > 0);
-  const workspaceSetupNeedsAttention = computed(() => (
-    ["failed", "ambiguous", "required"].includes(workspaceSetupStatus.value)
-  ));
-  const workspaceSetupOutput = computed(() => (
-    normalizedAgentTurnText(workspaceSetup.value?.transcript) || workspaceSetupDiagnostic.value
-  ));
-  const workspaceSetupTitle = computed(() => ({
-    ambiguous: "Workspace setup needs a choice",
-    failed: "Workspace preparation failed",
-    required: "Workspace preparation required",
-    pending: "Waiting for session update…",
-    running: "Preparing workspace…",
-    succeeded: "Workspace prepared"
-  })[workspaceSetupStatus.value] || "");
-  const workspaceSetupDiagnostic = computed(() => (
-    workspaceSetupRetryError.value || normalizedAgentTurnText(workspaceSetup.value?.diagnostic)
-  ));
-  const workspaceSetupCurrentLabel = computed(() => {
-    if (workspaceSetupStatus.value === "required") return workspaceSetupDiagnostic.value;
-    if (workspaceSetupStatus.value === "pending") return "Workspace preparation will start automatically after the update.";
-    return workspaceSetupRunning.value ? normalizedAgentTurnText(workspaceSetup.value?.currentLabel) : "";
-  });
-  const workspaceSetupError = computed(() => workspaceSetupRetryError.value ||
-    (workspaceSetupNeedsAttention.value && workspaceSetupStatus.value !== "required" ? workspaceSetupDiagnostic.value : ""));
-  const workspaceSetupRetryDisabled = computed(() => Boolean(
-    workspaceSetupRunning.value ||
-    workspaceSetupRetrying.value ||
-    repositoryOperationActive.value ||
-    saveWorkSending.value ||
-    saveWorkOperationActive.value ||
-    agentActive.value ||
-    !sessionId.value ||
-    props.sessionSelectionArchived
-  ));
-  const workspaceSetupAskDisabled = computed(() => Boolean(
-    !workspaceSetupNeedsAttention.value ||
-    workspaceSetupFixSending.value ||
-    !props.active ||
-    !sessionId.value ||
-    props.sessionSelectionArchived ||
-    repositoryOperationActive.value ||
-    !assistantFixAllowed.value
-  ));
-
-  async function retryWorkspaceSetup() {
-    if (workspaceSetupRetryDisabled.value) {
-      return false;
-    }
-    shortActionDismissals.value = { ...shortActionDismissals.value, workspaceSetup: "" };
-    if (shortActionDismissalsStorageKey.value) {
-      writeLocalStorageJson(shortActionDismissalsStorageKey.value, shortActionDismissals.value);
-    }
-    workspaceSetupRetryError.value = "";
-    workspaceSetupRetrying.value = true;
-    try {
-      return await props.retryWorkspaceSetup() !== false;
-    } catch (error) {
-      workspaceSetupRetryError.value = normalizedAgentTurnText(error?.message || error) ||
-        "Workspace preparation could not be started.";
-      return false;
-    } finally {
-      workspaceSetupRetrying.value = false;
-    }
-  }
-
-  function dismissWorkspaceSetupActivity() {
-    return dismissShortAction("workspaceSetup", workspaceSetupActivityKey.value);
-  }
-
-  async function askCodexToFixWorkspaceSetup() {
-    if (workspaceSetupAskDisabled.value || typeof requestTemporaryAi !== "function") {
-      return false;
-    }
-    const setup = {
-      ...workspaceSetup.value,
-      diagnostic: workspaceSetupDiagnostic.value
-    };
-    workspaceSetupFixSending.value = true;
-    try {
-      const result = await requestTemporaryAi({
-        completionMessage: "AI repair finished. Vibe64 is verifying workspace preparation now.",
-        dedupeKey: [
-          "workspace-setup",
-          sessionId.value,
-          workspaceSetupStatus.value,
-          normalizedAgentTurnText(setup.updatedAt),
-          normalizedAgentTurnText(setup.diagnostic)
-        ].join("|"),
-        displayMessage: "Fix workspace preparation.",
-        failureMessage: "Temporary AI stopped before confirming completion. Vibe64 is checking whether its edits repaired workspace preparation.",
-        message: workspaceSetupFixPrompt(setup),
-        nextStepMessage: "When the AI finishes, Vibe64 will automatically retry workspace preparation to verify the repair.",
-        recoveryNotice: TEMPORARY_AI_RECOVERY_NOTICE,
-        title: "Fix workspace preparation"
-      });
-      const accepted = result !== false && result?.ok !== false;
-      const taskId = normalizedAgentTurnText(result?.taskId);
-      if (accepted && taskId) {
-        workspaceSetupFixTaskId.value = taskId;
-      }
-      return accepted;
-    } finally {
-      workspaceSetupFixSending.value = false;
-    }
-  }
-
-  async function handleTemporaryAiTaskFinished(task = {}, reportRecovery = () => {}, { force = false } = {}) {
-    const taskId = normalizedAgentTurnText(task?.id);
-    const status = normalizedAgentTurnText(task?.status);
-    if (task.sessionId === sessionId.value && task.dedupeKey === subsystemMapTaskKey.value &&
-        ["completed", "failed"].includes(status)) {
-      systemReloadVersion.value += 1;
-      return "subsystem-map";
-    }
-    if (task.recoveryOperation === "update") {
-      const runId = normalizedAgentTurnText(task.runId);
-      if (
-        !taskId || !runId || task.sessionId !== sessionId.value ||
-        task.busy || ["starting", "inProgress"].includes(status) ||
-        saveWorkSending.value || saveWorkOperationActive.value ||
-        ["checking", "unconfirmed"].includes(task.recoveryOutcome) ||
-        (!force && (status !== "completed" || task.outcomeKind !== "complete" ||
-          checkedUpdateRepairRuns.get(taskId) === runId))
-      ) {
-        return false;
-      }
-      checkedUpdateRepairRuns.set(taskId, runId);
-      return verifySessionUpdate(task, reportRecovery, !force
-        ? normalizedAgentTurnText(task.runConflictId) : "");
-    }
-    if (
-      taskId !== workspaceSetupFixTaskId.value ||
-      !["completed", "failed"].includes(status)
-    ) {
-      return false;
-    }
-    workspaceSetupFixTaskId.value = "";
-    if (workspaceSetupNeedsAttention.value) {
-      await retryWorkspaceSetup();
-    }
-    return "workspace-setup";
-  }
-
-  async function verifySessionUpdate(task, reportRecovery, reviewedConflictId, { retryAi = true } = {}) {
-    const taskId = task?.id;
-    const checkingSessionId = sessionId.value;
-    const checkingProjectSlug = projectSlug.value;
-    const requestId = taskId ? crypto.randomUUID() : "";
-    const checkpoint = taskId ? reportRecovery(taskId, { status: "checking", message: "Checking Update…",
-      recoveryRequestId: requestId }) : true;
-    const checkpointSaved = checkpoint && typeof checkpoint.then === "function" ? await checkpoint : checkpoint;
-    if (checkingSessionId !== sessionId.value || checkingProjectSlug !== projectSlug.value) return false;
-    if (checkpointSaved === false) {
-      if (taskId) reportRecovery(taskId, { status: "failed",
-        message: "Update was not started because its recovery checkpoint could not be saved. Try again after the save error is resolved." });
-      return false;
-    }
-    const result = await updateBeforeSave({ reviewedConflictId, ...(requestId ? { requestId } : {}) });
-    const work = typeof props.refreshSessionWork === "function"
-      ? await props.refreshSessionWork().catch(() => null) : null;
-    await nextTick();
-    if (checkingSessionId !== sessionId.value || checkingProjectSlug !== projectSlug.value) {
-      return false;
-    }
-    if (!taskId) return "repository-update";
-    const operation = work?.updateOperation?.requestId === requestId ? work.updateOperation : null;
-    if (["queued", "running", "starting"].includes(operation?.status)) return "repository-update";
-    const succeeded = operation ? operation.status === "ready" : result?.ok === true;
-    const confirmedFailure = operation?.status === "failed" ||
-      ["vibe64_agent_write_mode_busy"].includes(saveWorkFailure.value?.code) ||
-      Boolean(saveWorkFailure.value?.code?.startsWith("vibe64_session_update_"));
-    const outcome = {
-      status: succeeded ? "succeeded" : confirmedFailure ? "failed" : "unconfirmed",
-      message: succeeded
-        ? "Session updated. Your changes were preserved. Nothing was pushed."
-        : confirmedFailure
-          ? `Update still needs attention: ${operation?.error || saveWorkError.value || "The operation failed."}`
-          : "Vibe64 could not confirm this Update result. Check the session's current Update status before trying again."
-    };
-    if (confirmedFailure && (saveWorkConflictFailure.value || operation?.conflictRecovery)) {
-      const failure = saveWorkFailure.value || operation;
-      const recovery = failure?.details?.conflictRecovery || operation?.conflictRecovery;
-      outcome.recoveryConflictId = recovery?.reviewId || "";
-      if (retryAi) {
-        outcome.retryKey = JSON.stringify([
-          failure?.code,
-          recovery?.reviewId || recovery?.canonicalCommit || "",
-          failure?.details?.conflictPaths || saveWorkError.value
-        ]);
-        outcome.retryMessage = [
-          "Vibe64 ran Update after the prepared repair, but it did not succeed. The working-tree edits remain. Inspect the current state and repair only the remaining conflicts; do not start over or repeat completed work.",
-          `Latest Update diagnostic:\n${saveWorkError.value}`,
-          UPDATE_REPAIR_MESSAGES.handoff
-        ].join("\n\n");
-      }
-    }
-    reportRecovery(taskId, outcome);
-    return "repository-update";
-  }
-
-  async function askCodexToFixPreviewIdentity(input = {}) {
-    if (
-      typeof requestTemporaryAi !== "function" ||
-      !assistantFixAllowed.value ||
-      !props.active ||
-      !sessionId.value ||
-      props.sessionSelectionArchived ||
-      repositoryOperationActive.value
-    ) {
-      return false;
-    }
-    const identity = input?.identity || {};
-    const identityName = normalizedAgentTurnText(identity.name) || "the selected identity";
-    const error = normalizedAgentTurnText(input?.error);
-    const result = await requestTemporaryAi({
-      completionMessage: "AI repair finished. Try the preview identity again from the sign-in menu.",
-      dedupeKey: [
-        "preview-identity",
-        sessionId.value,
-        normalizedAgentTurnText(identity.type),
-        normalizedAgentTurnText(identity.value),
-        error
-      ].join("|"),
-      displayMessage: `Fix preview sign-in for ${identityName}.`,
-      failureMessage: "Temporary AI stopped before completing the preview identity repair. Review the error and progress below before trying again.",
-      message: previewIdentityFixPrompt(input),
-      nextStepMessage: "When the AI finishes, try this preview identity again from the sign-in menu.",
-      recoveryNotice: TEMPORARY_AI_RECOVERY_NOTICE,
-      title: "Fix preview identity"
-    });
-    return result !== false && result?.ok !== false;
-  }
-
-  function temporaryAiRecoveryUnavailable() {
-    return Boolean(
-      repositoryRecoverySending.value ||
-      typeof requestTemporaryAi !== "function" ||
-      !assistantFixAllowed.value ||
-      !props.active ||
-      !sessionId.value ||
-      props.sessionSelectionArchived ||
-      repositoryOperationActive.value
-    );
-  }
-
-  async function fixRepositoryActionError() {
-    if (temporaryAiRecoveryUnavailable() || !saveWorkCanResolveWithTemporaryAi.value) {
-      return false;
-    }
-    const action = saveWorkActivityIsUpdate.value ? "Update" : "Save";
-    repositoryRecoverySending.value = true;
-    try {
-      const result = await requestTemporaryAi({
-        completionMessage: action === "Update"
-          ? UPDATE_REPAIR_MESSAGES.completion
-          : `AI repair finished. Review its result, then retry ${action}.`,
-        dedupeKey: repositoryTemporaryAiDedupeKey({
-          code: saveWorkFailure.value?.code,
-          diagnostic: saveWorkError.value,
-          sessionId: sessionId.value
-        }),
-        displayMessage: `Fix this ${action} problem without losing work.`,
-        failureMessage: `Temporary AI stopped before completing the ${action} repair. Review the error and progress below before retrying.`,
-        message: [
-          `Help resolve this Vibe64 ${action} problem. Inspect the current session and canonical repository state, preserve all work, and do not push until the conflict is understood:`,
-          REPOSITORY_TEMPORARY_AI_GIT_BOUNDARY,
-          action === "Update" ? UPDATE_REPAIR_MESSAGES.handoff : "",
-          saveWorkError.value
-        ].filter(Boolean).join("\n\n"),
-        nextStepMessage: action === "Update" ? UPDATE_REPAIR_MESSAGES.nextStep : `Review the repair, then retry ${action}.`,
-        recoveryNotice: TEMPORARY_AI_RECOVERY_NOTICE,
-        recoveryOperation: action === "Update" ? "update" : "",
-        recoveryConflictId: saveWorkFailure.value?.details?.conflictRecovery?.reviewId || "",
-        title: `Resolve ${action}`
-      });
-      return result !== false && result?.ok !== false;
-    } finally {
-      repositoryRecoverySending.value = false;
-    }
-  }
-
-  async function fixRepositoryError({
-    code = "",
-    error = "",
-    title = "Resolve repository problem"
-  } = {}) {
-    const diagnostic = normalizedAgentTurnText(error);
-    const isUpdate = ["vibe64_session_update_conflict", "vibe64_session_update_history_diverged"].includes(code);
-    const isIncoming = code === "vibe64_incoming_merge_conflict";
-    if (temporaryAiRecoveryUnavailable() || !diagnostic) {
-      return false;
-    }
-    repositoryRecoverySending.value = true;
-    try {
-      const result = await requestTemporaryAi({
-        completionMessage: isUpdate
-          ? UPDATE_REPAIR_MESSAGES.completion
-          : "AI repair finished. Review its result, then retry the repository operation.",
-        dedupeKey: repositoryTemporaryAiDedupeKey({
-          code,
-          diagnostic,
-          sessionId: sessionId.value
-        }),
-        displayMessage: "Fix this repository problem without losing work.",
-        failureMessage: "Temporary AI stopped before completing the repository repair. Review the error and progress below before retrying.",
-        message: [
-          "Help resolve this Vibe64 repository problem. Inspect the current session and canonical repository state, preserve all work, and do not push until the conflict is understood:",
-          REPOSITORY_TEMPORARY_AI_GIT_BOUNDARY,
-          isUpdate ? UPDATE_REPAIR_MESSAGES.handoff : "",
-          isIncoming ? "Repair only the listed conflicting files in this receiving session's worktree. Inspect both exact reviewed commits, preserve both sides' intended behavior and all unrelated/staged work. Do not commit, merge, rebase or push. Return to Incoming changes → Review resolved conflicts; only the person's reviewed Merge may integrate this contribution." : "",
-          diagnostic
-        ].join("\n\n"),
-        nextStepMessage: isUpdate ? UPDATE_REPAIR_MESSAGES.nextStep : "Review the repair, then retry the repository operation.",
-        recoveryNotice: TEMPORARY_AI_RECOVERY_NOTICE,
-        recoveryOperation: isUpdate ? "update" : "",
-        recoveryConflictId: isUpdate
-          ? saveWorkFailure.value?.details?.conflictRecovery?.reviewId || ""
-          : "",
-        title
-      });
-      return result !== false && result?.ok !== false;
-    } finally {
-      repositoryRecoverySending.value = false;
-    }
-  }
 
   function updateComposerAttachments(attachments = []) {
     composerAttachments.value = Array.isArray(attachments) ? attachments : [];
@@ -1153,7 +703,7 @@ function useVibe64AutopilotView(props, emit, {
       if (sessionId.value !== sendingSessionId || projectSlug.value !== sendingProjectSlug || actorKey.value !== sendingActorKey) {
         return false;
       }
-      const accepted = response !== false && response?.ok !== false;
+      const accepted = vibe64RequestAccepted(response);
       if (accepted) {
         conversationFollowLatestKey.value += 1;
         reportActivity("message-sent", { projectSlug: sendingProjectSlug, sessionId: sendingSessionId });
@@ -1295,424 +845,6 @@ function useVibe64AutopilotView(props, emit, {
     return accepted;
   }
 
-  const toolbarRepositoryWorkState = computed(() => {
-    const selectedId = String(props.session?.sessionId || "").trim();
-    const sessions = Array.isArray(props.sessionToolbar?.sessions)
-      ? props.sessionToolbar.sessions
-      : [];
-    return sessions.find((session) => String(session?.sessionId || "").trim() === selectedId)
-      ?.repositoryWorkState || null;
-  });
-  const saveWorkRepositoryState = computed(() => {
-    const inspected = props.workState && typeof props.workState === "object"
-      ? props.workState
-      : {};
-    const monitored = toolbarRepositoryWorkState.value;
-    const inspectedAt = Date.parse(String(inspected.checkedAt || "")) || 0;
-    const monitoredAt = Date.parse(String(monitored?.checkedAt || "")) || 0;
-    const monitoredState = String(monitored?.state || "");
-    if (!monitored || (monitored.updateStatusPending !== true && monitoredAt < inspectedAt)) {
-      return inspected;
-    }
-    const monitoredUnsaved = monitoredState === "unsaved"
-      ? true
-      : ["saved", "update_available"].includes(monitoredState)
-        ? false
-        : inspected.unsaved;
-    return {
-      ...inspected,
-      checkedAt: monitored.checkedAt || inspected.checkedAt,
-      error: monitoredState === "unavailable"
-        ? inspected.error || "Repository status is unavailable."
-        : "",
-      loading: monitoredState === "checking",
-      unsaved: monitoredUnsaved,
-      updateAvailable: monitored.updateAvailable === true ||
-        ["update_available", "updating"].includes(monitoredState),
-      updateStatusPending: monitored.updateStatusPending === true || monitoredState === "updating"
-    };
-  });
-  const saveConnectedFirst = computed(() => saveWorkRepositoryState.value?.connectedSaveRequired === true);
-  const saveWorkUnsaved = computed(() => saveWorkRepositoryState.value?.unsaved === true || saveConnectedFirst.value);
-  const saveWorkRequiresUpdate = computed(() => Boolean(
-    !saveConnectedFirst.value && (saveWorkRepositoryState.value?.updateAvailable === true ||
-    saveWorkRepositoryState.value?.updateStatusPending === true)
-  ));
-  const saveWorkRepositoryBusy = computed(() => ["saving", "updating"].includes(
-    String(toolbarRepositoryWorkState.value?.state || "")
-  ));
-  const repositoryAssistantStateSettled = computed(() => ["connected", "restricted", "unavailable", "failed"].includes(
-    props.agentConnectionStatus
-  ));
-  const updateWorkDisabled = computed(() => Boolean(
-    sessionInteractionDisabled.value ||
-    !repositoryAssistantStateSettled.value ||
-    agentActive.value ||
-    composerSending.value ||
-    saveWorkSending.value ||
-    saveWorkRepositoryBusy.value ||
-    saveWorkRepositoryState.value?.loading ||
-    saveWorkRepositoryState.value?.error
-  ));
-  const saveWorkDisabled = computed(() => Boolean(
-    updateWorkDisabled.value ||
-    (!saveWorkRequiresUpdate.value && !saveWorkUnsaved.value && !saveWorkRepositoryState.value?.connectedRequirementsPresent &&
-      !saveWorkRepositoryState.value?.connectedInspectionError)
-  ));
-  const sessionUpdateLabel = computed(() => {
-    const branch = saveWorkRepositoryState.value?.destination?.branch;
-    return branch ? `Update session from ${branch}` : "Update session";
-  });
-  const saveWorkActionLabel = computed(() => (
-    saveConnectedFirst.value ? "Save connected first" : saveWorkRequiresUpdate.value ? sessionUpdateLabel.value : "Review changes"
-  ));
-  const saveWorkHeaderAriaLabel = computed(() => (
-    saveConnectedFirst.value ? "Save connected first" : saveWorkRequiresUpdate.value
-      ? sessionUpdateLabel.value
-      : "Review selected session changes"
-  ));
-  const saveWorkHeaderVisible = computed(() => Boolean(
-    props.active && sessionId.value
-  ));
-  const saveWorkTitle = computed(() => {
-    if (!repositoryAssistantStateSettled.value) {
-      if (props.agentConnectionStatus === "initializing") {
-        return "Checking assistant activity before saving or updating";
-      }
-      return props.agentConnectionStatus === "reconciling"
-        ? "Checking the assistant connection before saving or updating"
-        : "Waiting for the assistant to reconnect before saving or updating";
-    }
-    if (repositoryOperationActive.value || saveWorkRepositoryBusy.value) {
-      return "Wait for the current repository operation to finish";
-    }
-    if (agentActive.value || composerSending.value) {
-      return "Wait for the assistant turn to finish before saving or updating";
-    }
-    if (saveWorkRepositoryState.value?.loading) {
-      return "Checking whether this session has work to save";
-    }
-    if (saveWorkRepositoryState.value?.error) {
-      return "Repository status is unavailable; check for updates before saving";
-    }
-    if (saveConnectedFirst.value) return "Review and push connected contributions before saving this project";
-    if (saveWorkRequiresUpdate.value) {
-      return saveWorkUnsaved.value
-        ? `${sessionUpdateLabel.value}, preserving its unsaved work. Save will be available when the update finishes.`
-        : `${sessionUpdateLabel.value} to load its latest saved changes.`;
-    }
-    if (!saveWorkUnsaved.value && !saveWorkRepositoryState.value?.connectedRequirementsPresent &&
-        !saveWorkRepositoryState.value?.connectedInspectionError) {
-      return "No work to save";
-    }
-    return "Review changes and choose where to commit them";
-  });
-  watch(() => {
-    const attempt = saveWorkAttempt.value;
-    const activeOperation = props.workState?.activeOperation;
-    return {
-      attempt,
-      kind: String(activeOperation?.kind || "").trim(),
-      operationId: String(activeOperation?.operationId || "").trim()
-    };
-  }, ({ attempt, kind, operationId }) => {
-    if (
-      !attempt ||
-      attempt.operationId ||
-      !operationId ||
-      kind !== attempt.kind
-    ) {
-      return;
-    }
-    saveWorkAttempt.value = {
-      ...attempt,
-      operationId
-    };
-  });
-  const saveWorkOperation = computed(() => {
-    const saveOperation = props.workState?.operation || null;
-    const updateOperation = props.workState?.updateOperation || null;
-    const attempt = saveWorkAttempt.value;
-    if (attempt) {
-      const operation = attempt.kind === "update" ? updateOperation : saveOperation;
-      const operationId = String(operation?.operationId || "").trim();
-      return attempt.operationId && operationId === attempt.operationId
-        ? operation
-        : null;
-    }
-    const activeOperation = props.workState?.activeOperation;
-    const activeOperationId = String(activeOperation?.operationId || "").trim();
-    if (activeOperationId) {
-      const operation = activeOperation?.kind === "update" ? updateOperation : saveOperation;
-      return String(operation?.operationId || "").trim() === activeOperationId
-        ? operation
-        : null;
-    }
-    const saveStatus = String(saveOperation?.status || "").trim().toLowerCase();
-    const updateStatus = String(updateOperation?.status || "").trim().toLowerCase();
-    const saveFailed = saveStatus === "failed";
-    const updateFailed = updateStatus === "failed";
-    if (saveFailed !== updateFailed) {
-      return updateFailed ? updateOperation : saveOperation;
-    }
-    if (saveFailed && updateFailed) {
-      return String(updateOperation?.updatedAt || "") > String(saveOperation?.updatedAt || "")
-        ? updateOperation
-        : saveOperation;
-    }
-    return null;
-  });
-  const saveWorkActivityIsUpdate = computed(() => {
-    if (saveWorkAttempt.value) {
-      return saveWorkAttempt.value.kind === "update";
-    }
-    return Boolean(
-      (props.workState?.updateOperation && saveWorkOperation.value === props.workState.updateOperation) ||
-      (!saveWorkOperation.value && saveWorkRequiresUpdate.value)
-    );
-  });
-  const saveWorkActivityKey = computed(() => {
-    const operationId = normalizedAgentTurnText(saveWorkOperation.value?.operationId);
-    if (!operationId) {
-      return "";
-    }
-    return `${saveWorkActivityIsUpdate.value ? "update-session" : "save-work"}:${operationId}`;
-  });
-  const saveWorkActivityDismissed = computed(() => Boolean(
-    saveWorkActivityKey.value &&
-    (shortActionDismissals.value.saveWork === saveWorkActivityKey.value ||
-      shortActionDismissals.value[saveWorkActivityKey.value] === true)
-  ));
-  const saveWorkActivityLabel = computed(() => (
-    saveWorkActivityIsUpdate.value ? sessionUpdateLabel.value : "Save work"
-  ));
-  const saveWorkOperationActive = computed(() => ["queued", "running", "starting"].includes(
-    String(saveWorkOperation.value?.status || "").trim().toLowerCase()
-  ));
-  const saveWorkOutput = computed(() => (Array.isArray(saveWorkOperation.value?.events)
-    ? saveWorkOperation.value.events
-      .filter((event) => normalizedAgentTurnText(event.message))
-      .map((event) => [event.at, event.message].filter(Boolean).join("  "))
-      .join("\n")
-    : ""));
-  const saveWorkStatus = computed(() => String(
-    saveWorkOperation.value?.status || (saveWorkSending.value ? "starting" : "")
-  ));
-  // Stage values are persisted machine identifiers; show Save wording, never "publishing".
-  const saveWorkStage = computed(() => String(
-    SAVE_WORK_STAGE_LABELS[saveWorkOperation.value?.stage] ||
-    saveWorkOperation.value?.stage ||
-    (saveWorkSending.value && !saveWorkOperation.value ? "Waiting for the session to be ready" : "")
-  ));
-  watch(() => ({
-    code: String(saveWorkOperation.value?.code || ""),
-    details: saveWorkOperation.value?.details || (saveWorkOperation.value?.conflictRecovery ? {
-      conflictPaths: saveWorkOperation.value.conflictPaths,
-      conflictRecovery: saveWorkOperation.value.conflictRecovery
-    } : null),
-    error: String(saveWorkOperation.value?.error || ""),
-    operationId: String(saveWorkOperation.value?.operationId || ""),
-    status: String(saveWorkOperation.value?.status || "").trim().toLowerCase()
-  }), (operation) => {
-    if (operation.code === "vibe64_session_save_update_required") {
-      if (saveWorkFailure.value?.code === operation.code) {
-        saveWorkError.value = "";
-        saveWorkFailure.value = null;
-      }
-      return;
-    }
-    if (operation.status !== "failed" || !operation.error) {
-      return;
-    }
-    saveWorkError.value = operation.error;
-    saveWorkFailure.value = {
-      code: operation.code,
-      details: operation.details,
-      message: operation.error
-    };
-  }, { immediate: true });
-  // Conflicts cannot succeed by retrying; they keep their dedicated recovery.
-  const saveWorkConflictFailure = computed(() => [
-    "vibe64_session_save_history_diverged",
-    "vibe64_session_update_conflict",
-    "vibe64_session_update_history_diverged"
-  ].includes(String(saveWorkFailure.value?.code || "")));
-  // Any reported Save or Update problem can be handed to temporary AI.
-  const saveWorkCanResolveWithTemporaryAi = computed(() => Boolean(saveWorkError.value));
-  const updateConflictRecovery = computed(() => {
-    const recovery = saveWorkFailure.value?.details?.conflictRecovery;
-    return saveWorkFailure.value?.code === "vibe64_session_update_conflict" &&
-      recovery?.reviewId && recovery.conflictPaths?.length ? recovery : null;
-  });
-  const resolvedUpdateReview = ref(null);
-  watch(() => updateConflictRecovery.value?.reviewId, () => {
-    resolvedUpdateReview.value = null;
-  }, { flush: "sync" });
-
-  function reviewResolvedUpdate() {
-    if (updateWorkDisabled.value || repositoryOperationActive.value ||
-        props.sessionRenewal?.sourceOperationsSuspended || !updateConflictRecovery.value) return false;
-    const { reviewId, conflictPaths } = updateConflictRecovery.value;
-    resolvedUpdateReview.value = { reviewId, conflictPaths: [...conflictPaths] };
-    return true;
-  }
-
-  function applyResolvedUpdate(task = null, reportRecovery = () => {}) {
-    const review = resolvedUpdateReview.value;
-    if (updateWorkDisabled.value || repositoryOperationActive.value || props.sessionRenewal?.sourceOperationsSuspended ||
-        !review || review.reviewId !== updateConflictRecovery.value?.reviewId ||
-        task && (task.sessionId !== sessionId.value || task.recoveryOperation !== "update" ||
-          task.busy || ["starting", "inProgress"].includes(task.status) ||
-          ["checking", "unconfirmed"].includes(task.recoveryOutcome))) return false;
-    resolvedUpdateReview.value = null;
-    return verifySessionUpdate(task, reportRecovery, review.reviewId, { retryAi: false });
-  }
-
-  const saveWorkRetryable = computed(() => Boolean(
-    saveWorkError.value &&
-    !saveWorkDisabled.value &&
-    !saveWorkConflictFailure.value
-  ));
-
-  async function updateBeforeSave(input = {}) {
-    const requestSequence = ++repositoryRequestSequence;
-    const updatingSessionId = sessionId.value;
-    const updatingProjectSlug = projectSlug.value;
-    const requestIsCurrent = () => (
-      requestSequence === repositoryRequestSequence &&
-      sessionId.value === updatingSessionId && projectSlug.value === updatingProjectSlug
-    );
-    saveWorkAttempt.value = {
-      kind: "update",
-      operationId: ""
-    };
-    saveWorkSending.value = true;
-    saveWorkError.value = "";
-    saveWorkFailure.value = null;
-    try {
-      const result = await props.updateSessionWork(input);
-      if (!requestIsCurrent()) {
-        return false;
-      }
-      saveWorkAttempt.value = null;
-      return result;
-    } catch (error) {
-      if (!requestIsCurrent()) {
-        return false;
-      }
-      saveWorkFailure.value = error && typeof error === "object"
-        ? {
-            code: String(error.code || error.response?.code || ""),
-            details: error.details || error.response?.details || null,
-            message: error instanceof Error ? error.message : String(error || "")
-          }
-        : null;
-      saveWorkError.value = error instanceof Error
-        ? error.message
-        : String(error || "This session could not be updated.");
-      return false;
-    } finally {
-      if (requestIsCurrent()) {
-        saveWorkSending.value = false;
-      }
-    }
-  }
-
-  function requestSaveWork() {
-    if (saveWorkDisabled.value) {
-      return false;
-    }
-    if (saveWorkRequiresUpdate.value) {
-      return updateBeforeSave();
-    }
-    saveWorkReview.value = saveWorkRepositoryState.value?.destination
-      ? { ...saveWorkRepositoryState.value.destination }
-      : null;
-    saveWorkConnectedReview.value = saveConnectedFirst.value
-      ? (saveWorkRepositoryState.value?.connectedReview || []).map(item => ({
-          projectSlug: item.projectSlug, destination: { ...item.destination }
-        }))
-      : null;
-    saveWorkConfirmOpen.value = true;
-    return true;
-  }
-
-  function retrySaveWork() {
-    return saveWorkRetryable.value ? requestSaveWork() : false;
-  }
-
-  function dismissSaveWorkActivity() {
-    if (saveWorkSending.value || saveWorkOperationActive.value) {
-      return false;
-    }
-    if (!saveWorkActivityKey.value && saveWorkError.value) {
-      saveWorkError.value = "";
-      saveWorkFailure.value = null;
-      return true;
-    }
-    return dismissShortAction("saveWork", saveWorkActivityKey.value);
-  }
-
-  function cancelSaveWork() {
-    saveWorkConfirmOpen.value = false;
-  }
-
-  async function confirmSaveWork() {
-    if (saveWorkDisabled.value) {
-      return false;
-    }
-    const requestSequence = ++repositoryRequestSequence;
-    const savingSessionId = sessionId.value;
-    const savingProjectSlug = projectSlug.value;
-    const requestIsCurrent = () => (
-      requestSequence === repositoryRequestSequence &&
-      sessionId.value === savingSessionId && projectSlug.value === savingProjectSlug
-    );
-    saveWorkAttempt.value = {
-      kind: "save",
-      operationId: ""
-    };
-    saveWorkSending.value = true;
-    saveWorkError.value = "";
-    saveWorkFailure.value = null;
-    saveWorkConnectedResults.value = [];
-    saveWorkStandInIdentity.value = false;
-    saveWorkConfirmOpen.value = false;
-    try {
-      const result = await props.saveSessionWork({ destinationReview: saveWorkReview.value,
-        ...(saveWorkConnectedReview.value !== null ? { connectedReview: saveWorkConnectedReview.value } : {})
-      });
-      if (!requestIsCurrent()) {
-        return false;
-      }
-      saveWorkAttempt.value = null;
-      saveWorkConnectedResults.value = result?.connected || [];
-      saveWorkStandInIdentity.value = result?.standInIdentity === true;
-      if (result) reportActivity("saved", { projectSlug: savingProjectSlug, sessionId: savingSessionId });
-      return result;
-    } catch (error) {
-      if (!requestIsCurrent()) {
-        return false;
-      }
-      saveWorkFailure.value = error && typeof error === "object"
-        ? {
-            code: String(error.code || error.response?.code || ""),
-            details: error.details || error.response?.details || null,
-            message: error instanceof Error ? error.message : String(error || "")
-          }
-        : null;
-      saveWorkError.value = error instanceof Error
-        ? error.message
-        : String(error || "Session work could not be saved.");
-      saveWorkConnectedResults.value = saveWorkFailure.value?.details?.connected || [];
-      return false;
-    } finally {
-      if (requestIsCurrent()) {
-        saveWorkSending.value = false;
-      }
-    }
-  }
-
   async function requestAgentInterrupt() {
     if (!agentStopEnabled.value) {
       return false;
@@ -1761,7 +893,7 @@ function useVibe64AutopilotView(props, emit, {
     !props.conversationLog?.error &&
     !chatTurns.value.length
       ? emptyConversationWelcomeText({
-          existingProject: workspaceSetupStatus.value !== "unconfigured",
+          existingProject: workspaceSetupActivity.workspaceSetupStatus.value !== "unconfigured",
           preferredName: preferredName.value,
           renewedSession: Boolean(normalizedAgentTurnText(
             props.session?.metadata?.renewed_from
@@ -1801,145 +933,30 @@ function useVibe64AutopilotView(props, emit, {
       : false;
   }
 
-  const rightPaneTab = ref("preview");
-  const lastDashboardRoutePath = ref("");
-  const sourceEditorOpenRequest = ref(null);
-  const systemRestoreRequest = ref(null);
-  const systemReloadVersion = ref(0);
-  const subsystemMapTaskKey = computed(() => `subsystem-map:${sessionId.value}`);
-  const databaseOpenRequest = ref(null);
-  const systemReturnContext = ref(null);
-  let sourceEditorOpenSequence = 0;
-  let systemRestoreSequence = 0;
-
-  const projectPaneValue = computed(() => normalizeProjectPane(props.projectPane));
-  const routeSessionToolId = computed(() => {
-    const dashboardPrefix = `${normalizeProjectRoutePath(projectAppPath(projectSlug.value, "/dashboard"))}/`;
-    const routePath = `${normalizeProjectRoutePath(route.path)}/`;
-    if (!routePath.startsWith(dashboardPrefix)) {
-      return "";
-    }
-    const segment = routePath.slice(dashboardPrefix.length).split("/")[0] || "";
-    const toolId = vibe64SessionToolIdFromRouteSegment(segment);
-    return DIRECT_SESSION_TOOL_IDS.has(toolId) ? toolId : "";
+  const sessionToolPane = useVibe64SessionToolPane(props, emit, {
+    actorKey,
+    assistantAccessPending,
+    assistantCanUseNative,
+    assistantDirectAllowed,
+    projectSlug,
+    requestSaveWork: saveWork.requestSaveWork,
+    sessionId,
+    sessionSourceRoot
   });
-  const sourceToolLoading = computed(() => Boolean(
-    projectPaneValue.value === "dashboard" &&
-    STANDALONE_SESSION_TOOL_IDS.has(routeSessionToolId.value) &&
-    !sessionSourceRoot.value &&
-    props.page?.launchBusy
-  ));
-  const dashboardShellVisible = computed(() => Boolean(
-    projectPaneValue.value === "dashboard" &&
-    !sourceToolLoading.value &&
-    !STANDALONE_SESSION_TOOL_IDS.has(rightPaneTab.value)
-  ));
-  const dashboardRouteVisible = computed(() => [
-    "dashboard",
-    "info",
-    "repository"
-  ].includes(rightPaneTab.value));
-  const sessionToolBackPath = computed(() => (
-    lastDashboardRoutePath.value || projectAppPath(projectSlug.value, "/dashboard/env")
-  ));
 
-  function sessionToolRuntimeState(toolId = "") {
-    if (
-      toolId === "ai-terminal" &&
-      !assistantAccessPending.value &&
-      !(assistantCanUseNative === null ? assistantDirectAllowed.value : unref(assistantCanUseNative) === true)
-    ) {
-      return {
-        disabled: true,
-        title: "The AI terminal requires access to this conversation’s current connection. Use chat to send through an available mode."
-      };
-    }
-    if (toolId === "editor") {
-      return { disabled: !props.session, title: "Browse repository files, Drop Zone and session files" };
-    }
-    if (["database", "system"].includes(toolId)) {
-      return {
-        disabled: !sessionSourceRoot.value,
-        title: sessionSourceRoot.value
-          ? (
-              toolId === "database"
-                ? "Query and map the active session database"
-                : "Explore the current project Cities"
-            )
-          : "Create the session source first"
-      };
-    }
-    return {};
+  // A conversation's integration request acts only in the active, selected session.
+  function integrationRequestAllowed(request) {
+    return Boolean(props.active && !props.sessionSelectionArchived && request.sessionId === sessionId.value);
   }
 
-  const sessionToolControls = computed(() => VIBE64_SESSION_TOOL_DEFINITIONS
-    .filter((definition) => definition.navigationScope !== "project" && DIRECT_SESSION_TOOL_IDS.has(definition.id))
-    .map((definition) => ({
-      ...definition,
-      ...sessionToolRuntimeState(definition.id)
-    })));
-
-  function sessionToolRoutePath(toolId = "") {
-    const suffix = vibe64SessionToolDashboardSuffix(toolId);
-    return suffix ? projectAppPath(projectSlug.value, suffix) : "";
-  }
-
-  function selectSessionTool(toolId = "", { navigate = true } = {}) {
-    if (!DIRECT_SESSION_TOOL_IDS.has(toolId)) {
-      return false;
-    }
-    // Git log moved to the project navigation but still opens as this pane's
-    // dashboard page; without it, its route fell back to Env.
-    const tool = sessionToolControls.value.find((item) => item.id === toolId) ||
-      VIBE64_SESSION_TOOL_DEFINITIONS.find((item) => item.id === toolId && item.navigationScope === "project");
-    if (!tool || tool.disabled) {
-      return false;
-    }
-    rightPaneTab.value = toolId;
-    if (navigate) {
-      const targetPath = sessionToolRoutePath(toolId);
-      if (targetPath && normalizeProjectRoutePath(targetPath) !== normalizeProjectRoutePath(route.path)) {
-        void router.push(targetPath);
-      }
-    }
-    emit("project-attention");
-    return true;
-  }
-
-  function backToDashboard() {
-    const targetPath = sessionToolBackPath.value;
-    if (targetPath && normalizeProjectRoutePath(targetPath) !== normalizeProjectRoutePath(route.path)) {
-      void router.push(targetPath);
-    }
-  }
-
-  function connectIntegrationRequest(request) {
-    if (!props.active || props.sessionSelectionArchived || request.sessionId !== sessionId.value) return false;
-    return props.conversationLog?.connectIntegrationRequest?.(request) || false;
-  }
-
-  function checkIntegrationRequest(request) {
-    if (!props.active || props.sessionSelectionArchived || request.sessionId !== sessionId.value) return false;
-    return props.conversationLog?.checkIntegrationRequest?.(request) || false;
-  }
-
-  function cancelIntegrationRequest(request) {
-    if (!props.active || props.sessionSelectionArchived || request.sessionId !== sessionId.value) return false;
-    return props.conversationLog?.cancelIntegrationRequest?.(request) || false;
-  }
-
-  function skipIntegrationRequest(request) {
-    if (!props.active || props.sessionSelectionArchived || request.sessionId !== sessionId.value) return false;
-    return props.conversationLog?.skipIntegrationRequest?.(request) || false;
-  }
-
-  function resumeIntegrationRequest(request) {
-    if (!props.active || props.sessionSelectionArchived || request.sessionId !== sessionId.value) return false;
-    return props.conversationLog?.resumeIntegrationRequest?.(request) || false;
+  // `action` is connect, check, cancel, skip or resume.
+  function runIntegrationRequest({ action, ...request }) {
+    if (!integrationRequestAllowed(request)) return false;
+    return props.conversationLog?.[`${action}IntegrationRequest`]?.(request) || false;
   }
 
   function openIntegrationRequest(request) {
-    if (!props.active || props.sessionSelectionArchived || request.sessionId !== sessionId.value) return;
+    if (!integrationRequestAllowed(request)) return;
     void router.push({
       path: projectAppPath(projectSlug.value, "/dashboard/integrations"),
       query: { integration: request.integrationId, integrationSession: sessionId.value, integrationTurn: request.turnId, integrationRequest: request.requestId }
@@ -1947,111 +964,7 @@ function useVibe64AutopilotView(props, emit, {
     emit("project-attention");
   }
 
-  function rightPaneTabMounted(tabId = "") {
-    return rightPaneTab.value === String(tabId || "");
-  }
-
-  const activeSessionNav = computed(() => ({
-    label: sessionNavLabel(props.session || {}),
-    selectTool: selectSessionTool,
-    sessionId: sessionId.value,
-    status: String(props.session?.status || ""),
-    statusLabel: vibe64SessionStatusLabel(props.session?.status),
-    tools: sessionToolControls.value.map((tool) => ({
-      ...tool,
-      active: rightPaneTab.value === tool.id,
-      disabledReason: tool.disabled ? tool.title || "" : "",
-      to: sessionToolRoutePath(tool.id)
-    })),
-    visible: Boolean(props.session)
-  }));
-  const dashboardSessionContext = computed(() => ({
-    active: Boolean(props.active),
-    activeSessionNav: activeSessionNav.value,
-    copyText: typeof props.page?.copyText === "function" ? props.page.copyText : null,
-    embeddedShell: true,
-    projectContext: props.projectContext || {},
-    refreshSessionWork: props.refreshSessionWork,
-    refreshConversation: () => props.conversationLog?.reload?.(),
-    requestSaveWork,
-    session: props.session || null,
-    sessionId: sessionId.value,
-    sessionsApiPath: props.sessionsApiPath,
-    statusColor: vibe64SessionStatusColor(props.session?.status),
-    statusLabel: vibe64SessionStatusLabel(props.session?.status),
-    workState: props.workState || null
-  }));
-
-  const systemBackAvailable = computed(() => Boolean(
-    systemReturnContext.value?.sessionId === sessionId.value
-  ));
-
-  function openSourceEditorFile(target = {}) {
-    const path = normalizedAgentTurnText(target?.path);
-    if (!path) {
-      return false;
-    }
-    systemReturnContext.value = target.origin === "system"
-      ? {
-          ...(target.systemContext && typeof target.systemContext === "object" ? target.systemContext : {}),
-          sessionId: sessionId.value
-        }
-      : null;
-    sourceEditorOpenSequence += 1;
-    sourceEditorOpenRequest.value = {
-      column: Number(target.column || 0) || 0,
-      line: Number(target.line || 0) || 0,
-      path,
-      presentation: target.presentation || "interface",
-      symbolId: target.symbolId || "",
-      symbol: target.symbol || "",
-      sequence: sourceEditorOpenSequence
-    };
-    return selectSessionTool("editor");
-  }
-
-  function openSubsystemTable(target = {}) {
-    if (!target.qualifiedName) return false;
-    systemReturnContext.value = { ...target.systemContext, sessionId: sessionId.value };
-    databaseOpenRequest.value = { qualifiedName: target.qualifiedName, sequence: Date.now() };
-    return selectSessionTool("database");
-  }
-
-  async function describeSubsystems() {
-    if (typeof requestTemporaryAi !== "function" || !assistantFixAllowed.value ||
-        !props.active || !sessionId.value || props.sessionSelectionArchived || repositoryOperationActive.value) {
-      return false;
-    }
-    const result = await requestTemporaryAi({
-      title: "Subsystem map",
-      dedupeKey: subsystemMapTaskKey.value,
-      displayMessage: "Generate the subsystem map from this application.",
-      message: [
-        "Create or repair genesis/subsystems.md from the application source, existing Program, and schema. Inspect the repository with your normal tools and preserve substantive existing descriptions and unrelated edits. Responsibilities are full explanations of purpose, scope, main parts and collaboration, not one-line map captions. If boundaries change, transfer the applicable prose and Program assignments to the current directory owners, and revalidate each required main source under its owner.",
-        "Read .agents/skills/genesis-program/SKILL.md and use its exact subsystem grammar. Resolve the project's Genesis command through its installed skill instructions.",
-        "Explain meaningful subsystem responsibilities and declare their Program operations and owned/used tables. Each subsystem has one canonical project-relative directory root, recorded in a required ### Source section with one - Directory `path` entry. Cover every indexed source with a declared owner; nested roots own their more specific files. Stack directory-parent rules can inform adoption, but never create a competing owner list. Assign each Program document to exactly one subsystem, allowing its Sources to cite libraries owned elsewhere. UI components can live in the same subsystem as Engine code. Preserve existing stable subsystem ids and responsibility boundaries. Run Genesis inspect subsystems --json on the resulting file and resolve every validation error before claiming success. Creating the file alone is not completion.",
-        "Leave the map as ordinary session changes for review; do not commit, push, or deploy."
-      ].join("\n\n"),
-      completionMessage: "Subsystem map task finished. Review the map and session changes before saving.",
-      failureMessage: "The subsystem map task stopped before completion. Review its progress and any partial edits.",
-      nextStepMessage: "The subsystem view refreshes when this task finishes. File changes remain in the session for review and Save."
-    });
-    return result !== false && result?.ok !== false;
-  }
-
-  function backToSystemFromEditor() {
-    if (!systemBackAvailable.value) {
-      return false;
-    }
-    systemRestoreSequence += 1;
-    systemRestoreRequest.value = {
-      ...systemReturnContext.value,
-      sequence: systemRestoreSequence
-    };
-    return selectSessionTool("system");
-  }
-
-  const sourceEditorAskCodexAvailable = computed(() => Boolean(
+  const assistantDraftAvailable = computed(() => Boolean(
     props.active &&
     sessionId.value &&
     !props.sessionSelectionArchived &&
@@ -2060,7 +973,7 @@ function useVibe64AutopilotView(props, emit, {
 
   function prefillComposer(text = "", { append = false } = {}) {
     const prompt = normalizedAgentTurnText(text);
-    if (!prompt || !sourceEditorAskCodexAvailable.value) {
+    if (!prompt || !assistantDraftAvailable.value) {
       return false;
     }
     composerDraft.value = append && composerDraft.value.trim()
@@ -2069,76 +982,17 @@ function useVibe64AutopilotView(props, emit, {
     return true;
   }
 
-  function askCodexAboutSourceEditorFile(path = "") {
+  function askAssistantAboutFile(path = "") {
     const normalizedPath = normalizedAgentTurnText(path);
     return normalizedPath
       ? prefillComposer(`Please look at \`${normalizedPath}\` and help me with this file.`)
       : false;
   }
 
-  function updateAgentSetting(parameterId = "", value = "") {
-    agentSettings.value?.update({
-      [String(parameterId || "")]: String(value || "")
-    });
-  }
-
-  watch(() => [
-    props.active,
-    projectPaneValue.value,
-    route.path,
-    routeSessionToolId.value,
-    sessionSourceRoot.value,
-    sourceToolLoading.value,
-    assistantAccessPending.value,
-    assistantDirectAllowed.value
-  ].join("|"), () => {
-    if (!props.active || projectPaneValue.value !== "dashboard") {
-      return;
-    }
-    if (sourceToolLoading.value) {
-      emit("project-attention");
-      return;
-    }
-    if (routeSessionToolId.value) {
-      if (selectSessionTool(routeSessionToolId.value, { navigate: false })) {
-        return;
-      }
-      const fallbackPath = projectAppPath(projectSlug.value, "/dashboard/env");
-      lastDashboardRoutePath.value = fallbackPath;
-      rightPaneTab.value = "dashboard";
-      if (normalizeProjectRoutePath(fallbackPath) !== normalizeProjectRoutePath(route.path)) {
-        void router.replace(fallbackPath);
-      }
-      return;
-    }
-    lastDashboardRoutePath.value = route.path;
-    rightPaneTab.value = "dashboard";
-  }, { immediate: true });
-
   watch([sessionId, projectSlug, actorKey], () => {
-    repositoryRequestSequence += 1;
-    saveWorkConfirmOpen.value = false;
-    saveWorkConnectedReview.value = null;
-    saveWorkConnectedResults.value = [];
-    saveWorkStandInIdentity.value = false;
-    resolvedUpdateReview.value = null;
-    saveWorkSending.value = false;
-    saveWorkAttempt.value = null;
-    saveWorkError.value = "";
-    saveWorkFailure.value = null;
     composerSubmissionKind.value = "";
     interrupting.value = false;
     questionState.reset();
-    workspaceSetupRetryError.value = "";
-    workspaceSetupFixTaskId.value = "";
-    checkedUpdateRepairRuns.clear();
-    systemReturnContext.value = null;
-    systemRestoreRequest.value = null;
-    databaseOpenRequest.value = null;
-  });
-
-  watch(() => workspaceSetup.value?.updatedAt, () => {
-    workspaceSetupRetryError.value = "";
   });
 
   watch([routingRequest, () => messageDelivery.value?.state.messages || []], ([request]) => {
@@ -2147,17 +1001,20 @@ function useVibe64AutopilotView(props, emit, {
     }
   }, { immediate: true });
 
-
   watch(() => Boolean(
     agentActive.value ||
     composerSending.value ||
     interrupting.value ||
-    saveWorkSending.value
+    saveWork.saveWorkSending.value
   ), (busy) => {
     emit("busy-change", busy);
   }, { immediate: true });
 
   return {
+    ...saveWork,
+    ...workspaceSetupActivity,
+    ...temporaryAiRepairs,
+    ...sessionToolPane,
     Vibe64OutputControls,
     sendLessonMessage,
     assistantDirectAllowed,
@@ -2169,17 +1026,11 @@ function useVibe64AutopilotView(props, emit, {
     agentStopVisible,
     answerChoices,
     prefillComposer,
-    askCodexAboutSourceEditorFile,
-    askCodexToFixPreviewIdentity,
-    askCodexToFixWorkspaceSetup,
+    askAssistantAboutFile,
     attachPreviewDiagnostics,
-    backToDashboard,
-    backToSystemFromEditor,
     cancelOptimisticMessage,
-    cancelSaveWork,
     captureVisiblePreview,
     chatCollapsed,
-    chatReloadAvailable,
     chatReloading,
     chatTurns,
     checkpointFailure,
@@ -2199,129 +1050,47 @@ function useVibe64AutopilotView(props, emit, {
     composerSending,
     routingRequest,
     routingBusy,
-    routingStatusLabel,
     composerSubmitAriaLabel,
-    composerSubmitLabel,
     composerSubmitMode,
     composerSubmitTitle,
     conversationLogVisible,
     conversationFollowLatestKey,
     conversationScrollKey,
-    currentAgentSettings,
-    dashboardSessionContext,
-    dashboardRouteVisible,
-    dashboardShellVisible,
-    sourceToolLoading,
-    dismissSaveWorkActivity,
     dismissNumberedQuestions,
-    dismissWorkspaceSetupActivity,
-    confirmSaveWork,
     editOptimisticMessage,
     emptyConversationWelcome,
-    fixRepositoryActionError,
-    fixRepositoryError,
-    handleTemporaryAiTaskFinished,
-    updateConflictRecovery,
-    resolvedUpdateReview,
-    reviewResolvedUpdate,
-    applyResolvedUpdate,
     interrupting,
     loadMoreChatTurns,
     numberedQuestionSelectItems,
     numberedQuestions,
     openIntegrationRequest,
-    skipIntegrationRequest,
-    resumeIntegrationRequest,
-    connectIntegrationRequest,
-    checkIntegrationRequest,
-    cancelIntegrationRequest,
-    openSourceEditorFile,
-    openSubsystemTable,
-    describeSubsystems,
-    databaseOpenRequest,
+    runIntegrationRequest,
     previewAttachmentState,
     projectSlug,
     questionAnswers,
     reloadChatPane,
-    repositoryRecoverySending,
     repositoryOperationActive,
-    retrySaveWork,
-    retryWorkspaceSetup,
-    requestSaveWork,
     resendOptimisticMessage,
     requestAgentInterrupt,
-    rightPaneTab,
-    rightPaneTabMounted,
-    saveWorkConfirmOpen,
     contextFullFailure,
     retryContextFull,
-    saveWorkReview,
-    saveConnectedFirst,
-    saveWorkConnectedReview,
-    saveWorkConnectedResults,
-    saveWorkStandInIdentity,
-    saveWorkDisabled,
-    updateWorkDisabled,
-    saveWorkActivityDismissed,
-    saveWorkActivityKey,
-    saveWorkActivityIsUpdate,
-    saveWorkActivityLabel,
-    saveWorkActionLabel,
-    saveWorkError,
-    saveWorkFailure,
-    saveWorkHeaderAriaLabel,
-    saveWorkHeaderVisible,
-    saveWorkCanResolveWithTemporaryAi,
-    saveWorkOperation,
-    saveWorkOperationActive,
-    saveWorkOutput,
-    saveWorkRetryable,
-    saveWorkSending,
-    saveWorkStage,
-    saveWorkStatus,
-    saveWorkTitle,
-    saveWorkRequiresUpdate,
-    saveWorkUnsaved,
-    selectSessionTool,
     sessionId,
     sessionGithubActor,
     sessionGithubActorHeaderVisible,
     sessionSourceRoot,
-    sessionToolControls,
     sessionToolbarVisible,
     selectedAnswerChoice,
-    sourceEditorAskCodexAvailable,
-    sourceEditorOpenRequest,
+    assistantDraftAvailable,
     structuredQuestionActive,
     submitComposerMessage,
-    systemBackAvailable,
-    systemRestoreRequest,
-    systemReloadVersion,
     thinkingLabel,
     thinkingVisible,
     agentWorking,
     assistantAccountMessage,
     assistantAccountUnavailable,
     connectionRecoveryVisible,
-    updateAgentSetting,
     updateComposerAttachments,
-    updatePreviewAttachmentState,
-    workspaceSetupActionVisible,
-    connectedUpdateActionVisible,
-    workspaceSetupAskDisabled,
-    workspaceSetupActivityKey,
-    workspaceSetupCurrentLabel,
-    workspaceSetupDiagnostic,
-    workspaceSetupDismissed,
-    workspaceSetupFixSending,
-    workspaceSetupNeedsAttention,
-    workspaceSetupError,
-    workspaceSetupOutput,
-    workspaceSetupRetryDisabled,
-    workspaceSetupRetrying,
-    workspaceSetupRunning,
-    workspaceSetupStatus,
-    workspaceSetupTitle
+    updatePreviewAttachmentState
   };
 }
 
@@ -2345,9 +1114,7 @@ function executionAttentionForError(error = null, message = "") {
 export {
   emptyConversationWelcomeText,
   agentConnectionThinkingLabel,
-  previewIdentityFixPrompt,
   useVibe64AutopilotView,
-  workspaceSetupFixPrompt,
   vibe64AutopilotViewEmits,
   vibe64AutopilotViewProps
 };

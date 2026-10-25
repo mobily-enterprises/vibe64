@@ -7,14 +7,16 @@ import {
 } from "../../src/composables/useAgentTerminalAttachments.js";
 import {
   AGENT_ATTACHMENT_MAX_BYTES,
-  AGENT_ATTACHMENT_MAX_ITEMS,
-  codexAttachmentEventHasFiles,
-  codexAttachmentFiles,
-  codexAttachmentFilesFromPasteEvent,
-  codexAttachmentFilesFromDropEvent,
-  codexAttachmentFilesFromTransferItems,
   useAgentAttachments
 } from "../../src/composables/useAgentAttachments.js";
+import {
+  ASSISTANT_ATTACHMENT_MAX_ITEMS,
+  assistantAttachmentEventHasFiles,
+  assistantAttachmentFiles,
+  assistantAttachmentFilesFromPasteEvent,
+  assistantAttachmentFilesFromDropEvent,
+  assistantAttachmentFilesFromTransferItems
+} from "@jskit-ai/assistant-core/client/conversation-attachments";
 
 function testFile(name, size = 1) {
   return {
@@ -70,7 +72,7 @@ describe("useAgentAttachments", () => {
   });
 
   it("shares file filtering for drag, picker, and terminal uploads", () => {
-    const files = codexAttachmentFiles([
+    const files = assistantAttachmentFiles([
       testFile("valid.txt"),
       null,
       {
@@ -79,7 +81,7 @@ describe("useAgentAttachments", () => {
     ]);
 
     expect(files).toEqual([testFile("valid.txt")]);
-    expect(codexAttachmentEventHasFiles({
+    expect(assistantAttachmentEventHasFiles({
       dataTransfer: {
         files: [],
         types: ["Files"]
@@ -90,7 +92,7 @@ describe("useAgentAttachments", () => {
   it("extracts file attachments from clipboard paste data", () => {
     const pastedFile = testFile("clipboard.png", 123);
 
-    expect(codexAttachmentFilesFromPasteEvent({
+    expect(assistantAttachmentFilesFromPasteEvent({
       clipboardData: {
         files: [],
         items: [
@@ -111,7 +113,7 @@ describe("useAgentAttachments", () => {
     const itemFile = testFile("dragged.png", 123);
     const fallbackFile = testFile("fallback.png", 456);
 
-    expect(codexAttachmentFilesFromTransferItems([
+    expect(assistantAttachmentFilesFromTransferItems([
       {
         kind: "file",
         getAsFile: () => itemFile
@@ -121,7 +123,7 @@ describe("useAgentAttachments", () => {
         getAsFile: () => testFile("ignored.txt")
       }
     ])).toEqual([itemFile]);
-    expect(codexAttachmentFilesFromDropEvent({
+    expect(assistantAttachmentFilesFromDropEvent({
       dataTransfer: {
         files: [fallbackFile],
         items: [
@@ -132,7 +134,7 @@ describe("useAgentAttachments", () => {
         ]
       }
     })).toEqual([itemFile]);
-    expect(codexAttachmentEventHasFiles({
+    expect(assistantAttachmentEventHasFiles({
       dataTransfer: {
         items: [
           {
@@ -142,7 +144,7 @@ describe("useAgentAttachments", () => {
         types: []
       }
     })).toBe(true);
-    expect(codexAttachmentEventHasFiles({
+    expect(assistantAttachmentEventHasFiles({
       dataTransfer: {
         types: ["application/x-moz-file"]
       }
@@ -444,10 +446,10 @@ describe("useAgentAttachments", () => {
     expect(uploadAttachment).not.toHaveBeenCalled();
 
     void attachments.uploadFiles(Array.from(
-      { length: AGENT_ATTACHMENT_MAX_ITEMS },
+      { length: ASSISTANT_ATTACHMENT_MAX_ITEMS },
       (_unused, index) => testFile(`file-${index}.txt`)
     ));
-    expect(attachments.queueItems.value).toHaveLength(AGENT_ATTACHMENT_MAX_ITEMS);
+    expect(attachments.queueItems.value).toHaveLength(ASSISTANT_ATTACHMENT_MAX_ITEMS);
     expect(attachments.atCapacity.value).toBe(true);
     expect(attachments.status.value).toContain("at most 10 attachments");
     expect(uploadAttachment).toHaveBeenCalledTimes(1);
@@ -674,11 +676,11 @@ describe("useAgentAttachments", () => {
     const cancelled = attachments.queueItems.value[0];
     attachments.cancelAttachment(cancelled);
     void attachments.uploadFiles(Array.from(
-      { length: AGENT_ATTACHMENT_MAX_ITEMS },
+      { length: ASSISTANT_ATTACHMENT_MAX_ITEMS },
       (_unused, index) => testFile(`replacement-${index}.txt`)
     ));
 
-    expect(attachments.queueItems.value).toHaveLength(AGENT_ATTACHMENT_MAX_ITEMS + 1);
+    expect(attachments.queueItems.value).toHaveLength(ASSISTANT_ATTACHMENT_MAX_ITEMS + 1);
     expect(attachments.atCapacity.value).toBe(true);
     expect(await attachments.retryAttachment(cancelled)).toBe(null);
     expect(cancelled.phase).toBe("cancelled");

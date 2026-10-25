@@ -1,4 +1,3 @@
-import { attachmentSizeLabel } from "@jskit-ai/assistant-core/shared/conversation";
 import { conversationAttachmentContentType, conversationAttachmentReference } from "@local/vibe64-runtime/shared";
 
 function labelComposerAttachments(attachments = []) {
@@ -22,7 +21,6 @@ function updateComposerAttachmentReferences(text, previous, next) {
 
 
 export {
-  attachmentSizeLabel,
   labelComposerAttachments,
   updateComposerAttachmentReferences
 };

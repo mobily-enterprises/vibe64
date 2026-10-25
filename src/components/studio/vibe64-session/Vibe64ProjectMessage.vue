@@ -35,6 +35,8 @@ import { parseLongTextReviewBlocks } from "@jskit-ai/assistant-core/shared/conve
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
+import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
+import { vibe64SessionShortLabel } from "@/lib/vibe64SessionViewModel.js";
 import { VIBE64_SESSIONS_API_SUFFIX, VIBE64_SESSION_CHANGED_EVENT, VIBE64_SURFACE_ID, vibe64SessionsQueryKey } from "@/lib/vibe64SessionRequestConfig.js";
 
 const props = defineProps({ details: { type: Object, required: true }, at: { type: String, default: "" } });
@@ -56,7 +58,7 @@ const sessions = useEndpointResource({
 });
 const sessionLabel = computed(() => {
   const session = sessions.data.value?.sessions?.find(item => item.sessionId === sessionId.value);
-  const name = String(session?.sessionName || session?.metadata?.issue_word || "").trim();
+  const name = vibe64SessionShortLabel(session);
   return name && name !== sessionId.value ? `${name} (${sessionId.value})` : sessionId.value;
 });
 const expanded = ref(false);
@@ -71,7 +73,7 @@ const blocks = computed(() => parseLongTextReviewBlocks(
   !expanded.value && preview.value ? preview.value : props.details.body,
   { preserveParagraphLineBreaks: true }
 ));
-const projectLink = computed(() => `/app/project/${encodeURIComponent(project.value)}?session=${encodeURIComponent(sessionId.value)}&chat=main`);
+const projectLink = computed(() => `${projectAppPath(project.value)}?session=${encodeURIComponent(sessionId.value)}&chat=main`);
 </script>
 
 <style scoped>

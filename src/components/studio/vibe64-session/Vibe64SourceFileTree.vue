@@ -93,10 +93,10 @@
               @click="emit('copy-path', child.path || child.name || '')"
             />
             <v-list-item
-              v-if="child.type === 'file' && askCodexAvailable"
+              v-if="child.type === 'file' && assistantDraftAvailable"
               :prepend-icon="mdiRobotOutline"
               title="Ask the AI assistant about this file"
-              @click="emit('ask-codex', child.path || '')"
+              @click="emit('ask-assistant', child.path || '')"
             />
           </v-list>
         </v-menu>
@@ -108,7 +108,7 @@
       >
         <Vibe64SourceFileTree
           :node="child"
-          :ask-codex-available="askCodexAvailable"
+          :assistant-draft-available="assistantDraftAvailable"
           :selected-path="selectedPath"
           :starred-paths="starredPaths"
           :expanded-paths="expandedPaths"
@@ -122,7 +122,7 @@
           @directory-open-change="emit('directory-open-change', $event)"
           @new-file="emit('new-file', $event)"
           @copy-path="emit('copy-path', $event)"
-          @ask-codex="emit('ask-codex', $event)"
+          @ask-assistant="emit('ask-assistant', $event)"
         />
         <div
           v-if="directoryLoading(child)"
@@ -210,12 +210,12 @@ const props = defineProps({
     default: 0,
     type: Number
   },
-  askCodexAvailable: {
+  assistantDraftAvailable: {
     default: false,
     type: Boolean
   }
 });
-const emit = defineEmits(["ask-codex", "copy-path", "directory-open-change", "download-file", "load-more-directory", "new-file", "open-file", "toggle-star"]);
+const emit = defineEmits(["ask-assistant", "copy-path", "directory-open-change", "download-file", "load-more-directory", "new-file", "open-file", "toggle-star"]);
 
 const nodes = computed(() => Array.isArray(props.node?.children) ? props.node.children : []);
 const visibleNodes = computed(() => nodes.value);

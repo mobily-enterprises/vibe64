@@ -1275,6 +1275,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `src/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue`
 - `src/lib/vibe64AssistantHost.js`
+- `src/lib/vibe64AssistantConversation.js`
 - `src/lib/vibe64ChatMessage.js`
 - `packages/vibe64-runtime/src/shared/integrationSetupRequest.js`
 - `src/lib/vibe64WelcomeName.js`

@@ -29,6 +29,8 @@ Genesis without creating another interpretation of the application.
 - `packages/vibe64-genesis/src/server/architectureLayout.js`
 - `packages/vibe64-system-graph/src/client/subsystemsModel.js`
 - `src/composables/useVibe64AutopilotView.js`
+- `src/composables/useVibe64TemporaryAiRepairs.js`
+- `src/composables/useVibe64SessionToolPane.js`
 - `packages/vibe64-system-graph/src/client/composables/useVibe64SystemGraph.js`
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 

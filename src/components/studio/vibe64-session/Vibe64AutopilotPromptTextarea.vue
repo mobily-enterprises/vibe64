@@ -41,9 +41,11 @@ import {
   useVibe64AttachmentCommands
 } from "@/composables/useVibe64AttachmentCommands.js";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
+import { useAgentAttachments } from "@/composables/useAgentAttachments.js";
 import {
-  useAgentAttachments, codexAttachmentFilesFromDropEvent, codexAttachmentFilesFromPasteEvent
-} from "@/composables/useAgentAttachments.js";
+  assistantAttachmentFilesFromDropEvent,
+  assistantAttachmentFilesFromPasteEvent
+} from "@jskit-ai/assistant-core/client/conversation-attachments";
 import { AssistantPromptInput } from "@jskit-ai/assistant-core/client/conversation";
 import Vibe64AttachmentQueue from "@/components/studio/vibe64-session/Vibe64AttachmentQueue.vue";
 import { labelComposerAttachments, updateComposerAttachmentReferences } from "@/lib/vibe64PromptAttachments.js";
@@ -278,7 +280,7 @@ async function handleFileInputChange(event = {}) {
 
 function handleDrop(event) {
   attachments.resetDragState();
-  void attachFiles(codexAttachmentFilesFromDropEvent(event));
+  void attachFiles(assistantAttachmentFilesFromDropEvent(event));
 }
 
 function openFilePicker() {
@@ -297,7 +299,7 @@ const handleDragEnter = attachments.handleDragEnter;
 const handleDragOver = attachments.handleDragOver;
 const handleDragLeave = attachments.handleDragLeave;
 function handlePaste(event) {
-  const files = codexAttachmentFilesFromPasteEvent(event);
+  const files = assistantAttachmentFilesFromPasteEvent(event);
   if (!files.length) return attachments.handlePaste(event);
   if (!event.clipboardData?.getData("text/plain")) event.preventDefault?.();
   return attachFiles(files);

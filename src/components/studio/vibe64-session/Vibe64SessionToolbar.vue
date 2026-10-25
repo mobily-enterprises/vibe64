@@ -150,7 +150,7 @@ import { VIBE64_AGENT_PROVIDERS } from "@local/vibe64-runtime/shared";
 import Vibe64RenameSessionDialog from "./Vibe64RenameSessionDialog.vue";
 import Vibe64CreateSessionButton from "@/components/studio/vibe64-session/Vibe64CreateSessionButton.vue";
 import { vibe64SessionInfoFacts } from "@/lib/vibe64SessionInfo.js";
-import { vibe64SessionStatusLabel } from "@/lib/vibe64SessionViewModel.js";
+import { vibe64SessionShortLabel, vibe64SessionStatusLabel } from "@/lib/vibe64SessionViewModel.js";
 import { VIBE64_SESSION_TOOLTIP_KEY } from "@/lib/vibe64SessionTooltip.js";
 import {
   visibleVibe64ToolbarSessions
@@ -271,11 +271,8 @@ function selectSession(sessionId = "") {
 }
 
 function sessionTabLabel(sessionItem = {}) {
-  const sessionName = String(sessionItem.sessionName || sessionItem.metadata?.issue_word || "").trim();
-  if (sessionName) {
-    return sessionName;
-  }
-  return props.toolbar.shortSessionId?.(sessionItem.sessionId) || String(sessionItem.sessionId || "");
+  return vibe64SessionShortLabel(sessionItem) ||
+    props.toolbar.shortSessionId?.(sessionItem.sessionId) || String(sessionItem.sessionId || "");
 }
 
 function repositoryState(sessionItem = {}) {

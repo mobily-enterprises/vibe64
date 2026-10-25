@@ -276,7 +276,6 @@ describe("member composer", () => {
     expect(view.composerDisabled.value).toBe(false);
     expect(view.composerAttachmentsSupported.value).toBe(false);
     expect(view.composerSubmitMode.value).toBe("approval");
-    expect(view.composerSubmitLabel.value).toBe("Send for approval");
     expect(view.composerSubmitAriaLabel.value).toBe("Send to Tony for approval");
     expect(view.composerPlaceholder.value).toBe("Message main chat — Tony approves before it's sent");
     expect(view.composerHint.value).toBe("Main chat runs on Tony's AI. Tony approves each message.");

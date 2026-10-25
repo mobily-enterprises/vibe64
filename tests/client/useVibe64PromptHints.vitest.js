@@ -3,14 +3,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   VIBE64_PROMPT_HINT_DRAFT_MAX_CHARACTERS,
   VIBE64_PROMPT_HINT_STATIC_STARTERS,
-  normalizedPromptHintDraft
+  normalizedPromptHintDraft,
+  normalizedPromptHintSuggestions
 } from "../../packages/vibe64-runtime/src/shared/promptHints.js";
 
 import {
   PROMPT_HINT_DEBOUNCE_MS,
   PROMPT_HINT_MIN_INTERVAL_MS,
   PROMPT_HINT_RECENT_VISIBLE_TURN_LIMIT,
-  normalizedPromptHintSuggestions,
   promptHintConversationFingerprint,
   useVibe64PromptHints
 } from "../../src/composables/useVibe64PromptHints.js";

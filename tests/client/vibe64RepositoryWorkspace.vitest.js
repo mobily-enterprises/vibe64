@@ -748,7 +748,7 @@ describe("Vibe64 Repository workspace", () => {
     const [repositoryWorkspace, repositoryComposable, autopilotView, runtimeHost] = await Promise.all([
       source("src/components/studio/repository/Vibe64RepositoryWorkspace.vue"),
       source("src/composables/useVibe64RepositoryWorkspace.js"),
-      source("src/composables/useVibe64AutopilotView.js"),
+      source("src/composables/useVibe64SessionToolPane.js"),
       source("src/components/studio/vibe64-session/Vibe64SessionRuntimeHost.vue")
     ]);
 

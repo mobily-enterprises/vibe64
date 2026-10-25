@@ -22,6 +22,8 @@ contract transported by the project's Stack.
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/components/studio/vibe64-session/Vibe64TemporaryAiWorkspace.vue`
 - `src/composables/useVibe64AutopilotView.js`
+- `src/composables/useVibe64WorkspaceSetupActivity.js`
+- `src/composables/useVibe64TemporaryAiRepairs.js`
 - `src/composables/useVibe64TemporaryAi.js`
 
 ## Public contract

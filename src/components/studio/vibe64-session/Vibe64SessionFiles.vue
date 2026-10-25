@@ -20,7 +20,7 @@
       :sessions-api-path="sessionsApiPath"
       :project-slug="projectSlug"
       :open-request="openRequest"
-      @ask-codex-about-file="$emit('ask-codex-about-file', $event)"
+      @ask-assistant-about-file="$emit('ask-assistant-about-file', $event)"
       @open-program="$emit('open-program', $event)"
     />
     <Vibe64SessionFileArea
@@ -48,7 +48,7 @@ import Vibe64SessionSourceEditor from "./Vibe64SessionSourceEditor.vue";
 import Vibe64SessionFileArea from "./Vibe64SessionFileArea.vue";
 
 defineOptions({ inheritAttrs: false });
-defineEmits(["ask-codex-about-file", "open-program"]);
+defineEmits(["ask-assistant-about-file", "open-program"]);
 const props = defineProps({
   repoAvailable: { type: Boolean, default: true },
   archived: { type: Boolean, default: false },

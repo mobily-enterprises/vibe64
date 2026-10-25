@@ -186,7 +186,7 @@ describe("useVibe64ChatColumnResize", () => {
 
   it("mounts only the visible project tool instead of retaining every heavy pane", () => {
     const source = readFileSync(
-      "src/composables/useVibe64AutopilotView.js",
+      "src/composables/useVibe64SessionToolPane.js",
       "utf8"
     );
 

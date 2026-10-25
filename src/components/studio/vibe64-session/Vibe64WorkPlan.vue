@@ -26,7 +26,7 @@ const open = ref(false);
 const archiveId = ref("");
 const notice = ref("");
 const view = ref("current");
-const document = ref("plan");
+const planDocument = ref("plan");
 const showHistory = computed(() => view.value === "history" && !archiveId.value);
 const pendingOperation = ref("");
 const feedback = useShellWebErrorRuntime();
@@ -153,8 +153,8 @@ const sections = computed(() => {
       prose = [];
     }
   };
-  for (const line of parseWorkPlanLines((document.value === "progress" ? plan.value?.progressText : plan.value?.text) || "",
-    { markTechnicalDetails: document.value === "plan" })) {
+  for (const line of parseWorkPlanLines((planDocument.value === "progress" ? plan.value?.progressText : plan.value?.text) || "",
+    { markTechnicalDetails: planDocument.value === "plan" })) {
     if (line.technicalDetails) {
       flush();
       technical = true;
@@ -172,14 +172,14 @@ const sections = computed(() => {
 });
 const overviewSections = computed(() => sections.value.filter(section => !section.technical));
 const technicalSections = computed(() => sections.value.filter(section => section.technical));
-watch([document, archiveId, () => plan.value?.revision], () => { technicalPanel.value = null; });
+watch([planDocument, archiveId, () => plan.value?.revision], () => { technicalPanel.value = null; });
 watch([sessionId, sessionsPath, actorKey], () => {
   open.value = false;
   technicalPanel.value = null;
   archiveId.value = "";
   notice.value = "";
   view.value = "current";
-  document.value = "plan";
+  planDocument.value = "plan";
   pendingOperation.value = "";
 });
 watch(() => props.active, (active) => {
@@ -272,11 +272,11 @@ watch(() => props.active, (active) => {
             </v-chip>
             <span class="text-body-small text-medium-emphasis">{{ plan.total }} requirements</span>
           </div>
-          <v-tabs v-model="document" grow height="48" aria-label="Plan documents" class="mb-4">
+          <v-tabs v-model="planDocument" grow height="48" aria-label="Plan documents" class="mb-4">
             <v-tab value="plan">Plan</v-tab>
             <v-tab value="progress">Progress</v-tab>
           </v-tabs>
-          <p v-if="document === 'progress' && !plan.progressAvailable" class="text-body-medium mb-4">This historical plan has no separate Progress document. Its original evidence remains in Plan.</p>
+          <p v-if="planDocument === 'progress' && !plan.progressAvailable" class="text-body-medium mb-4">This historical plan has no separate Progress document. Its original evidence remains in Plan.</p>
           <div v-for="(section, index) in overviewSections" :key="index" :class="{ 'work-plan-item': section.checked !== undefined }">
             <input v-if="section.checked !== undefined" type="checkbox" :checked="section.checked" disabled aria-label="Recorded checklist mark">
             <LongTextPreviewBlocks :blocks="section.blocks" />
