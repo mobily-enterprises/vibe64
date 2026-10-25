@@ -61,7 +61,6 @@ const PERSON_ONLY = Object.freeze(["api"]);
 
 function action({ id, input, execute, kind = "command", assistant = null, channels = null }) {
   return withVibe64ActionContext({
-    audit: { actionName: id },
     events: [],
     execute,
     extensions: assistant ? { assistant } : {},
@@ -69,7 +68,6 @@ function action({ id, input, execute, kind = "command", assistant = null, channe
     idempotency: kind === "query" ? "none" : "optional",
     input,
     kind,
-    observability: {},
     output: null,
     version: 1,
     ...(channels ? { channels } : {})

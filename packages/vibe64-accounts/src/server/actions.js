@@ -61,19 +61,19 @@ function createActions({ accounts } = {}) {
     {
       extensions: { assistant: modelRoutingTool("read") },
       id: ACTION_READ_MODEL_ROUTING, version: 1, kind: "query", input: modelRoutingReadInputValidator,
-      output: null, idempotency: "none", audit: { actionName: ACTION_READ_MODEL_ROUTING }, observability: {},
+      output: null, idempotency: "none",
       execute: (input) => accounts.readModelRouting(input)
     },
     {
       extensions: { assistant: modelRoutingTool("preview") },
       id: ACTION_PREVIEW_MODEL_ROUTING, version: 1, kind: "query", input: modelRoutingInputValidator,
-      output: null, idempotency: "none", audit: { actionName: ACTION_PREVIEW_MODEL_ROUTING }, observability: {},
+      output: null, idempotency: "none",
       execute: (input) => accounts.previewModelRouting(input)
     },
     {
       extensions: { assistant: modelRoutingTool("save") },
       id: ACTION_SAVE_MODEL_ROUTING, version: 1, kind: "command", input: modelRoutingInputValidator,
-      output: null, idempotency: "optional", audit: { actionName: ACTION_SAVE_MODEL_ROUTING }, observability: {},
+      output: null, idempotency: "optional",
       events: [vibe64AccountsChangedActionEvent(), vibe64ConnectionsChangedActionEvent()],
       execute: (input) => accounts.saveModelRouting(input)
     },
@@ -84,8 +84,6 @@ function createActions({ accounts } = {}) {
       input: accountsReadInputValidator,
       output: null,
       idempotency: "none",
-      audit: { actionName: ACTION_READ_CODEX_PROVIDERS },
-      observability: {},
       execute: (input) => accounts.readCodexProviders(input)
     },
     {
@@ -95,8 +93,6 @@ function createActions({ accounts } = {}) {
       input: codexProviderInputValidator,
       output: null,
       idempotency: "none",
-      audit: { actionName: ACTION_SAVE_CODEX_PROVIDER },
-      observability: {},
       events: [vibe64AccountsChangedActionEvent(), vibe64ConnectionsChangedActionEvent()],
       execute: (input) => accounts.saveCodexProvider(input)
     },
@@ -107,8 +103,6 @@ function createActions({ accounts } = {}) {
       input: codexProviderInputValidator,
       output: null,
       idempotency: "none",
-      audit: { actionName: ACTION_REMOVE_CODEX_PROVIDER },
-      observability: {},
       events: [vibe64AccountsChangedActionEvent(), vibe64ConnectionsChangedActionEvent()],
       execute: (input) => accounts.removeCodexProvider(input)
     },
@@ -119,10 +113,6 @@ function createActions({ accounts } = {}) {
       input: accountsReadInputValidator,
       output: null,
       idempotency: "none",
-      audit: {
-        actionName: ACTION_READ_ACCOUNTS
-      },
-      observability: {},
       async execute(input) {
         return accounts.getStatus(input);
       }
@@ -134,10 +124,6 @@ function createActions({ accounts } = {}) {
       input: accountIdInputValidator,
       output: null,
       idempotency: "optional",
-      audit: {
-        actionName: ACTION_LOGOUT_ACCOUNT
-      },
-      observability: {},
       events: [
         vibe64AccountsChangedActionEvent(),
         vibe64ConnectionsChangedActionEvent()
@@ -154,10 +140,6 @@ function createActions({ accounts } = {}) {
       input: gitIdentityInputValidator,
       output: null,
       idempotency: "optional",
-      audit: {
-        actionName: ACTION_SAVE_GIT_IDENTITY
-      },
-      observability: {},
       events: [
         vibe64AccountsChangedActionEvent(),
         vibe64ConnectionsChangedActionEvent()
@@ -173,10 +155,6 @@ function createActions({ accounts } = {}) {
       input: personalAiProfileInputValidator,
       output: null,
       idempotency: "optional",
-      audit: {
-        actionName: ACTION_SAVE_PERSONAL_AI_PROFILE
-      },
-      observability: {},
       events: [
         vibe64AccountsChangedActionEvent()
       ],
@@ -191,10 +169,6 @@ function createActions({ accounts } = {}) {
       input: accountAuthStartInputValidator,
       output: null,
       idempotency: "optional",
-      audit: {
-        actionName: ACTION_START_ACCOUNT_AUTH
-      },
-      observability: {},
       events: [
         vibe64AccountsChangedActionEvent(),
         vibe64ConnectionsChangedActionEvent(),
@@ -211,10 +185,6 @@ function createActions({ accounts } = {}) {
       input: accountAuthSessionInputValidator,
       output: null,
       idempotency: "none",
-      audit: {
-        actionName: ACTION_READ_ACCOUNT_AUTH_SESSION
-      },
-      observability: {},
       async execute(input) {
         return accounts.readAuthSession(input);
       }
@@ -226,10 +196,6 @@ function createActions({ accounts } = {}) {
       input: accountAuthSessionInputValidator,
       output: null,
       idempotency: "optional",
-      audit: {
-        actionName: ACTION_CANCEL_ACCOUNT_AUTH_SESSION
-      },
-      observability: {},
       async execute(input) {
         return accounts.cancelAuthSession(input);
       }
@@ -247,7 +213,6 @@ function createAiConnectionActions({ aiConnectionService, requireAiManagement = 
     id: `vibe64.accounts.ai-connections.${operation}`,
     version: 1, kind: ["list", "catalog"].includes(operation) ? "query" : "command",
     input, output: null, idempotency: "none",
-    audit: { actionName: `vibe64.accounts.ai-connections.${operation}` }, observability: {},
     extensions: { assistant: operation === "list" ? {
       description: "Read the owner's saved API connections in AI Accounts, without a project: one row per saved provider (for example Z.AI, Z.AI Coding Plan, OpenRouter or OpenCode Zen) with provider, label, ready, reason when not ready, preferred, defaultModelId and modelAccessMode. An empty list means nothing is saved; unavailable means the host has no connection store. ready is saved state only: it does not verify current credentials, balance, model entitlement or running conversations. Claude and Codex sign-ins are not saved connections. Regular Z.AI and a Z.AI Coding Plan are separate connections. Use Model routing read for actual future workflow assignments and offered choices; the preferred provider/default model is not the Senior assignment or Colleague's model. The person must register, enter the key and consent to paid models in AI Accounts. Never request a key in chat or infer setup completion from a quiz answer.",
       output: { mode: "replace", schema: createSchema({

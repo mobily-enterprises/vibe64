@@ -168,10 +168,6 @@ function action({ assistant, events = [], execute, id, input, kind, ownerRequire
     output: null,
     extensions: { assistant: assistant ?? { exclude: true } },
     idempotency: kind === "query" ? "none" : "optional",
-    audit: {
-      actionName: id
-    },
-    observability: {},
     events,
     execute
   }, { ownerRequired });

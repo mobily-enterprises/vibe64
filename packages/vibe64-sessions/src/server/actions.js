@@ -111,10 +111,6 @@ function action({
     output: null,
     extensions: { assistant: assistant ?? { exclude: true } },
     idempotency,
-    audit: {
-      actionName: id
-    },
-    observability: {},
     events,
     execute
   }, { projectScoped });

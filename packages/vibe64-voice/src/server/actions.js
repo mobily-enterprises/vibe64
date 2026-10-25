@@ -35,8 +35,6 @@ function createVoiceActions({ actions, voice } = {}) {
     output: null,
     extensions: { assistant: voiceCatalogueTool },
     idempotency: "none",
-    audit: { actionName: ACTION_READ_VOICE_CATALOGUE },
-    observability: {},
     async execute(_input, context) {
       // The Colleague read must authorize the original request afresh. Its
       // contributor rejects a resolved grant carried over from this action.

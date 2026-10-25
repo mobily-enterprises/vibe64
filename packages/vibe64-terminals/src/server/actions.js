@@ -64,8 +64,6 @@ function action({ assistant, channels, execute, id, idempotency = "optional", in
     output: null,
     extensions: { assistant: assistant || { exclude: true } },
     idempotency,
-    audit: { actionName: id },
-    observability: {},
     execute
   });
 }

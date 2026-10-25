@@ -17,10 +17,6 @@ function createActions({ currentApp } = {}) {
     output: null,
     extensions: { assistant: { exclude: true } },
     idempotency: "none",
-    audit: {
-      actionName: ACTION_READ_CURRENT_APP
-    },
-    observability: {},
     execute(input) {
       return currentApp.inspectCurrentApp(input);
     }
