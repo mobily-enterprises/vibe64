@@ -24,4 +24,18 @@ describe("Vibe64CodexSession", () => {
     expect(unmountHandler).toContain("detachTerminal()");
     expect(unmountHandler).not.toContain("closeTerminal()");
   });
+
+  it("shares the agent terminal panels and shows one start icon for panel and button", () => {
+    const source = readFileSync(componentPath, "utf8");
+    const native = readFileSync(path.resolve("src/components/studio/Vibe64NativeAgentSession.vue"), "utf8");
+    for (const file of [source, native]) {
+      expect(file).toContain("<Vibe64AgentTerminalStartPanel");
+      expect(file).toContain("<Vibe64AgentTerminalDropOverlay");
+      expect(file).toContain("useVibe64AgentTerminalDisplay(props,");
+    }
+    expect(source).not.toContain("terminalStartButtonIcon");
+    expect(source).toMatch(/terminalStartIcon = computed\(\(\) => \(\s*terminalReconnectRequired\.value \|\|/u);
+    expect(source).not.toContain("handleTerminalAttachmentDrag");
+    expect(source).toContain('@dragenter.prevent="terminalAttachmentsEnabled && handleAttachmentDragEnter($event)"');
+  });
 });

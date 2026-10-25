@@ -63,40 +63,17 @@
         />
       </template>
       <template #overlay>
-        <div v-if="attachmentDragActive" class="vibe64-native-agent-session__drop-overlay" role="status">
-          <v-sheet class="vibe64-native-agent-session__drop-card" elevation="4" rounded="lg">
-            <v-icon :icon="mdiPaperclip" size="28" />
-            <span>Drop files for {{ assistantLabel }}</span>
-          </v-sheet>
-        </div>
-        <div v-if="showStartPanel" class="vibe64-native-agent-session__start-panel">
-          <v-sheet
-            class="vibe64-native-agent-session__start-card"
-            elevation="4"
-            role="status"
-            rounded="lg"
-          >
-            <div class="vibe64-native-agent-session__start-icon">
-              <v-icon :icon="terminalExited ? mdiRestart : mdiPlayCircleOutline" size="30" />
-            </div>
-            <div class="vibe64-native-agent-session__start-copy">
-              <strong>{{ terminalExited ? `${assistantLabel} terminal exited` : `${assistantLabel} terminal is off` }}</strong>
-              <span>{{ sourcePending ? "The terminal can start after the session source is ready." : `Start an interactive ${assistantLabel} terminal for this session.` }}</span>
-            </div>
-            <v-btn
-              v-if="!sourcePending"
-              :aria-busy="terminalStarting ? 'true' : undefined"
-              class="vibe64-native-agent-session__start-action"
-              color="primary"
-              :disabled="terminalStarting"
-              :prepend-icon="terminalExited ? mdiRestart : mdiPlayCircleOutline"
-              variant="flat"
-              @click="restartTerminal"
-            >
-              {{ terminalStarting ? `Starting ${assistantLabel}…` : terminalExited ? `Restart ${assistantLabel}` : `Start ${assistantLabel}` }}
-            </v-btn>
-          </v-sheet>
-        </div>
+        <Vibe64AgentTerminalDropOverlay v-if="attachmentDragActive" :label="`Drop files for ${assistantLabel}`" />
+        <Vibe64AgentTerminalStartPanel
+          v-if="showStartPanel"
+          :action-text="terminalStarting ? `Starting ${assistantLabel}…` : terminalExited ? `Restart ${assistantLabel}` : `Start ${assistantLabel}`"
+          :action-visible="!sourcePending"
+          :icon="terminalExited ? mdiRestart : mdiPlayCircleOutline"
+          :message="sourcePending ? 'The terminal can start after the session source is ready.' : `Start an interactive ${assistantLabel} terminal for this session.`"
+          :starting="terminalStarting"
+          :title="terminalExited ? `${assistantLabel} terminal exited` : `${assistantLabel} terminal is off`"
+          @start="restartTerminal"
+        />
       </template>
 
       <template #footer="{ commandPreview, status }">
@@ -118,6 +95,9 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { mdiPaperclip, mdiPlayCircleOutline, mdiRestart } from "@mdi/js";
 import Vibe64AttachmentQueue from "@/components/studio/vibe64-session/Vibe64AttachmentQueue.vue";
+import Vibe64AgentTerminalDropOverlay from "@/components/studio/Vibe64AgentTerminalDropOverlay.vue";
+import Vibe64AgentTerminalStartPanel from "@/components/studio/Vibe64AgentTerminalStartPanel.vue";
+import { useVibe64AgentTerminalDisplay, vibe64ServerAgentTerminal } from "@/composables/useVibe64AgentTerminalDisplay.js";
 import { useAgentTerminalAttachments } from "@/composables/useAgentTerminalAttachments.js";
 import { useVibe64AttachmentCommands } from "@/composables/useVibe64AttachmentCommands.js";
 import { assistantAttachmentFilesFromPasteEvent } from "@jskit-ai/assistant-core/client/conversation-attachments";
@@ -165,21 +145,15 @@ const assistantLabel = computed(() => assistantProvider.value?.label || "");
 const assistantAcceptsAttachments = computed(() => assistantProvider.value?.terminalAttachments === true);
 const sessionId = computed(() => String(props.session?.sessionId || ""));
 const sessionSource = computed(() => String(props.session?.sourcePath || ""));
-const displayActive = computed(() => props.visible && props.displayMode !== "headless");
-const serverTerminal = computed(() => {
-  const terminal = props.session?.agentSession?.terminal;
-  return terminal && typeof terminal === "object" && !Array.isArray(terminal)
-    ? terminal
-    : {};
-});
+const serverTerminal = computed(() => vibe64ServerAgentTerminal(props.session));
 const serverTerminalId = computed(() => String(
   serverTerminal.value.id || serverTerminal.value.terminalSessionId || ""
 ));
-const hiddenListenActive = computed(() => Boolean(
-  props.listenWhenHidden && serverTerminalId.value && !displayActive.value
-));
-const terminalStreamActive = computed(() => Boolean(displayActive.value || hiddenListenActive.value));
-const terminalPresentation = computed(() => displayActive.value ? "inline" : "headless");
+const {
+  displayActive,
+  presentation: terminalPresentation,
+  streamActive: terminalStreamActive
+} = useVibe64AgentTerminalDisplay(props, serverTerminalId);
 
 const terminalController = useVibe64Terminal({
   driver: createWebSocketTerminalDriver({
@@ -437,72 +411,8 @@ onBeforeUnmount(() => {
   position: absolute;
 }
 
-.vibe64-native-agent-session__drop-overlay {
-  align-items: center;
-  background: rgba(var(--v-theme-surface), 0.8);
-  display: flex;
-  inset: 0;
-  justify-content: center;
-  pointer-events: none;
-  position: absolute;
-  z-index: 3;
-}
-
-.vibe64-native-agent-session__drop-card {
-  align-items: center;
-  display: flex;
-  gap: 0.5rem;
-  padding: 1rem;
-}
-
-.vibe64-native-agent-session__start-panel {
-  align-items: center;
-  display: flex;
-  inset: 0;
-  justify-content: center;
-  padding: 1rem;
-  position: absolute;
-}
-
-.vibe64-native-agent-session__start-card {
-  align-items: center;
-  display: grid;
-  gap: 0.9rem;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  max-inline-size: 48rem;
-  padding: 1rem;
-  width: 100%;
-}
-
-.vibe64-native-agent-session__start-icon {
-  align-items: center;
-  background: rgb(var(--v-theme-secondary-container));
-  border-radius: 50%;
-  color: rgb(var(--v-theme-on-secondary-container));
-  display: flex;
-  height: 3.25rem;
-  justify-content: center;
-  width: 3.25rem;
-}
-
-.vibe64-native-agent-session__start-copy {
-  display: grid;
-  gap: 0.2rem;
-}
-
-.vibe64-native-agent-session__start-copy span,
 .vibe64-native-agent-session__command {
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   font-size: 0.82rem;
-}
-
-@media (max-width: 600px) {
-  .vibe64-native-agent-session__start-card {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .vibe64-native-agent-session__start-action {
-    grid-column: 1 / -1;
-  }
 }
 </style>

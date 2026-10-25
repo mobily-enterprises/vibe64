@@ -7,10 +7,10 @@
       'vibe64-codex-session--headless': displayMode === 'headless'
     }"
     :aria-hidden="displayMode === 'headless' ? 'true' : undefined"
-    @dragenter="handleTerminalAttachmentDragEnter"
-    @dragover="handleTerminalAttachmentDragOver"
-    @dragleave="handleTerminalAttachmentDragLeave"
-    @drop="handleTerminalAttachmentDrop"
+    @dragenter.prevent="terminalAttachmentsEnabled && handleAttachmentDragEnter($event)"
+    @dragover.prevent="terminalAttachmentsEnabled && handleAttachmentDragOver($event)"
+    @dragleave.prevent="terminalAttachmentsEnabled && handleAttachmentDragLeave($event)"
+    @drop.prevent="terminalAttachmentsEnabled && handleAttachmentDrop($event)"
   >
     <input
       v-if="terminalAttachmentsEnabled"
@@ -81,42 +81,17 @@
       </template>
 
       <template #overlay>
-        <div
-          v-if="attachmentDragActive"
-          class="vibe64-codex-session__drop-overlay"
-          aria-live="polite"
-          role="status"
-        >
-          <v-sheet class="vibe64-codex-session__drop-card" rounded="lg" elevation="4">
-            <v-icon :icon="mdiPaperclip" size="28" />
-            <span>Drop temporary files for Codex</span>
-          </v-sheet>
-        </div>
-
-        <div v-if="showTerminalStartPanel" class="vibe64-codex-session__start-panel">
-          <v-sheet class="vibe64-codex-session__start-card" rounded="lg" elevation="4" role="status">
-            <div class="vibe64-codex-session__start-icon">
-              <v-icon :icon="terminalStartIcon" size="30" />
-            </div>
-            <div class="vibe64-codex-session__start-copy">
-              <strong>{{ terminalStartPanelTitle }}</strong>
-              <span>{{ terminalStartPanelMessage }}</span>
-            </div>
-            <v-btn
-              v-if="terminalStartActionVisible"
-              :aria-busy="terminalStarting ? 'true' : undefined"
-              class="vibe64-codex-session__start-action"
-              color="primary"
-              :disabled="terminalStarting"
-              :prepend-icon="terminalStartButtonIcon"
-              size="default"
-              variant="flat"
-              @click="restartTerminal"
-            >
-              {{ terminalStartButtonText }}
-            </v-btn>
-          </v-sheet>
-        </div>
+        <Vibe64AgentTerminalDropOverlay v-if="attachmentDragActive" label="Drop temporary files for Codex" />
+        <Vibe64AgentTerminalStartPanel
+          v-if="showTerminalStartPanel"
+          :action-text="terminalStartButtonText"
+          :action-visible="terminalStartActionVisible"
+          :icon="terminalStartIcon"
+          :message="terminalStartPanelMessage"
+          :starting="terminalStarting"
+          :title="terminalStartPanelTitle"
+          @start="restartTerminal"
+        />
       </template>
 
       <template #before-terminal>
@@ -163,6 +138,9 @@ import {
 } from "@local/vibe64-accounts/client";
 import Vibe64InteractiveTerminal from "@/components/studio/Vibe64InteractiveTerminal.vue";
 import Vibe64AttachmentQueue from "@/components/studio/vibe64-session/Vibe64AttachmentQueue.vue";
+import Vibe64AgentTerminalDropOverlay from "@/components/studio/Vibe64AgentTerminalDropOverlay.vue";
+import Vibe64AgentTerminalStartPanel from "@/components/studio/Vibe64AgentTerminalStartPanel.vue";
+import { useVibe64AgentTerminalDisplay, vibe64ServerAgentTerminal } from "@/composables/useVibe64AgentTerminalDisplay.js";
 import { useVibe64Terminal } from "@/composables/useVibe64Terminal.js";
 import {
   vibe64AgentTerminalWebSocketUrl
@@ -227,11 +205,7 @@ const terminalAttachmentsEnabled = computed(() => Boolean(
   sessionId.value
 ));
 const sessionSource = computed(() => String(props.session?.sourcePath || ""));
-const terminalDisplayActive = computed(() => props.visible && props.displayMode !== "headless");
-const rawServerCodexTerminal = computed(() => {
-  const terminal = props.session?.agentSession?.terminal;
-  return terminal && typeof terminal === "object" && !Array.isArray(terminal) ? terminal : {};
-});
+const rawServerCodexTerminal = computed(() => vibe64ServerAgentTerminal(props.session));
 const serverCodexTerminal = computed(() => {
   const terminal = rawServerCodexTerminal.value;
   if (terminal.stale || terminal.restartRequired) {
@@ -258,18 +232,11 @@ const serverTerminalSession = computed(() => ({
   id: String(serverCodexTerminal.value.id || serverCodexTerminal.value.terminalSessionId || ""),
   status: String(serverCodexTerminal.value.status || "")
 }));
-const hiddenTerminalListenActive = computed(() => Boolean(
-  props.listenWhenHidden &&
-  serverTerminalSession.value.id &&
-  !terminalDisplayActive.value
-));
-const terminalStreamActive = computed(() => Boolean(
-  terminalDisplayActive.value ||
-  hiddenTerminalListenActive.value
-));
-const terminalPresentation = computed(() => (
-  terminalDisplayActive.value ? "inline" : "headless"
-));
+const {
+  displayActive: terminalDisplayActive,
+  presentation: terminalPresentation,
+  streamActive: terminalStreamActive
+} = useVibe64AgentTerminalDisplay(props, computed(() => serverTerminalSession.value.id));
 const hasTerminalSession = computed(() => Boolean(
   terminalSessionId.value ||
   serverTerminalSession.value.id
@@ -418,37 +385,6 @@ function handleTerminalAttachmentFileSelection(event) {
   void uploadAttachmentFiles(files);
 }
 
-function handleTerminalAttachmentDragEnter(event) {
-  event?.preventDefault?.();
-  if (!terminalAttachmentsEnabled.value) {
-    return;
-  }
-  handleAttachmentDragEnter(event);
-}
-
-function handleTerminalAttachmentDragOver(event) {
-  event?.preventDefault?.();
-  if (!terminalAttachmentsEnabled.value) {
-    return;
-  }
-  handleAttachmentDragOver(event);
-}
-
-function handleTerminalAttachmentDragLeave(event) {
-  event?.preventDefault?.();
-  if (!terminalAttachmentsEnabled.value) {
-    return;
-  }
-  handleAttachmentDragLeave(event);
-}
-
-function handleTerminalAttachmentDrop(event) {
-  event?.preventDefault?.();
-  if (!terminalAttachmentsEnabled.value) {
-    return;
-  }
-  void handleAttachmentDrop(event);
-}
 const terminalCanStart = computed(() => Boolean(canStartTerminal.value));
 const sessionSourcePending = computed(() => Boolean(
   terminalDisplayActive.value &&
@@ -458,15 +394,11 @@ const sessionSourcePending = computed(() => Boolean(
 ));
 const terminalStartActionVisible = computed(() => !sessionSourcePending.value);
 const terminalServerStale = computed(() => Boolean(serverCodexTerminal.value.stale || serverCodexTerminal.value.restartRequired));
-const terminalStartIcon = computed(() => (terminalExited.value || terminalServerStale.value) ? mdiRestart : mdiPlayCircleOutline);
 const terminalReconnectRequired = computed(() => terminalError.value === CODEX_RECONNECT_REQUIRED_MESSAGE);
 const sessionCodexReconnectSignature = computed(() => codexReconnectRequiredSignature(props.session || {}));
-const terminalStartButtonIcon = computed(() => {
-  if (terminalReconnectRequired.value || terminalExited.value || terminalServerStale.value) {
-    return mdiRestart;
-  }
-  return mdiPlayCircleOutline;
-});
+const terminalStartIcon = computed(() => (
+  terminalReconnectRequired.value || terminalExited.value || terminalServerStale.value ? mdiRestart : mdiPlayCircleOutline
+));
 const terminalStartPanelTitle = computed(() => {
   if (sessionSourcePending.value) {
     return "Session source is being prepared";
@@ -698,34 +630,13 @@ async function sendAttachmentPath(text, attachmentIds = [], target = {}) {
   return true;
 }
 
-async function sendTerminalData(data, {
-  source = "program"
-} = {}) {
-  const input = String(data || "");
+async function sendEscape() {
   try {
-    if (!(await ensureTerminalReady())) {
-      return false;
-    }
-    if (!(await sendTerminalBytes(input))) {
-      return false;
-    }
-    if (source === "user" && input.includes("\u0003")) {
-      clearCodexBusy();
-      clearCodexWorking();
-    } else if (source === "user" && input.includes("\r")) {
-      markCodexBusy();
-    }
-    return true;
+    return await ensureTerminalReady() && await sendTerminalBytes("\u001b");
   } catch (sendError) {
     terminalError.value = String(sendError?.message || sendError || "Terminal input failed.");
     return false;
   }
-}
-
-async function sendEscape() {
-  return sendTerminalData("\u001b", {
-    source: "user"
-  });
 }
 
 async function focusTerminal() {
@@ -988,80 +899,11 @@ defineExpose({
   border-color: rgba(var(--v-theme-primary), 0.72);
 }
 
-.vibe64-codex-session__drop-overlay,
-.vibe64-codex-session__start-panel {
-  align-items: center;
-  display: flex;
-  inset: 0;
-  justify-content: center;
-  padding: 1rem;
-  position: absolute;
-}
-
-.vibe64-codex-session__drop-overlay {
-  background: rgba(var(--v-theme-scrim, var(--v-theme-on-surface)), 0.68);
-  pointer-events: none;
-  z-index: 5;
-}
-
-.vibe64-codex-session__drop-card {
-  align-items: center;
-  display: flex;
-  gap: 0.7rem;
-  padding: 1rem 1.15rem;
-}
-
-.vibe64-codex-session__start-panel {
-  background: rgba(var(--v-theme-scrim), 0.8);
-  z-index: 3;
-}
-
-.vibe64-codex-session__start-card {
-  align-items: center;
-  display: grid;
-  gap: 0.85rem;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  max-width: min(42rem, 100%);
-  padding: 1rem;
-  width: 100%;
-}
-
-.vibe64-codex-session__start-icon {
-  align-items: center;
-  background: rgba(var(--v-theme-primary), 0.14);
-  border-radius: 50%;
-  color: rgb(var(--v-theme-primary));
-  display: flex;
-  height: 3rem;
-  justify-content: center;
-  width: 3rem;
-}
-
-.vibe64-codex-session__start-copy {
-  display: grid;
-  gap: 0.15rem;
-  min-width: 0;
-}
-
-.vibe64-codex-session__start-copy strong {
-  font-size: 0.95rem;
-}
-
-.vibe64-codex-session__start-copy span {
-  color: rgba(var(--v-theme-on-surface), 0.72);
-  font-size: 0.8rem;
-  line-height: 1.35;
-}
-
 .vibe64-codex-session__command {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.vibe64-codex-session__start-action {
-  min-inline-size: 10rem;
 }
 
 .vibe64-codex-session__attachment-action {
@@ -1076,13 +918,12 @@ defineExpose({
   }
 }
 
-@media (max-width: 700px) {
-  .vibe64-codex-session__start-card {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
+.vibe64-codex-session__start-action {
+  min-inline-size: 10rem;
+}
 
+@media (max-width: 700px) {
   .vibe64-codex-session__start-action {
-    grid-column: 1 / -1;
     width: 100%;
   }
 }
