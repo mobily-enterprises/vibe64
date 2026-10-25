@@ -13,7 +13,6 @@ import {
   vibe64SessionStatusLabel
 } from "@/lib/vibe64SessionViewModel.js";
 import {
-  agentTurnControlPayloadFromContext,
   vibe64SessionPath
 } from "@/lib/vibe64SessionRequestConfig.js";
 import { vibe64ApiError, vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
@@ -77,10 +76,6 @@ function runtimeHostAgentWorking({
     transientAgentThinking ||
     sessionRecordHasActiveAgentWork(selectedSession)
   );
-}
-
-function agentMessageAcceptanceSignal(controller) {
-  return controller.signal;
 }
 
 function createVibe64SessionWorkRefreshQueue({ inspect } = {}) {
@@ -533,15 +528,6 @@ function useVibe64SessionRuntimeHost(props, emit) {
     autopilotAgentThinking.value = Boolean(busy);
   }
 
-  function emitToolbarControls() {
-    emit("toolbar-controls-ready", {
-      controls: {
-        archive: dialogs.archive
-      },
-      sessionId: selectedSessionId.value
-    });
-  }
-
   function emitBusy() {
     emit("busy-change", {
       agentThinking: activeAgentWorking.value,
@@ -568,7 +554,6 @@ function useVibe64SessionRuntimeHost(props, emit) {
   ));
 
   onMounted(() => {
-    emitToolbarControls();
     emitBusy();
     emit("page-error-change", {
       error: pageError.value,
@@ -665,8 +650,6 @@ function useVibe64SessionRuntimeHost(props, emit) {
 }
 
 export {
-  agentMessageAcceptanceSignal,
-  agentTurnControlPayloadFromContext,
   createVibe64SessionWorkRefreshQueue,
   focusRuntimeSessionChat,
   proxySessionDialogs,

@@ -154,7 +154,6 @@ const emit = defineEmits([
   "page-error-change",
   "source-operations-suspension-change",
   "work-state-change",
-  "toolbar-controls-ready",
   "project-attention"
 ]);
 

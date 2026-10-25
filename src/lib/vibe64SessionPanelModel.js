@@ -33,7 +33,6 @@ function blockingVibe64SessionPageError({
   hasMountedRuntime = false,
   runtimePageError = "",
   selectedSession = null,
-  selectedSessionLoadError = "",
   sessionListLoadError = "",
   sessions = []
 } = {}) {
@@ -43,11 +42,7 @@ function blockingVibe64SessionPageError({
   }
   const hasSelectedSession = Boolean(selectedSession?.sessionId || selectedSession);
   const listError = String(sessionListLoadError || "").trim();
-  if (listError && !hasMountedRuntime && !hasSelectedSession && sessions.length < 1) {
-    return listError;
-  }
-  const selectedError = String(selectedSessionLoadError || "").trim();
-  return selectedError && !hasMountedRuntime && !hasSelectedSession ? selectedError : "";
+  return listError && !hasMountedRuntime && !hasSelectedSession && sessions.length < 1 ? listError : "";
 }
 
 function enrichVibe64SessionForDisplay(session = null) {

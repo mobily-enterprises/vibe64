@@ -558,7 +558,7 @@ function useVibe64SessionData() {
     selectedSessionId,
     selectedSessionTitle,
     sessionsApiPath
-  }).archive);
+  }));
 
   const archiveFeedback = useUiFeedback({ source: "vibe64.sessions.archive.remote" });
   const shownArchiveFailures = new Set();

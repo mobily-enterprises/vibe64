@@ -113,8 +113,6 @@ describe("useVibe64SessionPanel", () => {
       selectedSessionId: "session-b",
       sessionLoadError: true,
       unrenderedMountedRuntimeHostCount: 1,
-      visibleRuntimeHostCount: 2,
-      visibleRuntimeSessionIds: ["session-a", "session-b"],
       visibleSessionCount: 2
     });
   });

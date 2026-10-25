@@ -42,7 +42,7 @@ describe("plain Vibe64 session presentation", () => {
       .toBe("Runtime unavailable");
     expect(blockingVibe64SessionPageError({
       selectedSession: { sessionId: "session-1" },
-      selectedSessionLoadError: "Temporary refresh error"
+      sessionListLoadError: "Temporary refresh error"
     })).toBe("");
   });
 

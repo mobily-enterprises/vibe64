@@ -77,7 +77,6 @@ const SessionRuntimeHost = componentFromSfcTemplate(
       "chat-attention",
       "page-error-change",
       "work-state-change",
-      "toolbar-controls-ready",
       "project-attention"
     ],
     name: "Vibe64SessionRuntimeHost",
@@ -168,20 +167,19 @@ const SessionPanel = componentFromSfcTemplate(
         props,
         resizeChatColumnWithKeyboard: vi.fn(),
         runtimeHostSessionIds: ref(["session-1"]),
-        selectedArchive: reactive({}),
         selectedSessionArchiving: ref(false),
         selection: reactive({
           isArchived: false,
           selectedSessionId: "session-1"
         }),
         sessionData: reactive({
+          archive: {},
           sessionsApiPath: "/api/vibe64/sessions",
           sessionList: { unavailableItems: [], isLoading: false }
         }),
         sessionTooltip: createVibe64SessionTooltipState(),
         setRuntimeBusy: vi.fn(),
         setRuntimePageError: vi.fn(),
-        setRuntimeToolbarControls: vi.fn(),
         setRuntimeWorkState: vi.fn(),
         startChatColumnResize: vi.fn(),
         toolbar: reactive({ sessions: [] }),

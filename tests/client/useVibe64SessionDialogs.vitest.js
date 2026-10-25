@@ -37,11 +37,11 @@ describe("useVibe64SessionDialogs", () => {
 
   it("opens and cancels the archive confirmation", () => {
     const dialogs = useVibe64SessionDialogs(dialogOptions());
-    dialogs.archive.request();
-    expect(dialogs.archive.open.value).toBe(true);
-    expect(dialogs.archive.sessionTitle.value).toBe("Session one");
-    dialogs.archive.cancel();
-    expect(dialogs.archive.open.value).toBe(false);
+    dialogs.request();
+    expect(dialogs.open.value).toBe(true);
+    expect(dialogs.sessionTitle.value).toBe("Session one");
+    dialogs.cancel();
+    expect(dialogs.open.value).toBe(false);
   });
 
   it("switches away before awaiting archival and refreshes after completion", async () => {
@@ -56,15 +56,15 @@ describe("useVibe64SessionDialogs", () => {
       selectedSessionId
     }));
 
-    dialogs.archive.request();
-    await dialogs.archive.confirm();
+    dialogs.request();
+    await dialogs.confirm();
 
     expect(beginArchive).toHaveBeenCalledOnce();
     expect(refreshSessionData).toHaveBeenCalledWith({
       includeList: true,
       reason: "archive-session"
     });
-    expect(dialogs.archive.archiving.value).toBe(false);
+    expect(dialogs.archiving.value).toBe(false);
   });
 
   it("restores availability when archiving fails", async () => {
@@ -78,10 +78,10 @@ describe("useVibe64SessionDialogs", () => {
     const beginArchive = vi.fn();
     const dialogs = useVibe64SessionDialogs(dialogOptions({ beginArchive }));
 
-    dialogs.archive.request();
-    expect(await dialogs.archive.confirm()).toBe(false);
+    dialogs.request();
+    expect(await dialogs.confirm()).toBe(false);
     expect(beginArchive).toHaveBeenCalledOnce();
-    expect(dialogs.archive.archiving.value).toBe(false);
+    expect(dialogs.archiving.value).toBe(false);
   });
 
   it("rejects a structured archive failure instead of reporting success", async () => {
@@ -104,33 +104,10 @@ describe("useVibe64SessionDialogs", () => {
       refreshSessionData
     }));
 
-    dialogs.archive.request();
-    expect(await dialogs.archive.confirm()).toBe(false);
+    dialogs.request();
+    expect(await dialogs.confirm()).toBe(false);
     expect(beginArchive).toHaveBeenCalledOnce();
     expect(refreshSessionData).toHaveBeenCalledOnce();
   });
 });
 
-
-describe("explicit session archive eligibility", () => {
-  it("refuses an ineligible active session without claiming it is archived and retains ordinary eligibility when enabled", () => {
-    commandMocks.useCommand.mockImplementation(() => ({ isRunning: false, run: vi.fn(async () => ({ ok: true })) }));
-    const archiveAllowed = ref(false);
-    const options = dialogOptions({ archiveAllowed: () => archiveAllowed.value });
-    const dialogs = useVibe64SessionDialogs(options);
-    dialogs.archive.request();
-    expect(options.isSelectedSessionArchived.value).toBe(false);
-    expect(dialogs.archive.open.value).toBe(false);
-    expect(dialogs.archive.sessionId.value).toBe("");
-    expect(dialogs.archive.command.run).not.toHaveBeenCalled();
-    archiveAllowed.value = true;
-    dialogs.archive.request();
-    expect(options.isSelectedSessionArchived.value).toBe(false);
-    expect(dialogs.archive.open.value).toBe(true);
-    expect(dialogs.archive.sessionId.value).toBe("session-1");
-    dialogs.archive.cancel();
-    const denied = useVibe64SessionDialogs(dialogOptions({ archiveAllowed: false }));
-    denied.archive.request();
-    expect(denied.archive.open.value).toBe(false);
-  });
-});

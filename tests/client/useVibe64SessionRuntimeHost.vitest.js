@@ -3,9 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { validateSchemaPayload } from "@jskit-ai/kernel/shared/validators";
 
 import { agentMessageInputValidator } from "../../packages/vibe64-sessions/src/server/inputSchemas.js";
+import { agentTurnControlPayloadFromContext } from "../../src/lib/vibe64SessionRequestConfig.js";
 import {
-  agentMessageAcceptanceSignal,
-  agentTurnControlPayloadFromContext,
   createVibe64SessionWorkRefreshQueue,
   focusRuntimeSessionChat,
   proxySessionDialogs,
@@ -107,18 +106,6 @@ describe("Vibe64 direct session runtime host", () => {
     expect(calls).toBe(2);
     expect(states).toEqual([{ operation: { status: "ready" } }]);
     queue.dispose();
-  });
-
-  it("lets an early chat request wait for declared workspace preparation", () => {
-    const controller = new AbortController();
-    const signal = agentMessageAcceptanceSignal(controller, {
-      waitingForWorkspaceSetup: true
-    });
-
-    expect(signal).toBe(controller.signal);
-    expect(signal.aborted).toBe(false);
-    controller.abort();
-    expect(signal.aborted).toBe(true);
   });
 
   it("tracks every repository background task instead of only the oldest one", () => {

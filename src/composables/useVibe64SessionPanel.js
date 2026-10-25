@@ -67,12 +67,6 @@ function useVibe64SessionPanel(props, emit) {
   const route = useRoute();
   const projectSlug = useVibe64ProjectSlug();
 
-  const fallbackArchive = {
-    command: {
-      isRunning: false
-    },
-    request: () => null
-  };
   const dismissedPageError = ref("");
   const mountedRuntimeSessionIds = ref([]);
   const runtimeStateBySessionId = reactive({});
@@ -115,10 +109,7 @@ function useVibe64SessionPanel(props, emit) {
     if ((sessionData.sessions.value || []).some((session) => session.sessionId === id)) return id;
     return sessionData.sessionList.isInitialLoading && id !== selectedSessionIdFromRoute(route) ? id : "";
   });
-  let repositoryStatusRegistry = {
-    observe: () => null
-  };
-  repositoryStatusRegistry = useVibe64SessionRepositoryStatusRegistry({
+  const repositoryStatusRegistry = useVibe64SessionRepositoryStatusRegistry({
     onState: applyRuntimeWorkState,
     selectedSessionId: () => listedSelectedSessionId.value,
     sessionSourceOperationsSuspended: (sessionId) => (
@@ -209,16 +200,14 @@ function useVibe64SessionPanel(props, emit) {
     (toolbar.sessions || []).length < 1
   ));
   const emptyLayoutVisible = computed(() => !selection.selectedSession);
-  const selectedArchive = computed(() => sessionData.archive || fallbackArchive);
   const selectedSessionArchiving = computed(() => sessionPanelSelectedSessionArchiving({
-    archive: selectedArchive.value,
+    archive: sessionData.archive,
     selectedSessionId: selection.selectedSessionId
   }));
   const rawPageError = computed(() => blockingVibe64SessionPageError({
     hasMountedRuntime: runtimeHostSessionIds.value.length > 0,
     runtimePageError: selectedRuntimeState.value?.pageError,
     selectedSession: selection.selectedSession,
-    selectedSessionLoadError: "",
     sessionListLoadError: sessionData.sessionList.loadError,
     sessions: toolbar.sessions || []
   }));
@@ -286,7 +275,6 @@ function useVibe64SessionPanel(props, emit) {
     promptHintPolicy,
     projectPane,
     runtimeHostSessionIds,
-    selectedArchive,
     selectedSessionArchiving,
     selection,
     sessionData,
@@ -294,7 +282,6 @@ function useVibe64SessionPanel(props, emit) {
     setRuntimePageError,
     setRuntimeSourceOperationsSuspended,
     setRuntimeWorkState,
-    setRuntimeToolbarControls,
     toolbar,
     visiblePageError
   };
@@ -318,7 +305,6 @@ function useVibe64SessionPanel(props, emit) {
     }
     if (!runtimeStateBySessionId[key]) {
       runtimeStateBySessionId[key] = {
-        toolbarControls: null,
         agentThinking: false,
         busy: false,
         pageError: "",
@@ -342,16 +328,6 @@ function useVibe64SessionPanel(props, emit) {
       key
     ];
     ensureRuntimeState(key);
-  }
-
-  function setRuntimeToolbarControls({
-    controls = null,
-    sessionId = ""
-  } = {}) {
-    const state = ensureRuntimeState(sessionId);
-    if (state) {
-      state.toolbarControls = controls;
-    }
   }
 
   function setRuntimeBusy({
@@ -553,8 +529,6 @@ function sessionPanelRuntimeHostDiagnostics({
     selectedSessionId: selectedId,
     sessionLoadError: Boolean(sessionLoadError),
     unrenderedMountedRuntimeHostCount: mountedIds.filter((sessionId) => !renderedSet.has(sessionId)).length,
-    visibleRuntimeHostCount: renderedIds.length,
-    visibleRuntimeSessionIds: renderedIds,
     visibleSessionCount: sessionIds.length
   };
 }

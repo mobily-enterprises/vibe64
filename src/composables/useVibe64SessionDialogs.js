@@ -10,7 +10,6 @@ import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 
 function useVibe64SessionDialogs({
-  archiveAllowed = true,
   beginArchive = () => null,
   finishArchive = () => null,
   isSelectedSessionArchived,
@@ -61,7 +60,6 @@ function useVibe64SessionDialogs({
 
   function requestArchiveSelectedSession() {
     if (
-      !readRefOrGetterValue(archiveAllowed) ||
       !unref(selectedSessionId) ||
       archivingSessionId.value ||
       archiveCommand.isRunning ||
@@ -110,24 +108,16 @@ function useVibe64SessionDialogs({
     }
   }
 
-  function clear() {
-    clearArchiveDialog();
-  }
-
   return {
-    archive: {
-      archiving: computed(() => Boolean(archivingSessionId.value)),
-      archivingSessionId,
-      cancel: cancelArchiveSession,
-      command: archiveCommand,
-      confirm: confirmArchiveSession,
-      open: archiveDialogOpen,
-      request: requestArchiveSelectedSession,
-      sessionId: archiveDialogSessionId,
-      sessionTitle: archiveDialogSessionTitle
-    },
-    busy: computed(() => Boolean(archivingSessionId.value)),
-    clear
+    archiving: computed(() => Boolean(archivingSessionId.value)),
+    archivingSessionId,
+    cancel: cancelArchiveSession,
+    command: archiveCommand,
+    confirm: confirmArchiveSession,
+    open: archiveDialogOpen,
+    request: requestArchiveSelectedSession,
+    sessionId: archiveDialogSessionId,
+    sessionTitle: archiveDialogSessionTitle
   };
 }
 

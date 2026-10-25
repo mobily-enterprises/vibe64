@@ -28,7 +28,7 @@
       @recheck="sessionData.refreshSessionData"
     />
 
-    <Vibe64SessionArchiveDialog :archive="selectedArchive" :short-session-id="sessionData.shortSessionId" />
+    <Vibe64SessionArchiveDialog :archive="sessionData.archive" :short-session-id="sessionData.shortSessionId" />
 
     <Vibe64EmptySessionLayout
       v-if="emptyLayoutVisible"
@@ -43,7 +43,7 @@
     >
       <template #header>
         <Vibe64SessionToolbar
-          :archive="selectedArchive"
+          :archive="sessionData.archive"
           compact
           :create-attention="emptyCreateAttention"
           :create-teleport-target="selectedSessionArchiving ? '' : props.createSessionTeleportTarget"
@@ -117,7 +117,6 @@
         @page-error-change="setRuntimePageError"
         @source-operations-suspension-change="setRuntimeSourceOperationsSuspended"
         @work-state-change="setRuntimeWorkState"
-        @toolbar-controls-ready="setRuntimeToolbarControls"
         @project-attention="emitProjectAttention"
       >
         <template #dashboard="dashboardSlotProps">
@@ -183,7 +182,6 @@ const {
   promptHintPolicy,
   projectPane,
   runtimeHostSessionIds,
-  selectedArchive,
   selectedSessionArchiving,
   selection,
   sessionData,
@@ -191,7 +189,6 @@ const {
   setRuntimePageError,
   setRuntimeSourceOperationsSuspended,
   setRuntimeWorkState,
-  setRuntimeToolbarControls,
   toolbar,
   visiblePageError
 } = useVibe64SessionPanel(props, emit);
@@ -249,11 +246,5 @@ const emptyToolbar = computed(() => ({
   min-height: 0;
   min-width: 0;
   overflow: hidden;
-}
-
-@media (min-width: 981px) {
-  .studio-ai-sessions__runtime-stack {
-    min-height: 0;
-  }
 }
 </style>
