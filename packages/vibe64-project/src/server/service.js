@@ -2,7 +2,7 @@ import { githubRepositoryFullName, normalizeConnectedProjects, readConnectedProj
 import { inspectConnectedDevelopmentInputs, inspectConnectedWorkspaceSetup, materializeConnectedDevelopmentInputs } from "./connectedDevelopment.js";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { githubApi, requireGithubRepository } from "./githubApi.js";
+import { githubApi, projectGithubFullName, requireGithubRepository } from "./githubApi.js";
 import { githubIssues } from "./githubIssues.js";
 import { githubPullRequests, pullRequestSessionSource, preparePullRequestSource, publishSessionPullRequest } from "./githubPullRequests.js";
 import { localRepositoryRemote } from "./localRepositoryRemote.js";
@@ -1474,7 +1474,7 @@ function createService({
       return connections.projects.map(connection => {
         const fullName = githubRepositoryFullName(connection.repository);
         const matches = listed.projects.filter(candidate => candidate.repositoryMode === "github" &&
-          String(candidate.githubRepository?.fullName || candidate.repository?.github?.fullName || "").toLowerCase() === fullName);
+          projectGithubFullName(candidate).toLowerCase() === fullName);
         if (matches.length !== 1) throw vibe64Error(
           `Register one accessible GitHub project for ${fullName} before preparing this connection. Existing source and access are unchanged.`,
           "vibe64_connected_project_registration_required");
@@ -1657,7 +1657,7 @@ function createService({
           repositoryWorkflow: {
             ...(await readProjectRepositoryWorkflow(selectedProjectRuntimeRoot())),
             canEdit: canEditProjectSettings(input),
-            available: Boolean(currentProject.githubRepository?.fullName || currentProject.repository?.github?.fullName)
+            available: Boolean(projectGithubFullName(currentProject))
           },
           developmentDatabase: await developmentDatabaseState(),
           ok: true,

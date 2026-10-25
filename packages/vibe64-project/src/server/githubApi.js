@@ -4,9 +4,13 @@ import {
   githubCredentialContext, normalizeGithubAccountMode, runVibe64Command
 } from "@local/vibe64-execution/server";
 
+// The project's GitHub owner/name, wherever its record keeps it ("" for none).
+export function projectGithubFullName(project) {
+  return String(project?.githubRepository?.fullName || project?.repository?.github?.fullName || "");
+}
+
 export function requireGithubRepository(project, feature = "GitHub tools") {
-  const repository = project?.githubRepository || project?.repository?.github;
-  const fullName = String(repository?.fullName || "");
+  const fullName = projectGithubFullName(project);
   if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(fullName) || project?.repositoryMode === "managed_git") {
     throw vibe64Error(`${feature} are available only for GitHub projects.`, "vibe64_github_project_required");
   }

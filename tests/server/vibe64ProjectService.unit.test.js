@@ -788,6 +788,24 @@ test("project settings saves report the project's slug, not its raw directory na
   });
 });
 
+test("settings read reports no repository workflow, not a request failure, while the catalogue has no current project", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const realContext = createStudioProjectContext({
+      explicitManagedSourceRoot: path.join(path.dirname(targetRoot), "managed-source"),
+      explicitSystemRoot: path.join(path.dirname(targetRoot), "system"),
+      explicitTargetRoot: targetRoot,
+      home: path.dirname(targetRoot)
+    });
+    const projectContext = Object.create(realContext, {
+      listProjects: { value: async () => ({ currentProject: null, projects: [] }) }
+    });
+    const service = createService({ env: {}, projectContext, ...collaborationHarness() });
+    const settings = await service.readSettings({ vibe64User: { role: "owner" } });
+    assert.equal(settings.ok, true, JSON.stringify(settings.errors || []));
+    assert.equal(settings.repositoryWorkflow.available, false);
+  });
+});
+
 test("prompt-hint settings never inspect or mutate Genesis collaboration", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = projectService(targetRoot, {

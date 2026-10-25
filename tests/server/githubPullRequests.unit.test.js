@@ -262,6 +262,18 @@ test("create PR checks current GitHub write access and retries by finding the ex
   await assert.rejects(preparePullRequestSource(project, session, input, denied.options), { code: "vibe64_pull_request_permission_denied" });
 });
 
+test("create PR refuses a managed or unnamed repository through the shared GitHub project check", async () => {
+  const session = { sessionId: "session-1", metadata: { base_commit: "a".repeat(40) } };
+  const input = { title: "t", body: "b", vibe64User: user };
+  for (const candidate of [{ ...project, repositoryMode: "managed_git" }, { ...project, githubRepository: null, repository: {} }]) {
+    const f = fixture([]);
+    await assert.rejects(preparePullRequestSource(candidate, session, input, f.options), {
+      code: "vibe64_github_project_required", message: "Pull requests are available only for GitHub projects."
+    });
+    assert.equal(f.calls.length, 0, "no GitHub request before the project check");
+  }
+});
+
 const mergeablePr = {
   ...pr, id: "PR_current", isDraft: false,
   baseRepository: { ...pr.baseRepository, viewerPermission: "WRITE", isArchived: false,

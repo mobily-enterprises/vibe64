@@ -65,6 +65,12 @@ and ambiguous writes require inspection before any explicit retry. These tools
 do not automatically save to unblock a merge, update worktrees, archive sessions,
 delete branches or deploy. Opening a PR uses ordinary session creation with its
 number, current GitHub identity and the existing source admission checks.
+Create PR first passes `githubApi.js`'s one GitHub project check
+(`requireGithubRepository`, "Pull requests are available only for GitHub
+projects."), which reads the owner/name through `projectGithubFullName`, as
+Project settings' repository workflow availability and connected-project
+matching do; a settings read with no current project reports the workflow
+unavailable instead of failing.
 Confirmed PR creation, readiness, branch-update acceptance and merge publish the
 existing project-scoped GitHub refresh event to invalidate open issue/PR views,
 including writes made by Colleague. The notification cannot retarget to a project

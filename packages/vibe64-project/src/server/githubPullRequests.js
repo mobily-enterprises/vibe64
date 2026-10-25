@@ -227,10 +227,7 @@ export function pullRequestSessionSource(pullRequest) {
 }
 
 export async function preparePullRequestSource(project, session, input, options = {}) {
-  const fullName = project.githubRepository?.fullName || project.repository?.github?.fullName || "";
-  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(fullName) || project.repositoryMode === "managed_git") {
-    throw vibe64Error("Pull requests require a GitHub project.", "vibe64_github_project_required");
-  }
+  const fullName = requireGithubRepository(project, "Pull requests");
   const repository = await githubApi(input, options)(`repos/${fullName}`, undefined, "GET");
   if (!repository.permissions?.push || repository.archived) {
     throw vibe64Error("Your GitHub account needs write access to this repository.", "vibe64_pull_request_permission_denied");
