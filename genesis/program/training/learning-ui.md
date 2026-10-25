@@ -24,7 +24,7 @@ controller itself is described in [Learning environment (L)](learning-environmen
 - `src/pages/app/learning.vue`
 - `src/pages/app/project/[slug].vue`
 - `src/composables/useVibe64AppPage.js`
-- `src/components/dashboard/Vibe64DashboardShell.vue`
+- `src/components/studio/Vibe64DashboardShell.vue`
 - `src/components/studio/ProjectSelectionGate.vue`
 - `src/components/Vibe64AssistantShellContext.vue`
 - `src/components/Vibe64LocalColleagueHost.vue`

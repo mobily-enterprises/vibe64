@@ -48,7 +48,6 @@ that turn without dropping either half. No saved history is rewritten.
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-terminals/src/server/sessionGitCommandActor.js`
 - `packages/vibe64-terminals/src/server/projectStackInspection.js`
-- `src/components/studio/vibe64-session/Vibe64WorkflowSelector.vue`
 - `src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionToolbar.vue`
 - `src/composables/useVibe64SessionPanel.js`
@@ -293,29 +292,19 @@ paths, metadata or logs. An accepted preparation retry does not mean it finished
 Retry consults the existing preparation owner's current readiness when the stored
 attempt succeeded, allowing changed recipes or resources through the same admission
 guard. A still-current or unconfirmed success cannot be rerun through that path.
-The workflow picker lists Claude Code, Codex, then OpenCode (the terminals
-provider registration order) and preselects the first available workflow; creation
-without an explicit workflow uses the same first available choice.
-It previews the submitting user's Senior and Junior destinations;
-it reads saved assignments and connection access without live model discovery.
-Uninitialized workflows use connected defaults to establish availability and say
-“Recommended on creation”; creation discovers and saves the exact recommendations.
-The picker shares the runtime's access and paired-backup rules, while creation
-and dispatch still validate the destination against its current model catalogue.
-Owner configuration opens in the same overlay. Accounts initializes only missing
-roles as part of explicit creation. The central resolver chooses the user's
-accessible Senior destination before creating the workspace, and its credential
-identity is checked again. Native selection and the intended workflow are stored
-separately, including when a member starts on another orchestrator's Shared backup.
-Implicit creation requests use Accounts' existing ordered available-workflow
-projection, matching the normal picker default. Explicit and retained workflows
-are never substituted. The same original role resolver and connection checks
-admit the destination afterward; Learning still requests Junior. An unavailable
-workflow fails before session creation, preserving an already reserved lesson
-attempt for its existing Resume path. There is no Training-specific routing fork.
-The optional hosted branch choice is independent of that AI workflow and both
-choices survive creation. Opening a pull request as a session keeps the selected
-workflow and uses the PR head, without offering a second branch destination.
+The creation dialog names the main AI that main chat runs on, the owner setup's
+Senior, with a link to change it in AI setup; without one it offers AI account
+management and creation stays disabled. It reads saved assignments without live
+model discovery. Accounts initializes only missing roles as part of explicit
+creation. The central resolver chooses the owner's accessible Senior destination
+before creating the workspace, and its credential identity is checked again.
+A team member cannot choose main chat's model: outside a lesson their session
+records main chat's starting model only, and nothing runs as them. Learning
+requests Junior, and an unavailable destination fails before session creation,
+preserving an already reserved lesson attempt for its existing Resume path.
+There is no Training-specific routing fork. The optional hosted branch choice is
+independent of that AI choice and both survive creation. Opening a pull request
+as a session uses the PR head, without offering a second branch destination.
 Its conversation, source location,
 agent activity, workspace preparation, and repository status remain available
 across UI refreshes. Archiving stops active work, removes its active workspace,
@@ -516,13 +505,12 @@ their details and cannot open pending tooltips. A new keyboard-visible focus als
 reenables the tooltip, while mouse-induced focus does not; the explicit info
 button still works.
 
-Renewal creates a fresh native assistant conversation. Its review step uses the
-same workflow picker as creation, initially selecting the previous workflow when
-available. Confirmation resolves its Senior destination for the confirming actor
-before stopping the old session. It saves that native selection and the intended
-workflow with Senior/review-off preferences in the durable renewal record. Successor
-creation and replacement retries retain both values. Explicit API model choices
-become Senior overrides in their chosen workflow. If the predecessor's model is
+Renewal creates a fresh native assistant conversation. Its review step
+initially selects main chat's Senior and can choose another model instead.
+Confirmation resolves the destination for the confirming actor before stopping
+the old session and saves that native selection with its routing preferences in
+the durable renewal record. Successor creation and replacement retries retain
+both values. A model other than main chat's own makes the successor's chat Custom. If the predecessor's model is
 inaccessible or fails while preparing the draft, renewal presents the canonical editable
 handover template so the person can still leave that provider. The fresh
 provider history is the handover boundary: after it accepts the exact handover
@@ -591,7 +579,7 @@ successor until the person confirms the refreshed draft.
 Colleague uses these same six renewal actions. Its inspection projection returns
 the complete bounded handover and exact draft hash/revision; other operations
 return concise status and guard values. Approval targets the reviewed draft and
-workflow, and a return to review requires renewed approval. The projection excludes
+AI choice, and a return to review requires renewed approval. The projection excludes
 private renewal basis, provider bindings and actor metadata. Missing or empty
 session IDs and missing optimistic guards fail at the canonical action boundary.
 
