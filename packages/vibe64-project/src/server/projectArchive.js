@@ -294,6 +294,11 @@ function createProjectArchiveService({
         await writeArchiveLifecycle(bundlePath, lifecycle);
       };
       const resourceContext = { bundlePath, metadata, projectContextRoot, projectRuntimeRoot, slug };
+      // Evidence this run already produced, so one uninterrupted run lists and
+      // hashes each archive once when it is created and once when validated.
+      let namespaceEvidence = null;
+      let stateEvidence = null;
+      let validatedManifest = null;
 
       if (!completed("runtime-closed")) {
         const closed = await closeProjectRuntime({
@@ -318,7 +323,7 @@ function createProjectArchiveService({
           sourceName: slug,
           sourceParent: path.dirname(projectContextRoot)
         });
-        await validateTarArchive({
+        namespaceEvidence = await validateTarArchive({
           archivePath: namespaceArchivePath,
           expectedPrefix: `${slug}/`,
           runCommand: runArchiveCommand
@@ -334,7 +339,7 @@ function createProjectArchiveService({
           sourceName: path.basename(projectRuntimeRoot),
           sourceParent: path.dirname(projectRuntimeRoot)
         });
-        await validateTarArchive({
+        stateEvidence = await validateTarArchive({
           archivePath: stateArchivePath,
           expectedPrefix: `${path.basename(projectRuntimeRoot)}/`,
           runCommand: runArchiveCommand
@@ -365,10 +370,12 @@ function createProjectArchiveService({
           runCommand: runArchiveCommand,
           slug,
           namespaceArchivePath,
-          stateArchivePath
+          namespaceEvidence,
+          stateArchivePath,
+          stateEvidence
         });
         await writeJsonAtomic(path.join(bundlePath, PROJECT_ARCHIVE_MANIFEST), manifest);
-        await validateBundleManifest({
+        validatedManifest = await validateBundleManifest({
           artifactKinds: resources.artifactKinds,
           bundlePath,
           runCommand: runArchiveCommand,
@@ -377,7 +384,8 @@ function createProjectArchiveService({
         await markComplete("bundle-validated");
       }
 
-      const manifest = await validateBundleManifest({
+      // A resumed run validates the bundle an earlier run completed.
+      const manifest = validatedManifest ?? await validateBundleManifest({
         artifactKinds: resources.artifactKinds,
         bundlePath,
         runCommand: runArchiveCommand,
@@ -699,7 +707,8 @@ async function createTarArchive({
   await rename(temporaryPath, archivePath);
 }
 
-async function validateTarArchive({
+// Lists the archive and checks its root: the listing's evidence.
+async function tarListingEvidence({
   archivePath = "",
   expectedPrefix = "",
   runCommand = runVibe64Command
@@ -730,11 +739,18 @@ async function validateTarArchive({
     error.code = "vibe64_project_archive_incomplete";
     throw error;
   }
-  const info = await assertNonEmptyFile(archivePath, "vibe64_project_archive_empty");
   return {
     entryCount: listing.length,
-    listingSha256: sha256Text(`${listing.join("\n")}\n`),
-    sha256: await sha256File(archivePath),
+    listingSha256: sha256Text(`${listing.join("\n")}\n`)
+  };
+}
+
+async function validateTarArchive(options = {}) {
+  const listing = await tarListingEvidence(options);
+  const info = await assertNonEmptyFile(options.archivePath, "vibe64_project_archive_empty");
+  return {
+    ...listing,
+    sha256: await sha256File(options.archivePath),
     size: info.size,
     type: "tar-gzip"
   };
@@ -778,14 +794,16 @@ async function createBundleManifest({
   runCommand = runVibe64Command,
   slug = "",
   namespaceArchivePath = "",
-  stateArchivePath = ""
+  namespaceEvidence = null,
+  stateArchivePath = "",
+  stateEvidence = null
 } = {}) {
-  const namespace = await validateTarArchive({
+  const namespace = namespaceEvidence || await validateTarArchive({
     archivePath: namespaceArchivePath,
     expectedPrefix: `${slug}/`,
     runCommand
   });
-  const state = await validateTarArchive({
+  const state = stateEvidence || await validateTarArchive({
     archivePath: stateArchivePath,
     expectedPrefix: `${slug}/`,
     runCommand
@@ -877,7 +895,7 @@ async function validateBundleManifest({
         : artifact.path === PROJECT_STATE_ARCHIVE
           ? "project-runtime-state"
           : "";
-      const tarEvidence = await validateTarArchive({
+      const tarEvidence = await tarListingEvidence({
         archivePath: absolutePath,
         expectedPrefix: `${slug}/`,
         runCommand

@@ -205,6 +205,27 @@ test("project deletion resumes after namespace removal failure without repeating
   });
 });
 
+test("one uninterrupted deletion lists each archive once when created and once when validated", async () => {
+  await withArchiveTest(async ({ projectContext }) => {
+    await projectContext.createWorkspaceProjectRecord({ slug: "single-run" });
+    const listings = new Map();
+    const service = createProjectArchiveService({
+      closeProjectRuntime: async () => ({ ok: true }),
+      projectContext,
+      runCommand: async (input) => {
+        if (input.args[0] === "-tzf") {
+          const name = path.basename(input.args[1]);
+          listings.set(name, (listings.get(name) || 0) + 1);
+        }
+        return runVibe64Command(input);
+      }
+    });
+    const completed = await service.archiveProject({ slug: "single-run" });
+    assert.equal(completed.ok, true);
+    assert.deepEqual(Object.fromEntries(listings), { "source.tgz": 2, "runtime-state.tgz": 2 });
+  });
+});
+
 test("archive recovery rehearsal restores session source and conversation ACLs and detects corruption", async () => {
   await withArchiveTest(async ({ projectContext, tempRoot }) => {
     const slug = "restore-rehearsal";

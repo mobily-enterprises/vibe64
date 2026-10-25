@@ -50,6 +50,10 @@ The bundle is `<archiveRoot>/<slug>/<UTC>-<slug>/` (default archive root
 
 The manifest is validated again before anything live is removed, and any change
 to an artifact refuses the archive (`vibe64_project_archive_artifact_changed`).
+The manifest reuses the evidence the same run produced when it created each
+tarball, and that run's `bundle-validated` result serves the removal steps; only
+a resumed run validates again. One uninterrupted run therefore lists and hashes
+each tarball twice: once when created and once when validated.
 The record is removed last. Archiving a project whose record is gone returns its
 completed bundle again from the newest matching `lifecycle.json`, so a replay
 after the final step changes nothing.
