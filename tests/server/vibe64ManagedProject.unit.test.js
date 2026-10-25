@@ -7,6 +7,7 @@ import test from "node:test";
 import { promisify } from "node:util";
 
 import {
+  createEmptyCanonicalRepository,
   initializeManagedProject,
   materializeInitialProject,
   verifyManagedProjectSource
@@ -497,4 +498,41 @@ test("creating a project without a usable Git says so in one plain sentence", as
     args: ["-c", "commit.gpgsign=true", "-c", "gpg.program=false", ...request.args] });
   await assert.rejects(create(signingGit), { code: "vibe64_git_signing_failed" });
   assert.deepEqual(await readdir(path.join(projectRuntimeRoot, "tmp")), []);
+});
+
+test("an empty canonical repository is created bare on the requested branch for its runtime root", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-empty-canonical-"));
+  t.after(() => rm(root, {
+    force: true,
+    recursive: true
+  }));
+  const projectRuntimeRoot = path.join(root, "runtime");
+  const requests = [];
+  const repositoryPath = await createEmptyCanonicalRepository({
+    defaultBranch: "trunk",
+    projectRuntimeRoot,
+    runCommand: (request) => {
+      requests.push(request);
+      return directCommand(request);
+    }
+  });
+
+  assert.equal(repositoryPath, path.join(projectRuntimeRoot, "canonical-repository", "repository.git"));
+  assert.equal(requests.length, 1);
+  assert.equal(requests[0].actor, "daemon");
+  assert.deepEqual(requests[0].allowedRoots, [path.dirname(repositoryPath)]);
+  const git = (args) => execFileAsync("git", ["--git-dir", repositoryPath, ...args]).then((result) => result.stdout.trim());
+  assert.equal(await git(["rev-parse", "--is-bare-repository"]), "true");
+  assert.equal(await git(["symbolic-ref", "HEAD"]), "refs/heads/trunk");
+  assert.equal(await git(["for-each-ref"]), "");
+
+  await assert.rejects(
+    () => createEmptyCanonicalRepository({
+      projectRuntimeRoot: "relative/runtime",
+      runCommand: directCommand
+    }),
+    {
+      code: "vibe64_initial_project_runtime_root_invalid"
+    }
+  );
 });

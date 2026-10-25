@@ -91,6 +91,9 @@ facility for its existing development database defaults. Standalone composition
 supplies no hosted database policy. The original initial commit, source exclusion,
 identity checks and atomic rollback remain with their original owners. Private
 creation obtains its exact root through Core rather than a catalogue-path guess.
+The same initializer also creates an empty canonical repository for a runtime
+root (`createEmptyCanonicalRepository`), so a host that fills canonical storage
+from existing history uses this one owner instead of its own copy.
 
 The same preparation coordinator enters this Core scope around its original
 exercise effect block, inside the already-held non-reentrant learner barrier.

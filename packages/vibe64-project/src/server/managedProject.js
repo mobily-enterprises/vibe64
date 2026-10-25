@@ -129,6 +129,28 @@ function absoluteRuntimeRoot(projectRuntimeRoot = "") {
   return path.resolve(input);
 }
 
+// An empty canonical repository for a runtime root, for a caller that fills it
+// itself (for example by fetching existing history into it). Returns its path.
+async function createEmptyCanonicalRepository({
+  defaultBranch = "main",
+  projectRuntimeRoot = "",
+  runCommand = runVibe64Command
+} = {}) {
+  const repositoryPath = resolveProjectCanonicalRepositoryPath({
+    projectRuntimeRoot: absoluteRuntimeRoot(projectRuntimeRoot)
+  });
+  const repositoryRoot = path.dirname(repositoryPath);
+  await mkdir(repositoryRoot, {
+    recursive: true
+  });
+  await initializeCanonicalRepository(repositoryPath, normalizeText(defaultBranch) || "main", {
+    allowedRoots: [repositoryRoot],
+    repositoryRoot,
+    runCommand
+  });
+  return repositoryPath;
+}
+
 async function materializeInitialProject({
   afterAuthorityVerification = null,
   beforeAuthorityMutation = null,
@@ -447,6 +469,7 @@ async function verifyManagedProjectSource({
 }
 
 export {
+  createEmptyCanonicalRepository,
   initializeManagedProject,
   materializeInitialProject,
   verifyManagedProjectSource

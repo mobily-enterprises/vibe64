@@ -54,7 +54,7 @@
           },
           {
             "subpath": "./server/managedProject",
-            "summary": "Builds one Vibe64-owned JSKIT foundation commit and publishes it through an explicit repository authority."
+            "summary": "Builds one Vibe64-owned JSKIT foundation commit and publishes it through an explicit repository authority, or creates an empty canonical repository for a caller to fill."
           },
           {
             "subpath": "./server/resourceEnvironment",
