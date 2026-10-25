@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 
 import {
   WEB_LAUNCH_READINESS_TIMEOUT_SECONDS
@@ -1471,8 +1472,7 @@ function registeredBrowserWorkerForInput(sessionId = "", input = {}, browserWork
   }
   const worktreePath = path.resolve(descriptor.worktreePath);
   const cwd = path.resolve(normalizeText(input.cwd) || worktreePath);
-  const relativeCwd = path.relative(worktreePath, cwd);
-  if (relativeCwd === ".." || relativeCwd.startsWith(`..${path.sep}`) || path.isAbsolute(relativeCwd)) {
+  if (!pathInsideOrEqual(worktreePath, cwd)) {
     return {
       error: responseError(
         "The managed browser working directory is outside this session source.",
@@ -1516,9 +1516,7 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
     const relativeCliPath = path.relative(path.resolve(descriptor.worktreePath), cliPath);
     if (
       !normalizeText(args[0]) ||
-      relativeCliPath === ".." ||
-      relativeCliPath.startsWith(`..${path.sep}`) ||
-      path.isAbsolute(relativeCliPath) ||
+      !pathInsideOrEqual(descriptor.worktreePath, cliPath) ||
       !/node_modules\/(?:@playwright\/test|playwright)\/cli\.js$/u.test(relativeCliPath.split(path.sep).join("/"))
     ) {
       return responseError(
@@ -1580,12 +1578,9 @@ async function runRegisteredPlaywrightCommand(sessionId = "", input = {}, {
   }
   const browsersPath = path.resolve(normalizeText(requestedEnv.PLAYWRIGHT_BROWSERS_PATH));
   const runtimeRoot = path.resolve(descriptor.runtimeRoot);
-  const relativeBrowsersPath = path.relative(runtimeRoot, browsersPath);
   if (
     !normalizeText(requestedEnv.PLAYWRIGHT_BROWSERS_PATH) ||
-    relativeBrowsersPath === ".." ||
-    relativeBrowsersPath.startsWith(`..${path.sep}`) ||
-    path.isAbsolute(relativeBrowsersPath) ||
+    !pathInsideOrEqual(runtimeRoot, browsersPath) ||
     path.basename(browsersPath) !== "browsers"
   ) {
     return responseError(

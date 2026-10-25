@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import path from "node:path";
+import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 
 import {
   inspectVibe64Outputs,
@@ -280,10 +281,7 @@ function createVibe64GenericOutputTargetTerminalSpec({
   }
   const resolvedWorktreeRoot = path.resolve(worktreePath);
   const workdir = path.resolve(resolvedWorktreeRoot, String(target.workdir || ".").trim() || ".");
-  const relativeWorkdir = path.relative(resolvedWorktreeRoot, workdir);
-  if (relativeWorkdir === ".."
-    || relativeWorkdir.startsWith(`..${path.sep}`)
-    || path.isAbsolute(relativeWorkdir)) {
+  if (!pathInsideOrEqual(resolvedWorktreeRoot, workdir)) {
     return {
       ok: false,
       message: "Output command workdir is outside the session source."
