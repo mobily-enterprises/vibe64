@@ -15,4 +15,16 @@ describe("Files editor theme", () => {
     expect(gutter).toMatch(/backgroundImage: "linear-gradient\(rgba\(var\(--v-theme-surface-variant\), 0\.38\)/u);
     expect(gutter).not.toMatch(/backgroundColor: "rgba\(/u);
   });
+
+  it.each(["Vibe64SourceInterface.vue", "Vibe64SourceExplanationPanel.vue"])(
+    "colours %s from the theme so dark mode stays legible",
+    (name) => {
+      const component = readFileSync(new URL(
+        `../../src/components/studio/vibe64-session/${name}`,
+        import.meta.url
+      ), "utf8");
+      const styles = component.slice(component.indexOf("<style"));
+      expect(styles).not.toMatch(/#[0-9a-f]{3,8}\b/iu);
+    }
+  );
 });

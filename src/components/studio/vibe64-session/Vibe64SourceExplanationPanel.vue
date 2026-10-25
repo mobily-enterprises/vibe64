@@ -477,8 +477,8 @@ watch(threadScrollKey, (value, previous) => {
 .source-explanation-document :deep(p), .source-explanation-document :deep(ul), .source-explanation-document :deep(ol) { margin: 0 0 .7em; }
 .source-explanation-document :deep(h2), .source-explanation-document :deep(h3), .source-explanation-document :deep(h4) { font-size: 14px; margin: 1em 0 .3em; }
 .source-explanation-document :deep(pre) { overflow: auto; font-size: 12px; line-height: 1.65; }
-.source-explanation-document__progress { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; color: #617b74; }
-.source-explanation-document__activity { font-size: 12px; color: #617b74; }
+.source-explanation-document__progress { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; color: rgba(var(--v-theme-on-surface), .72); }
+.source-explanation-document__activity { font-size: 12px; color: rgba(var(--v-theme-on-surface), .72); }
 .source-explanation-document__activity summary { cursor: pointer; }
 .vibe64-source-explanation {
   block-size: 100%;
