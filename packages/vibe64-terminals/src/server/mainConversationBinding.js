@@ -190,7 +190,7 @@ async function prepareCodexConversationContext(sessionId, runtime, session, allo
       error: "Vibe64 Codex execution root is not available."
     });
   }
-  const workdir = learningRoot || sessionSourcePath(session);
+  const workdir = executionRoot;
   if (!learningRoot && codexSessionWorktreeWasRemoved(session)) {
     return codexHost.unavailableWorktree(
       runtime,

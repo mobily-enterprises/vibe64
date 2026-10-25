@@ -230,8 +230,6 @@ function createAgentDatabaseCommandService({ logger = null, projectService } = {
     };
   }
 
-  const runInSessionProject = (sessionId, operation) => projectBinding.run(sessionId, operation);
-
   async function run(input = {}) {
     const startedAt = Date.now();
     const parsed = parseArgs(input.args);
@@ -242,7 +240,7 @@ function createAgentDatabaseCommandService({ logger = null, projectService } = {
       if (!result) {
         if (!databaseToolsProvider) throw vibe64Error("The session Database tool is unavailable.", "vibe64_agent_database_command_unavailable");
         if (parsed.command === "erd" || parsed.command === "overview") {
-          const payload = await runInSessionProject(sessionId, () => {
+          const payload = await projectBinding.run(sessionId, () => {
             if (parsed.command === "overview") return databaseToolsProvider.readOverview({ sessionId });
             if (parsed.positionals[1] === "apply") return databaseToolsProvider.moveErdTables({ sessionId, changes: input.changes });
             return databaseToolsProvider.readErd({ sessionId });
@@ -250,7 +248,7 @@ function createAgentDatabaseCommandService({ logger = null, projectService } = {
           if (payload?.ok === false) throw vibe64Error(payload.error, payload.code);
           result = { exitCode: 0, ok: true, stdout: `${JSON.stringify(payload, null, 2)}\n` };
         } else {
-          const refreshed = await runInSessionProject(sessionId, () => databaseToolsProvider.refreshSchema({
+          const refreshed = await projectBinding.run(sessionId, () => databaseToolsProvider.refreshSchema({
             sessionId,
             source: "agent"
           }));

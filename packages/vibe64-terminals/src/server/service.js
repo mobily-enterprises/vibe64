@@ -2260,8 +2260,7 @@ function createService({
     });
     if (execution?.ok === false) {
       const sessionSourceRoot = sessionSourcePath(session);
-      const workdir = sessionSourcePath(session);
-      const recorded = sessionSourceRoot && workdir
+      const recorded = sessionSourceRoot
         ? await writeSessionGitCommandActor({
             env,
             reason,
@@ -2270,7 +2269,7 @@ function createService({
             sourceRoot: sessionSourceRoot,
             threadId: session.metadata?.agent_identity_conversation_id || "",
             vibe64User: input.vibe64User,
-            workdir
+            workdir: sessionSourceRoot
           })
         : null;
       if (recorded?.ok !== false && recorded) {
@@ -2645,7 +2644,6 @@ function createService({
           ok: false
         };
       }
-      const workdir = sessionSourcePath(session);
       return writeSessionGitCommandActor({
         env,
         reason: input.reason || "session-interaction",
@@ -2654,7 +2652,7 @@ function createService({
         sourceRoot: sessionSourceRoot,
         threadId: session.metadata?.agent_identity_conversation_id || "",
         vibe64User: input.vibe64User || null,
-        workdir
+        workdir: sessionSourceRoot
       });
     },
 

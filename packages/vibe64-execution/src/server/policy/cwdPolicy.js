@@ -9,7 +9,6 @@ function resolveCommandCwd(cwd = "") {
   return normalizeAbsolutePath(cwd || process.cwd());
 }
 
-
 function assertCwdAllowed(cwd = "", {
   allowedRoots = []
 } = {}) {

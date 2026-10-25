@@ -8,7 +8,7 @@ function useVibe64AgentTerminalDisplay(props, serverTerminalId) {
   const hiddenListenActive = computed(() => Boolean(
     props.listenWhenHidden && serverTerminalId.value && !displayActive.value
   ));
-  const streamActive = computed(() => Boolean(displayActive.value || hiddenListenActive.value));
+  const streamActive = computed(() => displayActive.value || hiddenListenActive.value);
   const presentation = computed(() => displayActive.value ? "inline" : "headless");
   return { displayActive, presentation, streamActive };
 }

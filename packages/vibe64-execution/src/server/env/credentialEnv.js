@@ -12,7 +12,6 @@ function pathIsHomeDirectory(value = "") {
   return normalized === "/home" || normalized.startsWith("/home/");
 }
 
-
 function credentialEnv({ actor = {}, request = {} } = {}) {
   const credentialHome = request.credentialHome || {};
   const home = normalizeAbsolutePath(credentialHome.home);

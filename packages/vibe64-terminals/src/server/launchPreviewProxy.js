@@ -279,7 +279,7 @@ function previewTokenCookie(token = "", {
   const https = previewOriginUsesHttps(proxyOrigin);
   // The Preview is same-site with its editor, so Lax suffices; a foreign site
   // that frames the Preview gets no token cookie and so no application page.
-  const policy = https ? "SameSite=Lax; HttpOnly; Secure" : "SameSite=Lax; HttpOnly";
+  const policy = `SameSite=Lax; HttpOnly${https ? "; Secure" : ""}`;
   return `${previewTokenCookieName(proxyOrigin)}=${encodeURIComponent(String(token || ""))}; Path=/; ${policy}`;
 }
 

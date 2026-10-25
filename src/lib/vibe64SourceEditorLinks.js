@@ -53,11 +53,7 @@ function normalizeSourceEditorDirectoryPaths(value = []) {
 }
 
 function normalizeRelativeSourcePath(value = "") {
-  const normalized = String(value || "")
-    .trim()
-    .replaceAll("\\", "/")
-    .replace(/^\.\/+/u, "")
-    .replace(/\/+/gu, "/");
+  const normalized = normalizeSourceEditorPath(value).replace(/\/+/gu, "/");
   if (
     !normalized ||
     normalized === "." ||

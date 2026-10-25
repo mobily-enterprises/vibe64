@@ -386,7 +386,6 @@ export {
   createSessionCommandServers,
   removeDeadUnixJsonCommandSocket,
   requestUnixJsonCommand,
-  sendJsonCommandResponse,
   shortCommandHash,
   subscribeUnixCommandControlChanges,
   unixCommandSocketPath,

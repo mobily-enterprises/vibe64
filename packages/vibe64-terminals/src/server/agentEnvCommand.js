@@ -411,8 +411,6 @@ function createAgentEnvCommandService({
     };
   }
 
-  const runInSessionProject = (sessionId, operation) => projectBinding.run(sessionId, operation);
-
   // This command owns agent policy and transport, not persistence. These two
   // delegates are the complete boundary to the services that own each scope.
   const developmentEnvironment = Object.freeze({
@@ -681,7 +679,7 @@ function createAgentEnvCommandService({
     let result;
     try {
       const validation = validateParsedCommand(parsed);
-      result = validation || await runInSessionProject(
+      result = validation || await projectBinding.run(
         sessionId,
         (binding) => execute(parsed, input, binding)
       );
