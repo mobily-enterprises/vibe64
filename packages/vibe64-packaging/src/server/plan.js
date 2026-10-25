@@ -154,10 +154,12 @@ function createPublishPlan({
     targets: normalizedTargets,
     toolchain: versionMap(toolchain, "Toolchain"),
     templates: versionMap(templates, "Templates"),
+    // The order a release runs in. Builds come first, so a build that fails
+    // leaves no tag behind; each publish step reads its target back.
     steps: [
-      ...tags.map((tag) => ({ kind: "tag", tag })),
       ...built.map(({ id }) => ({ kind: "build", package: id })),
-      ...normalizedTargets.flatMap(({ id }) => [{ kind: "publish", target: id }, { kind: "read-back", target: id }])
+      ...tags.map((tag) => ({ kind: "tag", tag })),
+      ...normalizedTargets.map(({ id }) => ({ kind: "publish", target: id }))
     ]
   };
   return { plan, planHash: publishPlanHash(plan) };

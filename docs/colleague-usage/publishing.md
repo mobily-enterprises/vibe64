@@ -76,9 +76,10 @@ Vibe64 for this project on this computer, not in the project's files.
    reruns it; a refused sign-in offers **Fix sign-in**; saved work that is
    not on the remote yet offers **Push to origin** (fast-forward only, never
    forced; it is the person's button, not a Colleague tool). **What happens** lists
-   the steps in order: build each package once, tag the saved commit, publish
-   to each target (with its account and address), under a short plan id such
-   as `Plan 3f9c`.
+   the plan's own steps in the order the release runs them: build each package
+   once (an app's web content first), tag the saved commit, publish to each
+   target and read it back (with its account and address), under a short plan
+   id such as `Plan 3f9c`.
 3. **Dry run** builds once and asks each destination what would happen;
    nothing is tagged or uploaded. It appears in History as a dry run.
 4. **Publish…** opens the confirmation: exactly which package goes where at

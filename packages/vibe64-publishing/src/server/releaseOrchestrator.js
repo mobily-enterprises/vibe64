@@ -454,13 +454,16 @@ function createReleaseOrchestrator({
     });
   }
 
+  // The plan's own steps as the record tracks them; a dry run never tags.
   function stepsFor(publishPlan, kind) {
-    // Build first: a build that fails leaves no tag behind to block the next try.
-    return [
-      ...publishPlan.packages.map((entry) => ({ id: `build:${entry.id}`, status: "pending", message: "" })),
-      ...(kind === "release" ? publishPlan.tags.map((tag) => ({ id: `tag:${tag}`, status: "pending", message: "" })) : []),
-      ...publishPlan.targets.map((target) => ({ id: `${kind === "release" ? "publish" : "dry-run"}:${target.id}`, status: "pending", message: "" }))
-    ];
+    const stepId = (entry) => {
+      if (entry.kind === "build") return `build:${entry.package}`;
+      if (entry.kind === "tag") return `tag:${entry.tag}`;
+      return `${kind === "release" ? "publish" : "dry-run"}:${entry.target}`;
+    };
+    return publishPlan.steps
+      .filter((entry) => kind === "release" || entry.kind !== "tag")
+      .map((entry) => ({ id: stepId(entry), status: "pending", message: "" }));
   }
 
   function background(recordId, work) {

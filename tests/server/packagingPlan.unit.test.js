@@ -81,8 +81,11 @@ test("the plan builds each package once, fans out, and its hash is deterministic
   assert.equal(plan.packages.find(({ id }) => id === "sdk").buildNumber, undefined);
   assert.deepEqual(plan.targets.map(({ id }) => id), ["app-release", "phone", "sdk-npm"]);
   assert.deepEqual(plan.tags, ["app@1.5.0", "sdk@0.9.1"]);
-  assert.deepEqual(plan.steps.filter(({ kind }) => kind === "build").map((step) => step.package), ["web", "app", "sdk"]);
-  assert.equal(plan.steps.filter(({ kind }) => kind === "publish").length, 3);
+  assert.deepEqual(plan.steps.map((step) => `${step.kind}:${step.package || step.tag || step.target}`), [
+    "build:web", "build:app", "build:sdk",
+    "tag:app@1.5.0", "tag:sdk@0.9.1",
+    "publish:app-release", "publish:phone", "publish:sdk-npm"
+  ], "the plan lists the steps in the order a release runs them: builds before tags");
 
   const reordered = input({
     targets: [...input().targets].reverse(),

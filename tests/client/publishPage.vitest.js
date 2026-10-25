@@ -42,7 +42,8 @@ function render(component, props) {
 }
 
 const PLAN = { planHash: `sha256:${"a".repeat(64)}`, planId: "aaaa", savedCommit: "c".repeat(40), tags: ["v1.2.0"],
-  packages: [{ id: "sdk", version: "1.2.0" }], targets: [{ id: "sdk-npm", destination: "npm", package: "sdk", channel: null }] };
+  packages: [{ id: "sdk", version: "1.2.0" }], targets: [{ id: "sdk-npm", destination: "npm", package: "sdk", channel: null }],
+  steps: [{ kind: "build", package: "sdk" }, { kind: "tag", tag: "v1.2.0" }, { kind: "publish", target: "sdk-npm" }] };
 
 function publishingState(overrides = {}) {
   return {
@@ -205,6 +206,11 @@ it("lets a saved version nobody has published go out as it is, without a session
   expect(dialog.versions).toEqual({ sdk: "1.2.0" });
   expect(calls).not.toContain("/release/prepare");
   expect(dialog.planSteps.map((entry) => entry.id)).toEqual(["build:sdk", "tag:v1.2.0", "publish:sdk-npm"]);
+  // The dialog shows the plan's own steps, including the content an app is built from.
+  dialog.plan = { ...PLAN, packages: [{ id: "web", version: null }, { id: "app", version: "1.0.0" }], tags: ["v1.0.0"],
+    targets: [{ id: "app-phone", destination: "android-sideload", package: "app", channel: null }],
+    steps: [{ kind: "build", package: "web" }, { kind: "build", package: "app" }, { kind: "tag", tag: "v1.0.0" }, { kind: "publish", target: "app-phone" }] };
+  expect(dialog.planSteps.map((entry) => entry.id)).toEqual(["build:web", "build:app", "tag:v1.0.0", "publish:app-phone"]);
 
   const released = { ...suggestion.packages[0], released: true };
   expect(dialog.choicesFor(released).map((choice) => choice.kind)).toEqual(["patch", "minor", "major"]);

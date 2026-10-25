@@ -82,23 +82,20 @@ function releaseAsSaved() {
   void review();
 }
 
-// Step 2: what pressing Publish will do, in order.
+// Step 2: what pressing Publish will do: the plan's own steps, in its order.
 const accountsById = computed(() => Object.fromEntries((props.state?.accounts || []).map((entry) => [entry.id, entry])));
 const planSteps = computed(() => {
   if (!plan.value) return [];
-  const chosen = targets.value.filter((target) => selected.value.includes(target.id));
-  const builds = [...new Set(chosen.map((target) => target.package))];
   const versionOf = (id) => plan.value.packages?.find((entry) => entry.id === id)?.version || shortCommit(plan.value.savedCommit);
-  return [
-    ...builds.map((id) => ({ id: `build:${id}`, icon: mdiWrenchOutline, text: `Build ${packageLabel.value(id)} ${versionOf(id)} once` })),
-    ...(plan.value.tags || []).map((tag) => ({ id: `tag:${tag}`, icon: mdiTagOutline, text: `Tag the saved commit ${tag}` })),
-    ...chosen.map((target) => {
-      const account = accountsById.value[target.account];
-      const where = hostOf(target.settings?.registry || target.settings?.repository || "");
-      const signed = target.destination === "android-sideload" ? "signed with your install key" : "";
-      return { id: `publish:${target.id}`, icon: destinationIcon(target.destination), text: `${labels.value[target.destination] || target.destination}: ${packageLabel.value(target.package)} ${versionOf(target.package)}`, detail: [account?.label, where, signed].filter(Boolean).join(" · ") };
-    })
-  ];
+  return (plan.value.steps || []).map((entry) => {
+    if (entry.kind === "build") return { id: `build:${entry.package}`, icon: mdiWrenchOutline, text: `Build ${packageLabel.value(entry.package)} ${versionOf(entry.package)} once` };
+    if (entry.kind === "tag") return { id: `tag:${entry.tag}`, icon: mdiTagOutline, text: `Tag the saved commit ${entry.tag}` };
+    const target = plan.value.targets.find((candidate) => candidate.id === entry.target);
+    const account = accountsById.value[target.account];
+    const where = hostOf(target.settings?.registry || target.settings?.repository || "");
+    const signed = target.destination === "android-sideload" ? "signed with your install key" : "";
+    return { id: `publish:${target.id}`, icon: destinationIcon(target.destination), text: `${labels.value[target.destination] || target.destination}: ${packageLabel.value(target.package)} ${versionOf(target.package)}`, detail: [account?.label, where, signed].filter(Boolean).join(" · ") };
+  });
 });
 const blockedHint = computed(() => {
   if (!plan.value) return "";
