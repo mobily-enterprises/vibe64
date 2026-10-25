@@ -30,12 +30,24 @@ const INSTANCES = Object.freeze({
   pypi: Object.freeze({ repository: "https://upload.pypi.org/legacy/", index: "https://pypi.org/simple/", web: "https://pypi.org/" }),
   testpypi: Object.freeze({ repository: "https://test.pypi.org/legacy/", index: "https://test.pypi.org/simple/", web: "https://test.pypi.org/" })
 });
+function uploadAddress(address) {
+  const url = new URL(address);
+  return `${url.origin}${url.pathname.endsWith("/") ? url.pathname : `${url.pathname}/`}`;
+}
+
+// The PyPI instance whose upload address this is, or null for another index.
+function pypiInstanceForAddress(address = "") {
+  if (!address) return "pypi";
+  const upload = uploadAddress(address);
+  return Object.keys(INSTANCES).find((id) => INSTANCES[id].repository === upload) || null;
+}
+
 // Target settings for a PyPI account's upload address: one of INSTANCES, or a
 // private index whose simple index sits next to its upload address.
 function pypiSettingsForAddress(address = "") {
-  if (!address || /upload\.pypi\.org/u.test(address)) return { instance: "pypi" };
-  if (/test\.pypi\.org/u.test(address)) return { instance: "testpypi" };
-  const upload = address.endsWith("/") ? address : `${address}/`;
+  const instance = pypiInstanceForAddress(address);
+  if (instance) return { instance };
+  const upload = uploadAddress(address);
   return { repository: upload, index: new URL("simple/", new URL("../", upload)).href };
 }
 
@@ -234,6 +246,7 @@ const pypiDestination = Object.freeze({
   id: "pypi",
   label: "PyPI",
   packers: Object.freeze(["python-dist"]),
+  instances: INSTANCES,
   channels: Object.freeze([]),
   credentials: Object.freeze([CREDENTIAL]),
   expectedChecksum,

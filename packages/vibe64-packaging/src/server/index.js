@@ -49,6 +49,7 @@ export {
 } from "./destinations/androidSideload/index.js";
 export { CAPACITOR_SHELL_TEMPLATE } from "./packers/capacitor/shellTemplate/index.js";
 export { nextVersionCode } from "./packers/capacitor/generateShell.js";
+export { nextBuildNumbers } from "./release/buildNumbers.js";
 export { VIBE64_ANDROID_PREFLIGHT_CHECKS, gatherAndroidFacts } from "./preflight/android.js";
 export {
   ANDROID_TERMS_URL,

@@ -97,12 +97,12 @@ function createConfirmationService({ runtimeRoot, now = () => Date.now(), ttlMs 
           throw confirmationError("Only you can confirm publishing, on the Publish page. An assistant's request is not a confirmation.", "VIBE64_PUBLISH_CONFIRMATION_NOT_PERSON");
         }
         const value = await read();
-        const index = value.records.findIndex((record) => !record.usedAt && record.actorId === actor.id &&
-          Date.parse(record.expiresAt) > now() && record.tokenHash && publishConfirmationTokenMatches(record, token));
-        const record = index === -1 ? value.records.filter((candidate) => candidate.actorId === actor.id).at(-1) : value.records[index];
-        if (!record) throw confirmationError("Open the confirmation on the Publish page first.", "VIBE64_PUBLISH_CONFIRMATION_INVALID");
-        const redeemed = redeemPublishConfirmation({ token, planHash, actor, record, now: now() });
-        value.records[value.records.indexOf(record)] = redeemed;
+        // The token names this person's record; redeeming it says what else is
+        // wrong (already used, expired or another plan).
+        const index = value.records.findIndex((record) => record.actorId === actor.id && publishConfirmationTokenMatches(record, token));
+        if (index === -1) throw confirmationError("Open the confirmation on the Publish page first.", "VIBE64_PUBLISH_CONFIRMATION_INVALID");
+        const redeemed = redeemPublishConfirmation({ token, planHash, actor, record: value.records[index], now: now() });
+        value.records[index] = redeemed;
         if (value.pendingRequest?.planHash === planHash) value.pendingRequest = null;
         await write(value);
         return redeemed;

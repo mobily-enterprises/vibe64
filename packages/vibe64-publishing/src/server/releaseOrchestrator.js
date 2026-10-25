@@ -18,7 +18,7 @@ import {
   createPublishPlan,
   definePreflightCheck,
   isReleaseVersion,
-  nextVersionCode,
+  nextBuildNumbers,
   publishPlanDisplayId,
   runPreflight
 } from "@local/vibe64-packaging/server";
@@ -289,24 +289,9 @@ function createReleaseOrchestrator({
     };
   }
 
-  // Android refuses an update whose build number (versionCode) does not grow, so
-  // each app package gets one above every number a release has used, from the
-  // whole history. Retrying an unfinished release of the same saved version
-  // keeps its number, so its plan (and confirmation) stays the same.
-  async function nextBuildNumbers(packages, savedCommit) {
-    const numbers = {};
-    const releases = (await history.list({ limit: Infinity })).filter((record) => record.kind === "release").map(interruptedOr);
-    for (const entry of packages.filter((candidate) => candidate.packer === "capacitor")) {
-      const unfinished = releases.find((record) => UNFINISHED.includes(record.status) && record.savedCommit === savedCommit
-        && (record.versions?.[entry.id] ?? null) === entry.version && Number.isInteger(record.buildNumbers?.[entry.id]));
-      if (unfinished) {
-        numbers[entry.id] = unfinished.buildNumbers[entry.id];
-        continue;
-      }
-      const used = releases.map((record) => record.buildNumbers?.[entry.id]).filter(Number.isInteger);
-      numbers[entry.id] = nextVersionCode(used.length ? Math.max(...used) : null);
-    }
-    return numbers;
+  async function buildNumbersFor(packages, savedCommit) {
+    const releases = (await history.list({ limit: Infinity })).map(interruptedOr);
+    return nextBuildNumbers({ releases, packages, savedCommit });
   }
 
   // The runtime form of a plan target: plan settings and the confirmed account
@@ -345,7 +330,7 @@ function createReleaseOrchestrator({
       savedCommit: baseline.commit,
       packaging: release.packaging,
       versions,
-      buildNumbers: await nextBuildNumbers(built.map((entry) => ({ ...entry, version: versions[entry.id] ?? null })), baseline.commit),
+      buildNumbers: await buildNumbersFor(built.map((entry) => ({ ...entry, version: versions[entry.id] ?? null })), baseline.commit),
       targets: chosen.map(({ id, destination, package: packageId, channel, settings, account }) => ({ id, destination, package: packageId, channel, settings, account })),
       toolchain: {
         node: process.versions.node,

@@ -247,6 +247,7 @@ const npmDestination = Object.freeze({
   id: "npm",
   label: "npm",
   packers: Object.freeze(["npm"]),
+  defaultRegistry: DEFAULT_REGISTRY,
   channels: Object.freeze(["latest", "next"]),
   credentials: Object.freeze([CREDENTIAL]),
   readBackCredentials: (target) => (settingsOf(target).access === "restricted" ? [CREDENTIAL] : []),
