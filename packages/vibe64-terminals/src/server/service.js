@@ -523,14 +523,8 @@ function createService({
     listConnections: async () => [],
     readAssistantAccess: async () => ({ ownerOnly: false }),
     resolveAssistantUser: async (user) => user || currentProjectRequestContext()?.vibe64User || null,
-    createActionContext: (actor) => {
-      if (env.VIBE64_INSTANCE) throw new Error("The hosted assistant action context is unavailable.");
-      return { surface: "app", channel: "internal", requestMeta: { request: { vibe64User: actor } } };
-    },
-    authorizeProjectMessage: async (actor) => {
-      if (env.VIBE64_INSTANCE) throw new Error("The hosted project message access check is unavailable.");
-      return actor;
-    },
+    createActionContext: (actor) => ({ surface: "app", channel: "internal", requestMeta: { request: { vibe64User: actor } } }),
+    authorizeProjectMessage: async (actor) => actor,
     resolveConnection: async () => null,
     updateModelAccess: null
   };

@@ -53,6 +53,19 @@ test("public sources name no folders of their own in system locations", () => {
   assert.deepEqual(findings, []);
 });
 
+// A host overrides local behaviour by composition, so public code never reads
+// a host's own workspace variables to change what it does.
+test("public sources read no hosting workspace variable", () => {
+  const findings = [];
+  for (const file of trackedFiles()) {
+    if (file === "tests/server/hostNeutrality.unit.test.js") continue;
+    readText(file).split("\n").forEach((line, index) => {
+      if (/\bVIBE64_INSTANCE\b/u.test(line)) findings.push(`${file}:${index + 1}: ${line.trim().slice(0, 160)}`);
+    });
+  }
+  assert.deepEqual(findings, []);
+});
+
 test("the allowed exceptions still exist", () => {
   for (const file of ALLOWED_FILES) assert.ok(existsSync(path.join(REPO_ROOT, file)), file);
 });
