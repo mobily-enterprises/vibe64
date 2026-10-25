@@ -31,7 +31,7 @@
       "id": "try-it",
       "title": "Replace with what the learner does",
       "body": "steps/try-it.md",
-      "guide": { "target": "preview", "navigate": true, "caption": "Replace with where to look" },
+      "guide": { "target": "lesson-bar", "caption": "Replace with where to look" },
       "check": { "kind": "self" },
       "required": true
     }

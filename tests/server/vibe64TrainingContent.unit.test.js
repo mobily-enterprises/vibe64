@@ -656,6 +656,15 @@ test("v3 step beats end the step body and validate their grammar, places and the
   assert.equal((await validateTopic(f.root)).bundles[0].lesson.steps.length, 3, "lesson places need no practice project");
   await f.write("steps/reflect.md", beats(["show preview: Look."]));
   await assert.rejects(() => validateTopic(f.root), /beat show preview needs the lesson's exercise/u);
+  // A step guide follows the same rule as a beat: project places need the exercise.
+  await f.write("steps/reflect.md", reflect);
+  const guided = structuredClone(noProject);
+  guided.steps[0].guide = { target: "lesson-bar" };
+  await f.write("lesson.json", guided);
+  assert.equal((await validateTopic(f.root)).bundles[0].lesson.steps[0].guide.target, "lesson-bar", "studio guide places need no practice project");
+  guided.steps[0].guide = { target: "preview", navigate: true };
+  await f.write("lesson.json", guided);
+  await assert.rejects(() => validateTopic(f.root), /guide preview needs the lesson's exercise \(a practice project\)/u);
 });
 
 test("a step lesson descriptor holding answers cannot be served as a body, notes, visual or exercise file", async t => {

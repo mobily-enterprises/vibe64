@@ -137,7 +137,8 @@ places and activities plus the topic's declared names):
 `check auto|review|done|fact` matching the step's check kind. The bundler rejects a
 block that does not end the body, beats together with a `guide`, and practice
 project beats in a lesson without an exercise (`beatNeedsPracticeProject`: a
-project-scoped place, or an auto/review check). The
+project-scoped place, or an auto/review check), and a step `guide` at a
+project-scoped place in such a lesson. The
 installed reader serves `step.beats` parsed and `bodyText` without the block;
 the bytes, and so the lesson hash, are unchanged. The browser never parses
 beats. Point-only places (no `open`) refuse `navigate`.

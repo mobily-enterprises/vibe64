@@ -146,6 +146,9 @@ function validateSteps(lesson, visuals, checks, code, bodies, vocabulary) {
     if (step.guide) {
       const { caption, ...request } = step.guide;
       try { trainingGuideRequest(request, vocabulary); } catch (error) { fail(`${label} guide: ${error.message}`); }
+      if (vocabulary.place(step.guide.target)?.scope === "project" && !lesson.exercise) {
+        fail(`${label} guide ${step.guide.target} needs the lesson's exercise (a practice project).`);
+      }
     }
     let beats = null;
     try { ({ beats } = splitStepBeats(bodies.get(step.body), vocabulary)); } catch (error) { fail(`${label} beats: ${error.message}`); }

@@ -132,7 +132,10 @@ topic with every step kind; the copyable template is `docs/templates/learn-topic
   `architecture`, or `learning` for the **L** button). `navigate:true` opens
   it as well as highlighting it (`dashboard` can only be pointed at).
   `filePath` is allowed only with `files` and is a relative project path
-  without `..`. `caption` is at most 256 characters.
+  without `..`. `caption` is at most 256 characters. A lesson without an
+  `exercise` has no practice project, so its guide uses a studio place
+  (`learning`, `lesson`, `lesson-bar`, `courses`, `colleague`, the account
+  places); a project place such as `preview` is refused.
 - `check.kind` is one of:
   - `auto` — runs the declared check named by `check` (one of `checks[].id`)
     and needs the lesson's `exercise`. A response check names no `files`
