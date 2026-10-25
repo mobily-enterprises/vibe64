@@ -57,8 +57,13 @@ const HANDOVER = [
   "Inspect the approved handover and continue."
 ].join("\n");
 
+// Background renewal work does real file I/O, so a busy CI runner can need
+// more than the attempt count's worth of turns; keep polling for a time floor.
+const EVENTUALLY_MIN_WAIT_MS = 5000;
+
 async function eventually(operation, predicate, attempts = 100, pollIntervalMs = 0) {
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
+  const deadline = Date.now() + EVENTUALLY_MIN_WAIT_MS;
+  for (let attempt = 0; attempt < attempts || Date.now() < deadline; attempt += 1) {
     const value = await operation();
     if (predicate(value)) {
       return value;
