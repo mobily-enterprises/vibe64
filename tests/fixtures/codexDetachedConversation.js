@@ -24,19 +24,6 @@ function errorMessage(value, fallback = "Codex could not be prepared.") {
   return normalizeText(value?.error || value?.message || value) || fallback;
 }
 
-function codexAppServerPromptDeliveryEnabledByDefault({
-  env = process.env
-} = {}) {
-  const configured = normalizeText(env.VIBE64_CODEX_APP_SERVER_PROMPTS).toLowerCase();
-  if (["0", "false", "no", "off"].includes(configured)) {
-    return false;
-  }
-  if (["1", "true", "yes", "on"].includes(configured)) {
-    return true;
-  }
-  return true;
-}
-
 function codexDetachedChatTurnError(error, {
   agentSettings = {},
   executionProfile = null,
@@ -63,12 +50,10 @@ function codexDetachedChatTurnError(error, {
   contextualError.statusCode = error?.statusCode;
   return contextualError;
 }
-const CODEX_APP_SERVER_PROMPT_DELIVERY_ENABLED = codexAppServerPromptDeliveryEnabledByDefault();
 
 export function createCodexDetachedConversationView({ provider: hostProvider, options, nativeTestContext }) {
   const { agentDatabaseCommand = null, agentEnvCommand = null, agentPreviewCommand = null,
-    codexGitCommand = null,
-    codexAppServerPromptDeliveryEnabled = CODEX_APP_SERVER_PROMPT_DELIVERY_ENABLED } = options;
+    codexGitCommand = null } = options;
   function vibe64SessionContextInput(conversationKind = "main") {
     return {
       scope: "session",
@@ -79,13 +64,6 @@ export function createCodexDetachedConversationView({ provider: hostProvider, op
         managedGit: Boolean(codexGitCommand),
         managedPreview: Boolean(agentPreviewCommand)
       }
-    };
-  }
-
-  function codexAppServerControlDisabledResult() {
-    return {
-      ok: false,
-      error: "Codex app-server control is disabled. Session Codex control has no terminal fallback."
     };
   }
 
@@ -143,9 +121,6 @@ export function createCodexDetachedConversationView({ provider: hostProvider, op
       }
     };
     return vibe64Result(async () => {
-      if (!codexAppServerPromptDeliveryEnabled) {
-        return codexAppServerControlDisabledResult();
-      }
       const prompt = normalizeText(input.prompt || input.message);
       if (!prompt) {
         return {

@@ -24,13 +24,6 @@ function codexEffectiveAgentSettings(agentSettings = {}) {
   return effectiveVibe64AgentSettings(agentSettings);
 }
 
-function codexAppServerControlDisabledResult() {
-  return {
-    ok: false,
-    error: "Codex app-server control is disabled. Session Codex control has no terminal fallback."
-  };
-}
-
 // Application preparation only. Existing native owners invoke these phases;
 // this facility creates no native owner, queue, retained state or session read.
 function createCodexConversationPreparation({
@@ -41,7 +34,6 @@ function createCodexConversationPreparation({
   sessionEnvironment,
   health,
   unavailableWorktree: blockCodexAppServerForUnavailableWorktree,
-  enabled: codexAppServerPromptDeliveryEnabled,
   publishSessionChanged,
   checkpoint: checkpointCodexAppServerTurn
 }) {
@@ -79,24 +71,6 @@ function createCodexConversationPreparation({
     };
   }
 
-  async function writeCodexAppServerControlDisabledFailure(sessionId = "") {
-    const result = codexAppServerControlDisabledResult();
-    let context = null;
-    try {
-      context = await codexAppServerSessionContext(sessionId);
-    } catch {
-      return result;
-    }
-    if (context.ok === false) {
-      return result;
-    }
-    await writeCodexAppServerFailure(context.runtime, sessionId, {
-      ...result,
-      retryable: false
-    });
-    return result;
-  }
-
   async function withCodexAppServerObservationRecovery(runtime, session, operation) {
     const sessionId = session.sessionId;
     const learningRoot = await learningSessionExecutionRoot(runtime, sessionId, { allowClosing: true });
@@ -120,9 +94,6 @@ function createCodexConversationPreparation({
   }
 
   async function prepareCodexSessionReadiness(sessionId, options = {}) {
-    if (!codexAppServerPromptDeliveryEnabled) {
-      return { value: await writeCodexAppServerControlDisabledFailure(sessionId) };
-    }
     const runtime = await createRuntimeForSession();
     const session = await runtime.getSession(sessionId, { inspectSource: false });
     const learningRoot = await learningSessionExecutionRoot(runtime, sessionId);
@@ -397,14 +368,12 @@ function createCodexConversationPreparation({
     return {
       ...messagePreparation,
       async readContext({ session: _openingSession, ...options } = {}) {
-        if (!codexAppServerPromptDeliveryEnabled) return writeCodexAppServerControlDisabledFailure(sessionId);
         return messagePreparation.readContext(options);
       }
     };
   }
 
   async function control(sessionId, options, input = {}) {
-    if (!codexAppServerPromptDeliveryEnabled) return writeCodexAppServerControlDisabledFailure(sessionId);
     if (codexAppServerAdmissionError(sessionId)) return codexAppServerFrozenTurnInterruptResponse({
       threadId: input.threadId || input.codexSessionId, turnId: input.turnId || input.codexTurnId
     });
@@ -446,9 +415,8 @@ function createCodexConversationPreparation({
     control,
     readGoal,
     goalContext,
-    inspection,
-    disabledFailure: writeCodexAppServerControlDisabledFailure
+    inspection
   };
 }
 
-export { createCodexConversationPreparation, codexAppServerControlDisabledResult };
+export { createCodexConversationPreparation };

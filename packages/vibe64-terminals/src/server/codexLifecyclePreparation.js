@@ -3,7 +3,6 @@ import { closeTerminalSessionsForNamespace } from "@local/vibe64-execution/serve
 import { CODEX_APP_SERVER_RUNTIME_BUSY_CODE } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { codexAppServerThreadSettings } from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
 import { cleanupCodexAttachments, releaseCodexSessionAttachments } from "./codexAttachments.js";
-import { codexAppServerControlDisabledResult } from "./codexConversationPreparation.js";
 import { codexThreadIdForWorkdir, withCodexState } from "./codexConversationStorage.js";
 import { codexAgentSettingsFromSession } from "./codexRuntimeHost.js";
 import { renewalCleanupContext, renewalArchivedPredecessorContext } from "./sessionRenewalHandover.js";
@@ -31,7 +30,7 @@ async function terminalSessionSourceRootForSession(projectService, sessionId) {
 // the session-closing map remain with the same supplied shared runtime owner.
 function createCodexLifecyclePreparation({
   projectService, runtimeHost, sessionRuntimeHost, sessionEnvironment, providerHost,
-  conversationPreparation, helperPreparation, health, runtimeLifecycle, renewalSessionClosures, enabled
+  conversationPreparation, helperPreparation, health, runtimeLifecycle, renewalSessionClosures
 }) {
   const { codexAppServerRuntimeOptionsFromSessionMetadata, codexAppServerPersistedRuntimeHost } = runtimeHost;
   const { createRuntimeForSession, codexAppServerRuntimeOptionsForSession, codexAppServerStorageRuntimeOptionsForSession,
@@ -44,7 +43,6 @@ function createCodexLifecyclePreparation({
   const { ready: writeCodexAppServerReady } = health;
   const { sessionClosures: codexAppServerSessionClosures } = runtimeLifecycle;
   const codexAppServerRenewalSessionClosures = renewalSessionClosures;
-  const codexAppServerPromptDeliveryEnabled = enabled;
 
   async function prepareNativeStorageProvider(sessionId, binding, { runtime, session }) {
     if (binding.modelProviderId !== "openai" && !curatedCodexProvider(binding.modelProviderId)) {
@@ -83,8 +81,7 @@ function createCodexLifecyclePreparation({
 
   function codexAppServerReconciliationPreparation() {
     return {
-      get enabled() { return codexAppServerPromptDeliveryEnabled; },
-      get disabledResult() { return codexAppServerControlDisabledResult(); },
+      enabled: true, // JSKIT's native lifecycle still reads this; Codex control is always on.
       runtimeBusyCode: CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
       failureMessage: "Vibe64 Codex app-server thread reconciliation failed.",
       helperRestoration: runtime => prepareCodexAppServerHelperRestoration({ runtime }),
@@ -223,9 +220,6 @@ function createCodexLifecyclePreparation({
   }
 
   async function prepareCodexProjectCleanup() {
-    if (!codexAppServerPromptDeliveryEnabled) {
-      return { value: codexAppServerControlDisabledResult() };
-    }
     const runtime = await createRuntimeForSession();
     return {
       get helpers() { return prepareCodexAppServerHelperRestoration({ runtime }); }

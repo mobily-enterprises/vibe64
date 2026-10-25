@@ -138,21 +138,6 @@ function normalizeText(value) {
   return String(value || "").trim();
 }
 
-function codexAppServerPromptDeliveryEnabledByDefault({
-  env = process.env
-} = {}) {
-  const configured = normalizeText(env.VIBE64_CODEX_APP_SERVER_PROMPTS).toLowerCase();
-  if (["0", "false", "no", "off"].includes(configured)) {
-    return false;
-  }
-  if (["1", "true", "yes", "on"].includes(configured)) {
-    return true;
-  }
-  return true;
-}
-
-const CODEX_APP_SERVER_PROMPT_DELIVERY_ENABLED = codexAppServerPromptDeliveryEnabledByDefault();
-
 function createCodexSessionRegistration({
   connectionStatus = async () => true,
   listConnections = async () => [],
@@ -165,7 +150,6 @@ function createCodexSessionRegistration({
   codexAppServerDaemonWellbeingMs = CODEX_APP_SERVER_DAEMON_WELLBEING_MS,
   codexAppServerProviderOptions = {},
   codexAppServerProviderFactory = createCodexAppServerAgentProvider,
-  codexAppServerPromptDeliveryEnabled = CODEX_APP_SERVER_PROMPT_DELIVERY_ENABLED,
   codexHelperThreadLedgerFactory = createCodexHelperThreadLedger,
   codexToolHomeRequired = false,
   codexToolHomeSource = "",
@@ -373,7 +357,6 @@ function createCodexSessionRegistration({
     sessionEnvironment: codexSessionEnvironment,
     health: codexStartupHealth,
     unavailableWorktree: blockCodexAppServerForUnavailableWorktree,
-    enabled: codexAppServerPromptDeliveryEnabled,
     publishSessionChanged,
     checkpoint: checkpointCodexAppServerTurn
   });
@@ -387,8 +370,7 @@ function createCodexSessionRegistration({
     helperPreparation: codexHelperPreparation,
     health: codexStartupHealth,
     runtimeLifecycle: codexAppServerRunOwner.runtimeLifecycle,
-    renewalSessionClosures: codexAppServerRenewalSessionClosures,
-    enabled: codexAppServerPromptDeliveryEnabled
+    renewalSessionClosures: codexAppServerRenewalSessionClosures
   });
   const codexAssistantCatalog = createCodexAssistantCatalog({
     accountPreparation: codexAccountPreparation,
@@ -398,8 +380,7 @@ function createCodexSessionRegistration({
     helperPreparation: codexHelperPreparation,
     providerOwner: codexAppServerProviderOwner,
     runOwner: codexAppServerRunOwner,
-    providerFactory: codexAppServerProviderFactory,
-    enabled: codexAppServerPromptDeliveryEnabled
+    providerFactory: codexAppServerProviderFactory
   });
   const codexScopedConversationPreparation = createCodexScopedConversationPreparation({
     conversationPreparation: codexConversationPreparation,
@@ -408,8 +389,7 @@ function createCodexSessionRegistration({
     sessionRuntimeHost: codexSessionRuntimeHost,
     accountPreparation: codexAccountPreparation,
     sessionEnvironment: codexSessionEnvironment,
-    actorMetadata: currentConversationActorMetadata,
-    enabled: codexAppServerPromptDeliveryEnabled
+    actorMetadata: currentConversationActorMetadata
   });
   const markCodexAppServerContextRefreshPending = createCodexContextRefreshMarker({ projectService, runOwner: codexAppServerRunOwner });
 
@@ -494,7 +474,6 @@ function createCodexSessionRegistration({
     catalog: codexAssistantCatalog,
     terminals: codexInteractiveTerminals,
     attachments: codexAttachments,
-    enabled: codexAppServerPromptDeliveryEnabled,
     runNativeDetachedConversation,
     env,
     publishSessionChanged: publishCodexConversationEvent,

@@ -22,7 +22,6 @@ import {
   codexAppServerFrozenThreadDeleteResponse,
   codexAppServerFrozenTurnInterruptResponse
 } from "./codexSessionProviderHost.js";
-import { codexAppServerControlDisabledResult } from "./codexConversationPreparation.js";
 
 const CODEX_APP_SERVER_EPHEMERAL_PROGRESS_LIMIT = 24;
 
@@ -97,8 +96,7 @@ function createCodexScopedConversationPreparation({
   sessionRuntimeHost,
   accountPreparation,
   sessionEnvironment,
-  actorMetadata: currentConversationActorMetadata,
-  enabled: codexAppServerPromptDeliveryEnabled
+  actorMetadata: currentConversationActorMetadata
 }) {
   const { codexAppServerRuntimeOptions } = runtimeHost;
   const {
@@ -164,9 +162,6 @@ function createCodexScopedConversationPreparation({
     runtime: resolvedRuntime = null,
     session: resolvedSession = null
   } = {}) {
-    if (!codexAppServerPromptDeliveryEnabled) {
-      return { result: codexAppServerControlDisabledResult() };
-    }
     if (assistantScope) {
       return codexAppServerEphemeralScopePreparation(sessionId, input, assistantScope);
     }
@@ -329,9 +324,6 @@ function createCodexScopedConversationPreparation({
     return {
       admission,
       get result() {
-        if (!codexAppServerPromptDeliveryEnabled) {
-          return codexAppServerControlDisabledResult();
-        }
         prompt = normalizeText(input.prompt || input.message);
         if (!prompt) {
           return { code: "vibe64_codex_detached_prompt_empty", error: "Codex prompt is empty.", ok: false };
@@ -372,9 +364,6 @@ function createCodexScopedConversationPreparation({
   }
 
   function codexAppServerConversationControl(sessionId, input, operation) {
-    if (!codexAppServerPromptDeliveryEnabled) {
-      return { result: codexAppServerControlDisabledResult() };
-    }
     const threadId = normalizeText(input.threadId || input.codexSessionId);
     const turnId = operation === "interrupt" ? normalizeText(input.turnId || input.codexTurnId) : "";
     const frozen = () => operation === "delete"

@@ -67,7 +67,7 @@ async function withCodexAppServerModelCatalogDeadline(operation, {
 // Native catalogue caching, provider reuse and cleanup stay in the existing owner.
 function createCodexAssistantCatalog({
   accountPreparation, runtimeHost, sessionRuntimeHost, conversationPreparation, helperPreparation,
-  providerOwner, runOwner, providerFactory, enabled
+  providerOwner, runOwner, providerFactory
 }) {
   const { codexToolHomeResult } = accountPreparation;
   const { codexAppServerRuntimeOptions } = runtimeHost;
@@ -79,7 +79,6 @@ function createCodexAssistantCatalog({
   const codexConversationPreparation = conversationPreparation;
   const { restoration: prepareCodexAppServerHelperRestoration } = helperPreparation;
   const codexAppServerRunOwner = runOwner;
-  const codexAppServerPromptDeliveryEnabled = enabled;
 
   async function codexAppServerExecutionProfileModelCatalog(sessionId = "", {
     assistantScope = null,
@@ -88,11 +87,6 @@ function createCodexAssistantCatalog({
     session: resolvedSession = null,
     signal = null
   } = {}) {
-    if (!codexAppServerPromptDeliveryEnabled) {
-      const error = new Error("Codex background work is disabled.");
-      error.code = "vibe64_codex_control_disabled";
-      throw error;
-    }
     const context = assistantScope
       ? await codexAppServerRunOwner.readExecutionProfileModelCatalog(sessionId, { assistantScope, agentSettings, signal })
       : await codexConversationPreparation.context(sessionId, { runtime: resolvedRuntime, session: resolvedSession });

@@ -1,5 +1,4 @@
 import { sessionContextUsageFromMetadata } from "../../codexContextRenewalSignals.js";
-import { codexAppServerControlDisabledResult } from "../../codexConversationPreparation.js";
 import { renewalArchivedPredecessorContext, renewalSuccessorProcessExitProofReleaseContext } from "../../sessionRenewalHandover.js";
 import { beginTerminalNamespaceOperation } from "@local/vibe64-execution/server/terminalSessions";
 import {
@@ -442,7 +441,6 @@ function createCodexSessionAgentProvider({
   catalog: codexAssistantCatalog,
   terminals,
   attachments,
-  enabled: codexAppServerPromptDeliveryEnabled = true,
   env = process.env,
   publishSessionChanged,
   checkpoint: checkpointCodexAppServerTurn
@@ -503,8 +501,7 @@ function createCodexSessionAgentProvider({
       };
       if (mode === "unsubscription") return {
         native: { runOwner: codexAppServerRunOwner, preparation: {
-          get enabled() { return codexAppServerPromptDeliveryEnabled; },
-          get disabledResult() { return codexAppServerControlDisabledResult(); },
+          enabled: true, // JSKIT's native lifecycle still reads this; Codex control is always on.
           session: prepareCodexAppServerThreadUnsubscription,
           failureMessage: "Vibe64 Codex app-server thread unsubscribe failed.",
           cleanupFailureMessage: "Vibe64 Codex app-server provider cleanup failed."
@@ -512,8 +509,7 @@ function createCodexSessionAgentProvider({
       };
       if (mode === "invalidation") return {
         native: { runOwner: codexAppServerRunOwner, preparation: {
-        get enabled() { return codexAppServerPromptDeliveryEnabled; },
-        get disabledResult() { return codexAppServerControlDisabledResult(); },
+        enabled: true, // JSKIT's native lifecycle still reads this; Codex control is always on.
         get helpers() {
           return (async () => {
             const runtime = await createRuntimeForSession();
@@ -751,9 +747,6 @@ function createCodexSessionAgentProvider({
     },
     async startTerminal(context, input = {}) {
       return vibe64Result(async () => {
-        if (!codexAppServerPromptDeliveryEnabled) {
-          return codexConversationPreparation.disabledFailure(context.sessionId);
-        }
         return terminals.startTerminal(context.sessionId, input);
       });
     },
