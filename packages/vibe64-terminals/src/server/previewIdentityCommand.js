@@ -9,11 +9,14 @@ import {
   normalizePreviewIdentityCommandCapability,
   normalizePreviewIdentitySelection
 } from "@local/vibe64-core/server/previewAuth";
+import { PREVIEW_PROXY_TOKEN_QUERY_PARAM } from "../shared/launchPreviewProtocol.js";
 
 const PREVIEW_IDENTITY_COMMAND_MAX_OUTPUT_BYTES = 512 * 1024;
 const PREVIEW_IDENTITY_COMMAND_MAX_COOKIES = 64;
 const PREVIEW_IDENTITY_COMMAND_MAX_COOKIE_BYTES = 16 * 1024;
-const PREVIEW_TOKEN_COOKIE_PREFIX = "vibe64_preview_token";
+// The proxy names its token cookie after the query parameter, optionally
+// with a port suffix and __Host- prefix (launchPreviewProxy previewTokenCookieName).
+const PREVIEW_TOKEN_COOKIE_PREFIX = PREVIEW_PROXY_TOKEN_QUERY_PARAM;
 const COOKIE_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/u;
 
 function previewIdentityCommandError(message = "", code = "vibe64_preview_identity_command_failed", statusCode = 502) {

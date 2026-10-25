@@ -14,6 +14,8 @@ import {
 import {
   PREVIEW_IDENTITY_CONTROL_PATH
 } from "@local/vibe64-core/server/previewAuth";
+import { PREVIEW_PROXY_TOKEN_QUERY_PARAM } from "../shared/launchPreviewProtocol.js";
+import { previewLastPath, previewLogPath } from "./previewDiagnosticFiles.js";
 import {
   vibe64ErrorResponse,
   vibe64StatusCode
@@ -276,7 +278,7 @@ function previewPageUrl(baseUrl = "", route = "", {
     }
     if (inheritBaseSearch) {
       for (const [name, value] of base.searchParams) {
-        if (name === "vibe64_preview_token") {
+        if (name === PREVIEW_PROXY_TOKEN_QUERY_PARAM) {
           page.searchParams.set(name, value);
         } else if (!page.searchParams.has(name)) {
           page.searchParams.append(name, value);
@@ -337,10 +339,10 @@ function previewTerminal(status = {}) {
 
 function previewDiagnostics(status = {}) {
   const metadata = isRecord(status?.activeTerminal?.metadata) ? status.activeTerminal.metadata : {};
-  const sessionRoot = normalizeText(metadata.sessionRoot);
-  return sessionRoot ? {
-    latest: path.join(sessionRoot, "preview-last.json"),
-    log: path.join(sessionRoot, "preview-log.jsonl")
+  const session = { sessionRoot: metadata.sessionRoot };
+  return previewLastPath(session) ? {
+    latest: previewLastPath(session),
+    log: previewLogPath(session)
   } : null;
 }
 
@@ -351,7 +353,7 @@ function previewStatusSummary(status = {}, {
   const activeMetadata = isRecord(status.activeTerminal?.metadata) ? status.activeTerminal.metadata : {};
   const openTarget = isRecord(status.openTarget) ? status.openTarget : {};
   const previewTarget = isRecord(status.previewTarget) ? status.previewTarget : {};
-  const applicationUrl = normalizeText(lastOutputTarget.agentHref || activeMetadata.previewProxyTargetHref || activeMetadata.targetUrl || openTarget.href);
+  const applicationUrl = normalizeText(lastOutputTarget.agentHref || activeMetadata.targetUrl || openTarget.href);
   const browserUrl = previewInspectionUrl(status, { previewState });
   const browserEndpoint = previewReady(status) ? previewEndpoint(previewTarget.href) : null;
   const identityTypes = (Array.isArray(status.previewIdentity?.identityTypes)
@@ -381,7 +383,7 @@ function previewStatusSummary(status = {}, {
     defaultIdentity: normalizeText(status.previewIdentity?.defaultIdentityName),
     identities,
     identityTypes,
-    outputTargetId: normalizeText(lastOutputTarget.id || activeMetadata.outputTargetId),
+    outputTargetId: outputTargetIdFromStatus(status),
     stoppedIntent: status.preview?.stoppedIntent === true,
     ready: previewReady(status),
     stale: previewTarget.stale === true || normalizeText(previewTarget.recovery?.reason) === "server_source_changed",
@@ -715,7 +717,6 @@ function createAgentPreviewCommandService({
   async function authorizeBrowserIdentity(sessionId = "", identity = "") {
     const normalizedSessionId = normalizeText(sessionId);
     const requested = normalizeText(identity).toLowerCase();
-    const reservedIdentity = requested.toLowerCase();
     if (!normalizedSessionId) {
       return responseError(
         "Vibe64 preview command session id is required.",
@@ -734,7 +735,7 @@ function createAgentPreviewCommandService({
         "vibe64_agent_preview_identity_unavailable"
       );
     }
-    if (reservedIdentity === "guest") {
+    if (requested === "guest") {
       return launchTarget.selectPreviewIdentity(normalizedSessionId, {
         mode: "guest"
       });
@@ -771,23 +772,32 @@ function createAgentPreviewCommandService({
     return true;
   }
 
-  async function closeAllForSession(sessionId = "") {
+  // Interrupts a pending browser test, stops every registered worker and
+  // closes the session's command servers; returns the worker count.
+  async function teardownSession(sessionId = "", { forget = false, reason = "" } = {}) {
     const normalizedSessionId = normalizeText(sessionId);
     const pending = browserTestRuns.get(normalizedSessionId);
     pending?.interrupt();
     await pending?.completion;
     const sessionWorkers = browserWorkers.get(normalizedSessionId) || new Map();
-    browserWorkers.delete(normalizedSessionId);
+    if (forget) {
+      browserWorkers.delete(normalizedSessionId);
+    }
     let closed = 0;
     for (const descriptor of sessionWorkers.values()) {
       await stopRegisteredBrowserWorker(descriptor, {
-        reason: "session-close",
+        reason,
         stopExecution: stopManagedExecution,
         stopOwnedExecutions
       });
       closed += 1;
     }
     await closeAgentPreviewCommandServersForSession(normalizedSessionId);
+    return closed;
+  }
+
+  async function closeAllForSession(sessionId = "") {
+    const closed = await teardownSession(sessionId, { forget: true, reason: "session-close" });
     return {
       closed,
       ok: true
@@ -813,19 +823,7 @@ function createAgentPreviewCommandService({
   }
 
   async function releaseControlForSession(sessionId = "") {
-    const normalizedSessionId = normalizeText(sessionId);
-    const pending = browserTestRuns.get(normalizedSessionId);
-    pending?.interrupt();
-    await pending?.completion;
-    const sessionWorkers = browserWorkers.get(normalizedSessionId) || new Map();
-    for (const descriptor of sessionWorkers.values()) {
-      await stopRegisteredBrowserWorker(descriptor, {
-        reason: "control-release",
-        stopExecution: stopManagedExecution,
-        stopOwnedExecutions
-      });
-    }
-    await closeAgentPreviewCommandServersForSession(sessionId);
+    await teardownSession(sessionId, { reason: "control-release" });
     return {
       ok: true
     };

@@ -21,7 +21,6 @@ import {
 } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { Readable } from "node:stream";
 
 import {
   isLoopbackAddress
@@ -60,7 +59,7 @@ import {
 const LOOPBACK_HOST = "127.0.0.1";
 const HTML_CONTENT_TYPE_PATTERN = /\btext\/html\b/iu;
 const REQUEST_BODY_METHODS = new Set(["PATCH", "POST", "PUT"]);
-const PREVIEW_PROXY_TOKEN_COOKIE = "vibe64_preview_token";
+const PREVIEW_PROXY_TOKEN_COOKIE = PREVIEW_PROXY_TOKEN_QUERY_PARAM;
 const PREVIEW_PROXY_SOCKET_DIR_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_DIR";
 const PREVIEW_PROXY_DEBUG_ENV = "VIBE64_PREVIEW_DEBUG";
 const PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS_ENV = "VIBE64_PREVIEW_PROXY_SOCKET_IDLE_TIMEOUT_MS";
@@ -102,14 +101,10 @@ function proxyRequestHeaders(headers = {}, targetUrl, {
     delete nextHeaders["if-modified-since"];
     delete nextHeaders["if-none-match"];
   }
-  nextHeaders.cookie = stripPreviewTokenCookie(nextHeaders.cookie, {
-    proxyOrigin
-  });
-  nextHeaders.cookie = mergeCookieHeaders(
-    nextHeaders.cookie,
-    previewAuthCookieHeaderForRequest(previewAuth)
-  );
-  if (!nextHeaders.cookie) {
+  const cookie = browserCookieHeader(nextHeaders.cookie, { previewAuth, proxyOrigin });
+  if (cookie) {
+    nextHeaders.cookie = cookie;
+  } else {
     delete nextHeaders.cookie;
   }
   nextHeaders["accept-encoding"] = "identity";
@@ -126,20 +121,28 @@ function proxyUpgradeHeaders(headers = {}, targetUrl, {
   targetHost = ""
 } = {}) {
   const nextHeaders = { ...headers };
-  nextHeaders.cookie = stripPreviewTokenCookie(nextHeaders.cookie, {
-    proxyOrigin
-  });
-  nextHeaders.cookie = mergeCookieHeaders(
-    nextHeaders.cookie,
-    previewAuthCookieHeaderForRequest(previewAuth)
-  );
-  if (!nextHeaders.cookie) {
+  const cookie = browserCookieHeader(nextHeaders.cookie, { previewAuth, proxyOrigin });
+  if (cookie) {
+    nextHeaders.cookie = cookie;
+  } else {
     delete nextHeaders.cookie;
   }
   nextHeaders.host = targetHost || targetUrl.host;
   forwardedHeaders(nextHeaders, proxyOrigin, clientAddress);
   remapPreviewOrigin(nextHeaders, proxyOrigin);
   return nextHeaders;
+}
+
+// The app sees the browser's cookies without this proxy's token cookie, plus
+// the Preview identity's own cookies in place of any the browser sent.
+function browserCookieHeader(header = "", {
+  previewAuth = null,
+  proxyOrigin = ""
+} = {}) {
+  return mergeCookieHeaders(
+    stripPreviewTokenCookie(header, { proxyOrigin }),
+    previewAuthCookieHeader(previewAuth || {})
+  );
 }
 
 function forwardedHeaders(headers, browserOrigin, clientAddress = "") {
@@ -308,14 +311,7 @@ function stripPreviewTokenCookie(header = "", {
   return String(header || "")
     .split(";")
     .map((part) => part.trim())
-    .filter((part) => {
-      if (!part) {
-        return false;
-      }
-      const separatorIndex = part.indexOf("=");
-      const name = separatorIndex < 0 ? part : part.slice(0, separatorIndex).trim();
-      return name !== cookieName;
-    })
+    .filter((part) => part && cookiePairName(part) !== cookieName)
     .join("; ");
 }
 
@@ -324,14 +320,7 @@ function mergeCookieHeaders(header = "", injectedHeader = "") {
   const existing = String(header || "")
     .split(";")
     .map((part) => part.trim())
-    .filter((part) => {
-      if (!part) {
-        return false;
-      }
-      const separatorIndex = part.indexOf("=");
-      const name = separatorIndex < 0 ? part : part.slice(0, separatorIndex).trim();
-      return !injectedNames.has(name);
-    });
+    .filter((part) => part && !injectedNames.has(cookiePairName(part)));
   const injected = String(injectedHeader || "")
     .split(";")
     .map((part) => part.trim())
@@ -339,18 +328,17 @@ function mergeCookieHeaders(header = "", injectedHeader = "") {
   return [...existing, ...injected].join("; ");
 }
 
+// The name of one `name=value` cookie pair; a bare token is all name.
+function cookiePairName(part = "") {
+  const separatorIndex = part.indexOf("=");
+  return (separatorIndex < 0 ? part : part.slice(0, separatorIndex)).trim();
+}
+
 function cookieNames(header = "") {
   return String(header || "")
     .split(";")
-    .map((part) => {
-      const separatorIndex = part.indexOf("=");
-      return (separatorIndex < 0 ? part : part.slice(0, separatorIndex)).trim();
-    })
+    .map(cookiePairName)
     .filter(Boolean);
-}
-
-function previewAuthCookieHeaderForRequest(previewAuth = null) {
-  return previewAuthCookieHeader(previewAuth || {});
 }
 
 function rejectPreviewRequest(response) {
@@ -708,15 +696,9 @@ function responseHeaders(response, {
   targetOrigin = ""
 } = {}) {
   const headers = {};
-  if (typeof response.headers?.forEach === "function") {
-    response.headers.forEach((value, key) => {
+  for (const [key, value] of Object.entries(response.headers || {})) {
+    if (value !== undefined) {
       headers[key] = value;
-    });
-  } else {
-    for (const [key, value] of Object.entries(response.headers || {})) {
-      if (value !== undefined) {
-        headers[key] = value;
-      }
     }
   }
   delete headers["content-length"];
@@ -762,9 +744,7 @@ function filterPreviewAuthSetCookieHeaders(headers = {}, previewAuth = null) {
 }
 
 function setCookieName(header = "") {
-  const firstPart = String(header || "").split(";")[0] || "";
-  const separatorIndex = firstPart.indexOf("=");
-  return (separatorIndex < 0 ? firstPart : firstPart.slice(0, separatorIndex)).trim();
+  return cookiePairName(String(header || "").split(";")[0] || "");
 }
 
 function requestAcceptsHtml(request) {
@@ -1056,15 +1036,11 @@ async function proxyPreviewRequest(request, response, {
       return;
     }
     await proxyPreviewIdentityExchange(request, response, {
-      connectOrigin,
       consumeIdentityGrant,
       executePreviewIdentityCommand,
       previewAuth,
       proxyOrigin,
-      targetHost,
-      targetOrigin,
-      token,
-      tracker
+      token
     });
     return;
   }
@@ -1200,8 +1176,7 @@ async function streamText(stream, {
   })).toString("utf8");
 }
 
-function pipePreviewResponseBody(body, response) {
-  const stream = typeof body?.getReader === "function" ? Readable.fromWeb(body) : body;
+function pipePreviewResponseBody(stream, response) {
   stream.once("error", (error) => {
     if (!response.destroyed) {
       response.destroy(error);
@@ -1334,21 +1309,14 @@ function recordPreviewUpgradeSocketError(event) {
 function trackPreviewServerSockets(server, {
   tracker = null
 } = {}) {
-  const sockets = new Set();
   server.on("connection", (socket) => {
-    sockets.add(socket);
     tracker?.trackSocket?.(socket, "browser");
-    socket.once("close", () => {
-      sockets.delete(socket);
-    });
   });
-  return sockets;
 }
 
 async function closePreviewServer({
   listen = {},
   server,
-  sockets = new Set(),
   tracker = null
 } = {}) {
   await new Promise((resolve) => {
@@ -1358,9 +1326,6 @@ async function closePreviewServer({
     }
     if (typeof server.closeAllConnections === "function") {
       server.closeAllConnections();
-    }
-    for (const socket of [...sockets]) {
-      socket.destroy();
     }
     tracker?.destroyAll?.();
   });
@@ -1549,64 +1514,15 @@ function createLaunchPreviewProxyRegistry({
     }
   }
 
-  async function close(input = {}) {
-    const scope = previewProxyScope(input);
-    const closeEntries = [...proxies.entries()].filter(([, proxy]) => {
-      return proxy.scope.projectScope === scope.projectScope &&
-        proxy.scope.sessionId === scope.sessionId &&
-        (!scope.terminalSessionId || proxy.scope.terminalSessionId === scope.terminalSessionId);
-    });
-    const pendingCloseEntries = [...pendingStarts.entries()].filter(([, pending]) => {
-      return pending.scope.projectScope === scope.projectScope &&
-        pending.scope.sessionId === scope.sessionId &&
-        (!scope.terminalSessionId || pending.scope.terminalSessionId === scope.terminalSessionId);
-    });
+  // Pending starts are marked so their starter closes the proxy it opens.
+  async function closeMatching(matches, debugEvent, debugDetails = {}) {
+    const closeEntries = [...proxies.entries()].filter(([, proxy]) => matches(proxy.scope));
+    const pendingCloseEntries = [...pendingStarts.entries()].filter(([, pending]) => matches(pending.scope));
     if (closeEntries.length > 0 || pendingCloseEntries.length > 0) {
-      previewProxyDebugLog("server.launchPreviewProxy.close", {
+      previewProxyDebugLog(debugEvent, {
         count: closeEntries.length,
         pendingCount: pendingCloseEntries.length,
-        projectScope: String(scope.projectScope || ""),
-        sessionId: String(scope.sessionId || ""),
-        terminalSessionId: String(scope.terminalSessionId || ""),
-        targets: closeEntries.map(([, proxy]) => ({
-          connectHref: String(proxy.connectHref || ""),
-          proxyOrigin: String(proxy.origin || ""),
-          targetHref: String(proxy.targetHref || ""),
-          terminalSessionId: String(proxy.scope?.terminalSessionId || "")
-        }))
-      });
-    }
-    for (const [, pending] of pendingCloseEntries) {
-      pending.closeRequested = true;
-    }
-    await Promise.all([
-      ...closeEntries.map(async ([key, proxy]) => {
-        proxies.delete(key);
-        await proxy.close();
-      }),
-      ...pendingCloseEntries.map(async ([key, pending]) => {
-        try {
-          const proxy = await pending.promise;
-          proxies.delete(key);
-          await proxy.close();
-        } catch {
-          // The starter closes and rejects when closeRequested is set.
-        } finally {
-          if (pendingStarts.get(key) === pending) {
-            pendingStarts.delete(key);
-          }
-        }
-      })
-    ]);
-  }
-
-  async function closeAll() {
-    const closeEntries = [...proxies.entries()];
-    const pendingCloseEntries = [...pendingStarts.entries()];
-    if (closeEntries.length > 0 || pendingCloseEntries.length > 0) {
-      previewProxyDebugLog("server.launchPreviewProxy.closeAll", {
-        count: closeEntries.length,
-        pendingCount: pendingCloseEntries.length,
+        ...debugDetails,
         targets: closeEntries.map(([, proxy]) => ({
           connectHref: String(proxy.connectHref || ""),
           projectScope: String(proxy.scope?.projectScope || ""),
@@ -1639,6 +1555,23 @@ function createLaunchPreviewProxyRegistry({
         }
       })
     ]);
+  }
+
+  async function close(input = {}) {
+    const scope = previewProxyScope(input);
+    await closeMatching((candidate) => (
+      candidate.projectScope === scope.projectScope &&
+      candidate.sessionId === scope.sessionId &&
+      (!scope.terminalSessionId || candidate.terminalSessionId === scope.terminalSessionId)
+    ), "server.launchPreviewProxy.close", {
+      projectScope: String(scope.projectScope || ""),
+      sessionId: String(scope.sessionId || ""),
+      terminalSessionId: String(scope.terminalSessionId || "")
+    });
+  }
+
+  async function closeAll() {
+    await closeMatching(() => true, "server.launchPreviewProxy.closeAll");
   }
 
   return Object.freeze({
@@ -1739,7 +1672,7 @@ async function startLaunchPreviewProxy({
   const tracker = createPreviewProxyConnectionTracker({
     socketIdleTimeoutMs
   });
-  const sockets = trackPreviewServerSockets(server, {
+  trackPreviewServerSockets(server, {
     tracker
   });
   const token = crypto.randomBytes(32).toString("base64url");
@@ -1807,7 +1740,6 @@ async function startLaunchPreviewProxy({
     close: () => closePreviewServer({
       listen,
       server,
-      sockets,
       tracker
     }),
     isPublished: () => {

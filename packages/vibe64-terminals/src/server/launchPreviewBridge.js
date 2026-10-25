@@ -7,6 +7,7 @@ import {
   PREVIEW_IDENTITY_REQUEST_MESSAGE_TYPE,
   PREVIEW_IDENTITY_RESPONSE_MESSAGE_TYPE,
   PREVIEW_LOCATION_MESSAGE_TYPE,
+  PREVIEW_PROXY_TOKEN_QUERY_PARAM,
   PREVIEW_QUERY_MESSAGE_TYPE,
   PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE
 } from "../shared/launchPreviewProtocol.js";
@@ -31,6 +32,7 @@ function launchPreviewBridgeScript({
     queryMessageType: PREVIEW_QUERY_MESSAGE_TYPE,
     resourceFailureMessageType: PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE,
     targetOrigin: String(targetOrigin || ""),
+    tokenQueryParam: PREVIEW_PROXY_TOKEN_QUERY_PARAM,
     version: PREVIEW_BRIDGE_VERSION
   });
 
@@ -663,7 +665,7 @@ function launchPreviewBridgeScript({
   function targetResourceHref(value) {
     try {
       const resource = new URL(String(value || ""), window.location.href);
-      resource.searchParams.delete("vibe64_preview_token");
+      resource.searchParams.delete(config.tokenQueryParam);
       if (!config.targetOrigin || resource.host !== window.location.host) {
         return resource.toString();
       }

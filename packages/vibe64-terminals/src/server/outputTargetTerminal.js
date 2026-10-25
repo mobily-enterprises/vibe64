@@ -108,8 +108,14 @@ import {
   inspectVibe64OutputsForContext,
   inspectVibe64WorkspaceSetupForContext,
   listVibe64OutputTargets,
+  normalizedRuntimeRequirements,
   outputResultsMarkerLineSeen
 } from "./vibe64OutputTargets.js";
+import {
+  previewDiagnosticsSessionRoot,
+  previewLastPath,
+  previewLogPath
+} from "./previewDiagnosticFiles.js";
 import {
   listOutputResults,
   readOutputResult,
@@ -139,24 +145,11 @@ const PREVIEW_PUBLIC_HOST_PREFIX = "v64preview";
 const VIBE64_WORKSPACE_ENV = "VIBE64_WORKSPACE";
 const LAUNCH_RESTART_REASON_SOURCE_CHANGED = "server_source_changed";
 const MAX_RESTART_CHANGED_FILES = 20;
-const PREVIEW_LOG_FILE_NAME = "preview-log.jsonl";
-const PREVIEW_LAST_FILE_NAME = "preview-last.json";
 const PREVIEW_OUTPUT_TAIL_LIMIT = 12000;
 const DEFAULT_PUBLIC_PROTOCOL = "https";
 
-function normalizeRuntimeList(values = []) {
-  const normalized = [];
-  for (const value of Array.isArray(values) ? values : []) {
-    const runtime = String(value || "").trim();
-    if (runtime && !normalized.includes(runtime)) {
-      normalized.push(runtime);
-    }
-  }
-  return normalized;
-}
-
 function previewRuntimesForSpec(spec = {}) {
-  return normalizeRuntimeList([
+  return normalizedRuntimeRequirements([
     "git",
     ...(Array.isArray(spec.runtimes) ? spec.runtimes : [])
   ]);
@@ -166,19 +159,6 @@ function normalizeOutputTargetId(value = "") {
   return String(value || "").trim();
 }
 
-function previewDiagnosticsSessionRoot(session = {}) {
-  return String(session?.sessionRoot || "").trim();
-}
-
-function previewLogPath(session = {}) {
-  const sessionRoot = previewDiagnosticsSessionRoot(session);
-  return sessionRoot ? path.join(sessionRoot, PREVIEW_LOG_FILE_NAME) : "";
-}
-
-function previewLastPath(session = {}) {
-  const sessionRoot = previewDiagnosticsSessionRoot(session);
-  return sessionRoot ? path.join(sessionRoot, PREVIEW_LAST_FILE_NAME) : "";
-}
 
 function previewDiagnosticOutputTail(output = "") {
   const text = stripAnsi(String(output || ""));
@@ -535,16 +515,6 @@ async function writePreviewStopState(store, sessionId, { stopped, error = "" }) 
   });
 }
 
-function sessionWithoutLaunchMetadata(session = {}) {
-  const metadata = session.metadata && typeof session.metadata === "object" && !Array.isArray(session.metadata)
-    ? session.metadata
-    : {};
-  return {
-    ...session,
-    metadata: Object.fromEntries(Object.entries(metadata).filter(([name]) => !OUTPUT_METADATA_NAMES.includes(name)))
-  };
-}
-
 async function clearLaunchMetadata(store, sessionId = "", { preserveSelection = false } = {}) {
   const normalizedSessionId = String(sessionId || "").trim();
   if (!normalizedSessionId || !store) {
@@ -557,10 +527,6 @@ async function clearLaunchMetadata(store, sessionId = "", { preserveSelection = 
     await store.mutateSession(normalizedSessionId, async () => {
       await Promise.all(names.map((name) => store.deleteMetadataValue(normalizedSessionId, name)));
     });
-    return true;
-  }
-  if (typeof store.deleteMetadataValues === "function") {
-    await store.deleteMetadataValues(normalizedSessionId, names);
     return true;
   }
   return false;
@@ -585,18 +551,23 @@ async function clearLaunchMetadataForTerminal(store, sessionId = "", terminalSes
   return clearLaunchMetadata(store, sessionId, { preserveSelection });
 }
 
+// The application URL the agent's own checks use, beside the browser-facing Preview.
+function launchAgentHref(metadata = {}) {
+  return String(
+    metadata.agentTargetHref ||
+    metadata.targetUrl ||
+    normalizeOpenTarget(metadata.openTarget || {}).href ||
+    ""
+  ).trim();
+}
+
 async function writeLaunchMetadata(store, sessionId, terminalSession = {}) {
   const metadata = terminalSession.metadata || {};
   const openTarget = normalizeOpenTarget(metadata.openTarget || {});
   if (!metadata.outputTargetId || !openTarget.href) {
     return;
   }
-  const agentHref = String(
-    metadata.agentTargetHref ||
-    metadata.previewProxyTargetHref ||
-    metadata.targetUrl ||
-    openTarget.href
-  ).trim();
+  const agentHref = launchAgentHref(metadata);
   await store.mutateSession(sessionId, async () => {
     await Promise.all([
       store.writeMetadataValue(sessionId, OUTPUT_METADATA.agentHref, agentHref),
@@ -670,7 +641,6 @@ async function createLaunchContext(projectService, sessionId, {
     throw error;
   }
   return {
-    config: {},
     projectService,
     previewApplicationIdentities: previewIdentitySettings.identities || [],
     projectEnvironment,
@@ -748,10 +718,6 @@ function workspaceSetupLaunchDisabledReason(session = {}, inspection = null) {
   // Starting an output target owns running and awaiting the current recipe.
   // A new or changed recipe is therefore pending work, not a disabled target.
   return "";
-}
-
-async function createOutputTargetSpec(input = {}) {
-  return createVibe64OutputTargetTerminalSpec(input);
 }
 
 function outputTargetExecutionDescriptor(outputTarget = {}, spec = {}) {
@@ -886,7 +852,7 @@ function outputTargetFromTerminalMetadata(terminal = {}) {
   return {
     id,
     outputParameters: metadata.outputParameters || {},
-    agentHref: String(metadata.agentTargetHref || metadata.previewProxyTargetHref || metadata.targetUrl || openTarget.href || "").trim(),
+    agentHref: launchAgentHref(metadata),
     label: String(metadata.outputTargetLabel || id).trim() || id,
     openTarget: openTarget.href ? openTarget : null,
     startedAt: String(source.createdAt || "").trim()
@@ -1793,7 +1759,6 @@ async function ensureLaunchPreviewProxy({
 
 function launchExecutionProject(context = {}, terminalEnvRecords = {}) {
   return {
-    config: context.config || {},
     projectsRoot: context.projectsRoot || "",
     runtimeConfigEnv: terminalEnvRecords.runtimeConfigEnv,
     runtimeTargetRoot: context.projectContextRoot || "",
@@ -1883,8 +1848,7 @@ async function missingLaunchPreviewStatus({
 } = {}) {
   const lastOutputTarget = outputTargetFromMetadata(context.session?.metadata || {});
   const recovery = staleLaunchRecovery({
-    canRestart: Boolean(lastOutputTarget?.id),
-    canStopStale: false
+    canRestart: Boolean(lastOutputTarget?.id)
   });
   let metadataCleared = false;
   try {
@@ -1928,8 +1892,7 @@ async function missingLaunchPreviewStatus({
       state: "failed",
       targetHref: String(openTarget?.href || lastOutputTarget?.openTarget?.href || "").trim(),
       terminalId: ""
-    }),
-    session: sessionWithoutLaunchMetadata(context.session)
+    })
   };
 }
 
@@ -2359,8 +2322,8 @@ function createOutputTargetTerminalController({
           const testRun = previewTestRuns.get(sessionId);
           if (testRun) response.previewTestRun = { targetId: testRun.targetId, state: testRun.state };
           if (!["ready", "starting"].includes(response.preview.state) && !launchTerminalIsRunning(previewStatus.activeTerminal || {})) {
-            const root = previewDiagnosticsSessionRoot(context.session);
-            const diagnostic = root ? await readFile(path.join(root, PREVIEW_LAST_FILE_NAME), "utf8")
+            const latestPath = previewLastPath(context.session);
+            const diagnostic = latestPath ? await readFile(latestPath, "utf8")
               .then((text) => JSON.parse(text)).catch(() => null) : null;
             if (diagnostic?.sessionId === sessionId && diagnostic.status === "failed" &&
                 diagnostic.error?.code === "vibe64_capacity_rejected" &&
@@ -2386,7 +2349,7 @@ function createOutputTargetTerminalController({
           error.code = status.code || "vibe64_preview_identity_unavailable";
           throw error;
         }
-        const unavailable = launchAdmissionFailure(sessionId, status.session);
+        const unavailable = launchAdmissionFailure(sessionId);
         if (unavailable) {
           return unavailable;
         }
@@ -2570,7 +2533,7 @@ function createOutputTargetTerminalController({
         if (status?.ok === false) {
           return status;
         }
-        const unavailable = launchAdmissionFailure(sessionId, status.session);
+        const unavailable = launchAdmissionFailure(sessionId);
         if (unavailable) {
           return unavailable;
         }
@@ -2641,7 +2604,7 @@ function createOutputTargetTerminalController({
               return { ok: false, code: "vibe64_preview_stop_incomplete", error: stopState.error || "Preview cleanup is still running. Retry Stop before starting it." };
             }
           }
-          const cwd = sessionTerminalCwd(context.session, projectService);
+          const cwd = context.sessionSourceRoot;
           let forceRestart = input.forceRestart === true;
           let outputTargetId = normalizeOutputTargetId(input.outputTargetId);
           let outputTargets = null;
@@ -2767,7 +2730,7 @@ function createOutputTargetTerminalController({
           if (outputParameters === undefined && savedTarget?.id === outputTarget.id) {
             outputParameters = savedTarget.outputParameters;
           }
-          const spec = await createOutputTargetSpec({
+          const spec = await createVibe64OutputTargetTerminalSpec({
             context: {
               ...context,
               outputTarget,
@@ -2901,7 +2864,7 @@ function createOutputTargetTerminalController({
                 mode: "pty",
                 project: commandProject,
                 purpose: webOutput ? "preview" : "output",
-                runtimes: webOutput ? previewRuntimesForSpec(spec) : normalizeRuntimeList(spec.runtimes),
+                runtimes: webOutput ? previewRuntimesForSpec(spec) : normalizedRuntimeRequirements(spec.runtimes),
                 session: context.session || {},
                 terminal: {
                   commandPreview: spec.commandPreview,
@@ -3322,7 +3285,6 @@ export {
   OUTPUT_METADATA,
   cleanupSupersededLaunchTerminals,
   createLaunchRestartBaseline,
-  createOutputTargetSpec,
   launchActionsFromOutput,
   launchReadinessMarkerLineSeen,
   launchRestartState,

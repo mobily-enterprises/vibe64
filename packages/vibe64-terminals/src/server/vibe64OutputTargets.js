@@ -424,6 +424,7 @@ export {
   inspectVibe64OutputsForContext,
   inspectVibe64WorkspaceSetupForContext,
   listVibe64OutputTargets,
+  normalizedRuntimeRequirements,
   outputResultsMarkerLineSeen,
   vibe64OutputCommand,
   vibe64OutputTargetView,
