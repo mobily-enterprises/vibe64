@@ -414,7 +414,7 @@ test("Preview refuses an HTML page too large to inject the bridge", async () => 
   });
 });
 
-test("an injected Preview page may be framed and addressed only by the editors that asked for it", async () => {
+test("an injected Preview page is addressed only by the editors that asked for it and sets no frame-ancestors", async () => {
   await withTargetServer(async (target) => {
     const registry = createLaunchPreviewProxyRegistry();
     const input = {
@@ -425,13 +425,14 @@ test("an injected Preview page may be framed and addressed only by the editors t
     try {
       const unknown = await registry.ensure(input);
       const silent = await fetch(unknown.href, { redirect: "follow" });
-      assert.equal(silent.headers.get("content-security-policy"), "frame-ancestors 'none'");
+      // Nested Previews have ancestors this proxy never learns, so no frame-ancestors policy.
+      assert.doesNotMatch(String(silent.headers.get("content-security-policy") || ""), /frame-ancestors/u);
       assert.match(await silent.text(), /"parentOrigins":\[\]/u);
 
       await registry.ensure({ ...input, editorOrigin: "http://LOCALHOST:3000/ignored" });
       const preview = await registry.ensure({ ...input, editorOrigin: "javascript:alert(1)" });
       const response = await fetch(preview.href, { redirect: "follow" });
-      assert.equal(response.headers.get("content-security-policy"), "frame-ancestors http://localhost:3000");
+      assert.doesNotMatch(String(response.headers.get("content-security-policy") || ""), /frame-ancestors/u);
       const body = await response.text();
       assert.match(body, /"parentOrigins":\["http:\/\/localhost:3000"\]/u);
       assert.doesNotMatch(body, /postMessage\([^)]*"\*"/u);

@@ -441,8 +441,7 @@ a foreign site that frames the Preview sends no cookie and gets no application
 page. Both cookies remain HTTP-only and scoped to the proxy host.
 Each Preview proxy remembers the editor origins that were handed its address:
 the scheme and host of the editor's own output-status request, with the
-configured public protocol winning for a public host. Injected pages carry
-`Content-Security-Policy: frame-ancestors` naming only those origins, and the
+configured public protocol winning for a public host. The
 injected bridge ignores messages from any other parent origin and addresses
 every location, diagnostics, identity and app-request message to those origins,
 never `*`. The editor in turn addresses its queries, diagnostics requests and

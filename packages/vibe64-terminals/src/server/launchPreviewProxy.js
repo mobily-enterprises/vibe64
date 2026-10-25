@@ -1012,7 +1012,6 @@ async function proxyPreviewRequest(request, response, {
         targetOrigin
       });
       response.writeHead(targetResponse.statusCode || 200, previewResponseHeaders(targetResponse, {
-        editorOrigins,
         injected: true,
         proxyOrigin,
         targetOrigin,
@@ -1643,7 +1642,7 @@ async function startLaunchPreviewProxy({
     ? createPreviewIdentityGrantConsumer(previewAuth)
     : null;
   let proxyOrigin = "";
-  // Editors that were handed this Preview; only they may frame and talk to it.
+  // Editors that were handed this Preview; only they may talk to its bridge.
   const editorOrigins = new Set();
   server.on("request", (request, response) => {
     void proxyPreviewRequest(request, response, {
@@ -2067,14 +2066,6 @@ function previewProxyPublicHost(listenHost = LOOPBACK_HOST, env = process.env) {
 function previewResponseHeaders(response, options = {}) {
   const headers = responseHeaders(response, options);
   appendResponseHeader(headers, "set-cookie", previewTokenCookie(options.token, options));
-  if (options.injected) {
-    const editorOrigins = Array.isArray(options.editorOrigins) ? options.editorOrigins : [];
-    appendResponseHeader(
-      headers,
-      "content-security-policy",
-      `frame-ancestors ${editorOrigins.length > 0 ? editorOrigins.join(" ") : "'none'"}`
-    );
-  }
   return headers;
 }
 

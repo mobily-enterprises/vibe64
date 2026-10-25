@@ -164,11 +164,10 @@ A single app page larger than 16 MB cannot be shown in Preview: it shows
 **Preview page is too large to inject the bridge.** Ask the coding agent to make
 that page smaller, for example by loading its data separately. Uploads of any
 size pass through to the app unchanged.
-Only the editor that showed you the Preview can embed it. Another website that
-puts the Preview address in its own frame gets a refused frame and none of the
-app's captured console or network details. If an embedded Preview stays blank
-with a framing error, reopen it from the editor's **Preview** controls so the
-editor's current address is used.
+Only the editor that showed you the Preview can use it. Another website that
+puts the Preview address in its own frame gets no app page, because the Preview
+cookie reaches only same-site frames, and none of the app's captured console or
+network details.
 If two temporary editors show the same address, their host routing configuration
 needs correction. Restart the affected Previews after the host update; changing
 an application's listening port is not required.
