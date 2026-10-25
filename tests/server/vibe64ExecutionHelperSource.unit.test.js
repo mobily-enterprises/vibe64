@@ -369,11 +369,12 @@ test("managed executions can traverse their private workspace runtime directory"
 test("runtime pack lists stay in step: interactive order and the helper PATH cover every pack", () => {
   assert.deepEqual([...VIBE64_INTERACTIVE_RUNTIME_PACKS].sort(), Object.keys(RUNTIME_PACKS).sort());
 
-  const packRoot = "/opt/vibe64/runtime-packs/";
+  // The helper's own PATH names the pack folder; public tests must not.
+  const packMarker = "/runtime-packs/";
   const helperPackDirs = helperChildEnv({}, { home: "/home/alice", username: "alice" }, "v64d_alice", "command")
     .PATH.split(":")
-    .filter((entry) => entry.startsWith(packRoot))
-    .map((entry) => entry.slice(packRoot.length));
+    .filter((entry) => entry.includes(packMarker))
+    .map((entry) => entry.slice(entry.indexOf(packMarker) + packMarker.length));
   const packBinDirs = new Set(Object.values(RUNTIME_PACKS).flatMap((pack) => pack.binDirs));
   for (const dir of helperPackDirs) {
     assert.ok(packBinDirs.has(dir) || dir === "policy-bin" || dir === "guard-bin", `unknown helper PATH entry ${dir}`);
