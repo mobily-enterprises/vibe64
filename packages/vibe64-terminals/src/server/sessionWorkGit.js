@@ -23,6 +23,19 @@ const SESSION_WORK_OPERATION_COMMAND_PATH = fileURLToPath(new URL(
   import.meta.url
 ));
 
+// A full SHA-1 or SHA-256 Git object id.
+const GIT_OBJECT_ID = /^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u;
+// Review diffs are bounded before they cross into the browser.
+const MAX_REVIEW_DIFF_CHARACTERS = 100_000;
+
+function isGitObjectId(value = "") {
+  return GIT_OBJECT_ID.test(String(value ?? ""));
+}
+
+function boundedReviewDiff(content = "") {
+  return { content: content.slice(0, MAX_REVIEW_DIFF_CHARACTERS), truncated: content.length > MAX_REVIEW_DIFF_CHARACTERS };
+}
+
 function text(value = "") {
   return String(value || "").trim();
 }
@@ -560,7 +573,7 @@ async function mergeTrees(runCommand, context, {
   });
   const tokens = String(merged?.stdout || merged?.output || "").split("\0");
   const mergedTree = text(tokens.shift());
-  if (!/^[0-9a-f]{40,64}$/u.test(mergedTree)) {
+  if (!isGitObjectId(mergedTree)) {
     throw saveError(
       merged?.ok === true
         ? "Git did not produce a valid rebased tree."
@@ -660,7 +673,7 @@ async function treeWithDerivedArtifactsFromCommit(runCommand, context, {
         commandOptions,
         project
       });
-      const match = /^(\d+)\s+\S+\s+([0-9a-f]{40,64})\t([^\0]+)\0$/u.exec(String(result.stdout || ""));
+      const match = /^(\d+)\s+\S+\s+([a-f0-9]{40}|[a-f0-9]{64})\t([^\0]+)\0$/u.exec(String(result.stdout || ""));
       if (match && match[3] === filePath) {
         await git(runCommand, context, [
           "update-index",
@@ -760,6 +773,7 @@ async function regenerateDerivedArtifactTree(runCommand, context, {
 
 export {
   assertBranch,
+  boundedReviewDiff,
   canonicalRef,
   changedPathsBetween,
   commandProject,
@@ -771,6 +785,7 @@ export {
   deleteOperationRef,
   git,
   gitOutput,
+  isGitObjectId,
   mergeTrees,
   normalizedDerivedArtifactPaths,
   observedCanonicalCommit,

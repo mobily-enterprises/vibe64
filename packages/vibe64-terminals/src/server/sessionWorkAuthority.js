@@ -15,6 +15,7 @@ import {
   deleteOperationRef,
   git,
   gitOutput,
+  isGitObjectId,
   observedCanonicalCommit,
   optionalGitOutput,
   rememberCanonicalCommit,
@@ -106,7 +107,7 @@ async function readContributionHead(runCommand, context, options, allowDiscarded
     ["ls-remote", "--heads", context.remoteUrl, active, discarded], options);
   const refs = new Map(output.split("\n").filter(Boolean).map(line => {
     const [commit, ref] = line.split(/\s+/u);
-    if (![active, discarded].includes(ref) || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(commit)) {
+    if (![active, discarded].includes(ref) || !isGitObjectId(commit)) {
       throw saveError("The contribution's remote branches could not be verified.", "vibe64_contribution_refs_invalid");
     }
     return [ref, commit];
@@ -214,7 +215,7 @@ async function assertConnectedSubmissionsIntegrated(runCommand, context, options
       const heads = new Map();
       for (const line of observed.split("\n").filter(Boolean)) {
         const [head, ref] = line.split(/\s+/u);
-        if (![target, active, discarded].includes(ref) || heads.has(ref) || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(head)) {
+        if (![target, active, discarded].includes(ref) || heads.has(ref) || !isGitObjectId(head)) {
           throw saveError("The receiving repository returned invalid ref evidence.");
         }
         heads.set(ref, head);
@@ -275,7 +276,7 @@ function connectedWorkSnapshots(value = []) {
     if (!contribution || typeof snapshot.sessionId !== "string" || !text(snapshot.sessionId) ||
         !path.isAbsolute(text(snapshot.worktreePath)) ||
         [snapshot.baseCommit, snapshot.canonicalCommit, snapshot.sessionHead, snapshot.worktreeTree]
-          .some(commit => !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(text(commit)))) {
+          .some(commit => !isGitObjectId(text(commit)))) {
       throw saveError("The connected source could not be captured. Inspect connected work before saving.",
         "vibe64_connected_source_unavailable");
     }

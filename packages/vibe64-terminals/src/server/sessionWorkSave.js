@@ -36,6 +36,7 @@ import {
   deleteOperationRef,
   git,
   gitOutput,
+  isGitObjectId,
   normalizedDerivedArtifactPaths,
   observedCanonicalCommit,
   optionalGitOutput,
@@ -298,7 +299,7 @@ async function inspectSessionWorkDirect({
     const published = await readContributionHead(runCommand, context, { commandOptions, project }, true);
     publishedCommit = published.head;
     if (!publishedCommit && knownSubmittedCommit) {
-      if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(knownSubmittedCommit)) throw saveError(
+      if (!isGitObjectId(knownSubmittedCommit)) throw saveError(
         "The saved contribution evidence is invalid.", "vibe64_connected_integration_unknown");
       publishedCommit = knownSubmittedCommit;
     }
@@ -306,7 +307,7 @@ async function inspectSessionWorkDirect({
       const target = `refs/heads/${context.contribution.integrationBranch}`;
       const observed = await gitOutput(runCommand, context, ["ls-remote", "--heads", context.remoteUrl, target], { commandOptions, project });
       const [accepted, ref, extra] = observed.split(/\s+/u);
-      if (ref !== target || extra || !/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(accepted) ||
+      if (ref !== target || extra || !isGitObjectId(accepted) ||
           !await commitIsAncestor(runCommand, context, publishedCommit, accepted, { commandOptions, project })) {
         throw saveError("The removed contribution has not been proved integrated in this source. Check its receiving target and explicitly Update the connected session.",
           published.discarded ? "vibe64_contribution_discarded" : "vibe64_contribution_branch_missing");
@@ -569,6 +570,21 @@ async function publishSaveCommit(runCommand, context, { canonicalCommit, contrib
   );
 }
 
+// The saved-but-stale clone cache result that a later session or Save retries.
+function retryableMirrorMaintenance(context, verifiedCommit, code, reason, attempted) {
+  return {
+    attempted,
+    branch: context.branch,
+    code,
+    kind: "github_mirror",
+    message: "Your work was saved, but Vibe64 could not refresh its local clone cache. A later session or Save will retry it.",
+    reason,
+    retryable: true,
+    status: "retryable",
+    verifiedCommit
+  };
+}
+
 async function refreshVerifiedGithubMirror(
   runCommand,
   context,
@@ -584,17 +600,7 @@ async function refreshVerifiedGithubMirror(
     };
   }
   const mirrorPath = context.githubMirrorPath;
-  const retryable = (code, reason) => ({
-    attempted: Boolean(mirrorPath),
-    branch: context.branch,
-    code,
-    kind: "github_mirror",
-    message: "Your work was saved, but Vibe64 could not refresh its local clone cache. A later session or Save will retry it.",
-    reason,
-    retryable: true,
-    status: "retryable",
-    verifiedCommit
-  });
+  const retryable = (code, reason) => retryableMirrorMaintenance(context, verifiedCommit, code, reason, Boolean(mirrorPath));
   if (!mirrorPath && context.githubMirrorOptional) {
     return { attempted: false, kind: "none", retryable: false, status: "not_applicable" };
   }
@@ -1043,17 +1049,8 @@ function deferredCacheMaintenance(context, verifiedCommit) {
 }
 
 function failedCacheMaintenance(context, verifiedCommit, error) {
-  return {
-    attempted: false,
-    branch: context.branch,
-    code: text(error?.code) || "vibe64_session_save_github_mirror_refresh_failed",
-    kind: "github_mirror",
-    message: "Your work was saved, but Vibe64 could not refresh its local clone cache. A later session or Save will retry it.",
-    reason: "refresh_interrupted",
-    retryable: true,
-    status: "retryable",
-    verifiedCommit
-  };
+  return retryableMirrorMaintenance(context, verifiedCommit,
+    text(error?.code) || "vibe64_session_save_github_mirror_refresh_failed", "refresh_interrupted", false);
 }
 
 async function refreshSessionWorkSaveCacheDirect({

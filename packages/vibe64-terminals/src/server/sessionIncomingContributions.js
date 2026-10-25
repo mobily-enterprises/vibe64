@@ -4,12 +4,14 @@ import crypto from "node:crypto";
 import { PROJECT_REPOSITORY_MODE_GITHUB } from "@local/vibe64-core/server/projectRepository";
 import { runVibe64Command, writeGitWorktreeTree } from "@local/vibe64-execution/server";
 import {
+  boundedReviewDiff,
   commandProject,
   conflictWorktreeTree,
   createVirtualCommit,
   deleteOperationRef,
   git,
   gitOutput,
+  isGitObjectId,
   mergeTrees,
   regenerateDerivedArtifactTree,
   repositoryContext,
@@ -57,7 +59,7 @@ async function inspectIncomingContributionsDirect({ project = {}, session = {}, 
   let targetHead = "";
   for (const line of output.split("\n").filter(Boolean)) {
     const [head, ref] = line.split(/\s+/u);
-    if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(head)) {
+    if (!isGitObjectId(head)) {
       throw saveError("The receiving repository returned invalid ref evidence.", "vibe64_incoming_refs_invalid");
     }
     if (ref === targetRef) { targetHead = head; continue; }
@@ -104,7 +106,7 @@ async function inspectIncomingContributionsDirect({ project = {}, session = {}, 
       if (includeDiff) {
         const result = await git(runCommand, context, ["diff", "--no-ext-diff", "--no-textconv", "--no-color", "--unified=3", `${targetHead}...${head}`], options);
         const content = String(result.stdout || result.output || "");
-        diff = { content: content.slice(0, 100_000), truncated: content.length > 100_000 };
+        diff = boundedReviewDiff(content);
       }
       contributions.push({ ...entry, branch: `vibe64-incoming/${entry.id}`, head, title,
         review: { repository: context.repositoryFullName, targetBranch: context.branch, targetHead,
@@ -195,7 +197,7 @@ async function changeIncomingContributionDirect({ project = {}, session = {}, ac
             current.targetHead, repairedTree], options);
           const content = String(result.stdout || result.output || "");
           return { ok: true, status: "repair-review", review: expected, repairReview: currentRepair,
-            conflictPaths: merged.conflictPaths, diff: { content: content.slice(0, 100_000), truncated: content.length > 100_000 } };
+            conflictPaths: merged.conflictPaths, diff: boundedReviewDiff(content) };
         }
         if (Object.keys(currentRepair).some(key => repairReview?.[key] !== currentRepair[key])) {
           throw saveError("The receiving source changed after repair review. Review resolved conflicts again before merging.",
