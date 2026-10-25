@@ -63,6 +63,9 @@ function routingError(message, code = "vibe64_assistant_routing_invalid") {
 const upgradeRequired = () => routingError("This saved request predates the current AI setup. The administrator must run the state upgrade.",
   "vibe64_assistant_routing_upgrade_required");
 
+// Only Senior, Junior and Auto chats carry Deslop and automatic save choices.
+const choosesAutomation = (mode) => !["custom", "fix"].includes(mode);
+
 function assistantRoutingPreferences(value = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value) ||
       ![...ASSISTANT_MODES, ASSISTANT_FIX_MODE].some(({ id }) => id === value.mode)) {
@@ -71,8 +74,8 @@ function assistantRoutingPreferences(value = {}) {
   if (Object.hasOwn(value, "workflowEngineId")) throw upgradeRequired();
   if (value.mode === "custom" && !value.override) throw routingError("Choose a custom model first.");
   // review controls optional Deslop (Auto review is mandatory); autoSave runs
-  // Save after Auto completes a plan. Neither applies to Custom or Fix it with AI.
-  return { mode: value.mode, ...(["custom", "fix"].includes(value.mode) ? { review: false, autoSave: false } : assistantRoutingAutomation(value)),
+  // Save after Auto completes a plan.
+  return { mode: value.mode, ...(choosesAutomation(value.mode) ? assistantRoutingAutomation(value) : { review: false, autoSave: false }),
     ...(value.override && !["auto", "fix"].includes(value.mode) ? { override: defineVibe64AssistantSelection(value.override) } : {}) };
 }
 
@@ -80,7 +83,7 @@ function assistantRoutingPreferences(value = {}) {
 // turned it off; Custom and Fix it with AI carry no choice, so returning to
 // Auto from them starts with both on.
 function assistantRoutingAutomation(value) {
-  const chosen = value && !["custom", "fix"].includes(value.mode) ? value : {};
+  const chosen = value && choosesAutomation(value.mode) ? value : {};
   return { review: chosen.review !== false, autoSave: chosen.autoSave !== false };
 }
 

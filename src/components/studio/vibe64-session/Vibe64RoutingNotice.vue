@@ -35,10 +35,14 @@ const feedback = useShellWebErrorRuntime();
 const previousAttempt = computed(() => props.request?.stopped && props.request?.delivery === "uncertain" &&
   assistantRoutingRequestCanBeReplaced(props.request, props.selection));
 const label = computed(() => previousAttempt.value ? "Previous assistant delivery unconfirmed" : assistantRoutingStatusLabel(props.request));
-// While Auto waits for the person's answer only their reply (or Implement plan) moves on.
-const followupNeedsAction = computed(() => props.request?.awaitingAnswer ? canImplement.value : Boolean(props.request?.status === "waiting" &&
-  (props.request?.followup || props.request?.delivery === "accepted" && (props.request?.workflow || props.request?.stage === "planning"))) ||
-  Boolean(props.request?.delivery === "uncertain" && (props.request?.followup || previousAttempt.value)));
+const followupNeedsAction = computed(() => {
+  const request = props.request;
+  // While Auto waits for the person's answer only their reply (or Implement plan) moves on.
+  if (request?.awaitingAnswer) return canImplement.value;
+  const resumable = request?.followup || request?.delivery === "accepted" && (request?.workflow || request?.stage === "planning");
+  return Boolean(request?.status === "waiting" && resumable ||
+    request?.delivery === "uncertain" && (request?.followup || previousAttempt.value));
+});
 const canImplement = computed(() => props.mode === "auto" && props.request?.stage === "planning" &&
   props.request.status === "waiting" && ["pending", "accepted"].includes(props.request.delivery) &&
   !props.request.helper && props.request.workPlan?.status === "active" && Boolean(props.request.workPlan.revision));
