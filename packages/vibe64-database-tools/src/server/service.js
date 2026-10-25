@@ -404,7 +404,7 @@ function createService({
         const context = await sessionContext(input);
         const schema = await currentSchema(context);
         const [layout, workspace, overview] = await Promise.all([
-          readErdLayout(context.store, context.sessionId, context.vibe64User),
+          readErdLayout(context.store, context.sessionId),
           readWorkspace(context.store, context.sessionId, context.vibe64User),
           readDataOverview(context.session, schema)
         ]);
@@ -605,7 +605,7 @@ function createService({
       return databaseResult(async () => {
         const context = await sessionContext(input);
         const schema = await currentSchema(context);
-        const layout = await readErdLayout(context.store, context.sessionId, input.vibe64User);
+        const layout = await readErdLayout(context.store, context.sessionId);
         const { inspection } = inspectErdLayout(schema, layout);
         return { ok: true, ...inspection };
       });
@@ -615,7 +615,7 @@ function createService({
       return databaseResult(async () => {
         const context = await sessionContext(input);
         const schema = await currentSchema(context);
-        const current = await readErdLayout(context.store, context.sessionId, input.vibe64User);
+        const current = await readErdLayout(context.store, context.sessionId);
         const moved = moveErdTables(schema, current, input.changes);
         const { routes, inspection } = inspectErdLayout(schema, moved.layout);
         const layout = await saveErdLayout(context.store, context.sessionId, { ...moved.layout, routes }, {

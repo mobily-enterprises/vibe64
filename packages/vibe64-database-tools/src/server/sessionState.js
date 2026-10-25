@@ -223,20 +223,11 @@ function normalizedLayout(value = null) {
   };
 }
 
-async function readErdLayout(store, sessionId = "", vibe64User = null) {
-  return serializeWrite(`${sessionId}\u0000${ERD_LAYOUT_ARTIFACT_PATH}`, async () => {
-    const shared = await store.readArtifact(sessionId, ERD_LAYOUT_ARTIFACT_PATH);
-    if (shared) return normalizedLayout(parseArtifact(shared, "The database ERD layout"));
-
-    // Preserve an existing diagram once; all subsequent readers use the shared artifact.
-    const legacy = await store.readArtifact(sessionId, `database/erd-layout-${actorKey(vibe64User)}.json`);
-    const layout = normalizedLayout(parseArtifact(legacy, "The database ERD layout"));
-    if (legacy) {
-      layout.revision = 1;
-      await store.writeJsonArtifact(sessionId, ERD_LAYOUT_ARTIFACT_PATH, layout);
-    }
-    return layout;
-  });
+async function readErdLayout(store, sessionId = "") {
+  return normalizedLayout(parseArtifact(
+    await store.readArtifact(sessionId, ERD_LAYOUT_ARTIFACT_PATH),
+    "The database ERD layout"
+  ));
 }
 
 async function saveErdLayout(store, sessionId = "", layout = {}, { expectedRevision } = {}) {

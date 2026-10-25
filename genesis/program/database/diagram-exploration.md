@@ -157,9 +157,8 @@ hidden workspaces catch up on activation. A remote move leaves the viewer's
 current camera and selection alone. Reload restores the shared saved zoom and
 exact positions, even if cards overlap; automatic placement only moves new
 tables unless Reset positions was requested. Writes are serialized and assigned
-increasing revisions; older refreshes cannot replace newer acknowledged layouts. When no shared layout
-exists, the first opened existing user diagram is adopted into the shared
-artifact; old artifacts remain recoverable but cannot override it afterwards.
+increasing revisions; older refreshes cannot replace newer acknowledged layouts.
+Reading the layout only reads and normalises that shared artifact; it never writes.
 SQL history and snippets remain user-specific. Fullscreen keeps
 controls, menus, and dialogs inside the fullscreen element.
 
@@ -198,12 +197,11 @@ The server resolves the stored definition to current physical identities for the
 UI and removes the selected MySQL database prefix when saving. This covers actor
 roots, membership, reviewed tables, rings, positions and main relationships;
 the inspected schema, detailed ERD and SQL identities stay fully qualified.
-Existing MySQL definitions with embedded database names need a one-time source
-edit through Review with AI to remove only the old database prefix from those
-fields. The UI shows a conversion message and keeps all physical tables available;
-the authoring command preserves their original definition and reports missing
-references until repaired. Reads never rewrite project source or guess
-that a missing table was renamed. Unassigned
+A MySQL definition that names tables with a database prefix is invalid: the UI
+shows that MySQL table references must omit the database name and keeps all
+physical tables available, while the authoring command still returns the
+original definition. Reads never rewrite project source or guess that a missing
+table was renamed. Unassigned
 tables appear under Other tables, and missing references remain visible as a
 warning until reviewed. An invalid definition falls back to all tables in Other
 tables with its error visible. Opening each actor exposes every current table

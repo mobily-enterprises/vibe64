@@ -362,7 +362,7 @@ test("PostgreSQL schema distinctions and constraint names remain exact across da
   assert.throws(() => dataOverviewReference(mysql, "session_one_other.bookings:fk"), /outside the selected database/);
 });
 
-test("database-qualified MySQL source gets an explicit conversion message without rewriting or losing authored choices", async (t) => {
+test("database-qualified MySQL source is rejected as invalid without rewriting or losing authored choices", async (t) => {
   const { file, session } = await fixture(t);
   const original = {
     version: 1,
@@ -377,13 +377,13 @@ test("database-qualified MySQL source gets an explicit conversion message withou
   const schema = { engine: "mysql", database: "new_session" };
   const ui = await readDataOverview(session, schema);
   assert.equal(ui.present, true);
-  assert.match(ui.error, /omit the database name.*Review with AI/);
+  assert.equal(ui.error, "Data overview: MySQL table references must omit the database name.");
   assert.deepEqual(ui.definition.actors, []);
   assert.deepEqual((await readDataOverview(session)).definition, original, "authoring still receives all original choices");
   assert.equal(await readFile(file, "utf8"), text);
 
-  // Explicit, one-time conversion against the known old database; ordinary
-  // reads never guess this prefix or persist a conversion themselves.
+  // Saving through the normal path makes references database-relative;
+  // ordinary reads never guess this prefix or persist a conversion themselves.
   const converted = dataOverviewDefinition({ engine: "mysql", database: "old_session" }, original);
   await writeFile(file, JSON.stringify(converted));
   const repaired = await readDataOverview(session, schema);

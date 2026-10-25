@@ -19,7 +19,7 @@ export function dataOverviewDefinition(schema, definition, options) {
   const reference = (value) => dataOverviewReference(schema, value, options);
   const tableReference = (value) => {
     if (schema.engine === "mysql" && options?.qualified && value.includes(".")) {
-      throw new Error("Data overview: MySQL table references must omit the database name. Use Review with AI to convert data-overview.json once, preserving its grouping and positions.");
+      throw new Error("Data overview: MySQL table references must omit the database name.");
     }
     return reference(value);
   };

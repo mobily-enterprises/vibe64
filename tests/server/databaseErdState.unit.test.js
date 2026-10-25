@@ -16,21 +16,19 @@ function stateStore() {
 }
 test("ERD positions, views, groups, pins and focus are shared across users, not sessions", async () => {
   const store = stateStore();
-  const actor = { username: "owner" };
   const diagram = {
     nodes: [{ table: "public.orders", x: 240, y: 160, pinned: true, expanded: true, group: "sales" }],
     groups: [{ id: "sales", name: "Sales" }], columnMode: "all", focusTable: "public.orders", activeGroup: "sales",
     viewport: { x: -25, y: 15, zoom: 0.7 }
   };
   const saved = await saveErdLayout(store, "session", { ...diagram, views: [{ ...diagram, id: "overview", name: "Sales overview" }] });
-  assert.deepEqual(await readErdLayout(store, "session", actor), saved);
+  assert.deepEqual(await readErdLayout(store, "session"), saved);
   assert.equal(saved.nodes[0].pinned, true);
   assert.equal(saved.views[0].nodes[0].expanded, true);
   assert.equal(saved.views[0].groups[0].name, "Sales");
   assert.equal(saved.views[0].viewport.zoom, 0.7);
-  assert.deepEqual(await readErdLayout(store, "session", { username: "other" }), saved);
   assert.equal(saved.revision, 1);
-  assert.equal((await readErdLayout(store, "other-session", actor)).nodes.length, 0);
+  assert.equal((await readErdLayout(store, "other-session")).nodes.length, 0);
 });
 test("ERD normalization bounds stored fields and uses keys mode for an empty workspace", async () => {
   const store = stateStore();
@@ -45,21 +43,18 @@ test("ERD normalization bounds stored fields and uses keys mode for an empty wor
   await assert.rejects(saveErdLayout(store, "session", { nodes: Array.from({ length: 2001 }, () => ({ table: "t" })) }), { code: "vibe64_database_erd_layout_too_large" });
 });
 
-test("an existing user's layout is adopted once without losing the old artifact", async () => {
+test("reading the ERD layout only reads the shared artifact and never writes", async () => {
   const store = stateStore();
   const alice = { username: "alice" };
   const bob = { username: "bob" };
-  const oldPath = `database/erd-layout-${actorKey(alice)}.json`;
-  await store.writeJsonArtifact("session", oldPath, { nodes: [{ table: "orders", x: 100, y: 200 }] });
-  await store.writeJsonArtifact("session", `database/erd-layout-${actorKey(bob)}.json`, { nodes: [{ table: "orders", x: 900, y: 900 }] });
-  const adopted = await readErdLayout(store, "session", alice);
-  assert.equal(adopted.revision, 1);
-  assert.equal(adopted.nodes[0].x, 100);
-  assert.deepEqual(await readErdLayout(store, "session", bob), adopted);
-  const moved = await saveErdLayout(store, "session", { ...adopted, nodes: [{ table: "orders", x: 500, y: 400 }] });
-  assert.equal(moved.revision, 2);
-  assert.deepEqual(await readErdLayout(store, "session", alice), moved);
-  assert.equal(JSON.parse(await store.readArtifact("session", oldPath)).nodes[0].x, 100);
+  await store.writeJsonArtifact("session", `database/erd-layout-${actorKey(alice)}.json`, { nodes: [{ table: "orders", x: 100, y: 200 }] });
+  let writes = 0;
+  const write = store.writeJsonArtifact;
+  store.writeJsonArtifact = async (...args) => { writes += 1; return write(...args); };
+  const layout = await readErdLayout(store, "session");
+  assert.deepEqual(layout.nodes, []);
+  assert.equal(layout.revision, 0);
+  assert.equal(writes, 0, "a per-user file is not promoted on read");
   await saveSnippet(store, "session", alice, { name: "Private SQL", sql: "SELECT 1" });
   assert.equal((await readWorkspace(store, "session", bob)).snippets.length, 0);
 });
@@ -161,7 +156,7 @@ test("service publishes a scoped hint only after a successful shared save, witho
     },
     withKnex: () => assert.fail("ERD persistence must not execute SQL"),
     publishLayoutChanged: createDatabaseLayoutChangedPublisher({ async publish(event) {
-      assert.equal((await readErdLayout(store, "session", { username: "bob" })).nodes[0].x, 100);
+      assert.equal((await readErdLayout(store, "session")).nodes[0].x, 100);
       events.push(event);
     } })
   });
