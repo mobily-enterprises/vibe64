@@ -208,7 +208,7 @@ function createSessionConversations({
     });
     if (record.recoveryOperation === "update" && assistantRoutingFromMetadata(metadata)?.mode !== "custom") {
       // Enforce repair policy for future turns without rewriting saved requests or history.
-      metadata.assistant_routing = JSON.stringify({ mode: "fix", review: false });
+      metadata.assistant_routing = JSON.stringify(assistantRoutingPreferences({ mode: "fix" }));
     }
     return { ...ctx, routingConversationId: record.conversationId, assistantSelection: selection,
       session: { ...ctx.session, metadata } };
@@ -675,7 +675,7 @@ function createSessionConversations({
           : input.assistantRouting || inheritedPreferences;
         if (requestedPreferences.mode === "auto") throw new Error("Temporary chats use Senior or Junior. Auto is available in Main chat only.");
         if (!owner && ["senior", "junior"].includes(requestedPreferences.mode)) throw teamTemporaryModesRefusal();
-        const preferences = assistantRoutingPreferences({ ...requestedPreferences, review: false });
+        const preferences = assistantRoutingPreferences({ ...requestedPreferences, review: false, autoSave: false });
         const initialPresentation = presentation(input.presentation);
         const recentContext = input.includeRecentChatContext === true
           ? await ctx.runtime.store.mutateSession(sessionId, () => recentChatContext(ctx.runtime.store, sessionId)) : null;
@@ -791,7 +791,7 @@ function createSessionConversations({
           const override = selectingModel
             ? await sessionAgent.resolveSelection(requested.override, ctx) : requested.override;
           if (selectingModel) await sessionAgent.requireAssistantAccessForSelection(override, ctx);
-          const preferences = assistantRoutingPreferences({ ...requested, override, review: false });
+          const preferences = assistantRoutingPreferences({ ...requested, override, review: false, autoSave: false });
           fields.routingMetadata = { ...record.routingMetadata, assistant_routing: JSON.stringify(preferences) };
         }
         if (settingsChanged && !input.assistantRouting) {

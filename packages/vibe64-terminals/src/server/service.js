@@ -1107,6 +1107,7 @@ function createService({
   let databaseToolsProvider = null;
   let sourceEditorProvider = null;
   let connectedPreparation = null;
+  let planCompleted = null;
   const workspaceSetup = createWorkspaceSetupRunner({
     projectService,
     connectedPreparation: options => {
@@ -1563,6 +1564,8 @@ function createService({
     },
     publish: publishAgentSessionChanged,
     prepareSelection: prepareRoutingSelection,
+    // The Save owner supplies what follows a completed plan (automatic save).
+    onPlanCompleted: (sessionId, input) => planCompleted?.(sessionId, input) || "",
     onTiming(event) {
       // Timing is diagnostic only; a failing log sink must not fail the send.
       try {
@@ -2936,6 +2939,10 @@ function createService({
     setConnectedPreparation(prepare) {
       if (typeof prepare !== "function") throw new TypeError("Connected preparation requires its Sessions owner.");
       connectedPreparation = prepare;
+    },
+    setPlanCompleted(handler) {
+      if (typeof handler !== "function") throw new TypeError("Plan completion requires its Sessions owner.");
+      planCompleted = handler;
     },
 
     setDatabaseToolsProvider(provider = null) {

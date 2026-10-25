@@ -101,7 +101,28 @@ Deslop, code quality suffers and the project can become hard to change and may
 crash and burn over time, unless you ask the AI to “Deslop” in the chat yourself.
 Skip it only for quick throwaway projects. **Cancel** keeps Deslop on; **Turn off
 Deslop** saves it off for this chat. Turning it off does not disable review.
-Chats created before Deslop became the default keep their saved setting. Unfinished checks continue in Senior review; substantial necessary rework
+A chat with no saved choice, or one coming back to Auto from **Custom**, has
+Deslop on; a chat that turned it off keeps it off.
+
+The **Automatic save after completing a plan** switch below it is also on by
+default. When Auto's final Senior review (with any enabled Deslop) completes a
+plan and that turn ends, Vibe64 archives the plan and then runs the session's
+ordinary **Save** once, exactly as the **Save** button would, without its review
+dialog. Its usual Save progress and result appear in the Save activity panel, and
+the chat notes **Saved automatically after completing the plan.** It never runs
+while the agent is working, never runs **Update** for you, and does nothing for
+chats without a completed plan. When it cannot save, nothing is changed and the
+chat shows a short note: **Automatic save: nothing new to save.**, or
+**Automatic save didn't run:** followed by Save's own reason (for example an
+Update is needed, a conflict, a required pull request or an unavailable
+repository). A session with connected repositories always gets that note: use
+**Save connected first** and **Save** yourself. Turn the switch off to review and
+Save by hand. Like Deslop, it is the owner's Main chat choice, changes take effect
+for the next completed plan, and the switch is disabled while a goal is active.
+Colleague can explain both switches and, for the owner, change either through
+the chat mode action.
+
+Unfinished checks continue in Senior review; substantial necessary rework
 returns to Junior and comes back for another review. A changed product requirement
 needs your decision. Planning-only work waits for your request to implement it.
 

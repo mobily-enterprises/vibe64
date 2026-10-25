@@ -128,7 +128,7 @@ const initialPlanSelection = {
 function assertInitialPlanMetadata(metadata = {}, createdBy = "", mode = "senior") {
   assert.equal(metadata.created_by, createdBy);
   assert.deepEqual(vibe64AssistantSelectionFromMetadata(metadata), initialPlanSelection);
-  assert.deepEqual(JSON.parse(metadata.assistant_routing), { mode, review: true });
+  assert.deepEqual(JSON.parse(metadata.assistant_routing), { mode, review: true, autoSave: true });
 }
 
 async function requireAgentWrite(runtime, sessionId, operation) {
@@ -2982,7 +2982,7 @@ for (const chooseBranch of [false, true]) {
         ["setup", { vibe64User: actor }],
         ["resolve", { purpose: "senior" }, { vibe64User: { role: "owner" } }]
       ]);
-      assert.deepEqual(JSON.parse(harness.creationInputs[0].metadata.assistant_routing), { mode: "senior", review: true });
+      assert.deepEqual(JSON.parse(harness.creationInputs[0].metadata.assistant_routing), { mode: "senior", review: true, autoSave: true });
       assert.deepEqual(vibe64AssistantSelectionFromMetadata(harness.creationInputs[0].metadata), initialPlanSelection);
       assert.equal(harness.creationInputs[0].metadata.repository_branch, chooseBranch ? repositoryBranch.name : undefined);
       assert.deepEqual(harness.creationInputs[0].sourceContext, {
@@ -4077,8 +4077,14 @@ test("chat mode changes save for the next message without changing the main AI",
   const changed = await service.updateAssistantSelection(session.sessionId, {
     assistantRouting: { mode: "senior", review: true }, vibe64User: { role: "owner", username: "owner" } });
   assert.notEqual(changed.ok, false, JSON.stringify(changed));
-  assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "senior", review: true });
+  assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "senior", review: true, autoSave: true });
   assert.deepEqual(JSON.parse(session.metadata.assistant_selection), current);
+  // A mode change that omits a choice keeps the chat's own.
+  await service.updateAssistantSelection(session.sessionId, {
+    assistantRouting: { mode: "auto", autoSave: false }, vibe64User: { role: "owner", username: "owner" } });
+  await service.updateAssistantSelection(session.sessionId, {
+    assistantRouting: { mode: "senior" }, vibe64User: { role: "owner", username: "owner" } });
+  assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "senior", review: true, autoSave: false });
 });
 
 test("a team member can't change main chat's mode, review or model outside their lesson", async () => {
@@ -4104,7 +4110,7 @@ test("a team member can't change main chat's mode, review or model outside their
   const practice = await runWithPracticeProjectContext("test", { vibe64User: member },
     () => service.updateAssistantSelection(session.sessionId, { assistantRouting: { mode: "senior", review: true }, vibe64User: member }));
   assert.notEqual(practice.ok, false, JSON.stringify(practice));
-  assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "senior", review: true });
+  assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "senior", review: true, autoSave: true });
 });
 
 test("Auto preferences can be saved without changing an unfinished goal when observation is unavailable", async () => {
@@ -4188,7 +4194,7 @@ test("named chat modes rebind only an unfinished goal, through authorized access
       }
       assert.notEqual(result.ok, false, `${mode}/${failure}: ${JSON.stringify(result)}`);
       assert.equal(session.metadata.assistant_selection, original.assistant_selection);
-      assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode, review: mode === "auto" });
+      assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode, review: mode === "auto", autoSave: true });
       assert.deepEqual(operations, failure === "no-goal" ? ["write"] : ["resolve", "access", "future", "write"]);
     }
   }
@@ -4364,7 +4370,7 @@ test("source-bearing Learning creation retains the original source context, poli
     assert.equal(f.creationInputs.length, 1);
     assert.deepEqual(f.creationInputs[0].sourceContext, { expectedCommit: "d".repeat(40), vibe64User: actor });
     assert.equal(f.creationInputs[0].metadata.created_by, actor.username);
-    assert.deepEqual(JSON.parse(f.creationInputs[0].metadata.assistant_routing), { mode: "junior", review: true });
+    assert.deepEqual(JSON.parse(f.creationInputs[0].metadata.assistant_routing), { mode: "junior", review: true, autoSave: true });
     assert.deepEqual(vibe64AssistantSelectionFromMetadata(f.creationInputs[0].metadata), teacher);
     assert.equal(setup.length, 1);
     assert.equal(setup[0].runtime, f.runtime);
@@ -4539,4 +4545,56 @@ test("session actions hide people's approvals and undescribed actions from Colle
   for (const action of actions.filter(({ extensions }) => !extensions.assistant.exclude)) {
     assert.ok(action.extensions.assistant.description?.trim(), action.id);
   }
+});
+
+test("automatic save after a completed plan runs ordinary Save once and reports why it did not", async () => {
+  let preferences = { mode: "auto", review: true };
+  let unsaved = true;
+  let refusal = null;
+  const saves = [];
+  const destination = { mode: "managed_git", repository: "test-project", branch: "main" };
+  const session = () => ({ agentRuns: [], sessionId: "session-1", status: "active",
+    metadata: { assistant_routing: JSON.stringify(preferences) } });
+  const runtime = {
+    async getSession() { return session(); },
+    async listSessionSummaries() { return [session()]; },
+    store: {
+      async readBackgroundTask() { return null; },
+      async writeBackgroundTaskEvent(_sessionId, taskId, input) { return { ...input.patch, id: taskId, events: [input.event] }; },
+      async writeMetadataValue() {}
+    }
+  };
+  let planCompleted;
+  createService({
+    project: {
+      async readCurrentProject() { return { slug: "test-project", repository: { mode: "managed_git", defaultBranch: "main" } }; },
+      async createRuntime() { return runtime; }
+    },
+    async publishSessionChanged() {},
+    terminals: {
+      setPlanCompleted(handler) { planCompleted = handler; },
+      async inspectSessionWork() { return { unsaved, destination }; },
+      async saveSessionWork(_sessionId, input) {
+        if (refusal) throw Object.assign(new Error(refusal), { code: "vibe64_session_save_conflict" });
+        saves.push(input);
+        await input.onRepositoryWriteAcquired();
+        return { reconciled: true, saveCommit: "def456", status: "saved" };
+      }
+    }
+  });
+  const owner = { role: "owner", username: "owner" };
+  assert.equal(await planCompleted("session-1", { submittedBy: owner }), "Saved automatically after completing the plan.");
+  assert.equal(saves.length, 1);
+  assert.deepEqual(saves[0].destinationReview, destination);
+  assert.equal(saves[0].vibe64User, owner);
+  unsaved = false;
+  assert.equal(await planCompleted("session-1", { submittedBy: owner }), "Automatic save: nothing new to save.");
+  unsaved = true; refusal = "Update this session before saving.";
+  assert.equal(await planCompleted("session-1", { submittedBy: owner }), "Automatic save didn't run: Update this session before saving.");
+  refusal = null;
+  for (const off of [{ mode: "auto", autoSave: false }, { mode: "senior" }]) {
+    preferences = off;
+    assert.equal(await planCompleted("session-1", { submittedBy: owner }), "");
+  }
+  assert.equal(saves.length, 1);
 });

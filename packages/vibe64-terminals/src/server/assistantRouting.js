@@ -89,7 +89,7 @@ function withSelection(context, selection) {
 // The ordinary conversation owns delivery and history. This record only holds
 // the one request being prepared, its working plan snapshot and follow-up.
 function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive, dispatch, publish, prepareSelection = async () => {},
-  onTiming = () => {} }) {
+  onTiming = () => {}, onPlanCompleted = null }) {
   const running = new Map();
   // Sub-phase times of each send before native delivery, reported once.
   const timings = new Map();
@@ -812,6 +812,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
   async function afterTurn(sessionId, payload, options, { recovered = false } = {}) {
     const run = payload?.payload?.agentRun;
     if (!run || run.active) return;
+    let completed;
     await exclusive(sessionId, options, async context => {
       const key = keyFor(sessionId, context);
       if (closing || running.has(key)) return;
@@ -864,6 +865,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
           }
           await writeNotice(context, state, { messageId: `assistant-plan-archived:${state.turnId}`, text: `Completed plan archived: ${plan.title}.\n\n[View plan history](#vibe64-plan-history)` });
           await publish(sessionId, { reason: "work-plan-changed", payload: { planNotice: archived.notice, assistantRoutingRequest: state } });
+          completed = { context, state };
         }
         state.status = "complete";
         await save(context, state); return;
@@ -889,6 +891,14 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       try { await deliver(sessionId, { ...context, vibe64User: state.submittedBy }, state, true); }
       catch (error) { state.status = "waiting"; state.delivery = state.attemptedMessageId ? "uncertain" : "pending"; state.error = error.message; await save(context, state); }
     });
+    // After the lock: a completed plan's follow-up (automatic save) runs once
+    // the turn has ended, and its short result note joins the chat.
+    if (!completed || !onPlanCompleted) return;
+    const { context, state } = completed;
+    let note;
+    try { note = await onPlanCompleted(sessionId, { submittedBy: state.submittedBy }); }
+    catch (error) { note = `Automatic save didn't run: ${error.message}`; }
+    if (note) await writeNotice(context, state, { messageId: `assistant-plan-saved:${state.turnId}`, text: note });
   }
 
   async function prepareFollowup(context, state, stage) {

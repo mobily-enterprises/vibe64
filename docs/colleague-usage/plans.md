@@ -67,6 +67,9 @@ has been delivered and that review turn finishes, Vibe64 automatically moves
 that exact Plan and Progress pair into History. Chat shows **Completed plan
 archived** with **View plan history**, which opens this session's existing viewer.
 The plan icon remains available and opens History when there is no current plan.
+With **Automatic save after completing a plan** on (the default; see
+[Auto workflow](auto-workflow.md)), Vibe64 then runs the ordinary **Save** once
+and notes the result in chat.
 
 Senior can update checklist ticks and Progress during review without preventing
 completion. The agreed plan wording must still match the reviewed scope, and

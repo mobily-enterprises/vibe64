@@ -5001,7 +5001,7 @@ test("renewal retains the routed successor through backup creation and replaceme
   const completed = await eventually(() => readSessionRenewalState(context.runtime, OLD_SESSION_ID),
     (state) => state?.status === SESSION_RENEWAL_STATUS.COMPLETED);
   assert.equal(completed.successor.assistantSelection.engineId, "opencode");
-  assert.deepEqual(completed.successor.assistantRouting, { mode: "senior", review: false });
+  assert.deepEqual(completed.successor.assistantRouting, { mode: "senior", review: false, autoSave: true });
   assert.deepEqual(JSON.parse(context.calls.createMetadata.assistant_routing), completed.successor.assistantRouting);
   assert.equal(context.calls.selectionRequests[0].requested, undefined);
   assert.equal(completed.successor.attempt, 2);

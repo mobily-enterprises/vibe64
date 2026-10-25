@@ -1457,10 +1457,16 @@ messages and receipts remain terminal and intact as role/Helper conversion
 advances the format. Ordinary native requests without configuration remain
 invalid; no current record is silently marked legacy.
 
-Main chat can save Custom, Senior, Junior or Auto plus an Auto Deslop preference
-in the existing conversation metadata. New sessions start with Deslop on, and a
-chat without saved preferences shows it on; switching orchestrator keeps the
-chat's choice. Turning the switch off first opens a confirmation explaining that
+Main chat can save Custom, Senior, Junior or Auto plus Auto's Deslop (`review`)
+and automatic save (`autoSave`) preferences in the existing conversation
+metadata. `assistantRoutingAutomation` is their one default: each is on unless
+the chat turned it off, and Custom or Fix it with AI carry no choice, so Auto
+after them starts with both on. A mode change that omits a choice keeps the
+chat's own; switching orchestrator keeps the chat's choice. When Auto's
+completing Senior turn archives a plan, routing calls the Sessions-owned
+plan-completed handler after its lock; with `autoSave` on it inspects work and
+runs the ordinary Save once (never for connected sessions), and routing writes
+its short result note to chat. Turning the switch off first opens a confirmation explaining that
 code quality will suffer unless the person runs Deslop themselves; Cancel keeps
 it on. Existing saved preferences are not rewritten: an off value cannot be told
 apart from a deliberate choice. A role resolves to a live, available

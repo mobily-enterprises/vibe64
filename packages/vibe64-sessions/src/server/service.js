@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { createMainBrowserConversations } from "./mainBrowserConversations.js";
 import { assertSessionRepositoryReview, sessionConnectedContribution, sessionConnectedSources, sessionConnectedSubmissions, sessionRepositoryDestination, sessionRepositoryProject } from "@local/vibe64-core/server/projectRepository";
-import { ASSISTANT_ROUTING_METADATA, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingStatusIsPending,
+import { ASSISTANT_ROUTING_METADATA, assistantRoutingAutomation, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingStatusIsPending,
   isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
 
 import { vibe64Result } from "@local/vibe64-core/server/serverResponses";
@@ -498,9 +498,10 @@ function createService({
       : null;
     const previous = session ? assistantRoutingFromMetadata(session.metadata) : null;
     const startMode = previous && !["custom", "fix"].includes(previous.mode) ? previous.mode : mode;
-    // Deslop starts on; the chat-mode switch can turn it off after a warning.
+    // Deslop and automatic save start on (their shared default); the chat-mode
+    // controls can turn them off.
     const preferences = assistantRoutingPreferences(explicitSelection ? { mode: "custom", override: explicitSelection }
-      : { mode: startMode, review: true });
+      : { mode: startMode });
     const routingSetup = await initializeModelRouting({ vibe64User });
     if (routingSetup?.ok === false) throw Object.assign(new Error(routingSetup.error), { code: routingSetup.code, statusCode: routingSetup.statusCode });
     // Outside a lesson, a team member's session records main chat's starting
@@ -2488,7 +2489,9 @@ function createService({
             let resolved;
             let connectionIdentity;
             if (input.assistantRouting && input.assistantRouting.mode !== "custom") {
-              preferences = assistantRoutingPreferences(input.assistantRouting);
+              // An omitted Deslop or automatic save choice keeps the chat's own.
+              preferences = assistantRoutingPreferences({
+                ...assistantRoutingAutomation(assistantRoutingFromMetadata(session.metadata)), ...input.assistantRouting });
               // Main chat's tool follows the owner's setup; a changed tool
               // catches up on the next message. Only an active goal rebinds now.
               const observed = typeof terminals.readAgentGoal === "function"
@@ -2644,6 +2647,22 @@ function createService({
         };
       });
     }
+  });
+  // Automatic save: once Auto's completing turn ends, Main chat's autoSave
+  // preference runs the ordinary Save. Returns the short chat note.
+  terminals.setPlanCompleted?.(async (sessionId, { submittedBy = null } = {}) => {
+    const runtime = await project.createRuntime({ inspectSource: false });
+    const session = await runtime.getSession(sessionId, { inspectSource: false });
+    const preferences = assistantRoutingFromMetadata(session.metadata);
+    if (preferences?.mode !== "auto" || !preferences.autoSave) return "";
+    const skipped = reason => `Automatic save didn't run: ${reason}`;
+    // Connected Save needs the person's authenticated request to each project.
+    if (sessionConnectedSources(session).length) return skipped("this session has connected repositories. Choose Save yourself.");
+    const work = await service.inspectSessionWork(sessionId, {}, { includeConnected: false });
+    if (work?.ok === false) return skipped(text(work.error) || "this session's work could not be inspected.");
+    if (!work.unsaved) return "Automatic save: nothing new to save.";
+    const saved = await service.saveSessionWork(sessionId, { destinationReview: work.destination, vibe64User: submittedBy });
+    return saved?.ok === false ? skipped(text(saved.error) || "Save was refused.") : "Saved automatically after completing the plan.";
   });
   terminals.setConnectedPreparation?.(async ({ mode, runtime, session, onProgress = null }) => {
     const requestContext = { requestMeta: currentProjectActionRequestMeta() };

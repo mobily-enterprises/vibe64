@@ -16,8 +16,12 @@ async function finish(f, decision, options) {
 }
 async function review(f) { await f.service.send("session-1", request, f.context); await finish(f, "handoff"); }
 
-for (const deslop of [true, false]) test(`implementation, review and explicit completion archive exactly once with Deslop ${deslop}`, async t => {
-  const f = await fixture(t, { mode: "auto", review: deslop });
+for (const deslop of [true, false]) test(`implementation, review and explicit completion archive and auto-save exactly once with Deslop ${deslop}`, async t => {
+  const saves = [];
+  const f = await fixture(t, { mode: "auto", review: deslop }, { onPlanCompleted: async (sessionId, input) => {
+    saves.push({ sessionId, input, archived: (await readWorkPlanHistory(f.context)).length, status: f.state().status });
+    return "Saved automatically after completing the plan.";
+  } });
   await publishPlanFixture(f.context, planDocument() + "\n- [x] Required-name validation verified\n");
   await review(f);
   assert.equal(f.state().stage, "review"); assert.equal(f.state().status, "working");
@@ -31,6 +35,21 @@ for (const deslop of [true, false]) test(`implementation, review and explicit co
   assert.equal((await readWorkPlanHistory(f.context)).length, 1);
   await f.service.afterTurn("session-1", end(terminal), f.context);
   assert.equal((await readWorkPlanHistory(f.context)).length, 1); assert.equal(f.sends.length, 2);
+  // Save follows the archived plan once, after the completing turn ended.
+  assert.equal(saves.length, 1);
+  assert.equal(saves[0].sessionId, "session-1"); assert.equal(saves[0].archived, 1); assert.equal(saves[0].status, "complete");
+  assert.match([...f.notices.values()].map(turn => JSON.stringify(turn)).join("\n"), /Saved automatically after completing the plan/);
+});
+
+test("a refused automatic save leaves a short note and keeps the completed plan", async t => {
+  const f = await fixture(t, { mode: "auto", review: true }, { onPlanCompleted: async () => { throw new Error("Nothing changed."); } });
+  await publishPlanFixture(f.context, planDocument() + "\n- [x] Required-name validation verified\n");
+  await review(f);
+  const plan = await readWorkPlan(f.context);
+  await manageWorkPlan(f.context, { operation: "complete", expectedRevision: plan.revision, expectedProgressRevision: plan.progressRevision || "" }, "review");
+  await finish(f, "complete");
+  assert.equal(f.state().status, "complete"); assert.equal((await readWorkPlanHistory(f.context)).length, 1);
+  assert.match([...f.notices.values()].map(turn => JSON.stringify(turn)).join("\n"), /Automatic save didn't run: Nothing changed\./);
 });
 
 test("Senior can reconcile checklist ticks during review and archive the completed pair", async t => {

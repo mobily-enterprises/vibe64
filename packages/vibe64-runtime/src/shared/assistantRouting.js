@@ -70,9 +70,18 @@ function assistantRoutingPreferences(value = {}) {
   }
   if (Object.hasOwn(value, "workflowEngineId")) throw upgradeRequired();
   if (value.mode === "custom" && !value.override) throw routingError("Choose a custom model first.");
-  // The saved review preference controls optional Deslop; Auto review is mandatory.
-  return { mode: value.mode, review: !["custom", "fix"].includes(value.mode) && value.review === true,
+  // review controls optional Deslop (Auto review is mandatory); autoSave runs
+  // Save after Auto completes a plan. Neither applies to Custom or Fix it with AI.
+  return { mode: value.mode, ...(["custom", "fix"].includes(value.mode) ? { review: false, autoSave: false } : assistantRoutingAutomation(value)),
     ...(value.override && !["auto", "fix"].includes(value.mode) ? { override: defineVibe64AssistantSelection(value.override) } : {}) };
+}
+
+// The Auto automation a chat's preferences choose. Each is on unless the owner
+// turned it off; Custom and Fix it with AI carry no choice, so returning to
+// Auto from them starts with both on.
+function assistantRoutingAutomation(value) {
+  const chosen = value && !["custom", "fix"].includes(value.mode) ? value : {};
+  return { review: chosen.review !== false, autoSave: chosen.autoSave !== false };
 }
 
 function assistantRoutingFromMetadata(metadata = {}) {
@@ -581,7 +590,7 @@ function assistantWorkflowUpgradeChanges({ metadata = {}, conversations = [] }) 
 
 export { ASSISTANT_MODES, ASSISTANT_FIX_MODE, ASSISTANT_ROUTING_METADATA, ASSISTANT_SETUP_ROLES, ASSISTANT_FOLLOWING_ROLES,
   ASSISTANT_ROUTING_ROLE_DEFINITIONS, ASSISTANT_ROLE_DEFAULT_FOLLOWS, ASSISTANT_PURPOSE_ROLES, ASSISTANT_ROLE_PURPOSES, MAIN_CHAT_PURPOSES, ROUTING_REASONS,
-  routingModelScore, resolveAssistantPurpose, assistantRoutingPreferences, assistantRoutingSetupFor, assistantRoutingSetupValues, assistantSetupRoleValue, assistantMainAiChanged,
+  routingModelScore, resolveAssistantPurpose, assistantRoutingPreferences, assistantRoutingAutomation, assistantRoutingSetupFor, assistantRoutingSetupValues, assistantSetupRoleValue, assistantMainAiChanged,
   isAssistantRoutingOwner, isMainChatPurpose, needsMainChatApproval, routingRunsInChoices,
   assistantRoutingFromMetadata, hasConnectedAssistantModels, routingModelChoices, recommendedRoutingAssignments, routingAssignmentSelection,
   parseRoutingDecision, assistantRoutingPrompt, assistantWorkflowInstructions,

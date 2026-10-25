@@ -12,6 +12,7 @@ const sessionFields = {
   ...Object.fromEntries(["modelId", "modelProviderId", "variantId", "agentId"].map((key) => [key, { ...shortText, maxLength: 512 }])),
   reviewEnabled: { type: "boolean", required: false },
   deslopEnabled: { type: "boolean", required: false },
+  autoSaveEnabled: { type: "boolean", required: false },
   hasModelOverride: { type: "boolean", required: false },
   turnActive: { type: "boolean", required: false },
   needsUserInput: { type: "boolean", required: false }
@@ -63,7 +64,7 @@ function sessionSummary(session) {
       typeof value === "string" ? [[key, value.slice(0, sessionFields[key].maxLength)]] : []
     ))),
     ...(preferences ? { reviewEnabled: preferences.mode === "auto", deslopEnabled: preferences.mode === "auto" && preferences.review,
-      hasModelOverride: Boolean(preferences.override) } : {}),
+      autoSaveEnabled: preferences.mode === "auto" && preferences.autoSave, hasModelOverride: Boolean(preferences.override) } : {}),
     ...(typeof turn?.active === "boolean" ? { turnActive: turn.active } : {}),
     ...(route ? { needsUserInput: route.status === "waiting" } : {})
   };

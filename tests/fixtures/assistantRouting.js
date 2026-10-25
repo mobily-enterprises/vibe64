@@ -39,7 +39,7 @@ ${body}
 `).join("\n");
 }
 
-async function fixture(t, preferences = { mode: "auto", review: true }, { resolveAssistantUser, beforeExclusive, readyPlan = true } = {}) {
+async function fixture(t, preferences = { mode: "auto", review: true }, { resolveAssistantUser, beforeExclusive, readyPlan = true, onPlanCompleted } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-routing-lifecycle-"));
   t.after(() => rm(root, { force: true, recursive: true }));
   const catalog = { engineId: "codex", revision: `sha256:${"a".repeat(64)}`, transportId: "codex_app_server", label: "Codex",
@@ -145,7 +145,7 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
   };
   let failAdmission = false;
   let rejectedAdmission;
-  const routingOptions = { systemRoot: root, agent, exclusive,
+  const routingOptions = { systemRoot: root, agent, exclusive, onPlanCompleted,
     publish: async (_id, value) => { events.push(structuredClone(value)); },
     dispatch: async (_id, input, selected) => {
       if (rejectedAdmission) return rejectedAdmission;

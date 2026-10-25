@@ -433,6 +433,7 @@ const assistantSelectionField = { type: "object", required: false, schema: creat
 const assistantRoutingField = { type: "object", required: false, schema: createSchema({
   mode: { type: "string", enum: ASSISTANT_MODES.map(({ id }) => id), required: true },
   review: { type: "boolean", required: false },
+  autoSave: { type: "boolean", required: false },
   override: assistantSelectionField
 }) };
 

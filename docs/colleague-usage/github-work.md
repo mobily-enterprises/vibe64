@@ -13,6 +13,12 @@ pull-request policy. **Update this session (rebase)** reconciles newer saved pro
 work when offered; Save does not silently perform that update for you. A failed or
 uncertain push needs a state check before another request.
 
+In Auto, **Automatic save after completing a plan** (on by default in the chat
+mode menu) runs this same Save once a plan is completed and its review turn ends.
+Its progress, result and recovery are the ordinary Save's; when it cannot save,
+chat shows **Automatic save didn't run:** with the reason, and nothing changes.
+See [Auto workflow](auto-workflow.md).
+
 Whenever Save or Update reports a problem, its activity panel offers **Fix it with
 AI**, which opens a temporary repair chat with the exact error and asks it to
 preserve all work. Ordinary failures also keep **Retry**; conflicts and diverged

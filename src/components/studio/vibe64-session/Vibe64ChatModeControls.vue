@@ -4,7 +4,7 @@ import { mdiAccountOutline, mdiAccountStarOutline, mdiAutoFix, mdiCheck, mdiClos
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { ModelRoutingForm } from "@local/vibe64-accounts/client";
-import { ASSISTANT_FIX_MODE, ASSISTANT_MODES, assistantModeLabel, assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
+import { ASSISTANT_FIX_MODE, ASSISTANT_MODES, assistantModeLabel, assistantRoutingAutomation, assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
 import { vibe64SessionPath, VIBE64_SESSIONS_API_SUFFIX, VIBE64_SURFACE_ID } from "@/lib/vibe64SessionRequestConfig.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
@@ -15,8 +15,9 @@ const props = defineProps({ session: { type: Object, default: null }, goal: { ty
 const emit = defineEmits(["saved", "reload", "custom"]);
 const preferences = computed(() => assistantRoutingFromMetadata(props.session?.metadata));
 const mode = ref("");
-// Deslop is on unless this chat's saved preferences turned it off.
+// Deslop and automatic save follow the shared defaults unless this chat turned them off.
 const review = ref(true);
+const autoSave = ref(true);
 const deslopConfirmOpen = ref(false);
 const modelOverride = ref(null);
 const saving = ref(false);
@@ -43,9 +44,11 @@ const hasGoal = computed(() => Boolean(props.goal && !["completed", "complete"].
 const ownerOnly = computed(() => !props.temporary && decisions.value.senior?.approvalRequired === true);
 const reviewAvailable = computed(() => !props.temporary && !ownerOnly.value && !hasGoal.value && mode.value === "auto");
 const updatedPreferences = computed(() => ({ mode: mode.value, review: review.value,
+  ...(props.temporary ? {} : { autoSave: autoSave.value }),
   ...(modelOverride.value ? { override: modelOverride.value } : {}) }));
 watch(preferences, (value) => {
-  mode.value = value?.mode || ""; review.value = value ? value.review === true : true; modelOverride.value = value?.override || null;
+  mode.value = value?.mode || ""; modelOverride.value = value?.override || null;
+  ({ review: review.value, autoSave: autoSave.value } = assistantRoutingAutomation(value));
 }, { immediate: true });
 function roleLabel(role) {
   if (role === "custom" && preferences.value?.mode !== "custom") return "Choose a model and thinking level.";
@@ -67,7 +70,7 @@ const description = computed(() => {
   const selectedOverride = preferences.value?.mode === mode.value && preferences.value.override;
   return selectedOverride && !decisions.value[mode.value] ? `${vibe64AssistantSelectionLabel(selectedOverride)} · custom` : roleLabel(mode.value);
 });
-const triggerLabel = computed(() => `Chat mode${modeLabel.value ? `: ${modeLabel.value}` : ''}. ${description.value}${review.value && reviewAvailable.value ? '. Automatic deslop by Senior on' : ''}`);
+const triggerLabel = computed(() => `Chat mode${modeLabel.value ? `: ${modeLabel.value}` : ''}. ${description.value}${review.value && reviewAvailable.value ? '. Automatic deslop by Senior on' : ''}${autoSave.value && reviewAvailable.value ? '. Automatic save after plans on' : ''}`);
 const reviewDescription = computed(() => {
   if (hasGoal.value) return "Auto and automatic review apply after the current goal finishes.";
   if (ownerOnly.value) return "";
@@ -88,11 +91,11 @@ function openCustom() {
   detailsOpen.value = false;
   emit("custom", modeMenu.value?.activatorEl);
 }
-async function save(nextMode = mode.value, nextReview = review.value) {
+async function save(nextMode = mode.value, nextReview = review.value, nextAutoSave = autoSave.value) {
   if (saving.value || props.disabled || !modes.value.some(({ id }) => id === nextMode) || nextMode === "auto" && props.temporary) return;
-  const previous = { mode: mode.value, review: review.value, override: modelOverride.value };
+  const previous = { mode: mode.value, review: review.value, autoSave: autoSave.value, override: modelOverride.value };
   if (nextMode !== mode.value) modelOverride.value = null;
-  mode.value = nextMode; review.value = !props.temporary && nextReview; saving.value = true;
+  mode.value = nextMode; review.value = !props.temporary && nextReview; autoSave.value = !props.temporary && nextAutoSave; saving.value = true;
   saveError.value = "";
   try {
     const result = props.savePreferences ? await props.savePreferences(updatedPreferences.value) : await command.run();
@@ -100,7 +103,7 @@ async function save(nextMode = mode.value, nextReview = review.value) {
     emit("saved");
   }
   catch (error) {
-    mode.value = previous.mode; review.value = previous.review;
+    mode.value = previous.mode; review.value = previous.review; autoSave.value = previous.autoSave;
     modelOverride.value = previous.override;
     saveError.value = error.message || "Chat mode could not be saved.";
   }
@@ -182,8 +185,9 @@ function configure() {
           <div class="px-4 pb-3">
             <p v-if="requiredMode" class="text-body-small">Repair chats use Fix it with AI, or a model you choose. Model changes apply to the next turn.</p>
             <template v-if="!temporary && mode === 'auto'">
-              <p class="text-body-small">Senior always reviews Junior's completed work and, with Deslop on, cleans it up. Keep Deslop on unless this is a quick throwaway project.</p>
+              <p class="text-body-small">Senior always reviews Junior's completed work and, with Deslop on, cleans it up. Keep Deslop on unless this is a quick throwaway project. Automatic save runs Save once Senior completes a plan.</p>
               <v-switch :model-value="review" :disabled="disabled || saving || connecting || !reviewAvailable" label="Deslop during Senior review" hide-details color="primary" density="compact" @update:model-value="changeDeslop($event)" />
+              <v-switch :model-value="autoSave" :disabled="disabled || saving || connecting || !reviewAvailable" label="Automatic save after completing a plan" hide-details color="primary" density="compact" @update:model-value="save(mode, review, $event)" />
               <p v-if="reviewDescription" class="text-body-small">{{ reviewDescription }}</p>
             </template>
           </div>

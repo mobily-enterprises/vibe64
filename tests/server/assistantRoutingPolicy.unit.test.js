@@ -10,7 +10,7 @@ import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistant
 import { runWithPracticeProjectContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { assistantModePrompt, assistantGoalManagementMessage, assistantRoutingPrompt, assistantWorkflowInstructions, parseRoutingDecision, recommendedRoutingAssignments,
-  routingAssignmentSelection, routingModelChoices, routingModelScore, routingRunsInChoices, resolveAssistantPurpose, assistantRoutingPreferences,
+  routingAssignmentSelection, routingModelChoices, routingModelScore, routingRunsInChoices, resolveAssistantPurpose, assistantRoutingPreferences, assistantRoutingAutomation,
   assistantRoutingSetupFor, assistantMainAiChanged, ASSISTANT_PURPOSE_ROLES, MAIN_CHAT_PURPOSES } from "@local/vibe64-runtime/shared/assistantRouting";
 import { curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import routingScores from "../../packages/vibe64-runtime/src/shared/assistantRoutingScores.json" with { type: "json" };
@@ -587,7 +587,15 @@ test("old routing snapshots and chat preferences require the state upgrade", () 
   }
   assert.throws(() => assistantRoutingPreferences({ mode: "senior", workflowEngineId: "codex" }),
     (error) => error.code === "vibe64_assistant_routing_upgrade_required");
-  assert.deepEqual(assistantRoutingPreferences({ mode: "fix", review: true }), { mode: "fix", review: false });
+  assert.deepEqual(assistantRoutingPreferences({ mode: "fix", review: true }), { mode: "fix", review: false, autoSave: false });
+});
+
+test("Deslop and automatic save default on and keep an explicit off", () => {
+  assert.deepEqual(assistantRoutingPreferences({ mode: "auto" }), { mode: "auto", review: true, autoSave: true });
+  assert.deepEqual(assistantRoutingPreferences({ mode: "auto", review: false, autoSave: false }), { mode: "auto", review: false, autoSave: false });
+  // Custom carries no choice, so Auto after it starts with both on.
+  assert.deepEqual(assistantRoutingAutomation({ mode: "custom", review: false, autoSave: false }), { review: true, autoSave: true });
+  assert.deepEqual(assistantRoutingAutomation(null), { review: true, autoSave: true });
 });
 
 test("Auto names missing assignments and preserves connection and access failure reasons", () => {
