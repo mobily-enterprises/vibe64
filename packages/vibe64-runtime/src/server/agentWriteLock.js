@@ -58,7 +58,16 @@ async function runVibe64RenewalAgentWriteExclusive(runtime, sessionId = "", oper
       };
 }
 
+// A busy agent-write lock refuses the caller with a retryable error.
+function throwIfAgentWriteBusy(result) {
+  if (result?.ok === false && result.code === VIBE64_AGENT_WRITE_BUSY_RESULT.code) {
+    throw Object.assign(new Error(result.error || VIBE64_AGENT_WRITE_BUSY_RESULT.error), result, { retryable: true });
+  }
+  return result;
+}
+
 export {
   runVibe64AgentWriteExclusive,
-  runVibe64RenewalAgentWriteExclusive
+  runVibe64RenewalAgentWriteExclusive,
+  throwIfAgentWriteBusy
 };

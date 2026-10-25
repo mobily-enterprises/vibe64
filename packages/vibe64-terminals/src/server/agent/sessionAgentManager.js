@@ -4,7 +4,7 @@ import { openMainConversation } from "../mainConversationBinding.js";
 import { requireCompletedConversationRewind, requireCompletedNativeConversationReplacement } from "../assistantChangeover.js";
 import { ASSISTANT_PURPOSE_ROLES, ASSISTANT_ROLE_PURPOSES, ASSISTANT_SETUP_ROLES, assistantRoutingSetupValues, assistantSetupRoleValue,
   isAssistantRoutingOwner, needsMainChatApproval, recommendedRoutingAssignments, routingAssignmentSelection, routingModelChoices,
-  resolveAssistantPurpose, hasConnectedAssistantModels } from "@local/vibe64-runtime/shared/assistantRouting";
+  resolveAssistantPurpose, hasConnectedAssistantModels, assistantRoutingGoalFromMetadata, goalStatusIsComplete } from "@local/vibe64-runtime/shared/assistantRouting";
 
 import {
   assertCanUseVibe64Assistant,
@@ -560,8 +560,8 @@ function createSessionAgentManager({
   }
 
   function goalOptions(options) {
-    const pinned = JSON.parse(options.session?.metadata?.assistant_routing_goal || "null");
-    if (!pinned?.selection || ["complete", "completed"].includes(pinned.status)) return options;
+    const pinned = assistantRoutingGoalFromMetadata(options.session?.metadata);
+    if (!pinned?.selection || goalStatusIsComplete(pinned.status)) return options;
     const selection = defineVibe64AssistantSelection(pinned.selection);
     return { ...options, assistantSelection: selection, session: { ...options.session,
       metadata: { ...options.session.metadata, [VIBE64_ASSISTANT_SELECTION_METADATA]: serializeVibe64AssistantSelection(selection) } } };

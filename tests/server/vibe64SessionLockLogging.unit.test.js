@@ -5,7 +5,7 @@ import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
-import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
+import { runVibe64AgentWriteExclusive, throwIfAgentWriteBusy } from "@local/vibe64-runtime/server/agentWriteLock";
 import { projectRuntimeRoot, withTemporaryRoot } from "./vibe64TestHelpers.js";
 
 async function fixture(targetRoot, onLog = () => {}) {
@@ -202,4 +202,18 @@ test("preparation timeout identifies the actual blocker without exposing lock ow
     assert.equal(result.value.details.blockingOperation, "prepare-agent-session");
     assert.equal((await run("save-session-work", () => "saved", 60)).value, "saved");
   });
+});
+
+test("a busy agent-write result becomes a retryable error and other results pass through", () => {
+  const busy = { ok: false, code: "vibe64_agent_write_mode_busy", error: "Busy now.", details: { holder: "rename" } };
+  assert.throws(() => throwIfAgentWriteBusy(busy), (error) => {
+    assert.equal(error.message, "Busy now.");
+    assert.equal(error.code, "vibe64_agent_write_mode_busy");
+    assert.deepEqual(error.details, { holder: "rename" });
+    assert.equal(error.retryable, true);
+    return true;
+  });
+  const refused = { ok: false, code: "vibe64_session_not_found", error: "Missing." };
+  assert.equal(throwIfAgentWriteBusy(refused), refused);
+  assert.equal(throwIfAgentWriteBusy(undefined), undefined);
 });

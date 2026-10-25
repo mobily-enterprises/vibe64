@@ -30,7 +30,7 @@ import { claudeNativeMessageId } from "@jskit-ai/assistant-core/server/claude-tu
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
 import { createAssistantRouting } from "./assistantRouting.js";
-import { assistantGoalObjective, assistantMainAiChanged, assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantGoalObjective, assistantMainAiChanged, assistantRoutingFromMetadata, assistantRoutingGoalFromMetadata, assistantRoutingRequestFromMetadata, assistantRoutingStatusIsPending, goalStatusIsComplete } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createSessionConversations } from "./sessionConversations.js";
 import {
   createSessionConversationBinding,
@@ -166,7 +166,8 @@ import {
 } from "@local/vibe64-runtime/server/sessionLifecycle";
 import {
   runVibe64AgentWriteExclusive,
-  runVibe64RenewalAgentWriteExclusive
+  runVibe64RenewalAgentWriteExclusive,
+  throwIfAgentWriteBusy
 } from "@local/vibe64-runtime/server/agentWriteLock";
 import {
   VIBE64_ASSISTANT_ENGINE_IDS,
@@ -985,8 +986,7 @@ function createService({
     exclusive: async (sessionId, options, operation) => {
       const result = await runMainAgentWrite(sessionId, options, operation,
         { operation: "assistant-routing", waitMs: options.lockWaitMs ?? AGENT_WRITE_WAIT_MS });
-      if (result?.code === "vibe64_agent_write_mode_busy") throw Object.assign(new Error(result.error), result);
-      return result;
+      return throwIfAgentWriteBusy(result);
     },
     publish: publishAgentSessionChanged,
     prepareSelection: prepareRoutingSelection,
@@ -1005,6 +1005,8 @@ function createService({
     async dispatch(sessionId, input, context) {
       requireCompletedConversationRewind(context.session);
       await prepareAgentSkillsInsideAgentWrite(sessionId, context);
+      // A Main send needs the session's durable selection; this refuses without one.
+      vibe64AssistantSelectionFromMetadata(context.session.metadata);
       return sessionAgent.sendMessage(sessionId, input, context);
     }
   });
@@ -1045,7 +1047,7 @@ function createService({
   function changeSessionWorkPlan(sessionId, operation, input) {
     const restoring = operation === "restore";
     return vibe64Result(() => runMainAgentWrite(sessionId, {}, async (context) => {
-      const request = JSON.parse(context.session.metadata.assistant_routing_request || "null");
+      const request = assistantRoutingRequestFromMetadata(context.session.metadata);
       if (sessionHasActiveAgentRun(context.session) || assistantRoutingStatusIsPending(request) ||
           request?.status === "working" && request.workflow) {
         return { ok: false, error: "Wait for the assistant and its review to finish before " +
@@ -1116,14 +1118,18 @@ function createService({
     }
   }
 
+  // The project runtime and session a call works on: the caller's runtime and
+  // session when given (the session only when it is this one), else fresh reads.
+  async function sessionContext(sessionId = "", input = {}) {
+    const runtime = input.runtime || await projectService.createRuntime({ inspectSource: false });
+    const session = input.session?.sessionId === sessionId
+      ? input.session
+      : await runtime.getSession(sessionId, { inspectSource: false });
+    return { runtime, session };
+  }
+
   async function readAssistantSession(sessionId = "", options = {}) {
-    const runtime = options.runtime || await projectService.createRuntime({
-      inspectSource: false
-    });
-    const session = options.session || await runtime.getSession(sessionId, {
-      inspectSource: false
-    });
-    return { ...options, runtime, session };
+    return { ...options, ...await sessionContext(sessionId, options) };
   }
 
   async function assistantSessionOptions(sessionId = "", options = {}) {
@@ -1171,7 +1177,7 @@ function createService({
       if (!threadId) throw new Error("The accepted goal's native conversation identity is unavailable.");
       return { ...latest, daemonId: goalRuntimeId, pending: null, error: null,
         native: { threadId, createdAt: result.goal.createdAt, objective: result.goal.objective },
-        active: !["complete", "completed"].includes(result.goal.status) };
+        active: !goalStatusIsComplete(result.goal.status) };
     });
   }
 
@@ -1181,12 +1187,12 @@ function createService({
   // person's own model, and a paused goal is checked when it is resumed.
   async function cancelGoalIfMainAiChanged(sessionId, vibe64User = null, { activeOnly = false } = {}) {
     const context = await assistantSessionOptions(sessionId, { vibe64User });
-    const pinned = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
+    const pinned = assistantRoutingGoalFromMetadata(context.session.metadata);
     if (!pinned || pinned.mode === "custom") return false;
-    if (activeOnly ? pinned.status !== "active" : ["complete", "completed"].includes(pinned.status)) return false;
+    if (activeOnly ? pinned.status !== "active" : goalStatusIsComplete(pinned.status)) return false;
     if (!assistantMainAiChanged(pinned.configuration?.owner, (await readRoutingConfiguration()).owner)) return false;
     const observed = await service.readAgentGoal(sessionId, context);
-    if (observed?.status !== "available" || !observed.goal || ["complete", "completed"].includes(observed.goal.status)) return false;
+    if (observed?.status !== "available" || !observed.goal || goalStatusIsComplete(observed.goal.status)) return false;
     const result = await service.updateAgentGoal(sessionId, { vibe64User, action: "cancel",
       threadId: observed.threadId, createdAt: observed.goal.createdAt, objective: observed.goal.objective });
     if (result?.ok === false) throw Object.assign(new Error(result.error || "The goal could not be cancelled."), result);
@@ -1208,7 +1214,7 @@ function createService({
       throw new Error("Goal preparation was interrupted before its AI connection was verified. Resume the intended goal explicitly.");
     }
     const actor = await assistantRuntime.authorizeProjectMessage(intent.actor, projectRuntimeContext().projectSlug);
-    const pin = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
+    const pin = assistantRoutingGoalFromMetadata(context.session.metadata);
     context = { ...context, vibe64User: actor, assistantSelection: pin?.selection || intent.selection,
       expectedConnectionIdentity: intent.connectionIdentity };
     await sessionAgent.requireAssistantAccess(sessionId, context);
@@ -1239,7 +1245,7 @@ function createService({
         intent = latest;
       }
     }
-    if (!native.goal || ["complete", "completed"].includes(native.goal.status)) {
+    if (!native.goal || goalStatusIsComplete(native.goal.status)) {
       // An unresolved Set may have been accepted without its goal attachment
       // reaching storage. Its existing receipt must not be replaced by a send.
       if (intent.pending) throw new Error("The interrupted goal command needs its saved delivery receipt checked.");
@@ -1261,7 +1267,7 @@ function createService({
       }
     }
     const observed = await service.readAgentGoal(sessionId, { vibe64User: actor }, { canonical: true });
-    if (!observed.goal || ["complete", "completed"].includes(observed.goal.status)) return { sessionId, completed: true };
+    if (!observed.goal || goalStatusIsComplete(observed.goal.status)) return { sessionId, completed: true };
     const result = await service.updateAgentGoal(sessionId, { action: "resume", vibe64User: actor,
       expectedSegmentId: observed.target.segmentId, expectedGoalId: observed.goal.id,
       messageId: `goal-restart-${randomUUID()}` }, { canonical: true, restartIntentId: intent.id });
@@ -1271,10 +1277,10 @@ function createService({
   }
 
   async function applyAgentGoalReadResult(sessionId, context, result) {
-    const pinned = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
+    const pinned = assistantRoutingGoalFromMetadata(context.session.metadata);
     const recoveryError = readGoalIntent(context.session)?.error;
     if (recoveryError) result = { ...result, error: recoveryError };
-    if (result.status === "available" && (!result.goal || ["complete", "completed"].includes(result.goal.status))) {
+    if (result.status === "available" && (!result.goal || goalStatusIsComplete(result.goal.status))) {
       const intent = readGoalIntent(context.session);
       if (intent?.active && !intent.pending) await stopGoalIntent(sessionId, context, intent.id);
     }
@@ -1282,7 +1288,7 @@ function createService({
       // A new goal can become visible before Set acknowledgement saves its pin.
       // Only accepted Set/Resume may replace or reactivate a completed pin.
       if (result.goal && (assistantGoalObjective(result.goal.objective, pinned) !== pinned.objective ||
-          ["complete", "completed"].includes(pinned.status) && !["complete", "completed"].includes(result.goal.status))) return result;
+          goalStatusIsComplete(pinned.status) && !goalStatusIsComplete(result.goal.status))) return result;
       const status = result.goal?.status || "complete";
       if (pinned.status !== status) {
         await context.runtime.store.writeMetadataValue(sessionId, "assistant_routing_goal", JSON.stringify({ ...pinned, status }));
@@ -1547,14 +1553,7 @@ function createService({
       await options.onRepositoryWriteAcquired?.();
       return operation(context);
     }, { operation: operationName, waitMs: 10_000 });
-    if (result?.ok === false && result?.code === "vibe64_agent_write_mode_busy") {
-      const error = new Error(result.error || "Another session operation is starting. Try again in a moment.");
-      error.code = result.code;
-      error.details = result.details;
-      error.retryable = true;
-      throw error;
-    }
-    return result;
+    return throwIfAgentWriteBusy(result);
   }
 
   async function publishTerminalSessionChanged(
@@ -2234,10 +2233,9 @@ function createService({
 
   async function sessionWorkExecution(sessionId, input = {}, reason = "session-work") {
     const normalizedSessionId = String(sessionId || "").trim();
-    const runtime = input.runtime || await projectService.createRuntime({ inspectSource: false });
-    let session = input.session?.sessionId === normalizedSessionId
-      ? input.session
-      : await runtime.getSession(normalizedSessionId, { inspectSource: false });
+    const read = await sessionContext(normalizedSessionId, input);
+    const { runtime } = read;
+    let { session } = read;
     let execution = await codexGitCommand.sessionWorkSaveContext({
       session,
       sessionId: normalizedSessionId
@@ -2281,11 +2279,10 @@ function createService({
     sessionAgent,
     attachments: sessionAttachments,
     runAgentWrite: runMainAgentWrite,
-    readSessionContext: async (sessionId, options = {}) => {
-      const runtime = options.runtime || await projectService.createRuntime({ inspectSource: false });
-      const session = await runtime.getSession(sessionId, { inspectSource: false });
-      return { ...options, runtime, session };
-    },
+    // Always rereads the session; a conversation's caller may hold an older copy.
+    readSessionContext: async (sessionId, options = {}) => ({
+      ...options, ...await sessionContext(sessionId, { runtime: options.runtime })
+    }),
     prepareAgentSkills: prepareAgentSkillsInsideAgentWrite,
     publishSessionChanged: publishAgentSessionChanged,
     publishConversation: event => mainConversations.publishNative(event)
@@ -2394,10 +2391,7 @@ function createService({
     },
 
     async workspaceSetupIsPrepared(sessionId = "") {
-      const normalizedSessionId = assertValidVibe64SessionId(sessionId);
-      const runtime = await projectService.createRuntime({ inspectSource: false });
-      const session = await runtime.getSession(normalizedSessionId, { inspectSource: false });
-      return workspaceSetup.isPrepared({ runtime, session });
+      return workspaceSetup.isPrepared(await sessionContext(assertValidVibe64SessionId(sessionId)));
     },
 
     waitForWorkspaceSetup(sessionId = "") {
@@ -2624,14 +2618,7 @@ function createService({
           error: "Session id is required to record the Git command actor."
         };
       }
-      const runtime = input.runtime || await projectService.createRuntime({
-        inspectSource: false
-      });
-      const session = input.session?.sessionId === normalizedSessionId
-        ? input.session
-        : await runtime.getSession(normalizedSessionId, {
-            inspectSource: false
-          });
+      const { runtime, session } = await sessionContext(normalizedSessionId, input);
       const sessionSourceRoot = terminalSessionSourceRoot(session);
       if (!sessionSourceRoot) {
         return {
@@ -2904,14 +2891,7 @@ function createService({
 
     async inspectSessionWork(sessionId, input = {}) {
       const normalizedSessionId = String(sessionId || "").trim();
-      const runtime = input.runtime || await projectService.createRuntime({
-        inspectSource: false
-      });
-      const session = input.session?.sessionId === normalizedSessionId
-        ? input.session
-        : await runtime.getSession(normalizedSessionId, {
-            inspectSource: false
-          });
+      const { runtime, session } = await sessionContext(normalizedSessionId, input);
       const execution = input.inspectContributionPublication === true
         ? (await sessionWorkExecution(sessionId, { runtime, session }, "connected-publication-inspection")).execution
         : null;
@@ -2960,14 +2940,7 @@ function createService({
 
     async inspectSessionChanges(sessionId, input = {}) {
       const normalizedSessionId = String(sessionId || "").trim();
-      const runtime = input.runtime || await projectService.createRuntime({
-        inspectSource: false
-      });
-      const session = input.session?.sessionId === normalizedSessionId
-        ? input.session
-        : await runtime.getSession(normalizedSessionId, {
-            inspectSource: false
-          });
+      const { session } = await sessionContext(normalizedSessionId, input);
       const work = await inspectManagedSessionChanges({
         derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
         limit: input.limit,
@@ -2984,14 +2957,7 @@ function createService({
 
     async inspectSessionChangeDiff(sessionId, input = {}) {
       const normalizedSessionId = String(sessionId || "").trim();
-      const runtime = input.runtime || await projectService.createRuntime({
-        inspectSource: false
-      });
-      const session = input.session?.sessionId === normalizedSessionId
-        ? input.session
-        : await runtime.getSession(normalizedSessionId, {
-            inspectSource: false
-          });
+      const { session } = await sessionContext(normalizedSessionId, input);
       return inspectManagedSessionChangeDiff({
         derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
         lineLimit: input.lineLimit,
@@ -3299,7 +3265,7 @@ function createService({
         await sessionAgent.requireAssistantAccess(sessionId, context);
         const conversations = await context.runtime.store.listSessionConversations(sessionId);
         for (const metadata of [context.session.metadata, ...conversations.map((record) => record.routingMetadata || {})]) {
-          const routing = JSON.parse(metadata.assistant_routing_request || "null");
+          const routing = assistantRoutingRequestFromMetadata(metadata);
           if (assistantRoutingStatusIsPending(routing) || routing?.helper) fail("Finish pending routing and helper cleanup first.");
         }
         const saved = JSON.parse(context.session.metadata.assistant_changeover || "null");
@@ -3310,7 +3276,7 @@ function createService({
               goal?.goal && !["complete", "completed", "cancelled"].includes(goal.goal.status)) {
             fail("Finish the native goal before replacing its conversation.");
           }
-          const pinnedGoal = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
+          const pinnedGoal = assistantRoutingGoalFromMetadata(context.session.metadata);
           if (pinnedGoal && !["complete", "completed", "cancelled"].includes(pinnedGoal.status)) fail("Finish the routed goal first.");
           const native = await sessionAgent.sessionState(sessionId, context);
           if (native?.ok === false || native?.turn?.active || native?.terminal?.status === "running") {
@@ -3585,7 +3551,7 @@ function createService({
         if (saved.continuation.status === "accepted") {
           return { ok: true, integrationSetup: saved };
         }
-        const route = JSON.parse(context.session.metadata.assistant_routing_request || "null");
+        const route = assistantRoutingRequestFromMetadata(context.session.metadata);
         // A previously claimed delivery without a routing request is only
         // inspected. Never turn its old receipt into a fresh routed Send.
         if (saved.continuation.status === "sending" && route?.messageId !== saved.continuationMessageId) {
@@ -3742,7 +3708,7 @@ function createService({
           if (input.action === "set" && assistantRoutingFromMetadata(context.session.metadata)?.mode === "auto") {
             return { ok: false, code: "vibe64_goal_explicit_mode_required", error: "Choose Senior or Junior before starting or resuming a goal." };
           }
-          const pendingRoute = JSON.parse(context.session.metadata.assistant_routing_request || "null");
+          const pendingRoute = assistantRoutingRequestFromMetadata(context.session.metadata);
           if (assistantRoutingStatusIsPending(pendingRoute) || pendingRoute?.helper) {
             return { ok: false, error: "Finish or cancel the pending request before starting a goal." };
           }
@@ -3848,7 +3814,7 @@ function createService({
           ...(restartIntentId ? { waitMs: AGENT_WRITE_WAIT_MS } : {}) });
       }
       const context = await assistantSessionOptions(sessionId, input);
-      const pinned = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
+      const pinned = assistantRoutingGoalFromMetadata(context.session.metadata);
       // Validate the selected goal before recording the person's stop intent.
       // Native cleanup may fail, but a restart must never undo that intent.
       if (["pause", "cancel"].includes(input.action)) {
@@ -3935,15 +3901,10 @@ function createService({
     },
 
     async assertSessionRenewalIdle(sessionId, options = {}) {
-      const runtime = options.runtime || await projectService.createRuntime({
-        inspectSource: false
-      });
-      const session = options.session?.sessionId === sessionId
-        ? options.session
-        : await runtime.getSession(sessionId, { inspectSource: false });
+      const { runtime, session } = await sessionContext(sessionId, options);
       const records = await runtime.store.listSessionConversations(sessionId);
       const requests = [session.metadata, ...records.map((record) => record.routingMetadata || {})]
-        .map((metadata) => JSON.parse(metadata.assistant_routing_request || "null"));
+        .map(assistantRoutingRequestFromMetadata);
       if (requests.some((request) => assistantRoutingStatusIsPending(request) || request?.helper)) {
         throw Object.assign(new Error("Finish or cancel pending chat routing and reviews before renewing this session."), { code: "vibe64_assistant_routing_pending", retryable: true });
       }

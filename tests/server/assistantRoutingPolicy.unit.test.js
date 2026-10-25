@@ -11,7 +11,8 @@ import { runWithPracticeProjectContext } from "@local/vibe64-core/server/project
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
 import { assistantModePrompt, assistantGoalManagementMessage, assistantRoutingPrompt, assistantWorkflowInstructions, parseRoutingDecision, recommendedRoutingAssignments,
   routingAssignmentSelection, routingModelChoices, routingModelScore, routingRunsInChoices, resolveAssistantPurpose, assistantRoutingPreferences, assistantRoutingAutomation,
-  assistantRoutingSetupFor, assistantMainAiChanged, ASSISTANT_PURPOSE_ROLES, MAIN_CHAT_PURPOSES } from "@local/vibe64-runtime/shared/assistantRouting";
+  assistantRoutingSetupFor, assistantMainAiChanged, ASSISTANT_PURPOSE_ROLES, MAIN_CHAT_PURPOSES,
+  assistantRoutingGoalFromMetadata, assistantRoutingRequestFromMetadata, goalStatusIsComplete } from "@local/vibe64-runtime/shared/assistantRouting";
 import { curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import routingScores from "../../packages/vibe64-runtime/src/shared/assistantRoutingScores.json" with { type: "json" };
 
@@ -693,4 +694,18 @@ test("subscriptions run only in their own tool; key models list every tool that 
     ["gpt-6-sol", "codex_subscription", ["codex"], { engineId: "codex", reason: "chatgpt_plan" }],
     ["deepseek-v4-pro", "key", ["claude", "codex", "opencode"], undefined]
   ]);
+});
+
+test("routing metadata readers and goal completion share one definition", () => {
+  assert.equal(goalStatusIsComplete("complete"), true);
+  assert.equal(goalStatusIsComplete("completed"), true);
+  for (const status of ["active", "paused", "", undefined]) assert.equal(goalStatusIsComplete(status), false);
+  const metadata = {
+    assistant_routing_goal: JSON.stringify({ status: "active", objective: "Ship it" }),
+    assistant_routing_request: JSON.stringify({ status: "working", delivery: "accepted" })
+  };
+  assert.deepEqual(assistantRoutingGoalFromMetadata(metadata), { status: "active", objective: "Ship it" });
+  assert.deepEqual(assistantRoutingRequestFromMetadata(metadata), { status: "working", delivery: "accepted" });
+  assert.equal(assistantRoutingGoalFromMetadata({}), null);
+  assert.equal(assistantRoutingRequestFromMetadata(undefined), null);
 });

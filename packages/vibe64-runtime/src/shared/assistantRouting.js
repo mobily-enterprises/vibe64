@@ -92,6 +92,13 @@ function assistantRoutingFromMetadata(metadata = {}) {
     ? assistantRoutingPreferences(JSON.parse(metadata[ASSISTANT_ROUTING_METADATA])) : null;
 }
 
+// The pinned goal and the latest routed request a session's metadata records.
+const assistantRoutingGoalFromMetadata = (metadata = {}) => JSON.parse(metadata?.assistant_routing_goal || "null");
+const assistantRoutingRequestFromMetadata = (metadata = {}) => JSON.parse(metadata?.assistant_routing_request || "null");
+
+// Engines report a finished goal as either "complete" or "completed".
+const goalStatusIsComplete = (status) => status === "complete" || status === "completed";
+
 const isAssistantRoutingOwner = (actor) => !actor || actor.role === "owner";
 
 // A temporary chat's Custom model is the person's own choice, not main chat.
@@ -595,7 +602,7 @@ export { ASSISTANT_MODES, ASSISTANT_FIX_MODE, ASSISTANT_ROUTING_METADATA, ASSIST
   ASSISTANT_ROUTING_ROLE_DEFINITIONS, ASSISTANT_ROLE_DEFAULT_FOLLOWS, ASSISTANT_PURPOSE_ROLES, ASSISTANT_ROLE_PURPOSES, MAIN_CHAT_PURPOSES, ROUTING_REASONS,
   routingModelScore, resolveAssistantPurpose, assistantRoutingPreferences, assistantRoutingAutomation, assistantRoutingSetupFor, assistantRoutingSetupValues, assistantSetupRoleValue, assistantMainAiChanged,
   isAssistantRoutingOwner, isMainChatPurpose, needsMainChatApproval, routingRunsInChoices,
-  assistantRoutingFromMetadata, hasConnectedAssistantModels, routingModelChoices, recommendedRoutingAssignments, routingAssignmentSelection,
+  assistantRoutingFromMetadata, assistantRoutingGoalFromMetadata, assistantRoutingRequestFromMetadata, goalStatusIsComplete, hasConnectedAssistantModels, routingModelChoices, recommendedRoutingAssignments, routingAssignmentSelection,
   parseRoutingDecision, assistantRoutingPrompt, assistantWorkflowInstructions,
   assistantModeLabel, assistantModePrompt, assistantGoalObjective, assistantGoalManagementMessage, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel,
   assistantRoutingOutcomeNotice, assistantWorkflowUpgradeChanges };

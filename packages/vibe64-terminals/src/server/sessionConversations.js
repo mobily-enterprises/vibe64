@@ -9,6 +9,7 @@ import { parseIntegrationSetupRequest, normalizeVibe64AgentTaskResult, serialize
 import { assistantGoalManagementMessage, assistantGoalObjective, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingStatusIsPending,
   isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createAssistantRouting } from "./assistantRouting.js";
+import { throwIfAgentWriteBusy } from "@local/vibe64-runtime/server/agentWriteLock";
 import { requireCompletedConversationRewind, sendWithAssistantChangeover, sessionConversationKey } from "./assistantChangeover.js";
 import { createMainConversationBinding, readMainConversationHistory, MAIN_CONVERSATION_PRESENTATION } from "./mainConversationBinding.js";
 import { isNativeConversationBindingKey } from "./nativeConversationRetirement.js";
@@ -541,8 +542,7 @@ function createSessionConversations({
   const routing = createAssistantRouting({ systemRoot, allowAuto: false, agent: routingAgent, publish: publishSessionChanged,
     exclusive: async (id, options, operation) => {
       const result = await write(id, options, async (ctx) => operation(await routingContext(ctx, options.conversationId, { cleanup: options.routingCleanup === true })));
-      if (result?.code === "vibe64_agent_write_mode_busy") throw Object.assign(new Error(result.error), result);
-      return result;
+      return throwIfAgentWriteBusy(result);
     },
     prepareSelection: async (id, selection, ctx) => {
       const record = await recordFor(ctx.conversationContext, ctx.routingConversationId);
@@ -908,7 +908,7 @@ function createSessionConversations({
             if (observed.readError) throw new Error(observed.error);
             return completed;
           });
-          if (record?.code === "vibe64_agent_write_mode_busy") throw Object.assign(new Error(record.error), record);
+          throwIfAgentWriteBusy(record);
           if (record?.conversationId) await routing.afterTurn(sessionId, { payload: { agentRun: payload.temporaryRun } }, { ...options, conversationId: record.conversationId });
           return;
         } catch (error) {

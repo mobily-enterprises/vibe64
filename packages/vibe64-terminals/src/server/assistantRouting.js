@@ -9,7 +9,8 @@ import { VIBE64_ASSISTANT_SELECTION_METADATA, VIBE64_AGENT_EXECUTION_PROFILE_IDS
   serializeVibe64AssistantSelection, vibe64AssistantSelectionLabel, vibe64AssistantSelectionFromMetadata, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import {
   ROUTING_REASONS, assistantModeLabel, assistantModePrompt, assistantGoalObjective, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingFromMetadata,
-  assistantRoutingPrompt, parseRoutingDecision, assistantWorkflowInstructions, assistantRoutingOutcomeNotice
+  assistantRoutingPrompt, parseRoutingDecision, assistantWorkflowInstructions, assistantRoutingOutcomeNotice,
+  assistantRoutingGoalFromMetadata, goalStatusIsComplete
 } from "@local/vibe64-runtime/shared/assistantRouting";
 import { assistantReplyAsksPerson, latestAssistantMessageAwaitingUserReply } from "@local/vibe64-runtime/shared/conversationQuestions";
 
@@ -28,7 +29,7 @@ const OUTPUT_SCHEMA = {
   }
 };
 const MAX_WORKFLOW_STEPS = 8;
-const activeGoal = (goal) => goal && !["complete", "completed"].includes(goal.status);
+const activeGoal = (goal) => goal && !goalStatusIsComplete(goal.status);
 const workflowRole = state => state.stage === "review" && state.followup ? "senior" : state.resolvedMode;
 const activeMessage = state => state.followup || state.input;
 const usesWorkPlan = state => state.planInvolved === true;
@@ -60,7 +61,7 @@ export function prepareCopiedAssistantRouting(metadata = {}) {
     // Keep uncertain delivery and the original message/turn receipt intact.
     patch[STATE_KEY] = JSON.stringify(request);
   }
-  const goal = JSON.parse(metadata.assistant_routing_goal || "null");
+  const goal = assistantRoutingGoalFromMetadata(metadata);
   if (goal?.status === "active") patch.assistant_routing_goal = JSON.stringify({ ...goal, status: "paused" });
   return patch;
 }
@@ -118,7 +119,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
   }
   async function currentGoal(sessionId, context) {
     const native = await agent.readGoal(sessionId, context);
-    const pinned = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
+    const pinned = assistantRoutingGoalFromMetadata(context.session.metadata);
     return { pinned, goal: native?.status === "available" ? native.goal : native?.goal || pinned };
   }
   async function cleanupHelper(context, state) {
@@ -501,7 +502,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         // Steering keeps the running request's mode and model, also while its
         // finished reply only waits for a background task, so refuse it once the
         // saved Chat mode (or Custom model) differs. A goal's own mode governs its turns.
-        const goalPin = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
+        const goalPin = assistantRoutingGoalFromMetadata(context.session.metadata);
         const runningRequest = state?.status === "working" && state.delivery === "accepted" && !state.stopped;
         if (runningRequest && !options.purpose && !activeGoal(goalPin) && (state.mode !== preferences.mode ||
             state.mode === "custom" && state.override?.selection && !sameSelection(state.override.selection, preferences.override))) {
@@ -960,7 +961,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     const observed = await agent.readGoal(sessionId, context);
     if (observed?.status !== "available") return "unobserved";
     if (!activeGoal(observed.goal)) return "none";
-    const previous = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
+    const previous = assistantRoutingGoalFromMetadata(context.session.metadata);
     const current = previous?.selection || vibe64AssistantSelectionFromMetadata(context.session.metadata);
     if ((selection?.engineId || current.engineId) !== current.engineId || preferences.mode === "auto") return "after-goal";
     const goal = { ...observed.goal, objective: assistantGoalObjective(observed.goal.objective, previous) };
@@ -989,7 +990,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
   async function prepareGoal(sessionId, input, context) {
     const preferences = assistantRoutingFromMetadata(context.session.metadata);
     if (!preferences) return { input, context };
-    const previous = JSON.parse(context.session.metadata.assistant_routing_goal || "null");
+    const previous = assistantRoutingGoalFromMetadata(context.session.metadata);
     if (preferences.mode === "auto" && !(input.action === "resume" && previous)) throw failure("Choose Senior or Junior before starting a goal.");
     const rebind = input.action === "rebind";
     if (rebind && !input.goal) throw failure("The native goal is unavailable. Read its status again before changing its model.");
