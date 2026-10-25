@@ -8,6 +8,8 @@ import { registerColleagueFocus } from "./registerColleagueFocus.js";
 const Vibe64ColleagueProvider = defineFeature({
   id: "vibe64.colleague", domain: "vibe64-colleague",
   requires: { accounts: "vibe64.accounts", http: "runtime.http", terminals: "vibe64.terminals", events: "runtime.events" },
+  // A composed host's own project views for navigation.open: [{ pane, meaning }].
+  optional: { navigationPanes: "vibe64.colleague.navigation-panes" },
   provides: { colleague: "vibe64.colleague" },
   actionDefaults: { channels: ["api", "automation", "internal"], surfaces: ["app"] },
   setup({ accounts, http, terminals, events }, { actionCatalogue }) {
@@ -35,7 +37,7 @@ const Vibe64ColleagueProvider = defineFeature({
         conversationSelectionSchema: colleagueConversationSelectionSchema }
     } };
   },
-  actions: ({ colleague }) => createColleagueActions(colleague),
+  actions: ({ colleague, navigationPanes }) => createColleagueActions(colleague, { navigationPanes: navigationPanes || [] }),
   shutdown(_deps, { outputs }) { return outputs.colleague.close(); }
 });
 

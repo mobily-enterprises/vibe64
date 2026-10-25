@@ -1,6 +1,7 @@
 import { computed, inject, nextTick, onScopeDispose, ref, unref, watch } from "vue";
 import { isNavigationFailure, NavigationFailureType, useRoute, useRouter } from "vue-router";
 import { applyLearningNavigation, learningPanelFocus, learningPanelMatches } from "@local/vibe64-colleague/shared/learning-focus";
+import { VIBE64_COLLEAGUE_PANES } from "@local/vibe64-colleague/shared/navigation-panes";
 import { projectAppPath, projectSlugFromRoute } from "@/lib/vibe64ProjectScope.js";
 import {
   VIBE64_ASSISTANT_HOST_KEY,
@@ -15,9 +16,6 @@ import {
   VIBE64_PAGE_FOCUS_KEY
 } from "@/lib/vibe64AssistantHost.js";
 
-// The project views Colleague can open, each the dashboard page of that name.
-const VIBE64_COLLEAGUE_PANES = Object.freeze(["preview", "settings", "env", "integrations", "access", "publish", "history",
-  "health", "session", "changes", "repository", "files", "database", "system", "ai-terminal", "issues", "pull-requests"]);
 const NAVIGATION_TIMEOUT_MS = 15000;
 const TARGET_CHANGED = "The browser navigation target changed before it opened.";
 
@@ -313,4 +311,4 @@ function useVibe64ColleagueNavigation({ panes = [], routePanes = {}, actorKey = 
   return { focus, navigate, currentView, restoringSelection, selectionError };
 }
 
-export { VIBE64_COLLEAGUE_PANES, useVibe64ColleagueNavigation };
+export { useVibe64ColleagueNavigation };

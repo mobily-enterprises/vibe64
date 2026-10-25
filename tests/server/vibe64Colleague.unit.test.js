@@ -5649,6 +5649,19 @@ test("a lesson's teacher watches only its attempt's practice project, and the wa
   assert.equal(await exists(path.join(f.root, "colleague", "NDI", "learn", LESSON_ATTEMPT)), false);
 });
 
+test("a composed host adds its own project views to navigation.open, each with its meaning", () => {
+  const open = actions => actions.find(({ id }) => id === "vibe64.colleague.navigation.open");
+  const local = open(createColleagueActions({}));
+  assert.ok(!local.input.schema.structure.pane.enum.includes("extra-view"));
+  const composed = open(createColleagueActions({}, { navigationPanes: [{ pane: "extra-view", meaning: "the host's extra view" }] }));
+  assert.equal(composed.input.schema.structure.pane.enum.at(-1), "extra-view");
+  assert.match(composed.extensions.assistant.description, /extra-view means the host's extra view/u);
+  assert.doesNotMatch(local.extensions.assistant.description, /extra-view/u);
+  for (const navigationPanes of [[{ pane: "settings", meaning: "again" }], [{ pane: "Extra", meaning: "x" }], [{ pane: "extra-view" }]]) {
+    assert.throws(() => createColleagueActions({}, { navigationPanes }), /new lowercase view name with a meaning/u);
+  }
+});
+
 test("Colleague's own browser endpoints are not Colleague tools; its exposed actions are described", () => {
   const actions = createColleagueActions({});
   for (const name of ["state.read", "conversation.start-fresh", "conversation.history.read", "conversation.history-page.read", "focus.update",

@@ -17,6 +17,8 @@ import { watchColleagueLearningRequests } from "../../packages/vibe64-colleague/
 import { selectionLabels } from "../../packages/vibe64-colleague/src/client/colleagueSelectionLabels.js";
 import { COLLEAGUE_FOCUS_RELEASE, COLLEAGUE_FOCUS_UPDATE } from "../../packages/vibe64-colleague/src/shared/focusRealtime.js";
 import * as learningFocus from "../../packages/vibe64-colleague/src/shared/learningFocus.js";
+import * as navigationPanes from "../../packages/vibe64-colleague/src/shared/navigationPanes.js";
+import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/actions.js";
 
 // This source-evaluating renderer compiles the exercised SFCs below. Package
 // barrels need only presentation placeholders; all JavaScript stays installed.
@@ -2118,6 +2120,7 @@ async function mountLocalColleagueHost(t, { route, push = async target => { Obje
     "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {} },
     "@/composables/useVibe64LocalAvatarPreferences.js": { useVibe64LocalAvatarPreferences: () => ({ avatars: vue.ref({ colleague: "merc", coding: "yu" }) }) },
     "@local/vibe64-colleague/shared/learning-focus": learningFocus,
+    "@local/vibe64-colleague/shared/navigation-panes": navigationPanes,
     "@local/vibe64-colleague/client": { Vibe64Colleague: { props: ["focus", "navigate", "request"],
       setup(props) { received = props; return () => null; } } },
     "@jskit-ai/http-web/client/lib/httpClient": { getHttpWebClient: () => ({ request: async () => ({}) }) },
@@ -2192,13 +2195,27 @@ test("the local Colleague host opens a session's Main chat itself, without carry
   assert.equal(focus.sessionId, "s1");
 });
 
+test("the local Colleague host opens every project view that navigation.open offers", async t => {
+  const offered = createColleagueActions({}).find(({ id }) => id === "vibe64.colleague.navigation.open").input.schema.structure.pane.enum;
+  assert.deepEqual(offered, [...navigationPanes.VIBE64_COLLEAGUE_PANES]);
+  const route = vue.reactive({ path: "/app/project/demo", query: {} });
+  const pushed = [];
+  const { navigation } = await mountLocalColleagueHost(t, { route, push: async target => { pushed.push(target); } });
+  const openings = [];
+  for (const pane of offered) {
+    const sessionId = navigationPanes.VIBE64_COLLEAGUE_SESSION_PANES.includes(pane) ? { sessionId: "s1" } : {};
+    openings.push(navigation.value({ projectSlug: "demo", pane, ...sessionId }).catch(error => error));
+    await flush();
+    assert.equal(pushed.at(-1)?.path, pane === "preview" ? "/app/project/demo" : `/app/project/demo/dashboard/${pane}`, pane);
+  }
+  for (const result of await Promise.all(openings.slice(0, -1))) assert.match(result.message, /changed before it opened/u);
+});
+
 test("the local Colleague host refuses views it has no page for, and invalid combinations before routing", async t => {
   const route = vue.reactive({ path: "/app/project/demo", query: {} });
   const pushed = [];
   const { navigation } = await mountLocalColleagueHost(t, { route, push: async target => { pushed.push(target); } });
-  for (const pane of ["repository-settings", "resources", "deploy", "system-repair"]) {
-    await assert.rejects(navigation.value({ projectSlug: "demo", pane }), /This project view is unavailable/u);
-  }
+  await assert.rejects(navigation.value({ projectSlug: "demo", pane: "made-up-view" }), /This project view is unavailable/u);
   await assert.rejects(navigation.value({ projectSlug: "demo", pane: "database", databaseView: "data", databaseTable: "public.users" }),
     /exact session and Database Data view/u);
   await assert.rejects(navigation.value({ projectSlug: "demo", pane: "integrations", integrationEnvironment: "development" }),

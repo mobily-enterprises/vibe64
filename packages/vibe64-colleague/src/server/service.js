@@ -1,5 +1,6 @@
 import { learningPlaceOpenTo, learningVocabulary, trainingGuideCommand, trainingGuideRequest } from "@local/vibe64-training/shared/learning-vocabulary";
 import { createColleagueNavigationCoordination } from "./navigationCoordination.js";
+import { VIBE64_COLLEAGUE_SESSION_PANES } from "../shared/navigationPanes.js";
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -1656,7 +1657,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           (input.integrationEnvironment !== "production" && !input.sessionId))) {
         return { ok: false, error: "Choose Integrations and either a development session or the production environment." };
       }
-      if (!input.sessionId && (input.conversationId || ["session", "changes", "repository", "files", "database", "system", "ai-terminal"].includes(input.pane))) {
+      if (!input.sessionId && (input.conversationId || VIBE64_COLLEAGUE_SESSION_PANES.includes(input.pane))) {
         return { ok: false, error: "Choose the exact session before opening this conversation or session view." };
       }
       const connection = state.connections.get(context.colleague?.clientId);

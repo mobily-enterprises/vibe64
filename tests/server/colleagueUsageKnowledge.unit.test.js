@@ -79,7 +79,7 @@ test("usage actions share native authentication, require no project and validate
   let user = { uid: "member-1", username: "member", role: "member" };
   registerVibe64ActionContext(actions, { resolveUser: async () => user,
     authorizeProject: () => { assert.fail("Usage lookup must not open or authorize a project."); } });
-  const definitions = createColleagueActions({}, usage).filter(definition => definition.id.includes(".usage."));
+  const definitions = createColleagueActions({}, { usage }).filter(definition => definition.id.includes(".usage."));
   assert.equal(definitions.length, 2);
   assert.ok(definitions.every(definition => definition.kind === "query"));
   actions.register({ contributorId: "usage-proof", domain: "vibe64", actions: definitions.map(definition => ({

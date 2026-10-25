@@ -56,6 +56,7 @@ registers current focus only, without replaying stale focus or resuming watches.
 - `packages/vibe64-core/src/server/learnThreads.js`
 - `packages/vibe64-colleague/src/server/conversationRecord.js`
 - `packages/vibe64-colleague/src/shared/learningFocus.js`
+- `packages/vibe64-colleague/src/shared/navigationPanes.js`
 - `packages/vibe64-colleague/src/client/Vibe64Colleague.vue`
 - `packages/vibe64-colleague/src/client/colleagueNavigation.js`
 - `src/composables/useVibe64ColleagueNavigation.js`
@@ -879,8 +880,15 @@ command (its settled focus and what it highlighted) before Colleague reports
 it. Project/session navigation retains its separate project-authorized
 action. Opening a settings page does not authorize changing its settings.
 
-Project navigation accepts an enumerated project/dashboard pane. Session views
-and temporary conversations require an exact session ID. When a session is
+Project navigation accepts an enumerated project/dashboard pane. One shared
+list in `shared/navigationPanes.js` names them: `navigation.open` offers exactly
+those, and every host's browser navigator opens each of them. A composed host
+adds its own views to both sides: on the server by providing the optional
+`vibe64.colleague.navigation-panes` capability (`{ pane, meaning }` each, which
+also extends the tool's description), and in the browser through
+`useVibe64ColleagueNavigation({ panes })`. A pane outside a host's list is
+refused as unavailable. Session views and temporary conversations require an
+exact session ID. When a session is
 supplied, omitting the temporary conversation selects Main; keeping a temporary
 chat selected requires its ID. The host acknowledges the actual route and loaded
 conversation. This capability opens existing views without giving Colleague

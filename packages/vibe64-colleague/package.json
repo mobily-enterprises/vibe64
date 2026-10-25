@@ -9,7 +9,8 @@
     "./server": "./src/server/Vibe64ColleagueProvider.js",
     "./server/service": "./src/server/service.js",
     "./server/conversationUpgrade": "./src/server/conversationUpgrade.js",
-    "./shared/learning-focus": "./src/shared/learningFocus.js"
+    "./shared/learning-focus": "./src/shared/learningFocus.js",
+    "./shared/navigation-panes": "./src/shared/navigationPanes.js"
   },
   "jskit": {
     "kind": "runtime",
