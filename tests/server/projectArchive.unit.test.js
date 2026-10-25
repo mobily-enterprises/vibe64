@@ -226,6 +226,36 @@ test("one uninterrupted deletion lists each archive once when created and once w
   });
 });
 
+test("the namespace archive leaves out rebuildable output at each session source root, exactly once", async () => {
+  await withArchiveTest(async ({ projectContext }) => {
+    await projectContext.createWorkspaceProjectRecord({ slug: "lean" });
+    const root = path.join(projectContext.projectsRoot, "lean");
+    const source = path.join(root, "sessions", "active", "s1", "source");
+    for (const dir of ["node_modules/pkg", "src/build", "dist"]) await mkdir(path.join(source, dir), { recursive: true });
+    for (const file of ["node_modules/pkg/index.js", "src/build/keep.js", "dist/app.js"]) await writeFile(path.join(source, file), "x\n");
+    let createArgs = [];
+    const service = createProjectArchiveService({
+      closeProjectRuntime: async () => ({ ok: true }),
+      projectContext,
+      runCommand: async (input) => {
+        if (input.args.some((entry) => String(entry).endsWith(`${path.sep}source.tgz.partial`))) createArgs = input.args;
+        return runVibe64Command(input);
+      }
+    });
+    const completed = await service.archiveProject({ slug: "lean" });
+    const excludes = createArgs.flatMap((entry, index) => (createArgs[index - 1] === "--exclude" ? [entry] : []));
+    assert.equal(excludes.length, 20);
+    assert.deepEqual(excludes.slice(0, 2), ["lean/sessions/*/*/source/.jskit/cache", "lean/sessions/*/*/source/.jskit/cache/*"]);
+    assert.ok(excludes.includes("lean/sessions/*/*/source/node_modules"));
+    assert.ok(excludes.every((pattern) => pattern.startsWith("lean/sessions/*/*/source/") &&
+      !pattern.slice("lean/".length).includes("sessions/*/*/source/sessions")), "the session prefix appears once");
+    const { stdout } = await execFileAsync("tar", ["-tzf", path.join(completed.bundlePath, "source.tgz")]);
+    assert.ok(stdout.includes("lean/sessions/active/s1/source/src/build/keep.js"), "nested source directories are kept");
+    assert.ok(!stdout.includes("node_modules"));
+    assert.ok(!stdout.includes("source/dist"));
+  });
+});
+
 test("archive recovery rehearsal restores session source and conversation ACLs and detects corruption", async () => {
   await withArchiveTest(async ({ projectContext, tempRoot }) => {
     const slug = "restore-rehearsal";

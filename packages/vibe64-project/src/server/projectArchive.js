@@ -52,9 +52,10 @@ const SESSION_SOURCE_DISPOSABLE_PATHS = Object.freeze([
   "out",
   "vendor"
 ]);
-const PROJECT_NAMESPACE_DISPOSABLE_PATHS = Object.freeze([
-  ...SESSION_SOURCE_DISPOSABLE_PATHS.map((entry) => `sessions/*/*/source/${entry}`)
-]);
+// Rebuildable output at the root of every session source in the namespace.
+const PROJECT_NAMESPACE_DISPOSABLE_PATHS = Object.freeze(
+  SESSION_SOURCE_DISPOSABLE_PATHS.map((entry) => `sessions/*/*/source/${entry}`)
+);
 const NO_HOST_RESOURCES = Object.freeze({
   archive: async () => [],
   remove: async () => {},
@@ -1025,33 +1026,10 @@ function sha256Text(value = "") {
   return createHash("sha256").update(String(value || "")).digest("hex");
 }
 
+// Each disposable path is relative to the archived root (already carrying any
+// session-source prefix); tar leaves out that path and its contents.
 function tarExcludeArgs(slug = "", disposablePaths = []) {
-  return disposablePaths
-    .flatMap((entry) => tarExcludePatterns(slug, entry))
-    .flatMap((pattern) => ["--exclude", pattern]);
-}
-
-function tarExcludePatterns(slug = "", entry = "") {
-  const normalized = String(entry || "").trim().replaceAll("\\", "/").replace(/^\/+|\/+$/gu, "");
-  if (!normalized) {
-    return [];
-  }
-  if (normalized.includes("/")) {
-    return [
-      `${slug}/${normalized}`,
-      `${slug}/${normalized}/*`,
-      `${slug}/sessions/*/*/source/${normalized}`,
-      `${slug}/sessions/*/*/source/${normalized}/*`
-    ];
-  }
-  return [
-    `${slug}/${normalized}`,
-    `${slug}/*/${normalized}`,
-    `${slug}/*/*/${normalized}`,
-    `${slug}/sessions/*/*/source/${normalized}`,
-    `${slug}/sessions/*/*/source/${normalized}/*`,
-    `*/${normalized}`
-  ];
+  return disposablePaths.flatMap((entry) => ["--exclude", `${slug}/${entry}`, "--exclude", `${slug}/${entry}/*`]);
 }
 
 async function assertNonEmptyFile(filePath = "", code = "vibe64_project_archive_missing") {

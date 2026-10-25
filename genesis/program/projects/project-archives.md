@@ -40,8 +40,9 @@ The bundle is `<archiveRoot>/<slug>/<UTC>-<slug>/` (default archive root
 - `source.tgz`: the project namespace, tarred with `--acls --xattrs
   --numeric-owner` from the namespace's parent. Rebuildable dependencies are
   left out: `node_modules`, `dist`, `build`, `out`, `coverage`, `vendor`,
-  `.next`, `.turbo`, `.jskit/cache` and `cmake-build-*`, in the namespace and in
-  every `sessions/*/*/source`.
+  `.next`, `.turbo`, `.jskit/cache` and `cmake-build-*`, at the root of every
+  session source (`<slug>/sessions/*/*/source/<path>` and its contents); a
+  directory of that name deeper in the source is kept.
 - `runtime-state.tgz`: the runtime root (`<systemRoot>/projects/<slug>`), without
   session Drop Zones.
 - `resource-evidence.json` and `manifest.json` (`vibe64.project-archive-bundle`,
