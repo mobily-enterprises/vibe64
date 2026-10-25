@@ -4,6 +4,10 @@ import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { usePageActivity } from "@/lib/vibe64PageActivity.js";
 import {
+  normalizeSourceEditorDirectoryPaths,
+  normalizeSourceEditorPath
+} from "@/lib/vibe64SourceEditorLinks.js";
+import {
   vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
 
@@ -46,10 +50,6 @@ const SOURCE_EDITOR_TREE_PAGE_SIZE = 20;
 const SOURCE_EDITOR_REMOTE_CHANGE_MESSAGE = "This file changed in another window. Reload it before saving.";
 let sourceExplanationClientIdCounter = 0;
 
-function normalizeEditorPath(value = "") {
-  return String(value || "").trim().replaceAll("\\", "/").replace(/^\.\/+/u, "");
-}
-
 function normalizeSourceEditorSyncValue(value = "") {
   return String(value || "").trim();
 }
@@ -61,14 +61,14 @@ function sourceEditorFileChangePayloadMatches({
   projectSlug = "",
   sessionId = ""
 } = {}) {
-  const normalizedPath = normalizeEditorPath(path);
+  const normalizedPath = normalizeSourceEditorPath(path);
   const normalizedProjectSlug = normalizeSourceEditorSyncValue(projectSlug);
   const normalizedSessionId = normalizeSourceEditorSyncValue(sessionId);
   if (
     !normalizedPath ||
     !normalizedProjectSlug ||
     !normalizedSessionId ||
-    normalizeEditorPath(payload?.path) !== normalizedPath ||
+    normalizeSourceEditorPath(payload?.path) !== normalizedPath ||
     normalizeSourceEditorSyncValue(payload?.projectSlug) !== normalizedProjectSlug ||
     normalizeSourceEditorSyncValue(payload?.sessionId) !== normalizedSessionId ||
     vibe64RealtimePayloadFromCurrentTab(payload, {
@@ -84,13 +84,6 @@ function normalizeEditorQuery(value = "") {
   return String(value || "").trim();
 }
 
-function normalizePolicyDirectories(value = []) {
-  return [...new Set((Array.isArray(value) ? value : [])
-    .map((directoryPath) => normalizeEditorPath(directoryPath).replace(/\/+$/u, ""))
-    .filter(Boolean))]
-    .sort((left, right) => left.localeCompare(right));
-}
-
 function normalizeSourceEditorPolicy(value = {}) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? { ...value }
@@ -102,7 +95,7 @@ function normalizeFileMatches(value = []) {
     .map((file = {}) => ({
       language: String(file.language || ""),
       name: String(file.name || ""),
-      path: normalizeEditorPath(file.path)
+      path: normalizeSourceEditorPath(file.path)
     }))
     .filter((file) => file.path);
 }
@@ -112,7 +105,7 @@ function normalizeSearchResults(value = []) {
     .map((result = {}) => ({
       column: Math.max(1, Number(result.column || 1)),
       line: Math.max(1, Number(result.line || 1)),
-      path: normalizeEditorPath(result.path),
+      path: normalizeSourceEditorPath(result.path),
       preview: String(result.preview || "")
     }))
     .filter((result) => result.path);
@@ -123,7 +116,7 @@ function normalizeResolvedSourceEditorPath(value = {}) {
     ? value
     : {};
   return {
-    path: normalizeEditorPath(source.path || source.file?.path),
+    path: normalizeSourceEditorPath(source.path || source.file?.path),
     resolved: source.resolved === true
   };
 }
@@ -211,7 +204,7 @@ function normalizeExplanation(value = null) {
       endColumn: Math.max(1, Number(sourceRange.endColumn || 1)),
       endLine: Math.max(1, Number(sourceRange.endLine || 1)),
       language: String(sourceRange.language || ""),
-      path: normalizeEditorPath(sourceRange.path),
+      path: normalizeSourceEditorPath(sourceRange.path),
       scope: String(sourceRange.scope || "selection"),
       ...(sourceRange.presentation ? { presentation: sourceRange.presentation } : {}),
       ...(sourceRange.fileHash ? { fileHash: String(sourceRange.fileHash) } : {}),
@@ -232,7 +225,7 @@ function normalizeTreeNode(value = null) {
     return null;
   }
   const type = String(value.type || "");
-  const path = normalizeEditorPath(value.path);
+  const path = normalizeSourceEditorPath(value.path);
   if (type === "file") {
     return {
       language: String(value.language || ""),
@@ -280,7 +273,7 @@ function mergeDirectoryChildren(existingChildren = [], pageChildren = [], append
 }
 
 function treeNodeKey(node = {}) {
-  return normalizeEditorPath(node.path) || String(node.name || "");
+  return normalizeSourceEditorPath(node.path) || String(node.name || "");
 }
 
 function sortTreeNodes(children = []) {
@@ -293,7 +286,7 @@ function sortTreeNodes(children = []) {
 }
 
 function mergeDirectoryPage(root = null, directoryPath = "", page = null, append = false) {
-  const normalizedPath = normalizeEditorPath(directoryPath);
+  const normalizedPath = normalizeSourceEditorPath(directoryPath);
   const normalizedPage = normalizeTreeNode(page);
   if (!normalizedPage) {
     return root;
@@ -308,7 +301,7 @@ function mergeDirectoryPage(root = null, directoryPath = "", page = null, append
     if (!node || node.type !== "directory") {
       return node;
     }
-    if (normalizeEditorPath(node.path) === normalizedPath) {
+    if (normalizeSourceEditorPath(node.path) === normalizedPath) {
       return {
         ...node,
         ...normalizedPage,
@@ -356,11 +349,11 @@ function mergeRevealTree(root = null, revealTree = null) {
 }
 
 function findTreeDirectory(root = null, directoryPath = "") {
-  const normalizedPath = normalizeEditorPath(directoryPath);
+  const normalizedPath = normalizeSourceEditorPath(directoryPath);
   if (!root || root.type !== "directory") {
     return null;
   }
-  if (normalizeEditorPath(root.path) === normalizedPath) {
+  if (normalizeSourceEditorPath(root.path) === normalizedPath) {
     return root;
   }
   for (const child of Array.isArray(root.children) ? root.children : []) {
@@ -373,17 +366,17 @@ function findTreeDirectory(root = null, directoryPath = "") {
 }
 
 function loadedFileAncestorDirectoryPaths(root = null, filePath = "", ancestors = []) {
-  const normalizedFilePath = normalizeEditorPath(filePath);
+  const normalizedFilePath = normalizeSourceEditorPath(filePath);
   if (!root || !normalizedFilePath) {
     return null;
   }
   if (root.type === "file") {
-    return normalizeEditorPath(root.path) === normalizedFilePath ? ancestors : null;
+    return normalizeSourceEditorPath(root.path) === normalizedFilePath ? ancestors : null;
   }
   if (root.type !== "directory") {
     return null;
   }
-  const normalizedDirectoryPath = normalizeEditorPath(root.path);
+  const normalizedDirectoryPath = normalizeSourceEditorPath(root.path);
   const childAncestors = normalizedDirectoryPath
     ? [...ancestors, normalizedDirectoryPath]
     : ancestors;
@@ -402,7 +395,7 @@ function loadedTreeDirectoryPaths(root = null) {
     if (!node || node.type !== "directory") {
       return;
     }
-    const normalizedPath = normalizeEditorPath(node.path);
+    const normalizedPath = normalizeSourceEditorPath(node.path);
     if (normalizedPath && node.loaded === true) {
       paths.push(normalizedPath);
     }
@@ -444,7 +437,7 @@ function sourceEditorExplanationPromptText(filePath = "", range = {}) {
 }
 
 function sourceEditorExplanationTitle(filePath = "", range = {}) {
-  const name = normalizeEditorPath(filePath).split("/").filter(Boolean).pop() || "Code";
+  const name = normalizeSourceEditorPath(filePath).split("/").filter(Boolean).pop() || "Code";
   return range.scope === "file"
     ? `${name} full file`
     : `${name} lines ${range.startLine}-${range.endLine}`;
@@ -462,7 +455,7 @@ function localSourceExplanation({
     endColumn: Math.max(1, Number(range.endColumn || 1)),
     endLine: Math.max(1, Number(range.endLine || 1)),
     language: String(range.language || ""),
-    path: normalizeEditorPath(filePath),
+    path: normalizeSourceEditorPath(filePath),
     scope: String(range.scope || "selection"),
     ...(range.presentation ? { presentation: range.presentation } : {}),
     ...(range.symbolId ? { symbolId: range.symbolId } : {}),
@@ -740,7 +733,7 @@ function useVibe64SourceEditor({
   }
 
   function treePathKey(value = "") {
-    return normalizeEditorPath(value);
+    return normalizeSourceEditorPath(value);
   }
 
   function setTreePathLoading(path = "", loading = false) {
@@ -833,7 +826,7 @@ function useVibe64SourceEditor({
   function revealLoadedFilePath(filePath = "") {
     const ancestors = loadedFileAncestorDirectoryPaths(tree.value, filePath);
     if (ancestors) {
-      revealedDirectoryPaths.value = normalizePolicyDirectories(ancestors);
+      revealedDirectoryPaths.value = normalizeSourceEditorDirectoryPaths(ancestors);
     }
   }
 
@@ -921,7 +914,7 @@ function useVibe64SourceEditor({
     reveal = true
   } = {}) {
     const file = response.file || {};
-    const filePath = normalizeEditorPath(file.path || fallbackPath);
+    const filePath = normalizeSourceEditorPath(file.path || fallbackPath);
     if (!filePath) {
       return false;
     }
@@ -954,7 +947,7 @@ function useVibe64SourceEditor({
   }
 
   async function openFile(filePath = "", options = {}) {
-    const normalizedPath = normalizeEditorPath(filePath);
+    const normalizedPath = normalizeSourceEditorPath(filePath);
     if (!normalizedPath || !canLoad.value) {
       return false;
     }
@@ -1019,7 +1012,7 @@ function useVibe64SourceEditor({
   }
 
   async function createFile(filePath = "") {
-    const normalizedPath = normalizeEditorPath(filePath);
+    const normalizedPath = normalizeSourceEditorPath(filePath);
     if (!normalizedPath || !canLoad.value || creatingFile.value) {
       return false;
     }
@@ -1136,7 +1129,7 @@ function useVibe64SourceEditor({
     hash = "",
     path = ""
   } = {}) {
-    const changedPath = normalizeEditorPath(path);
+    const changedPath = normalizeSourceEditorPath(path);
     const changedHash = normalizeSourceEditorSyncValue(hash);
     if (!changedPath || changedPath !== selectedPath.value || (changedHash && changedHash === savedHash.value)) {
       return;
@@ -1170,7 +1163,7 @@ function useVibe64SourceEditor({
   async function applyObservedFileChange(payload = {}) {
     if (
       normalizeSourceEditorSyncValue(payload.sessionId) !== currentSessionId.value ||
-      normalizeEditorPath(payload.path) !== selectedPath.value
+      normalizeSourceEditorPath(payload.path) !== selectedPath.value
     ) {
       return;
     }
@@ -1250,7 +1243,7 @@ function useVibe64SourceEditor({
   }
 
   async function openFileMatch(filePath = "") {
-    const normalizedPath = normalizeEditorPath(filePath);
+    const normalizedPath = normalizeSourceEditorPath(filePath);
     if (!normalizedPath) {
       return;
     }
@@ -1264,7 +1257,7 @@ function useVibe64SourceEditor({
     fromPath = selectedPath.value,
     target = ""
   } = {}) {
-    const normalizedFromPath = normalizeEditorPath(fromPath);
+    const normalizedFromPath = normalizeSourceEditorPath(fromPath);
     const normalizedTarget = String(target || "").trim();
     if (!normalizedFromPath || !normalizedTarget || !canLoad.value) {
       return false;
@@ -1527,7 +1520,7 @@ function useVibe64SourceEditor({
   async function retryExplanation() {
     const explanation = activeExplanation.value;
     const range = explanation?.sourceRange || {};
-    const explanationPath = normalizeEditorPath(range.path);
+    const explanationPath = normalizeSourceEditorPath(range.path);
     if (!explanationPath || explanationBusy.value || explanationClosing.value) {
       return;
     }
@@ -1732,7 +1725,7 @@ function useVibe64SourceEditor({
   }
 
   function openSearchResult(result = {}) {
-    const filePath = normalizeEditorPath(result.path);
+    const filePath = normalizeSourceEditorPath(result.path);
     if (!filePath) {
       return;
     }
@@ -1822,7 +1815,7 @@ function useVibe64SourceEditor({
   }
 
   function openRequest(request = {}) {
-    const filePath = normalizeEditorPath(request.path);
+    const filePath = normalizeSourceEditorPath(request.path);
     if (!filePath) {
       return;
     }

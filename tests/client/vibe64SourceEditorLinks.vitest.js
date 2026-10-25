@@ -5,9 +5,25 @@ import {
 } from "@jskit-ai/assistant-core/shared/conversation";
 import {
   markdownDocumentLinkTarget,
+  normalizeSourceEditorDirectoryPaths,
+  normalizeSourceEditorPath,
   sourceEditorLinkTarget,
   sourcePathReferenceAtLineColumn
 } from "../../src/lib/vibe64SourceEditorLinks.js";
+
+describe("source editor paths", () => {
+  it("spells a project-relative path one way", () => {
+    expect(normalizeSourceEditorPath("  .\\src\\app.js ")).toBe("src/app.js");
+    expect(normalizeSourceEditorPath(".//src/app.js")).toBe("src/app.js");
+    expect(normalizeSourceEditorPath(null)).toBe("");
+  });
+
+  it("lists distinct sorted directories without trailing slashes", () => {
+    expect(normalizeSourceEditorDirectoryPaths(["src/", "./docs", "src", "", "a\\b/"]))
+      .toEqual(["a/b", "docs", "src"]);
+    expect(normalizeSourceEditorDirectoryPaths("src")).toEqual([]);
+  });
+});
 
 describe("source editor chat links", () => {
   it("parses markdown links in long text inline parts", () => {

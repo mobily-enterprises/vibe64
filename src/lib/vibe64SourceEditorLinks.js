@@ -39,6 +39,19 @@ function splitLineSuffix(value = "") {
   };
 }
 
+// The source editor's one spelling of a project-relative path.
+function normalizeSourceEditorPath(value = "") {
+  return String(value || "").trim().replaceAll("\\", "/").replace(/^\.\/+/u, "");
+}
+
+// Distinct, sorted directory paths without trailing slashes.
+function normalizeSourceEditorDirectoryPaths(value = []) {
+  return [...new Set((Array.isArray(value) ? value : [])
+    .map((directoryPath) => normalizeSourceEditorPath(directoryPath).replace(/\/+$/u, ""))
+    .filter(Boolean))]
+    .sort((left, right) => left.localeCompare(right));
+}
+
 function normalizeRelativeSourcePath(value = "") {
   const normalized = String(value || "")
     .trim()
@@ -207,6 +220,8 @@ function sourcePathReferenceTarget(value = "") {
 
 export {
   markdownDocumentLinkTarget,
+  normalizeSourceEditorDirectoryPaths,
+  normalizeSourceEditorPath,
   sourceEditorLinkTarget,
   sourcePathReferenceAtLineColumn
 };

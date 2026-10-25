@@ -713,7 +713,12 @@ import {
 import Vibe64SourceInterface from "./Vibe64SourceInterface.vue";
 import { Marked } from "marked";
 import GithubMarkdown from "@/components/studio/GithubMarkdown.vue";
-import { markdownDocumentLinkTarget, sourcePathReferenceAtLineColumn } from "@/lib/vibe64SourceEditorLinks.js";
+import {
+  markdownDocumentLinkTarget,
+  normalizeSourceEditorDirectoryPaths,
+  normalizeSourceEditorPath,
+  sourcePathReferenceAtLineColumn
+} from "@/lib/vibe64SourceEditorLinks.js";
 import { useVibe64SystemGraph } from "@local/vibe64-system-graph/client";
 import Vibe64SourceExplanationPanel from "@/components/studio/vibe64-session/Vibe64SourceExplanationPanel.vue";
 import Vibe64SourceFileTree from "@/components/studio/vibe64-session/Vibe64SourceFileTree.vue";
@@ -1097,12 +1102,8 @@ const newFileCreateDisabled = computed(() => Boolean(
   !newFilePath.value
 ));
 
-function normalizeTreePath(value = "") {
-  return String(value || "").trim().replaceAll("\\", "/").replace(/^\.\/+/u, "");
-}
-
 function normalizeNewFileEntryPath(value = "") {
-  const raw = normalizeTreePath(value).replace(/\/+$/u, "");
+  const raw = normalizeSourceEditorPath(value).replace(/\/+$/u, "");
   if (!raw || raw.startsWith("/")) {
     return "";
   }
@@ -1163,26 +1164,19 @@ function expandFileList() {
   fileListCollapsed.value = false;
 }
 
-function normalizeExpandedDirectoryPaths(value = []) {
-  return [...new Set((Array.isArray(value) ? value : [])
-    .map((path) => normalizeTreePath(path))
-    .filter(Boolean))]
-    .sort((left, right) => left.localeCompare(right));
-}
-
 function addExpandedDirectoryPaths(paths = []) {
-  const normalizedPaths = normalizeExpandedDirectoryPaths(paths);
+  const normalizedPaths = normalizeSourceEditorDirectoryPaths(paths);
   if (!normalizedPaths.length) {
     return;
   }
-  expandedDirectoryPaths.value = normalizeExpandedDirectoryPaths([
+  expandedDirectoryPaths.value = normalizeSourceEditorDirectoryPaths([
     ...expandedDirectoryPaths.value,
     ...normalizedPaths
   ]);
 }
 
 function parentDirectoryPathsFor(filePath = "") {
-  const parts = normalizeTreePath(filePath).split("/").filter(Boolean);
+  const parts = normalizeSourceEditorPath(filePath).split("/").filter(Boolean);
   const paths = [];
   for (let index = 1; index < parts.length; index += 1) {
     paths.push(parts.slice(0, index).join("/"));
@@ -1191,7 +1185,7 @@ function parentDirectoryPathsFor(filePath = "") {
 }
 
 function openNewFileDialog(directoryPath = "") {
-  newFileDirectory.value = normalizeTreePath(directoryPath);
+  newFileDirectory.value = normalizeSourceEditorPath(directoryPath);
   newFileName.value = "";
   newFileError.value = "";
   newFileDialogOpen.value = true;
@@ -1227,7 +1221,7 @@ async function submitNewFile() {
 }
 
 async function copySourcePath(path = "") {
-  const normalizedPath = normalizeTreePath(path);
+  const normalizedPath = normalizeSourceEditorPath(path);
   if (!normalizedPath) {
     return;
   }
@@ -1239,7 +1233,7 @@ async function copySourcePath(path = "") {
 }
 
 function askAssistantAboutPath(path = "") {
-  const normalizedPath = normalizeTreePath(path);
+  const normalizedPath = normalizeSourceEditorPath(path);
   if (!normalizedPath || !props.assistantDraftAvailable) {
     return;
   }
@@ -1569,7 +1563,7 @@ function handleDirectoryOpenChange({
   open = false,
   path = ""
 } = {}) {
-  const normalizedPath = normalizeTreePath(path);
+  const normalizedPath = normalizeSourceEditorPath(path);
   if (!normalizedPath) {
     return;
   }
@@ -1580,7 +1574,7 @@ function handleDirectoryOpenChange({
   } else {
     nextPaths.delete(normalizedPath);
   }
-  expandedDirectoryPaths.value = normalizeExpandedDirectoryPaths([...nextPaths]);
+  expandedDirectoryPaths.value = normalizeSourceEditorDirectoryPaths([...nextPaths]);
 }
 
 function closeAllDirectories() {
@@ -1631,7 +1625,7 @@ watch(editor.revealedDirectoryPaths, (paths) => {
 });
 
 watch(treeStateStorageKey, (storageKey = "") => {
-  expandedDirectoryPaths.value = normalizeExpandedDirectoryPaths(
+  expandedDirectoryPaths.value = normalizeSourceEditorDirectoryPaths(
     readLocalStorageJson(storageKey, [])
   );
 }, {
@@ -1640,7 +1634,7 @@ watch(treeStateStorageKey, (storageKey = "") => {
 
 watch(expandedDirectoryPaths, (paths) => {
   if (treeStateStorageKey.value) {
-    writeLocalStorageJson(treeStateStorageKey.value, normalizeExpandedDirectoryPaths(paths));
+    writeLocalStorageJson(treeStateStorageKey.value, normalizeSourceEditorDirectoryPaths(paths));
   }
 });
 

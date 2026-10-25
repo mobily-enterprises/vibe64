@@ -253,7 +253,7 @@ import {
   scrollElementNearBottom,
   parseLongTextReviewBlocks
 } from "@jskit-ai/assistant-core/shared/conversation";
-import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
+import { normalizeSourceEditorPath, sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 
 const props = defineProps({
   embedded: Boolean,
@@ -370,10 +370,6 @@ const {
   target: threadElement
 });
 
-function normalizePanelSourcePath(value = "") {
-  return String(value || "").trim().replaceAll("\\", "/").replace(/^\.\/+/u, "");
-}
-
 function sourceRangeLineSuffix({
   endLine,
   startLine
@@ -392,7 +388,7 @@ function sourceRangeLineSuffix({
 function compactSourcePath(path = "", {
   maxLength = 36
 } = {}) {
-  const normalized = normalizePanelSourcePath(path);
+  const normalized = normalizeSourceEditorPath(path);
   if (normalized.length <= maxLength) {
     return normalized;
   }
@@ -400,7 +396,7 @@ function compactSourcePath(path = "", {
 }
 
 function sourceRangePathDisplayLabel(range = {}) {
-  const path = normalizePanelSourcePath(range?.path);
+  const path = normalizeSourceEditorPath(range?.path);
   if (!path) {
     return "Source";
   }
@@ -408,7 +404,7 @@ function sourceRangePathDisplayLabel(range = {}) {
 }
 
 function sourceRangeDisplayLabel(range = {}) {
-  const path = normalizePanelSourcePath(range?.path);
+  const path = normalizeSourceEditorPath(range?.path);
   if (!path) {
     return "Source";
   }

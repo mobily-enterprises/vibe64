@@ -181,6 +181,7 @@ import {
   mdiStar,
   mdiStarOutline
 } from "@mdi/js";
+import { normalizeSourceEditorPath } from "@/lib/vibe64SourceEditorLinks.js";
 
 const DIRECTORY_BATCH_SIZE = 20;
 
@@ -231,17 +232,13 @@ const nextHiddenNodeCount = computed(() => {
 const nodeLabel = computed(() => props.node?.path || props.node?.name || "source");
 const expandedPathSet = computed(() => new Set(
   (Array.isArray(props.expandedPaths) ? props.expandedPaths : [])
-    .map((path) => normalizeTreePath(path))
+    .map((path) => normalizeSourceEditorPath(path))
     .filter(Boolean)
 ));
 const loadingPathSet = computed(() => new Set(
   (Array.isArray(props.loadingPaths) ? props.loadingPaths : [])
-    .map((path) => normalizeTreePath(path))
+    .map((path) => normalizeSourceEditorPath(path))
 ));
-
-function normalizeTreePath(value = "") {
-  return String(value || "").trim().replaceAll("\\", "/").replace(/^\.\/+/u, "");
-}
 
 function directoryExpandable(node = {}) {
   return node.type === "directory" && (
@@ -252,7 +249,7 @@ function directoryExpandable(node = {}) {
 }
 
 function directoryKey(node = {}) {
-  return normalizeTreePath(node.path || node.name || "");
+  return normalizeSourceEditorPath(node.path || node.name || "");
 }
 
 function directoryOpen(node = {}) {
@@ -260,7 +257,7 @@ function directoryOpen(node = {}) {
 }
 
 function pathLoading(path = "") {
-  return loadingPathSet.value.has(normalizeTreePath(path));
+  return loadingPathSet.value.has(normalizeSourceEditorPath(path));
 }
 
 function directoryLoading(node = {}) {
