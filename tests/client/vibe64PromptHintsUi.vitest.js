@@ -225,8 +225,9 @@ describe("Vibe64 prompt hints UI", () => {
     );
     expect(autopilot).toContain('event: VIBE64_SESSION_CHANGED_EVENT');
     expect(autopilot).toContain('payload.assistantProgress');
-    expect(autopilot).toContain('deepseek: "DeepSeek"');
-    expect(autopilot).toContain('"zai-coding-plan": "Z.AI"');
+    expect(autopilot).toContain(
+      'const openCodeProviderLabel = computed(() => vibe64ProviderPresentation(props.session?.assistantSelection).label || "OpenCode");'
+    );
     expect(autopilot).toContain('`${openCodeProviderLabel.value} is using a tool…`');
     expect(autopilot).toContain('`${openCodeProviderLabel.value} is reasoning…`');
     expect(autopilot).toContain('"opencode-server-message-delivered"');
