@@ -120,12 +120,11 @@ describe("vibe64AgentSettings", () => {
     }));
   });
 
-  it("scopes sticky settings by project and user email", () => {
+  it("scopes sticky settings by project", () => {
     expect(agentSettingsStorageKey(
       "vibe64:agent-settings",
-      "example-target-app",
-      "Owner@Example.com"
-    )).toBe("vibe64:agent-settings:project:example-target-app:user:owner@example.com");
+      "example-target-app"
+    )).toBe("vibe64:agent-settings:project:example-target-app");
   });
 });
 

@@ -17,24 +17,15 @@ import {
 
 const AGENT_SETTINGS_STORAGE_KEY = "vibe64:agent-settings";
 
-function normalizeAgentSettingsEmail(value = "") {
-  return String(value || "").trim().toLowerCase();
-}
-
-function agentSettingsStorageKey(baseKey = "", projectSlug = "", email = "") {
-  const projectKey = vibe64ProjectScopedStorageKey(baseKey, projectSlug);
-  const normalizedEmail = normalizeAgentSettingsEmail(email);
-  return normalizedEmail
-    ? `${projectKey}:user:${normalizedEmail}`
-    : projectKey;
+function agentSettingsStorageKey(baseKey = "", projectSlug = "") {
+  return vibe64ProjectScopedStorageKey(baseKey, projectSlug);
 }
 
 function useVibe64AgentSettings({ projectSlug: projectSlugInput } = {}) {
   const projectSlug = projectSlugInput === undefined ? useVibe64ProjectSlug() : computed(() => toValue(projectSlugInput));
   const storageKey = computed(() => agentSettingsStorageKey(
     AGENT_SETTINGS_STORAGE_KEY,
-    projectSlug.value,
-    ""
+    projectSlug.value
   ));
   const settings = ref(defaultVibe64AgentSettings());
 

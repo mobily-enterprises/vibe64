@@ -495,13 +495,7 @@ function useVibe64SessionRenewal({
 
   function acceptRenewal(candidate = null, { responseViewerScope = "" } = {}) {
     if (candidate === null || candidate === undefined) {
-      if (!prepareDraftContext(null, responseViewerScope)) {
-        return false;
-      }
-      if (!snapshot.value) {
-        snapshot.value = null;
-      }
-      return true;
+      return prepareDraftContext(null, responseViewerScope);
     }
     if (
       typeof candidate !== "object" ||
@@ -762,26 +756,9 @@ function useVibe64SessionRenewal({
   }
 
   function refreshResultError(result = null) {
-    if (Array.isArray(result)) {
-      for (const entry of result) {
-        if (entry?.status === "rejected") {
-          return entry.reason instanceof Error
-            ? entry.reason
-            : new Error(String(entry?.reason || "Session list could not be refreshed."));
-        }
-        if (entry?.status === "fulfilled") {
-          const nestedError = refreshResultError(entry.value);
-          if (nestedError) {
-            return nestedError;
-          }
-        }
-      }
-      return null;
-    }
     if (
       result &&
       typeof result === "object" &&
-      !Array.isArray(result) &&
       (result.isError === true || result.status === "error")
     ) {
       return result.error instanceof Error
