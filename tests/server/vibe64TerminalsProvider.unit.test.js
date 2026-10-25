@@ -616,6 +616,10 @@ test("a partial project close restores Preview service admission after services 
     try {
       const result = await outputs.terminals.closeProjectRuntime({ reason: "test-partial-close" });
       assert.equal(result.ok, false);
+      // Without a project request context the close acts on the global scope,
+      // the same scope its terminal namespaces use.
+      assert.equal(result.projectSlug, "global");
+      assert.equal(result.projectScope, "global");
       assert.match(result.failed[0].error, /session inventory unavailable/u);
       assert.deepEqual(calls, ["begin-close", "close", "opened"]);
     } finally {

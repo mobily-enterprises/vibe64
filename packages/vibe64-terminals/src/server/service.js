@@ -1632,8 +1632,8 @@ function createService({
       (typeof projectService.currentProjectRuntimeRoot === "function"
         ? projectService.currentProjectRuntimeRoot()
         : "");
-    const projectSlug = String(requestContext?.slug || "").trim() ||
-      String(terminalProjectScopeKey()).replace(/^project:/u, "").trim();
+    // "global" names the runtime used when no project request context is set.
+    const projectSlug = String(requestContext?.slug || "").trim() || "global";
     return {
       projectContextRoot,
       projectRuntimeRoot,
@@ -3001,7 +3001,7 @@ function createService({
     async closeProjectRuntime(input = {}, { dormant = false } = {}) {
       const startedAtMs = Date.now();
       const context = projectRuntimeContext();
-      const projectScope = context.projectSlug ? `project:${context.projectSlug}` : terminalProjectScopeKey();
+      const projectScope = terminalProjectScopeKey();
       const projectContextRoot = context.projectContextRoot;
       const reason = String(input?.reason || "project-close").trim() || "project-close";
       const pinRuntime = await projectService.createRuntime({ inspectSource: false });
