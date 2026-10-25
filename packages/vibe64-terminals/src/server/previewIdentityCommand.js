@@ -2,13 +2,12 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 
 import {
-  PREVIEW_IDENTITY_COMMAND_PROTOCOL,
   PREVIEW_IDENTITY_LOGIN_OPERATION,
   PREVIEW_IDENTITY_LOGOUT_OPERATION,
   PREVIEW_IDENTITY_SUBJECT_SELECTOR,
-  normalizePreviewIdentityCommandCapability,
   normalizePreviewIdentitySelection
 } from "@local/vibe64-core/server/previewAuth";
+import { VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL as PREVIEW_IDENTITY_COMMAND_PROTOCOL } from "@local/vibe64-genesis/server";
 import { PREVIEW_PROXY_TOKEN_QUERY_PARAM } from "../shared/launchPreviewProtocol.js";
 
 const PREVIEW_IDENTITY_COMMAND_MAX_OUTPUT_BYTES = 512 * 1024;
@@ -190,8 +189,8 @@ function createPreviewIdentityCommandRunner({
   if (typeof runCommand !== "function") {
     throw new TypeError("Preview identity command runner requires runCommand.");
   }
-  const normalizedCapability = normalizePreviewIdentityCommandCapability(capability);
-  if (!normalizedCapability) {
+  // capability is the Outputs Preview identity @local/vibe64-genesis validated.
+  if (!capability) {
     return null;
   }
   const commandRoot = String(sourceRoot || "").trim();
@@ -202,7 +201,7 @@ function createPreviewIdentityCommandRunner({
     const request = previewIdentityCommandRequest(selection, {
       targetHref: targetHref || capability.targetHref
     });
-    const [relativeCommand, ...args] = normalizedCapability.command;
+    const [relativeCommand, ...args] = capability.command;
     const result = await runCommand({
       actor: "app",
       allowedRoots,
@@ -216,11 +215,11 @@ function createPreviewIdentityCommandRunner({
       mode: "capture",
       project,
       purpose: "preview",
-      runtimes: normalizedCapability.runtimes.length > 0
-        ? normalizedCapability.runtimes
+      runtimes: capability.runtimes.length > 0
+        ? capability.runtimes
         : runtimes,
       session,
-      timeout: normalizedCapability.timeoutMs
+      timeout: capability.timeoutMs
     });
     if (result?.ok !== true) {
       throw previewIdentityCommandError(

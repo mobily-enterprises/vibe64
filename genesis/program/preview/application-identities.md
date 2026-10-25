@@ -16,6 +16,7 @@ users without turning that convenience into a production sign-in mechanism.
 - `packages/vibe64-execution/src/server/runtime/agentPlaywrightCommandSource.js`
 - `packages/vibe64-execution/src/server/runtime/agentPreviewBrowserWorkerSource.js`
 - `packages/vibe64-genesis/src/server/outputs.js`
+- `packages/vibe64-core/src/server/previewAuth.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
 - `src/components/studio/PreviewIdentitySettings.vue`
 - `packages/vibe64-project/src/shared/onboardingRequest.js`
@@ -57,7 +58,11 @@ application-owned executable with a fresh per-run secret, and refreshes the
 managed browser session. The executable may select an existing application
 user by the declared email, login, or user-ID selector. Arbitrary caller
 identities are rejected, and Vibe64 never creates users or changes their roles
-or data.
+or data. The Outputs parser is the only validator of that command contract
+(protocol, executable, identity types, environment names, runtimes and
+timeout); launch, Preview auth and the command runner use its result as given.
+This command is Preview's only authentication mode; a terminal recorded with any
+other mode gets no Preview authentication.
 
 Managed-browser identity selection always exchanges its grant at the canonical
 Preview proxy URL. If earlier browser navigation left that origin, selection

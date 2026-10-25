@@ -8,11 +8,10 @@ import {
   PREVIEW_IDENTITY_SELECTOR_EMAIL,
   PREVIEW_IDENTITY_SELECTOR_LOGIN,
   PREVIEW_IDENTITY_SELECTOR_USER_ID,
-  PREVIEW_IDENTITY_COMMAND_PROTOCOL,
   createPreviewAuthSecret,
   createPreviewIdentityGrant,
   normalizePreviewApplicationIdentities,
-  normalizePreviewIdentityCommandCapability,
+  normalizePreviewAuthKind,
   normalizePreviewIdentitySelection,
   previewAuthEnvironment,
   previewAuthIdentityAvailable,
@@ -63,20 +62,21 @@ test("preview identity selections normalize login and logout operations", () => 
   );
 });
 
-test("application command preview identity validates one direct app-owned invocation", () => {
+test("application command preview auth exposes the Outputs Preview identity environment aliases", () => {
   const secret = createPreviewAuthSecret();
-  const previewIdentity = normalizePreviewIdentityCommandCapability({
+  // The shape @local/vibe64-genesis returns for an Outputs `#### Preview identity`.
+  const previewIdentity = {
     command: ["tools/preview-identity"],
     environment: {
       enabled: "APP_PREVIEW_IDENTITY_ENABLED",
       secret: "APP_PREVIEW_IDENTITY_SECRET"
     },
     identityTypes: [PREVIEW_IDENTITY_SELECTOR_EMAIL, PREVIEW_IDENTITY_SELECTOR_USER_ID],
-    protocol: PREVIEW_IDENTITY_COMMAND_PROTOCOL,
-    runtimes: ["node26"]
-  });
+    protocol: "vibe64.preview-identity.command.v1",
+    runtimes: ["node26"],
+    timeoutMs: 10_000
+  };
 
-  assert.deepEqual(previewIdentity.command, ["tools/preview-identity"]);
   assert.deepEqual(previewAuthEnvironment({
     kind: APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
     previewIdentity,
@@ -92,35 +92,20 @@ test("application command preview identity validates one direct app-owned invoca
     identityTypes: previewIdentity.identityTypes,
     kind: APPLICATION_COMMAND_PREVIEW_AUTH_KIND
   }), [PREVIEW_IDENTITY_SELECTOR_EMAIL, PREVIEW_IDENTITY_SELECTOR_USER_ID]);
+  assert.throws(() => previewAuthEnvironment({
+    kind: APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
+    previewIdentity,
+    secret: ""
+  }), /secret is missing or invalid/u);
 });
 
-test("application command preview identity rejects Vibe64 viewer mappings", () => {
-  assert.throws(() => normalizePreviewIdentityCommandCapability({
-    command: ["tools/preview-identity"],
-    identityTypes: [PREVIEW_IDENTITY_SELECTOR_EMAIL],
-    protocol: PREVIEW_IDENTITY_COMMAND_PROTOCOL,
-    viewerIdentityTypes: [PREVIEW_IDENTITY_SELECTOR_EMAIL]
-  }), /cannot derive application identities from the Vibe64 viewer/u);
-});
-
-test("application command preview identity rejects colliding environment aliases", () => {
-  assert.throws(() => normalizePreviewIdentityCommandCapability({
-    command: ["tools/preview-identity"],
-    environment: {
-      enabled: "APP_PREVIEW_IDENTITY",
-      secret: "APP_PREVIEW_IDENTITY"
-    },
-    identityTypes: [PREVIEW_IDENTITY_SELECTOR_EMAIL],
-    protocol: PREVIEW_IDENTITY_COMMAND_PROTOCOL
-  }), /must be different/u);
-});
-
-test("application command preview identity requires an app-owned project-relative executable", () => {
-  assert.throws(() => normalizePreviewIdentityCommandCapability({
-    command: ["node", "./scripts/preview-identity.mjs"],
-    identityTypes: [PREVIEW_IDENTITY_SELECTOR_EMAIL],
-    protocol: PREVIEW_IDENTITY_COMMAND_PROTOCOL
-  }), /committed app-owned project-relative file/u);
+test("retired preview auth kinds grant no preview auth", () => {
+  for (const kind of ["cookie-profile", "vibe64-self", ""]) {
+    assert.equal(normalizePreviewAuthKind(kind), "");
+    assert.equal(previewAuthIdentityAvailable({ kind }), false);
+    assert.deepEqual(previewAuthIdentityTypes({ kind }), []);
+    assert.deepEqual(previewAuthEnvironment({ kind, previewIdentity: { environment: { enabled: "X" } } }), {});
+  }
 });
 
 test("application command grants reject viewer subjects", () => {

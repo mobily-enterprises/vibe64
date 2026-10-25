@@ -2,21 +2,24 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  PREVIEW_IDENTITY_COMMAND_PROTOCOL,
   PREVIEW_IDENTITY_SUBJECT_SELECTOR
 } from "../../packages/vibe64-core/src/server/previewAuth.js";
+import { VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL as PREVIEW_IDENTITY_COMMAND_PROTOCOL } from "../../packages/vibe64-genesis/src/server/index.js";
 import {
   createPreviewIdentityCommandRunner,
   normalizePreviewIdentityCommandResponse,
   previewIdentityCommandRequest
 } from "../../packages/vibe64-terminals/src/server/previewIdentityCommand.js";
 
+// The shape @local/vibe64-genesis returns for an Outputs `#### Preview identity`.
 function capability() {
   return {
     command: ["tools/preview-identity"],
+    environment: { enabled: "", secret: "" },
     identityTypes: ["email", "user-id"],
     protocol: PREVIEW_IDENTITY_COMMAND_PROTOCOL,
-    runtimes: ["node26"]
+    runtimes: ["node26"],
+    timeoutMs: 10_000
   };
 }
 

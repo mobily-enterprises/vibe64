@@ -18,13 +18,8 @@ import {
 import {
   APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
   createPreviewAuthSecret,
-  normalizePreviewIdentityCommandCapability,
-  normalizePreviewAuthKind,
-  previewAuthEnvironment,
-  previewAuthRequiresIdentitySecret,
-  previewAuthProfilePath,
-  previewAuthSecretPath,
-  previewAuthUsesProfile
+  previewIdentityCommandEnvironment,
+  previewAuthSecretPath
 } from "@local/vibe64-core/server/previewAuth";
 import {
   sessionSourcePath
@@ -389,11 +384,11 @@ function ensurePreviewAuthRuntimeFilePath(filePath = "") {
   if (!normalizedPath) {
     return "";
   }
-  const profileDir = path.dirname(normalizedPath);
-  mkdirSync(profileDir, {
+  const directory = path.dirname(normalizedPath);
+  mkdirSync(directory, {
     recursive: true
   });
-  chmodSync(profileDir, 0o700);
+  chmodSync(directory, 0o700);
   return normalizedPath;
 }
 
@@ -523,14 +518,8 @@ async function createVibe64WebLaunchTargetTerminalSpec({
         message: "Launch command workdir is outside the session source."
       };
     }
-    const previewIdentity = normalizePreviewIdentityCommandCapability(launch.previewIdentity);
-    if (previewIdentity && normalizePreviewAuthKind(launch.previewAuth)) {
-      releasePortReservation();
-      return {
-        ok: false,
-        message: "A launch target cannot combine a preview identity command with another preview authentication mode."
-      };
-    }
+    // The Outputs Preview identity, already validated by @local/vibe64-genesis.
+    const previewIdentity = launch.previewIdentity || null;
     if (previewIdentity) {
       const executablePath = path.resolve(resolvedWorktreeRoot, previewIdentity.command[0]);
       const executable = (() => {
@@ -548,12 +537,8 @@ async function createVibe64WebLaunchTargetTerminalSpec({
         };
       }
     }
-    const previewAuthKind = previewIdentity
-      ? APPLICATION_COMMAND_PREVIEW_AUTH_KIND
-      : normalizePreviewAuthKind(launch.previewAuth);
-    const previewAuthSecretValue = previewAuthRequiresIdentitySecret({ kind: previewAuthKind })
-      ? createPreviewAuthSecret()
-      : "";
+    const previewAuthKind = previewIdentity ? APPLICATION_COMMAND_PREVIEW_AUTH_KIND : "";
+    const previewAuthSecretValue = previewIdentity ? createPreviewAuthSecret() : "";
     const projectScope = normalizeText(launch.projectScope) || currentProjectScopeKey();
     const agentTargetHref = targetUrl;
     const launchAgentEnv = {
@@ -623,27 +608,14 @@ async function createVibe64WebLaunchTargetTerminalSpec({
             terminalSessionId: id || ""
           }), previewAuthSecretValue);
         }
-        const profilePath = previewAuthUsesProfile({ kind: previewAuthKind })
-          ? ensurePreviewAuthRuntimeFilePath(previewAuthProfilePath({
-              sessionRoot: session.sessionRoot || "",
-              terminalSessionId: id || ""
-            }))
-          : "";
         return normalizeLaunchEnv({
           ...(launch.env || {}),
           ...launchAgentEnv,
           VIBE64_LAUNCH_AGENT_HREF: environmentTargetHref,
-          ...previewAuthEnvironment({
-            kind: previewAuthKind,
+          ...previewIdentityCommandEnvironment({
             previewIdentity,
-            projectScope,
-            secret: previewAuthSecret,
-            sessionSourceRoot: resolvedWorktreeRoot,
-            sessionId: session.sessionId || "",
-            targetHref: environmentTargetHref,
-            terminalSessionId: id || ""
-          }),
-          ...(profilePath ? { VIBE64_PREVIEW_AUTH_PROFILE_FILE: profilePath } : {})
+            secret: previewAuthSecret
+          })
         });
       },
       metadata,

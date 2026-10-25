@@ -663,6 +663,58 @@ test("Vibe64 setup and Outputs parse only their canonical Markdown grammar", () 
   );
 });
 
+test("Outputs Preview identity is the one validator of the preview identity command contract", () => {
+  const target = (identityLines) => [
+    "### Target `app`: Run app",
+    "",
+    "- Default.",
+    "- Mode: `interactive`",
+    "- Runtimes: `nodejs`",
+    "- Run `Develop`: `npm` `run` `develop`",
+    "",
+    "#### Presentation",
+    "",
+    "- Kind: `web`",
+    "- Ready when: `GET` `/health` returns `200`",
+    "",
+    "#### Preview identity",
+    "",
+    "- Command: `tools/preview-identity`",
+    "- Protocol: `vibe64.preview-identity.command.v1`",
+    "- Identity types: `email`",
+    ...identityLines
+  ];
+  assert.deepEqual(parseVibe64OutputsLines(target([
+    "- Enabled environment: `APP_PREVIEW_IDENTITY_ENABLED`",
+    "- Secret environment: `APP_PREVIEW_IDENTITY_SECRET`"
+  ])).targets[0].previewIdentity, {
+    command: ["tools/preview-identity"],
+    environment: {
+      enabled: "APP_PREVIEW_IDENTITY_ENABLED",
+      secret: "APP_PREVIEW_IDENTITY_SECRET"
+    },
+    identityTypes: ["email"],
+    protocol: "vibe64.preview-identity.command.v1",
+    runtimes: [],
+    timeoutMs: 10_000
+  });
+  for (const [lines, message] of [
+    [["- Enabled environment: `APP_ID`", "- Secret environment: `APP_ID`"], /must differ/u],
+    [["- Secret environment: `PATH`"], /environment/u],
+    [["- Secret environment: `XDG_RUNTIME_DIR`"], /environment/u],
+    [["- Timeout ms: `30001`"], /from 1 through 30000/u],
+    [["- Timeout ms: `0`"], /from 1 through 30000/u]
+  ]) {
+    assert.throws(() => parseVibe64OutputsLines(target(lines)), message);
+  }
+  assert.throws(
+    () => parseVibe64OutputsLines(target([]).map((line) => (
+      line === "- Command: `tools/preview-identity`" ? "- Command: `node` `tools/preview-identity.mjs`" : line
+    ))),
+    /literal app-owned project-relative executable/u
+  );
+});
+
 test("Vibe64 executes the materialized JSKIT Deployment declaration exactly", async () => {
   await withTemporaryRoot(async (projectRoot) => {
     await initializeGit(projectRoot);

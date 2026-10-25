@@ -8,9 +8,9 @@ import {
   PREVIEW_IDENTITY_SELECTOR_USER_ID
 } from "../shared/previewIdentity.js";
 
+// The one Preview authentication mode: the app's own Preview identity command
+// (Outputs `#### Preview identity`) signs the selected application user in.
 const APPLICATION_COMMAND_PREVIEW_AUTH_KIND = "application-command";
-const COOKIE_PROFILE_PREVIEW_AUTH_KIND = "cookie-profile";
-const VIBE64_SELF_PREVIEW_AUTH_KIND = "vibe64-self";
 const PREVIEW_IDENTITY_CONTROL_PATH = "/__vibe64/preview-identity";
 const PREVIEW_IDENTITY_GRANT_PREFIX = "vibe64-preview-identity-v1";
 const PREVIEW_IDENTITY_GRANT_TTL_SECONDS = 60;
@@ -26,18 +26,6 @@ const PREVIEW_APPLICATION_IDENTITY_RESERVED_NAMES = new Set([
 ]);
 const PREVIEW_APPLICATION_IDENTITY_FIELDS = new Set(["name", "type", "value"]);
 const PREVIEW_APPLICATION_IDENTITY_LIMIT = 32;
-const PREVIEW_IDENTITY_COMMAND_PROTOCOL = "vibe64.preview-identity.command.v1";
-const PREVIEW_IDENTITY_COMMAND_DEFAULT_TIMEOUT_MS = 10_000;
-const PREVIEW_IDENTITY_COMMAND_MAX_TIMEOUT_MS = 30_000;
-const PREVIEW_IDENTITY_COMMAND_ENV_NAME_PATTERN = /^[A-Z_][A-Z0-9_]*$/u;
-const PREVIEW_IDENTITY_COMMAND_RESERVED_ENV_NAMES = new Set([
-  "HOME",
-  "LOGNAME",
-  "NODE_OPTIONS",
-  "PATH",
-  "TMPDIR",
-  "USER"
-]);
 const PREVIEW_IDENTITY_GRANT_SCOPE_KEYS = Object.freeze([
   "projectScope",
   "sessionSourceRoot",
@@ -45,16 +33,11 @@ const PREVIEW_IDENTITY_GRANT_SCOPE_KEYS = Object.freeze([
   "targetHref",
   "terminalSessionId"
 ]);
-const COOKIE_NAME_PATTERN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/u;
-const PREVIEW_AUTH_KINDS = new Set([
-  APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
-  COOKIE_PROFILE_PREVIEW_AUTH_KIND,
-  VIBE64_SELF_PREVIEW_AUTH_KIND
-]);
 
 function normalizePreviewAuthKind(value = "") {
-  const text = String(value || "").trim();
-  return PREVIEW_AUTH_KINDS.has(text) ? text : "";
+  return String(value || "").trim() === APPLICATION_COMMAND_PREVIEW_AUTH_KIND
+    ? APPLICATION_COMMAND_PREVIEW_AUTH_KIND
+    : "";
 }
 
 function createPreviewAuthSecret() {
@@ -72,54 +55,15 @@ function requirePreviewAuthSecret(secret = "") {
 function previewAuthEnvironment({
   kind = "",
   previewIdentity = null,
-  projectScope = "",
-  secret = "",
-  sessionSourceRoot = "",
-  sessionId = "",
-  targetHref = "",
-  terminalSessionId = ""
+  secret = ""
 } = {}) {
-  return previewAuthProvider(kind)?.environment({
-    previewIdentity,
-    projectScope,
-    secret,
-    sessionSourceRoot,
-    sessionId,
-    targetHref,
-    terminalSessionId
-  }) || {};
-}
-
-function previewAuthCookieNames({
-  kind = "",
-  profilePath = ""
-} = {}) {
-  return previewAuthProvider(kind)?.cookieNames({
-    profilePath
-  }) || [];
-}
-
-function previewAuthCookieHeader({
-  kind = "",
-  profilePath = "",
-  projectScope = "",
-  sessionSourceRoot = "",
-  sessionId = "",
-  targetHref = "",
-  terminalSessionId = ""
-} = {}) {
-  return previewAuthProvider(kind)?.cookieHeader({
-    profilePath,
-    projectScope,
-    sessionSourceRoot,
-    sessionId,
-    targetHref,
-    terminalSessionId
-  }) || "";
+  return normalizePreviewAuthKind(kind)
+    ? previewIdentityCommandEnvironment({ previewIdentity, secret })
+    : {};
 }
 
 function previewAuthIdentityAvailable({ kind = "" } = {}) {
-  return previewAuthProvider(kind)?.identityCommand === true;
+  return Boolean(normalizePreviewAuthKind(kind));
 }
 
 function normalizePreviewIdentityTypes(value = []) {
@@ -209,126 +153,20 @@ function normalizePreviewApplicationIdentities(value = []) {
   });
 }
 
-function previewIdentityCommandError(message = "") {
-  const error = new Error(message || "Preview identity command capability is invalid.");
-  error.code = "vibe64_preview_identity_command_invalid";
-  return error;
-}
-
-function normalizePreviewIdentityCommandEnvironmentName(value = "", label = "environment variable") {
-  const name = String(value || "").trim();
-  if (!name) {
-    return "";
-  }
-  if (
-    !PREVIEW_IDENTITY_COMMAND_ENV_NAME_PATTERN.test(name) ||
-    PREVIEW_IDENTITY_COMMAND_RESERVED_ENV_NAMES.has(name) ||
-    name.startsWith("XDG_")
-  ) {
-    throw previewIdentityCommandError(`Preview identity command ${label} is invalid.`);
-  }
-  return name;
-}
-
-function previewIdentityCommandPathValid(value = "") {
-  const command = String(value || "");
-  return command.includes("/") &&
-    !command.includes("\\") &&
-    !/[\0\r\n]/u.test(command) &&
-    command.split("/").every((part) => part && ![".", ".."].includes(part));
-}
-
-function normalizePreviewIdentityCommandCapability(value = null) {
-  if (!value) {
-    return null;
-  }
-  if (typeof value !== "object" || Array.isArray(value)) {
-    throw previewIdentityCommandError("Preview identity command capability must be an object.");
-  }
-  if (Object.hasOwn(value, "viewerIdentityTypes")) {
-    throw previewIdentityCommandError(
-      "Preview identity commands cannot derive application identities from the Vibe64 viewer. Configure named application identities in Vibe64 instead."
-    );
-  }
-  const protocol = String(value.protocol || "").trim();
-  if (protocol !== PREVIEW_IDENTITY_COMMAND_PROTOCOL) {
-    throw previewIdentityCommandError(
-      `Preview identity command protocol must be ${PREVIEW_IDENTITY_COMMAND_PROTOCOL}.`
-    );
-  }
-  const command = (Array.isArray(value.command) ? value.command : [])
-    .map((entry) => String(entry ?? ""));
-  if (
-    command.length < 1 ||
-    command.length > 64 ||
-    command.some((entry) => !entry.trim() || entry.length > 4096 || /[\0\r\n]/u.test(entry))
-  ) {
-    throw previewIdentityCommandError(
-      "Preview identity command must contain between 1 and 64 non-empty arguments."
-    );
-  }
-  if (!previewIdentityCommandPathValid(command[0])) {
-    throw previewIdentityCommandError(
-      "Preview identity executable must be a committed app-owned project-relative file."
-    );
-  }
-  const identityTypes = normalizePreviewIdentityTypes(value.identityTypes);
-  if (identityTypes.length < 1) {
-    throw previewIdentityCommandError(
-      "Preview identity command must advertise at least one supported application user identifier."
-    );
-  }
-  const environment = value.environment && typeof value.environment === "object" && !Array.isArray(value.environment)
-    ? value.environment
-    : {};
-  const enabledEnvironmentName = normalizePreviewIdentityCommandEnvironmentName(
-    environment.enabled,
-    "enabled environment variable"
-  );
-  const secretEnvironmentName = normalizePreviewIdentityCommandEnvironmentName(
-    environment.secret,
-    "secret environment variable"
-  );
-  if (enabledEnvironmentName && enabledEnvironmentName === secretEnvironmentName) {
-    throw previewIdentityCommandError(
-      "Preview identity enabled and secret environment variables must be different."
-    );
-  }
-  const timeoutValue = Number(value.timeoutMs);
-  const timeoutMs = Number.isSafeInteger(timeoutValue) && timeoutValue > 0
-    ? Math.min(timeoutValue, PREVIEW_IDENTITY_COMMAND_MAX_TIMEOUT_MS)
-    : PREVIEW_IDENTITY_COMMAND_DEFAULT_TIMEOUT_MS;
-  return {
-    command,
-    environment: {
-      enabled: enabledEnvironmentName,
-      secret: secretEnvironmentName
-    },
-    identityTypes,
-    protocol,
-    runtimes: [...new Set((Array.isArray(value.runtimes) ? value.runtimes : [])
-      .map((entry) => String(entry || "").trim())
-      .filter(Boolean))],
-    timeoutMs
-  };
-}
-
+// previewIdentity is the Outputs Preview identity that @local/vibe64-genesis
+// already parsed and validated; its environment names are the app's aliases.
 function previewIdentityCommandEnvironment({
   previewIdentity = null,
   secret = ""
 } = {}) {
-  const capability = normalizePreviewIdentityCommandCapability(previewIdentity);
-  if (!capability) {
+  if (!previewIdentity) {
     return {};
   }
   const normalizedSecret = requirePreviewAuthSecret(secret);
+  const { enabled = "", secret: secretName = "" } = previewIdentity.environment || {};
   return {
-    ...(capability.environment.enabled
-      ? { [capability.environment.enabled]: "true" }
-      : {}),
-    ...(capability.environment.secret
-      ? { [capability.environment.secret]: normalizedSecret }
-      : {})
+    ...(enabled ? { [enabled]: "true" } : {}),
+    ...(secretName ? { [secretName]: normalizedSecret } : {})
   };
 }
 
@@ -336,92 +174,11 @@ function previewAuthIdentityTypes({
   identityTypes = [],
   kind = ""
 } = {}) {
-  const supported = normalizePreviewIdentityTypes(previewAuthProvider(kind)?.identityTypes || []);
+  const supported = normalizePreviewAuthKind(kind) ? PREVIEW_IDENTITY_SELECTOR_TYPES : [];
   const requested = normalizePreviewIdentityTypes(identityTypes);
   return Array.isArray(identityTypes) && identityTypes.length > 0
     ? requested.filter((type) => supported.includes(type))
-    : supported;
-}
-
-function previewAuthRequiresIdentitySecret({ kind = "" } = {}) {
-  return previewAuthProvider(kind)?.requiresIdentitySecret === true;
-}
-
-function previewAuthUsesProfile({ kind = "" } = {}) {
-  return previewAuthProvider(kind)?.usesProfile === true;
-}
-
-function emptyPreviewAuthEnvironment() {
-  return {};
-}
-
-function emptyPreviewAuthCookies() {
-  return [];
-}
-
-function emptyPreviewAuthCookieHeader() {
-  return "";
-}
-
-function vibe64SelfPreviewAuthCookieNames({
-  profilePath = ""
-} = {}) {
-  const profile = readVibe64SelfPreviewAuthProfile(profilePath);
-  return profile ? [profile.cookieName] : [];
-}
-
-function vibe64SelfPreviewAuthCookieHeader({
-  profilePath = ""
-} = {}) {
-  const profile = readVibe64SelfPreviewAuthProfile(profilePath);
-  return profile
-    ? `${profile.cookieName}=${encodeURIComponent(profile.cookieValue)}`
-    : "";
-}
-
-function cookieProfilePreviewAuthCookieNames({
-  profilePath = ""
-} = {}) {
-  const profile = readCookiePreviewAuthProfile(profilePath);
-  return profile ? profile.cookies.map((cookie) => cookie.name) : [];
-}
-
-function cookieProfilePreviewAuthCookieHeader({
-  profilePath = ""
-} = {}) {
-  const profile = readCookiePreviewAuthProfile(profilePath);
-  return profile
-    ? profile.cookies
-      .map((cookie) => `${cookie.name}=${encodeURIComponent(cookie.value)}`)
-      .join("; ")
-    : "";
-}
-
-const PREVIEW_AUTH_PROVIDERS = Object.freeze({
-  [APPLICATION_COMMAND_PREVIEW_AUTH_KIND]: Object.freeze({
-    cookieHeader: emptyPreviewAuthCookieHeader,
-    cookieNames: emptyPreviewAuthCookies,
-    environment: previewIdentityCommandEnvironment,
-    identityCommand: true,
-    identityTypes: PREVIEW_IDENTITY_SELECTOR_TYPES,
-    requiresIdentitySecret: true
-  }),
-  [COOKIE_PROFILE_PREVIEW_AUTH_KIND]: Object.freeze({
-    cookieHeader: cookieProfilePreviewAuthCookieHeader,
-    cookieNames: cookieProfilePreviewAuthCookieNames,
-    environment: emptyPreviewAuthEnvironment,
-    usesProfile: true
-  }),
-  [VIBE64_SELF_PREVIEW_AUTH_KIND]: Object.freeze({
-    cookieHeader: vibe64SelfPreviewAuthCookieHeader,
-    cookieNames: vibe64SelfPreviewAuthCookieNames,
-    environment: emptyPreviewAuthEnvironment,
-    usesProfile: true
-  })
-});
-
-function previewAuthProvider(kind = "") {
-  return PREVIEW_AUTH_PROVIDERS[normalizePreviewAuthKind(kind)] || null;
+    : [...supported];
 }
 
 function normalizePreviewIdentitySelector(value = {}) {
@@ -622,23 +379,6 @@ function invalidPreviewIdentityGrant() {
   );
 }
 
-function previewAuthProfilePath({
-  sessionRoot = "",
-  terminalSessionId = ""
-} = {}) {
-  return previewAuthRuntimePath({
-    filename: "profile.json",
-    sessionRoot,
-    terminalSessionId
-  });
-}
-
-function readVibe64SelfPreviewAuthProfile(profilePath = "") {
-  return normalizeVibe64SelfPreviewAuthProfile(
-    readJsonProfile(profilePath, "Vibe64 self preview auth profile")
-  );
-}
-
 function previewAuthSecretPath({
   sessionRoot = "",
   terminalSessionId = ""
@@ -678,98 +418,11 @@ function readPreviewAuthSecret(secretPath = "") {
   }
 }
 
-function readCookiePreviewAuthProfile(profilePath = "") {
-  return normalizeCookiePreviewAuthProfile(
-    readJsonProfile(profilePath, "cookie preview auth profile")
-  );
-}
-
-function readJsonProfile(profilePath = "", label = "profile") {
-  const normalizedPath = String(profilePath || "").trim();
-  if (!normalizedPath) {
-    return null;
-  }
-  let payload;
-  try {
-    payload = JSON.parse(readFileSync(normalizedPath, "utf8"));
-  } catch (error) {
-    if (error?.code === "ENOENT") {
-      return null;
-    }
-    throw new Error(`Cannot read ${label}: ${String(error?.message || error)}`);
-  }
-  return payload;
-}
-
-function normalizeVibe64SelfPreviewAuthProfile(value = {}) {
-  if (!value) {
-    return null;
-  }
-  if (typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Vibe64 self preview auth profile must be an object.");
-  }
-  const profile = {
-    cookieName: String(value.cookieName || "").trim(),
-    cookieValue: String(value.cookieValue || "").trim()
-  };
-  if (!profile.cookieName || !profile.cookieValue) {
-    throw new Error("Vibe64 self preview auth profile requires cookieName and cookieValue.");
-  }
-  return profile;
-}
-
-function normalizeCookiePreviewAuthProfile(value = {}) {
-  if (!value) {
-    return null;
-  }
-  if (typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Cookie preview auth profile must be an object.");
-  }
-  if (!Array.isArray(value.cookies)) {
-    throw new Error("Cookie preview auth profile requires a cookies array.");
-  }
-  const seenNames = new Set();
-  const cookies = value.cookies.map((cookie, index) => {
-    const normalizedCookie = normalizeCookiePreviewAuthCookie(cookie, index);
-    if (seenNames.has(normalizedCookie.name)) {
-      throw new Error(`Cookie preview auth profile contains duplicate cookie name ${normalizedCookie.name}.`);
-    }
-    seenNames.add(normalizedCookie.name);
-    return normalizedCookie;
-  });
-  if (cookies.length === 0) {
-    throw new Error("Cookie preview auth profile requires at least one cookie.");
-  }
-  return {
-    cookies
-  };
-}
-
-function normalizeCookiePreviewAuthCookie(value = {}, index = 0) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`Cookie preview auth profile cookie ${index + 1} must be an object.`);
-  }
-  const name = String(value.name || "").trim();
-  const cookieValue = String(value.value ?? "").trim();
-  if (!COOKIE_NAME_PATTERN.test(name)) {
-    throw new Error(`Cookie preview auth profile cookie ${index + 1} has an invalid name.`);
-  }
-  if (!cookieValue) {
-    throw new Error(`Cookie preview auth profile cookie ${index + 1} requires a value.`);
-  }
-  return {
-    name,
-    value: cookieValue
-  };
-}
-
 export {
   APPLICATION_COMMAND_PREVIEW_AUTH_KIND,
-  COOKIE_PROFILE_PREVIEW_AUTH_KIND,
   PREVIEW_APPLICATION_IDENTITY_LIMIT,
   PREVIEW_APPLICATION_IDENTITY_RESERVED_NAMES,
   PREVIEW_IDENTITY_CONTROL_PATH,
-  PREVIEW_IDENTITY_COMMAND_PROTOCOL,
   PREVIEW_IDENTITY_LOGIN_OPERATION,
   PREVIEW_IDENTITY_LOGOUT_OPERATION,
   PREVIEW_IDENTITY_SELECTOR_EMAIL,
@@ -777,23 +430,16 @@ export {
   PREVIEW_IDENTITY_SELECTOR_TYPES,
   PREVIEW_IDENTITY_SELECTOR_USER_ID,
   PREVIEW_IDENTITY_SUBJECT_SELECTOR,
-  VIBE64_SELF_PREVIEW_AUTH_KIND,
   createPreviewAuthSecret,
   createPreviewIdentityGrant,
   normalizePreviewApplicationIdentities,
   normalizePreviewAuthKind,
-  normalizePreviewIdentityCommandCapability,
   normalizePreviewIdentitySelector,
   normalizePreviewIdentitySelection,
-  previewAuthCookieNames,
-  previewAuthCookieHeader,
   previewAuthEnvironment,
   previewAuthIdentityAvailable,
   previewAuthIdentityTypes,
-  previewAuthRequiresIdentitySecret,
-  previewAuthProfilePath,
   previewAuthSecretPath,
-  previewAuthUsesProfile,
   previewIdentityCommandEnvironment,
   readPreviewAuthSecret,
   verifyPreviewIdentityGrant

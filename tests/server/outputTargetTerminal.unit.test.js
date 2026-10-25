@@ -837,7 +837,8 @@ function previewIdentityCapability() {
     },
     identityTypes: ["email", "user-id"],
     protocol: "vibe64.preview-identity.command.v1",
-    runtimes: ["node26"]
+    runtimes: ["node26"],
+    timeoutMs: 10_000
   };
 }
 
@@ -1051,26 +1052,6 @@ test("web launch rejects preview identity executable symlinks", async () => {
 
     assert.equal(spec.ok, false);
     assert.match(spec.message, /missing or is not executable/u);
-  } finally {
-    await fixture.cleanup();
-  }
-});
-
-test("web launch rejects conflicting preview identity and preview authentication declarations", async () => {
-  const fixture = await createLaunchSpecFixture();
-  try {
-    const spec = await createSpec({
-      launch: {
-        previewAuth: "cookie-profile",
-        previewIdentity: previewIdentityCapability()
-      },
-      preferredPort: 46500 + crypto.randomInt(500),
-      session: fixture.session,
-      targetRoot: fixture.targetRoot
-    });
-
-    assert.equal(spec.ok, false);
-    assert.match(spec.message, /cannot combine/u);
   } finally {
     await fixture.cleanup();
   }

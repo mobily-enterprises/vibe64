@@ -381,7 +381,7 @@ describe("Vibe64 launch controls", () => {
       unavailableReason: "Waiting for the hosted preview URL."
     });
     expect(launchPreviewRequiresProxy({
-      previewAuth: "vibe64-self"
+      previewAuth: "application-command"
     })).toBe(true);
     expect(launchPreviewRequiresProxy({
       previewAuth: ""

@@ -39,8 +39,6 @@ import {
   PREVIEW_IDENTITY_CONTROL_PATH,
   PREVIEW_IDENTITY_LOGOUT_OPERATION,
   normalizePreviewAuthKind,
-  previewAuthCookieNames,
-  previewAuthCookieHeader,
   verifyPreviewIdentityGrant
 } from "@local/vibe64-core/server/previewAuth";
 import {
@@ -87,7 +85,6 @@ function normalizePreviewTargetHref(value = "") {
 function proxyRequestHeaders(headers = {}, targetUrl, {
   clientAddress = "",
   freshDocument = false,
-  previewAuth = null,
   proxyOrigin = "",
   targetHost = ""
 } = {}) {
@@ -101,7 +98,7 @@ function proxyRequestHeaders(headers = {}, targetUrl, {
     delete nextHeaders["if-modified-since"];
     delete nextHeaders["if-none-match"];
   }
-  const cookie = browserCookieHeader(nextHeaders.cookie, { previewAuth, proxyOrigin });
+  const cookie = stripPreviewTokenCookie(nextHeaders.cookie, { proxyOrigin });
   if (cookie) {
     nextHeaders.cookie = cookie;
   } else {
@@ -116,12 +113,11 @@ function proxyRequestHeaders(headers = {}, targetUrl, {
 
 function proxyUpgradeHeaders(headers = {}, targetUrl, {
   clientAddress = "",
-  previewAuth = null,
   proxyOrigin = "",
   targetHost = ""
 } = {}) {
   const nextHeaders = { ...headers };
-  const cookie = browserCookieHeader(nextHeaders.cookie, { previewAuth, proxyOrigin });
+  const cookie = stripPreviewTokenCookie(nextHeaders.cookie, { proxyOrigin });
   if (cookie) {
     nextHeaders.cookie = cookie;
   } else {
@@ -131,18 +127,6 @@ function proxyUpgradeHeaders(headers = {}, targetUrl, {
   forwardedHeaders(nextHeaders, proxyOrigin, clientAddress);
   remapPreviewOrigin(nextHeaders, proxyOrigin);
   return nextHeaders;
-}
-
-// The app sees the browser's cookies without this proxy's token cookie, plus
-// the Preview identity's own cookies in place of any the browser sent.
-function browserCookieHeader(header = "", {
-  previewAuth = null,
-  proxyOrigin = ""
-} = {}) {
-  return mergeCookieHeaders(
-    stripPreviewTokenCookie(header, { proxyOrigin }),
-    previewAuthCookieHeader(previewAuth || {})
-  );
 }
 
 function forwardedHeaders(headers, browserOrigin, clientAddress = "") {
@@ -304,6 +288,7 @@ function previewOriginUsesHttps(value = "") {
   }
 }
 
+// The app sees the browser's cookies without this proxy's token cookie.
 function stripPreviewTokenCookie(header = "", {
   proxyOrigin = ""
 } = {}) {
@@ -315,30 +300,10 @@ function stripPreviewTokenCookie(header = "", {
     .join("; ");
 }
 
-function mergeCookieHeaders(header = "", injectedHeader = "") {
-  const injectedNames = new Set(cookieNames(injectedHeader));
-  const existing = String(header || "")
-    .split(";")
-    .map((part) => part.trim())
-    .filter((part) => part && !injectedNames.has(cookiePairName(part)));
-  const injected = String(injectedHeader || "")
-    .split(";")
-    .map((part) => part.trim())
-    .filter(Boolean);
-  return [...existing, ...injected].join("; ");
-}
-
 // The name of one `name=value` cookie pair; a bare token is all name.
 function cookiePairName(part = "") {
   const separatorIndex = part.indexOf("=");
   return (separatorIndex < 0 ? part : part.slice(0, separatorIndex)).trim();
-}
-
-function cookieNames(header = "") {
-  return String(header || "")
-    .split(";")
-    .map(cookiePairName)
-    .filter(Boolean);
 }
 
 function rejectPreviewRequest(response) {
@@ -691,7 +656,6 @@ async function proxyPreviewIdentityExchange(request, response, {
 
 function responseHeaders(response, {
   injected = false,
-  previewAuth = null,
   proxyOrigin = "",
   targetOrigin = ""
 } = {}) {
@@ -715,36 +679,8 @@ function responseHeaders(response, {
       targetOrigin
     });
   }
-  filterPreviewAuthSetCookieHeaders(headers, previewAuth);
   headers.connection = "close";
   return headers;
-}
-
-function filterPreviewAuthSetCookieHeaders(headers = {}, previewAuth = null) {
-  const ownedNames = new Set(previewAuthCookieNames(previewAuth || {}));
-  if (ownedNames.size === 0) {
-    return;
-  }
-  const headerKey = Object.hasOwn(headers, "set-cookie")
-    ? "set-cookie"
-    : Object.hasOwn(headers, "Set-Cookie")
-      ? "Set-Cookie"
-      : "";
-  if (!headerKey) {
-    return;
-  }
-  const current = headers[headerKey];
-  const entries = (Array.isArray(current) ? current : [current])
-    .filter((entry) => !ownedNames.has(setCookieName(entry)));
-  if (entries.length === 0) {
-    delete headers[headerKey];
-    return;
-  }
-  headers[headerKey] = Array.isArray(current) ? entries : entries[0];
-}
-
-function setCookieName(header = "") {
-  return cookiePairName(String(header || "").split(";")[0] || "");
 }
 
 function requestAcceptsHtml(request) {
@@ -1051,7 +987,6 @@ async function proxyPreviewRequest(request, response, {
       headers: proxyRequestHeaders(request.headers, targetUrl, {
         clientAddress: request.socket?.remoteAddress || "",
         freshDocument: requestIsBrowserDocumentNavigation(request),
-        previewAuth,
         proxyOrigin,
         targetHost
       }),
@@ -1078,7 +1013,6 @@ async function proxyPreviewRequest(request, response, {
       });
       response.writeHead(targetResponse.statusCode || 200, previewResponseHeaders(targetResponse, {
         injected: true,
-        previewAuth,
         proxyOrigin,
         targetOrigin,
         token
@@ -1096,7 +1030,6 @@ async function proxyPreviewRequest(request, response, {
     }
 
     response.writeHead(targetResponse.statusCode || 200, previewResponseHeaders(targetResponse, {
-      previewAuth,
       proxyOrigin,
       targetOrigin,
       token
@@ -1193,7 +1126,6 @@ function pipePreviewResponseBody(stream, response) {
 
 function proxyPreviewUpgrade(request, socket, head, {
   connectOrigin = "",
-  previewAuth = null,
   proxyOrigin = "",
   tracker = null,
   tokenScope = {},
@@ -1224,7 +1156,6 @@ function proxyPreviewUpgrade(request, socket, head, {
   const upstreamRequest = requestFactory(targetUrl, {
     headers: proxyUpgradeHeaders(request.headers, targetUrl, {
       clientAddress: request.socket?.remoteAddress || "",
-      previewAuth,
       proxyOrigin,
       targetHost
     }),
@@ -1704,7 +1635,6 @@ async function startLaunchPreviewProxy({
   server.on("upgrade", (request, socket, head) => {
     proxyPreviewUpgrade(request, socket, head, {
       connectOrigin,
-      previewAuth,
       proxyOrigin: requestPreviewOrigin(request, proxyOrigin),
       tracker,
       tokenScope,
@@ -1791,7 +1721,6 @@ function normalizePreviewAuth(value = {}, {
       ? value.identityTypes.map((entry) => String(entry || "").trim()).filter(Boolean)
       : [],
     kind,
-    profilePath: String(value.profilePath || ""),
     projectScope: String(value.projectScope || ""),
     secret: String(value.secret || ""),
     sessionSourceRoot: String(value.sessionSourceRoot || ""),
@@ -1809,7 +1738,6 @@ function previewAuthFingerprint(value = null) {
   return JSON.stringify([
     value.kind,
     value.identityTypes,
-    value.profilePath,
     value.projectScope,
     value.secret
       ? crypto.createHash("sha256").update(String(value.secret)).digest("hex")

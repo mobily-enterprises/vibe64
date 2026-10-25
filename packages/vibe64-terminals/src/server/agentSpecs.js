@@ -1,13 +1,13 @@
 // Agent-readable specs of the Preview identity protocol and the managed app
-// identity list, generated from the limits this package and vibe64-core enforce.
+// identity list, generated from the limits this package, vibe64-core and vibe64-genesis enforce.
 import {
   PREVIEW_APPLICATION_IDENTITY_LIMIT,
   PREVIEW_APPLICATION_IDENTITY_RESERVED_NAMES,
-  PREVIEW_IDENTITY_COMMAND_PROTOCOL,
   PREVIEW_IDENTITY_LOGIN_OPERATION,
   PREVIEW_IDENTITY_LOGOUT_OPERATION,
   PREVIEW_IDENTITY_SELECTOR_TYPES
 } from "@local/vibe64-core/server/previewAuth";
+import { VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL as PREVIEW_IDENTITY_COMMAND_PROTOCOL } from "@local/vibe64-genesis/server";
 
 import {
   PREVIEW_IDENTITY_COMMAND_MAX_COOKIE_BYTES,

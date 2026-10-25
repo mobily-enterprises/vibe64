@@ -63,8 +63,6 @@ import {
   previewAuthEnvironment,
   previewAuthIdentityAvailable,
   previewAuthIdentityTypes,
-  previewAuthRequiresIdentitySecret,
-  previewAuthProfilePath,
   previewAuthSecretPath,
   readPreviewAuthSecret
 } from "@local/vibe64-core/server/previewAuth";
@@ -1078,15 +1076,12 @@ function previewAuthForLaunchTerminal(terminal = {}, {
   if (!kind) {
     return null;
   }
-  const requiresIdentitySecret = previewAuthRequiresIdentitySecret({ kind });
   let secret = "";
   try {
-    secret = requiresIdentitySecret
-      ? readPreviewAuthSecret(previewAuthSecretPath({
-          sessionRoot: metadata.sessionRoot,
-          terminalSessionId: terminal.id
-        }))
-      : "";
+    secret = readPreviewAuthSecret(previewAuthSecretPath({
+      sessionRoot: metadata.sessionRoot,
+      terminalSessionId: terminal.id
+    }));
   } catch (error) {
     vibe64SessionDebugLog("server.outputTargetTerminal.previewIdentity.secretReadError", {
       error: vibe64SessionDebugError(error),
@@ -1097,7 +1092,7 @@ function previewAuthForLaunchTerminal(terminal = {}, {
     });
     return null;
   }
-  if (requiresIdentitySecret && !secret) {
+  if (!secret) {
     return null;
   }
   return {
@@ -1106,10 +1101,6 @@ function previewAuthForLaunchTerminal(terminal = {}, {
       kind
     }),
     kind,
-    profilePath: previewAuthProfilePath({
-      sessionRoot: metadata.sessionRoot,
-      terminalSessionId: terminal.id
-    }),
     projectScope: String(metadata.projectScope || terminalProjectScopeKey()).trim(),
     secret,
     sessionId,
