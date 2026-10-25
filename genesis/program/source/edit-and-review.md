@@ -41,6 +41,7 @@ from saved project work, and inspect one exact file change at a time.
 - `src/components/studio/vibe64-session/Vibe64StarredFilesMenu.vue`
 - `src/components/studio/vibe64-session/Vibe64StarredFilesList.vue`
 - `packages/vibe64-terminals/src/server/repositoryHistory.js`
+- `packages/vibe64-terminals/src/server/gitRecords.js`
 - `packages/vibe64-terminals/src/server/sessionWorkOperationCommand.js`
 - `packages/vibe64-terminals/src/server/sessionWorkSave.js`
 - `src/composables/useVibe64SourceEditor.js`

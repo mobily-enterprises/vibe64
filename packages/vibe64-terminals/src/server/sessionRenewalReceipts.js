@@ -143,6 +143,20 @@ function codexSessionRenewalTurnError(reason, details = {}, providerMessage) {
   );
 }
 
+// The renewed conversation's acknowledgement also delivers its session briefing.
+function sessionRenewalSeedAcknowledgementMetadata({ acknowledgedAt, handoverHash, operationId, threadId, transport, turnId }) {
+  return {
+    agent_briefing_delivered: "yes",
+    agent_briefing_delivered_at: acknowledgedAt,
+    agent_briefing_transport: transport,
+    agent_renewal_seed_acknowledged_at: acknowledgedAt,
+    agent_renewal_seed_handover_hash: handoverHash,
+    agent_renewal_seed_operation_id: operationId,
+    agent_renewal_seed_thread_id: threadId,
+    agent_renewal_seed_turn_id: turnId
+  };
+}
+
 function sessionRenewalHandoverTurnId(input, session, operationId) {
   const metadata = session.metadata || {};
   const sameOperation = normalizeText(metadata.agent_renewal_handover_operation_id) === operationId;
@@ -263,17 +277,17 @@ async function completeSessionRenewalSeed({
   await runtime.store.mutateSessionForRenewal(sessionId, async () => {
     const writeMetadataValue = runtime.store.writeMetadataValueForRenewal.bind(runtime.store);
     await Promise.all([
-      writeMetadataValue(sessionId, "agent_briefing_delivered", "yes"),
-      writeMetadataValue(sessionId, "agent_briefing_delivered_at", acknowledgedAt),
-      writeMetadataValue(sessionId, "agent_briefing_transport", "codex_app_server"),
+      ...Object.entries(sessionRenewalSeedAcknowledgementMetadata({
+        acknowledgedAt,
+        handoverHash: approved.handoverHash,
+        operationId,
+        threadId,
+        transport: "codex_app_server",
+        turnId: result.turnId || turnId
+      })).map(([name, value]) => writeMetadataValue(sessionId, name, value)),
       writeMetadataValue(sessionId, "agent_settings_model", effectiveSettings.model),
       writeMetadataValue(sessionId, "agent_settings_provider", effectiveSettings.providerId),
-      writeMetadataValue(sessionId, "agent_settings_thinking", effectiveSettings.thinking),
-      writeMetadataValue(sessionId, "agent_renewal_seed_acknowledged_at", acknowledgedAt),
-      writeMetadataValue(sessionId, "agent_renewal_seed_handover_hash", approved.handoverHash),
-      writeMetadataValue(sessionId, "agent_renewal_seed_operation_id", operationId),
-      writeMetadataValue(sessionId, "agent_renewal_seed_thread_id", threadId),
-      writeMetadataValue(sessionId, "agent_renewal_seed_turn_id", result.turnId || turnId)
+      writeMetadataValue(sessionId, "agent_settings_thinking", effectiveSettings.thinking)
     ]);
   });
   // The successor remains intentionally hidden until the sessions service
@@ -317,12 +331,10 @@ async function completeClaudeSessionRenewalSeed({ input, prepared, context, meta
     throw failure;
   }
   const acknowledgedAt = now();
-  await metadata(await contextFor(context), {
-    agent_briefing_delivered: "yes", agent_briefing_delivered_at: acknowledgedAt, agent_briefing_transport: TRANSPORT,
-    agent_renewal_seed_acknowledged_at: acknowledgedAt, agent_renewal_seed_handover_hash: approved.handoverHash,
-    agent_renewal_seed_operation_id: result.operationId, agent_renewal_seed_thread_id: result.threadId,
-    agent_renewal_seed_turn_id: result.turnId
-  });
+  await metadata(await contextFor(context), sessionRenewalSeedAcknowledgementMetadata({
+    acknowledgedAt, handoverHash: approved.handoverHash, operationId: result.operationId,
+    threadId: result.threadId, transport: TRANSPORT, turnId: result.turnId
+  }));
   return { ...result, acknowledgement, acknowledgedAt, handoverHash: approved.handoverHash, ok: true, subscriptionDeferred: true };
 }
 
@@ -367,16 +379,14 @@ function createOpenCodeSessionRenewalSeedReceipt({ operationId, approved, client
       throw error;
     }
     acknowledgedAt = new Date().toISOString();
-    await writeSessionMetadata(context, {
-      agent_briefing_delivered: "yes",
-      agent_briefing_delivered_at: acknowledgedAt,
-      agent_briefing_transport: "opencode_server",
-      agent_renewal_seed_acknowledged_at: acknowledgedAt,
-      agent_renewal_seed_handover_hash: approved.handoverHash,
-      agent_renewal_seed_operation_id: operationId,
-      agent_renewal_seed_thread_id: result.threadId,
-      agent_renewal_seed_turn_id: result.turnId
-    });
+    await writeSessionMetadata(context, sessionRenewalSeedAcknowledgementMetadata({
+      acknowledgedAt,
+      handoverHash: approved.handoverHash,
+      operationId,
+      threadId: result.threadId,
+      transport: "opencode_server",
+      turnId: result.turnId
+    }));
   }
 
   async function complete(nativeResult) {

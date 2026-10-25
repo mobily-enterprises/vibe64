@@ -9,25 +9,29 @@ import { promisify } from "node:util";
 import test from "node:test";
 
 import {
-  checkSessionUpdates,
-  changeIncomingContribution,
-  changeIncomingContributionDirect,
   inspectSessionChangeDiff,
   inspectSessionChanges,
   inspectSessionWork,
   inspectSessionWorkDirect,
-  inspectIncomingContributions,
-  inspectIncomingContributionsDirect,
   prepareSessionWorkSaveMessage,
   prepareSessionPullRequestBranch,
-  recoverSessionWorkUpdate,
   recoverSessionWorkSave,
-  safeChangePath,
   saveSessionWork as saveManagedSessionWorkImplementation,
-  saveSessionWorkDirect as saveSessionWorkImplementation,
+  saveSessionWorkDirect as saveSessionWorkImplementation
+} from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
+import {
+  checkSessionUpdates,
+  recoverSessionWorkUpdate,
   updateSessionWork as updateManagedSessionWork,
   updateSessionWorkDirect as updateSessionWork
-} from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
+} from "../../packages/vibe64-terminals/src/server/sessionWorkUpdate.js";
+import {
+  changeIncomingContribution,
+  changeIncomingContributionDirect,
+  inspectIncomingContributions,
+  inspectIncomingContributionsDirect
+} from "../../packages/vibe64-terminals/src/server/sessionIncomingContributions.js";
+import { safeChangePath } from "../../packages/vibe64-terminals/src/server/gitRecords.js";
 import {
   canonicalRepositoryBackupPath,
   canonicalRepositoryInitializeScript,

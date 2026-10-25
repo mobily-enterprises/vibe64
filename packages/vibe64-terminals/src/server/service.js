@@ -184,18 +184,22 @@ import { createAgentSessionCommandService } from "./agentSessionCommand.js";
 import { closeAgentSessionCommandEnvironment, prepareAgentSessionCommandEnvironment } from "./agentCommandEnvironment.js";
 import { createCodexGitCommandService, removeCodexGitCommandSession } from "./codexGitCommand.js";
 import {
-  checkSessionUpdates as checkManagedSessionUpdates,
-  inspectIncomingContributions as inspectManagedIncomingContributions,
   changeIncomingContribution as changeManagedIncomingContribution,
+  inspectIncomingContributions as inspectManagedIncomingContributions
+} from "./sessionIncomingContributions.js";
+import {
+  checkSessionUpdates as checkManagedSessionUpdates,
+  recoverSessionWorkUpdate as recoverManagedSessionWorkUpdate,
+  updateSessionWork as updateManagedSessionWork
+} from "./sessionWorkUpdate.js";
+import {
   inspectSessionChangeDiff as inspectManagedSessionChangeDiff,
   inspectSessionChanges as inspectManagedSessionChanges,
   inspectSessionWork as inspectManagedSessionWork,
   prepareSessionPullRequestBranch,
   prepareSessionWorkSaveMessage as prepareManagedSessionWorkSaveMessage,
   recoverSessionWorkSave as recoverManagedSessionWorkSave,
-  recoverSessionWorkUpdate as recoverManagedSessionWorkUpdate,
-  saveSessionWork as saveManagedSessionWork,
-  updateSessionWork as updateManagedSessionWork
+  saveSessionWork as saveManagedSessionWork
 } from "./sessionWorkSave.js";
 import {
   cleanupSessionSaveCommitMessage,

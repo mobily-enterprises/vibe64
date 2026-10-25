@@ -6,7 +6,8 @@ import path from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
 import { localRepositoryRemote } from "../../packages/vibe64-project/src/server/localRepositoryRemote.js";
-import { checkSessionUpdatesDirect, updateSessionWork, saveSessionWorkDirect } from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
+import { saveSessionWorkDirect } from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
+import { checkSessionUpdatesDirect, updateSessionWork } from "../../packages/vibe64-terminals/src/server/sessionWorkUpdate.js";
 import { runCaptureCommand } from "../../packages/vibe64-execution/src/server/engines/capture.js";
 
 const exec = promisify(execFile);

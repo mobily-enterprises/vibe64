@@ -2,13 +2,17 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { configureVibe64Host, runCaptureCommand } from "@local/vibe64-execution/server";
 import {
-  inspectIncomingContributionsDirect,
   changeIncomingContributionDirect,
-  checkSessionUpdatesDirect,
-  captureSessionWorkUpdateCheckpointDirect,
-  prepareSessionWorkUpdateDirect,
-  regenerateSessionWorkUpdateDirect,
+  inspectIncomingContributionsDirect
+} from "./sessionIncomingContributions.js";
+import {
   applySessionWorkUpdateDirect,
+  captureSessionWorkUpdateCheckpointDirect,
+  checkSessionUpdatesDirect,
+  prepareSessionWorkUpdateDirect,
+  regenerateSessionWorkUpdateDirect
+} from "./sessionWorkUpdate.js";
+import {
   inspectSessionChangeDiffDirect,
   inspectSessionChangesDirect,
   inspectSessionWorkDirect,

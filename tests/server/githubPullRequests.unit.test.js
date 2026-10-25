@@ -12,7 +12,8 @@ import { assertSessionRepositoryReview, sessionRepositoryDestination, sessionRep
 import { repositoryBranches } from "../../packages/vibe64-project/src/server/repositoryBranches.js";
 import { createService as createProjectService } from "../../packages/vibe64-project/src/server/service.js";
 import { installVibe64ManagedExecutionProvider } from "../../packages/vibe64-execution/src/server/managedExecution.js";
-import { prepareSessionPullRequestBranch, saveSessionWorkDirect, checkSessionUpdatesDirect, updateSessionWorkDirect } from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
+import { prepareSessionPullRequestBranch, saveSessionWorkDirect } from "../../packages/vibe64-terminals/src/server/sessionWorkSave.js";
+import { checkSessionUpdatesDirect, updateSessionWorkDirect } from "../../packages/vibe64-terminals/src/server/sessionWorkUpdate.js";
 import { createSessionSource } from "../../packages/vibe64-terminals/src/server/sessionSource.js";
 import { createService } from "../../packages/vibe64-sessions/src/server/service.js";
 import getPlacements from "../../src/placement.js";

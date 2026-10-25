@@ -56,6 +56,10 @@ Git commands.
 - `packages/vibe64-terminals/src/server/sessionNamingHelper.js`
 - `packages/vibe64-terminals/src/server/sessionWorkOperationCommand.js`
 - Main: `packages/vibe64-terminals/src/server/sessionWorkSave.js`
+- `packages/vibe64-terminals/src/server/sessionWorkGit.js`
+- `packages/vibe64-terminals/src/server/sessionWorkAuthority.js`
+- `packages/vibe64-terminals/src/server/sessionWorkUpdate.js`
+- `packages/vibe64-terminals/src/server/sessionIncomingContributions.js`
 - `packages/vibe64-terminals/src/server/sessionSource.js`
 - `packages/vibe64-project/src/server/localRepositoryRemote.js`
 - `src/components/studio/repository/Vibe64LocalRemoteControls.vue`

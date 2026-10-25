@@ -6,6 +6,7 @@ import { recordSessionGitCommandActor, sessionGitCommandActorFromMetadata } from
 import { clearCodexAppServerContextRefreshPending } from "./codexContextRenewalSignals.js";
 import { openCodeModel } from "@jskit-ai/assistant-core/server/opencode-process";
 import { conversationActorMetadata, conversationReviewActorMetadata } from "./conversationActor.js";
+import { isNativeConversationBindingKey } from "./nativeConversationRetirement.js";
 import {
   VIBE64_ASSISTANT_ENGINE_IDS, defineVibe64AssistantSelection,
   vibe64AssistantConversationKey, vibe64AssistantSelectionFromMetadata
@@ -246,39 +247,35 @@ function openCodeSelection(session = {}) {
   return selection;
 }
 
+function synchronousConversationHost(provider, sessionId, context, purpose, label) {
+  const host = provider.prepareConversationHost(sessionId, context, purpose);
+  if (!host || typeof host.then === "function") {
+    throw new TypeError(`${label} requires synchronous native host facilities.`);
+  }
+  return host;
+}
+
 // Project cleanup has no conversation identity. This returns configured native
 // facilities synchronously; the shared owner retains its original preparation.
 export function prepareProjectConversationCleanup(provider, context, input) {
-  const host = provider.prepareConversationHost(undefined, context, "projectCleanup");
-  if (!host || typeof host.then === "function") {
-    throw new TypeError("Project cleanup requires synchronous native host facilities.");
-  }
+  const host = synchronousConversationHost(provider, undefined, context, "projectCleanup", "Project cleanup");
   return { engine: provider.id, native: host.native, context, input };
 }
 
 // Account cleanup preserves the native owner's synchronous closing fence.
 export function prepareConversationRuntimeInvalidation(provider, context, input) {
-  const host = provider.prepareConversationHost(undefined, context, "invalidation");
-  if (!host || typeof host.then === "function") {
-    throw new TypeError("Runtime invalidation requires synchronous native host facilities.");
-  }
+  const host = synchronousConversationHost(provider, undefined, context, "invalidation", "Runtime invalidation");
   return { engine: provider.id, native: host.native, context, input };
 }
 
 // Startup uses the same configured native owner without creating a Main binding.
 export function prepareConversationReconciliation(provider, context, sessions, options) {
-  const host = provider.prepareConversationHost(undefined, context, "reconciliation");
-  if (!host || typeof host.then === "function") {
-    throw new TypeError("Reconciliation requires synchronous native host facilities.");
-  }
+  const host = synchronousConversationHost(provider, undefined, context, "reconciliation", "Reconciliation");
   return { engine: provider.id, native: host.native, context, sessions, options };
 }
 
 export function prepareConversationSubscriptionReset(provider, context, sessions) {
-  const host = provider.prepareConversationHost(undefined, context, "unsubscription");
-  if (!host || typeof host.then === "function") {
-    throw new TypeError("Subscription reset requires synchronous native host facilities.");
-  }
+  const host = synchronousConversationHost(provider, undefined, context, "unsubscription", "Subscription reset");
   return { engine: provider.id, native: host.native, context, sessions };
 }
 
@@ -314,10 +311,7 @@ export async function prepareSessionConversationActivity(provider, sessionId, co
 // are synchronous; native owners retain the close/release order and lazy reads.
 export function prepareSessionConversationRenewalProof(provider, sessionId, context, input, method) {
   const request = provider.prepareConversationRequest(method, context, input);
-  const host = provider.prepareConversationHost(sessionId, context, "renewalProof");
-  if (!host || typeof host.then === "function") {
-    throw new TypeError("Renewal proof release requires synchronous native host facilities.");
-  }
+  const host = synchronousConversationHost(provider, sessionId, context, "renewalProof", "Renewal proof release");
   return { sessionId, engine: provider.id, native: host.native,
     context: Object.hasOwn(request, "context") ? request.context : context,
     input: Object.hasOwn(request, "input") ? request.input : input };
@@ -551,8 +545,7 @@ function createCodexMainMessagePreparation(sessionId, env, nativePreparation) {
       const providerContextRefreshPending = codexContextRefreshPending(preparedSession);
       stageStartedAt = Date.now();
       const genesisTask = normalizeMessageText(input.genesisTask);
-      const needsOpeningPrompt = !sessionBriefingIsDelivered(preparedSession) &&
-        !normalizeMessageText(preparedSession.metadata?.renewal_handover_delivered_at);
+      const needsOpeningPrompt = sessionNeedsOpeningPrompt(preparedSession);
       const rendered = genesisTask || needsOpeningPrompt
         ? await runtime.renderPrompt(sessionId, {
             input,
@@ -627,6 +620,13 @@ export function sessionBriefingIsDelivered(session = {}) {
   return normalizeMessageText(session.metadata?.agent_briefing_delivered) === "yes";
 }
 
+// A session opens with its briefing until it was delivered, unless a renewal
+// handover already started the conversation. Engines add their own conditions.
+function sessionNeedsOpeningPrompt(session = {}) {
+  return !sessionBriefingIsDelivered(session) &&
+    !normalizeMessageText(session.metadata?.renewal_handover_delivered_at);
+}
+
 function codexContextRefreshPending(session = {}) {
   return normalizeMessageText(session.metadata?.codex_context_refresh_pending) === "yes";
 }
@@ -656,8 +656,7 @@ export function createClaudeConversationMessagePolicy({ env, recordGitActor, pub
     }
     let prompt = message;
     // Only Main owns a session briefing; scoped assistant contexts carry no session.
-    const needsOpeningPrompt = entry.main && !steering && !entry.sent && !sessionBriefingIsDelivered(ctx.session) &&
-      !text(ctx.session?.metadata?.renewal_handover_delivered_at);
+    const needsOpeningPrompt = entry.main && !steering && !entry.sent && sessionNeedsOpeningPrompt(ctx.session);
     if (!renewal && entry.main && !/^\/goal(?:\s|$)/u.test(message) && (needsOpeningPrompt || input.genesisTask)) {
       prompt = (await ctx.runtime.renderPrompt(ctx.sessionId, { input, request: message, task: input.genesisTask || "start" }))?.prompt || message;
       mark("genesis-rendered");
@@ -853,8 +852,7 @@ export function createOpenCodeMainMessagePreparation({ projectService, env, reco
           const needsOpeningPrompt = Boolean(
             genesisTask || (
               !conversation?.pagination?.totalTurnCount &&
-              text(context.session?.metadata?.agent_briefing_delivered) !== "yes" &&
-              !text(context.session?.metadata?.renewal_handover_delivered_at)
+              sessionNeedsOpeningPrompt(context.session)
             )
           );
           const rendered = needsOpeningPrompt
@@ -960,7 +958,7 @@ export function createMainConversationBinding(store, sessionId, context) {
         if (metadata.agent_identity_provider !== selection.engineId || metadata.agent_identity_conversation_id !== expectedId ||
             !metadata.agent_identity_workdir) fail("The native predecessor identity changed or is incomplete.");
         const bindingNames = Object.keys(metadata).filter((name) =>
-          (name === "agent_identity_conversation_id" || /^(?:codex(?:_[a-z0-9_-]+)?|claude|opencode)_conversation_id$/u.test(name)) &&
+          (name === "agent_identity_conversation_id" || isNativeConversationBindingKey(name)) &&
           metadata[name] === expectedId);
         if (bindingNames.length < 2) fail("The native conversation binding is incomplete.");
         if (selection.engineId === "codex" && Object.hasOwn(metadata, "codex_conversation_tool_schema_identity")) {

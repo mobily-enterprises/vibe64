@@ -15,16 +15,6 @@ import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 
-const SESSION_GIT_COMMAND_ACTOR_METADATA_KEYS = Object.freeze([
-  "session_git_command_actor_reason",
-  "session_git_command_actor_updated_at",
-  "session_git_command_actor_scope",
-  "session_git_command_actor_session_id",
-  "session_git_command_actor_source_root",
-  "session_git_command_actor_thread_id",
-  "session_git_command_actor_user_key",
-  "session_git_command_actor_workdir"
-]);
 const NO_GITHUB_TERMINAL_USER_KEY = "runtime";
 
 function normalizeText(value = "") {
@@ -39,6 +29,29 @@ function responseError(message = "", code = "vibe64_session_git_actor_failed", e
     ok: false
   };
 }
+
+function actorMetadataRecord({
+  reason = "",
+  scope = "",
+  sessionId = "",
+  sourceRoot = "",
+  threadId = "",
+  userKey = "",
+  workdir = ""
+} = {}) {
+  return {
+    session_git_command_actor_reason: reason,
+    session_git_command_actor_updated_at: new Date().toISOString(),
+    session_git_command_actor_scope: scope,
+    session_git_command_actor_session_id: sessionId,
+    session_git_command_actor_source_root: sourceRoot,
+    session_git_command_actor_thread_id: threadId,
+    session_git_command_actor_user_key: userKey,
+    session_git_command_actor_workdir: workdir || sourceRoot
+  };
+}
+
+const SESSION_GIT_COMMAND_ACTOR_METADATA_KEYS = Object.freeze(Object.keys(actorMetadataRecord()));
 
 function sessionGitCommandActorMetadata({
   env = process.env,
@@ -71,18 +84,16 @@ function sessionGitCommandActorMetadata({
       "vibe64_session_git_command_actor_context_required"
     );
   }
-  const now = new Date();
   return {
-    metadata: {
-      session_git_command_actor_reason: normalizeText(reason),
-      session_git_command_actor_scope: ownerScope,
-      session_git_command_actor_session_id: normalizedSessionId,
-      session_git_command_actor_source_root: normalizedSourceRoot,
-      session_git_command_actor_thread_id: normalizeText(threadId),
-      session_git_command_actor_updated_at: now.toISOString(),
-      session_git_command_actor_user_key: ownerUserKey,
-      session_git_command_actor_workdir: normalizeText(workdir) || normalizedSourceRoot
-    },
+    metadata: actorMetadataRecord({
+      reason: normalizeText(reason),
+      scope: ownerScope,
+      sessionId: normalizedSessionId,
+      sourceRoot: normalizedSourceRoot,
+      threadId: normalizeText(threadId),
+      userKey: ownerUserKey,
+      workdir: normalizeText(workdir)
+    }),
     ok: true
   };
 }
@@ -103,18 +114,16 @@ function sessionGitCommandActorMetadataFromExistingActor({
       "vibe64_session_git_command_actor_context_required"
     );
   }
-  const now = new Date();
   return {
-    metadata: {
-      session_git_command_actor_reason: normalizeText(reason) || normalizeText(actor.actorReason),
-      session_git_command_actor_scope: normalizeText(actor.actorScope),
-      session_git_command_actor_session_id: normalizedSessionId,
-      session_git_command_actor_source_root: normalizedSourceRoot,
-      session_git_command_actor_thread_id: normalizeText(threadId) || normalizeText(actor.threadId),
-      session_git_command_actor_updated_at: now.toISOString(),
-      session_git_command_actor_user_key: normalizeText(actor.actorUserKey),
-      session_git_command_actor_workdir: normalizeText(workdir) || normalizeText(actor.workdir) || normalizedSourceRoot
-    },
+    metadata: actorMetadataRecord({
+      reason: normalizeText(reason) || normalizeText(actor.actorReason),
+      scope: normalizeText(actor.actorScope),
+      sessionId: normalizedSessionId,
+      sourceRoot: normalizedSourceRoot,
+      threadId: normalizeText(threadId) || normalizeText(actor.threadId),
+      userKey: normalizeText(actor.actorUserKey),
+      workdir: normalizeText(workdir) || normalizeText(actor.workdir)
+    }),
     ok: true,
     preservedActor: true
   };

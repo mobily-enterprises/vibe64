@@ -12,22 +12,21 @@ import {
 } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
 import {
-  exactFileDiffPathspecs,
-  parseGitNameStatusZ,
-  parseGitNumstatZ,
-  safeChangePath
-} from "./sessionWorkSave.js";
-import {
+  DEFAULT_CHANGE_DIFF_LINE_LIMIT,
+  DEFAULT_CHANGE_FILE_LIMIT,
   GIT_HISTORY_RECORD_FORMAT,
-  parseGitHistoryRecords
-} from "./gitHistoryRecords.js";
+  MAX_CHANGE_FILE_LIMIT,
+  boundedDiff,
+  boundedInteger,
+  changedFileRecords,
+  exactFileDiffPathspecs,
+  pageRecords,
+  parseGitHistoryRecords,
+  safeChangePath
+} from "./gitRecords.js";
 
 const DEFAULT_HISTORY_LIMIT = 30;
 const MAX_HISTORY_LIMIT = 50;
-const DEFAULT_FILE_LIMIT = 200;
-const MAX_FILE_LIMIT = 500;
-const DEFAULT_DIFF_LINE_LIMIT = 800;
-const MAX_DIFF_LINE_LIMIT = 5000;
 const HISTORY_TIMEOUT_MS = 30_000;
 
 function text(value = "") {
@@ -38,11 +37,6 @@ function repositoryError(message, code = "vibe64_repository_history_failed") {
   const error = new Error(message);
   error.code = code;
   return error;
-}
-
-function boundedInteger(value, fallback, maximum) {
-  const number = Number.parseInt(String(value ?? ""), 10);
-  return Number.isSafeInteger(number) && number > 0 ? Math.min(number, maximum) : fallback;
 }
 
 function commitObjectId(value = "", errorCode = "vibe64_repository_history_commit_invalid") {
@@ -274,7 +268,7 @@ async function versionComparison(context, commit, runCommand) {
 async function repositoryVersionFiles({
   commit = "",
   historySnapshotCommit = "",
-  limit = DEFAULT_FILE_LIMIT,
+  limit = DEFAULT_CHANGE_FILE_LIMIT,
   offset = 0,
   project = {},
   runCommand = runVibe64Command,
@@ -293,30 +287,27 @@ async function repositoryVersionFiles({
     git(context, ["diff-tree", "--no-commit-id", "-r", "-M", "--name-status", "-z", ...comparison.args], { runCommand }),
     git(context, ["diff-tree", "--no-commit-id", "-r", "-M", "--numstat", "-z", ...comparison.args], { runCommand })
   ]);
-  const statuses = parseGitNameStatusZ(output(statusResult));
-  const stats = parseGitNumstatZ(output(statResult));
-  const files = [...statuses.values()]
-    .map((file) => ({ ...file, ...(stats.get(file.path) || { added: 0, deleted: 0 }) }))
-    .sort((left, right) => left.path.localeCompare(right.path));
-  const boundedLimit = boundedInteger(limit, DEFAULT_FILE_LIMIT, MAX_FILE_LIMIT);
-  const boundedOffset = Math.max(0, Number.parseInt(String(offset ?? ""), 10) || 0);
+  const files = changedFileRecords(output(statusResult), output(statResult));
+  const { items, ...page } = pageRecords(files, {
+    defaultLimit: DEFAULT_CHANGE_FILE_LIMIT,
+    limit,
+    maxLimit: MAX_CHANGE_FILE_LIMIT,
+    offset
+  });
   return {
     commit,
-    files: files.slice(boundedOffset, boundedOffset + boundedLimit),
+    files: items,
     historySnapshotCommit: snapshot,
-    limit: boundedLimit,
-    offset: boundedOffset,
+    ...page,
     ok: true,
-    parent: comparison.parent,
-    totalCount: files.length,
-    truncated: boundedOffset + boundedLimit < files.length
+    parent: comparison.parent
   };
 }
 
 async function repositoryVersionFileDiff({
   commit = "",
   historySnapshotCommit = "",
-  lineLimit = DEFAULT_DIFF_LINE_LIMIT,
+  lineLimit = DEFAULT_CHANGE_DIFF_LINE_LIMIT,
   path: requestedPath = "",
   project = {},
   runCommand = runVibe64Command,
@@ -355,19 +346,13 @@ async function repositoryVersionFileDiff({
         "--",
         ...exactFileDiffPathspecs(filePath)
       ], { runCommand });
-  const lines = output(result).replaceAll("\r\n", "\n").split("\n");
-  const boundedLimit = boundedInteger(lineLimit, DEFAULT_DIFF_LINE_LIMIT, MAX_DIFF_LINE_LIMIT);
   return {
     commit,
-    diff: lines.slice(0, boundedLimit).join("\n"),
+    ...boundedDiff(output(result), lineLimit),
     historySnapshotCommit: snapshot,
-    lineLimit: boundedLimit,
     ok: true,
     parent: comparison.parent,
-    path: filePath,
-    shownLines: Math.min(lines.length, boundedLimit),
-    totalLines: lines.length,
-    truncated: lines.length > boundedLimit
+    path: filePath
   };
 }
 

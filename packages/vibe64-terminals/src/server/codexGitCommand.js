@@ -722,6 +722,35 @@ function createCodexGitCommandService({
 } = {}) {
   const gatewayCommandRunner = typeof runGatewayCommand === "function" ? runGatewayCommand : runVibe64Command;
 
+  // Resolved per call: the project service may install its hook after construction.
+  function actorAccessAuthorizer() {
+    if (typeof authorizeActorAccess === "function") {
+      return authorizeActorAccess;
+    }
+    return typeof projectService?.authorizeCodexGitActorAccess === "function"
+      ? projectService.authorizeCodexGitActorAccess.bind(projectService)
+      : null;
+  }
+
+  async function actorAccessRefusal(authorize, { actor, deniedMessage, session, workdir }) {
+    const access = await authorize({
+      actor,
+      session,
+      sourceRoot: actor.sourceRoot,
+      workdir
+    });
+    if (access !== false && access?.ok !== false) {
+      return null;
+    }
+    return responseError(
+      access?.error || deniedMessage,
+      access?.code || "vibe64_codex_git_actor_access_denied",
+      {
+        statusCode: access?.statusCode || 403
+      }
+    );
+  }
+
   async function sessionWorkSaveContext({
     session: suppliedSession = null,
     sessionId: suppliedSessionId = ""
@@ -740,26 +769,16 @@ function createCodexGitCommandService({
     if (actor.ok === false) {
       return actor;
     }
-    const authorize = typeof authorizeActorAccess === "function"
-      ? authorizeActorAccess
-      : typeof projectService?.authorizeCodexGitActorAccess === "function"
-        ? projectService.authorizeCodexGitActorAccess.bind(projectService)
-        : null;
-    if (actor.githubRequired !== false && authorize) {
-      const access = await authorize({
+    const authorize = actor.githubRequired !== false && actorAccessAuthorizer();
+    if (authorize) {
+      const refusal = await actorAccessRefusal(authorize, {
         actor,
+        deniedMessage: "This GitHub actor no longer has access to this project session.",
         session,
-        sourceRoot: actor.sourceRoot,
         workdir: actor.workdir
       });
-      if (access === false || access?.ok === false) {
-        return responseError(
-          access?.error || "This GitHub actor no longer has access to this project session.",
-          access?.code || "vibe64_codex_git_actor_access_denied",
-          {
-            statusCode: access?.statusCode || 403
-          }
-        );
+      if (refusal) {
+        return refusal;
       }
     }
     if (actor.githubRequired === false) {
@@ -895,27 +914,17 @@ function createCodexGitCommandService({
     if (cwd.ok === false) {
       return finish(cwd, actor);
     }
-    const authorize = typeof authorizeActorAccess === "function"
-      ? authorizeActorAccess
-      : typeof projectService?.authorizeCodexGitActorAccess === "function"
-        ? projectService.authorizeCodexGitActorAccess.bind(projectService)
-        : null;
-    if (actor.githubRequired !== false && authorize) {
+    const authorize = actor.githubRequired !== false && actorAccessAuthorizer();
+    if (authorize) {
       stage = "authorization";
-      const access = await authorize({
+      const refusal = await actorAccessRefusal(authorize, {
         actor,
+        deniedMessage: "This Codex GitHub actor no longer has access to this project session.",
         session,
-        sourceRoot: actor.sourceRoot,
         workdir: cwd.cwd
       });
-      if (access === false || access?.ok === false) {
-        return finish(responseError(
-          access?.error || "This Codex GitHub actor no longer has access to this project session.",
-          access?.code || "vibe64_codex_git_actor_access_denied",
-          {
-            statusCode: access?.statusCode || 403
-          }
-        ), {
+      if (refusal) {
+        return finish(refusal, {
           ...actor,
           cwd: cwd.cwd
         });

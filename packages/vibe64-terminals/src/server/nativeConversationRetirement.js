@@ -1,4 +1,10 @@
 
+export const NATIVE_CONVERSATION_BINDING_KEY = /^(codex(?:_([a-z0-9_-]+))?|claude|opencode)_conversation_id$/u;
+
+export function isNativeConversationBindingKey(name) {
+  return NATIVE_CONVERSATION_BINDING_KEY.test(name);
+}
+
 // Only saved main bindings and acknowledged replacements are eligible here.
 // Temporary conversations retain their existing explicit-close lifecycle.
 export function nativeConversationBindings(session, { retiredOnly = false } = {}) {
@@ -9,7 +15,7 @@ export function nativeConversationBindings(session, { retiredOnly = false } = {}
   if (retiredOnly) return bindings;
 
   for (const [key, conversationId] of Object.entries(metadata)) {
-    const match = /^(codex(?:_([a-z0-9_-]+))?|claude|opencode)_conversation_id$/u.exec(key);
+    const match = NATIVE_CONVERSATION_BINDING_KEY.exec(key);
     if (!match || !conversationId) continue;
     const [, prefix, codexHomeProvider] = match;
     const engineId = prefix.startsWith("codex") ? "codex" : prefix;

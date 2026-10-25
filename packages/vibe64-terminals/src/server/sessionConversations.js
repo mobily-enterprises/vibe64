@@ -11,6 +11,7 @@ import { assistantGoalManagementMessage, assistantGoalObjective, assistantRoutin
 import { createAssistantRouting } from "./assistantRouting.js";
 import { requireCompletedConversationRewind, sendWithAssistantChangeover, sessionConversationKey } from "./assistantChangeover.js";
 import { createMainConversationBinding, readMainConversationHistory, MAIN_CONVERSATION_PRESENTATION } from "./mainConversationBinding.js";
+import { isNativeConversationBindingKey } from "./nativeConversationRetirement.js";
 
 const textFields = [
   "title", "draft", "displayMessage", "completionMessage", "dedupeKey", "failureMessage", "nextStepMessage",
@@ -112,6 +113,10 @@ async function recentChatContext(store, sessionId) {
   return { messages, truncated, capturedAt: new Date().toISOString() };
 }
 
+function routingRequest(record) {
+  return JSON.parse(record.routingMetadata?.assistant_routing_request || "null");
+}
+
 function requireSuccess(result) {
   if (result?.ok === false) throw Object.assign(new Error(result.error || "Assistant conversation operation failed."), result);
   return result;
@@ -198,7 +203,7 @@ function createSessionConversations({
     for (const key of ["assistant_routing", "assistant_routing_request", "assistant_routing_goal", "codex_routing_home_provider", "assistant_changeover"]) delete metadata[key];
     // Native history belongs to this chat, never to the parent session.
     for (const key of Object.keys(metadata)) {
-      if (/^(?:codex(?:_[a-z0-9_-]+)?|claude|opencode)_conversation_id$/u.test(key)) delete metadata[key];
+      if (isNativeConversationBindingKey(key)) delete metadata[key];
     }
     Object.assign(metadata, record.routingMetadata || {}, {
       assistant_selection: serializeVibe64AssistantSelection(selection),
@@ -281,7 +286,7 @@ function createSessionConversations({
         if (phase === "stream") {
           // The scoped stream owner has already matched this captured native
           // thread. Keep its admitted selection, not a later composer choice.
-          const route = JSON.parse(record.routingMetadata?.assistant_routing_request || "null");
+          const route = routingRequest(record);
           const attributed = { ...message, metadata: { assistantSelection: record.assistantSelection,
             ...(route?.resolvedMode ? { assistantRouting: { resolvedMode: route.resolvedMode } } : {}) } };
           if (record.recoveryOperation !== "update" || (message.role || "assistant") !== "assistant") return attributed;
@@ -292,12 +297,12 @@ function createSessionConversations({
         if (phase === "incomplete" && message.role === "assistant" && record.recoveryOperation === "update" && !outcome) return null;
         return { ...message, text: outcome?.message || message.text,
           ...(phase === "incomplete" ? { assistantSelection: record.assistantSelection,
-            assistantRouting: JSON.parse(record.routingMetadata?.assistant_routing_request || "null") } : {}) };
+            assistantRouting: routingRequest(record) } : {}) };
       },
       async snapshot({ context: ctx, record, response, messages, includeAccess, readPage, savedOnly = false }) {
         const sessionId = ctx.session.sessionId;
         const outcome = response.outcome || normalizeVibe64AgentTaskResult(response.text);
-        const route = JSON.parse(record.routingMetadata?.assistant_routing_request || "null");
+        const route = routingRequest(record);
         if (!savedOnly && route && route.status === "working" && route.delivery === "accepted" && response.runId &&
             !["starting", "inProgress", "ready"].includes(response.status)) {
           // Schedule after releasing the existing write lock. Native idle events
@@ -330,10 +335,9 @@ function createSessionConversations({
     },
     prepare: {
       async continuity(sessionId, ctx, { remember = false } = {}) {
-        let engineId = remember ? sessionConversationKey(ctx.session) : undefined;
         requireCompletedConversationRewind(ctx.session);
+        const engineId = sessionConversationKey(ctx.session);
         const store = ctx.runtime.store;
-        if (!remember) engineId = sessionConversationKey(ctx.session);
         const id = remember ? ctx.session.sessionId : sessionId;
         const messages = [...(ctx.recentChatContext?.messages || []), ...await readMainConversationHistory(store, id)];
         const binding = createMainConversationBinding(store, id, remember ? undefined : ctx);
@@ -603,7 +607,7 @@ function createSessionConversations({
           const observed = requireSuccess(await service.readTemporaryConversation(sessionId, { conversationId }, context, query));
           const { conversationLog, pagination, messages: _messages, nativeBindings: _bindings,
             providerConversationId: _nativeId, ...presentation } = observed;
-          const route = JSON.parse(observed.routingMetadata?.assistant_routing_request || "null");
+          const route = routingRequest(observed);
           const pending = Object.values(JSON.parse(observed.routingMetadata?.assistant_changeover || "null")?.engines || {})
             .map(value => value.pending).find(value => value?.attempted);
           const request = route?.delivery === "uncertain" && route.input ? {
@@ -873,7 +877,7 @@ function createSessionConversations({
         context = ctx;
         const record = await ctx.runtime.store.readSessionConversation(sessionId, input.conversationId);
         if (!record) return { ok: true, deleted: true };
-        if (JSON.parse(record.routingMetadata?.assistant_routing_request || "null")?.helper) {
+        if (routingRequest(record)?.helper) {
           throw new Error("The routing helper could not be closed. Retry closing this conversation to finish cleanup.");
         }
         return conversationRuntime.deletePersistentConversation(persistentConversationOptions(ctx, record));
