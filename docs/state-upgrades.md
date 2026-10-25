@@ -1541,3 +1541,19 @@ changes, and a retry after success changes nothing. Personal preference readers
 refuse unknown fields, so a profile still holding the flag is unreadable until
 this upgrade runs. Focused evidence: `retiredTourPreferenceUpgrade.unit.test.js`
 and `stateUpgrades.unit.test.js`.
+
+## Retired project bootstrap (`20261025-retired-project-bootstrap`)
+
+Project records written before Genesis-first projects could hold a `bootstrap`
+creation record that nothing has read since; project metadata validation now
+refuses it instead of silently dropping it. This upgrade follows
+`20261023-retired-tour-preference`. For each `projects/<slug>/project.json`
+(the Core project-state inventory, including closed and deleting projects) that
+holds `bootstrap`, it removes that one field and keeps every other field as
+saved; records without it are not touched. It uses the backed-up publisher
+(backups under `upgrades/backups/20261025-retired-project-bootstrap/`); check is
+read-only, a record that is not a JSON object stops the upgrade without changes,
+and a retry after success changes nothing. A record still holding the field is
+unreadable until this upgrade runs. Focused evidence:
+`retiredProjectBootstrapUpgrade.unit.test.js`, `studioProjectContext.unit.test.js`
+and `stateUpgrades.unit.test.js`.

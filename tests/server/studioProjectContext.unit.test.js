@@ -494,6 +494,27 @@ test("hosted project readers reject stored local-source metadata without repairi
   });
 });
 
+test("project readers reject a stored retired bootstrap field; only its state upgrade removes it", async () => {
+  await withTemporaryRoot(async (root) => {
+    const projectsRoot = path.join(root, "projects");
+    const context = createStudioProjectContext({
+      explicitProjectsRoot: projectsRoot,
+      env: {},
+      home: root
+    });
+    await context.createWorkspaceProjectRecord({ slug: "retired-bootstrap" });
+    const recordPath = context.projectRecordPathForSlug("retired-bootstrap");
+    const current = JSON.parse(await readFile(recordPath, "utf8"));
+    const retired = `${JSON.stringify({ ...current, bootstrap: { mode: "new", status: "pending" } }, null, 2)}\n`;
+    await writeFile(recordPath, retired, "utf8");
+
+    await assert.rejects(() => context.readWorkspaceProject({ slug: "retired-bootstrap" }), {
+      code: "vibe64_project_metadata_field_unsupported"
+    });
+    assert.equal(await readFile(recordPath, "utf8"), retired);
+  });
+});
+
 test("hosted project access leaves every legacy root-checkout state inert", async (t) => {
   await withTemporaryRoot(async (root) => {
     const authorityRoot = path.join(root, "authority.git");
@@ -1322,47 +1343,6 @@ test("Studio project context defaults new catalog records to managed Git metadat
       defaultBranch: "main"
     });
     assert.deepEqual(Object.keys(record), ["repository"]);
-  });
-});
-
-test("Studio project context discards retired bootstrap metadata while reading current records", async () => {
-  await withTemporaryRoot(async (root) => {
-    const projectsRoot = path.join(root, "projects");
-    const context = createStudioProjectContext({
-      explicitProjectsRoot: projectsRoot,
-      env: {},
-      home: root
-    });
-    const projectRoot = path.join(projectsRoot, "retired-state-app");
-    const recordPath = context.projectRecordPathForSlug("retired-state-app");
-    await Promise.all([
-      mkdir(projectRoot, { recursive: true }),
-      writeTestFile(recordPath, `${JSON.stringify({
-        bootstrap: {
-          mode: "new",
-          status: "pending"
-        },
-        repository: {
-          defaultBranch: "main",
-          mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT
-        }
-      }, null, 2)}\n`)
-    ]);
-
-    const read = await context.readWorkspaceProject({
-      slug: "retired-state-app"
-    });
-    const state = await context.readWorkspaceProjectState({
-      slug: "retired-state-app"
-    });
-
-    assert.equal(read.project.repositoryMode, PROJECT_REPOSITORY_MODE_MANAGED_GIT);
-    assert.deepEqual(state.metadata, {
-      repository: {
-        defaultBranch: "main",
-        mode: PROJECT_REPOSITORY_MODE_MANAGED_GIT
-      }
-    });
   });
 });
 

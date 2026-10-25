@@ -459,7 +459,6 @@ function normalizeProjectMetadata(metadata = {}) {
   }
   const unsupportedFields = Object.keys(metadata)
     .filter((field) => ![
-      "bootstrap",
       "deletion",
       "developmentDatabaseName",
       "developmentDatabaseScope",

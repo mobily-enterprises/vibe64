@@ -29,6 +29,8 @@ workspace.
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `packages/vibe64-core/src/server/studioProjectContext.js`
 - `packages/vibe64-core/src/server/projectState.js`
+- `packages/vibe64-core/src/server/stateUpgrades/20261025-retired-project-bootstrap.js`
+- `tests/server/retiredProjectBootstrapUpgrade.unit.test.js`
 - `packages/vibe64-core/src/server/projectRequestContext.js`
 - `packages/vibe64-core/src/server/practiceContext.js`
 - `packages/vibe64-core/src/server/actionContext.js`
@@ -396,6 +398,12 @@ local installation does not have; ordinary projects still leave on it.
 Evidence: `tests/server/studioProjectContext.unit.test.js`,
 `tests/server/vibe64FeatureRoutes.unit.test.js` and
 `tests/client/vibe64PracticeProjectDeleted.vitest.js`.
+
+Project metadata accepts only its current fields (deletion, development
+database name and scope, `allowSharedDatabaseSessions`, repository and
+training) and refuses any other, including the retired `bootstrap` creation
+record; `20261025-retired-project-bootstrap` removes that field from saved
+records.
 
 Project metadata optionally stores `allowSharedDatabaseSessions`, defaulting to
 false without rewriting old records. The existing locked database settings action
