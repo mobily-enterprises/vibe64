@@ -8,7 +8,6 @@ import {
   inspectPostgresSchema,
   inspectSqliteSchema
 } from "./schemaInspector.js";
-import { SQL_QUOTING } from "../shared/sqlQuoting.js";
 
 // Text from a driver value: binary values (mysql2 Buffers, worker-transferred
 // Uint8Arrays) decode as UTF-8; anything else is trimmed.
@@ -17,24 +16,6 @@ function driverText(value = "") {
     return Buffer.from(value).toString("utf8");
   }
   return String(value ?? "").trim();
-}
-
-// The shared quoting rules, with a missing identifier reported as a Vibe64 error.
-function serverQuoting(engine) {
-  const { quoteIdentifier, stringLiteral } = SQL_QUOTING[engine];
-  return {
-    quoteIdentifier(value) {
-      try {
-        return quoteIdentifier(value);
-      } catch {
-        throw vibe64Error(
-          "A database identifier is missing.",
-          "vibe64_database_identifier_missing"
-        );
-      }
-    },
-    stringLiteral
-  };
 }
 
 function postgresEscapeStringAt(sql = "", index = 0) {
@@ -69,18 +50,15 @@ function mysqlOrigin(field = {}, maps = {}) {
 }
 
 const DATABASE_DIALECT_FUNCTIONS = Object.freeze([
-  "binaryLiteral",
   "commandResult",
   "connectionOptions",
   "databaseType",
   "fieldOrigin",
   "inspectSchema",
   "lookupSearch",
-  "quoteIdentifier",
   "resultSet",
   "sanitizeConnectionUrl",
-  "singleQuoteBackslashEscapes",
-  "stringLiteral"
+  "singleQuoteBackslashEscapes"
 ]);
 
 function defineDatabaseDialect(definition = {}) {
@@ -101,8 +79,6 @@ function defineDatabaseDialect(definition = {}) {
 }
 
 const POSTGRESQL_DIALECT = defineDatabaseDialect({
-  ...serverQuoting("postgresql"),
-  binaryLiteral: (hex) => `decode('${hex}', 'hex')`,
   client: "pg",
   commandResult(raw = {}) {
     return {
@@ -141,8 +117,6 @@ const POSTGRESQL_DIALECT = defineDatabaseDialect({
 });
 
 const MYSQL_DIALECT = defineDatabaseDialect({
-  ...serverQuoting("mysql"),
-  binaryLiteral: (hex) => `X'${hex}'`,
   client: "mysql2",
   commandResult(raw = {}, jsonSafeValue = (value) => value) {
     const response = Array.isArray(raw) ? raw[0] || {} : {};
@@ -196,8 +170,6 @@ const MYSQL_DIALECT = defineDatabaseDialect({
 
 const DATABASE_DIALECTS = Object.freeze({
   sqlite: defineDatabaseDialect({
-    ...serverQuoting("sqlite"),
-    binaryLiteral: (hex) => `X'${hex}'`,
     client: "sqlite3",
     commandResult: (raw = {}, jsonSafeValue = (value) => value) => ({
       affectedRows: Number(raw.changes || 0),

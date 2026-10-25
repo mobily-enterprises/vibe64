@@ -6,9 +6,6 @@ import {
   defineDatabaseClientDialect
 } from "../../packages/vibe64-database-tools/src/client/databaseDialect.js";
 import {
-  DATABASE_DIALECTS
-} from "../../packages/vibe64-database-tools/src/server/databaseDialect.js";
-import {
   SQL_QUOTING
 } from "../../packages/vibe64-database-tools/src/shared/sqlQuoting.js";
 
@@ -26,23 +23,17 @@ describe("shared SQL quoting", () => {
     expect(SQL_QUOTING.sqlite.stringLiteral("O'Reilly\\books")).toBe("'O''Reilly\\books'");
   });
 
-  it("refuses an empty identifier, which the server reports as a Vibe64 error", () => {
+  it("refuses an empty identifier", () => {
     for (const engine of Object.keys(SQL_QUOTING)) {
       expect(() => SQL_QUOTING[engine].quoteIdentifier("")).toThrow(/identifier is missing/u);
       expect(() => DATABASE_CLIENT_DIALECTS[engine].quoteIdentifier("")).toThrow(TypeError);
-      expect(() => DATABASE_DIALECTS[engine].quoteIdentifier("")).toThrow(
-        expect.objectContaining({ code: "vibe64_database_identifier_missing" })
-      );
     }
   });
 
-  it("is the quoting the client and server dialects expose", () => {
+  it("is the quoting the client dialects expose", () => {
     for (const engine of Object.keys(SQL_QUOTING)) {
       expect(DATABASE_CLIENT_DIALECTS[engine].quoteIdentifier).toBe(SQL_QUOTING[engine].quoteIdentifier);
       expect(DATABASE_CLIENT_DIALECTS[engine].stringLiteral).toBe(SQL_QUOTING[engine].stringLiteral);
-      expect(DATABASE_DIALECTS[engine].stringLiteral).toBe(SQL_QUOTING[engine].stringLiteral);
-      expect(DATABASE_DIALECTS[engine].quoteIdentifier("a`b\"c"))
-        .toBe(SQL_QUOTING[engine].quoteIdentifier("a`b\"c"));
     }
   });
 });

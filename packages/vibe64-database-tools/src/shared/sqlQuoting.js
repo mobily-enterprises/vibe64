@@ -1,7 +1,7 @@
 // The one home of SQL identifier and string-literal quoting for every engine
-// the database tools support. The server dialect, the editor dialect and the
-// local-server setup guide all quote through these rules, and the editor and
-// server build a table's default query here.
+// the database tools support. The editor dialect and the local-server setup
+// guide quote through these rules, and the editor and server build a table's
+// default query here.
 
 function quotedIdentifier(value = "", delimiter = "\"") {
   const name = String(value || "");

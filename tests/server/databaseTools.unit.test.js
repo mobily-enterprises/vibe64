@@ -74,7 +74,6 @@ import {
 } from "../../packages/vibe64-database-tools/src/server/service.js";
 import {
   assertSingleStatement,
-  quoteQualifiedTable,
   statementCommand
 } from "../../packages/vibe64-database-tools/src/server/sqlPolicy.js";
 import {
@@ -201,10 +200,6 @@ test("SQL policy accepts dialect strings and refuses a second statement", () => 
   assert.throws(
     () => assertSingleStatement(String.raw`SELECT '\\'; SELECT 2`, "mysql"),
     { code: "vibe64_database_single_statement_required" }
-  );
-  assert.equal(
-    quoteQualifiedTable({ name: "odd`table", schema: "app" }, "mysql"),
-    "`app`.`odd``table`"
   );
 });
 

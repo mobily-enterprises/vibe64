@@ -182,23 +182,10 @@ function queryId(value = "") {
   return candidate;
 }
 
-function quoteIdentifier(value = "", engine = "postgresql") {
-  return databaseDialect(engine).quoteIdentifier(value);
-}
-
-function quoteQualifiedTable(table = {}, engine = "postgresql") {
-  return [table.schema, table.name]
-    .filter((part) => String(part || "").length > 0)
-    .map((part) => quoteIdentifier(part, engine))
-    .join(".");
-}
-
 export {
   MAX_QUERY_TEXT_BYTES,
   assertSingleStatement,
   queryId,
-  quoteIdentifier,
-  quoteQualifiedTable,
   sqlSegments,
   statementCommand
 };
