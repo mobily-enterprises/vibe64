@@ -1023,8 +1023,7 @@
 <script setup>
 import Vibe64DashboardBackButton from "../Vibe64DashboardBackButton.vue";
 import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
-import { vibe64ProviderPresentation } from "@local/vibe64-runtime/shared";
-import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
+import { vibe64AssistantSelectionLabel, vibe64ProviderPresentation } from "@local/vibe64-runtime/shared";
 import { computed, defineAsyncComponent, inject, nextTick, onBeforeUnmount, reactive, ref, useId, watch, watchEffect } from "vue";
 import {
   LongTextPreviewBlocks

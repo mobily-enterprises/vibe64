@@ -639,11 +639,11 @@ function codexContextRefreshPending(session = {}) {
   return normalizeMessageText(session.metadata?.codex_context_refresh_pending) === "yes";
 }
 
-// The existing Claude owner shares this application policy across its retained entries.
-// Main/scoped/renewal predicates remain the original distinct rules.
 // Claude message preparation marks these stages on JSKIT's delivery observer.
 export const CLAUDE_PREPARATION_DELIVERY_STAGES = Object.freeze(["git-actor", "genesis-rendered"]);
 
+// The existing Claude owner shares this application policy across its retained entries.
+// Main/scoped/renewal predicates remain the original distinct rules.
 export function createClaudeConversationMessagePolicy({ env, recordGitActor, publishSessionChanged, onTiming = () => {} }) {
   const error = claudeConversationError;
   const ENGINE = "claude";

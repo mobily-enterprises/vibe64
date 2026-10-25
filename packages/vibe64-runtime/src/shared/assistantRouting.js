@@ -98,7 +98,7 @@ function assistantRoutingGoalFromMetadata(metadata = {}) {
   const raw = metadata?.assistant_routing_goal;
   if (!raw) return null;
   let goal;
-  try { goal = JSON.parse(raw); } catch { goal = undefined; }
+  try { goal = JSON.parse(raw); } catch { /* Refused below. */ }
   if (goal === null) return null;
   if (!goal || typeof goal !== "object" || Array.isArray(goal)) {
     throw Object.assign(new Error("Saved goal is unreadable. Inspect it before continuing."),

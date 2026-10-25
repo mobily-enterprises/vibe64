@@ -379,9 +379,7 @@ const assistantModelAccessFields = {
 };
 
 const assistantModelAccessUpdateInputValidator = patchSchema(assistantModelAccessFields);
-const assistantModelAccessUpdateActionInputValidator = actionInput({
-  ...assistantModelAccessFields,
-});
+const assistantModelAccessUpdateActionInputValidator = actionInput(assistantModelAccessFields);
 
 const assistantSelectionField = { type: "object", required: false, schema: createSchema({
   engineId: { type: "string", enum: Object.values(VIBE64_ASSISTANT_ENGINE_IDS), required: false },

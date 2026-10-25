@@ -336,7 +336,7 @@ function repositoryHistoryTool() {
       return { ok: result.ok === true, ...pickStrings(result, strings), ...pickBooleans(result, ["hasMore"]),
         ...(Array.isArray(result.versions) ? { versions: result.versions.slice(0, 50).map((version) => ({
           // Every version reports each field, empty when Git gave none.
-          ...pickStrings(Object.fromEntries(Object.keys(versionStrings).map((key) => [key, String(version[key] || "")])), versionStrings),
+          ...Object.fromEntries(Object.entries(versionStrings).map(([key, maxLength]) => [key, String(version[key] || "").slice(0, maxLength)])),
           isMerge: version.isMerge === true })) } : {}) };
     }
   };

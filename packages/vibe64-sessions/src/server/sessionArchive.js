@@ -14,7 +14,7 @@ function readSessionArchiveOperation(metadata = {}) {
   const stored = text(metadata?.session_archive_operation);
   if (!stored) return null;
   let operation = null;
-  try { operation = JSON.parse(stored); } catch { operation = null; }
+  try { operation = JSON.parse(stored); } catch { /* Refused below. */ }
   if (!operation || typeof operation !== "object" || Array.isArray(operation) ||
     !SESSION_ARCHIVE_STATUSES.has(operation.status) || !SESSION_ARCHIVE_PHASES.has(operation.phase)) {
     throw Object.assign(new Error("Session archive state is invalid; its recovery evidence was preserved."), {
