@@ -178,6 +178,11 @@ test("Git failures a person can fix read as one plain sentence", async (t) => {
   assert.equal(gitInstallCommand({ env: { PATH: path.join(root, "none") }, platform: "linux", systemPath: "" }), "");
   // Git runs with the system folders after PATH, so apt-get is found there too.
   assert.equal(gitInstallCommand({ env: { PATH: "" }, platform: "linux", systemPath: aptBin }), "sudo apt install git");
+  // Health and the Git failure message give the same install line and find apt-get the same way.
+  const { localToolInstall, thisComputerToolFamily } = await import("../../packages/vibe64-execution/src/server/runtime/localTools.js");
+  for (const machine of [apt, { env: { PATH: "" }, platform: "darwin" }, { env: { PATH: "" }, platform: "linux", systemPath: aptBin }]) {
+    assert.equal(gitInstallCommand(machine), localToolInstall("git", { family: thisComputerToolFamily(machine) }).command);
+  }
 
   const missing = describeGitFailure({ error: "Command failed with ENOENT: git init\nspawn git ENOENT" }, apt);
   assert.equal(missing.code, "vibe64_git_missing");

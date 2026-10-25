@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -6,10 +5,10 @@ import process from "node:process";
 import { runVibe64Command } from "../runVibe64Command.js";
 import {
   LOCAL_TOOLS,
-  localToolFamily,
   localToolId,
   localToolGuideUrl,
-  localToolInstall
+  localToolInstall,
+  thisComputerToolFamily
 } from "./localTools.js";
 import { RUNTIME_PACKS, runtimePackRoot } from "./runtimePacks.js";
 
@@ -33,16 +32,6 @@ const PROBE_SCRIPT = [
 
 function homeRelative(file = "", home = os.homedir()) {
   return home && file.startsWith(`${home}/`) ? `~/${file.slice(home.length + 1)}` : file;
-}
-
-function aptGetOnPath(env = process.env) {
-  return [...String(env.PATH || "").split(path.delimiter), "/usr/bin"]
-    .some((directory) => path.isAbsolute(directory) && existsSync(path.join(directory, "apt-get")));
-}
-
-/** This computer's install-line family: "apt", "brew" or "". */
-function thisComputerToolFamily({ env = process.env, platform = process.platform } = {}) {
-  return localToolFamily({ platform, aptGet: platform !== "darwin" && aptGetOnPath(env) });
 }
 
 function versionText(output = "") {
@@ -116,6 +105,5 @@ async function checkLocalTools(ids = [], {
 }
 
 export {
-  checkLocalTools,
-  thisComputerToolFamily
+  checkLocalTools
 };

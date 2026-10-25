@@ -1,28 +1,11 @@
-import { accessSync, constants } from "node:fs";
-import path from "node:path";
-import process from "node:process";
-
-import { DEFAULT_SYSTEM_PATH } from "./runtime/resolveRuntimePath.js";
+import { localToolInstall, thisComputerToolFamily } from "./runtime/localTools.js";
 
 // Plain words for the Git failures a person can fix on their own computer.
 // Anything else keeps git's own message.
 
-// Git runs with the system folders after the person's PATH, so the package
-// manager is looked up the same way.
-function commandOnPath(command, env = process.env, systemPath = DEFAULT_SYSTEM_PATH) {
-  return `${env.PATH || ""}:${systemPath}`.split(":").filter(Boolean).some((directory) => {
-    try {
-      accessSync(path.join(directory, command), constants.X_OK);
-      return true;
-    } catch {
-      return false;
-    }
-  });
-}
-
-function gitInstallCommand({ env = process.env, platform = process.platform, systemPath } = {}) {
-  if (platform === "darwin") return "xcode-select --install";
-  return commandOnPath("apt-get", env, systemPath) ? "sudo apt install git" : "";
+// The install line is the same one Health shows for Git.
+function gitInstallCommand({ env, platform, systemPath } = {}) {
+  return localToolInstall("git", { family: thisComputerToolFamily({ env, platform, systemPath }) })?.command || "";
 }
 
 function failureText(result = {}) {

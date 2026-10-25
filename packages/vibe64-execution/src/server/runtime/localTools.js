@@ -1,4 +1,8 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import process from "node:process";
+
+import { DEFAULT_SYSTEM_PATH } from "./resolveRuntimePath.js";
 
 /**
  * Install lines for the tools a person supplies on their own computer, keyed
@@ -78,6 +82,18 @@ function localToolFamily({ platform = process.platform, aptGet = false } = {}) {
   return aptGet ? "apt" : "";
 }
 
+// Commands run with the system folders after the person's PATH, so apt-get is
+// looked up the same way.
+function aptGetOnPath(env = process.env, systemPath = DEFAULT_SYSTEM_PATH) {
+  return [...String(env.PATH || "").split(path.delimiter), ...String(systemPath || "").split(path.delimiter)]
+    .some((directory) => path.isAbsolute(directory) && existsSync(path.join(directory, "apt-get")));
+}
+
+/** This computer's install-line family: "apt", "brew" or "". */
+function thisComputerToolFamily({ env = process.env, platform = process.platform, systemPath } = {}) {
+  return localToolFamily({ platform, aptGet: platform !== "darwin" && aptGetOnPath(env, systemPath) });
+}
+
 /**
  * The one command to show for a tool on this computer, or null when only
  * "Other ways" can help. `mise` says whether mise already runs here.
@@ -114,5 +130,6 @@ export {
   localToolGuideUrl,
   localToolId,
   localToolIds,
-  localToolInstall
+  localToolInstall,
+  thisComputerToolFamily
 };
