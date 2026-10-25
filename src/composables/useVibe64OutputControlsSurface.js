@@ -1,4 +1,4 @@
-import { computed, nextTick, onBeforeMount, onBeforeUnmount, ref, unref, watch } from "vue";
+import { computed, nextTick, onBeforeMount, onBeforeUnmount, ref, watch } from "vue";
 import {
   launchPreviewLocationStorageKey,
   launchPreviewToolbarStorageKey,
@@ -40,7 +40,7 @@ import {
   previewRoutePath,
   previewRoutesForTarget
 } from "@/lib/vibe64PreviewRoutes.js";
-import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
+import { isOrientationAnnouncement, useVibe64LearningOrientation } from "@/composables/useVibe64LearningOrientation.js";
 import { usePageActivity } from "@/lib/vibe64PageActivity.js";
 import { previewVisibleViewportRect } from "@/composables/useVibe64PreviewCapture.js";
 
@@ -678,12 +678,8 @@ function useVibe64OutputControlsSurface(props) {
     outputTargets.value.length < 1
   ));
   const previewFrame = ref(null);
-  // The Learning environment's controller, which owns the learner-origin App
-  // press receipt (step.observe) for its current lesson step.
-  const learning = useVibe64Learning();
   // What the person did here, for a lesson's do beats.
   const reportActivity = usePageActivity();
-  let orientation = null;
   const previewSuspended = ref(false);
   const previewBridgeVersion = ref(0);
   // The origin whose bridge announced itself in the frame. Requests go only to
@@ -1178,32 +1174,6 @@ function useVibe64OutputControlsSurface(props) {
     });
   }
 
-  // Learner-origin App interaction capture: the practice App's orientation
-  // protocol runs over one MessageChannel bound to this exact Preview frame,
-  // instance and player. A trusted press, its request and the displayed
-  // response are correlated here; the Learning controller sends step.observe
-  // only for its current response-check step of this practice project.
-  function orientationUuid(value) {
-    return typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(value);
-  }
-
-  function orientationFields(value, fields) {
-    return value && typeof value === "object" && !Array.isArray(value) &&
-      Object.keys(value).sort().join(",") === fields.slice().sort().join(",");
-  }
-
-  function learningOwner() {
-    const owner = unref(learning);
-    return typeof owner?.beginExercise === "function" && typeof owner.finishExercise === "function" ? owner : null;
-  }
-
-  function orientationFrameCurrent(channel) {
-    return orientation === channel && previewFrame.value === channel.frame &&
-      previewFrame.value?.contentWindow === channel.window && previewFrameRequestId.value === channel.frameRequestId &&
-      props.session?.sessionId === channel.sessionId && terminalSessionId.value === channel.terminalSessionId &&
-      projectSlug.value === channel.projectSlug && Boolean(previewUrl.value);
-  }
-
   function previewFrameVisible(frame) {
     return Boolean(frame) && previewFrameLoaded.value && previewPaneDisplayed.value &&
       props.windowDisplayed !== false && document.visibilityState === "visible" &&
@@ -1212,105 +1182,19 @@ function useVibe64OutputControlsSurface(props) {
       }));
   }
 
-  function orientationFrameVisible(channel) {
-    return orientationFrameCurrent(channel) && previewFrameVisible(channel.frame);
-  }
-
-  function retireOrientationInteraction(channel = orientation) {
-    if (channel) channel.pending = null;
-  }
-
-  function closeOrientation() {
-    retireOrientationInteraction();
-    orientation?.port?.close();
-    orientation = null;
-  }
-
-  function orientationInteractionCurrent(channel, pending) {
-    return channel.pending === pending && orientationFrameVisible(channel) && learningOwner() === pending.owner &&
-      pending.owner.exerciseCurrent(pending.ticket);
-  }
-
-  function handleOrientationPacket(channel, input) {
-    if (!orientationFrameCurrent(channel)) return;
-    const common = ["type", "protocolVersion", "playerInstanceId", "instanceId"];
-    if (input?.protocolVersion !== 1 || input.playerInstanceId !== channel.playerInstanceId || input.instanceId !== channel.instanceId) {
-      retireOrientationInteraction(channel);
-      return;
-    }
-    if (input.type === "ready" && orientationFields(input, common)) {
-      channel.ready = true;
-      return;
-    }
-    if (!channel.ready || !orientationFrameVisible(channel)) {
-      retireOrientationInteraction(channel);
-      return;
-    }
-    if (input.type === "button" && orientationFields(input, [...common, "interactionId"]) && orientationUuid(input.interactionId)) {
-      retireOrientationInteraction(channel);
-      reportActivity("app-pressed", { projectSlug: channel.projectSlug, sessionId: channel.sessionId });
-      const owner = learningOwner();
-      const ticket = owner?.beginExercise(channel.projectSlug);
-      if (ticket) channel.pending = { owner, ticket, interactionId: input.interactionId, phase: "button" };
-      return;
-    }
-    const pending = channel.pending;
-    if (!pending || input.interactionId !== pending.interactionId) return;
-    if (!orientationInteractionCurrent(channel, pending)) {
-      retireOrientationInteraction(channel);
-      return;
-    }
-    if (input.type === "request" && pending.phase === "button" && input.method === "POST" && input.path === "/api/greeting" &&
-        orientationFields(input, [...common, "interactionId", "method", "path"])) {
-      pending.phase = "request";
-      return;
-    }
-    if (input.type === "response-displayed" && pending.phase === "request" && orientationUuid(input.requestId) &&
-        input.message === "Hello from the server!" && orientationFields(input, [...common, "interactionId", "requestId", "message"])) {
-      retireOrientationInteraction(channel);
-      void pending.owner.finishExercise(pending.ticket, { sessionId: channel.sessionId,
-        instanceId: channel.instanceId, interactionId: pending.interactionId, requestId: input.requestId });
-      return;
-    }
-    retireOrientationInteraction(channel);
-  }
-
-  function connectOrientation() {
-    const channel = orientation;
-    if (!channel || channel.port || !orientationFrameCurrent(channel) || !previewFrameLoaded.value) return;
-    const ports = new MessageChannel();
-    channel.port = ports.port1;
-    channel.port.onmessage = event => handleOrientationPacket(channel, event.data);
-    channel.port.onmessageerror = () => retireOrientationInteraction(channel);
-    channel.port.start();
-    try {
-      channel.window.postMessage({ type: "orientation-init", protocolVersion: 1, playerInstanceId: channel.playerInstanceId },
-        channel.origin, [ports.port2]);
-    } catch {
-      ports.port2.close();
-      closeOrientation();
-    }
-  }
-
-  function handleOrientationAvailable(event) {
-    const owner = learningOwner();
-    if (!owner || !orientationFields(event.data, ["type", "protocolVersion", "instanceId"]) ||
-        event.data.protocolVersion !== 1 || !orientationUuid(event.data.instanceId) || event.ports?.length ||
-        !props.embeddedPreview || !previewFrameRequestId.value || !previewUrl.value ||
-        !projectSlug.value || !props.session?.sessionId || !terminalSessionId.value) return;
-    void owner.prepareExercise?.(projectSlug.value);
-    if (orientation && orientationFrameCurrent(orientation) && orientation.instanceId === event.data.instanceId) return;
-    closeOrientation();
-    orientation = { frame: previewFrame.value, window: event.source, origin: event.origin,
-      frameRequestId: previewFrameRequestId.value, projectSlug: projectSlug.value,
-      sessionId: props.session.sessionId, terminalSessionId: terminalSessionId.value,
-      instanceId: event.data.instanceId, playerInstanceId: crypto.randomUUID(), ready: false, port: null, pending: null };
-    connectOrientation();
-  }
-
-  function invalidateHiddenOrientation() {
-    if (orientation?.pending && !orientationInteractionCurrent(orientation, orientation.pending)) retireOrientationInteraction();
-  }
+  // Learning's practice App orientation channel, bound to the displayed frame.
+  const orientation = useVibe64LearningOrientation({
+    preview: () => props.embeddedPreview && previewUrl.value ? {
+      frame: previewFrame.value,
+      frameRequestId: previewFrameRequestId.value,
+      loaded: previewFrameLoaded.value,
+      displayed: previewPaneDisplayed.value && props.windowDisplayed !== false,
+      projectSlug: projectSlug.value,
+      sessionId: props.session?.sessionId,
+      terminalSessionId: terminalSessionId.value
+    } : null,
+    frameVisible: previewFrameVisible
+  });
 
   function cancelPreviewResourceRetry() {
     if (previewResourceRetryTimer !== null) {
@@ -1385,7 +1269,7 @@ function useVibe64OutputControlsSurface(props) {
   }
 
   function clearPreviewFrame(reason = "") {
-    closeOrientation();
+    orientation.close();
     resetPreviewBridge(reason || "frame-cleared");
     if (!previewFrameRequest.value.src) {
       return false;
@@ -1425,7 +1309,7 @@ function useVibe64OutputControlsSurface(props) {
     if (!nextIdentity || (!force && nextIdentity === previewFrameRequest.value.identity)) {
       return false;
     }
-    closeOrientation();
+    orientation.close();
     resetPreviewBridge(reason || "frame-requested");
     previewFrameRequest.value = {
       id: previewFrameRequest.value.id + 1,
@@ -2056,7 +1940,7 @@ function useVibe64OutputControlsSurface(props) {
 
   function handlePreviewBridgeMessage(event) {
     if (previewSuspended.value) return;
-    const orientationAvailable = event?.data?.type === "orientation-available";
+    const orientationAvailable = isOrientationAnnouncement(event?.data);
     if (!orientationAvailable && !isPreviewBridgeMessage(event?.data)) {
       return;
     }
@@ -2077,13 +1961,13 @@ function useVibe64OutputControlsSurface(props) {
       return;
     }
     if (orientationAvailable) {
-      handleOrientationAvailable(event);
+      orientation.announce(event);
       return;
     }
     const messageType = previewMessageType(event.data);
     const bridgeReady = isPreviewBridgeReadyMessage(event.data);
     if (bridgeReady && previewFrameLoaded.value) {
-      closeOrientation();
+      orientation.close();
       resetPreviewBridge("bridge-document-ready");
     }
     previewBridgeVersion.value = Math.max(
@@ -2145,7 +2029,7 @@ function useVibe64OutputControlsSurface(props) {
     if (lifecycle === previewIdentityLifecycle) {
       return;
     }
-    closeOrientation();
+    orientation.close();
     previewIdentityLifecycle = lifecycle;
     previewIdentityAutomaticAttempt = "";
     previewIdentityResumeSelection = null;
@@ -2158,15 +2042,6 @@ function useVibe64OutputControlsSurface(props) {
     immediate: true
   });
 
-  watch([previewFrameLoaded, previewFrame], () => {
-    if (orientation && !orientationFrameCurrent(orientation)) {
-      closeOrientation();
-    } else {
-      connectOrientation();
-    }
-  }, { flush: "sync" });
-  watch([previewPaneDisplayed, () => props.windowDisplayed, () => learningOwner()?.exerciseStep(projectSlug.value)],
-    invalidateHiddenOrientation, { flush: "sync" });
 
   watch(previewIdentityAvailable, (available) => {
     if (available && previewFrameLoaded.value) {
@@ -2260,13 +2135,10 @@ function useVibe64OutputControlsSurface(props) {
   
   onBeforeMount(() => {
     window.addEventListener("message", handlePreviewBridgeMessage);
-    document.addEventListener("visibilitychange", invalidateHiddenOrientation);
   });
   
   onBeforeUnmount(() => {
     window.removeEventListener("message", handlePreviewBridgeMessage);
-    document.removeEventListener("visibilitychange", invalidateHiddenOrientation);
-    closeOrientation();
     cancelPreviewResourceRetry();
     previewBridgeRequests.rejectAll("The application preview closed.");
   });

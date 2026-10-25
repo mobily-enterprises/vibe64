@@ -1200,3 +1200,22 @@ it("keeps the running output's identity while its target is missing from the rel
   await nextTick();
   expect(f.state.previewIdentityError.value).toBe("");
 });
+
+it("correlates any lesson's App request and displayed response, leaving their content to the step's declared check", async () => {
+  const owner = fakeLearningOwner();
+  const f = mountPreviewSurface({ learning: owner, projectSlug: "practice" });
+  f.load();
+  f.announce();
+  f.packet("ready");
+  f.packet("button", { interactionId });
+  f.packet("request", { interactionId, method: 7, path: "/api/todos" });
+  f.packet("response-displayed", { interactionId, requestId, message: "Saved." });
+  await portFlush();
+  expect(owner.responses).toHaveLength(0);
+  f.packet("button", { interactionId });
+  f.packet("request", { interactionId, method: "PUT", path: "/api/todos/:id" });
+  f.packet("response-displayed", { interactionId, requestId, message: "Saved." });
+  await portFlush();
+  expect(owner.responses).toHaveLength(1);
+  expect(owner.responses[0].response).toEqual({ sessionId: "session-a", instanceId, interactionId, requestId });
+});

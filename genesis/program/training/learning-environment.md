@@ -23,6 +23,7 @@ Training actions.
 - `packages/vibe64-training/src/shared/learnerEvents.js`
 - `packages/vibe64-training/src/shared/learnerContract.js`
 - `src/composables/useVibe64OutputControlsSurface.js`
+- `src/composables/useVibe64LearningOrientation.js`
 - `packages/vibe64-core/src/server/learningMode.js`
 - `packages/vibe64-training/src/server/learningSpace.js`
 - `packages/vibe64-training/src/server/stepActions.js`

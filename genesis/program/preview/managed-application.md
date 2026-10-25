@@ -100,6 +100,7 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `src/components/studio/vibe64-session/Vibe64ProjectOnboarding.vue`
 - `src/composables/useVibe64OutputControls.js`
 - `src/composables/useVibe64OutputControlsSurface.js`
+- `src/composables/useVibe64LearningOrientation.js`
 
 ## Public contract
 
@@ -512,12 +513,16 @@ project admission; there is no separate Learning App adapter, output namespace o
 `/api/learning/<attempt>/…` route. A lesson's
 automatic check needs a receipt of the learner's own App press, recorded through
 Training's browser-only `step.observe`; Run or an iframe load is never a pass.
-The output surface (`useVibe64OutputControlsSurface.js`, both hosts) restores
-the orientation protocol of the original capture: the practice App's
-`orientation-available` announcement from the exact Preview frame and origin
-receives one MessageChannel bound to that frame request, session, App run and a
-fresh player identity; a trusted `button`, its `request` and the displayed
-`response-displayed` are correlated while the frame stays visible. The Learning
+The output surface (`useVibe64OutputControlsSurface.js`, both hosts) admits
+the practice App's `orientation-available` announcement only from the exact
+Preview frame and origin and closes the channel whenever it replaces or clears
+that frame. Learning's orientation channel
+(`src/composables/useVibe64LearningOrientation.js`) owns the protocol: one
+MessageChannel bound to that frame request, session, App run and a fresh player
+identity; a trusted `button`, its `request` and the displayed
+`response-displayed` are correlated while the frame stays visible. It does not
+know what a lesson's App requests or displays; the step's declared check
+verifies the interaction against the App server. The Learning
 controller (`src/lib/vibe64Learning.js`) begins a press only for L's current
 step of its prepared, not-ended version 2 attempt whose practice project is the
 open project, while L is not covering the app, when that step declares an

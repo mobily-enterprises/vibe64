@@ -245,7 +245,9 @@ also has:
   App's button yourself in the practice project's visible Preview. Your press
   counts only for the lesson step Learning currently shows, in that lesson's
   own practice session, while Courses is not covering the app; the
-  status updates when the check finishes. In a new browser tab, open the lesson
+  status updates when the check finishes. The step's check decides whether
+  the App's response is the expected one: a press that shows a different
+  response is checked too and leaves the step not passed yet. In a new browser tab, open the lesson
   once before pressing. Colleague cannot press for you, and Run or
   reloading the Preview is not a press. A code step names the file to change
   and says "Make this change yourself in Dashboard → Files. Saving does not
