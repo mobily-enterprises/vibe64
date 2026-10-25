@@ -68,7 +68,7 @@ describe("session name strip room", () => {
   it("measures the whole strip and leaves Save its state colour", () => {
     const view = read("src/components/studio/vibe64-session/Vibe64AutopilotView.vue");
     expect(view).toContain('vibe64SessionNameStripWidth(header.querySelector(".studio-ai-sessions__tabs")?.children');
-    expect(view).not.toMatch(/\.studio-autopilot__save-work \{\n  border-radius: 8px;\n  color:/u);
+    expect(view).not.toContain(".studio-autopilot__save-work {\n  border-radius: 8px;\n  color:");
     expect(view).toContain(".studio-autopilot__save-work:not(.text-error):not(.text-warning) {");
   });
 });
