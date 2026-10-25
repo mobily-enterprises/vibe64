@@ -14,12 +14,14 @@ at startup as Vuetify's default theme and applied with `theme.change`; it is
 not an account operation and writes no server state.
 The five `vibe64.accounts.ai-connections.*` actions own provider list/catalogue,
 save/remove and model access. Standalone and hosted HTTP adapters dispatch the
-same contracts. Owner authorization and any host management policy apply on
-direct execution too. The existing store owns validation, credential writes,
+same contracts. One AI management policy, the account runtime's
+`requireAiManagement` (default: only the workspace owner; a host may replace
+it), decides Claude and Codex sign-in, curated provider keys, saved
+connections, model access and model routing save/preview/`canConfigure`, and
+the action enforces it on every lane, including direct execution. The existing store owns validation, credential writes,
 runtime invalidation and change publication. HTTP field selection derives from
 the action schema; a URL provider takes precedence over body input. Login
-WebSockets retain their transport adapter and the four retired Helper endpoints
-remain 410 notices with no operation to expose. Model routing read/preview/save
+WebSockets retain their transport adapter. Model routing read/preview/save
 have bounded Colleague presentations. `useModelRouting` owns main chat's
 selection (`mainChatSelection`: the owner's effective Senior, else its
 recommendation), which session creation and renewal dialogs share. The existing connection list also supplies
@@ -33,8 +35,7 @@ Registration, key entry and paid-model consent remain human UI operations.
 Regular Z.AI verification identifies temporary overload and insufficient balance
 without exposing raw provider text. Failed verification never replaces a saved
 key; overload calls for a later retry rather than credential replacement.
-The newly exposed list rejects a trusted non-owner as well as enforcing host
-management policy. Hosted context freshly resolves the actor and rejects missing
+The list read goes through the same AI management policy. Hosted context freshly resolves the actor and rejects missing
 authentication before execution; standalone retains its original authorized
 loopback/no-login lane. Other account actions remain excluded.
 
@@ -61,6 +62,7 @@ loopback/no-login lane. Other account actions remain excluded.
 - `packages/vibe64-accounts/src/server/aiConnectionStore.js`
 - `packages/vibe64-accounts/src/server/aiConnectionService.js`
 - `packages/vibe64-accounts/src/server/aiConnectionRuntime.js`
+- `packages/vibe64-accounts/src/server/opencodeCatalogPages.js`
 - `packages/vibe64-accounts/src/server/assistantProviderPolicy.js`
 - `packages/vibe64-accounts/src/server/zaiConnectionVerifier.js`
 - `packages/vibe64-accounts/src/client/studio/AiConnectionDialogs.vue`
@@ -100,6 +102,8 @@ loopback/no-login lane. Other account actions remain excluded.
 - `server/lib/browserLifecycle.js`
 - `packages/vibe64-accounts/src/server/Vibe64AccountsFeature.js`
 - `packages/vibe64-accounts/src/client/composables/useAccountAuthSessions.js`
+- `packages/vibe64-accounts/src/shared/authOutput.js`
+- `packages/vibe64-accounts/src/shared/gitIdentityInput.js`
 - `packages/vibe64-execution/src/server/engines/helperClient.js`
 - `packages/vibe64-runtime/src/shared/assistantSelection.js`
 - `packages/vibe64-sessions/src/server/registerRoutes.js`

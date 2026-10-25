@@ -58,7 +58,7 @@ test("all account operations use project-independent canonical contracts and aut
     registerVibe64ActionContext(actions, { resolveUser: async () => user,
       authorizeProject() { throw new Error("Account access must not require a project."); } });
     const app = testRouteApp();
-    registerRoutes(app.http, { accounts, aiConnectionService, requireAiManagement, fastify: { get() {} }, projectScoped: false,
+    registerRoutes(app.http, { accounts, aiConnectionService, fastify: { get() {} }, projectScoped: false,
       routeRelativePath: "vibe64/accounts", routeSurface: "app" });
     assert.equal(actions.listDefinitions().length, 18);
     for (const [method, suffix, operation, serviceMethod, data] of cases) {
@@ -146,7 +146,8 @@ test("Colleague reads every saved provider's readiness through the original owne
   const actions = createActionCatalogue();
   actions.register({ contributorId: "accounts", domain: "accounts", actions: createAiConnectionActions({
     aiConnectionService: { async list() { reads++; return service.list(); } },
-    requireAiManagement: () => managementAllowed ? null : { ok: false, error: "private-host-error" }
+    requireAiManagement: ({ vibe64User }) => vibe64User?.role === "owner" && managementAllowed ? null
+      : { ok: false, code: "vibe64_owner_required", error: "private-host-error" }
   }).map(action => ({ channels: ["api", "automation"], surfaces: ["app"], ...action })) });
   registerVibe64ActionContext(actions, { resolveUser: async () => actor,
     authorizeProject() { assert.fail("Saved connection status must work without a project."); } });
@@ -202,7 +203,7 @@ test("Colleague reads every saved provider's readiness through the original owne
     "standalone loopback account reads retain their existing host policy without a hosted owner identity");
   const localApp = testRouteApp();
   registerRoutes(localApp.http, { accounts: { subscribeAuthTerminal() {} }, aiConnectionService: service,
-    requireAiManagement: requireLocalManagement, fastify: localApp.fastify, projectScoped: false,
+    fastify: localApp.fastify, projectScoped: false,
     routeRelativePath: "vibe64/accounts", routeSurface: "app" });
   const localRequest = { hostname: "localhost", ip: "127.0.0.1", query: {},
     executeAction({ actionId, input }) {
@@ -213,14 +214,14 @@ test("Colleague reads every saved provider's readiness through the original owne
   await findRegisteredRoute(localApp, { method: "GET", path: "/api/vibe64/accounts/ai-connections" }).handler(localRequest, localReply);
   assert.equal(localReply.statusCode, 200);
   assert.deepEqual(localReply.payload, api);
-  assert.deepEqual(localActors, [undefined, null, undefined], "the original action/route lanes supply no hosted actor");
+  assert.deepEqual(localActors, [undefined, undefined], "the action alone checks management, once per lane, with no hosted actor");
 
   const beforeReads = reads;
   for (const input of [{ vibe64User: owner }, { apiKey: "fixture-private-secret" }, { modelProviderId: "zai-coding-plan" }]) {
     assert.equal((await execute(input)).ok, false);
   }
   actor = { username: "member", role: "member" };
-  assert.equal((await execute()).ok, false, "owner permission is enforced even without a host policy check");
+  assert.equal((await execute()).result.ok, false, "the single management policy refuses a member's read");
   actor = null;
   assert.equal((await execute()).ok, false);
   assert.equal(reads, beforeReads);

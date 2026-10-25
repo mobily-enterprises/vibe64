@@ -397,6 +397,7 @@ test("accounts feature keeps assistant readiness aligned with Codex sign-in stat
       }
     });
     try {
+      assert.equal(typeof assistantRuntime.claudeConnectionStatus, "function", "the feature registers both sign-in hooks");
       assert.equal(await assistantRuntime.codexConnectionStatus(), false);
       await writeReadyCodexMarker(systemRoot);
       assert.equal(await assistantRuntime.codexConnectionStatus(), true);
@@ -2264,7 +2265,7 @@ test("curated Codex connection management uses the existing workspace owner auth
     const checked = [];
     const service = createService({
       accountRuntime: createAccountsRuntime({ systemRoot: path.join(root, "system"),
-        canManageCodex(input) {
+        requireAiManagement(input) {
           checked.push(input.vibe64User?.role);
           return input.vibe64User?.role === "owner" ? null : denied;
         }
@@ -2280,6 +2281,30 @@ test("curated Codex connection management uses the existing workspace owner auth
       { id: "deepseek", connected: false }, { id: "zai-coding-plan", connected: false }, { id: "zai", connected: false }
     ]);
     assert.equal(checked.length, 7);
+  });
+});
+
+test("one default AI management policy refuses a team member for every AI setting and allows the owner", async () => {
+  await withTempDir(async (root) => {
+    const runtime = createAccountsRuntime({ systemRoot: path.join(root, "system") });
+    const service = createService({ accountRuntime: runtime });
+    const member = { role: "member", username: "member" };
+    const owner = { role: "owner", username: "owner" };
+    assert.equal(runtime.requireAiManagement({ vibe64User: owner }), null);
+    assert.equal(runtime.requireAiManagement({}), null, "a local request without a hosted user is the owner");
+    assert.equal(runtime.requireAiManagement({ vibe64User: member }).code, "vibe64_owner_required");
+    for (const [method, input] of [["readCodexProviders", {}], ["saveCodexProvider", { modelProviderId: "deepseek", apiKey: "never-sent" }],
+      ["removeCodexProvider", { modelProviderId: "deepseek" }], ["previewModelRouting", { revision: 0, owner: {} }],
+      ["saveModelRouting", { revision: 0, owner: {} }], ["startAuth", { accountId: "codex", mode: "device" }],
+      ["startAuth", { accountId: "claude", mode: "browser" }], ["logout", { accountId: "claude" }]]) {
+      assert.equal((await service[method]({ ...input, vibe64User: member })).code, "vibe64_owner_required", method);
+    }
+    assert.deepEqual(await service.initializeModelRouting({ vibe64User: member }), { ok: true, initialized: [] });
+    assert.equal((await service.readCodexProviders({ vibe64User: owner })).ok, true);
+    const hosted = createAccountsRuntime({ systemRoot: path.join(root, "system"),
+      requireAiManagement: () => ({ ok: false, code: "host_refused", error: "Refused by the host." }) });
+    assert.equal((await createService({ accountRuntime: hosted }).startAuth({ accountId: "claude", vibe64User: owner })).code, "host_refused",
+      "a host policy replaces the default for Claude too");
   });
 });
 
@@ -2310,7 +2335,7 @@ async function routingAccountsFixture(root) {
   const events = [];
   const denied = { ok: false, code: "owner_only", error: "Only the owner can configure routing." };
   const service = createService({ accountRuntime: createAccountsRuntime({ systemRoot: root,
-    canManageCodex: ({ vibe64User }) => vibe64User?.role === "owner" ? null : denied }),
+    requireAiManagement: ({ vibe64User }) => vibe64User?.role === "owner" ? null : denied }),
     inspectRoutingConfiguration: (configuration, options) => manager.inspectRoutingConfiguration(configuration, options),
     publishAccountChanged: async (...args) => { events.push(args); } });
   const owner = { role: "owner", username: "owner" };

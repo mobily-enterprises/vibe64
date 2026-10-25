@@ -5,10 +5,9 @@ import { createWebSocketTerminalDriver } from "/src/lib/vibe64TerminalDriver.js"
 import {
   accountAuthTerminalWebSocketUrl
 } from "../lib/accountsGateApi.js";
+import { deviceUserCode } from "../../shared/authOutput.js";
 
 const CHATGPT_SECURITY_SETTINGS_URL = "https://chatgpt.com/#settings/Security";
-const ANSI_ESCAPE_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, "gu");
-const VISIBLE_ANSI_ESCAPE_PATTERN = /\u00a4\[[0-?]*[ -/]*[@-~]/gu;
 
 function useProviderAccountsSetup(props, { onConnected } = {}) {
   const accountRows = computed(() => Array.isArray(props.accountRows) ? props.accountRows : []);
@@ -399,12 +398,6 @@ function useProviderAccountsSetup(props, { onConnected } = {}) {
     if (await cancelSession(session)) await startAccountAuth(account);
   }
 
-  function cleanAuthOutput(output = "") {
-    return String(output || "")
-      .replace(ANSI_ESCAPE_PATTERN, "")
-      .replace(VISIBLE_ANSI_ESCAPE_PATTERN, "");
-  }
-
   function authSessionUserCode(session = {}) {
     const existing = String(session?.userCode || "").trim();
     if (existing) {
@@ -417,7 +410,7 @@ function useProviderAccountsSetup(props, { onConnected } = {}) {
       session?.output || "",
       authTerminalVisible(session) ? authTerminal.terminalOutput.value : ""
     ].join("\n");
-    return cleanAuthOutput(output).match(/\b([A-Z0-9]{4}-[A-Z0-9]{4,8})\b/iu)?.[1]?.toUpperCase() || "";
+    return deviceUserCode(output);
   }
 
   function authTerminalError(session = {}) {

@@ -1,6 +1,7 @@
 import { aiConnectionError } from "./aiConnectionError.js";
 import { AI_CONNECTION_PROVIDER_PATTERN } from "../shared/aiConnectionIdentity.js";
 import { assistantProviderPolicy } from "./assistantProviderPolicy.js";
+import { readAllOpenCodeCapabilityRows } from "./opencodeCatalogPages.js";
 
 function createAiConnectionService({ aiConnections, readAssistantCapabilities, initializeModelRouting } = {}) {
   function requireConnectionStore() {
@@ -33,65 +34,8 @@ function createAiConnectionService({ aiConnections, readAssistantCapabilities, i
     };
   }
 
-  async function readOpenCodeCapabilityPages({
-    currentUser,
-    modelProviderId = ""
-  } = {}) {
-    const rows = [];
-    const seenCursors = new Set();
-    let cursor = "";
-    let firstResult = null;
-    let firstEngine = null;
-    let firstProvider = null;
-    do {
-      const result = await readAssistantCapabilities({
-        ...(cursor ? { cursor } : {}),
-        engineId: "opencode",
-        limit: "100",
-        ...(modelProviderId ? { modelProviderId } : {})
-      }, currentUser);
-      const engine = Array.isArray(result?.engines)
-        ? result.engines.find((candidate) => candidate?.engineId === "opencode")
-        : null;
-      if (!engine) {
-        throw aiConnectionError(
-          "vibe64_ai_catalog_invalid",
-          "OpenCode returned an invalid provider catalog.",
-          502
-        );
-      }
-      const provider = modelProviderId
-        ? (Array.isArray(engine.modelProviders)
-            ? engine.modelProviders.find((candidate) => candidate?.id === modelProviderId)
-            : null)
-        : null;
-      if (modelProviderId && !provider) {
-        throw aiConnectionError(
-          "vibe64_ai_provider_unavailable",
-          "The current OpenCode catalog did not return this provider.",
-          404
-        );
-      }
-      firstResult ||= result;
-      firstEngine ||= engine;
-      firstProvider ||= provider;
-      rows.push(...(modelProviderId
-        ? (Array.isArray(provider.models) ? provider.models : [])
-        : (Array.isArray(engine.modelProviders) ? engine.modelProviders : [])));
-      cursor = engine.page?.hasMore === true
-        ? String(engine.page.nextCursor || "").trim()
-        : "";
-      if (cursor && seenCursors.has(cursor)) {
-        throw aiConnectionError(
-          "vibe64_ai_catalog_cursor_stalled",
-          "OpenCode could not finish reading its provider catalog.",
-          502
-        );
-      }
-      if (cursor) seenCursors.add(cursor);
-    } while (cursor);
-    return { engine: firstEngine, provider: firstProvider, result: firstResult, rows };
-  }
+  const readOpenCodeCapabilityPages = ({ currentUser, modelProviderId = "" } = {}) =>
+    readAllOpenCodeCapabilityRows((query) => readAssistantCapabilities(query, currentUser), { modelProviderId });
 
   async function readOpenCodeProvider(modelProviderId, currentUser) {
     const id = String(modelProviderId || "").trim();

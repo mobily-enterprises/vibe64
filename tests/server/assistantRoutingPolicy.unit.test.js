@@ -333,7 +333,7 @@ test("Accounts reads and saves both setups for the owner only and refuses person
   });
   const service = createService({
     accountRuntime: createAccountsRuntime({ systemRoot: root, targetRoot: root,
-      canManageCodex: ({ vibe64User } = {}) => vibe64User?.role === "owner" ? null : { ok: false, error: "Owner required" } }),
+      requireAiManagement: ({ vibe64User } = {}) => vibe64User?.role === "owner" ? null : { ok: false, error: "Owner required" } }),
     inspectRoutingConfiguration: (configuration, options) => manager.inspectRoutingConfiguration(configuration, options) });
   assert.equal(service.readModelRoutingWorkflows, undefined, "the per-tool workflow read is gone");
   const owner = { role: "owner" };

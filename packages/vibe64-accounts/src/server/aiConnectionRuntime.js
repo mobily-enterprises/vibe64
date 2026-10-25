@@ -1,5 +1,6 @@
 import path from "node:path";
 import { createAiConnectionStore } from "./aiConnectionStore.js";
+import { readAllOpenCodeCapabilityRows } from "./opencodeCatalogPages.js";
 import { ZAI_FREE_MODEL_ID } from "./assistantProviderPolicy.js";
 import { verifyZaiConnection } from "./zaiConnectionVerifier.js";
 
@@ -34,36 +35,10 @@ function createAiConnectionRuntime({ systemRoot, terminals, publishConnectionCha
       return invalidation;
     },
     async readModelIds() {
-      const modelIds = [];
-      const seenCursors = new Set();
-      let cursor = "";
-      do {
-        const result = await terminals.listAssistantCapabilities({
-          cursor,
-          engineId: "opencode",
-          limit: "100",
-          modelProviderId: "opencode"
-        });
-        const engine = (Array.isArray(result?.engines) ? result.engines : [])
-          .find((candidate) => candidate?.engineId === "opencode");
-        const provider = (Array.isArray(engine?.modelProviders) ? engine.modelProviders : [])
-          .find((candidate) => candidate?.id === "opencode");
-        if (!engine || !provider) {
-          throw new Error("OpenCode returned an invalid Zen model catalogue.");
-        }
-        modelIds.push(...(Array.isArray(provider?.models) ? provider.models : [])
-          .filter((model) => model?.status !== "unavailable")
-          .map((model) => String(model?.id || "").trim())
-          .filter(Boolean));
-        cursor = engine?.page?.hasMore === true
-          ? String(engine.page.nextCursor || "").trim()
-          : "";
-        if (cursor && seenCursors.has(cursor)) {
-          throw new Error("OpenCode could not finish reading the Zen model catalogue.");
-        }
-        if (cursor) seenCursors.add(cursor);
-      } while (cursor);
-      return modelIds;
+      const { rows } = await readAllOpenCodeCapabilityRows((query) => terminals.listAssistantCapabilities(query),
+        { modelProviderId: "opencode" });
+      return rows.filter((model) => model?.status !== "unavailable")
+        .map((model) => String(model?.id || "").trim()).filter(Boolean);
     },
     verifyConnection(input) {
       if (
@@ -77,22 +52,20 @@ function createAiConnectionRuntime({ systemRoot, terminals, publishConnectionCha
   });
 }
 
-function configureAiConnectionRuntime({ accountService, aiConnections, terminals, requireManagement = () => null } = {}) {
+// The OpenCode connection hooks only; the Accounts feature registers the
+// Claude and Codex sign-in status hooks itself.
+function configureAiConnectionRuntime({ aiConnections, terminals, requireAiManagement } = {}) {
+  if (typeof requireAiManagement !== "function") {
+    throw new TypeError("AI connection runtime requires the host AI management policy.");
+  }
   terminals.configureAssistantRuntime({
-    async claudeConnectionStatus() {
-      return (await accountService.getClaudeStatus()).account?.connected === true;
-    },
-    async codexConnectionStatus() {
-      const status = await accountService.getStatus({ accountIds: ["codex"] });
-      return status.ok === true && status.accounts.some((account) => account.id === "codex" && account.connected === true);
-    },
     listConnections: () => aiConnections.listConnections(),
     readAssistantAccess: ({ assistantSelection, modelProviderId = "" } = {}) => aiConnections.assistantAccess(modelProviderId, {
       modelId: assistantSelection?.modelId || ""
     }),
     resolveConnection: ({ modelProviderId = "" } = {}) => aiConnections.resolveConnection(modelProviderId),
     async updateModelAccess({ modelProviderId = "", unlocked, vibe64User } = {}) {
-      const denied = await requireManagement({ vibe64User });
+      const denied = await requireAiManagement({ vibe64User });
       if (denied) throw Object.assign(new Error(denied.error), { code: denied.code, statusCode: 403 });
       return { connection: await aiConnections.updateModelAccess(modelProviderId, { unlocked }), ok: true };
     }

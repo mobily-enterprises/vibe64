@@ -11,7 +11,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 
-import stripAnsi from "strip-ansi";
 
 import {
   closeTerminalSession,
@@ -27,7 +26,8 @@ import {
 } from "./githubCliAuth.js";
 import {
   validateGitIdentityInputs
-} from "./gitIdentityInput.js";
+} from "../shared/gitIdentityInput.js";
+import { cleanAuthOutput, deviceUserCode, OPENAI_API_KEY_REDACTION_PATTERN, redactedAuthOutputTail } from "../shared/authOutput.js";
 import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
@@ -90,15 +90,10 @@ const CODEX_API_KEY_ENV = "VIBE64_CODEX_API_KEY";
 const REQUIRED_GITHUB_SCOPES = Object.freeze(["repo", "read:org", "gist", "workflow"]);
 const AUTH_DEBUG_MARKER = "VIBE64_ACCOUNTS_DEBUG";
 const AUTH_DEBUG_ENV = "VIBE64_ACCOUNTS_DEBUG";
-const AUTH_DEBUG_OUTPUT_TAIL_LENGTH = 1200;
 const GITHUB_STATUS_TRANSIENT_RETRY_ATTEMPTS = 3;
 const GITHUB_STATUS_TRANSIENT_RETRY_DELAY_MS = 75;
 const GITHUB_STATUS_TRANSIENT_FAILURE_PATTERN = /\b(?:EAGAIN|EINTR|EBUSY|resource temporarily unavailable)\b/iu;
 const GITHUB_STATUS_TEMPORARILY_UNAVAILABLE_CODE = "vibe64_github_status_temporarily_unavailable";
-const DEVICE_USER_CODE_PATTERN = /\b([A-Z0-9]{4}-[A-Z0-9]{4,8})\b/iu;
-const DEVICE_USER_CODE_REDACTION_PATTERN = /\b[A-Z0-9]{4}-[A-Z0-9]{4,8}\b/gu;
-const OPENAI_API_KEY_REDACTION_PATTERN = /\bsk-[A-Za-z0-9_-]{16,}\b/gu;
-const VISIBLE_ANSI_ESCAPE_PATTERN = /\u00a4\[[0-?]*[ -/]*[@-~]/gu;
 const GITHUB_HOSTS_RELATIVE_PATH = Object.freeze([".config", "gh", "hosts.yml"]);
 const GITHUB_GITCONFIG_RELATIVE_PATH = Object.freeze([".gitconfig"]);
 const ALL_CODEX_AUTH_MODES = Object.freeze([
@@ -192,25 +187,6 @@ async function writeJsonFile(filePath = "", value = {}) {
   await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, {
     mode: 0o600
   });
-}
-
-function cleanOutput(output = "") {
-  return stripAnsi(String(output || "")).replace(VISIBLE_ANSI_ESCAPE_PATTERN, "");
-}
-
-function sanitizedAuthOutputTail(output = "") {
-  const tail = cleanOutput(output).slice(-AUTH_DEBUG_OUTPUT_TAIL_LENGTH);
-  return tail
-    .replace(/https:\/\/[^\s"'<>]+/gu, (url) => {
-      try {
-        const parsed = new URL(url.replace(/[),.;]+$/u, ""));
-        return `${parsed.origin}${parsed.pathname}`;
-      } catch {
-        return "https://[redacted-url]";
-      }
-    })
-    .replace(DEVICE_USER_CODE_REDACTION_PATTERN, "[redacted-code]")
-    .replace(OPENAI_API_KEY_REDACTION_PATTERN, "[redacted-openai-api-key]");
 }
 
 function hostCommandResultOutput(result = {}) {
@@ -483,7 +459,7 @@ function accountAuthWorkingDirectory(providerContext = {}, fallback = process.cw
 }
 
 function firstMatchingUrl(output = "", predicate = () => true) {
-  const matches = cleanOutput(output).match(/https:\/\/[^\s"'<>]+/gu) || [];
+  const matches = cleanAuthOutput(output).match(/https:\/\/[^\s"'<>]+/gu) || [];
   for (const match of matches) {
     const url = match.replace(/[),.;]+$/u, "");
     if (predicate(url)) {
@@ -494,16 +470,12 @@ function firstMatchingUrl(output = "", predicate = () => true) {
 }
 
 function parseGithubUserCode(output = "") {
-  const normalizedOutput = cleanOutput(output);
+  const normalizedOutput = cleanAuthOutput(output);
   const labelledMatch = normalizedOutput.match(/one-time code:\s*([A-Z0-9]{4}-[A-Z0-9]{4,8})/iu);
   if (labelledMatch) {
     return labelledMatch[1].toUpperCase();
   }
-  return normalizedOutput.match(DEVICE_USER_CODE_PATTERN)?.[1]?.toUpperCase() || "";
-}
-
-function parseCodexUserCode(output = "") {
-  return cleanOutput(output).match(DEVICE_USER_CODE_PATTERN)?.[1]?.toUpperCase() || "";
+  return deviceUserCode(normalizedOutput);
 }
 
 function parseAuthOutput({
@@ -521,7 +493,7 @@ function parseAuthOutput({
   }
 
   if (mode === DEVICE_AUTH_MODE) {
-    const userCode = parseCodexUserCode(output);
+    const userCode = deviceUserCode(output);
     return {
       authUrl: firstMatchingUrl(output, (url) => url.includes("openai.com/") || url.includes("chatgpt.com/")) || (userCode ? CODEX_DEVICE_AUTH_URL : ""),
       userCode
@@ -1241,7 +1213,7 @@ function publicAuthSession({
   parsed,
   terminal
 } = {}) {
-  const output = cleanOutput(terminal.output)
+  const output = cleanAuthOutput(terminal.output)
     .replace(OPENAI_API_KEY_REDACTION_PATTERN, "[redacted-openai-api-key]");
   return {
     account,
@@ -1288,7 +1260,6 @@ function normalizeCodexAuthModes(modes = ALL_CODEX_AUTH_MODES) {
 
 function createAccountsRuntime({
   allowedCodexAuthModes = ALL_CODEX_AUTH_MODES,
-  canManageCodex = null,
   daemonHome = "",
   daemonGid = null,
   daemonUid = null,
@@ -1298,6 +1269,7 @@ function createAccountsRuntime({
   githubAccountMode = GITHUB_ACCOUNT_MODE_LOCAL,
   previousGithub = null,
   projectService = null,
+  requireAiManagement = null,
   requireExplicitRoots = true,
   systemRoot = "",
   targetRoot = "",
@@ -1352,8 +1324,13 @@ function createAccountsRuntime({
     previousGithub(input = {}) {
       return typeof previousGithub === "function" ? previousGithub(input) : null;
     },
-    requireCodexManagement(input = {}) {
-      return typeof canManageCodex === "function" ? canManageCodex(input) : null;
+    // The one answer to who may manage AI here: Claude and Codex sign-in,
+    // saved provider keys, model access and model routing. Hosts may
+    // override it; by default only the workspace owner may.
+    requireAiManagement(input = {}) {
+      if (typeof requireAiManagement === "function") return requireAiManagement(input);
+      return isAssistantRoutingOwner(input.vibe64User) ? null
+        : authError("vibe64_owner_required", "Only the workspace owner can manage AI connections and models.");
     },
     systemRoot: resolvedSystemRoot,
     unsupportedCodexAuthModeMessage(mode = "") {
@@ -1365,7 +1342,7 @@ function createAccountsRuntime({
 }
 
 // accountRuntime (from createAccountsRuntime) owns roots, credential homes
-// and Codex policy; the service owns login sessions and status reads.
+// and the AI management policy; the service owns login sessions and status reads.
 function createService({
   accountRuntime,
   env = process.env,
@@ -1398,13 +1375,10 @@ function createService({
       })
     : runHostToolCommand;
 
-  function claudeManagementError(input = {}) {
-    return input.vibe64User && input.vibe64User.role !== "owner"
-      ? authError("vibe64_owner_required", "Only the workspace owner can manage Claude Code.") : null;
-  }
+  const aiManagementError = (input = {}) => accountRuntime.requireAiManagement(input);
 
   async function prepareClaudeAuthChange(input) {
-    const failure = claudeManagementError(input);
+    const failure = aiManagementError(input);
     if (failure) return failure;
     const stopped = await invalidateAgentRuntimes({ provider: "claude", reason: "claude-auth-change" });
     return stopped?.ok === false ? stopped : null;
@@ -1431,10 +1405,6 @@ function createService({
   const codexProviders = createCodexProviderConnectionStore({
     systemRoot: resolvedSystemRoot, invalidateRuntimes: invalidateAgentRuntimes
   });
-
-  function codexManagementError(input = {}) {
-    return accountRuntime.requireCodexManagement(input);
-  }
 
   async function invalidateCodexAppServersForAuthChange({
     account = {},
@@ -1823,10 +1793,7 @@ function createService({
   }
 
   function sessionVisibleToInput(input = {}, metadata = {}) {
-    if (metadata.accountId === "claude") return !claudeManagementError(input);
-    if (metadata.accountId === "codex") {
-      return !codexManagementError(input);
-    }
+    if (["claude", "codex"].includes(metadata.accountId)) return !aiManagementError(input);
     if (metadata.accountId !== "github") {
       return true;
     }
@@ -1888,8 +1855,8 @@ function createService({
       exitCode: terminal.exitCode,
       inputVersion: terminal.inputVersion || 0,
       mode: metadata.mode,
-      outputLength: cleanOutput(terminal.output).length,
-      outputTail: metadata.accountId === "claude" ? "" : sanitizedAuthOutputTail(terminal.output),
+      outputLength: cleanAuthOutput(terminal.output).length,
+      outputTail: metadata.accountId === "claude" ? "" : redactedAuthOutputTail(terminal.output),
       outputVersion: terminal.outputVersion || 0,
       sessionId,
       terminalStatus: terminal.status,
@@ -2255,7 +2222,7 @@ function createService({
     const [result, team] = await Promise.all([
       inspectRoutingConfiguration(configuration, { vibe64User: input.vibe64User || null,
         ...(input.preferProvider ? { preferProvider: input.preferProvider } : {}) }), readWorkspaceTeam()]);
-    return { ok: true, revision: configuration.revision, canConfigure: !codexManagementError(input), team, ...result };
+    return { ok: true, revision: configuration.revision, canConfigure: !aiManagementError(input), team, ...result };
   }
 
   const sameRoutingSelection = (left, right) => ["engineId", "agentId", "modelProviderId", "modelId", "variantId"]
@@ -2267,7 +2234,7 @@ function createService({
   // the owner's own actions fill a setup; a team member's never writes.
   async function initializeModelRouting(input = {}) {
     return accountsResult(async () => {
-      if (!isAssistantRoutingOwner(input.vibe64User)) return { ok: true, initialized: [] };
+      if (aiManagementError(input)) return { ok: true, initialized: [] };
       const setup = input.setup || "owner";
       const preferProvider = input.preferProvider || null;
       if (!ASSISTANT_SETUP_ROLES[setup] || preferProvider && (typeof preferProvider.modelProviderId !== "string" ||
@@ -2319,7 +2286,7 @@ function createService({
     readModelRouting,
     async previewModelRouting(input = {}) {
       return accountsResult(async () => {
-        const failure = codexManagementError(input);
+        const failure = aiManagementError(input);
         if (failure) return failure;
         const { configuration } = await routingDraft(input);
         return routingView(configuration, input);
@@ -2327,7 +2294,7 @@ function createService({
     },
     async saveModelRouting(input = {}) {
       return accountsResult(async () => {
-        const failure = codexManagementError(input);
+        const failure = aiManagementError(input);
         if (failure) return failure;
         const { configuration, saved, pairError } = await routingDraft(input);
         const view = await routingView(configuration, input);
@@ -2399,7 +2366,7 @@ function createService({
           if (failure) return failure;
         }
         if (accountId === "codex") {
-          const managementError = codexManagementError(input);
+          const managementError = aiManagementError(input);
           if (managementError) {
             return managementError;
           }
@@ -2492,14 +2459,14 @@ function createService({
 
     readCodexProviders(input = {}) {
       return accountsResult(async () => {
-        const failure = codexManagementError(input);
+        const failure = aiManagementError(input);
         if (failure) return failure;
         return { ok: true, providers: await codexProviders.list() };
       });
     },
     saveCodexProvider(input = {}) {
       return accountsResult(async () => {
-        const failure = codexManagementError(input);
+        const failure = aiManagementError(input);
         if (failure) return failure;
         const providers = await codexProviders.change(input.modelProviderId, input);
         const routing = await initializeModelRouting({ vibe64User: input.vibe64User });
@@ -2509,7 +2476,7 @@ function createService({
     },
     removeCodexProvider(input = {}) {
       return accountsResult(async () => {
-        const failure = codexManagementError(input);
+        const failure = aiManagementError(input);
         if (failure) return failure;
         const providers = await codexProviders.change(input.modelProviderId, { remove: true, engineId: input.engineId });
         await publishAccountChanged(input.engineId, { reason: "provider-key-removed" });
@@ -2557,7 +2524,7 @@ function createService({
           if (failure) return failure;
         }
         if (accountId === "codex") {
-          const managementError = codexManagementError(input);
+          const managementError = aiManagementError(input);
           if (managementError) {
             return managementError;
           }
@@ -2576,8 +2543,8 @@ function createService({
         authDebug("server.auth.logout.host_command_done", {
           accountId,
           ok: result.ok === true,
-          outputLength: cleanOutput(result.output).length,
-          outputTail: sanitizedAuthOutputTail(result.output)
+          outputLength: cleanAuthOutput(result.output).length,
+          outputTail: redactedAuthOutputTail(result.output)
         });
         let account;
         if (accountId === "github" && result.ok) {

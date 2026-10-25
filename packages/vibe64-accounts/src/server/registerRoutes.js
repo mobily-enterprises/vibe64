@@ -25,19 +25,11 @@ import { vibe64ErrorResponse } from "@local/vibe64-core/server/serverResponses";
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 import { registerTerminalWebSocketRoute } from "@local/vibe64-core/server/terminalWebSocketRoutes";
 
-const retiredHelperModelResponse = Object.freeze({
-  ok: false,
-  statusCode: 410,
-  code: "vibe64_helper_model_retired",
-  error: "Helper settings have moved to Models. Reload the app and choose Quick helper there."
-});
-
 function registerRoutes(
   http,
   {
     accounts = null,
     aiConnectionService = null,
-    requireAiManagement = () => null,
     fastify = null,
     projectContext = null,
     routeSurface = "",
@@ -71,8 +63,6 @@ function registerRoutes(
         summary: "Manage AI provider connections."
       }, async (request) => {
         const vibe64User = request.vibe64User || null;
-        const denied = await requireAiManagement({ vibe64User });
-        if (denied) return { ...denied, statusCode: 403 };
         try {
           return await handler({
             body: routes.requestBody(request),
@@ -122,11 +112,6 @@ function registerRoutes(
     buildInput: (request) => withoutVibe64User(routes.requestBody(request)),
     summary: "Preview the owner and team AI setups without saving or running AI."
   });
-  for (const method of ["GET", "PATCH"]) {
-    routes.serviceRoute(method, "/helper-model", {
-      summary: "Direct older clients to Model routing."
-    }, async () => retiredHelperModelResponse);
-  }
   routes.actionRoute("POST", "/auth", {
     actionId: ACTION_START_ACCOUNT_AUTH,
     body: accountAuthStartInputValidator,
@@ -196,13 +181,6 @@ function registerRoutes(
 }
 
 function registerAiConnectionRoutes(register) {
-  for (const method of ["GET", "PATCH"]) {
-    register(method, "/:providerId/helper-model", () => {
-      throw Object.assign(new Error(retiredHelperModelResponse.error), {
-        code: retiredHelperModelResponse.code, statusCode: retiredHelperModelResponse.statusCode
-      });
-    });
-  }
   for (const [method, suffix, operation] of [
     ["GET", "", "list"],
     ["GET", "/catalog", "catalog"],

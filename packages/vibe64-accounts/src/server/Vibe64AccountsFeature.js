@@ -193,6 +193,9 @@ const Vibe64AccountsFeature = defineFeature({
 
     if (typeof terminals?.configureAssistantRuntime === "function") {
       terminals.configureAssistantRuntime({
+        async claudeConnectionStatus() {
+          return (await accounts.getClaudeStatus()).account?.connected === true;
+        },
         async codexConnectionStatus() {
           const status = await accounts.getStatus({ accountIds: ["codex"] });
           return status.ok === true &&
@@ -218,16 +221,14 @@ const Vibe64AccountsFeature = defineFeature({
         })
       : null;
     if (aiConnections) {
-      configureAiConnectionRuntime({
-        accountService: accounts, aiConnections, terminals,
-        requireManagement: (input) => resolvedAccountRuntime.requireCodexManagement(input)
-      });
+      configureAiConnectionRuntime({ aiConnections, terminals,
+        requireAiManagement: resolvedAccountRuntime.requireAiManagement });
     }
     if (aiConnectionService) {
       actionCatalogue.register({
         contributorId: "vibe64.accounts.ai-connections", domain: "vibe64-accounts",
         actions: createAiConnectionActions({ aiConnectionService,
-          requireAiManagement: (input) => resolvedAccountRuntime.requireCodexManagement(input)
+          requireAiManagement: resolvedAccountRuntime.requireAiManagement
         }).map((action) => ({ channels: ["api", "automation", "internal"], surfaces: ["app"], ...action }))
       });
     }
@@ -235,7 +236,6 @@ const Vibe64AccountsFeature = defineFeature({
     registerRoutes(http, {
       accounts,
       aiConnectionService,
-      requireAiManagement: (input) => resolvedAccountRuntime.requireCodexManagement(input),
       fastify,
       projectContext,
       routeRelativePath: "vibe64/accounts",
@@ -244,7 +244,6 @@ const Vibe64AccountsFeature = defineFeature({
     registerRoutes(http, {
       accounts,
       aiConnectionService,
-      requireAiManagement: (input) => resolvedAccountRuntime.requireCodexManagement(input),
       fastify,
       projectContext,
       projectScoped: false,

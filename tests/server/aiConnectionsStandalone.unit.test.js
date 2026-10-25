@@ -56,18 +56,15 @@ test("standalone connects an OpenCode provider and reopens its existing credenti
   };
   const aiConnections = createAiConnectionRuntime({ systemRoot, terminals,
     publishConnectionChanged(...args) { events.push(args); } });
-  configureAiConnectionRuntime({ terminals, aiConnections, accountService: {
-    async getStatus() { return { ok: true, accounts: [{ id: "codex", connected: false }] }; },
-    async getClaudeStatus() { return { ok: true, account: { connected: true } }; }
-  } });
-  assert.equal(await configured.codexConnectionStatus(), false);
-  assert.equal(await configured.claudeConnectionStatus(), true);
+  configureAiConnectionRuntime({ terminals, aiConnections, requireAiManagement: () => null });
+  assert.deepEqual(Object.keys(configured).sort(), ["listConnections", "readAssistantAccess", "resolveConnection", "updateModelAccess"],
+    "only the OpenCode connection hooks; the Accounts feature owns the sign-in status hooks");
   // Vibe64 includes no AI of its own: nothing is connected until the person adds a provider.
   assert.deepEqual(await configured.listConnections(), []);
 
   const service = createAiConnectionService({ aiConnections, readAssistantCapabilities: terminals.listAssistantCapabilities });
   const app = testRouteApp();
-  registerRoutes(app.http, { accounts: { subscribeAuthTerminal() {} }, fastify: app.fastify,
+  registerRoutes(app.http, { accounts: { subscribeAuthTerminal() {} }, fastify: app.fastify, requireAiManagement: () => null,
     aiConnectionService: service, projectScoped: false, routeSurface: "app", routeRelativePath: "vibe64/accounts" });
   const save = findRegisteredRoute(app, { method: "PATCH", path: "/api/vibe64/accounts/ai-connections/:providerId" });
   const reply = testReply();
@@ -79,13 +76,10 @@ test("standalone connects an OpenCode provider and reopens its existing credenti
   assert.equal(invalidations[0].provider, "opencode");
   assert.equal(events[0][0], "deepseek");
   assert.equal((await configured.resolveConnection({ modelProviderId: "deepseek" })).apiKey, "fixture-deepseek-private-key");
-  for (const path of ["/api/vibe64/accounts/helper-model", "/api/vibe64/accounts/ai-connections/:providerId/helper-model"]) {
-    const route = findRegisteredRoute(app, { method: "PATCH", path });
-    const retired = testReply();
-    await route.handler({ hostname: "localhost", ip: "127.0.0.1", params: { providerId: "deepseek" },
-      body: { modelId: "retired-setting" } }, retired);
-    assert.equal(retired.statusCode, 410);
-    assert.match(retired.payload.error, /moved to Models\. Reload the app/u);
+  for (const method of ["GET", "PATCH"]) {
+    for (const path of ["/api/vibe64/accounts/helper-model", "/api/vibe64/accounts/ai-connections/:providerId/helper-model"]) {
+      assert.equal(findRegisteredRoute(app, { method, path }), null, `${method} ${path} is not registered`);
+    }
   }
   const storedBefore = await readFile(aiConnections.filePath, "utf8");
   const reopened = createAiConnectionRuntime({ systemRoot, terminals });
@@ -106,7 +100,8 @@ test("provider management rejects a forged owner in the request body before touc
   const route = findRegisteredRoute(app, { method: "PATCH", path: "/api/vibe64/accounts/ai-connections/:providerId" });
   const reply = testReply();
   await route.handler({ hostname: "localhost", params: { providerId: "deepseek" },
-    vibe64User: { role: "member", username: "member" }, body: { vibe64User: { role: "owner" } } }, reply);
+    vibe64User: { role: "member", username: "member" },
+    body: { apiKey: "fixture-only", providerRevision: revision, vibe64User: { role: "owner" } } }, reply);
   assert.equal(reply.statusCode, 403);
   assert.equal(called, false);
 });

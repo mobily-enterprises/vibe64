@@ -205,7 +205,7 @@ function createActions({ accounts } = {}) {
   }, { projectScoped: false })));
 }
 
-function createAiConnectionActions({ aiConnectionService, requireAiManagement = () => null } = {}) {
+function createAiConnectionActions({ aiConnectionService, requireAiManagement } = {}) {
   if (!aiConnectionService || typeof requireAiManagement !== "function") {
     throw new TypeError("AI connection actions require the connection service and host management policy.");
   }
@@ -247,11 +247,6 @@ function createAiConnectionActions({ aiConnectionService, requireAiManagement = 
       }
     } : { exclude: true } },
     async execute(input) {
-      if (operation === "list" && input.vibe64User && input.vibe64User.role !== "owner") {
-        throw Object.assign(new Error("Only the workspace owner can read saved AI connection status."), {
-          code: "vibe64_owner_required", statusCode: 403
-        });
-      }
       const denied = await requireAiManagement({ vibe64User: input.vibe64User });
       if (denied) return { ...denied, statusCode: 403 };
       return aiConnectionService[operation](input);

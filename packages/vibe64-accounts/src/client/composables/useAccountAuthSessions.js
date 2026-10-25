@@ -6,17 +6,15 @@ import {
 import {
   VIBE64_ACCOUNT_AUTH_SESSION_CHANGED_EVENT
 } from "../lib/accountsGateApi.js";
+import { cleanAuthOutput, deviceUserCode, redactedAuthOutputTail } from "../../shared/authOutput.js";
+import { validateGitIdentityInputs } from "../../shared/gitIdentityInput.js";
 
 const DEFAULT_RECOVERY_POLL_INTERVAL_MS = 30_000;
 const MAX_POLL_FAILURE_BACKOFF_MS = 5 * 60_000;
 const AUTH_DEBUG_MARKER = "VIBE64_ACCOUNTS_DEBUG";
 const AUTH_DEBUG_QUERY_PARAM = "vibe64_accounts_debug";
 const AUTH_DEBUG_STORAGE_KEY = "vibe64:accounts-debug";
-const AUTH_DEBUG_OUTPUT_TAIL_LENGTH = 1200;
 const CODEX_DEVICE_AUTH_URL = "https://auth.openai.com/codex/device";
-const ANSI_ESCAPE_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-?]*[ -/]*[@-~]`, "gu");
-const VISIBLE_ANSI_ESCAPE_PATTERN = /\u00a4\[[0-?]*[ -/]*[@-~]/gu;
-const DEVICE_USER_CODE_PATTERN = /\b([A-Z0-9]{4}-[A-Z0-9]{4,8})\b/iu;
 
 function authDebug(event, fields = {}) {
   if (!isVibe64BrowserFlagEnabled({
@@ -448,32 +446,12 @@ function authSessionDebugFields(session = {}) {
     hasOutput: Boolean(normalizedSession.output),
     mode: normalizedSession.mode || "",
     outputLength: String(normalizedSession.output || "").length,
-    outputTail: authSessionAccountId(normalizedSession) === "claude" ? "" : sanitizedAuthOutputTail(normalizedSession.output),
+    outputTail: authSessionAccountId(normalizedSession) === "claude" ? "" : redactedAuthOutputTail(normalizedSession.output),
     sessionId: normalizedSession.id || "",
     status: normalizedSession.status || "",
     terminalStatus: normalizedSession.terminalStatus || "",
     userCodePresent: Boolean(normalizedSession.userCode)
   };
-}
-
-function sanitizedAuthOutputTail(output = "") {
-  return cleanAuthOutput(output)
-    .slice(-AUTH_DEBUG_OUTPUT_TAIL_LENGTH)
-    .replace(/https:\/\/[^\s"'<>]+/gu, (url) => {
-      try {
-        const parsed = new URL(url.replace(/[),.;]+$/u, ""));
-        return `${parsed.origin}${parsed.pathname}`;
-      } catch {
-        return "https://[redacted-url]";
-      }
-    })
-    .replace(/\b[A-Z0-9]{4}-[A-Z0-9]{4,8}\b/gu, "[redacted-code]");
-}
-
-function cleanAuthOutput(output = "") {
-  return String(output || "")
-    .replace(ANSI_ESCAPE_PATTERN, "")
-    .replace(VISIBLE_ANSI_ESCAPE_PATTERN, "");
 }
 
 function authSessionUserCode(session = {}) {
@@ -485,7 +463,7 @@ function authSessionUserCode(session = {}) {
   if (normalizedSession.mode !== "device") {
     return "";
   }
-  return cleanAuthOutput(normalizedSession.output).match(DEVICE_USER_CODE_PATTERN)?.[1]?.toUpperCase() || "";
+  return deviceUserCode(normalizedSession.output);
 }
 
 function authSessionAccountId(session = {}) {
@@ -563,9 +541,9 @@ function createScheduler({
 }
 
 function validGitIdentity(input = {}) {
-  const name = String(input.gitUserName || input.name || "").trim();
-  const email = String(input.gitUserEmail || input.email || "").trim();
-  return Boolean(name) && /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email);
+  return validateGitIdentityInputs({
+    name: input.gitUserName || input.name, email: input.gitUserEmail || input.email
+  }).ok;
 }
 
 export {
