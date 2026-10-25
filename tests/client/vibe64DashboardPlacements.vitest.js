@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   mdiAccountKeyOutline,
@@ -13,6 +14,7 @@ import {
 import getPlacements, {
   uniqueDashboardSectionPlacements
 } from "../../src/placement.js";
+import extensionPlacements from "../../src/placementExtensions.js";
 import {
   VIBE64_ACTIVE_SESSION_NAV_OWNER,
   VIBE64_ACTIVE_SESSION_NAV_TARGET,
@@ -21,6 +23,13 @@ import {
 } from "../../src/lib/vibe64SessionToolDefinitions.js";
 
 describe("Vibe64 dashboard placements", () => {
+  it("adds the placements a composed app supplies through its extension module, and ships none itself", () => {
+    expect(extensionPlacements).toEqual([]);
+    const source = readFileSync(new URL("../../src/placement.js", import.meta.url), "utf8");
+    expect(source).toMatch(/import extensionPlacements from "\.\/placementExtensions\.js";/u);
+    expect(source).toMatch(/for \(const placement of extensionPlacements\) addPlacement\(placement\);/u);
+  });
+
   it("links dashboard tabs through the public project route namespace", () => {
     const dashboardLinks = getPlacements()
       .filter((placement) => (

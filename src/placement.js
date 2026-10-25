@@ -17,6 +17,7 @@ import {
   VIBE64_SESSION_TOOL_DEFINITIONS,
   vibe64SessionToolDashboardSuffix
 } from "./lib/vibe64SessionToolDefinitions.js";
+import extensionPlacements from "./placementExtensions.js";
 
 const registry = createPlacementRegistry();
 const { addPlacement } = registry;
@@ -284,3 +285,5 @@ addPlacement({
     to: ""
   }
 });
+
+for (const placement of extensionPlacements) addPlacement(placement);
