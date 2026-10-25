@@ -20,8 +20,8 @@ import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
 import {
-  useVibe64ConversationLog
-} from "@/composables/useVibe64ConversationLog.js";
+  useArchivedVibe64ConversationHistory
+} from "@/composables/useArchivedVibe64ConversationHistory.js";
 import {
   enrichVibe64SessionForDisplay
 } from "@/lib/vibe64SessionPanelModel.js";
@@ -164,9 +164,11 @@ function useArchivedVibe64SessionDetail() {
   const backTo = computed(() => ({
     path: `${projectAppPath(projectSlug.value)}/dashboard/history`
   }));
-  const conversationLog = proxyRefs(useVibe64ConversationLog({
+  const conversationLog = proxyRefs(useArchivedVibe64ConversationHistory({
     active: computed(() => Boolean(session.value)),
-    session
+    projectSlug,
+    session,
+    sessionsApiPath
   }));
 
   return {

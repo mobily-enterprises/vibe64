@@ -1,5 +1,4 @@
-import { effectScope, nextTick, ref } from "vue";
-import { latestAssistantMessageAwaitingUserReply } from "@local/vibe64-runtime/shared/conversationQuestions";
+import { computed, effectScope, nextTick, ref } from "vue";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const httpRequest = vi.hoisted(() => vi.fn());
@@ -7,16 +6,8 @@ const endpointMocks = vi.hoisted(() => ({
   resource: null,
   useEndpointResource: vi.fn()
 }));
-const queryMocks = vi.hoisted(() => ({
-  getQueryData: vi.fn(),
-  setQueryData: vi.fn()
-}));
 const realtimeMocks = vi.hoisted(() => ({
-  events: [],
-  socket: {
-    off: vi.fn(),
-    on: vi.fn()
-  }
+  events: []
 }));
 
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
@@ -33,9 +24,6 @@ vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({
   useRealtimeEvent(options) {
     realtimeMocks.events.push(options);
     return options;
-  },
-  useRealtimeSocket() {
-    return realtimeMocks.socket;
   }
 }));
 
@@ -47,12 +35,6 @@ vi.mock("@jskit-ai/shell-web/client/navigation/usePaths", () => ({
   }
 }));
 
-vi.mock("@tanstack/vue-query", () => ({
-  useQueryClient() {
-    return queryMocks;
-  }
-}));
-
 vi.mock("@/composables/useVibe64ProjectScope.js", () => ({
   useVibe64ProjectSlug() {
     return ref("project-a");
@@ -60,10 +42,7 @@ vi.mock("@/composables/useVibe64ProjectScope.js", () => ({
 }));
 
 import {
-  applyConversationLogPatch,
   conversationLogCompletedTurnKey,
-  conversationLogRealtimePatch,
-  conversationLogRecoveryStateKey,
   conversationLogRealtimeShouldRefresh,
   normalizeConversationLog,
   sessionAgentTurnActive,
@@ -75,6 +54,14 @@ import {
   normalizeConversationLogPage
 } from "@jskit-ai/assistant-core/shared/conversation";
 
+// Main chat's supplied binding over the mocked saved history: its turns follow
+// the resource data and Reload is the resource's reload.
+function suppliedConversation() {
+  const resource = endpointMocks.resource;
+  return { turns: computed(() => normalizeConversationLog(resource.data.value)), error: ref(""), accessDenied: ref(false),
+    snapshot: ref({ status: "ready" }), loading: ref(false), reload: (...args) => resource.reload(...args) };
+}
+
 describe("useVibe64ConversationLog", () => {
   it("preserves saved attribution while normalizing conversation history", () => {
     const metadata = { assistantSelection: { engineId: "codex", modelId: "gpt-6-astra" } };
@@ -84,93 +71,13 @@ describe("useVibe64ConversationLog", () => {
     expect(turn.metadata).toEqual(metadata);
   });
 
-  it("receives live text without refetching, ignores older snapshots and replaces it with the saved reply", async () => {
-    const scope = effectScope();
-    const user = { role: "user", messageId: "user", text: "Question" };
-    endpointMocks.resource.data.value = { conversationLog: [{ turnId: "000001", user }] };
-    queryMocks.getQueryData.mockImplementation(() => endpointMocks.resource.data.value);
-    queryMocks.setQueryData.mockImplementation((_key, value) => { endpointMocks.resource.data.value = value; });
-    const model = scope.run(() => useVibe64ConversationLog({ session: ref({ sessionId: "session-1" }) }));
-    const listener = realtimeMocks.events[0];
-    const message = { role: "assistant", messageId: "answer", text: "Hello ", status: "inProgress" };
-    const payload = { sessionId: "session-1", reason: "assistant-stream", conversationStream: { revision: 2, messages: [message] } };
-    expect(listener.matches({ payload })).toBe(true);
-    expect(listener.matches({ payload: { ...payload, sessionId: "other" } })).toBe(false);
-    listener.onEvent({ payload });
-    expect(model.turns.value[0].assistant.text).toBe("Hello ");
-    expect(latestAssistantMessageAwaitingUserReply(model.turns.value)).toBe("");
-    expect(endpointMocks.resource.reload).not.toHaveBeenCalled();
-    endpointMocks.resource.data.value = { ...endpointMocks.resource.data.value,
-      conversationStream: { revision: 1, messages: [{ ...message, text: "H" }] } };
-    await nextTick();
-    expect(model.turns.value[0].assistant.text).toBe("Hello ");
-    const final = { ...message, text: "Hello world", status: "completed" };
-    await listener.onEvent({ payload: { sessionId: "session-1", reason: "assistant-response-bundle",
-      conversationStream: { revision: 3, messages: [] },
-      conversationLogPatch: { type: "upsert-turn", turn: { turnId: "000001", user, assistant: final } }
-    } });
-    expect(model.turns.value).toHaveLength(1);
-    expect(model.turns.value[0].assistant.text).toBe("Hello world");
-    expect(latestAssistantMessageAwaitingUserReply(model.turns.value)).toBe("Hello world");
-    expect(model.turns.value[0].pending).not.toBe(true);
-    expect(endpointMocks.resource.reload).not.toHaveBeenCalled();
-    scope.stop();
-  });
-
-  it("restores live text from a history read and clears it when the session changes", async () => {
-    const scope = effectScope();
-    const session = ref({ sessionId: "session-1" });
-    endpointMocks.resource.data.value.conversationStream = { revision: 1, messages: [
-      { role: "assistant", messageId: "answer", text: "Restored partial", status: "inProgress" }
-    ] };
-    const model = scope.run(() => useVibe64ConversationLog({ session }));
-    expect(model.turns.value[0].assistant.text).toBe("Restored partial");
-    session.value = { sessionId: "session-2" };
-    await nextTick();
-    expect(model.turns.value).toHaveLength(0);
-    scope.stop();
-  });
-
-  it("updates one timestamped reasoning paragraph as its text grows without refetching", async () => {
-    const scope = effectScope();
-    const user = { role: "user", messageId: "user", text: "Make the change." };
-    const first = { role: "thinking", at: "2026-09-24T07:45:00.000Z", text: "Preparing and applying patch" };
-    endpointMocks.resource.data.value = { conversationLog: [{ turnId: "000001", user, thinking: [first] }] };
-    queryMocks.getQueryData.mockImplementation(() => endpointMocks.resource.data.value);
-    queryMocks.setQueryData.mockImplementation((_key, value) => { endpointMocks.resource.data.value = value; });
-    const model = scope.run(() => useVibe64ConversationLog({ session: ref({ sessionId: "session-1" }) }));
-    const listener = realtimeMocks.events[0];
-    try {
-      for (const text of [
-        "Preparing and applying patch. I am updating",
-        "Preparing and applying patch. I am updating the relevant sections."
-      ]) {
-        const updated = { ...first, text };
-        listener.onEvent({ payload: { sessionId: "session-1", reason: "codex-app-server-reasoning-summary",
-          conversationLogPatch: { type: "upsert-turn", turn: { turnId: "000001", user, thinking: [updated] } }
-        } });
-        expect(model.turns.value[0].thinking).toEqual([updated]);
-        expect(model.turns.value[0].messages).toEqual([{ ...user, at: "" }, updated]);
-      }
-      const next = { ...first, at: "2026-09-24T07:45:01.000Z" };
-      listener.onEvent({ payload: { sessionId: "session-1", reason: "codex-app-server-reasoning-summary",
-        conversationLogPatch: { type: "upsert-turn", turn: { turnId: "000001", thinking: [next] } }
-      } });
-      expect(model.turns.value[0].thinking).toHaveLength(2);
-      expect(model.turns.value[0].thinking[1]).toEqual(next);
-      expect(endpointMocks.resource.reload).not.toHaveBeenCalled();
-    } finally {
-      scope.stop();
-    }
-  });
-
   it("recognizes Analytics configuration from chat without executing setup or completing the request", async () => {
     const scope = effectScope();
     const session = ref({ sessionId: "session-1" });
     const requestId = "a".repeat(64);
     endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure Analytics" },
       integrationSetup: { integrationId: "analytics", requestId, outcome: "pending" } }];
-    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    const model = scope.run(() => useVibe64ConversationLog({ session, conversation: suppliedConversation() }));
     const request = { sessionId: "session-1", turnId: "000001", requestId };
     httpRequest.mockResolvedValue({ configuration: { integrations: { analytics: {
       provider: "google-analytics", accountMode: "shared", authentication: { method: "none" }, settings: { measurementId: "G-ABC123" }
@@ -191,7 +98,7 @@ describe("useVibe64ConversationLog", () => {
     const requestId = "a".repeat(64);
     endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
       integrationSetup: { integrationId: "mail", requestId, outcome: "pending" } }];
-    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    const model = scope.run(() => useVibe64ConversationLog({ session, conversation: suppliedConversation() }));
     const request = { sessionId: "session-1", turnId: "000001", requestId };
     const config = { configuration: { integrations: { mail: { accountMode: "shared" } } }, baseHash: "hash" };
     httpRequest.mockResolvedValueOnce(config).mockResolvedValueOnce({ status: "pending", attemptId: "attempt-1", authorizationUrl: "https://provider.example/consent" });
@@ -216,7 +123,7 @@ describe("useVibe64ConversationLog", () => {
     const requestId = "a".repeat(64);
     endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
       integrationSetup: { integrationId: "mail", requestId, outcome: "pending" } }];
-    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    const model = scope.run(() => useVibe64ConversationLog({ session, conversation: suppliedConversation() }));
     httpRequest.mockResolvedValueOnce({ configuration: { integrations: { mail: { accountMode: "shared" } } }, baseHash: "hash" })
       .mockResolvedValueOnce({ status: "pending", attemptId: "existing-attempt", authorizationUrl: "https://provider.example/consent" });
     expect(await model.checkIntegrationRequest({ sessionId: "session-1", turnId: "000001", requestId })).toBe(true);
@@ -233,7 +140,7 @@ describe("useVibe64ConversationLog", () => {
     const requestId = "a".repeat(64);
     endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
       integrationSetup: { integrationId: "mail", requestId, outcome: "pending" } }];
-    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    const model = scope.run(() => useVibe64ConversationLog({ session, conversation: suppliedConversation() }));
     httpRequest.mockResolvedValueOnce({ configuration: { integrations: { mail: { accountMode: "shared" } } }, baseHash: "hash" })
       .mockResolvedValueOnce({ status: "connected", integrationSetup: { outcome: "completed", continuation: { status: "pending" } } })
       .mockResolvedValueOnce({ ok: false, error: "Delivery unconfirmed" });
@@ -253,7 +160,7 @@ describe("useVibe64ConversationLog", () => {
     const requestId = "a".repeat(64);
     endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
       integrationSetup: { integrationId: "mail", requestId, outcome: "pending" } }];
-    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    const model = scope.run(() => useVibe64ConversationLog({ session, conversation: suppliedConversation() }));
     let finish;
     httpRequest.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
     const pending = model.connectIntegrationRequest({ sessionId: "session-1", turnId: "000001", requestId });
@@ -273,7 +180,7 @@ describe("useVibe64ConversationLog", () => {
     const requestId = "a".repeat(64);
     endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
       integrationSetup: { integrationId: "mail", requestId, outcome: "pending" } }];
-    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    const model = scope.run(() => useVibe64ConversationLog({ session, conversation: suppliedConversation() }));
     let finish;
     httpRequest.mockResolvedValueOnce({ configuration: { integrations: { mail: { accountMode: "shared" } } }, baseHash: "hash" })
       .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
@@ -297,7 +204,7 @@ describe("useVibe64ConversationLog", () => {
     const turn = { turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
       integrationSetup: { integrationId: "mail", requestId, outcome: "pending" } };
     endpointMocks.resource.data.value.conversationLog = [turn];
-    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    const model = scope.run(() => useVibe64ConversationLog({ session, conversation: suppliedConversation() }));
     const request = { sessionId: "session-1", turnId: "000001", requestId };
     httpRequest.mockResolvedValueOnce({ configuration: { integrations: { mail: { accountMode: "shared" } } }, baseHash: "hash" })
       .mockRejectedValueOnce(new Error("Connection response lost"));
@@ -325,7 +232,7 @@ describe("useVibe64ConversationLog", () => {
     const requestId = "a".repeat(64);
     endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
       integrationSetup: { integrationId: "removed-slot", requestId, outcome: "completed", continuation: { status: "sending" } } }];
-    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    const model = scope.run(() => useVibe64ConversationLog({ session, conversation: suppliedConversation() }));
     const request = { sessionId: "session-1", turnId: "000001", requestId };
     expect(await model.resumeIntegrationRequest({ ...request, sessionId: "other" })).toBe(false);
     expect(await model.resumeIntegrationRequest({ ...request, requestId: "b".repeat(64) })).toBe(false);
@@ -349,7 +256,7 @@ describe("useVibe64ConversationLog", () => {
     const requestId = "a".repeat(64);
     endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
       integrationSetup: { integrationId: "mail", requestId, outcome: "pending" } }];
-    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    const model = scope.run(() => useVibe64ConversationLog({ session, conversation: suppliedConversation() }));
     let finish;
     httpRequest.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
     const request = { sessionId: "session-1", turnId: "000001", requestId };
@@ -375,7 +282,7 @@ describe("useVibe64ConversationLog", () => {
     const requestId = "a".repeat(64);
     endpointMocks.resource.data.value.conversationLog = [{ turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
       integrationSetup: { integrationId: "mail", requestId, outcome: "pending" } }];
-    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    const model = scope.run(() => useVibe64ConversationLog({ session, conversation: suppliedConversation() }));
     const request = { sessionId: "session-1", turnId: "000001", requestId };
     httpRequest.mockResolvedValueOnce({ ok: false, error: "Assistant access denied." });
     expect(await model.skipIntegrationRequest(request)).toBe(false);
@@ -406,11 +313,7 @@ describe("useVibe64ConversationLog", () => {
     };
     endpointMocks.useEndpointResource.mockReset();
     endpointMocks.useEndpointResource.mockReturnValue(endpointMocks.resource);
-    queryMocks.getQueryData.mockReset();
-    queryMocks.setQueryData.mockReset();
     realtimeMocks.events.length = 0;
-    realtimeMocks.socket.off.mockReset();
-    realtimeMocks.socket.on.mockReset();
   });
   it("builds conversation-log page queries from the shared page limit", () => {
     expect(conversationLogReadQuery()).toEqual({
@@ -779,21 +682,6 @@ describe("useVibe64ConversationLog", () => {
     })).toBe(false);
   });
 
-  it("builds a stable recovery key from canonical session state", () => {
-    expect(conversationLogRecoveryStateKey({
-      agentSession: {
-        turn: {
-          active: true,
-          id: "turn-1"
-        }
-      },
-      revision: 7,
-      sessionId: "session-1",
-      status: "active",
-      updatedAt: "2026-08-14T10:00:00.000Z"
-    })).toBe("session-1|active|7|2026-08-14T10:00:00.000Z|active|turn-1");
-  });
-
   it("identifies a canonical completed turn for durable-history reconciliation", () => {
     expect(conversationLogCompletedTurnKey({
       agentSession: {
@@ -823,77 +711,10 @@ describe("useVibe64ConversationLog", () => {
     })).toBe("");
   });
 
-  it("reloads durable history when canonical state completes a turn missed by realtime", async () => {
-    const scope = effectScope();
-    const session = ref({
-      agentSession: {
-        turn: {
-          active: true,
-          id: "turn-1"
-        }
-      },
-      revision: 7,
-      sessionId: "session-1"
-    });
-    scope.run(() => useVibe64ConversationLog({ session }));
-
-    session.value = {
-      agentSession: {
-        turn: {
-          active: false,
-          id: "turn-1"
-        }
-      },
-      revision: 8,
-      sessionId: "session-1"
-    };
-    await nextTick();
-
-    expect(endpointMocks.resource.reload).toHaveBeenCalledTimes(1);
-    scope.stop();
-  });
-
-  it("does not duplicate the reload when realtime delivered the completed turn", async () => {
-    const scope = effectScope();
-    const session = ref({
-      agentSession: {
-        turn: {
-          active: true,
-          id: "turn-1"
-        }
-      },
-      revision: 7,
-      sessionId: "session-1"
-    });
-    scope.run(() => useVibe64ConversationLog({ session }));
-    const completionPayload = {
-      agentSession: {
-        turn: {
-          active: false,
-          id: "turn-1"
-        }
-      },
-      reason: "opencode-server-turn-idle",
-      revision: 8,
-      sessionId: "session-1"
-    };
-    const completionListener = realtimeMocks.events.find((listener) => (
-      listener.matches({ payload: completionPayload })
-    ));
-
-    const realtimeReload = completionListener.onEvent({ payload: completionPayload });
-    session.value = completionPayload;
-    await realtimeReload;
-    await nextTick();
-
-    expect(endpointMocks.resource.reload).toHaveBeenCalledTimes(1);
-    scope.stop();
-  });
-
   it("reloads a completed integration request from the session notification without trusting event state", async () => {
     const scope = effectScope();
     const session = ref({ sessionId: "session-1" });
-    const model = scope.run(() => useVibe64ConversationLog({ session }));
+    const model = scope.run(() => useVibe64ConversationLog({ session, conversation: suppliedConversation() }));
     const pendingTurn = { turnId: "000001", assistant: { role: "assistant", text: "Configure mail" },
       integrationSetup: { outcome: "pending", requestId: "a".repeat(64), integrationId: "mail" } };
     endpointMocks.resource.data.value.conversationLog = [pendingTurn];
@@ -1036,399 +857,6 @@ describe("useVibe64ConversationLog", () => {
         sessionId: "session-2"
       }
     }, "session-1")).toBe(false);
-  });
-
-  it("extracts realtime reasoning-summary patches from durable chat events", () => {
-    const turn = {
-      thinking: [
-        {
-          role: "thinking",
-          text: "Checking database setup."
-        }
-      ],
-      turnId: "000003"
-    };
-
-    expect(conversationLogRealtimePatch({
-      conversationLogPatch: {
-        turn,
-        type: "upsert-turn"
-      },
-      reason: "codex-app-server-reasoning-summary",
-      sessionId: "session-1"
-    })).toEqual({
-      turn,
-      type: "upsert-turn"
-    });
-
-    expect(conversationLogRealtimePatch({
-      conversationLogPatch: {
-        turn,
-        type: "upsert-turn"
-      },
-      reason: "opencode-server-assistant-message",
-      sessionId: "session-1"
-    })).toEqual({
-      turn,
-      type: "upsert-turn"
-    });
-
-    const providerFailureTurn = {
-      system: {
-        role: "system",
-        text: "OpenCode could not finish.\n\nAborted\n\nSaved project changes remain."
-      },
-      turnId: "000004"
-    };
-    expect(conversationLogRealtimePatch({
-      conversationLogPatch: {
-        turn: providerFailureTurn,
-        type: "upsert-turn"
-      },
-      reason: "opencode-provider-failure",
-      sessionId: "session-1"
-    })).toEqual({
-      turn: providerFailureTurn,
-      type: "upsert-turn"
-    });
-
-    const commentaryTurn = {
-      commentary: [
-        {
-          role: "commentary",
-          text: "I found the affected booking and I’m updating only that row."
-        }
-      ],
-      thinking: turn.thinking,
-      turnId: "000003"
-    };
-    expect(conversationLogRealtimePatch({
-      conversationLogPatch: {
-        turn: commentaryTurn,
-        type: "upsert-turn"
-      },
-      reason: "codex-app-server-commentary",
-      sessionId: "session-1"
-    })).toEqual({
-      turn: commentaryTurn,
-      type: "upsert-turn"
-    });
-
-    expect(conversationLogRealtimePatch({
-      conversationLogPatch: {
-        turn,
-        type: "upsert-turn"
-      },
-      reason: "codex-app-server-terminal-thinking-message",
-      sessionId: "session-1"
-    })).toEqual({
-      turn,
-      type: "upsert-turn"
-    });
-
-    expect(conversationLogRealtimePatch({
-      conversationLogPatch: {
-        turn: {
-          turnId: "000004",
-          user: {
-            role: "user",
-            text: "Keep going."
-          }
-        },
-        type: "upsert-turn"
-      },
-      reason: "codex-app-server-message-delivered",
-      sessionId: "session-1"
-    })).toEqual({
-      turn: {
-        turnId: "000004",
-        user: {
-          role: "user",
-          text: "Keep going."
-        }
-      },
-      type: "upsert-turn"
-    });
-
-    expect(conversationLogRealtimePatch({
-      conversationLogPatch: {
-        turn,
-        type: "upsert-turn"
-      },
-      reason: "codex-app-server-agent-result",
-      sessionId: "session-1"
-    })).toBe(null);
-
-    expect(conversationLogRealtimePatch({
-      conversationLogPatch: {
-        turn: {
-          assistant: {
-            role: "assistant",
-            text: "Final answer."
-          },
-          thinking: [
-            {
-              role: "thinking",
-              text: "Checked the result."
-            }
-          ],
-          turnId: "000007"
-        },
-        type: "upsert-turn"
-      },
-      reason: "assistant-response-bundle",
-      sessionId: "session-1"
-    })).toEqual({
-      turn: {
-        assistant: {
-          role: "assistant",
-          text: "Final answer."
-        },
-        thinking: [
-          {
-            role: "thinking",
-            text: "Checked the result."
-          }
-        ],
-        turnId: "000007"
-      },
-      type: "upsert-turn"
-    });
-
-    expect(conversationLogRealtimePatch({
-      conversationLogPatch: {
-        turn: {
-          assistant: {
-            role: "assistant",
-            text: "This must not arrive as live progress."
-          },
-          turnId: "000008"
-        },
-        type: "upsert-turn"
-      },
-      reason: "codex-app-server-live-progress",
-      sessionId: "session-1"
-    })).toBe(null);
-
-    expect(conversationLogRealtimePatch({
-      conversationLogPatch: {
-        turn: {
-          thinking: [
-            {
-              role: "thinking",
-              text: "This is not a final answer."
-            }
-          ],
-          turnId: "000009"
-        },
-        type: "upsert-turn"
-      },
-      reason: "codex-app-server-final-assistant-message",
-      sessionId: "session-1"
-    })).toBe(null);
-
-    expect(conversationLogRealtimePatch({
-      conversationLogPatch: {
-        turn: {
-          turnId: "000005",
-          user: {
-            role: "user",
-            text: "Typed directly in the AI Terminal."
-          }
-        },
-        type: "upsert-turn"
-      },
-      reason: "codex-app-server-terminal-user-message",
-      sessionId: "session-1"
-    })).toEqual({
-      turn: {
-        turnId: "000005",
-        user: {
-          role: "user",
-          text: "Typed directly in the AI Terminal."
-        }
-      },
-      type: "upsert-turn"
-    });
-
-    expect(conversationLogRealtimePatch({
-      conversationLogPatch: {
-        turn: {
-          assistant: {
-            role: "assistant",
-            text: "Answered directly from the AI Terminal."
-          },
-          turnId: "000006"
-        },
-        type: "upsert-turn"
-      },
-      reason: "codex-app-server-terminal-assistant-message",
-      sessionId: "session-1"
-    })).toEqual({
-      turn: {
-        assistant: {
-          role: "assistant",
-          text: "Answered directly from the AI Terminal."
-        },
-        turnId: "000006"
-      },
-      type: "upsert-turn"
-    });
-  });
-
-  it("applies realtime conversation-log turn patches without a full reload", () => {
-    const originalPayload = {
-      conversationLog: [
-        {
-          turnId: "000001",
-          user: {
-            role: "user",
-            text: "Start."
-          }
-        },
-        {
-          thinking: [
-            {
-              messageId: "thought-2",
-              role: "thinking",
-              text: "Old thought."
-            }
-          ],
-          turnId: "000002",
-          user: {
-            role: "user",
-            text: "Continue."
-          }
-        }
-      ],
-      ok: true,
-      revision: 3
-    };
-    const updatedTurn = {
-      thinking: [
-        {
-          messageId: "thought-2",
-          role: "thinking",
-          text: "Updated thought."
-        }
-      ],
-      turnId: "000002",
-      user: {
-        role: "user",
-        text: "Continue."
-      }
-    };
-
-    expect(applyConversationLogPatch(originalPayload, {
-      turn: updatedTurn,
-      type: "upsert-turn"
-    })).toEqual({
-      conversationLog: [
-        originalPayload.conversationLog[0],
-        {
-          ...updatedTurn,
-          commentary: [],
-          thinking: [{ ...updatedTurn.thinking[0], at: "" }],
-          messages: [updatedTurn.user, { ...updatedTurn.thinking[0], at: "" }]
-        }
-      ],
-      ok: true,
-      pagination: {
-        beforeTurnId: "",
-        count: 2,
-        hasMoreBefore: false,
-        limit: 0,
-        newestTurnId: "000002",
-        nextBeforeTurnId: "",
-        oldestTurnId: "000001",
-        totalTurnCount: 0
-      },
-      revision: 3
-    });
-
-    const appendedTurn = {
-      thinking: [
-        {
-          role: "thinking",
-          text: "New thought."
-        }
-      ],
-      turnId: "000003"
-    };
-    expect(applyConversationLogPatch(originalPayload, {
-      turn: appendedTurn,
-      type: "upsert-turn"
-    })?.conversationLog).toEqual([
-      ...originalPayload.conversationLog,
-      appendedTurn
-    ]);
-
-    const earlierTurn = {
-      turnId: "000000",
-      user: {
-        role: "user",
-        text: "Earlier message."
-      }
-    };
-    expect(applyConversationLogPatch(originalPayload, {
-      turn: earlierTurn,
-      type: "upsert-turn"
-    })?.conversationLog).toEqual([
-      earlierTurn,
-      ...originalPayload.conversationLog
-    ]);
-  });
-
-  it("keeps realtime page patches inside the configured latest-page limit", () => {
-    const trimmed = applyConversationLogPatch({
-      conversationLog: [
-        {
-          turnId: "000001",
-          user: {
-            role: "user",
-            text: "First."
-          }
-        },
-        {
-          turnId: "000002",
-          user: {
-            role: "user",
-            text: "Second."
-          }
-        }
-      ],
-      ok: true,
-      pagination: {
-        count: 2,
-        hasMoreBefore: false,
-        limit: 2,
-        newestTurnId: "000002",
-        oldestTurnId: "000001",
-        totalTurnCount: 2
-      }
-    }, {
-      turn: {
-        turnId: "000003",
-        user: {
-          role: "user",
-          text: "Third."
-        }
-      },
-      type: "upsert-turn"
-    }, {
-      limit: 2
-    });
-
-    expect(trimmed.conversationLog.map((turn) => turn.turnId)).toEqual([
-      "000002",
-      "000003"
-    ]);
-    expect(trimmed.pagination).toMatchObject({
-      count: 2,
-      hasMoreBefore: true,
-      newestTurnId: "000003",
-      oldestTurnId: "000002"
-    });
   });
 
   it("reconciles supplied Main history when canonical completion misses realtime", async () => {

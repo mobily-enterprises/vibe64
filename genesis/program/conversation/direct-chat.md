@@ -917,9 +917,11 @@ entry instead of appearing as multiple partial paragraphs. Later authoritative
 reads remain authoritative replacements. Pending-read
 overlays stay scoped to their conversation identity and are discarded when that
 request finishes or fails.
-The archived-session history resource retains its original query-cache reader;
-`tests/server/conversationLogReconciliation.unit.test.js` exercises that Vue
-composable with delayed HTTP responses.
+An archived session has no live turn, stream or patches, so its history is a
+separate read-only reader, `useArchivedVibe64ConversationHistory`: one saved
+history read, Load older paging through the shared page helpers, and Reload.
+It subscribes to no realtime events. `useVibe64ConversationLog` serves only the
+supplied live binding.
 
 Automatic thinking uses the selected curated model's declared default in both
 native Codex terminals and app-server turns.
@@ -1268,6 +1270,7 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `src/composables/useVibe64AssistantCatalog.js`
 - `src/composables/useVibe64AutopilotView.js`
 - `src/composables/useVibe64ConversationLog.js`
+- `src/composables/useArchivedVibe64ConversationHistory.js`
 - `src/composables/useVibe64MountedSessionData.js`
 - `src/composables/useVibe64SessionRuntimeHost.js`
 - `src/composables/useVibe64PromptHints.js`

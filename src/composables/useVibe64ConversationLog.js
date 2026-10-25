@@ -1,12 +1,6 @@
 import { connectorDefinitions } from "@jskit-ai/connectors-catalog/shared";
 import { computed, onScopeDispose, ref, shallowRef, watch } from "vue";
-import { useQueryClient } from "@tanstack/vue-query";
-import {
-  useRealtimeEvent,
-  useRealtimeSocket
-} from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
-import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
-import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
+import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 import {
@@ -16,28 +10,14 @@ import {
   VIBE64_SESSION_CHANGED_EVENT,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
-  vibe64ConversationLogPath,
   vibe64SessionPath,
-  vibe64ConversationLogQueryKey,
   vibe64SessionEventMatchesScope
 } from "@/lib/vibe64SessionRequestConfig.js";
 import {
   readRefOrGetterValue
 } from "@/lib/vueRefOrGetterValue.js";
 import {
-  vibe64SessionDebugError,
-  vibe64SessionDebugLog
-} from "@/lib/vibe64SessionDebugLog.js";
-import {
-  normalizeConversationMessage as normalizeSharedConversationMessage,
-  normalizeConversationTurn as normalizeSharedConversationTurn,
-  applyConversationLogPatch as applySharedConversationLogPatch,
-  mergeConversationStream,
-  CONVERSATION_LOG_PAGE_LIMIT,
-  normalizeConversationLogPagination,
-  normalizeConversationLogPage,
-  mergeConversationLogPages,
-  conversationLogReadQuery
+  normalizeConversationTurn as normalizeSharedConversationTurn
 } from "@jskit-ai/assistant-core/shared/conversation";
 import {
   normalizeVibe64ConversationAttachments
@@ -80,10 +60,6 @@ const CONVERSATION_LOG_REALTIME_REASONS = new Set([
   "session-agent-message-failed"
 ]);
 
-function normalizeConversationMessage(message = {}) {
-  return normalizeSharedConversationMessage(message, { normalizeAttachments: normalizeVibe64ConversationAttachments });
-}
-
 function normalizeConversationTurn(turn = {}, index = 0) {
   const normalized = normalizeSharedConversationTurn(turn, index, { normalizeAttachments: normalizeVibe64ConversationAttachments });
   return normalized && {
@@ -117,63 +93,6 @@ function conversationTurnsWithPending(turns, pending) {
   });
 }
 
-function conversationLogRealtimePatch(payload = {}) {
-  const reason = String(payload?.reason || "").trim();
-  const patch = isRecord(payload?.conversationLogPatch) ? payload.conversationLogPatch : null;
-  if (
-    ![
-      "assistant-response-bundle",
-      "codex-app-server-commentary",
-      "codex-app-server-final-assistant-message",
-      "codex-app-server-reasoning-summary",
-      "codex-app-server-live-progress",
-      "codex-app-server-terminal-assistant-message",
-      "codex-app-server-terminal-thinking-message",
-      "codex-app-server-terminal-user-message",
-      "codex-app-server-message-delivered",
-      "opencode-credential-failure",
-      "opencode-provider-failure",
-      "opencode-server-assistant-message",
-      "opencode-server-message-delivered",
-      "opencode-server-reasoning",
-      "opencode-server-tool"
-    ].includes(reason) ||
-    patch?.type !== "upsert-turn" ||
-    !isRecord(patch.turn)
-  ) {
-    return null;
-  }
-  const assistant = normalizeConversationMessage(patch.turn.assistant);
-  const commentary = Array.isArray(patch.turn.commentary)
-    ? patch.turn.commentary.map(normalizeConversationMessage).filter(Boolean)
-    : [];
-  const thinking = Array.isArray(patch.turn.thinking)
-    ? patch.turn.thinking.map(normalizeConversationMessage).filter(Boolean)
-    : [];
-  if (
-    ["codex-app-server-reasoning-summary", "codex-app-server-live-progress"].includes(reason) &&
-    (!thinking.length || assistant)
-  ) {
-    return null;
-  }
-  if (reason === "codex-app-server-commentary" && (!commentary.length || assistant)) {
-    return null;
-  }
-  if (["assistant-response-bundle", "codex-app-server-final-assistant-message"].includes(reason) && !assistant) {
-    return null;
-  }
-  return {
-    turn: patch.turn,
-    type: "upsert-turn"
-  };
-}
-
-function applyConversationLogPatch(payload = {}, patch = null, options = {}) {
-  return applySharedConversationLogPatch(payload, patch, {
-    ...options, normalizeAttachments: normalizeVibe64ConversationAttachments
-  });
-}
-
 function sessionAgentTurnActive(session = {}) {
   const source = session && typeof session === "object" && !Array.isArray(session) ? session : {};
   return source.agentSession?.turn?.active === true;
@@ -190,18 +109,6 @@ function conversationLogRealtimeShouldRefresh({ payload = {} } = {}, sessionId =
   // server. Even the originating tab must refetch the durable log; optimistic
   // self-echo suppression belongs outside the canonical conversation query.
   return Boolean(payload.conversationStream) || !reason || CONVERSATION_LOG_REALTIME_REASONS.has(reason);
-}
-
-function conversationLogRecoveryStateKey(session = {}) {
-  const source = session && typeof session === "object" && !Array.isArray(session) ? session : {};
-  return [
-    source.sessionId,
-    source.status,
-    source.revision,
-    source.updatedAt,
-    source.agentSession?.turn?.active ? "active" : "idle",
-    source.agentSession?.turn?.id
-  ].map((value) => String(value || "").trim()).join("|");
 }
 
 function conversationLogCompletedTurnKey(session = {}) {
@@ -328,12 +235,15 @@ function useConversationIntegrationActions({ turns, enabled, sessionId, projectS
     integrationActionPending, integrationActionError, skipIntegrationRequest, resumeIntegrationRequest };
 }
 
+// Main chat's product view over its supplied JSKIT conversation binding: the
+// binding owns reads, live output and recovery; this adds Vibe64's pending
+// turn, integration actions and completion reconciliation.
 function useVibe64ConversationLog({
   active = true,
   projectSlug: projectSlugInput,
   sessionsApiPath: sessionsApiPathInput,
   session,
-  conversation = null
+  conversation
 } = {}) {
   const paths = usePaths();
   const httpClient = getHttpWebClient();
@@ -348,377 +258,43 @@ function useVibe64ConversationLog({
   const sessionsApiPath = computed(() => readRefOrGetterValue(sessionsApiPathInput) || paths.api(VIBE64_SESSIONS_API_SUFFIX, {
     surface: VIBE64_SURFACE_ID
   }));
-  if (conversation) {
-    const turns = computed(() => conversationTurnsWithPending(conversation.turns.value, sessionAgentTurnActive(currentSession.value)));
-    const integrationActions = useConversationIntegrationActions({ turns, enabled, sessionId, projectSlug,
-      sessionsApiPath, reloadConversationLog: conversation.reload, httpClient });
-    // Product completion remains an independent reconciliation signal when a
-    // native notification is missed. The supplied binding still owns the read.
-    let realtimeCompletionKey = "";
-    const realtime = useRealtimeEvent({ enabled, event: VIBE64_SESSION_CHANGED_EVENT,
-      matches: context => (["session-assistant-selection-updated", "integration-setup-skipped", "integration-setup-completed"]
-        .includes(context?.payload?.reason) || conversationLogCompletedTurnKey(context?.payload)) &&
-        conversationLogRealtimeShouldRefresh(context, sessionId.value) &&
-        vibe64SessionEventMatchesScope(context?.payload, { projectSlug: projectSlug.value }),
-      onEvent: ({ payload = {} } = {}) => {
-        realtimeCompletionKey = conversationLogCompletedTurnKey(payload) || realtimeCompletionKey;
-        return payload.reason === "session-assistant-selection-updated"
-          ? conversation.reload({ resubscribe: true }) : conversation.reload();
-      } });
-    watch(() => conversationLogCompletedTurnKey(currentSession.value), key => {
-      if (!enabled.value || !key) return;
-      if (key === realtimeCompletionKey) {
-        realtimeCompletionKey = "";
-        return;
-      }
-      void conversation.reload()?.catch(() => {
-        // The supplied binding retains the error and its ordinary recovery.
-      });
-    }, { flush: "post" });
-    return { ...integrationActions, turns, error: conversation.error,
-      errorReloadable: computed(() => conversation.accessDenied?.value === false),
-      hasMoreBefore: conversation.hasMoreBefore,
-      loadMore: conversation.loadMore, loadMoreError: conversation.loadMoreError, loading: conversation.loading,
-      initializing: computed(() => !conversation.snapshot.value && conversation.loading.value),
-      loadingMore: conversation.loadingMore, reload: conversation.reload, realtime,
-      visible: computed(() => Boolean(conversation.loading.value || conversation.error.value || turns.value.length)) };
-  }
-  // Archived sessions still use their original read-only history resource.
-  const queryClient = useQueryClient();
-  const olderPages = ref([]);
-  const loadingMore = ref(false);
-  const loadMoreError = ref("");
-  const queryKey = computed(() => [
-    ...vibe64ConversationLogQueryKey(
-      VIBE64_SURFACE_ID,
-      ROUTE_VISIBILITY_PUBLIC,
-      sessionId.value,
-      projectSlug.value
-    )
-  ]);
-  const conversationLogPath = computed(() => sessionId.value
-    ? vibe64ConversationLogPath(sessionsApiPath.value, sessionId.value)
-    : "");
-  const pendingReads = new Set();
-  const resource = useEndpointResource({
-    enabled,
-    fallbackLoadError: "Conversation history could not be loaded.",
-    path: conversationLogPath,
-    queryKey,
-    queryOptions: {
-      async queryFn({ signal }) {
-        const read = {
-          sessionId: sessionId.value,
-          projectSlug: projectSlug.value,
-          patches: []
-        };
-        pendingReads.add(read);
-        try {
-          let payload = await httpClient.request(conversationLogPath.value, {
-            method: "GET",
-            query: conversationLogReadQuery(),
-            signal
-          });
-          // The request may have captured history before a live delivery. Apply
-          // only updates received during this read before it replaces the cache.
-          for (const patch of read.patches) {
-            payload = applyConversationLogPatch(payload, patch, { limit: CONVERSATION_LOG_PAGE_LIMIT });
-          }
-          return payload;
-        } finally {
-          pendingReads.delete(read);
-        }
-      },
-      placeholderData: (previousData) => previousData,
-      refetchOnMount: false,
-      refetchOnWindowFocus: false
-    },
-    readMethod: "GET",
-    refreshOnPull: true,
-    requestRecoveryLabel: "Conversation history",
-    realtime: null
-  });
-  let reloadInFlight = null;
-  let reloadQueued = false;
-  let recoveredErrorKey = "";
+  const turns = computed(() => conversationTurnsWithPending(conversation.turns.value, sessionAgentTurnActive(currentSession.value)));
+  const integrationActions = useConversationIntegrationActions({ turns, enabled, sessionId, projectSlug,
+    sessionsApiPath, reloadConversationLog: conversation.reload, httpClient });
+  // Product completion remains an independent reconciliation signal when a
+  // native notification is missed. The supplied binding still owns the read.
   let realtimeCompletionKey = "";
-  const conversationStream = shallowRef(null);
-
-  function receiveConversationStream(snapshot) {
-    if (snapshot && (!conversationStream.value || snapshot.revision >= conversationStream.value.revision)) {
-      conversationStream.value = snapshot;
-    }
-  }
-  watch(() => resource.data.value, (data) => receiveConversationStream(data?.conversationStream), { immediate: true });
-
-  async function reloadConversationLog() {
-    if (reloadInFlight) {
-      reloadQueued = true;
-      vibe64SessionDebugLog("client.conversationLog.reload.join", {
-        sessionId: sessionId.value
-      });
-      return reloadInFlight;
-    }
-
-    olderPages.value = [];
-    loadMoreError.value = "";
-    vibe64SessionDebugLog("client.conversationLog.reload.start", {
-      sessionId: sessionId.value
-    });
-    reloadInFlight = resource.reload();
-    try {
-      const result = await reloadInFlight;
-      vibe64SessionDebugLog("client.conversationLog.reload.done", {
-        sessionId: sessionId.value
-      });
-      return result;
-    } finally {
-      reloadInFlight = null;
-      if (reloadQueued) {
-        reloadQueued = false;
-        void reloadConversationLog();
-      }
-    }
-  }
-
-  const realtimeSocket = useRealtimeSocket({ required: false });
-  const reconcileConversationAfterRealtimeConnect = () => {
-    if (enabled.value) {
-      conversationStream.value = null;
-      void reloadConversationLog().catch(() => {
-        // The resource retains the failed reconciliation for the mounted session UI.
-      });
-    }
-  };
-  realtimeSocket.on("connect", reconcileConversationAfterRealtimeConnect);
-  onScopeDispose(() => {
-    realtimeSocket.off("connect", reconcileConversationAfterRealtimeConnect);
-  });
-
-  function applyRealtimeConversationLogPatch(payload = {}) {
-    const patch = conversationLogRealtimePatch(payload);
-    if (!patch) {
-      return false;
-    }
-    const key = queryKey.value;
-    const currentPayload = queryClient.getQueryData(key);
-    const nextPayload = applyConversationLogPatch(currentPayload, patch, {
-      limit: CONVERSATION_LOG_PAGE_LIMIT
-    });
-    if (!nextPayload) {
-      vibe64SessionDebugLog("client.conversationLog.patch.miss", {
-        hasCurrentPayload: Boolean(currentPayload),
-        patchType: String(patch?.type || ""),
-        sessionId: sessionId.value
-      });
-      return false;
-    }
-    for (const read of pendingReads) {
-      if (read.sessionId === sessionId.value && read.projectSlug === projectSlug.value) {
-        read.patches.push(patch);
-      }
-    }
-    queryClient.setQueryData(key, nextPayload);
-    vibe64SessionDebugLog("client.conversationLog.patch.done", {
-      patchType: String(patch.type || ""),
-      sessionId: sessionId.value,
-      turnId: String(patch.turn?.turnId || "")
-    });
-    return true;
-  }
-
-  const realtime = useRealtimeEvent({
-    enabled,
-    event: VIBE64_SESSION_CHANGED_EVENT,
-    matches: (context) => conversationLogRealtimeShouldRefresh(context, sessionId.value),
+  const realtime = useRealtimeEvent({ enabled, event: VIBE64_SESSION_CHANGED_EVENT,
+    matches: context => (["session-assistant-selection-updated", "integration-setup-skipped", "integration-setup-completed"]
+      .includes(context?.payload?.reason) || conversationLogCompletedTurnKey(context?.payload)) &&
+      conversationLogRealtimeShouldRefresh(context, sessionId.value) &&
+      vibe64SessionEventMatchesScope(context?.payload, { projectSlug: projectSlug.value }),
     onEvent: ({ payload = {} } = {}) => {
-      receiveConversationStream(payload.conversationStream);
       realtimeCompletionKey = conversationLogCompletedTurnKey(payload) || realtimeCompletionKey;
-      vibe64SessionDebugLog("client.conversationLog.realtime", {
-        hasPatch: Boolean(conversationLogRealtimePatch(payload)),
-        reason: String(payload.reason || ""),
-        sessionId: sessionId.value
-      });
-      if (applyRealtimeConversationLogPatch(payload)) {
-        return null;
-      }
-      if (payload.reason === "assistant-stream") return null;
-      return reloadConversationLog();
-    }
-  });
-
-  const recoveryStateKey = computed(() => conversationLogRecoveryStateKey(currentSession.value));
-  const completedTurnKey = computed(() => conversationLogCompletedTurnKey(currentSession.value));
-  watch(completedTurnKey, (key) => {
-    if (!enabled.value || !key) {
-      return;
-    }
+      return payload.reason === "session-assistant-selection-updated"
+        ? conversation.reload({ resubscribe: true }) : conversation.reload();
+    } });
+  watch(() => conversationLogCompletedTurnKey(currentSession.value), key => {
+    if (!enabled.value || !key) return;
     if (key === realtimeCompletionKey) {
       realtimeCompletionKey = "";
       return;
     }
-    vibe64SessionDebugLog("client.conversationLog.completion.reconcile", {
-      completedTurnKey: key,
-      sessionId: sessionId.value
+    void conversation.reload()?.catch(() => {
+      // The supplied binding retains the error and its ordinary recovery.
     });
-    void reloadConversationLog().catch(() => {
-      // The ordinary resource error recovery below retries against later
-      // canonical session revisions without discarding the mounted history.
-    });
-  }, {
-    flush: "post"
-  });
-  const recoveryErrorKey = computed(() => [
-    enabled.value ? "enabled" : "disabled",
-    sessionId.value,
-    recoveryStateKey.value,
-    resource.loadError.value
-  ].join("|"));
-  watch(recoveryErrorKey, () => {
-    const loadError = String(resource.loadError.value || "").trim();
-    if (!enabled.value || !loadError) {
-      recoveredErrorKey = "";
-      return;
-    }
-
-    const key = recoveryErrorKey.value;
-    if (recoveredErrorKey === key) {
-      return;
-    }
-    recoveredErrorKey = key;
-    vibe64SessionDebugLog("client.conversationLog.recover.start", {
-      error: loadError,
-      recoveryStateKey: recoveryStateKey.value,
-      sessionId: sessionId.value
-    });
-    void reloadConversationLog()
-      .then(() => {
-        vibe64SessionDebugLog("client.conversationLog.recover.done", {
-          recoveryStateKey: recoveryStateKey.value,
-          sessionId: sessionId.value
-        });
-      })
-      .catch((error) => {
-        vibe64SessionDebugLog("client.conversationLog.recover.error", {
-          error: vibe64SessionDebugError(error),
-          recoveryStateKey: recoveryStateKey.value,
-          sessionId: sessionId.value
-        });
-      });
-  }, {
-    flush: "post"
-  });
-
-  const latestPage = computed(() => normalizeConversationLogPage(resource.data.value || {}));
-  const loadedPages = computed(() => [
-    ...olderPages.value,
-    latestPage.value
-  ]);
-  const oldestLoadedPage = computed(() => olderPages.value[0] || latestPage.value);
-  const hasMoreBefore = computed(() => Boolean(
-    normalizeConversationLogPagination(oldestLoadedPage.value?.pagination).hasMoreBefore
-  ));
-  const turns = computed(() => {
-    const savedTurns = normalizeConversationLog(mergeConversationLogPages(loadedPages.value), {
-      pending: sessionAgentTurnActive(currentSession.value)
-    });
-    return mergeConversationStream(savedTurns, conversationStream.value);
-  });
-  const visible = computed(() => Boolean(
-    resource.isLoading.value ||
-    resource.loadError.value ||
-    turns.value.length
-  ));
-
-  async function loadMoreConversationLog({ complete } = {}) {
-    const finish = (result) => {
-      if (typeof complete === "function") {
-        complete(result);
-      }
-    };
-    const pagination = normalizeConversationLogPagination(oldestLoadedPage.value?.pagination);
-    const beforeTurnId = pagination.nextBeforeTurnId || pagination.oldestTurnId ||
-      String(turns.value[0]?.turnId || "").trim();
-    if (!enabled.value || !conversationLogPath.value || !hasMoreBefore.value || loadingMore.value || !beforeTurnId) {
-      finish({ changed: false, loaded: false });
-      return false;
-    }
-    loadingMore.value = true;
-    loadMoreError.value = "";
-    vibe64SessionDebugLog("client.conversationLog.loadMore.start", {
-      beforeTurnId,
-      sessionId: sessionId.value
-    });
-    try {
-      const page = await httpClient.request(conversationLogPath.value, {
-        method: "GET",
-        query: conversationLogReadQuery({
-          beforeTurnId,
-          limit: CONVERSATION_LOG_PAGE_LIMIT
-        })
-      });
-      const previousOldestTurnId = String(turns.value[0]?.turnId || "").trim();
-      const previousMessageCount = turns.value.reduce((count, turn) => count + (turn.messages?.length || 0), 0);
-      olderPages.value = [
-        normalizeConversationLogPage(page),
-        ...olderPages.value
-      ];
-      const nextOldestTurnId = String(turns.value[0]?.turnId || "").trim();
-      const nextMessageCount = turns.value.reduce((count, turn) => count + (turn.messages?.length || 0), 0);
-      const changed = Boolean(
-        nextOldestTurnId &&
-        (nextOldestTurnId !== previousOldestTurnId || nextMessageCount !== previousMessageCount)
-      );
-      vibe64SessionDebugLog("client.conversationLog.loadMore.done", {
-        beforeTurnId,
-        sessionId: sessionId.value,
-        turnCount: Array.isArray(page?.conversationLog) ? page.conversationLog.length : 0
-      });
-      finish({ changed, loaded: true });
-      return true;
-    } catch (error) {
-      loadMoreError.value = String(error?.message || error || "Older conversation history could not be loaded.");
-      vibe64SessionDebugLog("client.conversationLog.loadMore.error", {
-        beforeTurnId,
-        error: vibe64SessionDebugError(error),
-        sessionId: sessionId.value
-      });
-      finish({ changed: false, loaded: false });
-      return false;
-    } finally {
-      loadingMore.value = false;
-    }
-  }
-
-  const integrationActions = useConversationIntegrationActions({ turns, enabled, sessionId, projectSlug,
-    sessionsApiPath, reloadConversationLog, httpClient });
-  watch([sessionId, projectSlug], () => {
-    conversationStream.value = null;
-    olderPages.value = [];
-    loadMoreError.value = "";
-  });
-
-  return {
-    ...integrationActions,
-    error: resource.loadError,
-    hasMoreBefore,
-    loadMore: loadMoreConversationLog,
-    loadMoreError,
-    loading: resource.isLoading,
-    initializing: resource.isInitialLoading,
-    loadingMore,
-    reload: reloadConversationLog,
-    realtime,
-    turns,
-    visible
-  };
+  }, { flush: "post" });
+  return { ...integrationActions, turns, error: conversation.error,
+    errorReloadable: computed(() => conversation.accessDenied?.value === false),
+    hasMoreBefore: conversation.hasMoreBefore,
+    loadMore: conversation.loadMore, loadMoreError: conversation.loadMoreError, loading: conversation.loading,
+    initializing: computed(() => !conversation.snapshot.value && conversation.loading.value),
+    loadingMore: conversation.loadingMore, reload: conversation.reload, realtime,
+    visible: computed(() => Boolean(conversation.loading.value || conversation.error.value || turns.value.length)) };
 }
 
 export {
-  applyConversationLogPatch,
   conversationLogCompletedTurnKey,
-  conversationLogRealtimePatch,
-  conversationLogRecoveryStateKey,
   conversationLogRealtimeShouldRefresh,
   normalizeConversationLog,
   sessionAgentTurnActive,
