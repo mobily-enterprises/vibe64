@@ -30,6 +30,7 @@ workspace.
 - `packages/vibe64-core/src/server/studioProjectContext.js`
 - `server.js`
 - `packages/vibe64-core/src/server/projectState.js`
+- `packages/vibe64-core/src/shared/projectSlug.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261025-retired-project-bootstrap.js`
 - `tests/server/retiredProjectBootstrapUpgrade.unit.test.js`
 - `packages/vibe64-core/src/server/projectRequestContext.js`
@@ -122,7 +123,9 @@ v2; all-provider native lifetime acceptance is still required. Source renewal re
 its existing ordinary policy is unchanged. This is not installed/browser proof.
 
 Core’s exact project-slug validator and read-only runtime-root inventory live in
-`projectState.js`. The live Project context retains its original exports and
+`projectState.js`. The slug rule itself (pattern and 48-character maximum) is
+Core's browser-safe `shared/projectSlug.js`, so forms that name a project check
+the same rule before asking the server. The live Project context retains its original exports and
 callers. Offline Training state upgrades use the same implementations without
 loading live Project execution or Genesis dependencies.
 

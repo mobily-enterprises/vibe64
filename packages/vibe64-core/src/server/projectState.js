@@ -6,9 +6,10 @@ import {
   normalizeTargetRoot,
   normalizeText
 } from "./core.js";
-
-const PROJECT_SLUG_MAX_LENGTH = 48;
-const PROJECT_SLUG_PATTERN = /^[a-z0-9][a-z0-9_-]*$/u;
+import {
+  PROJECT_SLUG_MAX_LENGTH,
+  PROJECT_SLUG_PATTERN
+} from "../shared/projectSlug.js";
 
 function normalizeProjectSlug(value = "") {
   const slug = String(value || "").trim();

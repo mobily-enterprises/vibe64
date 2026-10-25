@@ -17,6 +17,10 @@ import {
   resolveProjectContextRoot,
 } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import {
+  PROJECT_SLUG_MAX_LENGTH as SHARED_PROJECT_SLUG_MAX_LENGTH,
+  PROJECT_SLUG_PATTERN
+} from "../../packages/vibe64-core/src/shared/projectSlug.js";
+import {
   PROJECT_REPOSITORY_MODE_GITHUB,
   PROJECT_REPOSITORY_MODE_LOCAL_SOURCE,
   PROJECT_REPOSITORY_MODE_MANAGED_GIT,
@@ -718,6 +722,10 @@ test("project slug contract resolves only canonical Vibe64 project roots", async
       slug: "app_1-alpha"
     }), path.join(projectsRoot, "app_1-alpha"));
 
+    // Browser forms check names against the same shared rule the server enforces.
+    assert.equal(SHARED_PROJECT_SLUG_MAX_LENGTH, PROJECT_SLUG_MAX_LENGTH);
+    assert.equal(PROJECT_SLUG_PATTERN.test("app_1-alpha"), true);
+    assert.equal(PROJECT_SLUG_PATTERN.test("-dash"), false);
     assert.equal(normalizeProjectSlug("a".repeat(PROJECT_SLUG_MAX_LENGTH)), "a".repeat(PROJECT_SLUG_MAX_LENGTH));
 
     for (const slug of ["", "Example", "app.dot", "../outside", "/tmp/app", "_hidden", "-dash", "app/slash", "a".repeat(PROJECT_SLUG_MAX_LENGTH + 1)]) {
