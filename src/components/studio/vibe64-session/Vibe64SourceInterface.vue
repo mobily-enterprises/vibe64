@@ -57,14 +57,15 @@ import { parseLongTextReviewBlocks } from '@jskit-ai/assistant-core/shared/conve
 const props = defineProps({ filePath: String, fileHash: String, analysisError: String, symbols: { type: Array, default: () => [] }, programs: { type: Array, default: () => [] }, programStatus: String, interpretations: { type: Array, default: () => [] }, interpretationWarning: String, activeInterpretation: Boolean, activeFileInterpretation: Boolean, selectedId: String, current: Boolean, indexed: Boolean, dirty: Boolean, busy: Boolean, assistantAvailable: Boolean, assistantUnavailableMessage: String, source: String, presentation: { type: String, default: 'description' }, coverage: { type: String, default: 'Partial static coverage' } });
 const emit = defineEmits(['select-symbol', 'present-symbol', 'explain-file', 'whole-file-code', 'open-source', 'open-program']);
 const orderedPrograms = computed(() => [...props.programs.filter(program => program.mainSource === props.filePath), ...props.programs.filter(program => program.mainSource !== props.filePath)]);
-function openProgramLink({ event, href }, sourcePath) {
-  const relative = href && !/^(?:[a-z][a-z\d+.-]*:|\/|#)/iu.test(href);
-  const target = sourceEditorLinkTarget({ href: relative && sourcePath ? new URL(href, `https://source.invalid/${sourcePath}`).pathname.slice(1) : href });
+// This file's Programs open directly; every other path goes to the host, which
+// decides how explanatory documents and source files open.
+function openProgramLink(payload = {}) {
+  const target = sourceEditorLinkTarget(payload);
   if (!target) return;
-  event?.preventDefault();
+  payload.event?.preventDefault?.();
   const program = props.programs.find(program => program.path === target.path);
   if (program) emit('open-program', program.id);
-  else if (target.path !== 'genesis/subsystems.md' && !target.path.startsWith('genesis/program/')) emit('open-source', target);
+  else emit('open-source', target);
 }
 const selectedSymbol = computed(() => props.symbols.find(symbol => symbol.id === props.selectedId));
 const explanationDisabled = computed(() => props.busy || props.dirty || !props.assistantAvailable);

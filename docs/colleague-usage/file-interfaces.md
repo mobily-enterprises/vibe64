@@ -49,6 +49,10 @@ place to start reading, not necessarily an executable entry point. It belongs to
 the Program’s owning subsystem; supporting files may be shared libraries elsewhere.
 Program explanations describe the capability rather than each individual function.
 The file’s **Explanation** is a separate informational overview of its saved source.
+A path in a saved explanation or pseudocode, whether written as a link or as
+plain link text, opens that file. Inside Architecture a link to any Program
+document opens its Program view, and other Genesis explanation documents are not
+opened as raw files.
 
 Genesis requires exactly one explicit main source per Program. After deliberate
 changes to the authored subsystem map or Program, use **Architecture options →
