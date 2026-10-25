@@ -98,7 +98,7 @@ function createCodexSessionTurnCheckpoint({ projectService, publishSessionChange
     if (conversationOuterTurnId) {
       await checkpointSessionTurn({
         projectService, sessionId, outerTurnId: conversationOuterTurnId,
-        outcome: checkpointOutcomeForCodexTurn(status), publishSessionChanged
+        outcome: checkpointOutcomeForCodexTurn(status, turnOutcome), publishSessionChanged
       });
       return publishSessionChanged(sessionId, { reason: "temporary-agent-turn-idle", payload: {
         conversationId: threadId, temporaryRun: { active: false, state: status, providerTurnId: turnId }

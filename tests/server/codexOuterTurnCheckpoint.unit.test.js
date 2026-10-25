@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { checkpointSessionTurn } from "../../packages/vibe64-terminals/src/server/sessionTurnCheckpoint.js";
+import { checkpointSessionTurn, createCodexSessionTurnCheckpoint } from "../../packages/vibe64-terminals/src/server/sessionTurnCheckpoint.js";
 
 import {
   withCodexState
@@ -183,4 +183,21 @@ test("source-bearing Learning retains the original native source and Git checkpo
     assert.equal(checkpoints.length, 6);
     assert.equal(publications.length, 9);
   });
+});
+
+test("temporary and Main Codex turns record the same checkpoint outcome for a turn outcome", async () => {
+  const patches = [];
+  const session = { sessionId: "session-1", sourcePath: "/missing/session-source", metadata: {} };
+  const runtime = {
+    async getSession() { return session; },
+    store: { async writeBackgroundTaskEvent(_id, _task, { patch }) { patches.push(patch); return patch; } }
+  };
+  const checkpoint = createCodexSessionTurnCheckpoint({
+    projectService: { async createRuntime() { return runtime; }, async readCurrentProject() { return {}; } },
+    publishSessionChanged: async () => {}
+  });
+  for (const [turnOutcome, outcome] of [["user_cancelled", "cancelled"], ["response_delivery_failure", "failed"]]) {
+    await checkpoint("session-1", { outerTurnId: `codex:temporary:${turnOutcome}`, status: "completed", turnOutcome });
+    assert.equal(patches.at(-1).checkpointOutcome, outcome, turnOutcome);
+  }
 });
