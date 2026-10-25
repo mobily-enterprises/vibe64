@@ -3,6 +3,7 @@ export {
   currentProjectSlugFromLocation,
   normalizeProjectRoutePath,
   projectAppPath,
+  projectListPath,
   projectSlugFromPathname,
   projectSlugFromRoute,
   vibe64ProjectQueryScope,

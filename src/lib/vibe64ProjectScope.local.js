@@ -34,6 +34,12 @@ function projectAppPath(slug = "", suffix = "") {
   return `${VIBE64_PROJECT_APP_PATH_PREFIX}/${encodeURIComponent(projectSlug)}${normalizedProjectRouteSuffix(suffix)}`;
 }
 
+// A host with its own Projects page names it; local Vibe64 has none, and
+// its /app resolves the project itself.
+function projectListPath() {
+  return "";
+}
+
 function projectSlugFromPathname(pathname = "") {
   const match = /^\/app\/project\/([^/?#]+)/u.exec(String(pathname || ""));
   const slug = decodeURIComponent(match?.[1] || "").trim();
@@ -72,6 +78,7 @@ export {
   currentProjectSlugFromLocation,
   normalizeProjectRoutePath,
   projectAppPath,
+  projectListPath,
   vibe64ProjectScopedStorageKey,
   vibe64ProjectQueryScope,
   projectSlugFromPathname,

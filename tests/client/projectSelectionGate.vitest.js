@@ -4,14 +4,17 @@ import { renderToString } from "vue/server-renderer";
 import { createVuetify } from "vuetify";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ resources: [], next: {}, routes: [], dialogs: [] }));
+const mocks = vi.hoisted(() => ({ resources: [], next: {}, listPath: "", dialogs: [] }));
+vi.mock("@/lib/vibe64ProjectScope.js", async (importOriginal) => ({
+  ...await importOriginal(), projectListPath: () => mocks.listPath
+}));
 vi.mock("@tanstack/vue-query", async (importOriginal) => {
   const original = await importOriginal();
   return { ...original, useQueryClient: () => new original.QueryClient() };
 });
 vi.mock("vue-router", () => ({
   useRoute: () => ({ params: { slug: "hello-node" } }),
-  useRouter: () => ({ push: vi.fn(), resolve: (path) => ({ matched: mocks.routes.includes(path) ? [{ path }] : [] }) })
+  useRouter: () => ({ push: vi.fn() })
 }));
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
   useEndpointResource(options) {
@@ -40,7 +43,7 @@ const text = (html) => html.replace(/<!--[\s\S]*?-->/gu, "").replace(/<[^>]+>/gu
 
 afterEach(() => {
   mocks.resources.length = 0;
-  mocks.routes.length = 0;
+  mocks.listPath = "";
   mocks.dialogs.length = 0;
   mocks.next = {};
 });
@@ -83,10 +86,10 @@ describe("a team member's project before team AI is set up", () => {
   });
 
   it("offers Back to projects only where the host has a project list", async () => {
-    mocks.routes.push("/app/manage/projects");
+    mocks.listPath = "/projects";
     const html = await renderGate({ error: gated() }, { scopeSelectionToCurrentProject: true });
     expect(text(html)).toContain("Back to projects");
-    expect(mountGate({ error: gated() }).state.projectsPath).toBe("/app/manage/projects");
+    expect(mountGate({ error: gated() }).state.projectsPath).toBe("/projects");
   });
 
   it("is a refusal, not an error: no error event, and Check again reads the selection again", async () => {

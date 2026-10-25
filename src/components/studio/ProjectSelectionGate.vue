@@ -200,7 +200,8 @@ import { provideVibe64OpenedProjectSlug } from "@/composables/useVibe64ProjectSc
 import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 import { VIBE64_LEARNING_MODE_NOTE } from "@/lib/vibe64Learning.js";
 import {
-  projectAppPath
+  projectAppPath,
+  projectListPath
 } from "@/lib/vibe64ProjectScope.js";
 
 const props = defineProps({
@@ -230,7 +231,6 @@ const props = defineProps({
   }
 });
 
-const PROJECTS_PATH = "/app/manage/projects";
 const emit = defineEmits(["missing", "ready", "error", "deleted", "retry-runtime"]);
 const router = useRouter();
 // A gate scoped to the current project is keyed by its slug: its view keeps it.
@@ -277,7 +277,7 @@ const selectedSlotVisible = computed(() => hasSelection.value && !props.forcePic
 const pickerVisible = computed(() => !practiceDeleted.value && !learningModeBlocked.value && !teamAiBlocked.value &&
   selectionReady.value && (props.forcePicker || !hasSelection.value));
 // The host's project list, where it has one.
-const projectsPath = router.resolve(PROJECTS_PATH).matched.length ? PROJECTS_PATH : "";
+const projectsPath = projectListPath();
 
 function openTeamAiSetup() {
   requestVibe64AccountConnectionsDialog({ providerId: "ai", section: "team" });

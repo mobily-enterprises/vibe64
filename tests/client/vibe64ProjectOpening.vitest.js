@@ -6,7 +6,10 @@ import { createMemoryHistory, createRouter } from "vue-router";
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ command: null, requests: [], realtime: [], selectionReload: vi.fn() }));
+const mocks = vi.hoisted(() => ({ command: null, requests: [], realtime: [], selectionReload: vi.fn(), listPath: "" }));
+vi.mock("@/lib/vibe64ProjectScope.js", async (importOriginal) => ({
+  ...await importOriginal(), projectListPath: () => mocks.listPath
+}));
 vi.mock("@/composables/useStudioShellDrawer.js", () => ({ useStudioShellDrawer() {} }));
 vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({ useRealtimeEvent(options) { mocks.realtime.push(options); } }));
 vi.mock("@/composables/useVibe64ProjectsResource.js", () => ({
@@ -67,7 +70,7 @@ function passthrough(tag) {
 }
 
 const dispose = [];
-afterEach(() => { while (dispose.length) dispose.pop()(); });
+afterEach(() => { while (dispose.length) dispose.pop()(); mocks.listPath = ""; });
 const success = { ok: true, runtime: { open: true } };
 async function flush() { for (let i = 0; i < 8; i += 1) await Vue.nextTick(); }
 
@@ -77,7 +80,8 @@ async function mountPage() {
   const router = createRouter({ history: createMemoryHistory(), routes: [
     { path: "/app/project/:slug", component: { render: () => null } },
     { path: "/app/project/:slug/dashboard/files", component: { render: () => null } },
-    { path: "/app/manage/projects", component: { render: () => null } }
+    { path: "/app", component: { render: () => null } },
+    { path: "/projects", component: { render: () => null } }
   ] });
   await router.push("/app/project/dogandgroom");
   const renderer = Vue.createRenderer({
@@ -167,6 +171,29 @@ describe("opening a routed project", () => {
     expect(view.issues.selectedLabels.value).toEqual(["bug", "help wanted"]);
     mocks.requests[0].resolve(success);
     await flush();
+  });
+
+  it("returns to /app when the open project closes and the host has no project list", async () => {
+    const view = await mountPage();
+    const event = { payload: { projectSlug: "dogandgroom", action: "runtime-closed", runtime: { open: false } } };
+    const listener = mocks.realtime.find((entry) => entry.matches(event));
+    expect(listener).toBeDefined();
+    const push = vi.spyOn(view.router, "push");
+    listener.onEvent(event);
+    await push.mock.results[0].value;
+    expect(view.router.currentRoute.value.fullPath).toBe("/app");
+    expect(view.page.pageError.value).toBe("Project is closed.");
+  });
+
+  it("returns to the host's project list, naming the closed project, where the host has one", async () => {
+    mocks.listPath = "/projects";
+    const view = await mountPage();
+    const event = { payload: { projectSlug: "dogandgroom", action: "runtime-closed", runtime: { open: false } } };
+    const push = vi.spyOn(view.router, "push");
+    mocks.realtime.find((entry) => entry.matches(event)).onEvent(event);
+    await push.mock.results[0].value;
+    expect(view.router.currentRoute.value.path).toBe("/projects");
+    expect(view.router.currentRoute.value.query).toEqual({ projectClosed: "dogandgroom" });
   });
 
   it("keeps project pane navigation scoped to the selected project", async () => {

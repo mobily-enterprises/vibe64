@@ -22,6 +22,7 @@ import {
 } from "@/composables/useVibe64ProjectsResource.js";
 import {
   projectAppPath,
+  projectListPath,
   projectSlugFromRoute
 } from "@/lib/vibe64ProjectScope.js";
 import {
@@ -422,12 +423,10 @@ function useVibe64AppPage() {
   function handleProjectRuntimeClosed(payload = {}) {
     const closedSlug = String(payload.projectSlug || projectSlug.value || "").trim();
     pageError.value = String(payload.message || "Project is closed.");
-    void router.push({
-      path: "/app/manage/projects",
-      query: {
-        projectClosed: closedSlug
-      }
-    });
+    // The host's project list says which project closed; without one, /app
+    // resolves the project again.
+    const listPath = projectListPath();
+    void router.push(listPath ? { path: listPath, query: { projectClosed: closedSlug } } : "/app");
   }
 
   function showProjectPane() {
@@ -478,7 +477,7 @@ function projectRuntimeClosedPayloadMatches(payload = {}, currentSlug = "", { pr
   }
   // Deleting an open practice project closes its runtime first. The project
   // page's selection gate then shows "This practice project is gone", so
-  // the page must not leave for the hosted Projects page (absent locally).
+  // the page must not leave for the host's project list or /app.
   if (practice && String(payload?.runtimeCloseReason || "").trim() === "project-delete") {
     return false;
   }

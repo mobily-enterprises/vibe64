@@ -349,7 +349,8 @@ the code and `details`. The owner's `projects.list` adds `teamAi`
 exposes `teamAiBlocked`, `teamAiOwnerName` and `teamAiOwnerPrompt`;
 `ProjectSelectionGate.vue` shows `Vibe64TeamAiGate.vue` ("Team AI isn't set up
 yet", Check again re-reads the selection, Back to projects only where the host
-routes `/app/manage/projects`) in place of the project and of a load error, the
+names a project list through `projectListPath()` in `vibe64ProjectScope.js`;
+local Vibe64 names none) in place of the project and of a load error, the
 owner prompt "Team members can't open projects yet" with Set up team AI (opens
 AI Accounts at `section: "team"`) above the picker's list, and a project row's
 `approvalsWaiting` as "N waiting".
@@ -396,12 +397,14 @@ Learning's own `vibe64.training.learner.changed` notice with reason `practice`
 other query of the page fails with the deleted code (a query-cache subscription
 in the gate). `ProjectSelectionGate` then shows **This practice project
 is gone** with **Open Courses** instead of the error.
-The delete's own `runtime-closed` event (reason `project-delete`) does not send
-an open practice page to the hosted Projects page (`useVibe64AppPage`), which a
-local installation does not have; ordinary projects still leave on it.
+The delete's own `runtime-closed` event (reason `project-delete`) does not move
+an open practice page (`useVibe64AppPage`). Ordinary projects leave on it: to
+the host's project list from `projectListPath()` with `projectClosed`, or to
+`/app` where the host names none (local Vibe64).
 Evidence: `tests/server/studioProjectContext.unit.test.js`,
-`tests/server/vibe64FeatureRoutes.unit.test.js` and
-`tests/client/vibe64PracticeProjectDeleted.vitest.js`.
+`tests/server/vibe64FeatureRoutes.unit.test.js`,
+`tests/client/vibe64PracticeProjectDeleted.vitest.js` and
+`tests/client/vibe64ProjectOpening.vitest.js`.
 
 Project metadata accepts only its current fields (deletion, development
 database name and scope, `allowSharedDatabaseSessions`, repository and
