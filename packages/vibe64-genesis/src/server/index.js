@@ -7,7 +7,6 @@ import { createRequire } from "node:module";
 import path from "node:path";
 
 import {
-  GENESIS_STACK_CONTRACTS_INCOMPLETE,
   GENESIS_STACK_SECTION_AMBIGUOUS,
   genesisProjectContractNeedsAttention
 } from "./projectContractAttention.js";
@@ -28,7 +27,6 @@ import {
   vibe64PackagingInspection
 } from "./packaging.js";
 import {
-  VIBE64_OUTPUTS_CONTRACT,
   VIBE64_OUTPUTS_SECTION,
   VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL,
   parseVibe64OutputsLines,
@@ -41,7 +39,6 @@ import {
   vibe64ProjectServicesInspection
 } from "./projectServices.js";
 import {
-  VIBE64_WORKSPACE_SETUP_CONTRACT,
   VIBE64_WORKSPACE_SETUP_SECTION,
   parseVibe64WorkspaceSetupLines,
   vibe64WorkspaceSetupInspection
@@ -50,14 +47,12 @@ import {
   vibe64Driver
 } from "./promptContext.js";
 import {
-  VIBE64_RESOURCE_ESTIMATES_CONTRACT,
   VIBE64_RESOURCE_ESTIMATES_SECTION,
   parseVibe64ResourceEstimatesLines,
   vibe64ResourceEstimatesInspection
 } from "./resourceEstimates.js";
 
 import {
-  VIBE64_INTEGRATION_SETUP_CONTRACT,
   VIBE64_INTEGRATION_SETUP_SECTION,
   parseVibe64IntegrationSetupLines,
   vibe64IntegrationSetupInspection
@@ -117,26 +112,23 @@ const {
   withTrustedGitRepository,
   SOURCE_EXPLANATION_PROMPT_VERSION,
   sourceExplanationGuidance,
-  sourceExplanationReviewGuidance,
   validateArchitectureFacts,
-  validateArchitectureObservations,
   mergeArchitectureObservations
 } = genesisCompiler;
 
 const GENESIS_BLUEPRINT_PATH = "genesis/blueprint.md";
 const GENESIS_SUBSYSTEMS_PATH = "genesis/subsystems.md";
-const VIBE64_POSTGRESQL_NEW_PROJECT_AVAILABLE = false;
+// Stack pieces new-project onboarding does not offer: Vue and every PostgreSQL piece.
 const VIBE64_HIDDEN_ONBOARDING_STACK_PIECES = Object.freeze([
   "vue",
-  ...(VIBE64_POSTGRESQL_NEW_PROJECT_AVAILABLE ? [] : [
-    "django-postgresql",
-    "jskit-postgresql",
-    "postgresql",
-    "rails-postgresql",
-    "spring-boot-postgresql"
-  ])
+  "django-postgresql",
+  "jskit-postgresql",
+  "postgresql",
+  "rails-postgresql",
+  "spring-boot-postgresql"
 ]);
 const VIBE64_STACK_PACKAGES = Object.freeze(["genesis-stack"]);
+const GENESIS_PROMPT_FALLBACK_TASKS = Object.freeze({ BLUEPRINT_INVALID: "blueprint", BLUEPRINT_REQUIRED: "start" });
 const GENESIS_PROMPT_TASKS = new Set([
   "adopt",
   "blueprint",
@@ -483,38 +475,25 @@ async function renderGenesisPrompt({
 } = {}) {
   const requestedTask = genesisPromptTask(action);
   const request = genesisPromptRequest(input, action);
+  const generate = (promptTask) => runGenesisOperation(generatePrompt, {
+    environment,
+    projectRoot,
+    request,
+    sessionContextInstalled: true,
+    task: promptTask
+  }, { prompt: true });
   let task = requestedTask;
   let result;
   try {
-    result = await runGenesisOperation(generatePrompt, {
-      environment,
-      projectRoot,
-      request,
-      sessionContextInstalled: true,
-      task
-    }, { prompt: true });
+    result = await generate(task);
   } catch (error) {
-    if (error?.code === "BLUEPRINT_INVALID" && requestedTask !== "blueprint") {
-      task = "blueprint";
-      result = await runGenesisOperation(generatePrompt, {
-        environment,
-        projectRoot,
-        request,
-        sessionContextInstalled: true,
-        task
-      }, { prompt: true });
-    } else if (error?.code === "BLUEPRINT_REQUIRED" && requestedTask !== "start") {
-      task = "start";
-      result = await runGenesisOperation(generatePrompt, {
-        environment,
-        projectRoot,
-        request,
-        sessionContextInstalled: true,
-        task
-      }, { prompt: true });
-    } else {
-      throw error;
-    }
+    // A missing or invalid Blueprint is answered by the task that writes one.
+    const fallbackTask = Object.hasOwn(GENESIS_PROMPT_FALLBACK_TASKS, String(error?.code))
+      ? GENESIS_PROMPT_FALLBACK_TASKS[error.code]
+      : "";
+    if (!fallbackTask || fallbackTask === requestedTask) throw error;
+    task = fallbackTask;
+    result = await generate(task);
   }
   const effectiveTask = assertGenesisPromptTask(result.task) || task;
   return {
@@ -532,14 +511,11 @@ async function renderGenesisPrompt({
 }
 
 export {
-  GENESIS_STACK_CONTRACTS_INCOMPLETE,
   GENESIS_STACK_SECTION_AMBIGUOUS,
   genesisProjectContractNeedsAttention,
   inspectVibe64ConnectedDevelopment,
   inspectVibe64ProjectServices,
   parseVibe64ProjectServicesLines,
-  VIBE64_INTEGRATION_SETUP_CONTRACT,
-  VIBE64_INTEGRATION_SETUP_SECTION,
   inspectVibe64IntegrationSetup,
   parseVibe64IntegrationSetupLines,
   genesisParserEnvironment,
@@ -548,19 +524,9 @@ export {
   GENESIS_DERIVED_ARTIFACT_PATHS,
   GENESIS_MACHINE_CITY_PATH,
   GENESIS_PROGRAM_CITY_PATH,
-  HOST_CONTEXT_RESOLVER_DATA_ENV,
-  HOST_CONTEXT_RESOLVER_ENV,
   VIBE64_APPLICATION_DEPLOYMENT_CONTRACT,
-  VIBE64_APPLICATION_DEPLOYMENT_SECTION,
   VIBE64_PACKAGING_CONTRACT,
-  VIBE64_PACKAGING_SECTION,
-  VIBE64_OUTPUTS_CONTRACT,
-  VIBE64_OUTPUTS_SECTION,
   VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL,
-  VIBE64_RESOURCE_ESTIMATES_CONTRACT,
-  VIBE64_RESOURCE_ESTIMATES_SECTION,
-  VIBE64_WORKSPACE_SETUP_CONTRACT,
-  VIBE64_WORKSPACE_SETUP_SECTION,
   addGenesisStack,
   applyGenesisTemplate,
   assertGenesisPromptTask,
@@ -577,7 +543,6 @@ export {
   inspectGenesisAgentIntegrations,
   inspectGenesisSkills,
   listGenesisTemplates,
-  inspectGenesisStackSection,
   inspectGenesisStackComponents,
   inspectVibe64Deployment,
   inspectVibe64Packaging,
@@ -599,8 +564,6 @@ export {
   validateArchitectureFacts,
   SOURCE_EXPLANATION_PROMPT_VERSION,
   sourceExplanationGuidance,
-  sourceExplanationReviewGuidance,
-  validateArchitectureObservations,
   mergeArchitectureObservations,
   inspectGenesisSubsystems,
   renderGenesisPrompt,

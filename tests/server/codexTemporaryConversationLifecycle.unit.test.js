@@ -13420,7 +13420,7 @@ test("Main browser fresh authorization for a local practice project opened as an
       runWithPracticeProjectScope: (input, operation) => runWithPracticeProjectContext(owner, { slug,
         targetRoot: runtime.projectContextRoot, projectRuntimeRoot: runtime.stateRoot,
         projectSessionSourceRoot: runtime.projectContextRoot, access: input.access, vibe64User: input.actor }, operation) };
-    registerPracticeRequestActor(() => actor);
+    const unregisterActor = registerPracticeRequestActor(() => actor);
     const ordinary = await resolveProjectRequestContext({ projectContext, request: { params: { slug }, headers: {} } });
     assert.equal(ordinary.learningScope, undefined, "the practice project is an ordinary project context");
     const requestContext = { channel: "internal", surface: "app", requestMeta: { request: {
@@ -13492,7 +13492,7 @@ test("Main browser fresh authorization for a local practice project opened as an
       resume.resolve();
       await goalOperation?.catch(() => {});
       await unsubscribe?.();
-      registerPracticeRequestActor(null);
+      unregisterActor();
     }
   }, { actions, throughTerminalService: true });
 });

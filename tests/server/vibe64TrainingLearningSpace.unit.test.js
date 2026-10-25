@@ -46,8 +46,7 @@ async function fixture(t, { headroom = async () => {}, release = async () => {},
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-learning-space-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const released = [];
-  registerLearnThreadReleaser(async input => { await release(input); released.push(input); });
-  t.after(() => registerLearnThreadReleaser(null));
+  t.after(registerLearnThreadReleaser(async input => { await release(input); released.push(input); }));
   const systemRoot = path.join(root, "system");
   const pins = await installTopic(root, systemRoot);
   const content = createInstalledTrainingContent({ systemRoot });

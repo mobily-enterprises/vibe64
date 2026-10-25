@@ -38,7 +38,7 @@ function learnThreadLearnerKey(actor = null) {
 
 // One releaser per process; the returned function unregisters it.
 function registerLearnThreadReleaser(releaser) {
-  if (releaser !== null && typeof releaser !== "function") throw new TypeError("A Learn thread releaser must be a function.");
+  if (typeof releaser !== "function") throw new TypeError("A Learn thread releaser must be a function.");
   learnThreadReleaser = releaser;
   return () => { if (learnThreadReleaser === releaser) learnThreadReleaser = null; };
 }

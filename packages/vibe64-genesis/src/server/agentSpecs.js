@@ -3,27 +3,64 @@
 // and a focused test parses every example below with its real parser.
 import { ARCHITECTURE_OBSERVATIONS_SCHEMA } from "genesis-compiler";
 
-import { DEPLOYMENT_ENTRY_FORMS, DEPLOYMENT_STEP_ROLES } from "./applicationDeployment.js";
+import {
+  DEPLOYMENT_ENTRY_FORMS,
+  DEPLOYMENT_STEP_ROLES,
+  VIBE64_APPLICATION_DEPLOYMENT_CONTRACT,
+  VIBE64_APPLICATION_DEPLOYMENT_SECTION
+} from "./applicationDeployment.js";
 import {
   PACKAGING_ENTRY_FORMS,
   PACKAGING_HEADING_FORM,
   VIBE64_PACKAGING_CONTRACT,
-  VIBE64_PACKAGING_PACKERS
+  VIBE64_PACKAGING_PACKERS,
+  VIBE64_PACKAGING_SECTION
 } from "./packaging.js";
-import { ARCHITECTURE_INSPECTOR_FIELDS } from "./architectureInspection.js";
-import { ARCHITECTURE_LAYOUT_KINDS } from "./architectureLayout.js";
-import { CONNECTED_DEVELOPMENT_ENTRY_FORMS } from "./connectedDevelopment.js";
-import { INTEGRATION_SETUP_ENTRY_FORM } from "./integrationSetup.js";
+import {
+  ARCHITECTURE_INSPECTOR_FIELDS,
+  VIBE64_ARCHITECTURE_INSPECTION_CONTRACT,
+  VIBE64_ARCHITECTURE_INSPECTION_SECTION
+} from "./architectureInspection.js";
+import {
+  ARCHITECTURE_LAYOUT_KINDS,
+  VIBE64_ARCHITECTURE_LAYOUT_CONTRACT,
+  VIBE64_ARCHITECTURE_LAYOUT_SECTION
+} from "./architectureLayout.js";
+import {
+  CONNECTED_DEVELOPMENT_ENTRY_FORMS,
+  VIBE64_CONNECTED_DEVELOPMENT_CONTRACT,
+  VIBE64_CONNECTED_DEVELOPMENT_SECTION
+} from "./connectedDevelopment.js";
+import {
+  INTEGRATION_SETUP_ENTRY_FORM,
+  VIBE64_INTEGRATION_SETUP_CONTRACT,
+  VIBE64_INTEGRATION_SETUP_SECTION
+} from "./integrationSetup.js";
 import {
   OUTPUTS_ENTRY_FORMS,
   OUTPUTS_HEADING_FORMS,
   VIBE64_OUTPUT_MAX_PARAMETERS,
+  VIBE64_OUTPUTS_CONTRACT,
+  VIBE64_OUTPUTS_SECTION,
   VIBE64_PREVIEW_IDENTITY_COMMAND_PROTOCOL,
   VIBE64_PREVIEW_IDENTITY_RESERVED_ENVIRONMENT_NAMES
 } from "./outputs.js";
-import { PROJECT_SERVICE_ENTRY_FORM } from "./projectServices.js";
-import { VIBE64_RESOURCE_ESTIMATE_FIELDS, VIBE64_RESOURCE_ESTIMATE_MAX_MIB } from "./resourceEstimates.js";
-import { WORKSPACE_SETUP_ENTRY_FORM } from "./workspaceSetup.js";
+import {
+  PROJECT_SERVICE_ENTRY_FORM,
+  VIBE64_PROJECT_SERVICES_CONTRACT,
+  VIBE64_PROJECT_SERVICES_SECTION
+} from "./projectServices.js";
+import {
+  VIBE64_RESOURCE_ESTIMATE_FIELDS,
+  VIBE64_RESOURCE_ESTIMATE_MAX_MIB,
+  VIBE64_RESOURCE_ESTIMATES_CONTRACT,
+  VIBE64_RESOURCE_ESTIMATES_SECTION
+} from "./resourceEstimates.js";
+import {
+  VIBE64_WORKSPACE_SETUP_CONTRACT,
+  VIBE64_WORKSPACE_SETUP_SECTION,
+  WORKSPACE_SETUP_ENTRY_FORM
+} from "./workspaceSetup.js";
 import {
   CONNECTED_CUSTOM_RUNNER_CONTRACT,
   CONNECTED_PACKAGE_TYPES,
@@ -125,8 +162,8 @@ const VIBE64_GENESIS_AGENT_SPECS = Object.freeze([
   sectionSpec({
     name: "workspace-setup",
     title: "Workspace setup",
-    section: "Workspace setup",
-    contract: "vibe64.workspace-setup.v1",
+    section: VIBE64_WORKSPACE_SETUP_SECTION,
+    contract: VIBE64_WORKSPACE_SETUP_CONTRACT,
     summary: "Ordered commands that prepare a session's working copy (dependencies, generated files, migrations) before any Output runs.",
     body: `
 Each entry:
@@ -146,8 +183,8 @@ ${list([WORKSPACE_SETUP_ENTRY_FORM])}
   sectionSpec({
     name: "outputs",
     title: "Outputs",
-    section: "Outputs",
-    contract: "vibe64.outputs.v1",
+    section: VIBE64_OUTPUTS_SECTION,
+    contract: VIBE64_OUTPUTS_CONTRACT,
     summary: "The runnable targets Vibe64 offers: interactive terminal or web apps shown in Preview, and finite runs that produce downloads.",
     body: `
 Headings, each target followed by its entries and then optional blocks:
@@ -189,8 +226,8 @@ ${list(OUTPUTS_ENTRY_FORMS.previewIdentity)}
   sectionSpec({
     name: "deployment",
     title: "Deployment",
-    section: "Deployment",
-    contract: "vibe64.application-deployment.v1",
+    section: VIBE64_APPLICATION_DEPLOYMENT_SECTION,
+    contract: VIBE64_APPLICATION_DEPLOYMENT_CONTRACT,
     summary: "The commands that turn a project revision into a running production application.",
     body: `
 Entries:
@@ -214,7 +251,7 @@ ${list(DEPLOYMENT_ENTRY_FORMS)}
   sectionSpec({
     name: "packaging",
     title: "Packaging",
-    section: "Packaging",
+    section: VIBE64_PACKAGING_SECTION,
     contract: VIBE64_PACKAGING_CONTRACT,
     summary: "Source facts Vibe64 needs to turn this project into distributable packages: registry packages, static web bundles and generated mobile app shells. Where each package is published (targets, channels, builders) is Vibe64 project state, never this section.",
     body: `
@@ -263,8 +300,8 @@ ${list(PACKAGING_ENTRY_FORMS)}
   sectionSpec({
     name: "resource-estimates",
     title: "Resource estimates",
-    section: "Resource estimates",
-    contract: "vibe64.resource-estimates.v1",
+    section: VIBE64_RESOURCE_ESTIMATES_SECTION,
+    contract: VIBE64_RESOURCE_ESTIMATES_CONTRACT,
     summary: "Optional memory planning hints for Outputs and Workspace setup. They are not observed usage, reservations, minimum requirements or granted limits; the execution host owns those choices.",
     body: `
 Headings: \`\` ### Output \`id\` \`\` (an id declared in Outputs) or \`### Workspace setup\` (requires declared setup steps), each followed by fields:
@@ -291,8 +328,8 @@ ${list([...VIBE64_RESOURCE_ESTIMATE_FIELDS.keys()].map((field) => `- ${field}: \
   sectionSpec({
     name: "connected-development",
     title: "Connected development",
-    section: "Connected development",
-    contract: "vibe64.connected-development.v1",
+    section: VIBE64_CONNECTED_DEVELOPMENT_SECTION,
+    contract: VIBE64_CONNECTED_DEVELOPMENT_CONTRACT,
     summary: "How this project consumes the working source of connected projects (its own dependencies under development) in a session.",
     body: `
 Entries:
@@ -313,8 +350,8 @@ ${list(CONNECTED_DEVELOPMENT_ENTRY_FORMS)}
   sectionSpec({
     name: "project-services",
     title: "Project services",
-    section: "Project services",
-    contract: "vibe64.project-services.v1",
+    section: VIBE64_PROJECT_SERVICES_SECTION,
+    contract: VIBE64_PROJECT_SERVICES_CONTRACT,
     summary: "Foreground helper processes (workers, local reference services) that Vibe64 starts before an Output.",
     body: `
 Entries:
@@ -333,8 +370,8 @@ ${list([PROJECT_SERVICE_ENTRY_FORM])}
   sectionSpec({
     name: "integration-setup",
     title: "Integration setup",
-    section: "Integration setup",
-    contract: "vibe64.integration-setup.v1",
+    section: VIBE64_INTEGRATION_SETUP_SECTION,
+    contract: VIBE64_INTEGRATION_SETUP_CONTRACT,
     summary: "The one application-owned command the editor's Integrations controls call to configure, connect and check the application's external integrations.",
     body: `
 Exactly one entry:
@@ -349,8 +386,8 @@ The command's request/response protocol and the \`integrations.json\` usage: \`v
   sectionSpec({
     name: "architecture-inspection",
     title: "Architecture inspection",
-    section: "Architecture inspection",
-    contract: "vibe64.architecture-inspection.v1",
+    section: VIBE64_ARCHITECTURE_INSPECTION_SECTION,
+    contract: VIBE64_ARCHITECTURE_INSPECTION_CONTRACT,
     summary: "Optional project-owned inspectors that the Architecture view runs to observe the application's structure (pages, routes, entry points).",
     body: `
 Headings: \`\` ### Inspector \`id\`: Title \`\`, each followed by fields:
@@ -374,8 +411,8 @@ ${list(Object.entries(ARCHITECTURE_INSPECTOR_FIELDS).map(([label, [, value]]) =>
   sectionSpec({
     name: "architecture-layout",
     title: "Architecture layout",
-    section: "Architecture layout",
-    contract: "vibe64.architecture-layout.v1",
+    section: VIBE64_ARCHITECTURE_LAYOUT_SECTION,
+    contract: VIBE64_ARCHITECTURE_LAYOUT_CONTRACT,
     summary: "Presentation groups for the Architecture view. Declarations neither discover subsystems nor change their ownership.",
     body: `
 Headings: \`\` ### Group \`id\`: Title \`\`, each followed by:

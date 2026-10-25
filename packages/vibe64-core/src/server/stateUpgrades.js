@@ -87,6 +87,26 @@ function requireSystemRoot(systemRoot) {
   }
 }
 
+// One apply.lock excludes ordinary upgrades, explicit repairs, baselines and
+// backup retention. busy() answers for a held lock; without it, that is an error.
+async function withUpgradeLock(upgradeRoot, operation, { busy = null } = {}) {
+  const lockPath = path.join(upgradeRoot, "apply.lock");
+  let lock;
+  try {
+    lock = await open(lockPath, "wx", 0o600);
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    if (busy) return busy();
+    throw new Error("State upgrade lock exists. Check for a running upgrade; remove a stale lock only after confirming it has stopped.");
+  }
+  try {
+    return await operation(lockPath);
+  } finally {
+    await lock.close();
+    await rm(lockPath);
+  }
+}
+
 async function writeLedger(ledgerPath, ledger) {
   const temporaryPath = `${ledgerPath}.${randomUUID()}.tmp`;
   try {
@@ -133,7 +153,6 @@ async function recordStateUpgradeBaseline({ systemRoot, report = (level, message
   requireSystemRoot(systemRoot);
   const upgradeRoot = path.join(systemRoot, "upgrades");
   const ledgerPath = path.join(upgradeRoot, "applied.json");
-  const lockPath = path.join(upgradeRoot, "apply.lock");
   const refuseUnlessFresh = async ignoredPath => {
     if (await ledgerExists(ledgerPath)) {
       throw Object.assign(new Error("State upgrade ledger already exists; a baseline is only for a new installation. Use --check/--apply."),
@@ -147,42 +166,26 @@ async function recordStateUpgradeBaseline({ systemRoot, report = (level, message
   };
   await refuseUnlessFresh();
   await mkdir(upgradeRoot, { recursive: true, mode: 0o700 });
-  let lock;
-  try {
-    lock = await open(lockPath, "wx", 0o600);
-  } catch (error) {
-    if (error.code !== "EEXIST") throw error;
-    throw new Error("State upgrade lock exists. Check for a running upgrade; remove a stale lock only after confirming it has stopped.");
-  }
-  try {
+  return withUpgradeLock(upgradeRoot, async lockPath => {
     await refuseUnlessFresh(lockPath);
     const completedAt = new Date().toISOString();
     await writeLedger(ledgerPath, { version: 1, applied: upgrades.map(upgrade => ({ id: upgrade.id, completedAt })) });
     report("info", `Recorded ${upgrades.length} state upgrade(s) as the baseline of a new installation.`);
     return { recorded: upgrades.map(upgrade => upgrade.id) };
-  } finally {
-    await lock.close();
-    await rm(lockPath);
-  }
+  });
 }
 
-async function runStateUpgrades({ systemRoot, projectsRoot, managedSourceRoot, apply = false, upgradeAssistantRouting, upgradeAssistantRoles, upgradeAssistantHelpers, upgradeCompletedDiscussionPlan, upgradeAssistantPlans, upgradeColleagueConversations, upgradeSessionConversations, upgradeColleagueConversationRuntime, upgradeColleagueConversationHistory, inspectConversationUndoRetirement, upgradeLearningPracticeHistory, upgradePlanProgress, upgradeIndependentProviderCredentials, upgradeColleagueNativeContinuity, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, upgradeAssistantWorkflow, upgradeClaudeRejectedInput, upgradeClaudeCommandMessages, repairColleagueRetiredOperation, upgradeColleagueHistoricalInteractiveContinuity, resetLearningForLearningSpace, retireColleagueLearningWatches, retireFreeModelRouting, retireColleagueFreeModel, upgradeTeamSetupSessions, upgradeTeamSetupRouting, repairRetiredOperation = false, repairInteractiveContinuity = false,
-  report = (level, message) => console.log(`[${level}] ${message}`) }) {
+// The composition root supplies the feature-owned migration operations
+// (upgradeAssistantRouting, upgradeLearningPracticeHistory, ...) as the other
+// options; each upgrade reads the ones it needs. Core must not depend back on
+// Accounts or Runtime.
+async function runStateUpgrades({ systemRoot, projectsRoot, managedSourceRoot, apply = false,
+  repairRetiredOperation = false, repairInteractiveContinuity = false,
+  report = (level, message) => console.log(`[${level}] ${message}`), ...operations }) {
   requireSystemRoot(systemRoot);
   const upgradeRoot = path.join(systemRoot, "upgrades");
   const ledgerPath = path.join(upgradeRoot, "applied.json");
-  const lockPath = path.join(upgradeRoot, "apply.lock");
-  let lock;
-  if (apply) {
-    await mkdir(upgradeRoot, { recursive: true, mode: 0o700 });
-    try {
-      lock = await open(lockPath, "wx", 0o600);
-    } catch (error) {
-      if (error.code !== "EEXIST") throw error;
-      throw new Error("State upgrade lock exists. Check for a running upgrade; remove a stale lock only after confirming it has stopped.");
-    }
-  }
-  try {
+  const upgradeState = async () => {
     // Missing history normally means a legacy installation that predates the
     // ledger. State created by a current release without its baseline is not
     // one, and replaying old upgrades against it fails; say so with the error.
@@ -194,39 +197,11 @@ async function runStateUpgrades({ systemRoot, projectsRoot, managedSourceRoot, a
     const pending = upgrades.slice(ledger.applied.length);
     report("info", `${pending.length} pending state upgrade(s).`);
     const run = (upgrade, write, backupSuffix = "") => upgrade.run({
+      ...operations,
       systemRoot,
       projectsRoot,
       managedSourceRoot,
       apply: write,
-      // The composition root supplies feature-owned migration operations.
-      // Core must not depend back on Accounts or Runtime.
-      upgradeAssistantRouting,
-      upgradeAssistantRoles,
-      upgradeAssistantHelpers,
-      upgradeCompletedDiscussionPlan,
-      upgradeAssistantPlans,
-      upgradeColleagueConversations,
-      upgradeSessionConversations,
-      upgradeColleagueConversationRuntime,
-      upgradeColleagueConversationHistory,
-      inspectConversationUndoRetirement,
-      upgradeLearningPracticeHistory,
-      upgradePlanProgress,
-      upgradeIndependentProviderCredentials,
-      upgradeColleagueNativeContinuity,
-      upgradeColleagueCodexCompletedPolicy,
-      upgradeColleagueNativeInstructions,
-      upgradeAssistantWorkflow,
-      upgradeClaudeRejectedInput,
-      upgradeClaudeCommandMessages,
-      repairColleagueRetiredOperation,
-      upgradeColleagueHistoricalInteractiveContinuity,
-      resetLearningForLearningSpace,
-      retireColleagueLearningWatches,
-      retireFreeModelRouting,
-      retireColleagueFreeModel,
-      upgradeTeamSetupSessions,
-      upgradeTeamSetupRouting,
       backupRoot: path.join(upgradeRoot, "backups", upgrade.id, backupSuffix),
       report: (level, message) => report(level, `${upgrade.id}: ${message}`)
     }).catch(error => {
@@ -250,12 +225,10 @@ async function runStateUpgrades({ systemRoot, projectsRoot, managedSourceRoot, a
       report("info", `${upgrade.id}: completed and recorded.`);
     }
     return { pending: [], applied };
-  } finally {
-    if (lock) {
-      await lock.close();
-      await rm(lockPath);
-    }
-  }
+  };
+  if (!apply) return upgradeState();
+  await mkdir(upgradeRoot, { recursive: true, mode: 0o700 });
+  return withUpgradeLock(upgradeRoot, upgradeState);
 }
 
 // Retention belongs to the registry, not the immutable historical scripts.
@@ -273,19 +246,8 @@ async function maintainStateUpgradeBackups({ systemRoot, dryRun = false, now = D
       return { ...result, status: "partial", issues: [{ code: "upgrade_backup_path_unverified" }] };
     }
   } catch (error) { if (error.code === "ENOENT") return result; throw error; }
-  const lockPath = path.join(upgradeRoot, "apply.lock");
-  let lock;
-  try {
-    if (dryRun) {
-      try { await lstat(lockPath); return { ...result, status: "busy", issues: [{ code: "upgrade_backup_busy" }] }; }
-      catch (error) { if (error.code !== "ENOENT") throw error; }
-    } else {
-      try { lock = await open(lockPath, "wx", 0o600); }
-      catch (error) {
-        if (error.code !== "EEXIST") throw error;
-        return { ...result, status: "busy", issues: [{ code: "upgrade_backup_busy" }] };
-      }
-    }
+  const busy = () => ({ ...result, status: "busy", issues: [{ code: "upgrade_backup_busy" }] });
+  const maintain = async () => {
     const ledger = await readLedger(path.join(upgradeRoot, "applied.json"));
     const completed = new Map(ledger.applied.map(entry => [entry.id, Date.parse(entry.completedAt)]));
     const cutoff = Number(now) - 14 * 86400000;
@@ -332,9 +294,12 @@ async function maintainStateUpgradeBackups({ systemRoot, dryRun = false, now = D
     }
     if (result.issues.length) result.status = "partial";
     return result;
-  } finally {
-    if (lock) { await lock.close(); await rm(lockPath); }
-  }
+  };
+  if (!dryRun) return withUpgradeLock(upgradeRoot, maintain, { busy });
+  // A dry run only reports: it never takes the lock, but respects one held.
+  try { await lstat(path.join(upgradeRoot, "apply.lock")); return busy(); }
+  catch (error) { if (error.code !== "ENOENT") throw error; }
+  return maintain();
 }
 
 export { BASELINE_LEDGER_EXISTS, BASELINE_STATE_WITHOUT_LEDGER, maintainStateUpgradeBackups, recordStateUpgradeBaseline, runStateUpgrades };

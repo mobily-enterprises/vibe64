@@ -158,8 +158,7 @@ test("Studio project context uses visibly local-editor roots in local mode", asy
       runtimeProfile: {
         local: true,
         mode: "local"
-      },
-      targetRoot: path.join(root, "target")
+      }
     }).projectsRoot, "");
   });
 });
@@ -270,7 +269,6 @@ test("Studio project context creates and selects workspace project folders under
     assert.equal(context.targetRoot, expectedTargetRoot);
     assert.equal(created.currentProject.slug, "example-app");
     assert.equal(created.currentProject.external, false);
-    assert.equal(context.sourceConfigRootForSlug("example-app"), "");
     assert.equal(context.projectRuntimeRootForSlug("example-app"), expectedRuntimeRoot);
     assert.equal(context.projectRecordPathForSlug("example-app"), expectedRecordPath);
     assert.deepEqual(created.projects.map((project) => project.slug), ["example-app"]);
@@ -1975,12 +1973,12 @@ test("practice admission opens only the learner's own project on both hosts, for
       const internal = await open({});
       assert.equal(internal.targetRoot, practice.projectRoot, `${host}: work without a person is admitted as the marker's learner`);
       assert.deepEqual(internal.vibe64User, { username: "42" });
-      registerPracticeRequestActor(({ request }) => (request.headers.host === "localhost" ? learner : other));
+      const unregisterActor = registerPracticeRequestActor(({ request }) => (request.headers.host === "localhost" ? learner : other));
       try {
         assert.equal((await open({ headers })).targetRoot, practice.projectRoot, "a host supplies the local-transport person");
         await assert.rejects(open({ headers: { host: "remote" } }), deleted);
       } finally {
-        registerPracticeRequestActor(null);
+        unregisterActor();
       }
       await assert.rejects(resolveProjectRequestContext({ projectContext: context,
         request: { params: { slug: "training-00000000000040008000000000000000" }, vibe64User: learner } }), deleted,

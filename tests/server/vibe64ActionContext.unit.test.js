@@ -374,12 +374,12 @@ test("a practice project action admits only its own learner, through the host co
     // request, so the host-supplied actor is compared with the learner.
     const local = (headers) => definition.execute({ projectSlug: slug }, { requestMeta: { request: { headers } } });
     await assert.rejects(local({ host: "localhost" }), deleted, "a person without an actor is not admitted as the marker's learner");
-    registerPracticeRequestActor(({ request }) => (request.headers.host === "localhost" ? learner : other));
+    const unregisterActor = registerPracticeRequestActor(({ request }) => (request.headers.host === "localhost" ? learner : other));
     try {
       assert.deepEqual(await local({ host: "localhost" }), { targetRoot: practice.projectRoot });
       await assert.rejects(local({ host: "remote" }), deleted, "another local person is refused");
     } finally {
-      registerPracticeRequestActor(null);
+      unregisterActor();
     }
     assert.deepEqual(await definition.execute({ projectSlug: slug }, {}), { targetRoot: practice.projectRoot },
       "requestless internal work runs as the marker's learner");

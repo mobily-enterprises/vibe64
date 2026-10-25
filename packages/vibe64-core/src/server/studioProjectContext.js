@@ -9,11 +9,11 @@ import {
   runVibe64Command
 } from "@local/vibe64-execution/server";
 
-import { assertProjectEffectAdmission, currentPracticeProjectScope, runWithPracticeProjectContext } from "./projectRequestContext.js";
+import { assertProjectEffectAdmission, currentPracticeProjectScope, runWithPracticeProjectContext } from "./practiceContext.js";
 
 import {
   VIBE64_PROJECTS_ROOT_ENV,
-  resolveDefaultLocalEditorProjectsRoot,
+  resolveDefaultProjectsRoot,
   resolveVibe64Roots,
   resolveExplicitStudioTargetRoot
 } from "./studioRoots.js";
@@ -88,7 +88,7 @@ function resolveStudioProjectsRoot({
 } = {}) {
   return normalizeRoot(
     explicitRoot || env[VIBE64_PROJECTS_ROOT_ENV],
-    path.join(home || process.cwd(), "vibe64")
+    resolveDefaultProjectsRoot(home)
   );
 }
 
@@ -231,10 +231,6 @@ async function assertDirectoryUsable(directoryPath = "") {
   }
 }
 
-async function assertProjectDirectoryUsable(directoryPath = "") {
-  return assertDirectoryUsable(directoryPath);
-}
-
 function projectRecord({
   path: projectPath = "",
   projectsRoot = "",
@@ -317,6 +313,13 @@ function localProjectKeyFromTargetRoot(targetRoot = "") {
     .digest("hex")
     .slice(0, 12);
   return `${localProjectSlugFromTargetRoot(resolvedTargetRoot)}-${hash}`;
+}
+
+// A saved practice project belongs to its exact training marker, is not being
+// deleted (unless deletion is the operation) and keeps its managed Git authority.
+function practiceOwnershipDiffers(metadata, training, allowDeleting) {
+  return !isDeepStrictEqual(metadata.training, training) || Boolean(metadata.deletion && !allowDeleting) ||
+    projectRepositoryView(metadata).repositoryMode !== PROJECT_REPOSITORY_MODE_MANAGED_GIT;
 }
 
 function workspaceProjectRecord({
@@ -683,7 +686,7 @@ function createStudioProjectContext({
       })
     : String(explicitProjectsRoot || "").trim()
       ? normalizeRoot(explicitProjectsRoot)
-      : resolveDefaultLocalEditorProjectsRoot(home);
+      : "";
   const roots = resolveVibe64Roots({
     env,
     explicitManagedSourceRoot,
@@ -861,8 +864,7 @@ function createStudioProjectContext({
       throw practiceProjectDeletedError();
     }
     if (await pathExists(projectContextRoot) || await pathExists(projectRuntimeRoot) || Object.keys(metadata).length) {
-      if (!isDeepStrictEqual(metadata.training, training) || (metadata.deletion && !allowDeleting) ||
-          projectRepositoryView(metadata).repositoryMode !== PROJECT_REPOSITORY_MODE_MANAGED_GIT) {
+      if (practiceOwnershipDiffers(metadata, training, allowDeleting)) {
         throw Object.assign(new Error("Practice project has missing or different ownership. Keep it intact and ask the owner to inspect it."), { code: "vibe64_practice_scope_mismatch" });
       }
     }
@@ -969,19 +971,10 @@ function createStudioProjectContext({
       : externalProjectSessionSourceRootForTarget(targetRoot);
   }
 
-  function sourceRootForSlug() {
-    return "";
-  }
-
   function sourceRootForTarget(targetRoot = "") {
     const scope = practiceScope();
     if (scope && normalizeRoot(targetRoot) === scope.targetRoot) return "";
     return targetIsCatalogProjectHome(targetRoot) ? "" : normalizeRoot(targetRoot);
-  }
-
-  function sourceConfigRootForSlug(slug = "") {
-    void slug;
-    return "";
   }
 
   function sourceConfigRootForTarget(targetRoot = "") {
@@ -1175,13 +1168,29 @@ function createStudioProjectContext({
     };
   }
 
-  async function createWorkspaceProjectRecord(input = {}, {
-    prepare = null
-  } = {}) {
+  // The catalogue serves its own projects; without it only practice access does.
+  function catalogueOrPracticeScope() {
     const scope = practiceScope();
     if (!projectCatalogEnabled && !scope) {
       throw projectCatalogUnavailableError();
     }
+    return scope;
+  }
+
+  function workspaceProjectRecordForSlug(slug, scope) {
+    return workspaceProjectRecordForPath({
+      projectRecordPath: projectRecordPathForSlug(slug),
+      path: projectContextRootForSlug(slug),
+      projectRuntimeRoot: projectRuntimeRootForSlug(slug),
+      projectSessionSourceRoot: projectSessionSourceRootForSlug(slug),
+      projectsRoot: scope?.projectsRoot || projectsRoot
+    });
+  }
+
+  async function createWorkspaceProjectRecord(input = {}, {
+    prepare = null
+  } = {}) {
+    const scope = catalogueOrPracticeScope();
 
     const slug = projectSlugFromInput(input);
     if (!scope) assertCatalogueSlugAllowed(slug);
@@ -1229,13 +1238,7 @@ function createStudioProjectContext({
         });
       }
       await writeProjectMetadata(projectRecordPathForSlug(slug), metadata);
-      project = await workspaceProjectRecordForPath({
-        projectRecordPath: projectRecordPathForSlug(slug),
-        path: projectContextRoot,
-        projectRuntimeRoot: projectRuntimeRootForSlug(slug),
-        projectSessionSourceRoot: projectSessionSourceRootForSlug(slug),
-        projectsRoot: scope?.projectsRoot || projectsRoot
-      });
+      project = await workspaceProjectRecordForSlug(slug, scope);
     } catch (error) {
       await Promise.all([
         ...(sourceCreated ? [rm(projectContextRoot, {
@@ -1275,22 +1278,13 @@ function createStudioProjectContext({
   }
 
   async function readWorkspaceProject(input = {}) {
-    const scope = practiceScope();
-    if (!projectCatalogEnabled && !scope) {
-      throw projectCatalogUnavailableError();
-    }
+    const scope = catalogueOrPracticeScope();
 
     const slug = projectSlugFromInput(input);
     const projectContextRoot = projectContextRootForSlug(slug);
     if (scope) await readWorkspaceProjectState({ slug });
     await assertDirectoryUsable(projectContextRoot);
-    const project = await workspaceProjectRecordForPath({
-      projectRecordPath: projectRecordPathForSlug(slug),
-      path: projectContextRoot,
-      projectRuntimeRoot: projectRuntimeRootForSlug(slug),
-      projectSessionSourceRoot: projectSessionSourceRootForSlug(slug),
-      projectsRoot: scope?.projectsRoot || projectsRoot
-    });
+    const project = await workspaceProjectRecordForSlug(slug, scope);
     if (project.deletion && input.allowDeleting !== true) {
       throw projectDeletingError();
     }
@@ -1307,10 +1301,7 @@ function createStudioProjectContext({
   }
 
   async function updateWorkspaceProjectMetadata(input = {}) {
-    const scope = practiceScope();
-    if (!projectCatalogEnabled && !scope) {
-      throw projectCatalogUnavailableError();
-    }
+    const scope = catalogueOrPracticeScope();
 
     assertProjectEffectAdmission();
     const slug = projectSlugFromInput(input);
@@ -1326,13 +1317,7 @@ function createStudioProjectContext({
       });
       return metadata;
     });
-    const project = await workspaceProjectRecordForPath({
-      projectRecordPath: projectRecordPathForSlug(slug),
-      path: projectContextRoot,
-      projectRuntimeRoot: projectRuntimeRootForSlug(slug),
-      projectSessionSourceRoot: projectSessionSourceRootForSlug(slug),
-      projectsRoot: scope?.projectsRoot || projectsRoot
-    });
+    const project = await workspaceProjectRecordForSlug(slug, scope);
     return {
       ok: true,
       project,
@@ -1341,10 +1326,7 @@ function createStudioProjectContext({
   }
 
   async function readWorkspaceProjectState(input = {}) {
-    const scope = practiceScope();
-    if (!projectCatalogEnabled && !scope) {
-      throw projectCatalogUnavailableError();
-    }
+    const scope = catalogueOrPracticeScope();
     const slug = projectSlugFromInput(input);
     if (scope) {
       for (const directory of [scope.targetRoot, scope.projectRuntimeRoot, scope.projectSessionSourceRoot]) {
@@ -1355,8 +1337,7 @@ function createStudioProjectContext({
       projectRecordPath: projectRecordPathForSlug(slug)
     }));
     if (scope && (Object.keys(metadata).length || await pathExists(scope.targetRoot) || await pathExists(scope.projectRuntimeRoot)) &&
-        (!isDeepStrictEqual(metadata.training, scope.training) || (metadata.deletion && scope.allowDeleting !== true) ||
-        projectRepositoryView(metadata).repositoryMode !== PROJECT_REPOSITORY_MODE_MANAGED_GIT)) {
+        practiceOwnershipDiffers(metadata, scope.training, scope.allowDeleting === true)) {
       throw Object.assign(new Error("Practice project ownership changed. Keep it intact and ask the owner to inspect it."), { code: "vibe64_practice_scope_mismatch" });
     }
     return {
@@ -1482,11 +1463,6 @@ function createStudioProjectContext({
       projectsRoot,
       slug
     });
-    if (!pathInsideOrEqual(projectsRoot, projectContextRoot)) {
-      const error = new Error("Project folder must be inside the Studio projects root.");
-      error.code = "vibe64_project_outside_projects_root";
-      throw error;
-    }
     await assertDirectoryUsable(projectContextRoot);
     selectedTargetRoot = projectContextRoot;
     selectionSource = "workspace";
@@ -1571,9 +1547,7 @@ function createStudioProjectContext({
     projectRuntimeRootForTarget,
     projectSessionSourceRootForSlug,
     projectSessionSourceRootForTarget,
-    sourceConfigRootForSlug,
     sourceConfigRootForTarget,
-    sourceRootForSlug,
     sourceRootForTarget
   });
 }
@@ -1605,5 +1579,5 @@ export {
   registerApprovalCountReader,
   resolveStudioProjectsRoot,
   resolveProjectContextRoot,
-  assertProjectDirectoryUsable
+  assertDirectoryUsable as assertProjectDirectoryUsable
 };

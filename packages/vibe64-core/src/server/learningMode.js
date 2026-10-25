@@ -21,10 +21,18 @@ let learningModeReader = null;
 let learningModeReadFailure = null;
 const requestModes = new WeakMap();
 
+// Returns the unregister function. null also clears the reader, which hosts'
+// existing test cleanup still relies on.
 function registerLearningModeReader(reader, { onReadFailure = null } = {}) {
   if (reader !== null && typeof reader !== "function") throw new TypeError("Learning mode needs its Training reader.");
   learningModeReader = reader;
   learningModeReadFailure = typeof onReadFailure === "function" ? onReadFailure : null;
+  return () => {
+    if (reader && learningModeReader === reader) {
+      learningModeReader = null;
+      learningModeReadFailure = null;
+    }
+  };
 }
 
 // The learner's mode: { on, currentAttemptId, lessonCode, practiceSlug }, or

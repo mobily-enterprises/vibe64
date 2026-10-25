@@ -30,6 +30,7 @@ workspace.
 - `packages/vibe64-core/src/server/studioProjectContext.js`
 - `packages/vibe64-core/src/server/projectState.js`
 - `packages/vibe64-core/src/server/projectRequestContext.js`
+- `packages/vibe64-core/src/server/practiceContext.js`
 - `packages/vibe64-core/src/server/actionContext.js`
 - `packages/vibe64-core/src/server/learningMode.js`
 - `packages/vibe64-core/src/server/teamAiGate.js`

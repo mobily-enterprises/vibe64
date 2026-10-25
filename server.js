@@ -496,8 +496,7 @@ async function createServer(options = {}) {
     explicitManagedSourceRoot: options.managedSourceRoot,
     explicitSystemRoot: options.systemRoot,
     projectsRoot: requestedProjectsRoot,
-    runtimeProfile,
-    targetRoot: runtimeProfile.singleTargetRoot
+    runtimeProfile
   });
   const projectsRoot = rootContract.projectsRoot;
   const managedSourceRoot = rootContract.managedSourceRoot;

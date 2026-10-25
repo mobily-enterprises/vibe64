@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from "node:async_hooks";
 import { mkdir } from "node:fs/promises";
 
 import {
@@ -17,18 +16,28 @@ import {
 } from "./learningSpace.js";
 import { assertLearningModeAllowsProject, LEARNING_MODE_PROJECT_CODE } from "./learningMode.js";
 import { assertTeamAiAllowsProject, TEAM_AI_REQUIRED_CODE } from "./teamAiGate.js";
+import {
+  actionRequestMetaKey,
+  assertProjectEffectAdmission,
+  captureProjectRequestContext,
+  currentPracticeProjectScope,
+  currentProjectRequestContext,
+  practiceScopeKey,
+  projectContextStorage,
+  retainPracticeContext,
+  runWithPracticeProjectContext
+} from "./practiceContext.js";
 
 const VIBE64_PROJECT_ROUTE_BASE = "/app/:slug";
-const projectContextStorage = new AsyncLocalStorage();
-const practiceScopeKey = Symbol("Vibe64 server practice scope");
-const actionRequestMetaKey = Symbol("Vibe64 original action request metadata");
 let practiceRequestActor = null;
 
 // A host whose person requests carry no vibe64User (the local transport)
 // supplies the person here: resolve({request}) returns the actor or null.
+// Returns the unregister function.
 function registerPracticeRequestActor(resolve) {
-  if (resolve !== null && typeof resolve !== "function") throw new TypeError("Practice request actor requires a resolver.");
+  if (typeof resolve !== "function") throw new TypeError("Practice request actor requires a resolver.");
   practiceRequestActor = resolve;
+  return () => { if (practiceRequestActor === resolve) practiceRequestActor = null; };
 }
 
 function projectSlugFromRequest(request = {}) {
@@ -193,76 +202,12 @@ function explicitProjectRequestContextForSlug(projectContext = {}, slug = "", pr
   });
 }
 
-function currentProjectRequestContext() {
-  const context = projectContextStorage.getStore() || null;
-  if (context?.[practiceScopeKey] && !context[practiceScopeKey].active()) {
-    throw Object.assign(new Error("Practice access ended with its owning callback. Read the saved lesson again."), { code: "vibe64_practice_scope_expired" });
-  }
-  return context;
-}
-
 // Retained only for fresh action dispatch. This is the original request, not
 // the prior action's authorization result, and must never become saved state.
 function currentProjectActionRequestMeta() {
   const context = currentProjectRequestContext();
   if (context?.[practiceScopeKey]) return null;
   return context?.[actionRequestMetaKey] || null;
-}
-
-function currentPracticeProjectScope(owner) {
-  const grant = currentProjectRequestContext()?.[practiceScopeKey];
-  if (!grant) return null;
-  if (grant.owner !== owner) {
-    throw Object.assign(new Error("Practice access belongs to its original Project context."), { code: "vibe64_practice_context_mismatch" });
-  }
-  return grant.scope;
-}
-
-// Core calls this with its exact derived scope. The private token survives only
-// inside the original ALS callback; ordinary request/context fields cannot grant it.
-async function runWithPracticeProjectContext(owner, scope, operation) {
-  if (typeof operation !== "function") throw new TypeError("Practice access requires an owning callback.");
-  let active = true;
-  const context = Object.freeze({ ...scope,
-    [practiceScopeKey]: Object.freeze({ owner, scope, active: () => active })
-  });
-  try {
-    return await projectContextStorage.run(context, () => operation());
-  } finally {
-    active = false;
-  }
-}
-
-// Existing accepted-work owners retain only this exact observation/control
-// projection. Fresh effects must re-enter the saved-attempt request admission.
-// A practice project admitted as an ordinary project (admitPracticeRequest)
-// keeps its write: that admission depends only on the learner's ownership, not
-// on lesson activity, so later work (agent turns, helpers) behaves as in any project.
-function captureProjectRequestContext() {
-  const grant = currentProjectRequestContext()?.[practiceScopeKey];
-  return retainPracticeContext(grant?.ordinary === true ? "write" : "control");
-}
-
-// The retained projection outlives the owning callback. Only core's practice
-// admission retains write; every other caller retains control.
-function retainPracticeContext(access) {
-  const context = currentProjectRequestContext();
-  const grant = context?.[practiceScopeKey];
-  if (!grant) return context;
-  const scope = Object.freeze({ ...grant.scope, access,
-    vibe64User: Object.freeze({ ...grant.scope.vibe64User }) });
-  return Object.freeze({ ...scope,
-    [practiceScopeKey]: Object.freeze({ owner: grant.owner, scope, active: () => true, ...(access === "write" ? { ordinary: true } : {}) })
-  });
-}
-
-function assertProjectEffectAdmission() {
-  const scope = currentProjectRequestContext()?.[practiceScopeKey]?.scope;
-  if (scope && !["create", "write"].includes(scope.access)) {
-    throw Object.assign(new Error("Read this saved lesson's current authority before starting new practice work."), {
-      code: "vibe64_practice_effect_admission_required", statusCode: 409
-    });
-  }
 }
 
 // Work in a learner's own practice project. Admission opens one only to its
@@ -329,26 +274,25 @@ async function runWithResolvedProjectRequestContext(options = {}, operation) {
   return runWithProjectRequestContext(context, operation);
 }
 
+// The project-admission refusals a project route answers itself, with their
+// HTTP status; any other error is not a project request error.
+const PROJECT_REQUEST_ERROR_STATUS = Object.freeze({
+  vibe64_invalid_project_slug: 422,
+  vibe64_project_route_unavailable: 404,
+  [LEARNING_MODE_PROJECT_CODE]: 403,
+  [TEAM_AI_REQUIRED_CODE]: 403,
+  vibe64_project_path_not_accessible: 404,
+  [PRACTICE_PROJECT_DELETED_CODE]: 404,
+  vibe64_project_path_not_directory: 409,
+  vibe64_project_path_symlink: 409
+});
+
+function isProjectRequestError(error = {}) {
+  return Object.hasOwn(PROJECT_REQUEST_ERROR_STATUS, String(error?.code));
+}
+
 function projectRequestErrorStatusCode(error = {}) {
-  if (error?.code === "vibe64_invalid_project_slug") {
-    return 422;
-  }
-  if (error?.code === "vibe64_project_route_unavailable") {
-    return 404;
-  }
-  if (error?.code === LEARNING_MODE_PROJECT_CODE || error?.code === TEAM_AI_REQUIRED_CODE) {
-    return 403;
-  }
-  if (error?.code === "vibe64_project_path_not_accessible" || error?.code === PRACTICE_PROJECT_DELETED_CODE) {
-    return 404;
-  }
-  if (
-    error?.code === "vibe64_project_path_not_directory" ||
-    error?.code === "vibe64_project_path_symlink"
-  ) {
-    return 409;
-  }
-  return 400;
+  return isProjectRequestError(error) ? PROJECT_REQUEST_ERROR_STATUS[error.code] : 400;
 }
 
 export {
@@ -372,6 +316,7 @@ export {
   resolveProjectRequestContext,
   runWithResolvedProjectRequestContext,
   runWithProjectRequestContext,
+  isProjectRequestError,
   projectRequestErrorStatusCode,
   projectSlugFromRequest
 };

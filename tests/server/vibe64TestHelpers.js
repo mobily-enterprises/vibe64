@@ -2,9 +2,9 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import {
-  resolveVibe64ProjectRuntimeRoot
-} from "@local/vibe64-core/server/studioRoots";
+import { resolveDefaultLocalEditorSystemRoot } from "@local/vibe64-core/server/studioRoots";
+import { localProjectKeyFromTargetRoot } from "@local/vibe64-core/server/studioProjectContext";
+import { EXTERNAL_PROJECT_LOCAL_ROOTS_DIR } from "@local/vibe64-core/server/projectState";
 import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
 } from "@local/vibe64-core/server/sessionSourcePath";
@@ -68,7 +68,7 @@ function sourceMetadata(targetRoot, sessionId = "session") {
 }
 
 function projectRuntimeRoot(targetRoot) {
-  return resolveVibe64ProjectRuntimeRoot(targetRoot);
+  return path.join(resolveDefaultLocalEditorSystemRoot(), EXTERNAL_PROJECT_LOCAL_ROOTS_DIR, localProjectKeyFromTargetRoot(targetRoot));
 }
 
 // Seed completed historical state without retaining an application Undo API.
