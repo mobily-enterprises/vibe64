@@ -1059,7 +1059,7 @@ import {
   mdiSend,
 } from "@mdi/js";
 import { vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
-import { splitVibe64SessionHeaderActions } from "@/lib/vibe64SessionToolbarVisibility.js";
+import { splitVibe64SessionHeaderActions, vibe64SessionNameStripWidth } from "@/lib/vibe64SessionToolbarVisibility.js";
 import Vibe64CreatePullRequestDialog from "@/components/studio/vibe64-session/Vibe64CreatePullRequestDialog.vue";
 import GitStandInIdentityNotice from "@/components/studio/repository/GitStandInIdentityNotice.vue";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
@@ -1181,11 +1181,7 @@ function measureHeaderActionRoom() {
   const header = sessionHeader.value;
   if (!header) return;
   const style = getComputedStyle(header);
-  const names = [...header.querySelectorAll(".studio-ai-sessions__tab")].reduce((total, chip) => {
-    const label = chip.querySelector(".studio-ai-sessions__tab-label");
-    const natural = chip.offsetWidth - (label?.clientWidth || 0) + (label?.scrollWidth || 0);
-    return total + Math.min(natural, SESSION_NAME_MAX_WIDTH) + 6;
-  }, 0);
+  const names = vibe64SessionNameStripWidth(header.querySelector(".studio-ai-sessions__tabs")?.children, SESSION_NAME_MAX_WIDTH);
   const fixed = [...header.querySelectorAll(".studio-autopilot__save-work, .studio-autopilot__header-fixed")]
     .reduce((total, element) => total + element.offsetWidth + 2, 0);
   const actionSize = (parseFloat(style.getPropertyValue("--session-action-size")) || 36) + 2;
@@ -2062,6 +2058,11 @@ onBeforeUnmount(() => {
 .studio-autopilot__header-action,
 .studio-autopilot__save-work {
   border-radius: 8px;
+}
+
+/* Save keeps its unsaved (error) or update (warning) colour. */
+.studio-autopilot__header-action,
+.studio-autopilot__save-work:not(.text-error):not(.text-warning) {
   color: rgba(var(--v-theme-on-surface), 0.66);
 }
 
@@ -2073,7 +2074,7 @@ onBeforeUnmount(() => {
 }
 
 .studio-autopilot__header-action:hover,
-.studio-autopilot__save-work:hover {
+.studio-autopilot__save-work:not(.text-error):not(.text-warning):hover {
   color: rgba(var(--v-theme-on-surface), 0.9);
 }
 

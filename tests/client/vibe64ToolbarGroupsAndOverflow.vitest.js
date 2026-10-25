@@ -3,7 +3,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   SESSION_HEADER_ACTION_PRIORITY,
-  splitVibe64SessionHeaderActions
+  splitVibe64SessionHeaderActions,
+  vibe64SessionNameStripWidth
 } from "../../src/lib/vibe64SessionToolbarVisibility.js";
 
 const root = path.resolve(import.meta.dirname, "../..");
@@ -46,6 +47,29 @@ describe("session header priority overflow", () => {
     }
     expect(view).not.toContain("header-actions--compact");
     expect(view).not.toContain('variant="tonal"\n              width="var(--session-action-size');
+  });
+});
+
+describe("session name strip room", () => {
+  const element = (classes, offsetWidth, label) => ({
+    classList: { contains: (name) => classes.includes(name) },
+    offsetWidth,
+    querySelector: () => label
+  });
+
+  it("counts chips at their full label width up to the max and every other strip element", () => {
+    const chip = element(["studio-ai-sessions__tab"], 100, { clientWidth: 40, scrollWidth: 90 });
+    const longChip = element(["studio-ai-sessions__tab"], 200, { clientWidth: 150, scrollWidth: 400 });
+    const newSession = element(["studio-ai-sessions__create-button"], 28, null);
+    expect(vibe64SessionNameStripWidth([chip, longChip, newSession], 240)).toBe((150 + 6) + (240 + 6) + (28 + 6));
+    expect(vibe64SessionNameStripWidth(undefined, 240)).toBe(0);
+  });
+
+  it("measures the whole strip and leaves Save its state colour", () => {
+    const view = read("src/components/studio/vibe64-session/Vibe64AutopilotView.vue");
+    expect(view).toContain('vibe64SessionNameStripWidth(header.querySelector(".studio-ai-sessions__tabs")?.children');
+    expect(view).not.toMatch(/\.studio-autopilot__save-work \{\n  border-radius: 8px;\n  color:/u);
+    expect(view).toContain(".studio-autopilot__save-work:not(.text-error):not(.text-warning) {");
   });
 });
 

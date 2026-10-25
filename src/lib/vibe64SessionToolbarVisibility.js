@@ -38,9 +38,22 @@ function splitVibe64SessionHeaderActions(available = [], slots = Infinity) {
   return { inline: ordered.slice(0, count), overflow: ordered.slice(count) };
 }
 
+// Room the session name strip needs: each name chip at its full label width up
+// to the chip's max-width, plus anything else in the strip, such as New session
+// while it stays in the header.
+function vibe64SessionNameStripWidth(elements = [], maxChipWidth = Infinity) {
+  return [...(elements || [])].reduce((total, element) => {
+    if (!element.classList?.contains("studio-ai-sessions__tab")) return total + element.offsetWidth + 6;
+    const label = element.querySelector(".studio-ai-sessions__tab-label");
+    const natural = element.offsetWidth - (label?.clientWidth || 0) + (label?.scrollWidth || 0);
+    return total + Math.min(natural, maxChipWidth) + 6;
+  }, 0);
+}
+
 export {
   DEFAULT_VISIBLE_SESSION_LIMIT,
   SESSION_HEADER_ACTION_PRIORITY,
   splitVibe64SessionHeaderActions,
+  vibe64SessionNameStripWidth,
   visibleVibe64ToolbarSessions
 };
