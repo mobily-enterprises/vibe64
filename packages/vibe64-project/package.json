@@ -66,7 +66,7 @@
           },
           {
             "subpath": "./server/managedRepository",
-            "summary": "Owns original managed project creation and exact training source proof; hosted defaults remain an explicit host facility."
+            "summary": "Owns original managed project creation and exact training source proof; defaults a host adds remain its own facility."
           },
           {
             "subpath": "./server/project-archive",

@@ -254,7 +254,7 @@ async function initializeManagedProject({
   const runtimeRoot = path.resolve(runtimeInput);
   if ((await readdir(namespaceRoot)).length > 0) {
     throw vibe64Error(
-      "A new managed project must start from an empty hosted namespace.",
+      "A new managed project must start from an empty project namespace.",
       "vibe64_managed_project_namespace_not_empty"
     );
   }

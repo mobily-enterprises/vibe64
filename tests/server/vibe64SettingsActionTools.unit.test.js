@@ -430,3 +430,13 @@ test("database policy action carries the explicit boolean override and rejects s
     assert.equal(calls.length, before, "invalid override never reaches the owner");
   });
 });
+
+test("settings tool descriptions describe the project, not any host's product", async () => {
+  const { settingsTool } = await import("../../packages/vibe64-project/src/server/settingsAssistantContracts.js");
+  for (const operation of operations) {
+    const { description = "" } = settingsTool(operation);
+    assert.doesNotMatch(description, /\bhosted\b/iu, operation);
+  }
+  assert.match(settingsTool("env.read").description, /not a deployed application's production environment/u);
+  assert.match(settingsTool("env.user-values.save").description, /does not manage a deployment's production environment/u);
+});
