@@ -65,7 +65,7 @@ function freshSession() {
 async function openRenewal(page: Page) {
   const compactActions = page.getByRole("button", { name: /^Session actions/u });
   const expandedAction = page.locator(
-    ".studio-autopilot__header-actions--expanded [data-vibe64-session-renew-action]:visible"
+    ".studio-autopilot__header-actions button[data-vibe64-session-renew-action]:visible"
   );
   await expect.poll(async () => (
     await compactActions.isVisible() || await expandedAction.isVisible()

@@ -1,7 +1,7 @@
 # Choose the AI for a temporary chat
 
 Open **Temporary AI** from the session toolbar, or from **Session actions** in
-a narrow chat. Select the temporary chat you want to change. Its **Chat mode**
+a chat too narrow for it. Select the temporary chat you want to change. Its **Chat mode**
 icon is inside the message box.
 
 In **New temporary chat**, **Cancel** returns directly to Main when starting the

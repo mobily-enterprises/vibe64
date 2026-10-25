@@ -10,8 +10,8 @@ Use **Expand** to inspect output, or **Dismiss** to hide an inactive notice.
 Preparation does not save or push the project.
 
 To rerun preparation after success, select **Prepare workspace** (the wrench)
-in the session header. On narrow screens, open **Session actions** (three dots)
-and select **Prepare workspace**. This stays available after dismissing the
+in the session header. It is the first header action to move into **Session
+actions** (three dots) when the chat is narrow; select it there instead. This stays available after dismissing the
 preparation notice. It runs the complete current recipe, including declared
 database steps and connected-source Prepare/Verify commands. It is unavailable
 while another assistant or repository operation is active, or for archived sessions.

@@ -28,7 +28,15 @@ restoration failed: ask the coding agent to recover the managed browser run
 before using Preview. Colleague can inspect output status and explain recovery;
 it must not claim the normal app is restored from a test exit code alone.
 
-Use **Suspend preview**, beside the circular **Reload preview** button, to unload
+The Preview address bar has two groups. The page group, styled as the address
+field, holds **Go back in preview**, the **Preview URL**, **Reload preview**,
+**Suspend preview**, **Copy preview URL** and the open-in-new-tab button; these
+act on the page shown in this browser. The separate outlined server group holds
+the server status dot, **Show run output**, **Stop preview** and **Restart**;
+these act on the app server behind every Preview page. On mobile the server
+group sits on its own row under the address.
+
+Use **Suspend preview**, beside **Reload preview**, to unload
 only this displayed page and reduce browser CPU use. Unsaved changes inside the
 page may be lost. The app server, coding agents and goals continue running;
 other Preview windows are unaffected. **Resume preview** reopens the saved route

@@ -3,6 +3,13 @@ import { temporaryConversationId } from "@local/vibe64-sessions/shared/conversat
 import { DASHBOARD_PATH, WORKSPACE_SLUG } from "./support/base-shell-data";
 import { assistantStatusServer } from "./support/assistant-status-server";
 
+// Temporary AI stays in the session header while it has room, else in Session actions.
+async function openTemporaryAi(page: Page) {
+  const inline = page.locator("button[data-vibe64-temporary-ai-action]:visible");
+  if (!await inline.count()) await page.locator("[data-vibe64-session-actions]:visible").click();
+  await page.locator("[data-vibe64-temporary-ai-action]:visible").first().click();
+}
+
 for (const engineId of ["codex", "opencode"]) {
   test(`${engineId} temporary typing stays in its conversation across browser tabs`, async ({ browser }, info) => {
     const server = await assistantStatusServer({ temporaryEngineId: engineId });
@@ -39,8 +46,7 @@ for (const engineId of ["codex", "opencode"]) {
           await route.fulfill({ json: { ok: true } });
         });
         await page.goto(`${server.url}${DASHBOARD_PATH}/env`);
-        await page.locator("[data-vibe64-session-actions]:visible").click();
-        await page.locator("[data-vibe64-temporary-ai-action]:visible").click();
+        await openTemporaryAi(page);
         await expect(composer(page)).toBeVisible();
       }
 
@@ -62,8 +68,7 @@ for (const engineId of ["codex", "opencode"]) {
 
       // Returning to the saved chat receives the next heartbeat, without copying draft text.
       await reader.reload();
-      await reader.locator("[data-vibe64-session-actions]:visible").click();
-      await reader.locator("[data-vibe64-temporary-ai-action]:visible").click();
+      await openTemporaryAi(reader);
       await expect(composer(reader)).toBeVisible();
       await composer(writer).fill("Ready to send");
       await expect(typing(reader)).toBeVisible();

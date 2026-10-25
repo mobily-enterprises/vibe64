@@ -933,7 +933,7 @@ describe("Vibe64 direct session view", () => {
     expect(composable).toContain("sessionGithubCommandActor(props.session || {})");
     expect(composable).toContain("sessionGithubActor.value.available");
     const sessionHeader = component.slice(
-      component.indexOf('<header class="studio-autopilot__session-header">'),
+      component.indexOf('<header ref="sessionHeader" class="studio-autopilot__session-header">'),
       component.indexOf("</header>")
     );
     expect(sessionHeader).toContain("studio-autopilot__save-work");
@@ -942,8 +942,8 @@ describe("Vibe64 direct session view", () => {
     expect(sessionHeader).toContain('v-else-if="props.workState?.destination?.mode === \'github\'"');
     expect(sessionHeader).toContain('class="studio-autopilot__save-symbol-commit"');
     expect(sessionHeader).toContain('<v-icon v-else :icon="mdiContentSaveOutline" />');
-    expect(sessionHeader).toContain('height="48"');
-    expect(sessionHeader).toContain('width="48"');
+    expect(sessionHeader).toContain('height="var(--session-action-size, 36px)"');
+    expect(sessionHeader).toContain('width="var(--session-action-size, 36px)"');
     expect(sessionHeader).not.toContain("studio-autopilot__save-work-label");
   });
 
@@ -1143,7 +1143,7 @@ describe("Vibe64 direct session view", () => {
     expect(component).toContain('@retry="retryWorkspaceSetup"');
     const preparationActions = component.slice(chatStart, activityStart);
     expect(preparationActions.match(/data-vibe64-prepare-workspace/gu)).toHaveLength(2);
-    expect(preparationActions.match(/v-if="workspaceSetupActionVisible"/gu)).toHaveLength(2);
+    expect(preparationActions.match(/headerActions\.(?:inline|overflow)\.includes\('prepare-workspace'\)/gu)).toHaveLength(2);
     expect(preparationActions.match(/@click="retryWorkspaceSetup"/gu)).toHaveLength(3);
     expect(preparationActions).toContain('v-if="connectedUpdateActionVisible"');
     expect(composable).toContain("workspaceSetupActionVisible.value && connectedRepositoryCount.value > 0");

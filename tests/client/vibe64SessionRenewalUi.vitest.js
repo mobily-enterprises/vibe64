@@ -577,23 +577,21 @@ describe("session renewal dialog", () => {
     expect(html).toContain("Open fresh session");
   });
 
-  it("makes the advisory available by tap with full-size header targets", () => {
+  it("makes the advisory available by tap with compact header targets", () => {
     expect(autopilotSource).toContain(":title=\"sessionRenewalActionPresentation.reason\"");
     expect(autopilotSource).toContain('ref="sessionActionsTrigger"');
     expect(autopilotSource).toContain('@click="requestSessionRenewal(sessionActionsTrigger)"');
     expect(autopilotSource).toContain('@click="requestSessionRenewal($event.currentTarget)"');
     expect(autopilotSource).toContain("returnFocusTarget: returnFocusTarget?.$el || returnFocusTarget");
-    expect(autopilotSource).toMatch(/height="var\(--session-action-size, 48px\)"[\s\S]*?:icon="mdiAutorenew"[\s\S]*?width="var\(--session-action-size, 48px\)"/u);
-    expect(autopilotSource).toMatch(/:aria-label="temporaryAiHasUnreadMessages[^"\n]+"[\s\S]*?height="var\(--session-action-size, 48px\)"[\s\S]*?width="var\(--session-action-size, 48px\)"/u);
-    expect(autopilotSource).toContain("@container studio-chat-pane (min-width: 32.01rem) and (max-width: 40rem)");
-    expect(autopilotSource).toContain("--session-action-size: 44px;");
+    expect(autopilotSource).toMatch(/height="var\(--session-action-size, 36px\)"[\s\S]*?:icon="mdiAutorenew"[\s\S]*?width="var\(--session-action-size, 36px\)"/u);
+    expect(autopilotSource).toMatch(/:aria-label="temporaryAiHasUnreadMessages[^"\n]+"[\s\S]*?height="var\(--session-action-size, 36px\)"[\s\S]*?width="var\(--session-action-size, 36px\)"/u);
+    expect(autopilotSource).toMatch(/@media \(pointer: coarse\) \{\s*\.studio-autopilot__session-header \{\s*--session-action-size: 44px;/u);
     expect(autopilotSource).toContain(":aria-label=\"sessionActionsLabel\"");
     expect(autopilotSource).toContain('sessionRenewalActionPresentation.value.attention ? sessionRenewalActionPresentation.value.label : ""');
     expect(autopilotSource).toContain('].filter(Boolean).join(": ")');
     expect(autopilotSource).toContain(':icon="mdiDotsVertical"');
     expect(autopilotSource).toContain("studio-autopilot__session-action-item");
-    expect(autopilotSource).toContain("studio-autopilot__header-actions--compact");
-    expect(autopilotSource).toContain("@container studio-chat-pane (max-width: 32rem)");
+    expect(autopilotSource).toContain("headerActions.overflow.includes('renew')");
     expect(autopilotSource).not.toContain("v-if=\"smAndDown\"");
   });
 });

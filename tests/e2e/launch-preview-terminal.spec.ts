@@ -1554,10 +1554,10 @@ test("@temporary-model merge repair exposes the shared picker and retains Senior
   await page.screenshot({ path: testInfo.outputPath("repair-model-changed.png") });
 });
 
-test("@session-toolbar crowded actions shrink, recover their spacing, and use a vertical commit icon", async ({ page }, testInfo) => {
+test("@session-toolbar gives names and Save room first, then overflows the lowest-priority actions", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await mockLaunchTerminalSocket(page);
-  const sessions = ["#60 Booking validation", "#61 Invoice totals", "#53 Appointment screen"].map((sessionName, index) =>
+  const sessions = ["#60 Booking validation", "#61 Invoice totals"].map((sessionName, index) =>
     sessionPayload({ sessionName, sessionId: index ? `toolbar-${index}` : SESSION_ID }));
   await mockLaunchSession(page, { session: sessions[0], sessionList: sessions });
   await page.route("**/sessions/*/work", (route) => fulfillJson(route, {
@@ -1568,24 +1568,31 @@ test("@session-toolbar crowded actions shrink, recover their spacing, and use a 
   await separator.focus();
   await separator.press("End");
   const header = page.locator(".studio-autopilot__session-header:visible");
-  const temporaryAi = header.getByRole("button", { name: "Open temporary AI", exact: true });
-  await expect.poll(async () => Math.round((await temporaryAi.boundingBox())!.width)).toBe(48);
-  await expect.poll(() => header.locator(".studio-autopilot__header-actions--expanded").evaluate(element => getComputedStyle(element).gap)).toBe("6.4px");
+  const save = header.locator("[data-vibe64-guide=save]");
+  const inline = () => header.locator("[data-vibe64-header-action]").evaluateAll((elements) =>
+    elements.filter((element) => element.getClientRects().length > 0).map((element) => element.getAttribute("data-vibe64-header-action")));
+  const priority = ["temporary-ai", "renew", "pin", "pull-request", "prepare-workspace"];
+  await expect(save).toBeVisible();
+  await expect.poll(async () => (await inline()).length).toBeGreaterThan(1);
   await header.screenshot({ path: testInfo.outputPath("toolbar-roomy.png") });
-  for (let i = 0; i < 7; i += 1) await separator.press("ArrowLeft");
-  await expect.poll(async () => Math.round((await temporaryAi.boundingBox())!.width)).toBe(44);
-  const actions = header.locator(".studio-autopilot__header-actions--expanded");
-  await expect.poll(() => actions.evaluate(element => getComputedStyle(element).gap)).toBe("0px");
-  const actionBox = (await actions.boundingBox())!;
-  const headerBox = (await header.boundingBox())!;
-  expect(headerBox.x + headerBox.width - actionBox.x - actionBox.width).toBeLessThanOrEqual(5);
-  const commit = header.locator(".studio-autopilot__save-work svg path").first();
-  await expect(commit).toBeVisible();
-  const commitBox = (await commit.boundingBox())!;
-  expect(commitBox.height).toBeGreaterThan(commitBox.width);
+  const roomy = await inline();
+  let previous = roomy;
+  for (let i = 0; i < 40 && previous.length > 0; i += 1) {
+    await separator.press("ArrowLeft");
+    await expect(save).toBeVisible();
+    const current = await inline();
+    // Inline actions are always the highest-priority available ones, in order.
+    expect(priority.filter((id) => current.includes(id))).toEqual(current);
+    expect(current.length).toBeLessThanOrEqual(previous.length);
+    expect(previous.slice(0, current.length)).toEqual(current);
+    if (current.length < previous.length) await expect(header.locator("[data-vibe64-session-actions]")).toBeVisible();
+    previous = current;
+  }
+  expect(previous.length).toBeLessThan(roomy.length);
+  expect(await header.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
   await header.screenshot({ path: testInfo.outputPath("toolbar-crowded.png") });
   await separator.press("End");
-  await expect.poll(async () => Math.round((await temporaryAi.boundingBox())!.width)).toBe(48);
+  await expect.poll(inline).toEqual(roomy);
 });
 
 for (const status of ["required", "failed"]) {

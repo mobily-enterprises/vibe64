@@ -87,8 +87,10 @@
             @click="collapsePreviewToolbar"
           />
 
+          <!-- Client group: the page shown in this browser. -->
           <form
-            v-if="embeddedPreview && previewBrowserControlsVisible"
+            v-if="previewNavVisible"
+            aria-label="Preview page"
             class="vibe64-launch-controls__preview-nav"
             :class="{ 'vibe64-launch-controls__preview-nav--invalid': previewAddressError }"
             :title="previewAddressError || 'Preview URL'"
@@ -160,7 +162,7 @@
             />
             <v-btn
               :aria-label="previewSuspended ? 'Resume preview' : 'Suspend preview'"
-              :icon="previewSuspended ? mdiPlayCircleOutline : mdiPauseCircleOutline"
+              :icon="previewSuspended ? mdiPlay : mdiPause"
               size="small"
               :title="previewSuspended ? 'Resume preview' : 'Suspend preview — unload this page; unsaved page changes may be lost'"
               type="button"
@@ -175,6 +177,17 @@
               type="button"
               variant="text"
               @click.prevent="copyPreviewUrl"
+            />
+            <v-btn
+              v-for="action in launchActions"
+              :key="action.id || action.href"
+              :aria-label="action.label || 'Open in new tab'"
+              :icon="mdiOpenInNew"
+              size="small"
+              :title="action.label || action.href"
+              type="button"
+              variant="text"
+              @click="openAction(action)"
             />
           </form>
           <v-btn
@@ -258,20 +271,24 @@
               </v-card>
             </v-menu>
 
+            <!-- Server group: the app server behind every Preview page. -->
             <div
               v-if="launchToolbarDockVisible"
+              aria-label="Preview server"
               class="vibe64-launch-controls__dock"
+              role="group"
               :title="terminalTitle"
             >
               <span
                 class="vibe64-launch-controls__status-dot"
                 :class="`vibe64-launch-controls__status-dot--${terminalIndicatorState}`"
                 :aria-label="terminalIndicatorLabel"
+                role="img"
                 :title="terminalIndicatorLabel"
               />
 
               <v-btn
-                v-for="action in launchActions"
+                v-for="action in previewNavVisible ? [] : launchActions"
                 :key="action.id || action.href"
                 :icon="mdiOpenInNew"
                 size="small"
@@ -294,7 +311,7 @@
                 v-if="terminalCanStop"
                 aria-label="Stop preview"
                 :disabled="operationBusy"
-                :icon="mdiStop"
+                :icon="mdiStopCircleOutline"
                 size="small"
                 title="Stop preview"
                 variant="text"
@@ -303,8 +320,9 @@
 
               <v-btn
                 v-if="previewToolbarRecoveryVisible"
+                aria-label="Restart preview"
                 :disabled="operationBusy"
-                :icon="mdiRefresh"
+                :icon="mdiRestart"
                 size="small"
                 title="Restart preview"
                 variant="text"
@@ -313,8 +331,9 @@
 
               <v-btn
                 v-if="terminalCanRetry && !previewToolbarRecoveryVisible"
+                aria-label="Retry preview"
                 :disabled="operationBusy"
-                :icon="mdiRefresh"
+                :icon="mdiRestart"
                 size="small"
                 title="Retry"
                 variant="text"
@@ -323,8 +342,9 @@
 
               <v-btn
                 v-if="terminalCanRestart && !previewToolbarRecoveryVisible"
+                aria-label="Restart preview server"
                 :disabled="operationBusy"
-                :icon="mdiPowerCycle"
+                :icon="mdiRestart"
                 size="small"
                 title="Restart"
                 variant="text"
@@ -847,12 +867,13 @@ import {
   mdiDotsHorizontal,
   mdiDownloadOutline,
   mdiOpenInNew,
-  mdiPauseCircleOutline,
+  mdiPause,
+  mdiPlay,
   mdiPlayCircleOutline,
-  mdiPowerCycle,
   mdiRefresh,
+  mdiRestart,
   mdiRoutes,
-  mdiStop,
+  mdiStopCircleOutline,
   mdiWebClock
 } from "@mdi/js";
 import Vibe64LongRunningTerminal from "@/components/studio/Vibe64LongRunningTerminal.vue";
@@ -1083,6 +1104,8 @@ const {
   toolbarTeleportTarget,
   visible
 } = useVibe64OutputControlsSurface(props);
+// The address bar's client group also opens the page in a new tab.
+const previewNavVisible = computed(() => Boolean(props.embeddedPreview && previewBrowserControlsVisible.value));
 
 const resultsButtonVisible = computed(() => Boolean(
   outputResults.value.length > 0 ||
@@ -1367,10 +1390,26 @@ onBeforeUnmount(() => {
   display: none;
 }
 
+/* Address-bar buttons: compact, thin icons, a subtle hover tint only. */
 .vibe64-launch-controls__toolbar :deep(.v-btn--icon.v-btn--size-small) {
-  height: 1.9rem;
-  min-width: 1.9rem;
-  width: 1.9rem;
+  border-radius: 6px;
+  color: rgba(var(--v-theme-on-surface), 0.66);
+  height: 1.75rem;
+  min-width: 1.75rem;
+  width: 1.75rem;
+}
+
+.vibe64-launch-controls__toolbar :deep(.v-btn--icon.v-btn--size-small .v-icon) {
+  font-size: 1.05rem;
+}
+
+.vibe64-launch-controls__toolbar :deep(.v-btn--icon.v-btn--size-small:hover) {
+  color: rgba(var(--v-theme-on-surface), 0.92);
+}
+
+.vibe64-launch-controls__toolbar :deep(.v-btn--icon.v-btn--size-small:focus-visible) {
+  outline: 2px solid rgba(var(--v-theme-primary), 0.6);
+  outline-offset: -2px;
 }
 
 .vibe64-launch-controls--prominent .vibe64-launch-controls__run-button {
@@ -1397,9 +1436,9 @@ onBeforeUnmount(() => {
 
 .vibe64-launch-controls__preview-nav {
   align-items: center;
-  background: rgba(var(--v-theme-primary), 0.08);
-  border: 1px solid rgba(var(--v-theme-primary), 0.16);
-  border-radius: 999px;
+  background: rgba(var(--v-theme-on-surface), 0.045);
+  border: 1px solid rgba(var(--v-theme-outline), 0.16);
+  border-radius: 8px;
   display: flex;
   flex: 1 1 19rem;
   gap: 0.02rem;
@@ -1414,6 +1453,10 @@ onBeforeUnmount(() => {
   max-width: clamp(12rem, 24vw, 20rem);
   /* Never narrower than its buttons and the shortest address. */
   min-width: auto;
+}
+
+.vibe64-launch-controls__preview-nav:focus-within {
+  border-color: rgba(var(--v-theme-primary), 0.42);
 }
 
 .vibe64-launch-controls__preview-nav--invalid {
@@ -1439,10 +1482,18 @@ onBeforeUnmount(() => {
   color: rgba(var(--v-theme-on-surface), 0.95);
 }
 
+/* The server group is its own outlined segment, apart from the page's address field. */
 .vibe64-launch-controls__dock {
   align-items: center;
+  background: rgb(var(--v-theme-surface));
+  border: 1px solid rgba(var(--v-theme-outline), 0.3);
+  border-radius: 8px;
   display: flex;
-  gap: 0.04rem;
+  flex: 0 0 auto;
+  gap: 0.02rem;
+  margin-inline-start: 0.3rem;
+  min-height: 2.05rem;
+  padding: 0 0.1rem 0 0.15rem;
 }
 
 .vibe64-launch-controls__status-dot {
@@ -1450,11 +1501,11 @@ onBeforeUnmount(() => {
   contain: paint;
   display: inline-block;
   flex: 0 0 auto;
-  height: 0.55rem;
-  margin: 0 0.35rem;
+  height: 0.45rem;
+  margin: 0 0.3rem;
   transform: translateZ(0);
   will-change: opacity, transform;
-  width: 0.55rem;
+  width: 0.45rem;
 }
 
 .vibe64-launch-controls__mobile-collapsed {
@@ -1496,23 +1547,23 @@ onBeforeUnmount(() => {
 
 .vibe64-launch-controls__status-dot--stopped {
   background: rgba(var(--v-theme-on-surface), 0.38);
-  box-shadow: 0 0 0 0.2rem rgba(var(--v-theme-on-surface), 0.08);
+  box-shadow: 0 0 0 0.16rem rgba(var(--v-theme-on-surface), 0.08);
 }
 
 .vibe64-launch-controls__status-dot--starting {
   animation: vibe64-launch-status-pulse 0.9s ease-in-out infinite;
   background: rgb(var(--v-theme-error));
-  box-shadow: 0 0 0 0.2rem rgba(var(--v-theme-error), 0.14);
+  box-shadow: 0 0 0 0.16rem rgba(var(--v-theme-error), 0.14);
 }
 
 .vibe64-launch-controls__status-dot--running {
   background: rgb(var(--v-theme-success));
-  box-shadow: 0 0 0 0.2rem rgba(var(--v-theme-success), 0.16);
+  box-shadow: 0 0 0 0.16rem rgba(var(--v-theme-success), 0.16);
 }
 
 .vibe64-launch-controls__status-dot--failed {
   background: rgb(var(--v-theme-error));
-  box-shadow: 0 0 0 0.2rem rgba(var(--v-theme-error), 0.14);
+  box-shadow: 0 0 0 0.16rem rgba(var(--v-theme-error), 0.14);
 }
 
 .vibe64-launch-controls__menu {

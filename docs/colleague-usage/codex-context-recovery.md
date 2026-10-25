@@ -62,8 +62,9 @@ check the current chat mode control for the assistant that will receive **Send**
 Changing the selection does not send a message.
 
 If an already-created conversation reports that it is stored in a **separate
-provider home**, retrying the message cannot repair its storage. Open **Session
-actions → Renew session** and follow the reviewed handover flow. Save or discard
+provider home**, retrying the message cannot repair its storage. Select **Renew
+session** in the session header (or in **Session actions** when the header is
+narrow) and follow the reviewed handover flow. Save or discard
 source changes first. Renewal keeps the old session until the handover reaches
 the new conversation. Do not delete the guest or its account connections to fix
 this error. Colleague can explain these steps and offer to prepare a renewal;

@@ -73,11 +73,15 @@ instead; no chat, Preview or other session work starts for the unknown
 session. Switching projects always starts the next project from its own
 sessions, never the previous project's.
 
-The right-side session actions tighten their spacing and icon size in narrower
-chat panes to leave more room for labels. Wider panes retain their usual spacing;
-the smallest panes keep secondary actions in **Session actions**. Update uses a
-vertical line through a circle, distinct from the branching pull-request icon.
-Hover or focus a control to read its action label.
+The session header gives its room to session names first, then **Save**, which
+never leaves the header. The other actions follow in priority order: **Temporary
+AI**, **Renew session**, **Pin session**, **Pull request** and **Prepare
+workspace**. When the pane is too narrow, the lowest-priority action moves into
+**Session actions** (three dots) first, so Prepare workspace goes first and
+Temporary AI last; widening the pane brings them back. All header actions use
+small, light outline icons. Update uses a vertical line through a circle,
+distinct from the branching pull-request icon. Hover or focus a control to read
+its action label.
 
 During a session **Save** or **Update**, you can still open existing temporary
 chats, read their saved history and keep a plain text draft. The draft's save
@@ -244,8 +248,9 @@ Start such a lesson from Learning → **Courses** (see
 
 ## Pin a source session
 
-Select the source session, then choose **Pin session as project source** beside
-Save. Its pin icon becomes filled. One session per project can be pinned.
+Select the source session, then choose **Pin session as project source** in the
+session header, or **Pin session** in **Session actions** when the header is
+narrow. Its pin icon becomes filled. One session per project can be pinned.
 Pinning and unpinning work while the assistant is busy or reconnecting; they do
 not require an AI connection. Archive or renewal already in progress still blocks pinning.
 You can still browse and work in other session tabs; the server-selected source

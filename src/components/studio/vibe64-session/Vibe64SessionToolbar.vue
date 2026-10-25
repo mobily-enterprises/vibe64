@@ -504,7 +504,7 @@ const visibleSessions = computed(() => {
 }
 
 .studio-ai-sessions__repository-state {
-  color: rgba(var(--v-theme-on-surface), 0.52);
+  color: rgba(var(--v-theme-on-surface), 0.4);
   flex: 0 0 auto;
   margin-inline-start: 0.42rem;
 }
@@ -622,59 +622,65 @@ const visibleSessions = computed(() => {
   min-height: 2rem;
 }
 
+/* Compact chips size to their names; the session header gives names its
+   room before any action, so ellipsis is only the last resort. */
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab {
-  flex: 1 1 0;
-  font-size: 0.92rem;
-  height: 2rem;
+  flex: 0 1 auto;
+  font-size: 0.86rem;
+  height: 1.75rem;
   letter-spacing: 0;
-  max-width: 12.5rem;
-  min-height: 2rem;
-  min-width: 0;
+  max-width: 15rem;
+  min-height: 1.75rem;
+  min-width: 3.5rem;
 }
 
-/* Equal-width compact chips: the chip surface fills its share of the row
-   instead of floating inside it. */
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab :deep(.v-chip__content) {
   flex: 1 1 auto;
   width: 100%;
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab-main {
-  padding-inline: 0.5rem 0.25rem;
-}
-
-.studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab--active {
-  flex-basis: 1.7rem;
+  padding-inline: 0.45rem 0.4rem;
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab--active .studio-ai-sessions__tab-main {
-  padding-inline-end: 0.28rem;
+  padding-inline-end: 0.18rem;
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab-close-slot {
-  padding-inline: 0.08rem 0.22rem;
+  padding-inline: 0 0.14rem;
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__status-dot {
-  height: 0.58rem;
-  margin-right: 0.25rem;
-  width: 0.58rem;
+  height: 0.38rem;
+  margin-right: 0.3rem;
+  width: 0.38rem;
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__repository-state {
-  margin-inline-start: 0.25rem;
+  font-size: 12px;
+  height: 12px;
+  margin-inline-start: 0.22rem;
+  width: 12px;
+}
+
+.studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab-info {
+  height: 1.25rem;
+  width: 1.25rem;
+}
+
+.studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab-info :deep(.v-icon),
+.studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab-archive :deep(.v-icon) {
+  font-size: 0.82rem;
 }
 
 .studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab-archive {
-  flex-basis: 1.42rem;
-  height: 1.42rem !important;
-  min-height: 1.42rem;
-  min-width: 1.42rem;
-  width: 1.42rem !important;
-}
-
-.studio-ai-sessions__toolbar--compact .studio-ai-sessions__tab-archive :deep(.v-icon) {
-  font-size: 1rem;
+  flex-basis: 1.2rem;
+  height: 1.2rem !important;
+  min-height: 1.2rem;
+  min-width: 1.2rem;
+  opacity: 0.7;
+  width: 1.2rem !important;
 }
 
 @media (max-width: 640px) {

@@ -24,7 +24,7 @@
       aria-label="Session chat"
       tabindex="-1"
     >
-      <header class="studio-autopilot__session-header">
+      <header ref="sessionHeader" class="studio-autopilot__session-header">
         <Vibe64SessionToolbar
           v-if="sessionToolbarVisible"
           :active="props.active"
@@ -51,24 +51,24 @@
               v-bind="checkingProps"
               :aria-busy="saveWorkSending || saveWorkChecking ? 'true' : undefined"
               :aria-label="saveWorkChecking ? 'Checking repository status' : saveWorkCheckAvailable ? 'Check for updates' : saveWorkHeaderAriaLabel"
-              class="studio-autopilot__save-work"
+              class="studio-autopilot__save-work studio-autopilot__header-fixed"
               :class="{ 'studio-autopilot__save-work--check': saveWorkCheckAvailable }"
               data-vibe64-guide="save"
               :color="saveWorkRequiresUpdate ? 'warning' : (saveWorkUnsaved ? 'error' : undefined)"
               :disabled="saveWorkChecking || (saveWorkDisabled && !saveWorkCheckAvailable) || temporaryAiWorkspace?.updateRepairTask?.busy"
-              height="var(--session-action-size, 48px)"
+              height="var(--session-action-size, 36px)"
               icon
               :title="saveWorkHeaderHint"
               type="button"
-              variant="tonal"
-              width="var(--session-action-size, 48px)"
+              variant="text"
+              width="var(--session-action-size, 36px)"
               @click="requestSessionSaveWork"
             >
               <v-icon v-if="saveConnectedFirst" :icon="mdiSourceBranch" />
               <v-icon v-else-if="saveWorkRequiresUpdate" :icon="mdiSourceCommit" />
               <span v-else-if="props.workState?.destination?.mode === 'github'" class="studio-autopilot__save-symbol" aria-hidden="true">
-                <v-icon :icon="mdiContentSaveOutline" size="26" class="studio-autopilot__save-symbol-disk" />
-                <v-icon :icon="mdiSourceCommit" size="24" class="studio-autopilot__save-symbol-commit" />
+                <v-icon :icon="mdiContentSaveOutline" size="18" class="studio-autopilot__save-symbol-disk" />
+                <v-icon :icon="mdiSourceCommit" size="16" class="studio-autopilot__save-symbol-commit" />
               </span>
               <v-icon v-else :icon="mdiContentSaveOutline" />
             </v-btn>
@@ -77,7 +77,7 @@
         </v-tooltip>
         <v-chip
           v-if="mainChatApprovals.isOwner && mainChatApprovals.waitingCount"
-          class="studio-autopilot__approvals-chip"
+          class="studio-autopilot__approvals-chip studio-autopilot__header-fixed"
           color="secondary"
           variant="tonal"
           size="small"
@@ -87,42 +87,151 @@
         >
           {{ mainChatApprovals.waitingCount }} waiting
         </v-chip>
-        <Vibe64SessionPin
-          v-if="props.session?.sourceReady && !props.sessionSelectionArchived"
-          :key="`${readRefOrGetterValue(props.sessionsApiPath)}:${sessionId}`"
-          :session="props.session"
-          :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
-          :refresh="props.refreshSessionData"
-        />
-        <div class="studio-autopilot__header-actions studio-autopilot__header-actions--compact">
+        <!-- After Save, actions keep the header in priority order; the lowest move into Session actions first. -->
+        <div class="studio-autopilot__header-actions">
+          <v-badge
+            v-if="headerActions.inline.includes('temporary-ai')"
+            color="primary" dot :model-value="temporaryAiHasUnreadMessages" offset-x="4" offset-y="4"
+          >
+            <v-btn
+              :aria-label="temporaryAiHasUnreadMessages ? 'Open temporary AI: unread messages' : 'Open temporary AI'"
+              class="studio-autopilot__header-action"
+              data-vibe64-temporary-ai-action
+              data-vibe64-header-action="temporary-ai"
+              :disabled="!sessionId || props.sessionSelectionArchived"
+              height="var(--session-action-size, 36px)"
+              :icon="mdiIncognito"
+              :title="temporaryAiHasUnreadMessages ? 'New messages in Temporary AI' : 'Open a temporary AI conversation'"
+              type="button"
+              variant="text"
+              width="var(--session-action-size, 36px)"
+              @click="openTemporaryAi"
+            />
+          </v-badge>
+          <v-badge
+            v-if="headerActions.inline.includes('renew')"
+            :color="sessionRenewalActionPresentation.color || 'primary'"
+            dot
+            :model-value="sessionRenewalActionPresentation.attention === true"
+            offset-x="4"
+            offset-y="4"
+          >
+            <v-btn
+              :aria-label="sessionRenewalActionPresentation.label"
+              class="studio-autopilot__header-action"
+              data-vibe64-session-renew-action
+              data-vibe64-header-action="renew"
+              height="var(--session-action-size, 36px)"
+              :icon="mdiAutorenew"
+              :title="sessionRenewalActionPresentation.reason"
+              type="button"
+              variant="text"
+              width="var(--session-action-size, 36px)"
+              @click="requestSessionRenewal($event.currentTarget)"
+            />
+          </v-badge>
+          <Vibe64SessionPin
+            v-if="headerActions.inline.includes('pin')"
+            data-vibe64-header-action="pin"
+            :key="`${readRefOrGetterValue(props.sessionsApiPath)}:${sessionId}`"
+            :session="props.session"
+            :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
+            :refresh="props.refreshSessionData"
+          />
+          <v-btn
+            v-if="headerActions.inline.includes('pull-request')"
+            data-vibe64-header-action="pull-request"
+            class="studio-autopilot__header-action"
+            :icon="mdiSourcePull" height="var(--session-action-size, 36px)" width="var(--session-action-size, 36px)" variant="text"
+            :aria-label="sessionPullRequest?.number ? 'View pull request' : 'Create pull request'"
+            :title="sessionPullRequest?.number ? `View pull request #${sessionPullRequest.number}` : 'Create pull request'"
+            :to="sessionPullRequestTarget" :disabled="!sessionPullRequest?.number && sourceOperationsSuspended"
+            @click="!sessionPullRequest?.number && (createPullRequestOpen = true)"
+          />
+          <v-btn
+            v-if="headerActions.inline.includes('prepare-workspace')"
+            aria-label="Prepare workspace"
+            class="studio-autopilot__header-action"
+            data-vibe64-prepare-workspace
+            data-vibe64-header-action="prepare-workspace"
+            :disabled="workspaceSetupRetryDisabled"
+            height="var(--session-action-size, 36px)"
+            :icon="mdiWrenchOutline"
+            title="Prepare workspace: run all declared setup steps again"
+            type="button"
+            variant="text"
+            width="var(--session-action-size, 36px)"
+            @click="retryWorkspaceSetup"
+          />
           <v-menu
+            v-if="sessionActionsMenuVisible"
             location="bottom end"
           >
             <template #activator="{ props: menuProps }">
               <v-badge
                 :color="(sessionRenewalActionPresentation.attention && sessionRenewalActionPresentation.color) || 'primary'"
                 dot
-                :model-value="sessionRenewalActionPresentation.attention === true || temporaryAiHasUnreadMessages"
-                offset-x="5"
-                offset-y="5"
+                :model-value="sessionActionsAttention"
+                offset-x="4"
+                offset-y="4"
               >
                 <v-btn
                   ref="sessionActionsTrigger"
                   v-bind="menuProps"
                   :aria-label="sessionActionsLabel"
+                  class="studio-autopilot__header-action"
                   data-vibe64-session-actions
-                  height="48"
+                  height="var(--session-action-size, 36px)"
                   :icon="mdiDotsVertical"
                   title="Session actions"
                   type="button"
                   variant="text"
-                  width="48"
+                  width="var(--session-action-size, 36px)"
                 />
               </v-badge>
             </template>
             <v-list aria-label="Session actions" density="compact" min-width="17rem">
               <v-list-item
-                v-if="workspaceSetupActionVisible"
+                v-if="headerActions.overflow.includes('temporary-ai')"
+                class="studio-autopilot__session-action-item"
+                data-vibe64-temporary-ai-action
+                :disabled="!sessionId || props.sessionSelectionArchived"
+                :subtitle="temporaryAiHasUnreadMessages ? 'New messages in Temporary AI' : 'Open a separate short-lived conversation'"
+                title="Temporary AI"
+                @click="openTemporaryAi"
+              >
+                <template #prepend>
+                  <v-badge color="primary" dot :model-value="temporaryAiHasUnreadMessages">
+                    <v-icon :icon="mdiIncognito" />
+                  </v-badge>
+                </template>
+              </v-list-item>
+              <v-list-item
+                v-if="headerActions.overflow.includes('renew')"
+                class="studio-autopilot__session-action-item"
+                data-vibe64-session-renew-action
+                :prepend-icon="mdiAutorenew"
+                :subtitle="sessionRenewalActionPresentation.reason"
+                :title="sessionRenewalActionPresentation.label"
+                @click="requestSessionRenewal(sessionActionsTrigger)"
+              />
+              <Vibe64SessionPin
+                v-if="headerActions.overflow.includes('pin')"
+                :key="`${readRefOrGetterValue(props.sessionsApiPath)}:${sessionId}:menu`"
+                list-item
+                :session="props.session"
+                :sessions-api-path="readRefOrGetterValue(props.sessionsApiPath)"
+                :refresh="props.refreshSessionData"
+              />
+              <v-list-item
+                v-if="headerActions.overflow.includes('pull-request')" min-height="48"
+                :prepend-icon="mdiSourcePull" :title="sessionPullRequest?.number ? 'View pull request' : 'Create pull request'"
+                :subtitle="sessionPullRequest?.number ? `PR #${sessionPullRequest.number}` : 'Propose this work for merging'"
+                :to="sessionPullRequestTarget" :disabled="!sessionPullRequest?.number && sourceOperationsSuspended"
+                @click="!sessionPullRequest?.number && (createPullRequestOpen = true)"
+              />
+              <v-list-item
+                v-if="headerActions.overflow.includes('prepare-workspace')"
                 data-vibe64-prepare-workspace
                 min-height="48"
                 :disabled="workspaceSetupRetryDisabled"
@@ -141,94 +250,8 @@
                 title="Update connected repositories"
                 @click="retryWorkspaceSetup"
               />
-              <v-list-item
-                v-if="githubProject" min-height="48"
-                :prepend-icon="mdiSourcePull" :title="sessionPullRequest?.number ? 'View pull request' : 'Create pull request'"
-                :subtitle="sessionPullRequest?.number ? `PR #${sessionPullRequest.number}` : 'Propose this work for merging'"
-                :to="sessionPullRequestTarget" :disabled="!sessionPullRequest?.number && sourceOperationsSuspended"
-                @click="!sessionPullRequest?.number && (createPullRequestOpen = true)"
-              />
-              <v-list-item
-                v-if="props.sessionRenewal?.visible"
-                class="studio-autopilot__session-action-item"
-                data-vibe64-session-renew-action
-                :prepend-icon="mdiAutorenew"
-                :subtitle="sessionRenewalActionPresentation.reason"
-                :title="sessionRenewalActionPresentation.label"
-                @click="requestSessionRenewal(sessionActionsTrigger)"
-              />
-              <v-list-item
-                class="studio-autopilot__session-action-item"
-                data-vibe64-temporary-ai-action
-                :disabled="!sessionId || props.sessionSelectionArchived"
-                :subtitle="temporaryAiHasUnreadMessages ? 'New messages in Temporary AI' : 'Open a separate short-lived conversation'"
-                title="Temporary AI"
-                @click="openTemporaryAi"
-              >
-                <template #prepend>
-                  <v-badge color="primary" dot :model-value="temporaryAiHasUnreadMessages">
-                    <v-icon :icon="mdiIncognito" />
-                  </v-badge>
-                </template>
-              </v-list-item>
             </v-list>
           </v-menu>
-        </div>
-        <div class="studio-autopilot__header-actions studio-autopilot__header-actions--expanded">
-          <v-btn
-            v-if="workspaceSetupActionVisible"
-            aria-label="Prepare workspace"
-            data-vibe64-prepare-workspace
-            :disabled="workspaceSetupRetryDisabled"
-            height="var(--session-action-size, 48px)"
-            :icon="mdiWrenchOutline"
-            title="Prepare workspace: run all declared setup steps again"
-            type="button"
-            variant="text"
-            width="var(--session-action-size, 48px)"
-            @click="retryWorkspaceSetup"
-          />
-          <v-btn
-            v-if="githubProject" :icon="mdiSourcePull" height="var(--session-action-size, 48px)" width="var(--session-action-size, 48px)" variant="text"
-            :aria-label="sessionPullRequest?.number ? 'View pull request' : 'Create pull request'"
-            :title="sessionPullRequest?.number ? `View pull request #${sessionPullRequest.number}` : 'Create pull request'"
-            :to="sessionPullRequestTarget" :disabled="!sessionPullRequest?.number && sourceOperationsSuspended"
-            @click="!sessionPullRequest?.number && (createPullRequestOpen = true)"
-          />
-          <v-badge
-            v-if="props.sessionRenewal?.visible"
-            :color="sessionRenewalActionPresentation.color || 'primary'"
-            dot
-            :model-value="sessionRenewalActionPresentation.attention === true"
-            offset-x="5"
-            offset-y="5"
-          >
-            <v-btn
-              :aria-label="sessionRenewalActionPresentation.label"
-              :color="sessionRenewalActionPresentation.color"
-              data-vibe64-session-renew-action
-              height="var(--session-action-size, 48px)"
-              :icon="mdiAutorenew"
-              :title="sessionRenewalActionPresentation.reason"
-              type="button"
-              variant="text"
-              width="var(--session-action-size, 48px)"
-              @click="requestSessionRenewal($event.currentTarget)"
-            />
-          </v-badge>
-          <v-badge color="primary" dot :model-value="temporaryAiHasUnreadMessages" offset-x="5" offset-y="5">
-            <v-btn
-              :aria-label="temporaryAiHasUnreadMessages ? 'Open temporary AI: unread messages' : 'Open temporary AI'"
-              :disabled="!sessionId || props.sessionSelectionArchived"
-              height="var(--session-action-size, 48px)"
-              :icon="mdiIncognito"
-              :title="temporaryAiHasUnreadMessages ? 'New messages in Temporary AI' : 'Open a temporary AI conversation'"
-              type="button"
-              variant="text"
-              width="var(--session-action-size, 48px)"
-              @click="openTemporaryAi"
-            />
-          </v-badge>
         </div>
       </header>
 
@@ -1036,6 +1059,7 @@ import {
   mdiSend,
 } from "@mdi/js";
 import { vibe64SessionPullRequest } from "@/lib/vibe64SessionViewModel.js";
+import { splitVibe64SessionHeaderActions } from "@/lib/vibe64SessionToolbarVisibility.js";
 import Vibe64CreatePullRequestDialog from "@/components/studio/vibe64-session/Vibe64CreatePullRequestDialog.vue";
 import GitStandInIdentityNotice from "@/components/studio/repository/GitStandInIdentityNotice.vue";
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
@@ -1148,10 +1172,56 @@ const sessionActionsTrigger = ref(null);
 const temporaryAiWorkspace = ref(null);
 const workPlanViewer = ref(null);
 const temporaryAiHasUnreadMessages = computed(() => temporaryAiWorkspace.value?.hasUnreadMessages === true);
+// Session names get the header's room first, then Save, then these actions in
+// priority order; whatever does not fit moves into Session actions.
+const sessionHeader = ref(null);
+const headerActionRoom = ref(Infinity);
+const SESSION_NAME_MAX_WIDTH = 240; // the compact chip's max-width
+function measureHeaderActionRoom() {
+  const header = sessionHeader.value;
+  if (!header) return;
+  const style = getComputedStyle(header);
+  const names = [...header.querySelectorAll(".studio-ai-sessions__tab")].reduce((total, chip) => {
+    const label = chip.querySelector(".studio-ai-sessions__tab-label");
+    const natural = chip.offsetWidth - (label?.clientWidth || 0) + (label?.scrollWidth || 0);
+    return total + Math.min(natural, SESSION_NAME_MAX_WIDTH) + 6;
+  }, 0);
+  const fixed = [...header.querySelectorAll(".studio-autopilot__header-fixed")]
+    .reduce((total, element) => total + element.offsetWidth + 2, 0);
+  const actionSize = (parseFloat(style.getPropertyValue("--session-action-size")) || 36) + 2;
+  const room = header.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - names - fixed - 8;
+  headerActionRoom.value = Math.floor(room / actionSize);
+}
+watch(sessionHeader, (header, _previous, onCleanup) => {
+  if (!header || typeof ResizeObserver === "undefined") return;
+  const observer = new ResizeObserver(() => measureHeaderActionRoom());
+  observer.observe(header);
+  const toolbar = header.querySelector(".studio-ai-sessions__tabs");
+  if (toolbar) observer.observe(toolbar);
+  onCleanup(() => observer.disconnect());
+});
+const headerActionsAvailable = computed(() => [
+  "temporary-ai",
+  props.sessionRenewal?.visible && "renew",
+  props.session?.sourceReady && !props.sessionSelectionArchived && "pin",
+  githubProject.value && "pull-request",
+  workspaceSetupActionVisible.value && "prepare-workspace"
+].filter(Boolean));
+const headerActions = computed(() => {
+  const available = headerActionsAvailable.value;
+  const room = headerActionRoom.value;
+  // Everything fits without the menu, or one slot goes to Session actions.
+  const slots = room >= available.length && !connectedUpdateActionVisible.value ? room : room - 1;
+  return splitVibe64SessionHeaderActions(available, slots);
+});
+const sessionActionsMenuVisible = computed(() => headerActions.value.overflow.length > 0 || connectedUpdateActionVisible.value);
+const sessionActionsAttention = computed(() =>
+  (headerActions.value.overflow.includes("renew") && sessionRenewalActionPresentation.value.attention === true) ||
+  (headerActions.value.overflow.includes("temporary-ai") && temporaryAiHasUnreadMessages.value));
 const sessionActionsLabel = computed(() => [
   "Session actions",
-  sessionRenewalActionPresentation.value.attention ? sessionRenewalActionPresentation.value.label : "",
-  temporaryAiHasUnreadMessages.value ? "Unread temporary AI messages" : ""
+  headerActions.value.overflow.includes("renew") && sessionRenewalActionPresentation.value.attention ? sessionRenewalActionPresentation.value.label : "",
+  headerActions.value.overflow.includes("temporary-ai") && temporaryAiHasUnreadMessages.value ? "Unread temporary AI messages" : ""
 ].filter(Boolean).join(": "));
 const workspaceRecoveryTaskId = ref("");
 const thinkingStatusId = `studio-autopilot-thinking-${useId()}`;
@@ -1861,6 +1931,13 @@ onBeforeUnmount(() => {
   }
 });
 
+// Session names, Save and the available actions change the header's room.
+watch(() => [
+  (props.sessionToolbar?.sessions || []).map((session) => session?.sessionName || session?.sessionId).join("\n"),
+  headerActionsAvailable.value.join(),
+  saveWorkHeaderVisible.value,
+  mainChatApprovals.waitingCount
+].join("|"), () => nextTick(measureHeaderActionRoom));
 </script>
 
 <style scoped>
@@ -1976,38 +2053,42 @@ onBeforeUnmount(() => {
 
 .studio-autopilot__header-actions {
   flex: 0 0 auto;
+  gap: 0.125rem;
   margin-inline-start: auto;
 }
 
-.studio-autopilot__header-actions--compact {
-  display: none;
+/* Light, compact address-bar style: thin icons, no filled discs. */
+.studio-autopilot__header-action,
+.studio-autopilot__save-work {
+  border-radius: 8px;
+  color: rgba(var(--v-theme-on-surface), 0.66);
 }
 
-@container studio-chat-pane (min-width: 32.01rem) and (max-width: 40rem) {
+.studio-autopilot__header-action :deep(.v-icon),
+.studio-autopilot__save-work :deep(.v-btn__content > .v-icon) {
+  font-size: 18px;
+  height: 18px;
+  width: 18px;
+}
+
+.studio-autopilot__header-action:hover,
+.studio-autopilot__save-work:hover {
+  color: rgba(var(--v-theme-on-surface), 0.9);
+}
+
+.studio-autopilot__save-work.text-error,
+.studio-autopilot__save-work.text-warning {
+  background: color-mix(in srgb, currentColor 9%, transparent);
+}
+
+.studio-autopilot__header-action :deep(.v-btn__overlay),
+.studio-autopilot__save-work :deep(.v-btn__overlay) {
+  border-radius: inherit;
+}
+
+@media (pointer: coarse) {
   .studio-autopilot__session-header {
     --session-action-size: 44px;
-  }
-  .studio-autopilot__header-actions {
-    gap: 0;
-  }
-  .studio-autopilot__header-actions :deep(.v-icon),
-  .studio-autopilot__save-work :deep(.v-btn__content > .v-icon) {
-    font-size: 20px;
-    height: 20px;
-    width: 20px;
-  }
-  .studio-autopilot__save-symbol {
-    transform: scale(0.85);
-  }
-}
-
-@container studio-chat-pane (max-width: 32rem) {
-  .studio-autopilot__header-actions--compact {
-    display: flex;
-  }
-
-  .studio-autopilot__header-actions--expanded {
-    display: none;
   }
 }
 
@@ -2187,8 +2268,8 @@ onBeforeUnmount(() => {
 
 .studio-autopilot__save-symbol {
   position: relative;
-  width: 34px;
-  height: 32px;
+  width: 24px;
+  height: 22px;
 }
 
 .studio-autopilot__save-symbol-disk,
