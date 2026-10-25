@@ -28,6 +28,11 @@ function createSessionReleaseWriter({ project, sourceEditor, today = () => new D
     }
     const current = await sourceEditor.readFile({ sessionId, path: file.path, vibe64User: user || undefined });
     if (current?.ok === false) throw writerError(current.error || `Could not read ${file.path}.`);
+    // The change was built from the text read when it was prepared; an edit
+    // since then is never overwritten with it.
+    if (current.file.text !== file.before) {
+      throw writerError(`${file.path} changed after the release was prepared. Prepare it again.`, "VIBE64_PUBLISH_PREPARE_STALE");
+    }
     const saved = await sourceEditor.saveFile({ sessionId, path: file.path, text: file.after, baseHash: current.file.hash, vibe64User: user || undefined });
     if (saved?.ok === false) throw writerError(saved.error || `Could not change ${file.path}.`);
   }
