@@ -40,7 +40,13 @@ function createSourceEditorSearchIndex() {
       allowedRoots: [context.sourceRoot],
       command: "node",
       args: [require.resolve("@local/vibe64-source-editor/server/search-index-worker")],
-      input: JSON.stringify({ ...input, operation, directory: sourceEditorIndexDirectory(context), sourceRoot: context.sourceRoot }),
+      input: JSON.stringify({
+        ...input,
+        operation,
+        directory: sourceEditorIndexDirectory(context),
+        policy: { exclude: context.policy.exclude, protectSourceContract: context.policy.protectSourceContract },
+        sourceRoot: context.sourceRoot
+      }),
       cwd: context.sourceRoot,
       execution: { label: operation === "refresh" ? "Index session files" : "Search session files", sessionId: context.sessionId },
       mode: "capture",

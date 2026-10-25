@@ -5,7 +5,7 @@ import path from "node:path";
 import { isMissingPathError, normalizeText, pathInsideOrEqual, vibe64Error } from "@local/vibe64-core/server/core";
 import { vibe64ErrorResponse } from "@local/vibe64-core/server/serverResponses";
 import { runVibe64Command } from "@local/vibe64-execution/server";
-import { sourceEditorSourceContractPathExcluded } from "./filePolicy.js";
+import { normalizePolicyPath, sourceEditorPathExcluded } from "./filePolicy.js";
 import { VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT, VIBE64_SOURCE_EDITOR_SYNC_ERROR_EVENT, VIBE64_SOURCE_EDITOR_SYNC_READY_EVENT } from "@local/vibe64-core/server/sourceEditorRealtimeEvents";
 
 // Session source files: path policy, tree, file matching, search, resolution
@@ -177,13 +177,10 @@ function sourceEditorErrorResponse(error) {
 
 function publicSourceEditorPolicy(policy = {}) {
   return {
-    defaultOpenFiles: Array.isArray(policy.defaultOpenFiles) ? policy.defaultOpenFiles : [],
     exclude: Array.isArray(policy.exclude) ? policy.exclude : [],
     maxFileBytes: policy.maxFileBytes,
     maxTreeDepth: policy.maxTreeDepth,
-    maxTreeEntries: policy.maxTreeEntries,
-    preexpandedDirectories: Array.isArray(policy.preexpandedDirectories) ? policy.preexpandedDirectories : [],
-    preloadDirectories: Array.isArray(policy.preloadDirectories) ? policy.preloadDirectories : []
+    maxTreeEntries: policy.maxTreeEntries
   };
 }
 
@@ -226,66 +223,6 @@ async function sourceEditorPathStats(sourceRoot = "", relativePath = "") {
   return stats;
 }
 
-function normalizeSourceEditorPolicyPath(value = "") {
-  return normalizeText(value)
-    .replaceAll("\\", "/")
-    .replace(/^\.\/+/u, "")
-    .replace(/\/+$/u, "");
-}
-
-function wildcardPattern(pattern = "") {
-  let source = "^";
-  const text = String(pattern || "");
-  for (let index = 0; index < text.length; index += 1) {
-    const character = text[index];
-    if (character === "*") {
-      if (text[index + 1] === "*") {
-        source += ".*";
-        index += 1;
-      } else {
-        source += "[^/]*";
-      }
-      continue;
-    }
-    source += character.replace(/[\\^$+?.()|{}[\]]/gu, "\\$&");
-  }
-  source += "$";
-  return new RegExp(source, "u");
-}
-
-function pathMatchesPolicyPattern(relativePath = "", pattern = "") {
-  const normalizedPath = normalizeSourceEditorPolicyPath(relativePath);
-  const normalizedPattern = normalizeSourceEditorPolicyPath(pattern);
-  if (!normalizedPath || !normalizedPattern) {
-    return false;
-  }
-  if (!normalizedPattern.includes("/") && !normalizedPattern.includes("*")) {
-    return normalizedPath.split("/").includes(normalizedPattern);
-  }
-  if (!normalizedPattern.includes("/") && normalizedPattern.includes("*")) {
-    const segmentPattern = wildcardPattern(normalizedPattern);
-    return normalizedPath.split("/").some((segment) => segmentPattern.test(segment));
-  }
-  const subtreePattern = normalizedPattern.endsWith("/**")
-    ? normalizedPattern.slice(0, -3)
-    : normalizedPattern;
-  if (
-    !subtreePattern.includes("*") &&
-    (normalizedPath === subtreePattern || normalizedPath.startsWith(`${subtreePattern}/`))
-  ) {
-    return true;
-  }
-  return wildcardPattern(normalizedPattern).test(normalizedPath);
-}
-
-function sourceEditorPathExcluded(policy = {}, relativePath = "") {
-  if (policy.protectSourceContract !== false && sourceEditorSourceContractPathExcluded(relativePath)) {
-    return true;
-  }
-  return (Array.isArray(policy.exclude) ? policy.exclude : [])
-    .some((pattern) => pathMatchesPolicyPattern(relativePath, pattern));
-}
-
 function normalizeSourceEditorQuery(value = "") {
   return normalizeText(value).slice(0, SOURCE_EDITOR_QUERY_MAX_LENGTH);
 }
@@ -314,7 +251,7 @@ function sourceEditorPolicyExcludeGlobs(policy = {}) {
   const globs = [];
   const seen = new Set();
   function add(pattern = "") {
-    const normalized = normalizeSourceEditorPolicyPath(pattern);
+    const normalized = normalizePolicyPath(pattern);
     if (!normalized || seen.has(normalized)) {
       return;
     }
@@ -323,7 +260,7 @@ function sourceEditorPolicyExcludeGlobs(policy = {}) {
   }
 
   for (const pattern of Array.isArray(policy.exclude) ? policy.exclude : []) {
-    const normalized = normalizeSourceEditorPolicyPath(pattern);
+    const normalized = normalizePolicyPath(pattern);
     if (!normalized) {
       continue;
     }
@@ -347,10 +284,6 @@ function sourceEditorRipgrepBaseArgs(policy = {}) {
     "path",
     ...sourceEditorPolicyExcludeGlobs(policy)
   ];
-}
-
-function normalizeRipgrepPath(value = "") {
-  return normalizeSourceEditorPolicyPath(value);
 }
 
 function orderedTokenIndexes(text = "", tokens = []) {
@@ -507,7 +440,7 @@ async function sourceEditorFilePaths(context = {}) {
   ], {
     cwd: context.sourceRoot,
     onLine(line = "") {
-      const relativePath = normalizeRipgrepPath(line);
+      const relativePath = normalizePolicyPath(line);
       if (
         !relativePath ||
         sourceEditorPathExcluded(context.policy, relativePath)
@@ -859,7 +792,7 @@ function normalizeNewSourceEditorFilePath(value = "") {
 }
 
 async function ensureSourceEditorParentDirectory(context = {}, parentRelativePath = "") {
-  const parentPath = normalizeSourceEditorPolicyPath(parentRelativePath);
+  const parentPath = normalizePolicyPath(parentRelativePath);
   if (parentPath && sourceEditorPathExcluded(context.policy, parentPath)) {
     throw sourceEditorError("The selected directory is excluded from source editing.", "vibe64_source_editor_directory_excluded", {
       path: parentPath
@@ -897,16 +830,10 @@ async function ensureSourceEditorParentDirectory(context = {}, parentRelativePat
 }
 
 async function createSourceEditorFile(context = {}, input = {}) {
-  const text = String(input.text ?? "");
-  const buffer = Buffer.from(text, "utf8");
-  if (buffer.byteLength > context.policy.maxFileBytes) {
-    throw sourceEditorError("The new file is too large for the source editor.", "vibe64_source_editor_file_too_large", {}, 413);
-  }
-  assertTextBuffer(buffer, input.path);
   const relativePath = normalizeNewSourceEditorFilePath(input.path);
   const content = Buffer.from(String(input.text ?? ""), "utf8");
   if (content.byteLength > context.policy.maxFileBytes) {
-    throw sourceEditorError("The new file is too large for the source editor.", "vibe64_source_editor_file_too_large");
+    throw sourceEditorError("The new file is too large for the source editor.", "vibe64_source_editor_file_too_large", {}, 413);
   }
   assertTextBuffer(content, relativePath);
   if (sourceEditorPathExcluded(context.policy, relativePath)) {
@@ -1115,7 +1042,6 @@ export {
   normalizeNewSourceEditorFilePath,
   normalizeSourceEditorQuery,
   normalizeSourceEditorRelativePath,
-  pathMatchesPolicyPattern,
   publicSourceEditorPolicy,
   readSourceEditorFile,
   resolveSourceEditorPath,

@@ -20,6 +20,7 @@ from saved project work, and inspect one exact file change at a time.
 - `src/pages/app/project/[slug]/dashboard/integrations/index.vue`
 - Main: `packages/vibe64-source-editor/src/server/service.js`
 - `packages/vibe64-source-editor/src/server/sourceFiles.js`
+- `packages/vibe64-source-editor/src/server/filePolicy.js`
 - `packages/vibe64-source-editor/src/server/fileAreas.js`
 - `packages/vibe64-source-editor/src/server/integrations.js`
 - `packages/vibe64-source-editor/src/server/explanations.js`
@@ -614,8 +615,11 @@ there are no recursive watchers or scans while idle. Index metadata compares
 file identity, size, modification and change timestamps, rereads changed files,
 and removes deleted files. Unchanged content survives browser and server restarts.
 
-Ignored files remain included; VCS internals, symlinks and binary content stay
-excluded. Streaming overlapping chunks include large text files and long lines
+Ignored files remain included. The index applies the same file policy as the
+tree, Open file and reads (`filePolicy.js`): VCS internals, the protected
+`.vibe64/` source contract and policy exclusions are never indexed or returned,
+and a refresh drops rows from paths the policy no longer allows. Symlinks and
+binary content stay excluded. Streaming overlapping chunks include large text files and long lines
 without keeping a whole file in memory. Trigrams select candidates; literal
 matching checks smart case and returns line/byte-column positions. Short or
 non-ASCII queries scan indexed text with a time budget, without rereading source.

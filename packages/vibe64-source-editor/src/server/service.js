@@ -3,7 +3,7 @@ import path from "node:path";
 import { isMissingPathError, normalizeText } from "@local/vibe64-core/server/core";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64Command } from "@local/vibe64-execution/server";
-import { sourceEditorFilePolicy } from "./filePolicy.js";
+import { pathMatchesPolicyPattern, sourceEditorFilePolicy, sourceEditorPathExcluded } from "./filePolicy.js";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { sessionClosingReason } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { createSourceEditorFileObserver } from "./sourceChangeObserver.js";
@@ -18,7 +18,6 @@ import {
   downloadSessionFile,
   normalizeSourceEditorQuery,
   normalizeSourceEditorRelativePath,
-  pathMatchesPolicyPattern,
   publicSourceEditorPolicy,
   readSourceEditorFile,
   resolveSourceEditorPath,
@@ -336,12 +335,16 @@ function createService({
     async search(input = {}) {
       return runSourceEditorOperation(async () => {
         const context = await sourceEditorContext(input.sessionId);
+        const found = await searchIndex.search(context, {
+          query: normalizeSourceEditorQuery(input.query || input.q),
+          limit: sourceEditorResultLimit(input.limit, SOURCE_EDITOR_SEARCH_RESULT_LIMIT)
+        });
+        // The worker skips excluded paths; an index written before a policy
+        // change may still hold rows until its next refresh removes them.
         return {
           ok: true,
-          ...await searchIndex.search(context, {
-            query: normalizeSourceEditorQuery(input.query || input.q),
-            limit: sourceEditorResultLimit(input.limit, SOURCE_EDITOR_SEARCH_RESULT_LIMIT)
-          })
+          ...found,
+          results: found.results.filter((result) => !sourceEditorPathExcluded(context.policy, result.path))
         };
       });
     },

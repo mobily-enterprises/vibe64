@@ -92,14 +92,9 @@ function normalizePolicyDirectories(value = []) {
 }
 
 function normalizeSourceEditorPolicy(value = {}) {
-  const policy = value && typeof value === "object" && !Array.isArray(value)
-    ? value
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? { ...value }
     : {};
-  return {
-    ...policy,
-    preexpandedDirectories: normalizePolicyDirectories(policy.preexpandedDirectories),
-    preloadDirectories: normalizePolicyDirectories(policy.preloadDirectories)
-  };
 }
 
 function normalizeFileMatches(value = []) {
@@ -401,28 +396,6 @@ function loadedFileAncestorDirectoryPaths(root = null, filePath = "", ancestors 
   return null;
 }
 
-function loadedDirectoryPaths(root = null, directoryPath = "") {
-  const directory = findTreeDirectory(root, directoryPath);
-  if (!directory) {
-    return [];
-  }
-  const paths = [];
-  function visit(node = null) {
-    if (!node || node.type !== "directory") {
-      return;
-    }
-    const normalizedPath = normalizeEditorPath(node.path);
-    if (normalizedPath) {
-      paths.push(normalizedPath);
-    }
-    for (const child of Array.isArray(node.children) ? node.children : []) {
-      visit(child);
-    }
-  }
-  visit(directory);
-  return [...new Set(paths)].sort((left, right) => left.localeCompare(right));
-}
-
 function loadedTreeDirectoryPaths(root = null) {
   const paths = [];
   function visit(node = null) {
@@ -622,7 +595,6 @@ function useVibe64SourceEditor({
   const saving = ref(false);
   const loadedVersion = ref(0);
   const cursorRequest = ref(null);
-  const preexpandedDirectoryPaths = ref([]);
   const revealedDirectoryPaths = ref([]);
   const selectedRevealTree = ref(null);
   let treeRequestId = 0;
@@ -837,12 +809,6 @@ function useVibe64SourceEditor({
           tree.value = mergeRevealTree(tree.value, selectedRevealTree.value);
         }
       }
-      if (!normalizedPath) {
-        preexpandedDirectoryPaths.value = normalizePolicyDirectories(
-          (policy.value.preexpandedDirectories || [])
-            .flatMap((directoryPath) => loadedDirectoryPaths(tree.value, directoryPath))
-        );
-      }
       if (applyPage) revealLoadedFilePath(selectedPath.value);
       return page;
     } catch (error) {
@@ -886,7 +852,6 @@ function useVibe64SourceEditor({
     if (!preserveLoadedDirectories) {
       tree.value = null;
       policy.value = normalizeSourceEditorPolicy({});
-      preexpandedDirectoryPaths.value = [];
       revealedDirectoryPaths.value = [];
     }
     treeDirectoryRequestIds.clear();
@@ -923,9 +888,6 @@ function useVibe64SourceEditor({
       tree.value = mergeRevealTree(tree.value, selectedRevealTree.value);
       revealLoadedFilePath(selectedPath.value);
     }
-    preexpandedDirectoryPaths.value = normalizePolicyDirectories(
-      (policy.value.preexpandedDirectories || []).flatMap((directoryPath) => loadedDirectoryPaths(tree.value, directoryPath))
-    );
   }
 
   function loadDirectory(directoryPath = "") {
@@ -2000,7 +1962,6 @@ function useVibe64SourceEditor({
     openRequest,
     openSearchResult,
     policy,
-    preexpandedDirectoryPaths,
     refresh,
     retryExplanation,
     revealedDirectoryPaths,

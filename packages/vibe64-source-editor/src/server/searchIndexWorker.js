@@ -2,6 +2,7 @@ import { constants } from "node:fs";
 import { lstat, mkdir, open, readdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { sourceEditorPathExcluded } from "./filePolicy.js";
 
 // Finite command, run through the execution gateway. SQLite and text processing
 // stay off the HTTP event loop. WAL lets queries read while a refresh commits.
@@ -33,7 +34,8 @@ function fileStamp(stats) {
   return `${stats.dev}:${stats.ino}:${stats.size}:${stats.mtimeNs}:${stats.ctimeNs}`;
 }
 
-async function* discoverFiles(sourceRoot, directory = "") {
+// Index only what the editor may show: the same policy as the tree and reads.
+async function* discoverFiles(sourceRoot, policy, directory = "") {
   let entries;
   try {
     const absolute = path.join(sourceRoot, directory);
@@ -45,9 +47,10 @@ async function* discoverFiles(sourceRoot, directory = "") {
   }
   entries.sort((a, b) => a.name.localeCompare(b.name));
   for (const entry of entries) {
-    if (entry.name === ".git" || entry.isSymbolicLink()) continue;
+    if (entry.isSymbolicLink()) continue;
     const relative = directory ? `${directory}/${entry.name}` : entry.name;
-    if (entry.isDirectory()) yield* discoverFiles(sourceRoot, relative);
+    if (sourceEditorPathExcluded(policy, relative)) continue;
+    if (entry.isDirectory()) yield* discoverFiles(sourceRoot, policy, relative);
     else if (entry.isFile()) yield relative;
   }
 }
@@ -84,7 +87,7 @@ async function indexText(handle, insert, fileId) {
   return true;
 }
 
-async function refresh({ sourceRoot, directory }) {
+async function refresh({ sourceRoot, directory, policy }) {
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const db = openIndex(directory);
   let previousStatus = null;
@@ -107,7 +110,7 @@ async function refresh({ sourceRoot, directory }) {
     const existing = new Map(db.prepare("SELECT id, path, stamp FROM files").all().map((file) => [file.path, file]));
     const paths = [];
     await progress(true);
-    for await (const file of discoverFiles(sourceRoot)) {
+    for await (const file of discoverFiles(sourceRoot, policy)) {
       paths.push(file);
       status.total += 1;
       await progress();

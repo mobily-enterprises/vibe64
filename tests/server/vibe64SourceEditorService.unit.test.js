@@ -605,8 +605,7 @@ test("source editor tree uses a neutral policy and excludes VCS internals", asyn
     const childNames = response.tree.children.map((child) => child.name);
     assert.deepEqual(childNames, ["dist", "node_modules", "src"]);
     assert.equal(childNames.includes(".git"), false);
-    assert.deepEqual(response.policy.preexpandedDirectories, []);
-    assert.deepEqual(response.policy.preloadDirectories, []);
+    assert.deepEqual(Object.keys(response.policy).sort(), ["exclude", "maxFileBytes", "maxTreeDepth", "maxTreeEntries"]);
   } finally {
     await rm(fixture.root, {
       force: true,
@@ -706,15 +705,14 @@ test("source editor observes only an explicitly opened, policy-approved file", a
   }
 });
 
-test("source editor does not invent technology-specific preload directories", async () => {
+test("source editor publishes no preload directories and loads subdirectories lazily", async () => {
   const fixture = await createSourceEditorFixture();
   try {
     const response = await fixture.service.readTree({
       sessionId: "session-1"
     });
     assert.equal(response.ok, true);
-    assert.deepEqual(response.policy.preexpandedDirectories, []);
-    assert.deepEqual(response.policy.preloadDirectories, []);
+    assert.deepEqual(Object.keys(response.policy).sort(), ["exclude", "maxFileBytes", "maxTreeDepth", "maxTreeEntries"]);
     const srcNode = response.tree.children.find((child) => child.path === "src");
     assert.equal(srcNode?.loaded, false);
     assert.deepEqual(srcNode?.children, []);
@@ -743,9 +741,7 @@ test("source editor root pages preserve neutral metadata for query-style inputs"
       });
       assert.equal(response.ok, true);
       assert.equal(response.root, "");
-      assert.deepEqual(response.policy.defaultOpenFiles, []);
-      assert.deepEqual(response.policy.preexpandedDirectories, []);
-      assert.deepEqual(response.policy.preloadDirectories, []);
+      assert.deepEqual(Object.keys(response.policy).sort(), ["exclude", "maxFileBytes", "maxTreeDepth", "maxTreeEntries"]);
       const { children, ...metadata } = response.tree;
       assert.deepEqual(metadata, {
         hasMore: page.hasMore,
@@ -947,8 +943,14 @@ test("source editor creates new files without overwriting existing or excluded p
     assert.equal(initialized.ok, true);
     assert.equal(initialized.file.text, text);
     assert.equal(await readFile(path.join(fixture.sourceRoot, "data-overview.json"), "utf8"), text);
-    const binary = await fixture.service.createFile({ path: "invalid.json", sessionId: "session-1", text: "a\u0000b" });
+    const binary = await fixture.service.createFile({ path: "src\\invalid.json", sessionId: "session-1", text: "a\u0000b" });
     assert.equal(binary.ok, false);
+    assert.equal(binary.statusCode, 415);
+    assert.equal(binary.errors[0].code, "vibe64_source_editor_binary_file");
+    assert.equal(binary.details.path, "src/invalid.json");
+    const oversized = await fixture.service.createFile({ path: "large.txt", sessionId: "session-1", text: "x".repeat(1024 * 1024 + 1) });
+    assert.equal(oversized.statusCode, 413);
+    assert.equal(oversized.errors[0].code, "vibe64_source_editor_file_too_large");
   } finally {
     await rm(fixture.root, {
       force: true,
@@ -4265,12 +4267,15 @@ test("source editor file matcher finds basename plus unordered path tokens", asy
   }
 });
 
-test("source editor content index includes ignored files and excludes VCS internals", async () => {
+test("source editor content index includes ignored files and excludes VCS internals and the source contract", async () => {
 
   const fixture = await createSourceEditorFixture({
     extraFiles: [{
       path: ".git/hidden.txt",
       text: "source editor VCS needle\n"
+    }, {
+      path: ".vibe64/preview-identity",
+      text: "source editor contract needle\n"
     }]
   });
   try {

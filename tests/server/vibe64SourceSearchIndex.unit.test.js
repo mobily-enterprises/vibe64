@@ -3,11 +3,17 @@ import { mkdtemp, mkdir, readFile, rename, rm, symlink, writeFile } from "node:f
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { sourceEditorFilePolicy } from "../../packages/vibe64-source-editor/src/server/filePolicy.js";
 import { createSourceEditorSearchIndex, sourceEditorIndexDirectory } from "../../packages/vibe64-source-editor/src/server/searchIndex.js";
 
 async function fixture(t) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-search-index-"));
-  const context = { sourceRoot: path.join(root, "source"), sessionId: "session-1", runtime: { stateRoot: path.join(root, "state") } };
+  const context = {
+    policy: sourceEditorFilePolicy(),
+    sourceRoot: path.join(root, "source"),
+    sessionId: "session-1",
+    runtime: { stateRoot: path.join(root, "state") }
+  };
   await mkdir(context.sourceRoot);
   const indexes = [];
   t.after(async () => {
@@ -94,6 +100,20 @@ test("content index excludes VCS internals, binaries and symlinks and isolates s
   await mkdir(other.sourceRoot);
   assert.deepEqual((await ready(index, other, "needle")).results, []);
   assert.notEqual(sourceEditorIndexDirectory(other), sourceEditorIndexDirectory(f.context));
+});
+
+test("content index applies the source-editor file policy and drops rows it no longer allows", async (t) => {
+  const f = await fixture(t);
+  await f.put(".vibe64/preview-identity", "needle");
+  await f.put("generated/out.txt", "needle");
+  await f.put("visible.txt", "needle");
+  const index = f.index();
+  const permissive = { ...f.context, policy: { ...f.context.policy, exclude: [], protectSourceContract: false } };
+  assert.deepEqual((await ready(index, permissive, "needle")).results.map((r) => r.path),
+    [".vibe64/preview-identity", "generated/out.txt", "visible.txt"]);
+  const restricted = { ...f.context, policy: { ...f.context.policy, exclude: [...f.context.policy.exclude, "generated"] } };
+  index.invalidate(f.context.sourceRoot);
+  assert.deepEqual((await ready(index, restricted, "needle")).results.map((r) => r.path), ["visible.txt"]);
 });
 
 test("failed refreshes stop reporting progress and explicit refresh retries them", async (t) => {

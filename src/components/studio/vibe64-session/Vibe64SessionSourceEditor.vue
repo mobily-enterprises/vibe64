@@ -306,16 +306,6 @@
                 @click="collapseFileList"
               />
               <v-btn
-                aria-label="Reset folder view"
-                :disabled="!editor.tree.value"
-                :icon="mdiRestore"
-                size="x-small"
-                title="Reset folder view"
-                type="button"
-                variant="text"
-                @click="resetExpandedDirectoryPaths"
-              />
-              <v-btn
                 aria-label="Close all folders"
                 :disabled="!editor.tree.value || !expandedDirectoryPaths.length"
                 :icon="mdiCollapseAllOutline"
@@ -715,7 +705,6 @@ import {
   mdiRedoVariant,
   mdiRefresh,
   mdiRobotOutline,
-  mdiRestore,
   mdiStar,
   mdiStarOutline,
   mdiUndoVariant
@@ -1594,10 +1583,6 @@ function handleDirectoryOpenChange({
   expandedDirectoryPaths.value = normalizeExpandedDirectoryPaths([...nextPaths]);
 }
 
-function resetExpandedDirectoryPaths() {
-  expandedDirectoryPaths.value = normalizeExpandedDirectoryPaths(editor.preexpandedDirectoryPaths.value);
-}
-
 function closeAllDirectories() {
   expandedDirectoryPaths.value = [];
 }
@@ -1639,10 +1624,6 @@ watch(() => editor.activeExplanation.value?.id || "", (explanationId = "") => {
   if (explanationId) {
     explanationCollapsed.value = false;
   }
-});
-
-watch(editor.preexpandedDirectoryPaths, (paths) => {
-  addExpandedDirectoryPaths(paths);
 });
 
 watch(editor.revealedDirectoryPaths, (paths) => {
