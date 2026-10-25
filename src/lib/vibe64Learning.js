@@ -252,9 +252,13 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
   // the "Lesson finished" screen. trialAttemptId: an author trial opened in
   // this tab, which is the current lesson here (a trial never changes the
   // learner's mode). modeRead: this viewer's mode has been read (or found
-  // unreadable).
+  // unreadable). Each surface has its own error, cleared only when its own
+  // operation starts: lessonError (the lesson read and step actions: Reader,
+  // Step, step bar) and attemptsError (restart, finish, delete and the In
+  // progress / Archived list: Attempts, Finished). A failed L switch is the
+  // overlay notice.
   const state = reactive({ open: false, minimised: false, surface: "courses", attemptId: "", stepId: "", scroll: 0,
-    loading: false, error: "", actorKey: "", busy: "", hiddenBy: "", finished: false, notice: "", modeBusy: "",
+    loading: false, lessonError: "", attemptsError: "", actorKey: "", busy: "", hiddenBy: "", finished: false, notice: "", modeBusy: "",
     modeRead: false, trialAttemptId: "", beat: 0, beatPaused: false, orientationRequested: false });
   const lesson = shallowRef(null);
   // The learner's mode (server-backed): null until read or when unreadable (Develop).
@@ -350,7 +354,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     notes.value = null;
     Object.assign(notesState, { loading: false, saving: false, error: "" });
     Object.assign(state, { open: false, minimised: false, surface: "courses", attemptId: "", stepId: "", scroll: 0,
-      loading: false, error: "", busy: "", hiddenBy: "", finished: false, notice: "", modeBusy: "", modeRead: false,
+      loading: false, lessonError: "", attemptsError: "", busy: "", hiddenBy: "", finished: false, notice: "", modeBusy: "", modeRead: false,
       trialAttemptId: "", beat: 0, beatPaused: false, orientationRequested: false, actorKey: next });
     finishRun = null;
     const place = next ? readPlace(next) : null;
@@ -430,7 +434,6 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     const path = currentPath();
     if (path.startsWith("/app")) writeJson("localStorage", modePlaceKey(state.actorKey, modeSide(learnMode.value)), { path });
     state.modeBusy = "set";
-    state.error = "";
     try {
       const value = normalizeLearningMode(await request(VIBE64_LEARNING_ROUTES.learningMode, { method: "POST", body: { on: on === true } }));
       if (!value) throw new Error("The switch was not confirmed. Press L again.");
@@ -445,7 +448,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
       pageActivity?.report("learn-toggled", { projectSlug: projectSlugFromPathname(currentPath()) });
       return value;
     } catch (cause) {
-      if (expected === viewer) state.error = String(cause?.message || "The switch was not confirmed. Press L again.");
+      if (expected === viewer) showNotice(cause?.message || "The switch was not confirmed. Press L again.");
       return null;
     } finally {
       if (state.modeBusy === "set") state.modeBusy = "";
@@ -491,7 +494,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     if (!attemptId || !state.actorKey) return null;
     const expected = ++reads;
     state.loading = true;
-    state.error = "";
+    state.lessonError = "";
     try {
       const result = await readAllPages(attemptId);
       if (expected !== reads || attemptId !== state.attemptId) return null;
@@ -513,7 +516,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
       remember();
       return value;
     } catch (cause) {
-      if (expected === reads) state.error = String(cause?.message || "This lesson could not be read.");
+      if (expected === reads) state.lessonError = String(cause?.message || "This lesson could not be read.");
       return null;
     } finally {
       if (expected === reads) state.loading = false;
@@ -660,7 +663,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     const expected = viewer;
     const before = complete.value;
     state.busy = `${kind}:${stepId}`;
-    state.error = "";
+    state.lessonError = "";
     try {
       const result = await request(route(attemptId), { method: "POST", body: { stepId, ...extra, requestId } });
       if (result?.ok === false) throw new Error(result.error || "The step result was not confirmed. Try again.");
@@ -671,7 +674,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
       }
       return result;
     } catch (cause) {
-      if (expected === viewer) state.error = String(cause?.message || "The step result was not confirmed. Try again.");
+      if (expected === viewer) state.lessonError = String(cause?.message || "The step result was not confirmed. Try again.");
       return null;
     } finally {
       if (state.busy === `${kind}:${stepId}`) state.busy = "";
@@ -726,7 +729,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
       }
       return result;
     } catch (cause) {
-      if (expected === viewer) state.error = String(cause?.message || "The App press was not recorded. Press the App's button again.");
+      if (expected === viewer) state.lessonError = String(cause?.message || "The App press was not recorded. Press the App's button again.");
       return null;
     } finally {
       exerciseObservations.delete(requestId);
@@ -970,14 +973,14 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     if (!state.actorKey || state.busy) return null;
     const expected = viewer;
     state.busy = kind;
-    state.error = "";
+    state.attemptsError = "";
     try {
       const result = await request(url, { method: "POST", body: await body() });
       if (result?.ok !== true) throw new Error(result?.error || fallback);
       if (expected === viewer) await Promise.all([readLearningMode(), readPractice()]);
       return result;
     } catch (cause) {
-      if (expected === viewer) state.error = String(cause?.message || fallback);
+      if (expected === viewer) state.attemptsError = String(cause?.message || fallback);
       return null;
     } finally {
       if (state.busy === kind) state.busy = "";
@@ -1046,7 +1049,7 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
       const value = normalizePractice(await request(VIBE64_LEARNING_ROUTES.practice, { method: "GET" }));
       if (expected === practiceReads) practice.value = value;
     } catch (cause) {
-      if (expected === practiceReads) state.error = String(cause?.message || "Your lessons could not be read. Try again.");
+      if (expected === practiceReads) state.attemptsError = String(cause?.message || "Your lessons could not be read. Try again.");
     }
     return practice.value;
   }

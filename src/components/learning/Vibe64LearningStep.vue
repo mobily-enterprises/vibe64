@@ -138,7 +138,7 @@ async function runReview() {
   checkReason.value = "";
   const result = await props.learning.review(stepId);
   if (step.value?.id === stepId) {
-    checkReason.value = result ? props.learning.reviewNote(result) : props.learning.state.error || "Your work could not be checked. Try again.";
+    checkReason.value = result ? props.learning.reviewNote(result) : props.learning.state.lessonError || "Your work could not be checked. Try again.";
   }
 }
 async function answer() {

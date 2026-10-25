@@ -84,7 +84,7 @@ async function checkReview() {
   const result = await learning.review(stepId);
   // A pass on a step with beats is said on the beat's line itself.
   if (step.value?.id !== stepId || (result?.outcome === "passed" && beats.value.length)) return;
-  note.value = result ? learning.reviewNote(result) : learning.state.error || "Your work could not be checked. Try again.";
+  note.value = result ? learning.reviewNote(result) : learning.state.lessonError || "Your work could not be checked. Try again.";
 }
 async function showMe() {
   note.value = "";

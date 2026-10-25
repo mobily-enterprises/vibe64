@@ -513,6 +513,24 @@ describe("useVibe64Learning controller", () => {
     expect(LearningLib.normalizePractice({ ok: false })).toMatchObject({ current: null, archived: [], loaded: false });
   });
 
+  it("keeps each surface's error to its own operations: a lesson reread keeps an Attempts failure, a failed L switch is a notice", async () => {
+    let switchFails = false;
+    const { learning } = controller({
+      mode: (url, method) => method === "POST" && switchFails ? null : LEARN,
+      posts: url => url === VIBE64_LEARNING_ROUTES.archiveDelete(OTHER) ? { ok: false, error: "Archive delete refused." } : { ok: true }
+    });
+    learning.setViewer("member");
+    await learning.show({ attemptId: ATTEMPT });
+    expect(await learning.deleteArchived(OTHER)).toBeNull();
+    expect([learning.state.attemptsError, learning.state.lessonError]).toEqual(["Archive delete refused.", ""]);
+    await learning.loadLesson(ATTEMPT);
+    expect(learning.state.attemptsError, "a realtime lesson reread does not erase the Attempts failure").toBe("Archive delete refused.");
+    switchFails = true;
+    expect(await learning.setMode(false)).toBeNull();
+    expect(learning.notice).toBe("The switch was not confirmed. Press L again.");
+    expect([learning.state.lessonError, learning.state.attemptsError]).toEqual(["", "Archive delete refused."]);
+  });
+
   it("keeps the Lesson pane's place and Courses' tab; closing and reopening Courses changes neither", async () => {
     vi.useFakeTimers();
     const { learning, calls } = controller();
@@ -577,7 +595,7 @@ describe("useVibe64Learning controller", () => {
     learning.setViewer("member");
     await learning.show({ attemptId: ATTEMPT });
     expect(await learning.answer("quiz", [2, 0])).toBeNull();
-    expect(learning.state.error).toBe("Network");
+    expect(learning.state.lessonError).toBe("Network");
     await learning.answer("quiz", [0, 2]);
     const answers = calls.filter(call => call.url === VIBE64_LEARNING_ROUTES.stepAnswer(ATTEMPT));
     expect(answers.map(call => call.body.selected)).toEqual([[0, 2], [0, 2]]);

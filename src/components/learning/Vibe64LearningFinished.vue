@@ -36,7 +36,7 @@ async function finish() {
   if (await props.learning.finish(summary.value)) {
     finished.value = true;
     void props.courses.learningResource.reload();
-  } else finishError.value = props.learning.state.error || "Finishing the lesson was not confirmed. Try again.";
+  } else finishError.value = props.learning.state.attemptsError || "Finishing the lesson was not confirmed. Try again.";
 }
 watch(() => props.learning.finished && props.learning.state.attemptId, attemptId => {
   if (!attemptId || finishingFor === attemptId) return;

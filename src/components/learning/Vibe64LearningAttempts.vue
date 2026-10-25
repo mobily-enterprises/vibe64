@@ -42,10 +42,10 @@ async function confirmThen(key, action) {
         ? "Lessons you finished or archived, each with its practice project and conversation."
         : "Your lesson in progress. It stays paused, with its practice project and conversation, until you finish, restart or delete it." }}
     </p>
-    <v-alert v-if="learning.state.error" type="error" variant="tonal" density="compact" class="vibe64-learning-attempts__error"
-      data-test="learning-attempts-error">{{ learning.state.error }}</v-alert>
+    <v-alert v-if="learning.state.attemptsError" type="error" variant="tonal" density="compact" class="vibe64-learning-attempts__error"
+      data-test="learning-attempts-error">{{ learning.state.attemptsError }}</v-alert>
 
-    <div v-if="!practice.loaded && !learning.state.error" class="vibe64-learning-attempts__loading" role="status"
+    <div v-if="!practice.loaded && !learning.state.attemptsError" class="vibe64-learning-attempts__loading" role="status"
       data-test="learning-attempts-loading">
       <v-progress-circular indeterminate size="20" width="2" color="primary" />{{ archived ? "Loading archived lessons…" : "Loading your lesson…" }}
     </div>

@@ -62,8 +62,8 @@ watch([() => step.value?.id, () => props.visible], async ([, shown]) => {
 <template>
   <div class="vibe64-learning-reader-frame">
   <div class="vibe64-learning-reader" :aria-busy="learning.state.loading">
-    <v-alert v-if="learning.state.error" type="error" variant="tonal" rounded="lg" class="vibe64-learning-reader__alert" role="alert">
-      {{ learning.state.error }}
+    <v-alert v-if="learning.state.lessonError" type="error" variant="tonal" rounded="lg" class="vibe64-learning-reader__alert" role="alert">
+      {{ learning.state.lessonError }}
       <template #append><v-btn variant="text" min-height="48" @click="learning.loadLesson()">Retry</v-btn></template>
     </v-alert>
     <v-skeleton-loader v-if="!lesson && learning.state.loading" type="heading, paragraph, paragraph" aria-label="Loading the lesson" />

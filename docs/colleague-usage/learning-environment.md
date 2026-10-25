@@ -49,7 +49,8 @@ While a switch is being confirmed, the **L** button is disabled and the project
 page you are leaving clears at once (pressing **L** always leaves a project
 page), then the other mode's place opens. The page you left never shows an
 error from the mode you switched to, also when you return to it later. If the
-switch is not confirmed, the page comes back and you can press **L** again.
+switch is not confirmed, the page comes back, a short notice says so, and you
+can press **L** again.
 
 ## The lesson step bar
 
@@ -341,6 +342,9 @@ attempt.
 - An error banner at the top of the lesson has **Retry**, which reads the
   lesson again. A failed **Check answer**, **Done** or **Check now** shows its
   message; press the same button again.
+- A failed **Restart**, **Delete** or archived-lesson delete shows its message
+  in the Attempts list, not in the lesson; it stays there until you try that
+  change again.
 - Signing out or switching account closes Courses and the lesson and clears the
   previous person's place on this device.
 
