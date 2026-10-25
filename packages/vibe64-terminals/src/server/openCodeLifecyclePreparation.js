@@ -6,7 +6,7 @@ import { closeTerminalSessionsForNamespace, listTerminalSessions, terminalNamesp
 import { requireOpenCodeConnection } from "./opencodeServerProcess.js";
 import { upstreamMessageId } from "./openCodeConversationStorage.js";
 import { OPENCODE_AGENT_RUN_ID } from "./openCodeConversationPresentation.js";
-import { openCodeError, openCodeRuntimeFailure as runtimeFailure,
+import { openCodeError, throwVibe64OpenCodeError as runtimeFailure,
   openCodeSessionId as safeSessionId, opencodeTerminalNamespace } from "./terminalShared.js";
 
 // Authorized application facts and awaited product cleanup. The supplied native

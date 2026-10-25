@@ -16,7 +16,7 @@ import { terminalNamespaceAdmissionFailure } from "@local/vibe64-execution/serve
 import {
   claudeConversationError, codexTerminalNamespace, codexSessionWorktreeWasRemoved,
   codexSessionWorktreeUnavailableFailure, codexSessionWorkdirAllowed, directoryExists,
-  openCodeError, openCodeRuntimeFailure as runtimeFailure, openCodeSessionId, retryableTerminalFailure, terminalSessionSourceRoot, terminalWorktreePath
+  openCodeError, throwVibe64OpenCodeError as runtimeFailure, openCodeSessionId, nonRetryableTerminalFailure, terminalSessionSourceRoot, terminalWorktreePath
 } from "./terminalShared.js";
 import { VIBE64_SESSION_STATUS, conversationMessageIdentity, conversationMessageVersion } from "@local/vibe64-runtime/server/sessionStore";
 import {
@@ -177,7 +177,7 @@ async function prepareCodexConversationContext(sessionId, runtime, session, allo
   }
   const executionRoot = learningRoot || terminalSessionSourceRoot(session);
   if (!executionRoot) {
-    return retryableTerminalFailure({
+    return nonRetryableTerminalFailure({
       ok: false,
       error: "Vibe64 Codex execution root is not available."
     });
@@ -198,7 +198,7 @@ async function prepareCodexConversationContext(sessionId, runtime, session, allo
     executionRoot,
     workdir
   })) {
-    return retryableTerminalFailure({
+    return nonRetryableTerminalFailure({
       ok: false,
       error: workdir
         ? "Vibe64 Codex workdir is outside the execution root."

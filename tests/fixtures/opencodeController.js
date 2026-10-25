@@ -7,7 +7,7 @@ import path from "node:path";
 import { serializeVibe64AssistantSelection } from "../../packages/vibe64-runtime/src/shared/index.js";
 import { startTerminalSession } from "../../packages/vibe64-execution/src/server/engines/terminalSessions.js";
 import { openCodeAssistantCapabilities } from "../../packages/vibe64-terminals/src/server/agent/providers/opencodeAssistantCatalog.js";
-import { createOpenCodeSessionRegistration } from "../../packages/vibe64-terminals/src/server/service.js";
+import { createOpenCodeSessionRegistration } from "../../packages/vibe64-terminals/src/server/openCodeSessionRegistration.js";
 
 const providerDefinition = {
   id: "deepseek",

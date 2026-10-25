@@ -7,7 +7,7 @@ import {
   codexAppServerMessageText
 } from "@jskit-ai/assistant-core/server/codex-turn";
 import { inspectCodexAppServerMessageAdmission } from "@jskit-ai/assistant-core/server/codex-provider";
-import { createCodexSessionRegistration } from "../../packages/vibe64-terminals/src/server/service.js";
+import { createCodexSessionRegistration } from "../../packages/vibe64-terminals/src/server/codexSessionRegistration.js";
 import { withCodexState } from "../../packages/vibe64-terminals/src/server/codexConversationStorage.js";
 import { codexTerminalNamespace, vibe64Result } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
 

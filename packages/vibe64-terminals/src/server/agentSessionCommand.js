@@ -79,6 +79,14 @@ const VIBE64_AGENT_SESSION_RUN_RESULT_ENV = "VIBE64_AGENT_SESSION_RUN_RESULT_PAT
 // This capability permits session status, rename, project messages and role-checked plan commands. It
 // does not expose the shell-execution token stripped from managed child commands.
 const SESSION_RENAME_CONTROL_ENV = "VIBE64_SESSION_RENAME_CONTROL";
+// Routes authorized by the control token rather than the shell-execution token.
+const CONTROL_ROUTES = new Set([
+  "/agent-session-command/rename",
+  "/agent-session-command/plan",
+  "/agent-session-command/status",
+  "/agent-session-command/message-project",
+  "/agent-session-command/project-preview"
+]);
 
 const AGENT_SESSION_CONTROL_ENV_NAMES = new Set([
   VIBE64_AGENT_SESSION_COMMAND_CONTRACT_VERSION_ENV,
@@ -433,7 +441,7 @@ async function ensureAgentSessionCommandServer({
     });
     const generationId = randomUUID();
     const token = randomUUID();
-    const renameToken = randomUUID();
+    const controlToken = randomUUID();
     const server = http.createServer(async (request, response) => {
       try {
         if (request.method !== "POST") {
@@ -456,7 +464,7 @@ async function ensureAgentSessionCommandServer({
         const isRename = request.url === "/agent-session-command/rename";
         const isPlan = request.url === "/agent-session-command/plan";
         const isStatus = request.url === "/agent-session-command/status";
-        const authorized = normalizeText(input.token) === (isRename || isPlan || isStatus || isProjectMessage || isProjectPreview ? renameToken : token) &&
+        const authorized = normalizeText(input.token) === (CONTROL_ROUTES.has(request.url) ? controlToken : token) &&
           normalizeText(input.generationId) === generationId &&
           normalizeText(input.sessionId) === normalizeText(sessionId);
         if (!authorized) {
@@ -537,7 +545,7 @@ async function ensureAgentSessionCommandServer({
       sessionId: normalizeText(sessionId),
       socketPath,
       token,
-      renameToken
+      controlToken
     };
     commandServers.set(socketPath, stored);
     if (!await unixJsonCommandServerIsHealthy(stored, {
@@ -1040,7 +1048,7 @@ async function prepareAgentSessionCommand({
     controlGenerationId: server.generationId,
     env: {
       [SESSION_RENAME_CONTROL_ENV]: JSON.stringify({ socketPath: server.socketPath, sessionId: normalizedSessionId,
-        generationId: server.generationId, token: server.renameToken }),
+        generationId: server.generationId, token: server.controlToken }),
       [VIBE64_AGENT_SESSION_COMMAND_CONTRACT_VERSION_ENV]: AGENT_SESSION_COMMAND_CONTRACT_VERSION,
       [VIBE64_AGENT_SESSION_COMMAND_GENERATION_ENV]: server.generationId,
       [VIBE64_AGENT_SESSION_COMMAND_SESSION_ID_ENV]: normalizedSessionId,

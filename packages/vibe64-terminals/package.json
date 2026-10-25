@@ -62,14 +62,6 @@
       "apiSummary": {
         "surfaces": [
           {
-            "subpath": "./server/registerRoutes",
-            "summary": "Registers Vibe64 terminal, attachment, output, and managed preview routes."
-          },
-          {
-            "subpath": "./server/service",
-            "summary": "Registers shared conversation providers and application facilities; owns Vibe64 workspace preparation, managed terminal access, and output lifecycle."
-          },
-          {
             "subpath": "./server/projectExecutionEnv",
             "summary": "Resolves Vibe64-owned project Env for terminal processes."
           },

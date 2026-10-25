@@ -23,7 +23,7 @@ import { requireCompletedNativeConversationReplacement } from "./assistantChange
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
 import { prepareOpenCodeSessionCommandEnvironment } from "./agentCommandEnvironment.js";
 import { openCodeFingerprint, recordOpenCodeSessionIdentity } from "./openCodeConversationStorage.js";
-import { normalizePlainObject as record, openCodeError, openCodeRuntimeFailure } from "./terminalShared.js";
+import { normalizePlainObject as record, openCodeError, throwVibe64OpenCodeError } from "./terminalShared.js";
 
 import {
   OPENCODE_EXPECTED_VERSION, OPENCODE_HOST, OPENCODE_READY_TIMEOUT_MS,
@@ -275,7 +275,7 @@ function createOpenCodeHostPreparation({
     }), context.selection.modelProviderId);
     const learningRoot = await learningSessionExecutionRoot(context.runtime, context.sessionId);
     const projectContextRoot = learningRoot || path.resolve(context.runtime.projectContextRoot);
-    return { key: context.key, connection, failure: openCodeRuntimeFailure, async configure() {
+    return { key: context.key, connection, failure: throwVibe64OpenCodeError, async configure() {
       let helperModelId = "";
       if (!context.assistantScope && getAssistantManager()) {
         const helper = await getAssistantManager().resolveAssistantPurpose({ purpose: "quick_helper" }, {
@@ -813,7 +813,7 @@ export {
   createOpenCodeServerProcess,
   createOpenCodeHostPreparation,
   openCodeFingerprint,
-  openCodeRuntimeFailure,
+  throwVibe64OpenCodeError,
   requireOpenCodeConnection,
   openCodeInlineConfig,
   readOpenCodeCatalog,

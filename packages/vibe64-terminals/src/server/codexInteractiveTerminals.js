@@ -9,7 +9,7 @@ import {
 import {
   codexSessionWorktreeUnavailableFailure, codexSessionWorkdirAllowed,
   codexTerminalNamespace, directoryExists, ensureTerminalSessionSourceGitSelfContained,
-  globalCodexTerminalNamespace, retryableTerminalFailure, terminalSessionSourceRoot,
+  globalCodexTerminalNamespace, nonRetryableTerminalFailure, terminalSessionSourceRoot,
   terminalWorktreePath, vibe64Result
 } from "./terminalShared.js";
 import { codexAppServerEndpointForTarget } from "@local/vibe64-runtime/server/codexAppServerProvider";
@@ -95,7 +95,7 @@ function createCodexInteractiveTerminals({
     const session = await runtime.getSession(sessionId);
     const executionRoot = terminalSessionSourceRoot(session);
     if (!executionRoot) {
-      return retryableTerminalFailure({
+      return nonRetryableTerminalFailure({
         ok: false,
         error: "Vibe64 Codex execution root is not available."
       });
@@ -116,7 +116,7 @@ function createCodexInteractiveTerminals({
       executionRoot,
       workdir
     })) {
-      return retryableTerminalFailure({
+      return nonRetryableTerminalFailure({
         ok: false,
         error: workdir
           ? "Vibe64 Codex workdir is outside the execution root."
@@ -174,7 +174,7 @@ function createCodexInteractiveTerminals({
               if (reconnectFailure) {
                 return reconnectFailure;
               }
-              return retryableTerminalFailure({
+              return nonRetryableTerminalFailure({
                 code: error?.code || "",
                 errors: Array.isArray(error?.errors) ? error.errors : undefined,
                 ok: false,
@@ -241,13 +241,13 @@ function createCodexInteractiveTerminals({
     });
     const executionRoot = await globalCodexRuntimeRoot(projectService, runtime);
     if (!executionRoot) {
-      return retryableTerminalFailure({
+      return nonRetryableTerminalFailure({
         ok: false,
         error: "Global Codex runtime root is not available."
       });
     }
     if (!await directoryExists(executionRoot)) {
-      return retryableTerminalFailure({
+      return nonRetryableTerminalFailure({
         ok: false,
         error: `Main repo directory does not exist: ${executionRoot}`
       });

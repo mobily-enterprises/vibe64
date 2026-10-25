@@ -4,95 +4,6 @@ import { ACTION_PAUSE_MAIN_GOAL, ACTION_BLOCK_MAIN_GOAL } from "./assistantContr
 import { randomUUID } from "node:crypto";
 import { AppError } from "@jskit-ai/kernel/server/runtime";
 import { conversationConfiguration } from "./conversationConfiguration.js";
-import {
-  createCodexSessionRenewalPreparation
-} from "./sessionRenewalReceipts.js";
-import {
-  createCodexContextRefreshMarker,
-  recordCodexContextUsageSignal
-} from "./codexContextRenewalSignals.js";
-import {
-  CODEX_TURN_OUTCOME,
-  codexAppServerResultDeliveryFailureMessage,
-  writeCodexTurnOutcomeNotice
-} from "./codexTurnOutcomeNotice.js";
-import {
-  conversationActorMetadata,
-  codexDeliveredConversationMetadata as deliveredConversationMetadata,
-  codexTerminalConversationMetadata as terminalConversationMetadata
-} from "./conversationActor.js";
-import {
-  createCodexConversationStorage
-} from "./codexConversationStorage.js";
-import {
-  createCodexHelperThreadLedger,
-  codexHelperThreadLedgerOwner
-} from "./codexHelperThreadLedger.js";
-import {
-  getStudioProjectContext
-} from "@local/vibe64-core/server/studioProjectContext";
-import {
-  createPersonalAiProfileStore
-} from "@local/vibe64-core/server/personalAiProfile";
-import {
-  VIBE64_OUTPUTS_CLIENT_REFRESH_PAYLOAD
-} from "@local/vibe64-core/server/sessionRealtimeEvents";
-import {
-  codexAppServerHelperIsolation
-} from "@local/vibe64-runtime/server/codexAppServerSessionBridge";
-import {
-  createCodexAppServerRunOwner
-} from "@jskit-ai/assistant-core/server/codex-turn";
-import {
-  createCodexSessionTurnCheckpoint
-} from "./sessionTurnCheckpoint.js";
-import {
-  vibe64ErrorResponse
-} from "@local/vibe64-core/server/serverResponses";
-import {
-  createCodexAppServerProviderOwner
-} from "@jskit-ai/assistant-core/server/codex-provider";
-import {
-  createCodexInteractiveTerminals
-} from "./codexInteractiveTerminals.js";
-import {
-  codexAppServerTaskFinishedAfterRun,
-  createCodexStartupHealth,
-  createCodexUnavailableWorktreeHandler
-} from "./codexStartupHealth.js";
-import {
-  createCodexSessionProviderHost,
-  codexAppServerAdmissionError,
-  CODEX_AGENT_TURN_INTERRUPT_FAILED_CODE,
-  runWithCodexAppServerProjectContext
-} from "./codexSessionProviderHost.js";
-import {
-  createCodexRuntimeHost,
-  createCodexSessionRuntimeHost
-} from "./codexRuntimeHost.js";
-import {
-  createCodexAccountPreparation
-} from "./codexAccountPreparation.js";
-import {
-  createCodexSessionEnvironment
-} from "./codexSessionEnvironment.js";
-import {
-  createCodexAssistantCatalog
-} from "./codexAssistantCatalog.js";
-import {
-  createCodexConversationPreparation
-} from "./codexConversationPreparation.js";
-import {
-  createCodexHelperPreparation
-} from "./codexHelperPreparation.js";
-import {
-  createCodexLifecyclePreparation
-} from "./codexLifecyclePreparation.js";
-import {
-  createCodexScopedConversationPreparation,
-  codexAppServerConversationResponse,
-  codexAppServerExpiredEphemeralConversation
-} from "./codexScopedConversationPreparation.js";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 import { vibe64Error } from "@local/vibe64-core/server/core";
@@ -102,16 +13,12 @@ import {
   appCredentialContext,
   createVibe64ConversationExecution,
   homeEnvForUser,
-  operatorCliCommand,
-  runVibe64Command
+  operatorCliCommand
 } from "@local/vibe64-execution/server";
 import {
   codexAppServerRuntimeBaseDir,
   codexAppServerRuntimeDir,
-  codexAppServerRuntimeHost,
-  CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
-  assertCodexAuthPreflightReady,
-  createCodexAppServerAgentProvider
+  codexAppServerRuntimeHost
 } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { nativeConversationBindings } from "./nativeConversationRetirement.js";
@@ -126,7 +33,6 @@ import { createAssistantRouting } from "./assistantRouting.js";
 import { assistantGoalObjective, assistantMainAiChanged, assistantRoutingFromMetadata, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createSessionConversations } from "./sessionConversations.js";
 import {
-  createOpenCodeMainMessagePreparation,
   createSessionConversationBinding,
   prepareSessionConversationActivity,
   prepareSessionConversationCreation,
@@ -141,39 +47,14 @@ import {
   prepareConversationSubscriptionReset,
   prepareSessionDetachedConversationCleanup,
   prepareSessionDetachedConversationRun,
-  prepareSessionConversationStorage,
-  publishMainConversationEvent
+  prepareSessionConversationStorage
 } from "./mainConversationBinding.js";
 import { rememberAssistantBeforeChangeover, replaceNativeConversation, requireCompletedConversationRewind, requireCompletedNativeConversationReplacement, sendWithAssistantChangeover } from "./assistantChangeover.js";
-import {
-  createSessionAttachments,
-  createCodexSessionAttachmentRenewal
-} from "./sessionAttachments.js";
+import { createSessionAttachments } from "./sessionAttachments.js";
 import { createProviderUsage } from "./providerUsage.js";
 import {
   createSessionAgentManager
 } from "./agent/sessionAgentManager.js";
-import {
-  createCodexSessionAgentProvider
-} from "./agent/providers/codexSessionAgentProvider.js";
-import {
-  createOpenCodeSessionAgentProvider
-} from "./agent/providers/opencodeSessionAgentProvider.js";
-import { createOpenCodeSharedRuntime } from "@jskit-ai/assistant-core/server/opencode-process";
-import { createOpenCodeLifecyclePreparation } from "./openCodeLifecyclePreparation.js";
-import { createOpenCodeConversationAccounts } from "./openCodeConversationAccounts.js";
-import { createOpenCodeConversationPresentation } from "./openCodeConversationPresentation.js";
-import { createOpenCodeConversationEvents } from "./openCodeConversationEvents.js";
-import { createOpenCodeScopedPreparation } from "./openCodeScopedPreparation.js";
-import { createOpenCodeInteractiveTerminals } from "./openCodeInteractiveTerminals.js";
-import { createOpenCodeSessionRenewalPreparation } from "./sessionRenewalReceipts.js";
-import {
-  createOpenCodeServerProcess,
-  createOpenCodeHostPreparation,
-  readOpenCodeCatalog,
-  readOpenCodeZenModelIds,
-  verifyOpenCodeApiKey
-} from "./opencodeServerProcess.js";
 import process from "node:process";
 import { existsSync } from "node:fs";
 import path from "node:path";
@@ -181,7 +62,7 @@ import { createAgentEnvCommandService } from "./agentEnvCommand.js";
 import { createAgentDatabaseCommandService } from "./agentDatabaseCommand.js";
 import { createAgentPreviewCommandService } from "./agentPreviewCommand.js";
 import { createAgentSessionCommandService } from "./agentSessionCommand.js";
-import { closeAgentSessionCommandEnvironment, prepareAgentSessionCommandEnvironment } from "./agentCommandEnvironment.js";
+import { closeAgentSessionCommandEnvironment } from "./agentCommandEnvironment.js";
 import { createCodexGitCommandService, removeCodexGitCommandSession } from "./codexGitCommand.js";
 import {
   changeIncomingContribution as changeManagedIncomingContribution,
@@ -234,7 +115,6 @@ import {
   directoryExists,
   ensureTerminalSessionSourceGitSelfContained,
   outputTargetTerminalNamespace,
-  opencodeTerminalNamespace,
   terminalSessionSourceRoot,
   terminalWorktreePath,
   terminalProjectScopeKey,
@@ -277,8 +157,7 @@ import {
 import {
   VIBE64_SESSION_STATUS,
   assertValidVibe64SessionId,
-  vibe64AgentRunStateIsActive,
-  normalizeVibe64AgentRunState
+  vibe64AgentRunStateIsActive
 } from "@local/vibe64-runtime/server/sessionStore";
 import {
   sessionIsClosing
@@ -296,6 +175,8 @@ import {
   vibe64AssistantSelectionFromMetadata
 } from "@local/vibe64-runtime/shared";
 import { createWorkspaceSetupRunner } from "./workspaceSetup.js";
+import { createCodexSessionRegistration } from "./codexSessionRegistration.js";
+import { createOpenCodeSessionRegistration } from "./openCodeSessionRegistration.js";
 import {
   defineSessionRenewalHandoverText,
   sessionRenewalManualHandoverTemplate
@@ -303,10 +184,6 @@ import {
 import {
   createSessionPromptHintsService
 } from "./sessionPromptHints.js";
-
-const CODEX_AGENT_TURN_STEER_FAILED_CODE = "vibe64_codex_turn_steer_failed";
-const CODEX_APP_SERVER_ACTIVE_RECONCILE_MS = 2000;
-const CODEX_APP_SERVER_DAEMON_WELLBEING_MS = 15000;
 
 // The runtime proved this message never reached the assistant. Say so in the
 // response, so the browser shows the failure instead of an uncertain receipt.
@@ -322,466 +199,6 @@ function notSentDeliveryError(error, messageId) {
       code: readable ? error.code : "vibe64_assistant_message_not_sent",
       details: { ...(readable && error.details && typeof error.details === "object" ? error.details : {}), delivery }
     });
-}
-
-function normalizeText(value) {
-  return String(value || "").trim();
-}
-
-function codexAppServerPromptDeliveryEnabledByDefault({
-  env = process.env
-} = {}) {
-  const configured = normalizeText(env.VIBE64_CODEX_APP_SERVER_PROMPTS).toLowerCase();
-  if (["0", "false", "no", "off"].includes(configured)) {
-    return false;
-  }
-  if (["1", "true", "yes", "on"].includes(configured)) {
-    return true;
-  }
-  return true;
-}
-
-const CODEX_APP_SERVER_PROMPT_DELIVERY_ENABLED = codexAppServerPromptDeliveryEnabledByDefault();
-
-function createCodexSessionRegistration({
-  connectionStatus = async () => true,
-  listConnections = async () => [],
-  agentDatabaseCommand = null,
-  agentEnvCommand = null,
-  agentPreviewCommand = null,
-  agentSessionCommand = null,
-  codexAuthPreflight = assertCodexAuthPreflightReady,
-  codexAppServerActiveReconcileMs = CODEX_APP_SERVER_ACTIVE_RECONCILE_MS,
-  codexAppServerDaemonWellbeingMs = CODEX_APP_SERVER_DAEMON_WELLBEING_MS,
-  codexAppServerProviderOptions = {},
-  codexAppServerProviderFactory = createCodexAppServerAgentProvider,
-  codexAppServerPromptDeliveryEnabled = CODEX_APP_SERVER_PROMPT_DELIVERY_ENABLED,
-  codexHelperThreadLedgerFactory = createCodexHelperThreadLedger,
-  codexToolHomeRequired = false,
-  codexToolHomeSource = "",
-  env = process.env,
-  codexGitCommand = null,
-  logger = null,
-  projectService,
-  publishConversation = null,
-  runNativeDetachedConversation,
-  publishSessionChanged = async () => null,
-  runCommand = runVibe64Command
-} = {}) {
-  const initialCodexRuntime = codexRuntimeContext({
-    env,
-    providerOptions: codexAppServerProviderOptions,
-    toolHomeSource: codexToolHomeSource
-  });
-  if (initialCodexRuntime?.ok === false) {
-    throw new Error(initialCodexRuntime.error || "Codex runtime context could not be resolved.");
-  }
-  codexAppServerProviderOptions = initialCodexRuntime.providerOptions;
-  codexToolHomeSource = initialCodexRuntime.toolHomeSource;
-  const codexRuntimeHost = createCodexRuntimeHost({ env, codexAppServerProviderOptions, codexToolHomeSource });
-  const {
-    codexAppServerProviderKeyFields,
-  } = codexRuntimeHost;
-  const studioRuntimeProfile = getStudioProjectContext().runtimeProfile || {};
-  const localRuntime = studioRuntimeProfile.local === true ||
-    ["local", "local-editor"].includes(normalizeText(studioRuntimeProfile.mode).toLowerCase());
-  const personalProfileStore = localRuntime && normalizeText(codexAppServerProviderOptions.systemRoot)
-    ? createPersonalAiProfileStore({
-        systemRoot: codexAppServerProviderOptions.systemRoot
-      })
-    : null;
-
-  const providerConnections = createCodexProviderConnectionStore({ systemRoot: codexAppServerProviderOptions.systemRoot });
-  const codexAccountPreparation = createCodexAccountPreparation({
-    runtimeHost: codexRuntimeHost,
-    providerConnections,
-    codexToolHomeRequired,
-    codexAuthPreflight,
-    codexToolHomeSource,
-    codexAppServerProviderOptions
-  });
-
-  const codexSessionEnvironment = createCodexSessionEnvironment({
-    agentDatabaseCommand,
-    agentEnvCommand,
-    agentPreviewCommand,
-    agentSessionCommand,
-    codexGitCommand,
-    env,
-    projectService,
-    runCommand
-  });
-
-  const codexSessionRuntimeHost = createCodexSessionRuntimeHost({
-    runtimeHost: codexRuntimeHost,
-    accountPreparation: codexAccountPreparation,
-    sessionEnvironment: codexSessionEnvironment,
-    projectService,
-    runCommand
-  });
-  const {
-    createRuntimeForSession,
-    createStoreForSession,
-    sessionHasCodexAppServerRuntime,
-    codexAppServerOutputContext
-  } = codexSessionRuntimeHost;
-  const codexRenewalPreparation = createCodexSessionRenewalPreparation({
-    runtimeHost: codexRuntimeHost,
-    sessionRuntimeHost: codexSessionRuntimeHost,
-    sessionEnvironment: codexSessionEnvironment
-  });
-  const codexSessionProviderHost = createCodexSessionProviderHost({
-    runtimeHost: codexRuntimeHost,
-    sessionRuntimeHost: codexSessionRuntimeHost,
-    sessionEnvironment: codexSessionEnvironment,
-    providerConnections,
-    env,
-    logger,
-    // The native owner consumes these preparations only after construction.
-    get runOwner() { return codexAppServerRunOwner; }
-  });
-  const {
-    codexAppServerSessionProviderContext,
-    codexAppServerConnectionPolicy,
-    codexAppServerRecoveryEvent
-  } = codexSessionProviderHost;
-
-  const codexAppServerProviderOwner = createCodexAppServerProviderOwner({
-    runtimeRoot: codexAppServerRuntimeBaseDir({ env }),
-    exitUnverifiedCode: "vibe64_codex_runtime_exit_unverified",
-    requiredStopCode: "vibe64_session_renewal_process_exit_unverified",
-    runtimeCloseError: "Vibe64 Codex app-server runtime close failed.",
-    onRecoveryEvent: codexAppServerRecoveryEvent,
-    debugLog: (event, details) => vibe64SessionDebugLog(`server.codexTerminal.${event}`, details),
-    debugError: vibe64SessionDebugError,
-    runtimeBusyCode: CODEX_APP_SERVER_RUNTIME_BUSY_CODE,
-    providerFactory: codexAppServerProviderFactory === createCodexAppServerAgentProvider
-      ? null : codexAppServerProviderFactory,
-    prepareNativeHost(parameters) {
-      const host = codexAppServerRuntimeHost(parameters);
-      host.parameters.runtimeDir ||= codexAppServerRuntimeDir(parameters);
-      return host;
-    }
-  });
-  const codexAppServerRenewalSessionClosures = new WeakSet();
-  async function publishCodexConversationEvent(sessionId, event) {
-    const { nativeGoal: _nativeGoal, ...publicEvent } = event;
-    return publishMainConversationEvent(
-      codexTerminalNamespace, publishSessionChanged, publishConversation, sessionId, event, publicEvent
-    );
-  }
-  const checkpointCodexAppServerTurn = createCodexSessionTurnCheckpoint({ projectService, publishSessionChanged });
-  const codexAppServerRunOwner = createCodexAppServerRunOwner({
-    namespace: codexTerminalNamespace,
-    normalizeRunState: normalizeVibe64AgentRunState,
-    debugLog: (event, details) => vibe64SessionDebugLog(`server.codexTerminal.${event}`, details),
-    debugError: vibe64SessionDebugError,
-    createRuntime: createRuntimeForSession,
-    createStore: createStoreForSession,
-    publish: publishCodexConversationEvent,
-    providerSessions: {
-      owner: codexAppServerProviderOwner,
-      wellbeingMs: codexAppServerDaemonWellbeingMs,
-      keyFields: codexAppServerProviderKeyFields,
-      context: codexAppServerSessionProviderContext,
-      outputContext: codexAppServerOutputContext,
-      connectionPolicy: codexAppServerConnectionPolicy
-    },
-    helperThreads: {
-      ledgerOwner: { ...codexHelperThreadLedgerOwner,
-        createCodexHelperThreadLedger: codexHelperThreadLedgerFactory },
-      applicationName: "Vibe64"
-    },
-    conversationPreparation: {
-      context: codexAppServerConversationPreparation,
-      scope: codexAppServerEphemeralScopePreparation,
-      execution: codexAppServerConversationExecution,
-      detached: (sessionId, input) => codexScopedConversationPreparation.detached(sessionId, input),
-      control: codexAppServerConversationControl,
-      admissionError: codexAppServerAdmissionError,
-      isolation: codexAppServerHelperIsolation,
-      response: codexAppServerConversationResponse,
-      expired: codexAppServerExpiredEphemeralConversation,
-      failure: error => vibe64ErrorResponse(error, {
-        fallbackCode: "vibe64_terminal_request_failed",
-        fallbackMessage: "Vibe64 terminal request failed."
-      })
-    },
-    serverClosingError: {
-      message: "The Vibe64 server is shutting down and cannot acquire Codex runtimes.",
-      code: "vibe64_server_stopping",
-      retryable: true
-    },
-    storeReadError: "Vibe64 session store does not support agent-run reads.",
-    sessionIdRequiredError: "Vibe64 session ID is required.",
-    turnClaimsUnsupportedError: "Vibe64 session runtime does not support Codex turn claims.",
-    turnAlreadyRunningError: "Codex is already working on this Vibe64 session.",
-    messageIdPrefix: "vibe64:",
-    idlePublishPayload: VIBE64_OUTPUTS_CLIENT_REFRESH_PAYLOAD,
-    checkpoint: checkpointCodexAppServerTurn,
-    messageMetadata: {
-      actor: currentConversationActorMetadata,
-      delivered: deliveredConversationMetadata,
-      terminal: terminalConversationMetadata
-    },
-    deliveryStateMetadataKey: "assistant_changeover",
-    hasRuntime: sessionHasCodexAppServerRuntime,
-    admissionTaskFinished: codexAppServerTaskFinishedAfterRun,
-    outcomeNotice: writeCodexAppServerTurnOutcomeNotice,
-    resultDeliveryFailureMessage: codexAppServerResultDeliveryFailureMessage,
-    orphanedPromptMessage: "Vibe64 restarted before Codex confirmed the message. Your message is safe; retry it.",
-    onNotificationSignal: recordCodexAppServerProductSignal,
-    captureContext: captureProjectRequestContext,
-    runInContext: runWithCodexAppServerProjectContext,
-    activeReconcileMs: codexAppServerActiveReconcileMs,
-    steerFailedCode: CODEX_AGENT_TURN_STEER_FAILED_CODE,
-    interruptFailedCode: CODEX_AGENT_TURN_INTERRUPT_FAILED_CODE,
-    errorPrefix: "vibe64_"
-  });
-  const codexHelperPreparation = createCodexHelperPreparation({
-    runtimeHost: codexRuntimeHost,
-    sessionRuntimeHost: codexSessionRuntimeHost,
-    accountPreparation: codexAccountPreparation,
-    providerHost: codexSessionProviderHost,
-    runOwner: codexAppServerRunOwner
-  });
-  const codexConversationStorage = createCodexConversationStorage({ projectService, runOwner: codexAppServerRunOwner });
-  const codexAttachments = createCodexSessionAttachmentRenewal({
-    sessionRuntimeHost: codexSessionRuntimeHost, sessionEnvironment: codexSessionEnvironment
-  });
-  const codexStartupHealth = createCodexStartupHealth(publishSessionChanged);
-  const blockCodexAppServerForUnavailableWorktree = createCodexUnavailableWorktreeHandler({
-    runOwner: codexAppServerRunOwner,
-    sessionRuntimeHost: codexSessionRuntimeHost,
-    health: codexStartupHealth
-  });
-  const codexConversationPreparation = createCodexConversationPreparation({
-    projectService,
-    runtimeHost: codexRuntimeHost,
-    sessionRuntimeHost: codexSessionRuntimeHost,
-    accountPreparation: codexAccountPreparation,
-    sessionEnvironment: codexSessionEnvironment,
-    health: codexStartupHealth,
-    unavailableWorktree: blockCodexAppServerForUnavailableWorktree,
-    enabled: codexAppServerPromptDeliveryEnabled,
-    publishSessionChanged,
-    checkpoint: checkpointCodexAppServerTurn
-  });
-  const codexLifecyclePreparation = createCodexLifecyclePreparation({
-    projectService,
-    runtimeHost: codexRuntimeHost,
-    sessionRuntimeHost: codexSessionRuntimeHost,
-    sessionEnvironment: codexSessionEnvironment,
-    providerHost: codexSessionProviderHost,
-    conversationPreparation: codexConversationPreparation,
-    helperPreparation: codexHelperPreparation,
-    health: codexStartupHealth,
-    runtimeLifecycle: codexAppServerRunOwner.runtimeLifecycle,
-    renewalSessionClosures: codexAppServerRenewalSessionClosures,
-    enabled: codexAppServerPromptDeliveryEnabled
-  });
-  const codexAssistantCatalog = createCodexAssistantCatalog({
-    accountPreparation: codexAccountPreparation,
-    runtimeHost: codexRuntimeHost,
-    sessionRuntimeHost: codexSessionRuntimeHost,
-    conversationPreparation: codexConversationPreparation,
-    helperPreparation: codexHelperPreparation,
-    providerOwner: codexAppServerProviderOwner,
-    runOwner: codexAppServerRunOwner,
-    providerFactory: codexAppServerProviderFactory,
-    enabled: codexAppServerPromptDeliveryEnabled
-  });
-  const codexScopedConversationPreparation = createCodexScopedConversationPreparation({
-    conversationPreparation: codexConversationPreparation,
-    helperPreparation: codexHelperPreparation,
-    runtimeHost: codexRuntimeHost,
-    sessionRuntimeHost: codexSessionRuntimeHost,
-    accountPreparation: codexAccountPreparation,
-    sessionEnvironment: codexSessionEnvironment,
-    actorMetadata: currentConversationActorMetadata,
-    enabled: codexAppServerPromptDeliveryEnabled
-  });
-  const markCodexAppServerContextRefreshPending = createCodexContextRefreshMarker({ projectService, runOwner: codexAppServerRunOwner });
-
-  function recordCodexAppServerProductSignal(kind, { store, sessionId, threadId, notification, reason }) {
-    if (kind === "usage") {
-      return recordCodexContextUsageSignal(store, sessionId, notification, { expectedThreadId: threadId });
-    }
-    if (kind === "context_refresh") {
-      return markCodexAppServerContextRefreshPending(sessionId, threadId, notification, { reason });
-    }
-    return null;
-  }
-
-  function currentConversationActorMetadata(vibe64User = null) {
-    return conversationActorMetadata({
-      personalProfileStore,
-      vibe64User
-    });
-  }
-
-  const codexInteractiveTerminals = createCodexInteractiveTerminals({
-    env,
-    projectService,
-    runCommand,
-    runtimeHost: codexRuntimeHost,
-    sessionRuntimeHost: codexSessionRuntimeHost,
-    accountPreparation: codexAccountPreparation,
-    sessionEnvironment: codexSessionEnvironment,
-    runOwner: codexAppServerRunOwner,
-    withThreadReadiness: codexConversationPreparation.threadReadiness,
-    unavailableWorktree: blockCodexAppServerForUnavailableWorktree
-  });
-
-  async function writeCodexAppServerTurnOutcomeNotice(
-    runtime,
-    sessionId = "",
-    threadId = "",
-    turnId = "",
-    outcome = CODEX_TURN_OUTCOME.PROVIDER_FAILURE,
-    detail = "",
-    { usageLimitExceeded = false } = {}
-  ) {
-    return writeCodexTurnOutcomeNotice({
-      detail,
-      outcome,
-      publishSessionChanged,
-      sessionId,
-      store: runtime?.store,
-      threadId,
-      turnId,
-      usageLimitExceeded
-    });
-  }
-
-  function codexAppServerEphemeralScopePreparation(sessionId = "", input = {}, scope = {}) {
-    return codexScopedConversationPreparation.scope(sessionId, input, scope);
-  }
-
-  function codexAppServerConversationPreparation(sessionId = "", input = {}, options) {
-    return codexScopedConversationPreparation.context(sessionId, input, options);
-  }
-
-  function codexAppServerConversationExecution(sessionId, input, options, context, conversationState, operation, identity = {}) {
-    return codexScopedConversationPreparation.execution(sessionId, input, options, context, conversationState, operation, identity);
-  }
-
-  function codexAppServerConversationControl(sessionId, input, operation) {
-    return codexScopedConversationPreparation.control(sessionId, input, operation);
-  }
-
-  const provider = createCodexSessionAgentProvider({
-    connectionStatus,
-    listConnections,
-    runOwner: codexAppServerRunOwner,
-    providerOwner: codexAppServerProviderOwner,
-    conversationPreparation: codexConversationPreparation,
-    lifecyclePreparation: codexLifecyclePreparation,
-    helperPreparation: codexHelperPreparation,
-    renewalPreparation: codexRenewalPreparation,
-    sessionRuntimeHost: codexSessionRuntimeHost,
-    storage: codexConversationStorage,
-    catalog: codexAssistantCatalog,
-    terminals: codexInteractiveTerminals,
-    attachments: codexAttachments,
-    enabled: codexAppServerPromptDeliveryEnabled,
-    runNativeDetachedConversation,
-    env,
-    publishSessionChanged: publishCodexConversationEvent,
-    checkpoint: checkpointCodexAppServerTurn
-  });
-  return Object.freeze({
-    provider,
-    terminals: codexInteractiveTerminals,
-    accounts: codexAccountPreparation,
-    catalog: codexAssistantCatalog,
-    attachments: codexAttachments
-  });
-}
-
-function createOpenCodeSessionRegistration({
-  agentDatabaseCommand = null,
-  agentEnvCommand = null,
-  agentPreviewCommand = null,
-  agentSessionCommand = null,
-  codexGitCommand = null,
-  command = "",
-  createServerProcess = createOpenCodeServerProcess,
-  env = process.env,
-  getAssistantManager = () => null,
-  listConnections = async () => [],
-  logger = null,
-  prepareCommandEnvironment = prepareAgentSessionCommandEnvironment,
-  projectService,
-  publishSessionChanged: publishApplicationSessionChanged = async () => null,
-  publishConversation,
-  runNativeDetachedConversation,
-  readCatalogCommand = readOpenCodeCatalog,
-  readZenModelsCommand = readOpenCodeZenModelIds,
-  recordGitActor = writeSessionGitCommandActor,
-  resolveConnection = async () => null,
-  verifyConnectionCommand = verifyOpenCodeApiKey
-} = {}) {
-  if (!projectService) {
-    throw new TypeError("OpenCode terminal controllers require vibe64.project.");
-  }
-  const publishSessionChanged = publishMainConversationEvent.bind(
-    null, opencodeTerminalNamespace, publishApplicationSessionChanged, publishConversation
-  );
-  const sharedRuntime = createOpenCodeSharedRuntime({
-    onStop: details => {
-      vibe64SessionDebugLog("server.opencode.shared-process.stop", details);
-      logOperationalEvent(logger, /failed|lost/u.test(details.reason) ? "warn" : "info", {
-        component: "vibe64.opencode",
-        event: "vibe64.opencode.shared_process_stop",
-        ...details
-      }, "Stopping the shared OpenCode process.");
-    }
-  });
-  const { turns, temporaryConversations } = sharedRuntime;
-  const hostPreparation = createOpenCodeHostPreparation({
-    agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand,
-    codexGitCommand, command, createServerProcess, env, getAssistantManager,
-    listConnections, prepareCommandEnvironment, projectService, resolveConnection,
-    sharedRuntime
-  });
-  const presentation = createOpenCodeConversationPresentation({ getAssistantManager, publishSessionChanged, turns, temporaryConversations });
-  const events = createOpenCodeConversationEvents({ projectService, publishSessionChanged, sharedRuntime, presentation });
-  const mainMessagePreparation = createOpenCodeMainMessagePreparation({
-    projectService, env, recordGitActor, hostPreparation, events, presentation
-  });
-  const { contextFor } = mainMessagePreparation;
-  const accounts = createOpenCodeConversationAccounts({
-    command, createServerProcess, env, listConnections, readCatalogCommand,
-    readZenModelsCommand, sharedRoots: hostPreparation.sharedRoots, verifyConnectionCommand,
-    mainMessagePreparation, resolveConnection
-  });
-  const scopedPreparation = createOpenCodeScopedPreparation({
-    projectService, contextFor, hostPreparation, events, publishSessionChanged, prepareSessionCleanup
-  });
-
-  const lifecyclePreparation = createOpenCodeLifecyclePreparation({
-    projectService, getAssistantManager, sharedRuntime, hostPreparation,
-    mainMessagePreparation, events, presentation, resolveConnection
-  });
-  const renewalPreparation = createOpenCodeSessionRenewalPreparation({
-    mainMessagePreparation, hostPreparation, lifecyclePreparation
-  });
-
-  const terminals = createOpenCodeInteractiveTerminals({
-    sharedRuntime, contextFor, hostPreparation, env, recordGitActor
-  });
-
-  function prepareSessionCleanup(sessionId = "", options = {}) {
-    return lifecyclePreparation.prepareSessionCleanup(sessionId, options);
-  }
-
-  const provider = createOpenCodeSessionAgentProvider({
-    sharedRuntime, hostPreparation, accounts, mainMessagePreparation, scopedPreparation,
-    lifecyclePreparation, renewalPreparation, terminals, publishSessionChanged,
-    prepareSessionCleanup, runNativeDetachedConversation
-  });
-  return { provider, hostPreparation, accounts, terminals };
 }
 
 const AGENT_WRITE_WAIT_MS = 60_000;
@@ -931,6 +348,14 @@ function sessionRecordId(session = {}) {
   return String(session?.sessionId || session?.id || "").trim();
 }
 
+function ephemeralInput(input = {}) {
+  return { ...input, ephemeral: input.persistent !== true };
+}
+
+function realtimeDebugEnabled(env = {}) {
+  return ["1", "true", "yes", "on"].includes(String(env.JSKIT_REALTIME_DEBUG || "").trim().toLowerCase());
+}
+
 function sessionActivityTimestamps(session = {}) {
   const manifest = session?.manifest && typeof session.manifest === "object" && !Array.isArray(session.manifest)
     ? session.manifest
@@ -954,7 +379,7 @@ function projectRuntimeDormancyState({
   const sessionRecords = Array.isArray(sessions) ? sessions : [];
   const activeAgentSessionIds = sessionRecords
     .filter(sessionHasActiveAgentRun)
-    .map((session) => String(session?.sessionId || session?.id || "").trim())
+    .map((session) => sessionRecordId(session))
     .filter(Boolean)
     .sort();
   const activityMs = [
@@ -1321,7 +746,7 @@ function createService({
         // Stream publications also reauthorize as "subscribe". Retain slow or
         // denied checks without adding a log write for every healthy token.
         if ((operation !== "subscribe" || !allowed || durationMs >= 100) &&
-            ["1", "true", "yes", "on"].includes(String(env.JSKIT_REALTIME_DEBUG || "").trim().toLowerCase())) {
+            realtimeDebugEnabled(env)) {
           logOperationalEvent(logger, "warn", { event: "vibe64.conversation.browser_timing",
             sessionId: conversationId, phase: "authorization", operation, allowed,
             durationMs }, "Browser conversation authorization timing.");
@@ -2354,7 +1779,7 @@ function createService({
     const migrated = [];
     const legacy = [];
     for (const session of sessions) {
-      const sessionId = String(session?.sessionId || session?.id || "").trim();
+      const sessionId = sessionRecordId(session);
       if (!String(session?.metadata?.[VIBE64_ASSISTANT_SELECTION_METADATA] || "").trim()) {
         legacy.push(session);
         continue;
@@ -2386,7 +1811,7 @@ function createService({
     };
     const runtime = await projectService.createRuntime({ inspectSource: false });
     for (const session of legacy) {
-      const sessionId = String(session?.sessionId || session?.id || "").trim();
+      const sessionId = sessionRecordId(session);
       try {
         const metadata = session.metadata || {};
         const selection = resolveVibe64AssistantSelection(migrationCapabilities, {
@@ -3610,7 +3035,7 @@ function createService({
           try {
             const sessions = await listOpenProjectRuntimeSessions();
             sessionIds = (Array.isArray(sessions) ? sessions : [])
-              .map((session) => String(session?.sessionId || session?.id || "").trim())
+              .map((session) => sessionRecordId(session))
               .filter(Boolean);
             sessionCount = sessionIds.length;
           } catch (error) {
@@ -3880,10 +3305,7 @@ function createService({
     },
 
     createEphemeralAgentConversation(scope = {}, input = {}, options = {}) {
-      return sessionAgent.createEphemeralConversation(scope, {
-        ...input,
-        ephemeral: input.persistent !== true
-      }, options);
+      return sessionAgent.createEphemeralConversation(scope, ephemeralInput(input), options);
     },
 
     resolveEphemeralAgentExecutionProfile(scope = {}, input = {}, options = {}) {
@@ -3895,10 +3317,7 @@ function createService({
     },
 
     deleteEphemeralAgentConversation(scope = {}, input = {}, options = {}) {
-      return sessionAgent.deleteEphemeralConversation(scope, {
-        ...input,
-        ephemeral: input.persistent !== true
-      }, options);
+      return sessionAgent.deleteEphemeralConversation(scope, ephemeralInput(input), options);
     },
 
     async runDetachedAgentChatTurn(sessionId, input = {}, options = {}) {
@@ -4617,7 +4036,7 @@ function createService({
           code: "conversation_forbidden", statusCode: 403
         });
       }
-      const diagnostics = ["1", "true", "yes", "on"].includes(String(env.JSKIT_REALTIME_DEBUG || "").trim().toLowerCase());
+      const diagnostics = realtimeDebugEnabled(env);
       let phase = "session-read";
       let started = performance.now();
       let completed = false;
@@ -4700,10 +4119,7 @@ function createService({
     },
 
     readEphemeralAgentConversation(scope = {}, input = {}, options = {}) {
-      return sessionAgent.readEphemeralConversation(scope, {
-        ...input,
-        ephemeral: input.persistent !== true
-      }, options);
+      return sessionAgent.readEphemeralConversation(scope, ephemeralInput(input), options);
     },
 
     readOutputTargetTerminal(sessionId, terminalSessionId) {
@@ -4779,17 +4195,11 @@ function createService({
     },
 
     startEphemeralAgentConversationTurn(scope = {}, input = {}, options = {}) {
-      return sessionAgent.startEphemeralConversationTurn(scope, {
-        ...input,
-        ephemeral: input.persistent !== true
-      }, options);
+      return sessionAgent.startEphemeralConversationTurn(scope, ephemeralInput(input), options);
     },
 
     stopEphemeralAgentConversation(scope = {}, input = {}, options = {}) {
-      return sessionAgent.stopEphemeralConversation(scope, {
-        ...input,
-        ephemeral: input.persistent !== true
-      }, options);
+      return sessionAgent.stopEphemeralConversation(scope, ephemeralInput(input), options);
     },
 
     async startGlobalCodexTerminal(options = {}) {
@@ -4843,10 +4253,7 @@ function createService({
     },
 
     waitForEphemeralAgentConversationTurn(scope = {}, input = {}, options = {}) {
-      return sessionAgent.waitForEphemeralConversationTurn(scope, {
-        ...input,
-        ephemeral: input.persistent !== true
-      }, options);
+      return sessionAgent.waitForEphemeralConversationTurn(scope, ephemeralInput(input), options);
     },
 
     writeAgentTerminal(sessionId, terminalSessionId, data, input = {}, options = {}) {
@@ -4971,10 +4378,6 @@ function startProjectRuntimeDormancyCleanupSchedule({
 }
 
 export {
-  createCodexSessionRegistration,
-  createOpenCodeSessionRegistration,
   createService,
-  projectRuntimeDormancyState,
-  startProjectRuntimeDormancyCleanupSchedule,
-  terminalNamespaceMatchesProjectScope
+  startProjectRuntimeDormancyCleanupSchedule
 };

@@ -9,7 +9,7 @@ import { checkpointSessionTurn } from "./sessionTurnCheckpoint.js";
 import { conversationMessageId, upstreamMessageId } from "./openCodeConversationStorage.js";
 import { openCodeMessageError } from "./openCodeConversationEvents.js";
 import { OPENCODE_HELPER_AGENT_ID, OPENCODE_EPHEMERAL_AGENT_ID } from "./opencodeServerProcess.js";
-import { openCodeError, openCodeRuntimeFailure as runtimeFailure } from "./terminalShared.js";
+import { openCodeError, throwVibe64OpenCodeError as runtimeFailure } from "./terminalShared.js";
 import { normalizeText as text } from "@local/vibe64-core/server/core";
 
 function openCodeExecutionProfile(input = {}) {

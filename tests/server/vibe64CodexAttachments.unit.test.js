@@ -46,7 +46,7 @@ import {
 import {
   registerRoutes
 } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
-import { createCodexSessionRegistration } from "../../packages/vibe64-terminals/src/server/service.js";
+import { createCodexSessionRegistration } from "../../packages/vibe64-terminals/src/server/codexSessionRegistration.js";
 import {
   runWithProjectRequestContext
 } from "../../packages/vibe64-core/src/server/projectRequestContext.js";

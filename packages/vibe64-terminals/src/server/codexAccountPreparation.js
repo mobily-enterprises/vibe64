@@ -5,7 +5,7 @@ import { CODEX_RECONNECT_REQUIRED_CODE, CODEX_RECONNECT_REQUIRED_MESSAGE } from 
 import { markCodexReconnectRequired } from "@local/vibe64-core/server/codexAuthState";
 import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
-import { directoryExists, retryableTerminalFailure } from "./terminalShared.js";
+import { directoryExists, nonRetryableTerminalFailure } from "./terminalShared.js";
 import { errorMessage } from "./codexStartupHealth.js";
 
 function normalizeText(value) {
@@ -16,7 +16,7 @@ function codexReconnectTerminalFailure(error = null) {
   if (error?.code !== CODEX_RECONNECT_REQUIRED_CODE) {
     return null;
   }
-  return retryableTerminalFailure({
+  return nonRetryableTerminalFailure({
     code: CODEX_RECONNECT_REQUIRED_CODE,
     errors: [
       {
@@ -84,7 +84,7 @@ function createCodexAccountPreparation({
     const toolHomeSource = resolvedCodexToolHomeSource();
     if (!toolHomeSource) {
       return codexToolHomeRequired
-        ? retryableTerminalFailure({
+        ? nonRetryableTerminalFailure({
             ok: false,
             error: "Codex account storage is not available. Connect Codex before starting a Codex terminal."
           })
@@ -99,7 +99,7 @@ function createCodexAccountPreparation({
         await mkdir(toolHomeSource, { recursive: true, mode: 0o700 });
         return { ok: true, toolHomeSource };
       }
-      return retryableTerminalFailure({
+      return nonRetryableTerminalFailure({
         ok: false,
         error: "Codex is not ready for terminals. Connect Codex before continuing."
       });
@@ -137,7 +137,7 @@ function createCodexAccountPreparation({
       if (reconnectFailure) {
         return reconnectFailure;
       }
-      return retryableTerminalFailure({
+      return nonRetryableTerminalFailure({
         code: error?.code || "",
         errors: Array.isArray(error?.errors) ? error.errors : undefined,
         ok: false,

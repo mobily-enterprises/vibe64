@@ -10,7 +10,7 @@ import {
   emitVibe64AgentExecutionProfile,
   vibe64HelperExecutionProfileRequest
 } from "@local/vibe64-runtime/shared";
-import { OPENCODE_EXPECTED_VERSION, openCodeRuntimeFailure as runtimeFailure } from "../../opencodeServerProcess.js";
+import { OPENCODE_EXPECTED_VERSION, throwVibe64OpenCodeError as runtimeFailure } from "../../opencodeServerProcess.js";
 import { openCodeSessionId as safeSessionId, opencodeTerminalNamespace } from "../../terminalShared.js";
 
 const OPENCODE_HELPER_PROFILE_REVISION =

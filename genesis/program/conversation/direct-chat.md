@@ -1240,6 +1240,8 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-terminals/src/server/openCodeConversationStorage.js`
 - `tests/server/opencodeReasoningSummaries.unit.test.js`
 - `packages/vibe64-terminals/src/server/service.js`
+- `packages/vibe64-terminals/src/server/codexSessionRegistration.js`
+- `packages/vibe64-terminals/src/server/openCodeSessionRegistration.js`
 - `packages/vibe64-terminals/src/server/mainConversationBinding.js`
 - `packages/vibe64-terminals/src/server/nativeConversationRetirement.js`
 - Main: `packages/vibe64-terminals/src/server/agent/sessionAgentManager.js`
@@ -3301,7 +3303,7 @@ checkpoint-before-state and stream-removal order through one native event sink. 
 null-write handling; `projectReasoning` remains cosmetic product presentation.
 Those store/event projections do not implement native turn state.
 
-`service.createCodexSessionRegistration` constructs one shared native provider/run
+`codexSessionRegistration.createCodexSessionRegistration` constructs one shared native provider/run
 owner pair and the existing account, storage, environment, preparation, catalogue,
 attachment and terminal facilities. The registered Codex provider assembles its
 selected-owner descriptors directly from those instances; there is no intermediate
@@ -3310,7 +3312,7 @@ while ordinary chat operations still dispatch through the common manager/runtime
 The attachment adapter retains one renewal facility per registration as its retry
 identity, so terminal lease retries share their original coordination.
 
-`service.createOpenCodeSessionRegistration` constructs the original shared native
+`openCodeSessionRegistration.createOpenCodeSessionRegistration` constructs the original shared native
 runtime and its named host, account, message, scoped, lifecycle, renewal,
 publication and terminal facilities once. The registered provider assembles the
 same configured-owner descriptors from those instances; there is no intermediate

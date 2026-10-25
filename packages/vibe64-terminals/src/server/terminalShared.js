@@ -27,7 +27,7 @@ const GLOBAL_CODEX_TERMINAL_NAMESPACE = "vibe64-global-codex";
 const OPENCODE_TERMINAL_NAMESPACE = "vibe64-opencode";
 const OUTPUT_TARGET_TERMINAL_NAMESPACE = "vibe64-output-target";
 
-function retryableTerminalFailure(result = {}) {
+function nonRetryableTerminalFailure(result = {}) {
   return {
     ...result,
     retryable: false
@@ -44,7 +44,7 @@ function codexSessionWorktreeUnavailableFailure({
 } = {}) {
   const removed = codexSessionWorktreeWasRemoved(session);
   const closingReason = sessionClosingReason(session);
-  return retryableTerminalFailure({
+  return nonRetryableTerminalFailure({
     code: CODEX_SESSION_WORKTREE_UNAVAILABLE_CODE,
     ok: false,
     error: removed
@@ -75,11 +75,15 @@ function openCodeError(code, message, details = {}, statusCode = 409) {
   return error;
 }
 
-function openCodeRuntimeFailure(error) {
-  if (error.code === "assistant_opencode_stop_unverified") error.code = "vibe64_opencode_stop_unverified";
-  if (error.code === "assistant_opencode_interrupt_unconfirmed") error.code = "vibe64_opencode_interrupt_unconfirmed";
-  if (error.code === "assistant_opencode_interrupt_timeout") error.code = "vibe64_opencode_interrupt_timeout";
-  if (error.code === "assistant_opencode_conversation_busy") error.code = "vibe64_opencode_conversation_busy";
+const VIBE64_OPENCODE_ERROR_CODES = Object.freeze({
+  assistant_opencode_stop_unverified: "vibe64_opencode_stop_unverified",
+  assistant_opencode_interrupt_unconfirmed: "vibe64_opencode_interrupt_unconfirmed",
+  assistant_opencode_interrupt_timeout: "vibe64_opencode_interrupt_timeout",
+  assistant_opencode_conversation_busy: "vibe64_opencode_conversation_busy"
+});
+
+function throwVibe64OpenCodeError(error) {
+  if (Object.hasOwn(VIBE64_OPENCODE_ERROR_CODES, error.code)) error.code = VIBE64_OPENCODE_ERROR_CODES[error.code];
   throw error;
 }
 
@@ -208,9 +212,9 @@ export {
   codexSessionWorktreeUnavailableFailure,
   codexSessionWorkdirAllowed,
   openCodeError,
-  openCodeRuntimeFailure,
+  throwVibe64OpenCodeError,
   openCodeSessionId,
-  retryableTerminalFailure,
+  nonRetryableTerminalFailure,
   vibe64Result,
   claudeTerminalNamespace,
   codexTerminalNamespace,
