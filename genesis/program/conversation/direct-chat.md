@@ -1570,7 +1570,11 @@ new pin only after native acceptance. No goal, history or account metadata repai
 is performed on reads.
 
 Active and paused goals permit Custom model or Senior/Junior changes within the
-same orchestrator. The selection writer calls `applyGoalSelection`, which
+same orchestrator. The selection writer reads native state once per attempt and
+decides "unfinished goal" from one ordered source for both chat-mode and model
+changes: the native goal when the tool reports it, else the live session's goal,
+else the routing pin. A model change reads it only after destination access is
+checked. It then calls `applyGoalSelection`, which
 validates current access, applies native future-turn settings and updates the
 routing pin without clearing objective, budget or progress. Auto and another
 orchestrator are saved for after the current goal. Native settings failures keep

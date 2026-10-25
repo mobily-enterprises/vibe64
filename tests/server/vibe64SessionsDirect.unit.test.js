@@ -4234,6 +4234,33 @@ test("named chat modes rebind only an unfinished goal, through authorized access
 });
 
 
+test("a chat mode change sees the live session's unfinished goal once, like a model change", async () => {
+  const lock = agentWriteLockHarness();
+  const operations = [];
+  const current = { agentId: "codex", catalogRevision: `sha256:${"a".repeat(64)}`, engineId: "codex",
+    modelId: "gpt-6-astra", modelProviderId: "openai", schema: "vibe64.assistant-selection.v1", variantId: "high" };
+  const next = { ...current, modelId: "gpt-6-nova" };
+  const session = { sessionId: "session-1", projectSlug: "project-a", status: "active", metadata: {
+    assistant_selection: JSON.stringify(current),
+    assistant_routing: JSON.stringify({ mode: "custom", review: false, override: current })
+  } };
+  const runtime = { async getSession() { return session; }, store: { ...lock.store,
+    async writeMetadataValue(_id, name, value) { operations.push("write"); session.metadata[name] = value; } } };
+  const service = createService({ project: { async createRuntime() { return runtime; } }, terminals: {
+    async agentSessionState() { operations.push("state"); return { turn: { active: false }, goal: { status: "active" } }; },
+    async readAgentGoal() { operations.push("goal"); return { status: "unavailable" }; },
+    async resolveAssistantPurpose() { operations.push("resolve"); return { available: true, effectiveSelection: next, connectionIdentity: "c" }; },
+    async requireAssistantSelectionAccess() { operations.push("access"); },
+    async applyGoalSelection(_id, selection) { assert.deepEqual(selection, next); operations.push("future"); }
+  } });
+  const result = await service.updateAssistantSelection(session.sessionId, {
+    assistantRouting: { mode: "senior", review: false }, vibe64User: { role: "owner", username: "owner" }
+  });
+  assert.notEqual(result.ok, false, JSON.stringify(result));
+  assert.equal(session.metadata.assistant_selection, JSON.stringify(current));
+  assert.deepEqual(operations, ["state", "goal", "resolve", "access", "future", "write"]);
+});
+
 test("a routed send reports its sub-phase timing once", async () => {
   const session = { sessionId: "session-1", status: "active", metadata: {} };
   const runtime = { stateRoot: "/unused-timing-fixture", store: { async readMetadataValue(_id, name) { return session.metadata[name]; } } };

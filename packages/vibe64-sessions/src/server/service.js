@@ -2501,17 +2501,28 @@ function createService({
             let preferences = null;
             let resolved;
             let connectionIdentity;
+            // One answer, read once, to "is a turn running or a goal unfinished":
+            // the native goal when the tool reports it, else the live session's,
+            // else the pin. A model change reads it only after access is checked.
+            let nativeState = null;
+            const readNativeState = async () => {
+              if (nativeState) return nativeState;
+              const agentSession = typeof terminals.agentSessionState === "function"
+                ? await terminals.agentSessionState(sessionId, { runtime, session }) : null;
+              const observedGoal = typeof terminals.readAgentGoal === "function"
+                ? await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User }) : null;
+              nativeState = { turnActive: agentSession?.turn?.active === true,
+                goalActive: assistantGoalIsActive(observedGoal?.status === "available" ? observedGoal.goal
+                  : observedGoal?.goal || agentSession?.goal || assistantRoutingGoalFromMetadata(session.metadata)) };
+              return nativeState;
+            };
             if (input.assistantRouting && input.assistantRouting.mode !== "custom") {
               // An omitted Deslop or automatic save choice keeps the chat's own.
               preferences = assistantRoutingPreferences({
                 ...assistantRoutingAutomation(assistantRoutingFromMetadata(session.metadata)), ...input.assistantRouting });
               // Main chat's tool follows the owner's setup; a changed tool
               // catches up on the next message. Only an active goal rebinds now.
-              const observed = typeof terminals.readAgentGoal === "function"
-                ? await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User }) : null;
-              const pinned = assistantRoutingGoalFromMetadata(session.metadata);
-              const goal = observed?.status === "available" ? observed.goal : observed?.goal || pinned;
-              if (!assistantGoalIsActive(goal)) {
+              if (!(await readNativeState()).goalActive) {
                 await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(preferences));
                 return { assistantSelection: current, session: await runtime.getSession(sessionId, { inspectSource: false }) };
               }
@@ -2535,18 +2546,12 @@ function createService({
             await terminals.requireAssistantSelectionAccess(resolved, {
               vibe64User, ...(connectionIdentity ? { expectedConnectionIdentity: connectionIdentity } : {})
             });
-            const agentSession = typeof terminals.agentSessionState === "function"
-              ? await terminals.agentSessionState(sessionId, { runtime, session })
-              : null;
+            const { turnActive, goalActive } = await readNativeState();
             const next = resolved;
-            const observedGoal = typeof terminals.readAgentGoal === "function"
-              ? await terminals.readAgentGoal(sessionId, { runtime, session, vibe64User }) : null;
-            const goal = observedGoal?.status === "available" ? observedGoal.goal
-              : observedGoal?.goal || agentSession?.goal || assistantRoutingGoalFromMetadata(session.metadata);
             const nextPreferences = preferences || {
               mode: "custom", review: false, override: next
             };
-            if (deferred || agentSession?.turn?.active || assistantGoalIsActive(goal)) {
+            if (deferred || turnActive || goalActive) {
               await terminals.applyGoalSelection(sessionId, next, nextPreferences, { runtime, session, vibe64User });
               await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(nextPreferences));
               return { assistantSelection: current, session: await runtime.getSession(sessionId, { inspectSource: false }) };
