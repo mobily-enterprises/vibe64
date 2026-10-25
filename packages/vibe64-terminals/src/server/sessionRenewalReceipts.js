@@ -167,20 +167,13 @@ function sessionRenewalHandoverTurnId(input, session, operationId) {
 }
 
 function sessionRenewalSeedTurnId(input, session, operationId, threadId) {
-  const currentSession = {
-    ...session,
-    metadata: {
-      ...(session.metadata || {}),
-      agent_identity_conversation_id: threadId,
-      agent_renewal_seed_operation_id: operationId
-    }
-  };
-  const metadata = currentSession.metadata;
-  const sameOperation = normalizeText(metadata.agent_renewal_seed_operation_id) === operationId;
-  const expectedTurnId = normalizeText(input.expectedTurnId) || (
-    sameOperation ? normalizeText(metadata.agent_renewal_seed_turn_id) : ""
+  const metadata = session.metadata || {};
+  // A stored seed turn belongs to one operation on one successor thread.
+  const sameSeed = normalizeText(metadata.agent_renewal_seed_operation_id) === operationId &&
+    normalizeText(metadata.agent_renewal_seed_thread_id) === normalizeText(threadId);
+  return normalizeText(input.expectedTurnId) || (
+    sameSeed ? normalizeText(metadata.agent_renewal_seed_turn_id) : ""
   );
-  return expectedTurnId;
 }
 
 function writeSessionRenewalHandoverTurnMetadata(runtime, sessionId, values) {
