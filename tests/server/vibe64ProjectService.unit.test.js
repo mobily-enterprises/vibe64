@@ -2248,6 +2248,8 @@ test("managed app identities are stored in the repository source", async () => {
     });
     // Private on a person's own computer; a group-sharing host passes 0o660.
     assert.equal((await stat(storedPath)).mode & 0o777, 0o600);
+    assert.deepEqual((await fsPromises.readdir(path.dirname(storedPath))).filter((name) => name.includes("preview-identities.json.")), [],
+      "the atomic write leaves no temporary file beside the identities");
     await assert.rejects(() => readFile(path.join(
       service.currentProjectRuntimeRoot(),
       "preview",

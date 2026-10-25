@@ -52,6 +52,10 @@ Saved user values live in one private (`0600`) file per project that every
 session shares. Saves queue per file, so concurrent saves from different
 sessions keep each other's values, and each one replaces the file atomically:
 an interrupted save leaves the previous values readable.
+Core's `atomicFile.js` is the one temporary-file-and-rename writer: saved
+values, the generated dotenv and Git exclude projections, Preview identities
+and archive bundle records all use it, so its temporary file never outlives a
+failed write.
 Codex, Claude, and OpenCode session commands receive the resolved development
 environment. The authenticated shell broker reads current project Env for every
 command using its bound project and exact session source, then supplies it through

@@ -8,8 +8,7 @@ import {
   readdir,
   rename,
   rm,
-  rmdir,
-  writeFile
+  rmdir
 } from "node:fs/promises";
 import path from "node:path";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
@@ -18,6 +17,7 @@ import {
   normalizeProjectSlug,
   resolveProjectContextRoot
 } from "@local/vibe64-core/server/studioProjectContext";
+import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { pathExists, pathInsideOrEqual } from "@local/vibe64-core/server/core";
 // Practice project slugs (the learning space). Outside its practice scope such
 // a slug resolves to catalogue paths while its record is shared, so the
@@ -957,13 +957,7 @@ async function writeArchiveLifecycle(bundlePath = "", lifecycle = {}) {
 }
 
 async function writeJsonAtomic(filePath = "", value = {}) {
-  const temporaryPath = `${filePath}.${process.pid}.partial`;
-  await writeFile(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, {
-    encoding: "utf8",
-    mode: 0o600
-  });
-  await chmod(temporaryPath, 0o600);
-  await rename(temporaryPath, filePath);
+  await writeJsonFileAtomic(filePath, value, { fileMode: 0o600 });
 }
 
 async function readJsonIfExists(filePath = "") {

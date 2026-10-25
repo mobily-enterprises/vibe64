@@ -6,8 +6,10 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   rename,
   rm,
+  stat,
   symlink,
   writeFile
 } from "node:fs/promises";
@@ -176,6 +178,12 @@ test("project deletion resumes after namespace removal failure without repeating
     });
 
     assert.equal(completed.ok, true);
+    // Bundle records are written atomically and privately, leaving no temporary file.
+    const bundleEntries = await readdir(completed.bundlePath);
+    assert.deepEqual(bundleEntries.filter((name) => /\.(?:partial|tmp)$/u.test(name)), []);
+    for (const name of bundleEntries.filter((entry) => entry.endsWith(".json"))) {
+      assert.equal((await stat(path.join(completed.bundlePath, name))).mode & 0o777, 0o600, name);
+    }
     assert.equal(closeAttempts, 1);
     assert.equal(namespaceRemovalAttempts, 2);
     assert.equal(resourceRemovalAttempts, 1);

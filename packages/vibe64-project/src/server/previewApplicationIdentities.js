@@ -1,5 +1,4 @@
-import crypto from "node:crypto";
-import { chmod, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -11,6 +10,7 @@ import {
 import {
   normalizePreviewApplicationIdentities
 } from "@local/vibe64-core/server/previewAuth";
+import { writeJsonFileAtomic } from "@local/vibe64-core/server/atomicFile";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 
 const PREVIEW_APPLICATION_IDENTITIES_DIR = ".vibe64";
@@ -92,22 +92,8 @@ async function savePreviewApplicationIdentities({
     identities,
     version: PREVIEW_APPLICATION_IDENTITIES_VERSION
   });
-  const temporaryPath = `${filePath}.${process.pid}.${crypto.randomUUID()}.tmp`;
-  await mkdir(path.dirname(filePath), {
-    mode: vibe64SharedModes().inheritingDirectory,
-    recursive: true
-  });
-  try {
-    await writeFile(temporaryPath, `${JSON.stringify(state, null, 2)}\n`, {
-      mode: vibe64SharedModes().file
-    });
-    await rename(temporaryPath, filePath);
-    await chmod(filePath, vibe64SharedModes().file);
-  } finally {
-    await rm(temporaryPath, {
-      force: true
-    });
-  }
+  const modes = vibe64SharedModes();
+  await writeJsonFileAtomic(filePath, state, { directoryMode: modes.inheritingDirectory, fileMode: modes.file });
   return {
     filePath,
     identities: state.identities
