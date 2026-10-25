@@ -179,7 +179,6 @@ const MYSQL_DIALECT = defineDatabaseDialect({
     const fields = Array.isArray(raw) ? raw[1] : null;
     return Array.isArray(rows) && Array.isArray(fields)
       ? {
-          command: "SELECT",
           fields,
           fullRowCount: rows.length,
           rows
@@ -223,7 +222,6 @@ const DATABASE_DIALECTS = Object.freeze({
     queryOptions: Object.freeze({ sqliteResultSet: true }),
     readOnlyBeginSql: "BEGIN",
     resultSet: (raw = {}) => raw.fields?.length ? {
-      command: raw.command,
       fields: raw.fields,
       fullRowCount: raw.rows.length,
       rows: raw.rows

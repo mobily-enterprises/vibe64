@@ -72,7 +72,8 @@ import {
 } from "../../packages/vibe64-database-tools/src/server/service.js";
 import {
   assertSingleStatement,
-  quoteQualifiedTable
+  quoteQualifiedTable,
+  statementCommand
 } from "../../packages/vibe64-database-tools/src/server/sqlPolicy.js";
 import {
   codexAppServerHelperTurnSettings
@@ -368,6 +369,21 @@ test("MySQL result provenance uses the same normalized query contract", () => {
   assert.equal(result.columns[0].databaseType, "integer");
   assert.equal(result.cellMeta[0][1].editable, true);
   assert.deepEqual(result.cellMeta[0][1].key.columns, [{ column: "id", value: 7 }]);
+  assert.equal(result.command, "COMMAND");
+
+  const select = normalizeRawResponse([[[7]], [{ name: "id", type: 8 }]], schema, { engine: "mysql" }, "SELECT 7");
+  assert.equal(select.command, "SELECT");
+  const procedure = normalizeRawResponse([[[7]], [{ name: "id", type: 8 }]], schema, { engine: "mysql" }, "CALL list_books()");
+  assert.equal(procedure.command, "CALL");
+});
+
+test("statement commands come from the SQL, and a writing WITH is never a SELECT", () => {
+  assert.equal(statementCommand("  /* note */ -- line\n select 1"), "SELECT");
+  assert.equal(statementCommand("INSERT INTO t(x) VALUES (1) RETURNING id"), "INSERT");
+  assert.equal(statementCommand("WITH a AS (SELECT 1) SELECT * FROM a"), "SELECT");
+  assert.equal(statementCommand("WITH a AS (SELECT 1) DELETE FROM t RETURNING *"), "DELETE");
+  assert.equal(statementCommand("with a as (select 1) update t set x = 1 returning x"), "UPDATE");
+  assert.equal(statementCommand("(SELECT 1)"), "COMMAND");
 });
 
 test("MySQL assistant queries use the adapter's read-only transaction and row mode", async () => {

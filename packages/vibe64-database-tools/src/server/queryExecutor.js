@@ -12,7 +12,8 @@ import {
 } from "./databaseDialect.js";
 import {
   assertSingleStatement,
-  queryId as normalizeQueryId
+  queryId as normalizeQueryId,
+  statementCommand
 } from "./sqlPolicy.js";
 
 const QUERY_TIMEOUT_MS = 20_000;
@@ -314,7 +315,10 @@ function publicColumns(columns = []) {
   return columns.map(({ source: _source, ...column }) => column);
 }
 
-function normalizeRawResponse(raw, schema = {}, connection = {}) {
+// A result set's command is the driver's own when it reports one (PostgreSQL);
+// otherwise it is read from the executed statement, so a row-returning write
+// such as INSERT ... RETURNING or CALL is never mistaken for a SELECT.
+function normalizeRawResponse(raw, schema = {}, connection = {}, sql = "") {
   const dialect = databaseDialect(connection.engine);
   const resultSet = dialect.resultSet(raw);
   if (resultSet) {
@@ -324,7 +328,7 @@ function normalizeRawResponse(raw, schema = {}, connection = {}) {
       ...bounded,
       cellMeta: bounded.rows.map((row) => cellEditMetadata(row, columns)),
       columns: publicColumns(columns),
-      command: resultSet.command,
+      command: resultSet.command || statementCommand(sql),
       fullRowCount: resultSet.fullRowCount,
       kind: "result-set",
       rowMeta: bounded.rows.map((row) => rowEditMetadata(row, columns))
@@ -383,7 +387,7 @@ async function executeDatabaseQuery({
       .connection(connection)
       .timeout(QUERY_TIMEOUT_MS, { cancel: true });
     signal?.throwIfAborted();
-    const result = normalizeRawResponse(raw, schema, descriptor);
+    const result = normalizeRawResponse(raw, schema, descriptor, statement);
     return {
       ...result,
       durationMs: Date.now() - startedAt,

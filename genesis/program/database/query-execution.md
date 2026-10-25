@@ -138,6 +138,12 @@ one statement at a time.
 Read-only execution uses the reader endpoint and a read-only transaction;
 manual write execution requires the existing unlock and confirmation checks.
 Copilot SQL remains read-only and uses the same execution owner as manual SQL.
+A result set reports the statement's real command: PostgreSQL's driver supplies
+it, and SQLite and MySQL read it from the executed statement's leading verb, with
+a WITH statement counted as SELECT only when no data-changing keyword appears in
+it. After a cell edit, row insert or row delete the editor re-runs its SQL only
+for SELECT, SHOW, DESCRIBE or EXPLAIN results, so a row-returning write such as
+`INSERT ... RETURNING` or `CALL` is never repeated; otherwise it reloads state.
 Copilot resolves the workflow's Helper assignment for the submitting user before
 inference. It may use a shared model in another orchestrator while the main chat
 remains on the owner's personal model. Its availability and model label describe

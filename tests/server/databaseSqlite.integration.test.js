@@ -60,6 +60,14 @@ test("SQLite schema, results, edits, read isolation and cancellation use real da
       } });
       const result = await executeDatabaseQuery({ connection, knex, schema, readOnly: false, sql: "SELECT name, visits FROM people ORDER BY id" });
       assert.deepEqual(result.rows, [["Alicia", "5"], ["Bob", "5"]]);
+      assert.equal(result.command, "SELECT");
+      const returning = await executeDatabaseQuery({ connection, knex, schema, readOnly: false,
+        sql: "-- add a team\nINSERT INTO teams(name) VALUES ('Writers') RETURNING id" });
+      assert.equal(returning.kind, "result-set");
+      assert.equal(returning.command, "INSERT");
+      const writingWith = await executeDatabaseQuery({ connection, knex, schema, readOnly: false,
+        sql: "WITH named(name) AS (VALUES ('Readers')) INSERT INTO teams(name) SELECT name FROM named RETURNING id" });
+      assert.equal(writingWith.command, "INSERT");
       await deleteDatabaseRow({ knex, schema, table: { schema: "main", name: "people" }, key: { columns: [{ column: "id", value: "2" }] }, confirmed: true });
       await assert.rejects(executeDatabaseQuery({ connection, knex, readOnly: false, sql: "ATTACH DATABASE ':memory:' AS outside" }));
     });

@@ -161,6 +161,19 @@ function assertSingleStatement(value = "", engine = "postgresql") {
   return sql;
 }
 
+// The statement's verb, read from its SQL rather than from a driver that labels
+// every row-returning statement alike. A WITH statement is a SELECT only when
+// no data-changing keyword appears anywhere in it; the search deliberately
+// ignores quoting, so a false match only makes the statement look writing.
+function statementCommand(sql = "") {
+  const code = String(sql || "").replace(/^(?:\s+|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)*/u, "");
+  const verb = (code.match(/^[A-Za-z]+/u)?.[0] || "").toUpperCase();
+  if (verb !== "WITH") {
+    return verb || "COMMAND";
+  }
+  return code.match(/\b(?:DELETE|INSERT|MERGE|REPLACE|UPDATE)\b/iu)?.[0].toUpperCase() || "SELECT";
+}
+
 function queryId(value = "") {
   const candidate = String(value || "").trim() || randomUUID();
   if (!QUERY_ID_PATTERN.test(candidate)) {
@@ -186,5 +199,6 @@ export {
   queryId,
   quoteIdentifier,
   quoteQualifiedTable,
-  sqlSegments
+  sqlSegments,
+  statementCommand
 };

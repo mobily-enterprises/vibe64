@@ -58,9 +58,9 @@ process.on("message", async ({ id, operation, filename, readOnly, sql, bindings 
           if (resultSet && (rows.length > 500 || bytes > 2 * 1024 * 1024)) break;
           if (rows.length > 100_000 || bytes > 16 * 1024 * 1024) throw new Error("SQLite inspection result is too large.");
         }
-        result = { fields, rows, changes: 0, command: "SELECT" };
+        result = { fields, rows, changes: 0 };
       } else {
-        result = { ...statement.run(...bindings), fields: [], rows: [], command: "COMMAND" };
+        result = { ...statement.run(...bindings), fields: [], rows: [] };
       }
     } else throw new Error("Unknown SQLite connection operation.");
     process.send({ id, result });
