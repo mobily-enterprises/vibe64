@@ -171,7 +171,7 @@ function statementCommand(sql = "") {
   if (verb !== "WITH") {
     return verb || "COMMAND";
   }
-  return code.match(/\b(?:DELETE|INSERT|MERGE|REPLACE|UPDATE)\b/iu)?.[0].toUpperCase() || "SELECT";
+  return code.match(/\b(?:DELETE|INSERT|MERGE|UPDATE|REPLACE(?!\s*\())\b/iu)?.[0].toUpperCase() || "SELECT";
 }
 
 function queryId(value = "") {

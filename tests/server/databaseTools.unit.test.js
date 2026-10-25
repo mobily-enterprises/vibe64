@@ -378,6 +378,7 @@ test("the editor and server share one default table query, naming MySQL tables w
   assert.equal(defaultTableQuery(table, "mysql"), "SELECT *\nFROM `book``s`;");
   assert.equal(defaultTableQuery(table, "postgresql"), 'SELECT *\nFROM "catalogue"."book`s";');
   assert.equal(defaultTableQuery({ name: "people", schema: "main" }, "sqlite"), 'SELECT *\nFROM "main"."people";');
+  assert.equal(defaultTableQuery({ name: "people", schema: "app" }, ""), 'SELECT *\nFROM "app"."people";');
 });
 
 test("statement commands come from the SQL, and a writing WITH is never a SELECT", () => {
@@ -387,6 +388,8 @@ test("statement commands come from the SQL, and a writing WITH is never a SELECT
   assert.equal(statementCommand("WITH a AS (SELECT 1) DELETE FROM t RETURNING *"), "DELETE");
   assert.equal(statementCommand("with a as (select 1) update t set x = 1 returning x"), "UPDATE");
   assert.equal(statementCommand("(SELECT 1)"), "COMMAND");
+  assert.equal(statementCommand("WITH a AS (SELECT REPLACE(x, 'a', 'b') AS y FROM t) SELECT * FROM a"), "SELECT");
+  assert.equal(statementCommand("WITH a AS (SELECT 1) REPLACE INTO t SELECT * FROM a"), "REPLACE");
 });
 
 test("MySQL assistant queries use the adapter's read-only transaction and row mode", async () => {

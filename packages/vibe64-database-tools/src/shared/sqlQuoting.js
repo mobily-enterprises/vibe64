@@ -32,9 +32,10 @@ const SQL_QUOTING = Object.freeze({
 });
 
 // The query a table opens with. A MySQL table's schema is the connection's own
-// database, so it is named without it; other engines qualify it by schema.
+// database, so it is named without it; other engines, including an unknown
+// one, qualify it by schema with standard double-quoted identifiers.
 function defaultTableQuery(table = {}, engine = "") {
-  const { quoteIdentifier } = SQL_QUOTING[engine];
+  const { quoteIdentifier } = SQL_QUOTING[engine] || SQL_QUOTING.postgresql;
   const parts = engine === "mysql" ? [table.name] : [table.schema, table.name];
   return `SELECT *\nFROM ${parts.filter(Boolean).map(quoteIdentifier).join(".")};`;
 }
