@@ -63,6 +63,33 @@ function structuredExplanation(answer = "") {
   return JSON.stringify({ answer });
 }
 
+// Runs one explanation stream and returns its final result in response form:
+// { ok: true, explanation, events } or the streamed error response.
+async function streamResult(run) {
+  const events = [];
+  await run({ emit: (event) => events.push(event), isClosed: () => false });
+  const error = events.find((event) => event.type === "source-explanation.error");
+  if (error) {
+    const { type: _type, ...response } = error;
+    return { ...response, events };
+  }
+  const finished = events.findLast((event) => event.type.endsWith(".finished"));
+  return { ok: true, explanation: finished?.explanation, events };
+}
+
+// The source text a Helper turn was asked to explain.
+function promptCode(prompt = "") {
+  return prompt.match(/\n(?:Selected code|File contents|File excerpt):\n```\n([\s\S]*?)\n```\n/u)?.[1];
+}
+
+function explainSource(service, input) {
+  return streamResult((stream) => service.streamExplanation(input, stream));
+}
+
+function followUpSource(service, input) {
+  return streamResult((stream) => service.streamExplanationFollowup(input, stream));
+}
+
 function sourceMetadata(sourceRoot) {
   return {
     source_kind: "session_clone",
@@ -150,6 +177,22 @@ async function createSourceEditorFixture({
     },
     ...(terminalService || {})
   };
+  // Shorthand for cache, admission and identity tests: answer each Helper turn
+  // from a generator returning { body, executionProfile }. Follow-up turns
+  // continue an existing conversation and use the follow-up generator.
+  if (!fixtureTerminalService.runEphemeralAgentChatTurn && (explanationGenerator || explanationFollowupGenerator)) {
+    fixtureTerminalService.runEphemeralAgentChatTurn = async (_scope, input, options) => {
+      const generator = input.threadId ? explanationFollowupGenerator : explanationGenerator;
+      const answer = await generator(input, options);
+      return {
+        ok: true,
+        executionProfile: answer?.executionProfile || resolvedSourceExplanationProfile(),
+        text: structuredExplanation(answer?.body ?? answer?.answer ?? answer),
+        threadId: answer?.agentThreadId || "",
+        turnId: answer?.agentTurnId || ""
+      };
+    };
+  }
   for (const method of ["resolveEphemeralAgentExecutionProfile", "runEphemeralAgentChatTurn", "deleteEphemeralAgentConversation", "stopEphemeralAgentConversation"]) {
     const operation = fixtureTerminalService[method];
     if (typeof operation !== "function") continue;
@@ -191,8 +234,6 @@ async function createSourceEditorFixture({
   }
   const serviceOptions = {
     explanationCacheNow,
-    explanationFollowupGenerator,
-    explanationGenerator,
     projectService: {
       async createRuntime() {
         return {
@@ -281,7 +322,7 @@ test("interface explanations separate Description and Steps caches and reject ch
     assert.match(prompt, /Start with one concrete overview sentence/u);
   }
   await writeFile(path.join(fixture.sourceRoot, "src/app.js"), "console.log('two');\n");
-  const stale = await fixture.service.explainSelection({ path: "src/app.js", sessionId: "session-1", startLine: 1, endLine: 1, presentation: "description", expectedHash });
+  const stale = await explainSource(fixture.service, { path: "src/app.js", sessionId: "session-1", startLine: 1, endLine: 1, presentation: "description", expectedHash });
   assert.equal(stale.ok, false);
   assert.equal(stale.statusCode, 409);
   assert.equal(stale.errors[0].code, "vibe64_source_explanation_source_changed");
@@ -296,7 +337,7 @@ test("symbol explanations use the server-indexed declaration, ignore forged brow
   const fixture = await createSourceEditorFixture({
     extraFiles: [{ path: "src/app.js", text }],
     explanationGenerator(input) {
-      generated.push(input.selectedText);
+      generated.push(promptCode(input.prompt));
       return { body: "Returns the first value.", executionProfile: resolvedSourceExplanationProfile() };
     }
   });
@@ -312,31 +353,31 @@ test("symbol explanations use the server-indexed declaration, ignore forged brow
   await mkdir(path.dirname(artifact));
   await writeFile(artifact, JSON.stringify({ architecture }));
   const input = { sessionId: "session-1", path: "src/app.js", symbolId: symbols[1].id, expectedHash: hash, presentation: "steps", scope: "file", startLine: 1, endLine: 1, startColumn: 2, endColumn: 3 };
-  const result = await fixture.service.explainSelection(input);
+  const result = await explainSource(fixture.service, input);
   assert.equal(result.ok, true);
   assert.deepEqual(generated, [declarations[1]]);
   assert.equal(result.explanation.sourceRange.symbolId, symbols[1].id);
   assert.equal(result.explanation.sourceRange.scope, "selection");
   assert.equal(result.explanation.sourceRange.startLine, 2);
   assert.equal(result.explanation.sourceRange.endColumn, declarations[1].length + 1);
-  const cached = await fixture.service.explainSelection(input);
+  const cached = await explainSource(fixture.service, input);
   assert.equal(cached.ok, true);
   assert.equal(cached.explanation.engine, "agent-cache");
   assert.equal(cached.explanation.sourceRange.symbolId, symbols[1].id);
   assert.equal(generated.length, 1);
-  const restored = await fixture.restartService().explainSelection(input);
+  const restored = await explainSource(fixture.restartService(), input);
   assert.equal(restored.ok, true);
   assert.equal(restored.explanation.sourceRange.symbolId, symbols[1].id);
   assert.deepEqual(generated, [declarations[1]], 'durable interpretations survive service restart');
   const saved = await fixture.service.readFile({ sessionId: 'session-1', path: 'src/app.js' });
   assert.equal(saved.interpretations.records[0].status, 'current');
   assert.equal(saved.interpretations.records[0].symbolId, symbols[1].id);
-  const unknown = await fixture.service.explainSelection({ ...input, symbolId: "missing-symbol" });
+  const unknown = await explainSource(fixture.service, { ...input, symbolId: "missing-symbol" });
   assert.equal(unknown.statusCode, 409);
-  const otherFile = await fixture.service.explainSelection({ ...input, path: "src/index/pages.jsx", expectedHash: undefined });
+  const otherFile = await explainSource(fixture.service, { ...input, path: "src/index/pages.jsx", expectedHash: undefined });
   assert.equal(otherFile.statusCode, 409);
   await writeFile(path.join(fixture.sourceRoot, "src/app.js"), text.replace("return first", "return 'changed'"));
-  const stale = await fixture.service.explainSelection({ ...input, expectedHash: undefined });
+  const stale = await explainSource(fixture.service, { ...input, expectedHash: undefined });
   assert.equal(stale.statusCode, 409);
   assert.equal(stale.errors[0].code, "vibe64_source_explanation_symbol_changed");
   assert.equal(generated.length, 1);
@@ -348,10 +389,10 @@ test("symbol explanations reject missing, malformed, impossible, symlinked and o
   t.after(() => rm(fixture.root, { recursive: true, force: true }));
   const input = { sessionId: "session-1", path: "src/app.js", symbolId: "symbol:app", startLine: 1, endLine: 1 };
   const artifact = path.join(fixture.sourceRoot, ".genesis/machine-city.json");
-  assert.equal((await fixture.service.explainSelection(input)).statusCode, 409);
+  assert.equal((await explainSource(fixture.service, input)).statusCode, 409);
   await mkdir(path.dirname(artifact));
   await writeFile(artifact, "not JSON");
-  assert.equal((await fixture.service.explainSelection(input)).statusCode, 409);
+  assert.equal((await explainSource(fixture.service, input)).statusCode, 409);
   const hash = crypto.createHash("sha256").update("console.log('one');\n").digest("hex");
   const architecture = { schema: "genesis.architecture.v1", snapshotId: "bad-range",
     subsystems: [{ id: "directory:src", root: "src", parentId: null, fileIds: ["file:src/app.js"] }],
@@ -359,15 +400,15 @@ test("symbol explanations reject missing, malformed, impossible, symlinked and o
     symbols: [{ id: "symbol:app", fileId: "file:src/app.js", path: "src/app.js", name: "app", visibility: "public", rangeAvailable: true, start: { line: 1, column: 1 }, end: { line: 1, column: 500 } }],
     relations: [], capabilities: { symbols: "partial", dependencies: "partial", pages: "unconfigured", runtimeCalls: "unsupported" }, diagnostics: [] };
   await writeFile(artifact, JSON.stringify({ architecture }));
-  assert.equal((await fixture.service.explainSelection(input)).errors[0].code, "vibe64_source_explanation_symbol_changed");
+  assert.equal((await explainSource(fixture.service, input)).errors[0].code, "vibe64_source_explanation_symbol_changed");
   await rm(artifact);
   await symlink(path.join(fixture.sourceRoot, "src/app.js"), artifact);
-  assert.equal((await fixture.service.explainSelection(input)).statusCode, 403);
+  assert.equal((await explainSource(fixture.service, input)).statusCode, 403);
   await rm(artifact);
   const handle = await open(artifact, "w");
   try { await handle.truncate(128 * 1024 * 1024 + 1); } finally { await handle.close(); }
-  assert.equal((await fixture.service.explainSelection(input)).statusCode, 413);
-  assert.equal((await fixture.service.explainSelection({ ...input, symbolId: "" })).statusCode, 400);
+  assert.equal((await explainSource(fixture.service, input)).statusCode, 413);
+  assert.equal((await explainSource(fixture.service, { ...input, symbolId: "" })).statusCode, 400);
   assert.equal(generated, 0);
 });
 
@@ -391,9 +432,9 @@ test('function pseudocode survive restart, expose staleness and isolate people a
   t.after(() => Promise.all([fixture, other].map(({ root }) => rm(root, { recursive: true, force: true }))));
   await writeCallableAnalysis(fixture);
   const input = { sessionId: 'session-1', path: 'src/app.js', scope: 'selection', presentation: 'steps', symbolId: 'symbol:app', startLine: 1, endLine: 1, vibe64User: { uid: 1001, username: 'ada' } };
-  assert.equal((await fixture.service.explainSelection(input)).ok, true);
+  assert.equal((await explainSource(fixture.service, input)).ok, true);
   const restarted = fixture.restartService();
-  assert.equal((await restarted.explainSelection(input)).explanation.engine, 'agent-cache');
+  assert.equal((await explainSource(restarted, input)).explanation.engine, 'agent-cache');
   assert.equal(generated, 1);
   const current = await restarted.readFile(input);
   assert.equal(current.interpretations.records[0].status, 'current');
@@ -403,10 +444,10 @@ test('function pseudocode survive restart, expose staleness and isolate people a
   await writeFile(path.join(fixture.sourceRoot, input.path), 'export function app() { return 2; }\n');
   assert.equal((await restarted.readFile(input)).interpretations.records[0].status, 'stale');
   await writeCallableAnalysis(fixture, 'export function app() { return 2; }\n');
-  assert.equal((await restarted.explainSelection(input)).ok, true);
+  assert.equal((await explainSource(restarted, input)).ok, true);
   assert.equal(generated, 2);
   assert.equal((await restarted.readFile(input)).interpretations.records[0].status, 'current');
-  await restarted.explainSelection({ ...input, force: true });
+  await explainSource(restarted, { ...input, force: true });
   assert.equal(generated, 3);
 });
 
@@ -415,9 +456,8 @@ test('file overviews use the whole saved file without an index, survive restart 
   const text = "export function load() { return 1; }\nexport const name = 'app';\n";
   const fixture = await createSourceEditorFixture({ extraFiles: [{ path: 'src/app.js', text }], explanationGenerator(input) {
     generated++;
-    assert.equal(input.range.scope, 'file');
-    assert.equal(input.range.symbolId, undefined);
-    assert.equal(input.selectedText, generated < 2 ? text : text.replace('return 1', 'return 2'));
+    assert.match(input.prompt, /Target: whole file/u);
+    assert.equal(promptCode(input.prompt), generated < 2 ? text : text.replace('return 1', 'return 2'));
     return { body: `File overview revision ${generated}.`, executionProfile: resolvedSourceExplanationProfile() };
   } });
   const other = await createSourceEditorFixture();
@@ -425,12 +465,12 @@ test('file overviews use the whole saved file without an index, survive restart 
   const expectedHash = crypto.createHash('sha256').update(text).digest('hex');
   // No .genesis index exists. Client range must not truncate a whole-file overview.
   const input = { sessionId: 'session-1', path: 'src/app.js', scope: 'file', presentation: 'description', startLine: 2, endLine: 2, startColumn: 2, endColumn: 4, expectedHash, vibe64User: { uid: 1001, username: 'ada' } };
-  const first = await fixture.service.explainSelection(input);
+  const first = await explainSource(fixture.service, input);
   assert.equal(first.ok, true);
   assert.equal(first.explanation.sourceRange.startLine, 1);
   assert.equal(first.explanation.sourceRange.endLine, 3);
   const restarted = fixture.restartService();
-  assert.equal((await restarted.explainSelection(input)).explanation.engine, 'agent-cache');
+  assert.equal((await explainSource(restarted, input)).explanation.engine, 'agent-cache');
   assert.equal(generated, 1);
   const current = await restarted.readFile(input);
   assert.equal(current.interpretations.records[0].scope, 'file');
@@ -440,13 +480,13 @@ test('file overviews use the whole saved file without an index, survive restart 
   assert.deepEqual((await other.service.readFile(input)).interpretations.records, []);
   await writeFile(path.join(fixture.sourceRoot, input.path), text.replace('return 1', 'return 2'));
   assert.equal((await restarted.readFile(input)).interpretations.records[0].status, 'stale');
-  assert.equal((await restarted.explainSelection(input)).statusCode, 409);
+  assert.equal((await explainSource(restarted, input)).statusCode, 409);
   assert.equal(generated, 1);
   const changedHash = (await restarted.readFile(input)).file.hash;
-  assert.equal((await restarted.explainSelection({ ...input, expectedHash: changedHash })).ok, true);
+  assert.equal((await explainSource(restarted, { ...input, expectedHash: changedHash })).ok, true);
   assert.equal(generated, 2);
   assert.equal((await restarted.readFile(input)).interpretations.records[0].status, 'current');
-  await restarted.explainSelection({ ...input, expectedHash: changedHash, force: true });
+  await explainSource(restarted, { ...input, expectedHash: changedHash, force: true });
   assert.equal(generated, 3);
 });
 
@@ -459,7 +499,7 @@ test('file overviews describe manifests without function input/output contracts'
     }
   } });
   t.after(() => rm(fixture.root, { recursive: true, force: true }));
-  assert.equal((await fixture.service.explainSelection({ sessionId: 'session-1', path: 'package.json', scope: 'file', presentation: 'description' })).ok, true);
+  assert.equal((await explainSource(fixture.service, { sessionId: 'session-1', path: 'package.json', scope: 'file', presentation: 'description' })).ok, true);
   assert.match(prompts[0], /Explain its scope, responsibilities, main parts, behavior/u);
   assert.match(prompts[0], /Do not add Inputs or Outputs and use sections/u);
   assert.doesNotMatch(prompts[0], /state what is actually returned and how callers use it/u);
@@ -477,7 +517,7 @@ test('document explanations include every line within the byte budget and admit 
   } });
   t.after(() => rm(fixture.root, { recursive: true, force: true }));
   const input = { sessionId: 'session-1', path: 'src/app.js', scope: 'file', presentation: 'description' };
-  assert.equal((await fixture.service.explainSelection(input)).ok, true);
+  assert.equal((await explainSource(fixture.service, input)).ok, true);
   assert.ok(prompts[0].includes(text), 'file explanation receives the complete saved file, including its middle');
   assert.doesNotMatch(prompts[0], /File excerpt|lines omitted from the middle/u);
   assert.match(prompts[0], /Explain its scope, responsibilities, main parts, behavior/u);
@@ -489,7 +529,7 @@ test('document explanations include every line within the byte budget and admit 
   index.architecture.files[0].lines = text.split('\n').length;
   index.architecture.symbols[0].end = { line: text.split('\n').length, column: 2 };
   await writeFile(indexPath, JSON.stringify(index));
-  assert.equal((await fixture.service.explainSelection({ ...input, scope: 'selection', presentation: 'steps', symbolId: 'symbol:app' })).ok, true);
+  assert.equal((await explainSource(fixture.service, { ...input, scope: 'selection', presentation: 'steps', symbolId: 'symbol:app' })).ok, true);
   assert.ok(prompts[1].includes(text), 'indexed function receives its entire server-validated declaration');
   assert.match(prompts[1], /Include \*\*Inputs\*\* and \*\*Outputs and use\*\* only when/u);
   assert.match(prompts[1], /absent sections must be omitted/u);
@@ -498,7 +538,7 @@ test('document explanations include every line within the byte budget and admit 
   assert.match(prompts[1], /Name the useful returned fields and operations/u);
   assert.match(prompts[1], /Explain observable effects separately from returned data/u);
   assert.match(prompts[1], /state that briefly rather than guessing/u);
-  const selection = await fixture.service.explainSelection({ ...input, scope: 'selection', presentation: 'steps', startLine: 1, endLine: 302 });
+  const selection = await explainSource(fixture.service, { ...input, scope: 'selection', presentation: 'steps', startLine: 1, endLine: 302 });
   assert.equal(selection.statusCode, 413, 'ordinary unindexed selections retain their existing line limit');
   assert.equal(prompts.length, 2);
 });
@@ -516,9 +556,9 @@ test('forced interpretation refresh cannot be overwritten by an older completed 
   t.after(() => rm(fixture.root, { recursive: true, force: true }));
   await writeCallableAnalysis(fixture);
   const input = { sessionId: 'session-1', path: 'src/app.js', scope: 'selection', presentation: 'steps', symbolId: 'symbol:app', startLine: 1, endLine: 1 };
-  const older = fixture.service.explainSelection(input);
+  const older = explainSource(fixture.service, input);
   await started;
-  const newer = await fixture.service.explainSelection({ ...input, force: true });
+  const newer = await explainSource(fixture.service, { ...input, force: true });
   assert.equal(newer.explanation.body, 'New interpretation.');
   release();
   await older;
@@ -1051,7 +1091,7 @@ test("source editor rejects assistant-backed explanations before inspecting a qu
     }
   });
   try {
-    const blocked = await fixture.service.explainSelection({
+    const blocked = await explainSource(fixture.service, {
       endColumn: 20,
       endLine: 1,
       path: "src/app.js",
@@ -1094,7 +1134,7 @@ test("source editor rejects explanation admission before provider inspection or 
     }
   });
   try {
-    const blocked = await fixture.service.explainSelection({
+    const blocked = await explainSource(fixture.service, {
       endColumn: 20,
       endLine: 1,
       path: "src/app.js",
@@ -1192,7 +1232,7 @@ test("source editor keeps provider failure cleanup ownership inside its conversa
     }
   });
   try {
-    const failed = await fixture.service.explainSelection({
+    const failed = await explainSource(fixture.service, {
       endColumn: 20,
       endLine: 1,
       path: "src/app.js",
@@ -1260,7 +1300,7 @@ test("explanations overlap source work and exclude only a second turn in the sam
     return "foreground completed while explanation was answering";
   });
   assert.equal(foreground.acquired, true);
-  const duplicate = await fixture.service.addExplanationFollowup({
+  const duplicate = await followUpSource(fixture.service, {
     explanationId: input.explanationId,
     message: "Another question",
     sessionId: input.sessionId
@@ -1348,22 +1388,23 @@ test("source editor runs temporary explanation chats, follow-ups, stale state, a
   const generatorCalls = [];
   const deletedThreads = [];
   const fixture = await createSourceEditorFixture({
-    explanationFollowupGenerator(explanation, message) {
-      return `Answered ${message} for ${explanation.sourceRange.path}:${explanation.sourceRange.startLine}.`;
+    explanationFollowupGenerator(input) {
+      const message = input.prompt.split("User follow-up:\n").at(-1);
+      const file = input.prompt.match(/^File: (.*)$/mu)[1];
+      const line = input.prompt.match(/^Target: lines (\d+)/mu)[1];
+      return `Answered ${message} for ${file}:${line}.`;
     },
     explanationGenerator(input) {
-      generatorCalls.push(input);
+      generatorCalls.push(promptCode(input.prompt));
       return {
         agentThreadId: `thread-${generatorCalls.length}`,
-        body: `Generated explanation for:\n${input.selectedText}`,
-        model: "unit-explainer",
-        summary: "Generated source explanation.",
-        title: "Generated app.js explanation"
+        body: `Generated explanation for:\n${generatorCalls.at(-1)}`
       };
     },
     terminalService: {
       async deleteEphemeralAgentConversation(sessionId, input = {}) {
-        deletedThreads.push({
+        // Helpers that never opened a conversation (cache hits) are released too.
+        if (input.conversationId) deletedThreads.push({
           threadId: input.conversationId
         });
         return {
@@ -1375,7 +1416,7 @@ test("source editor runs temporary explanation chats, follow-ups, stale state, a
     }
   });
   try {
-    const createResponse = await fixture.service.explainSelection({
+    const createResponse = await explainSource(fixture.service, {
       endColumn: 20,
       endLine: 1,
       path: "src/app.js",
@@ -1384,13 +1425,13 @@ test("source editor runs temporary explanation chats, follow-ups, stale state, a
       startLine: 1
     });
     assert.equal(createResponse.ok, true);
-    assert.equal(createResponse.explanation.title, "Generated app.js explanation");
-    assert.equal(createResponse.explanation.model, "unit-explainer");
+    assert.equal(createResponse.explanation.title, "app.js lines 1-1");
+    assert.equal(createResponse.explanation.model, resolvedSourceExplanationProfile().model);
     assert.equal(createResponse.explanation.agentThreadId, "thread-1");
     assert.equal(createResponse.explanation.stale, false);
     assert.equal(generatorCalls.length, 1);
 
-    const repeatedResponse = await fixture.service.explainSelection({
+    const repeatedResponse = await explainSource(fixture.service, {
       endColumn: 20,
       endLine: 1,
       path: "src/app.js",
@@ -1400,9 +1441,10 @@ test("source editor runs temporary explanation chats, follow-ups, stale state, a
     });
     assert.equal(repeatedResponse.ok, true);
     assert.notEqual(repeatedResponse.explanation.id, createResponse.explanation.id);
-    assert.equal(generatorCalls.length, 2);
+    assert.equal(repeatedResponse.explanation.engine, "agent-cache");
+    assert.equal(generatorCalls.length, 1);
 
-    const partialResponse = await fixture.service.explainSelection({
+    const partialResponse = await explainSource(fixture.service, {
       endColumn: 8,
       endLine: 1,
       path: "src/app.js",
@@ -1412,10 +1454,10 @@ test("source editor runs temporary explanation chats, follow-ups, stale state, a
     });
     assert.equal(partialResponse.ok, true);
     assert.notEqual(partialResponse.explanation.id, createResponse.explanation.id);
-    assert.equal(generatorCalls.length, 3);
-    assert.equal(generatorCalls[2].selectedText, "console");
+    assert.equal(generatorCalls.length, 2);
+    assert.equal(generatorCalls[1], "console");
 
-    const followupResponse = await fixture.service.addExplanationFollowup({
+    const followupResponse = await followUpSource(fixture.service, {
       explanationId: createResponse.explanation.id,
       message: "why?",
       sessionId: "session-1"
@@ -1428,7 +1470,7 @@ test("source editor runs temporary explanation chats, follow-ups, stale state, a
     assert.match(followupResponse.explanation.followups[1].text, /Answered why\?/u);
 
     await writeFile(path.join(fixture.sourceRoot, "src", "app.js"), "console.log('changed');\n");
-    const staleResponse = await fixture.service.addExplanationFollowup({
+    const staleResponse = await followUpSource(fixture.service, {
       explanationId: createResponse.explanation.id,
       message: "still current?",
       sessionId: "session-1"
@@ -1447,7 +1489,7 @@ test("source editor runs temporary explanation chats, follow-ups, stale state, a
       threadId: "thread-1"
     }]);
 
-    const deletedFollowupResponse = await fixture.service.addExplanationFollowup({
+    const deletedFollowupResponse = await followUpSource(fixture.service, {
       explanationId: createResponse.explanation.id,
       message: "after close?",
       sessionId: "session-1"
@@ -1902,7 +1944,7 @@ test("source editor retains streaming ownership unless cleanup explicitly succee
   }
 });
 
-test("source editor immediately cleans a non-stream result missing its final audit profile", async () => {
+test("source editor immediately cleans a result missing its final audit profile", async () => {
   const deletedThreads = [];
   const fixture = await createSourceEditorFixture({
     terminalService: {
@@ -1934,7 +1976,7 @@ test("source editor immediately cleans a non-stream result missing its final aud
     }
   });
   try {
-    const response = await fixture.service.explainSelection({
+    const response = await explainSource(fixture.service, {
       endColumn: 20,
       endLine: 1,
       originId: "tab:invalid-cleaned",
@@ -2007,7 +2049,7 @@ test("source editor isolates helper execution while retaining the selected conne
     }
   });
   try {
-    const created = await fixture.service.explainSelection({
+    const created = await explainSource(fixture.service, {
       endColumn: 20,
       endLine: 1,
       path: "src/app.js",
@@ -2038,7 +2080,7 @@ test("source editor isolates helper execution while retaining the selected conne
   }
 });
 
-test("source editor cleans a rejected non-stream agent result after its thread is announced", async () => {
+test("source editor cleans a rejected agent result after its thread is announced", async () => {
   const deletedThreads = [];
   const fixture = await createSourceEditorFixture({
     terminalService: {
@@ -2073,7 +2115,7 @@ test("source editor cleans a rejected non-stream agent result after its thread i
     }
   });
   try {
-    const response = await fixture.service.explainSelection({
+    const response = await explainSource(fixture.service, {
       endColumn: 20,
       endLine: 1,
       path: "src/app.js",
@@ -2100,7 +2142,7 @@ test("source editor cleans a rejected non-stream agent result after its thread i
   }
 });
 
-test("source editor retains cleanup ownership when a non-stream agent throws after announcing a thread", async () => {
+test("source editor retains cleanup ownership when an agent throws after announcing a thread", async () => {
   let cleanupAttempts = 0;
   const fixture = await createSourceEditorFixture({
     terminalService: {
@@ -2141,9 +2183,10 @@ test("source editor retains cleanup ownership when a non-stream agent throws aft
     }
   });
   try {
-    const response = await fixture.service.explainSelection({
+    const response = await explainSource(fixture.service, {
       endColumn: 20,
       endLine: 1,
+      explanationId: "exp_thrown_retry",
       path: "src/app.js",
       sessionId: "session-1",
       startColumn: 1,
@@ -2152,11 +2195,11 @@ test("source editor retains cleanup ownership when a non-stream agent throws aft
 
     assert.equal(response.ok, false);
     assert.equal(response.code, "unit_detached_turn_failed");
-    assert.equal(response.details.cleanupRequired, true);
-    assert.equal(response.details.cleanupThreadId, "agent-thread-thrown-retry");
-    assert.match(response.details.cleanupExplanationId, /^exp_/u);
+    assert.equal(cleanupAttempts, 1);
+    const ledger = JSON.parse(await readFile(path.join(fixture.sourceEditorTempRoot, "source-editor-explanation-cleanup.json"), "utf8"));
+    assert.deepEqual(ledger.records.map((record) => [record.id, record.agentThreadId]), [["exp_thrown_retry", "agent-thread-thrown-retry"]]);
     const retry = await fixture.service.deleteExplanation({
-      explanationId: response.details.cleanupExplanationId,
+      explanationId: "exp_thrown_retry",
       sessionId: "session-1"
     });
     assert.equal(retry.ok, true);
@@ -2204,9 +2247,11 @@ test("source editor does not accept a missing cleanup acknowledgement for an inv
     }
   });
   try {
-    const response = await fixture.service.explainSelection({
+    const cleanupExplanationId = "exp_invalid_retry";
+    const response = await explainSource(fixture.service, {
       endColumn: 20,
       endLine: 1,
+      explanationId: cleanupExplanationId,
       originId: "tab:invalid-retry",
       path: "src/app.js",
       sessionId: "session-1",
@@ -2215,10 +2260,8 @@ test("source editor does not accept a missing cleanup acknowledgement for an inv
     });
 
     assert.equal(response.ok, false);
-    assert.equal(response.details.cleanupRequired, true);
-    assert.equal(response.details.cleanupThreadId, "agent-thread-invalid-retry");
-    const cleanupExplanationId = response.details.cleanupExplanationId;
-    assert.match(cleanupExplanationId, /^exp_/u);
+    assert.equal(response.code, "vibe64_source_explanation_agent_invalid");
+    assert.equal(cleanupAttempts, 1);
     const ledgerPath = path.join(
       fixture.sourceEditorTempRoot,
       "source-editor-explanation-cleanup.json"
@@ -2406,9 +2449,9 @@ test("source editor cache identity follows the resolved helper profile revision 
   let agentCalls = 0;
   let executionProfile = resolvedSourceExplanationProfile();
   const fixture = await createSourceEditorFixture({
-    explanationGenerator(_input, { context } = {}) {
+    explanationGenerator(input) {
       agentCalls += 1;
-      const resolvedProfile = context.agentExecutionProfile;
+      const resolvedProfile = input.executionProfile;
       return {
         agentThreadId: `agent-thread-profile-cache-${agentCalls}`,
         agentTurnId: `agent-turn-profile-cache-${agentCalls}`,
@@ -2430,7 +2473,7 @@ test("source editor cache identity follows the resolved helper profile revision 
       }
     }
   });
-  const explain = (explanationId) => fixture.service.explainSelection({
+  const explain = (explanationId) => explainSource(fixture.service, {
     endColumn: 20,
     endLine: 1,
     explanationId,
@@ -2482,16 +2525,16 @@ test("source explanation access denial precedes provider inspection, cache reuse
       followupCalls += 1;
       return "This follow-up must not run.";
     },
-    explanationGenerator(_input, { context } = {}) {
+    explanationGenerator(input) {
       generationCalls += 1;
       return {
         agentThreadId: `thread-restricted-${generationCalls}`,
         agentTurnId: `turn-restricted-${generationCalls}`,
         body: "Authorized explanation.",
         engine: "agent-chat",
-        executionProfile: context.agentExecutionProfile,
+        executionProfile: input.executionProfile,
         messages: [],
-        model: context.agentExecutionProfile.model,
+        model: input.executionProfile.model,
         summary: "Authorized explanation.",
         title: "Authorized explanation"
       };
@@ -2524,7 +2567,7 @@ test("source explanation access denial precedes provider inspection, cache reuse
     ...extra
   });
   try {
-    const created = await fixture.service.explainSelection(request("exp_restricted_initial"));
+    const created = await explainSource(fixture.service, request("exp_restricted_initial"));
     assert.equal(created.ok, true);
     assert.equal(generationCalls, 1);
     assert.equal(providerCalls > 0, true);
@@ -2533,8 +2576,8 @@ test("source explanation access denial precedes provider inspection, cache reuse
     const authorizedProfileCalls = profileCalls;
 
     restricted = true;
-    const cached = await fixture.service.explainSelection(request("exp_restricted_cached"));
-    const regenerated = await fixture.service.explainSelection(request(
+    const cached = await explainSource(fixture.service, request("exp_restricted_cached"));
+    const regenerated = await explainSource(fixture.service, request(
       "exp_restricted_regenerated",
       { force: true }
     ));
@@ -2552,7 +2595,7 @@ test("source explanation access denial precedes provider inspection, cache reuse
     });
     assert.equal(explanationEvents.at(-1).code, "vibe64_assistant_owner_required");
 
-    const followup = await fixture.service.addExplanationFollowup({
+    const followup = await followUpSource(fixture.service, {
       explanationId: created.explanation.id,
       message: "Why?",
       sessionId: "session-1",
@@ -2600,10 +2643,10 @@ test("source editor never coalesces an in-flight explanation across resolved pro
     releaseFirst = resolve;
   });
   const fixture = await createSourceEditorFixture({
-    async explanationGenerator(_input, { context } = {}) {
+    async explanationGenerator(input) {
       agentCalls += 1;
       const call = agentCalls;
-      const resolvedProfile = context.agentExecutionProfile;
+      const resolvedProfile = input.executionProfile;
       if (call === 1) {
         markFirstStarted();
         await firstReleased;
@@ -2629,7 +2672,7 @@ test("source editor never coalesces an in-flight explanation across resolved pro
       }
     }
   });
-  const explain = (explanationId) => fixture.service.explainSelection({
+  const explain = (explanationId) => explainSource(fixture.service, {
     endColumn: 20,
     endLine: 1,
     explanationId,
@@ -2847,15 +2890,15 @@ test("source editor explanation cache expires entries using its bounded TTL", as
     startLine: 1
   });
   try {
-    const first = await fixture.service.explainSelection(request("exp_ttl_first"));
-    const cached = await fixture.service.explainSelection(request("exp_ttl_cached"));
+    const first = await explainSource(fixture.service, request("exp_ttl_first"));
+    const cached = await explainSource(fixture.service, request("exp_ttl_cached"));
     assert.equal(first.ok, true);
     assert.equal(cached.ok, true);
     assert.equal(cached.explanation.engine, "agent-cache");
     assert.equal(agentCalls, 1);
 
     nowMs += 5 * 60 * 1000;
-    const expired = await fixture.service.explainSelection(request("exp_ttl_expired"));
+    const expired = await explainSource(fixture.service, request("exp_ttl_expired"));
     assert.equal(expired.ok, true);
     assert.equal(expired.explanation.engine, "agent-chat");
     assert.equal(agentCalls, 2);
@@ -2899,8 +2942,8 @@ test("source editor never reuses a completed explanation without an authoritativ
     }
   });
   try {
-    const first = await fixture.service.explainSelection(request("exp_unsigned_first"));
-    const second = await fixture.service.explainSelection(request("exp_unsigned_second"));
+    const first = await explainSource(fixture.service, request("exp_unsigned_first"));
+    const second = await explainSource(fixture.service, request("exp_unsigned_second"));
     assert.equal(first.ok, true);
     assert.equal(second.ok, true);
     assert.equal(first.explanation.engine, "agent-chat");
@@ -3030,7 +3073,7 @@ test("source editor explanation cache evicts its least-recently-used entry at th
       }
     }
   });
-  const explainFile = (index) => fixture.service.explainSelection({
+  const explainFile = (index) => explainSource(fixture.service, {
     endColumn: 32,
     endLine: 1,
     path: `src/cache-${index}.js`,
@@ -3185,7 +3228,7 @@ test("source editor fails closed before generation when helper profile resolutio
     }
   });
   try {
-    const response = await fixture.service.explainSelection({
+    const response = await explainSource(fixture.service, {
       endColumn: 20,
       endLine: 1,
       path: "src/app.js",
@@ -3223,7 +3266,7 @@ test("source editor blocks required explanations when the selected assistant acc
     }
   });
   try {
-    const response = await fixture.service.explainSelection({
+    const response = await explainSource(fixture.service, {
       endColumn: 20,
       endLine: 1,
       path: "src/app.js",
@@ -3279,7 +3322,7 @@ test("source editor surfaces helper availability blockers without an interactive
         }
       });
       try {
-        const response = await fixture.service.explainSelection({
+        const response = await explainSource(fixture.service, {
           endColumn: 20,
           endLine: 1,
           path: "src/app.js",
@@ -3306,33 +3349,30 @@ test("source editor surfaces helper availability blockers without an interactive
 test("source editor never reuses an unverified explanation thread for follow-ups", async () => {
   let agentCalls = 0;
   const fixture = await createSourceEditorFixture({
-    explanationGenerator() {
-      return {
-        agentThreadId: "interactive-thread",
-        body: "Legacy explanation.",
-        model: "interactive-model",
-        title: "Legacy explanation"
-      };
-    },
     terminalService: {
+      async deleteEphemeralAgentConversation() { return { ok: false, error: "Retained for the follow-up check." }; },
       async runEphemeralAgentChatTurn() {
         agentCalls += 1;
-        throw new Error("Unverified thread reached the provider.");
+        if (agentCalls > 1) throw new Error("Unverified thread reached the provider.");
+        // The answer arrives without a verified Helper execution profile.
+        return { ok: true, text: structuredExplanation("Unverified explanation."), threadId: "interactive-thread", turnId: "interactive-turn" };
       }
     }
   });
   try {
-    const created = await fixture.service.explainSelection({
+    const created = await explainSource(fixture.service, {
       endColumn: 20,
       endLine: 1,
+      explanationId: "exp_unverified_thread",
       path: "src/app.js",
       sessionId: "session-1",
       startColumn: 1,
       startLine: 1
     });
+    assert.equal(created.code, "vibe64_source_explanation_execution_profile_missing");
     const events = [];
     await fixture.service.streamExplanationFollowup({
-      explanationId: created.explanation.id,
+      explanationId: "exp_unverified_thread",
       message: "Continue this thread.",
       sessionId: "session-1"
     }, {
@@ -3344,9 +3384,9 @@ test("source editor never reuses an unverified explanation thread for follow-ups
       }
     });
 
-    assert.equal(agentCalls, 0);
+    assert.equal(agentCalls, 1);
     const failure = events.find((event) => event.type === "source-explanation.error");
-    assert.equal(failure.code, "vibe64_source_explanation_execution_profile_missing");
+    assert.equal(failure.code, "vibe64_source_explanation_agent_thread_failed");
     assert.match(failure.error, /Regenerate this explanation/u);
   } finally {
     await rm(fixture.root, {
@@ -3424,7 +3464,7 @@ test("source editor asks for regeneration when a helper follow-up thread is unav
   }
 });
 
-test("source editor retires a non-stream helper thread after an invalid follow-up", async () => {
+test("source editor retires a helper thread after an invalid follow-up", async () => {
   const deletedThreads = [];
   let agentCalls = 0;
   const fixture = await createSourceEditorFixture({
@@ -3461,7 +3501,7 @@ test("source editor retires a non-stream helper thread after an invalid follow-u
     }
   });
   try {
-    const created = await fixture.service.explainSelection({
+    const created = await explainSource(fixture.service, {
       endColumn: 20,
       endLine: 1,
       path: "src/app.js",
@@ -3471,20 +3511,19 @@ test("source editor retires a non-stream helper thread after an invalid follow-u
     });
     assert.equal(created.ok, true);
 
-    const invalidFollowup = await fixture.service.addExplanationFollowup({
+    const invalidFollowup = await followUpSource(fixture.service, {
       explanationId: created.explanation.id,
       message: "What happens next?",
       sessionId: "session-1"
     });
     assert.equal(invalidFollowup.ok, false);
     assert.equal(invalidFollowup.code, "vibe64_source_explanation_agent_invalid");
-    assert.equal(invalidFollowup.details.cleanupRequired, false);
     assert.deepEqual(deletedThreads, [{
       executionProfile: resolvedSourceExplanationProfile(),
       threadId: "helper-followup-invalid"
     }]);
 
-    const blockedFollowup = await fixture.service.addExplanationFollowup({
+    const blockedFollowup = await followUpSource(fixture.service, {
       explanationId: created.explanation.id,
       message: "Try the same conversation again.",
       sessionId: "session-1"
@@ -3501,7 +3540,7 @@ test("source editor retires a non-stream helper thread after an invalid follow-u
   }
 });
 
-test("source editor preserves retryable ownership when a failed non-stream follow-up cannot retire its thread", async () => {
+test("source editor preserves retryable ownership when a failed follow-up cannot retire its thread", async () => {
   let agentCalls = 0;
   let cleanupAttempts = 0;
   const fixture = await createSourceEditorFixture({
@@ -3538,7 +3577,7 @@ test("source editor preserves retryable ownership when a failed non-stream follo
     }
   });
   try {
-    const created = await fixture.service.explainSelection({
+    const created = await explainSource(fixture.service, {
       endColumn: 20,
       endLine: 1,
       path: "src/app.js",
@@ -3548,16 +3587,16 @@ test("source editor preserves retryable ownership when a failed non-stream follo
     });
     assert.equal(created.ok, true);
 
-    const failedFollowup = await fixture.service.addExplanationFollowup({
+    const failedFollowup = await followUpSource(fixture.service, {
       explanationId: created.explanation.id,
       message: "Trigger the failed turn.",
       sessionId: "session-1"
     });
     assert.equal(failedFollowup.ok, false);
-    assert.equal(failedFollowup.details.cleanupRequired, true);
-    assert.equal(failedFollowup.details.cleanupThreadId, "helper-followup-retry");
+    const ledger = JSON.parse(await readFile(path.join(fixture.sourceEditorTempRoot, "source-editor-explanation-cleanup.json"), "utf8"));
+    assert.deepEqual(ledger.records.map((record) => [record.id, record.agentThreadId]), [[created.explanation.id, "helper-followup-retry"]]);
 
-    const blockedFollowup = await fixture.service.addExplanationFollowup({
+    const blockedFollowup = await followUpSource(fixture.service, {
       explanationId: created.explanation.id,
       message: "Do not reuse it.",
       sessionId: "session-1"
@@ -4069,7 +4108,7 @@ test("source editor keeps temporary explanation chat retryable when agent cleanu
     }
   });
   try {
-    const createResponse = await fixture.service.explainSelection({
+    const createResponse = await explainSource(fixture.service, {
       endColumn: 20,
       endLine: 1,
       path: "src/app.js",
@@ -4086,7 +4125,7 @@ test("source editor keeps temporary explanation chat retryable when agent cleanu
     assert.equal(failedDeleteResponse.ok, false);
     assert.equal(failedDeleteResponse.code, "unit_cleanup_failed");
 
-    const followupResponse = await fixture.service.addExplanationFollowup({
+    const followupResponse = await followUpSource(fixture.service, {
       explanationId: createResponse.explanation.id,
       message: "cleanup retry",
       sessionId: "session-1"
@@ -4133,7 +4172,7 @@ test("source editor keeps temporary explanation chat retryable when cleanup is n
     }
   });
   try {
-    const createResponse = await fixture.service.explainSelection({
+    const createResponse = await explainSource(fixture.service, {
       endColumn: 20,
       endLine: 1,
       path: "src/app.js",
@@ -4533,9 +4572,9 @@ test("source explanations use a member's shared Helper without the personal work
   });
   t.after(async () => { await fixture.service.close(); await rm(fixture.root, { recursive: true, force: true }); });
   const input = { sessionId: "session-1", explanationId: "exp_member_shared", path: "src/app.js", scope: "file", vibe64User: member };
-  const initial = await fixture.service.explainSelection(input);
+  const initial = await explainSource(fixture.service, input);
   assert.equal(initial.ok, true, JSON.stringify(initial));
-  const followup = await fixture.service.addExplanationFollowup({ ...input, message: "Why does it log?" });
+  const followup = await followUpSource(fixture.service, { ...input, message: "Why does it log?" });
   assert.equal(followup.ok, true, JSON.stringify(followup));
   assert.equal(followup.explanation.model, "deepseek-chat");
   assert.equal(nativeScopes.length, 2);
@@ -4578,16 +4617,16 @@ for (const changed of ["connection", "model", "actor"]) {
     } });
     t.after(async () => { await fixture.service.close(); await rm(fixture.root, { recursive: true, force: true }); });
     const input = { sessionId: "session-1", explanationId: `exp_changed_${changed}`, path: "src/app.js", scope: "file" };
-    assert.equal((await fixture.service.explainSelection({ ...input, vibe64User: actor })).ok, true);
+    assert.equal((await explainSource(fixture.service, { ...input, vibe64User: actor })).ok, true);
     const firstScope = fixture.helperScopes[0].id;
     if (changed === "connection") connectionIdentity = "connection-b";
     if (changed === "model") model = "gpt-5.4-nano";
     if (changed === "actor") actor = { role: "member", username: "grace" };
-    const blocked = await fixture.service.addExplanationFollowup({ ...input, vibe64User: actor, message: "Continue" });
+    const blocked = await followUpSource(fixture.service, { ...input, vibe64User: actor, message: "Continue" });
     assert.equal(blocked.code, "vibe64_source_explanation_destination_changed");
     assert.equal(runs, 1);
     assert.deepEqual(deleted, []);
-    const regenerated = await fixture.service.explainSelection({ ...input, vibe64User: actor, force: true });
+    const regenerated = await explainSource(fixture.service, { ...input, vibe64User: actor, force: true });
     assert.equal(regenerated.ok, true, JSON.stringify(regenerated));
     assert.equal(runs, 2);
     assert.deepEqual(deleted, [{ scope: firstScope, thread: "thread-1" }]);
@@ -4657,7 +4696,7 @@ test("source cleanup survives a restart and uses the captured destination withou
   let restarted;
   t.after(async () => { await fixture.service.close(); await restarted?.close(); await rm(fixture.root, { recursive: true, force: true }); });
   const input = { sessionId: "session-1", explanationId: "exp_restart", path: "src/app.js", scope: "file" };
-  assert.equal((await fixture.service.explainSelection(input)).ok, true);
+  assert.equal((await explainSource(fixture.service, input)).ok, true);
   assert.equal((await fixture.service.deleteExplanation(input)).code, "native_cleanup_failed");
   const ledgerPath = path.join(fixture.sourceEditorTempRoot, "source-editor-explanation-cleanup.json");
   const retained = JSON.parse(await readFile(ledgerPath, "utf8")).records[0];

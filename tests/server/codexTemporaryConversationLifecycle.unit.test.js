@@ -736,7 +736,8 @@ test("source explanations preserve one pre-resolved profile through the terminal
     );
 
     try {
-      const pending = sourceEditor.explainSelection({
+      const events = [];
+      const pending = sourceEditor.streamExplanation({
         endColumn: 61,
         endLine: 1,
         explanationId: "exp-real-manager-profile",
@@ -744,7 +745,10 @@ test("source explanations preserve one pre-resolved profile through the terminal
         sessionId: session.sessionId,
         startColumn: 1,
         startLine: 1
-      });
+      }, { emit: (event) => events.push(event), isClosed: () => false }).then(() => (
+        events.find((event) => event.type === "source-explanation.error") ||
+        { ok: true, explanation: events.findLast((event) => event.type === "source-explanation.finished")?.explanation }
+      ));
       await Promise.race([
         waitForCapturedTurns(captures, 1),
         pending.then((result) => assert.fail(`Source explanation ended before starting a turn: ${JSON.stringify(result)}`))

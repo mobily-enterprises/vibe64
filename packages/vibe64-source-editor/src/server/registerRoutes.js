@@ -1,29 +1,17 @@
 import { VIBE64_UPLOAD_MAX_BYTES, VIBE64_UPLOAD_BODY_LIMIT_BYTES } from "@local/vibe64-core/shared";
+import { validateSchemaPayload } from "@jskit-ai/kernel/shared/validators";
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
 import { sendVibe64EventStream } from "@local/vibe64-core/server/eventStream";
 import {
   VIBE64_SOURCE_EDITOR_SYNC_ERROR_EVENT
 } from "@local/vibe64-core/server/sourceEditorRealtimeEvents";
+import { explanationFollowupStreamSchema, explanationStreamSchema } from "./actions.js";
 
 function writeSourceEditorStreamEvent(rawReply, payload = {}) {
   rawReply.write(`${JSON.stringify({
     ...payload,
     at: payload.at || new Date().toISOString()
   })}\n`);
-}
-
-function withVibe64User(request, input = {}) {
-  const {
-    vibe64User: _ignoredVibe64User,
-    ...safeInput
-  } = input || {};
-  void _ignoredVibe64User;
-  return request.vibe64User
-    ? {
-        ...safeInput,
-        vibe64User: request.vibe64User
-      }
-    : safeInput;
 }
 
 async function sendSourceEditorNdjsonStream(reply, run) {
@@ -175,10 +163,9 @@ function registerRoutes(http, {
   route("GET", "/source-editor/stars", "stars.read", { summary: "Read this account's starred files." });
   route("POST", "/source-editor/stars", "star.set", { bodyLimit: 16 * 1024, summary: "Star or unstar a file." }, body);
   route("POST", "/source-editor/resolve-path", "path.resolve", { bodyLimit: 32 * 1024, summary: "Resolve a source path reference." }, body);
-  route("POST", "/source-editor/explanations", "explanation.create", { bodyLimit: 256 * 1024, summary: "Explain a selected source range." }, body);
   route("POST", "/source-editor/explanations/cleanup", "explanations.cleanup", { bodyLimit: 16 * 1024, summary: "Clean abandoned source explanation chats." }, body);
   for (const [method, suffix, operation] of [
-    ["DELETE", "", "delete"], ["POST", "/stop", "stop"], ["POST", "/followups", "followup"]
+    ["DELETE", "", "delete"], ["POST", "/stop", "stop"]
   ]) route(method, `/source-editor/explanations/:explanationId${suffix}`, `explanation.${operation}`, {
     bodyLimit: 128 * 1024, summary: "Operate the selected temporary source explanation."
   }, (request) => ({ ...body(request), explanationId: request.params.explanationId }));
@@ -212,55 +199,36 @@ function registerRoutes(http, {
   });
 
 
+  // Streams validate the same selection fields an action would, before the
+  // reply is hijacked, so a malformed request is an ordinary 400 response.
+  const streamInput = (request, schema, input) => ({
+    ...validateSchemaPayload({ schema, mode: "create" }, sourceInput(request, input), {
+      context: "Source explanation stream", statusCode: 400
+    }),
+    vibe64User: request.vibe64User
+  });
   routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/explanations/stream", {
     bodyLimit: 256 * 1024,
     summary: "Stream a source explanation chat in a Vibe64 session."
   }, async (request, reply) => {
-    const body = routes.requestBody(request);
-    await sendSourceEditorNdjsonStream(reply, ({ emit, isClosed }) => {
-      return sourceEditor.streamExplanation(withVibe64User(request, {
-        assistantMessageId: body.assistantMessageId,
-        endColumn: body.endColumn,
-        endLine: body.endLine,
-        explanationId: body.explanationId,
-        force: body.force === true,
-        presentation: body.presentation,
-        symbolId: body.symbolId,
-        expectedHash: body.expectedHash,
-        originId: body.originId,
-        path: body.path,
-        scope: body.scope,
-        sessionId: request.params.sessionId,
-        startColumn: body.startColumn,
-        startLine: body.startLine,
-        userMessageId: body.userMessageId
-      }), {
-        emit,
-        isClosed
-      });
-    });
+    const input = streamInput(request, explanationStreamSchema, routes.requestBody(request));
+    await sendSourceEditorNdjsonStream(reply, ({ emit, isClosed }) => (
+      sourceEditor.streamExplanation(input, { emit, isClosed })
+    ));
   });
-
 
   routes.serviceRoute("POST", "/sessions/:sessionId/source-editor/explanations/:explanationId/followups/stream", {
     bodyLimit: 128 * 1024,
     summary: "Stream a source explanation follow-up answer."
   }, async (request, reply) => {
-    const body = routes.requestBody(request);
-    await sendSourceEditorNdjsonStream(reply, ({ emit, isClosed }) => {
-      return sourceEditor.streamExplanationFollowup(withVibe64User(request, {
-        assistantMessageId: body.assistantMessageId,
-        explanationId: request.params.explanationId,
-        message: body.message,
-        sessionId: request.params.sessionId,
-        userMessageId: body.userMessageId
-      }), {
-        emit,
-        isClosed
-      });
+    const input = streamInput(request, explanationFollowupStreamSchema, {
+      ...routes.requestBody(request),
+      explanationId: request.params.explanationId
     });
+    await sendSourceEditorNdjsonStream(reply, ({ emit, isClosed }) => (
+      sourceEditor.streamExplanationFollowup(input, { emit, isClosed })
+    ));
   });
-
 }
 
 export { registerRoutes };

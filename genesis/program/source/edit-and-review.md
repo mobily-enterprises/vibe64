@@ -78,7 +78,11 @@ executable, environment or source root supplied by a caller. Existing service
 revision, owner, path and session-admission checks still apply.
 
 Live file observation and streamed explanation/follow-up responses retain their
-transport-owned callbacks and lifetime. Repository investigation and editing
+transport-owned callbacks and lifetime. Explanations and follow-ups exist only as
+these streams; there is no separate non-streaming create or follow-up action.
+Each stream validates its body against the same selection and message schema an
+action would (`actions.js`) and receives the authenticated actor, rejecting a
+malformed request with an ordinary 400 response before streaming starts. Repository investigation and editing
 belong to coding conversations. Colleague discovers two read controls here:
 `integrations.read` projects the same authorized configuration read into slot IDs,
 providers, display names, account modes, authentication methods and scope counts;

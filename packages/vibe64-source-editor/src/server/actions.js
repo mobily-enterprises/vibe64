@@ -26,6 +26,17 @@ const selection = {
   scope: { type: "string", enum: ["file", "selection"], required: false },
   force: { type: "boolean", defaultTo: false, required: false }, originId: text
 };
+// The explanation stream routes carry the transport's message identities; they
+// stream directly instead of returning an action result.
+const messageId = { ...text, maxLength: 256 };
+const explanationStreamSchema = createSchema({
+  sessionId: identity, ...selection, explanationId: { ...identity, required: false },
+  assistantMessageId: messageId, userMessageId: messageId
+});
+const explanationFollowupStreamSchema = createSchema({
+  sessionId: identity, explanationId: identity, message: requiredText,
+  assistantMessageId: messageId, userMessageId: messageId
+});
 
 function createSourceEditorActions({ sourceEditor, publishFileChanged = async () => {} }) {
   const action = (name, fields, execute, { kind = "command", changed = null, assistant = { exclude: true } } = {}) => withVibe64ActionContext({
@@ -77,15 +88,13 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged = async ()
     action("star.set", { path: { ...filePath, required: true }, starred: { type: "boolean", required: true } }, (input) => sourceEditor.setStarredFile(input)),
     action("search", { query: text, limit: text }, (input) => sourceEditor.search(input), query),
     action("path.resolve", { fromPath: filePath, target: requiredText }, (input) => sourceEditor.resolvePath(input), query),
-    action("explanation.create", selection, (input) => sourceEditor.explainSelection(input)),
     action("explanations.cleanup", { activeExplanationIds: { type: "array", items: { type: "string" }, required: false }, originId: text }, (input) => sourceEditor.cleanupExplanations(input)),
     action("explanation.delete", { explanationId: identity }, (input) => sourceEditor.deleteExplanation(input)),
     action("explanation.stop", { explanationId: identity }, (input) => sourceEditor.stopExplanation(input)),
-    action("explanation.followup", { explanationId: identity, message: requiredText }, (input) => sourceEditor.addExplanationFollowup(input)),
     action("file.read", { path: { ...filePath, required: true } }, (input) => sourceEditor.readFile(input), query),
     action("file.create", { ...origin, path: { ...filePath, required: true } }, (input) => sourceEditor.createFile(input), { changed: "created" }),
     action("file.save", { ...origin, path: { ...filePath, required: true }, baseHash: requiredText, text: { ...text, required: true } }, (input) => sourceEditor.saveFile(input), { changed: "saved" })
   ];
 }
 
-export { createSourceEditorActions };
+export { createSourceEditorActions, explanationFollowupStreamSchema, explanationStreamSchema };

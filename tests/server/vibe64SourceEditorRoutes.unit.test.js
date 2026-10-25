@@ -163,64 +163,48 @@ test("star routes accept only trusted identity and download responses are privat
   }));
 });
 
-test("source explanation routes use the authenticated Vibe64 actor", async () => {
-  await withLocalRequestBypass(async () => {
-    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
-      const calls = [];
-      const sourceEditor = {
-        async explainSelection(input) {
-          calls.push(input);
-          return { explanation: {}, ok: true };
-        },
-        async readTree() {
-          return { ok: true, tree: [] };
-        }
-      };
-      const app = testRouteApp();
-      registerRoutes(app.http, {
-        projectContext,
-        routeRelativePath: "vibe64",
-        routeSurface: "app",
-        sourceEditor
-      });
-      const route = findRegisteredRoute(app, {
-        method: "POST",
-        path: `${apiRouteBase}/vibe64/sessions/:sessionId/source-editor/explanations`
-      });
-      assert.ok(route);
-      const vibe64User = {
-        email: "ada@example.com",
-        username: "ada"
-      };
-      const body = {
-        endColumn: 8,
-        endLine: 3,
-        path: "src/app.js",
-        startColumn: 1,
-        startLine: 2,
-        vibe64User: {
-          username: "spoofed"
-        }
-      };
+test("explanation streams validate their input before streaming and use the authenticated Vibe64 actor", async () => {
+  await withLocalRequestBypass(async () => withRouteProject(async ({ apiRouteBase, projectContext }) => {
+    const app = testRouteApp();
+    const server = Fastify();
+    const calls = [];
+    try {
+      registerRoutes(app.http, { projectContext, routeRelativePath: "vibe64", routeSurface: "app", sourceEditor: {
+        async readTree() { return { ok: true }; },
+        async streamExplanation(input, stream) { calls.push(["explanation", input]); stream.emit({ type: "source-explanation.finished", ok: true }); },
+        async streamExplanationFollowup(input, stream) { calls.push(["followup", input]); stream.emit({ type: "source-explanation.followup.finished", ok: true }); }
+      } });
+      server.addHook("preHandler", async request => { request.vibe64User = localUser; });
+      for (const suffix of ["/source-editor/explanations/stream", "/source-editor/explanations/:explanationId/followups/stream"]) {
+        const route = findRegisteredRoute(app, { method: "POST", path: `${apiRouteBase}/vibe64/sessions/:sessionId${suffix}` });
+        server.post(route.path, route.handler);
+      }
+      for (const retired of ["/source-editor/explanations", "/source-editor/explanations/:explanationId/followups"]) {
+        assert.equal(findRegisteredRoute(app, { method: "POST", path: `${apiRouteBase}/vibe64/sessions/:sessionId${retired}` }), null);
+      }
+      const base = "/api/app/unit_project/vibe64/sessions/session-1/source-editor/explanations";
+      for (const payload of [
+        { path: "src/app.js", startLine: 0, endLine: 2 },
+        { path: "src/app.js", startLine: 1, endLine: 2, presentation: "essay" },
+        { path: "src/app.js", startLine: 1, endLine: 2, expectedHash: "not-a-hash" },
+        { startLine: 1, endLine: 2 }
+      ]) {
+        const rejected = await server.inject({ method: "POST", url: `${base}/stream`, payload });
+        assert.equal(rejected.statusCode, 400, JSON.stringify(payload));
+      }
+      assert.equal((await server.inject({ method: "POST", url: `${base}/exp-1/followups/stream`, payload: { message: "" } })).statusCode, 400);
+      assert.deepEqual(calls, []);
 
-      await route.handler({
-        input: { body },
-        params: routeProjectParams({ sessionId: "session-1" }),
-        vibe64User
-      }, testReply());
-
-      assert.deepEqual(calls, [{
-        endColumn: 8,
-        endLine: 3,
-        force: false,
-        path: "src/app.js",
-        sessionId: "session-1",
-        startColumn: 1,
-        startLine: 2,
-        vibe64User
-      }]);
-    });
-  });
+      const followup = await server.inject({ method: "POST", url: `${base}/exp-1/followups/stream`, payload: {
+        assistantMessageId: "msg-a", message: "Explain further", userMessageId: "msg-u", vibe64User: { username: "spoofed" }
+      } });
+      assert.equal(followup.statusCode, 200);
+      assert.deepEqual(calls, [["followup", {
+        assistantMessageId: "msg-a", explanationId: "exp-1", message: "Explain further", sessionId: "session-1",
+        userMessageId: "msg-u", vibe64User: localUser
+      }]]);
+    } finally { await server.close(); }
+  }));
 });
 
 test("source file creation publishes a created refresh after the durable write", async () => {
@@ -316,11 +300,9 @@ test("source operations share validated inputs and fresh project authority acros
       ["GET", "/source-editor/stars", "stars.read", "readStarredFiles", {}],
       ["POST", "/source-editor/stars", "star.set", "setStarredFile", { path: "src/app.js", starred: false }],
       ["POST", "/source-editor/resolve-path", "path.resolve", "resolvePath", { fromPath: "src/app.js", target: "./other.js" }],
-      ["POST", "/source-editor/explanations", "explanation.create", "explainSelection", { path: "src/app.js", startLine: 1, endLine: 2, symbolId: "symbol:app:start", presentation: "steps", expectedHash: "a".repeat(64) }],
       ["POST", "/source-editor/explanations/cleanup", "explanations.cleanup", "cleanupExplanations", { activeExplanationIds: ["keep"] }],
       ["DELETE", "/source-editor/explanations/:explanationId", "explanation.delete", "deleteExplanation", {}],
       ["POST", "/source-editor/explanations/:explanationId/stop", "explanation.stop", "stopExplanation", {}],
-      ["POST", "/source-editor/explanations/:explanationId/followups", "explanation.followup", "addExplanationFollowup", { message: "Explain further" }],
       ["GET", "/source-editor/file", "file.read", "readFile", { path: "src/app.js" }],
       ["POST", "/source-editor/file", "file.create", "createFile", { path: "new.js", originId: "browser" }],
       ["PUT", "/source-editor/file", "file.save", "saveFile", { path: "new.js", baseHash: "hash", text: "  content\n" }]

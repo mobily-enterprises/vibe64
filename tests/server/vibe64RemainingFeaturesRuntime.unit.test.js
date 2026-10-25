@@ -102,7 +102,7 @@ test("remaining Vibe64 features use named capabilities and register direct route
       "file-area.upload", "file-area.save", "file-area.rename", "file-area.mkdir", "file-area.delete",
       "integrations.read", "integrations.providers.read", "integrations.n8n.discover", "integrations.save", "integrations.oauth-client.register", "integrations.setup",
       "tree.read", "files.find", "file.download", "stars.read", "star.set", "search", "path.resolve",
-      "explanation.create", "explanations.cleanup", "explanation.delete", "explanation.stop", "explanation.followup",
+      "explanations.cleanup", "explanation.delete", "explanation.stop",
       "file.read", "file.create", "file.save"
     ].map((name) => `vibe64.source-editor.${name}`),
     ...["status.read", "architecture.read", "refresh", "refresh.cancel", "refresh.status"].map((name) => `vibe64.system-graph.${name}`)
@@ -113,9 +113,9 @@ test("remaining Vibe64 features use named capabilities and register direct route
       !["vibe64.source-editor.integrations.read", "vibe64.source-editor.integrations.providers.read", "vibe64.source-editor.integrations.save", "vibe64.source-editor.integrations.setup"].includes(action.id),
       "Only integration product controls are exposed; source tools belong to coding sessions.");
   }
-  // 42 project routes (Health's tool check included). Learning v2: a practice project uses these ordinary
+  // 40 project routes (Health's tool check included). Learning v2: a practice project uses these ordinary
   // project routes, so none is mirrored under /api/learning/:learningAttemptId.
-  assert.equal(routes.length, 42);
+  assert.equal(routes.length, 40);
   assert.equal(routes.filter((route) => String(route.path || route.url || "").startsWith("/api/learning/")).length, 0);
   for (const [method, suffix] of [
     ["GET", "/source-editor/download"],

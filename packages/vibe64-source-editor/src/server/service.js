@@ -56,8 +56,6 @@ function createService({
   integrationCommandRunner = runVibe64Command,
   integrationDiscoveryFetch = globalThis.fetch,
   explanationCacheNow = Date.now,
-  explanationFollowupGenerator = null,
-  explanationGenerator = null,
   logger = console,
   projectService,
   publishSessionChanged = async () => null,
@@ -187,7 +185,7 @@ function createService({
   }
 
   const explanations = createExplanationOperations({
-    explanationCacheNow, explanationFollowupGenerator, explanationGenerator, logger,
+    explanationCacheNow, logger,
     projectService, sourceEditorContext, temporaryRoot, terminalService
   });
 
