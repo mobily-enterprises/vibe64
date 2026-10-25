@@ -406,6 +406,7 @@ import {
   useVibe64TemporaryAi
 } from "@/composables/useVibe64TemporaryAi.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
+import { assistantRoutingFromMetadata, assistantRoutingRequestForDisplay } from "@local/vibe64-runtime/shared/assistantRouting";
 import { useVibe64SessionTypingPresence } from "@/composables/useVibe64SessionTypingPresence.js";
 
 import { VIBE64_COLLEAGUE_VIEW_KEY, VIBE64_HOST_CONVERSATION_KEY } from "@/lib/vibe64AssistantHost.js";
@@ -590,7 +591,7 @@ const customOpen = ref(false);
 const customTarget = ref(null);
 const activeTask = temporary.activeTask;
 watch(() => activeTask.value?.id, () => { customOpen.value = false; });
-const routingRequest = computed(() => JSON.parse(activeTask.value?.routingMetadata?.assistant_routing_request || "null"));
+const routingRequest = computed(() => assistantRoutingRequestForDisplay(activeTask.value?.routingMetadata));
 const modeSession = computed(() => ({ sessionId: props.sessionId,
   assistantSelection: activeTask.value?.assistantSelection || props.assistantSelection,
   agentSession: { goal: activeTask.value?.goal || null },
@@ -761,7 +762,7 @@ function taskAccessReason(task) {
   if (!task) return "";
   if (task.busy) return task.canSteer === false
     ? "You cannot steer this turn's AI connection. You can send a new request when it finishes." : "";
-  const mode = JSON.parse(task.routingMetadata?.assistant_routing || "null")?.mode;
+  const mode = assistantRoutingFromMetadata(task.routingMetadata || {})?.mode;
   const decision = task.purposes?.[mode];
   return decision?.available === false ? decision.message || "This mode is unavailable. Choose another chat mode." : "";
 }

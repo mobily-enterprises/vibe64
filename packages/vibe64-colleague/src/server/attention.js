@@ -1,4 +1,5 @@
 import { conversationObservation, watchUpdate } from "@local/vibe64-core/server/watch-observations";
+import { assistantRoutingRequestForDisplay } from "@local/vibe64-runtime/shared/assistantRouting";
 
 const working = new Set(["starting", "inProgress", "working", "preparing"]);
 const attention = new Set(["failed", "interrupted", "cancelled", "closing", "archived", "uncertain", "waiting"]);
@@ -18,13 +19,11 @@ async function readWatchedConversation(actions, watch, context) {
     runId = result.runId || "";
     error = result.error || "";
     messages = result.messages || [];
-    try {
-      route = JSON.parse(result.routingMetadata?.assistant_routing_request || "null");
-    } catch { /* No trustworthy routing phase. */ }
+    route = assistantRoutingRequestForDisplay(result.routingMetadata);
   } else {
     const session = await execute("vibe64.sessions.inspect", { sessionId: watch.sessionId });
     const turn = session.agentSession?.turn;
-    try { route = JSON.parse(session.metadata?.assistant_routing_request || "null"); } catch { /* No trustworthy routing phase. */ }
+    route = assistantRoutingRequestForDisplay(session.metadata);
     status = session.status === "archived" ? "archived"
       : route && (working.has(route.status) || attention.has(route.status)) ? route.status
         : turn?.active ? "inProgress" : turn?.state || "unknown";

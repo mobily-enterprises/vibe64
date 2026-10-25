@@ -430,6 +430,9 @@ Switching sessions preserves each session's selected temporary chat and draft.
 Switching sessions or removing the view sends draft, attachment, settings and
 repair-field edits still waiting for their save, including one queued behind an
 unfinished save; their responses are not applied to the departed view.
+Main and temporary chat views read a saved routing request through the shared
+runtime reader and show an unreadable value as none; server guards use the
+strict reader and refuse to act on it.
 While mounted, each task tracks unread assistant text in browser-local state.
 New or streamed reply text received outside the active visible conversation
 marks that task's tab, the expanded incognito button and the compact session

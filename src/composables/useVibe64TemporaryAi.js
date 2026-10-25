@@ -15,7 +15,7 @@ import { chatMessagePayload } from "@/lib/vibe64ChatMessage.js";
 import { useAssistantConversationFactory } from "@jskit-ai/assistant-runtime/client";
 import { vibe64AssistantConversationOptions } from "@/lib/vibe64AssistantConversation.js";
 import { temporaryConversationId } from "@local/vibe64-sessions/shared/conversation";
-import { assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantRoutingRequestForDisplay, assistantRoutingStatusIsPending } from "@local/vibe64-runtime/shared/assistantRouting";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import {
   VIBE64_SESSION_CHANGED_EVENT,
@@ -179,7 +179,7 @@ function useVibe64TemporaryAi({
           if (!observed.readError) {
             update.nativeWorking = temporaryAiTurnIsActive(temporaryAiText(observed.status));
           }
-          const route = JSON.parse(observed.routingMetadata?.assistant_routing_request || "null");
+          const route = assistantRoutingRequestForDisplay(observed.routingMetadata);
           // A pre-Send read cannot finish a newer request while preparation runs,
           // but a request the saved transcript has followed with a later one
           // (from any view) is no longer current.
@@ -736,7 +736,7 @@ function useVibe64TemporaryAi({
 
   function pendingMessage(task, messageId) {
     const local = task?.delivery.find(messageId);
-    const route = JSON.parse(task?.routingMetadata?.assistant_routing_request || "null");
+    const route = assistantRoutingRequestForDisplay(task?.routingMetadata);
     return (route?.messageId === messageId && routedChatMessage(route, local)) || local;
   }
 
@@ -839,7 +839,7 @@ function useVibe64TemporaryAi({
     const message = pendingMessage(task, messageId);
     if (disposed || !message || message.status !== "failed" ||
         readRefOrGetterValue(operationBusy) || closingTaskIds.has(taskId) || task.recoveryOutcome === "checking") return false;
-    const route = JSON.parse(task.routingMetadata?.assistant_routing_request || "null");
+    const route = assistantRoutingRequestForDisplay(task.routingMetadata);
     if (route?.messageId === messageId) {
       if (route.delivery === "uncertain") { updateTask(taskId, { error: "Check delivery before editing or cancelling this message." }); return false; }
       await stopTask(taskId);

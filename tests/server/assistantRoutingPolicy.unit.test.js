@@ -12,7 +12,7 @@ import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionSt
 import { assistantModePrompt, assistantGoalManagementMessage, assistantRoutingPrompt, assistantWorkflowInstructions, parseRoutingDecision, recommendedRoutingAssignments,
   routingAssignmentSelection, routingModelChoices, routingModelScore, routingRunsInChoices, resolveAssistantPurpose, assistantRoutingPreferences, assistantRoutingAutomation,
   assistantRoutingSetupFor, assistantMainAiChanged, ASSISTANT_PURPOSE_ROLES, MAIN_CHAT_PURPOSES,
-  assistantRoutingGoalFromMetadata, assistantRoutingRequestFromMetadata, goalStatusIsComplete } from "@local/vibe64-runtime/shared/assistantRouting";
+  assistantRoutingGoalFromMetadata, assistantRoutingRequestFromMetadata, assistantRoutingRequestForDisplay, goalStatusIsComplete } from "@local/vibe64-runtime/shared/assistantRouting";
 import { curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import routingScores from "../../packages/vibe64-runtime/src/shared/assistantRoutingScores.json" with { type: "json" };
 
@@ -708,4 +708,9 @@ test("routing metadata readers and goal completion share one definition", () => 
   assert.deepEqual(assistantRoutingRequestFromMetadata(metadata), { status: "working", delivery: "accepted" });
   assert.equal(assistantRoutingGoalFromMetadata({}), null);
   assert.equal(assistantRoutingRequestFromMetadata(undefined), null);
+  // Guards refuse an unreadable saved request; views show it as none.
+  const unreadable = { assistant_routing_request: "{not json" };
+  assert.throws(() => assistantRoutingRequestFromMetadata(unreadable), SyntaxError);
+  assert.equal(assistantRoutingRequestForDisplay(unreadable), null);
+  assert.deepEqual(assistantRoutingRequestForDisplay(metadata), { status: "working", delivery: "accepted" });
 });

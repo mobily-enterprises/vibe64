@@ -1,6 +1,6 @@
 import { createSchema } from "@jskit-ai/kernel/shared/validators";
 import { connectedWorkReviewSchema, incomingReviewSchema, sessionHistoryReviewSchema, sessionRepositoryReviewSchema } from "./inputSchemas.js";
-import { assistantRoutingFromMetadata } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantRoutingFromMetadata, assistantRoutingRequestForDisplay } from "@local/vibe64-runtime/shared/assistantRouting";
 import { SESSION_RENEWAL_MAX_HANDOVER_CHARACTERS } from "@local/vibe64-terminals/server/sessionRenewalHandover";
 
 const shortText = { type: "string", maxLength: 256, required: false };
@@ -34,9 +34,8 @@ const sessionOutput = {
 
 function sessionSummary(session) {
   const turn = session.agentSession?.turn;
-  let route;
   let preferences;
-  try { route = JSON.parse(session.metadata?.assistant_routing_request || "null"); } catch { /* No verified routing phase. */ }
+  const route = assistantRoutingRequestForDisplay(session.metadata);
   try { preferences = assistantRoutingFromMetadata(session.metadata); } catch { /* No verified mode preferences. */ }
   const fields = {
     sessionId: session.sessionId,

@@ -3,7 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 import { createMainBrowserConversations } from "./mainBrowserConversations.js";
 import { assertSessionRepositoryReview, parseSessionConnectedContribution, serializeSessionConnectedSources, serializeSessionConnectedSubmissions, sessionConnectedContribution,
   sessionConnectedSources, sessionConnectedSubmissions, sessionRepositoryDestination, sessionRepositoryProject } from "@local/vibe64-core/server/projectRepository";
-import { ASSISTANT_ROUTING_METADATA, assistantRoutingAutomation, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingStatusIsPending,
+import { ASSISTANT_ROUTING_METADATA, assistantRoutingAutomation, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingRequestFromMetadata, assistantRoutingStatusIsPending,
   isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
 
 import { vibe64Result } from "@local/vibe64-core/server/serverResponses";
@@ -838,7 +838,7 @@ function createService({
           const routingRequests = [{ metadata: currentSession.metadata }, ...conversations.map(record => ({
             conversationId: record.conversationId, metadata: record.routingMetadata
           }))].map(({ conversationId, metadata }) => ({
-            conversationId, request: JSON.parse(metadata?.assistant_routing_request || "null")
+            conversationId, request: assistantRoutingRequestFromMetadata(metadata)
           }));
           const renewalSessions = await runtime.store.listSessionsForRenewal();
           const reservedSuccessor = renewalSessions.find((session) => (
@@ -2532,7 +2532,7 @@ function createService({
               await runtime.store.writeMetadataValue(sessionId, ASSISTANT_ROUTING_METADATA, JSON.stringify(nextPreferences));
               return { assistantSelection: current, session: await runtime.getSession(sessionId, { inspectSource: false }) };
             }
-            const routingRequest = JSON.parse(session.metadata.assistant_routing_request || "null");
+            const routingRequest = assistantRoutingRequestFromMetadata(session.metadata);
             if (routingRequest?.helper || !routingRequest?.stopped && (assistantRoutingStatusIsPending(routingRequest) ||
                 routingRequest?.status === "working" && routingRequest.workflow && routingRequest.delivery === "accepted")) {
               return { cancelRouting: routingRequest.messageId };

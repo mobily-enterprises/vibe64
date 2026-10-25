@@ -95,6 +95,11 @@ function assistantRoutingFromMetadata(metadata = {}) {
 // The pinned goal and the latest routed request a session's metadata records.
 const assistantRoutingGoalFromMetadata = (metadata = {}) => JSON.parse(metadata?.assistant_routing_goal || "null");
 const assistantRoutingRequestFromMetadata = (metadata = {}) => JSON.parse(metadata?.assistant_routing_request || "null");
+// Views and summaries show an unreadable saved request as none; guards use the
+// strict reader above and refuse to act on it.
+function assistantRoutingRequestForDisplay(metadata = {}) {
+  try { return assistantRoutingRequestFromMetadata(metadata); } catch { return null; }
+}
 
 // Engines report a finished goal as either "complete" or "completed".
 const goalStatusIsComplete = (status) => status === "complete" || status === "completed";
@@ -602,7 +607,7 @@ export { ASSISTANT_MODES, ASSISTANT_FIX_MODE, ASSISTANT_ROUTING_METADATA, ASSIST
   ASSISTANT_ROUTING_ROLE_DEFINITIONS, ASSISTANT_ROLE_DEFAULT_FOLLOWS, ASSISTANT_PURPOSE_ROLES, ASSISTANT_ROLE_PURPOSES, MAIN_CHAT_PURPOSES, ROUTING_REASONS,
   routingModelScore, resolveAssistantPurpose, assistantRoutingPreferences, assistantRoutingAutomation, assistantRoutingSetupFor, assistantRoutingSetupValues, assistantSetupRoleValue, assistantMainAiChanged,
   isAssistantRoutingOwner, isMainChatPurpose, needsMainChatApproval, routingRunsInChoices,
-  assistantRoutingFromMetadata, assistantRoutingGoalFromMetadata, assistantRoutingRequestFromMetadata, goalStatusIsComplete, hasConnectedAssistantModels, routingModelChoices, recommendedRoutingAssignments, routingAssignmentSelection,
+  assistantRoutingFromMetadata, assistantRoutingGoalFromMetadata, assistantRoutingRequestFromMetadata, assistantRoutingRequestForDisplay, goalStatusIsComplete, hasConnectedAssistantModels, routingModelChoices, recommendedRoutingAssignments, routingAssignmentSelection,
   parseRoutingDecision, assistantRoutingPrompt, assistantWorkflowInstructions,
   assistantModeLabel, assistantModePrompt, assistantGoalObjective, assistantGoalManagementMessage, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingStatusLabel,
   assistantRoutingOutcomeNotice, assistantWorkflowUpgradeChanges };

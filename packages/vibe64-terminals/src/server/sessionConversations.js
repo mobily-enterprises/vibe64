@@ -6,7 +6,7 @@ import { ACTION_START_TEMPORARY_CONVERSATION_TURN, ACTION_STOP_TEMPORARY_CONVERS
   ACTION_UPDATE_TEMPORARY_CONVERSATION } from "./actions.js";
 import { temporaryConversationTurnActionInputValidator, temporaryConversationUpdateInputValidator } from "./inputSchemas.js";
 import { parseIntegrationSetupRequest, normalizeVibe64AgentTaskResult, serializeVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
-import { assistantGoalManagementMessage, assistantGoalObjective, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingStatusIsPending,
+import { assistantGoalManagementMessage, assistantGoalObjective, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingRequestFromMetadata, assistantRoutingStatusIsPending,
   isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createAssistantRouting } from "./assistantRouting.js";
 import { throwIfAgentWriteBusy } from "@local/vibe64-runtime/server/agentWriteLock";
@@ -115,7 +115,7 @@ async function recentChatContext(store, sessionId) {
 }
 
 function routingRequest(record) {
-  return JSON.parse(record.routingMetadata?.assistant_routing_request || "null");
+  return assistantRoutingRequestFromMetadata(record.routingMetadata);
 }
 
 function requireSuccess(result) {

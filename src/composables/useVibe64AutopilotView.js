@@ -1,5 +1,5 @@
 import { chatTurnsWithRouting, routedChatMessage } from "@/lib/vibe64ChatDelivery.js";
-import { assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced } from "@local/vibe64-runtime/shared/assistantRouting";
+import { assistantRoutingRequestForDisplay, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced } from "@local/vibe64-runtime/shared/assistantRouting";
 import { computed, inject, reactive, ref, unref, watch } from "vue";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { useRouter } from "vue-router";
@@ -385,9 +385,7 @@ function useVibe64AutopilotView(props, emit, {
   const composerStartupQueueing = computed(() => composerQueueing.value && composerSending.value &&
     activeAgentTurn.value.state === "starting" && !agentObservationLost.value);
   const composerSubmissionKind = ref("");
-  const routingRequest = computed(() => {
-    try { return JSON.parse(props.session?.metadata?.assistant_routing_request || "null"); } catch { return null; }
-  });
+  const routingRequest = computed(() => assistantRoutingRequestForDisplay(props.session?.metadata));
   const routingBusy = computed(() => assistantRoutingStatusIsPending(routingRequest.value) &&
     !assistantRoutingRequestCanBeReplaced(routingRequest.value, props.session?.assistantSelection));
   const composerRoutingQueueing = computed(() => composerQueueing.value && composerSending.value &&

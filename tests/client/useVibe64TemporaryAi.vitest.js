@@ -311,6 +311,17 @@ describe("useVibe64TemporaryAi", () => {
     expect(temporary.activeTask.value.draftSaveState).toBe("failed");
   });
 
+  it("treats an unreadable saved routing request as none instead of failing the chat", async () => {
+    mocks.responses.push({ conversations: [{ conversationId: createdId, status: "completed", messages: [],
+      draft: "Saved draft.", routingMetadata: { assistant_routing_request: "{unreadable" } }] });
+    const temporary = await mountTemporaryAi({ assistantReady: () => true });
+    await flushPromises();
+    const task = temporary.activeTask.value;
+    expect(task.draft).toBe("Saved draft.");
+    expect(await temporary.editMessage(task.id, "missing-message")).toBe(false);
+    expect(await temporary.cancelMessage(task.id, "missing-message")).toBe(false);
+  });
+
   it("checks a restored unconfirmed request without changing its ID or the newer draft", async () => {
     const route = { messageId: "interrupted-1", status: "waiting", delivery: "uncertain", input: { message: "Original prompt.", displayMessage: "Original prompt." } };
     mocks.responses.push({ conversations: [{ conversationId: createdId, status: "uncertain", messages: [],
