@@ -27,10 +27,10 @@ async function terminalSessionSourceRootForSession(projectService, sessionId) {
 }
 
 // Authorized application facts and cleanup effects. Native stop/recovery and
-// the session-closing map remain with the same supplied shared runtime owner.
+// session-closure coordination belong to assistant-core's runtime lifecycle.
 function createCodexLifecyclePreparation({
   projectService, runtimeHost, sessionRuntimeHost, sessionEnvironment, providerHost,
-  conversationPreparation, helperPreparation, health, runtimeLifecycle, renewalSessionClosures
+  conversationPreparation, helperPreparation, health
 }) {
   const { codexAppServerRuntimeOptionsFromSessionMetadata, codexAppServerPersistedRuntimeHost } = runtimeHost;
   const { createRuntimeForSession, codexAppServerRuntimeOptionsForSession, codexAppServerStorageRuntimeOptionsForSession,
@@ -41,8 +41,6 @@ function createCodexLifecyclePreparation({
   const { restoration: prepareCodexAppServerHelperRestoration,
     inventory: prepareCodexAppServerHelperInventory } = helperPreparation;
   const { ready: writeCodexAppServerReady } = health;
-  const { sessionClosures: codexAppServerSessionClosures } = runtimeLifecycle;
-  const codexAppServerRenewalSessionClosures = renewalSessionClosures;
 
   async function prepareNativeStorageProvider(sessionId, binding, { runtime, session }) {
     if (binding.modelProviderId !== "openai" && !curatedCodexProvider(binding.modelProviderId)) {
@@ -140,8 +138,6 @@ function createCodexLifecyclePreparation({
     );
     return {
       sessionKey,
-      pending: codexAppServerSessionClosures,
-      restrictedPending: codexAppServerRenewalSessionClosures,
       restricted: Boolean(renewalCleanup),
       preserveProcessExitProof,
       get changeover() { return options.changeover; },

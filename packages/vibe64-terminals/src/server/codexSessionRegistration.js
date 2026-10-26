@@ -257,7 +257,6 @@ function createCodexSessionRegistration({
       return host;
     }
   });
-  const codexAppServerRenewalSessionClosures = new WeakSet();
   async function publishCodexConversationEvent(sessionId, event) {
     const { nativeGoal: _nativeGoal, ...publicEvent } = event;
     return publishMainConversationEvent(
@@ -368,9 +367,7 @@ function createCodexSessionRegistration({
     providerHost: codexSessionProviderHost,
     conversationPreparation: codexConversationPreparation,
     helperPreparation: codexHelperPreparation,
-    health: codexStartupHealth,
-    runtimeLifecycle: codexAppServerRunOwner.runtimeLifecycle,
-    renewalSessionClosures: codexAppServerRenewalSessionClosures
+    health: codexStartupHealth
   });
   const codexAssistantCatalog = createCodexAssistantCatalog({
     accountPreparation: codexAccountPreparation,
