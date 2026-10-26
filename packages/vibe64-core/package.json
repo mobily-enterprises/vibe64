@@ -115,8 +115,8 @@
     }
   },
   "dependencies": {
-    "@jskit-ai/assistant-core": "0.1.240",
-    "@jskit-ai/kernel": "0.1.245",
+    "@jskit-ai/assistant-core": "0.1.241",
+    "@jskit-ai/kernel": "0.1.246",
     "@local/vibe64-execution": "0.1.0"
   }
 }
