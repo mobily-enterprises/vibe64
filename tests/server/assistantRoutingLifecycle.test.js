@@ -13,7 +13,6 @@ import { codexAuthMarkerPath } from "@local/vibe64-core/server/codexAuthState";
 import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerProvider";
 
 import { assistantRoutingStatusLabel, assistantModePrompt, assistantGoalObjective } from "@local/vibe64-runtime/shared/assistantRouting";
-import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { createCodexSessionAgentProvider } from "../fixtures/codexProviderAdapter.js";
 
 const request = { messageId: "request-1", message: "Yes, implement it.", submissionKind: "send" };
@@ -432,43 +431,29 @@ test("a plain message sent while the previous request starts its turn steers tha
   assert.equal(f.sends.length, 2, "Retry of a delivered message never sends it twice");
 });
 
-test("a Chat mode change is never steered into the running turn of the old mode", async (t) => {
-  // Production: a Custom turn's reply was ready but its background test run kept
-  // the turn active; after switching to Auto, "Create a plan" joined that turn
-  // and ran as Custom on the old model, so the plan helper refused it.
+test("a Chat mode change never refuses steering: the message joins the running turn on its old mode", async (t) => {
+  // Production: switching Custom model while a turn was still running made the
+  // next message fail with "The running turn still uses Senior". Steering must
+  // keep the running turn's model instead of refusing.
   const f = await fixture(t, { mode: "auto", review: false });
   f.metadata.assistant_routing = JSON.stringify({ mode: "custom", review: false, override: f.assignments.senior });
   await f.service.send("session-1", { ...request, messageId: "custom-turn" }, f.context);
   assert.equal(f.state().mode, "custom");
-  assert.equal(f.state().status, "working");
   f.agent.sessionState = async () => ({ turn: { active: true, id: "turn-1" } });
   const { submissionKind: _kind, ...plain } = request;
-  // The same mode still steers the running turn.
-  await f.service.send("session-1", { ...plain, messageId: "same-mode" }, f.context);
-  assert.equal(f.sends.length, 2);
   f.metadata.assistant_routing = JSON.stringify({ mode: "auto", review: false });
-  await assert.rejects(f.service.send("session-1", { ...plain, messageId: "plan", message: "Create a plan" }, f.context),
-    (error) => error.code === "vibe64_assistant_chat_mode_changed" && error.delivery === "not-sent" &&
-      /still uses Custom/u.test(error.message) && /Stop the turn/u.test(error.message));
+  const steered = await f.service.send("session-1", { ...plain, messageId: "plan", message: "Create a plan" }, f.context);
+  assert.equal(steered.delivered, true);
   f.metadata.assistant_routing = JSON.stringify({ mode: "custom", review: false, override: f.assignments.junior });
-  if (f.assignments.junior.modelId !== f.assignments.senior.modelId || f.assignments.junior.variantId !== f.assignments.senior.variantId) {
-    await assert.rejects(f.service.send("session-1", { ...plain, messageId: "other-model" }, f.context),
-      (error) => error.code === "vibe64_assistant_chat_mode_changed" &&
-        error.message.includes(`still uses ${vibe64AssistantSelectionLabel(f.assignments.senior)}, so this message would ` +
-          `not use ${vibe64AssistantSelectionLabel(f.assignments.junior)}.`));
-  }
-  assert.equal(f.sends.length, 2, "nothing reaches the old turn after the mode changed");
-  assert.equal(f.helperCalls(), 0);
-  // A goal's own mode governs its running turns; Auto waits for the goal.
-  f.metadata.assistant_routing_goal = JSON.stringify({ mode: "custom", status: "active", selection: f.assignments.senior });
-  f.metadata.assistant_routing = JSON.stringify({ mode: "auto", review: false });
-  await f.service.send("session-1", { ...plain, messageId: "goal-steer" }, f.context);
-  assert.equal(f.sends.length, 3, "a goal turn still accepts steering");
-  delete f.metadata.assistant_routing_goal;
-  // Once the turn ends, the same message is routed by Auto as a new request.
+  await f.service.send("session-1", { ...plain, messageId: "other-model" }, f.context);
+  assert.equal(f.sends.length, 3);
+  assert.equal(f.sends[2].input.message, plain.message, "steering is delivered verbatim");
+  assert.equal(f.helperCalls(), 0, "steering never classifies");
+  assert.equal(f.state().mode, "custom", "the running request keeps its mode");
+  // Once the turn ends, the next message is routed by the new Chat mode.
   f.agent.sessionState = async () => ({ turn: { active: false } });
   f.metadata.assistant_routing = JSON.stringify({ mode: "auto", review: false });
-  await f.service.send("session-1", { ...plain, messageId: "plan", message: "Create a plan" }, f.context);
+  await f.service.send("session-1", { ...plain, messageId: "next", message: "Create a plan" }, f.context);
   assert.equal(f.sends.length, 4);
   assert.equal(f.state().mode, "auto");
   assert.equal(f.helperCalls(), 1);

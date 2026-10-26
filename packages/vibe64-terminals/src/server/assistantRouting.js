@@ -6,9 +6,9 @@ import path from "node:path";
 import { readWorkPlan, manageWorkPlan, workPlanInstructions } from "./assistantWorkPlan.js";
 import { vibe64AgentRunStateIsActive } from "@local/vibe64-runtime/server/sessionStore";
 import { VIBE64_ASSISTANT_SELECTION_METADATA, VIBE64_AGENT_EXECUTION_PROFILE_IDS, VIBE64_AGENT_EXECUTION_WORKLOAD_IDS,
-  serializeVibe64AssistantSelection, sameVibe64AssistantSelection, vibe64AssistantSelectionLabel, vibe64AssistantSelectionFromMetadata, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
+  serializeVibe64AssistantSelection, sameVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import {
-  ROUTING_REASONS, assistantModeLabel, assistantModePrompt, assistantGoalObjective, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingFromMetadata,
+  ROUTING_REASONS, assistantModePrompt, assistantGoalObjective, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced, assistantRoutingFromMetadata,
   assistantRoutingPrompt, parseRoutingDecision, assistantWorkflowInstructions, assistantRoutingOutcomeNotice,
   assistantRoutingGoalFromMetadata, assistantGoalIsActive, assistantWorkflowStateIsSupported, assistantWorkflowRole, assistantWorkflowMessageIds
 } from "@local/vibe64-runtime/shared/assistantRouting";
@@ -499,20 +499,8 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       if (native?.turn?.active) {
         if (explicitDeslop) throw failure("Deslop uses the Senior model in its own turn. Finish or stop the current turn, then send Deslop again.");
         if (input.submissionKind === "send") throw failure("The assistant started another turn. Review it before sending.");
-        // Steering keeps the running request's mode and model, also while its
-        // finished reply only waits for a background task, so refuse it once the
-        // saved Chat mode (or Custom model) differs. A goal's own mode governs its turns.
-        const goalPin = assistantRoutingGoalFromMetadata(context.session.metadata);
-        const runningRequest = state?.status === "working" && state.delivery === "accepted" && !state.stopped;
-        if (runningRequest && !options.purpose && !assistantGoalIsActive(goalPin) && (state.mode !== preferences.mode ||
-            state.mode === "custom" && state.override?.selection && !sameVibe64AssistantSelection(state.override.selection, preferences.override))) {
-          const [runs, chosen] = state.mode === preferences.mode
-            ? [state.override.selection, preferences.override].map(selection => vibe64AssistantSelectionLabel(selection))
-            : [state.mode, preferences.mode].map(assistantModeLabel);
-          throw Object.assign(failure(`The running turn still uses ${runs}, so this message would ` +
-            `not use ${chosen}. Stop the turn (this also stops its background task) or wait ` +
-            "for it to finish, then send again.", "vibe64_assistant_chat_mode_changed"), { delivery: "not-sent" });
-        }
+        // A steered message joins the running turn on that turn's mode and model,
+        // even after the saved Chat mode (or Custom model) changed.
         if (state?.workflow === true) task.steeringRequestId = state.messageId;
         direct = true; return;
       }
