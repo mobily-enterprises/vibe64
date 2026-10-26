@@ -241,6 +241,12 @@ test("Genesis City schema validation rejects corrupt documents and broken refere
     assert.equal(status.status, "invalid");
     assert.equal(status.cities.machine.state, "invalid");
     assert.equal(status.cities.machine.error.code, "vibe64_invalid_genesis_city");
+    await assert.rejects(readGenesisCity(root, "machine"), (error) => {
+      assert.equal(error.code, "vibe64_invalid_genesis_city");
+      assert.equal(error.message, "Machine City schema must be genesis.machine-city.v1.");
+      assert.deepEqual(error.details, { cityKind: "machine", path: GENESIS_MACHINE_CITY_PATH });
+      return true;
+    });
 
     const response = await service.readArchitecture({ sessionId: "session-1" });
     assert.equal(response.ok, false);
@@ -257,6 +263,14 @@ test("Genesis City schema validation rejects corrupt documents and broken refere
     invalidProgram.buildings[0].mainSource = 'src/uncited.py';
     await writeJson(path.join(root, GENESIS_PROGRAM_CITY_PATH), invalidProgram);
     await assert.rejects(readGenesisCity(root, 'program'), error => error.code === 'vibe64_invalid_genesis_city' && /mainSource must be a cited source/u.test(error.message));
+    const invalidArchitecture = { ...machineCityFixture(), architecture: { schema: "genesis.architecture.v0" } };
+    await writeJson(path.join(root, GENESIS_MACHINE_CITY_PATH), invalidArchitecture);
+    await assert.rejects(readGenesisCity(root, "machine"), (error) => {
+      assert.equal(error.code, "vibe64_invalid_genesis_city");
+      assert.match(error.message, /^Machine City architecture is invalid: /u);
+      assert.deepEqual(error.details, { cityKind: "machine", path: GENESIS_MACHINE_CITY_PATH });
+      return true;
+    });
   });
 });
 

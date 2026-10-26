@@ -113,7 +113,11 @@ const {
   SOURCE_EXPLANATION_PROMPT_VERSION,
   sourceExplanationGuidance,
   validateArchitectureFacts,
-  mergeArchitectureObservations
+  mergeArchitectureObservations,
+  validateCityDocument,
+  MACHINE_CITY_SCHEMA,
+  PROGRAM_CITY_SCHEMA,
+  CITY_SCHEMA_VERSION
 } = genesisCompiler;
 
 const GENESIS_BLUEPRINT_PATH = "genesis/blueprint.md";
@@ -562,6 +566,10 @@ export {
   inspectVibe64ArchitectureInspection,
   inspectVibe64ArchitectureLayout,
   validateArchitectureFacts,
+  validateCityDocument,
+  MACHINE_CITY_SCHEMA,
+  PROGRAM_CITY_SCHEMA,
+  CITY_SCHEMA_VERSION,
   SOURCE_EXPLANATION_PROMPT_VERSION,
   sourceExplanationGuidance,
   mergeArchitectureObservations,
