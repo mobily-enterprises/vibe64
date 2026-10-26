@@ -373,7 +373,7 @@ describe("Vibe64 project client scope", () => {
       };
     }));
 
-    await getHttpWebClient().get(PROJECT_SELECTION_ENDPOINT);
+    await getHttpWebClient().request(PROJECT_SELECTION_ENDPOINT, { method: "GET" });
 
     expect(requestedUrls).toEqual([
       "/api/vibe64/projects"
