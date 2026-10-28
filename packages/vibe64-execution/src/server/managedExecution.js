@@ -73,6 +73,7 @@ function vibe64CapacityRejectedResult(execution = {}, {
   code = "vibe64_capacity_rejected",
   estimatedMemoryBytes = 0,
   message = "This work cannot start while available memory is this low.",
+  retryable = false,
   safelyAvailableMemoryBytes = 0
 } = {}) {
   return commandErrorResult(message, code, {
@@ -84,7 +85,7 @@ function vibe64CapacityRejectedResult(execution = {}, {
       safelyAvailableMemoryBytes: Math.max(0, Number(safelyAvailableMemoryBytes) || 0),
       state: "rejected"
     },
-    retryable: false
+    retryable: retryable === true
   });
 }
 

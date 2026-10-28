@@ -11,7 +11,8 @@ import { promisify } from "node:util";
 import {
   installVibe64ManagedExecutionProvider,
   stopVibe64Execution,
-  stopVibe64OwnedExecutions
+  stopVibe64OwnedExecutions,
+  vibe64CapacityRejectedResult
 } from "../../packages/vibe64-execution/src/server/managedExecution.js";
 import {
   normalizeExecutionDescriptor,
@@ -332,6 +333,18 @@ test("a managed host fails closed when its execution provider is unavailable", a
   assert.equal(result.retryable, false);
   assert.match(result.error, /did not start this work/iu);
   await assert.rejects(readFile(markerPath, "utf8"), { code: "ENOENT" });
+});
+
+test("capacity refusals are retryable only when the caller marks a temporary condition", () => {
+  const execution = { id: "refused-execution", kind: "job" };
+  const refused = vibe64CapacityRejectedResult(execution, { message: "Memory is low." });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.code, "vibe64_capacity_rejected");
+  assert.equal(refused.error, "Memory is low.");
+  assert.equal(refused.execution.outcome, "capacity_rejected");
+  assert.equal(refused.retryable, false);
+  assert.equal(vibe64CapacityRejectedResult(execution, { retryable: true }).retryable, true);
+  assert.equal(vibe64CapacityRejectedResult(execution, { retryable: "true" }).retryable, false);
 });
 
 test("isolated managed commands exclude the daemon environment and own their XDG roots", async (t) => {
