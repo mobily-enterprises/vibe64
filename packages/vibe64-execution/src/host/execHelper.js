@@ -569,7 +569,12 @@ function configureManagedExecutionWorkSlice(owner = {}, {
   tasksMax = 0
 } = {}) {
   const sliceName = managedExecutionSliceName(owner);
-  runRootCommand("systemctl", ["start", sliceName]);
+  // `systemctl start` on an active slice still waits for any member that is
+  // stopping, for up to that member's TimeoutStopSec. Starting only an inactive
+  // slice keeps one slow stop from holding every new execution behind it.
+  if (runRootCommandAllowFailure("systemctl", ["is-active", "--quiet", sliceName]).status !== 0) {
+    runRootCommand("systemctl", ["start", sliceName]);
+  }
   runRootCommand("systemctl", [
     "set-property",
     "--runtime",

@@ -178,6 +178,19 @@ test("execution Stop lets systemd run service cleanup before signalling the cgro
   assert.match(stop.slice(firstStop), /SIGKILL/u, "unresponsive descendants still have bounded forced cleanup");
 });
 
+test("a new execution never waits for another member of its work slice to stop", async () => {
+  // Production: a cancelled OpenCode service ignored SIGTERM for its 30 s
+  // TimeoutStopSec, and `systemctl start` on the already active work slice held
+  // every new execution, including a GitHub access check, behind that stop.
+  const source = await helperSource();
+  const configure = source.slice(source.indexOf("function configureManagedExecutionWorkSlice("),
+    source.indexOf("function managedWorkflowIdentity("));
+  const check = configure.indexOf('["is-active", "--quiet", sliceName]');
+  const start = configure.indexOf('["start", sliceName]');
+  assert.ok(check > 0 && start > check, "the slice is started only after proving it inactive");
+  assert.match(configure.slice(check, start), /status !== 0/u);
+});
+
 test("execution helper default PATH includes every first-class runtime pack", async () => {
   const source = await helperSource();
 
