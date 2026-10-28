@@ -7,6 +7,11 @@ async function sendProjectMessage(input, { projectService, authorize, assertOpen
   if (!/^[a-z0-9][a-z0-9-]*$/.test(input.projectSlug) || !input.message) {
     throw vibe64Error("A project slug and message are required.", "vibe64_project_message_input_required");
   }
+  // The recipient's conversation accepts only these IDs. Refuse here, before
+  // acceptance, so the sender learns at once instead of from a later failure.
+  if (!/^[\w-]{1,128}$/u.test(input.messageId)) {
+    throw vibe64Error("A message ID may use only letters, digits, _ and - (at most 128 characters), for example mb-87.", "vibe64_project_message_id_invalid");
+  }
   const actor = await authorize(input.actor, input.projectSlug);
   return projectService.runInProjectContext(input.projectSlug, async () => {
     const project = await projectService.readCurrentProject();

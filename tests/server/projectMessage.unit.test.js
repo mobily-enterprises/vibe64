@@ -205,6 +205,11 @@ test("exact same-project messages and replies retain their recipients and reject
   await assert.rejects(sendProjectMessage({ ...input, destinationSessionId: "missing" }, dependencies));
   await store.writeStatus("b", "blocked");
   await assert.rejects(sendProjectMessage({ ...input, destinationSessionId: "b" }, dependencies), /not active/);
+  // Production: "mb #87" was accepted, then failed inside the recipient's chat.
+  for (const messageId of ["mb #87", "x".repeat(129)]) {
+    await assert.rejects(sendProjectMessage({ ...input, sourceSession: "c", destinationSessionId: "b", messageId }, dependencies),
+      { code: "vibe64_project_message_id_invalid" });
+  }
   assert.deepEqual(prepared, ["b", "a"]);
   assert.equal(sent.length, 2);
   assert.equal((await store.readConversationLog("a")).length, 2, "Rejected messages leave no sender receipts");

@@ -4132,7 +4132,9 @@ resolves the explicit active destination session or, when omitted, the current
 selected session, and sends through ordinary
 Main admission/steering in the background. There is no separate inbox or queue for
 closed projects. Learning sessions cannot use this command. Self-delivery is
-rejected before assistant preparation or receipt writes. Explicit addressing never
+rejected before assistant preparation or receipt writes, as is a message ID that
+the recipient conversation would refuse (anything but letters, digits, `_` and `-`,
+up to 128 characters). Explicit addressing never
 changes selection or substitutes a missing/inactive destination; preparation
 rechecks the addressed session rather than requiring it to be selected.
 

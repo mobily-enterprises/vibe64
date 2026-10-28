@@ -193,7 +193,7 @@ function sessionRenameCommandSource() {
 import http from "node:http";
 
 const args = process.argv.slice(2);
-const usage = 'Usage: vibe64-helper session status [--json] | setup retry | rename "Name" | message-project <project> [--session <session-id>] <message> [message-id] | project-preview <project> [--session <session-id>]';
+const usage = 'Usage: vibe64-helper session status [--json] | setup retry | rename "Name" | message-project <project> [--session <session-id>] <message> [message-id: letters, digits, _ or -] | project-preview <project> [--session <session-id>]';
 if (!args.length || args[0] === "--help" || args[0] === "-h") {
   console.log(usage);
   process.exit(0);
