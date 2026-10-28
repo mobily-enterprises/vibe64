@@ -31,9 +31,11 @@ function createSessionArchive({ project, terminals, setupRunner, publishSessionC
   let archivePreparation = null;
 
   // Stopping: preview, AI turns and remaining tools stop before anything is removed.
+  // The session's live conversations also leave memory: once its source is gone
+  // they cannot be reopened, and a later account change would fail on them.
   async function stopSessionWork(runtime, session) {
     const { sessionId } = session;
-    await terminals.closeSessionTerminals(sessionId, { session });
+    await terminals.closeSessionTerminals(sessionId, { session, forgetConversationBinding: true });
     if (typeof terminals.removeOutputResultsForSession === "function") {
       await terminals.removeOutputResultsForSession(sessionId);
     }

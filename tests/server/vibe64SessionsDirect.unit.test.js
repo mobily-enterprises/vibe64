@@ -2543,7 +2543,10 @@ test("archive cancels exact pending routing outside its lock and retains deliver
     };
     const service = createService({ project: { createRuntime: async () => runtime },
       terminals: { cancelAssistantRoutingForSelection: cancel, cancelTemporaryConversationRouting: cancel,
-        closeSessionTerminals: async () => { calls.push("stop-native"); } },
+        closeSessionTerminals: async (id, options) => {
+          assert.equal(options.forgetConversationBinding, true, "an archived session's conversations leave memory");
+          calls.push("stop-native");
+        } },
       workspaceSetupRunner: { isRunning: () => false, wait: () => null } });
     assert.equal((await service.archiveSession("session-1")).ok, true);
     assert.deepEqual(calls, ["cancel", "closing", "stop-native", "archive"]);
