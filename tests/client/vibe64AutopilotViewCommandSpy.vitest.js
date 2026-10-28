@@ -43,6 +43,12 @@ const temporaryAiFixActionPath = path.resolve(
 
 // Match the original Colleague client renderer: compile the actual SFC setup,
 // use the real Vue instance and moved launcher, and stub presentation only.
+// From JSKIT 0.2 the voice controls import their own message module, and shared
+// components render texts from message keys: load the real module, accept either form.
+const controlsI18nUrl = new URL("./i18n.js", import.meta.resolve("@jskit-ai/assistant-voice/client"));
+const controlsI18n = fs.existsSync(controlsI18nUrl) ? await import(controlsI18nUrl.href) : null;
+const containsText = (source, english, key) => source.includes(english) || source.includes(key);
+
 function mountMainConversationLog({ render = false, speech = { voices: [{ id: "cori" }], defaultVoice: "cori" } } = {}) {
   const filename = path.resolve("src/components/studio/vibe64-session/Vibe64ConversationLog.vue");
   const { descriptor } = parse(fs.readFileSync(filename, "utf8"), { filename });
@@ -99,6 +105,7 @@ function mountMainConversationLog({ render = false, speech = { voices: [{ id: "c
     const controlsModule = { exports: {} };
     new Function("require", "module", "exports", controlsCode)(name => {
       if (name === "./voiceLauncher.js") return launcher.exports;
+      if (name === "./i18n.js" && controlsI18n) return controlsI18n;
       if (name === "vue") return vue;
       if (name === "@mdi/js") return mdi;
       throw new Error(`Unexpected control import ${name}`);
@@ -1067,7 +1074,8 @@ describe("Vibe64 direct session view", () => {
     expect(composerActions).toContain(':aria-busy="state.stopPending ? \'true\' : undefined"');
     expect(composerActions).not.toContain(":loading=");
     expect(composerActions).toContain('v-if="state.canStop"');
-    expect(composerActions).toContain("{{ state.stopPending ? 'Stopping…' : 'Stop' }}");
+    expect(containsText(composerActions, "{{ state.stopPending ? 'Stopping…' : 'Stop' }}",
+      "{{ state.stopPending ? t('jskit.assistant.composer.stopping') : t('jskit.assistant.composer.stop') }}")).toBe(true);
     expect(component).toContain(':described-by="composerSupportStatusVisible ? thinkingStatusId : \'\'"');
     expect(component).toContain("<AssistantComposerSupport");
     expect(promptHints).toContain("@media (prefers-reduced-motion: reduce)");
@@ -1089,7 +1097,7 @@ describe("Vibe64 direct session view", () => {
     expect(questions).toContain('item-title="selectLabel"');
     expect(component).toContain(':select-items="numberedQuestionSelectItems"');
     expect(questions).not.toContain("#selection=");
-    expect(questions).toContain("Answer normally instead");
+    expect(containsText(questions, "Answer normally instead", "jskit.assistant.questions.answerNormally")).toBe(true);
     expect(questions).toContain(':prepend-icon="mdiPencilOutline"');
     expect(component.match(/:can-submit="composerCanSubmit && !composerBlocked && attachmentState\.canSubmit"/gu)).toHaveLength(1);
     expect(composable).toContain('const NUMBERED_QUESTION_UNSURE_VALUE = "I am not sure";');

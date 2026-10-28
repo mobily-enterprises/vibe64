@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { registerHooks } from "node:module";
 import test from "node:test";
@@ -58,10 +59,14 @@ const { code } = await transform(compileScript(descriptor, { id: "colleague-clie
 const elementFilename = new URL("./AssistantConversationElement.vue", import.meta.resolve("@jskit-ai/assistant-core/client/conversation"));
 const { descriptor: elementDescriptor } = parse(await readFile(elementFilename, "utf8"), { filename: String(elementFilename) });
 const { code: elementCode } = await transform(compileScript(elementDescriptor, { id: "colleague-element" }).content, { format: "cjs" });
+// From JSKIT 0.2 the element imports its own message module; load the real one.
+const elementI18nUrl = new URL("../i18n.js", elementFilename);
+const elementI18n = existsSync(elementI18nUrl) ? await import(elementI18nUrl) : null;
 const elementModule = { exports: {} };
 new Function("require", "module", "exports", elementCode)(name => {
   if (name === "vue") return vue;
   if (name === "@mdi/js") return mdi;
+  if (name === "../i18n.js" && elementI18n) return elementI18n;
   assert.ok(name.endsWith(".vue"), name);
   return { default: {} };
 }, elementModule, elementModule.exports);

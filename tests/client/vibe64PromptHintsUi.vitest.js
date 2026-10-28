@@ -145,6 +145,10 @@ function mountPromptHints(input = {}) {
   return { app, container, events, state };
 }
 
+
+// From JSKIT 0.2 shared components render texts from message keys; accept either form.
+const containsText = (source, english, key) => source.includes(english) || source.includes(key);
+
 describe("Vibe64 prompt hints UI", () => {
   it("uses one minimal icon-led short-label rail with a persistent footprint", () => {
     const component = hintComponentSource;
@@ -153,7 +157,8 @@ describe("Vibe64 prompt hints UI", () => {
     expect(component).not.toContain("assistant-composer-support__label");
     expect(component).not.toContain("<span>Suggestions</span>");
     expect(component).toContain('v-for="suggestion in suggestions"');
-    expect(component).toContain(':aria-label="`Use suggestion: ${suggestion.prompt}`"');
+    expect(containsText(component, ':aria-label="`Use suggestion: ${suggestion.prompt}`"',
+      ":aria-label=\"t('jskit.assistant.composer.useSuggestion', { prompt: suggestion.prompt })\"")).toBe(true);
     expect(component).toContain("{{ suggestion.label }}");
     expect(component).not.toContain(':title="suggestion"');
     expect(component).toContain('aria-orientation="horizontal"');
@@ -179,7 +184,7 @@ describe("Vibe64 prompt hints UI", () => {
     const component = hintComponentSource;
     const autopilot = fs.readFileSync(autopilotPath, "utf8");
 
-    expect(component).toContain("Thinking of a few ideas");
+    expect(containsText(component, "Thinking of a few ideas", "jskit.assistant.composer.thinkingOfIdeas")).toBe(true);
     expect(component).toContain('aria-live="polite"');
     expect(component).not.toContain("assistant-composer-support__typing");
     expect(autopilot).toContain("<AssistantComposerSupport");
