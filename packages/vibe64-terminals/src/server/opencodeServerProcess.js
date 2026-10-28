@@ -476,6 +476,7 @@ function safeOpenCodeEnvironment(baseEnv = {}, {
   managedEnv = {},
   modelProviderId = "",
   outputTokenMax = 0,
+  packageInstalls = true,
   password = "",
   privateRoot = "",
   providerConnections = [],
@@ -506,6 +507,7 @@ function safeOpenCodeEnvironment(baseEnv = {}, {
           sessionEnvironmentRegistry
         }),
         outputTokenMax,
+        packageInstalls,
         password
       }),
       ...(text(sessionEnvironmentRegistry)
@@ -547,6 +549,7 @@ async function createOpenCodeServerProcess({
   inspectExecution,
   managedEnv = {},
   modelProviderId = "",
+  packageInstalls = true,
   port = 0,
   privateRoot = "",
   providerConnections = [],
@@ -581,7 +584,7 @@ async function createOpenCodeServerProcess({
     command: executable, workdir: normalizedWorkdir, privateRoot: normalizedPrivateRoot, port: Number(port),
     fetchImpl, expectedVersion, readinessTimeoutMs, allowAttachmentDirectories: true,
     env: safeOpenCodeEnvironment(env, { cacheRoot, canonicalUrl, dbPath: normalizedDbPath,
-      hostContextResolver, managedEnv, modelProviderId, privateRoot: normalizedPrivateRoot,
+      hostContextResolver, managedEnv, modelProviderId, packageInstalls, privateRoot: normalizedPrivateRoot,
       providerConnections, sessionEnvironmentRegistry, shimDirs }),
     connections: [...(text(modelProviderId) || String(apiKey) ? [{ apiKey, modelProviderId }] : []),
       ...(Array.isArray(providerConnections) ? providerConnections : [])].map(connection => ({ providerId: text(connection?.modelProviderId), apiKey: String(connection?.apiKey || "") })),
@@ -707,6 +710,9 @@ async function readOpenCodeCatalog({
             operationId: "opencode-catalog",
             ownerId: "opencode-catalog"
           },
+          // The read lasts seconds and uses no plugins. An unfinished plugin
+          // install would hold the stopped process for the whole stop timeout.
+          packageInstalls: false,
           privateRoot: native.privateRoot,
           providerConnections: native.providerConnections,
           workdir: native.workdir

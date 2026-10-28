@@ -505,7 +505,10 @@ native auth-file write and outside the sanitized command-error boundary; it
 returns the original managed command operation. JSKIT supplies native arguments
 and limits, classifies its result and removes the temporary credential root in
 the original `finally` position. Catalogue cleanup must succeed before either a
-result or a captured read error is returned.
+result or a captured read error is returned. The catalogue server starts with
+package installs disabled: OpenCode would otherwise begin installing its plugin
+package into the fresh configuration directory, and a stop that arrives during
+that install only aborts it, keeping the process alive until systemd kills it.
 
 Vibe64's native OpenCode plugin reads Genesis through a fixed Node composer
 inside OpenCode's managed process group, with bounded output and a timeout.

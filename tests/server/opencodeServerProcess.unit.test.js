@@ -113,6 +113,7 @@ test("OpenCode cold catalog unlocks complete Zen metadata with only its public i
   assert.equal(starts.length, 1);
   assert.deepEqual(starts[0].providerConnections, []);
   assert.equal(starts[0].execution.operationId, "opencode-catalog");
+  assert.equal(starts[0].packageInstalls, false);
   assert.equal(stopped, 1);
 });
 
