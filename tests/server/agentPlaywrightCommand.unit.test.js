@@ -811,13 +811,16 @@ test("managed Playwright test command refuses mismatched runtimes and browser in
       ["readiness"], { cwd: fixture.projectRoot })).stdout);
     assert.equal(readiness.status, "unsupported-runtime");
     assert.equal(readiness.installedVersion, "1.62.0");
-    assert.match(readiness.recovery, /platform operator/u);
+    // The agent is told the host's single version to pin, not to ask for another runtime.
+    assert.equal(readiness.platformVersion, "1.61.1");
+    assert.match(readiness.recovery, /Pin the project's @playwright\/test dependency to exactly 1\.61\.1/u);
+    assert.doesNotMatch(readiness.recovery, /platform operator/u);
     assert.equal(fixture.managedCommands.length, 0);
     await assert.rejects(
       execFileAsync(fixture.prepared.hostPlaywrightWrapperPath, ["test"], {
         cwd: fixture.projectRoot
       }),
-      /requires Playwright 1\.62\.0.*does not provide its matching managed browser runtime/isu
+      /requires Playwright 1\.62\.0.*does not provide its matching managed browser runtime.*Pin .* to exactly 1\.61\.1/isu
     );
 
     await createRuntime(fixture.runtimeRoot, "1.62.0");

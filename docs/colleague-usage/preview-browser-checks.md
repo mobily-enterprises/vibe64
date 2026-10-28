@@ -45,9 +45,11 @@ disconnected; it lists every browser command, including `browser storage-state`,
 and the fields of the status, screenshot and eval JSON. Help starts neither
 Preview nor a browser.
 An actual suite still requires the project's installed Playwright version and a
-matching managed runtime. A version error is a test-runtime blocker; interactive
-checks can use the existing managed Preview browser. Report the exact required
-version to the platform operator instead of installing a separate browser.
+matching managed runtime. Every session shares one browser runtime, so a project
+pins `@playwright/test` to exactly that version. On a version error, the coding
+agent pins the project to the version `vibe64-helper playwright readiness`
+reports, runs Workspace setup and checks again; it never installs a separate
+browser. Interactive checks can still use the existing managed Preview browser.
 On a computer without managed browser runtimes, the agent runs the project's own
 Playwright (`npx playwright test`). Interactive Preview checks (screenshot, eval)
 use the project's own Playwright, or else the `playwright` command installed on

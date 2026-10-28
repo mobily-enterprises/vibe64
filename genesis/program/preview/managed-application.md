@@ -147,8 +147,11 @@ second lock or run underneath active source work.
 and exact managed-runtime selection without executing tests or launching Preview.
 Its result distinguishes not-configured, dependencies-not-prepared,
 unsupported-runtime and ready; active suite status remains a separate operation.
-An unsupported-runtime error identifies tests as not started and directs runtime
-reconciliation to the operator while retaining the interactive browser entry point.
+Every session on a host shares that host's single current browser runtime, and
+readiness reports its version as `platformVersion`. An unsupported-runtime error
+identifies tests as not started and directs the agent to pin the project's
+`@playwright/test` exactly to that version, rather than asking the operator for
+another runtime, while retaining the interactive browser entry point.
 
 Managed-session instructions and command help require browser suites and live
 Preview browser actions to run sequentially. The coding agent waits on the

@@ -108,6 +108,25 @@ function managedRuntime(version = "") {
   return null;
 }
 
+// Every session shares the host's one current browser runtime, so a project
+// pins its exact version instead of asking for another runtime.
+function platformVersion() {
+  if (!runtimeRoot) return "";
+  const manifest = runtimeManifest(path.join(runtimeRoot, "playwright"));
+  return existsSync(manifest.browsersPath) && existsSync(manifest.cliPath) ? manifest.version : "";
+}
+
+function unsupportedRecovery() {
+  const version = platformVersion();
+  const inspection = " Interactive inspection can use vibe64-helper preview browser eval.";
+  return version
+    ? "Every session shares this host's single browser runtime, Playwright " + version +
+      ". Pin the project's @playwright/test dependency to exactly " + version +
+      " (package.json and lockfile), run the project's declared Workspace setup, and check vibe64-helper playwright readiness again." +
+      inspection
+    : "This host has no current managed browser runtime; report that to the platform operator." + inspection;
+}
+
 function managedPreview(applicationRoot = "", {
   identityExplicit = false
 } = {}) {
@@ -398,9 +417,10 @@ if (command === "readiness") {
       !runtime ? "unsupported-runtime" : "ready",
     declaredVersion, installedVersion: project?.version || "",
     runtimeVersion: runtime?.version || "",
+    platformVersion: platformVersion(),
     recovery: !declaredVersion ? "Declare portable project browser tests when needed." :
       !installed ? "Run the project's declared Workspace setup." : !runtime && !runtimeRoot ? LOCAL_PLAYWRIGHT_MESSAGE : !runtime ?
-      "Ask the platform operator to reconcile the exact dependency with the supported runtime catalogue. Interactive inspection can use vibe64-helper preview browser eval." : ""
+      unsupportedRecovery() : ""
   }) + "\\n");
   process.exit(0);
 }
@@ -430,9 +450,8 @@ if (!runtime && !runtimeRoot) {
 if (!runtime) {
   fail(
     "The project requires Playwright " + project.version +
-    ", but Vibe64 does not provide its matching managed browser runtime. " +
-    "Browser tests were not started. Ask the platform operator to reconcile this project's exact test dependency with the supported runtime catalogue. " +
-    "Interactive inspection can use vibe64-helper preview browser eval. Do not install a browser in this session."
+    ", but Vibe64 does not provide its matching managed browser runtime. Browser tests were not started. " +
+    unsupportedRecovery() + " Do not install a browser in this session."
   );
 }
 if (targetId && (String(process.env.PLAYWRIGHT_BASE_URL || "").trim() || String(process.env.VIBE64_PLAYWRIGHT_STORAGE_STATE || "").trim())) {
