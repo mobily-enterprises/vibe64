@@ -205,6 +205,10 @@ function useVibe64SessionPanel(props, emit) {
     archive: sessionData.archive,
     selectedSessionId: selection.selectedSessionId
   }));
+  const archiveWorkState = computed(() => sessionPanelArchiveWorkState({
+    archive: sessionData.archive,
+    sessions: toolbarSessions.value
+  }));
   const rawPageError = computed(() => blockingVibe64SessionPageError({
     hasMountedRuntime: runtimeHostSessionIds.value.length > 0,
     runtimePageError: selectedRuntimeState.value?.pageError,
@@ -258,6 +262,7 @@ function useVibe64SessionPanel(props, emit) {
   });
 
   return {
+    archiveWorkState,
     chatCollapsed,
     dashboardProjectActive,
     dismissPageError,
@@ -402,6 +407,15 @@ function sessionPanelSelectedSessionArchiving({
   return Boolean(archive?.archiving && selectedId && archivingId === selectedId);
 }
 
+function sessionPanelArchiveWorkState({
+  archive = null,
+  sessions = []
+} = {}) {
+  const sessionId = String(archive?.sessionId || "").trim();
+  if (!sessionId) return null;
+  return sessions.find((session) => session?.sessionId === sessionId)?.repositoryWorkState || null;
+}
+
 function sessionPanelDashboardContext(projectContext = {}, sessionsApiPath = "") {
   const safeProjectContext = projectContext && typeof projectContext === "object" && !Array.isArray(projectContext)
     ? projectContext
@@ -495,6 +509,7 @@ function sessionPanelEmptyStateActivity({
 }
 
 export {
+  sessionPanelArchiveWorkState,
   sessionPanelDashboardContext,
   sessionPanelEmptyStateActivity,
   sessionPanelRuntimeHostDiagnostics,

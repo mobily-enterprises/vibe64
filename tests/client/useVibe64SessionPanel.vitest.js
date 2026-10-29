@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  sessionPanelArchiveWorkState,
   sessionPanelDashboardContext,
   sessionPanelEmptyStateActivity,
   sessionPanelRuntimeHostDiagnostics,
@@ -377,5 +378,34 @@ describe("repository work state presentation", () => {
     for (const state of ["checking", "needs_help", "saved", "saving", "unavailable", "unsaved", "update_available", "updating"]) {
       expect(repositoryWorkStateIcon({ repositoryWorkState: { state } })).toMatch(/^M/u);
     }
+  });
+
+  it("warns before archiving work the project does not have, such as an unsaved starter", async () => {
+    const { sessionArchiveWorkNotice } = await import("../../src/lib/vibe64SessionRepositoryWorkState.js");
+    const unsaved = sessionArchiveWorkNotice({ changedCount: 69, state: "unsaved" });
+    expect(unsaved).toMatchObject({ confirmLabel: "Archive without saving", kind: "unsaved" });
+    expect(unsaved.message).toContain("69 unsaved changes");
+    expect(unsaved.message).toContain("Save");
+    expect(sessionArchiveWorkNotice({ changedCount: 1, state: "unsaved" }).message).toContain("1 unsaved change ");
+    for (const state of ["saved", "update_available"]) {
+      expect(sessionArchiveWorkNotice({ state })).toBeNull();
+    }
+    for (const state of ["checking", "needs_help", "saving", "unavailable", "updating", "bogus"]) {
+      expect(sessionArchiveWorkNotice({ state })).toMatchObject({ confirmLabel: "Archive session", kind: "unconfirmed" });
+    }
+    expect(sessionArchiveWorkNotice(null).kind).toBe("unconfirmed");
+  });
+
+  it("gives the archive confirmation the work state of the session being archived", () => {
+    const sessions = [
+      { repositoryWorkState: { state: "saved" }, sessionId: "session-a" },
+      { repositoryWorkState: { changedCount: 3, state: "unsaved" }, sessionId: "session-b" }
+    ];
+    expect(sessionPanelArchiveWorkState({ archive: { sessionId: "session-b" }, sessions }))
+      .toEqual({ changedCount: 3, state: "unsaved" });
+    expect(sessionPanelArchiveWorkState({ archive: { sessionId: "session-a" }, sessions }))
+      .toEqual({ state: "saved" });
+    expect(sessionPanelArchiveWorkState({ archive: { sessionId: "session-x" }, sessions })).toBeNull();
+    expect(sessionPanelArchiveWorkState({ archive: { sessionId: "" }, sessions })).toBeNull();
   });
 });

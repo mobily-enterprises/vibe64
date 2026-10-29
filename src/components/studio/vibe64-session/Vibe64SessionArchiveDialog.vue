@@ -25,6 +25,16 @@
           Session:
           <strong>{{ archive.sessionTitle || shortSessionId(archive.sessionId) }}</strong>
         </p>
+        <v-alert
+          v-if="workNotice"
+          class="mt-3"
+          density="compact"
+          role="status"
+          :type="workNotice.kind === 'unsaved' ? 'warning' : 'info'"
+          variant="tonal"
+        >
+          {{ workNotice.message }}
+        </v-alert>
       </v-card-text>
       <v-card-actions class="studio-ai-session-archive-dialog__actions">
         <v-btn
@@ -40,7 +50,7 @@
           :disabled="archive.command.isRunning"
           @click="archive.confirm"
         >
-          {{ archive.command.isRunning ? "Archiving…" : "Archive session" }}
+          {{ archive.command.isRunning ? "Archiving…" : (workNotice?.confirmLabel || "Archive session") }}
         </v-btn>
       </v-card-actions>
     </v-card>
@@ -48,8 +58,9 @@
 </template>
 
 <script setup>
-import { useId } from "vue";
+import { computed, useId } from "vue";
 import { mdiArchiveOutline } from "@mdi/js";
+import { sessionArchiveWorkNotice } from "@/lib/vibe64SessionRepositoryWorkState.js";
 
 const props = defineProps({
   archive: {
@@ -59,8 +70,13 @@ const props = defineProps({
   shortSessionId: {
     default: (sessionId) => String(sessionId || ""),
     type: Function
+  },
+  workState: {
+    default: null,
+    type: Object
   }
 });
+const workNotice = computed(() => sessionArchiveWorkNotice(props.workState));
 
 function updateOpen(open) {
   if (open !== true) {

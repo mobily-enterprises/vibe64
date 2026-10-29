@@ -140,6 +140,13 @@ fresh session does not authorize further coding work.
 Select the session, choose **Archive session**, and confirm **Archive session**
 in the dialog. This stops its assistant and terminals, preserves the session and
 removes its active workspace. Desktop and mobile use the same confirmation.
+Archiving does not Save. Work the project does not have yet, such as an added
+starter, stays only in the session archive, and archived sessions cannot restore
+source to the project. When the session has unsaved changes, the dialog says how
+many and its button reads **Archive without saving**; choose **Cancel**, then
+**Save**, to keep them. When Vibe64 has not yet confirmed whether the work is
+saved, the dialog says so. A new session starts from the project's saved source,
+so it does not contain an archived session's unsaved work.
 An OpenCode session can be archived before its main chat has started; an idle
 assistant with no native conversation does not need a main-turn Stop request.
 Its helper conversations and terminals still go through normal cleanup.

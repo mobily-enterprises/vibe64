@@ -94,9 +94,32 @@ function repositoryWorkStateIcon(sessionItem = {}) {
   return REPOSITORY_WORK_STATE_PRESENTATION[repositoryWorkState(sessionItem)].icon;
 }
 
+// Archiving keeps unsaved work only in the archive, which cannot restore source,
+// so the confirmation says when the project does not have this session's work yet.
+function sessionArchiveWorkNotice(workState = null) {
+  const state = repositoryWorkState({ repositoryWorkState: workState });
+  if (state === "saved" || state === "update_available") return null;
+  const archiveOnly = "Archiving keeps them only in the session archive, which cannot restore them to the project.";
+  if (state === "unsaved") {
+    const changedCount = Number(workState?.changedCount || 0);
+    const changes = changedCount === 1 ? "1 unsaved change" : `${changedCount || "some"} unsaved changes`;
+    return {
+      confirmLabel: "Archive without saving",
+      kind: "unsaved",
+      message: `This session has ${changes} that the project does not have yet, such as an added starter. ${archiveOnly} To keep them, choose Cancel and use Save first.`
+    };
+  }
+  return {
+    confirmLabel: "Archive session",
+    kind: "unconfirmed",
+    message: `Vibe64 has not confirmed that this session's work is saved. Any unsaved changes are not in the project. ${archiveOnly}`
+  };
+}
+
 export {
   repositoryWorkState,
   repositoryWorkStateIcon,
   repositoryWorkStateLabel,
+  sessionArchiveWorkNotice,
   sessionRepositoryWorkState
 };

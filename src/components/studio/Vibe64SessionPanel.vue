@@ -28,7 +28,11 @@
       @recheck="sessionData.refreshSessionData"
     />
 
-    <Vibe64SessionArchiveDialog :archive="sessionData.archive" :short-session-id="sessionData.shortSessionId" />
+    <Vibe64SessionArchiveDialog
+      :archive="sessionData.archive"
+      :short-session-id="sessionData.shortSessionId"
+      :work-state="archiveWorkState"
+    />
 
     <Vibe64EmptySessionLayout
       v-if="emptyLayoutVisible"
@@ -165,6 +169,7 @@ const learning = useVibe64Learning();
 provide(VIBE64_SESSION_TOOLTIP_KEY, sessionTooltip);
 
 const {
+  archiveWorkState,
   chatCollapsed,
   dashboardProjectActive,
   dismissPageError,

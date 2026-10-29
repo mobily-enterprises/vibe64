@@ -50,6 +50,7 @@ that turn without dropping either half. No saved history is rewritten.
 - `packages/vibe64-terminals/src/server/projectStackInspection.js`
 - `src/components/studio/vibe64-session/Vibe64AssistantSessionDialog.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionToolbar.vue`
+- `src/components/studio/vibe64-session/Vibe64SessionArchiveDialog.vue`
 - `src/composables/useVibe64SessionPanel.js`
 - `src/lib/vibe64SessionRepositoryWorkState.js`
 - `src/lib/vibe64SessionPanelModel.js`
@@ -164,6 +165,14 @@ Sessions/Runtime/source owners above, and focused contribution cases in
 `tests/server/githubPullRequests.unit.test.js`,
 `tests/server/vibe64SessionsDirect.unit.test.js`,
 `tests/server/vibe64SessionSourceGit.unit.test.js` and the Runtime test file.
+
+Archiving never Saves. The archive confirmation receives the archived session's
+repository work state from the panel's session list. Unsaved work, such as an
+applied starter, is named with its change count and the confirm action reads
+Archive without saving; an unconfirmed state says the work is not known to be
+saved. Either way that work stays only in the source-recovery artifacts, which
+the archived-session view cannot restore to the project, and a new session
+starts from saved canonical source.
 
 The Store retains its existing filesystem creation lock through Runtime source
 initialization, outside the publication mutation queue so ordinary metadata
