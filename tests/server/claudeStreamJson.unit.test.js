@@ -1185,6 +1185,11 @@ test("Claude retires a process when its settings change is only partially accept
   assert.equal(f.processes[1].options.model, "haiku");
 });
 
+// Claude Code's get_usage answer from the usage endpoint keeps its `limits` list;
+// an answer seeded from old response headers drops it and is not a current reading.
+const claudeEndpointUsage = Object.freeze({ rate_limits_available: true,
+  rate_limits: { seven_day: { utilization: 25 }, limits: [] } });
+
 test("Claude reads account capabilities and allowance through an already owned process", async (t) => {
   const f = await fixture(t);
   await f.provider.sendMessage(f.context, { message: "Hello", messageId: "initial" });
@@ -1193,7 +1198,7 @@ test("Claude reads account capabilities and allowance through an already owned p
   const native = f.processes[0];
   native.client.request = async (request) => {
     assert.equal(request.subtype, "get_usage");
-    return { rate_limits_available: true, rate_limits: { seven_day: { utilization: 25 } } };
+    return claudeEndpointUsage;
   };
   assert.equal((await f.provider.capabilities(f.context)).modelProviders[0].models.length, 2);
   assert.equal((await f.provider.readPlanUsage(f.context)).windows[0].remainingPercent, 75);
@@ -2128,10 +2133,14 @@ test("main Claude canonical goal acknowledgement leaves Stop available and canno
   assert.equal(events.some(event => event.type === "accepted" || event.type === "transcript"), false);
   await native.options.onEvent({ type: "user", uuid: inputs[0].messageId, session_id: native.options.sessionId });
   assert.deepEqual(await f.store.readConversationLog("test"), []);
+  // Claude's history never recorded the command and no native work remains, so
+  // the stopped goal is proven unsent and its Retry may send it once.
   assert.deepEqual(await canonical.inspectDelivery({ messageId: "unacknowledged-goal" }), {
-    status: "unknown", messageId: "unacknowledged-goal"
+    status: "not-sent", messageId: "unacknowledged-goal",
+    error: "This message was not sent. Review it before sending a new message.",
+    messageCode: "assistant.conversation.messageNotSent", messageParams: {}
   });
-  assert.equal(inputs.length, 1, "inspection never resends an unproven goal command");
+  assert.equal(inputs.length, 1, "inspection itself never resends a goal command");
 });
 
 
@@ -2969,7 +2978,7 @@ test("Claude native status frames preserve forwarding before usage and goal publ
   native.client.request = async request => {
     assert.equal(request.subtype, "get_usage");
     usageReads++;
-    return { rate_limits_available: true, rate_limits: { seven_day: { utilization: 25 } } };
+    return claudeEndpointUsage;
   };
   await provider.readPlanUsage(context);
   await provider.readPlanUsage(context);
