@@ -30,6 +30,8 @@ async function applicationHost(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-application-accounts-"));
   t.after(() => rm(root, { force: true, recursive: true }));
   await mkdir(path.join(root, "var", "lib"), { recursive: true });
+  const managedRoot = path.join(root, "var", "lib", "managed");
+  for (const project of ["shop", "blog"]) await mkdir(path.join(managedRoot, "test", "projects", project), { recursive: true });
   const owner = { gid: GID, home: path.join(root, "home", daemonUser("test")), uid: UID, username: daemonUser("test") };
   const accounts = new Map();
   const created = [];
@@ -51,6 +53,7 @@ async function applicationHost(t) {
     },
     facts: (username) => ({ groupGid: GID, groups: [username], loginUids: LOGIN_UIDS }),
     grantDaemonSearch: (descriptor) => grants.push(descriptor),
+    managedRoot,
     registryRoot: path.join(root, "etc", "vibe64", "applications"),
     registryUid: UID,
     resolveUser: (username) => accounts.get(username) || null,
@@ -117,6 +120,36 @@ test("the daemon names only a project of its own workspace", async (t) => {
       /Only a workspace daemon/u);
   }
   assert.deepEqual(host.created, []);
+});
+
+test("a new application account needs a real project of the workspace, and room under its limit", async (t) => {
+  const host = await applicationHost(t);
+  const projects = path.join(host.options.managedRoot, "test", "projects");
+  assert.throws(() => host.ensure("missing"), /test has no project missing/u);
+  await writeFile(path.join(projects, "file"), "not a project");
+  assert.throws(() => host.ensure("file"), /test has no project file/u);
+  await mkdir(path.join(host.root, "elsewhere"));
+  await symlink(path.join(host.root, "elsewhere"), path.join(projects, "linked"));
+  assert.throws(() => host.ensure("linked"), /test has no project linked/u, "a link is never followed to a project");
+  assert.deepEqual(host.created, []);
+
+  host.ensure("shop");
+  assert.throws(() => host.ensure("blog", { applicationLimit: 1 }), /test already has 1, its limit/u);
+  assert.deepEqual(host.created, [applicationIdentity(host.owner, "shop").username]);
+  // A registered account is the same account, limit or not, and so is one
+  // whose project went while its production database stays.
+  assert.equal(host.ensure("shop", { applicationLimit: 1 }).username, applicationIdentity(host.owner, "shop").username);
+  host.ensure("blog");
+  const shop = host.ensure("shop");
+  await writeFile(path.join(shop.databaseRoot, "app.sqlite"), "data");
+  host.retire("shop");
+  await rm(path.join(projects, "shop"), { recursive: true });
+  assert.equal(host.ensure("shop").username, shop.username);
+  // An account kept for its production database still holds its uid.
+  host.retire("shop");
+  await mkdir(path.join(projects, "news"));
+  assert.throws(() => host.ensure("news", { applicationLimit: 2 }), /test already has 2, its limit/u);
+  host.ensure("news", { applicationLimit: 3 });
 });
 
 test("an account the helper did not make is never adopted as an application", async (t) => {

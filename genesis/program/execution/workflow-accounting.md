@@ -255,7 +255,11 @@ from the people's. A person
 operation refuses any `v64a_` name, and an application is acted as only through
 that registry, so neither ever stands in for the other. `ensure` makes the
 account on first use and adopts an account an interrupted `ensure` left
-unregistered only when it is exactly the account the helper makes. Through
+unregistered only when it is exactly the account the helper makes. A new
+registration needs a project of the workspace (a real folder of its
+`projects`, opened without following links) and room under the workspace's
+limit of 100 registrations, because each holds a system uid for as long as it
+lasts and the host's system uid range is small. Through
 directories it opened itself, never following a link, it makes the area: root's
 directories down to the project's (`0711`), the daemon's `handover/` the
 application's group may read (`2750`), and the application's own `app/` with
@@ -265,7 +269,9 @@ given; nothing is repaired. `retire` refuses while anything runs as the
 account, and removes the handover and application files. A production database
 outlives its project, as other production databases do, so while `database/`
 holds one the account, its registration and that directory stay; otherwise they
-go too.
+go too. The account stays with its database so that the files' owner is never
+a uid the host could give to another account; it counts toward the limit until
+the database goes.
 
 A managed execution runs as an application only when the daemon asks for its
 registered account by name (`applicationAccount`), and only as a finite capture.

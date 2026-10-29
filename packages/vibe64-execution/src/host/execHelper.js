@@ -161,6 +161,9 @@ const CONTROLLER_LEASE_NAME = "resource-controller.sock";
 const APPLICATION_RECEIPTS_ROOT = "/run/vibe64-applications";
 const APPLICATION_SHELL = "/usr/sbin/nologin";
 const APPLICATION_PROJECT_PATTERN = /^[a-z0-9][a-z0-9_-]{0,47}$/u;
+// Each registration holds a system uid for as long as it lasts, and the host's
+// system uid range is small (100-999 by default).
+const APPLICATION_LIMIT_PER_WORKSPACE = 100;
 const MANAGED_EXECUTION_ID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu;
 const MANAGED_EXECUTION_KINDS = new Set([
   "assistant",
@@ -2446,11 +2449,41 @@ function ensureApplicationArea(identity = {}, owner = {}, user = {}, {
   }
 }
 
+// A new application needs a project of its workspace, a real folder of the
+// workspace's projects opened without following links, and room under the
+// workspace's limit.
+function assertNewApplication(identity = {}, { applicationLimit, managedRoot, registryRoot, registryUid }) {
+  try {
+    closeSync(openDirectoryBelow(path.join(managedRoot, identity.workspace), ["projects", identity.project]));
+  } catch (error) {
+    if (!["ELOOP", "ENOENT", "ENOTDIR"].includes(error.code)) throw error;
+    throw new Error(`Vibe64 exec helper refused an application account: ${identity.workspace} has no project ${identity.project}.`);
+  }
+  let registered = 0;
+  try {
+    const directory = openRegistry(identity.workspace, { registryRoot, registryUid });
+    try {
+      registered = readdirSync(openedPath(directory)).filter((name) => name.endsWith(".json") &&
+        APPLICATION_USERNAME_PATTERN.test(name.slice(0, -".json".length))).length;
+    } finally {
+      closeSync(directory);
+    }
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  if (registered >= applicationLimit) {
+    throw new Error(`Vibe64 exec helper refused an application account: ${identity.workspace} already has ` +
+      `${applicationLimit}, its limit. Retire unused ones first.`);
+  }
+}
+
 function ensureApplicationAccount(owner = {}, project = "", {
+  applicationLimit = APPLICATION_LIMIT_PER_WORKSPACE,
   areaRoot = APPLICATION_AREA_ROOT,
   createUser = (identity) => runRootCommand("useradd", ["--system", "--user-group", "--no-create-home",
     "--home-dir", identity.home, "--shell", APPLICATION_SHELL, identity.username]),
   facts = hostApplicationFacts,
+  managedRoot = MANAGED_ROOT,
   resolveUser = tryResolveOsUser,
   ...options
 } = {}) {
@@ -2461,9 +2494,17 @@ function ensureApplicationAccount(owner = {}, project = "", {
     if (!user || user.uid !== registration.uid || user.gid !== registration.gid || registration.project !== identity.project) {
       throw new Error(`The registered application account ${identity.username} is not the account on this host.`);
     }
-  } else if (!user) {
-    createUser(identity);
-    user = resolveUser(identity.username);
+  } else {
+    assertNewApplication(identity, {
+      applicationLimit,
+      managedRoot,
+      registryRoot: options.registryRoot ?? APPLICATION_REGISTRY_ROOT,
+      registryUid: options.registryUid ?? 0
+    });
+    if (!user) {
+      createUser(identity);
+      user = resolveUser(identity.username);
+    }
   }
   // An account left unregistered by an interrupted ensure is adopted only when
   // it is exactly the one the helper makes.
