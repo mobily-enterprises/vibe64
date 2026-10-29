@@ -340,6 +340,11 @@ function assertInteractiveCodexAppServerArgs(args = [], tail = []) {
   assert.deepEqual(args.slice(8), [
     "-c",
     STUDIO_MANAGED_CODEX_NO_UPDATE_CONFIG,
+    // JSKIT launches every app-server without Codex's plugin and app syncs.
+    "-c",
+    "features.plugins=false",
+    "-c",
+    "features.apps=false",
     ...tail.slice(0, -3)
   ]);
 }
