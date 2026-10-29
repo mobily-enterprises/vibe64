@@ -2525,7 +2525,10 @@ function ensureApplicationAccount(owner = {}, project = "", {
 
 // A retired project's application keeps nothing but its production databases,
 // which outlive the project like its other production databases. Without any,
-// its account, registration and area go too. Nothing of it may still run.
+// its account, registration and area go too. Nothing of it may still run: no
+// release unit of it may remain installed, since one could restart it, and it
+// is unregistered before the check for its processes, so no new execution can
+// start as it meanwhile. A refused retire registers it again.
 function retireApplicationAccount(owner = {}, project = "", {
   areaRoot = APPLICATION_AREA_ROOT,
   areaUid = 0,
@@ -2534,7 +2537,9 @@ function retireApplicationAccount(owner = {}, project = "", {
   registryRoot = APPLICATION_REGISTRY_ROOT,
   registryUid = 0,
   resolveUser = tryResolveOsUser,
-  running = (uid) => spawnSync("pgrep", ["-U", String(uid)]).status !== 1
+  running = (uid) => spawnSync("pgrep", ["-U", String(uid)]).status !== 1,
+  unitRoot = SYSTEMD_UNIT_ROOT,
+  unitUid = 0
 } = {}) {
   const identity = applicationIdentity(owner, project, { areaRoot });
   const registry = { registryRoot, registryUid };
@@ -2547,9 +2552,25 @@ function retireApplicationAccount(owner = {}, project = "", {
     if (problem) {
       throw new Error(`Vibe64 exec helper refused to retire application account ${identity.username}: ${problem}`);
     }
-    if (running(user.uid)) {
-      throw new Error("The application still runs. Stop its release service before retiring it.");
+    const installed = installedReleaseUnits({ unitRoot, unitUid })
+      .find(({ lines }) => lines.includes(`User=${identity.username}`));
+    if (installed) {
+      throw new Error(`The application's release service ${installed.name} is still installed. Remove it before retiring the application.`);
     }
+  }
+  const unregister = () => {
+    const directory = openRegistry(identity.workspace, registry);
+    try {
+      unlinkSync(openedPath(directory, `${identity.username}.json`));
+    } finally {
+      closeSync(directory);
+    }
+  };
+  const unregistered = Boolean(registration && user);
+  if (unregistered) unregister();
+  if (user && running(user.uid)) {
+    if (unregistered) writeApplicationRegistration(identity, user, registry);
+    throw new Error("The application still runs. Stop its release service before retiring it.");
   }
   let projectRoot = -1;
   try {
@@ -2575,6 +2596,9 @@ function retireApplicationAccount(owner = {}, project = "", {
     }
   }
   if (databaseKept) {
+    // Kept with its database, so the files' owner is never a uid the host
+    // could give another account.
+    if (unregistered) writeApplicationRegistration(identity, user, registry);
     return { databaseKept, retired: true };
   }
   if (projectRoot >= 0) {
@@ -2588,14 +2612,7 @@ function retireApplicationAccount(owner = {}, project = "", {
   }
   // Unregistered first: an account an interrupted retire leaves behind is one
   // the next ensure adopts or the next retire removes.
-  if (registration) {
-    const directory = openRegistry(identity.workspace, registry);
-    try {
-      unlinkSync(openedPath(directory, `${identity.username}.json`));
-    } finally {
-      closeSync(directory);
-    }
-  }
+  if (registration && !unregistered) unregister();
   if (user) deleteUser(identity.username);
   return { databaseKept, retired: Boolean(user || registration || projectRoot >= 0) };
 }
@@ -2683,6 +2700,21 @@ function applicationReleaseServiceFiles(payload = {}, identity = {}, { daemonUid
   return { environmentFile, startScript, workingDirectory };
 }
 
+// Every installed release unit, read as root's own files: name and lines.
+function installedReleaseUnits({ unitRoot = SYSTEMD_UNIT_ROOT, unitUid = 0 } = {}) {
+  const directory = openSync(unitRoot, DIRECTORY_NO_FOLLOW);
+  try {
+    return readdirSync(openedPath(directory))
+      .filter((name) => name.startsWith("vibe64-release-") && name.endsWith(".service"))
+      .map((name) => ({
+        lines: readOwnedFile(directory, name, { maxBytes: 64 * 1024, othersMayWrite: false, uid: unitUid }).split("\n"),
+        name
+      }));
+  } finally {
+    closeSync(directory);
+  }
+}
+
 // A release unit `user` may install: one named for its application's project
 // in the daemon's workspace that is new or already its own, on a port no other
 // release service unit claims. Root wrote every unit file it reads here.
@@ -2692,21 +2724,14 @@ function assertReleaseServiceClaim({ loopbackPort = 0, owner = {}, unitName = ""
   if (!project || !new RegExp(`^vibe64-release-${workspace}-${project}-[a-f0-9]{12}\\.service$`, "u").test(unitName)) {
     throw new Error(`Release service ${unitName} is not named for application ${user.username}'s project.`);
   }
-  const directory = openSync(unitRoot, DIRECTORY_NO_FOLLOW);
-  try {
-    for (const name of readdirSync(openedPath(directory))) {
-      if (!name.startsWith("vibe64-release-") || !name.endsWith(".service")) continue;
-      const unit = readOwnedFile(directory, name, { maxBytes: 64 * 1024, othersMayWrite: false, uid: unitUid });
-      if (name === unitName) {
-        if (!unit.split("\n").includes(`User=${user.username}`)) {
-          throw new Error(`Release service ${unitName} belongs to another account.`);
-        }
-      } else if (unit.split("\n").includes(`SocketBindAllow=tcp:${loopbackPort}`)) {
-        throw new Error(`Port ${loopbackPort} belongs to another release service.`);
+  for (const { lines, name } of installedReleaseUnits({ unitRoot, unitUid })) {
+    if (name === unitName) {
+      if (!lines.includes(`User=${user.username}`)) {
+        throw new Error(`Release service ${unitName} belongs to another account.`);
       }
+    } else if (lines.includes(`SocketBindAllow=tcp:${loopbackPort}`)) {
+      throw new Error(`Port ${loopbackPort} belongs to another release service.`);
     }
-  } finally {
-    closeSync(directory);
   }
 }
 

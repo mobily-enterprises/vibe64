@@ -265,8 +265,11 @@ directories down to the project's (`0711`), the daemon's `handover/` the
 application's group may read (`2750`), and the application's own `app/` with
 its `home/` and `database/` (`0700`), which the daemon may search for a database
 by name but never list. An existing directory must still have the owner it was
-given; nothing is repaired. `retire` refuses while anything runs as the
-account, and removes the handover and application files. A production database
+given; nothing is repaired. `retire` refuses while a release unit of the
+account is still installed (it could start it again) or anything runs as it.
+It unregisters the account before it looks for its processes, so no new
+execution can start as it meanwhile, and registers it again when it refuses.
+It then removes the handover and application files. A production database
 outlives its project, as other production databases do, so while `database/`
 holds one the account, its registration and that directory stay; otherwise they
 go too. The account stays with its database so that the files' owner is never

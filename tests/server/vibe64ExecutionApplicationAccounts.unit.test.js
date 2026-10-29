@@ -31,6 +31,8 @@ async function applicationHost(t) {
   t.after(() => rm(root, { force: true, recursive: true }));
   await mkdir(path.join(root, "var", "lib"), { recursive: true });
   const managedRoot = path.join(root, "var", "lib", "managed");
+  const unitRoot = path.join(root, "etc", "systemd", "system");
+  await mkdir(unitRoot, { recursive: true });
   for (const project of ["shop", "blog"]) await mkdir(path.join(managedRoot, "test", "projects", project), { recursive: true });
   const owner = { gid: GID, home: path.join(root, "home", daemonUser("test")), uid: UID, username: daemonUser("test") };
   const accounts = new Map();
@@ -57,7 +59,9 @@ async function applicationHost(t) {
     registryRoot: path.join(root, "etc", "vibe64", "applications"),
     registryUid: UID,
     resolveUser: (username) => accounts.get(username) || null,
-    running: () => false
+    running: () => false,
+    unitRoot,
+    unitUid: UID
   };
   return {
     accounts, created, deleted, grants, options, owner, root,
@@ -266,6 +270,40 @@ test("retiring a project removes its application unless a production database re
   assert.equal(readApplicationRegistration("test", account.username, host.options), null);
   assert.deepEqual(host.deleted, [account.username]);
   assert.deepEqual(host.retire("shop"), { databaseKept: false, retired: false });
+});
+
+test("retiring waits for every release unit of the application to go, and admits no new execution meanwhile", async (t) => {
+  const host = await applicationHost(t);
+  const account = host.ensure("shop");
+  const unitName = "vibe64-release-test-shop-0123456789ab.service";
+  await writeFile(path.join(host.options.unitRoot, unitName), `[Service]\nUser=${account.username}\nRestart=always\n`, { mode: 0o644 });
+  await writeFile(path.join(host.options.unitRoot, "vibe64-release-test-blog-0123456789ab.service"),
+    `[Service]\nUser=${applicationUser("ba9876543210")}\n`, { mode: 0o644 });
+  assert.throws(() => host.retire("shop"), new RegExp(`release service ${unitName} is still installed`, "u"),
+    "an installed unit could start it again after the check");
+  assert.notEqual(readApplicationRegistration("test", account.username, host.options), null);
+  assert.equal((await stat(account.appRoot)).isDirectory(), true);
+  await rm(path.join(host.options.unitRoot, unitName));
+
+  // While its processes are checked it is no registered application, so no
+  // execution can start as it; a refused retire registers it again.
+  const registeredWhileChecked = [];
+  const running = () => {
+    registeredWhileChecked.push(readApplicationRegistration("test", account.username, host.options));
+    return true;
+  };
+  assert.throws(() => host.retire("shop", { running }), /still runs/u);
+  assert.deepEqual(registeredWhileChecked, [null]);
+  assert.deepEqual(readApplicationRegistration("test", account.username, host.options),
+    { gid: GID, project: "shop", uid: UID, username: account.username });
+  assert.deepEqual(host.deleted, []);
+
+  // Kept with a production database, it is registered again once its files go.
+  await writeFile(path.join(account.databaseRoot, "app.sqlite"), "data");
+  registeredWhileChecked.length = 0;
+  assert.deepEqual(host.retire("shop", { running: (uid) => running(uid) && false }), { databaseKept: true, retired: true });
+  assert.deepEqual(registeredWhileChecked, [null]);
+  assert.notEqual(readApplicationRegistration("test", account.username, host.options), null);
 });
 
 test("an application command runs only as a registered application of the daemon's own workspace", async (t) => {
