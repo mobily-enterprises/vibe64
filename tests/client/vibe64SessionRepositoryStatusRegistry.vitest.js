@@ -124,6 +124,22 @@ describe("session repository status registry", () => {
     };
   }
 
+  // A queue whose settle timers run on the fake clock.
+  function queueOnClock(clock, options) {
+    return createVibe64SessionRepositoryStatusQueue({
+      clearTimer: clock.clearTimer, now: clock.now, setTimer: clock.setTimer, ...options
+    });
+  }
+
+  // The registry's own settle timers, and the dates its checks record.
+  function fakeRegistryTimers() {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+  }
+
+  function realtimeListener(event) {
+    return registryHarness.realtimeEvents.find((options) => options.event === event);
+  }
+
   function workRequests(sessionId = "") {
     return registryHarness.requests.filter(({ options, path }) => options.method === "GET" &&
       (!sessionId || path.endsWith(`/${sessionId}/work`)));
@@ -202,19 +218,16 @@ describe("session repository status registry", () => {
     queue.dispose();
   });
 
-  // Live monitoring saw each event of a burst start its own inspection and
-  // every event during it queue a second full one.
+  // One change reaches a session as a burst of events: the burst gets one
+  // inspection, not one per event.
   it("inspects each session once for a burst of changes, after the burst settles", async () => {
     const clock = fakeQueueClock();
     const calls = [];
-    const queue = createVibe64SessionRepositoryStatusQueue({
-      clearTimer: clock.clearTimer,
-      now: clock.now,
+    const queue = queueOnClock(clock, {
       async requestWork(sessionId) {
         calls.push(sessionId);
         return { ok: true, unsaved: false };
-      },
-      setTimer: clock.setTimer
+      }
     });
 
     for (let event = 0; event < 6; event += 1) {
@@ -233,11 +246,8 @@ describe("session repository status registry", () => {
   it("follows a change that lands during an inspection with exactly one settled inspection", async () => {
     const clock = fakeQueueClock();
     const releases = [];
-    const queue = createVibe64SessionRepositoryStatusQueue({
-      clearTimer: clock.clearTimer,
-      now: clock.now,
-      requestWork: () => new Promise((resolve) => releases.push(resolve)),
-      setTimer: clock.setTimer
+    const queue = queueOnClock(clock, {
+      requestWork: () => new Promise((resolve) => releases.push(resolve))
     });
 
     queue.enqueue(["session-a"], { force: true, settle: true });
@@ -263,14 +273,11 @@ describe("session repository status registry", () => {
   it("does not let a continuous stream of changes postpone an inspection past five seconds", async () => {
     const clock = fakeQueueClock();
     const startedAt = [];
-    const queue = createVibe64SessionRepositoryStatusQueue({
-      clearTimer: clock.clearTimer,
-      now: clock.now,
+    const queue = queueOnClock(clock, {
       async requestWork() {
         startedAt.push(clock.now());
         return { ok: true, unsaved: false };
-      },
-      setTimer: clock.setTimer
+      }
     });
 
     for (let event = 0; event < 16; event += 1) {
@@ -285,12 +292,9 @@ describe("session repository status registry", () => {
     const clock = fakeQueueClock();
     const releases = [];
     const inspected = [];
-    const queue = createVibe64SessionRepositoryStatusQueue({
-      clearTimer: clock.clearTimer,
-      now: clock.now,
+    const queue = queueOnClock(clock, {
       onInspected: (state) => inspected.push(state),
-      requestWork: () => new Promise((resolve) => releases.push(resolve)),
-      setTimer: clock.setTimer
+      requestWork: () => new Promise((resolve) => releases.push(resolve))
     });
 
     queue.enqueue(["session-a"], { force: true, settle: true });
@@ -389,7 +393,7 @@ describe("session repository status registry", () => {
 
   for (const first of ["HTTP", "realtime"]) {
     it(`shows Rebase immediately and shares one inspection when ${first} arrives first`, async () => {
-      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+      fakeRegistryTimers();
       const check = Promise.withResolvers();
       const work = Promise.withResolvers();
       const states = [];
@@ -430,7 +434,7 @@ describe("session repository status registry", () => {
   }
 
   it("ignores an older check delivered after a newer realtime confirmation", async () => {
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    fakeRegistryTimers();
     const check = Promise.withResolvers();
     const work = Promise.withResolvers();
     const states = [];
@@ -598,7 +602,7 @@ describe("session repository status registry", () => {
   // The starter is applied outside any turn, Save or editor event, so without
   // its own reason the selected session kept showing "All work is saved".
   it("re-inspects the selected session's work when a starter is applied to it", async () => {
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    fakeRegistryTimers();
     const states = [];
     const scope = effectScope();
     scope.run(() => useVibe64SessionRepositoryStatusRegistry({
@@ -613,7 +617,7 @@ describe("session repository status registry", () => {
     const starterFiles = ["genesis/stack.md", "package.json", "src/main.js"];
     registryHarness.requestHandler = () => ({ changedPaths: starterFiles, ok: true, unsaved: true });
 
-    const sessionEvent = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.session.summary.changed");
+    const sessionEvent = realtimeListener("vibe64.session.summary.changed");
     const change = { payload: { reason: "session-starter-applied", sessionId: "session-a" } };
     expect(sessionEvent.matches(change)).toBe(true);
     sessionEvent.onEvent(change);
@@ -630,7 +634,7 @@ describe("session repository status registry", () => {
   });
 
   it("reuses checked repository state across session switches and still responds to real invalidation", async () => {
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    fakeRegistryTimers();
     const selectedSessionId = ref("session-a");
     let revision = 0;
     registryHarness.requestHandler = (path) => String(path).endsWith("/updates/check")
@@ -653,7 +657,7 @@ describe("session repository status registry", () => {
     }
     expect(registryHarness.requests).toEqual([]);
 
-    const sourceEvent = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.source-editor.file.changed");
+    const sourceEvent = realtimeListener("vibe64.source-editor.file.changed");
     sourceEvent.onEvent({ payload: { sessionId: "session-b" } });
     await settleBurst();
     expect(registryHarness.requests.map(({ path }) => path)).toEqual([
@@ -691,9 +695,9 @@ describe("session repository status registry", () => {
     expect(registryHarness.documentListeners.has("visibilitychange")).toBe(false);
   });
 
-  // A hidden tab released its watch, so a project open only in background
-  // tabs got no 30 s probe. The person returns to that tab and must see
-  // accurate state, so only leaving the project or the page ends the watch.
+  // A project open only in background tabs still gets the 30 s probe, so a
+  // person returning to that tab sees accurate state: only leaving the
+  // project or the page ends the watch.
   it("watches its project for the server's update probe while the tab is open, visible or hidden", async () => {
     const projectSlug = ref("sample");
     const scope = effectScope();
@@ -737,7 +741,7 @@ describe("session repository status registry", () => {
   });
 
   it("reads each visible session's work once for a burst of realtime changes", async () => {
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    fakeRegistryTimers();
     const scope = effectScope();
     const registry = scope.run(() => useVibe64SessionRepositoryStatusRegistry({
       selectedSessionId: ref("session-a"),
@@ -746,8 +750,8 @@ describe("session repository status registry", () => {
     }));
     await settleBurst();
     registryHarness.requests.length = 0;
-    const sessionChanged = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.session.summary.changed");
-    const fileChanged = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.source-editor.file.changed");
+    const sessionChanged = realtimeListener("vibe64.session.summary.changed");
+    const fileChanged = realtimeListener("vibe64.source-editor.file.changed");
     for (const sessionId of ["session-a", "session-b"]) {
       for (const reason of ["session-turn-checkpoint-updated", "claude-stream-turn-idle"]) {
         sessionChanged.onEvent({ payload: { reason, sessionId } });
@@ -774,7 +778,7 @@ describe("session repository status registry", () => {
 
   for (const outcome of ["confirms", "fails"]) {
     it(`inspects a canonical change once, after the forced check it starts ${outcome}`, async () => {
-      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+      fakeRegistryTimers();
       const states = [];
       const scope = effectScope();
       scope.run(() => useVibe64SessionRepositoryStatusRegistry({
@@ -788,7 +792,7 @@ describe("session repository status registry", () => {
       const check = Promise.withResolvers();
       registryHarness.requestHandler = (path) => String(path).endsWith("/updates/check")
         ? check.promise : { changedPaths: [], ok: true, unsaved: false };
-      const sessionChanged = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.session.summary.changed");
+      const sessionChanged = realtimeListener("vibe64.session.summary.changed");
       sessionChanged.onEvent({ payload: {
         canonicalCommit: "new-version", reason: "repository-canonical-changed", sessionId: "session-b"
       } });
@@ -816,7 +820,7 @@ describe("session repository status registry", () => {
   }
 
   it("inspects a canonical change that joins a running check once, when its forced recheck fails", async () => {
-    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    fakeRegistryTimers();
     const checks = [];
     registryHarness.requestHandler = (path) => {
       if (!String(path).endsWith("/updates/check")) return { changedPaths: [], ok: true, unsaved: false };
@@ -832,7 +836,7 @@ describe("session repository status registry", () => {
     }));
     await settleRegistryRequests();
     expect(checks).toHaveLength(1);
-    const sessionChanged = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.session.summary.changed");
+    const sessionChanged = realtimeListener("vibe64.session.summary.changed");
     sessionChanged.onEvent({ payload: {
       canonicalCommit: "new-version", reason: "repository-canonical-changed", sessionId: "session-a"
     } });

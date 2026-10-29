@@ -42,7 +42,7 @@ export function createTemporaryConversationFixture({ request, created = () => {}
   function snapshot(id) {
     const record = get(id);
     const route = JSON.parse(record.routingMetadata?.assistant_routing_request || "null");
-    // As on the server, a stopped request is no longer offered for recovery.
+    // As on the server, a stopped request is not offered for recovery.
     const pendingRequest = route?.status === "uncertain" && !route.stopped ? { messageId: route.messageId,
       text: route.input?.displayMessage || route.input?.message || "", error: route.error || "" } : null;
     return { id, segmentId: record.runId ? `fixture:${id}` : null,

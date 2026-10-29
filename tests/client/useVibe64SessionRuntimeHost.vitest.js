@@ -403,8 +403,8 @@ describe("mounted Main host", () => {
 
 
 describe("host work inspection", () => {
-  // Live monitoring saw the registry read the selected session's work for a
-  // session change and this host read it again for the same change's revision.
+  // A session change reaches both the registry and this host (through the
+  // change's task revision); the session's work is read once for both.
   it("reuses the registry's inspection of its session instead of reading it again", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     const f = mountedHostFixture();

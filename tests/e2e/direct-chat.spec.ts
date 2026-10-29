@@ -53,12 +53,6 @@ const hintTest = test.extend<{
     const realtime = await assistantStatusServer({ session: directSession(), temporaryEngineId });
     try {
       await relayConversation(page, realtime);
-      if (temporaryEngineId) await page.route(/\/temporary-conversations(?:[/?]|$)/u, async (route) => {
-        const url = new URL(route.request().url());
-        const response = await route.fetch({ url: `${realtime.url}${url.pathname}${url.search}`,
-          headers: { ...route.request().headers(), origin: realtime.url } }).catch(() => null);
-        await (response ? route.fulfill({ response }) : route.abort()).catch(() => {});
-      });
       await use(realtime);
     } finally {
       await realtime.close();
@@ -67,8 +61,10 @@ const hintTest = test.extend<{
 });
 const temporaryTest = hintTest.extend({ temporaryEngineId: "codex" });
 
+const sessionChat = (page: Page) => page.getByRole("region", { name: "Session chat" });
+
 async function openTemporaryAiWorkspace(page: Page) {
-  await expect(page.getByRole("region", { name: "Session chat" })).toBeVisible();
+  await expect(sessionChat(page)).toBeVisible();
   const expandedAction = page.getByRole("button", {
     name: /^Open temporary AI(?::|$)/u
   });
@@ -643,7 +639,7 @@ test.describe("direct chat", () => {
       // is waiting (--loading), so the wait exists before the clock moves.
       await page.clock.install();
       await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
-      const hints = page.getByRole("region", { name: "Session chat" }).locator("[data-assistant-composer-support]");
+      const hints = sessionChat(page).locator("[data-assistant-composer-support]");
       const composer = page.getByLabel("Message AI assistant");
       const geometry = () => page.locator(".studio-autopilot__chat-panel").evaluate((panel) => {
         const bounds = (selector: string) => {
@@ -659,7 +655,7 @@ test.describe("direct chat", () => {
       });
       await expect(composer).toBeVisible();
       await expect(hints).toHaveClass(/--hidden/);
-      const conversation = page.getByRole("region", { name: "Session chat" }).locator(".assistant-transcript__body");
+      const conversation = sessionChat(page).locator(".assistant-transcript__body");
       await expect.poll(() => conversationDistanceFromBottom(conversation)).toBeLessThanOrEqual(48);
       await detachConversation(conversation, 600, width === 390 ? "touch" : "wheel");
       const empty = await geometry();
@@ -759,8 +755,7 @@ test.describe("direct chat", () => {
       // Main chat queues while it sends, so its button stays Send (disabled
       // while the draft is empty) and the status reports the delivery.
       await expect(composer).toBeEnabled();
-      await expect(page.getByRole("region", { name: "Session chat" }).locator(".assistant-composer-support__assistant-status"))
-        .toHaveText(/^Sending to assistant/u);
+      await expect(sessionChat(page).locator(".assistant-composer-support__assistant-status")).toHaveText(/^Sending to assistant/u);
       await composer.fill("Keep the completion-race test focused.");
 
       // The conversation owner reports the starting turn.
@@ -780,7 +775,7 @@ test.describe("direct chat", () => {
       const steer = page.getByRole("button", { name: "Steer assistant" });
       await expect(steer).toBeEnabled();
       // Steer and Stop keep 48 px touch targets inside the narrow phone pane.
-      const stop = page.getByRole("region", { name: "Session chat" }).getByRole("button", { name: "Stop", exact: true });
+      const stop = sessionChat(page).getByRole("button", { name: "Stop", exact: true });
       await expect(stop).toBeVisible();
       for (const control of [steer, stop]) {
         const bounds = await control.boundingBox();
@@ -813,8 +808,7 @@ test.describe("direct chat", () => {
 
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
 
-    const sessionChat = page.getByRole("region", { name: "Session chat" });
-    const saveButton = sessionChat.getByRole("button", { name: "Review selected session changes", exact: true });
+    const saveButton = sessionChat(page).getByRole("button", { name: "Review selected session changes", exact: true });
     await expect(saveButton).toBeVisible();
     await expect(page.locator(".studio-home-shell-save-work-host")).toHaveCount(0);
     await saveButton.click();
@@ -1041,8 +1035,7 @@ test.describe("direct chat", () => {
     try {
       await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
       const save = page.getByRole("button", { name: "Review selected session changes", exact: true });
-      await expect(page.getByRole("region", { name: "Session chat" }).locator(".assistant-composer-support__assistant-status"))
-        .toHaveText("Loading assistant…");
+      await expect(sessionChat(page).locator(".assistant-composer-support__assistant-status")).toHaveText("Loading assistant…");
       await expect(save).toHaveCount(0);
       await expect(page.getByRole("button", { name: "Check for updates", exact: true })).toBeVisible();
       releasePreparation();
@@ -1143,7 +1136,7 @@ test.describe("direct chat", () => {
       await mockDirectChat(page);
       await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
 
-      const sessionHeader = page.getByRole("region", { name: "Session chat" }).locator(".studio-autopilot__session-header");
+      const sessionHeader = sessionChat(page).locator(".studio-autopilot__session-header");
       const saveButton = sessionHeader.getByRole("button", { name: "Review selected session changes", exact: true });
       await expect(saveButton).toBeVisible();
       await expect(saveButton).toHaveText("");
@@ -1164,7 +1157,7 @@ test.describe("direct chat", () => {
       await mockDirectChat(page);
       await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
 
-      const saveButton = page.getByRole("region", { name: "Session chat" }).getByRole("button", {
+      const saveButton = sessionChat(page).getByRole("button", {
         name: "Review selected session changes",
         exact: true
       });
@@ -1297,7 +1290,7 @@ test.describe("direct chat", () => {
 
         await navigation.getByRole("button", { name: "Main chat", exact: true }).click();
         await expect(workspace).not.toBeVisible();
-        await expect(page.getByRole("region", { name: "Session chat" })).toBeFocused();
+        await expect(sessionChat(page)).toBeFocused();
         await page.getByLabel("Message AI assistant").fill("Continue in the main conversation.");
         await page.getByRole("button", { name: "Send message", exact: true }).click();
         await expect.poll(() => messages).toHaveLength(1);
@@ -1355,7 +1348,7 @@ test.describe("direct chat", () => {
       );
       await navigation.getByRole("button", { name: "Main chat", exact: true }).click();
       await expect(workspace).not.toBeVisible();
-      await expect(page.getByRole("region", { name: "Session chat" })).toBeFocused();
+      await expect(sessionChat(page)).toBeFocused();
 
       await openTemporaryAiWorkspace(page);
       await expect(navigation.getByRole("button", { name: "Temporary 1", exact: true })).toBeVisible();
@@ -1567,7 +1560,7 @@ test.describe("direct chat", () => {
       await mockDirectChat(page);
       await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
 
-      const body = page.getByRole("region", { name: "Session chat" }).locator(".assistant-transcript__body");
+      const body = sessionChat(page).locator(".assistant-transcript__body");
       await expect(body).toBeVisible();
       await expect(body).toHaveAttribute("tabindex", "0");
       await expect(body).toHaveAttribute("aria-label", "Conversation messages");
@@ -1690,7 +1683,7 @@ test.describe("direct chat", () => {
     await mockDirectChat(page);
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
 
-    const body = page.getByRole("region", { name: "Session chat" }).locator(".assistant-transcript__body");
+    const body = sessionChat(page).locator(".assistant-transcript__body");
     await expect(body).toBeVisible();
     await expect.poll(() => conversationDistanceFromBottom(body)).toBeLessThanOrEqual(48);
     hintRealtime.state.beforeConversationRead = () => olderPage.promise;
@@ -2050,6 +2043,25 @@ function codexGoalView(goal: Record<string, unknown> | null) {
   } } };
 }
 
+// A Models choice on the fixture catalogue's revision.
+function modelSelection(engineId: string, modelProviderId: string, modelId: string, selectionSource = "recommended") {
+  return { schema: "vibe64.assistant-selection.v1", engineId, agentId: engineId, modelProviderId, modelId, variantId: "high",
+    catalogRevision: `sha256:${"a".repeat(64)}`, selectionSource };
+}
+
+// Models' setups: each owner role's state, and no separate setup for others.
+function ownerSetups(roleState: (role: string) => Record<string, unknown>) {
+  return { owner: { roles: Object.fromEntries(["senior", "junior", "router", "colleague", "fix", "explain", "quickHelper"]
+    .map(role => [role, roleState(role)])) }, nonOwner: { roles: {} } };
+}
+
+// Account menu, then Account settings, then its AI Accounts tab.
+async function openAiAccounts(page: Page) {
+  await page.getByRole("button", { name: "Account menu", exact: true }).click();
+  await page.locator(".vibe64-auth-settings__menu").getByText("Account settings", { exact: true }).click();
+  await page.getByRole("tab", { name: "AI Accounts", exact: true }).click();
+}
+
 for (const width of [320, 390, 820, 1280, 2048]) {
   hintTest(`@colleague-mobile session Send remains usable beside Colleague at ${width}px`, async ({ page, hintRealtime }, info) => {
     test.skip(process.env.VIBE64_E2E_COLLEAGUE_HOST !== "1", "Requires a composed host with Colleague mounted.");
@@ -2298,7 +2310,7 @@ for (const [width, header] of [320, 360, 390, 540].flatMap(width => [[width, "se
         expect(boxes.some(box => box.name === name), `${name} is in the app bar only with the chat pane`).toBe(pane === "chat");
       }
       // A phone shows one side at a time: its Lesson toggle is on the lesson
-      // step bar on both sides, so the app bar keeps the 5a928c735 budget.
+      // step bar on both sides, so the app bar keeps its phone budget.
       expect(boxes.some(box => box.name === "lessonToggle"), "the Lesson toggle is not in the phone app bar").toBe(false);
       await expect(page.locator("[data-test=learning-step-bar] [data-test=lesson-toggle]")).toBeVisible();
       // The name is readable, or (beside Preview's controls on the narrowest
@@ -2398,7 +2410,7 @@ for (const width of [390, 820, 1280]) {
         session.metadata.assistant_routing = JSON.stringify(route.request().postDataJSON().assistantRouting);
         await fulfillJson(route, { ok: true, ...session });
       });
-      // Today's server: Auto needs Senior, Junior and Router in the owner's setup.
+      // Auto needs Senior, Junior and Router in the owner's setup.
       let routerChosen = true;
       let canConfigure = true;
       const decision = (effectiveSelection: Record<string, unknown>) => ({ available: true, effectiveSelection });
@@ -2414,10 +2426,10 @@ for (const width of [390, 820, 1280]) {
       const owner: Record<string, unknown> = { senior, junior, router };
       const routing = () => ({ ok: true, revision: 1, canConfigure, team: { available: false },
         engines: [{ engineId: "codex", label: "Codex", connected: true }],
-        setups: { owner: { roles: Object.fromEntries(["senior", "junior", "router", "colleague", "fix", "explain", "quickHelper"].map(role => {
+        setups: ownerSetups(role => {
           const value = role === "router" && !routerChosen ? null : owner[role] ?? null;
-          return [role, { configured: Boolean(value), value, effective: value, recommendation: null, choices }];
-        })) }, nonOwner: { roles: {} } },
+          return { configured: Boolean(value), value, effective: value, recommendation: null, choices };
+        }),
         viewer: { senior: { available: true } } });
       // The open session reads only the light main view; Models alone makes the full read.
       let mainReads = 0;
@@ -2604,10 +2616,8 @@ for (const width of [390, 820, 1280]) {
       const codex = accounts[1];
       const providers: any[] = [];
       await routeApiEndpoint(page, "/vibe64/accounts", route => fulfillJson(route, { ok: true, ready: true, accounts }));
-      const selection = (engineId: string, modelProviderId: string, modelId: string) => ({ schema: "vibe64.assistant-selection.v1",
-        engineId, agentId: engineId, modelProviderId, modelId, variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}`, selectionSource: "recommended" });
-      const deepseek = selection("claude", "deepseek", "deepseek-flash");
-      const astra = selection("codex", "openai", "gpt-6-astra");
+      const deepseek = modelSelection("claude", "deepseek", "deepseek-flash");
+      const astra = modelSelection("codex", "openai", "gpt-6-astra");
       const owner: Record<string, any> = {};
       const patches: any[] = [];
       await routeApiEndpoint(page, "/vibe64/accounts/codex-providers", route => {
@@ -2637,9 +2647,7 @@ for (const width of [390, 820, 1280]) {
         };
         return { ok: true, revision: 1 + patches.length, canConfigure: true, team: { available: false },
           engines: [{ engineId: "claude", label: "Claude Code", connected: providers.length > 0 }, { engineId: "codex", label: "Codex", connected: codex.connected }],
-          setups: { owner: { roles: Object.fromEntries(["senior", "junior", "router", "colleague", "fix", "explain", "quickHelper"].map(role => [role, state(role)])) },
-            nonOwner: { roles: {} } },
-          viewer: { senior: { available: Boolean(roles.senior || recommendation("senior")) } } };
+          setups: ownerSetups(state), viewer: { senior: { available: Boolean(roles.senior || recommendation("senior")) } } };
       };
       await routeApiEndpoint(page, "/vibe64/accounts/model-routing", route => {
         if (route.request().method() === "PATCH") {
@@ -2652,9 +2660,7 @@ for (const width of [390, 820, 1280]) {
       await routeApiEndpoint(page, "/vibe64/accounts/model-routing/preview", route => fulfillJson(route,
         routing({ ...owner, ...route.request().postDataJSON().owner })));
       await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
-      await page.getByRole("button", { name: "Account menu", exact: true }).click();
-      await page.locator(".vibe64-auth-settings__menu").getByText("Account settings", { exact: true }).click();
-      await page.getByRole("tab", { name: "AI Accounts", exact: true }).click();
+      await openAiAccounts(page);
       await expect(page.getByRole("heading", { name: "Pick the AI behind Vibe64", exact: true })).toBeVisible();
       await expect(page.getByRole("button", { name: "Add a connection", exact: true })).toHaveCount(0);
       const deepseekCard = page.getByRole("article", { name: "DeepSeek", exact: true });
@@ -2724,10 +2730,8 @@ for (const width of [390, 820, 1280]) {
       await routeApiEndpoint(page, "/vibe64/accounts/ai-connections", route => fulfillJson(route, { ok: true, providers: [], connections: [
         { id: "opencode", label: "OpenCode Zen", connected: true, builtIn: true, removable: false }
       ] }));
-      const selection = (modelProviderId: string, modelId: string, selectionSource = "recommended") => ({ schema: "vibe64.assistant-selection.v1",
-        engineId: "codex", agentId: "codex", modelProviderId, modelId, variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}`, selectionSource });
-      const senior = selection("openai", "gpt-6-astra", "explicit");
-      const deepseek = selection("deepseek", "deepseek-flash");
+      const senior = modelSelection("codex", "openai", "gpt-6-astra", "explicit");
+      const deepseek = modelSelection("codex", "deepseek", "deepseek-flash");
       const owner: Record<string, any> = { senior, junior: senior };
       const patches: any[] = [];
       const reads: string[] = [];
@@ -2742,9 +2746,7 @@ for (const width of [390, 820, 1280]) {
           effective: roles[role] || recommendation(role), recommendation: recommendation(role), choices });
         return { ok: true, revision: 1 + patches.length, canConfigure: true, team: { available: false },
           engines: ["codex", "claude", "opencode"].map(engineId => ({ engineId, connected: true })),
-          setups: { owner: { roles: Object.fromEntries(["senior", "junior", "router", "colleague", "fix", "explain", "quickHelper"].map(role => [role, state(role)])) },
-            nonOwner: { roles: {} } },
-          viewer: { senior: { available: true } } };
+          setups: ownerSetups(state), viewer: { senior: { available: true } } };
       };
       await routeApiEndpoint(page, "/vibe64/accounts/model-routing", route => {
         if (route.request().method() === "PATCH") {
@@ -2757,9 +2759,7 @@ for (const width of [390, 820, 1280]) {
       await routeApiEndpoint(page, "/vibe64/accounts/model-routing/preview", route => fulfillJson(route,
         routing({ ...owner, ...route.request().postDataJSON().owner })));
       await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
-      await page.getByRole("button", { name: "Account menu", exact: true }).click();
-      await page.locator(".vibe64-auth-settings__menu").getByText("Account settings", { exact: true }).click();
-      await page.getByRole("tab", { name: "AI Accounts", exact: true }).click();
+      await openAiAccounts(page);
       await expect(page.getByRole("heading", { name: "Your AI setup", exact: true })).toBeVisible();
       await page.getByRole("button", { name: /^Advanced/ }).click();
       await page.getByRole("button", { name: "Add a connection", exact: true }).click();

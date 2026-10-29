@@ -9,8 +9,8 @@ import {
 } from "../../src/lib/vibe64RepositoryRealtime.js";
 
 // Project pages (the session list and its activity, archive and renewal state,
-// repository status, approval notices) now read only the summary of a change.
-// Each must still find in it what it read from the full change.
+// repository status, approval notices) read only the summary of a change.
+// Each must find in it what it needs from the full change.
 async function summaryOf(sessionId, change) {
   const published = [];
   await createSessionChangedPublisher({ async publish(event) { published.push(event); return event; } })(sessionId, change);

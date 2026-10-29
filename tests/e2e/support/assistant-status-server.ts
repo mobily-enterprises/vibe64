@@ -526,16 +526,19 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
 }
 
 // The page's HTTP stays mocked; its chat uses this server's real conversation
-// owner and Socket.IO transport. Studio sockets must come from the server's own
+// owner and Socket.IO transport, and so do its temporary conversations when the
+// server serves Temporary AI. Studio sockets must come from the server's own
 // origin, so they are relayed from Node.
-export async function relayConversation(page: Page, server: { url: string }) {
-  await page.route("**/api/assistant/**", async (route) => {
-    const url = new URL(route.request().url());
-    const response = await route.fetch({ url: `${server.url}${url.pathname}${url.search}`,
+export async function relayConversation(page: Page, server: { url: string; temporary?: unknown }) {
+  const relay = (url: string | RegExp) => page.route(url, async (route) => {
+    const { pathname, search } = new URL(route.request().url());
+    const response = await route.fetch({ url: `${server.url}${pathname}${search}`,
       headers: { ...route.request().headers(), origin: server.url } }).catch(() => null);
     // Requests still in flight when the test ends find the server closed.
     await (response ? route.fulfill({ response }) : route.abort()).catch(() => {});
   });
+  await relay("**/api/assistant/**");
+  if (server.temporary) await relay(/\/temporary-conversations(?:[/?]|$)/u);
   await page.routeWebSocket(/\/socket\.io\//u, (route) => {
     const url = new URL(route.url());
     const upstream = new WebSocket(`${server.url.replace("http", "ws")}${url.pathname}${url.search}`, { origin: server.url });
