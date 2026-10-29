@@ -576,8 +576,9 @@ Every product-owned repair entry, including project setup warnings, uses the
 shared Fix it with AI control and temporary-task sender. It opens, selects, and
 focuses a separate Temporary AI task immediately, even while the main assistant
 is working. These entries and subsystem generation check the viewer's effective
-Junior access, independently of the main chat's mode or personal connection,
-except Update merge-repair entries, which check Senior access.
+Fix it with AI access, independently of the main chat's mode or personal
+connection. Without it the control stays visible but disabled, and its title
+gives the role's reason or says Fix it with AI is unavailable.
 Onboarding's create, inspect and adoption actions use that same
 temporary-chat path. Each onboarding request opens a fresh chat. The task
 shows a concise user-facing repair request and a compact status heading while

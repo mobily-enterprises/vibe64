@@ -476,12 +476,14 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     presence(payload: Record<string, unknown>) {
       broadcast("vibe64.session.presence.changed", payload);
     },
-    sessionChanged(reason: string, payload: Record<string, unknown> = {}) {
+    // Streamed work passes { summary: false }: the server sends it only to the
+    // session's viewers, never to the project's session list.
+    sessionChanged(reason: string, payload: Record<string, unknown> = {}, { summary = true } = {}) {
       session.revision += 1;
       broadcastSessionChange({
         projectSlug: WORKSPACE_SLUG, sessionId: session.sessionId,
         revision: session.revision, reason, ...payload
-      });
+      }, { summary });
       const patch = payload.conversationLogPatch as { type: string; turn: Record<string, unknown> } | undefined;
       applicationEvents.emit("conversation", patch
         ? { type: "transcript", patch: { ...patch, turn: normalizeConversationTurn(patch.turn) } }
@@ -566,6 +568,8 @@ async function temporaryConversationsFixture({ engineId, session, actions, publi
   let nextNativeId = 0;
   const captured = { temporaryCreates: [] as Record<string, unknown>[], temporaryTurns: [] as Record<string, unknown>[],
     temporaryDeletes: 0, outcome: (_turn: number) => "continue",
+    // Awaited before each native start; a throw is that start's failure.
+    beforeNativeTurn: async (_turn: number): Promise<void> => {},
     // Replaces the completed native result, for example { status: "inProgress" }.
     nativeTurn: (_turn: number): Record<string, unknown> | null => null };
   const sessionAgent = {
@@ -586,6 +590,7 @@ async function temporaryConversationsFixture({ engineId, session, actions, publi
       return { ok: true, ...response, admitted: accepted.has(input.messageId) };
     },
     async startConversationTurn(_id, input) {
+      await captured.beforeNativeTurn(captured.temporaryTurns.length);
       await input.onPromptSending?.({ threadId: input.conversationId });
       const record = native.get(input.conversationId);
       const runId = `temporary-run-${captured.temporaryTurns.length}`;

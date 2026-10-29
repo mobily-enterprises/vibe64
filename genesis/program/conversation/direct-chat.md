@@ -1482,11 +1482,13 @@ native owners. Its canonical goal methods use the original product actions and
 service policy. A goal read can target a retained Codex or Claude goal while the
 visible chat uses OpenCode; its native capability remains `goals: false`.
 
-The session header preserves label space by tightening its right-aligned action
-group in 512–640 px chat panes: 44 px controls, 20 px icons and no inter-button
-gap. Larger panes retain 48 px controls and their normal gaps; smaller panes use
-the existing Session actions menu. Update uses the existing commit icon rotated
-vertically, distinct from the pull-request branch glyph.
+The session header gives its room to session names first, then Save, which never
+leaves the header. Temporary AI, Renew session, Pin session, Pull request and
+Prepare workspace follow in that priority; when the pane is too narrow, the
+lowest-priority actions move into Session actions first. Header actions are light
+36 px icon buttons with 18 px icons, and 44 px touch targets on coarse pointers.
+Update uses the commit icon, a vertical line through a circle, distinct from the
+pull-request branch glyph.
 
 Session and temporary-conversation actions resolve their project and acting user
 through the shared action boundary. The acting user is trusted context, never
