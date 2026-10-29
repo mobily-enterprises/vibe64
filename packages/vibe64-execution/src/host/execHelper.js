@@ -549,7 +549,8 @@ async function runManagedExecutionPayload(payloadPath = "") {
   const controllerLease = controllerLeaseName
     ? await connectManagedExecutionController(controllerLeaseName)
     : null;
-  process.umask(0o007);
+  // As its unit's UMask= says: an application's files are its own alone.
+  process.umask(payload.application === true ? 0o077 : 0o007);
   let child = null;
   let terminationTimer = null;
   let controllerLeaseClosed = false;

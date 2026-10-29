@@ -345,7 +345,7 @@ test("an application's execution runs as itself in its sandbox, with its own tem
   const payloadPath = path.join(root, "command.json");
   await writeFile(payloadPath, JSON.stringify({
     application: true,
-    args: ["-e", "process.stdout.write(JSON.stringify({key:process.env.RELEASE_KEY,tmp:process.env.TMPDIR}))"],
+    args: ["-e", "process.stdout.write(JSON.stringify({key:process.env.RELEASE_KEY,tmp:process.env.TMPDIR,umask:process.umask()}))"],
     command: process.execPath,
     cwd: root,
     env: { HOME: account.home, PATH: "/usr/bin:/bin", USER: account.username },
@@ -357,7 +357,8 @@ test("an application's execution runs as itself in its sandbox, with its own tem
   const { stdout } = await promisify(execFile)(process.execPath, [EXEC_HELPER, "run-managed", payloadPath], {
     cwd: root, env: {}, timeout: 5000
   });
-  assert.deepEqual(JSON.parse(stdout), { key: "from-file", tmp: "/tmp" });
+  // Its files are its own alone, as its unit's UMask= says.
+  assert.deepEqual(JSON.parse(stdout), { key: "from-file", tmp: "/tmp", umask: 0o077 });
 });
 
 test("an application's execution is finite, and its receipt sits where only root adds receipts", async (t) => {
