@@ -297,7 +297,10 @@ its own Git source and stable identity. Creation starts in Senior with review of
 Colleague can also rename, archive and retry preparation through those same
 session actions and their current access checks. Its result projection contains
 bounded session identity, lifecycle and preparation status rather than private
-paths, metadata or logs. An accepted preparation retry does not mean it finished.
+paths, metadata or logs. Its archive tool directs it to inspect saved-work status
+first and, when work is unsaved or unconfirmed, to report the count, offer Save
+and archive only after the user confirms archiving without saving; this is
+Colleague guidance, not a server guard. An accepted preparation retry does not mean it finished.
 Retry consults the existing preparation owner's current readiness when the stored
 attempt succeeded, allowing changed recipes or resources through the same admission
 guard. A still-current or unconfirmed success cannot be rerun through that path.

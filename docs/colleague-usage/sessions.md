@@ -165,9 +165,12 @@ If the last open session cannot be archived, its chat is selected again so you
 can inspect the failure and retry. If another session is already selected, that
 selection stays in place and the failed session becomes available in its tab.
 Colleague can explain these steps and the reported error. When you explicitly
-ask it to archive a named session, it archives it through the same action; the
-same pin, renewal and preparation guards apply, and it reports a failed cleanup
-for retry. Stopping an agent or ending Colleague is never an archive request.
+ask it to archive a named session, it first checks that session's saved-work
+status. If the session has unsaved changes, or their status is unconfirmed, it
+tells you how many, offers **Save**, and archives only after you confirm
+archiving without saving. It archives through the same action; the same pin,
+renewal and preparation guards apply, and it reports a failed cleanup for retry.
+Stopping an agent or ending Colleague is never an archive request.
 
 ## Chat availability
 

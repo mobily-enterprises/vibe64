@@ -330,6 +330,17 @@ test("every session action names its session with one shared definition", async 
   }
 });
 
+// Archiving never Saves; the person archived a session holding an unsaved
+// starter believing it empty. Colleague must check and say so first.
+test("Colleague confirms unsaved work before archiving a session", () => {
+  const actions = createSessionActions({ sessions: {} });
+  const { description } = actions.find((action) => action.id === ACTION_ARCHIVE_SESSION).extensions.assistant;
+  assert.match(description, /Archiving never Saves/u);
+  assert.match(description, /first inspect .*vibe64\.sessions\.work\.inspect/u);
+  assert.match(description, /how many unsaved changes/u);
+  assert.match(description, /only after the user confirms archiving without saving/u);
+});
+
 test("typing presence trusts the authenticated request user and never accepts a draft", async () => {
   const updates = [];
   const sessionPresence = {
