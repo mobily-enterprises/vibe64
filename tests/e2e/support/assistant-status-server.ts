@@ -217,7 +217,6 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
       const service = createColleagueService({ actions, events, systemRoot: colleagueRoot,
         accounts: {},
         terminals: {
-          joinAgentRuntimeInvalidation: () => () => {},
           async requireAssistantSelectionAccess(_selection, { vibe64User }) {
             if (vibe64User?.uid !== owner.uid) throw Object.assign(new Error("Model access denied."), { statusCode: 403 });
           },

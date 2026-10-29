@@ -1241,6 +1241,11 @@ Once the old assistant process is confirmed stopped, unfinished helper-history
 cleanup stays recorded for retry without preventing logout or a successful new
 login from becoming available. Unverified process shutdown still blocks the
 account transition.
+Claude sign-in, sign-out and Remove AI never stop or wait on running chats,
+goals or Colleague answers; the account's new state shows as soon as Claude
+Code's own sign-in or sign-out finishes. Work in progress continues on the newly
+connected account, and after a sign-out its next request ends at once with a
+clear not-connected message instead of hanging.
 AI choices load while the session is open and remain visible during refresh,
 so opening the model menu does not restart its loading screen each time.
 Codex helper tasks accept the installed stable Codex version when it meets the

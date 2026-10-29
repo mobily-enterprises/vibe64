@@ -403,6 +403,21 @@ describe("useAccountAuthSessions", () => {
     expect(accounts.refresh).toHaveBeenCalledOnce();
   });
 
+  it("shows a sign-out's account row at once and reloads the other rows without holding the button", async () => {
+    const reload = deferred();
+    const signedOut = { id: "claude", connected: false, status: "not_connected" };
+    const accounts = { loadError: "", startAuthCommand: {}, refresh: vi.fn(), showAccount: vi.fn(),
+      logout: vi.fn().mockResolvedValue({ ok: true, account: signedOut }),
+      reloadLocalStatus: vi.fn().mockReturnValue(reload.promise) };
+    const auth = await mountAccountAuthSessions(accounts, { accountRows: [{ id: "claude" }], browserWindow: null });
+    await auth.logoutAccount("claude");
+    expect(accounts.showAccount).toHaveBeenCalledExactlyOnceWith(signedOut);
+    expect(auth.logoutAccountId.value).toBe("");
+    expect(accounts.reloadLocalStatus).toHaveBeenCalledOnce();
+    expect(accounts.refresh).not.toHaveBeenCalled();
+    reload.resolve({});
+  });
+
   it("does not reopen routing from a cancelled login's late status response", async () => {
     const pending = deferred();
     const session = { id: "cancelled-login", account: { id: "codex" }, status: "authenticating" };

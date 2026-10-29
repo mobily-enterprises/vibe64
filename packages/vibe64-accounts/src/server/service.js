@@ -1401,10 +1401,12 @@ function createService({
   async function prepareClaudeAuthChange(input) {
     const failure = aiManagementError(input);
     if (failure) return failure;
-    const stopped = await invalidateAgentRuntimes({ provider: "claude", reason: "claude-auth-change" });
-    if (stopped?.ok !== false) return null;
-    // The refusal names the first Claude process that could not be stopped.
-    return { ...stopped, error: stopped.error || stopped.failed?.[0]?.error || "Claude processes could not be stopped." };
+    // Running Claude turns keep going: Claude Code reads its credentials for
+    // every request. This drops only the account's cached reads, at once.
+    const invalidated = await invalidateAgentRuntimes({ provider: "claude", reason: "claude-auth-change" });
+    if (invalidated?.ok !== false) return null;
+    return { ...invalidated,
+      error: invalidated.error || invalidated.failed?.[0]?.error || "Claude Code could not apply the account change." };
   }
 
   function authCredentialContext(accountId, githubContext) {

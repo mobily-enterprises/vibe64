@@ -64,6 +64,17 @@ function statusWithCodexReconnectRequired(status = {}) {
   };
 }
 
+// An account action answers with that account's new row. Showing it at once
+// keeps the readiness rule the server applies: every required account connected.
+function statusWithAccount(status, account) {
+  const id = String(account?.id || "");
+  const accounts = Array.isArray(status?.accounts) ? status.accounts : [];
+  if (!id || !accounts.some((row) => row?.id === id)) return status;
+  const nextAccounts = accounts.map((row) => row?.id === id ? account : row);
+  const missing = nextAccounts.find((row) => row?.required && row.connected !== true);
+  return { ...status, accounts: nextAccounts, blockedReason: missing ? String(missing.message || "") : "", ready: !missing };
+}
+
 function useVibe64Accounts({
   client = null
 } = {}) {
@@ -268,6 +279,10 @@ function useVibe64Accounts({
     queryClient.setQueryData(statusQueryKey.value, statusWithCodexReconnectRequired);
   }
 
+  function showAccount(account) {
+    queryClient.setQueryData(statusQueryKey.value, (status) => statusWithAccount(status, account));
+  }
+
   return {
     cancelAuthSession,
     isLoading: statusResource.isLoading,
@@ -282,6 +297,7 @@ function useVibe64Accounts({
     reloadLocalStatus,
     refresh,
     logout,
+    showAccount,
     cancelAuthSessionCommand,
     startAuth,
     startAuthCommand,
@@ -292,6 +308,7 @@ function useVibe64Accounts({
 }
 
 export {
+  statusWithAccount,
   statusWithCodexReconnectRequired,
   useVibe64Accounts
 };

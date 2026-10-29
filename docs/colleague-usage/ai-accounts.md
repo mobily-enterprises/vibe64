@@ -185,16 +185,19 @@ If Claude reports that another process is refreshing its OAuth token, wait a
 minute before retrying. If the error persists, ask the workspace operator to
 check the managed Claude version and refresh-lock recovery. This error alone
 does not prove that you signed out or need to replace your credentials.
-Changing the workspace's Claude account stops its existing Claude processes,
-Colleague's included: a Colleague answer in progress stops, and the thread
-continues on the new account with your next message.
+Changing the workspace's Claude account (signing in, signing out or
+**Remove AI**) stops no chat, Colleague answer or goal and waits for none of
+them: the account's new state shows as soon as Claude Code's own sign-in or
+sign-out finishes. Claude Code reads the
+current sign-in for each request, so work in progress continues on the newly
+connected account. After a sign-out, a running chat's next request ends at once
+with "Claude isn't connected. Sign in to Claude, then send your message again."
+Nothing hangs; sign in again and resend.
 Sign-ins and key checks show a spinner and what is happening while they wait,
 as described in [AI onboarding](ai-onboarding.md#while-it-works).
 Main and temporary chats keep their history and resume with the newly connected account; they
 do not require access to the previous account. Model selection in **Chat mode**
-also uses the current workspace connection. If the old process cannot be stopped,
-resolve the reported stop failure before retrying; a replacement cannot start
-until shutdown is confirmed. Replacing a saved, authorized
+also uses the current workspace connection. Replacing a saved, authorized
 external-provider API key does not require a new Claude conversation. Its next
 message uses the updated connection; you do not need to close and reopen the chat.
 If a background Codex task reports that its selected account changed, its answer

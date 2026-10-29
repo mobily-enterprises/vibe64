@@ -174,14 +174,19 @@ function useAccountAuthSessions(
   async function logoutAccount(accountId) {
     localError.value = "";
     logoutAccountId.value = String(accountId || "");
+    let result;
     try {
-      await accounts.logout(accountId);
-      await refreshStatus();
+      result = await accounts.logout(accountId);
     } catch (error) {
       localError.value = String(error?.message || error || "Logout failed.");
+      return;
     } finally {
       logoutAccountId.value = "";
     }
+    // The sign-out answers with the account's new row: it shows at once, and
+    // the other rows update in the background without holding the button.
+    accounts.showAccount(result?.account);
+    void accounts.reloadLocalStatus().catch(() => {});
   }
 
   async function cancelSession(session = {}) {

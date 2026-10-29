@@ -5,6 +5,7 @@ import {
 } from "@local/vibe64-core/shared";
 
 import {
+  statusWithAccount,
   statusWithCodexReconnectRequired
 } from "../../packages/vibe64-accounts/src/client/composables/useVibe64Accounts.js";
 
@@ -51,5 +52,17 @@ describe("useVibe64Accounts account status cache", () => {
       status: "reconnect_required"
     });
     expect(nextStatus.accounts[1]).toEqual(status.accounts[1]);
+  });
+
+  it("shows an account action's own row at once with the readiness it implies", () => {
+    const claude = { id: "claude", connected: true, required: false, message: "Connected through Claude Code." };
+    const codex = { id: "codex", connected: true, required: true, message: "Codex is signed in." };
+    const status = { accounts: [claude, codex], blockedReason: "", ok: true, ready: true, updatedAt: "earlier" };
+    const signedOut = { ...claude, connected: false, status: "not_connected", message: "Sign in to Claude Code." };
+    expect(statusWithAccount(status, signedOut)).toEqual({ ...status, accounts: [signedOut, codex] });
+    const codexOut = { ...codex, connected: false, message: "Sign in to Codex." };
+    expect(statusWithAccount(status, codexOut)).toMatchObject({ ready: false, blockedReason: "Sign in to Codex." });
+    expect(statusWithAccount(status, { id: "github" })).toBe(status, "a row the status does not list waits for the reload");
+    expect(statusWithAccount(undefined, signedOut)).toBe(undefined);
   });
 });

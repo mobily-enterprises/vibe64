@@ -113,13 +113,13 @@ to reconnect only when the account check asks you to sign in.
 Colleague uses the same saved native Claude login as Main. Opening Colleague
 does not move that login to another profile or require a separate sign-in.
 Changing the workspace Claude account (signing in, signing out or **Remove AI**)
-stops Colleague's Claude process right away, including an answer in progress.
-Your next Colleague request opens a new process on the current account and keeps
-the conversation history. If Colleague cannot stop its process, the account
-change is refused with that reason and the account stays as it was; restore execution and use
-**Stop**, then retry the account change. Colleague will not continue with the old
-credentials. A completed action receipt
-from the old account cannot be replayed as the new account.
+stops nothing and waits for nothing of Colleague's. An answer in progress keeps going:
+Claude Code reads the current sign-in for each request, so after a switch it
+continues on the new account, and after a sign-out it ends at once with "Claude
+isn't connected. Sign in to Claude, then send your message again." Your next
+Colleague request runs on the current account and keeps the conversation
+history. A completed action receipt from the old account cannot be replayed as
+the new account.
 Saved Colleague errors stay inside Colleague when you reopen the workspace; they
 do not raise an unrelated global alert over your project chat. Open Colleague to
 read the error and its recovery controls.

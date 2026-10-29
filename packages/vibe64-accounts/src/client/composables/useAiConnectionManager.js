@@ -681,7 +681,11 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
       } else if (["codex", "claude"].includes(target?.kind)) {
         nativeRemoving.value = true;
         response = await nativeAccounts.logout(target.kind);
-        if (response?.ok !== false) await nativeAccounts.reloadLocalStatus();
+        // The sign-out's own account row shows at once; the rest reload behind it.
+        if (response?.ok !== false) {
+          nativeAccounts.showAccount(response?.account);
+          void nativeAccounts.reloadLocalStatus().catch(() => {});
+        }
       } else {
         response = await removeConnection(providerId);
       }

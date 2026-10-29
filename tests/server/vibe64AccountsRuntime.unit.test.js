@@ -2324,23 +2324,18 @@ test("Claude authentication is owner-only and launches native login after runtim
 });
 
 
-test("a Claude account change also stops the conversations of features that joined account invalidation", async () => {
+test("a Claude account change goes through the terminals service without touching a project, and a refused change names why", async () => {
   await withTempDir(async (root) => {
     const systemRoot = path.join(root, "system");
     const unused = () => assert.fail("A Claude account change must not touch a project.");
     const terminals = createTerminalsService({ env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot },
       projectService: { createRuntime: unused, createSessionStore: unused, readCurrentProject: unused,
         readEnv: unused, runInProjectContext: unused, saveEnvUserValues: unused } });
-    const joined = [];
-    let stopFails = false;
-    const leave = terminals.joinAgentRuntimeInvalidation(async (input) => {
-      joined.push(input);
-      if (stopFails) throw new Error("Colleague could not stop every claude conversation.");
-    });
+    let refusal = null;
     const requests = [];
     const service = createService({
       accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "home"), systemRoot }),
-      invalidateAgentRuntimes: (input) => terminals.invalidateAgentRuntimes(input),
+      invalidateAgentRuntimes: async (input) => refusal || terminals.invalidateAgentRuntimes(input),
       runAuthTerminalCommand: async (input) => {
         requests.push(input);
         return { ok: false, code: "fixture_terminal", error: "Captured native login request." };
@@ -2348,22 +2343,12 @@ test("a Claude account change also stops the conversations of features that join
     });
     const owner = { role: "owner", username: "owner" };
     assert.equal((await service.startAuth({ accountId: "claude", mode: "browser", vibe64User: owner })).code, "fixture_terminal");
-    assert.deepEqual(joined, [{ provider: "claude", reason: "claude-auth-change" }]);
-    stopFails = true;
+    refusal = { ok: false, failed: [{ ok: false, providerId: "claude", error: "The Claude runtime is shutting down." }] };
     const refused = await service.startAuth({ accountId: "claude", mode: "browser", vibe64User: owner });
     assert.equal(refused.ok, false);
-    assert.equal(refused.failed.at(-1).error, "Colleague could not stop every claude conversation.");
-    assert.equal(refused.error, "Colleague could not stop every claude conversation.",
+    assert.equal(refused.error, "The Claude runtime is shutting down.",
       "the refusal itself names why, so the person sees it instead of a generic failure");
-    assert.equal(requests.length, 1, "a change that could not stop every Claude process does not start a login");
-    // Credential publication keeps its own fence and does not stop joined work.
-    await terminals.invalidateAgentRuntimes({ provider: "claude", modelProviderId: "deepseek", reason: "provider-key-change",
-      prepare() {}, publish() {} });
-    assert.equal(joined.length, 2);
-    leave();
-    stopFails = false;
-    await service.startAuth({ accountId: "claude", mode: "browser", vibe64User: owner });
-    assert.equal(joined.length, 2, "a feature that left is not called again");
+    assert.equal(requests.length, 1, "a refused change does not start a login");
   });
 });
 

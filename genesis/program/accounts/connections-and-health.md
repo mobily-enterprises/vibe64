@@ -574,8 +574,15 @@ authorization code into the guided form, which forwards it to the owned login
 terminal. Claude performs the exchange and stores its own credentials. Realtime
 completion rereads `claude auth status --json`; a failed login offers Try again,
 and the native terminal remains available for recovery. Vibe64 neither reads
-OAuth tokens nor implements a replacement OAuth client. Login and logout retire
-the account's owned Claude processes before changing authentication.
+OAuth tokens nor implements a replacement OAuth client. Login and logout stop
+no Claude process and wait on no turn: Claude Code reads its credentials for
+every request, so a running turn continues on the newly connected account, and
+after a logout its next request ends at once as signed out. The change only drops
+the account's cached model and usage reads (`prepareClaudeAuthChange` in
+`vibe64-accounts/src/server/service.js`); each conversation applies the new
+account at its next idle admission. The browser shows the logout's returned
+account row at once (`showAccount` in `useVibe64Accounts.js`) and reloads the
+other rows in the background.
 The CLI's signed-out JSON response is a normal disconnected state even though
 its exit code is nonzero.
 Account status reads share one native query and reuse its public result for up
@@ -835,16 +842,12 @@ manager sends to every provider waits for all of them, and a provider that
 throws becomes its own failed result naming that provider, so the other
 providers' outcomes are still reported.
 
-A Claude account change (sign-in, sign-out or Remove AI) also reaches features
-that run their own conversations on the workspace account. Such a feature joins
-through the terminals service's `joinAgentRuntimeInvalidation` and leaves when
-it closes. After the session agents accept an account invalidation, each joined
-participant runs; a participant failure fails the change with its reason.
-A refused Claude account change carries the first failed stop as its `error`,
-with every failure still listed in `failed`, so the person sees why instead of
-a generic failure. Colleague joins and releases its live Claude conversations. Credential
-publications that carry their own fence, such as OpenCode connection changes,
-do not run participants.
+A Claude account change (sign-in, sign-out or Remove AI) leaves features that
+run their own conversations, such as Colleague, alone: their hosts allow an
+account change, so each conversation rebinds at its next message. A refused
+Claude account change carries the first failure as its `error`, with every
+failure still listed in `failed`, so the person sees why instead of a generic
+failure.
 
 Every account and AI connection change leaves one operational log line from
 component `vibe64-accounts`: starting, finishing and cancelling a sign-in,

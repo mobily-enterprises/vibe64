@@ -211,6 +211,22 @@ it("removes only the selected orchestrator key through its existing owner", asyn
   expect(state.removeOpen).toBe(false);
 });
 
+it("removing the Claude plan shows its signed-out row at once and reloads the rest without holding the dialog", async () => {
+  const signedOut = { id: "claude", connected: false, status: "not_connected" };
+  let finishReload;
+  Object.assign(mocks.accounts, { logout: vi.fn().mockResolvedValue({ ok: true, account: signedOut }), showAccount: vi.fn(),
+    reloadLocalStatus: vi.fn(() => new Promise(resolve => { finishReload = resolve; })) });
+  const state = mount();
+  state.requestRemove(engineGroup(state, "claude").accounts.find(account => account.id === "claude"));
+  await state.confirmRemove();
+  expect(mocks.accounts.logout).toHaveBeenCalledExactlyOnceWith("claude");
+  expect(mocks.accounts.showAccount).toHaveBeenCalledExactlyOnceWith(signedOut);
+  expect(mocks.accounts.reloadLocalStatus).toHaveBeenCalledOnce();
+  expect(state.removeOpen).toBe(false);
+  expect(state.nativeRemoving).toBe(false);
+  finishReload({});
+});
+
 it("is idle with no provider id saving, removing or changing model access", () => {
   Object.assign(mocks.connections, {
     removingProviderId: ref(""), savingProviderId: ref(""), updatingModelAccessProviderId: ref("")

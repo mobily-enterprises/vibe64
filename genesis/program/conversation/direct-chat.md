@@ -626,7 +626,13 @@ JSKIT classifies native result completion into the existing semantic goal-update
 event before resolving the turn. The application no longer reads the native
 completion source. It supplies its authorized command hook and timeout; JSKIT
 formats the native hook envelope.
-Account invalidation still drains queries and retained failed stops before closing sessions.
+A Claude account change only drops the account's cached queries: it closes no
+session, stops no running turn and returns without waiting for them. Claude Code
+reads its credentials for every request, so a running turn continues on the newly
+connected account; after a sign-out its next request ends at once with Claude
+Code's "Not logged in" result, which JSKIT reports as "Claude isn't connected.
+Sign in to Claude, then send your message again." Server shutdown still drains
+queries and retained failed stops before closing sessions.
 The existing native account-binding guard also belongs to JSKIT. A changed
 signed-in Claude account cannot resume another account's history; an authorized
 external-provider key may rotate. Vibe64 supplies the resolved identity and
@@ -3541,9 +3547,10 @@ and OpenCode, it invokes the configured common runtime project-close operation
 without opening a conversation. Claude now uses that same route: its retained
 native owner groups the original contexts and closes them sequentially using
 current application storage and terminal facilities. Claude account invalidation
-also enters the common runtime without a conversation identity. The same native
-owner fences new work, drains existing account queries, then closes conversations;
-selected-provider cleanup retains its narrower original behavior. The application
+also enters the common runtime without a conversation identity. An account change
+only drops the account's cached queries; server shutdown fences new work, drains
+those queries, then closes conversations; selected-provider cleanup retains its
+narrower original behavior. The application
 supplies its unchanged account-error conversion. The same native owners preserve
 Helper cleanup, shared peer retention and retryable stop failures. Codex and
 OpenCode account cleanup also enter this configured runtime operation. Codex

@@ -176,10 +176,6 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
       observations.helperCalls.push({ cleanup: input });
       return observations.cleanupFails ? { ok: false, error: "Summary cleanup unavailable." } : { ok: true };
     },
-    joinAgentRuntimeInvalidation(participant) {
-      observations.invalidation = participant;
-      return () => { if (observations.invalidation === participant) observations.invalidation = null; };
-    },
     createConversationHost(scope) {
       observations.creates += 1;
       observations.scope = scope;
@@ -5280,30 +5276,24 @@ test("native completed Colleague unknown effect retains the original receipt thr
   assert.deepEqual(after.conversationLog, before.conversationLog, "Restart preserves exact raw completion and unknown-effect receipts");
 });
 
-test("a Claude account change stops Colleague's own Claude process, and the thread reopens on its next message", { timeout: 30_000 }, async t => {
+test("a Claude account change leaves Colleague's Claude process alone, and the thread moves to the new account with its next message", { timeout: 30_000 }, async t => {
   const f = await fixture(t, [{ text: reply("First answer.") }, { text: reply("Second answer.") }], { native: true });
   await selectCompletedColleagueClaude(f);
   await f.send("Hello.", "claude-1");
   assert.equal((await f.service.wait(f.context)).status, "ready");
-  const started = (await f.native.trace()).filter(row => row.pid && row.args?.some(arg => ["--session-id", "--resume"].includes(arg)));
-  assert.equal(started.length, 1);
-  const { pid } = started[0];
-  assert.doesNotThrow(() => process.kill(pid, 0), "the finished turn keeps its Claude process for the next message");
-  // Codex account changes leave Colleague's Claude process alone.
-  await f.observations.invalidation({ provider: "codex", reason: "codex-auth-change" });
-  assert.doesNotThrow(() => process.kill(pid, 0));
-  await f.observations.invalidation({ provider: "claude", reason: "claude-auth-change" });
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    try { process.kill(pid, 0); } catch (error) { if (error.code === "ESRCH") break; throw error; }
-    await new Promise(resolve => setTimeout(resolve, 50));
-  }
-  assert.throws(() => process.kill(pid, 0), { code: "ESRCH" }, "the old account's Claude process has ended");
+  const sessions = async () => (await f.native.trace()).filter(row => row.pid && row.args?.some(arg => ["--session-id", "--resume"].includes(arg)));
+  const [{ pid }] = await sessions();
+  // The workspace signs in to another Claude account. Colleague does not join
+  // the change: its fixture terminals offer no account invalidation to join.
+  await writeFile(f.native.host(f.observations.scope).env.TEST_ACCOUNT, "other@example.test");
+  assert.doesNotThrow(() => process.kill(pid, 0), "the account change stops nothing of Colleague's");
   await f.send("Again.", "claude-2");
   const after = await f.service.wait(f.context);
   assert.equal(after.status, "ready", after.error);
   assert.equal(after.messages.at(-1).text, "Second answer.");
+  assert.deepEqual(after.messages.filter(({ role }) => role === "user").map(({ text }) => text), ["Hello.", "Again."],
+    "the thread keeps its history across the account change");
   await f.service.close();
-  assert.equal(f.observations.invalidation, null, "a closed Colleague leaves account invalidation");
 });
 
 async function selectCompletedColleagueClaude(f) {
