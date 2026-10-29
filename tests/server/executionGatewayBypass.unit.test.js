@@ -97,6 +97,9 @@ const ENV_POLICY_ALLOWLIST = new Map([
     "XDG_CACHE_HOME object key": { count: 1, reason: TOOL_HOME },
     "XDG_CONFIG_HOME object key": { count: 1, reason: TOOL_HOME }
   }]),
+  ["packages/vibe64-terminals/src/server/opencodeServerProcess.js", {
+    "export HOME": { count: 1, reason: "A managed OpenCode server keeps its home and XDG roots in its execution's private directory, so a stop without its handle still removes them." }
+  }],
   ["packages/vibe64-terminals/src/server/vibe64OutputTargets.js", {
     "export PATH": { count: 1, reason: "Output startup restores the tool PATH Vibe64 resolved after a login shell (macOS path_helper) reorders it." }
   }]
