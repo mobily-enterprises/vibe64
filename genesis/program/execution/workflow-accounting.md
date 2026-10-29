@@ -310,6 +310,15 @@ names its loopback port (1024–65535) and `SocketBindDeny=any` refuses every
 other, so it can never take over another service's port while that service is
 down. It still starts at boot and requires its managed databases.
 
+Every `deployment-service` action (install-start, remove, inspect) names a
+unit of the calling daemon's own workspace, `vibe64-release-<workspace>-…`, so
+no daemon replaces, stops or reads another workspace's release service.
+install-start also requires the name of the application's own project
+(`vibe64-release-<workspace>-<project>-<hash>.service`), refuses a unit file
+already installed for another account, and refuses a port that another release
+unit's `SocketBindAllow=` claims; root reads only unit files it wrote.
+`assertReleaseServiceClaim()` holds these checks.
+
 `startVibe64Workflow()`, `setVibe64WorkflowPhase()` and
 `finishVibe64Workflow()` delegate trusted server lifecycle requests to the same
 installed managed-execution provider as commands. Standalone operation may

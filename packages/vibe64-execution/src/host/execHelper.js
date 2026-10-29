@@ -156,6 +156,7 @@ const APPLICATION_USERNAME_PATTERN = new RegExp(`^${APPLICATION_USERNAME_PREFIX}
 const APPLICATION_REGISTRY_ROOT = path.join(HOST_SETTINGS_ROOT, "applications");
 const APPLICATION_REGISTRATION_SCHEMA = "vibe64.application-account";
 const APPLICATION_AREA_ROOT = "/var/lib/vibe64-apps";
+const SYSTEMD_UNIT_ROOT = "/etc/systemd/system";
 const APPLICATION_RECEIPTS_ROOT = "/run/vibe64-applications";
 const APPLICATION_SHELL = "/usr/sbin/nologin";
 const APPLICATION_PROJECT_PATTERN = /^[a-z0-9][a-z0-9_-]{0,47}$/u;
@@ -2631,6 +2632,33 @@ function applicationReleaseServiceFiles(payload = {}, identity = {}, { daemonUid
   return { environmentFile, startScript, workingDirectory };
 }
 
+// A release unit `user` may install: one named for its application's project
+// in the daemon's workspace that is new or already its own, on a port no other
+// release service unit claims. Root wrote every unit file it reads here.
+function assertReleaseServiceClaim({ loopbackPort = 0, owner = {}, unitName = "", unitRoot = SYSTEMD_UNIT_ROOT, unitUid = 0, user = {} } = {}) {
+  const workspace = workspaceFromDaemonUsername(safeUsername(owner.username));
+  const project = String(user.application?.project || "").replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "");
+  if (!project || !new RegExp(`^vibe64-release-${workspace}-${project}-[a-f0-9]{12}\\.service$`, "u").test(unitName)) {
+    throw new Error(`Release service ${unitName} is not named for application ${user.username}'s project.`);
+  }
+  const directory = openSync(unitRoot, DIRECTORY_NO_FOLLOW);
+  try {
+    for (const name of readdirSync(openedPath(directory))) {
+      if (!name.startsWith("vibe64-release-") || !name.endsWith(".service")) continue;
+      const unit = readOwnedFile(directory, name, { maxBytes: 64 * 1024, othersMayWrite: false, uid: unitUid });
+      if (name === unitName) {
+        if (!unit.split("\n").includes(`User=${user.username}`)) {
+          throw new Error(`Release service ${unitName} belongs to another account.`);
+        }
+      } else if (unit.split("\n").includes(`SocketBindAllow=tcp:${loopbackPort}`)) {
+        throw new Error(`Port ${loopbackPort} belongs to another release service.`);
+      }
+    }
+  } finally {
+    closeSync(directory);
+  }
+}
+
 function releaseServicePort(value) {
   const port = Number(value);
   if (!Number.isSafeInteger(port) || port < 1024 || port > 65535) {
@@ -2669,13 +2697,13 @@ function handleDeploymentServiceOperation(payload = {}) {
   const owner = resolveOwnerUser();
   ensureGroup(VIBE64_GROUP);
   const action = String(payload.action || "").trim();
-  const unitName = assertValidDeploymentUnitName(payload.unitName);
+  const unitName = assertValidDeploymentUnitName(payload.unitName, owner);
   if (action === "inspect") {
-    inspectDeploymentServiceUnit(unitName);
+    inspectDeploymentServiceUnit(unitName, owner);
     return;
   }
   if (action === "remove") {
-    removeDeploymentServiceUnit(unitName);
+    removeDeploymentServiceUnit(unitName, owner);
     return;
   }
   if (action !== "install-start") {
@@ -2686,11 +2714,13 @@ function handleDeploymentServiceOperation(payload = {}) {
   const service = applicationReleaseServiceFiles(payload, user.application, { daemonUid: owner.uid, gid: user.gid });
   const requiredUnits = [...new Set((Array.isArray(payload.requiredUnits) ? payload.requiredUnits : [])
     .map((requiredUnit) => assertValidManagedServiceUnitName(requiredUnit, owner)))];
-  const unitPath = systemdUnitPath(unitName);
+  const loopbackPort = releaseServicePort(payload.loopbackPort);
+  assertReleaseServiceClaim({ loopbackPort, owner, unitName, user });
+  const unitPath = systemdUnitPath(unitName, owner);
   const unit = deploymentServiceUnit({
     ...service,
     helperPath: path.resolve(process.argv[1]),
-    loopbackPort: releaseServicePort(payload.loopbackPort),
+    loopbackPort,
     owner,
     requiredUnits,
     unitName,
@@ -2704,8 +2734,8 @@ function handleDeploymentServiceOperation(payload = {}) {
   });
 }
 
-function inspectDeploymentServiceUnit(unitName = "") {
-  assertValidDeploymentUnitName(unitName);
+function inspectDeploymentServiceUnit(unitName = "", owner = {}) {
+  assertValidDeploymentUnitName(unitName, owner);
   const state = runRootCommand("systemctl", [
     "show",
     unitName,
@@ -3002,8 +3032,8 @@ function installSystemdUnit({
   }
 }
 
-function removeDeploymentServiceUnit(unitName = "") {
-  assertValidDeploymentUnitName(unitName);
+function removeDeploymentServiceUnit(unitName = "", owner = {}) {
+  assertValidDeploymentUnitName(unitName, owner);
   runRootCommandAllowFailure("systemctl", [
     "stop",
     unitName
@@ -3017,7 +3047,7 @@ function removeDeploymentServiceUnit(unitName = "") {
     unitName
   ]);
   try {
-    unlinkSync(systemdUnitPath(unitName));
+    unlinkSync(systemdUnitPath(unitName, owner));
   } catch (error) {
     if (error?.code !== "ENOENT") {
       throw error;
@@ -3437,10 +3467,14 @@ function canonicalPath(candidatePath, { allowMissingLeaf = false } = {}) {
   return realpathSync(resolved);
 }
 
-function assertValidDeploymentUnitName(unitName = "") {
+// A release service unit of the calling daemon's own workspace; no daemon
+// installs, stops, removes or reads another workspace's.
+function assertValidDeploymentUnitName(unitName = "", owner = {}) {
   const normalized = String(unitName || "").trim();
+  const workspace = workspaceFromDaemonUsername(safeUsername(owner.username));
   if (
-    !normalized.startsWith("vibe64-release-") ||
+    !owner.username?.startsWith(DAEMON_USERNAME_PREFIX) ||
+    !normalized.startsWith(`vibe64-release-${workspace}-`) ||
     !normalized.endsWith(".service") ||
     !/^[A-Za-z0-9_.@:-]+$/u.test(normalized) ||
     normalized.includes("/") ||
@@ -3474,8 +3508,8 @@ function assertValidManagedServiceProcessModel(value = "") {
   return processModel;
 }
 
-function systemdUnitPath(unitName = "") {
-  return path.join("/etc/systemd/system", assertValidDeploymentUnitName(unitName));
+function systemdUnitPath(unitName = "", owner = {}) {
+  return path.join(SYSTEMD_UNIT_ROOT, assertValidDeploymentUnitName(unitName, owner));
 }
 
 function managedSystemdUnitPath(unitName = "", owner = {}) {
@@ -3798,6 +3832,7 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
 }
 
 export { APPLICATION_USERNAME_PREFIX, DAEMON_USERNAME_PREFIX, HOST_SETTINGS_ROOT, accountUnitLines, applicationIdentity, applicationReleaseEnvironmentFile,
+  assertReleaseServiceClaim, assertValidDeploymentUnitName,
   applicationReleaseServiceFiles, applicationSandboxLines, ensureApplicationAccount, readApplicationRegistration,
   registeredApplicationUser,
   resolveApplicationCwd, retireApplicationAccount,

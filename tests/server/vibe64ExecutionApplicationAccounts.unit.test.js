@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import {
   APPLICATION_USERNAME_PREFIX, DAEMON_USERNAME_PREFIX, HOST_SETTINGS_ROOT, accountUnitLines, applicationIdentity, applicationReleaseEnvironmentFile, applicationReleaseServiceFiles,
+  assertReleaseServiceClaim, assertValidDeploymentUnitName,
   assertActablePerson, deploymentServiceUnit, ensureApplicationAccount, helperChildEnv, openManagedExecutionReceipts, readApplicationRegistration, registeredApplicationUser,
   registerPerson, resolveApplicationCwd, retireApplicationAccount
 } from "../../packages/vibe64-execution/src/host/execHelper.js";
@@ -476,11 +477,56 @@ test("a release service unit runs as its application in its sandbox, listening o
   }
 });
 
+test("a daemon names, stops, removes and reads only its own workspace's release units", () => {
+  const owner = { username: daemonUser("test") };
+  assert.equal(assertValidDeploymentUnitName("vibe64-release-test-shop-0123456789ab.service", owner),
+    "vibe64-release-test-shop-0123456789ab.service");
+  for (const unitName of ["vibe64-release-other-shop-0123456789ab.service", "vibe64-release-testx-shop-0123456789ab.service",
+    "vibe64-release-test.service", "vibe64-release-test-../x.service", "ssh.service"]) {
+    assert.throws(() => assertValidDeploymentUnitName(unitName, owner), /unsafe deployment service unit name/u, unitName);
+  }
+  assert.throws(() => assertValidDeploymentUnitName("vibe64-release-test-shop-0123456789ab.service", { username: "test" }),
+    /unsafe deployment service unit name/u, "only a workspace daemon has release units");
+});
+
+test("a release unit is its application's own, named for its project, on a port no other release unit claims", async (t) => {
+  const unitRoot = await mkdtemp(path.join(os.tmpdir(), "v64-release-units-"));
+  t.after(() => rm(unitRoot, { force: true, recursive: true }));
+  const owner = { username: daemonUser("test") };
+  const shop = { application: { project: "my_shop" }, username: applicationUser("0123456789ab") };
+  const books = { application: { project: "books" }, username: applicationUser("ba9876543210") };
+  const unitFor = (user, port) => `[Service]\nUser=${user.username}\nSocketBindAllow=tcp:${port}\nSocketBindDeny=any\n`;
+  await writeFile(path.join(unitRoot, "vibe64-release-test-books-111111111111.service"), unitFor(books, 4100), { mode: 0o644 });
+  await writeFile(path.join(unitRoot, "vibe64-release-other-cafe-222222222222.service"), unitFor({ username: "v64a_other" }, 4200),
+    { mode: 0o644 });
+  await writeFile(path.join(unitRoot, "unrelated.service"), "SocketBindAllow=tcp:4300\n", { mode: 0o644 });
+  const claim = (user, unitName, loopbackPort) => assertReleaseServiceClaim({ loopbackPort, owner, unitName, unitRoot,
+    unitUid: UID, user });
+  const shopUnit = "vibe64-release-test-my-shop-333333333333.service";
+
+  claim(shop, shopUnit, 4101);
+  claim(shop, shopUnit, 4300);
+  assert.throws(() => claim(shop, shopUnit, 4100), /Port 4100 belongs to another release service/u, "another application's");
+  assert.throws(() => claim(shop, shopUnit, 4200), /Port 4200 belongs to another release service/u, "another workspace's");
+  assert.throws(() => claim(shop, "vibe64-release-test-books-444444444444.service", 4101), /not named for application/u);
+  assert.throws(() => claim(shop, "vibe64-release-other-my-shop-444444444444.service", 4101), /not named for application/u);
+  // An installed unit is replaced only by its own application.
+  assert.throws(() => claim(shop, "vibe64-release-test-books-111111111111.service", 4100), /not named for application/u);
+  await writeFile(path.join(unitRoot, shopUnit), unitFor(books, 4101), { mode: 0o644 });
+  assert.throws(() => claim(shop, shopUnit, 4101), /belongs to another account/u);
+  await writeFile(path.join(unitRoot, shopUnit), unitFor(shop, 4101), { mode: 0o644 });
+  claim(shop, shopUnit, 4101);
+  // Only unit files root alone may change count.
+  await chmod(path.join(unitRoot, shopUnit), 0o666);
+  assert.throws(() => claim(shop, shopUnit, 4101), { code: "EVIBE64UNSAFEFILE" });
+});
+
 test("only an application's registered account installs a release service", async () => {
   const source = await readFile(EXEC_HELPER, "utf8");
   const operation = source.slice(source.indexOf("function handleDeploymentServiceOperation("),
     source.indexOf("function inspectDeploymentServiceUnit("));
   assert.match(operation, /const user = registeredApplicationUser\(owner, payload\.applicationAccount\);/u);
   assert.match(operation, /applicationReleaseServiceFiles\(payload, user\.application, \{ daemonUid: owner\.uid, gid: user\.gid \}\)/u);
+  assert.match(operation, /assertReleaseServiceClaim\(\{ loopbackPort, owner, unitName, user \}\);/u);
   assert.doesNotMatch(source, /upgrade-release-units|resolveAllowedDeploymentServicePath/u);
 });
