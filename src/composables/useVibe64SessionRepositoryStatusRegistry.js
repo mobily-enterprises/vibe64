@@ -27,11 +27,31 @@ import {
 const DEFAULT_MAX_CONCURRENCY = 2;
 const DEFAULT_STALE_AFTER_MS = 5 * 60_000;
 const DEFAULT_STALE_CHECK_INTERVAL_MS = 60_000;
+// One change reaches a session as a burst: a turn's checkpoint and idle state,
+// observed file changes, a check's result, and the runtime host's refresh of
+// the same task revision. A change's inspection starts once its session's
+// burst has been quiet this long, and never later than the cap after the
+// burst's first request, so a steady stream of changes cannot postpone it.
+const DEFAULT_SETTLE_MS = 1_000;
+const DEFAULT_MAX_SETTLE_MS = 5_000;
+
+// Inspects each session's work, at most `maxConcurrency` sessions at a time.
+// A session has at most one inspection running and one requested: requests
+// made while it runs become exactly one follow-up, because the running read
+// may predate their change. A request with `settle` waits for its burst to
+// settle; one without starts as soon as a slot frees and takes the burst's
+// settling requests with it.
 function createVibe64SessionRepositoryStatusQueue({
+  clearTimer = (timer) => clearTimeout(timer),
   maxConcurrency = DEFAULT_MAX_CONCURRENCY,
+  maxSettleMs = DEFAULT_MAX_SETTLE_MS,
   now = () => Date.now(),
+  onInspected = () => null,
   onState = () => null,
+  prioritized = () => false,
   requestWork,
+  setTimer = (callback, delay) => setTimeout(callback, delay),
+  settleMs = DEFAULT_SETTLE_MS,
   staleAfterMs = DEFAULT_STALE_AFTER_MS
 } = {}) {
   if (typeof requestWork !== "function") {
@@ -39,22 +59,23 @@ function createVibe64SessionRepositoryStatusQueue({
   }
   const concurrency = Math.max(1, Number(maxConcurrency || 0));
   const records = new Map();
-  const pending = new Map();
+  // Each session's requested inspection that has not started:
+  // { firstAt, lastAt, ready, settle, timer, waiters }.
+  const requested = new Map();
   const activeSessions = new Set();
   const canonicalUpdatePending = new Map();
-  const refreshAfterActive = new Set();
-  const waiters = new Set();
+  const idleWaiters = new Set();
   let active = 0;
   let disposed = false;
 
   function settled() {
-    if (active || pending.size) {
+    if (active || requested.size) {
       return;
     }
-    for (const resolve of waiters) {
+    for (const resolve of idleWaiters) {
       resolve();
     }
-    waiters.clear();
+    idleWaiters.clear();
   }
 
   function observe(sessionId = "", workState = null) {
@@ -127,7 +148,7 @@ function createVibe64SessionRepositoryStatusQueue({
     return checkedAtMs > 0 && now() - checkedAtMs < staleAfterMs;
   }
 
-  async function inspect(sessionId) {
+  async function inspect(sessionId, waiters) {
     active += 1;
     activeSessions.add(sessionId);
     const prior = records.get(sessionId)?.workState || null;
@@ -140,6 +161,7 @@ function createVibe64SessionRepositoryStatusQueue({
         unsaved: null
       });
     }
+    let workState = null;
     try {
       const result = await requestWork(sessionId);
       if (disposed) {
@@ -148,95 +170,178 @@ function createVibe64SessionRepositoryStatusQueue({
       if (result?.ok === false) {
         throw new Error(vibe64ApiResponseError(result, "Session work could not be inspected."));
       }
-      observe(sessionId, {
+      workState = {
         ...result,
         checkedAt: new Date(now()).toISOString(),
         error: "",
         loading: false
-      });
+      };
+      observe(sessionId, workState);
     } catch (error) {
       if (disposed) {
         return;
       }
-      observe(sessionId, {
+      workState = {
         checkedAt: new Date(now()).toISOString(),
         error: error instanceof Error ? error.message : String(error || "Session work could not be inspected."),
         loading: false,
         operation: null,
         unsaved: null
-      });
+      };
+      observe(sessionId, workState);
     } finally {
       active -= 1;
       activeSessions.delete(sessionId);
-      if (refreshAfterActive.delete(sessionId) && !disposed) {
-        pending.set(sessionId, true);
+      if (workState) {
+        onInspected({ sessionId, workState });
+      }
+      for (const resolve of waiters) {
+        resolve(workState);
+      }
+      const followUp = requested.get(sessionId);
+      if (followUp) {
+        arm(sessionId, followUp);
       }
       drain();
       settled();
     }
   }
 
-  function drain() {
-    if (disposed) {
-      pending.clear();
-      settled();
-      return;
-    }
-    while (active < concurrency && pending.size) {
-      const [sessionId] = pending.entries().next().value;
-      pending.delete(sessionId);
-      void inspect(sessionId);
-    }
-  }
-
-  function enqueue(sessionIds = [], { force = false } = {}) {
-    for (const rawSessionId of sessionIds) {
-      const sessionId = String(rawSessionId || "").trim();
-      if (!sessionId || pending.has(sessionId) || (!force && fresh(sessionId))) {
-        continue;
-      }
-      if (activeSessions.has(sessionId)) {
-        if (force) {
-          refreshAfterActive.add(sessionId);
-        }
-        continue;
-      }
-      pending.set(sessionId, true);
-    }
+  function start(next) {
+    next.timer = null;
+    next.ready = true;
     drain();
   }
 
+  // Schedules a session's requested inspection; a running one keeps it waiting.
+  function arm(sessionId, next) {
+    if (disposed || next.ready || activeSessions.has(sessionId)) {
+      return;
+    }
+    if (next.timer !== null) {
+      clearTimer(next.timer);
+      next.timer = null;
+    }
+    const delay = next.settle
+      ? Math.min(next.lastAt + settleMs, next.firstAt + maxSettleMs) - now()
+      : 0;
+    if (delay > 0) {
+      next.timer = setTimer(() => start(next), delay);
+    } else {
+      start(next);
+    }
+  }
+
+  function drain() {
+    while (!disposed && active < concurrency) {
+      let sessionId = "";
+      for (const [id, next] of requested) {
+        if (!next.ready) continue;
+        if (prioritized(id)) {
+          sessionId = id;
+          break;
+        }
+        sessionId ||= id;
+      }
+      if (!sessionId) {
+        return;
+      }
+      const next = requested.get(sessionId);
+      requested.delete(sessionId);
+      void inspect(sessionId, next.waiters);
+    }
+  }
+
+  function request(sessionId, { settle = false, waiter = null } = {}) {
+    const at = now();
+    let next = requested.get(sessionId);
+    if (next) {
+      next.lastAt = at;
+      next.settle &&= settle;
+    } else {
+      next = { firstAt: at, lastAt: at, ready: false, settle, timer: null, waiters: [] };
+      requested.set(sessionId, next);
+    }
+    if (waiter) {
+      next.waiters.push(waiter);
+    }
+    arm(sessionId, next);
+  }
+
+  // Requests an inspection of every listed session that needs one: with
+  // `force`, after a change, otherwise only one whose state is not fresh.
+  function enqueue(sessionIds = [], { force = false, settle = false } = {}) {
+    if (disposed) {
+      return;
+    }
+    for (const rawSessionId of sessionIds) {
+      const sessionId = String(rawSessionId || "").trim();
+      if (!sessionId || (!force && (requested.has(sessionId) || activeSessions.has(sessionId) || fresh(sessionId)))) {
+        continue;
+      }
+      request(sessionId, { settle: force && settle });
+    }
+  }
+
+  // Resolves with the work state of the session's next inspection, or null
+  // when there is none.
+  function inspectSession(sessionId = "", { settle = false } = {}) {
+    const id = String(sessionId || "").trim();
+    if (disposed || !id) {
+      return Promise.resolve(null);
+    }
+    return new Promise((resolve) => request(id, { settle, waiter: resolve }));
+  }
+
+  function cancel(sessionId) {
+    const next = requested.get(sessionId);
+    requested.delete(sessionId);
+    if (next?.timer != null) {
+      clearTimer(next.timer);
+    }
+    for (const resolve of next?.waiters || []) {
+      resolve(null);
+    }
+  }
+
+  // Forgets sessions that left the toolbar. A requested inspection that a
+  // runtime host still waits for runs anyway.
   function removeExcept(sessionIds = []) {
     const retained = new Set(sessionIds.map((sessionId) => String(sessionId || "").trim()).filter(Boolean));
-    for (const sessionId of records.keys()) {
-      if (!retained.has(sessionId)) {
-        records.delete(sessionId);
-        pending.delete(sessionId);
-        refreshAfterActive.delete(sessionId);
-        canonicalUpdatePending.delete(sessionId);
+    for (const sessionId of new Set([...records.keys(), ...requested.keys()])) {
+      if (retained.has(sessionId)) {
+        continue;
+      }
+      records.delete(sessionId);
+      canonicalUpdatePending.delete(sessionId);
+      if (!requested.get(sessionId)?.waiters.length) {
+        cancel(sessionId);
       }
     }
+    settled();
   }
 
   function dispose() {
     disposed = true;
-    pending.clear();
-    refreshAfterActive.clear();
+    for (const sessionId of [...requested.keys()]) {
+      cancel(sessionId);
+    }
     canonicalUpdatePending.clear();
     settled();
   }
 
   function waitForIdle() {
-    if (!active && !pending.size) {
+    if (!active && !requested.size) {
       return Promise.resolve();
     }
-    return new Promise((resolve) => waiters.add(resolve));
+    return new Promise((resolve) => idleWaiters.add(resolve));
   }
 
   return {
     dispose,
     confirmCanonical,
     enqueue,
+    inspect: inspectSession,
     markCanonicalCheckUnavailable,
     markUpdatePending,
     observe,
@@ -271,6 +376,9 @@ function useVibe64SessionRepositoryStatusRegistry({
   const canonicalCheckedAt = new Map();
   const canonicalAccessRevisions = new Map();
   const forcedCanonicalFollowups = new Set();
+  // How many work inspections each session's check results have requested.
+  const canonicalCheckInspections = new Map();
+  const workListeners = new Map();
   let disposed = false;
 
   function sourceOperationsSuspended(sessionId = "") {
@@ -292,7 +400,13 @@ function useVibe64SessionRepositoryStatusRegistry({
     return revision;
   }
   const queue = createVibe64SessionRepositoryStatusQueue({
+    onInspected({ sessionId, workState }) {
+      for (const listener of workListeners.get(sessionId) || []) {
+        listener(workState);
+      }
+    },
     onState,
+    prioritized: (sessionId) => sessionId === selectedId.value,
     async requestWork(sessionId) {
       // Match the selected session's budget for connected Git inspections.
       return getHttpWebClient().request(vibe64SessionPath(
@@ -303,7 +417,8 @@ function useVibe64SessionRepositoryStatusRegistry({
     }
   });
 
-  function inspectVisible({ force = false, includeSelected = false, sessionId = "" } = {}) {
+  // `settle` marks a realtime change, which usually arrives in a burst.
+  function inspectVisible({ force = false, includeSelected = false, sessionId = "", settle = false } = {}) {
     if (!apiPath.value) {
       return;
     }
@@ -312,10 +427,38 @@ function useVibe64SessionRepositoryStatusRegistry({
       !sourceOperationsSuspended(id) &&
       (includeSelected || id !== selectedId.value) && (!requestedId || id === requestedId)
     ));
-    queue.enqueue(ids, { force });
+    queue.enqueue(ids, { force, settle });
   }
 
-  function observeCanonicalCheck(sessionId, result) {
+  // A runtime host's work for its own session: it joins this registry's
+  // inspection of that session, and every inspection of it reaches the host,
+  // so one change reads the session's work once for its tab and its host.
+  const sessionWork = Object.freeze({
+    inspect(sessionId = "", { settle = false } = {}) {
+      const id = String(sessionId || "").trim();
+      if (disposed || !id || !apiPath.value || sourceOperationsSuspended(id)) {
+        return Promise.resolve(null);
+      }
+      return queue.inspect(id, { settle });
+    },
+    subscribe(sessionId = "", listener) {
+      const id = String(sessionId || "").trim();
+      if (!id || typeof listener !== "function") {
+        return () => {};
+      }
+      const listeners = workListeners.get(id) || new Set();
+      listeners.add(listener);
+      workListeners.set(id, listeners);
+      return () => {
+        listeners.delete(listener);
+        if (!listeners.size && workListeners.get(id) === listeners) {
+          workListeners.delete(id);
+        }
+      };
+    }
+  });
+
+  function observeCanonicalCheck(sessionId, result, { settle = false } = {}) {
     if (forcedCanonicalFollowups.has(sessionId)) {
       return;
     }
@@ -327,7 +470,8 @@ function useVibe64SessionRepositoryStatusRegistry({
       canonicalCheckedAt.set(sessionId, checkedAt);
     }
     queue.confirmCanonical(sessionId, result);
-    inspectVisible({ force: true, includeSelected: true, sessionId });
+    canonicalCheckInspections.set(sessionId, (canonicalCheckInspections.get(sessionId) || 0) + 1);
+    inspectVisible({ force: true, includeSelected: true, sessionId, settle });
   }
 
   async function checkCanonical(sessionId = "", { force = false } = {}) {
@@ -449,22 +593,32 @@ function useVibe64SessionRepositoryStatusRegistry({
         canonicalCheckedAt.delete(sessionId);
       }
       if (payload.reason === "session-repository-checked") {
-        observeCanonicalCheck(sessionId, payload.repositoryUpdateCheck);
+        observeCanonicalCheck(sessionId, payload.repositoryUpdateCheck, { settle: true });
         return;
       }
       if (payload.reason === REPOSITORY_UPDATE_CHECK_FAILED_REASON) {
         queue.markCanonicalCheckUnavailable(sessionId, payload.repositoryUpdateCheckError?.message);
         return;
       }
-      inspectVisible({
+      const inspectChange = () => inspectVisible({
         force: true,
         includeSelected: true,
-        sessionId
+        sessionId,
+        settle: true
       });
       if (repositoryStatusRealtimeNeedsCanonicalCheck(payload)) {
+        // The forced check's result inspects the session's work, so the change
+        // is inspected once, after the check. When no check result requests
+        // that inspection (the check failed, or it joined a running check whose
+        // forced recheck failed), the change requests it itself.
         queue.markUpdatePending(sessionId, payload.canonicalCommit);
-        void checkCanonical(sessionId, { force: true });
+        const checkInspections = canonicalCheckInspections.get(sessionId) || 0;
+        void checkCanonical(sessionId, { force: true }).then(() => {
+          if ((canonicalCheckInspections.get(sessionId) || 0) === checkInspections) inspectChange();
+        });
+        return;
       }
+      inspectChange();
     }
   });
 
@@ -477,7 +631,8 @@ function useVibe64SessionRepositoryStatusRegistry({
     onEvent: ({ payload = {} } = {}) => inspectVisible({
       force: true,
       includeSelected: true,
-      sessionId: repositoryStatusSessionId(payload)
+      sessionId: repositoryStatusSessionId(payload),
+      settle: true
     })
   });
 
@@ -537,6 +692,8 @@ function useVibe64SessionRepositoryStatusRegistry({
     canonicalCheckedAt.clear();
     canonicalAccessRevisions.clear();
     forcedCanonicalFollowups.clear();
+    canonicalCheckInspections.clear();
+    workListeners.clear();
     queue.dispose();
   });
 
@@ -544,6 +701,7 @@ function useVibe64SessionRepositoryStatusRegistry({
     inspectVisible,
     observe: queue.observe,
     refresh,
+    sessionWork,
     visibleSessionIds
   };
 }

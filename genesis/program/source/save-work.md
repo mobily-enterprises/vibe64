@@ -90,6 +90,7 @@ Git commands.
 - `src/lib/vibe64SessionRepositoryWorkState.js`
 - `src/components/studio/vibe64-session/Vibe64SessionToolbar.vue`
 - `src/composables/useVibe64SessionRepositoryStatusRegistry.js`
+- `src/composables/useVibe64SessionRuntimeHost.js`
 
 ## Public contract
 
@@ -159,6 +160,11 @@ checkpoints. Progress events of one running Save or Update update only the
 displayed progress (`runtimeHostWorkInspectionRevision`), so a rebase costs one
 inspection of each repository instead of one per event. Opening a session with
 an interrupted running task still inspects it and therefore recovers it.
+The view never reads its session's work itself: it asks the session panel's
+repository status registry, which inspects every session's work, and receives
+each of the registry's results for its session, including those the registry
+started for a realtime change. The realtime event and the view's task revision
+of one change therefore read the session's work once.
 An unresolved unknown outcome cannot be overwritten by another Save or treated
 as a completed connected contribution.
 Failed native publishing tasks also use that verifier before replacement, so a
@@ -441,6 +447,24 @@ it again. A session
 without a confirmed check still gets its first check, which also records the
 session's Git actor; the probe reads a GitHub authority only with an actor that
 such a check recorded, and leaves a session without one to that first check.
+The registry inspects at most two sessions at a time, the selected session first,
+and each session has at most one inspection running and one requested. A change
+reaches a session as a burst of realtime events (a turn's checkpoint and idle
+state, observed file changes, check results) plus the open view's refresh of the
+same task revision, and every tab receives it. Each such request waits until the
+session's burst has been quiet for one second, and never more than five seconds
+after the burst's first request, then the burst reads the session's work once.
+A change that arrives while that read runs may predate it, so it leads to
+exactly one further read, which settles the same way. A request that needs the
+state now (opening a session, returning to a tab, a Save or Update request, an
+explicit refresh, a check's HTTP result) starts at once and takes the settling
+requests with it. A change that starts a forced canonical check
+(`repository-canonical-changed`, a pull request, a failed Save or Update) reads
+the work once, after that check's result; only when no check result asks for
+that read (the check failed, or it joined a running check whose forced recheck
+failed) does the change ask for it itself. Tabs that receive the same burst
+settle on the same events and issue their reads close together, where the
+server's shared worktree read below can serve them with one inspection.
 Clicking the muted repository action explicitly forces a server update check through
 the same registry and waits for the work inspection to settle. A visible
 “Checking…” hint and busy state last for that request, with repeated clicks

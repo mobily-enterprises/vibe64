@@ -5,7 +5,6 @@ import { validateSchemaPayload } from "@jskit-ai/kernel/shared/validators";
 import { agentMessageInputValidator } from "../../packages/vibe64-sessions/src/server/inputSchemas.js";
 import { agentTurnControlPayloadFromContext } from "../../src/lib/vibe64SessionRequestConfig.js";
 import {
-  createVibe64SessionWorkRefreshQueue,
   focusRuntimeSessionChat,
   proxySessionDialogs,
   runtimeHostAgentWorking,
@@ -62,50 +61,6 @@ describe("Vibe64 direct session runtime host", () => {
     await expect(focusRuntimeSessionChat("session-fresh", root)).resolves.toBe(true);
     expect(runtime.querySelector).toHaveBeenCalledWith(".studio-autopilot__chat-panel");
     expect(focus).toHaveBeenCalledWith({ preventScroll: true });
-  });
-
-  it("serializes work inspection and suppresses an invalidated response", async () => {
-    let active = 0;
-    let calls = 0;
-    let maximumActive = 0;
-    const releases = [];
-    const states = [];
-    const queue = createVibe64SessionWorkRefreshQueue({
-      async inspect({ isCurrent }) {
-        const call = calls;
-        calls += 1;
-        active += 1;
-        maximumActive = Math.max(maximumActive, active);
-        const state = await new Promise((resolve) => {
-          releases[call] = resolve;
-        });
-        active -= 1;
-        if (isCurrent()) {
-          states.push(state);
-        }
-      }
-    });
-
-    const first = queue.request();
-    await Promise.resolve();
-    const second = queue.request();
-    const third = queue.request();
-    expect(calls).toBe(1);
-    expect(second).toBe(first);
-    expect(third).toBe(first);
-
-    releases[0]({ operation: { status: "running" } });
-    await Promise.resolve();
-    await Promise.resolve();
-    expect(calls).toBe(2);
-
-    releases[1]({ operation: { status: "ready" } });
-    await Promise.all([first, second, third]);
-
-    expect(maximumActive).toBe(1);
-    expect(calls).toBe(2);
-    expect(states).toEqual([{ operation: { status: "ready" } }]);
-    queue.dispose();
   });
 
   it("tracks every repository background task instead of only the oldest one", () => {
@@ -348,8 +303,10 @@ describe("session navigation projections", () => {
 // binding, admission and account fences have their original separate fixtures.
 import { computed, createRenderer, h, reactive, ref, shallowRef, toValue, nextTick } from "vue";
 import { useVibe64SessionRuntimeHost } from "../../src/composables/useVibe64SessionRuntimeHost.js";
+import { useVibe64SessionRepositoryStatusRegistry } from "../../src/composables/useVibe64SessionRepositoryStatusRegistry.js";
 const mountedHostMocks = vi.hoisted(() => ({
-  conversation: vi.fn(), renewal: vi.fn(), request: vi.fn(), events: vi.fn()
+  conversation: vi.fn(), renewal: vi.fn(), request: vi.fn(), events: vi.fn(),
+  socket: { connected: false, emit() {}, off() {}, on() {} }
 }));
 vi.mock("../../src/composables/useVibe64ConversationRuntime.js", () => ({
   useVibe64ConversationRuntime: mountedHostMocks.conversation
@@ -358,7 +315,8 @@ vi.mock("../../src/composables/useVibe64SessionRenewal.js", () => ({
   useVibe64SessionRenewal: mountedHostMocks.renewal
 }));
 vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({
-  useRealtimeEvent: mountedHostMocks.events
+  useRealtimeEvent: mountedHostMocks.events,
+  useRealtimeSocket: () => mountedHostMocks.socket
 }));
 vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({
   getHttpWebClient: () => ({ request: mountedHostMocks.request })
@@ -388,18 +346,25 @@ function mountedHostFixture() {
   mountedHostMocks.conversation.mockClear(); mountedHostMocks.renewal.mockClear();
   mountedHostMocks.request.mockClear(); mountedHostMocks.events.mockClear();
   const send = vi.fn(async () => true);
+  const mountedSession = ref(session);
   mountedHostMocks.conversation.mockImplementation(() => shallowRef({
-    mounted: { session: ref(session), detailState: ref({}), agentConnectionError: ref(""),
+    mounted: { session: mountedSession, detailState: ref({}), agentConnectionError: ref(""),
       agentConnectionStatus: ref("connected"), refresh: vi.fn(async () => {}) }, sendAgentMessage: send
   }));
   mountedHostMocks.renewal.mockImplementation(() => ({ sourceOperationsSuspended: ref(false) }));
   mountedHostMocks.request.mockResolvedValue({ ok: true, unsaved: false });
   let host;
   const app = mountedHostRenderer.createApp({ setup() {
+    // The session panel's repository status registry inspects this session's work.
+    hostProps.sessionWorkInspector = useVibe64SessionRepositoryStatusRegistry({
+      selectedSessionId: () => props.sessionId,
+      sessions: computed(() => state.sessions),
+      sessionsApiPath: computed(() => state.apiPath)
+    }).sessionWork;
     host = useVibe64SessionRuntimeHost(hostProps, vi.fn()); return () => h("div");
   } });
   app.mount({});
-  return { app, host, props, hostProps, state, send };
+  return { app, host, mountedSession, props, hostProps, state, send };
 }
 
 describe("mounted Main host", () => {
@@ -436,6 +401,48 @@ describe("mounted Main host", () => {
   });
 });
 
+
+describe("host work inspection", () => {
+  // Live monitoring saw the registry read the selected session's work for a
+  // session change and this host read it again for the same change's revision.
+  it("reuses the registry's inspection of its session instead of reading it again", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    const f = mountedHostFixture();
+    try {
+      await vi.advanceTimersByTimeAsync(2_000);
+      const workReads = () => mountedHostMocks.request.mock.calls.filter(([path]) => path.endsWith("/working-one/work"));
+      expect(workReads().length).toBeGreaterThan(0);
+      mountedHostMocks.request.mockClear();
+      mountedHostMocks.request.mockResolvedValue({ ok: true, changedPaths: ["src/app.js"], unsaved: true });
+      const listener = (event) => mountedHostMocks.events.mock.calls.map(([options]) => options)
+        .find((options) => options.event === event);
+      const sessionChanged = listener("vibe64.session.changed");
+      const checkpoint = { reason: "session-turn-checkpoint-updated", sessionId: "working-one" };
+      expect(sessionChanged.matches({ payload: checkpoint })).toBe(true);
+      sessionChanged.onEvent({ payload: checkpoint });
+      // The host's own detail refresh then shows the same checkpoint's task.
+      f.mountedSession.value = { ...f.mountedSession.value, backgroundTasks: [{
+        events: [{ at: "2026-10-29T08:44:30.000Z", kind: "checkpoint-created" }],
+        id: "codex_turn_checkpoint", status: "ready", updatedAt: "2026-10-29T08:44:30.000Z"
+      }] };
+      await vi.advanceTimersByTimeAsync(300);
+      sessionChanged.onEvent({ payload: { reason: "claude-stream-turn-idle", sessionId: "working-one" } });
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(workReads()).toHaveLength(1);
+      expect(f.host.workState.value).toMatchObject({ changedPaths: ["src/app.js"], loading: false, unsaved: true });
+
+      // An inspection only the registry asked for still reaches this host.
+      mountedHostMocks.request.mockResolvedValue({ ok: true, changedPaths: [], unsaved: false });
+      listener("vibe64.source-editor.file.changed").onEvent({ payload: { sessionId: "working-one" } });
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(workReads()).toHaveLength(2);
+      expect(f.host.workState.value).toMatchObject({ changedPaths: [], unsaved: false });
+    } finally {
+      f.app.unmount();
+      vi.useRealTimers();
+    }
+  });
+});
 
 describe("host list errors", () => {
   it("shows the session list load error on the guarded page", () => {

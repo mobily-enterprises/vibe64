@@ -15,7 +15,7 @@ import {
 import {
   vibe64SessionPath
 } from "@/lib/vibe64SessionRequestConfig.js";
-import { vibe64ApiError, vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
+import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64RealtimeOriginPayload } from "@/lib/vibe64BrowserTabOrigin.js";
 
@@ -76,46 +76,6 @@ function runtimeHostAgentWorking({
     transientAgentThinking ||
     sessionRecordHasActiveAgentWork(selectedSession)
   );
-}
-
-function createVibe64SessionWorkRefreshQueue({ inspect } = {}) {
-  if (typeof inspect !== "function") {
-    throw new TypeError("Session work refresh requires an inspector.");
-  }
-  let active = null;
-  let disposed = false;
-  let refreshAfterActive = false;
-
-  async function drain() {
-    do {
-      refreshAfterActive = false;
-      await inspect({
-        isCurrent: () => !disposed && !refreshAfterActive
-      });
-    } while (!disposed && refreshAfterActive);
-  }
-
-  function request() {
-    if (disposed) {
-      return Promise.resolve();
-    }
-    if (active) {
-      refreshAfterActive = true;
-      return active;
-    }
-    active = Promise.resolve().then(drain).finally(() => {
-      active = null;
-    });
-    return active;
-  }
-
-  return Object.freeze({
-    dispose() {
-      disposed = true;
-      refreshAfterActive = false;
-    },
-    request
-  });
 }
 
 const ACTIVE_WORK_TASK_STATUSES = ["queued", "running", "starting"];
@@ -226,78 +186,53 @@ function useVibe64SessionRuntimeHost(props, emit) {
     }
   });
   let workStateActive = true;
+  // The session panel's repository status registry inspects every session's
+  // work, this one included: this host's reads join the registry's read of the
+  // same change, and each of the registry's results for this session lands here.
+  const workInspector = props.sessionWorkInspector;
 
-  async function inspectWorkState({ isCurrent }) {
-    const sessionId = selectedSessionId.value;
-    const sessionArchived = selectedSessionArchived.value;
-    const requestIsCurrent = () => Boolean(
+  function applyInspectedWork(sessionId, state) {
+    if (
+      state &&
       workStateActive &&
-      isCurrent() &&
       !sourceOperationsSuspended.value &&
       selectedSessionId.value === sessionId &&
-      selectedSessionArchived.value === sessionArchived
-    );
+      !selectedSessionArchived.value
+    ) {
+      workState.value = { ...state };
+    }
+  }
+
+  watch(selectedSessionId, (sessionId, _previous, onCleanup) => {
+    if (sessionId) {
+      onCleanup(workInspector.subscribe(sessionId, (state) => applyInspectedWork(sessionId, state)));
+    }
+  }, { flush: "sync", immediate: true });
+
+  // `settle` marks a change of this session's work tasks, one event of a burst.
+  async function inspectWorkState({ settle = false } = {}) {
+    const sessionId = selectedSessionId.value;
     if (sourceOperationsSuspended.value) {
       return;
     }
-    if (!sessionId || sessionArchived) {
-      if (requestIsCurrent()) {
-        workState.value = {
-          checkedAt: new Date().toISOString(),
-          error: "",
-          loading: false,
-          operation: null,
-          unsaved: null
-        };
-      }
+    if (!sessionId || selectedSessionArchived.value) {
+      workState.value = {
+        checkedAt: new Date().toISOString(),
+        error: "",
+        loading: false,
+        operation: null,
+        unsaved: null
+      };
       return;
     }
-    if (
-      requestIsCurrent() &&
-      (workState.value.unsaved === null || workState.value.unsaved === undefined)
-    ) {
+    if (workState.value.unsaved === null || workState.value.unsaved === undefined) {
       workState.value = {
         ...workState.value,
         loading: true
       };
     }
-    try {
-      const result = await getHttpWebClient().request(
-        vibe64SessionPath(
-          readRefOrGetterValue(props.sessionData.sessionsApiPath),
-          sessionId,
-          "/work"
-        ),
-        // Connected repositories require sequential authenticated Git checks.
-        { method: "GET", timeoutMs: 120_000 }
-      );
-      if (result?.ok === false) {
-        throw new Error(vibe64ApiResponseError(result, "Session work could not be inspected."));
-      }
-      if (requestIsCurrent()) {
-        workState.value = {
-          ...result,
-          checkedAt: new Date().toISOString(),
-          error: "",
-          loading: false
-        };
-      }
-    } catch (error) {
-      if (requestIsCurrent()) {
-        workState.value = {
-          checkedAt: new Date().toISOString(),
-          error: error instanceof Error ? error.message : String(error || "Session work could not be inspected."),
-          loading: false,
-          operation: null,
-          unsaved: null
-        };
-      }
-    }
+    await workInspector.inspect(sessionId, { settle });
   }
-
-  const workStateRefreshQueue = createVibe64SessionWorkRefreshQueue({
-    inspect: inspectWorkState
-  });
 
   async function refreshWorkState(observedWork = null) {
     if (sourceOperationsSuspended.value) {
@@ -317,7 +252,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
       };
       return workState.value;
     }
-    await workStateRefreshQueue.request();
+    await inspectWorkState();
     return workState.value;
   }
 
@@ -602,16 +537,21 @@ function useVibe64SessionRuntimeHost(props, emit) {
       };
     }
   }, { flush: "post", immediate: true });
+  // The first read is needed now; a later revision is one change of a burst
+  // that the registry is usually already inspecting.
+  let workInspectionRevisionSeen = false;
   watch(() => {
     return `${selectedSessionId.value}:${selectedSessionArchived.value}:${runtimeHostWorkInspectionRevision(selectedSession.value)}`;
   }, () => {
-    void refreshWorkState();
+    if (!sourceOperationsSuspended.value) {
+      void inspectWorkState({ settle: workInspectionRevisionSeen });
+    }
+    workInspectionRevisionSeen = true;
   }, { flush: "post", immediate: true });
 
   onBeforeUnmount(() => {
     interruptFeedback.success();
     workStateActive = false;
-    workStateRefreshQueue.dispose();
   });
 
   return {
@@ -649,7 +589,6 @@ function useVibe64SessionRuntimeHost(props, emit) {
 }
 
 export {
-  createVibe64SessionWorkRefreshQueue,
   focusRuntimeSessionChat,
   proxySessionDialogs,
   runtimeHostAgentWorking,

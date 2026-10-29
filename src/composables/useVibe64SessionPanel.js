@@ -289,6 +289,7 @@ function useVibe64SessionPanel(props, emit) {
     setRuntimePageError,
     setRuntimeSourceOperationsSuspended,
     setRuntimeWorkState,
+    sessionWorkInspector: repositoryStatusRegistry.sessionWork,
     toolbar,
     visiblePageError
   };

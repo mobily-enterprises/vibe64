@@ -29,7 +29,9 @@ while no tab has the project open and no AI works in it; it checks again as soon
 as you open it. A tab opened before Vibe64 was last updated may not keep these
 checks running; reload it. If a check fails, the session's repository status
 shows the error and Vibe64 retries every minute. **Check for updates** in
-Repository checks immediately. These steps apply on desktop and mobile.
+Repository checks immediately. After an AI turn, a Save or edited files, the
+session's saved-work status follows within a few seconds. These steps apply on
+desktop and mobile.
 
 Vibe64 reuses your GitHub login for a few minutes across repository operations.
 If you reconnect GitHub and the previous login was revoked, the next operation can

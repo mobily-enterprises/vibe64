@@ -121,6 +121,11 @@ const props = defineProps({
     required: true,
     type: String
   },
+  // The session panel registry's { inspect, subscribe } for session work.
+  sessionWorkInspector: {
+    required: true,
+    type: Object
+  },
   toolbarSessions: {
     default: null,
     type: Array

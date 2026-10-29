@@ -77,6 +77,7 @@ describe("session repository status registry", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -85,6 +86,47 @@ describe("session repository status registry", () => {
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
+  }
+
+  // A burst's inspection starts once the burst has been quiet for a second.
+  async function settleBurst() {
+    await settleRegistryRequests();
+    await vi.advanceTimersByTimeAsync(1_000);
+    await settleRegistryRequests();
+  }
+
+  function fakeQueueClock() {
+    let time = 0;
+    const timers = new Set();
+    return {
+      now: () => time,
+      setTimer(callback, delay) {
+        const timer = { at: time + delay, callback };
+        timers.add(timer);
+        return timer;
+      },
+      clearTimer(timer) {
+        timers.delete(timer);
+      },
+      async advance(ms) {
+        const end = time + ms;
+        for (;;) {
+          await settleRegistryRequests();
+          const next = [...timers].filter((timer) => timer.at <= end).sort((left, right) => left.at - right.at)[0];
+          if (!next) break;
+          timers.delete(next);
+          time = next.at;
+          next.callback();
+        }
+        time = end;
+        await settleRegistryRequests();
+      }
+    };
+  }
+
+  function workRequests(sessionId = "") {
+    return registryHarness.requests.filter(({ options, path }) => options.method === "GET" &&
+      (!sessionId || path.endsWith(`/${sessionId}/work`)));
   }
 
   it("inspects only the session chips the toolbar can actually display", () => {
@@ -157,6 +199,109 @@ describe("session repository status registry", () => {
     release();
     await queue.waitForIdle();
     expect(calls).toHaveLength(2);
+    queue.dispose();
+  });
+
+  // Live monitoring saw each event of a burst start its own inspection and
+  // every event during it queue a second full one.
+  it("inspects each session once for a burst of changes, after the burst settles", async () => {
+    const clock = fakeQueueClock();
+    const calls = [];
+    const queue = createVibe64SessionRepositoryStatusQueue({
+      clearTimer: clock.clearTimer,
+      now: clock.now,
+      async requestWork(sessionId) {
+        calls.push(sessionId);
+        return { ok: true, unsaved: false };
+      },
+      setTimer: clock.setTimer
+    });
+
+    for (let event = 0; event < 6; event += 1) {
+      queue.enqueue(["session-a", "session-b"], { force: true, settle: true });
+      await clock.advance(300);
+    }
+    expect(calls).toEqual([]);
+    await clock.advance(1_000);
+    expect(calls.sort()).toEqual(["session-a", "session-b"]);
+    await clock.advance(10_000);
+    await queue.waitForIdle();
+    expect(calls).toHaveLength(2);
+    queue.dispose();
+  });
+
+  it("follows a change that lands during an inspection with exactly one settled inspection", async () => {
+    const clock = fakeQueueClock();
+    const releases = [];
+    const queue = createVibe64SessionRepositoryStatusQueue({
+      clearTimer: clock.clearTimer,
+      now: clock.now,
+      requestWork: () => new Promise((resolve) => releases.push(resolve)),
+      setTimer: clock.setTimer
+    });
+
+    queue.enqueue(["session-a"], { force: true, settle: true });
+    await clock.advance(1_000);
+    expect(releases).toHaveLength(1);
+    for (let event = 0; event < 5; event += 1) {
+      queue.enqueue(["session-a"], { force: true, settle: true });
+      await clock.advance(200);
+    }
+    expect(releases).toHaveLength(1);
+    releases[0]({ ok: true, unsaved: true });
+    await clock.advance(0);
+    expect(releases).toHaveLength(1);
+    await clock.advance(1_000);
+    expect(releases).toHaveLength(2);
+    releases[1]({ ok: true, unsaved: false });
+    await clock.advance(10_000);
+    await queue.waitForIdle();
+    expect(releases).toHaveLength(2);
+    queue.dispose();
+  });
+
+  it("does not let a continuous stream of changes postpone an inspection past five seconds", async () => {
+    const clock = fakeQueueClock();
+    const startedAt = [];
+    const queue = createVibe64SessionRepositoryStatusQueue({
+      clearTimer: clock.clearTimer,
+      now: clock.now,
+      async requestWork() {
+        startedAt.push(clock.now());
+        return { ok: true, unsaved: false };
+      },
+      setTimer: clock.setTimer
+    });
+
+    for (let event = 0; event < 16; event += 1) {
+      queue.enqueue(["session-a"], { force: true, settle: true });
+      await clock.advance(500);
+    }
+    expect(startedAt[0]).toBe(5_000);
+    queue.dispose();
+  });
+
+  it("starts a direct inspection at once, sharing it with the burst that is settling", async () => {
+    const clock = fakeQueueClock();
+    const releases = [];
+    const inspected = [];
+    const queue = createVibe64SessionRepositoryStatusQueue({
+      clearTimer: clock.clearTimer,
+      now: clock.now,
+      onInspected: (state) => inspected.push(state),
+      requestWork: () => new Promise((resolve) => releases.push(resolve)),
+      setTimer: clock.setTimer
+    });
+
+    queue.enqueue(["session-a"], { force: true, settle: true });
+    const direct = queue.inspect("session-a");
+    await clock.advance(0);
+    expect(releases).toHaveLength(1);
+    releases[0]({ ok: true, unsaved: true });
+    await expect(direct).resolves.toMatchObject({ error: "", loading: false, unsaved: true });
+    expect(inspected).toEqual([{ sessionId: "session-a", workState: expect.objectContaining({ unsaved: true }) }]);
+    await clock.advance(10_000);
+    expect(releases).toHaveLength(1);
     queue.dispose();
   });
 
@@ -244,6 +389,7 @@ describe("session repository status registry", () => {
 
   for (const first of ["HTTP", "realtime"]) {
     it(`shows Rebase immediately and shares one inspection when ${first} arrives first`, async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
       const check = Promise.withResolvers();
       const work = Promise.withResolvers();
       const states = [];
@@ -268,13 +414,14 @@ describe("session repository status registry", () => {
       else check.resolve(result);
       await settleRegistryRequests();
       expect(states.at(-1)).toMatchObject({ loading: false, updateAvailable: true, updateStatusPending: true });
-      expect(registryHarness.requests.filter(({ options }) => options.method === "GET")).toHaveLength(1);
+      await settleBurst();
+      expect(workRequests()).toHaveLength(1);
       if (first === "realtime") check.resolve(result);
       else notify();
-      await settleRegistryRequests();
-      expect(registryHarness.requests.filter(({ options }) => options.method === "GET")).toHaveLength(1);
+      await settleBurst();
+      expect(workRequests()).toHaveLength(1);
       work.resolve({ ok: true, canonicalCommit: "new-version", unsaved: false, updateAvailable: true });
-      await settleRegistryRequests();
+      await settleBurst();
       expect(states.at(-1)).toMatchObject({ updateAvailable: true, unsaved: false });
       expect(states.at(-1).updateStatusPending).not.toBe(true);
       expect(registryHarness.requests).toHaveLength(2);
@@ -283,6 +430,7 @@ describe("session repository status registry", () => {
   }
 
   it("ignores an older check delivered after a newer realtime confirmation", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     const check = Promise.withResolvers();
     const work = Promise.withResolvers();
     const states = [];
@@ -300,7 +448,7 @@ describe("session repository status registry", () => {
       }
     } });
     check.resolve({ ok: true, canonicalCommit: "first-save", checkedAt: "2026-09-08T10:00:00.000Z", updateAvailable: true });
-    await settleRegistryRequests();
+    await settleBurst();
     expect(registryHarness.requests).toHaveLength(2);
     expect(states.at(-1)).toMatchObject({ updateAvailable: true, updateStatusPending: true });
     work.resolve({ ok: true, canonicalCommit: "second-save", unsaved: false, updateAvailable: false });
@@ -450,6 +598,7 @@ describe("session repository status registry", () => {
   // The starter is applied outside any turn, Save or editor event, so without
   // its own reason the selected session kept showing "All work is saved".
   it("re-inspects the selected session's work when a starter is applied to it", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     const states = [];
     const scope = effectScope();
     scope.run(() => useVibe64SessionRepositoryStatusRegistry({
@@ -468,7 +617,7 @@ describe("session repository status registry", () => {
     const change = { payload: { reason: "session-starter-applied", sessionId: "session-a" } };
     expect(sessionEvent.matches(change)).toBe(true);
     sessionEvent.onEvent(change);
-    await settleRegistryRequests();
+    await settleBurst();
 
     expect(registryHarness.requests.map(({ path }) => path)).toEqual([
       "/api/app/sample/vibe64/sessions/session-a/work"
@@ -481,6 +630,7 @@ describe("session repository status registry", () => {
   });
 
   it("reuses checked repository state across session switches and still responds to real invalidation", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
     const selectedSessionId = ref("session-a");
     let revision = 0;
     registryHarness.requestHandler = (path) => String(path).endsWith("/updates/check")
@@ -505,7 +655,7 @@ describe("session repository status registry", () => {
 
     const sourceEvent = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.source-editor.file.changed");
     sourceEvent.onEvent({ payload: { sessionId: "session-b" } });
-    await settleRegistryRequests();
+    await settleBurst();
     expect(registryHarness.requests.map(({ path }) => path)).toEqual([
       "/api/app/sample/vibe64/sessions/session-b/work"
     ]);
@@ -584,6 +734,117 @@ describe("session repository status registry", () => {
     scope.stop();
     expect(emitted().slice(-2)).toEqual([["watch", "sample"], ["release", ""]]);
     expect(socket.listeners.has("connect")).toBe(false);
+  });
+
+  it("reads each visible session's work once for a burst of realtime changes", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    const scope = effectScope();
+    const registry = scope.run(() => useVibe64SessionRepositoryStatusRegistry({
+      selectedSessionId: ref("session-a"),
+      sessions: ref([{ sessionId: "session-a" }, { sessionId: "session-b" }]),
+      sessionsApiPath: ref("/api/app/sample/vibe64/sessions")
+    }));
+    await settleBurst();
+    registryHarness.requests.length = 0;
+    const sessionChanged = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.session.changed");
+    const fileChanged = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.source-editor.file.changed");
+    for (const sessionId of ["session-a", "session-b"]) {
+      for (const reason of ["session-turn-checkpoint-updated", "claude-stream-turn-idle"]) {
+        sessionChanged.onEvent({ payload: { reason, sessionId } });
+      }
+      fileChanged.onEvent({ payload: { sessionId } });
+    }
+    // The selected session's runtime host refreshes for the same change.
+    const hostRead = registry.sessionWork.inspect("session-a", { settle: true });
+    await vi.advanceTimersByTimeAsync(400);
+    sessionChanged.onEvent({ payload: { reason: "session-turn-checkpoint-updated", sessionId: "session-b" } });
+    await settleRegistryRequests();
+    expect(workRequests()).toEqual([]);
+
+    await settleBurst();
+    expect(workRequests().map(({ path }) => path).sort()).toEqual([
+      "/api/app/sample/vibe64/sessions/session-a/work",
+      "/api/app/sample/vibe64/sessions/session-b/work"
+    ]);
+    await expect(hostRead).resolves.toMatchObject({ error: "", unsaved: false });
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(workRequests()).toHaveLength(2);
+    scope.stop();
+  });
+
+  for (const outcome of ["confirms", "fails"]) {
+    it(`inspects a canonical change once, after the forced check it starts ${outcome}`, async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+      const states = [];
+      const scope = effectScope();
+      scope.run(() => useVibe64SessionRepositoryStatusRegistry({
+        onState: ({ sessionId, workState }) => states.push({ sessionId, workState }),
+        selectedSessionId: ref("session-a"),
+        sessions: ref([{ sessionId: "session-a" }, { sessionId: "session-b" }]),
+        sessionsApiPath: ref("/api/app/sample/vibe64/sessions")
+      }));
+      await settleBurst();
+      registryHarness.requests.length = 0;
+      const check = Promise.withResolvers();
+      registryHarness.requestHandler = (path) => String(path).endsWith("/updates/check")
+        ? check.promise : { changedPaths: [], ok: true, unsaved: false };
+      const sessionChanged = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.session.changed");
+      sessionChanged.onEvent({ payload: {
+        canonicalCommit: "new-version", reason: "repository-canonical-changed", sessionId: "session-b"
+      } });
+      await settleBurst();
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(states.at(-1)).toMatchObject({ sessionId: "session-b", workState: { updateAvailable: true, updateStatusPending: true } });
+      expect(workRequests()).toEqual([]);
+
+      const result = { canonicalCommit: "new-version", checkedAt: new Date().toISOString(), ok: true, updateAvailable: true };
+      if (outcome === "confirms") check.resolve(result);
+      else check.resolve({ error: "GitHub is unavailable", ok: false });
+      await settleBurst();
+      expect(workRequests().map(({ path }) => path)).toEqual(["/api/app/sample/vibe64/sessions/session-b/work"]);
+      if (outcome === "confirms") {
+        // The same check's realtime result reaches this tab too.
+        sessionChanged.onEvent({ payload: {
+          reason: "session-repository-checked", repositoryUpdateCheck: result, sessionId: "session-b"
+        } });
+      }
+      await settleBurst();
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(workRequests()).toHaveLength(1);
+      scope.stop();
+    });
+  }
+
+  it("inspects a canonical change that joins a running check once, when its forced recheck fails", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+    const checks = [];
+    registryHarness.requestHandler = (path) => {
+      if (!String(path).endsWith("/updates/check")) return { changedPaths: [], ok: true, unsaved: false };
+      const check = Promise.withResolvers();
+      checks.push(check);
+      return check.promise;
+    };
+    const scope = effectScope();
+    scope.run(() => useVibe64SessionRepositoryStatusRegistry({
+      selectedSessionId: ref("session-a"),
+      sessions: ref([{ sessionId: "session-a" }]),
+      sessionsApiPath: ref("/api/app/sample/vibe64/sessions")
+    }));
+    await settleRegistryRequests();
+    expect(checks).toHaveLength(1);
+    const sessionChanged = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.session.changed");
+    sessionChanged.onEvent({ payload: {
+      canonicalCommit: "new-version", reason: "repository-canonical-changed", sessionId: "session-a"
+    } });
+    checks[0].resolve({ canonicalCommit: "old-version", checkedAt: new Date().toISOString(), ok: true });
+    await settleBurst();
+    expect(checks).toHaveLength(2);
+    expect(workRequests()).toEqual([]);
+    checks[1].resolve({ error: "GitHub is unavailable", ok: false });
+    await settleBurst();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(workRequests().map(({ path }) => path)).toEqual(["/api/app/sample/vibe64/sessions/session-a/work"]);
+    scope.stop();
   });
 
   it("shows a server probe failure on its session's repository status", async () => {

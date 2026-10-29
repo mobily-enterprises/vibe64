@@ -106,6 +106,7 @@
         :active="runtimeSessionId === selection.selectedSessionId"
         :session-data="sessionData"
         :session-id="runtimeSessionId"
+        :session-work-inspector="sessionWorkInspector"
         :chat-collapsed="chatCollapsed"
         :create-session-teleport-target="!emptyLayoutVisible && !selectedSessionArchiving && runtimeSessionId === selection.selectedSessionId ? props.createSessionTeleportTarget : ''"
         :github-actor-teleport-target="runtimeSessionId === selection.selectedSessionId ? props.githubActorTeleportTarget : ''"
@@ -194,6 +195,7 @@ const {
   setRuntimePageError,
   setRuntimeSourceOperationsSuspended,
   setRuntimeWorkState,
+  sessionWorkInspector,
   toolbar,
   visiblePageError
 } = useVibe64SessionPanel(props, emit);
