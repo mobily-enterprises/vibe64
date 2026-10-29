@@ -7,7 +7,13 @@ project, session and branch you are using before saving or creating a pull reque
 Open **Changes** in Dashboard to inspect the work. Use the session's **Save**
 control for its native review and save workflow. When the selected session has
 unsaved changes, the **Save** button is red, matching the red save icon on that
-session's tab. Managed Vibe64 Git saves a version;
+session's tab. A green tick on the tab means **All work is saved**. While that
+session's assistant is working (its dot pulses), the tick is grey and reads
+**All work was saved at the last check; the assistant is still working**,
+because the turn can still change files; when the turn ends the tab shows the
+session's current state again. Phones and other touch screens hide this icon;
+select the tab's info button to read the same status under **Work**.
+Managed Vibe64 Git saves a version;
 GitHub workflows use your repository permissions and the project's direct-push or
 pull-request policy. **Update this session (rebase)** reconciles newer saved project
 work when offered; Save does not silently perform that update for you. A failed or

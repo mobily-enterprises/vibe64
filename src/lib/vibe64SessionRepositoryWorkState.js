@@ -78,7 +78,16 @@ function repositoryWorkState(sessionItem = {}) {
   return Object.hasOwn(REPOSITORY_WORK_STATE_PRESENTATION, state) ? state : "checking";
 }
 
+// The assistant can change source until its turn ends, so "saved" is only the
+// last check's result while the session reports assistant work.
+function repositoryWorkStateProvisional(sessionItem = {}) {
+  return sessionItem?.agentThinking === true && repositoryWorkState(sessionItem) === "saved";
+}
+
 function repositoryWorkStateLabel(sessionItem = {}) {
+  if (repositoryWorkStateProvisional(sessionItem)) {
+    return "All work was saved at the last check; the assistant is still working";
+  }
   const state = repositoryWorkState(sessionItem);
   if (state === "unsaved") {
     const changedCount = Number(sessionItem?.repositoryWorkState?.changedCount || 0);
@@ -120,6 +129,7 @@ export {
   repositoryWorkState,
   repositoryWorkStateIcon,
   repositoryWorkStateLabel,
+  repositoryWorkStateProvisional,
   sessionArchiveWorkNotice,
   sessionRepositoryWorkState
 };

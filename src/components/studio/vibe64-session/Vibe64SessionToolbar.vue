@@ -32,7 +32,10 @@
           <span class="studio-ai-sessions__tab-label">{{ sessionItem.archiving ? `${sessionTabLabel(sessionItem)} · Archiving…` : sessionTabLabel(sessionItem) }}</span>
           <v-icon
             class="studio-ai-sessions__repository-state studio-ai-sessions__repository-state--desktop"
-            :class="`studio-ai-sessions__repository-state--${repositoryWorkState(sessionItem)}`"
+            :class="[
+              `studio-ai-sessions__repository-state--${repositoryWorkState(sessionItem)}`,
+              { 'studio-ai-sessions__repository-state--provisional': repositoryWorkStateProvisional(sessionItem) }
+            ]"
             :icon="repositoryWorkStateIcon(sessionItem)"
             size="14"
             :title="repositoryWorkStateLabel(sessionItem)"
@@ -150,7 +153,8 @@ import { VIBE64_SESSION_TOOLTIP_KEY } from "@/lib/vibe64SessionTooltip.js";
 import {
   repositoryWorkState,
   repositoryWorkStateIcon,
-  repositoryWorkStateLabel
+  repositoryWorkStateLabel,
+  repositoryWorkStateProvisional
 } from "@/lib/vibe64SessionRepositoryWorkState.js";
 import {
   visibleVibe64ToolbarSessions
@@ -488,6 +492,12 @@ const visibleSessions = computed(() => {
 
 .studio-ai-sessions__repository-state--saved {
   color: rgb(var(--v-theme-success));
+}
+
+/* A running turn can still change source, so the saved tick stays in the
+   theme's disabled grey until that turn ends. */
+.studio-ai-sessions__repository-state--saved.studio-ai-sessions__repository-state--provisional {
+  color: rgba(var(--v-theme-on-surface), var(--v-disabled-opacity));
 }
 
 .studio-ai-sessions__repository-state--unsaved,

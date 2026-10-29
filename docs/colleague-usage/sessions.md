@@ -239,6 +239,9 @@ work, including when you are viewing another session. It stops when that work
 finishes; you do not need to select the session to see the change. This also
 works immediately after opening the project, before you have visited that
 session. If its activity cannot be read, the dot does not claim it is working.
+While the dot pulses, that tab's green **All work is saved** tick turns grey,
+because the assistant can still change files; see
+[Review, Save and work with GitHub](github-work.md).
 
 **Loading assistant…** means the initial assistant connection is being prepared,
 including after you select a different assistant. Checking an already healthy

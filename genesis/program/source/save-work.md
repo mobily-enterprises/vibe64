@@ -7,6 +7,13 @@ temporary action terminal retains viewed completed details only when status,
 stage or output remains; a connected Save with no origin operation therefore
 cannot leave an empty "Working…" card after success.
 
+A session tab shows the projection's **All work is saved** tick in the success
+colour only while that tab reports no assistant work. During its existing
+`agentThinking` state, the same one that pulses the tab's dot, the tick uses the
+theme's disabled grey and its label says the work was saved at the last check
+while the assistant is still working, because the turn can still change source.
+The projection, other states' colours and the archive warning are unchanged.
+
 A clean Main Save checks retained submitted revisions before reporting that there
 is no work to save. Its existing preparation job receives the freshly authorized
 connected snapshots and reuses the native integration gate on the no-change path;
@@ -81,6 +88,7 @@ Git commands.
 - `src/composables/useVibe64TemporaryAiRepairs.js`
 - `src/composables/useVibe64SessionPanel.js`
 - `src/lib/vibe64SessionRepositoryWorkState.js`
+- `src/components/studio/vibe64-session/Vibe64SessionToolbar.vue`
 - `src/composables/useVibe64SessionRepositoryStatusRegistry.js`
 
 ## Public contract

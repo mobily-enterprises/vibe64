@@ -441,4 +441,34 @@ describe("session toolbar archive and repository controls", () => {
     expect(html).toContain("Checking whether work is saved");
     expect(html).toContain("Session info: Session work");
   });
+
+  it("greys the saved tick while the session's assistant is working, then shows it as saved", async () => {
+    const savedSession = (agentThinking) => ({ sessionId: "work", agentThinking, repositoryWorkState: { state: "saved" } });
+    const icon = (html) => html.match(/<span[^>]*studio-ai-sessions__repository-state[^>]*>/u)?.[0] || "";
+    const provisional = "All work was saved at the last check; the assistant is still working";
+
+    const working = await renderToolbar({ createVisible: false, sessions: [savedSession(true)] });
+    expect(icon(working)).toContain("studio-ai-sessions__repository-state--saved");
+    expect(icon(working)).toContain("studio-ai-sessions__repository-state--provisional");
+    expect(icon(working)).toContain(`title="${provisional}"`);
+    expect(working).toContain(`. ${provisional}.`);
+    expect(working).toMatch(new RegExp(`<dd[^>]*>${provisional}</dd>`, "u"));
+    expect(working).not.toContain("All work is saved");
+
+    const finished = await renderToolbar({ createVisible: false, sessions: [savedSession(false)] });
+    expect(icon(finished)).toContain("studio-ai-sessions__repository-state--saved");
+    expect(icon(finished)).not.toContain("--provisional");
+    expect(icon(finished)).toContain('title="All work is saved"');
+
+    // Only the green tick is provisional; unsaved work stays red while the turn runs.
+    const unsaved = await renderToolbar({ createVisible: false, sessions: [{
+      sessionId: "work", agentThinking: true, repositoryWorkState: { changedCount: 2, state: "unsaved" }
+    }] });
+    expect(icon(unsaved)).toContain("studio-ai-sessions__repository-state--unsaved");
+    expect(icon(unsaved)).not.toContain("--provisional");
+
+    // The grey is the theme's disabled colour, which Vuetify sets per light and dark theme.
+    const styles = toolbarDescriptor.styles.map((style) => style.content).join("\n");
+    expect(styles).toMatch(/\.studio-ai-sessions__repository-state--saved\.studio-ai-sessions__repository-state--provisional\s*\{\s*color: rgba\(var\(--v-theme-on-surface\), var\(--v-disabled-opacity\)\);/u);
+  });
 });
