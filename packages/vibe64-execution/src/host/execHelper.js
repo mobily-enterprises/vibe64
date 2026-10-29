@@ -157,6 +157,7 @@ const APPLICATION_REGISTRY_ROOT = path.join(HOST_SETTINGS_ROOT, "applications");
 const APPLICATION_REGISTRATION_SCHEMA = "vibe64.application-account";
 const APPLICATION_AREA_ROOT = "/var/lib/vibe64-apps";
 const SYSTEMD_UNIT_ROOT = "/etc/systemd/system";
+const CONTROLLER_LEASE_NAME = "resource-controller.sock";
 const APPLICATION_RECEIPTS_ROOT = "/run/vibe64-applications";
 const APPLICATION_SHELL = "/usr/sbin/nologin";
 const APPLICATION_PROJECT_PATTERN = /^[a-z0-9][a-z0-9_-]{0,47}$/u;
@@ -356,7 +357,8 @@ function handleManagedExecutionOperation(payload = {}) {
   }
   const controllerLeaseName = managedExecutionControllerLeaseName(
     payload.controllerLeaseName,
-    lifecycle
+    lifecycle,
+    owner
   );
   const targetUser = managedExecutionTargetUser(payload, owner);
   // A published application's commands (its build, release file work and
@@ -624,7 +626,12 @@ async function runManagedExecutionPayload(payloadPath = "") {
   }
 }
 
-function managedExecutionControllerLeaseName(value = "", lifecycle = "") {
+// A managed service's controller lease is the socket its controller listens
+// on in the daemon's own runtime directory, where only the daemon adds
+// entries and no application can reach; an abstract socket name would be any
+// local account's to take first. Started for `owner`, it is exactly that
+// daemon's; the runner, given it by root, checks only its shape.
+function managedExecutionControllerLeaseName(value = "", lifecycle = "", owner = null) {
   const leaseName = String(value || "");
   if (lifecycle !== "service") {
     if (leaseName) {
@@ -632,7 +639,10 @@ function managedExecutionControllerLeaseName(value = "", lifecycle = "") {
     }
     return "";
   }
-  if (!/^\0vibe64-resource-controller-[a-z][a-z0-9-]{0,62}$/u.test(leaseName)) {
+  const valid = owner
+    ? leaseName === path.join(managedExecutionRuntimeBase(owner), CONTROLLER_LEASE_NAME)
+    : path.isAbsolute(leaseName) && path.resolve(leaseName) === leaseName && path.basename(leaseName) === CONTROLLER_LEASE_NAME;
+  if (!valid) {
     throw new Error("Vibe64 exec helper rejected an invalid managed service controller lease.");
   }
   return leaseName;
@@ -3837,7 +3847,7 @@ export { APPLICATION_USERNAME_PREFIX, DAEMON_USERNAME_PREFIX, HOST_SETTINGS_ROOT
   registeredApplicationUser,
   resolveApplicationCwd, retireApplicationAccount,
   assertActablePerson, assertEnabledForVibe64, configureManagedExecutionWorkSlice, consumeManagedExecutionRequestPayload,
-  ensureWorkspaceRuntimeBase,
+  ensureWorkspaceRuntimeBase, managedExecutionControllerLeaseName, managedExecutionRuntimeBase,
   enablePerson, loginUidRange, personAccountProblem, personSudoCommands, readPersonRegistration, registerPerson, upgradePersonRegistry, deploymentServiceUnit, ensureManagedServiceProcessOwnership,
   parseEnvironmentFile,
   managedWorkflowCounters, openManagedExecutionReceipts, managedWorkflowIdentity, managedExecutionOomBoundary,

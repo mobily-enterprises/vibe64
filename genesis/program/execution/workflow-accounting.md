@@ -295,6 +295,14 @@ becomes the service's start script, so no extra process stays running. A
 finite execution given a release environment has its runner load the file as
 the application. The file keeps systemd's `EnvironmentFile=` syntax.
 
+A managed service's runner stays connected to the controller that admitted it
+and stops the service when that connection ends. The controller's lease is
+the socket `resource-controller.sock` in the daemon's runtime directory, where
+only the daemon adds entries and which no application can reach; the helper
+starts a service only with exactly that daemon's socket
+(`managedExecutionControllerLeaseName()`), so no other local account can take
+the lease first, as it could an abstract socket name.
+
 `deployment-service install-start` installs a release service only for an
 application account root registered for the calling daemon's workspace. Its
 working directory must be `app/releases/<release>/workspace` in that

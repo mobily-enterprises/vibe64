@@ -21,6 +21,9 @@ import {
 import {
   runVibe64Command
 } from "../../packages/vibe64-execution/src/server/runVibe64Command.js";
+import {
+  DAEMON_USERNAME_PREFIX, managedExecutionControllerLeaseName, managedExecutionRuntimeBase
+} from "../../packages/vibe64-execution/src/host/execHelper.js";
 
 const execFileAsync = promisify(execFile);
 const EXEC_HELPER = path.resolve("packages/vibe64-execution/src/host/execHelper.js");
@@ -664,9 +667,26 @@ test("a finite managed runner whose command is killed by a signal exits with a f
   }
 });
 
+test("a managed service's controller lease is its daemon's runtime socket, never a name any account can take", () => {
+  const owner = { username: `${DAEMON_USERNAME_PREFIX}test` };
+  const lease = path.join(managedExecutionRuntimeBase(owner), "resource-controller.sock");
+  assert.equal(managedExecutionControllerLeaseName(lease, "service", owner), lease);
+  const other = path.join(managedExecutionRuntimeBase({ username: `${DAEMON_USERNAME_PREFIX}other` }), "resource-controller.sock");
+  for (const name of ["\0vibe64-resource-controller-test", other, path.join(os.tmpdir(), "resource-controller.sock"),
+    `${lease}/`, `${managedExecutionRuntimeBase(owner)}/x/../resource-controller.sock`, ""]) {
+    assert.throws(() => managedExecutionControllerLeaseName(name, "service", owner), /invalid managed service controller lease/u,
+      JSON.stringify(name));
+  }
+  // The runner, started by root with the lease root chose, checks its shape.
+  assert.equal(managedExecutionControllerLeaseName(lease, "service"), lease);
+  assert.throws(() => managedExecutionControllerLeaseName("\0vibe64-resource-controller-test", "service"),
+    /invalid managed service controller lease/u);
+  assert.throws(() => managedExecutionControllerLeaseName(lease, "finite", owner), /controller lease on a finite execution/u);
+});
+
 test("managed service runner stops its process tree when the owning controller disappears", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-managed-controller-lease-"));
-  const leaseName = `\0vibe64-resource-controller-runner-${process.pid}`;
+  const leaseName = path.join(root, "resource-controller.sock");
   const sockets = new Set();
   const server = createServer((socket) => {
     sockets.add(socket);
