@@ -28,6 +28,13 @@ export default defineConfig({
       env: {
         PORT: port
       },
+      // Playwright's default stop is SIGKILL, which skips the server's shutdown
+      // and leaves its temporary folder behind. SIGTERM runs that shutdown; the
+      // server forces its own exit after 8 s, inside this timeout.
+      gracefulShutdown: {
+        signal: "SIGTERM",
+        timeout: 10_000
+      },
       url: `${baseURL}/api/health`,
       reuseExistingServer: true,
       timeout: 180_000
