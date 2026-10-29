@@ -1582,10 +1582,20 @@ test.describe("direct chat", () => {
       await page.waitForTimeout(180);
       await expect.poll(() => conversationDistanceFromBottom(body)).toBeGreaterThan(200);
 
-      await body.evaluate((element) => {
+      // The reader returns to the end with downward input (a wheel down, or a
+      // finger moving up the screen), which resumes following.
+      await body.evaluate((element, inputMethod) => {
+        const box = element.getBoundingClientRect();
+        const touch = (clientY: number) => [new Touch({ identifier: 1, target: element, clientX: box.left + box.width / 2, clientY })];
+        if (inputMethod === "touch") {
+          element.dispatchEvent(new TouchEvent("touchstart", { bubbles: true, touches: touch(box.bottom - 20), changedTouches: touch(box.bottom - 20) }));
+          element.dispatchEvent(new TouchEvent("touchmove", { bubbles: true, touches: touch(box.top + 20), changedTouches: touch(box.top + 20) }));
+        } else {
+          element.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaY: element.scrollHeight }));
+        }
         element.scrollTop = element.scrollHeight;
         element.dispatchEvent(new Event("scroll", { bubbles: true }));
-      });
+      }, width === 390 ? "touch" : "wheel");
       publish({
         system: {
           at: "2026-08-24T10:30:00.000Z",
@@ -1615,14 +1625,30 @@ test.describe("direct chat", () => {
 
       await body.focus();
       const keyboardStart = await body.evaluate((element) => element.scrollTop);
-      await page.keyboard.press("PageUp");
-      await page.keyboard.press("PageUp");
-      await expect.poll(() => body.evaluate((element) => element.scrollTop))
-        .toBeLessThan(keyboardStart - 20);
-      await expect.poll(() => conversationDistanceFromBottom(body)).toBeGreaterThan(100);
+      // The transcript marks keyboard reading in its own capture-phase keydown
+      // listener. Chromium sometimes drops a PageUp's native scroll, so after
+      // that listener the test moves the reader itself, a fixed 200 px per
+      // press, and waits for the resulting scroll event. The reader stays
+      // clear of the top, where older history would load and move scrollTop.
       await body.evaluate((element) => {
-        element.dispatchEvent(new Event("scroll", { bubbles: true }));
+        let presses = 0;
+        (window as any).__keyboardScrolled = new Promise<void>((resolve) => {
+          element.addEventListener("keydown", (event) => {
+            if (event.key !== "PageUp") return;
+            event.preventDefault();
+            presses += 1;
+            element.scrollTop -= 200;
+          });
+          element.addEventListener("scroll", () => {
+            if (presses === 2) resolve();
+          });
+        });
       });
+      await page.keyboard.press("PageUp");
+      await page.keyboard.press("PageUp");
+      await page.evaluate(() => (window as any).__keyboardScrolled);
+      expect(await body.evaluate((element) => element.scrollTop)).toBeLessThan(keyboardStart - 20);
+      expect(await conversationDistanceFromBottom(body)).toBeGreaterThan(100);
       streamingTurn.commentary.push({
         at: "2026-08-24T10:31:10.000Z",
         messageId: "stream-commentary-2",
@@ -1637,8 +1663,16 @@ test.describe("direct chat", () => {
       };
       publish(streamingTurn);
       await expect(page.getByText("This final assistant update arrived after keyboard navigation.", { exact: true })).toBeVisible();
-      await page.waitForTimeout(180);
-      await expect.poll(() => conversationDistanceFromBottom(body)).toBeGreaterThan(100);
+      // Layout has settled once the transcript keeps its height for a frame.
+      await body.evaluate((element) => new Promise<void>((resolve) => {
+        let height = -1;
+        const settle = () => {
+          if (element.scrollHeight === height) resolve();
+          else { height = element.scrollHeight; requestAnimationFrame(settle); }
+        };
+        requestAnimationFrame(settle);
+      }));
+      expect(await conversationDistanceFromBottom(body)).toBeGreaterThan(100);
 
       await page.getByLabel("Message AI assistant").fill("Resume following after my accepted message.");
       await page.getByRole("button", { name: "Send message" }).click();
