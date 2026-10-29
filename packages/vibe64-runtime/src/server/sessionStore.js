@@ -1412,10 +1412,9 @@ function createVibe64SessionStore({
         cwd: normalizedProjectContextRoot
       });
       if (!extractResult.ok) {
-        throw vibe64Error(
+        throw archiveCommandError(extractResult,
           `Cannot read Vibe64 session archive ${record.archivePath}: ${extractResult.output}`,
-          "vibe64_session_archive_read_failed"
-        );
+          "vibe64_session_archive_read_failed");
       }
       const sessionPaths = pathsForSessionRoot(record.sessionId, extractedSessionRoot);
       if (!await pathExists(sessionPaths.manifestPath)) {

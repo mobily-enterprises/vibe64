@@ -436,10 +436,11 @@ reported with its code while the others are published and open archives still
 resume. Startup runs archive recovery and then renewal recovery, logs every
 reported failure as the operational warning
 `vibe64.sessions.recovery.session_failed` with its session and code, and stops
-before the next step when the server shuts down. Archive tar work keeps a refusal
-from the execution owner, such as a host memory refusal, with its code and
-retryability; only tar's own failure on a published archive reports
-`vibe64_session_archive_invalid`.
+before the next step when the server shuts down. Archive tar work (check,
+extraction and staging) keeps a refusal from the execution owner, such as a host
+memory refusal, with its code and retryability; only tar's own failure reports
+`vibe64_session_archive_invalid` for a check or
+`vibe64_session_archive_read_failed` for an extraction.
 Start, each durable stage transition, completion, and failure publish `vibe64.session.changed` to
 all clients with a list-refresh hint. Reconnecting clients read persisted state.
 
