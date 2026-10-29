@@ -640,11 +640,14 @@ describe("temporary AI mounted lifetime", () => {
 
   it.each(["editMessage", "cancelMessage"])("%s removes the failed entry without losing a newer draft", async (action) => {
     const { temporary, task } = mountTemporaryAi();
+    // The conversation is never created, so the server holds nothing to cancel.
     http.request.mockResolvedValueOnce({ ok: false, error: "Provider unavailable." });
     await temporary.send(task.id);
     const messageId = temporary.activeTask.value.delivery.state.messages[0].id;
+    expect(temporary.activeTask.value.delivery.find(messageId).status).toBe("failed");
     temporary.updateDraft(task.id, "My next question.");
     expect(await temporary[action](task.id, messageId)).toBe(true);
+    expect(http.request.mock.calls.some(([path]) => String(path).includes("/deliveries/"))).toBe(false);
     expect(temporary.activeTask.value.delivery.state.messages).toEqual([]);
     expect(temporary.activeTask.value.draft).toBe(action === "editMessage"
       ? "Repair this conflict.\n\nMy next question." : "My next question.");

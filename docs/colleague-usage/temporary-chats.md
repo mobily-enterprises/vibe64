@@ -177,7 +177,10 @@ The message shows **Cancelling…** until the server confirms, then leaves the
 chat for good; the server also stops any work that message started. If the
 server cannot be reached, the message stays with **Couldn't reach the server —
 Cancel again**, and the chat retries after reconnecting. If the AI had already
-received it, its answer still appears in the conversation. **Stop** remains available for ongoing work. **Close** removes
+received it, its answer still appears in the conversation. A failed message
+that never reached the chat, for example because the temporary chat itself
+could not start, has nothing on the server to cancel: **Cancel** removes it at
+once, and **Edit** returns its text to the composer. **Stop** remains available for ongoing work. **Close** removes
 the temporary chat only after its native work and attachments are safely cleaned
 up; a failed Close can be retried. If you used more than one AI in this chat,
 Close cleans up each retained native conversation. A retry continues the unfinished

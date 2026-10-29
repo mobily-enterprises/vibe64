@@ -143,7 +143,10 @@ Snapshots, inspection (`cancelled`) and admission all honour the tombstone, so
 the message never returns. A message shown only from its route joins the
 delivery first, and a cancelled route never returns its text to the draft.
 When the server cannot be reached the message stays with Cancel again and is
-retried after reconnecting; accepted history remains.
+retried after reconnecting; accepted history remains. A failed delivery entry
+not shown from a route was definitely never sent, even when the chat itself
+never started, so `useVibe64TemporaryAi` retires it through JSKIT's delivery
+`edit()` instead of a server cancel.
 Accepted Claude steering retains the original input identity on partial output.
 The shared scoped reader resolves native input identities against authored
 messages and uses the existing transcript turn IDs when saving replies. A

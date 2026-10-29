@@ -740,6 +740,14 @@ function useVibe64TemporaryAi({
     return (route?.messageId === messageId && routedChatMessage(route, local)) || local;
   }
 
+  // JSKIT's failed delivery entry was definitely not sent, so the server holds
+  // nothing to cancel, even when the conversation itself was never created. A
+  // message shown from its route is the server's own record.
+  function definitelyUnsent(task, messageId) {
+    const route = assistantRoutingRequestForDisplay(task?.routingMetadata);
+    return route?.messageId !== messageId && task?.delivery.find(messageId)?.status === "failed";
+  }
+
   async function send(taskId = "", { retryMessageId = "", generatedMessage = null, attachmentOwner = null } = {}) {
     const task = tasks.value.find((candidate) => candidate.id === taskId);
     if (disposed || !task || closingTaskIds.has(taskId) || stoppingTaskIds.has(taskId) ||
@@ -841,13 +849,18 @@ function useVibe64TemporaryAi({
   // Cancelling…, until the server records the cancel, which also stops its
   // route and any turn it started. When the server cannot be reached the
   // message stays with Cancel again. Accepted history remains the transcript's.
+  // A definitely unsent message leaves through JSKIT's Edit instead.
   async function cancelMessage(taskId, messageId) {
     const task = tasks.value.find((candidate) => candidate.id === taskId);
     const message = pendingMessage(task, messageId);
     const runtime = task?.binding.runtime.value;
     if (disposed || !message || message.status === "accepted" || !runtime) return false;
-    trackRoutedMessage(task.delivery, message, runtime.turns?.value);
-    if (await runtime.cancelMessage(messageId) !== true || !canApplyTaskResponse(task)) return false;
+    if (definitelyUnsent(task, messageId)) {
+      if (task.delivery.edit(messageId) === null) return false;
+    } else {
+      trackRoutedMessage(task.delivery, message, runtime.turns?.value);
+      if (await runtime.cancelMessage(messageId) !== true || !canApplyTaskResponse(task)) return false;
+    }
     const current = tasks.value.find(candidate => candidate.id === taskId);
     updateTask(taskId, {
       ...(current.pendingMessageId === messageId ? { pendingMessageId: "" } : {}),
