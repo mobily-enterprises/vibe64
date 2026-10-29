@@ -278,16 +278,11 @@ function createService({
     terminals
   });
 
-  async function resolveAssistantSelection(input = {}, vibe64User = null, {
-    configuredOnly = false
-  } = {}) {
+  async function resolveAssistantSelection(input = {}, vibe64User = null) {
     const requested = record(input);
     if (typeof terminals.resolveAssistantSelection === "function") {
-      const selection = Object.keys(requested).length > 0
-        ? requested
-        : { engineId: VIBE64_ASSISTANT_ENGINE_IDS.CODEX };
       return defineVibe64AssistantSelection(await terminals.resolveAssistantSelection(
-        configuredOnly ? { ...selection, configuredOnly: "true" } : selection,
+        Object.keys(requested).length > 0 ? requested : { engineId: VIBE64_ASSISTANT_ENGINE_IDS.CODEX },
         { vibe64User }
       ));
     }
@@ -306,8 +301,10 @@ function createService({
       throw Object.assign(new Error("Main chat runs on the workspace owner's AI. Team members can't choose its model."), {
         code: "vibe64_main_chat_approval_required", statusCode: 403 });
     }
+    // A chosen model comes from Custom's live catalogue, so it is checked as
+    // Custom checks it in an open chat.
     const explicitSelection = Object.keys(input.assistantSelection || {}).length
-      ? await resolveAssistantSelection(input.assistantSelection, vibe64User, { configuredOnly: true })
+      ? await resolveAssistantSelection(input.assistantSelection, vibe64User)
       : null;
     const previous = session ? assistantRoutingFromMetadata(session.metadata) : null;
     const startMode = previous && !["custom", "fix"].includes(previous.mode) ? previous.mode : mode;

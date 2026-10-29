@@ -305,9 +305,14 @@ Retry consults the existing preparation owner's current readiness when the store
 attempt succeeded, allowing changed recipes or resources through the same admission
 guard. A still-current or unconfirmed success cannot be rerun through that path.
 The creation dialog names the main AI that main chat runs on, the owner setup's
-Senior, with a link to change it in AI setup; without one it offers AI account
-management and creation stays disabled. It reads saved assignments without live
-model discovery. Accounts initializes only missing roles as part of explicit
+Senior, with a separate **Change main AI for all sessions** link to AI setup;
+without one it offers AI account management and creation stays disabled. It
+reads saved assignments without live model discovery. For whoever manages AI
+(the main view's `canConfigure`), **Change** opens the chat's Custom picker for
+this one session and loads its choices only then; creation sends that applied
+selection as `assistantSelection`, resolved against the same live catalogue as
+Custom's Apply, and the new chat starts Custom. Applying main chat's own model,
+**Use main AI** or reopening the dialog keeps the main AI. Accounts initializes only missing roles as part of explicit
 creation. The central resolver chooses the owner's accessible Senior destination
 before creating the workspace, and its credential identity is checked again.
 A team member cannot choose main chat's model: outside a lesson their session

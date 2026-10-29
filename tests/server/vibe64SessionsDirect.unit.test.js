@@ -55,6 +55,7 @@ import {
 } from "../../packages/vibe64-sessions/src/server/service.js";
 import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
 import { createAssistantRouting } from "../../packages/vibe64-terminals/src/server/assistantRouting.js";
+import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import {
   developmentDatabasePolicy
@@ -3002,10 +3003,7 @@ test("session creation resolves a partial selection before checking access", asy
     },
     async resolveAssistantSelection(selection) {
       catalogResolutions += 1;
-      assert.deepEqual(selection, {
-        configuredOnly: "true",
-        engineId: "codex"
-      });
+      assert.deepEqual(selection, { engineId: "codex" });
       return resolvedSelection;
     }
   });
@@ -3073,6 +3071,35 @@ test("a starting model makes the owner's main chat Custom and a member cannot ch
       assistantSelection: { engineId: "opencode" } });
     assert.equal(member.code, "vibe64_main_chat_approval_required");
     assert.equal(harness.creationInputs.length, 1);
+  });
+});
+
+test("a model chosen in Custom starts the new chat on it, checked against Custom's own catalogue", async () => {
+  // Custom lists every connected model; the saved connection view holds only
+  // each provider's verified default, under a different catalogue revision.
+  const live = `sha256:${"b".repeat(64)}`;
+  const reads = [];
+  const manager = createSessionAgentManager({ providers: [{ id: "opencode", transportId: "opencode_server",
+    async capabilities(_context, input) {
+      reads.push(input);
+      const savedOnly = input.configuredOnly === "true";
+      return { engineId: "opencode", transportId: "opencode_server", revision: savedOnly ? `sha256:${"c".repeat(64)}` : live,
+        agents: [{ id: "build", mode: "primary" }], modelProviders: [{ id: "deepseek", connected: true, models: [
+          { id: "deepseek-flash", status: "available", variants: [] },
+          ...(savedOnly ? [] : [{ id: "deepseek-v4-pro", status: "available", variants: [{ id: "high", label: "High" }] }])
+        ] }] };
+    } }] });
+  const chosen = { agentId: "build", catalogRevision: live, engineId: "opencode", modelId: "deepseek-v4-pro",
+    modelProviderId: "deepseek", variantId: "high" };
+  await withTemporaryRoot(async (root) => {
+    const harness = sessionCreationPolicyHarness({ projectRuntimeRoot: projectRuntimeRoot(root),
+      resolveAssistantSelection: (input, options) => manager.resolveSelection(input, options) });
+    const result = await harness.service.createSession({ vibe64User: { username: "owner", role: "owner" }, assistantSelection: chosen });
+    assert.equal(result.ok, true, result.error);
+    const preferences = JSON.parse(harness.creationInputs[0].metadata.assistant_routing);
+    assert.equal(preferences.mode, "custom");
+    assert.deepEqual(preferences.override, { ...chosen, schema: "vibe64.assistant-selection.v1" });
+    assert.equal(reads.some((input) => input.configuredOnly), false);
   });
 });
 

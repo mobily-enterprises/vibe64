@@ -2210,10 +2210,11 @@ function createService({
       }
       const saved = await routingStore().read();
       // Main chat runs on the owner's Senior. A saved choice needs no live
-      // catalogue; only an unsaved setup waits for its recommendation.
+      // catalogue; only an unsaved setup waits for its recommendation. Whoever
+      // manages AI may also start one new session on another model.
       if (input.view === "main") {
         const { value } = assistantSetupRoleValue(saved.owner, "senior");
-        return { ok: true, revision: saved.revision, mainSelection: value?.schema ? value
+        return { ok: true, revision: saved.revision, canConfigure: !aiManagementError(input), mainSelection: value?.schema ? value
           : (await routingView(saved, input)).setups.owner.roles.senior.recommendation ?? null };
       }
       const view = await routingView(saved, input);

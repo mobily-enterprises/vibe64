@@ -1,4 +1,4 @@
-import { computed, createRenderer, ref, ssrContextKey } from "vue";
+import { computed, createRenderer, h, nextTick, ref, ssrContextKey } from "vue";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ resource: null, branches: null, branchOptions: null, routingOptions: null, openSettings: vi.fn() }));
@@ -18,18 +18,21 @@ import AssistantSessionDialog from "../../src/components/studio/vibe64-session/V
 
 const senior = { schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex", modelProviderId: "openai",
   modelId: "gpt-6-astra", variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` };
+const deepseek = { schema: "vibe64.assistant-selection.v1", engineId: "opencode", agentId: "build", modelProviderId: "deepseek",
+  modelId: "deepseek-v4-pro", variantId: "high", catalogRevision: `sha256:${"b".repeat(64)}` };
 let app;
-function mount(toolbar = {}) {
+function mount(toolbar = {}, open = ref(true)) {
   const createSession = vi.fn(async () => ({ ok: true, sessionId: "new-chat" }));
   const created = vi.fn();
   const update = vi.fn();
   const renderer = createRenderer({ createComment: (text) => ({ text }), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
-  app = renderer.createApp({ ...AssistantSessionDialog, render: () => null }, {
-    modelValue: true, toolbar: { createSession, ...toolbar }, onCreated: created, "onUpdate:modelValue": update
-  });
+  const dialog = { ...AssistantSessionDialog, render: () => null };
+  app = renderer.createApp({ render: () => h(dialog, {
+    modelValue: open.value, toolbar: { createSession, ...toolbar }, onCreated: created, "onUpdate:modelValue": update
+  }) });
   app.provide(ssrContextKey, { modules: new Set() });
   app.mount({});
-  return { state: app._instance.setupState, createSession, created, update };
+  return { state: app._instance.subTree.component.setupState, createSession, created, update };
 }
 beforeEach(() => {
   mocks.openSettings.mockReset();
@@ -83,4 +86,43 @@ it("creation publishes a reviewed branch selection", async () => {
   expect(f.createSession).toHaveBeenCalledWith({}, {
     repositoryBranch: { name: "feature/review", fromBranch: "main", expectedCommit: "a".repeat(40) }
   });
+});
+
+it("Change chooses this new session's AI in place, and Create starts its chat on that choice", async () => {
+  mocks.resource.data.value.canConfigure = true;
+  const f = mount();
+  expect(f.state.aiSummary).toBe("Runs on your main AI: Codex (gpt-6-astra default)");
+  expect(f.state.customOpen).toBe(false);
+  f.state.openSessionAiChoice();
+  // The existing Custom picker opens here; it is not the workspace's AI setup.
+  expect(f.state.customOpen).toBe(true);
+  expect(mocks.openSettings).not.toHaveBeenCalled();
+  expect(await f.state.chooseSessionAi(deepseek)).toEqual({ ok: true });
+  expect(f.state.aiSummary).toBe("This session runs on: OpenCode (deepseek-v4-pro high)");
+  await f.state.submit();
+  expect(f.createSession).toHaveBeenCalledWith(deepseek, {});
+});
+
+it("main chat's own model, Use main AI and reopening the dialog keep the main AI", async () => {
+  mocks.resource.data.value.canConfigure = true;
+  const open = ref(true);
+  const f = mount({}, open);
+  f.state.chooseSessionAi({ ...senior, catalogRevision: `sha256:${"c".repeat(64)}` });
+  expect(f.state.sessionAi).toBe(null);
+  f.state.chooseSessionAi(deepseek);
+  f.state.useMainAi();
+  expect(f.state.sessionAi).toBe(null);
+  f.state.chooseSessionAi(deepseek);
+  open.value = false; await nextTick(); open.value = true; await nextTick();
+  expect(f.state.sessionAi).toBe(null);
+  await f.state.submit();
+  expect(f.createSession).toHaveBeenCalledWith({}, {});
+});
+
+it("only someone who manages AI can choose another model for the session", () => {
+  mocks.resource.data.value.canConfigure = false;
+  const f = mount();
+  expect(f.state.canChooseSessionAi).toBe(false);
+  f.state.openSessionAiChoice();
+  expect(f.state.customOpen).toBe(false);
 });

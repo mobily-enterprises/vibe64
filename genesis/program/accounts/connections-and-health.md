@@ -144,7 +144,8 @@ metadata, not account identities, credentials, provider error details or private
 runtime context. The ordinary HTTP read retains its full UI result. `view: "main"`
 returns only main chat's selection (the owner's saved Senior, read from the
 routing store without any live catalogue; only an unsaved setup builds the full
-view for its recommendation); **Start an AI session** uses it. Supplying
+view for its recommendation) and `canConfigure`; **Start an AI session** uses
+it, offering its per-session **Change** only when `canConfigure`. Supplying
 `engineId` and `choiceRole` requests the same role's choices as a 20-item page,
 optionally filtered by `choiceSearch` and advanced through `choiceOffset` and
 `nextOffset`. `includeOtherModels` includes the UI's other connected choices.

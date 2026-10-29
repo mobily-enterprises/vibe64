@@ -2450,13 +2450,18 @@ test("the session dialog's main selection reads a saved setup without waiting fo
     const f = await routingAccountsFixture(root);
     const unsaved = await f.service.readModelRouting({ vibe64User: f.owner, view: "main" });
     const full = await f.service.readModelRouting({ vibe64User: f.owner });
-    assert.deepEqual(unsaved, { ok: true, revision: full.revision, mainSelection: full.setups.owner.roles.senior.recommendation });
+    assert.deepEqual(unsaved, { ok: true, revision: full.revision, canConfigure: true,
+      mainSelection: full.setups.owner.roles.senior.recommendation });
     await f.store.write({ owner: f.assignments, nonOwner: {} }, 0);
     const service = createService({ accountRuntime: createAccountsRuntime({ systemRoot: root }),
       inspectRoutingConfiguration: async () => { throw new Error("Model discovery must not run."); } });
     const saved = await service.readModelRouting({ vibe64User: f.owner, view: "main" });
     assert.equal(saved.ok, true, saved.error);
     assert.equal(saved.mainSelection.modelId, f.senior.modelId);
+    assert.equal(saved.canConfigure, true);
+    // Only someone who manages AI may choose another model for a new session.
+    const member = await f.service.readModelRouting({ vibe64User: f.member, view: "main" });
+    assert.deepEqual([member.mainSelection.modelId, member.canConfigure], [f.senior.modelId, false]);
   });
 });
 

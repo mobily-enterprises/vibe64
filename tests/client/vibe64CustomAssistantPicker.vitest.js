@@ -146,3 +146,20 @@ it("names the selected provider and its recommended model rather than one provid
   const state = mount(); state.menuOpen = true; await nextTick();
   expect(state.selectedProvider.label).toBe("zai");
 });
+
+it("chooses a new session's AI without a session: nothing loads until it opens, then it starts from the given AI", async () => {
+  const saveSelection = vi.fn(() => ({ ok: true }));
+  const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+  app = renderer.createApp({ ...Menu, render: () => null }, { modelValue: false, selection, saveSelection });
+  app.provide(ssrContextKey, { modules: new Set() }); app.mount({});
+  const state = app._instance.setupState;
+  expect(mocks.catalogOptions.some((options) => options.active.value)).toBe(false);
+  state.menuOpen = true; await nextTick();
+  expect(mocks.catalogOptions[0].active.value).toBe(true);
+  expect(state.draftSelection).toMatchObject({ engineId: "opencode", modelProviderId: "zai", modelId: "glm", variantId: "high" });
+  state.selectModel(JSON.stringify(["other", "glm"])); await nextTick();
+  await state.save();
+  expect(saveSelection).toHaveBeenCalledWith(expect.objectContaining({ modelProviderId: "other", modelId: "glm" }));
+  expect(mocks.save).not.toHaveBeenCalled();
+  expect(state.menuOpen).toBe(false);
+});

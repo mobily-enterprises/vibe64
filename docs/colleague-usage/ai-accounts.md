@@ -247,6 +247,9 @@ If those choices changed while the dialog was open, press **Cancel**, reopen
 **Custom**, review your selection and apply again. A loading error offers
 **Retry**. Neither action changes saved provider connections.
 Claude Code uses its selected provider for background model calls as well.
+To start a new session on such a choice, select **Change** in **Start an AI
+session**: it opens the same **Custom AI** choice, and the new chat starts in
+Custom (see [Create and switch sessions](sessions.md)).
 
 If an administrator's stopped-service upgrade reports an unsupported saved
 model request even though the conversation uses current Senior, Junior, Auto

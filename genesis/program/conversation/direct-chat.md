@@ -3065,17 +3065,16 @@ and uncertainty with engine/thread/message ids and counts, never prompt text.
 Hosts may mark account-wide access controls as management-only; only their
 enabled model results appear in the cog, while the control itself remains on
 the host's account-management surface.
-The new-session AI chooser is a separate, preloaded view of Vibe64's saved AI
-connections. It presents one choice for Codex when connected and one choice for
-each saved OpenCode route, using each connection's verified default model. It
-orders a host-designated preferred provider first, so that choice is selected
-when the dialog opens. It does not start OpenCode or read OpenCode's provider
-and model catalogue when
-the chooser opens or when the session is created; creation validates the
-selection against the same saved connection view. Between turns, Custom can
+**Start an AI session** shows main chat's saved AI without reading any model
+catalogue or starting an AI tool. Its **Change** reuses the Custom picker
+(`Vibe64SessionAssistantMenu` with a `saveSelection` callback) for that one new
+session; the picker starts its catalogue reads only when opened. The dialog
+sends the applied selection as creation's `assistantSelection`, and the
+sessions service resolves it against the same live catalogue as Custom's Apply
+in an open chat, so the new chat starts Custom on it. Between turns, Custom can
 change orchestrator through the existing context handoff. During an active turn,
 the picker saves settings for subsequent turns; unfinished goals retain their
-current orchestrator. Creating a session does not
+current orchestrator. Creating a session on the main AI does not
 load model catalogues; opening Custom starts those reads separately from
 provider/thread preparation. Distinct OpenCode provider ids remain distinct
 model choices, so separate routes or plans from one provider can coexist. People can choose among
@@ -3087,8 +3086,8 @@ relevant selector.
 Codex model choices use the running provider's paginated `model/list` catalogue,
 including its display names and supported reasoning efforts. If no Codex service
 is running, discovery starts one temporarily and verifies its shutdown before
-returning. Configured-only new-session choices retain the configured default
-without model discovery. Selected model and reasoning ids survive persistence
+returning. Configured-only reads retain the configured default without model
+discovery. Selected model and reasoning ids survive persistence
 and turn mapping unchanged; selection validation uses the live catalogue.
 Provider-filtered discovery and validation retain the full catalogue identity.
 Curated-only dispatch explicitly uses the configured model view so it does not
@@ -3672,10 +3671,10 @@ these account-setup operations do not create a conversation runner.
   is returned.
 - `openCodeConfiguredAssistantCapabilities()` projects saved connection labels,
   access descriptions, preferred-provider status, and verified default models
-  into the new-session choices
-  without consulting the live OpenCode catalogue. The configured-only
-  capability and session-creation paths both use that projection, while
-  `Vibe64AssistantSessionDialog` preloads it before the dialog opens.
+  without consulting the live OpenCode catalogue. Configured-only capability
+  reads, such as the Custom picker's and renewal's orchestrator overview, use
+  that projection; session creation checks a chosen model against the live
+  catalogue instead, as Custom's Apply does.
 - `verifyConnection()` checks the exact current provider and model before
   `verifyOpenCodeApiKey()` delegates one finite, tool-free request to JSKIT's
   native process owner in an isolated credential home. Its synchronous host

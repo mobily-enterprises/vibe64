@@ -2,9 +2,25 @@
 
 Use **New session** (+), or **Create session** when there are no open sessions,
 to open **Start an AI session**. It shows **Runs on your main AI:** and the main
-AI's model; every session runs on that AI setup, with no per-session tool
-choice. A saved setup appears straight away: the dialog does not wait for each
-AI tool's model list or start any AI tool. Select **Change** to open AI setup instead. Review any branch choice,
+AI's model. A saved setup appears straight away: the dialog does not wait for
+each AI tool's model list or start any AI tool. Without a change the new session
+runs on the main AI and starts with Senior.
+
+To run only this new session on another AI, for example DeepSeek, select
+**Change** beside the main AI. It opens **Custom AI**, the same choice as a
+chat's **Custom** mode, and only then loads the model choices. Choose
+**Orchestrator**, **Model** and **Thinking** and press **Apply**; a loading
+error offers **Retry**, and **Configure more AIs** opens account setup when the
+provider you want is not connected. **Cancel** there keeps the current choice. The
+dialog then shows **This session runs on:** with your choice and says the
+session **Starts in Custom**; the new chat runs on that AI in **Custom** mode,
+and your main AI and other sessions are unchanged. **Use main AI** discards the
+choice, as does closing the dialog. Choosing the main AI's own model keeps the
+main AI. **Change** is offered only to the person who manages the workspace's
+AI; a team member's sessions always start on the owner's main AI.
+
+To change the main AI for every session instead, select **Change main AI for
+all sessions**, which opens AI setup. Review any branch choice,
 then select **Create session** (or
 **Create branch & session**). While **Creating session…** is shown, the dialog
 shows a progress bar and explains that it is copying the project source. It stays open: clicking outside,
@@ -28,8 +44,9 @@ finishes; see [Prepare a session after updating its source](workspace-preparatio
 for failures and retry.
 
 Creation through an action without an explicit AI choice uses the main AI. An
-explicit model choice makes the new chat Custom and is preserved even when it is
-unavailable: fix its account or AI setup before retrying. A team member's new
+explicit model choice, like **Change** in the dialog, makes the new chat Custom
+and is preserved even when it is unavailable: fix its account or AI setup, or
+choose another AI, before retrying. A team member's new
 session still records the owner's main AI; main chat runs on the owner's AI. Colleague
 can read the available choices and explain recovery; it must not claim a failed
 request left no saved lesson without checking that lesson's current state.

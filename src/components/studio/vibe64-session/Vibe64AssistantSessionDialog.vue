@@ -10,7 +10,9 @@
       <v-card-title class="vibe64-assistant-dialog__title">
         <span class="vibe64-assistant-dialog__title-copy">
           <strong class="text-title-large">Start an AI session</strong>
-          <small class="text-body-small">Start with Senior. Choose Junior or Auto from chat.</small>
+          <small class="text-body-small">
+            {{ sessionAi ? "Starts in Custom. Choose Senior, Junior or Auto from chat." : "Start with Senior. Choose Junior or Auto from chat." }}
+          </small>
         </span>
         <v-btn
           aria-label="Close AI session dialog"
@@ -28,10 +30,24 @@
           {{ routing.loadError.value }}
           <v-btn variant="text" @click="routing.resource.reload()">Try again</v-btn>
         </v-alert>
-        <p v-else-if="mainSelection" class="text-body-medium mb-0">
-          Runs on your main AI: {{ vibe64AssistantSelectionLabel(mainSelection) }}
-          <v-btn variant="text" size="small" @click="openConnectionSettings">Change</v-btn>
-        </p>
+        <div v-else-if="mainSelection" class="vibe64-assistant-dialog__ai">
+          <p class="text-body-medium mb-0">
+            {{ aiSummary }}
+            <v-btn
+              v-if="canChooseSessionAi" ref="changeButton" :disabled="submitting" size="small" variant="text"
+              @click="openSessionAiChoice"
+            >
+              Change
+            </v-btn>
+            <v-btn v-if="sessionAi" :disabled="submitting" size="small" variant="text" @click="useMainAi">Use main AI</v-btn>
+          </p>
+          <v-btn
+            class="vibe64-assistant-dialog__main-ai" :disabled="submitting" :prepend-icon="mdiCogOutline" size="small"
+            variant="text" @click="openConnectionSettings"
+          >
+            Change main AI for all sessions
+          </v-btn>
+        </div>
         <div v-else class="d-flex flex-column ga-2">
           <strong>No AI is set up yet</strong>
           <span class="text-body-small">Set up your AI, then come back to start a session.</span>
@@ -103,6 +119,10 @@
           {{ submitting ? "Creating session…" : chooseBranch && createBranch ? "Create branch & session" : "Create session" }}
         </v-btn>
       </v-card-actions>
+      <Vibe64SessionAssistantMenu
+        v-model="customOpen" :target="changeButton?.$el || null" :selection="sessionAi || mainSelection"
+        :can-configure="canChooseSessionAi" :changes-disabled="submitting" :save-selection="chooseSessionAi"
+      />
     </v-card>
   </v-dialog>
 </template>
@@ -112,16 +132,37 @@ import { computed, nextTick, ref, watch } from "vue";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import { VIBE64_SESSIONS_API_SUFFIX, vibe64RepositoryApiPath } from "@/lib/vibe64SessionRequestConfig.js";
-import { mdiClose } from "@mdi/js";
+import { mdiClose, mdiCogOutline } from "@mdi/js";
 import { requestVibe64AiOnboarding, useModelRouting } from "@local/vibe64-accounts/client";
-import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
+import { sameVibe64AssistantSelection, vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnectionsDialog.js";
+import Vibe64SessionAssistantMenu from "@/components/studio/vibe64-session/Vibe64SessionAssistantMenu.vue";
 const props = defineProps({ modelValue: Boolean, toolbar: { type: Object, default: () => ({}) } });
 const emit = defineEmits(["created", "update:model-value"]);
 // Main chat starts on the owner's Senior from AI setup.
 const routing = useModelRouting({ enabled: computed(() => props.modelValue), view: "main" });
 const mainSelection = routing.mainChatSelection;
 const openConnectionSettings = () => requestVibe64AccountConnectionsDialog({ section: "ai" });
+// Whoever manages AI may start this one session on another model with the
+// chat's Custom picker, which loads model choices only once it opens.
+const canChooseSessionAi = computed(() => routing.resource.data.value?.canConfigure === true);
+const sessionAi = ref(null);
+const customOpen = ref(false);
+const changeButton = ref(null);
+const aiSummary = computed(() => sessionAi.value
+  ? `This session runs on: ${vibe64AssistantSelectionLabel(sessionAi.value)}`
+  : `Runs on your main AI: ${vibe64AssistantSelectionLabel(mainSelection.value)}`);
+function openSessionAiChoice() {
+  if (canChooseSessionAi.value && !submitting.value) customOpen.value = true;
+}
+// Main chat's own model keeps the main AI; another one makes the new chat Custom.
+function chooseSessionAi(selection) {
+  sessionAi.value = sameVibe64AssistantSelection(selection, mainSelection.value) ? null : selection;
+  return { ok: true };
+}
+function useMainAi() {
+  sessionAi.value = null;
+}
 // The guided setup also explains installing an AI tool; it closes this dialog first.
 function setUpAi() {
   close();
@@ -181,7 +222,7 @@ async function submit() {
         expectedCommit: selectedBranch.value.commit
       };
     }
-    response = await props.toolbar.createSession?.({}, options);
+    response = await props.toolbar.createSession?.(sessionAi.value || {}, options);
   } catch {
     return;
   }
@@ -195,6 +236,8 @@ watch(() => props.modelValue, (open) => {
   branchMode.value = "project";
   branchName.value = branches.data.value?.defaultBranch || "";
   newBranchName.value = "";
+  sessionAi.value = null;
+  customOpen.value = false;
 }, { immediate: true });
 watch(submitting, async (running, wasRunning) => {
   if (running || !wasRunning || !props.modelValue) return;
@@ -234,6 +277,17 @@ watch(submitting, async (running, wasRunning) => {
 
 .vibe64-assistant-dialog__body {
   padding: 0.25rem 1.25rem 1rem !important;
+}
+
+.vibe64-assistant-dialog__ai {
+  display: grid;
+  gap: 0.25rem;
+  justify-items: start;
+  overflow-wrap: anywhere;
+}
+
+.vibe64-assistant-dialog__main-ai {
+  margin-inline-start: -0.5rem;
 }
 
 .vibe64-assistant-dialog__actions {
