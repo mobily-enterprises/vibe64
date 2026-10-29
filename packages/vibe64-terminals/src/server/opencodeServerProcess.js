@@ -357,7 +357,7 @@ function createOpenCodeHostPreparation({
   }
 
   return {
-    conversationHost, prepareProcess, prepareSharedProcess, promptContext,
+    configuredConnections, conversationHost, prepareProcess, prepareSharedProcess, promptContext,
     sessionEnvironments, sharedRoots, storedUpstreamSessionId,
     upstreamSessionOptions, writeSessionEnvironmentRegistry
   };
@@ -650,6 +650,8 @@ async function createOpenCodeServerProcess({
     port: selectedPort,
     privateRoot: normalizedPrivateRoot,
     readLogs: native.readLogs,
+    // The shared runtime stops a server that exits without being stopped.
+    unexpectedExit: native.unexpectedExit,
     async startAttachedTerminal({
       metadata = {},
       namespace = "",

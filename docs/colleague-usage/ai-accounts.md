@@ -164,9 +164,14 @@ known terminals using another provider keep running. The refusal names the
 sessions whose terminal is still open; a terminal that has already exited or
 been closed no longer blocks the change. Refusal preserves the saved key and
 connection status.
-OpenCode may require you to close its native terminals, other-provider chats and
-Colleague conversations before changing a key. If it refuses, the saved key stays
-unchanged and those conversations keep running; close the named users and retry.
+Connecting, replacing or removing an OpenCode key returns at once. Running
+OpenCode chats and Colleague conversations keep going: a reply already being
+written finishes on the key it started with, and the next message uses the saved
+key. A new message in a chat whose reply is still being written starts once that
+reply ends. After you remove a connection, a message for that provider ends with
+a notice to connect it again in **AI Accounts**; it never hangs. Only an open
+OpenCode native terminal still refuses the change: close it and retry. The
+refusal leaves the saved key unchanged.
 Removing a connection keeps the saved model choices that name it; reconnect the
 exact row or deliberately choose other models in **Models**. Removing a Codex
 connection also deletes that connection's Codex logs and temporary files; its

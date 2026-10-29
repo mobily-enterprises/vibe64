@@ -697,3 +697,23 @@ test("without runtime packs OpenCode runs the person's own installed version", a
   assert.equal(requests[0].args[4], installed, "found in ~/.opencode/bin, and any opencode version is accepted");
   await server.stop();
 });
+
+test("an OpenCode server reports an exit nobody asked for", async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-opencode-unexpected-exit-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  withRuntimePacks(t, root);
+  let running = true;
+  const server = await createOpenCodeServerProcess({
+    dbPath: path.join(root, "opencode.db"), privateRoot: path.join(root, "private"), workdir: root, port: 43210,
+    env: { PATH: "/usr/bin" },
+    // A process ID above the kernel's limit, so the exit is read at the next inspection.
+    commandRunner: async () => ({ ok: true, execution: { id: "exits" }, pid: 4_194_305 }),
+    inspectExecution: async () => ({ ok: true, running }),
+    stopExecution: async () => ({ scopeEmpty: true }),
+    fetchImpl: async () => new Response(JSON.stringify({ healthy: true, version: OPENCODE_EXPECTED_VERSION }))
+  });
+  t.after(() => server.stop());
+  running = false;
+  assert.equal(typeof server.unexpectedExit?.then, "function", "The shared runtime needs the server's unexpected exit.");
+  await server.unexpectedExit;
+});

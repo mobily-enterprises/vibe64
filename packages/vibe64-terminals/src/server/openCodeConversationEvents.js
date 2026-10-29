@@ -42,7 +42,7 @@ function openCodeMessageError(message = {}) {
 }
 
 function openCodeCredentialFailureNoticeMessage() {
-  return "OpenCode needs attention: the selected provider rejected its API key, which may have expired or been revoked. [Go to AI Accounts](/app/manage/accounts) to replace and verify the key, then return here and send your message again. Saved project changes remain.";
+  return "OpenCode needs attention: the provider isn't connected, or it rejected its API key, which may have expired or been revoked. [Go to AI Accounts](/app/manage/accounts) to connect it or to replace and verify its key, then return here and send your message again. Saved project changes remain.";
 }
 
 function openCodeProviderApiFailureNoticeMessage(failure = "") {

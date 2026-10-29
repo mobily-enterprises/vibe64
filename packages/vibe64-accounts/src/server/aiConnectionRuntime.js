@@ -14,12 +14,12 @@ function createAiConnectionRuntime({ systemRoot, terminals, publishConnectionCha
         published = true;
       } });
       if (result?.ok === false || !published) {
-        throw new Error(result?.failed?.[0]?.error || "Close OpenCode chats and native terminals, then retry this connection change.");
+        throw new Error(result?.failed?.[0]?.error || "Close OpenCode native terminals, then retry this connection change.");
       }
     },
-    // Credential changes already retired their runtimes inside
-    // withConnectionChange. Model access is admission policy, checked again on
-    // every turn, so a model-access change stops no running OpenCode work.
+    // Credential changes already reached the running OpenCode server inside
+    // withConnectionChange, which stops no turn. Model access is admission
+    // policy, checked again on every turn, so it stops no running work either.
     async onConnectionChanged(change) {
       const removed = change.reason === "removed";
       await publishConnectionChanged(change.modelProviderId, {

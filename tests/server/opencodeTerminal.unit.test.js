@@ -1868,7 +1868,26 @@ test("OpenCode turns make revoked provider keys actionable without exposing raw 
   )), true);
 });
 
-test("OpenCode restarts on key replacement while preserving its database and native session id", async (t) => {
+test("OpenCode tells the person to reconnect a provider whose connection is gone", async (t) => {
+  const harness = await controllerHarness({
+    assistantError: { data: { message: "Model not found: zai/glm-4.6. Did you mean: glm-4.6?" }, name: "UnknownError" }
+  });
+  t.after(async () => {
+    await harness.controller.closeAllForProject();
+    await rm(harness.root, { force: true, recursive: true });
+  });
+  const options = { runtime: harness.runtime, session: harness.session, vibe64User: { username: "ada" } };
+  await harness.controller.sendMessage("session-1", { message: "Reply exactly OK", messageId: "client-message-disconnected" }, options);
+  const result = await harness.controller.waitForTurn("session-1", options);
+
+  assert.equal(result.state, "failed");
+  assert.equal(harness.systemMessages.length, 1);
+  assert.match(harness.systemMessages[0].text, /isn't connected/u);
+  assert.match(harness.systemMessages[0].text, /\[Go to AI Accounts\]\(\/app\/manage\/accounts\) to connect it/u);
+  assert.doesNotMatch(harness.systemMessages[0].text, /Model not found/u);
+});
+
+test("OpenCode takes a replaced key in place, keeping its server, database and native session id", async (t) => {
   const harness = await controllerHarness();
   t.after(async () => {
     await harness.controller.closeAllForProject();
@@ -1888,12 +1907,10 @@ test("OpenCode restarts on key replacement while preserving its database and nat
   ));
 
   assert.equal(first.thread.id, second.thread.id);
-  assert.equal(sessionStarts.length, 2);
-  assert.equal(sessionStarts[0].options.dbPath, sessionStarts[1].options.dbPath);
-  assert.equal(sessionStarts[0].options.workdir, sessionStarts[1].options.workdir);
+  assert.equal(sessionStarts.length, 1);
   assert.equal(sessionStarts[0].options.providerConnections[0].apiKey, "deepseek-key-one");
-  assert.equal(sessionStarts[1].options.providerConnections[0].apiKey, "deepseek-key-two");
-  assert.equal(harness.processStops.includes(sessionStarts[0].options), true);
+  assert.deepEqual(harness.processStops, []);
+  assert.deepEqual(harness.connectionCalls.filter(([kind]) => kind !== "reload"), [["key", "deepseek", "deepseek-key-two"]]);
   assert.equal(harness.createdSessions.filter((entry) => entry.id === first.thread.id).length, 1);
 });
 
@@ -4202,7 +4219,7 @@ test("R19 a late recovery ACK cannot replace admitted B or bypass its authored-r
 });
 
 
-test("prepared credential publication retires only selected native users before replacement and retains history", async (t) => {
+test("a credential publication keeps the OpenCode server and its conversations, and gives the server the saved key", async (t) => {
   const harness = await controllerHarness();
   t.after(async () => {
     await harness.controller.closeAllForProject();
@@ -4211,17 +4228,16 @@ test("prepared credential publication retires only selected native users before 
   const options = { runtime: harness.runtime, session: harness.session, vibe64User: { username: "ada" } };
   const first = await harness.controller.ensureSession("session-1", options);
   const result = await harness.controller.invalidateRuntimes({ modelProviderId: "deepseek", reason: "replaced", publish() {
-    assert.equal(harness.processStops.length, 1);
     harness.connection.apiKey = "fixture-replacement";
     harness.connection.fingerprint = `sha256:${"3".repeat(64)}`;
   } });
   assert.equal(result.ok, true);
+  assert.deepEqual(harness.processStops, []);
+  assert.deepEqual(harness.connectionCalls.filter(([kind]) => kind !== "reload"), [["key", "deepseek", "fixture-replacement"]]);
   const second = await harness.controller.ensureSession("session-1", options);
   const starts = harness.processStarts.filter(entry => entry.options.execution.operationId === "opencode-server");
   assert.equal(first.thread.id, second.thread.id);
-  assert.equal(starts.length, 2);
-  assert.equal(starts[0].options.dbPath, starts[1].options.dbPath);
-  assert.equal(starts[1].options.providerConnections[0].apiKey, "fixture-replacement");
+  assert.equal(starts.length, 1);
   assert.equal(harness.createdSessions.filter(entry => entry.id === first.thread.id).length, 1);
 });
 

@@ -211,6 +211,9 @@ async function controllerHarness({
   const processStarts = [];
   const serverStartCalls = [];
   const processStops = [];
+  // What the running server is asked to do with its saved connections.
+  const connectionCalls = [];
+  const loadedDirectories = new Set();
   const terminalStarts = [];
   const commandEnvironmentCalls = [];
   const catalogReadCalls = [];
@@ -277,6 +280,17 @@ async function controllerHarness({
         return true;
       },
       async prepareDirectory() {},
+      async authenticateApiKey(providerId, apiKey) {
+        connectionCalls.push(["key", providerId, apiKey]);
+      },
+      async removeAuthentication(providerId) {
+        connectionCalls.push(["remove", providerId]);
+      },
+      async disposeInstance() {
+        connectionCalls.push(["reload", directory]);
+        loadedDirectories.delete(directory);
+      },
+      instanceDirectories: () => [...loadedDirectories],
       async health() {
         if (failNextHealth) {
           failNextHealth = false;
@@ -348,6 +362,7 @@ async function controllerHarness({
         return catalogProviders;
       },
       forDirectory(nextDirectory = "") {
+        loadedDirectories.add(path.resolve(nextDirectory));
         return client(path.resolve(nextDirectory));
       },
       async readSession(id) {
@@ -655,6 +670,7 @@ async function controllerHarness({
     commentaryMessages,
     connection,
     commandEnvironmentCalls,
+    connectionCalls,
     controller,
     createdSessionDirectories,
     createdSessions,

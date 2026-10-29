@@ -56,7 +56,7 @@ function createOpenCodeSessionAgentProvider({
   if (!accounts) {
     throw new TypeError("OpenCode session agent providers require their account facility.");
   }
-  const { prepareSharedProcess, sessionEnvironments, storedUpstreamSessionId } = hostPreparation;
+  const { configuredConnections, prepareSharedProcess, sessionEnvironments, storedUpstreamSessionId } = hostPreparation;
   const { contextFor, prepareMessageInput, inspection: prepareMessageInspection } = mainMessagePreparation;
   const { prepareConversationCreation, prepareDetachedChatTurn, prepareExistingDetachedTarget } = scopedPreparation;
   const { processRelease, prepareInterruption, prepareSessionReadiness, prepareSessionReconciliation } = lifecyclePreparation;
@@ -94,6 +94,8 @@ function createOpenCodeSessionAgentProvider({
     };
     if (mode === "invalidation") return {
       native: { owner: sharedRuntime, preparation: {
+        // A connection change gives the running server every saved connection.
+        connections: () => configuredConnections(),
         get release() { return {
           ...processRelease,
           ownsTarget: (target) => sessionEnvironments.has(target.key)

@@ -788,8 +788,9 @@ for its own management surface. The public Accounts service owns the provider po
 store. Runtime admission checks that policy again, so a durable selection cannot
 bypass a later restriction. Changing model access therefore only publishes the
 change: running OpenCode answers, runtimes and native terminals continue, and
-the new policy applies when the next message is admitted. Only credential
-changes (create, replace, remove) retire OpenCode runtimes.
+the new policy applies when the next message is admitted. Credential changes
+(create, replace, remove) also stop no OpenCode work; they reach the running
+server as described below.
 
 Zen's rotating model roster never makes its saved connection stale. Provider
 revision checks still protect connection setup and other provider definitions,
@@ -799,8 +800,8 @@ when other models rotate or a prior session selection is no longer enabled.
 
 The short-lived private-credential-free catalogue snapshot is independent of
 credential-bearing assistant runtimes. Replacing or removing a connection
-still retires those runtimes, but does not discard an unexpired catalogue and
-force an otherwise redundant cold discovery.
+reaches those runtimes but does not discard an unexpired catalogue and force an
+otherwise redundant cold discovery.
 
 A host may ask Vibe64 to verify one exact OpenCode provider, model, and API key.
 Vibe64 first checks that provider and model against the same current catalogue,
@@ -839,15 +840,22 @@ eligible destinations still require the current catalogue before dispatch.
 Senior and Junior
 must run in the same tool.
 
-OpenCode native provider configuration is cached for the shared server lifetime.
-Credential mutation validates the selected provider first, then enters the existing
-shared owner acquisition fence before publishing the private store. Pending starts
-are drained. Other-provider users, unowned common-driver users and unconfirmed native
-terminals refuse the change before Stop or write, with close/retry guidance. When
-only owned selected users remain, original cleanup and verified shared process exit
-retire that cache before publication; the existing database and native IDs survive.
-The default store remains usable independently; its optional private publication
-facility is supplied only by the server composition, never browser or action input.
+OpenCode keeps each working directory's provider credentials in memory until that
+directory reloads. Credential mutation validates the selected provider first and
+returns once the private store is published; it stops, kills and waits for no
+turn, retained conversation or shared server. Only a running OpenCode native
+terminal refuses the change before the write, with close/retry guidance, because
+a terminal's turns cannot be seen. After publication the OpenCode session
+provider gives JSKIT's shared runtime the host's saved connections
+(`opencodeSessionAgentProvider.js` invalidation preparation `connections`, read by
+`configuredConnections()` in `opencodeServerProcess.js`). JSKIT sets or removes
+each changed key on the running server, reloads every idle directory at once and
+each busy directory when its turn ends, and starts new work in a directory only
+after that reload; a reply already in flight finishes on its earlier key. A turn
+whose provider was removed fails with a reconnect notice that links to AI
+Accounts, never a hang. The default store remains usable independently; its
+optional private publication facility is supplied only by the server
+composition, never browser or action input.
 
 Claude credential mutation uses the existing manager's terminal opening fence before
 its reconnect marker and private-key publication. Pending PTY openings drain first;

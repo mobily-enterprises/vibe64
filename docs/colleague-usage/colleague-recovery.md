@@ -188,8 +188,9 @@ operator can proceed. These steps are the same on desktop and phone.
 
 When you replace OpenCode's own provider key in **AI Accounts**, the next request
 uses that authorized connection while retaining the chat and native session.
-The shared service verifies that its earlier process stopped before restarting
-with the replacement key. Other orchestrators' connections remain separate.
+The shared service keeps running and takes the replacement key at once; a reply
+already being written finishes on the earlier key. Other orchestrators'
+connections remain separate.
 Opening history does not send a request or authorize key replacement. A completed
 reply still needs its original delivery receipt; replacing a key does not resend
 an earlier request or authorize its effects under the new key.
