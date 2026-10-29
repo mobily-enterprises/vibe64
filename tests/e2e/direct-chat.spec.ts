@@ -606,7 +606,10 @@ test.describe("direct chat", () => {
       page.on("pageerror", (error) => errors.push(error.message));
       const agentTurn = { active: false, id: "", state: "idle" };
       await mockDirectChat(page, { agentTurn, includeWorktreePaths: true });
-      hintRealtime.state.conversationLog = Array.from({ length: 16 }, (_, index) => scrollTestTurn(index + 1));
+      // One history page (ten messages): a reader detached near its top would
+      // otherwise load older messages, whose anchor settles the scroll
+      // position on its own schedule.
+      hintRealtime.state.conversationLog = Array.from({ length: 5 }, (_, index) => scrollTestTurn(index + 1));
       await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-session`, (route) => fulfillJson(route, {
         ok: true, ...directSession({ agentTurn }).agentSession
       }));
@@ -636,7 +639,8 @@ test.describe("direct chat", () => {
         ] });
       });
       // Hint requests are at least 30 s apart; the test moves the page's clock
-      // past that wait instead of sleeping through it.
+      // past that wait instead of sleeping through it, once the page shows it
+      // is waiting (--loading), so the wait exists before the clock moves.
       await page.clock.install();
       await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
       const hints = page.getByRole("region", { name: "Session chat" }).locator("[data-assistant-composer-support]");
@@ -695,6 +699,7 @@ test.describe("direct chat", () => {
 
       failHints = true;
       await composer.fill("");
+      await expect(hints).toHaveClass(/--loading/);
       await expect.poll(geometry).toEqual(empty);
       await page.clock.fastForward(30_000);
       await expect(hints).toHaveClass(/--hidden/);
@@ -708,6 +713,7 @@ test.describe("direct chat", () => {
       Object.assign(agentTurn, { active: false, id: "", state: "idle" });
       hintRealtime.state.session.agentSession.turn = { ...agentTurn };
       hintRealtime.publishTurn();
+      await expect(hints).toHaveClass(/--loading/);
       await page.clock.fastForward(30_000);
       await expect(hints).toHaveClass(/--hidden/);
       await expect.poll(geometry).toEqual(empty);
