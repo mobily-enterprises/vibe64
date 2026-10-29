@@ -161,6 +161,12 @@ const CONTROLLER_LEASE_NAME = "resource-controller.sock";
 const APPLICATION_RECEIPTS_ROOT = "/run/vibe64-applications";
 const APPLICATION_SHELL = "/usr/sbin/nologin";
 const APPLICATION_PROJECT_PATTERN = /^[a-z0-9][a-z0-9_-]{0,47}$/u;
+// A learner's practice project lives below the workspace's projects at
+// .learning/<learner>/<practice>/training-<practice id without dashes>
+// (vibe64-core learningSpace.js). Catalogue projects may not take such a
+// slug, so a practice slug, like a catalogue one, is unique in its workspace.
+const PRACTICE_LEARNER_PATTERN = /^[A-Za-z0-9_-]{1,171}$/u;
+const PRACTICE_ID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u;
 // Each registration holds a system uid for as long as it lasts, and the host's
 // system uid range is small (100-999 by default).
 const APPLICATION_LIMIT_PER_WORKSPACE = 100;
@@ -2262,10 +2268,16 @@ function applicationWorkspace(owner = {}) {
 // The area below `areaRoot`: root's directories down to the project's, the
 // daemon's handover directory its application's group may read, the
 // application's own directory with its home, and its production databases.
+// The daemon names the project by its folder below the workspace's projects,
+// a catalogue project's own or a learner's practice project's; its
+// application, area and units are named by the project's slug either way.
 function applicationIdentity(owner = {}, project = "", { areaRoot = APPLICATION_AREA_ROOT } = {}) {
   const workspace = applicationWorkspace(owner);
-  const name = String(project || "");
-  if (!APPLICATION_PROJECT_PATTERN.test(name)) {
+  const folder = String(project || "").split("/");
+  const name = folder.at(-1);
+  const practice = folder.length === 4 && folder[0] === ".learning" && PRACTICE_LEARNER_PATTERN.test(folder[1]) &&
+    PRACTICE_ID_PATTERN.test(folder[2]) && name === `training-${folder[2].replaceAll("-", "")}`;
+  if (!APPLICATION_PROJECT_PATTERN.test(name) || (folder.length > 1 && !practice)) {
     throw new Error("Vibe64 exec helper rejected an invalid project name.");
   }
   const projectRoot = path.join(areaRoot, workspace, name);
@@ -2273,6 +2285,7 @@ function applicationIdentity(owner = {}, project = "", { areaRoot = APPLICATION_
     appRoot: path.join(projectRoot, "app"),
     areaRoot,
     databaseRoot: path.join(projectRoot, "database"),
+    folder,
     handoverRoot: path.join(projectRoot, "handover"),
     home: path.join(projectRoot, "app", "home"),
     project: name,
@@ -2449,15 +2462,16 @@ function ensureApplicationArea(identity = {}, owner = {}, user = {}, {
   }
 }
 
-// A new application needs a project of its workspace, a real folder of the
-// workspace's projects opened without following links, and room under the
-// workspace's limit.
+// A new application needs a project of its workspace, its folder reached
+// below the workspace's projects through real folders, never a link, and room
+// under the workspace's limit.
 function assertNewApplication(identity = {}, { applicationLimit, managedRoot, registryRoot, registryUid }) {
   try {
-    closeSync(openDirectoryBelow(path.join(managedRoot, identity.workspace), ["projects", identity.project]));
+    closeSync(openDirectoryBelow(path.join(managedRoot, identity.workspace), ["projects", ...identity.folder]));
   } catch (error) {
     if (!["ELOOP", "ENOENT", "ENOTDIR"].includes(error.code)) throw error;
-    throw new Error(`Vibe64 exec helper refused an application account: ${identity.workspace} has no project ${identity.project}.`);
+    throw new Error(`Vibe64 exec helper refused an application account: ${identity.workspace} has no project ` +
+      `${identity.folder.join("/")}.`);
   }
   let registered = 0;
   try {
@@ -3921,7 +3935,7 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
   return env;
 }
 
-export { APPLICATION_USERNAME_PREFIX, DAEMON_USERNAME_PREFIX, HOST_SETTINGS_ROOT, accountUnitLines, applicationIdentity, applicationReleaseEnvironmentFile,
+export { APPLICATION_LIMIT_PER_WORKSPACE, APPLICATION_USERNAME_PREFIX, DAEMON_USERNAME_PREFIX, HOST_SETTINGS_ROOT, accountUnitLines, applicationIdentity, applicationReleaseEnvironmentFile,
   assertReleaseServiceClaim, assertValidDeploymentUnitName,
   applicationReleaseServiceFiles, applicationSandboxLines, ensureApplicationAccount, readApplicationRegistration,
   registeredApplicationUser,

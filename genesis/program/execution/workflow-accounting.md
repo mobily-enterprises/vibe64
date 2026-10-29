@@ -245,9 +245,15 @@ and its refusals.
 
 Each published project runs as its own application account, which the helper's
 `application-account` operation makes and retires; the daemon names only the
-project. The helper derives the account, `v64a_` and twelve hex digits of a hash
-of the workspace and project, and its area, a folder per workspace and project
-in root's system folder for applications, from the calling daemon. The account
+project, by its folder below the workspace's `projects`: a catalogue project's
+own folder, or a learner's practice project's,
+`.learning/<learner>/<practice>/training-<practice>`, the shape
+`learningSpace.js` gives it. The helper derives the account, `v64a_` and twelve
+hex digits of a hash of the workspace and the project's slug, and its area, a
+folder per workspace and slug in root's system folder for applications, from
+the calling daemon. Catalogue projects may not take a practice slug, so every
+slug, and with it every account, area and release unit name, belongs to one
+project of its workspace. The account
 is a system account with only its own group: no login, no home outside its
 area, never in `vibe64` or `nix-users`. Root registers it in its own registry,
 one root-owned file per account in a root-only folder for the workspace, apart
@@ -256,8 +262,8 @@ operation refuses any `v64a_` name, and an application is acted as only through
 that registry, so neither ever stands in for the other. `ensure` makes the
 account on first use and adopts an account an interrupted `ensure` left
 unregistered only when it is exactly the account the helper makes. A new
-registration needs a project of the workspace (a real folder of its
-`projects`, opened without following links) and room under the workspace's
+registration needs a project of the workspace (its folder below `projects`,
+reached through real folders without following links) and room under the workspace's
 limit of 100 registrations, because each holds a system uid for as long as it
 lasts and the host's system uid range is small. Through
 directories it opened itself, never following a link, it makes the area: root's

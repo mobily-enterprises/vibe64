@@ -156,6 +156,40 @@ test("a new application account needs a real project of the workspace, and room 
   host.ensure("news", { applicationLimit: 3 });
 });
 
+test("a learner's practice project has its account, found by its folder below the workspace's projects", async (t) => {
+  const host = await applicationHost(t);
+  const projects = path.join(host.options.managedRoot, "test", "projects");
+  const practice = (practiceId, learner = Buffer.from("1001").toString("base64url")) =>
+    `.learning/${learner}/${practiceId}/training-${practiceId.replaceAll("-", "")}`;
+  const folder = practice("0b6c0a37-0f4f-4b61-9d5c-3f3f8a1d2e4f");
+  const slug = path.basename(folder);
+  await mkdir(path.join(projects, folder), { recursive: true });
+
+  const account = host.ensure(folder);
+
+  // Its account and area are its slug's, as every project's are, and its
+  // registration names it by that slug.
+  assert.equal(account.username, applicationIdentity(host.owner, slug).username);
+  assert.equal(account.home, path.join(host.options.areaRoot, "test", slug, "app", "home"));
+  assert.equal(host.ensure(slug).username, account.username);
+  for (const wrong of [
+    `${path.dirname(folder)}/training-${"0".repeat(32)}`, folder.replace("0b6c0a37-0f4f-4b61-9d5c-3f3f8a1d2e4f", "not-a-practice"),
+    `${folder}/app`, `.learning/../${path.basename(path.dirname(folder))}/${slug}`, folder.replace(".learning", ".other"),
+    path.dirname(folder)
+  ]) {
+    assert.throws(() => host.ensure(wrong), /invalid project name/u, wrong);
+  }
+  // A practice folder is reached through real folders, never a link.
+  const linked = practice("1b6c0a37-0f4f-4b61-9d5c-3f3f8a1d2e4f", "bGlua2Vk");
+  await mkdir(path.join(host.root, "elsewhere", path.basename(path.dirname(linked)), path.basename(linked)), { recursive: true });
+  await symlink(path.join(host.root, "elsewhere"), path.join(projects, ".learning", "bGlua2Vk"));
+  assert.throws(() => host.ensure(linked), /test has no project \.learning\/bGlua2Vk\//u);
+  assert.deepEqual(host.created, [account.username]);
+
+  assert.equal(host.retire(folder).retired, true);
+  assert.deepEqual(host.deleted, [account.username]);
+});
+
 test("an account the helper did not make is never adopted as an application", async (t) => {
   const host = await applicationHost(t);
   const { home, username } = applicationIdentity(host.owner, "shop", host.options);
