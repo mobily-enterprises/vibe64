@@ -112,6 +112,7 @@ function serviceForSession(session = {}, {
   authorizeActorAccess = null,
   logger = null,
   metadataReads = null,
+  now,
   readCurrentProject,
   refreshGithub,
   runGatewayCommand
@@ -119,6 +120,7 @@ function serviceForSession(session = {}, {
   return createCodexGitCommandService({
     authorizeActorAccess,
     logger,
+    now,
     projectService: {
       readCurrentProject,
       refreshGithub,
@@ -514,7 +516,11 @@ test("GitHub credential lookup shares the budget and timeouts are not reported a
     let tokenTimedOut = false;
     const calls = [];
     const events = [];
+    // Each phase reads the token afresh: a cached token would skip its lookup.
+    let credentialClock = 0;
+    const expireCachedToken = () => { credentialClock += 10 * 60_000; };
     const service = serviceForSession(session, {
+      now: () => credentialClock,
       logger: { info: (fields) => events.push(fields), warn: (fields) => events.push(fields) },
       async runGatewayCommand(request) {
         calls.push(request);
@@ -533,6 +539,7 @@ test("GitHub credential lookup shares the budget and timeouts are not reported a
 
     calls.length = 0;
     tokenDuration = 30_000;
+    expireCachedToken();
     const exhausted = await service.run(input);
     assert.equal(exhausted.timedOut, true);
     assert.equal(exhausted.code, "vibe64_codex_git_command_timed_out");
@@ -544,6 +551,7 @@ test("GitHub credential lookup shares the budget and timeouts are not reported a
 
     calls.length = 0;
     tokenTimedOut = true;
+    expireCachedToken();
     const failedToken = await service.run(input);
     assert.equal(failedToken.timedOut, true);
     assert.equal(failedToken.code, "vibe64_command_capture_timed_out");
@@ -1019,6 +1027,97 @@ test("Save run by the workspace service commits under the person's own Git ident
     assert.equal(env.GIT_AUTHOR_NAME, "Ana Diaz");
     assert.equal(env.GIT_AUTHOR_EMAIL, "ana@example.test");
     assert.equal(env.GIT_COMMITTER_EMAIL, "ana@example.test");
+  });
+});
+
+// Load review 2026-10-29: each GitHub session-work check ran `gh auth token`
+// and `git config` as the person before its own job, three managed jobs where
+// one does the work. The server's update probe runs every 30 seconds.
+function credentialGateway({ commandResult = { exitCode: 0, ok: true, stdout: "" } } = {}) {
+  const calls = { command: 0, identity: 0, token: 0 };
+  return {
+    calls,
+    async runGatewayCommand(request) {
+      if (request.command === "gh" && request.args[0] === "auth") {
+        calls.token += 1;
+        return { exitCode: 0, ok: true, stdout: `token-${calls.token}\n` };
+      }
+      if (request.actor === "owner-user" && request.args[0] === "config") {
+        calls.identity += 1;
+        return { exitCode: 0, ok: true, stdout: "user.name Ana Diaz\nuser.email ana@example.test\n" };
+      }
+      calls.command += 1;
+      return typeof commandResult === "function" ? commandResult(request) : commandResult;
+    }
+  };
+}
+
+test("session-work checks within the credential TTL reuse the actor's token and Git identity", async () => {
+  await withTemporaryRoot(async (root) => {
+    const session = githubSession(root);
+    await mkdir(session.metadata.source_path, { recursive: true });
+    let clock = 1_000_000;
+    const gateway = credentialGateway();
+    const service = serviceForSession(session, { now: () => clock, runGatewayCommand: gateway.runGatewayCommand });
+
+    const first = await service.sessionWorkSaveContext({ session });
+    clock += 60_000;
+    const second = await service.sessionWorkSaveContext({ session });
+    assert.deepEqual(gateway.calls, { command: 0, identity: 1, token: 1 });
+    for (const context of [first, second]) {
+      assert.equal(context.commandOptions.gitAuthToken, "token-1");
+      assert.deepEqual(context.commandOptions.personGitIdentity, { email: "ana@example.test", name: "Ana Diaz" });
+    }
+    // An agent's GitHub Git command by the same actor reuses the token too.
+    const fetched = await service.run({ args: ["fetch", "origin", "main"], command: "git", sessionId: session.sessionId });
+    assert.equal(fetched.ok, true);
+    assert.deepEqual(gateway.calls, { command: 1, identity: 1, token: 1 });
+
+    clock += 5 * 60_000;
+    const expired = await service.sessionWorkSaveContext({ session });
+    assert.equal(expired.commandOptions.gitAuthToken, "token-2");
+    assert.deepEqual(gateway.calls, { command: 1, identity: 2, token: 2 });
+  });
+});
+
+test("a GitHub authentication rejection drops the actor's cached token", async () => {
+  await withTemporaryRoot(async (root) => {
+    const session = githubSession(root);
+    await mkdir(session.metadata.source_path, { recursive: true });
+    let rejected = false;
+    const gateway = credentialGateway({
+      commandResult: () => rejected
+        // The session repository operation relays Git's failure in its JSON stdout.
+        ? { exitCode: 1, ok: false, stdout: JSON.stringify({ ok: false, error: { message:
+            "remote: Invalid username or password.\nfatal: Authentication failed for 'https://github.com/owner/repo.git/'" } }) }
+        : { exitCode: 0, ok: true, stdout: "{\"ok\":true}" }
+    });
+    const service = serviceForSession(session, { runGatewayCommand: gateway.runGatewayCommand });
+
+    const context = await service.sessionWorkSaveContext({ session });
+    await context.runCommand({ args: ["ls-remote"], command: "git" });
+    await service.sessionWorkSaveContext({ session });
+    assert.equal(gateway.calls.token, 1, "a successful operation keeps the cached token");
+
+    rejected = true;
+    const failed = await context.runCommand({ args: ["ls-remote"], command: "git" });
+    assert.equal(failed.ok, false, "the rejection is returned unchanged");
+    const renewed = await service.sessionWorkSaveContext({ session });
+    assert.equal(gateway.calls.token, 2);
+    assert.equal(gateway.calls.identity, 2);
+    assert.equal(renewed.commandOptions.gitAuthToken, "token-2");
+
+    // An agent's gh command rejected with HTTP 401 drops it the same way.
+    gateway.calls.token = 0;
+    const agent = serviceForSession(session, {
+      runGatewayCommand: async (request) => request.command === "gh" && request.args[0] !== "auth"
+        ? { exitCode: 1, ok: false, outputEncoding: "base64",
+            stderr: Buffer.from("HTTP 401: Bad credentials (https://api.github.com/user)").toString("base64") }
+        : gateway.runGatewayCommand(request)
+    });
+    await agent.run({ args: ["api", "user"], command: "gh", sessionId: session.sessionId });
+    await agent.run({ args: ["api", "user"], command: "gh", sessionId: session.sessionId });
+    assert.equal(gateway.calls.token, 2);
   });
 });
 

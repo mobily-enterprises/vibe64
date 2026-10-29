@@ -637,3 +637,10 @@ Push of that upstream stay with the original folder.
   and one managed publish-and-reconcile transaction under the project source
   lock. A deterministic private prepared-commit ref supplies restart evidence;
   disposable mirror refresh is deferred until after Save.
+- `codexGitCommand.js` reads a GitHub actor's token (`gh auth token`) and Git
+  identity as that person, each a managed job, and keeps them in memory for five
+  minutes per actor and tool home, so repeated session-work operations and the
+  agent's GitHub Git commands reuse them. A command GitHub rejects as
+  unauthenticated (401, failed authentication, bad credentials) drops that
+  actor's values, so the next operation reads them again. Neither is written to
+  disk or logs; the actor authorization hook still runs for every operation.

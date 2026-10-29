@@ -13,6 +13,10 @@ pull-request policy. **Update this session (rebase)** reconciles newer saved pro
 work when offered; Save does not silently perform that update for you. A failed or
 uncertain push needs a state check before another request.
 
+Vibe64 reuses your GitHub login for a few minutes across repository operations.
+If you reconnect GitHub and the previous login was revoked, the next operation can
+fail once with a GitHub authentication error; retry it and it uses the new login.
+
 In Auto, **Automatic save after completing a plan** (on by default in the chat
 mode menu) runs this same Save once a plan is completed and its review turn ends.
 Its progress, result and recovery are the ordinary Save's; when it cannot save,

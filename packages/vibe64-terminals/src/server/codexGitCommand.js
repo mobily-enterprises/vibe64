@@ -516,6 +516,53 @@ function commandOutputTail(value = "", limit = 1000) {
   return sanitizeLogText(normalizeText(value)).slice(-limit);
 }
 
+// Git and gh report a rejected GitHub credential with these messages. The
+// session repository operation relays its Git output in its JSON stdout.
+const GITHUB_AUTHENTICATION_REJECTED = /Authentication failed|Invalid username or (?:password|token)|returned error: 401|HTTP 401|Bad credentials/iu;
+
+function githubAuthenticationRejected(result = {}) {
+  if (result?.ok === true) return false;
+  const decode = (value) => value
+    ? Buffer.from(value, result.outputEncoding === "base64" ? "base64" : "utf8").toString("utf8")
+    : "";
+  return GITHUB_AUTHENTICATION_REJECTED.test(
+    [decode(result?.stderr), decode(result?.stdout), result?.error, result?.output].filter(Boolean).join("\n")
+  );
+}
+
+// Each GitHub session-work operation needs the actor's token and Git identity,
+// and each read is a managed job run as that person. One actor's values are
+// reused for a short time and dropped when GitHub rejects the token. They live
+// in this process's memory only, never on disk or in logs.
+const ACTOR_CREDENTIAL_TTL_MS = 5 * 60_000;
+
+function createActorCredentialCache({ now = Date.now, ttlMs = ACTOR_CREDENTIAL_TTL_MS } = {}) {
+  const entries = new Map();
+  const entryKey = (actorKey, field) => `${actorKey}\0${field}`;
+  return Object.freeze({
+    // load() returns { cacheable, value }; only a settled answer is kept.
+    async read(actorKey, field, load) {
+      const at = now();
+      for (const [key, entry] of entries) {
+        if (entry.expiresAt <= at) entries.delete(key);
+      }
+      const cached = entries.get(entryKey(actorKey, field));
+      if (cached) return cached.value;
+      const { cacheable, value } = await load();
+      if (cacheable) entries.set(entryKey(actorKey, field), { expiresAt: now() + ttlMs, value });
+      return value;
+    },
+    drop(actorKey) {
+      entries.delete(entryKey(actorKey, "token"));
+      entries.delete(entryKey(actorKey, "identity"));
+    }
+  });
+}
+
+function actorCredentialKey(session = {}, actor = {}, toolHome = {}) {
+  return JSON.stringify([gatewayGitIdentityUserKey(session, actor, toolHome), normalizeText(toolHome.toolHomeSource)]);
+}
+
 function commandArgv(command = "", args = []) {
   return [
     normalizeText(command),
@@ -636,6 +683,7 @@ async function readGithubToken({
 // Save runs as the workspace service, so the person's own Git settings are
 // read as the person, in their tool home, the same way their GitHub token is.
 // An unreadable or unset identity leaves the command env's own resolution.
+// `settled` is false only when the read itself failed: Git exits 1 for unset.
 async function readPersonGitIdentity({
   actor = {},
   gatewayCommandRunner,
@@ -643,7 +691,7 @@ async function readPersonGitIdentity({
   toolHome = {}
 } = {}) {
   const credentialRoot = normalizeText(toolHome.toolHomeSource);
-  if (!credentialRoot) return null;
+  if (!credentialRoot) return { identity: null, settled: true };
   const result = await gatewayCommandRunner({
     actor: "owner-user",
     allowedRoots: [credentialRoot],
@@ -665,13 +713,18 @@ async function readPersonGitIdentity({
     timeout: CODEX_GIT_COMMAND_TIMEOUT_MS,
     userKey: gatewayGitIdentityUserKey(session, actor, toolHome)
   });
-  if (result?.ok !== true) return null;
+  if (result?.ok !== true) {
+    return { identity: null, settled: Number(result?.exitCode) === 1 && result?.timedOut !== true };
+  }
   const values = {};
   for (const line of String(result.stdout || "").split("\n")) {
     const match = /^user\.(name|email) (.+)$/iu.exec(line.trim());
     if (match) values[match[1].toLowerCase()] = normalizeText(match[2]);
   }
-  return values.name && values.email ? { email: values.email, name: values.name } : null;
+  return {
+    identity: values.name && values.email ? { email: values.email, name: values.name } : null,
+    settled: true
+  };
 }
 
 function logGitCommandResult(logger, result = {}, fields = {}) {
@@ -712,10 +765,25 @@ function createCodexGitCommandService({
   authorizeActorAccess = null,
   env = process.env,
   logger = null,
+  now = Date.now,
   projectService,
   runGatewayCommand = runVibe64Command
 } = {}) {
   const gatewayCommandRunner = typeof runGatewayCommand === "function" ? runGatewayCommand : runVibe64Command;
+  const actorCredentials = createActorCredentialCache({ now });
+
+  function readActorToken(credentialKey, request) {
+    return actorCredentials.read(credentialKey, "token", async () => {
+      const value = await readGithubToken(request);
+      return { cacheable: value.ok === true, value };
+    });
+  }
+
+  // Returns the result unchanged; a GitHub rejection only drops the cached token.
+  function dropRejectedCredentials(credentialKey, result) {
+    if (githubAuthenticationRejected(result)) actorCredentials.drop(credentialKey);
+    return result;
+  }
 
   // Resolved per call: the project service may install its hook after construction.
   function actorAccessAuthorizer() {
@@ -792,7 +860,8 @@ function createCodexGitCommandService({
     if (toolHome.ok === false) {
       return toolHome;
     }
-    const githubToken = await readGithubToken({
+    const credentialKey = actorCredentialKey(session, actor, toolHome);
+    const githubToken = await readActorToken(credentialKey, {
       actor,
       gatewayCommandRunner,
       session,
@@ -801,11 +870,14 @@ function createCodexGitCommandService({
     if (githubToken.ok === false) {
       return githubToken;
     }
-    const personGitIdentity = await readPersonGitIdentity({
-      actor,
-      gatewayCommandRunner,
-      session,
-      toolHome
+    const personGitIdentity = await actorCredentials.read(credentialKey, "identity", async () => {
+      const { identity, settled } = await readPersonGitIdentity({
+        actor,
+        gatewayCommandRunner,
+        session,
+        toolHome
+      });
+      return { cacheable: settled, value: identity };
     });
     return {
       actor,
@@ -818,7 +890,7 @@ function createCodexGitCommandService({
         userKey: gatewayGitIdentityUserKey(session, actor, toolHome)
       },
       ok: true,
-      runCommand: gatewayCommandRunner
+      runCommand: async (request) => dropRejectedCredentials(credentialKey, await gatewayCommandRunner(request))
     };
   }
 
@@ -959,8 +1031,9 @@ function createCodexGitCommandService({
     }
     if (phaseElapsedMs) phaseElapsedMs.account = Math.round(performance.now() - startedAt);
     stage = "github-token";
+    const credentialKey = actorCredentialKey(session, actor, toolHome);
     const githubToken = requiresGithubToken
-      ? await readGithubToken({
+      ? await readActorToken(credentialKey, {
           actor,
           gatewayCommandRunner: runWithinBudget,
           session,
@@ -1013,6 +1086,7 @@ function createCodexGitCommandService({
       },
       userKey: gatewayUserKey
     });
+    if (githubToken.token) dropRejectedCredentials(credentialKey, result);
     if (phaseElapsedMs) phaseElapsedMs.commandFinished = Math.round(performance.now() - startedAt);
     let error = "";
     if (result.timedOut && commandSubmitted) {
