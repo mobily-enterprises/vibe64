@@ -269,7 +269,7 @@ async function fixture(t, { scopedConversations = false } = {}) {
     accountStatus: async () => behavior.account,
     credentialHome: { home: root }, recordGitActor: async () => ({ ok: true }), connectionStatus: async () => true,
     createProcess: async (options) => {
-      const native = { options, executionId: `test-${processes.length}`, stopped: false, stopAllowed: true,
+      const native = { options, executionId: `test-${processes.length}`, command: options.command, stopped: false, stopAllowed: true,
         initialization: { models: [{ value: "sonnet", supportedEffortLevels: ["low", "high"] }, { value: "haiku", supportedEffortLevels: [] }] },
         async stop() { this.stopped = this.stopAllowed; return { exited: this.stopped, scopeEmpty: this.stopped }; },
         client: { async request(request) {
