@@ -554,6 +554,14 @@ function createAgentPreviewCommandService({
   const browserWorkers = new Map();
   const browserTestRuns = new Map();
 
+  // The project that prepared the session's assistant commands. A browser
+  // test's changes name it, because its command can arrive outside any
+  // request, as after a restart.
+  function sessionProjectSlug(sessionId) {
+    const project = [...(browserWorkers.get(sessionId)?.values() || [])][0]?.project;
+    return normalizeText(project?.slug || project?.name);
+  }
+
   async function runBrowserCommand(request) {
     const runtimeConfigEnv = await projectService.runInProjectContext(request.project.slug, () => (
       projectService.projectInspectionEnvironment({
@@ -602,7 +610,7 @@ function createAgentPreviewCommandService({
       }
       if (!result.previewRecoveryRequired && browserTestRuns.get(sessionId) === pending) {
         browserTestRuns.delete(sessionId);
-        await publishSessionChanged(sessionId);
+        await publishSessionChanged(sessionId, { projectSlug: pending.projectSlug });
       }
     }
     if (result?.previewRecoveryRequired) return result;
@@ -630,7 +638,7 @@ function createAgentPreviewCommandService({
     // The command's promise remains its result owner. HTTP only acknowledges
     // the handoff; a lost dashboard response never launches a second test.
     pending.resume(authorizeStart);
-    await publishSessionChanged(sessionId);
+    await publishSessionChanged(sessionId, { projectSlug });
     return { ok: true, accepted: true, sessionId };
   }
 
@@ -639,7 +647,7 @@ function createAgentPreviewCommandService({
       const pending = browserTestRuns.get(sessionId);
       if (pending?.admissionId) {
         pending.state = "running";
-        await publishSessionChanged(sessionId);
+        await publishSessionChanged(sessionId, { projectSlug: pending.projectSlug });
       }
       options.signal?.throwIfAborted();
       return operation(token);
@@ -698,7 +706,7 @@ function createAgentPreviewCommandService({
     timer = setTimeout(() => pending.cancel("expired"), Math.max(0, Date.parse(wait.expiresAt) - Date.now()));
     try {
       options.onOutput?.("Waiting for resources. Normal Preview has been restored. Retry or Cancel in Vibe64 within five minutes; tests have not run.\n");
-      await publishSessionChanged(sessionId);
+      await publishSessionChanged(sessionId, { projectSlug: pending.projectSlug });
       const authorizeStart = await decision;
       if (!authorizeStart) return responseError(
         outcome === "expired" ? "The resource wait expired. Tests were not run."
@@ -844,8 +852,7 @@ function createAgentPreviewCommandService({
     if (words[0] !== "identities" || words.length > (subcommand === "save" ? 2 : 1) || (subcommand && subcommand !== "save")) {
       return responseError("Usage: vibe64-helper preview identities [save < identities.json]", "vibe64_agent_preview_identities_usage", { exitCode: 64 });
     }
-    const project = [...(browserWorkers.get(sessionId)?.values() || [])][0]?.project;
-    const projectSlug = normalizeText(project?.slug || project?.name);
+    const projectSlug = sessionProjectSlug(sessionId);
     if (!projectSlug) {
       return responseError("Managed app identities are not bound to this session's project. Reconnect the assistant.", "vibe64_agent_preview_identities_project_required");
     }
@@ -1114,6 +1121,7 @@ function createAgentPreviewCommandService({
     const completion = Promise.withResolvers();
     const pending = !input.testRunToken ? {
       id: crypto.randomUUID(),
+      projectSlug: sessionProjectSlug(sessionId),
       targetId: input.targetId || "",
       state: "starting",
       startedAt: new Date().toISOString(),
@@ -1167,7 +1175,7 @@ function createAgentPreviewCommandService({
       completion.resolve(result);
       if (pending && !result?.previewRecoveryRequired && browserTestRuns.get(sessionId) === pending) {
         browserTestRuns.delete(sessionId);
-        await publishSessionChanged(sessionId);
+        await publishSessionChanged(sessionId, { projectSlug: pending.projectSlug });
       }
     }
   }

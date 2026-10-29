@@ -133,7 +133,9 @@ Output targets may declare `Data: test` or `Data: development` in the Vibe64-own
 Outputs grammar. This optional field reaches target views unchanged. Test-data
 targets show a persistent amber banner in embedded Preview; their app launchers
 own database isolation. The existing serialized temporary-Preview run publishes
-its state through launch status and realtime refresh. Startup/running,
+its state through launch status and realtime refresh. Its changes, like Preview
+readiness, cleanup and Stop, name the session's project, so they reach the
+session's pages even when a terminal event or cleanup runs outside any request. Startup/running,
 restoration, and retained cleanup/restoration failures remain visible until the
 original owner releases the run. Failures show a red recovery banner even when
 the saved target is development. Status is transient and adds no persisted state.

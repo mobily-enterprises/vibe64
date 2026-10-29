@@ -94,7 +94,7 @@ function normalizedClientRefresh(value = {}) {
     .map((read) => [read, source[read]]));
 }
 
-function sessionRealtimePayload(sessionId, { session: sessionValue, originId, reason, payload }) {
+function sessionRealtimePayload(sessionId, { session: sessionValue, originId, projectSlug, reason, payload }) {
   const source = record(sessionValue);
   const nestedSession = record(source.session);
   const session = Object.keys(nestedSession).length > 0 ? nestedSession : source;
@@ -129,7 +129,9 @@ function sessionRealtimePayload(sessionId, { session: sessionValue, originId, re
     ...(Number.isSafeInteger(revision) && revision >= 0 ? { revision } : {}),
     ...(status ? { status } : {}),
     ...additionalFields,
-    projectSlug: String(context?.slug || session.projectSlug || additionalFields.projectSlug || "").trim(),
+    // A publisher that knows its session's project names it; work that runs
+    // outside any request has no context to supply it.
+    projectSlug: String(projectSlug || context?.slug || session.projectSlug || additionalFields.projectSlug || "").trim(),
     ...(Object.keys(clientRefresh).length > 0 ? { clientRefresh } : {}),
     ...(origin ? { originId: origin } : {}),
     ...(reason ? { reason } : {})
@@ -169,6 +171,7 @@ function createSessionChangedPublisher(events) {
     operation = "updated",
     originId: eventOriginId = "",
     payload = null,
+    projectSlug: sessionProjectSlug = "",
     reason = "",
     session = null
   } = {}) {
@@ -181,6 +184,7 @@ function createSessionChangedPublisher(events) {
     const fullPayload = Object.freeze(sessionRealtimePayload(id, {
       session,
       originId: eventOriginId,
+      projectSlug: sessionProjectSlug,
       reason,
       payload
     }));

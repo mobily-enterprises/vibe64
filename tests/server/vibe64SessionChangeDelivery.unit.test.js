@@ -86,6 +86,43 @@ test("a streamed delta is not a session change", async () => {
   assert.deepEqual(published, [], "its subscribers receive the delta natively; no page reads it as a change");
 });
 
+// Work that outlives its request, such as Preview cleanup or a browser test
+// after a restart, publishes outside any project context. It names its
+// session's project itself, so the session's viewers still receive it.
+const viewersOf = (published) => published.filter(({ type }) => type === "entity.changed").map(({ realtime }) => realtime.audience);
+
+test("a Preview change made outside any request reaches the session's viewers", async (t) => {
+  const { events, published } = recordingEvents();
+  const { createOutputTargetTerminalController } = await import("../../packages/vibe64-terminals/src/server/outputTargetTerminal.js");
+  const sessionId = `preview-${crypto.randomUUID()}`;
+  const store = { async mutateSession(_id, update) { return update(); }, async writeMetadataValue() {} };
+  const controller = createOutputTargetTerminalController({
+    // Outside a request, the project service still knows the project it holds.
+    projectService: { currentProjectSlug: () => "alpha", async createRuntime() { return { store }; } },
+    publishSessionChanged: createSessionChangedPublisher(events),
+    stopPreviewBrowsers: () => ({ ok: true })
+  });
+  t.after(() => controller.close());
+  assert.equal((await controller.stopTerminal(sessionId, "")).ok, true);
+  await delay(0);
+  assert.deepEqual(viewersOf(published), [{ room: `vibe64:project:alpha:session:${sessionId}` }]);
+});
+
+test("a browser test's change made outside any request reaches the session's viewers", async () => {
+  const { events, published } = recordingEvents();
+  const { createAgentPreviewCommandService } = await import("../../packages/vibe64-terminals/src/server/agentPreviewCommand.js");
+  const service = createAgentPreviewCommandService({
+    launchTarget: { previewTestRunAdmission: () => null },
+    projectService: {},
+    publishSessionChanged: createSessionChangedPublisher(events)
+  });
+  // The assistant's start registers its browser inside the session's project.
+  service.registerBrowserWorker("s1", { socketPath: "/tmp/v64-browser.sock", token: "t1", project: { slug: "alpha" } });
+  const result = await service.playwrightRun("s1", { browserSocketPath: "/tmp/v64-browser.sock" });
+  assert.equal(result.code, "vibe64_managed_browser_runtime_invalid");
+  assert.deepEqual(viewersOf(published), [{ room: "vibe64:project:alpha:session:s1" }]);
+});
+
 test("pages receive only the changes of the projects and sessions they watch", { timeout: 30_000 }, async (t) => {
   // Imported here so that the publisher tests above stand on their own.
   const [{ PROJECT_WATCH, PROJECT_WATCH_RELEASE }, { Vibe64RepositoryUpdatesProvider }] = await Promise.all([

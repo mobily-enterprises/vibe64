@@ -585,6 +585,14 @@ async function writeLaunchMetadata(store, sessionId, terminalSession = {}) {
   });
 }
 
+// The project whose runtime holds the session. Its changes name it, because
+// terminal events and cleanup can publish outside any request.
+function sessionProjectSlug(projectService) {
+  return typeof projectService?.currentProjectSlug === "function"
+    ? String(projectService.currentProjectSlug() || "").trim()
+    : "";
+}
+
 async function createLaunchContext(projectService, sessionId, {
   awaitWorkspacePrepared = false,
   ensureWorkspacePrepared = null,
@@ -643,6 +651,7 @@ async function createLaunchContext(projectService, sessionId, {
     projectEnvironment,
     projectsRoot: projectService?.selectedProject?.projectsRoot || "",
     projectContextRoot,
+    projectSlug: sessionProjectSlug(projectService),
     runtime,
     serviceDataRoot: typeof projectService?.currentServiceDataRoot === "function"
       ? projectService.currentServiceDataRoot()
@@ -1493,6 +1502,7 @@ async function cleanupSupersededLaunchTerminals({
 
 async function markLaunchTerminalReady({
   namespace = "",
+  projectSlug = "",
   publishSessionChanged = async () => null,
   source = "marker",
   store,
@@ -1556,6 +1566,7 @@ async function markLaunchTerminalReady({
     namespace
   }) || updatedSession || readyTerminal;
   await publishSessionChanged(sessionId, {
+    projectSlug,
     reason: "output-target-ready"
   });
   vibe64SessionDebugLog("server.outputTargetTerminal.readyMarker.ready", {
@@ -1592,6 +1603,7 @@ async function repairLaunchReadinessFromOutput({
   try {
     const result = await markReady({
       namespace: outputTargetTerminalNamespace(sessionId),
+      projectSlug: context.projectSlug,
       publishSessionChanged,
       source: "marker-repair",
       store: context.store,
@@ -1890,6 +1902,7 @@ async function missingLaunchPreviewStatus({
   }
   if (metadataCleared) {
     await publishSessionChanged(sessionId, {
+      projectSlug: context.projectSlug,
       reason: "output-target-stale-cleared"
     });
   }
@@ -2066,9 +2079,10 @@ function createOutputTargetTerminalController({
   const previewTestRuns = new Map();
   const outputResultWrites = new Map();
 
-  function publishLaunchCleanup(sessionId, reason = "output-target-stale-cleared") {
+  function publishLaunchCleanup(sessionId, projectSlug, reason = "output-target-stale-cleared") {
     // Process cleanup must not wait for realtime delivery or its access checks.
     void Promise.resolve().then(() => publishSessionChanged(sessionId, {
+      projectSlug,
       reason
     })).catch((error) => {
       vibe64SessionDebugLog("server.outputTargetTerminal.cleanupPublication.error", {
@@ -2156,6 +2170,7 @@ function createOutputTargetTerminalController({
         outputRun: snapshot.run
       });
       await publishSessionChanged(context.session?.sessionId || "", {
+        projectSlug: context.projectSlug,
         reason: "output-results-ready"
       });
       return {
@@ -2172,6 +2187,7 @@ function createOutputTargetTerminalController({
         outputResultsReady: false
       });
       await publishSessionChanged(context.session?.sessionId || "", {
+        projectSlug: context.projectSlug,
         reason: "output-results-failed"
       }).catch(() => null);
       vibe64SessionDebugLog("server.outputTargetTerminal.results.error", {
@@ -2416,7 +2432,7 @@ function createOutputTargetTerminalController({
       function changeState(state) {
         testRun.state = state;
         onState(state);
-        publishLaunchCleanup(sessionId, "preview-test-state-changed");
+        publishLaunchCleanup(sessionId, testRun.projectSlug, "preview-test-state-changed");
       }
       const previous = await withLaunchStartLock(sessionId, async () => {
         signal?.throwIfAborted();
@@ -2426,6 +2442,7 @@ function createOutputTargetTerminalController({
           });
         }
         const context = await createLaunchContext(projectService, sessionId);
+        testRun.projectSlug = context.projectSlug;
         const unavailable = launchAdmissionFailure(sessionId, context.session);
         if (unavailable) throw Object.assign(new Error(unavailable.error), unavailable);
         const targets = await listOutputTargets(context);
@@ -2517,7 +2534,7 @@ function createOutputTargetTerminalController({
             });
           }
           previewTestRuns.delete(sessionId);
-          publishLaunchCleanup(sessionId, "preview-test-state-changed");
+          publishLaunchCleanup(sessionId, testRun.projectSlug, "preview-test-state-changed");
         } catch (error) {
           changeState("restore_failed");
           return {
@@ -2946,7 +2963,7 @@ function createOutputTargetTerminalController({
                       });
                       const metadataCleared = await clearLaunchMetadataForTerminal(context.store, sessionId, event.id);
                       if (metadataCleared) {
-                        publishLaunchCleanup(sessionId);
+                        publishLaunchCleanup(sessionId, context.projectSlug);
                       }
                       if (typeof spec.onClose === "function") {
                         await spec.onClose(event);
@@ -2975,7 +2992,7 @@ function createOutputTargetTerminalController({
                     });
                     const metadataCleared = await clearLaunchMetadataForTerminal(context.store, sessionId, event.id);
                     if (metadataCleared) {
-                      publishLaunchCleanup(sessionId);
+                      publishLaunchCleanup(sessionId, context.projectSlug);
                     }
                     if (typeof spec.onStop === "function") {
                       await spec.onStop(event);
@@ -3013,6 +3030,7 @@ function createOutputTargetTerminalController({
                     }
                     void markLaunchReady({
                       namespace,
+                      projectSlug: context.projectSlug,
                       publishSessionChanged,
                       source: "marker",
                       store: context.store,
@@ -3127,6 +3145,7 @@ function createOutputTargetTerminalController({
           return { ok: false, code: "vibe64_preview_run_changed", error: "A newer Preview run is active. Refresh its status before stopping it." };
         }
         const runtime = await projectService.createRuntime();
+        const projectSlug = sessionProjectSlug(projectService);
         await writePreviewStopState(runtime.store, sessionId, { stopped: true });
         const activeId = active?.id && (!requestedId || active.id === requestedId) ? active.id : "";
         let result = { ok: true, id: requestedId, running: false, status: "exited" };
@@ -3141,12 +3160,12 @@ function createOutputTargetTerminalController({
           const browserCleanup = await stopPreviewBrowsers(sessionId);
           if (browserCleanup?.ok === false) throw new Error(browserCleanup.error || "Managed Preview browser did not stop.");
           await writePreviewStopState(runtime.store, sessionId, { stopped: true });
-          publishLaunchCleanup(sessionId, "preview-stopped");
+          publishLaunchCleanup(sessionId, projectSlug, "preview-stopped");
           return result;
         } catch (error) {
           const message = String(error?.message || error || "Preview cleanup failed.");
           await writePreviewStopState(runtime.store, sessionId, { stopped: true, error: message });
-          publishLaunchCleanup(sessionId, "preview-stop-failed");
+          publishLaunchCleanup(sessionId, projectSlug, "preview-stop-failed");
           return { ok: false, code: "vibe64_preview_stop_incomplete", error: message };
         }
       }));

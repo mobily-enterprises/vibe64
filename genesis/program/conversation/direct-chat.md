@@ -939,8 +939,12 @@ notices project pages show (repository check result or failure, canonical
 commit, approval sender and id). The session list and its activity, archive
 and renewal state, the repository status registry, Project settings, the
 owner's approval notice and project message labels read summaries; the
-session's own readers keep the full change. A change without a project reaches
-no page. The summary is a second publication of type `entity.summary`, so
+session's own readers keep the full change. A change reaches the pages of the
+project its publisher names, or else of the request's project. Work that
+outlives its request names its session's project itself: Preview from the
+project whose runtime holds the session (`outputTargetTerminal.js`), a browser
+test from the project that registered the session's assistant commands
+(`agentPreviewCommand.js`). A change without a project reaches no page. The summary is a second publication of type `entity.summary`, so
 server listeners of session changes match `entity.changed` and see each change
 once. A change never carries the conversation's live text or transcript patch
 (`conversationStream`, `conversationLogPatch`): viewers receive both through
