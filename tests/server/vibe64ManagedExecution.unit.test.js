@@ -544,6 +544,37 @@ test("managed runner preserves final counters after a successful transient unit 
   }
 });
 
+// `systemd-run --wait` reports a unit whose main process ends by SIGTERM or
+// SIGINT as success (exit 0). A finite command killed that way must still fail.
+test("a finite managed runner whose command is killed by a signal exits with a failure status", { skip: process.platform === "win32" }, async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-managed-finite-signal-"));
+  try {
+    const payloadPath = path.join(root, "command.json");
+    await writeFile(payloadPath, `${JSON.stringify({
+      args: ["-e", "process.kill(process.pid, 'SIGTERM'); setInterval(() => {}, 1000);"],
+      command: process.execPath,
+      cwd: root,
+      env: { PATH: process.env.PATH },
+      executionId: randomUUID(),
+      inputBase64: "",
+      inputPresent: false,
+      schema: "vibe64.managed-execution.command",
+      schemaVersion: 1
+    })}\n`, "utf8");
+    const runner = spawn(process.execPath, [EXEC_HELPER, "run-managed", payloadPath], { cwd: root, stdio: "ignore" });
+    const exit = await new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => { runner.kill("SIGKILL"); reject(new Error("Finite runner did not end.")); }, 8000);
+      runner.once("close", (code, signal) => { clearTimeout(timeout); resolve({ code, signal }); });
+    });
+    assert.deepEqual(exit, { code: 143, signal: null });
+    const receipt = JSON.parse(await readFile(path.join(root, "result.json"), "utf8"));
+    assert.equal(receipt.result, "signal");
+    assert.equal(receipt.signal, "SIGTERM");
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
 test("managed service runner stops its process tree when the owning controller disappears", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-managed-controller-lease-"));
   const leaseName = `\0vibe64-resource-controller-runner-${process.pid}`;

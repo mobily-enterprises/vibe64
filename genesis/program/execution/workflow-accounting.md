@@ -255,10 +255,12 @@ Runner receipts also retain their start time. When systemd has collected the
 transient unit, its default `success`, exit status and task maximum do not replace
 the saved runner measurements. Start and observed exit times still bound a
 failure-only journal lookup after collection.
-After saving its receipt the runner ends as its command did: with the command's
-exit status, or by re-raising the command's terminating signal. systemd thus
-judges the unit as it would the command, so a command stopped with SIGTERM is a
-clean stop rather than a failed unit.
+After saving its receipt the runner exits with the command's exit status. When a
+service's command ends by a signal, the runner re-raises that signal, so systemd
+judges the unit as it would the command: a service stopped with SIGTERM is a
+clean stop rather than a failed unit. A finite or interactive command ended by a
+signal exits with 128 plus the signal's number instead, because
+`systemd-run --wait` would report a clean signal stop of its unit as success.
 For an unsuccessful execution without counter evidence, inspection checks a
 current-boot, exact-owned-unit, start/exit-bounded kernel journal query with the
 same two-second/128-KiB/64-record limits. A complete fork-denial record proves

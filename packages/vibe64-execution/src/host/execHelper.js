@@ -494,7 +494,8 @@ async function runManagedExecutionPayload(payloadPath = "") {
       signal: String(outcome.signal || "")
     });
     childSignal = outcome.signal || "";
-    // A signal this process ignores, such as SIGPIPE, still exits as 128 + its number.
+    // A finite or interactive run, and a signal this process ignores such as
+    // SIGPIPE, exit as 128 + the signal's number.
     process.exitCode = childSignal ? 128 + (osConstants.signals[childSignal] || 0) : status;
   } finally {
     if (terminationTimer !== null) {
@@ -503,9 +504,12 @@ async function runManagedExecutionPayload(payloadPath = "") {
     controllerLease?.off("close", stopForControllerLoss);
     controllerLease?.destroy();
   }
-  if (childSignal) {
-    // End the way the child ended, so systemd judges the unit as it would the
-    // child: an ordinary SIGTERM stop is clean, a SIGKILL is a failure.
+  // Only a service (the one lifecycle with a controller lease) ends the way its
+  // child ended, so systemd judges the unit as it would the child: an ordinary
+  // SIGTERM stop is clean, a SIGKILL is a failure. `systemd-run --wait` reports
+  // a clean signal stop as exit 0, so a finite or interactive command killed by
+  // SIGTERM keeps its failure status instead.
+  if (childSignal && controllerLease) {
     process.kill(process.pid, childSignal);
   }
 }
