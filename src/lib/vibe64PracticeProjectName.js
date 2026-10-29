@@ -14,11 +14,11 @@ function practiceProjectName({ lessonTitle = "", lessonCode = "" } = {}) {
 }
 
 // `project` is a listed project ({ slug }). A practice slug is named as
-// practice (by its lesson title when known) rather than by its raw slug; every
-// other slug is shown as it is.
-function projectDisplayName(project = null, { lessonTitle = "" } = {}) {
+// practice (by its lesson title, or code, when known) rather than by its raw
+// slug; every other slug is shown as it is.
+function projectDisplayName(project = null, lesson = {}) {
   const slug = String(project?.slug || "");
-  return isPracticeProjectSlug(slug) ? practiceProjectName({ lessonTitle }) : slug;
+  return isPracticeProjectSlug(slug) ? practiceProjectName(lesson) : slug;
 }
 
 // The line under a project's name in project lists: its folder, except for a

@@ -380,9 +380,9 @@ People see a practice project by its lesson, never its `training-<practice ID>`
 slug, which stays the address. The client `vibe64PracticeProjectName.js`
 (`projectDisplayName`, `practiceProjectName`) is the one naming rule for both
 hosts: **Practice:** plus the lesson title where the client knows it (the open
-lesson's own practice project in `useVibe64AppPage`'s `projectTitle`; each
-`practice.list` row's lesson as the Learning controller's `readPractice` normalizes it), else that row's
-lesson code, else "Practice project" for a bare practice slug; no catalogue
+lesson's own practice project in `useVibe64AppPage`'s `projectHeaderTitle`; each
+`practice.list` row's lesson as the Learning controller's `readPractice` normalizes it), else that
+lesson's code, else "Practice project" for a bare practice slug; no catalogue
 marker is read. Headers, the project
 switcher, both Practice lists and a host's management pages use it; Colleague's
 protocol names practice projects the same way. On phones (≤600px) the project

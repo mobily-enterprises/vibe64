@@ -55,6 +55,15 @@ const PROJECT_PANES = Object.freeze({
   dashboard: Object.freeze({ id: "dashboard", label: "Dash", name: "Dashboard", icon: mdiViewDashboardOutline })
 });
 
+// A practice project is named by its lesson (the current lesson, or the read
+// lesson when it owns this project), never by its training-<id> slug.
+function projectHeaderTitle(slug = "", { mode = null, lesson = null } = {}) {
+  // No slug: Learn mode without a practice project (/app/learning).
+  if (!slug) return "No project selected";
+  return projectDisplayName({ slug }, mode?.practiceSlug === slug ? { lessonTitle: mode.lessonTitle, lessonCode: mode.lessonCode }
+    : lesson?.practiceProjectSlug === slug ? { lessonTitle: lesson.title, lessonCode: lesson.code } : {});
+}
+
 function projectPaneTabs({ projectSlug = "", lesson = false } = {}) {
   const { preview, dashboard } = PROJECT_PANES;
   return !projectSlug && lesson ? [] : [preview, dashboard];
@@ -118,18 +127,9 @@ function useVibe64AppPage() {
   const projectLoadError = projectSelection.loadError;
   const projects = projectSelection.projects;
   const learning = useVibe64Learning();
-  // A practice project is named by its lesson (the current lesson, or the
-  // read lesson when it owns this project), never by its training-<id> slug.
-  const projectTitle = computed(() => {
-    const slug = projectSlug.value;
-    // No slug: Learn mode without a practice project (/app/learning).
-    if (!slug) return "No project selected";
-    const mode = learning?.mode;
-    const lesson = learning?.lesson?.value;
-    return projectDisplayName({ slug }, {
-      lessonTitle: mode?.practiceSlug === slug ? mode.lessonTitle : lesson?.practiceProjectSlug === slug ? lesson.title : ""
-    });
-  });
+  const projectTitle = computed(() => projectHeaderTitle(projectSlug.value, {
+    mode: learning?.mode, lesson: learning?.lesson?.value
+  }));
   const developmentBasePath = computed(() => projectAppPath(projectSlug.value));
   const dashboardBasePath = computed(() => `${developmentBasePath.value}/dashboard`);
   const dashboardRouteActive = computed(() => routePathContainsSection(route.path, dashboardBasePath.value) &&
@@ -532,6 +532,7 @@ export {
   dashboardReturnPath,
   nextProjectPane,
   openProjectSwitcherProjects,
+  projectHeaderTitle,
   projectPaneTabs,
   projectRuntimeClosedPayloadMatches,
   previewToolbarTargetVisible,

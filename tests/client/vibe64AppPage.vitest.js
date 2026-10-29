@@ -5,6 +5,7 @@ import {
   dashboardReturnPath,
   nextProjectPane,
   openProjectSwitcherProjects,
+  projectHeaderTitle,
   projectPaneTabs,
   projectRuntimeClosedPayloadMatches,
   previewToolbarTargetVisible
@@ -59,6 +60,20 @@ describe("Vibe64 app page", () => {
       projectPane: "dashboard",
       projectPaneNavigationVisible: true
     })).toBe(false);
+  });
+
+  it("names a practice project in the header by its lesson title, otherwise its lesson code", () => {
+    const slug = `training-${"0123456789abcdef".repeat(2)}`;
+    expect(projectHeaderTitle("")).toBe("No project selected");
+    expect(projectHeaderTitle("alpha", { mode: { practiceSlug: "alpha", lessonTitle: "First change" } })).toBe("alpha");
+    expect(projectHeaderTitle(slug, { mode: { practiceSlug: slug, lessonCode: "V64-START-02", lessonTitle: "First change" } }))
+      .toBe("Practice: First change");
+    expect(projectHeaderTitle(slug, { mode: { practiceSlug: slug, lessonCode: "V64-START-02", lessonTitle: "" } }))
+      .toBe("Practice: V64-START-02");
+    expect(projectHeaderTitle(slug, { lesson: { practiceProjectSlug: slug, code: "V64-START-03", title: "" } }))
+      .toBe("Practice: V64-START-03");
+    expect(projectHeaderTitle(slug, { mode: { practiceSlug: "training-other", lessonCode: "V64-START-02" } }))
+      .toBe("Practice project");
   });
 
   it("switches Preview and Dash in the header; the lesson is its own toggle, and alone without a project", () => {
