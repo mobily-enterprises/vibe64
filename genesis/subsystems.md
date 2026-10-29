@@ -336,7 +336,7 @@ access; file create and star set with write access) for the saved attempt; its
 save is Training's ledgered action. File areas, uploads, integrations, the
 Interface view and explanations stay unavailable there.
 
-Provides the shared file viewer and editor used by Files and Architecture, including saved-source reads, edits, conflict checks, downloads and source references. File overviews and per-function pseudocode are generated only on request through the configured Helper. Informational answers are cached against source and guidance identity; they remain separate from authored subsystem and Program explanations. Terminal orchestration owns publishing session source through Save work.
+Provides the shared file viewer and editor used by Files and Architecture, including saved-source reads, edits, conflict checks, downloads and source references. File overviews and per-function pseudocode are generated only on request through the asker's Explain & check model. Informational answers are cached against source and guidance identity; they remain separate from authored subsystem and Program explanations. Terminal orchestration owns publishing session source through Save work.
 
 ### Source
 - Directory `packages/vibe64-source-editor`
@@ -376,7 +376,7 @@ The Architecture canvas combines registered UI pages with directory-bound subsys
 
 Owns inspection, diagram exploration, agent-assisted layout changes and query execution for a selected project database.
 Its transient copilot consumes the supplied JSKIT bounded-task browser binding,
-shared conversation UI and central Helper resolution. JSKIT owns its original
+shared conversation UI and central Explain & check resolution. JSKIT owns its original
 browser-local draft/request history and final-command lifecycle; this subsystem
 supplies endpoint/input/result mappings and SQL placement through the existing
 HTTP command, without a second transcript or fabricated native receipts.

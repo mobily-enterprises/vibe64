@@ -50,7 +50,8 @@ retrying. Colleague can inspect and retry the selected session's preparation whe
 asked, and refresh schema afterward; a retry acknowledgement is not completion.
 
 Open **Copilot** to ask about the database or the currently selected table. It uses
-the configured **Helper** destination, looks up bounded parts of the refreshed
+your **Explain & check** model from **Models** (the **Team members** setup unless
+you are the owner), looks up bounded parts of the refreshed
 schema and can run read-only queries. If a lookup or query fails, that question
 stops and shows the error; narrow or correct the request before trying again.
 A step-limit error also asks you to narrow the question. If cleanup of the

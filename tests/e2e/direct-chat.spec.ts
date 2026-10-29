@@ -2641,7 +2641,7 @@ for (const width of [390, 820, 1280]) {
       const routingRequest = { schemaVersion: 5, messageId: "old-request", mode: "senior", resolvedMode: "senior",
         status: "waiting", delivery: "failed", stopped: true, stage: null, workflow: false,
         input: { message: "Earlier request", displayMessage: "Earlier request" },
-        error: "This Codex conversation is stored in a separate provider home. Renew the session to use model routing." };
+        error: "This Codex conversation is stored in a separate provider home. Renew the session to use the models chosen in Models." };
       await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, {
         ok: true, ...directSession(), metadata: {
           assistant_routing: JSON.stringify({ mode: "senior" }),

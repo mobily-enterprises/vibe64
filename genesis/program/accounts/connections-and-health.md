@@ -460,8 +460,9 @@ a Colleague chat bound to it as a previous conversation
 upgrade restates the original included row for its frozen interpretation.
 Managed OpenCode Helper turns retain native tool definitions while the
 trusted session registry and execution plugin deny tool execution in restricted
-non-project workloads. Routing admits any available connected model for Router
-and Helper as well as Senior, Junior and shared Backup. Catalogue availability,
+non-project workloads. Routing admits any available connected model for Router,
+Explain & check and Quick helper as well as Senior, Junior, Colleague and Fix it
+with AI. Catalogue availability,
 account access and the actual execution profile remain authoritative; accepting a
 routing assignment does not grant a Helper coding access.
 New OpenCode keys are checked against the complete trusted provider

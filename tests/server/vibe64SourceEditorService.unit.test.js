@@ -11,6 +11,7 @@ import {
   pathMatchesPolicyPattern,
   sourceEditorLanguageForPath
 } from "../../packages/vibe64-source-editor/src/server/service.js";
+import { readSourceInterpretations } from "../../packages/vibe64-source-editor/src/server/sourceInterpretations.js";
 import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
 } from "@local/vibe64-core/server/sessionSourcePath";
@@ -4843,4 +4844,21 @@ test("source cleanup retires old thread-only references without resolving a new 
   assert.equal(closed.ok, true, JSON.stringify(closed));
   assert.deepEqual(deleted, [{ sessionId: "session-1", threadId: "old-native-thread" }]);
   await assert.rejects(readFile(cleanupPath), { code: "ENOENT" });
+});
+
+test("unreadable saved explanations ask for a new generation without naming a retired role", async (t) => {
+  const stateRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-interpretations-"));
+  t.after(() => rm(stateRoot, { recursive: true, force: true }));
+  const context = { runtime: { stateRoot }, sourceRoot: "/source", sessionId: "session-1" };
+  const sha = (value) => crypto.createHash("sha256").update(value).digest("hex");
+  const scope = path.join(stateRoot, "source-editor", "interpretations", sha(JSON.stringify(["/source", "session-1", "local"])));
+  const file = { path: "src/a.js", hash: "a".repeat(64) };
+  await mkdir(path.join(scope, sha(file.path)), { recursive: true });
+  await writeFile(path.join(scope, sha(file.path), `${"b".repeat(64)}.json`), "{}");
+  assert.deepEqual(await readSourceInterpretations(context, file, () => "1"),
+    { records: [], warning: "A saved explanation could not be read. Generate it again." });
+  const other = { path: "src/b.js", hash: "a".repeat(64) };
+  await writeFile(path.join(scope, sha(other.path)), "not a directory");
+  assert.deepEqual(await readSourceInterpretations(context, other, () => "1"),
+    { records: [], warning: "Saved explanations are unavailable. Generate them again." });
 });

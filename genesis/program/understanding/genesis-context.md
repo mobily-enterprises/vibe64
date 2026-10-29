@@ -282,14 +282,14 @@ overviews are on-demand, informational and hashed against the whole saved file;
 they do not require an index or replace authored Program text. Authored Program
 context appears in its dedicated Program reader; main and supporting source files
 link there without repeating it. Whole-file Code uses the shared editable Files
-implementation, including save/conflict coordination, Undo/Redo and download. Missing return/parser/Helper evidence stays explicit. Selected declarations expand inline under their signature, avoiding a duplicate
+implementation, including save/conflict coordination, Undo/Redo and download. Missing return, parser or Explain & check model evidence stays explicit. Selected declarations expand inline under their signature, avoiding a duplicate
 heading and detached detail card.
 The subsystem square shows its authored Genesis responsibility in an Explanation
 field, followed by links to associated capability readers. Invalid Program evidence
 keeps that responsibility visible and exposes the source-citation diagnostic in
 Analysis details, without raw-document navigation. Its text and signatures can be selected without activating
 the signature. The file view explains common definition kinds and distinguishes a file export
-from the subsystem's intended API. Missing-Helper status appears before selection,
+from the subsystem's intended API. Missing Explain & check status appears before selection,
 with disabled English modes and available whole-file Code stated directly.
 
 `pageConnections` preserves component-mediated uses, protocol/scope and exact

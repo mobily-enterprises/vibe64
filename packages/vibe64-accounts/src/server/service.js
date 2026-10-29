@@ -2314,7 +2314,7 @@ function createService({
       const preferProvider = input.preferProvider || null;
       if (!ASSISTANT_SETUP_ROLES[setup] || preferProvider && (typeof preferProvider.modelProviderId !== "string" ||
           !["codex", "claude", "opencode"].includes(preferProvider.engineId))) {
-        throw new Error("Choose a supported AI setup to initialize model routing.");
+        throw new Error("Choose a supported AI setup to fill in Models.");
       }
       const saved = await routingStore().read();
       if (ASSISTANT_SETUP_ROLES[setup].every((role) => Object.hasOwn(saved[setup], role))) return { ok: true, initialized: [] };
@@ -2346,7 +2346,7 @@ function createService({
       const changes = input[setup];
       if (changes === undefined) continue;
       if (!changes || typeof changes !== "object" || Array.isArray(changes) ||
-          Object.keys(changes).some((role) => !ASSISTANT_SETUP_ROLES[setup].includes(role))) throw new Error("Unknown model routing role.");
+          Object.keys(changes).some((role) => !ASSISTANT_SETUP_ROLES[setup].includes(role))) throw new Error("Unknown role in Models.");
       Object.assign(configuration[setup], structuredClone(changes));
     }
     // A Senior/Junior tool mismatch is reported on the Junior field, not as a shape error.

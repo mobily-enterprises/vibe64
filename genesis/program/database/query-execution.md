@@ -153,11 +153,12 @@ a WITH statement counted as SELECT only when no data-changing keyword appears in
 it. After a cell edit, row insert or row delete the editor re-runs its SQL only
 for SELECT, SHOW, DESCRIBE or EXPLAIN results, so a row-returning write such as
 `INSERT ... RETURNING` or `CALL` is never repeated; otherwise it reloads state.
-Copilot resolves the workflow's Helper assignment for the submitting user before
-inference. It may use a shared model in another orchestrator while the main chat
-remains on the owner's personal model. Its availability and model label describe
-that resolved destination, including Shared backup. Disabling Helper does not
-prevent browsing or manual SQL. A person can still prepare a question in main
+Copilot resolves the submitting user's Explain & check role (`database_assistant`)
+before inference: the owner's setup for the owner, the team setup for everyone
+else. It may use another orchestrator, and a team member's question uses the team
+setup while the main chat remains on the owner's personal model. Its availability
+and model label describe that resolved destination. An unset or disabled Explain &
+check does not prevent browsing or manual SQL. A person can still prepare a question in main
 chat when its separate approval workflow is available.
 
 Each question runs under the session's existing admission lock, with one active
@@ -183,7 +184,7 @@ Stop cannot stop the main conversation.
 The client caches database workspace state per actor, project and session, and
 refreshes it when AI connections or routing change. Switching actors remounts
 the transient Copilot view. AI generation of the project's Data overview is a
-separate Junior task; it does not use Copilot's Helper availability.
+separate Junior task; it does not use Copilot's Explain & check availability.
 
 SQLite uses an explicitly declared persistent filename. Hosted resources provide
 an absolute filename; standalone projects may resolve a relative filename from

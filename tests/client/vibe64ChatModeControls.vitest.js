@@ -93,6 +93,13 @@ it("Auto after a Custom model starts with Deslop and automatic save on; turning 
   expect(state.triggerLabel).toMatch(/Automatic deslop by Senior on$/);
 });
 
+it("ends each sentence of the mode label with one period", () => {
+  const state = mount(undefined, false, { canConfigure: true, session: { sessionId: "session-1", metadata: {
+    assistant_routing: JSON.stringify({ mode: "auto", review: true, autoSave: true }) } } });
+  expect(state.triggerLabel).toBe("Chat mode: Auto. Senior for plans and reviews; Junior otherwise · Router: " +
+    "Choose a model in Models. Automatic deslop by Senior on. Automatic save after plans on");
+});
+
 it("does not save Helper as a chat mode", async () => {
   const state = mount();
   await state.save("helper", false);

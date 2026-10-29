@@ -735,8 +735,7 @@ AI access still uses its existing check. This avoids an irrelevant sign-in
 warning and queue requests in a local editor with no hosted identity.
 Owner settings in main and temporary chat use the Models `canConfigure`
 response (its light `view: "main"` read) independently of that queue, so they remain available in the local editor.
-The compact mode menu names the effective reviewer and states when it uses the
-same model as Junior, including a collaborator's shared backup pair.
+The compact mode menu names each mode's effective model and Auto's Router.
 Unavailable modes retain their explanation and expose their disabled state to
 assistive technology, including when Auto requires a personal connection.
 Model labels and restriction reasons wrap fully within the scrollable mode menu.
@@ -1478,8 +1477,8 @@ routing. It loads saved or server-supplied draft configuration, trusted actor
 and connection facts, and the exact required catalogue models before invoking
 the shared deterministic policy. It does not authorize against the last chat
 selection or change a conversation binding. Senior/Junior decisions capture the
-whole effective pair; independent Router/Helper decisions read only their own
-dependencies. OpenJunior model pages must share one catalogue revision. Unknown
+whole effective pair; each other role's decision (Router, Colleague, Fix it with
+AI, Explain & check, Quick helper) reads only its own dependencies. OpenCode model pages must share one catalogue revision. Unknown
 credentials and unavailable catalogues produce unavailable decisions rather
 than provider-failure substitution. Execution retains the direct provider
 access check, including the captured connection identity at inference admission.
@@ -1496,7 +1495,7 @@ new Send. Recorded submitters still receive fresh admission; inspecting a prior
 delivery receipt requires no new inference. Standalone admission without hosted
 users remains supported. Access responses omit the user record. Reads,
 Stop and cleanup remain separate from admission of new inference. Source
-explanations and Database Copilot use their own resolved Helper destination too.
+explanations and Database Copilot use their own resolved Explain & check destination too.
 
 The offline routing upgrade owners validate exact known schema 3/4 state before
 legacy conversion. Current schema 4 requests and Custom preferences retain their
@@ -1551,7 +1550,8 @@ A failed switch retains the prior selection; the
 next ordinary Send supplies the existing conversation catch-up. Custom retains
 its exact-model picker, and temporary chats retain their independent controls.
 Main passes its existing initializing/reconciling state into the mode menu.
-The menu shows Connecting assistant while keeping settings editable. Its existing
+The menu shows Connecting assistant while keeping mode and model choices editable;
+the Deslop and automatic-save switches wait for the connection. Its existing
 settings lock serializes preference saves separately from turn admission. Saving
 a preference does not interrupt native startup or the current turn; native
 changeover retains the original admission and cleanup checks.
@@ -1562,17 +1562,18 @@ menu but Send reports its unavailability.
 `packages/vibe64-runtime/src/shared/assistantLabels.js` formats the same visible identity for Main and
 temporary replies from their saved selections. Empty thinking displays "default";
 absent thinking displays "not recorded". Current settings never relabel history.
-Senior and Junior resolve as a pair even when review is off. A member's foreign
-shared Backup replaces both roles; same-engine Backup replaces restricted roles.
-Auto resolves Router, Senior and Junior through the same actor-aware fallback
-policy. A compatible shared destination can replace each owner-only connection;
+Senior and Junior resolve as a pair even when review is off. Auto resolves Router,
+Senior and Junior from the same setup: the owner's, or the team setup in a team
+member's own lesson, where Colleague serves as Senior and Junior and Quick helper
+as Router. No other destination replaces a connection the actor cannot use;
 the captured submitter remains the actor for routing, delivery and review.
 Goals cannot start in Auto. Choosing Auto during an unfinished goal saves it
 for after the goal finishes. Resume and messages retain the existing goal
 orchestrator, including when its native status is temporarily unavailable.
-Chat modes are `custom`, `senior`, `junior` and `auto`. Model assignments additionally
-include `helper` and `router`; neither is selectable as a direct chat mode.
-Configuration and request snapshots use schema 4. The simplified classifier uses
+Chat modes are `custom`, `senior`, `junior` and `auto`; `fix` is only a temporary
+repair chat's mode. Model assignments additionally include `router`, `colleague`,
+`fix`, `explain` and `quickHelper`; none is selectable as a main-chat mode.
+Configuration and request snapshots use schema 5. The simplified classifier uses
 new reason values in ordinary new requests; existing saved roles, review decisions,
 receipts and history remain valid without rewriting or classifying past requests. The numbered stopped-service
 role upgrade renames owned routing fields in settings, sessions, temporary chats,
@@ -1583,10 +1584,11 @@ no old-role aliases. Actual Auto plan artifacts retain their `workPlan` and
 
 Custom records an exact selection in the existing conversation override and
 uses its selected orchestrator. It needs no configured Senior, Junior or Router,
-and never substitutes a shared backup. Actor access and model compatibility are
+and refuses a personal connection the actor cannot use rather than substituting
+another model. Actor access and model compatibility are
 still validated at dispatch. Its messages and goals use the same routing,
 receipts and context handoff as the existing modes. Selecting a named role clears
-the custom override and returns to that workflow's role assignments. Old records
+the custom override and returns to the owner's setup role assignments. Old records
 remain valid without rewriting or classifying past requests.
 
 A goal pins its role and model across account reconnection. A new Send or Resume
@@ -1634,8 +1636,9 @@ missing roles bring the first one into view. The header's close control is an X.
 Both icons retain accessible labels and tooltips; there is no bottom
 configuration button.
 Other users have no configuration action. The mode icon remains reachable when
-the current mode is unavailable. Its menu shows the actor's effective destination,
-Shared backup and pair-preservation reasons, and explains unavailable choices.
+the current mode is unavailable. Its menu shows the actor's effective destination
+and explains unavailable choices; a team member outside their own lesson is told
+that main chat runs on the owner's AI.
 Routing progress stays on the message bubble, without a duplicate composer banner.
 Main chat uses the routing notice component: planning, implementation, review and
 delivery-recovery notices share a compact wrapping row, with expandable details,
@@ -1651,7 +1654,7 @@ only when that connection is available and the viewer may not use it; an
 unavailable connection, including the owner's, gets the unavailable-connection
 hint instead. Members regain direct chat after an owner's personal turn finishes
 when their configured mode is accessible. Suggestions independently use
-`prompt_hint` availability, allowing private drafts through accessible Helper.
+`prompt_hint` availability, allowing private drafts through an accessible Quick helper.
 An idle routed Send does not require the previous native connection to start.
 Unresolved activity or a running turn still prevents changing its destination.
 Access and approval query caches separate actor/role, project and session; user
@@ -1842,8 +1845,8 @@ pair, never a model, executable command or generated rejection message.
 
 Auto captures Router and the effective Senior–Junior pair, the actor, connection
 identities and configuration revision before invoking the existing tool-free
-classification workload in a separate non-project scope. Helper is not an Auto
-dependency. The classifier sees the submitted text, attachment labels and bounded
+classification workload in a separate non-project scope. Quick helper is not an
+Auto dependency, except as the Router of a team member's lesson. The classifier sees the submitted text, attachment labels and bounded
 three recent visible messages plus the current plan status, revision and bounded outline; it returns only a mode and reason. Its native reference
 and any managed execution ID stay in the parent request until verified cleanup.
 Helper callbacks merge that reference under the ordinary lock without overwriting
@@ -1851,8 +1854,8 @@ cancellation. A late native start is stopped before delivery; failed cleanup
 blocks new work and is retried during reconciliation or explicit cancellation.
 Vibe64 then rechecks the captured decision and sends the original request through
 ordinary native delivery with a Senior or Junior instruction. Main chat uses both
-existing changeover preparation and Send when Helper or a member Backup selects
-another orchestrator. The workflow stays fixed across that excursion. Returning
+existing changeover preparation and Send when the routed selection runs in
+another orchestrator than the chat's current one. Returning
 to Codex looks up its retained native history in the shared workflow storage,
 even when the next turn selects a different model provider. Temporary chat scopes
 the same owner to its own transcript and retained native bindings. Old provider-specific
@@ -2552,7 +2555,7 @@ accepted record cannot be claimed again or rebound to another thread. These
 store operations do not themselves contact the assistant. The terminal service
 uses the ordinary routing coordinator for generated Junior work, with automatic review
 off and unchanged chat preferences. It resolves the submitting actor's effective
-Junior destination, including shared Backup and ordinary history changeover.
+Junior destination, including ordinary history changeover.
 Its internal pre-send callback claims the domain receipt before native inference;
 both transitions use the existing main assistant write lock. Before the first
 claim, the sessions feature supplies the source editor's configuration reader;
@@ -2873,11 +2876,12 @@ Older conversation records that retained only file details cannot recover bytes
 already removed by upload expiry.
 
 All AI features resolve the requesting person's effective destination through
-`resolveAssistantPurpose`. Owner-only connections use the workflow's compatible
-shared fallback for collaborators, including Router and Auto. Database and source
-explanations, prompt hints and save naming use the same policy through their
-existing purpose calls. Provider admission rechecks the effective connection.
-The fallback cannot grant access to personal credentials.
+`resolveAssistantPurpose`. Main chat, including Router and Auto, uses the owner's
+setup, so a team member's main-chat message outside their own lesson waits for
+the owner's approval; their other purposes use the team setup, which refuses a personal connection. Database
+and source explanations, prompt hints and save naming use the same policy through
+their existing purpose calls. Provider admission rechecks the effective connection.
+No fallback grants access to personal credentials.
 
 An active owner-only turn remains bound to its native connection. Collaborators
 cannot steer it, submit a proposal, or queue a replacement request. Their composer
@@ -3136,7 +3140,7 @@ Terminal availability checks the conversation's native connection, independently
 of the next routed chat mode. Each open terminal retains the connection it was
 started with; input rechecks the current viewer's access and connection identity
 without loading full chat history. A changed connection requires closing and
-reopening the terminal. Shared Backup never receives raw terminal input. Reading,
+reopening the terminal. Reading,
 resizing and closing remain available after AI access is lost.
 The shared terminal WebSocket route serializes each connection's incoming
 messages through its existing authorized write/resize operations. An asynchronous
@@ -3189,17 +3193,17 @@ ordinary provider command boundaries, and closing that session drains those
 descendants.
 The shared OpenCode configuration defines helper subagents for connected
 providers, while task admission and native chat/model hooks restrict use to the
-registered parent's selected provider and effective Helper model. A foreign
-Helper choice is not exposed as a native subagent. Resuming a
+registered parent's selected provider and effective Quick helper model. A Quick
+helper choice in another tool or provider is not exposed as a native subagent. Resuming a
 helper from another parent is rejected. The plugin resolves native child
 `parentID` ancestry for command control, history unwrapping and host capabilities;
 unknown or unverifiable ancestry fails closed. Helpers gain no extra account or
 command permissions.
 OpenCode progress broadcasts coalesce to at most one per second per session,
 with the first state published immediately. A meaningful reasoning sentence or
-completed part can queue one bounded, tool-free summary through effective Helper
+completed part can queue one bounded, tool-free summary through effective Quick helper
 using the common scoped manager and the submitting actor. This helper may run
-under another orchestrator without changing the working OpenJunior model. Streaming and final projection share turn-owned entries, so
+under another orchestrator without changing the working OpenCode model. Streaming and final projection share turn-owned entries, so
 replayed parts never submit duplicate requests and initial partial words do not
 consume a part. The existing completion reader waits for the helper's finished
 answer. Main completion persists any missing mechanical headlines before its
@@ -3242,9 +3246,9 @@ origin, without resending the private draft. The HTTP route preserves omitted
 optional fields so action validation can admit that cancellation. Draft context
 is bounded to its latest 4,000 characters;
 it is sent only to the tool-free suggestion helper, not saved as a chat message.
-The server resolves the saved workflow's effective Helper destination for the
-requesting actor before creating a provider profile; a personal main-chat
-selection does not block an accessible shared helper. Cache identity includes
+The server resolves the requesting actor's effective Quick helper destination
+before creating a provider profile; a personal main-chat selection does not block
+an accessible Quick helper. Cache identity includes
 the actor, exact destination and connection generation, routing revision, draft,
 Blueprint and conversation. Routing is rechecked before publishing a result.
 Each actual generation uses an independent tool-free scope. Its native
@@ -3256,7 +3260,7 @@ by the next request or session close, including after restart. Cancelling a
 session also waits for requests still preparing their context.
 Successful generation without a draft also stores a shared suggestion snapshot
 in the session's private assistant artifact and publishes a session refresh hint.
-When effective Helper is unavailable, the server may return that snapshot
+When the actor's Quick helper is unavailable, the server may return that snapshot
 only while its complete conversation/Blueprint basis still matches; this path
 does not invoke inference. Draft suggestions remain actor-specific and are never persisted in
 this shared artifact. The browser requests hints, including private drafts,
@@ -3617,7 +3621,7 @@ its user-authorized connection workflow remains separate from ordinary chat.
 | [codexGitCommand.js](../../../packages/vibe64-terminals/src/server/codexGitCommand.js): `createCodexGitCommandService`, `prepareCodexGitCommand` | `service` and `agentCommandEnvironment` use the existing authenticated Git/GitHub command broker, actor/source-root checks and Save policy across engines. Its historical name does not make it an engine protocol owner. |
 | [claudeConversationEnvironment.js](../../../packages/vibe64-terminals/src/server/claudeConversationEnvironment.js): `createClaudeConversationEnvironment` | The original managed command/project environment, selected provider configuration and Genesis registry preparation share one private application facility. It creates no native owner or lifecycle state; the same native owner invokes those facts at their original phases. Its private session-environment preparation is also reused by `createTerminalAccess`: native acquisition and confirmed Stop precede application environment/Git effects, native resume/argument preparation and managed PTY launch. Existing terminal methods retain their authorized namespaces. |
 | [openCodeConversationEvents.js](../../../packages/vibe64-terminals/src/server/openCodeConversationEvents.js): `createOpenCodeConversationEvents`, `openCodeMessageError` | Application checkpoint, run-record, transcript and realtime effects retain the original awaited order. Native frames, monitoring and error decoding remain JSKIT-owned; this facility supplies Genesis diagnostics, actor attribution, visible notices and cosmetic-summary publication using the existing presentation facility. |
-| [openCodeConversationPresentation.js](../../../packages/vibe64-terminals/src/server/openCodeConversationPresentation.js): `createOpenCodeConversationPresentation` | Product progress summaries retain actor-authorized Helper selection, durable cleanup receipts, headline formatting and the original publication throttle maps. Summary state still participates in the same native owner inventory; no second process or registry is introduced. |
+| [openCodeConversationPresentation.js](../../../packages/vibe64-terminals/src/server/openCodeConversationPresentation.js): `createOpenCodeConversationPresentation` | Product progress summaries retain actor-authorized Quick helper selection, durable cleanup receipts, headline formatting and the original publication throttle maps. Summary state still participates in the same native owner inventory; no second process or registry is introduced. |
 | [claudeConversationEvents.js](../../../packages/vibe64-terminals/src/server/claudeConversationEvents.js): `createClaudeConversationEvents` | The same synchronous native event sink applies application receipts, run/log/stream publication and checkpoints in their original order. It shares the existing storage, message policy, native snapshot and account-query owners; it creates no queue, native dispatcher or lifecycle state. |
 | [codexRuntimeHost.js](../../../packages/vibe64-terminals/src/server/codexRuntimeHost.js): `createCodexRuntimeHost`, `createCodexSessionRuntimeHost` | Codex application preparation reuses its captured environment, normalized provider options and tool-home reference for the original shared-runtime options, provider identity key and saved transport metadata projection. Session facts use the same account/environment facilities and project service for full runtime versus bounded-store reads, late managed-thread identity and saved-runtime presence. Supplied environment still bypasses project preparation; otherwise the original ordered inspection, command environment and account selection remain lazy. These factories create no process, cache, native map or account store. |
 | [codexSessionProviderHost.js](../../../packages/vibe64-terminals/src/server/codexSessionProviderHost.js): `createCodexSessionProviderHost` | The application facility supplies the original selected-account and managed-command policy, exact hidden-renewal reader, Genesis thread binding and fresh connection-current checks. It reuses the same runtime/account/environment facilities and lazily references the actual native owner; construction performs no session read or acquisition. Parameter/settings getters and observation-error presentation keep their original phases. JSKIT still owns native provider selection, subscription, resume guards, recovery and retirement. |

@@ -80,8 +80,8 @@ agent guidance folders excluded, and, only when the step's `evidence` lists it,
 the end of the Main chat through `vibe64.sessions.conversation-log.read`; both
 are bounded. The reviewer (`stepReview.js`) runs the `lesson_review` Helper
 workload through Terminals' retained Helper (`retainedConversationHelper.js`,
-scope prefix `review`) on the learner's Helper route for the session's
-workflow, with the learner store's per-learner lock, private root and receipt
+scope prefix `review`) on the learner's Explain & check route (the team setup
+unless the learner is the owner), with the learner store's per-learner lock, private root and receipt
 (`runReviewExclusive`). A failed review keeps its own reason when its Helper
 close also fails; that kept receipt holds the next review, with an error naming
 the review Helper, until the close is confirmed. Its fixed context makes the rubric the only requirement

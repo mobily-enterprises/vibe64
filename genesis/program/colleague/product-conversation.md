@@ -8,13 +8,13 @@ both calendar date and time in the browser's locale and local timezone.
 
 Colleague can inspect the actor's configured coding destinations and change the
 requested session's chat mode or assistant through the existing selection action.
-Its bounded inspection distinguishes saved `chatMode`, workflow and review
+Its bounded inspection distinguishes saved `chatMode` and review
 preferences from the mode of the previous/current routing request and its selected
 model. Changing preferences alone does not send work or claim that a running
 model changed. Mode inputs expose Senior, Junior and Auto explicitly; the service
 retains goal, access, pending-work and engine-changeover guards. The access
-projection reports configured roles, effective selections, Backup use and missing
-prerequisites without connection bindings or execution profiles.
+projection reports configured roles, the setup each purpose uses, any Same as role
+followed, effective selections, owner-approval need and missing prerequisites without connection bindings or execution profiles.
 
 Colleague reads Main's Auto work plan through its canonical paged action. It
 must finish all pages of one revision before describing the complete document;
@@ -191,12 +191,13 @@ request or accepted offer.
 Colleague uses JSKIT's `createConversationRuntime` for model turns, application
 tools, native history, admission, cancellation and model replacement. Its service
 owns product instructions, focused targets, watches, assignments and authorization.
-Initial Senior selection tries Claude Code, then Codex, then the other available
-workflows. When it has no available route, the service records the
+Initial selection resolves the person's Colleague role: the owner's setup, after
+saving its recommendations, for the owner; the team setup for others. When it has
+no available route, the service records the
 existing setup failure without admitting a model request and projects a bounded
 `modelSetupRequired` presentation fact. Before a selection is committed, a read
-also projects it when ordinary selection finds no usable Senior route (no
-failure is recorded), so the composer and Teach me know before any send. The client keeps the original JSKIT draft
+also projects it when ordinary selection finds no usable Colleague route (an
+unset role still counts when an AI is connected; no failure is recorded), so the composer and Teach me know before any send. The client keeps the original JSKIT draft
 and offers the existing account owner: a host may navigate to its own AI
 accounts page, while standalone dispatches its existing Account settings request. The
 control sends no message, changes no selection and performs no credential action.
@@ -798,7 +799,7 @@ in an application-owned Vuetify dialog. No watch panels consume height below
 chat. Resume/Cancel remain the existing actions, and closing details returns to
 the same chat/draft. The client continues fetching state while minimized with
 an active watch.
-Large-range conversation reads use the configured Helper with the existing
+Large-range conversation reads use the reader's Quick helper with the existing
 tool-free `conversation_summary` execution profile. The operation reads at most
 20 Main turns or 12 temporary messages, caps input at 120,000 characters and
 marks omitted content. Ranges of up to 8,000 characters return directly without
@@ -817,7 +818,7 @@ Conversation summaries retain their existing Helper lifecycle,
 including cleanup of retained historical executions.
 The original retained Helper execution block now belongs to Terminals'
 `retainedConversationHelper` owner. Colleague supplies its unchanged private
-summary root, existing `summaryHelper` receipt publication and workflow selector.
+summary root, existing `summaryHelper` receipt publication and `summary` scope prefix.
 The shared block retains the original tool-free profile, account connection,
 native ID publication, timeout, cancellation and cleanup-before-reuse contract.
 Excerpt/citation policy and Stop serialization remain in Colleague. This move

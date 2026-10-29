@@ -174,6 +174,8 @@ test("names validate before storage and automatic names must be one word", async
   for (const value of ['{"name":"Two words"}', '{"name":"Okay!"}', '{"name":"a","extra":1}', "bad", '{"name":""}']) {
     assert.throws(() => parseSessionName(value), { code: "vibe64_session_name_invalid" });
   }
+  assert.throws(() => parseSessionName("bad"), { message: "Quick helper did not return a session name." });
+  assert.throws(() => parseSessionName('{"name":"Two words"}'), { message: "Quick helper must return one word of at most 40 characters." });
   assert.equal(parseSessionName('{"name":"予約"}'), "予約");
   assert.equal(parseSessionName('{"name":"Café"}'), "Café");
 });

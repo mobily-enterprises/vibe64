@@ -313,12 +313,12 @@ running non-Senior turn must be stopped before another request. Native history,
 repair context and verification remain owned by the existing conversation.
 
 Each ordinary temporary chat reads availability from the same central resolver as
-Send, using its own workflow, mode and custom override. Its menu labels the user's
-effective destination, thinking choice and Shared backup, rather than using the main chat's last
+Send, using its own mode and custom override. Its menu labels the user's
+effective destination and thinking choice, rather than using the main chat's last
 model or an account-wide preview. Mode changes return refreshed decisions without
 inference. Selecting another role clears a custom override. Explicit model/thinking edits update that mode's
-saved override; their availability is validated against the current catalogue. A foreign backup cannot turn a
-Senior/Junior override into a split-orchestrator pair. Configuration and connection changes refresh existing chats' decisions
+saved override; their availability is validated against the current catalogue. Senior and Junior
+overrides must both run in the main AI's tool, never as a split-orchestrator pair. Configuration and connection changes refresh existing chats' decisions
 without replacing unsent drafts or switching away from Main chat or the selected
 temporary chat. Initial restoration loads saved chats without selecting them;
 reload keeps Main chat visible until a person explicitly opens Temporary AI.
@@ -332,8 +332,8 @@ main chat's last model. An active turn reports its separate native steering
 permission; a collaborator may be unable to steer that turn while still having a
 shared route for the next request.
 
-Foreign Helper and Backup turns use the same changeover preparation and Send
-owner as Main chat, scoped to this chat's metadata and visible transcript. The
+A turn whose selection runs in another orchestrator uses the same changeover
+preparation and Send owner as Main chat, scoped to this chat's metadata and visible transcript. The
 previous native conversation is stopped and retained before selection changes;
 a failed stop leaves that selection unchanged. Returning resumes the recorded
 native conversation and sends missed or corrected visible messages with the
@@ -749,8 +749,8 @@ to its shared owner for each operation. Session close still drains those entries
 and closes its terminals before an explicitly requested cached-binding release.
 After restart, its parent's captured managed-execution receipt still drives verified Stop
 before native history or the retained scoped record is removed.
-Save naming, suggestions, source explanations and database help resolve effective
-Helper through this seam. Each feature retains its own durable helper-cleanup
+Save naming and suggestions resolve the actor's effective Quick helper, and source
+explanations and database help its Explain & check, through this seam. Each feature retains its own durable helper-cleanup
 references, exact destination and connection identity; the last main-chat model
 does not determine helper access.
 
@@ -852,21 +852,22 @@ an earlier observation.
 Native completion first saves the final reply through the ordinary snapshot
 owner. Review then checks the saved reply for the composer's structured questions;
 an unanswered question retains the coding model and waits for the user's answer.
-This also applies when a collaborator uses a foreign Backup pair.
 Settings saves retain current access and catalogue validation. An unavailable
 native goal does not disable preference saves or clear its existing pin. Native
 settings updates require an observed goal and preserve its objective and progress.
 
 Bounded tasks use the central resolver's exact destination. Their provider
-profiles validate that model and enforce workload limits without consulting a
-per-account helper preference or choosing an implicit fallback. The profile
+profiles validate that model and enforce workload limits without choosing an
+implicit fallback. The profile
 retains the model for that task. Codex requires low thinking; Claude validates
 low effort when the model exposes effort controls. Claude's tool-free process
 uses the selected account's private home without the project's command
 environment, Genesis prompt or driver. Routing changes affect new tasks.
 
-Bounded operations use the `helper` execution profile and the configured Helper
-model and thinking; Auto classification uses Router's separate assignment. The
+Bounded operations use the `helper` execution profile and the model and thinking
+of their purpose's role: Explain & check for source explanations, database help
+and lesson reviews, Quick helper for titles, commit subjects, prompt hints and
+summaries; Auto classification uses Router's separate assignment. The
 profile constrains tools, environment access, output and time, not model selection.
 
 Custom is the first mode in ordinary temporary chats and opens the same
@@ -876,7 +877,8 @@ send uses the existing native changeover and conversation handoff, leaving Main
 untouched. Active goals retain their orchestrator while accepting future-turn
 model settings. Merge repair keeps its picker available during work while
 retaining Senior and its repair instructions.
-Custom never silently substitutes a collaborator backup.
+Custom never silently substitutes another model; a selection the person cannot
+access is refused.
 
 Temporary conversation reads optionally accept a stable message cursor and a
 bounded count, return messages in chronological order, and report whether earlier
@@ -891,8 +893,8 @@ ordinary requests. The existing execution plugin enforces
 the conversation’s actual access when a tool is called; a classification task
 does not gain coding access merely because definitions are present. Without
 the plugin and its trusted session registry, the Helper remains denied. Routing
-therefore admits a connected OpenCode model for Router and Helper as well as
-chat. Vibe64 offers no account-free model: OpenCode Zen's free Big Pickle is
+therefore admits a connected OpenCode model for Router, Explain & check and Quick
+helper as well as chat. Vibe64 offers no account-free model: OpenCode Zen's free Big Pickle is
 never offered, so without a connected AI these background workloads are not
 admitted.
 

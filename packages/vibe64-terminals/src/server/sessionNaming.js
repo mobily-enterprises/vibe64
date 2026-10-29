@@ -28,7 +28,7 @@ function parseSessionName(value) {
   try {
     result = typeof value === "string" ? JSON.parse(value) : value;
   } catch {
-    throw namingError("The Helper did not return a session name.", undefined, "invalid");
+    throw namingError("Quick helper did not return a session name.", undefined, "invalid");
   }
   if (
     !result ||
@@ -36,7 +36,7 @@ function parseSessionName(value) {
     typeof result.name !== "string" ||
     !/^[\p{L}\p{N}][\p{L}\p{M}\p{N}]{0,39}$/u.test(result.name)
   ) {
-    throw namingError("The Helper must return one word of at most 40 characters.", undefined, "invalid");
+    throw namingError("Quick helper must return one word of at most 40 characters.", undefined, "invalid");
   }
   return result.name;
 }

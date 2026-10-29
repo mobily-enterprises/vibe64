@@ -2579,6 +2579,8 @@ test("model routing setup initializes missing roles once and preserves deliberat
     assert.deepEqual(current.owner.junior, chosen.junior);
     const nextPreview = await f.service.readModelRouting({ vibe64User: f.owner });
     assert.equal(nextPreview.setups.owner.setupPreview.prompt_hint.available, false);
+    const unsupported = await f.service.initializeModelRouting({ setup: "everyone", vibe64User: f.owner });
+    assert.deepEqual([unsupported.ok, unsupported.error], [false, "Choose a supported AI setup to fill in Models."]);
     const team = await f.service.initializeModelRouting({ setup: "nonOwner", vibe64User: f.owner });
     assert.equal(team.ok, true, team.error);
     const teamSaved = (await f.store.read()).nonOwner;
@@ -2628,6 +2630,7 @@ test("a save patches only the requested roles of each setup and refuses unknown 
     for (const changes of [{ owner: { sharedBackup: f.pickle } }, { nonOwner: { senior: f.pickle } }, { owner: { colleague: { follows: "colleague" } } }]) {
       const rejected = await f.service.saveModelRouting({ vibe64User: f.owner, revision: before.revision, ...changes });
       assert.equal(rejected.ok, false, JSON.stringify(changes));
+      if (!changes.owner?.colleague) assert.equal(rejected.error, "Unknown role in Models.");
       assert.deepEqual(await f.store.read(), before);
     }
     const saved = await f.service.saveModelRouting({ vibe64User: f.owner, revision: before.revision,

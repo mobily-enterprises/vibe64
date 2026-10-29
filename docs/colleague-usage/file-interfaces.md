@@ -61,7 +61,7 @@ anchors require correction rather than an inferred file or document link.
 
 The file opens as a document, with an **Explanation** field above its exports.
 An empty field offers **Generate explanation**. Press it to fill the field through
-the configured Helper. Saved text is shown automatically when you reopen the file;
+the **Explain & check** model. Saved text is shown automatically when you reopen the file;
 **Update explanation** replaces it with a newly generated answer. Existing text
 stays readable while an update runs. A short status marks an out-of-date answer.
 These explanations describe the saved file, not a chat transcript or an authored
@@ -78,7 +78,7 @@ English steps. Function explanations identify **Inputs** and **Outputs and use**
 what callers pass, what is returned, and which returned data or operations they
 read or invoke. Required options, important defaults, live state, snapshots,
 awaitable results and side effects are distinguished when evidenced. Inapplicable
-sections are omitted; missing real contracts remain explicit. The Helper is asked
+sections are omitted; missing real contracts remain explicit. The model is asked
 for a purpose sentence, that caller interface, then up to twelve concise steps,
 grouping related operations in large declarations.
 A saved answer appears when that declaration is selected;
@@ -87,13 +87,13 @@ Components, values and types offer Code without an inapplicable pseudocode field
 **Code · whole file** opens the source view; **Interface** returns to the document.
 The Architecture reader's source view uses the full width without an explanation
 chat dock. Discussion belongs in the project's agent conversation.
-Opening a file or selecting a signature makes no Helper query.
+Opening a file or selecting a signature makes no AI request.
 
 Both generated fields use the existing private source-editor cache, keyed to saved
-source, person, project/session, verified Helper profile and prompt revision.
+source, person, project/session, verified helper execution profile and prompt revision.
 Source changes mark the text out of date. It remains informational and is not
 supplied to coding agents. Generating or updating starts only on an explicit
-button press. A missing Helper disables generation, but saved text and Code stay
+button press. A missing **Explain & check** model disables generation, but saved text and Code stay
 readable. Choose the **Explain & check** model in **Models** and connect its account in
 **AI Accounts** if necessary.
 
@@ -113,7 +113,7 @@ within that same character limit, including functions longer than 240 lines.
 
 An out-of-date index disables symbol-range use. **Architecture → ⋯ → Re-scan project** rebuilds
 the whole project browsing index: signatures, imports and UI links. It reads existing
-Genesis documents; it does not rewrite Program or ask the Helper for explanations.
+Genesis documents; it does not rewrite Program or generate explanations.
 The running stage and elapsed seconds show progress, with **Cancel analysis** in
 Architecture. An inspector failure offers **Command output** inline and retains
 the preceding index. Fix the reported command or prepare the missing dependency,
@@ -159,6 +159,6 @@ After following a cited source to another file, **← Back** restores the previo
 file and selected declaration. This history also covers links across subsystems;
 **×**, Esc and the subsystem breadcrumb return to the enclosing browser instead.
 
-**Analysis details** holds coverage, visibility and missing-Helper information.
+**Analysis details** holds coverage, visibility and missing **Explain & check** model information.
 The file view keeps this secondary information collapsed. Program diagnostics remain inside **Analysis details**. **Code** and saved function explanations remain available
 independently.

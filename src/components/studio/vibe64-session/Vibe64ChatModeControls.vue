@@ -70,7 +70,11 @@ const description = computed(() => {
   const selectedOverride = preferences.value?.mode === mode.value && preferences.value.override;
   return selectedOverride && !decisions.value[mode.value] ? `${vibe64AssistantSelectionLabel(selectedOverride)} · custom` : roleLabel(mode.value);
 });
-const triggerLabel = computed(() => `Chat mode${modeLabel.value ? `: ${modeLabel.value}` : ''}. ${description.value}${review.value && reviewAvailable.value ? '. Automatic deslop by Senior on' : ''}${autoSave.value && reviewAvailable.value ? '. Automatic save after plans on' : ''}`);
+// One sentence per part: a description may already end with a period.
+const triggerLabel = computed(() => [`Chat mode${modeLabel.value ? `: ${modeLabel.value}` : ''}`, description.value,
+  review.value && reviewAvailable.value && 'Automatic deslop by Senior on',
+  autoSave.value && reviewAvailable.value && 'Automatic save after plans on'
+].filter(Boolean).map(part => part.replace(/\.$/u, '')).join('. '));
 const reviewDescription = computed(() => {
   if (hasGoal.value) return "Auto and automatic review apply after the current goal finishes.";
   if (ownerOnly.value) return "";

@@ -39,7 +39,7 @@ files; opening it never opens its Genesis Markdown as a source file.
 File interfaces use the native language facts, distinguishing recorded exports
 from intended subsystem API and externally observed imports. Opening a file or
 signature does not ask an AI to explain it. Explicit Generate/Update controls
-request a file overview or function pseudocode from the current Helper, through
+request a file overview or function pseudocode from the asker's Explain & check model, through
 the original source service. Saved text remains readable during updates.
 
 The component does not own project, provider, execution, account or teaching

@@ -554,6 +554,8 @@ test("Same as follows one role of the same setup and names the followed role", (
   f.input.configuration.owner.quickHelper = null;
   assert.deepEqual([f.resolve("source_explanation", owner).reasonCode, f.resolve("source_explanation", owner).message],
     ["vibe64_assistant_role_unconfigured", "Choose a Quick helper model in Models."]);
+  f.input.configuration.owner.explain = null;
+  assert.equal(f.resolve("source_explanation", owner).message, "Choose an Explain & check model in Models.");
 });
 
 test("a personal model in the team setup is refused at use while the owner keeps it", () => {

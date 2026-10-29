@@ -93,8 +93,8 @@ A step passes only through your own action in the lesson:
   **Not yet** with a comment and a hint. While the coding agent is still
   working it says "Wait until the agent finishes"; with nothing changed yet it
   says "No changes yet" without asking your AI; pressing again without new
-  work shows the same review. When the review cannot finish (no Helper route,
-  the provider failed, or the reply was unusable) nothing is recorded: fix the
+  work shows the same review. When the review cannot finish (no **Explain & check**
+  model you can use, the provider failed, or the reply was unusable) nothing is recorded: fix the
   cause and press it again.
 - **When you are stuck**: Colleague can read your practice work for the
   current step (`step.evidence.read`): the files you changed since the lesson

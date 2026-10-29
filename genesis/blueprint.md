@@ -167,7 +167,7 @@ If its model addresses an application tool through the wrong native channel,
 Colleague requests a correction before accepting the answer. Repeated mistakes
 show a specific request error and keep the person's message for retry, rather than
 reporting that project lookup or other application tools are unavailable.
-If no usable Senior model is available for the first request, no model request is
+If no usable Colleague model is available for the first request, no model request is
 sent. Colleague keeps the draft, explains the missing AI connection/routing
 prerequisite and offers **Set up your AI**, the guided AI setup. Setup and provider consent remain the
 person's actions; they return and explicitly send the retained draft afterward.
@@ -181,8 +181,8 @@ On request, Colleague can open the exact session's existing Plan and history
 dialog, with Current plan or History selected, and waits for the browser to
 confirm its display. Opening reads the plan and starts no coding work or plan
 change. Missing plans, access failures and changed sessions are reported.
-The host can check live-turn Helper availability before recording, without
-sending an AI request. Stopping or steering clears unfinished text.
+Until a send commits a model, each read rechecks whether a usable Colleague model
+exists, without sending an AI request. Stopping or steering clears unfinished text.
 Colleague can browse open and archived sessions beyond the first page, while
 reporting unavailable records separately and keeping historical sessions inactive.
 Changing that name keeps the conversation and model choice. People can ask it
@@ -482,7 +482,7 @@ confirms it, while the file-change details continue loading in the background.
 The chat header gives three session tabs room to show their labels, hides the
 new-session plus when all three slots are occupied, and groups Save beside the
 session actions.
-After the first accepted chat message, the workflow's Helper gives an unnamed
+After the first accepted chat message, the Quick helper gives an unnamed
 session a short, one-word display name in the background. People can rename it
 from the session details or ask the chat to do so. Their chosen name takes
 precedence over an automatic suggestion. Names never change session IDs,
@@ -582,7 +582,8 @@ and unfinished goals must finish before switching.
 A switch into Codex prepares its conversation for model routing before it opens,
 even when the session already has an OpenCode or Claude conversation.
 While the assistant starts or reconnects, the chat-mode menu shows connection
-progress and waits before enabling another model or mode change.
+progress; mode and model choices stay available, while the Deslop and automatic-save
+switches wait for the connection.
 Switching tools uses the existing conversation handoff. Both use one compact icon in the composer's bottom toolbar. The icon reflects the selected
 mode and comes first. Its menu shows
 effective model and thinking assignments and the selected role, including Router
@@ -691,7 +692,7 @@ continuation or review. Goals require a concrete
 mode and model, with Auto and automatic review unavailable. In Auto, the goal
 menu explains that a concrete
 mode must be selected before offering Start or Resume. Background helpers use
-the independent Helper role.
+their own Quick helper or Explain & check role.
 When the service shuts down, pending routing is cancelled and its helper cleanup
 finishes before the assistant processes close. Restart does not send that request.
 Custom AI controls open from Chat mode. Failed saves remain visible in that
@@ -849,9 +850,10 @@ including persistent SQLite databases as well as MySQL and PostgreSQL. SQLite
 uses the project's declared filename, enforces read-only inspection, and supports
 deliberate row edits through the same explicit unlock and confirmation controls.
 Project members can browse and work with the database regardless of AI access.
-Database Copilot uses the workflow's Helper model and checks that destination
-for the person asking. A shared Helper model remains usable when the main chat
-last used an owner's personal subscription. The Copilot names its effective
+Database Copilot uses the asking person's Explain & check model, from the team
+setup unless they are the owner, and checks that destination for them. A team
+member's Copilot remains usable when the main chat runs on an owner's personal
+subscription. The Copilot names its effective
 model; unavailable AI does not prevent database browsing or editing.
 The diagram lets people explore their data,
 starting with its keys and expanding detail when needed. Large diagrams load
@@ -1067,7 +1069,7 @@ project rows, and a snackbar with Review for each new message. Approving,
 declining, editing and withdrawing are human-only.
 A migrated AI request with no recorded submitter cannot borrow the current
 viewer's identity on Retry; cancel it and send a new request.
-Prompt hints use the actor's effective Helper independently of the connection
+Prompt hints use the actor's effective Quick helper independently of the connection
 answering Main chat. Draft hints remain private to their author.
 
 Prompt suggestions follow the person's current draft first, then the latest
@@ -1152,8 +1154,8 @@ formats, and the Codex identity upgrade does not rewrite project source.
 An overdue AI-settings upgrade reports the administrator's stop, upgrade and
 restart steps in the affected screen instead of a generic server error.
 Routing upgrades preserve saved destinations, conversation identities and
-delivery evidence, including archived and temporary conversations. Conflicting
-old helper choices remain visible for owner review. Interrupted publication
+delivery evidence, including archived and temporary conversations. An old helper
+choice still awaiting owner review became Quick helper off, with a warning. Interrupted publication
 resumes from the same prepared changes and retains the original backups.
 
 Codex code sign-in presents preparation and authorization as two clear steps.
@@ -1222,7 +1224,8 @@ before work continues; a provider context rejection remains an explicit failure,
 with saved history and existing edits retained. Vibe64 does not automatically
 replay a failed turn or promise that arbitrary history fits every model.
 Undo cannot cross a Codex provider switch.
-Helper work uses the actor's effective Helper model and its connection.
+Helper work uses the actor's effective Quick helper or Explain & check model and
+its connection.
 The GPT models and thinking choices come from the connected Codex service,
 so newly available GPT models appear without an editor update.
 Custom model discovery and Apply use the same Codex catalogue revision, including
@@ -1375,8 +1378,8 @@ serve only that view, returning
 to a view refreshes it promptly, and repeated failures slow recovery checks.
 Open sessions that choose the same coding-assistant application
 share one running assistant service, and that service stops when its final
-session is archived. Suggestions and focused helpers use their configured
-Helper destination in independent scopes; cleanup ends their native work without
+session is archived. Suggestions and focused helpers use their own Quick helper or
+Explain & check destination in independent scopes; cleanup ends their native work without
 rebinding or stopping the working chat. A helper may use another orchestrator.
 Suggestions and tool-free helper conversations can run alongside preview and
 foreground work. Only operations that change shared source or prepare its
@@ -1683,7 +1686,7 @@ Resume continues it, and Cancel clears it. A human can ask Main Claude to pause
 after a safe checkpoint; Claude uses the same application's structured Pause
 control after draining its work. A prose acknowledgement alone does not change
 the goal, and explicit pause intent survives server restarts.
-Claude goals have no token-budget field. Tool-free helpers use the workflow's independent Helper role. New tasks
+Claude goals have no token-budget field. Tool-free helpers use the actor's Quick helper or Explain & check role. New tasks
 capture that choice without changing main chat or tasks already running.
 
 Changing or reconnecting an AI account must not strand an unfinished goal.
@@ -1696,7 +1699,7 @@ conversation presentation. User-facing temporary chats have main chat's tools,
 capabilities and project access in Codex, Claude Code and OpenCode, without separate permission
 modes.
 Temporary model and thinking choices come from the connected service's current
-catalogue, including new Codex models and OpenJunior models. Each chat retains its own role and selected model without changing Main chat.
+catalogue, including new Codex models and OpenCode models. Each chat retains its own role and selected model without changing Main chat.
 A Fix it with AI or Custom turn can use another assistant application; returning
 to Senior or Junior retains the conversation already held by its effective assistant.
 The server keeps their conversations, settings, drafts and sent attachments
@@ -1761,16 +1764,17 @@ focus or selection.
 People configure Router and Quick helper independently in Models. Hints,
 commit naming and other bounded helpers capture the actor's effective Quick helper
 choice, which may use another orchestrator, without retargeting the working chat.
-Any connected model is eligible for Helper and Router as well as ordinary chat;
-with no connected AI, background helpers do not run.
-Helper is available to background tasks, not as a chat mode. Its model and thinking
-are user-configured; task limits and tool restrictions still apply. Router keeps
-its own model and thinking. Existing Helper choices retain their preferences
-through the numbered upgrade, while the retired third chat role becomes Junior.
-The old per-account Helper model preference is retired. Existing choices are
-backed up and incorporated or presented for review by the state upgrade.
-OpenCode's native Helper subagent is available only when the resolved choice
-uses the same OpenCode account; it inherits its parent's command controls.
+Any connected model is eligible for Router, Explain & check and Quick helper as
+well as ordinary chat; with no connected AI, background helpers do not run.
+Explain & check and Quick helper serve background tasks, not chat modes. Their
+models and thinking are chosen in Models; task limits and tool restrictions still
+apply. Router keeps its own model and thinking. Existing Helper choices became
+Quick helper through the numbered upgrades, while the retired third chat role
+became Junior. The old per-account Helper model preference is retired; the state
+upgrades backed up existing choices and incorporated them, and a choice still
+awaiting review became Quick helper off.
+OpenCode's native helper subagent is available only when the resolved Quick
+helper uses the same OpenCode account; it inherits its parent's command controls.
 Compact progress summaries use isolated, tool-free Helper tasks. Incomplete
 fragments do not suppress later reasoning, and finishing the main answer never
 waits for a summary model. Cancellation suppresses late results. Failed cleanup
@@ -1923,7 +1927,7 @@ The viewer also retains exact symbol Code. Whole-file Code uses the same viewer,
 editing, autosave, conflict and file controls as Files, with its browser hidden. Generated interpretations are
 informational only, cached privately against actual saved source and guidance,
 and regenerated on the next explicit explanation request after changes. Opening a file or
-selecting a declaration makes no Helper query. Files retains its full browser.
+selecting a declaration makes no AI request. Files retains its full browser.
 
 Purple protocol-neutral page/controller bridges remain evidenced and hidden
 initially; page selection focuses its calls and the menu can show all.
@@ -1940,7 +1944,7 @@ capabilities enrich subsystem and file views. Loading failures offer Retry loadi
 Reload architecture reads existing snapshots. Re-scan project is a separate
 Architecture toolbar option, absent from individual files. It rebuilds signatures
 and links from source and existing Genesis documents, without rewriting Program
-or asking the Helper for explanations. The running stage and elapsed seconds
+or generating explanations. The running stage and elapsed seconds
 show progress, including after leaving and returning to the view. Other viewers
 of the same session share that status through live updates, and reconnect reads
 the current outcome. Duplicate scan requests reuse the running operation;

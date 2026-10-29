@@ -191,7 +191,8 @@ shown as unconfirmed, not as success or failure. Check the saved Update status
 before trying again. Only its confirmed result clears the checking state; a
 failed conflict check keeps its review and retry controls.
 
-Background focused tasks keep their selected Helper model and workload limits;
+Background focused tasks keep the model selected for them (**Quick helper** or
+**Explain & check**) and their workload limits;
 they do not add their exchanges to Main. A profile audit identifies the selected
 request, not independent proof of provider enforcement or successful completion.
 Wait for the task result before reporting success. No new user control or permission

@@ -1,14 +1,14 @@
 # Where Architecture explanations come from
 
 Architecture displays project documentation, analysed source facts and optional
-Helper interpretations. They have different owners and update rules.
+AI interpretations. They have different owners and update rules.
 
 | What you read | Who creates it | Owner and storage | How it changes |
 | --- | --- | --- | --- |
 | Subsystem explanation | A coding agent following Genesis guidance, with human review | Genesis project documentation: the responsibility prose in `genesis/subsystems.md` | An explicit documentation/adoption task reconciles it with the source and current directory boundaries. |
 | Program explanation | A coding agent following Genesis guidance, with human review | Genesis project documentation under `genesis/program/`; the subsystem map assigns each Program exactly once | An explicit Program task updates the purpose, contract, main source and supporting sources together. |
-| File Explanation | The configured Helper, when the person requests it | Vibe64 source-editor informational cache in private runtime state | **Generate explanation** creates it; **Update explanation** refreshes it. |
-| Function Pseudocode | The configured Helper, when the person requests it | The same Vibe64 cache, tied to the exact indexed declaration | **Generate pseudocode** or **Update pseudocode** reads the saved declaration and fills the field. |
+| File Explanation | The **Explain & check** model, when the person requests it | Vibe64 source-editor informational cache in private runtime state | **Generate explanation** creates it; **Update explanation** refreshes it. |
+| Function Pseudocode | The **Explain & check** model, when the person requests it | The same Vibe64 cache, tied to the exact indexed declaration | **Generate pseudocode** or **Update pseudocode** reads the saved declaration and fills the field. |
 | Signatures, imports and ownership links | Genesis's source index and selected language/framework/package analysers | Derived index facts, including the replaceable `.genesis/` snapshots | **Architecture options → Re-scan project** recomputes facts. It does not ask an AI to write explanations. |
 
 Interface group definitions are shared UI guidance, not generated explanations
@@ -76,7 +76,7 @@ change, then re-scan to load the updated facts.
 
 Opening a file, signature, subsystem or Program starts no explanation query.
 The source-editor service admits an explicit request using current project/session
-access, saved source and the configured Helper. A file request asks for scope,
+access, saved source and the **Explain & check** model. A file request asks for scope,
 responsibilities and behavior. An indexed callable request asks for practical
 inputs, returned data or operations, and ordered pseudocode. It does not impose
 function input/output sections on a file overview.

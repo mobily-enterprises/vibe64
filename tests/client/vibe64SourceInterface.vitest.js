@@ -19,7 +19,7 @@ async function renderInterface(overrides = {}) {
     filePath: 'engine.rs', indexed: true, current: true, selectedId: 'load',
     symbols: [{ id: 'load', name: 'load', kind: 'function', parameters: [], visibilityScope: 'crate', rangeAvailable: true }],
     presentation: 'code', source: 'pub(crate) fn load() -> &str { "😀" }',
-    assistantAvailable: false, assistantUnavailableMessage: 'Choose a Helper account.', ...overrides,
+    assistantAvailable: false, assistantUnavailableMessage: 'Choose an Explain & check model in Models.', ...overrides,
   });
   for (const [name, element] of [['VBtn', 'button'], ['VAlert', 'aside']]) app.component(name, Vue.defineComponent({
     inheritAttrs: false, setup: (_, { attrs, slots }) => () => Vue.h(element, attrs, slots.default?.()),
@@ -27,14 +27,17 @@ async function renderInterface(overrides = {}) {
   return (await renderToString(app)).replace(/<!--[\s\S]*?-->/gu, '');
 }
 
-it('scoped interfaces explain visibility and retain exact Code when no Helper is available', async () => {
+it('scoped interfaces explain visibility and retain exact Code when no Explain & check model is available', async () => {
   const html = await renderInterface();
   expect(html).toContain('Visibility: crate');
   expect(html).toContain('pub(crate) fn load() -&gt; &amp;str { &quot;😀&quot; }');
   expect(html).not.toContain('>Program context</button>');
   expect(html).toMatch(/<button[^>]*disabled[^>]*>Generate pseudocode<\/button>/u);
   expect(html).toMatch(/<button(?![^>]*disabled)[^>]*>Code<\/button>/u);
-  expect(html).toContain('Choose a Helper account.');
+  expect(html).toContain('Choose an Explain &amp; check model in Models.');
+  expect(html).toContain('Pseudocode needs an Explain &amp; check model.');
+  expect(html).not.toContain('Helper');
+  expect(await renderInterface({ assistantUnavailableMessage: '' })).toContain('Source explanations are unavailable.');
 });
 
 it('dirty files disable indexed symbol use and explanations while keeping the editable whole-file entry', async () => {

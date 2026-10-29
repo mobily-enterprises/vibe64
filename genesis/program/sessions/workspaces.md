@@ -512,12 +512,12 @@ limit; compact Git controls leave space for the button on small screens.
 Save sits directly beside the session actions so the tabs retain that space.
 Session display names use the existing `label` metadata. After accepted delivery,
 `createSessionNaming` checks the durable first user message, including rewound
-turns, and claims the `session-name` background task once. The workflow's Helper
+turns, and claims the `session-name` background task once. The actor's Quick helper
 receives only bounded first-message text through the tool-free `session_title`
 profile. Its owned conversation and scratch directory are cleaned through the
 same naming lifecycle used by Save. Failed cleanup stays recorded for session
 close; closing waits for an in-flight naming task. Subsequent messages and
-restarts do not regenerate a name or backfill old chats. Unavailable Helper or
+restarts do not regenerate a name or backfill old chats. An unavailable Quick helper or
 invalid output leaves the existing display name and ordinary chat usable.
 
 Session details offer Rename on desktop and touch. `PATCH /sessions/:sessionId/name`

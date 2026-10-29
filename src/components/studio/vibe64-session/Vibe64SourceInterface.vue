@@ -21,7 +21,7 @@
     </nav>
     <p v-if="interpretationWarning" class="source-interface__hint" role="status">{{ interpretationWarning }}</p>
     <h4 class="source-interface__exports-heading" :title="`${coverage}. File exports may be internal to the subsystem. Unrecorded returns are omitted.`">File exports <span>{{ symbols.length }}</span></h4>
-    <details v-if="programStatus !== 'valid' || !assistantAvailable" class="source-interface__analysis"><summary>Analysis details</summary><p v-if="programStatus !== 'valid'" class="source-interface__hint">Program unavailable.</p><p v-if="!assistantAvailable" class="source-interface__hint">{{ assistantUnavailableMessage || 'A Helper is needed to generate explanations.' }}</p></details>
+    <details v-if="programStatus !== 'valid' || !assistantAvailable" class="source-interface__analysis"><summary>Analysis details</summary><p v-if="programStatus !== 'valid'" class="source-interface__hint">Program unavailable.</p><p v-if="!assistantAvailable" class="source-interface__hint">{{ assistantUnavailableMessage || 'Source explanations are unavailable.' }}</p></details>
     <div class="source-interface__layout">
       <nav class="source-interface__symbols" aria-label="Exported and public symbols">
         <div v-for="symbol in symbols" :key="symbol.id" class="source-interface__symbol-row">
@@ -34,7 +34,7 @@
           <v-btn v-if="Array.isArray(selectedSymbol.parameters)" size="small" min-height="44" variant="text" :disabled="!selectedSymbol.rangeAvailable || !current || dirty || explanationDisabled" @click="$emit('present-symbol', 'steps', Boolean(selectedInterpretation))">{{ selectedInterpretation ? 'Update pseudocode' : 'Generate pseudocode' }}</v-btn>
           <v-btn size="small" min-height="44" variant="text" :disabled="!selectedSymbol.rangeAvailable || !current || dirty" @click="$emit('present-symbol', 'code')">Code</v-btn>
         </div>
-        <p v-if="Array.isArray(selectedSymbol.parameters) && !assistantAvailable && !saved('selection', selectedId, 'steps')" class="source-interface__hint">Choose a Helper to generate pseudocode.</p>
+        <p v-if="Array.isArray(selectedSymbol.parameters) && !assistantAvailable && !saved('selection', selectedId, 'steps')" class="source-interface__hint">Pseudocode needs an Explain & check model.</p>
         <pre v-if="presentation === 'code'" class="source-interface__code"><code>{{ source }}</code></pre>
         <template v-else-if="Array.isArray(selectedSymbol.parameters)">
           <p v-if="selectedInterpretation" class="source-interface__hint">{{ isCurrentInterpretation(selectedInterpretation) ? 'Saved · matches source' : 'Out of date · source or guidance changed' }}</p>

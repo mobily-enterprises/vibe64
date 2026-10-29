@@ -128,6 +128,7 @@ const assistantWorkflowRole = (request) => request.stage === "review" && request
 const assistantWorkflowMessageIds = (request) => [request?.messageId, request?.followup?.messageId].filter(Boolean);
 
 const isAssistantRoutingOwner = (actor) => !actor || actor.role === "owner";
+const withArticle = (label) => `${/^[AEIOU]/u.test(label) ? "an" : "a"} ${label}`;
 
 // A temporary chat's Custom model is the person's own choice, not main chat.
 const isMainChatPurpose = (purpose, { temporaryChat = false } = {}) =>
@@ -349,9 +350,9 @@ function resolveAssistantPurpose({ purpose, actor, configuration, catalogs = [],
       if (!value) {
         if (roleName === "custom") throw routingError("Choose a custom model from Chat mode.");
         if (setup === "nonOwner") {
-          throw routingError(`The workspace owner hasn't chosen a ${assistantModeLabel(named)} model for team members yet.`, "vibe64_team_ai_role_unconfigured");
+          throw routingError(`The workspace owner hasn't chosen ${withArticle(assistantModeLabel(named))} model for team members yet.`, "vibe64_team_ai_role_unconfigured");
         }
-        throw routingError(`Choose a ${assistantModeLabel(named)} model in Models.`, "vibe64_assistant_role_unconfigured");
+        throw routingError(`Choose ${withArticle(assistantModeLabel(named))} model in Models.`, "vibe64_assistant_role_unconfigured");
       }
       const selection = defineVibe64AssistantSelection(value);
       const access = routingConnectionAccess(selection, connectionAccess);

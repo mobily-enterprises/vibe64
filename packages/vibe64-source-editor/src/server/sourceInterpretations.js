@@ -28,7 +28,7 @@ async function readRecord(filePath) {
       || !/^[a-f0-9]{64}$/.test(record.cacheIdentity || '') || typeof record.promptVersion !== 'string'
       || !['description', 'steps'].includes(record.presentation) || !['file', 'selection'].includes(record.scope)
       || typeof record.path !== 'string' || typeof record.symbolId !== 'string') {
-      throw new Error('Saved source interpretation is invalid. Regenerate it with the Helper.');
+      throw new Error('Saved source interpretation is invalid. Generate it again.');
     }
     return record;
   } catch (error) {
@@ -66,11 +66,11 @@ export async function readSourceInterpretations(context, file, promptVersion) {
   try {
     const entries = (await readdir(directory(context, file.path))).filter(name => /^[a-f0-9]{64}\.json$/.test(name));
     if (entries.length > MAX_FILE_RECORDS) warnings.push('Only the first 512 saved interpretations are shown.');
-    // Bounded reads; no index, source discovery, Helper or write on this path.
+    // Bounded reads; no index, source discovery, AI request or write on this path.
     for (let offset = 0; offset < Math.min(entries.length, MAX_FILE_RECORDS); offset += 16) {
       const batch = await Promise.allSettled(entries.slice(offset, Math.min(offset + 16, MAX_FILE_RECORDS)).map(name => readRecord(path.join(directory(context, file.path), name))));
       for (const result of batch) {
-        if (result.status === 'rejected') { warnings.push('A saved explanation could not be read. Regenerate it with the Helper.'); continue; }
+        if (result.status === 'rejected') { warnings.push('A saved explanation could not be read. Generate it again.'); continue; }
         const record = result.value;
         if (!record || record.path !== file.path) continue;
         if (!(record.scope === 'file' && record.presentation === 'description' && !record.symbolId)
@@ -81,7 +81,7 @@ export async function readSourceInterpretations(context, file, promptVersion) {
       }
     }
   } catch (error) {
-    if (error.code !== 'ENOENT') warnings.push('Saved explanations are unavailable. Regenerate them with the Helper.');
+    if (error.code !== 'ENOENT') warnings.push('Saved explanations are unavailable. Generate them again.');
   }
   return { records, warning: [...new Set(warnings)].join(' ') };
 }

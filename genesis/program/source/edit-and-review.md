@@ -701,9 +701,10 @@ shared tool route; a retained hidden host waits until reactivation to reconsider
 its source and the current route.
 
 A source explanation is temporary assistance for a selected code range or file.
-The server resolves `source_explanation` to the actor's effective Helper before
-requesting a profile or consulting the answer cache. This can use a shared
-foreign orchestrator while the working conversation uses a personal connection.
+The server resolves `source_explanation` to the actor's effective Explain & check
+role before requesting a profile or consulting the answer cache. This can use
+another orchestrator; a team member's explanation uses the team setup even while
+the working conversation uses the owner's personal connection.
 The editor's explanation controls use this purpose's availability; ordinary file
 access remains independent. Answers name the actual orchestrator and model.
 A matching cached answer can appear without starting a provider conversation;

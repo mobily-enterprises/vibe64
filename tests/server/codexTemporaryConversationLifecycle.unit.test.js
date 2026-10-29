@@ -1623,7 +1623,8 @@ test("routing refuses to relocate an existing Codex conversation into another pr
       const runtime = { store: { writeMetadataValue: async (...args) => writes.push(args) } };
       await assert.rejects(prepareCodexModelRouting("session-1", { modelProviderId: "deepseek" }, {
         runtime, session: { metadata }
-      }), { code: "vibe64_codex_history_unsupported", statusCode: 409 });
+      }), { code: "vibe64_codex_history_unsupported", statusCode: 409,
+        message: /Renew the session to use the models chosen in Models;/u });
       assert.deepEqual(metadata, saved);
       assert.deepEqual(writes, []);
     }
