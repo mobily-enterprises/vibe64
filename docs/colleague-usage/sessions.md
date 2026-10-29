@@ -177,6 +177,9 @@ arriving during cancellation can also require another Close attempt. Pinning,
 renewal and active workspace preparation still prevent archival.
 Archiving uses the session's saved assistant even after a server restart; it
 does not require connecting a different assistant just to stop that session.
+If a local editor ends uncleanly (a crash, a closed terminal or a forced
+shutdown) while Claude is working, its Claude process ends with it, and after
+the restart that chat can be read, messaged, archived and removed as usual.
 A session whose workspace could not be created never started its assistant, so
 archiving it skips that assistant's cleanup; it also does not hold the project
 open or make project Close fail.

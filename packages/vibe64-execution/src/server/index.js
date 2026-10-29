@@ -53,6 +53,7 @@ export {
   startVibe64Workflow,
   stopVibe64Execution,
   stopVibe64OwnedExecutions,
+  stopVibe64RestoredService,
   vibe64CapacityRejectedResult,
   vibe64ManagedExecutionProvider,
   vibe64ManagedExecutionRequired

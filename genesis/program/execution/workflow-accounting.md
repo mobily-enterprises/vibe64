@@ -89,12 +89,16 @@ closes and the reaper stops those groups (SIGTERM, then SIGKILL after three
 seconds); it also exits once the last detached command ends. Commands remain
 their own process-group leaders. Terminal commands, including Preview launches,
 end with the kernel's hangup of their terminal instead; a program that ignores
-SIGHUP outlives the server. Captured commands are not held. A saved execution ID
-this server does not hold therefore belongs to an earlier server whose groups
-were already stopped: a restored stop (`allowMissingRecordScopeRecovery`)
-reports the scope empty without claiming to have stopped anything, while an
-ordinary stop of an unknown ID is still not found. Windows keeps its previous
-behaviour.
+SIGHUP outlives the server. Captured commands are not held. A saved service
+execution ID this server does not hold therefore belongs to an earlier server
+whose groups were already stopped. `stopVibe64RestoredService`, the default stop
+of the Claude host and of the conversation execution facility, whose owners keep
+only that ID, reports such a restored stop (`allowMissingRecordScopeRecovery`)
+as an empty scope without claiming to have stopped anything.
+`stopVibe64Execution` still reports an unknown ID as not found, so an owner that
+also keeps the process's own identity, such as the Codex app-server, runs its
+identity proof, which also finds command groups that left the service's group.
+Windows keeps its previous behaviour.
 
 The terminal-session registry keeps a namespace only while it holds a session.
 Listing, reading, subscribing to, stopping or closing a namespace records nothing.

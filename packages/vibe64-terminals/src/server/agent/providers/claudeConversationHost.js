@@ -14,7 +14,7 @@ import {
   VIBE64_ASSISTANT_TRANSPORT_IDS,
   vibe64AgentExecutionProfileAuditSnapshot
 } from "@local/vibe64-runtime/shared";
-import { appCredentialContext, operatorCliCommand, runVibe64Command, stopVibe64Execution } from "@local/vibe64-execution/server";
+import { appCredentialContext, operatorCliCommand, runVibe64Command, stopVibe64RestoredService } from "@local/vibe64-execution/server";
 import { captureProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { closeTerminalSessionsForNamespace, listTerminalSessions } from "@local/vibe64-execution/server/terminalSessions";
 import { readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
@@ -45,7 +45,8 @@ function createClaudeConversationHost({
   // Found again at each start, so a Claude Code installed after Vibe64 started is used.
   command = () => operatorCliCommand("claude", { env }),
   credentialHome = appCredentialContext(), createProcess = createClaudeCodeProcess,
-  commandRunner = runVibe64Command, stopExecution = stopVibe64Execution,
+  // Claude keeps only its execution ID, so a restored ID is stopped as a service.
+  commandRunner = runVibe64Command, stopExecution = stopVibe64RestoredService,
   connectionStatus = async () => false,
   systemRoot = resolveVibe64SystemRoot({ env }),
   accountStatus = () => readClaudeCodeAuthStatus({ env, credentialHome, commandRunner }),

@@ -853,6 +853,25 @@ test("Claude recovers exact admission and temporary history without resending af
   await assert.rejects(restored.readConversation(f.context, { conversationId: temporary.conversationId }), /unavailable/u);
 });
 
+// After an unclean exit the saved execution ID belongs to an earlier local
+// server, whose detached Claude process ended with it. The host's own stop
+// proves that, so the chat stays usable instead of failing every read and send.
+test("a local Claude chat whose process an unclean exit left saved stays usable with the host's own stop", async (t) => {
+  const f = await fixture(t);
+  const temporary = await f.provider.createConversation(f.context);
+  await f.provider.startConversationTurn(f.context, { conversationId: temporary.conversationId, message: "Temporary", messageId: "temp" });
+  await writeHistory(f, temporary.conversationId, [
+    { type: "user", uuid: nativeMessageId("temp"), message: { content: "Temporary" } },
+    { type: "assistant", uuid: "answer", message: { id: "answer", content: [{ type: "text", text: "Recovered" }] } }
+  ]);
+  assert.equal(JSON.parse(f.context.session.metadata[`claude_conversation_${temporary.conversationId}`]).executionId, "test-0");
+  const restarted = createClaudeSessionAgentProvider({ ...f.providerOptions });
+  const read = await restarted.readConversation(f.context, { conversationId: temporary.conversationId, messageId: "temp" });
+  assert.equal(read.text, "Recovered");
+  assert.equal(JSON.parse(f.context.session.metadata[`claude_conversation_${temporary.conversationId}`]).executionId, "");
+  assert.equal((await restarted.closeSession(f.context)).ok, true);
+});
+
 test("Claude shutdown cannot restore a closed temporary chat from a cached main snapshot", async (t) => {
   const f = await fixture(t);
   const recovered = [];

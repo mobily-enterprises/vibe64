@@ -7,7 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 import { runVibe64Command } from "./runVibe64Command.js";
-import { inspectVibe64Service, stopVibe64Execution } from "./managedExecution.js";
+import { inspectVibe64Service, stopVibe64RestoredService } from "./managedExecution.js";
 import { vibe64ProcessUmask } from "./hostProfile.js";
 
 const bridgePath = fileURLToPath(new URL("./engines/stdioBridge.js", import.meta.url));
@@ -30,7 +30,7 @@ function processExists(pid) {
 
 /** Common native-conversation execution facility backed by Vibe64's policy gateway. */
 export function createVibe64ConversationExecution({
-  commandRunner = runVibe64Command, stopExecution = stopVibe64Execution, inspectExecution = inspectVibe64Service,
+  commandRunner = runVibe64Command, stopExecution = stopVibe64RestoredService, inspectExecution = inspectVibe64Service,
   credentialHome = { home: os.homedir() }, execution = {}, shimDirs = [],
   purpose = "assistant", capturePurpose = purpose, operationId = "conversation", label = "Assistant", logPath, onStarted
 } = {}) {

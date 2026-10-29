@@ -11,7 +11,8 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   createVibe64ConversationExecution,
   runVibe64Command,
-  stopVibe64Execution
+  stopVibe64Execution,
+  stopVibe64RestoredService
 } from "@local/vibe64-execution/server";
 
 const executionIndex = fileURLToPath(new URL("../../packages/vibe64-execution/src/server/index.js", import.meta.url));
@@ -80,9 +81,9 @@ test("a local detached service ends with the server that started it, even when i
     assert.equal(await waitFor(() => !groupExists(started.pid), 8_000), true,
       "the earlier server's service is still running after that server ended");
 
-    // A restarted server never saw this ID. Restored-ID recovery is proven
-    // empty, so a saved Claude or helper execution ID no longer blocks its chat.
-    const restored = await stopVibe64Execution(started.executionId, { allowMissingRecordScopeRecovery: true });
+    // A restarted server never saw this ID. A restored service stop proves it
+    // ended, so a saved Claude or helper execution ID no longer blocks its chat.
+    const restored = await stopVibe64RestoredService(started.executionId, { allowMissingRecordScopeRecovery: true });
     assert.deepEqual(restored, { executionId: started.executionId, ok: true, scopeEmpty: true, stopped: false });
     const conversation = createVibe64ConversationExecution();
     assert.equal((await conversation.stop(started.executionId)).scopeEmpty, true);
@@ -92,12 +93,17 @@ test("a local detached service ends with the server that started it, even when i
   }
 });
 
-test("an execution ID unknown to this server is proven empty only for restored-ID recovery", async () => {
+test("an execution ID unknown to this server is proven ended only by a restored service stop", async () => {
   const unknown = randomUUID();
-  const ordinary = await stopVibe64Execution(unknown);
+  const ordinary = await stopVibe64RestoredService(unknown);
   assert.equal(ordinary.code, "vibe64_execution_not_found");
   assert.equal(ordinary.scopeEmpty, false);
-  const restored = await stopVibe64Execution(unknown, { allowMissingRecordScopeRecovery: true });
+  // An owner that keeps the process identity (Codex) still gets not found, so
+  // its own identity proof runs instead of trusting the earlier server's end.
+  const identityOwned = await stopVibe64Execution(unknown, { allowMissingRecordScopeRecovery: true });
+  assert.equal(identityOwned.code, "vibe64_execution_not_found");
+  assert.equal(identityOwned.scopeEmpty, false);
+  const restored = await stopVibe64RestoredService(unknown, { allowMissingRecordScopeRecovery: true });
   assert.equal(restored.scopeEmpty, posix);
 });
 

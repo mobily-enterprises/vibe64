@@ -125,16 +125,23 @@ async function stopVibe64Execution(executionId = "", options = {}) {
   if (detached.code !== "vibe64_execution_not_found") {
     return detached;
   }
-  const pty = await stopPtyExecution(normalizedExecutionId, options);
-  if (pty.code !== "vibe64_execution_not_found" || options.allowMissingRecordScopeRecovery !== true ||
-      process.platform === "win32") {
-    return pty;
+  return stopPtyExecution(normalizedExecutionId, options);
+}
+
+// Stops a detached service whose owner keeps only its execution ID, such as a
+// Claude chat or a conversation helper. Without a provider, a restored ID this
+// server does not hold came from an earlier server, whose reaper stopped that
+// service's process group when the server ended. An owner that also keeps the
+// process's own identity (Codex) stops with stopVibe64Execution instead, where
+// such an ID stays not found, so that owner's stronger identity proof still runs.
+async function stopVibe64RestoredService(executionId = "", options = {}) {
+  const result = await stopVibe64Execution(executionId, options);
+  if (installedProvider || result?.code !== "vibe64_execution_not_found" ||
+      options.allowMissingRecordScopeRecovery !== true || process.platform === "win32") {
+    return result;
   }
-  // A restored ID this server never started came from an earlier server, and
-  // restored IDs name detached services. That server's reaper stopped its
-  // detached groups when it ended, so nothing can still run under the ID.
   return {
-    executionId: normalizedExecutionId,
+    executionId: String(executionId || "").trim(),
     ok: true,
     scopeEmpty: true,
     stopped: false
@@ -165,6 +172,7 @@ export {
   startVibe64Workflow,
   stopVibe64Execution,
   stopVibe64OwnedExecutions,
+  stopVibe64RestoredService,
   vibe64CapacityRejectedResult,
   vibe64ManagedExecutionProvider,
   vibe64ManagedExecutionRequired
