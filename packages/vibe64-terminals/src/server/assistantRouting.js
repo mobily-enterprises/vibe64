@@ -444,6 +444,11 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     let direct;
     const task = { cancelled: false, finished: Promise.withResolvers() };
     let key;
+    // A new message refused here, including while the lock is busy, has not
+    // reached the AI. Saying so lets the chat show it as not sent, with Edit and
+    // Cancel, instead of an unconfirmed receipt that no delivery check can settle.
+    // A retry of an existing request keeps that request's own delivery state.
+    let refusedBeforeAdmission = input.reviewAction !== "retry";
     await exclusive(sessionId, options, async (current) => {
       mark(input.messageId, "lock-acquired");
       if (closing) throw failure("The assistant is shutting down. Reconnect before sending.");
@@ -486,6 +491,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       if (!preferences) { direct = true; return; }
       const store = context.runtime.store;
       state = await read(store, sessionId);
+      if (state?.messageId === input.messageId) refusedBeforeAdmission = false;
       const duplicate = await store.conversationMessageIdExists(sessionId, input.messageId);
       mark(input.messageId, "duplicate-checked");
       if (duplicate) {
@@ -548,7 +554,9 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
         const { goal, pinned: savedGoal } = await currentGoal(sessionId, context);
         mark(input.messageId, "goal-read");
-        if (explicitDeslop && assistantGoalIsActive(goal)) throw failure("Finish or cancel the current goal before starting Deslop.");
+        if (explicitDeslop && assistantGoalIsActive(goal)) {
+          throw failure("Deslop can't start during the current goal. Open Goal and choose Resume goal to finish it, or Cancel goal to end it, then send Deslop again.");
+        }
         if (!options.purpose && preferences.mode === "auto" && assistantGoalIsActive(goal) && !savedGoal) throw failure("Choose Senior or Junior before working on a goal.");
         const saved = await createAssistantRoutingStore({ systemRoot }).read();
         const pinnedGoal = assistantGoalIsActive(goal) && savedGoal;
@@ -628,6 +636,9 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
         }
       };
       running.set(key, task);
+    }).catch((error) => {
+      if (refusedBeforeAdmission && error && typeof error === "object" && !error.delivery) error.delivery = "not-sent";
+      throw error;
     });
     if (direct === true) return exclusive(sessionId, options, async (current) => {
       mark(input.messageId, "dispatch-called");

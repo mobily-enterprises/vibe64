@@ -1060,6 +1060,36 @@ test("Deslop is never steered into a running coder or an unfinished goal", async
   assert.equal(f.sends.length, 0);
 });
 
+test("a new message refused before admission is a definite not-sent rejection that names the Goal controls", async (t) => {
+  let busy = false;
+  const f = await fixture(t, { mode: "junior", review: false }, { beforeExclusive() {
+    if (busy) throw Object.assign(new Error("Another assistant operation is starting. Try again in a moment."),
+      { code: "vibe64_agent_write_mode_busy", statusCode: 409, retryable: true });
+  } });
+  f.agent.sessionState = async () => ({ turn: { active: false } });
+  f.agent.readGoal = async () => ({ status: "available", goal: { status: "paused" } });
+  const metadata = structuredClone(f.metadata);
+  await assert.rejects(f.service.send("session-1", { ...request, messageId: "deslop-during-goal", message: "deslop" }, f.context), {
+    code: "vibe64_assistant_routing_unavailable", statusCode: 409, delivery: "not-sent",
+    message: "Deslop can't start during the current goal. Open Goal and choose Resume goal to finish it, or Cancel goal to end it, then send Deslop again."
+  });
+  assert.deepEqual(f.metadata, metadata, "the refusal records no routing request");
+  f.agent.readGoal = async () => ({ status: "available", goal: null });
+  busy = true;
+  await assert.rejects(f.service.send("session-1", { ...request, messageId: "while-busy" }, f.context), {
+    code: "vibe64_agent_write_mode_busy", statusCode: 409, delivery: "not-sent"
+  });
+  busy = false;
+  assert.equal(f.sends.length, 0);
+  // A failure after a delivery attempt stays uncertain: it may have reached the AI.
+  f.failAdmission();
+  await assert.rejects(f.service.send("session-1", { ...request, messageId: "attempted" }, f.context), (error) => {
+    assert.match(error.message, /Lost admission/);
+    assert.equal(error.delivery, undefined);
+    return true;
+  });
+});
+
 test("Deslop with uncertain admission retains its task and checks the receipt without resending", async (t) => {
   const f = await fixture(t);
   f.failAdmission();

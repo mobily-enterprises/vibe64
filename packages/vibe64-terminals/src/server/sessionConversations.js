@@ -140,6 +140,7 @@ function createSessionConversations({
   actions,
   attachments,
   runAgentWrite,
+  routingWaitMs,
   readSessionContext,
   prepareAgentSkills,
   systemRoot,
@@ -150,6 +151,9 @@ function createSessionConversations({
   temporaryCompletionAttempts = 6,
   temporaryCompletionRetryMs = 500
 }) {
+  if (!Number.isSafeInteger(routingWaitMs) || routingWaitMs < 0) {
+    throw new TypeError("Temporary conversations require the assistant routing lock wait.");
+  }
   async function recordFor(ctx, conversationId) {
     const record = await ctx.runtime.store.readSessionConversation(ctx.session.sessionId, conversationId);
     if (!record) throw Object.assign(new Error("This conversation has been closed."), {
@@ -566,8 +570,11 @@ function createSessionConversations({
     }
   };
   const routing = createAssistantRouting({ systemRoot, allowAuto: false, agent: routingAgent, publish: publishSessionChanged,
+    // A send waits behind a sibling chat's slow assistant startup, as Main does,
+    // instead of refusing after the shorter default wait.
     exclusive: async (id, options, operation) => {
-      const result = await write(id, options, async (ctx) => operation(await routingContext(ctx, options.conversationId, { cleanup: options.routingCleanup === true })));
+      const result = await write(id, { ...options, lockWaitMs: options.lockWaitMs ?? routingWaitMs },
+        async (ctx) => operation(await routingContext(ctx, options.conversationId, { cleanup: options.routingCleanup === true })));
       return throwIfAgentWriteBusy(result);
     },
     prepareSelection: async (id, selection, ctx) => {

@@ -202,6 +202,7 @@ async function conversationFixture(root, engineId = "codex") {
   Object.assign(sessionAgent, { resolveAssistantPurpose: (input, options) => manager.resolveAssistantPurpose(input, options),
     requireAssistantAccessForSelection: async () => {} });
   const events = [];
+  const locks = [];
   const restart = (overrides = {}) => {
     let service;
     const conversationRuntime = overrides.conversationRuntime || createConversationRuntime({
@@ -217,7 +218,9 @@ async function conversationFixture(root, engineId = "codex") {
       readSessionContext: async (sessionId, options = {}) => ({
         ...options, runtime, session: await runtime.getSession(sessionId)
       }),
+      routingWaitMs: 10_000,
       runAgentWrite: async (sessionId, options, operation, lockOptions) => {
+        locks.push(lockOptions);
         const result = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
           const session = await runtime.getSession(sessionId);
           return operation({ ...options, runtime, session });
@@ -229,8 +232,23 @@ async function conversationFixture(root, engineId = "codex") {
     });
     return service;
   };
-  return { attachments, events, native, restart, service: restart(), runtime, store, selection, sessionAgent, capabilities };
+  return { attachments, events, locks, native, restart, service: restart(), runtime, store, selection, sessionAgent, capabilities };
 }
+
+test("a temporary send waits for the session write lock as long as the service's routing wait", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await conversationFixture(root);
+    const service = f.restart({ routingWaitMs: 54_321 });
+    await service.createTemporaryConversation("one", { conversationId: "chat" });
+    f.locks.length = 0;
+    await service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "first", message: "Begin" });
+    const routing = f.locks.filter(lock => lock.operation === "temporary-conversation");
+    assert.ok(routing.length > 0);
+    // A sibling chat's slow Claude startup holds this lock; the send waits it out.
+    assert.deepEqual([...new Set(routing.map(lock => lock.waitMs))], [54_321]);
+    await service.close();
+  });
+});
 
 test("temporary provisional rows require exact native admission across read failure and restart without replay", async () => {
   await withTemporaryRoot(async (root) => {

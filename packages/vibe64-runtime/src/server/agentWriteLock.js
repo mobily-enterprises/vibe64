@@ -58,15 +58,22 @@ async function runVibe64RenewalAgentWriteExclusive(runtime, sessionId = "", oper
       };
 }
 
-// A busy agent-write lock refuses the caller with a retryable error.
+// A busy agent-write lock refuses the caller with a retryable 409 conflict.
+// HTTP callers show its message; without a status it would be a server error.
+function agentWriteBusyError(result = VIBE64_AGENT_WRITE_BUSY_RESULT) {
+  return Object.assign(new Error(result.error || VIBE64_AGENT_WRITE_BUSY_RESULT.error),
+    VIBE64_AGENT_WRITE_BUSY_RESULT, result, { retryable: true, statusCode: 409 });
+}
+
 function throwIfAgentWriteBusy(result) {
   if (result?.ok === false && result.code === VIBE64_AGENT_WRITE_BUSY_RESULT.code) {
-    throw Object.assign(new Error(result.error || VIBE64_AGENT_WRITE_BUSY_RESULT.error), result, { retryable: true });
+    throw agentWriteBusyError(result);
   }
   return result;
 }
 
 export {
+  agentWriteBusyError,
   runVibe64AgentWriteExclusive,
   runVibe64RenewalAgentWriteExclusive,
   throwIfAgentWriteBusy

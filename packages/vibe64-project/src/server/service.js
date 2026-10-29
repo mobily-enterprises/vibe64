@@ -17,6 +17,7 @@ import {
   createVibe64SessionStore
 } from "@local/vibe64-runtime/server/sessionStore";
 import {
+  agentWriteBusyError,
   runVibe64AgentWriteExclusive
 } from "@local/vibe64-runtime/server/agentWriteLock";
 import {
@@ -429,14 +430,7 @@ function createService({
       operation,
       { operation: operationName, waitMs }
     );
-    if (!exclusive.acquired) {
-      const error = vibe64Error(
-        exclusive.value?.error || "Another assistant operation is starting. Try again in a moment.",
-        exclusive.value?.code || "vibe64_agent_write_mode_busy"
-      );
-      error.retryable = true;
-      throw error;
-    }
+    if (!exclusive.acquired) throw agentWriteBusyError(exclusive.value || undefined);
     return exclusive.value;
   }
 

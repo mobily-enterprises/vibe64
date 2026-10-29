@@ -57,6 +57,18 @@ not prompts, output or credentials. Slow accepted sends and first responses are
 visible at the normal warning log level; faster milestones use information level.
 Observer results are not awaited and errors cannot fail native delivery.
 
+Routing's admission section is the boundary of a definite rejection. A new
+message refused there, including a busy agent-write lock, an explicit Deslop
+during an open goal or an unavailable route, carries `delivery: "not-sent"`, and
+Main and temporary Send convert it into the conversation protocol's 4xx
+rejection with `details.delivery`. The browser then marks it failed (Edit and
+Cancel) instead of uncertain, so it cannot hold the goal controls disabled.
+Retries of an existing routed request and failures after a dispatch attempt keep
+their own delivery state. The agent-write busy error is a retryable 409 at its
+owner, so no caller surfaces it as a server error. Temporary routing waits for
+the agent-write lock as long as Main routing, because a sibling chat holds it
+through its assistant's startup.
+
 Before dispatching an idle turn, Codex, Claude and OpenCode share the same
 application-owned skill and integration preparation. The format gate uses
 Genesis's narrow `inspectProjectFormat` operation through `inspectGenesisProjectFormat`,

@@ -7,6 +7,13 @@ For an existing unfinished goal, use **Resume goal** to continue it or
 **Cancel goal** before setting a different one. These steps apply on desktop
 and mobile; an objective written in chat alone does not create a goal.
 
+A paused goal stays unfinished until you choose **Resume goal** or **Cancel
+goal**, even when later chat replies say the work is done. While any goal is
+open, a message that is just “Deslop” is refused because Deslop runs in its own
+turn: open **Goal**, choose **Resume goal** to finish it or **Cancel goal** to
+end it, then send Deslop again. The refused message is marked as not sent, so
+**Cancel** or **Edit** on it works at once and the goal controls stay usable.
+
 In the standalone local editor, open a session, choose a connected assistant,
 and use **Send message** and **Set goal** in the same chat. These controls use
 the selected local project's access checks and do not require a hosted login.

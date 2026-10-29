@@ -164,6 +164,7 @@ import {
   sessionIsClosing
 } from "@local/vibe64-runtime/server/sessionLifecycle";
 import {
+  agentWriteBusyError,
   runVibe64AgentWriteExclusive,
   runVibe64RenewalAgentWriteExclusive,
   throwIfAgentWriteBusy
@@ -1381,14 +1382,7 @@ function createService({
       }),
       { operation: "prepare-renewal-workspace" }
     );
-    if (!exclusive.acquired) {
-      const error = new Error(
-        exclusive.value?.error || "Another session operation is starting. Try again in a moment."
-      );
-      error.code = exclusive.value?.code || "vibe64_agent_write_mode_busy";
-      error.retryable = true;
-      throw error;
-    }
+    if (!exclusive.acquired) throw agentWriteBusyError(exclusive.value || undefined);
     return exclusive.value;
   }
 
@@ -2392,6 +2386,8 @@ function createService({
     sessionAgent,
     attachments: sessionAttachments,
     runAgentWrite: runMainAgentWrite,
+    // A temporary chat's routing waits for a sibling's assistant startup as long as Main chat does.
+    routingWaitMs: AGENT_WRITE_WAIT_MS,
     // Always rereads the session; a conversation's caller may hold an older copy.
     readSessionContext: async (sessionId, options = {}) => ({
       ...options, ...await sessionContext(sessionId, { runtime: options.runtime })
@@ -2402,6 +2398,15 @@ function createService({
   });
   const service = {
     ...sessionConversations,
+    // A temporary send refused before admission uses Main's definite rejection.
+    async startTemporaryConversationTurn(sessionId, input = {}, options = {}) {
+      try {
+        return await sessionConversations.startTemporaryConversationTurn(sessionId, input, options);
+      } catch (error) {
+        if (error?.delivery === "not-sent") throw notSentDeliveryError(error, input.messageId);
+        throw error;
+      }
+    },
     readClaudeAccountStatus,
     async recordPreviewDiagnostic(sessionId, input) {
       // Action admission owns project access; read the exact existing session without preparing it.

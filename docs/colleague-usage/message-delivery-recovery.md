@@ -29,7 +29,15 @@ send a new message to continue. This works the same on desktop and mobile.
 
 A message that fails before it reaches the assistant shows its error at once
 and is marked **failed**, not uncertain, for example when the assistant's memory
-is too full. Fix the cause and choose **Retry**; nothing was sent.
+is too full. Fix the cause and choose **Retry**; nothing was sent. The same
+applies when the chat refuses a new request before sending it, such as Deslop
+while a goal is open, or when another assistant operation in the session is
+still starting. **Cancel** or **Edit** removes it at once.
+
+A send in a temporary chat waits, as Main chat does, while another chat in the
+same session starts its assistant (a slow Claude start can take 15–20 seconds).
+It shows **Pending** meanwhile and is refused only if that start takes longer
+than a minute.
 
 The assistant is shown as working (the animated indicator and the **Assistant
 working** dot on a temporary chat tab) only while its turn is actually

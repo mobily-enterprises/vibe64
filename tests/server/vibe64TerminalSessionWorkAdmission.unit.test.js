@@ -2424,6 +2424,33 @@ test("Codex service retirement preserves an archived family before deletion and 
 });
 
 
+test("a Main or temporary send refused while the agent-write lock is busy is a definite not-sent conflict", async (t) => {
+  const { AppError } = await import("@jskit-ai/kernel/server/runtime");
+  const lock = agentWriteLockHarness({ holdFirst: true });
+  const { service, session } = await terminalServiceFixture(t, lock);
+  const preparing = service.prepareWorkspaceSetup(session.sessionId, { retry: true });
+  await lock.firstEntered;
+  const sends = [
+    ["main-while-busy", () => service.sendAgentMessage(session.sessionId,
+      { messageId: "main-while-busy", message: "Say OK." }, { lockWaitMs: 0 })],
+    ["temporary-while-busy", () => service.startTemporaryConversationTurn(session.sessionId,
+      { conversationId: "chat", messageId: "temporary-while-busy", message: "Say OK." }, { lockWaitMs: 0 })]
+  ];
+  for (const [messageId, send] of sends) {
+    // Without a status this was an unhandled 500 the chat could never confirm.
+    await assert.rejects(send(), (error) => {
+      assert.equal(error instanceof AppError, true);
+      assert.equal(error.status, 409);
+      assert.equal(error.code, "vibe64_agent_write_mode_busy");
+      assert.equal(error.message, "Another assistant operation is starting. Try again in a moment.");
+      assert.deepEqual(error.details, { delivery: { status: "not-sent", messageId } });
+      return true;
+    });
+  }
+  lock.releaseFirst();
+  await preparing;
+});
+
 test("a message proven not sent returns a definite rejection so the chat shows it instead of an uncertain receipt", async t => {
   const { AppError } = await import("@jskit-ai/kernel/server/runtime");
   // The retired Learning capture hook was this test's injection point; a

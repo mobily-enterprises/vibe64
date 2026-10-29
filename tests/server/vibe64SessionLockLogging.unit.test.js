@@ -204,13 +204,15 @@ test("preparation timeout identifies the actual blocker without exposing lock ow
   });
 });
 
-test("a busy agent-write result becomes a retryable error and other results pass through", () => {
+test("a busy agent-write result becomes a retryable 409 conflict and other results pass through", () => {
   const busy = { ok: false, code: "vibe64_agent_write_mode_busy", error: "Busy now.", details: { holder: "rename" } };
   assert.throws(() => throwIfAgentWriteBusy(busy), (error) => {
     assert.equal(error.message, "Busy now.");
     assert.equal(error.code, "vibe64_agent_write_mode_busy");
     assert.deepEqual(error.details, { holder: "rename" });
     assert.equal(error.retryable, true);
+    // HTTP shows a conflict's message; an error without a status is a 500.
+    assert.equal(error.statusCode, 409);
     return true;
   });
   const refused = { ok: false, code: "vibe64_session_not_found", error: "Missing." };
