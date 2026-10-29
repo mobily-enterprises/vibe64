@@ -147,6 +147,49 @@ test("Vibe64 operational logging sanitizes embedded secrets in ordinary strings"
   });
 });
 
+test("Vibe64 operational logging keeps the redacted causes and inner errors of a failure", () => {
+  const providerCause = Object.assign(new Error("Claude requires a prepared session workspace."), { code: "vibe64_workspace_missing" });
+  const provider = Object.assign(new Error('Provider "vibe64.terminals" shutdown failed: token=private-token', { cause: providerCause }), {
+    providerId: "vibe64.terminals"
+  });
+  const runtime = new AggregateError([provider], "Capability runtime shutdown failed: vibe64.terminals.");
+  const operation = new Error(`Shutdown operation "capability-runtime" failed: ${runtime.message}`, { cause: runtime });
+  const fastify = new Error('Shutdown operation "fastify" failed: close failed', { cause: new Error("close failed") });
+  const aggregate = new AggregateError([operation, fastify], "2 shutdown operation(s) failed.");
+  const looping = new Error("looping failure");
+  looping.cause = looping;
+
+  assert.deepEqual(operationalLogFields({ component: "server-lifecycle", error: aggregate, event: "vibe64.server.stop_failed" }).error, {
+    code: "",
+    message: "2 shutdown operation(s) failed.",
+    name: "AggregateError",
+    errors: [{
+      code: "",
+      message: 'Shutdown operation "capability-runtime" failed: Capability runtime shutdown failed: vibe64.terminals.',
+      name: "Error",
+      cause: {
+        code: "",
+        message: "Capability runtime shutdown failed: vibe64.terminals.",
+        name: "AggregateError",
+        errors: [{
+          code: "",
+          message: 'Provider "vibe64.terminals" shutdown failed: token=[redacted]',
+          name: "Error",
+          cause: { code: "vibe64_workspace_missing", message: "Claude requires a prepared session workspace.", name: "Error" }
+        }]
+      }
+    }, {
+      code: "",
+      message: 'Shutdown operation "fastify" failed: close failed',
+      name: "Error",
+      cause: { code: "", message: "close failed", name: "Error" }
+    }]
+  });
+  assert.deepEqual(operationalLogFields({ error: looping }).error, {
+    code: "", message: "looping failure", name: "Error", cause: "[circular]"
+  });
+});
+
 test("streaming operation output redacts exact secrets across process chunk boundaries", () => {
   const secret = "canary-secret-value";
   const sanitizer = createStreamingLogSanitizer({

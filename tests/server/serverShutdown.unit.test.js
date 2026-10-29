@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { io } from "socket.io-client";
+import WebSocket from "ws";
 
 import {
   createServer,
@@ -14,6 +15,7 @@ import {
   readTerminalSession,
   startTerminalSession
 } from "@local/vibe64-execution/server/terminalSessions";
+import { BROWSER_LIFECYCLE_WEBSOCKET_PATH } from "../../server/lib/browserLifecycle.js";
 
 test("signal shutdown exits cleanly after Fastify closes", async () => {
   const events = [];
@@ -301,6 +303,146 @@ test("signal shutdown closes a real upgraded Socket.IO connection through capabi
   }
 });
 
+test("a shutdown timeout names the operations still running and the provider still stopping", async () => {
+  const logged = [];
+  let timeoutCallback = null;
+  const exits = [];
+  const providerShutdowns = [
+    { id: "vibe64.colleague", status: "stopped", durationMs: 40 },
+    { id: "vibe64.terminals", status: "stopping", durationMs: 7900 }
+  ];
+  const handler = createSignalShutdownHandler({
+    app: {
+      async close() {},
+      log: fieldLogger(logged),
+      server: {},
+      vibe64CapabilityRuntime: {
+        shutdown: () => new Promise(() => {}),
+        diagnostics: () => ({ providerShutdowns })
+      }
+    },
+    closeRuntimeTerminals() {},
+    exitProcess(code) {
+      exits.push(code);
+    },
+    setTimeoutFn(callback) {
+      timeoutCallback = callback;
+      return { unref() {} };
+    },
+    shutdownTimeoutMs: 1000
+  });
+
+  void handler("SIGTERM");
+  await new Promise((resolve) => setImmediate(resolve));
+  timeoutCallback();
+
+  const timedOut = logged.find(({ fields }) => fields.event === "vibe64.server.shutdown_timeout").fields;
+  assert.deepEqual(timedOut.pendingOperations, ["capability-runtime"]);
+  assert.deepEqual(timedOut.providerShutdowns, providerShutdowns);
+  assert.equal(Number.isInteger(timedOut.durationMs), true);
+  assert.deepEqual(exits, [1]);
+});
+
+test("a failed shutdown logs each failed operation with its provider and cause", async () => {
+  const logged = [];
+  const providerFailure = Object.assign(new Error(
+    'Provider "vibe64.terminals" shutdown failed: Claude requires a prepared session workspace.',
+    { cause: new Error("Claude requires a prepared session workspace.") }
+  ), { providerId: "vibe64.terminals" });
+  const handler = createSignalShutdownHandler({
+    app: {
+      async close() {
+        throw new Error("fastify close failed");
+      },
+      log: fieldLogger(logged),
+      vibe64CapabilityRuntime: {
+        async shutdown() {
+          throw new AggregateError([providerFailure], "Capability runtime shutdown failed: vibe64.terminals.");
+        },
+        diagnostics: () => ({ providerShutdowns: [{ id: "vibe64.terminals", status: "failed", durationMs: 12 }] })
+      }
+    },
+    closeRuntimeTerminals() {},
+    exitProcess() {},
+    setTimeoutFn() {
+      return { unref() {} };
+    },
+    shutdownTimeoutMs: 1000
+  });
+
+  await handler("SIGTERM");
+
+  const failed = logged.find(({ fields }) => fields.event === "vibe64.server.stop_failed").fields;
+  assert.deepEqual(failed.failedOperations, ["capability-runtime", "fastify"]);
+  assert.deepEqual(failed.providerShutdowns, [{ id: "vibe64.terminals", status: "failed", durationMs: 12 }]);
+  const [capability, fastify] = failed.error.errors;
+  assert.match(capability.message, /Shutdown operation "capability-runtime" failed/u);
+  assert.equal(capability.cause.errors[0].message,
+    'Provider "vibe64.terminals" shutdown failed: Claude requires a prepared session workspace.');
+  assert.equal(fastify.cause.message, "fastify close failed");
+});
+
+test("signal shutdown is not held by another route's open WebSocket", async () => {
+  const temporaryRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-signal-held-socket-"));
+  const previousRuntimeNamespace = process.env.VIBE64_RUNTIME_NAMESPACE;
+  process.env.VIBE64_RUNTIME_NAMESPACE = `signal-held-socket-${process.pid}`;
+  let app = null;
+  let socket = null;
+  let held = null;
+  const logged = [];
+  const exits = [];
+
+  try {
+    app = await createServer({
+      managedSourceRoot: path.join(temporaryRoot, "managed"),
+      projectsRoot: path.join(temporaryRoot, "projects"),
+      systemRoot: path.join(temporaryRoot, "state")
+    });
+    const address = await app.listen({ host: "127.0.0.1", port: 0 });
+    // The browser lifecycle socket stands in for an open terminal or Preview
+    // WebSocket: another route's upgraded connection on the same HTTP server.
+    held = new WebSocket(`${address.replace(/^http/u, "ws")}${BROWSER_LIFECYCLE_WEBSOCKET_PATH}`, {
+      headers: { Origin: address }
+    });
+    await new Promise((resolve, reject) => {
+      held.once("message", resolve);
+      held.once("error", reject);
+    });
+    socket = io(address, { forceNew: true, reconnection: false, transports: ["websocket"] });
+    await new Promise((resolve, reject) => {
+      socket.once("connect", resolve);
+      socket.once("connect_error", reject);
+    });
+    const log = app.log;
+    const handler = createSignalShutdownHandler({
+      app: Object.assign(Object.create(app), { log: fieldLogger(logged, log) }),
+      closeRuntimeTerminals() {},
+      exitProcess(code) {
+        exits.push(code);
+      },
+      shutdownTimeoutMs: 3000
+    });
+
+    await Promise.race([
+      handler("SIGTERM"),
+      new Promise((resolve) => setTimeout(resolve, 3500))
+    ]);
+
+    assert.deepEqual(logged.filter(({ fields }) => fields.event === "vibe64.server.shutdown_timeout"), []);
+    assert.deepEqual(exits, [0]);
+  } finally {
+    held?.terminate();
+    socket?.close();
+    await app?.close().catch(() => null);
+    if (previousRuntimeNamespace === undefined) {
+      delete process.env.VIBE64_RUNTIME_NAMESPACE;
+    } else {
+      process.env.VIBE64_RUNTIME_NAMESPACE = previousRuntimeNamespace;
+    }
+    await rm(temporaryRoot, { force: true, recursive: true });
+  }
+});
+
 test("signal shutdown reaches Fastify feature shutdown when pre-close cleanup fails", async () => {
   const events = [];
   const handler = createSignalShutdownHandler({
@@ -509,6 +651,13 @@ test("signal shutdown stops runtime terminals before a stalled Fastify close", a
   timeoutCallback();
   assert.deepEqual(exits, [1]);
 });
+
+function fieldLogger(logged, fallback = null) {
+  const record = (level) => (fields, message) => {
+    logged.push({ level, fields, message });
+  };
+  return { ...fallback, error: record("error"), info: record("info"), warn: record("warn") };
+}
 
 function testLogger(events) {
   return {

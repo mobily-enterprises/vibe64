@@ -29,6 +29,9 @@ workspace.
 - `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `packages/vibe64-core/src/server/studioProjectContext.js`
 - `server.js`
+- `packages/vibe64-core/src/server/logging.js`
+- `tests/server/serverShutdown.unit.test.js`
+- `tests/server/vibe64Logging.unit.test.js`
 - `packages/vibe64-core/src/server/projectState.js`
 - `packages/vibe64-core/src/shared/projectSlug.js`
 - `packages/vibe64-core/src/server/stateUpgrades/20261025-retired-project-bootstrap.js`
@@ -270,6 +273,15 @@ Opening a runtime publishes only its closed-to-open transition. Repeated tab
 opens still refresh the persisted runtime timestamp for dormancy, but do not
 invalidate every open tab's project resources. The terminal service serializes
 opens per runtime root so simultaneous visits observe one transition.
+
+On SIGTERM or SIGINT the server stops its runtime terminals and capability
+features together, then closes Fastify, within an 8 s deadline. Every stop
+event (`vibe64.server.stopped`, `vibe64.server.stop_failed` and
+`vibe64.server.shutdown_timeout`) carries its `durationMs` and the capability
+runtime's `providerShutdowns` (each provider's status and duration). A timeout
+also names its `pendingOperations`; a failure names its `failedOperations`, and
+operational logs keep each failure's inner errors and causes, redacted, so the
+provider and its reason are visible.
 
 ## Practice projects
 

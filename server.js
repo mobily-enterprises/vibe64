@@ -259,12 +259,30 @@ function createSignalShutdownHandler({
       signal
     }, "Stopping vibe64 server.");
 
+    // Every stop event says how long it took, which operations were still
+    // running and how long each capability provider's shutdown took.
+    const startedAt = Date.now();
+    const pendingOperations = new Set();
+    function progressFields() {
+      const providerShutdowns = app.vibe64CapabilityRuntime?.diagnostics?.()?.providerShutdowns;
+      return {
+        durationMs: Date.now() - startedAt,
+        ...(Array.isArray(providerShutdowns) ? { providerShutdowns } : {})
+      };
+    }
+    function startOperation({ name, run }) {
+      pendingOperations.add(name);
+      return Promise.resolve().then(run).finally(() => pendingOperations.delete(name));
+    }
+
     const timeout = setTimeoutFn(() => {
       logOperationalEvent(app.log, "error", {
         component: "server-lifecycle",
         event: "vibe64.server.shutdown_timeout",
         signal,
-        shutdownTimeoutMs: timeoutMs
+        shutdownTimeoutMs: timeoutMs,
+        pendingOperations: [...pendingOperations],
+        ...progressFields()
       }, "Vibe64 server shutdown timed out; forcing process exit.");
       forceCloseServerConnections(app.server);
       exitOnce(1);
@@ -279,9 +297,7 @@ function createSignalShutdownHandler({
         { name: "runtime-terminals", run: () => closeRuntimeTerminals() },
         { name: "capability-runtime", run: () => shutdownCapabilityRuntime() }
       ];
-      const preClosePromises = preCloseOperations.map(({ run }) => (
-        Promise.resolve().then(run)
-      ));
+      const preClosePromises = preCloseOperations.map(startOperation);
       const capabilityRuntimeIndex = preCloseOperations.findIndex(({ name }) => (
         name === "capability-runtime"
       ));
@@ -292,7 +308,7 @@ function createSignalShutdownHandler({
       ];
       const results = await Promise.allSettled([
         ...preClosePromises,
-        Promise.resolve().then(operations.at(-1).run)
+        startOperation(operations.at(-1))
       ]);
       const failures = results.flatMap((result, index) => {
         if (result.status === "fulfilled") {
@@ -315,7 +331,8 @@ function createSignalShutdownHandler({
       logOperationalEvent(app.log, "info", {
         component: "server-lifecycle",
         event: "vibe64.server.stopped",
-        signal
+        signal,
+        ...progressFields()
       }, "Stopped vibe64 server.");
       exitOnce(0);
     } catch (error) {
@@ -323,7 +340,9 @@ function createSignalShutdownHandler({
       logOperationalEvent(app.log, "error", {
         component: "server-lifecycle",
         error,
-        event: "vibe64.server.stop_failed"
+        event: "vibe64.server.stop_failed",
+        failedOperations: (error?.errors || []).map(({ operation }) => operation).filter(Boolean),
+        ...progressFields()
       }, "Failed to stop vibe64 server cleanly.");
       exitOnce(1);
     }

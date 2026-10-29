@@ -173,17 +173,20 @@ function redactLogValue(value, {
   if (!value || typeof value !== "object") {
     return value;
   }
-  if (value instanceof Error) {
-    return {
-      code: String(value.code || ""),
-      message: sanitizeLogText(value.message),
-      name: String(value.name || "Error")
-    };
-  }
   if (seen.has(value)) {
     return "[circular]";
   }
   seen.add(value);
+  if (value instanceof Error) {
+    // An aggregate's inner errors and a wrapped cause say what actually failed.
+    return {
+      code: String(value.code || ""),
+      message: sanitizeLogText(value.message),
+      name: String(value.name || "Error"),
+      ...(Array.isArray(value.errors) ? { errors: value.errors.map((entry) => redactLogValue(entry, { seen })) } : {}),
+      ...(value.cause !== undefined ? { cause: redactLogValue(value.cause, { seen }) } : {})
+    };
+  }
   if (Array.isArray(value)) {
     return value.map((entry) => redactLogValue(entry, {
       seen
