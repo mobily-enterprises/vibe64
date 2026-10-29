@@ -942,7 +942,11 @@ owner's approval notice and project message labels read summaries; the
 session's own readers keep the full change. A change without a project reaches
 no page. The summary is a second publication of type `entity.summary`, so
 server listeners of session changes match `entity.changed` and see each change
-once. Deleting a temporary Claude chat
+once. A change never carries the conversation's live text or transcript patch
+(`conversationStream`, `conversationLogPatch`): viewers receive both through
+their conversation subscription, and a streamed delta (`assistant-stream`) is
+not published as a session change at all. A completed turn reloads the
+durable log from its idle reason and turn identity, not from a stream. Deleting a temporary Claude chat
 removes its metadata record instead of accumulating empty files that every
 session read would reopen.
 Claude process restoration reads current saved session metadata, rather than a

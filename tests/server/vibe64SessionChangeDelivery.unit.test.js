@@ -53,11 +53,37 @@ test("a session change reaches its viewers in full and its project's pages as a 
 test("streamed work reaches only the session's viewers", async () => {
   const { events, published } = recordingEvents();
   const publish = createSessionChangedPublisher(events);
-  for (const reason of ["assistant-stream", "claude-stream-message", "codex-app-server-live-progress", "output-target-ready"]) {
-    await publish("s1", { reason, payload: { conversationStream: { text: "partial" } }, session: { sessionId: "s1", projectSlug: "alpha" } });
+  for (const reason of ["claude-stream-message", "codex-app-server-live-progress", "output-target-ready"]) {
+    await publish("s1", { reason, session: { sessionId: "s1", projectSlug: "alpha" } });
   }
   assert.deepEqual(published.map(({ realtime }) => [realtime.event, realtime.audience.room]),
-    Array(4).fill([FULL, "vibe64:project:alpha:session:s1"]));
+    Array(3).fill([FULL, "vibe64:project:alpha:session:s1"]));
+});
+
+// Viewers receive a conversation's live text and transcript through its
+// conversation subscription. The application change carried them again, the
+// whole streamed text so far with every delta, and no page read them there.
+test("a session change never carries the conversation's stream or transcript", async () => {
+  const { events, published } = recordingEvents();
+  await createSessionChangedPublisher(events)("s1", {
+    reason: "claude-stream-message",
+    payload: {
+      conversationLogPatch: { type: "upsert-turn", turn: { turnId: "t1", text: "x".repeat(4000) } },
+      conversationStream: { revision: 3, messages: [{ text: "y".repeat(4000) }] }
+    },
+    session: { sessionId: "s1", projectSlug: "alpha", revision: 4 }
+  });
+  assert.deepEqual(published.map(({ realtime }) => realtime.payload), [{
+    sessionId: "s1", revision: 4, projectSlug: "alpha", clientRefresh: { includeAccess: false }, reason: "claude-stream-message"
+  }]);
+});
+
+test("a streamed delta is not a session change", async () => {
+  const { events, published } = recordingEvents();
+  const publish = createSessionChangedPublisher(events);
+  assert.equal(await publish("s1", { reason: "assistant-stream", payload: { conversationStream: { text: "Hel" } },
+    session: { sessionId: "s1", projectSlug: "alpha" } }), null);
+  assert.deepEqual(published, [], "its subscribers receive the delta natively; no page reads it as a change");
 });
 
 test("pages receive only the changes of the projects and sessions they watch", { timeout: 30_000 }, async (t) => {
@@ -118,21 +144,20 @@ test("pages receive only the changes of the projects and sessions they watch", {
   const publish = createSessionChangedPublisher(events);
   const reasons = () => Object.fromEntries(Object.entries(received).map(([name, list]) =>
     [name, list.map(([event, payload]) => `${event === FULL ? "full" : "summary"}:${payload.reason}`)]));
-  await publish("s1", { reason: "assistant-stream", payload: { conversationStream: { text: "Hel" } }, session: { sessionId: "s1", projectSlug: "alpha" } });
+  await publish("s1", { reason: "codex-app-server-live-progress", session: { sessionId: "s1", projectSlug: "alpha" } });
   await publish("s1", turnIdle);
   await publish("s2", { reason: "session-renamed", session: { sessionId: "s2", projectSlug: "alpha", revision: 3 } });
   await delay(100);
   assert.deepEqual(reasons(), {
-    viewer: ["full:assistant-stream", "full:claude-stream-turn-idle", "summary:claude-stream-turn-idle", "summary:session-renamed"],
+    viewer: ["full:codex-app-server-live-progress", "full:claude-stream-turn-idle", "summary:claude-stream-turn-idle", "summary:session-renamed"],
     list: ["summary:claude-stream-turn-idle", "summary:session-renamed"],
     elsewhere: []
   });
-  assert.equal(received.viewer[0][1].conversationStream.text, "Hel", "the viewer still receives the stream");
 
   tabs.viewer.emit(PROJECT_WATCH_RELEASE, { watchId: "session" });
   await delay(50);
   for (const list of Object.values(received)) list.length = 0;
-  await publish("s1", { reason: "assistant-stream", payload: { conversationStream: { text: "Hello" } }, session: { sessionId: "s1", projectSlug: "alpha" } });
+  await publish("s1", { reason: "codex-app-server-live-progress", session: { sessionId: "s1", projectSlug: "alpha" } });
   await publish("s1", { reason: "session-renamed", session: { sessionId: "s1", projectSlug: "alpha", revision: 8 } });
   await delay(100);
   assert.deepEqual(reasons(), {

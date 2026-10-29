@@ -39,7 +39,6 @@ const NOT_ACCESS = Object.freeze({ includeAccess: false });
 // Live presentation of a session's work: streamed text, progress and output
 // targets. They invalidate no client read.
 const PRESENTATION_REASONS = Object.freeze([
-  "assistant-stream",
   "assistant-response-bundle",
   "codex-app-server-commentary",
   "codex-app-server-live-progress",
@@ -108,11 +107,17 @@ function sessionRealtimePayload(sessionId, { session: sessionValue, originId, re
   const sessionRefresh = normalizedClientRefresh(source.clientRefresh);
   const additionalPayload = record(payload);
   const additionalRefresh = normalizedClientRefresh(additionalPayload.clientRefresh);
+  // A conversation's live text and transcript reach its viewers through their
+  // conversation subscription, never through the session change.
   const {
     clientRefresh: _clientRefresh,
+    conversationLogPatch: _conversationLogPatch,
+    conversationStream: _conversationStream,
     ...additionalFields
   } = additionalPayload;
   void _clientRefresh;
+  void _conversationLogPatch;
+  void _conversationStream;
   const context = currentProjectRequestContext();
   const clientRefresh = {
     ...CLIENT_REFRESH_BY_REASON.get(String(reason || "").trim()),
@@ -168,7 +173,9 @@ function createSessionChangedPublisher(events) {
     session = null
   } = {}) {
     const id = String(sessionIdValue || "").trim();
-    if (!id) {
+    // A streamed delta carries only the conversation's live text, which its
+    // subscribers receive natively: no page or listener reads it as a change.
+    if (!id || String(reason || "").trim() === "assistant-stream") {
       return null;
     }
     const fullPayload = Object.freeze(sessionRealtimePayload(id, {

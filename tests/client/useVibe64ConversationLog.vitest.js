@@ -911,6 +911,8 @@ describe("useVibe64ConversationLog", () => {
       const listener = realtimeMocks.events.find(entry => entry.matches({ payload }));
       expect(listener).toBeDefined();
       expect(listener.matches({ payload: { ...payload, sessionId: "other-session" } })).toBe(false);
+      // Completion events carry no live stream: the native subscription does.
+      expect(listener.matches({ payload: { ...payload, reason: "claude-stream-turn-idle" } })).toBe(true);
       await listener.onEvent({ payload });
       session.value = payload;
       await nextTick();

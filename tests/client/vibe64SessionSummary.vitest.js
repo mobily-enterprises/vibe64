@@ -61,8 +61,8 @@ describe("session summaries", () => {
   });
 
   it("are not sent for streamed work", async () => {
-    for (const reason of ["assistant-stream", "claude-stream-message", "opencode-server-progress", "output-target-started"]) {
-      expect(await summaryOf("s1", { reason, session: session("s1"), payload: { conversationStream: { text: "x" } } })).toBeUndefined();
+    for (const reason of ["claude-stream-message", "opencode-server-progress", "output-target-started"]) {
+      expect(await summaryOf("s1", { reason, session: session("s1") })).toBeUndefined();
     }
   });
 });

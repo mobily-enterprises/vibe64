@@ -27,7 +27,6 @@ const CONVERSATION_LOG_REALTIME_REASONS = new Set([
   "project-message-changed",
   "conversation-rewound",
   "session-assistant-selection-updated",
-  "assistant-stream",
   "integration-setup-skipped",
   "integration-setup-completed",
   "assistant-response-bundle",
@@ -108,7 +107,7 @@ function conversationLogRealtimeShouldRefresh({ payload = {} } = {}, sessionId =
   // Action and intent events can persist user, system, or audit turns on the
   // server. Even the originating tab must refetch the durable log; optimistic
   // self-echo suppression belongs outside the canonical conversation query.
-  return Boolean(payload.conversationStream) || !reason || CONVERSATION_LOG_REALTIME_REASONS.has(reason);
+  return !reason || CONVERSATION_LOG_REALTIME_REASONS.has(reason);
 }
 
 function conversationLogCompletedTurnKey(session = {}) {
