@@ -633,7 +633,7 @@ describe("ProjectSettingsPanel AI behaviour", () => {
     }
   });
 
-  it("replaces a held pre-mutation settings refresh once without publishing its stale draft", async () => {
+  it("reads once more after a held pre-mutation settings refresh and shows the fresh settings", async () => {
     projectSettingsMocks.route.query = {};
     const fixture = mountPanel({ liveQueries: true });
     try {
@@ -645,16 +645,16 @@ describe("ProjectSettingsPanel AI behaviour", () => {
       expect(earlierRequest.url).toBe(PROJECT_SETTINGS_ENDPOINT);
       earlierRequest.data.collaboration.requirements = "Read before the mutation.";
       const from = fixture.requests.length;
+      const settingsRefreshes = () => fixture.requests.slice(from).filter(({ url }) => url === PROJECT_SETTINGS_ENDPOINT);
 
+      // Realtime never cancels a read in flight; it reads again once it settles.
       await fixture.projectChanged();
-
-      const settingsRefreshes = fixture.requests.slice(from).filter(({ url }) => url === PROJECT_SETTINGS_ENDPOINT);
-      expect(settingsRefreshes).toHaveLength(1);
-      settingsRefreshes[0].data.collaboration.requirements = "Freshly saved requirements.";
-      await fixture.resolveReads(from);
+      expect(settingsRefreshes()).toHaveLength(0);
       earlierRequest.resolve(earlierRequest.data);
       await earlierRefresh;
-      await nextTick();
+      await vi.waitFor(() => expect(settingsRefreshes()).toHaveLength(1));
+      settingsRefreshes()[0].data.collaboration.requirements = "Freshly saved requirements.";
+      await fixture.resolveReads(from);
       expect(findField(fixture.container, "Project requirements (optional)").props.modelValue)
         .toBe("Freshly saved requirements.");
       expect(fixture.queryClient.getQueryData(key).collaboration.requirements).toBe("Freshly saved requirements.");
@@ -902,23 +902,23 @@ describe("ProjectSettingsPanel AI behaviour", () => {
       }
       const afterEvent = fixture.requests.length;
       await fixture.projectChanged();
-      expect(fixture.requests.slice(afterEvent).filter(({ url }) => url === ENGINEERING_ENDPOINT)).toHaveLength(1);
-      for (const request of fixture.requests.slice(afterEvent)) {
-        if (request.url === ENGINEERING_ENDPOINT) {
-          request.data = createEngineeringResource({ profile: "high-assurance.v1" }).data.value;
-        }
+      const eventReads = () => fixture.requests.slice(afterEvent).filter(({ url }) => url === ENGINEERING_ENDPOINT);
+      if (eventTiming === "during") {
+        // Realtime never cancels the canonical read; it reads once more after it.
+        expect(eventReads()).toHaveLength(0);
+        canonicalRead.resolve(canonicalRead.data);
+        await saving;
       }
+      await vi.waitFor(() => expect(eventReads()).toHaveLength(1));
+      eventReads()[0].data = createEngineeringResource({ profile: "high-assurance.v1" }).data.value;
       await fixture.resolveReads(afterEvent);
-      canonicalRead.resolve(canonicalRead.data);
-      await saving;
       await nextTick();
 
       const key = engineeringSettingsQueryKey("app", "public", "project-a", "session-a");
       expect(fixture.queryClient.getQueryData(key).engineering.profile.id).toBe("high-assurance.v1");
       expect(fixture.requests.slice(afterAcknowledgement).filter(({ url }) => url === ENGINEERING_ENDPOINT)).toHaveLength(2);
       expect(findField(fixture.container, "Engineering profile").props.disabled).toBe(false);
-      expect(findField(fixture.container, "Engineering profile").props.modelValue)
-        .toBe(eventTiming === "during" ? "durable.v1" : "high-assurance.v1");
+      expect(findField(fixture.container, "Engineering profile").props.modelValue).toBe("high-assurance.v1");
     } finally {
       fixture.close();
       await saving.catch(() => {});

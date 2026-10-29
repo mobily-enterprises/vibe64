@@ -345,14 +345,16 @@ describe("retained project conversation ownership", () => {
     const first = binding.submitText("Cancel these words", { messageId: "deferred-a", context });
     const second = binding.submitText("Never cross accounts", { messageId: "deferred-b", context });
     await vi.waitFor(() => expect(runtime.delivery.state.messages).toHaveLength(2));
-    expect(runtime.cancelMessage("unrelated")).toBe(false);
-    expect(runtime.cancelMessage("deferred-a")).toBe(true);
+    expect(await runtime.cancelMessage("unrelated")).toBe(false);
+    // Cancel asks the server, which records it; the words never send.
+    expect(await runtime.cancelMessage("deferred-a")).toBe(true);
     expect(await first).toBe(false);
     f.viewer.value = { actorKey: "member" };
     await nextTick();
     expect(await second).toBe(false);
     expect(runtime.available.value).toBe(false);
-    expect(mocks.request).not.toHaveBeenCalled();
+    expect(mocks.request).toHaveBeenCalledTimes(1);
+    expect(mocks.request.mock.calls[0][0]).toMatch(/\/deliveries\/deferred-a\/cancel$/);
   });
   it("stops both undispatched spoken followers through the original conversation Stop owner", async () => {
     const f = fixture({ status: "working", steering: false });
@@ -373,20 +375,27 @@ describe("retained project conversation ownership", () => {
   it("aborts only the captured pending message through the supplied Send owner", async () => {
     const f = fixture();
     let signal;
-    mocks.request.mockImplementation((_url, options) => new Promise((_resolve, reject) => {
+    const agreement = Promise.withResolvers();
+    mocks.request.mockImplementation((url, options) => url.endsWith("/cancel") ? agreement.promise : new Promise((_resolve, reject) => {
       signal = options.signal;
       signal.addEventListener("abort", () => reject(new Error("Request aborted")), { once: true });
     }));
     const runtime = f.runtime.value;
     const sending = runtime.send({ message: "Routing this exact request" }, { messageId: "pending-router" });
     await vi.waitFor(() => expect(signal).toBeDefined());
-    expect(runtime.cancelMessage("another-message")).toBe(false);
+    expect(await runtime.cancelMessage("another-message")).toBe(false);
     expect(signal.aborted).toBe(false);
-    expect(runtime.cancelMessage("pending-router")).toBe(true);
+    const cancelled = runtime.cancelMessage("pending-router");
     expect(signal.aborted).toBe(true);
     expect(await sending).toBe(false);
-    expect(runtime.cancelMessage("pending-router")).toBe(false);
-    expect(mocks.request).toHaveBeenCalledTimes(1);
+    // The message shows Cancelling… until the server agrees.
+    expect(runtime.delivery.find("pending-router").cancelling).toBe(true);
+    agreement.resolve({ ok: true });
+    expect(await cancelled).toBe(true);
+    expect(runtime.delivery.find("pending-router")).toBe(null);
+    expect(await runtime.cancelMessage("pending-router")).toBe(false);
+    expect(mocks.request.mock.calls.map(([url]) => url.endsWith("/deliveries/pending-router/cancel")))
+      .toEqual([false, true]);
   });
 });
 

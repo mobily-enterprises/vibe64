@@ -498,7 +498,7 @@ describe("Vibe64 project client scope", () => {
     }
   });
 
-  it("replaces a held pre-mutation projects refresh once and ignores its late stale result", async () => {
+  it("reads once more after a held pre-mutation projects refresh, without cancelling it", async () => {
     const slug = "realtime-held-project";
     const fixture = mountProjectQueries(slug);
     try {
@@ -513,18 +513,16 @@ describe("Vibe64 project client scope", () => {
       const earlierRequest = fixture.requests.at(-1);
       expect(fixture.requests).toHaveLength(2);
 
+      // Realtime never cancels a read in flight; it reads again once it settles.
       await fixture.projectChanged();
-      expect(fixture.requests).toHaveLength(3);
+      expect(fixture.requests).toHaveLength(2);
+      earlierRequest.resolve(projectSelection(slug));
+      await earlierRefresh;
+      await vi.waitFor(() => expect(fixture.requests).toHaveLength(3));
       const updated = projectSelection(slug);
       updated.currentProject.path = `/projects/${slug}/after-mutation`;
       fixture.requests.at(-1).resolve(updated);
-      await query.promise;
-      await Vue.nextTick();
-      earlierRequest.resolve(projectSelection(slug));
-      await earlierRefresh;
-      await Vue.nextTick();
-
-      expect(query.state.data.currentProject.path).toBe(updated.currentProject.path);
+      await vi.waitFor(() => expect(query.state.data.currentProject.path).toBe(updated.currentProject.path));
       expect(fixture.renderedProject()).toBe(slug);
     } finally {
       fixture.close();
