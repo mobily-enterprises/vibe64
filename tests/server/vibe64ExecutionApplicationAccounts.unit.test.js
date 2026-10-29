@@ -8,7 +8,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import {
-  APPLICATION_USERNAME_PREFIX, DAEMON_USERNAME_PREFIX, accountUnitLines, applicationIdentity, applicationReleaseEnvironmentFile, applicationReleaseServiceFiles,
+  APPLICATION_USERNAME_PREFIX, DAEMON_USERNAME_PREFIX, HOST_SETTINGS_ROOT, accountUnitLines, applicationIdentity, applicationReleaseEnvironmentFile, applicationReleaseServiceFiles,
   assertActablePerson, deploymentServiceUnit, ensureApplicationAccount, helperChildEnv, openManagedExecutionReceipts, readApplicationRegistration, registeredApplicationUser,
   registerPerson, resolveApplicationCwd, retireApplicationAccount
 } from "../../packages/vibe64-execution/src/host/execHelper.js";
@@ -326,7 +326,7 @@ test("an application's execution runs as itself in its sandbox, with its own tem
   assert.equal(lines.some((line) => /^(SupplementaryGroups=|Group=vibe64$)/u.test(line)), false);
   for (const line of ["NoNewPrivileges=yes", "PrivateTmp=yes", "ProtectSystem=strict", "ProtectHome=yes",
     "ProtectProc=invisible", "RestrictSUIDSGID=yes", "RestrictNamespaces=yes", "CapabilityBoundingSet=",
-    `ReadWritePaths=${account.appRoot} ${account.databaseRoot} ${receiptRoot}`]) {
+    `InaccessiblePaths=${HOST_SETTINGS_ROOT}`, `ReadWritePaths=${account.appRoot} ${account.databaseRoot} ${receiptRoot}`]) {
     assert.ok(lines.includes(line), line);
   }
   assert.deepEqual(accountUnitLines({ username: "alice" }),
@@ -435,7 +435,7 @@ test("a release service unit runs as its application in its sandbox, listening o
     `User=${applicationUser("0123456789ab")}`, `Group=${applicationUser("0123456789ab")}`, "UMask=0077", "Slice=vibe64-test-work.slice",
     "NoNewPrivileges=yes", "PrivateTmp=yes", "ProtectSystem=strict", "ReadWritePaths=/area/app /area/database",
     "ProtectHome=yes", "ProtectProc=invisible", "RestrictSUIDSGID=yes", "RestrictNamespaces=yes", "CapabilityBoundingSet=",
-    "SocketBindAllow=tcp:4100", "SocketBindDeny=any", "Environment=TMPDIR=/tmp",
+    `InaccessiblePaths=${HOST_SETTINGS_ROOT}`, "SocketBindAllow=tcp:4100", "SocketBindDeny=any", "Environment=TMPDIR=/tmp",
     "WorkingDirectory=/area/app/releases/r1/workspace", "Requires=vibe64-managed-test-mariadb.service",
     "WantedBy=multi-user.target",
     'ExecStart=/usr/bin/setpriv --no-new-privs -- /helper/vibe64-exec-helper run-release-service "/area/handover/r1/environment" "/area/handover/r1/start.sh"'

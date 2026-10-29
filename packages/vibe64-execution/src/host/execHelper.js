@@ -123,7 +123,8 @@ const MANAGED_ROOT = "/var/lib/vibe64";
 const RESERVED_HUMAN_USERNAMES = new Set([
   "root"
 ]);
-const PERSON_REGISTRY_ROOT = "/etc/vibe64/people";
+const HOST_SETTINGS_ROOT = "/etc/vibe64";
+const PERSON_REGISTRY_ROOT = path.join(HOST_SETTINGS_ROOT, "people");
 const PERSON_REGISTRATION_SCHEMA = "vibe64.person-registration";
 const PERSON_REGISTRATION_LIMIT_BYTES = 4096;
 const PERSON_REFUSED_EXIT_CODE = 3;
@@ -152,7 +153,7 @@ const ADMINISTRATOR_GROUPS = new Set([
 ]);
 const APPLICATION_USERNAME_PREFIX = "v64a_";
 const APPLICATION_USERNAME_PATTERN = new RegExp(`^${APPLICATION_USERNAME_PREFIX}[a-f0-9]{12}$`, "u");
-const APPLICATION_REGISTRY_ROOT = "/etc/vibe64/applications";
+const APPLICATION_REGISTRY_ROOT = path.join(HOST_SETTINGS_ROOT, "applications");
 const APPLICATION_REGISTRATION_SCHEMA = "vibe64.application-account";
 const APPLICATION_AREA_ROOT = "/var/lib/vibe64-apps";
 const APPLICATION_RECEIPTS_ROOT = "/run/vibe64-applications";
@@ -2651,7 +2652,10 @@ function applicationSandboxLines(identity = {}, writablePaths = []) {
     "RestrictSUIDSGID=yes",
     "RestrictNamespaces=yes",
     "LockPersonality=yes",
-    "CapabilityBoundingSet="
+    "CapabilityBoundingSet=",
+    // The host's own settings, people and applications are no business of a
+    // project's code, though some of those files are readable by every account.
+    `InaccessiblePaths=${HOST_SETTINGS_ROOT}`
   ];
 }
 
@@ -3785,7 +3789,7 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
   return env;
 }
 
-export { APPLICATION_USERNAME_PREFIX, DAEMON_USERNAME_PREFIX, accountUnitLines, applicationIdentity, applicationReleaseEnvironmentFile,
+export { APPLICATION_USERNAME_PREFIX, DAEMON_USERNAME_PREFIX, HOST_SETTINGS_ROOT, accountUnitLines, applicationIdentity, applicationReleaseEnvironmentFile,
   applicationReleaseServiceFiles, applicationSandboxLines, ensureApplicationAccount, readApplicationRegistration,
   registeredApplicationUser,
   resolveApplicationCwd, retireApplicationAccount,

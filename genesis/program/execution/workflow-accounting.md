@@ -274,7 +274,8 @@ Any command may run there, from the application's own area (`app/` or
 check. It runs as the account and its own group alone, with umask `0077`, the
 runner under `setpriv --no-new-privs`, and a sandbox: no new privileges, a
 private `/tmp` as its `TMPDIR`, the whole file system read-only except its area
-and its receipt, no access to homes, no other users' processes, no kernel
+and its receipt, no access to homes or to the host's settings folder (with
+its people and applications), no other users' processes, no kernel
 settings, set-user-ID files, namespaces or capabilities. Its receipt sits in
 root's own runtime directory for the workspace's applications (`0711`), which
 the account can traverse but not list, because it is in no group that reaches
