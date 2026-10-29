@@ -286,8 +286,13 @@ as root. It runs as the account and its own group alone, with umask `0077`, the
 runner under `setpriv --no-new-privs`, and a sandbox: no new privileges, a
 private `/tmp` as its `TMPDIR`, the whole file system read-only except its area
 and its receipt, no access to homes or to the host's settings folder (with
-its people and applications), no other users' processes, no kernel
-settings, set-user-ID files, namespaces or capabilities. Its receipt sits in
+its people and applications), no other users' processes, no devices beyond
+the standard ones, no System V IPC or `/dev/shm` shared with others, no kernel settings,
+set-user-ID files, namespaces or capabilities; only internet, local and netlink
+sockets (Node's `os.networkInterfaces()` needs netlink); and only an ordinary
+service's system calls (`@system-service`), any other failing with `EPERM`.
+Builds with Node, npm, esbuild, Python, tar and SQLite run unchanged in it. Its
+receipt sits in
 root's own runtime directory for the workspace's applications (`0711`), which
 the account can traverse but not list, because it is in no group that reaches
 the daemon's runtime directory. Inspect, stop and release-ended find receipts
@@ -324,8 +329,12 @@ own group with umask `0077`, the helper under `setpriv --no-new-privs`, in the
 same sandbox as the application's executions with its area as the only
 writable place, a private `/tmp`, and one listening port: `SocketBindAllow=`
 names its loopback port (1024–65535) and `SocketBindDeny=any` refuses every
-other, so it can never take over another service's port while that service is
-down. It still starts at boot and requires its managed databases.
+other TCP port, port 0 included, so it can never take over another service's
+port while that service is down. UDP binds stay allowed: a UDP client (Node's
+`dgram`, for StatsD or syslog) binds before it sends, usually to port 0, which
+no port rule can name, and no host service listens on an unprivileged UDP
+port. A finite execution has no bind limits, as builds and tests may listen.
+It still starts at boot and requires its managed databases.
 
 Every `deployment-service` action (install-start, remove, inspect) names a
 unit of the calling daemon's own workspace, `vibe64-release-<workspace>-…`, so

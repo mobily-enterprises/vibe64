@@ -2745,11 +2745,17 @@ function releaseServicePort(value) {
 
 // What an application's commands and release service run inside: its own area
 // is all they may write, they never gain privileges, and they see no other
-// user's processes, homes or temporary files, nor the kernel's settings.
+// user's processes, homes, temporary or shared-memory files, devices or System
+// V IPC, nor the kernel's settings. They use only internet, local and netlink sockets (Node's
+// os.networkInterfaces() needs netlink) and the system calls of an ordinary
+// service; any other call fails with EPERM rather than killing the process.
 function applicationSandboxLines(identity = {}, writablePaths = []) {
   return [
     "NoNewPrivileges=yes",
     "PrivateTmp=yes",
+    "PrivateDevices=yes",
+    "PrivateIPC=yes",
+    "TemporaryFileSystem=/dev/shm:mode=1777,nosuid,nodev",
     "ProtectSystem=strict",
     `ReadWritePaths=${[identity.appRoot, identity.databaseRoot, ...writablePaths.filter(Boolean)]
       .map(systemdUnitSafeValue).join(" ")}`,
@@ -2763,6 +2769,10 @@ function applicationSandboxLines(identity = {}, writablePaths = []) {
     "RestrictNamespaces=yes",
     "LockPersonality=yes",
     "CapabilityBoundingSet=",
+    "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK",
+    "SystemCallArchitectures=native",
+    "SystemCallFilter=@system-service",
+    "SystemCallErrorNumber=EPERM",
     // The host's own settings, people and applications are no business of a
     // project's code, though some of those files are readable by every account.
     `InaccessiblePaths=${HOST_SETTINGS_ROOT}`
@@ -3639,8 +3649,12 @@ function deploymentServiceUnit({
     ...accountUnitLines(user),
     ...serviceResourceUnitLines(owner),
     // It may listen on its own loopback port and nowhere else, so it can never
-    // take over another service's port while that service is down.
+    // take over another service's port while that service is down. UDP stays
+    // open: a UDP client (Node's dgram, for StatsD or syslog) binds before it
+    // sends, often to port 0, which no port rule names, and no host service
+    // listens on an unprivileged UDP port.
     `SocketBindAllow=tcp:${releaseServicePort(loopbackPort)}`,
+    "SocketBindAllow=udp",
     "SocketBindDeny=any",
     `WorkingDirectory=${systemdUnitSafeValue(workingDirectory)}`,
     `Environment=PATH=${systemdUnitSafeValue(DEFAULT_PATH)}`,

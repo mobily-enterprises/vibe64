@@ -398,9 +398,13 @@ test("an application's execution runs as itself in its sandbox, with its own tem
   assert.equal(lines.some((line) => /^(SupplementaryGroups=|Group=vibe64$)/u.test(line)), false);
   for (const line of ["NoNewPrivileges=yes", "PrivateTmp=yes", "ProtectSystem=strict", "ProtectHome=yes",
     "ProtectProc=invisible", "RestrictSUIDSGID=yes", "RestrictNamespaces=yes", "CapabilityBoundingSet=",
-    `InaccessiblePaths=${HOST_SETTINGS_ROOT}`, `ReadWritePaths=${account.appRoot} ${account.databaseRoot} ${receiptRoot}`]) {
+    `InaccessiblePaths=${HOST_SETTINGS_ROOT}`, `ReadWritePaths=${account.appRoot} ${account.databaseRoot} ${receiptRoot}`,
+    "PrivateDevices=yes", "PrivateIPC=yes", "TemporaryFileSystem=/dev/shm:mode=1777,nosuid,nodev",
+    "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK",
+    "SystemCallArchitectures=native", "SystemCallFilter=@system-service", "SystemCallErrorNumber=EPERM"]) {
     assert.ok(lines.includes(line), line);
   }
+  assert.equal(lines.some((line) => line.startsWith("SocketBind")), false, "a finite command may bind, as builds and tests do");
   assert.deepEqual(accountUnitLines({ username: "alice" }),
     ["User=alice", "Group=vibe64", "SupplementaryGroups=nix-users", "UMask=0007"]);
 
@@ -535,7 +539,10 @@ test("a release service unit runs as its application in its sandbox, listening o
     `User=${applicationUser("0123456789ab")}`, `Group=${applicationUser("0123456789ab")}`, "UMask=0077", "Slice=vibe64-test-work.slice",
     "NoNewPrivileges=yes", "PrivateTmp=yes", "ProtectSystem=strict", "ReadWritePaths=/area/app /area/database",
     "ProtectHome=yes", "ProtectProc=invisible", "RestrictSUIDSGID=yes", "RestrictNamespaces=yes", "CapabilityBoundingSet=",
-    `InaccessiblePaths=${HOST_SETTINGS_ROOT}`, "SocketBindAllow=tcp:4100", "SocketBindDeny=any", "Environment=TMPDIR=/tmp",
+    `InaccessiblePaths=${HOST_SETTINGS_ROOT}`, "SocketBindAllow=tcp:4100", "SocketBindAllow=udp", "SocketBindDeny=any",
+    "Environment=TMPDIR=/tmp", "PrivateDevices=yes", "PrivateIPC=yes", "TemporaryFileSystem=/dev/shm:mode=1777,nosuid,nodev",
+    "RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK", "SystemCallArchitectures=native",
+    "SystemCallFilter=@system-service", "SystemCallErrorNumber=EPERM",
     "WorkingDirectory=/area/app/releases/r1/workspace", "Requires=vibe64-managed-test-mariadb.service",
     "WantedBy=multi-user.target",
     'ExecStart=/usr/bin/setpriv --no-new-privs -- /helper/vibe64-exec-helper run-release-service "/area/handover/r1/environment" "/area/handover/r1/start.sh"'
