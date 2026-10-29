@@ -1534,6 +1534,10 @@ function handleManagedServiceOperation(payload = {}) {
   ensureGroup(VIBE64_GROUP);
   const action = String(payload.action || "").trim();
   const unitName = assertValidManagedServiceUnitName(payload.unitName, owner);
+  if (action === "stop") {
+    process.stdout.write(`${JSON.stringify(stopManagedServiceUnit(unitName))}\n`);
+    return;
+  }
   if (action !== "install-start") {
     throw new Error("Vibe64 exec helper rejected an unknown managed service action.");
   }
@@ -1557,12 +1561,47 @@ function handleManagedServiceOperation(payload = {}) {
     pidFile,
     unitName
   });
+  // Started on demand only: a release service that Requires= it starts it at
+  // boot, and every other use starts it through this action again.
   installSystemdUnit({
     activation: "start",
+    enable: false,
     unit,
     unitName,
     unitPath
   });
+}
+
+// Its owner found the service unused. Data stays in place, and install-start
+// starts it again. A running or starting unit that Requires= it (a release
+// service) keeps it: systemd would stop that unit with it. A state that
+// cannot be read counts as running.
+function stopManagedServiceUnit(unitName = "", {
+  query = runRootCommandAllowFailure
+} = {}) {
+  const state = (unit) => String(query("systemctl", ["is-active", unit]).stdout || "").trim();
+  const stopped = (value) => value === "inactive" || value === "failed";
+  const requiredBy = String(query("systemctl", ["show", unitName, "--property=RequiredBy", "--value"]).stdout || "")
+    .split(/\s+/u).filter(Boolean).filter((dependent) => !stopped(state(dependent)));
+  if (requiredBy.length > 0) {
+    return { ok: true, requiredBy, state: "required" };
+  }
+  const active = !stopped(state(unitName));
+  if (active) {
+    runSystemctl(query, ["stop", unitName]);
+  }
+  // Units enabled by earlier releases lose their boot target here.
+  if (String(query("systemctl", ["is-enabled", unitName]).stdout || "").trim() === "enabled") {
+    runSystemctl(query, ["disable", unitName]);
+  }
+  return { ok: true, requiredBy: [], state: active ? "stopped" : "inactive" };
+}
+
+function runSystemctl(query, args = []) {
+  const result = query("systemctl", args);
+  if (result.status !== 0) {
+    throw new Error(String(result.stderr || result.stdout || `systemctl ${args[0]} failed.`).trim());
+  }
 }
 
 function ensureManagedServiceProcessOwnership({
@@ -1670,6 +1709,7 @@ function processBelongsToSystemdUnit(pid = 0, unitName = "") {
 
 function installSystemdUnit({
   activation = "start",
+  enable = true,
   unit = "",
   unitName = "",
   unitPath = ""
@@ -1697,10 +1737,12 @@ function installSystemdUnit({
   runRootCommand("systemctl", [
     "daemon-reload"
   ]);
-  runRootCommand("systemctl", [
-    "enable",
-    unitName
-  ]);
+  if (enable) {
+    runRootCommand("systemctl", [
+      "enable",
+      unitName
+    ]);
+  }
   runRootCommandAllowFailure("systemctl", [
     "reset-failed",
     unitName
@@ -2143,9 +2185,6 @@ function managedServiceUnit({
     "RestartSec=3",
     "TimeoutStartSec=90",
     "TimeoutStopSec=30",
-    "",
-    "[Install]",
-    "WantedBy=multi-user.target",
     ""
   ].join("\n");
 }
@@ -2353,7 +2392,7 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
 
 export { managedWorkflowCounters, managedWorkflowIdentity, managedExecutionOomBoundary,
   managedExecutionState, managedExecutionStopTimeoutMs, managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal,
-  stopManagedExecution,
+  stopManagedExecution, stopManagedServiceUnit,
   assertExpectedId, canonicalPath, helperChildEnv, resolveAllowedCwd,
   resolveAllowedDeploymentServicePath,
   resolveAllowedUserHomePath, runUserCommand };

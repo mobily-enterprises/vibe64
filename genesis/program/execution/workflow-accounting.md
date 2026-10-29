@@ -135,6 +135,16 @@ environment. Loader and shell startup injection variables are excluded.
 Allowed working directories and host service paths are checked after resolving
 symlinks. A link inside an allowed directory cannot grant access outside that root.
 
+The helper's `managed-service` operation serves the daemon's own long-running
+services below the workspace service root. `install-start` writes the unit and
+starts it without a boot target, so it runs only while used: its owner starts it
+again through the same action, and a release service whose unit `Requires=` it
+starts it at boot. `stop` stops and disables it and leaves its data in place.
+It refuses, reporting `required` and the units, while a running, starting or
+unreadable unit still requires the service, because systemd would stop that
+unit with it. Release services keep their boot target.
+`tests/server/vibe64ExecutionHelperSource.unit.test.js` covers both actions.
+
 `startVibe64Workflow()`, `setVibe64WorkflowPhase()` and
 `finishVibe64Workflow()` delegate trusted server lifecycle requests to the same
 installed managed-execution provider as commands. Standalone operation may

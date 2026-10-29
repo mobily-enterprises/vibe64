@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { helperChildEnv, managedExecutionState, managedExecutionOomBoundary, managedExecutionStopTimeoutMs,
   managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal,
-  stopManagedExecution } from "../../packages/vibe64-execution/src/host/execHelper.js";
+  stopManagedExecution, stopManagedServiceUnit } from "../../packages/vibe64-execution/src/host/execHelper.js";
 import {
   RUNTIME_PACKS,
   VIBE64_INTERACTIVE_RUNTIME_PACKS
@@ -346,6 +346,72 @@ test("execution helper manages provider-neutral simple and forking services", as
   assert.match(source, /processBelongsToSystemdUnit\(pid, unitName\)/u);
   assert.match(source, /runRootCommandAllowFailure\("systemctl", \[\s*"stop",\s*unitName/u);
   assert.doesNotMatch(source, /function handleMariaDb|function handlePostgres|function handleRedis/u);
+});
+
+// A managed service runs only while its owner has a use for it: install-start
+// starts it without a boot target, a release service that Requires= it starts
+// it at boot, and Stop leaves it stopped and disabled with its data in place.
+function managedServiceHost({ active = "active", enabled = "enabled", requiredBy = "", dependents = {} } = {}) {
+  const commands = [];
+  return {
+    commands,
+    query: (command, args) => {
+      commands.push(args.join(" "));
+      if (args[0] === "show") return { status: 0, stdout: `${requiredBy}\n` };
+      if (args[0] === "is-active") {
+        const state = args[1] === "db.service" ? active : dependents[args[1]] ?? "";
+        return { status: state === "active" ? 0 : 3, stdout: `${state}\n` };
+      }
+      if (args[0] === "is-enabled") return { status: enabled === "enabled" ? 0 : 1, stdout: `${enabled}\n` };
+      return { status: 0, stdout: "" };
+    }
+  };
+}
+
+test("managed service Stop stops and disables an unused service without touching its data", () => {
+  const host = managedServiceHost({ requiredBy: "vibe64-release-a.service", dependents: { "vibe64-release-a.service": "inactive" } });
+  assert.deepEqual(stopManagedServiceUnit("db.service", host), { ok: true, requiredBy: [], state: "stopped" });
+  assert.deepEqual(host.commands, [
+    "show db.service --property=RequiredBy --value",
+    "is-active vibe64-release-a.service",
+    "is-active db.service",
+    "stop db.service",
+    "is-enabled db.service",
+    "disable db.service"
+  ]);
+});
+
+test("managed service Stop of a stopped, disabled service changes nothing", () => {
+  const host = managedServiceHost({ active: "inactive", enabled: "static" });
+  assert.deepEqual(stopManagedServiceUnit("db.service", host), { ok: true, requiredBy: [], state: "inactive" });
+  assert.deepEqual(host.commands, [
+    "show db.service --property=RequiredBy --value",
+    "is-active db.service",
+    "is-enabled db.service"
+  ]);
+});
+
+test("managed service Stop refuses while a running or unreadable unit requires the service", () => {
+  for (const state of ["active", "activating", "deactivating", ""]) {
+    const host = managedServiceHost({ requiredBy: "vibe64-release-a.service vibe64-release-b.service",
+      dependents: { "vibe64-release-a.service": "failed", "vibe64-release-b.service": state } });
+    assert.deepEqual(stopManagedServiceUnit("db.service", host),
+      { ok: true, requiredBy: ["vibe64-release-b.service"], state: "required" }, state);
+    assert.equal(host.commands.some((command) => /^(stop|disable) /u.test(command)), false,
+      "systemd would stop the release with the service it requires");
+  }
+});
+
+test("managed services have no boot target; install-start no longer enables them", async () => {
+  const source = await helperSource();
+  const managed = source.slice(source.indexOf("function managedServiceUnit("), source.indexOf("function systemdUnitSafeValue("));
+  assert.doesNotMatch(managed, /\[Install\]|WantedBy=/u);
+  const operation = source.slice(source.indexOf("function handleManagedServiceOperation("),
+    source.indexOf("function ensureManagedServiceProcessOwnership("));
+  assert.match(operation, /action === "stop"/u);
+  assert.match(operation, /enable: false/u);
+  const release = source.slice(source.indexOf("function deploymentServiceUnit("), source.indexOf("function managedServiceUnit("));
+  assert.match(release, /WantedBy=multi-user\.target/u, "release services still start at boot and pull in their databases");
 });
 
 test("execution helper rejects payloads that did not pass gateway normalization", async () => {
