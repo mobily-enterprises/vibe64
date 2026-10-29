@@ -215,14 +215,24 @@ re-enables a registered person: the daemon can no longer make an existing
 account a person, or add it to the shared group, merely by naming it. Every
 command as a person, captured or managed, needs that registration with the
 account's current uid, a login uid from `login.defs` rather than a system
-account, the shared group, and an active membership in the daemon's state. The
-person's command then runs with no new privileges, so sudo, su and other setuid
-programs cannot raise it. `setpriv --no-new-privs` sets this for the managed
-runner too, because a container's systemd drop-in can switch a unit's
-`NoNewPrivileges=` off. Host setup runs the root-only
+account, no administrator power, the shared group, and an active membership in
+the daemon's state. An administrator is an account in one of the groups that
+administer the host or reach root without sudo (`adm`, `admin`, `disk`,
+`docker`, `incus`, `incus-admin`, `kmem`, `libvirt`, `lxd`, `root`, `shadow`,
+`staff`, `sudo`, `wheel`), or one for which root's `sudo -n -l -U` lists any
+rule; an answer other than sudo's "not allowed" refuses. The check repeats
+before every command, so a person who later becomes an administrator is
+refused from then on. The person's command then runs with no new privileges,
+so sudo, su and other setuid programs cannot raise it. That alone would not
+protect an administrator: the command could still change the account's own
+files, such as its SSH keys, shell start-up files or user services, which run
+with all of its rights at its next sign-in. A managed execution's runner gets
+no new privileges from `setpriv --no-new-privs`, because a container's systemd
+drop-in can switch a unit's `NoNewPrivileges=` off. Host setup runs the root-only
 `upgrade-person-registry <workspace>` once per workspace: it registers each
-membership whose account is already in the shared group, except system
-accounts, which it reports; a workspace that has a registry keeps it.
+membership whose account is already in the shared group, except system and
+administrator accounts, which it reports; a workspace that has a registry keeps
+it.
 `tests/server/vibe64ExecutionPersonRegistry.unit.test.js` covers the registry
 and its refusals.
 

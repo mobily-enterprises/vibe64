@@ -124,6 +124,26 @@ const PERSON_REGISTRY_ROOT = "/etc/vibe64/people";
 const PERSON_REGISTRATION_SCHEMA = "vibe64.person-registration";
 const PERSON_REGISTRATION_LIMIT_BYTES = 4096;
 const PERSON_REFUSED_EXIT_CODE = 3;
+// Members of these groups administer the host or can become root without sudo:
+// through the group's own files or devices (disk, kmem, root, shadow, staff's
+// /usr/local), a container or VM daemon (docker, incus, libvirt, lxd), or the
+// administrators' logs (adm).
+const ADMINISTRATOR_GROUPS = new Set([
+  "adm",
+  "admin",
+  "disk",
+  "docker",
+  "incus",
+  "incus-admin",
+  "kmem",
+  "libvirt",
+  "lxd",
+  "root",
+  "shadow",
+  "staff",
+  "sudo",
+  "wheel"
+]);
 const MANAGED_EXECUTION_ID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu;
 const MANAGED_EXECUTION_KINDS = new Set([
   "assistant",
@@ -1872,13 +1892,26 @@ function loginUidRange(loginDefs = "") {
 }
 
 // Why the helper must never act as this account, or "" for a person's
-// ordinary login: a system account is no person.
+// ordinary login. Acting as an administrator would hand the daemon that power
+// whatever confines the command itself: the account's own files (its SSH keys,
+// shell start-up files and user services) run with all of its rights at its
+// next sign-in. sudo's own answer covers every rule source it reads; groups
+// cover the administrators sudo knows nothing about.
 function personAccountProblem(user = {}, {
-  loginUids = loginUidRange()
+  groups = [],
+  loginUids = loginUidRange(),
+  sudoListing = ""
 } = {}) {
   const { uid, username } = user;
   if (!Number.isSafeInteger(uid) || uid < loginUids.min || uid > loginUids.max) {
     return `${username} is a system account (uid ${uid}), not a person's login.`;
+  }
+  const group = groups.find((name) => ADMINISTRATOR_GROUPS.has(name));
+  if (group) {
+    return `${username} is in the administrators' group ${group}.`;
+  }
+  if (!sudoListing.includes(`User ${username} is not allowed to run sudo on `)) {
+    return `${username} has sudo rules.`;
   }
   return "";
 }
@@ -1890,16 +1923,21 @@ function hostPersonFacts(username = "") {
   } catch {
     // Without login.defs, useradd's own defaults apply.
   }
+  const sudo = spawnSync("/usr/bin/sudo", ["-n", "-l", "-U", username], {
+    encoding: "utf8",
+    env: { LANG: "C", LC_ALL: "C", PATH: "/usr/sbin:/usr/bin:/sbin:/bin" }
+  });
   return {
     groups: osGroupNames(username),
-    loginUids: loginUidRange(loginDefs)
+    loginUids: loginUidRange(loginDefs),
+    sudoListing: sudo.error ? "" : String(sudo.stdout || "")
   };
 }
 
 function assertPersonAccount(user = {}, facts = {}) {
   const problem = personAccountProblem(user, facts);
   if (problem) {
-    throw personRefusal(`Vibe64 never runs commands as a system account: ${problem}`);
+    throw personRefusal(`Vibe64 never runs commands as an administrator or system account: ${problem}`);
   }
 }
 
@@ -1920,8 +1958,8 @@ function assertRegisteredPerson(workspace = "", targetUser = {}, {
 }
 
 // Every command the helper runs as a person passes this: a person root
-// registered for the daemon's workspace, still a person's login, in the shared
-// group, and enabled in the daemon's own state.
+// registered for the daemon's workspace, still without administrator power,
+// in the shared group, and enabled in the daemon's own state.
 function assertActablePerson(owner = {}, targetUser = {}, options = {}) {
   const facts = assertRegisteredPerson(personWorkspace(owner), targetUser, options);
   if (!facts.groups.includes(VIBE64_GROUP)) {
@@ -1930,8 +1968,8 @@ function assertActablePerson(owner = {}, targetUser = {}, options = {}) {
   assertEnabledForVibe64(owner, targetUser.username);
 }
 
-// Root-side registration of one existing account. Refuses system accounts;
-// the person also joins the shared group.
+// Root-side registration of one existing account. Refuses system and
+// administrator accounts; the person also joins the shared group.
 function registerPerson(workspace = "", username = "", {
   addToGroup = (name) => addUserToGroup(name, VIBE64_GROUP),
   facts = hostPersonFacts,
@@ -1955,7 +1993,7 @@ function registerPerson(workspace = "", username = "", {
 
 // One-time registration of the people a workspace had before root kept its
 // registry: each membership in the daemon's state whose account is already in
-// the shared group, except system accounts, which it reports.
+// the shared group, except system and administrator accounts, which it reports.
 // A workspace that has a registry keeps it unchanged. The registry appears
 // whole, so an interrupted run imports nothing and the next run starts again.
 function upgradePersonRegistry(workspace = "", {

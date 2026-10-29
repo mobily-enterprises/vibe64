@@ -103,13 +103,38 @@ test("the helper acts as a person root registered for the daemon's own workspace
   assert.throws(() => assertActablePerson(host.owner, host.accounts.alice, host.registry), /shared Vibe64 group/u);
 });
 
-test("system accounts are refused", () => {
+test("a registered person who later gains administrator power is refused at the next command", async (t) => {
+  const host = await workspaceHost(t);
+  await host.member("alice");
+  host.register("alice");
+  for (const facts of [
+    { ...HOST_FACTS.alice, groups: ["alice", "vibe64", "sudo"] },
+    { ...HOST_FACTS.alice, groups: ["alice", "vibe64", "docker"] },
+    { ...HOST_FACTS.alice, sudoListing: mayRunAll("alice") },
+    { ...HOST_FACTS.alice, sudoListing: "User alice may run the following commands on host:\n    (bob) /usr/bin/true\n" },
+    // An answer sudo did not give is no proof of no rules.
+    { ...HOST_FACTS.alice, sudoListing: "" }
+  ]) {
+    host.facts.alice = facts;
+    assert.throws(() => assertActablePerson(host.owner, host.accounts.alice, host.registry),
+      (error) => error.exitCode === 3 && /never runs commands as an administrator/u.test(error.message));
+  }
+});
+
+test("system accounts and every administrators' group are refused", () => {
   const person = { uid: 1001, username: "alice" };
-  const facts = { groups: ["alice", "vibe64"], loginUids: LOGIN_UIDS };
+  const facts = { groups: ["alice", "vibe64"], loginUids: LOGIN_UIDS, sudoListing: notAllowed("alice") };
   assert.equal(personAccountProblem(person, facts), "");
   for (const uid of [0, 104, 999, 60001, 65534, undefined, "1001"]) {
     assert.match(personAccountProblem({ ...person, uid }, facts), /is a system account/u, String(uid));
   }
+  for (const group of ["adm", "admin", "disk", "docker", "incus", "incus-admin", "kmem", "libvirt", "lxd", "root",
+    "shadow", "staff", "sudo", "wheel"]) {
+    assert.match(personAccountProblem(person, { ...facts, groups: [...facts.groups, group] }),
+      new RegExp(`administrators' group ${group}`, "u"));
+  }
+  assert.match(personAccountProblem(person, { ...facts, sudoListing: mayRunAll("alice") }), /has sudo rules/u);
+  assert.match(personAccountProblem(person, { ...facts, sudoListing: notAllowed("alicex") }), /has sudo rules/u);
   // Another host's login range is honored.
   assert.match(personAccountProblem(person, { ...facts, loginUids: { max: 60000, min: 2000 } }), /system account/u);
 });
@@ -119,11 +144,13 @@ test("the login range is read from login.defs, with useradd's defaults", () => {
   assert.deepEqual(loginUidRange("# UID_MIN 5\nUID_MIN\t\t\t 2000\nSYS_UID_MIN 100\nUID_MAX 30000\n"), { max: 30000, min: 2000 });
 });
 
-test("registration refuses system accounts and records only people", async (t) => {
+test("registration refuses system and administrator accounts and records only people", async (t) => {
   const host = await workspaceHost(t);
-  assert.throws(() => host.register("sshd"), (error) => error.exitCode === 3 &&
-    /never runs commands as a system account: sshd is a system account \(uid 104\)/u.test(error.message));
-  assert.equal(readPersonRegistration("test", "sshd", host.registry), null);
+  for (const username of ["merc", "ubuntu", "sshd"]) {
+    assert.throws(() => host.register(username), (error) => error.exitCode === 3 &&
+      /never runs commands as an administrator or system account/u.test(error.message));
+    assert.equal(readPersonRegistration("test", username, host.registry), null);
+  }
   assert.throws(() => host.register("root"), /Privileged Unix accounts/u);
   assert.throws(() => host.register(DAEMON), /daemon Unix accounts/u);
   assert.throws(() => registerPerson("Bad/Name", "alice", host.registry), /invalid workspace name/u);
@@ -174,11 +201,11 @@ test("a registration only root could have written is the only registration", asy
   }
 });
 
-test("the existing people of a workspace are registered once, without system accounts", async (t) => {
+test("the existing people of a workspace are registered once, without its administrators", async (t) => {
   const host = await workspaceHost(t);
-  // As sas has them: the owner, two members, a system account in the shared
-  // group, and a membership the daemon wrote for an account no root setup ever
-  // put in the shared group.
+  // As sas has them: the owner and ubuntu hold sudo, two members, a system
+  // account in the shared group, and a membership the daemon wrote for an
+  // account no root setup ever put in the shared group.
   await host.member("merc");
   await host.member("alice", "disabled");
   await host.member("ubuntu");
@@ -198,20 +225,20 @@ test("the existing people of a workspace are registered once, without system acc
     }
   });
 
-  assert.deepEqual(upgrade(), { imported: ["alice", "merc", "ubuntu"], refused: ["sshd"] });
+  assert.deepEqual(upgrade(), { imported: ["alice"], refused: ["merc", "sshd", "ubuntu"] });
   assert.deepEqual(await readdir(host.registry.registryRoot), ["test"]);
-  assert.deepEqual(await readdir(path.join(host.registry.registryRoot, "test")), ["alice.json", "merc.json", "ubuntu.json"]);
+  assert.deepEqual(await readdir(path.join(host.registry.registryRoot, "test")), ["alice.json"]);
   assert.deepEqual(lines, [
     "[vibe64-exec-helper] Registered alice as a Vibe64 person of test.",
-    "[vibe64-exec-helper] Registered merc as a Vibe64 person of test.",
+    "[vibe64-exec-helper] Not registering merc as a Vibe64 person of test: merc is in the administrators' group sudo.",
     "[vibe64-exec-helper] Not registering sshd as a Vibe64 person of test: sshd is a system account (uid 104), not a person's login.",
-    "[vibe64-exec-helper] Registered ubuntu as a Vibe64 person of test."
+    "[vibe64-exec-helper] Not registering ubuntu as a Vibe64 person of test: ubuntu is in the administrators' group adm."
   ]);
 
   // Once the workspace has its registry, a later membership registers no one.
   host.facts.bob = { ...HOST_FACTS.bob, groups: ["bob", "vibe64"] };
   assert.deepEqual(upgrade(), { imported: [], refused: [] });
-  assert.deepEqual(await readdir(path.join(host.registry.registryRoot, "test")), ["alice.json", "merc.json", "ubuntu.json"]);
+  assert.deepEqual(await readdir(path.join(host.registry.registryRoot, "test")), ["alice.json"]);
 });
 
 test("a workspace without memberships still receives its empty registry", async (t) => {
