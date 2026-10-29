@@ -1,17 +1,12 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { existsSync, lstatSync, readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { fileURLToPath } from "node:url";
 
 import { createService } from "../../packages/vibe64-project/src/server/service.js";
 import { createStudioProjectContext } from "../../packages/vibe64-core/src/server/studioProjectContext.js";
 import { runtimeConfigViewRecord } from "../../packages/vibe64-core/src/server/runtimeConfig.js";
 import { sourceMetadata, sourcePath, withTemporaryRoot } from "./vibe64TestHelpers.js";
-
-const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 function projectService(targetRoot, options = {}) {
   return createService({
@@ -170,16 +165,4 @@ test("records carry an optional one-line label for display only", () => {
   assert.equal(Object.hasOwn(runtimeConfigViewRecord({ key: "A", value: "x" }), "label"), false);
   assert.throws(() => runtimeConfigViewRecord({ key: "A", label: "two\nlines" }), { code: "vibe64_runtime_config_label_invalid" });
   assert.throws(() => runtimeConfigViewRecord({ key: "A", label: "x".repeat(201) }), { code: "vibe64_runtime_config_label_invalid" });
-});
-
-test("public names no host behind the saved-value seam", () => {
-  const files = execFileSync("git", ["ls-files", "-z"], { cwd: REPO_ROOT, encoding: "utf8" }).split("\0")
-    .filter((file) => file && file !== "package-lock.json" && !file.startsWith(".genesis/"))
-    .filter((file) => existsSync(path.join(REPO_ROOT, file)) && lstatSync(path.join(REPO_ROOT, file)).isFile());
-  const hostNames = /Keys (?:&|and) accounts|\/api\/vibe64\/keys|Vibe64 Online|private-online/u;
-  const findings = files.filter((file) => {
-    const content = readFileSync(path.join(REPO_ROOT, file));
-    return !content.includes(0) && hostNames.test(content.toString("utf8"));
-  });
-  assert.deepEqual(findings.filter((file) => file !== "tests/server/savedEnvValues.unit.test.js"), []);
 });

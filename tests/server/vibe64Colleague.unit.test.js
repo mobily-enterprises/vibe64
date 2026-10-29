@@ -5745,7 +5745,7 @@ test("a registered state source is watched by code, reads under project access, 
   await assert.rejects(watchAction(f, "watch.source.create", { ...deploymentWatch, input: { projectSlug: "gamma" } }), /different request/);
 
   f.observations.deployment = { live: true, release: "r1" };
-  f.events.publish({ type: "entity.changed", source: "vibe64-online", entity: "deployment", entityId: "alpha" });
+  f.events.publish({ type: "entity.changed", source: "deployment-observer", entity: "deployment", entityId: "alpha" });
   await until(() => f.observations.starts.length === 1);
   const result = await f.service.wait(f.context);
   assert.equal(result.messages.at(-1).text, "Your app is live.");
@@ -5755,7 +5755,7 @@ test("a registered state source is watched by code, reads under project access, 
   assert.deepEqual(Object.fromEntries(["source", "reason", "summary", "conditionsMet", "question"].map(key => [key, prompt.observations[0][key]])),
     { source: "deployment", reason: "live", summary: "Live (r1).", conditionsMet: ["live"], question: "Tell me when my app is live." });
   assert.equal(prompt.observations[0].focus.projectSlug, "alpha");
-  f.events.publish({ type: "entity.changed", source: "vibe64-online", entity: "deployment", entityId: "alpha" });
+  f.events.publish({ type: "entity.changed", source: "deployment-observer", entity: "deployment", entityId: "alpha" });
   await new Promise(resolve => setTimeout(resolve, 20));
   assert.equal(f.observations.starts.length, 1, "a delivered one-shot watch reads no more");
 });

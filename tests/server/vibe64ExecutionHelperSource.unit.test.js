@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { assertEnabledForVibe64, consumeManagedExecutionRequestPayload, deploymentServiceUnit,
+import { DAEMON_USERNAME_PREFIX, assertEnabledForVibe64, consumeManagedExecutionRequestPayload, deploymentServiceUnit,
   ensureManagedServiceProcessOwnership, helperChildEnv, parseEnvironmentFile, managedExecutionState, managedExecutionOomBoundary, managedExecutionStopTimeoutMs,
   managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal, openManagedExecutionReceipts,
   releaseEndedManagedExecutions, stopManagedExecution, stopManagedServiceUnit,
@@ -16,6 +16,8 @@ import {
 } from "../../packages/vibe64-execution/src/server/runtime/runtimePacks.js";
 
 const HELPER_SOURCE_URL = new URL("../../packages/vibe64-execution/src/host/execHelper.js", import.meta.url);
+// The workspace daemon account the helper serves, as the helper names it.
+const daemonUser = (workspace) => `${DAEMON_USERNAME_PREFIX}${workspace}`;
 
 const oomUnit = `vibe64-exec-test-${"c".repeat(32)}.service`;
 const oomWork = "/vibe64.slice/vibe64-test.slice/vibe64-test-work.slice";
@@ -653,7 +655,7 @@ test("runtime pack lists stay in step: interactive order and the helper PATH cov
 
   // The helper's own PATH names the pack folder; public tests must not.
   const packMarker = "/runtime-packs/";
-  const helperPackDirs = helperChildEnv({}, { home: "/home/alice", username: "alice" }, "v64d_alice", "command")
+  const helperPackDirs = helperChildEnv({}, { home: "/home/alice", username: "alice" }, daemonUser("alice"), "command")
     .PATH.split(":")
     .filter((entry) => entry.includes(packMarker))
     .map((entry) => entry.slice(entry.indexOf(packMarker) + packMarker.length));
@@ -667,7 +669,7 @@ test("runtime pack lists stay in step: interactive order and the helper PATH cov
 });
 
 test("a starting controller releases every receipt and failed unit record except those it owns or that still run", () => {
-  const owner = { username: "v64d_test" };
+  const owner = { username: daemonUser("test") };
   const id = (digit) => `${digit.repeat(8)}-0000-4000-8000-00000000000${digit}`;
   const unit = (executionId) => `vibe64-exec-test-${executionId.replaceAll("-", "")}.service`;
   const [owned, running, failed, collected, orphanFailed] = ["a", "b", "c", "d", "e"].map(id);
@@ -730,7 +732,7 @@ function helperInChild(expression, input) {
 
 test("a payload file is read only as the daemon's regular file in its workspace payload directory", async (t) => {
   const { root, victim } = await plantedRoot(t);
-  const owner = { uid: process.getuid(), username: "v64d_test" };
+  const owner = { uid: process.getuid(), username: daemonUser("test") };
   const consume = (file, as = owner) => consumeManagedExecutionRequestPayload(file, as, { managedRoot: root });
   const directory = path.join(root, "test", "tmp", "managed-execution-payloads");
   await mkdir(directory, { recursive: true, mode: 0o700 });
@@ -789,7 +791,7 @@ test("a user's Vibe64 membership is read only as the daemon's regular file", asy
   const home = path.join(root, "home");
   const users = path.join(home, ".local", "state", "vibe64", "users");
   await mkdir(users, { recursive: true });
-  const owner = { home, uid: process.getuid(), username: "v64d_test" };
+  const owner = { home, uid: process.getuid(), username: daemonUser("test") };
   const active = (username) => JSON.stringify({ status: "active", username });
   await writeFile(path.join(users, "alice.json"), active("alice"));
   await writeFile(path.join(users, "bob.json"), JSON.stringify({ status: "disabled", username: "bob" }));
@@ -816,7 +818,7 @@ test("a managed service PID file is read and removed only through its own direct
   const workspaceRoot = path.join(root, "test");
   const run = path.join(workspaceRoot, "services", "db", "run");
   await mkdir(run, { recursive: true });
-  const owner = { uid: process.getuid(), username: "v64d_test" };
+  const owner = { uid: process.getuid(), username: daemonUser("test") };
   const ensure = (pidFile) => ensureManagedServiceProcessOwnership({ owner, pidFile, unitName: "vibe64-test-db.service", workspaceRoot });
 
   await writeFile(path.join(run, "db.pid"), `${DEAD_PID}\n`);
@@ -888,7 +890,7 @@ test("release environment files are parsed with systemd's EnvironmentFile= rules
 test("a release service unit loads its environment as its user, then becomes its start script", async (t) => {
   const unit = deploymentServiceUnit({
     environmentFile: "/release/service/environment", helperPath: "/helper/vibe64-exec-helper",
-    owner: { username: "v64d_test" }, requiredUnits: [], startScript: "/release/service/start.sh",
+    owner: { username: daemonUser("test") }, requiredUnits: [], startScript: "/release/service/start.sh",
     unitName: "vibe64-release-test.service", workingDirectory: "/release/workspace"
   });
   assert.doesNotMatch(unit, /^EnvironmentFile=/mu, "systemd does not read the environment file as root");
@@ -916,7 +918,7 @@ test("host installation rewrites release units written by the old helper, then r
   const helperPath = "/helper/vibe64-exec-helper";
   const current = deploymentServiceUnit({
     environmentFile: "/release/service/environment", helperPath,
-    owner: { username: "v64d_test" }, requiredUnits: ["vibe64-db-test.service"], startScript: "/release/service/start.sh",
+    owner: { username: daemonUser("test") }, requiredUnits: ["vibe64-db-test.service"], startScript: "/release/service/start.sh",
     unitName: "vibe64-release-test.service", workingDirectory: "/release/workspace"
   });
   // The old helper wrote the same unit, with systemd reading the environment

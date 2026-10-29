@@ -1009,7 +1009,7 @@ function personHomeGateway(personHome, calls = []) {
 // The env a Save command run as the workspace service gets from its options.
 function workspaceServiceSaveEnv(serviceHome, commandOptions = {}) {
   return resolveCommandEnv({
-    actor: { actor: "daemon", requiresRealUser: false, user: { home: serviceHome, username: "v64d_unit" } },
+    actor: { actor: "daemon", requiresRealUser: false, user: { home: serviceHome, username: "workspace_service" } },
     baseEnv: { PATH: process.env.PATH },
     request: normalizeVibe64CommandRequest({ args: ["commit-tree"], command: "git", cwd: serviceHome, ...commandOptions })
   });

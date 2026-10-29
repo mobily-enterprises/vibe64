@@ -4,11 +4,13 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import {
-  assertActablePerson, enablePerson, loginUidRange, personAccountProblem, readPersonRegistration,
+  DAEMON_USERNAME_PREFIX, assertActablePerson, enablePerson, loginUidRange, personAccountProblem, readPersonRegistration,
   registerPerson, upgradePersonRegistry
 } from "../../packages/vibe64-execution/src/host/execHelper.js";
 
 const UID = process.getuid();
+// The workspace daemon account the helper serves, as the helper names it.
+const DAEMON = `${DAEMON_USERNAME_PREFIX}test`;
 const LOGIN_UIDS = { max: 60000, min: 1000 };
 const ACCOUNTS = {
   alice: { gid: 1001, home: "/home/alice", uid: 1001, username: "alice" },
@@ -16,7 +18,7 @@ const ACCOUNTS = {
   merc: { gid: 1000, home: "/home/merc", uid: 1000, username: "merc" },
   sshd: { gid: 65534, home: "/nonexistent", uid: 104, username: "sshd" },
   ubuntu: { gid: 1003, home: "/home/ubuntu", uid: 1003, username: "ubuntu" },
-  v64d_test: { gid: 983, home: "", uid: 998, username: "v64d_test" }
+  [DAEMON]: { gid: 983, home: "", uid: 998, username: DAEMON }
 };
 const notAllowed = (username) => `User ${username} is not allowed to run sudo on host.\n`;
 const mayRunAll = (username) => `User ${username} may run the following commands on host:\n    (ALL) NOPASSWD: ALL\n`;
@@ -32,11 +34,11 @@ const HOST_FACTS = {
 async function workspaceHost(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-person-registry-"));
   t.after(() => rm(root, { force: true, recursive: true }));
-  const daemonHome = path.join(root, "home", "v64d_test");
+  const daemonHome = path.join(root, "home", DAEMON);
   const users = path.join(daemonHome, ".local", "state", "vibe64", "users");
   await mkdir(users, { recursive: true });
-  const owner = { home: daemonHome, uid: UID, username: "v64d_test" };
-  const accounts = { ...ACCOUNTS, v64d_test: { ...ACCOUNTS.v64d_test, home: daemonHome, uid: UID } };
+  const owner = { home: daemonHome, uid: UID, username: DAEMON };
+  const accounts = { ...ACCOUNTS, [DAEMON]: { ...ACCOUNTS[DAEMON], home: daemonHome, uid: UID } };
   const facts = { ...HOST_FACTS };
   const added = [];
   const registry = {
@@ -85,7 +87,7 @@ test("the helper acts as a person root registered for the daemon's own workspace
   assert.deepEqual(host.added, ["alice", "alice"]);
 
   // Another workspace's daemon cannot act as this workspace's person.
-  assert.throws(() => assertActablePerson({ ...host.owner, username: "v64d_other" }, host.accounts.alice, host.registry),
+  assert.throws(() => assertActablePerson({ ...host.owner, username: `${DAEMON_USERNAME_PREFIX}other` }, host.accounts.alice, host.registry),
     /not registered as a Vibe64 person of workspace other/u);
   // Only a workspace daemon acts as people at all.
   assert.throws(() => assertActablePerson({ ...host.owner, username: "merc" }, host.accounts.alice, host.registry),
@@ -123,7 +125,7 @@ test("registration refuses system accounts and records only people", async (t) =
     /never runs commands as a system account: sshd is a system account \(uid 104\)/u.test(error.message));
   assert.equal(readPersonRegistration("test", "sshd", host.registry), null);
   assert.throws(() => host.register("root"), /Privileged Unix accounts/u);
-  assert.throws(() => host.register("v64d_test"), /daemon Unix accounts/u);
+  assert.throws(() => host.register(DAEMON), /daemon Unix accounts/u);
   assert.throws(() => registerPerson("Bad/Name", "alice", host.registry), /invalid workspace name/u);
   assert.deepEqual(host.added, []);
 

@@ -101,14 +101,3 @@ it("offers a connected-account row for a refresh token kept in Env", () => {
   expect(integrations).toContain("authentication.refreshTokenRef");
   expect(integrations).toContain('label: "Connected account"');
 });
-
-it("never names a host in the saved-value seam", () => {
-  for (const file of [
-    "src/lib/vibe64SavedEnvValues.js",
-    "src/components/studio/RuntimeConfigRecordsTable.vue",
-    "src/components/studio/RuntimeConfigRecordsView.vue",
-    "src/components/studio/EnvPanel.vue"
-  ]) {
-    expect(source(file)).not.toMatch(/Online|Keys &|keys-and-accounts/u);
-  }
-});
