@@ -265,15 +265,32 @@ given; nothing is repaired. `retire` refuses while anything runs as the
 account, and removes the handover and application files. A production database
 outlives its project, as other production databases do, so while `database/`
 holds one the account, its registration and that directory stay; otherwise they
-go too. `tests/server/vibe64ExecutionApplicationAccounts.unit.test.js` covers
-the accounts, their area and their refusals.
+go too.
+
+A managed execution runs as an application only when the daemon asks for its
+registered account by name (`applicationAccount`), and only as a finite capture.
+Any command may run there, from the application's own area (`app/` or
+`database/`, its home by default), with a link it planted resolved before the
+check. It runs as the account and its own group alone, with umask `0077`, the
+runner under `setpriv --no-new-privs`, and a sandbox: no new privileges, a
+private `/tmp` as its `TMPDIR`, the whole file system read-only except its area
+and its receipt, no access to homes, no other users' processes, no kernel
+settings, set-user-ID files, namespaces or capabilities. Its receipt sits in
+root's own runtime directory for the workspace's applications (`0711`), which
+the account can traverse but not list, because it is in no group that reaches
+the daemon's runtime directory. Inspect, stop and release-ended find receipts
+in both. A release environment is accepted only for an application's command:
+the daemon's file `handover/<release>/environment`, readable by the
+application's group alone, for a command in that release's build or workspace.
+`tests/server/vibe64ExecutionApplicationAccounts.unit.test.js` covers the
+accounts, their area, their executions and their refusals.
 
 Root never reads a release's environment file, and no unit makes systemd read
 one on root's behalf. A release service's unit runs the helper as the service's
 own user, which loads the file at every start, restarts included, and then
 becomes the service's start script, so no extra process stays running. A
 finite execution given a release environment has its runner load the file as
-the owner. The file keeps systemd's `EnvironmentFile=` syntax. Host installation
+the application. The file keeps systemd's `EnvironmentFile=` syntax. Host installation
 runs the helper's root-only `upgrade-release-units` right after installing it,
 so a unit names `run-release-service` only once the installed helper has it. It
 rewrites any release unit that still names an `EnvironmentFile=` to this form

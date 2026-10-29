@@ -2,6 +2,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  chmodSync,
   closeSync,
   constants as fsConstants,
   existsSync,
@@ -154,6 +155,7 @@ const APPLICATION_USERNAME_PATTERN = /^v64a_[a-f0-9]{12}$/u;
 const APPLICATION_REGISTRY_ROOT = "/etc/vibe64/applications";
 const APPLICATION_REGISTRATION_SCHEMA = "vibe64.application-account";
 const APPLICATION_AREA_ROOT = "/var/lib/vibe64-apps";
+const APPLICATION_RECEIPTS_ROOT = "/run/vibe64-applications";
 const APPLICATION_SHELL = "/usr/sbin/nologin";
 const APPLICATION_PROJECT_PATTERN = /^[a-z0-9][a-z0-9_-]{0,47}$/u;
 const MANAGED_EXECUTION_ID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu;
@@ -362,36 +364,38 @@ function handleManagedExecutionOperation(payload = {}) {
     lifecycle
   );
   const targetUser = managedExecutionTargetUser(payload, owner);
+  // A published application's commands (its build, release file work and
+  // production database work) are finite and stay inside its own area.
+  const application = targetUser.application || null;
+  if (application && mode !== "capture") {
+    throw new Error("An application account runs only finite commands.");
+  }
   const commandOperation = String(payload.commandOperation || "").trim();
-  const cwd = resolveAllowedCwd(payload.cwd || "", owner.username, {
-    operation: commandOperation,
-    targetUser
-  });
+  const cwd = application
+    ? resolveApplicationCwd(payload.cwd || "", application)
+    : resolveAllowedCwd(payload.cwd || "", owner.username, {
+      operation: commandOperation,
+      targetUser
+    });
   const command = String(payload.command || "").trim();
   if (!command || /[\r\n]/u.test(command)) {
     throw new Error("Vibe64 exec helper rejected an invalid managed execution command.");
   }
-  if (targetUser.username !== owner.username && !ALLOWED_COMMANDS.has(path.basename(command))) {
+  if (!application && targetUser.username !== owner.username && !ALLOWED_COMMANDS.has(path.basename(command))) {
     throw new Error("Vibe64 exec helper rejected an unsupported real-user managed command.");
   }
   const args = Array.isArray(payload.args) ? payload.args.map((arg) => String(arg)) : [];
   const env = helperChildEnv(payload.env || {}, targetUser, owner.username, commandOperation);
   let releaseEnvironmentFile = "";
   if (payload.releaseEnvironmentFile) {
-    if (mode !== "capture" || targetUser.username !== owner.username) {
-      throw new Error("Release environment requires finite owner execution.");
+    if (!application) {
+      throw new Error("Release environment requires an application's own execution.");
     }
-    releaseEnvironmentFile = assertSafeDeploymentServicePath(payload.releaseEnvironmentFile, owner, "environmentFile");
-    const file = lstatSync(releaseEnvironmentFile);
-    const workspaceRoot = path.join(path.dirname(path.dirname(releaseEnvironmentFile)), "workspace");
-    if (path.basename(releaseEnvironmentFile) !== "environment" ||
-        path.basename(path.dirname(releaseEnvironmentFile)) !== "service" ||
-        !file.isFile() || file.uid !== owner.uid || (file.mode & 0o077) !== 0 ||
-        realpathSync(releaseEnvironmentFile) !== releaseEnvironmentFile ||
-        realpathSync(cwd) !== cwd ||
-        (cwd !== workspaceRoot && relativePathParts(workspaceRoot, cwd).length === 0)) {
-      throw new Error("Release environment must belong to the selected private release.");
-    }
+    releaseEnvironmentFile = applicationReleaseEnvironmentFile(payload.releaseEnvironmentFile, application, {
+      cwd,
+      daemonUid: owner.uid,
+      gid: targetUser.gid
+    });
   }
   const memoryMaxBytes = managedExecutionInteger(
     payload.memoryMaxBytes,
@@ -437,8 +441,11 @@ function handleManagedExecutionOperation(payload = {}) {
       tasksMax: workTasksMax
     });
   }
-  const receipts = openWorkspaceExecutionReceipts(owner, { create: true, gid: groupId });
+  const receipts = application
+    ? openApplicationExecutionReceipts(owner, { create: true })
+    : openWorkspaceExecutionReceipts(owner, { create: true, gid: groupId });
   receipts.create(executionId, targetUser, {
+    ...(application ? { application: true } : {}),
     args,
     command,
     controllerLeaseName,
@@ -450,7 +457,10 @@ function handleManagedExecutionOperation(payload = {}) {
     executionId
   }, { privateDirectory: mode === "detached" });
   // The runner reads its command as the target user, with no privilege to lend.
-  const runnerPayloadPath = path.join(managedExecutionRuntimeRoot(owner, executionId), "command.json");
+  const receiptRoot = application
+    ? path.join(applicationExecutionReceiptsRoot(owner), managedExecutionId(executionId))
+    : managedExecutionRuntimeRoot(owner, executionId);
+  const runnerPayloadPath = path.join(receiptRoot, "command.json");
 
   const helperPath = path.resolve(process.argv[1]);
   const systemdArgs = [
@@ -459,10 +469,7 @@ function handleManagedExecutionOperation(payload = {}) {
     "--service-type=exec",
     `--slice=${executionSlice}`,
     `--property=Description=Vibe64 ${kind} execution`,
-    `--property=User=${targetUser.username}`,
-    `--property=Group=${VIBE64_GROUP}`,
-    "--property=SupplementaryGroups=nix-users",
-    "--property=UMask=0007",
+    ...managedExecutionAccountLines(targetUser, { receiptRoot }).map((line) => `--property=${line}`),
     `--property=WorkingDirectory=${cwd}`,
     "--property=KillMode=control-group",
     "--property=ExitType=cgroup",
@@ -568,7 +575,7 @@ async function runManagedExecutionPayload(payloadPath = "") {
       // The runner, as the execution's own user, loads the release environment.
       env: payload.releaseEnvironmentFile
         ? helperChildEnv({ ...process.env, ...readEnvironmentFile(payload.releaseEnvironmentFile), ...payload.env },
-          { username: payload.env.USER, home: payload.env.HOME }, payload.env.USER)
+          { application: payload.application === true, home: payload.env.HOME, username: payload.env.USER }, payload.env.USER)
         : payload.env && typeof payload.env === "object" && !Array.isArray(payload.env) ? payload.env : {},
       stdio: payload.inputPresent === true
         ? ["pipe", "inherit", "inherit"]
@@ -1098,6 +1105,12 @@ function managedExecutionTargetUser(payload = {}, owner = {}, {
   assertInGroup = assertUserInGroup,
   resolveUser = resolveOsUser
 } = {}) {
+  if (payload.applicationAccount === true) {
+    const application = registeredApplicationUser(owner, payload.username);
+    assertExpectedId("uid", payload.uid, application.uid);
+    assertExpectedId("gid", payload.gid, application.gid);
+    return application;
+  }
   const username = safeUsername(payload.username || owner.username);
   // The daemon was resolved by this process moments ago; most executions run as it.
   const targetUser = username === owner.username ? owner : resolveUser(username);
@@ -1166,6 +1179,63 @@ function managedExecutionRuntimeBase(owner = {}) {
   return `/run/vibe64-${workspace}`;
 }
 
+// A person's or the daemon's execution runs as a member of the shared group;
+// an application's only as itself, inside its sandbox, where its area and its
+// receipt are all it may write.
+function managedExecutionAccountLines(targetUser = {}, { receiptRoot = "" } = {}) {
+  if (!targetUser.application) {
+    return [
+      `User=${targetUser.username}`,
+      `Group=${VIBE64_GROUP}`,
+      "SupplementaryGroups=nix-users",
+      "UMask=0007"
+    ];
+  }
+  return [
+    `User=${targetUser.username}`,
+    `Group=${targetUser.username}`,
+    "UMask=0077",
+    ...applicationSandboxLines(targetUser.application, [receiptRoot])
+  ];
+}
+
+function applicationExecutionReceiptsRoot(owner = {}) {
+  return path.join(APPLICATION_RECEIPTS_ROOT, workspaceFromDaemonUsername(safeUsername(owner.username)));
+}
+
+// A workspace's application executions keep their receipts in root's own
+// runtime directory, which their accounts only traverse: they are in no group
+// that reaches the daemon's runtime directory. Only root writes in /run, so
+// root makes that directory itself, with no process.
+function openApplicationExecutionReceipts(owner = {}, { create = false } = {}) {
+  if (create) {
+    try { mkdirSync(APPLICATION_RECEIPTS_ROOT); } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+    }
+    chmodSync(APPLICATION_RECEIPTS_ROOT, 0o711);
+  }
+  return openManagedExecutionReceipts(applicationExecutionReceiptsRoot(owner), { create, mode: 0o711 });
+}
+
+// Every receipt of a workspace: its daemon's and people's, and its applications'.
+function openAllExecutionReceipts(owner = {}) {
+  const workspace = openWorkspaceExecutionReceipts(owner);
+  let applications;
+  try {
+    applications = openApplicationExecutionReceipts(owner);
+  } catch (error) {
+    workspace.close();
+    throw error;
+  }
+  const both = [workspace, applications];
+  return {
+    close: () => both.forEach((receipts) => receipts.close()),
+    entries: () => both.flatMap((receipts) => receipts.entries()),
+    remove: (executionId) => both.forEach((receipts) => receipts.remove(executionId)),
+    result: (executionId) => both.map((receipts) => receipts.result(executionId)).find((result) => result.executionId) || {}
+  };
+}
+
 // The workspace's execution receipts in its daemon's runtime directory. Only
 // creating one makes the directories, with the shared group's id its caller
 // read; stopping and releasing find none there when there is none.
@@ -1227,10 +1297,11 @@ function openManagedExecutionReceipts(directory = "", {
   create = false,
   gid = 0,
   legacyUid = 0,
+  mode = 0o750,
   uid = 0
 } = {}) {
   if (create) {
-    try { mkdirSync(directory, { mode: 0o750 }); } catch (error) {
+    try { mkdirSync(directory, { mode }); } catch (error) {
       if (error?.code !== "EEXIST") throw error;
     }
   }
@@ -1248,7 +1319,7 @@ function openManagedExecutionReceipts(directory = "", {
     }
     if (create) {
       fchownSync(descriptor, uid, gid);
-      fchmodSync(descriptor, 0o750);
+      fchmodSync(descriptor, mode);
     }
   } catch (error) {
     closeSync(descriptor);
@@ -1325,7 +1396,7 @@ function openManagedExecutionReceipts(directory = "", {
 }
 
 function readManagedExecutionResult(owner = {}, executionId = "") {
-  const receipts = openWorkspaceExecutionReceipts(owner);
+  const receipts = openAllExecutionReceipts(owner);
   try {
     return receipts.result(executionId);
   } finally {
@@ -1673,7 +1744,7 @@ function stopManagedExecution(unitName = "", executionId = "", owner = {}, {
   run = runRootCommandAllowFailure,
   readState = () => managedExecutionState(unitName, executionId, owner),
   removeRuntime = () => {
-    const receipts = openWorkspaceExecutionReceipts(owner);
+    const receipts = openAllExecutionReceipts(owner);
     try {
       receipts.remove(executionId);
     } finally {
@@ -1733,7 +1804,7 @@ function releaseEndedManagedExecutions(owner = {}, keepExecutionIds = [], {
     "list-units", "--all", "--plain", "--no-legend", "--full",
     `vibe64-exec-${workspaceFromDaemonUsername(safeUsername(owner.username))}-*.service`
   ]),
-  openReceipts = () => openWorkspaceExecutionReceipts(owner),
+  openReceipts = () => openAllExecutionReceipts(owner),
   resetFailed = (unitNames) => runRootCommandAllowFailure("systemctl", ["reset-failed", ...unitNames])
 } = {}) {
   if (!Array.isArray(keepExecutionIds) || keepExecutionIds.length > MANAGED_EXECUTION_RELEASE_KEEP_MAX) {
@@ -2175,15 +2246,19 @@ function handleApplicationAccountOperation(payload = {}) {
   process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
 }
 
-// The area below `areaRoot`: root's directories down to the project's, the
-// daemon's handover directory its application's group may read, the
-// application's own directory with its home, and its production databases.
-function applicationIdentity(owner = {}, project = "", { areaRoot = APPLICATION_AREA_ROOT } = {}) {
+function applicationWorkspace(owner = {}) {
   const daemon = String(owner.username || "");
   if (!daemon.startsWith(DAEMON_USERNAME_PREFIX)) {
     throw new Error("Only a workspace daemon has application accounts.");
   }
-  const workspace = personWorkspaceName(daemon.slice(DAEMON_USERNAME_PREFIX.length));
+  return personWorkspaceName(daemon.slice(DAEMON_USERNAME_PREFIX.length));
+}
+
+// The area below `areaRoot`: root's directories down to the project's, the
+// daemon's handover directory its application's group may read, the
+// application's own directory with its home, and its production databases.
+function applicationIdentity(owner = {}, project = "", { areaRoot = APPLICATION_AREA_ROOT } = {}) {
+  const workspace = applicationWorkspace(owner);
   const name = String(project || "");
   if (!APPLICATION_PROJECT_PATTERN.test(name)) {
     throw new Error("Vibe64 exec helper rejected an invalid project name.");
@@ -2480,6 +2555,84 @@ function retireApplicationAccount(owner = {}, project = "", {
   }
   if (user) deleteUser(identity.username);
   return { databaseKept, retired: Boolean(user || registration || projectRoot >= 0) };
+}
+
+// The application account an execution or release service runs as: one root
+// registered for the calling daemon's workspace, still exactly the account the
+// helper made. Never a person, nor another workspace's application.
+function registeredApplicationUser(owner = {}, username = "", {
+  areaRoot = APPLICATION_AREA_ROOT,
+  facts = hostApplicationFacts,
+  resolveUser = resolveOsUser,
+  ...registry
+} = {}) {
+  const name = safeUsername(username);
+  const registration = readApplicationRegistration(applicationWorkspace(owner), name, registry);
+  if (!registration) {
+    throw new Error(`${name} is not an application account of this workspace.`);
+  }
+  const identity = applicationIdentity(owner, registration.project, { areaRoot });
+  const user = resolveUser(name);
+  const problem = identity.username !== name || registration.uid !== user.uid || registration.gid !== user.gid
+    ? "it is not the registered account."
+    : applicationAccountProblem(user, identity, facts(name));
+  if (problem) {
+    throw new Error(`Vibe64 exec helper refused application account ${name}: ${problem}`);
+  }
+  return { ...user, application: identity };
+}
+
+// An application's command starts in its own area, by default its home. A
+// link it planted there is resolved, never trusted.
+function resolveApplicationCwd(cwd = "", identity = {}) {
+  const resolved = canonicalPath(String(cwd || "").trim() || identity.home);
+  for (const root of [identity.appRoot, identity.databaseRoot]) {
+    const allowed = canonicalPath(root);
+    if (resolved === allowed || relativePathParts(allowed, resolved).length > 0) return resolved;
+  }
+  throw new Error("Vibe64 exec helper rejected an application command path outside its area.");
+}
+
+// An application's release environment is the daemon's file in that release's
+// handover directory, readable by the application's group alone, and the
+// command runs in that release's build or workspace. Root never reads it.
+function applicationReleaseEnvironmentFile(candidate = "", identity = {}, { cwd = "", daemonUid = -1, gid = -1 } = {}) {
+  const file = String(candidate || "");
+  const [releaseId = "", name = "", ...rest] = relativePathParts(identity.handoverRoot, file);
+  const stats = lstatSync(file);
+  const releaseRoots = [
+    path.join(identity.appRoot, "sources", releaseId),
+    path.join(identity.appRoot, "releases", releaseId, "workspace")
+  ];
+  if (!releaseId || name !== "environment" || rest.length > 0 || canonicalPath(file) !== file || !stats.isFile() ||
+      stats.uid !== daemonUid || stats.gid !== gid || (stats.mode & 0o027) !== 0 ||
+      !releaseRoots.some((root) => cwd === root || relativePathParts(root, cwd).length > 0)) {
+    throw new Error("Release environment must belong to the application's selected release.");
+  }
+  return file;
+}
+
+// What an application's commands and release service run inside: its own area
+// is all they may write, they never gain privileges, and they see no other
+// user's processes, homes or temporary files, nor the kernel's settings.
+function applicationSandboxLines(identity = {}, writablePaths = []) {
+  return [
+    "NoNewPrivileges=yes",
+    "PrivateTmp=yes",
+    "ProtectSystem=strict",
+    `ReadWritePaths=${[identity.appRoot, identity.databaseRoot, ...writablePaths.filter(Boolean)]
+      .map(systemdUnitSafeValue).join(" ")}`,
+    "ProtectHome=yes",
+    "ProtectProc=invisible",
+    "ProtectKernelTunables=yes",
+    "ProtectKernelModules=yes",
+    "ProtectKernelLogs=yes",
+    "ProtectControlGroups=yes",
+    "RestrictSUIDSGID=yes",
+    "RestrictNamespaces=yes",
+    "LockPersonality=yes",
+    "CapabilityBoundingSet="
+  ];
 }
 
 function handleDeploymentServiceOperation(payload = {}) {
@@ -3669,11 +3822,15 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
   }
   env.LOGNAME = targetUser.username;
   env.USER = targetUser.username;
-  env.TMPDIR = workspaceTempRoot(ownerUsername);
+  // An application has its own private temporary directory, and no access to
+  // the workspace's.
+  env.TMPDIR = targetUser.application ? "/tmp" : workspaceTempRoot(ownerUsername);
   return env;
 }
 
-export { DAEMON_USERNAME_PREFIX, applicationIdentity, ensureApplicationAccount, readApplicationRegistration, retireApplicationAccount,
+export { DAEMON_USERNAME_PREFIX, applicationIdentity, applicationReleaseEnvironmentFile, applicationSandboxLines,
+  ensureApplicationAccount, managedExecutionAccountLines, readApplicationRegistration, registeredApplicationUser,
+  resolveApplicationCwd, retireApplicationAccount,
   assertActablePerson, assertEnabledForVibe64, configureManagedExecutionWorkSlice, consumeManagedExecutionRequestPayload,
   ensureWorkspaceRuntimeBase,
   enablePerson, loginUidRange, personAccountProblem, personSudoCommands, readPersonRegistration, registerPerson, upgradePersonRegistry, deploymentServiceUnit, ensureManagedServiceProcessOwnership,

@@ -146,6 +146,13 @@ A host whose profile declares a helper is a managed host: it routes every
 real-user command through the helper, even one for the process's own user, and
 never adds the launching shell's `PATH`.
 
+On a managed host, an `app` capture may also name `applicationAccount`: the OS
+account of a published application, which the host helper made and registered
+for the daemon's workspace. The command then runs as that account, in its own
+area and sandbox, never as a person; `releaseEnvironmentFile` is accepted only
+for such a command. A person's own computer has no application accounts and
+refuses the field.
+
 ### `purpose`
 
 `purpose` describes why the command is running. It drives defaults and policy.
