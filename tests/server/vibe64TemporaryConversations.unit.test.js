@@ -1170,7 +1170,7 @@ async function temporaryChangeoverFixture(root, actor = { role: "owner", usernam
   await service.createTemporaryConversation("one", { conversationId: "chat" }, options);
   return { ...f, native, calls, failures, manager, options, senior, junior, helper,
     get service() { return service; },
-    restart() { service = f.restart({ systemRoot: root, prepareSelection: preparation }); return service; },
+    restart(overrides = {}) { service = f.restart({ systemRoot: root, prepareSelection: preparation, ...overrides }); return service; },
     record: () => f.store.readSessionConversation("one", "chat"),
     async send(mode, messageId, message = `Request ${messageId}`) {
       await service.updateTemporaryConversation("one", { conversationId: "chat", assistantRouting: { mode, review } }, options);
@@ -1929,6 +1929,57 @@ test("temporary canonical inspection recovers the original foreign receipt befor
   });
 });
 
+
+test("a temporary message the AI proved it never received is not sent and leaves no unconfirmed request", async () => {
+  await withTemporaryRoot(async root => {
+    const f = await temporaryChangeoverFixture(root);
+    let notAdmitted = false;
+    let service;
+    const common = createConversationRuntime({ authorize: async () => true,
+      host: { conversation: ({ id, context }) => service.conversationBinding(id, context) } });
+    // Stub the native owner's proof of non-admission, including its changeover
+    // saving the attempt as unattempted.
+    const conversationRuntime = { ...common, async inspectPersistentConversationAdmission(options) {
+      const receipt = await common.inspectPersistentConversationAdmission(options);
+      return notAdmitted && receipt.admission !== "accepted" ? { ...receipt, admission: "not-admitted" } : receipt;
+    }, async inspectPersistentConversationDelivery(options) {
+      const receipt = await common.inspectPersistentConversationDelivery(options);
+      if (!notAdmitted || receipt.status !== "unknown") return receipt;
+      const record = await f.record();
+      const changeover = JSON.parse(record.routingMetadata.assistant_changeover);
+      for (const engine of Object.values(changeover.engines)) if (engine.pending?.messageId === "lost") engine.pending.attempted = false;
+      await f.store.writeSessionConversation("one", "chat", { routingMetadata: { ...record.routingMetadata,
+        assistant_changeover: JSON.stringify(changeover) } });
+      return { status: "not-sent", messageId: "lost" };
+    } };
+    service = f.restart({ conversationRuntime });
+    f.failures.loseAdmission = true;
+    await assert.rejects(f.send("junior", "lost"), /Lost native admission reply/);
+    f.failures.read = false;
+    const route = async () => JSON.parse((await f.record()).routingMetadata.assistant_routing_request);
+    const binding = async () => service.conversationBinding("one", { ...f.options, temporaryConversationId: "chat",
+      runtime: f.runtime, session: await f.runtime.getSession("one") });
+    assert.equal((await route()).delivery, "uncertain");
+    assert.equal((await (await binding()).read(f.options)).status, "unconfirmed");
+    f.native.get((await f.record()).providerConversationId).accepted.delete("lost");
+    f.native.get((await f.record()).providerConversationId).status = "interrupted";
+    assert.deepEqual(await service.inspectTemporaryConversationDelivery("one", { conversationId: "chat", messageId: "lost" }, f.options),
+      { status: "unknown", messageId: "lost" }, "absence alone is not proof");
+    notAdmitted = true;
+    const receipt = await service.inspectTemporaryConversationDelivery("one", { conversationId: "chat", messageId: "lost" }, f.options);
+    assert.equal(receipt.status, "not-sent");
+    assert.equal((await route()).delivery, "failed");
+    const read = await (await binding()).read(f.options);
+    assert.notEqual(read.status, "unconfirmed");
+    assert.equal(read.pendingRequest, null);
+    assert.equal(f.calls.starts.length, 1, "inspection never sends");
+    f.failures.loseAdmission = false;
+    await service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "lost", message: "Request lost" }, f.options);
+    assert.equal(f.calls.starts.length, 2, "Retry sends the unsent message once");
+    assert.equal((await route()).delivery, "accepted");
+    await service.close();
+  });
+});
 
 test("missed completion stays deferred during source work and reconciles once after release", { timeout: 5000 }, async () => {
   await withTemporaryRoot(async root => {

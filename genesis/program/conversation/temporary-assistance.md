@@ -114,7 +114,12 @@ ordinary Main Stop remains acknowledgement-only. Native deletion still precedes
 observer retirement and registry publication. Vibe64 retains authorized target
 selection, scoped Helper release and the parent's durable cleanup receipt.
 An uncertain delivery is inspected by its original message identity rather than
-replayed; an unreadable or absent receipt remains uncertain.
+replayed; an unreadable or absent receipt remains uncertain. Only the native
+owner's proof of non-admission (`not-admitted`, from Claude) makes the routed
+attempt unsent: routing clears its attempt and reports `not-sent`, and a
+changeover holding the same attempt settles it through its own owner. Retry
+then sends it normally. Cancel on an unconfirmed message stops the chat,
+inspects it, and removes it only when it was accepted or proven not sent.
 Accepted Claude steering retains the original input identity on partial output.
 The shared scoped reader resolves native input identities against authored
 messages and uses the existing transcript turn IDs when saving replies. A

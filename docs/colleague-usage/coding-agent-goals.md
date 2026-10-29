@@ -100,11 +100,16 @@ through the explanation.
 
 Failed Main-chat messages offer **Retry** and **Cancel** on desktop and mobile.
 **Retry** checks an uncertain attempt's original message ID first. If it was
-already delivered, the failure controls disappear without another send.
+already delivered, the failure controls disappear without another send. If the
+AI proves it never received the message, Retry sends it once with the same ID;
+while delivery is unknown, nothing is sent.
 **Cancel** removes an old local failed attempt immediately without stopping a
 newer goal or deleting delivered conversation history. For a request still
-owned by the current route, the bubble hides while cancellation is checked; it
-returns if delivery remains unknown or cancellation fails. Colleague can explain
+owned by the current route, the bubble hides while cancellation is checked. An
+unconfirmed request is removed only once the AI proves it never received it:
+while that is unknown, Cancel stops the turn and checks once more. The bubble
+returns if delivery remains unknown or cancellation fails. Only Claude can
+currently prove that a message never arrived. Colleague can explain
 these controls; the person presses them in Main chat.
 
 New goals pass exactly your objective to the native goal evaluator. Model and

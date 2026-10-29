@@ -303,19 +303,28 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     if (uncertain || state.attemptedMessageId === messageId) {
       const receipt = await agent.inspectMessageAdmission(sessionId, { messageId, threadId: state.threadId }, selectedContext)
         .catch(error => { if (!inspectionOnly) throw error; return null; });
-      if (inspectionOnly && receipt?.admission !== "accepted") return { ok: false, delivered: false, messageId };
-      if (receipt?.admission !== "accepted") throw failure("Delivery is uncertain. Retry to check the receipt; this will not send a duplicate.", "vibe64_assistant_routing_delivery_uncertain");
-      await store.writeConversationUserMessage(sessionId, {
-        messageId, text: displayMessage,
-        attachments: followup ? [] : state.input.displayAttachments,
-        turnMetadata: { ...(!followup ? state.input.turnMetadata : {}), assistantSelection: selection, assistantRouting: attribution(state, followup),
-          ...(followup ? { actorId: "app", actorDisplayName: followupLabel } : {}) }
-      });
-      state.status = "working"; state.delivery = "accepted";
-      state.turnId = receipt.turnId || "";
-      delete state.error;
-      await save(context, state);
-      return { ok: true, delivered: true, messageId, threadId: state.threadId };
+      // Only the AI's proof that it never received the attempt makes it
+      // unsent; a retry then sends it normally.
+      if (receipt?.admission === "not-admitted") {
+        delete state.attemptedMessageId;
+        state.delivery = followup ? "pending" : "failed"; state.status = "waiting";
+        await save(context, state);
+        if (inspectionOnly) return { status: "not-sent", messageId, error: "This request was not sent." };
+      } else {
+        if (inspectionOnly && receipt?.admission !== "accepted") return { ok: false, delivered: false, messageId };
+        if (receipt?.admission !== "accepted") throw failure("Delivery is uncertain. Retry to check the receipt; this will not send a duplicate.", "vibe64_assistant_routing_delivery_uncertain");
+        await store.writeConversationUserMessage(sessionId, {
+          messageId, text: displayMessage,
+          attachments: followup ? [] : state.input.displayAttachments,
+          turnMetadata: { ...(!followup ? state.input.turnMetadata : {}), assistantSelection: selection, assistantRouting: attribution(state, followup),
+            ...(followup ? { actorId: "app", actorDisplayName: followupLabel } : {}) }
+        });
+        state.status = "working"; state.delivery = "accepted";
+        state.turnId = receipt.turnId || "";
+        delete state.error;
+        await save(context, state);
+        return { ok: true, delivered: true, messageId, threadId: state.threadId };
+      }
     }
     // Explicit inspection may use only the original uncertain-receipt branch.
     // It cannot continue into selection, preparation or native dispatch.

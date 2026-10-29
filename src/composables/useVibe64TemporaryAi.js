@@ -837,17 +837,25 @@ function useVibe64TemporaryAi({
   async function cancelMessage(taskId, messageId) {
     const task = tasks.value.find((candidate) => candidate.id === taskId);
     const message = pendingMessage(task, messageId);
-    if (disposed || !message || message.status !== "failed" ||
+    const uncertain = message?.status === "uncertain";
+    if (disposed || !message || message.status !== "failed" && !uncertain ||
         readRefOrGetterValue(operationBusy) || closingTaskIds.has(taskId) || task.recoveryOutcome === "checking") return false;
     const route = assistantRoutingRequestForDisplay(task.routingMetadata);
-    if (route?.messageId === messageId) {
-      if (route.delivery === "uncertain") { updateTask(taskId, { error: "Check delivery before editing or cancelling this message." }); return false; }
+    if (uncertain) {
+      // Stop first, then remove the message only once its receipt is settled.
       await stopTask(taskId);
-    } else if (task.busy) return false;
+      const receipt = await task.binding.runtime.value.inspectDelivery(messageId);
+      if (!canApplyTaskResponse(task)) return false;
+      if (!["accepted", "not-sent"].includes(receipt?.status)) {
+        updateTask(taskId, { error: "Delivery is still not confirmed, so this message was kept. Try again in a moment." });
+        return false;
+      }
+    } else if (route?.messageId === messageId) await stopTask(taskId);
+    else if (task.busy) return false;
     task.delivery.remove(messageId);
     updateTask(taskId, {
       ...(task.pendingMessageId === messageId ? { pendingMessageId: "" } : {}),
-      ...(task.error === message.error ? { error: "", errorCode: "" } : {})
+      ...(uncertain || task.error === message.error ? { error: "", errorCode: "" } : {})
     });
     return true;
   }
@@ -855,7 +863,8 @@ function useVibe64TemporaryAi({
   async function editMessage(taskId, messageId) {
     const task = tasks.value.find((candidate) => candidate.id === taskId);
     const message = pendingMessage(task, messageId);
-    if (!message || !await cancelMessage(taskId, messageId)) return false;
+    // A message that may have reached the AI is never turned back into a draft.
+    if (message?.status !== "failed" || !await cancelMessage(taskId, messageId)) return false;
     updateDraft(taskId, draftWithRestoredMessage(message.text, task.draft));
     return true;
   }

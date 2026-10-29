@@ -1350,6 +1350,13 @@ the exact original active UUID, without an attempted prompt, helper or running
 owner, and with the same submitter, selected destination and fresh account
 admission. Canonical acceptance wins first. Missing routing or continuity fields
 alone remain unknown; follow-up aliases cannot turn an earlier input into not-sent.
+An uncertain or attempted route becomes failed only on the native owner's proof
+of non-admission; inspection then reports not-sent and a retry dispatches it
+normally. Main's Cancel on the route's unconfirmed message interrupts the turn
+when its receipt is unknown and re-inspects once; it removes the message only
+when proven not sent. Retry resends after that proof even when the route is
+failed. An orphaned local attempt keeps its dismissal without stopping a newer
+turn.
 
 Main’s composer allows attachment uploads and submission during a steerable
 active turn, using the existing attachment identities and receipt handling.

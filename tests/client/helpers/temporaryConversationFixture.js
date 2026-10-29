@@ -127,6 +127,10 @@ export function createTemporaryConversationFixture({ request, created = () => {}
           publishTranscript(id);
           return { status: "accepted", messageId };
         }
+        if (response?.status === "not-sent") {
+          observe(id, response);
+          return { status: "not-sent", messageId, error: response.error || "" };
+        }
         return { status: "unknown", messageId };
       }
       return response;

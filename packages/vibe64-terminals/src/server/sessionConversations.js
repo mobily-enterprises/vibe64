@@ -118,6 +118,12 @@ function routingRequest(record) {
   return assistantRoutingRequestFromMetadata(record.routingMetadata);
 }
 
+// A native changeover keeps its own record of a prompt it attempted.
+function attemptedChangeover(record) {
+  return Object.values(JSON.parse(record.routingMetadata?.assistant_changeover || "null")?.engines || {})
+    .map(value => value.pending).find(value => value?.attempted);
+}
+
 function requireSuccess(result) {
   if (result?.ok === false) throw Object.assign(new Error(result.error || "Assistant conversation operation failed."), result);
   return result;
@@ -608,8 +614,7 @@ function createSessionConversations({
           const { conversationLog, pagination, messages: _messages, nativeBindings: _bindings,
             providerConversationId: _nativeId, ...presentation } = observed;
           const route = routingRequest(observed);
-          const pending = Object.values(JSON.parse(observed.routingMetadata?.assistant_changeover || "null")?.engines || {})
-            .map(value => value.pending).find(value => value?.attempted);
+          const pending = attemptedChangeover(observed);
           const request = route?.delivery === "uncertain" && route.input ? {
             messageId: route.messageId, text: route.input.displayMessage || route.input.message,
             attachments: route.input.displayAttachments || [], error: route.error || ""
@@ -653,6 +658,8 @@ function createSessionConversations({
       if (routed?.delivered === false) return { status: "unknown", messageId: input.messageId };
       return write(sessionId, options, async ctx => {
         const context = await routingContext(ctx, input.conversationId);
+        // A changeover that attempted the same prompt settles it separately.
+        if (routed?.status === "not-sent" && attemptedChangeover(await recordFor(ctx, input.conversationId))?.messageId !== input.messageId) return routed;
         return conversationRuntime.inspectPersistentConversationDelivery({
           ...persistentConversationOptions(context), sessionId, input,
           delivered: routed?.delivered === true, operations: routingAgent

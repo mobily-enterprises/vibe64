@@ -306,7 +306,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.chatTurns.value[0].optimistic).toBeUndefined();
   });
 
-  it("checks an unconfirmed request with its original ID and rejects Edit and Cancel", async () => {
+  it("checks an unconfirmed request with its original ID, rejects Edit and keeps it on Cancel while delivery is unknown", async () => {
     const { view, props } = await createViewWithProps();
     props.session.metadata.assistant_routing_request = JSON.stringify({
       messageId: "interrupted-1", status: "waiting", delivery: "uncertain", input: { message: "Keep this exact prompt." },
@@ -316,12 +316,38 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.chatTurns.value[0].optimistic.status).toBe("uncertain");
     expect(await view.editOptimisticMessage("interrupted-1")).toBe(false);
     expect(await view.cancelOptimisticMessage("interrupted-1")).toBe(false);
-    expect(props.interruptAgentTurn).not.toHaveBeenCalled();
+    expect(props.interruptAgentTurn).toHaveBeenCalledExactlyOnceWith({ reason: "cancel-routing" });
+    expect(view.chatTurns.value[0].optimistic.status).toBe("uncertain");
     expect(await view.resendOptimisticMessage("interrupted-1")).toBe(true);
     expect(props.sendAgentMessage).toHaveBeenCalledWith(expect.objectContaining({
       messageId: "interrupted-1", message: "Keep this exact prompt."
     }));
     expect(view.composerDraft.value).toBe("A newer draft.");
+  });
+
+  it("Cancel stops an unconfirmed request and removes it once the server proves it was never sent", async () => {
+    vi.stubGlobal("window", { sessionStorage: memoryStorage() });
+    const messageId = "interrupted-1";
+    const inspect = vi.fn().mockResolvedValueOnce({ status: "unknown", messageId })
+      .mockResolvedValueOnce({ status: "not-sent", messageId, error: "This request was not sent." });
+    const { view, props } = await createViewWithProps({}, { runtimeOptions: { inspectConversationDelivery: inspect } });
+    await vi.waitFor(() => expect(props.conversationRuntime.available.value).toBe(true));
+    const route = { messageId, status: "waiting", delivery: "uncertain", input: { message: "Keep this exact prompt." }, assignments: {} };
+    props.session.metadata.assistant_routing_request = JSON.stringify(route);
+    props.conversationRuntime.delivery.state.messages.push({ id: messageId, text: route.input.message, payload: route.input, status: "uncertain" });
+    props.interruptAgentTurn.mockImplementation(async () => {
+      props.session.metadata.assistant_routing_request = JSON.stringify({ ...route, stopped: true });
+      await nextTick();
+      return true;
+    });
+    await expect(view.cancelOptimisticMessage(messageId)).resolves.toBe(true);
+    expect(inspect).toHaveBeenCalledTimes(2);
+    expect(props.interruptAgentTurn).toHaveBeenCalledExactlyOnceWith({ reason: "cancel-routing" });
+    expect(props.sendAgentMessage).not.toHaveBeenCalled();
+    expect(view.chatTurns.value).toEqual([]);
+    props.session.metadata.assistant_routing_request = JSON.stringify({ ...route, status: "waiting", delivery: "failed", stopped: true });
+    const restored = await createViewWithProps({ session: props.session });
+    expect(restored.view.chatTurns.value).toEqual([]);
   });
 
   it("lets explicit Cancel discard a failed routing bubble without restoring its draft", async () => {
@@ -3652,7 +3678,7 @@ describe("useVibe64AutopilotView direct chat", () => {
 });
 
 
-it("checks a local uncertain receipt before retrying a conflicting failed route", async () => {
+it("checks a local uncertain receipt and retries a conflicting failed route only once it is proven not sent", async () => {
   accountMocks.useVibe64Accounts.mockReturnValue({ status: ref(null) });
   const inspect = vi.fn();
   const { view, props, scope } = await createViewWithProps({}, { runtimeOptions: { inspectConversationDelivery: inspect } });
@@ -3676,7 +3702,7 @@ it("checks a local uncertain receipt before retrying a conflicting failed route"
     expect(turn.system.delivery).toMatchObject({ messageId, error: "Internal server error." });
     await expect(view.cancelOptimisticMessage(messageId)).resolves.toBe(false);
     await expect(view.editOptimisticMessage(messageId)).resolves.toBe(false);
-    expect(props.interruptAgentTurn).not.toHaveBeenCalled();
+    expect(props.interruptAgentTurn).toHaveBeenCalledTimes(1);
     expect(runtime.delivery.find(messageId)?.status).toBe("uncertain");
     expect(view.composerDraft.value).toBe("A separate unsent draft.");
 
@@ -3688,12 +3714,6 @@ it("checks a local uncertain receipt before retrying a conflicting failed route"
     expect(runtime.delivery.find(messageId)?.status).toBe("uncertain");
 
     inspect.mockResolvedValue({ status: "not-sent", messageId, error: "Confirmed not sent." });
-    await expect(view.resendOptimisticMessage(messageId)).resolves.toBe(false);
-    expect(props.sendAgentMessage).not.toHaveBeenCalled();
-    expect(runtime.delivery.find(messageId)?.status).toBe("failed");
-    expect(runtime.canSubmit.value).toBe(true);
-    expect(view.chatTurns.value[0].optimistic.status).toBe("failed");
-    expect(view.chatTurns.value[0].system.delivery).toBeUndefined();
     await expect(view.resendOptimisticMessage(messageId)).resolves.toBe(true);
     expect(props.sendAgentMessage).toHaveBeenCalledTimes(1);
     expect(props.sendAgentMessage.mock.calls[0][0]).toMatchObject({ messageId, message: payload.message });

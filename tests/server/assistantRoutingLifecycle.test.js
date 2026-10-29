@@ -339,6 +339,31 @@ test("uncertain native admission is inspected on retry without resending", async
   assert.equal(f.state().error, undefined);
 });
 
+test("a request the AI proved it never received is not sent, and Retry sends it once", async (t) => {
+  for (const inspectFirst of [true, false]) {
+    const f = await fixture(t);
+    f.failAdmission();
+    await assert.rejects(f.service.send("session-1", request, f.context), /Lost admission/);
+    assert.equal(f.state().delivery, "uncertain");
+    f.agent.inspectMessageAdmission = async () => ({ admission: "unknown" });
+    assert.deepEqual(await f.service.inspectDelivery("session-1", { messageId: request.messageId }, f.context),
+      { ok: false, delivered: false, messageId: request.messageId }, "An unknown receipt stays uncertain");
+    f.agent.inspectMessageAdmission = async () => ({ admission: "not-admitted" });
+    if (inspectFirst) {
+      const receipt = await f.service.inspectDelivery("session-1", { messageId: request.messageId }, f.context);
+      assert.equal(receipt.status, "not-sent");
+      assert.equal(receipt.messageId, request.messageId);
+      assert.equal(f.state().delivery, "failed");
+      assert.equal(f.state().attemptedMessageId, undefined);
+      assert.equal(f.sends.length, 1, "Inspection never dispatches");
+    }
+    f.failAdmission(false);
+    assert.equal((await f.service.send("session-1", request, f.context)).delivered, true);
+    assert.equal(f.sends.length, 2);
+    assert.equal(f.state().delivery, "accepted");
+  }
+});
+
 test("successful direct and automatic sends never publish uncertain delivery", async (t) => {
   for (const mode of ["senior", "junior", "auto"]) {
     const f = await fixture(t, { mode, review: true });

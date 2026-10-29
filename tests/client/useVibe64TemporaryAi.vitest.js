@@ -342,7 +342,6 @@ describe("useVibe64TemporaryAi", () => {
     const temporary = await mountTemporaryAi({ assistantReady: () => true });
     await flushPromises();
     const task = temporary.activeTask.value;
-    expect(await temporary.cancelMessage(task.id, route.messageId)).toBe(false);
     expect(await temporary.editMessage(task.id, route.messageId)).toBe(false);
     mocks.responses.push({ ok: true, status: "completed", messages: [
       { id: route.messageId, role: "user", text: "Original prompt." }
@@ -353,6 +352,35 @@ describe("useVibe64TemporaryAi", () => {
     expect(mocks.requests.some(([path]) => path.endsWith("/messages"))).toBe(false);
     expect(temporary.activeTask.value.draft).toBe("Newer draft.");
     expect(temporary.activeTask.value.delivery.state.messages).toHaveLength(0);
+  });
+
+  it("Cancel stops an unconfirmed request and removes it only once the server proves it was never sent", async () => {
+    const route = { messageId: "interrupted-1", status: "uncertain", delivery: "uncertain", input: { message: "Original prompt.", displayMessage: "Original prompt." } };
+    const saved = value => ({ assistant_routing_request: JSON.stringify({ ...route, ...value }) });
+    mocks.responses.push({ conversations: [{ conversationId: createdId, status: "uncertain", messages: [],
+      draft: "Newer draft.", routingMetadata: saved({}) }] });
+    const temporary = await mountTemporaryAi({ assistantReady: () => true });
+    await flushPromises();
+    const task = temporary.activeTask.value;
+    expect(task.delivery.find(route.messageId)?.status).toBe("uncertain");
+    const inspections = () => mocks.requests.filter(([path]) => path.includes(`/deliveries/${route.messageId}/inspect`));
+    // Stopping reloads the chat before the receipt is inspected.
+    const stop = () => [{ ok: true, status: "interrupted", routingMetadata: saved({ stopped: true }) }, {}];
+    mocks.responses.push(...stop(), { status: "unknown", messageId: route.messageId });
+    expect(await temporary.cancelMessage(task.id, route.messageId)).toBe(false);
+    await flushPromises();
+    expect(inspections()).toHaveLength(1);
+    expect(temporary.activeTask.value.error).toContain("still not confirmed");
+    expect(temporary.activeTask.value.delivery.find(route.messageId)?.status).toBe("uncertain");
+    mocks.responses.push(...stop(), { status: "not-sent", messageId: route.messageId, error: "This request was not sent.",
+      routingMetadata: saved({ status: "waiting", delivery: "failed", stopped: true }) });
+    expect(await temporary.cancelMessage(task.id, route.messageId)).toBe(true);
+    await flushPromises();
+    expect(inspections()).toHaveLength(2);
+    expect(temporary.activeTask.value.delivery.find(route.messageId)).toBeNull();
+    expect(temporary.activeTask.value.error).toBe("");
+    expect(temporary.activeTask.value.draft).toBe("Newer draft.");
+    expect(mocks.requests.some(([path]) => path.endsWith("/messages"))).toBe(false);
   });
 
   it("ignores a late HTTP failure after the exact temporary message receipt arrives", async () => {

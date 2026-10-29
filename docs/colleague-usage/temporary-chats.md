@@ -164,10 +164,17 @@ original settings and files. Anything you typed or attached afterward stays in
 the composer. Accepted files leave the composer; later attachments remain.
 
 If a message shows **Retry**, use that control with the original message.
-It checks whether that exact message reached the selected chat; it does not send
-the work again. A visible message can still be awaiting confirmation. If the
+It checks whether that exact message reached the selected chat. If it did,
+nothing is sent again. If the AI proves it never received the message, Retry
+sends it once with its original settings; while delivery is still unknown,
+nothing is sent. A visible message can still be awaiting confirmation. If the
 connection cannot read the native receipt, keep the chat and retry the check
-after reconnecting. **Stop** remains available for ongoing work. **Close** removes
+after reconnecting. **Cancel** on an unconfirmed message stops ongoing work and
+then checks it: the message is removed, and stays removed after a reload, once
+the AI proves it never received it; a message that did arrive stays in the
+conversation. While delivery remains unknown, Cancel keeps the message and says
+so; try again in a moment. Only Claude can currently prove that a message never
+arrived; with other AIs an unknown delivery stays until it is confirmed. **Stop** remains available for ongoing work. **Close** removes
 the temporary chat only after its native work and attachments are safely cleaned
 up; a failed Close can be retried. If you used more than one AI in this chat,
 Close cleans up each retained native conversation. A retry continues the unfinished

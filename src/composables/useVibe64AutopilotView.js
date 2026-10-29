@@ -775,15 +775,23 @@ function useVibe64AutopilotView(props, emit, {
     const routed = routingRequest.value?.messageId === messageId;
     discardingMessageIds.add(messageId);
     try {
-      // An orphaned local attempt can be dismissed without stopping a newer turn.
-      // Accepted history remains owned by the transcript and is never removed here.
-      if (routed && message.status === "uncertain") {
-        const receipt = await runtime.inspectDelivery(messageId);
+      // The request's own message is removed only once its receipt proves it
+      // was never sent. While that is unknown, Cancel stops the turn and checks
+      // once more. An orphaned local attempt can be dismissed without stopping a
+      // newer turn. Accepted history remains owned by the transcript.
+      let interrupted = false;
+      if (message.status === "uncertain") {
+        let receipt = await runtime.inspectDelivery(messageId);
+        if (routed && !["accepted", "not-sent"].includes(receipt?.status)) {
+          if (runtime !== props.conversationRuntime || await props.interruptAgentTurn({ reason: "cancel-routing" }) === false) return false;
+          interrupted = true;
+          receipt = await runtime.inspectDelivery(messageId);
+        }
         if (receipt?.status === "accepted") return true;
-        if (receipt?.status !== "not-sent" || receipt.messageId !== messageId) return false;
+        if (routed && (receipt?.status !== "not-sent" || receipt.messageId !== messageId)) return false;
       }
       if (runtime !== props.conversationRuntime) return false;
-      if (routed && routingRequest.value?.messageId === messageId &&
+      if (routed && !interrupted && routingRequest.value?.messageId === messageId &&
           await props.interruptAgentTurn({ reason: "cancel-routing" }) === false) return false;
       if (message.status === "pending" && await props.cancelAgentMessage(messageId) === false) return false;
       if (composerRetrySubmission.value?.messageId === messageId) settleComposerRetry(composerRetrySubmission.value);
@@ -818,7 +826,9 @@ function useVibe64AutopilotView(props, emit, {
         settleComposerRetry(retry);
         return true;
       }
-      if (routingRequest.value?.messageId === messageId && routingRequest.value?.delivery === "failed") return false;
+      // Only the server's proof that the message was never sent lets Retry send it again.
+      if (receipt?.status !== "not-sent" && routingRequest.value?.messageId === messageId &&
+          routingRequest.value?.delivery === "failed") return false;
     }
     // Retry through the original coordinator with the same identity and payload.
     // A missing route is not a receipt: the coordinator owns duplicate detection
