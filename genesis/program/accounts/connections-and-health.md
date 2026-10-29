@@ -548,6 +548,12 @@ keychain, only concurrent reads are shared.
 JSKIT owns this native status interpretation and cache. Vibe64 supplies the
 managed command, credential context and capture policy; the common conversation
 runtime uses the same reader through its supplied execution facility.
+The cache is keyed by the exact command, environment and credential context, so
+Vibe64 has one Claude status reader: the terminals service's, with the inputs
+Claude conversations run with. Accounts, assistant readiness and a conversation's
+account identity all read through it, so one account costs one status read per
+cache period. Accounts still reports a credential context the host refused
+without running Claude Code.
 Model and allowance reads reuse a running process owned by the current account.
 When no such process exists, a temporary query publishes cached results only
 after verified process exit. Failed cleanup stays owned for retry

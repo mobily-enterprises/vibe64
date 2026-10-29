@@ -1351,6 +1351,8 @@ function createService({
   inspectRoutingConfiguration = null,
   publishAccountChanged = async () => null,
   publishAuthSessionChanged = async () => null,
+  // Claude conversations' own status read; Accounts shows what they use.
+  readClaudeAccountStatus = null,
   runHostToolCommand = runDefaultHostCommand,
   runAuthTerminalCommand = runVibe64Command
 } = {}) {
@@ -1392,7 +1394,10 @@ function createService({
 
   async function readClaudeStatus() {
     if (!resolveOperatorCli("claude", { env }).installed) return operatorCliAccount("claude");
-    const status = await readClaudeCodeAuthStatus({ env, credentialHome: accountRuntime.claudeContext() });
+    const credentialHome = accountRuntime.claudeContext();
+    const status = credentialHome?.ok === false || !readClaudeAccountStatus
+      ? await readClaudeCodeAuthStatus({ env, credentialHome })
+      : await readClaudeAccountStatus();
     if (claudeStatusStartFailed(status)) {
       return operatorCliAccount("claude", { installed: true, observed: status.error });
     }

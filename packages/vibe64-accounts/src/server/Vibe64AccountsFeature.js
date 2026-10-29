@@ -170,7 +170,9 @@ const Vibe64AccountsFeature = defineFeature({
         return null;
       },
       publishAccountChanged: createVibe64AccountsChangedPublisher({ events }),
-      publishAuthSessionChanged: createVibe64AccountAuthSessionChangedPublisher({ events })
+      publishAuthSessionChanged: createVibe64AccountAuthSessionChangedPublisher({ events }),
+      readClaudeAccountStatus: typeof terminals?.readClaudeAccountStatus === "function"
+        ? () => terminals.readClaudeAccountStatus() : null
     });
     const connections = createConnections({
       accounts, project,

@@ -517,8 +517,12 @@ function createService({
   const turnCompletions = new Set();
   let closing = false;
 
+  // The one Claude Code account status read, with the inputs Claude
+  // conversations run with. Accounts and readiness read it too, so one
+  // account costs one status read per cache period.
+  const readClaudeAccountStatus = () => readClaudeCodeAuthStatus({ env });
   const assistantRuntime = {
-    claudeConnectionStatus: async () => (await readClaudeCodeAuthStatus({ env })).loggedIn === true,
+    claudeConnectionStatus: async () => (await readClaudeAccountStatus()).loggedIn === true,
     codexConnectionStatus: async () => true,
     listConnections: async () => [],
     readAssistantAccess: async () => ({ ownerOnly: false }),
@@ -892,6 +896,7 @@ function createService({
     systemRoot: codexProviderOptions.systemRoot,
     runNativeDetachedConversation,
     codexGitCommand, agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand,
+    accountStatus: readClaudeAccountStatus,
     connectionStatus: (context) => assistantRuntime.claudeConnectionStatus(context)
   });
   const readRoutingConfiguration = () => createAssistantRoutingStore({ systemRoot: codexProviderOptions.systemRoot }).read();
@@ -2306,6 +2311,7 @@ function createService({
   });
   const service = {
     ...sessionConversations,
+    readClaudeAccountStatus,
     async recordPreviewDiagnostic(sessionId, input) {
       // Action admission owns project access; read the exact existing session without preparing it.
       const { session } = await assistantSessionOptions(sessionId);

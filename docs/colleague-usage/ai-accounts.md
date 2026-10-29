@@ -162,7 +162,8 @@ consent remain your interaction in **AI Accounts**.
 
 For Claude, a failed status check is distinct from being signed out. Retry the
 status check before starting another login; Colleague can recheck readiness,
-while provider consent remains your step.
+while provider consent remains your step. **AI Accounts** shows the same Claude
+Code sign-in your chats use.
 If Claude reports that another process is refreshing its OAuth token, wait a
 minute before retrying. If the error persists, ask the workspace operator to
 check the managed Claude version and refresh-lock recovery. This error alone

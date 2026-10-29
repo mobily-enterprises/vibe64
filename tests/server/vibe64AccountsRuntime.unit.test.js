@@ -7,6 +7,7 @@ import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
+import { createService as createTerminalsService } from "../../packages/vibe64-terminals/src/server/service.js";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
@@ -282,7 +283,8 @@ async function startAccountsFeature({
         async publish(event) {
           publishedEvents.push(event);
           return event;
-        }
+        },
+        register() {}
       },
       "runtime.fastify": {
         get(pathname, options, handler) {
@@ -408,6 +410,48 @@ test("accounts feature keeps assistant readiness aligned with Codex sign-in stat
       assert.equal(await assistantRuntime.codexConnectionStatus(), false);
     } finally {
       await feature.runtime.shutdown();
+    }
+  });
+});
+
+test("Accounts, assistant readiness and Claude conversations share one Claude Code status read", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    const statusReads = path.join(root, "status-reads");
+    const previousHome = process.env.HOME;
+    // A credential home of its own, so no other test's status read is reused.
+    process.env.HOME = path.join(root, "home");
+    await mkdir(process.env.HOME, { recursive: true });
+    await mkdir(path.dirname(MANAGED_CLAUDE_COMMAND), { recursive: true });
+    await writeFile(MANAGED_CLAUDE_COMMAND, [
+      "#!/bin/sh",
+      `[ "$1 $2" = "auth status" ] && echo read >> '${statusReads}'`,
+      "echo '{\"loggedIn\":true,\"email\":\"person@example.test\",\"authMethod\":\"claude.ai\"}'",
+      ""
+    ].join("\n"), { mode: 0o755 });
+    const unused = () => assert.fail("Reading Claude Code's account must not touch a project.");
+    // The terminals service as the server composes it, with the runtime's own env.
+    const terminals = createTerminalsService({ env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot },
+      projectService: { createRuntime: unused, createSessionStore: unused, readCurrentProject: unused,
+        readEnv: unused, runInProjectContext: unused, saveEnvUserValues: unused } });
+    let readiness;
+    const feature = await startAccountsFeature({ env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot },
+      terminals: Object.create(terminals, { configureAssistantRuntime: { value(input) {
+        readiness = input;
+        return terminals.configureAssistantRuntime(input);
+      } } }) });
+    try {
+      // A conversation's account identity, the Accounts page and the readiness check.
+      assert.equal((await terminals.readClaudeAccountStatus()).email, "person@example.test");
+      assert.equal((await feature.accounts.getClaudeStatus()).account.connected, true);
+      assert.equal(await readiness.claudeConnectionStatus(), true);
+      const reads = (await readFile(statusReads, "utf8")).split("\n").filter(Boolean).length;
+      assert.equal(reads, 1, "one account is read once per status cache period");
+    } finally {
+      process.env.HOME = previousHome;
+      await feature.runtime.shutdown();
+      await terminals.close();
+      await rm(MANAGED_CLAUDE_COMMAND, { force: true });
     }
   });
 });
