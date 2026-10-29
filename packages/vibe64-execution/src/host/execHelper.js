@@ -1998,10 +1998,6 @@ function personAccountProblem(user = {}, {
   sudoListing = ""
 } = {}) {
   const { uid, username } = user;
-  // Application accounts (v64a_*) run published apps; they are never people.
-  if (String(username).startsWith("v64a_")) {
-    return `${username} is an application account, not a person's login.`;
-  }
   if (!Number.isSafeInteger(uid) || uid < loginUids.min || uid > loginUids.max) {
     return `${username} is a system account (uid ${uid}), not a person's login.`;
   }
@@ -3247,6 +3243,8 @@ function assertHumanUsername(username = "") {
   if (username.startsWith(DAEMON_USERNAME_PREFIX)) {
     throw new Error("Vibe64 daemon Unix accounts cannot be managed as app users.");
   }
+  // Every person path starts here, before the helper makes, registers or acts
+  // as an account, so a published project's account is never made a person.
   if (username.startsWith(APPLICATION_USERNAME_PREFIX)) {
     throw new Error("Vibe64 application accounts are never people.");
   }

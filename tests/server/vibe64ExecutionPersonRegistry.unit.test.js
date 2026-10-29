@@ -174,10 +174,12 @@ test("only the host's exact narrow sudo commands leave an account a person", () 
 });
 
 test("application accounts are never people", () => {
-  const facts = { groups: ["v64a_shop", "vibe64"], loginUids: LOGIN_UIDS, sudoListing: notAllowed("v64a_shop") };
-  assert.match(personAccountProblem({ uid: 1500, username: "v64a_shop" }, facts), /application account/u);
-  assert.equal(personAccountProblem({ uid: 1500, username: "v64ashop" },
-    { ...facts, sudoListing: notAllowed("v64ashop") }), "");
+  assert.throws(() => registerPerson("shop", "v64a_shop", {
+    addToGroup: () => assert.fail("joined the shared group"),
+    resolveUser: () => assert.fail("looked up the account")
+  }), /application accounts are never people/u);
+  const facts = { groups: ["vibe64"], loginUids: LOGIN_UIDS, sudoListing: notAllowed("v64ashop") };
+  assert.equal(personAccountProblem({ uid: 1500, username: "v64ashop" }, facts), "");
 });
 
 test("the host's narrow sudo commands come only from a file root alone can change", async (t) => {
