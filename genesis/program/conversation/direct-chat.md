@@ -2588,8 +2588,9 @@ a finite application deployment command. It excludes editable project/session
 Env and the editor process environment, and rejects local execution when no
 managed host can consume the reference. The host helper requires the private,
 owner-held `artifact/service/environment` file and a working directory inside
-its sibling `workspace`. The transient unit loads that file; its command runner
-keeps the host-selected identity and runtime paths. This is an execution
+its sibling `workspace`. The execution's runner loads that file as the owner,
+never root or systemd on root's behalf; it keeps the host-selected identity and
+runtime paths. This is an execution
 capability, not a production Integrations screen or an active-release selector.
 The caller must still select and coordinate the active release.
 

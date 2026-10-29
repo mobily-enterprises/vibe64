@@ -5,8 +5,8 @@ import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { assertEnabledForVibe64, consumeManagedExecutionRequestPayload, ensureManagedServiceProcessOwnership,
-  helperChildEnv, managedExecutionState, managedExecutionOomBoundary, managedExecutionStopTimeoutMs,
+import { assertEnabledForVibe64, consumeManagedExecutionRequestPayload, deploymentServiceUnit,
+  ensureManagedServiceProcessOwnership, helperChildEnv, parseEnvironmentFile, managedExecutionState, managedExecutionOomBoundary, managedExecutionStopTimeoutMs,
   managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal, openManagedExecutionReceipts,
   releaseEndedManagedExecutions, stopManagedExecution, stopManagedServiceUnit } from "../../packages/vibe64-execution/src/host/execHelper.js";
 import {
@@ -850,4 +850,48 @@ test("an execution's result is read only as its target user's regular file in it
     const receipts = helper.openManagedExecutionReceipts(input.directory, input.ids);
     try { return receipts.result(input.fifo); } finally { receipts.close(); }
   })()`, { directory, fifo, ids }).value, {});
+});
+
+// Release environment files keep systemd's EnvironmentFile= syntax, but the
+// service's own user loads them, so root never reads one.
+test("release environment files are parsed with systemd's EnvironmentFile= rules", () => {
+  const text = [
+    "# comment", "; comment", "",
+    'QUOTED="a\\"b\\\\c\\nd\\$e"',
+    "SINGLE='lit $x \\\\n'",
+    "  SPACED =  value with spaces  ",
+    "ESCAPED=un\\ quoted",
+    'JOINED="multi\\', 'line"',
+    "EMPTY=",
+    "1INVALID=x", "NOEQUALS", "LAST=end"
+  ].join("\n");
+  assert.deepEqual(parseEnvironmentFile(text), {
+    EMPTY: "", ESCAPED: "un quoted", JOINED: "multiline", LAST: "end",
+    QUOTED: 'a"b\\c\\nd$e', SINGLE: "lit $x \\\\n", SPACED: "value with spaces"
+  });
+});
+
+test("a release service unit loads its environment as its user, then becomes its start script", async (t) => {
+  const unit = deploymentServiceUnit({
+    environmentFile: "/release/service/environment", helperPath: "/helper/vibe64-exec-helper",
+    owner: { username: "v64d_test" }, requiredUnits: [], startScript: "/release/service/start.sh",
+    unitName: "vibe64-release-test.service", workingDirectory: "/release/workspace"
+  });
+  assert.doesNotMatch(unit, /^EnvironmentFile=/mu, "systemd does not read the environment file as root");
+  assert.match(unit, /^ExecStart=\/helper\/vibe64-exec-helper run-release-service "\/release\/service\/environment" "\/release\/service\/start\.sh"$/mu);
+
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-release-service-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const environmentFile = path.join(root, "environment");
+  const startScript = path.join(root, "start.sh");
+  await writeFile(environmentFile, 'RELEASE_TEST_KEY="from-file"\nPORT="4100"\n', { mode: 0o600 });
+  await writeFile(startScript, '#!/bin/sh\nprintf "%s %s %s %s" "$$" "$RELEASE_TEST_KEY" "$PORT" "$KEPT"\n', { mode: 0o700 });
+  const child = spawn(process.execPath, [new URL(HELPER_SOURCE_URL).pathname, "run-release-service", environmentFile, startScript], {
+    env: { KEPT: "unit-environment", PATH: "/usr/bin:/bin", PORT: "1" }, stdio: ["ignore", "pipe", "pipe"]
+  });
+  let output = "";
+  child.stdout.on("data", (chunk) => { output += chunk; });
+  const status = await new Promise((resolve) => child.once("close", resolve));
+  assert.equal(status, 0);
+  assert.equal(output, `${child.pid} from-file 4100 unit-environment`, "the helper's process became the start script, with the file's values over the unit's");
 });

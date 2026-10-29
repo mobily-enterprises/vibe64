@@ -201,6 +201,14 @@ input, except that a managed execution whose terminal holds standard input
 passes it as the daemon's own file directly in the workspace's payload
 directory; the helper accepts no other file, and removes that one once read.
 
+Root never reads a release's environment file, and no unit makes systemd read
+one on root's behalf. A release service's unit runs the helper as the service's
+own user, which loads the file at every start, restarts included, and then
+becomes the service's start script, so no extra process stays running. A
+finite execution given a release environment has its runner load the file as
+the owner. The file keeps systemd's `EnvironmentFile=` syntax. A release service
+installed before this keeps its old unit until its next deployment.
+
 `startVibe64Workflow()`, `setVibe64WorkflowPhase()` and
 `finishVibe64Workflow()` delegate trusted server lifecycle requests to the same
 installed managed-execution provider as commands. Standalone operation may

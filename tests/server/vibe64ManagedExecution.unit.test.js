@@ -87,23 +87,27 @@ test("release commands exclude editable Env and cannot fall back to local execut
   assert.equal(fallback.code, "vibe64_release_environment_unavailable");
 });
 
-test("managed release runner supplies inherited release values with host-owned identity", async (t) => {
+// The runner loads the release environment file itself, as the execution's own
+// user: no unit property makes root read it.
+test("managed release runner loads its release environment file as its user, with host-owned identity", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-release-env-"));
   t.after(() => rm(root, { force: true, recursive: true }));
   const payloadPath = path.join(root, "command.json");
+  const environmentFile = path.join(root, "environment");
+  await writeFile(environmentFile, 'RELEASE_TEST_KEY="release-fixture"\nHOME="/from-file"\n', { mode: 0o600 });
   await writeFile(payloadPath, JSON.stringify({
     command: process.execPath,
     args: ["-e", "process.stdout.write(JSON.stringify({key:process.env.RELEASE_TEST_KEY,home:process.env.HOME,user:process.env.USER,path:process.env.PATH}))"],
     cwd: root,
     env: { HOME: root, USER: "fixture", PATH: "/host/runtime/bin" },
-    releaseEnvironment: true,
+    releaseEnvironmentFile: environmentFile,
     executionId: randomUUID(),
     schema: "vibe64.managed-execution.command",
     schemaVersion: 1
   }));
   const result = await execFileAsync(process.execPath, [EXEC_HELPER, "run-managed", payloadPath], {
     cwd: root,
-    env: { RELEASE_TEST_KEY: "release-fixture", HOME: "/wrong", USER: "wrong", PATH: "/wrong" },
+    env: { RELEASE_TEST_KEY: "inherited", HOME: "/wrong", USER: "wrong", PATH: "/wrong" },
     timeout: 5000
   });
   assert.deepEqual(JSON.parse(result.stdout), {
@@ -118,6 +122,8 @@ test("managed release runner consumes input and records child failure without pe
   const payloadPath = path.join(root, "command.json");
   const executionId = randomUUID();
   const input = JSON.stringify({ operation: "status", integrationId: "mailbox" });
+  const environmentFile = path.join(root, "environment");
+  await writeFile(environmentFile, 'RELEASE_TEST_KEY="private-fixture-value"\n', { mode: 0o600 });
   await writeFile(payloadPath, JSON.stringify({
     command: process.execPath,
     args: ["--input-type=module", "-e", `
@@ -130,7 +136,7 @@ test("managed release runner consumes input and records child failure without pe
     `],
     cwd: root,
     env: { HOME: root, USER: "fixture", PATH: "/host/runtime/bin" },
-    releaseEnvironment: true,
+    releaseEnvironmentFile: environmentFile,
     inputPresent: true,
     inputBase64: Buffer.from(input).toString("base64"),
     executionId,
@@ -138,7 +144,7 @@ test("managed release runner consumes input and records child failure without pe
     schemaVersion: 1
   }));
   await assert.rejects(execFileAsync(process.execPath, [EXEC_HELPER, "run-managed", payloadPath], {
-    cwd: root, env: { RELEASE_TEST_KEY: "private-fixture-value" }, timeout: 5000
+    cwd: root, env: {}, timeout: 5000
   }), (error) => {
     assert.equal(error.code, 7);
     assert.equal(error.stdout, "controlled failure");

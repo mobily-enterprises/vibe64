@@ -149,6 +149,10 @@ async function main() {
     await runManagedExecutionPayload(process.argv[3] || "");
     return;
   }
+  if (process.argv[2] === "run-release-service") {
+    runReleaseService(process.argv[3] || "", process.argv[4] || "");
+    return;
+  }
   if (process.argv[2] !== "execute" || process.argv.length > 4) {
     throw new Error("Usage: vibe64-exec-helper execute [payload-json-file]");
   }
@@ -366,7 +370,7 @@ function handleManagedExecutionOperation(payload = {}) {
     env,
     inputBase64: String(payload.inputBase64 || ""),
     inputPresent: payload.inputPresent === true,
-    ...(releaseEnvironmentFile ? { releaseEnvironment: true } : {}),
+    ...(releaseEnvironmentFile ? { releaseEnvironmentFile } : {}),
     executionId
   }, { privateDirectory: mode === "detached" });
   // The runner reads its command as the target user, with no privilege to lend.
@@ -384,7 +388,6 @@ function handleManagedExecutionOperation(payload = {}) {
     "--property=SupplementaryGroups=nix-users",
     "--property=UMask=0007",
     `--property=WorkingDirectory=${cwd}`,
-    ...(releaseEnvironmentFile ? [`--property=EnvironmentFile=${releaseEnvironmentFile}`] : []),
     "--property=KillMode=control-group",
     "--property=ExitType=cgroup",
     "--property=OOMPolicy=stop",
@@ -481,8 +484,9 @@ async function runManagedExecutionPayload(payloadPath = "") {
     child = spawn(command, Array.isArray(payload.args) ? payload.args.map(String) : [], {
       cwd: String(payload.cwd || "/"),
       detached: Boolean(controllerLease),
-      env: payload.releaseEnvironment === true
-        ? helperChildEnv({ ...process.env, ...payload.env },
+      // The runner, as the execution's own user, loads the release environment.
+      env: payload.releaseEnvironmentFile
+        ? helperChildEnv({ ...process.env, ...readEnvironmentFile(payload.releaseEnvironmentFile), ...payload.env },
           { username: payload.env.USER, home: payload.env.HOME }, payload.env.USER)
         : payload.env && typeof payload.env === "object" && !Array.isArray(payload.env) ? payload.env : {},
       stdio: payload.inputPresent === true
@@ -1679,6 +1683,7 @@ function handleDeploymentServiceOperation(payload = {}) {
   const unitPath = systemdUnitPath(unitName);
   const unit = deploymentServiceUnit({
     environmentFile,
+    helperPath: path.resolve(process.argv[1]),
     owner,
     requiredUnits,
     startScript,
@@ -2015,6 +2020,94 @@ function removeDeploymentServiceUnit(unitName = "") {
   runRootCommand("systemctl", [
     "daemon-reload"
   ]);
+}
+
+// A release service loads its environment as its own user at every start, so
+// neither root nor systemd on root's behalf reads a file whose path that user
+// controls. The start script then replaces this process, so nothing else stays
+// running.
+function runReleaseService(environmentFile = "", startScript = "") {
+  if (process.argv.length !== 5 || !path.isAbsolute(environmentFile) || !path.isAbsolute(startScript)) {
+    throw new Error("Usage: vibe64-exec-helper run-release-service <environment-file> <start-script>");
+  }
+  process.execve(startScript, [startScript], { ...process.env, ...readEnvironmentFile(environmentFile) });
+}
+
+function readEnvironmentFile(file = "") {
+  return parseEnvironmentFile(readFileSync(file, "utf8"));
+}
+
+// Release environment files keep systemd's EnvironmentFile= syntax: comment
+// lines, NAME=value with surrounding blanks trimmed, single quotes taken
+// literally, double quotes in which a backslash escapes only " \ ` $ and a line
+// end, and outside quotes a backslash escaping the next character. Quoted and
+// unquoted parts join, and an assignment whose name is not a valid environment
+// name is skipped.
+function parseEnvironmentFile(text = "") {
+  const environment = {};
+  const blank = (character) => " \t\n\r".includes(character);
+  const lineEnd = (character) => character === "\n" || character === "\r";
+  let state = "pre-key";
+  let key = "";
+  let value = "";
+  let valueEnd = 0;
+  const keep = (characters) => {
+    value += characters;
+    valueEnd = value.length;
+  };
+  const assign = () => {
+    const name = key.trim();
+    if (SAFE_ENV_NAME_PATTERN.test(name)) environment[name] = value.slice(0, valueEnd);
+    key = "";
+    value = "";
+    valueEnd = 0;
+    state = "pre-key";
+  };
+  for (const character of String(text)) {
+    if (state === "pre-key") {
+      if (character === "#" || character === ";") state = "comment";
+      else if (!blank(character)) {
+        key = character;
+        state = "key";
+      }
+    } else if (state === "key") {
+      if (lineEnd(character)) {
+        key = "";
+        state = "pre-key";
+      } else if (character === "=") state = "pre-value";
+      else key += character;
+    } else if (state === "pre-value" || state === "value") {
+      if (lineEnd(character)) assign();
+      else if (character === "\\") state = "value-escape";
+      else if (state === "pre-value" && character === "'") state = "single";
+      else if (state === "pre-value" && character === "\"") state = "double";
+      else if (!blank(character)) {
+        keep(character);
+        state = "value";
+      } else if (state === "value") value += character;
+    } else if (state === "value-escape") {
+      if (!lineEnd(character)) keep(character);
+      state = "value";
+    } else if (state === "single") {
+      if (character === "'") state = "pre-value";
+      else keep(character);
+    } else if (state === "double") {
+      if (character === "\"") state = "pre-value";
+      else if (character === "\\") state = "double-escape";
+      else keep(character);
+    } else if (state === "double-escape") {
+      if ("\"\\`$".includes(character)) keep(character);
+      else if (!lineEnd(character)) keep(`\\${character}`);
+      state = "double";
+    } else if (state === "comment") {
+      if (character === "\\") state = "comment-escape";
+      else if (lineEnd(character)) state = "pre-key";
+    } else {
+      state = "comment";
+    }
+  }
+  if (state !== "pre-key" && state !== "key" && state !== "comment" && state !== "comment-escape") assign();
+  return environment;
 }
 
 function readPayload() {
@@ -2417,6 +2510,7 @@ function serviceResourceUnitLines(owner = {}) {
 
 function deploymentServiceUnit({
   environmentFile = "",
+  helperPath = "",
   owner = {},
   requiredUnits = [],
   startScript = "",
@@ -2438,10 +2532,11 @@ function deploymentServiceUnit({
     ...serviceAccountUnitLines(owner),
     ...serviceResourceUnitLines(owner),
     `WorkingDirectory=${systemdUnitSafeValue(workingDirectory)}`,
-    `EnvironmentFile=${systemdUnitSafeValue(environmentFile)}`,
     `Environment=PATH=${systemdUnitSafeValue(DEFAULT_PATH)}`,
     `Environment=TMPDIR=${systemdUnitSafeValue(workspaceTempRoot(owner.username))}`,
-    `ExecStart=${systemdUnitSafeValue(startScript)}`,
+    // The service's own user loads its environment at every start; see
+    // runReleaseService.
+    `ExecStart=${systemdUnitSafeValue(helperPath)} run-release-service "${systemdUnitSafeValue(environmentFile)}" "${systemdUnitSafeValue(startScript)}"`,
     "Restart=always",
     "RestartSec=3",
     "KillSignal=SIGTERM",
@@ -2698,7 +2793,8 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
   return env;
 }
 
-export { assertEnabledForVibe64, consumeManagedExecutionRequestPayload, ensureManagedServiceProcessOwnership,
+export { assertEnabledForVibe64, consumeManagedExecutionRequestPayload, deploymentServiceUnit, ensureManagedServiceProcessOwnership,
+  parseEnvironmentFile,
   managedWorkflowCounters, openManagedExecutionReceipts, managedWorkflowIdentity, managedExecutionOomBoundary,
   managedExecutionState, managedExecutionStopTimeoutMs, managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal,
   releaseEndedManagedExecutions, stopManagedExecution, stopManagedServiceUnit,
