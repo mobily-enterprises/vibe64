@@ -519,7 +519,11 @@ Its query actions `vibe64.colleague.usage.topics.read` and
 `vibe64.colleague.usage.guide.read` discover and read task guides shipped under
 the application root's `docs/colleague-usage/`. The topic index is searchable and
 paged, and returns bounded metadata without guide bodies. A guide read returns
-one complete document of at most 16,000 Unicode characters. Topic IDs cannot
+one complete document of at most 24,000 Unicode characters and refuses a larger,
+untitled or unreadable guide. The index isolates such a refusal: it lists that
+topic ID with its reason instead of a title, logs one warning naming the file
+and its size, and keeps every other guide available. Guides are never truncated;
+public's guide test fails when a shipped guide exceeds the limit. Topic IDs cannot
 choose arbitrary files or follow file links. Lookup needs authenticated access
 but no selected project; it opens no session and starts no inference.
 Colleague reads the relevant guide before naming exact controls, explains useful

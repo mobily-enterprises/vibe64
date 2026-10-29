@@ -127,9 +127,9 @@ function createColleagueActions(colleague, { usage = createColleagueUsageKnowled
       limit: { type: "integer", min: 1, max: 20, required: false }
     }, input => usage.topics(input), {
       alwaysAvailable: true,
-      description: "Find release-matched instructions for using Vibe64. Use a few task keywords in query, or omit it to list topics. Follow nextOffset while hasMore to see later results. Read the relevant guide before giving exact buttons or steps. Guides describe human steps and available assistance, not authority to execute. This is read-only, works without a project, and exposes no source files or secrets.",
+      description: "Find release-matched instructions for using Vibe64. Use a few task keywords in query, or omit it to list topics. Follow nextOffset while hasMore to see later results. Read the relevant guide before giving exact buttons or steps. A topic listed with an error instead of a title is unavailable in this release: explain that limit and never invent its steps. Guides describe human steps and available assistance, not authority to execute. This is read-only, works without a project, and exposes no source files or secrets.",
       output: { mode: "replace", schema: createSchema({ ok: { type: "boolean", required: true }, error: { ...text, maxLength: 1000 },
-        topics: { type: "array", required: true, maxLength: 20, items: createSchema({ topicId: text, title: text, summary: { ...text, maxLength: 400 } }) },
+        topics: { type: "array", required: true, maxLength: 20, items: createSchema({ topicId: text, title: text, summary: { ...text, maxLength: 400 }, error: { ...text, maxLength: 1000 } }) },
         total: { type: "integer", required: false }, hasMore: { type: "boolean", required: true }, nextOffset: { type: "integer", required: false }
       }) }
     }),

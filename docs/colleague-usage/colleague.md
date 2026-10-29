@@ -199,9 +199,11 @@ project's publication), Learning observation and recorded action outcomes, read
 
 Colleague works on every screen, not only inside a project: the account menu,
 AI setup, Courses and any other screen outside your projects. Ask how to do
-something there and it reads this release's guide first. Ask “Show me where…”
-and it points at the place, or opens it when you ask it to; it only offers
-places this Vibe64 has and that you may use. It can watch what this Vibe64
+something there and it reads this release's guide first. If one guide in this
+release is too large or cannot be read, Colleague tells you that topic is
+unavailable instead of guessing its steps, and still uses every other guide.
+Ask “Show me where…” and it points at the place, or opens it when you ask it
+to; it only offers places this Vibe64 has and that you may use. It can watch what this Vibe64
 lets it watch for you. A studio lesson's step bar points at the same places.
 
 Recognized words can appear as a Pending user message in chat; acceptance replaces

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { createColleagueActions } from "../../packages/vibe64-colleague/src/server/actions.js";
-import { createColleagueUsageKnowledge } from "../../packages/vibe64-colleague/src/server/usageKnowledge.js";
+import { createColleagueUsageKnowledge, maxGuideCharacters } from "../../packages/vibe64-colleague/src/server/usageKnowledge.js";
 
 async function fixture(t) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "colleague-guides-"));
@@ -72,6 +72,33 @@ test("missing releases and malformed or oversized guides give actionable failure
   await assert.rejects(usage.guide({ topicId: "untitled" }), /no title/u);
 });
 
+test("an oversized, untitled or unreadable guide is listed as unavailable without hiding the other topics", async t => {
+  const { directory, usage } = await fixture(t);
+  await writeFile(path.join(directory, "alpha.md"), "# Alpha\n\nOpen Alpha.\n");
+  await writeFile(path.join(directory, "huge.md"), "# Huge\n\n" + "x".repeat(maxGuideCharacters));
+  await writeFile(path.join(directory, "locked.md"), "# Locked\n\nlocked sentinel\n", { mode: 0 });
+  await writeFile(path.join(directory, "untitled.md"), "No heading\n");
+  await writeFile(path.join(directory, "zulu.md"), "# Zulu\n\nOpen Zulu.\n");
+  const warnings = [];
+  t.mock.method(console, "warn", warning => warnings.push(warning));
+  const huge = { topicId: "huge", error: "The huge usage guide needs to be split into smaller topics in the application release." };
+  assert.deepEqual(await usage.topics(), { ok: true, total: 5, hasMore: false, topics: [
+    { topicId: "alpha", title: "Alpha", summary: "Open Alpha." },
+    huge,
+    { topicId: "locked", error: "This usage guide could not be read in this application release." },
+    { topicId: "untitled", error: "This usage guide has no title. Its release documentation needs correction." },
+    { topicId: "zulu", title: "Zulu", summary: "Open Zulu." }
+  ] });
+  assert.deepEqual((await usage.topics({ query: "huge" })).topics, [huge]);
+  assert.equal((await usage.topics({ query: "x".repeat(20) })).total, 0);
+  assert.deepEqual(warnings, [
+    `Colleague usage guide ${path.join(directory, "huge.md")} (24008 bytes, 24008 characters) is unavailable: ${huge.error}`,
+    `Colleague usage guide ${path.join(directory, "locked.md")} (size unknown) is unavailable: EACCES: permission denied, open '${path.join(directory, "locked.md")}'`,
+    `Colleague usage guide ${path.join(directory, "untitled.md")} (11 bytes, 11 characters) is unavailable: This usage guide has no title. Its release documentation needs correction.`
+  ], "each refused guide is logged once, however often the list is read");
+  await assert.rejects(usage.guide({ topicId: "huge" }), /The huge usage guide needs to be split into smaller/u);
+});
+
 test("usage actions share native authentication, require no project and validate all inputs", async t => {
   const { directory, usage } = await fixture(t);
   await writeFile(path.join(directory, "preview.md"), "# Preview\n\nChoose Run.\n");
@@ -88,7 +115,10 @@ test("usage actions share native authentication, require no project and validate
   const execute = (operation, input = {}, context = {}) => actions.execute({
     actionId: `vibe64.colleague.usage.${operation}.read`, input, context: { surface: "app", channel: "automation", ...context }
   });
-  assert.equal((await execute("topics")).topics[0].topicId, "preview");
+  await writeFile(path.join(directory, "untitled.md"), "No heading\n");
+  t.mock.method(console, "warn", () => {});
+  assert.deepEqual((await execute("topics")).topics, [{ topicId: "preview", title: "Preview", summary: "Choose Run." },
+    { topicId: "untitled", error: "This usage guide has no title. Its release documentation needs correction." }]);
   assert.equal((await execute("guide", { topicId: "preview" })).text, "# Preview\n\nChoose Run.\n");
   for (const input of [{ limit: 21 }, { offset: -1 }, { query: "x".repeat(201) }]) await assert.rejects(execute("topics", input));
   await assert.rejects(execute("guide"));
@@ -102,6 +132,11 @@ test("all shipped public usage topics are discoverable and fit a complete bounde
   const directory = new URL("../../docs/colleague-usage/", import.meta.url);
   const usage = createColleagueUsageKnowledge({ directory: fileURLToPath(directory) });
   const filenames = (await readdir(directory)).filter(name => name.endsWith(".md")).sort();
+  for (const filename of filenames) {
+    const characters = Array.from(await readFile(new URL(filename, directory), "utf8")).length;
+    assert.ok(characters <= maxGuideCharacters,
+      `${filename} has ${characters} characters; split it into guides of at most ${maxGuideCharacters} so Colleague can read it.`);
+  }
   const topics = [];
   let offset = 0;
   for (;;) {
@@ -111,6 +146,7 @@ test("all shipped public usage topics are discoverable and fit a complete bounde
     offset = page.nextOffset;
   }
   assert.deepEqual(topics.map(topic => `${topic.topicId}.md`), filenames);
+  assert.deepEqual(topics.filter(topic => topic.error), [], "every shipped guide must be readable");
   for (const topic of topics) {
     const guide = await usage.guide({ topicId: topic.topicId });
     assert.equal(guide.ok, true);
