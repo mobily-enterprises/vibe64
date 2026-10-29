@@ -98,9 +98,10 @@ When an assistant cannot start, stops by itself or reports a failure, see [When 
    conversation. Type the request and select **Send**.
 2. While it works, add instructions through **Steer**. This targets the active
    conversation; selecting another project does not move an earlier request.
-   Steering never stops running work: Claude reads the instruction after its
-   current command (such as a deploy) finishes, and Codex adds it to the active
-   turn. Use **Stop** when you want to cancel. When the assistant reads your
+   Steering never stops running work: Claude moves a running command (such as
+   a deploy) to the background, where it keeps running and reports when it
+   finishes, and reads the instruction within moments; Codex adds it to the
+   active turn. Use **Stop** when you want to cancel. When the assistant reads your
    message it first answers it in a short reply (a direct question gets a direct
    answer), then continues. Its progress lines show its thinking; they are not
    that reply.

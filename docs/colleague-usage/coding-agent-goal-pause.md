@@ -43,7 +43,8 @@ uses the same conversation's steering path, and **Goal** shows it after Claude
 acknowledges the command. You do not need to stop the current work first.
 Setting or resuming a goal while Claude works never interrupts that work: a
 running command (for example a long deploy), background agents and background
-tasks all continue. Claude reads the goal after its current tool call finishes.
+tasks all continue. Claude moves a running command to the background, where it
+keeps running, and reads the goal within moments.
 **Stop** and **Pause goal** still stop work; use those controls when cancellation
 is intended.
 When a background task finishes, Claude stays working while it reads and handles

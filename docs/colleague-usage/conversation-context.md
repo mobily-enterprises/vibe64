@@ -94,8 +94,8 @@ This policy concerns ordinary Main chat. Learning's tool-bound context, temporar
 chat context copying and Colleague's own history policy are separate.
 
 While Claude is working, you can send a follow-up to steer the same conversation.
-Claude reads it after its current command finishes; sending it does not stop
-that command. Use **Stop** to cancel work.
+Claude moves its current command to the background, where it keeps running, and
+reads the follow-up within moments; sending it does not stop that command. Use **Stop** to cancel work.
 Updated project guidance is applied when a later turn starts idle; it must not
 block an ordinary follow-up or restart active work. Account changes and explicit
 model settings still use their existing checks. If a message shows an error,
