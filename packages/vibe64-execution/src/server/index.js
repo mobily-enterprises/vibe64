@@ -66,6 +66,7 @@ export {
   checkpointRefRoot,
   checkpointRefs,
   createGitTurnCheckpoint,
+  createGitTurnCheckpointAsOneJob,
   writeGitWorktreeTree
 } from "./gitTurnCheckpoint.js";
 export {

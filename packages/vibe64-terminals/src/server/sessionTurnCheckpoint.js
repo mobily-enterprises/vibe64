@@ -1,4 +1,4 @@
-import { createGitTurnCheckpoint } from "@local/vibe64-execution/server";
+import { createGitTurnCheckpointAsOneJob } from "@local/vibe64-execution/server";
 import { codexAppServerTurnState } from "@jskit-ai/assistant-core/server/codex-turn";
 import { normalizeVibe64AgentRunState } from "@local/vibe64-runtime/server/sessionStore";
 import { CODEX_TURN_OUTCOME } from "./codexTurnOutcomeNotice.js";
@@ -12,7 +12,7 @@ const SESSION_TURN_CHECKPOINT_TASK_ID = "codex_turn_checkpoint";
 async function checkpointSessionTurn({
   projectService, runtime, session, sessionId, outerTurnId, outcome = "completed",
   timestamp = new Date().toISOString(), publishSessionChanged = async () => {},
-  createCheckpoint = createGitTurnCheckpoint
+  createCheckpoint = createGitTurnCheckpointAsOneJob
 }) {
   if (!outerTurnId) return { ok: true, processed: false, reason: "outer_turn_unavailable" };
   runtime ||= await projectService.createRuntime({ inspectSource: false });

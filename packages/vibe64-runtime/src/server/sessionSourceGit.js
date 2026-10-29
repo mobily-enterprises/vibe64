@@ -1,4 +1,4 @@
-import { readFile, rm } from "node:fs/promises";
+import { readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 
 import {
@@ -11,6 +11,9 @@ import { runSourceCommand } from "./sourceCommand.js";
 
 const GIT_TIMEOUT_MS = 30_000;
 const GIT_REPACK_TIMEOUT_MS = 60_000;
+// Last conflict answer per session source, keyed by its index file revision.
+const MAX_REMEMBERED_MERGE_STATES = 256;
+const mergeStatesByIndex = new Map();
 
 async function runGit(sourceRoot = "", args = [], {
   timeout = GIT_TIMEOUT_MS
@@ -69,6 +72,21 @@ async function sessionSourceGitAlternatesPath(sourceRoot = "") {
   return resolveGitPath(normalizedSourceRoot, gitPathResult.stdout || gitPathResult.output);
 }
 
+// Git records unmerged paths only in the index, and every index write replaces
+// the file. An unchanged index file therefore has the same conflicts.
+async function indexRevision(sourceRoot = "") {
+  const entry = await stat(path.join(sourceRoot, ".git", "index"), { bigint: true }).catch(() => null);
+  return entry?.isFile() ? `${entry.dev}:${entry.ino}:${entry.size}:${entry.mtimeNs}:${entry.ctimeNs}` : "";
+}
+
+function rememberMergeState(sourceRoot, revision, merge) {
+  mergeStatesByIndex.delete(sourceRoot);
+  mergeStatesByIndex.set(sourceRoot, { merge, revision });
+  if (mergeStatesByIndex.size > MAX_REMEMBERED_MERGE_STATES) {
+    mergeStatesByIndex.delete(mergeStatesByIndex.keys().next().value);
+  }
+}
+
 async function inspectSessionSourceMergeState(sourceRoot = "") {
   const normalizedSourceRoot = normalizeText(sourceRoot) ? path.resolve(sourceRoot) : "";
   if (!normalizedSourceRoot) {
@@ -81,6 +99,15 @@ async function inspectSessionSourceMergeState(sourceRoot = "") {
     return {
       conflictedFiles: [],
       hasConflicts: false
+    };
+  }
+  // Read before git runs, so an index written meanwhile is inspected again.
+  const revision = await indexRevision(normalizedSourceRoot);
+  const remembered = revision ? mergeStatesByIndex.get(normalizedSourceRoot) : null;
+  if (remembered?.revision === revision) {
+    return {
+      conflictedFiles: [...remembered.merge.conflictedFiles],
+      hasConflicts: remembered.merge.hasConflicts
     };
   }
   const conflictsResult = await runGit(normalizedSourceRoot, [
@@ -96,10 +123,12 @@ async function inspectSessionSourceMergeState(sourceRoot = "") {
     );
   }
   const conflictedFiles = String(conflictsResult.stdout || "").split("\0").filter(Boolean);
-  return {
+  const merge = {
     conflictedFiles,
     hasConflicts: conflictedFiles.length > 0
   };
+  if (revision) rememberMergeState(normalizedSourceRoot, revision, { ...merge, conflictedFiles: [...conflictedFiles] });
+  return merge;
 }
 
 async function ensureSessionSourceGitAlternatesDissociated(sourceRoot = "", {

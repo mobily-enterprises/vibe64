@@ -1,12 +1,21 @@
 import { createHash } from "node:crypto";
-import { lstat, mkdir, mkdtemp, rm, statfs } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readdir, rm, statfs } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
+import { vibe64Host } from "./hostProfile.js";
 import {
   runVibe64Command
 } from "./runVibe64Command.js";
 
 const GIT_CHECKPOINT_TIMEOUT_MS = 30_000;
+// One bound for the whole sequence run as a single job; each git step inside
+// it keeps its own 30-second limit.
+const GIT_CHECKPOINT_JOB_TIMEOUT_MS = 120_000;
+const GIT_CHECKPOINT_COMMAND_PATH = fileURLToPath(new URL("./gitTurnCheckpointCommand.js", import.meta.url));
+// A temporary index directory untouched this long belongs to a run that was
+// killed; a live tree write changes it within seconds and ends within minutes.
+const STALE_TEMPORARY_TREE_MS = 15 * 60_000;
 const DEFAULT_CHECKPOINT_TEMPORARY_DISK_BUDGET_BYTES = 512 * 1024 * 1024;
 const DEFAULT_CHECKPOINT_DISK_RESERVE_BYTES = 1024 * 1024 * 1024;
 const CHECKPOINT_OUTCOMES = new Set([
@@ -44,6 +53,75 @@ async function createGitTurnCheckpoint({
     temporaryDiskBudgetBytes,
     temporaryDiskReserveBytes
   }));
+}
+
+// The daemon's checkpoint: the same git sequence run as one command (one
+// managed job on a hosted workspace) instead of one job per git step. The
+// daemon still serializes snapshots per worktree, resolves the disk settings
+// and, through the command's own env, the commit identity.
+async function createGitTurnCheckpointAsOneJob({
+  outerTurnId = "",
+  outcome = "completed",
+  project = {},
+  runCommand = runVibe64Command,
+  sessionId = "",
+  temporaryDiskBudgetBytes,
+  temporaryDiskReserveBytes,
+  timestamp = "",
+  worktreePath = ""
+} = {}) {
+  const identity = checkpointIdentity({
+    outerTurnId,
+    outcome,
+    sessionId,
+    timestamp,
+    worktreePath
+  });
+  const payload = {
+    // The child process starts without this process's host profile.
+    hostProfile: vibe64Host(),
+    input: {
+      ...identity,
+      temporaryDiskBudgetBytes: checkpointTemporaryDiskBudgetBytes(temporaryDiskBudgetBytes),
+      temporaryDiskReserveBytes: checkpointDiskReserveBytes(temporaryDiskReserveBytes)
+    }
+  };
+  return withSerializedCheckpoint(identity.worktreePath, async () => checkpointJobValue(await runCommand({
+    actor: "daemon",
+    allowedRoots: [identity.worktreePath, path.dirname(GIT_CHECKPOINT_COMMAND_PATH)],
+    args: [GIT_CHECKPOINT_COMMAND_PATH],
+    command: "node",
+    cwd: identity.worktreePath,
+    envPolicy: "session",
+    execution: { label: "Saving a recovery checkpoint" },
+    gitSafeDirectories: [identity.worktreePath],
+    input: JSON.stringify(payload),
+    mode: "capture",
+    project,
+    purpose: "source",
+    runtimes: ["node26", "git"],
+    timeout: GIT_CHECKPOINT_JOB_TIMEOUT_MS
+  })));
+}
+
+// The child reports its checkpoint or its own failure as JSON. Anything else,
+// including a job the host refused, killed or could not drain, fails the
+// checkpoint with the host's message and code, as a failed git step did.
+function checkpointJobValue(result = {}) {
+  let response = null;
+  try {
+    response = JSON.parse(String(result.stdout || "").trim());
+  } catch {
+    // The command result below carries the failure.
+  }
+  if (result.ok === true && response?.ok === true) return response.value;
+  if (response?.ok === false && response.error) {
+    throw checkpointError(response.error.message, response.error.code || "vibe64_checkpoint_failed");
+  }
+  throw checkpointError(
+    String(result.stderr || result.error || result.output || "").trim() || "Git checkpoint command failed.",
+    result.code || "vibe64_checkpoint_git_failed"
+  );
 }
 
 async function createGitTurnCheckpointUnlocked({
@@ -167,6 +245,7 @@ async function writeGitWorktreeTreeUnlocked({
   ], { project });
   const checkpointRoot = path.join(gitDirectory, "vibe64-checkpoints");
   await mkdir(checkpointRoot, { recursive: true });
+  await removeStaleTemporaryTrees(checkpointRoot);
   const temporaryRoot = await mkdtemp(path.join(checkpointRoot, ".tree-"));
   const temporaryIndex = path.join(temporaryRoot, "index");
   try {
@@ -199,6 +278,22 @@ async function writeGitWorktreeTreeUnlocked({
   } finally {
     await rm(temporaryRoot, { force: true, recursive: true });
   }
+}
+
+// A killed run (a job timeout, an out-of-memory kill, a restart) never reaches
+// its cleanup. The next tree write removes what such runs left behind.
+async function removeStaleTemporaryTrees(checkpointRoot = "") {
+  const now = Date.now();
+  const entries = await readdir(checkpointRoot, { withFileTypes: true });
+  await Promise.all(entries
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith(".tree-"))
+    .map(async (entry) => {
+      const directory = path.join(checkpointRoot, entry.name);
+      const status = await lstat(directory).catch(() => null);
+      if (status?.isDirectory() && now - status.mtimeMs > STALE_TEMPORARY_TREE_MS) {
+        await rm(directory, { force: true, recursive: true });
+      }
+    }));
 }
 
 function withSerializedCheckpoint(worktreePath = "", operation = async () => null) {
@@ -267,18 +362,8 @@ async function assertCheckpointDiskBudget({
   }
   const candidateBytes = sizedCandidates.reduce((total, candidate) => total + candidate.bytes, 0);
   const estimatedTemporaryBytes = Math.min(Number.MAX_SAFE_INTEGER, candidateBytes * 2);
-  const configuredBudgetBytes = checkpointDiskSetting(
-    temporaryDiskBudgetBytes,
-    process.env.VIBE64_CHECKPOINT_TEMPORARY_DISK_BUDGET_BYTES,
-    DEFAULT_CHECKPOINT_TEMPORARY_DISK_BUDGET_BYTES,
-    1
-  );
-  const reserveBytes = checkpointDiskSetting(
-    temporaryDiskReserveBytes,
-    process.env.VIBE64_CHECKPOINT_DISK_RESERVE_BYTES,
-    DEFAULT_CHECKPOINT_DISK_RESERVE_BYTES,
-    0
-  );
+  const configuredBudgetBytes = checkpointTemporaryDiskBudgetBytes(temporaryDiskBudgetBytes);
+  const reserveBytes = checkpointDiskReserveBytes(temporaryDiskReserveBytes);
   const availableBytes = Math.max(0, Number(filesystem.bavail) * Number(filesystem.bsize));
   const effectiveBudgetBytes = Math.min(
     configuredBudgetBytes,
@@ -304,6 +389,24 @@ async function assertCheckpointDiskBudget({
 
 function nullSeparatedPaths(value = "") {
   return String(value || "").split("\0").filter(Boolean);
+}
+
+function checkpointTemporaryDiskBudgetBytes(explicitValue) {
+  return checkpointDiskSetting(
+    explicitValue,
+    process.env.VIBE64_CHECKPOINT_TEMPORARY_DISK_BUDGET_BYTES,
+    DEFAULT_CHECKPOINT_TEMPORARY_DISK_BUDGET_BYTES,
+    1
+  );
+}
+
+function checkpointDiskReserveBytes(explicitValue) {
+  return checkpointDiskSetting(
+    explicitValue,
+    process.env.VIBE64_CHECKPOINT_DISK_RESERVE_BYTES,
+    DEFAULT_CHECKPOINT_DISK_RESERVE_BYTES,
+    0
+  );
 }
 
 function checkpointDiskSetting(explicitValue, envValue, fallback, minimum) {
@@ -511,5 +614,6 @@ export {
   checkpointRefRoot,
   checkpointRefs,
   createGitTurnCheckpoint,
+  createGitTurnCheckpointAsOneJob,
   writeGitWorktreeTree
 };

@@ -579,7 +579,13 @@ Checkpoints preserve the saveable files without advancing the project branch or
 changing the index. A turn's ref and the latest pointer are published in one Git
 transaction. If another writer advances latest, publication retries up to twice
 with the same captured tree parented onto that checkpoint. Both turns remain
-recoverable; unrelated Git failures stop immediately. A durable background-task
+recoverable; unrelated Git failures stop immediately. The daemon runs a turn's
+whole checkpoint as one command (one managed job on a hosted workspace) under
+its per-worktree lock, resolving the commit identity and disk budget before it
+starts; each Git step keeps its 30-second limit and the job stops after two
+minutes. A job the host refuses, kills or cannot drain fails the checkpoint with
+the host's own message and code. A killed run's temporary index directory is
+removed by the next checkpoint once it is 15 minutes old. A durable background-task
 failure appears as a compact chat notice with collapsed, scrollable technical
 details; the files remain but a successful recovery point is not claimed. This is not continuous
 backup of arbitrary terminal edits, unsaved editor buffers or database contents.

@@ -44,7 +44,8 @@ deleted or prevent you from chatting. An interrupted snapshot command is named
 as such; expand **Technical details** for the original error and recovery steps.
 Vibe64 attempts another snapshot when the next assistant turn finishes, including
 failed or stopped turns—not immediately when you send a message. A successful
-snapshot clears the warning automatically.
+snapshot clears the warning automatically. A snapshot stops after two minutes at
+most, and a later snapshot removes the temporary files of one that was stopped.
 
 Select **Dismiss** to hide this particular failure. This takes effect immediately
 and is remembered for this project/session in the same browser across reloads.

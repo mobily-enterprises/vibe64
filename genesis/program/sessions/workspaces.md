@@ -334,6 +334,9 @@ workspace. Expired payloads return 410 while their descriptions remain readable.
 Routine session-detail refreshes read session and agent state without launching
 Git source inspections. Source operations retain their explicit health checks;
 chat updates do not need a new managed Git process to report activity.
+When a source inspection does run, its unresolved-conflict listing is reused
+until that session's `.git/index` file changes: Git records unmerged paths only
+in the index and replaces that file on every write.
 Both selected-session and toolbar work-status reads allow two minutes for the
 sequential authenticated Git checks of connected repositories. Their existing
 refresh queues and late-result guards remain authoritative; this per-request
