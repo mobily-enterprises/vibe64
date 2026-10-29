@@ -3121,68 +3121,69 @@ for (const width of [390, 820, 1280]) {
       await routeApiEndpoint(page, "/vibe64/accounts/ai-connections", route => fulfillJson(route, { ok: true, providers: [], connections: [
         { id: "opencode", label: "OpenCode Zen", connected: true, builtIn: true, removable: false }
       ] }));
-      const senior = { ...ASSISTANT_CATALOG.engines[0].defaults, engineId: "codex", modelId: "gpt-6-astra",
-        catalogRevision: ASSISTANT_CATALOG.engines[0].revision, selectionSource: "explicit" };
-      const deepseek = { ...senior, modelProviderId: "deepseek", modelId: "deepseek-flash", selectionSource: "recommended" };
-      const assignments: Record<string, any> = { senior, junior: senior, helper: null, router: null, sharedBackup: null };
+      const selection = (modelProviderId: string, modelId: string, selectionSource = "recommended") => ({ schema: "vibe64.assistant-selection.v1",
+        engineId: "codex", agentId: "codex", modelProviderId, modelId, variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}`, selectionSource });
+      const senior = selection("openai", "gpt-6-astra", "explicit");
+      const deepseek = selection("deepseek", "deepseek-flash");
+      const owner: Record<string, any> = { senior, junior: senior };
       const patches: any[] = [];
       const reads: string[] = [];
-      const routing = (roles = assignments) => ({ ok: true, revision: 1 + patches.length, canConfigure: true, engines: [{
-        engineId: "codex", label: "Codex", connected: true,
-        roles: Object.fromEntries(Object.entries(roles).map(([role, assignment]) => [role, {
-          assignment, recommendation: role === "senior" ? senior : deepseek,
-          choices: [senior, deepseek].map(selection => ({ ...selection, available: true, variants: [], providerLabel: selection.modelProviderId, accessLabel: "Workspace use" }))
-        }])), preview: { collaborator: {} }
-      }] });
+      // Every orchestrator is connected, yet DeepSeek's suggestions stay in Codex, where it was connected.
+      const routing = (roles: Record<string, any> = owner) => {
+        const choices = [{ ...senior, label: "GPT-6 Astra", providerLabel: "Codex (OpenAI)", accessLabel: "Personal use" },
+          ...(providers.length ? [{ ...deepseek, label: "DeepSeek Flash", providerLabel: "DeepSeek", accessLabel: "Workspace use" }] : [])]
+          .map(choice => ({ ...choice, engineLabel: "Codex", available: true, variants: [{ id: "high", label: "High" }] }));
+        const recommendation = (role: string) => ["colleague", "fix", "explain"].includes(role) ? null
+          : role === "senior" || !providers.length ? senior : deepseek;
+        const state = (role: string) => ({ configured: Object.hasOwn(roles, role), value: roles[role] ?? null,
+          effective: roles[role] || recommendation(role), recommendation: recommendation(role), choices });
+        return { ok: true, revision: 1 + patches.length, canConfigure: true, team: { available: false },
+          engines: ["codex", "claude", "opencode"].map(engineId => ({ engineId, connected: true })),
+          setups: { owner: { roles: Object.fromEntries(["senior", "junior", "router", "colleague", "fix", "explain", "quickHelper"].map(role => [role, state(role)])) },
+            nonOwner: { roles: {} } },
+          viewer: { senior: { available: true } } };
+      };
       await routeApiEndpoint(page, "/vibe64/accounts/model-routing", route => {
         if (route.request().method() === "PATCH") {
           const body = route.request().postDataJSON();
-          expect(body.engineId).toBe("codex");
-          expect(Object.keys(body.orchestrators)).toEqual(["codex"]);
           patches.push(body);
-          Object.assign(assignments, body.orchestrators.codex);
-        } else {
-          const engineId = new URL(route.request().url()).searchParams.get("engineId");
-          expect(engineId).toBe("codex");
-          reads.push(engineId!);
-        }
+          Object.assign(owner, body.owner);
+        } else reads.push(route.request().url());
         return fulfillJson(route, routing());
       });
-      await routeApiEndpoint(page, "/vibe64/accounts/model-routing/preview", route => {
-        const body = route.request().postDataJSON();
-        expect(body.engineId).toBe("codex");
-        expect(Object.keys(body.orchestrators)).toEqual(["codex"]);
-        return fulfillJson(route, routing({ ...assignments, ...body.orchestrators.codex }));
-      });
+      await routeApiEndpoint(page, "/vibe64/accounts/model-routing/preview", route => fulfillJson(route,
+        routing({ ...owner, ...route.request().postDataJSON().owner })));
       await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
       await page.getByRole("button", { name: "Account menu", exact: true }).click();
       await page.locator(".vibe64-auth-settings__menu").getByText("Account settings", { exact: true }).click();
       await page.getByRole("tab", { name: "AI Accounts", exact: true }).click();
-      await page.getByRole("button", { name: "Add connection", exact: true }).click();
+      await expect(page.getByRole("heading", { name: "Your AI setup", exact: true })).toBeVisible();
+      await page.getByRole("button", { name: /^Advanced/ }).click();
+      await page.getByRole("button", { name: "Add a connection", exact: true }).click();
       await page.getByRole("button", { name: "Choose Codex", exact: true }).click();
-      await page.getByText("DeepSeek", { exact: true }).click();
+      await page.getByRole("dialog").filter({ hasText: "Choose a provider" }).getByText("DeepSeek", { exact: true }).click();
       await page.getByLabel("API key", { exact: true }).fill("fixture-key");
       await page.getByRole("button", { name: "Check and connect", exact: true }).click();
-      const form = page.getByRole("region", { name: "Model routing", exact: true });
+      const form = page.locator(".vibe64-codex-setup__body").getByRole("region", { name: "Models", exact: true });
       await expect(form.getByText("DeepSeek connected", { exact: true })).toBeVisible();
-      await expect(form.getByText("Codex", { exact: true })).toBeVisible();
-      await expect(form.getByText(/Suggested: Codex \(deepseek-flash/)).toHaveCount(4);
-      await expect(form.getByRole("button", { name: /^Configure .* routing$/ })).toHaveCount(1);
-      await expect(form.getByRole("button", { name: "Configure Codex routing", exact: true })).toBeVisible();
+      await expect(form.getByText(/Suggested: Codex \(deepseek-flash high\) · Workspace use/)).toHaveCount(3);
+      await expect(form.getByText("You chose the current model. Select this change to replace it.", { exact: true })).toHaveCount(1);
       await expect(form.getByText(/Claude Code|OpenCode/)).toHaveCount(0);
-      await expect(form.getByRole("button", { name: "Apply 3 changes", exact: true })).toBeEnabled();
+      await expect(form.getByRole("button", { name: "Apply 2 changes", exact: true })).toBeEnabled();
       await page.screenshot({ path: info.outputPath(`deepseek-codex-${width}.png`), animations: "disabled" });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       if (width === 1280) {
-        await form.getByRole("button", { name: "Configure Codex routing", exact: true }).click();
-        await expect(form.getByText("Codex routing", { exact: true })).toBeVisible();
-        await expect(form.getByRole("combobox", { name: "Helper", exact: true })).toHaveValue("Codex (deepseek-flash high)");
+        await form.getByRole("button", { name: "Configure AI setup", exact: true }).click();
+        await expect(form.getByRole("group", { name: "Router", exact: true })).toContainText(/DeepSeek Flash · \S* ?runs in Codex/);
         await form.getByRole("button", { name: "Cancel", exact: true }).click();
       } else if (width === 820) {
-        await form.getByRole("button", { name: "Apply 3 changes", exact: true }).click();
+        await form.getByRole("button", { name: "Apply 2 changes", exact: true }).click();
         await expect.poll(() => patches.length).toBe(1);
-        expect(Object.keys(patches[0].orchestrators.codex)).toEqual(["helper", "router", "sharedBackup"]);
-      } else await form.getByRole("button", { name: "Keep current routing", exact: true }).click();
+        expect(patches[0].owner.router).toMatchObject({ engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-flash" });
+        expect(patches[0].owner.quickHelper).toMatchObject({ engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-flash" });
+        expect(patches[0].owner).not.toHaveProperty("junior");
+        expect(patches[0].owner).not.toHaveProperty("senior");
+      } else await form.getByRole("button", { name: "Keep current models", exact: true }).click();
       await expect(form).toBeHidden();
       expect(reads.length).toBeGreaterThan(0);
       if (width !== 820) expect(patches).toEqual([]);
