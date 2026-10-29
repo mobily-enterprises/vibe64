@@ -1,4 +1,4 @@
-import { draftWithRestoredMessage, routedChatMessage } from "@/lib/vibe64ChatDelivery.js";
+import { draftWithRestoredMessage, routedChatMessage, trackRoutedMessage } from "@/lib/vibe64ChatDelivery.js";
 import { computed, hasInjectionContext, inject, markRaw, onBeforeUnmount, ref, watch } from "vue";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
@@ -813,9 +813,12 @@ function useVibe64TemporaryAi({
       if (error.code === "vibe64_assistant_routing_cancelled") {
         const current = tasks.value.find(candidate => candidate.id === taskId);
         const text = payload.displayMessage || payload.message;
-        task.delivery.remove(messageId);
+        // Stop returns an unsent message to the draft; a Cancel in progress owns it.
+        const local = task.delivery.find(messageId);
+        const cancelling = Boolean(local?.cancelling || local?.cancelError);
+        if (!cancelling) task.delivery.remove(messageId);
         updateTask(taskId, { busy: false, pendingMessageId: "", error: "", errorCode: "", status: "interrupted",
-          draft: draftWithRestoredMessage(text, current.draft) });
+          ...(cancelling ? {} : { draft: draftWithRestoredMessage(text, current.draft) }) });
         updateTask(taskId, { draft: tasks.value.find(candidate => candidate.id === taskId).draft });
         return false;
       }
@@ -834,28 +837,21 @@ function useVibe64TemporaryAi({
     }
   }
 
+  // Cancel means cancel, and the server decides: the message stays, shown as
+  // Cancelling…, until the server records the cancel, which also stops its
+  // route and any turn it started. When the server cannot be reached the
+  // message stays with Cancel again. Accepted history remains the transcript's.
   async function cancelMessage(taskId, messageId) {
     const task = tasks.value.find((candidate) => candidate.id === taskId);
     const message = pendingMessage(task, messageId);
-    const uncertain = message?.status === "uncertain";
-    if (disposed || !message || message.status !== "failed" && !uncertain ||
-        readRefOrGetterValue(operationBusy) || closingTaskIds.has(taskId) || task.recoveryOutcome === "checking") return false;
-    const route = assistantRoutingRequestForDisplay(task.routingMetadata);
-    if (uncertain) {
-      // Stop first, then remove the message only once its receipt is settled.
-      await stopTask(taskId);
-      const receipt = await task.binding.runtime.value.inspectDelivery(messageId);
-      if (!canApplyTaskResponse(task)) return false;
-      if (!["accepted", "not-sent"].includes(receipt?.status)) {
-        updateTask(taskId, { error: "Delivery is still not confirmed, so this message was kept. Try again in a moment." });
-        return false;
-      }
-    } else if (route?.messageId === messageId) await stopTask(taskId);
-    else if (task.busy) return false;
-    task.delivery.remove(messageId);
+    const runtime = task?.binding.runtime.value;
+    if (disposed || !message || message.status === "accepted" || !runtime) return false;
+    trackRoutedMessage(task.delivery, message, runtime.turns?.value);
+    if (await runtime.cancelMessage(messageId) !== true || !canApplyTaskResponse(task)) return false;
+    const current = tasks.value.find(candidate => candidate.id === taskId);
     updateTask(taskId, {
-      ...(task.pendingMessageId === messageId ? { pendingMessageId: "" } : {}),
-      ...(uncertain || task.error === message.error ? { error: "", errorCode: "" } : {})
+      ...(current.pendingMessageId === messageId ? { pendingMessageId: "" } : {}),
+      ...(message.status === "uncertain" || current.error === message.error ? { error: "", errorCode: "" } : {})
     });
     return true;
   }

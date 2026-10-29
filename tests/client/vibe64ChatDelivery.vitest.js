@@ -2,7 +2,7 @@ import { createSSRApp, defineComponent, h } from "vue";
 import { renderToString } from "vue/server-renderer";
 import { describe, expect, it, vi } from "vitest";
 import { createAssistantMessageDelivery } from "@jskit-ai/assistant-core/client/conversation-delivery";
-import { chatTurnsWithRouting, routedChatMessage } from "../../src/lib/vibe64ChatDelivery.js";
+import { chatTurnsWithRouting, routedChatMessage, trackRoutedMessage } from "../../src/lib/vibe64ChatDelivery.js";
 
 vi.mock("vuetify/components/VBtn", () => ({
   VBtn: defineComponent({ setup: (_props, { attrs, slots }) => () => h("button", attrs, slots.default?.()) })
@@ -31,6 +31,27 @@ describe("routed chat delivery presentation", () => {
     expect(chatTurnsWithRouting(delivery.turns([]), newRoute)[0].optimistic)
       .toMatchObject({ status: "failed", error: "New attempt failed." });
     expect(routedChatMessage(newRoute, delivery.find(request.messageId)).status).toBe("failed");
+  });
+
+  it("tracks a message shown only from its route so Cancel can wait for the server, and shows it until the route stops", () => {
+    const delivery = createAssistantMessageDelivery();
+    const route = { ...request, status: "waiting", delivery: "failed", error: "Refused." };
+    const [shown] = chatTurnsWithRouting(delivery.turns([]), route);
+    trackRoutedMessage(delivery, routedChatMessage(route), []);
+    expect(delivery.find(request.messageId)).toMatchObject({ text: "Hello", status: "uncertain" });
+    trackRoutedMessage(delivery, routedChatMessage(route), []);
+    expect(delivery.state.messages).toHaveLength(1);
+    expect(chatTurnsWithRouting(delivery.turns([]), route)).toHaveLength(1);
+    expect(shown.user.text).toBe("Hello");
+    // Only the server's answer ends it: its route stops and the delivery drops it.
+    const stopped = { ...route, stopped: true, cancelled: true };
+    expect(chatTurnsWithRouting(delivery.turns([]), stopped)).toHaveLength(1);
+    delivery.remove(request.messageId);
+    expect(chatTurnsWithRouting(delivery.turns([]), stopped)).toEqual([]);
+    // Accepted history is never tracked for Cancel.
+    trackRoutedMessage(delivery, { id: request.messageId, text: "Hello", payload: { message: "Hello" } },
+      [{ turnId: "saved", user: { messageId: request.messageId, text: "Hello" } }]);
+    expect(delivery.state.messages).toEqual([]);
   });
 
   it("keeps ordinary sends pending, including after a local transport error", async () => {

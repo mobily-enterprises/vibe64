@@ -145,12 +145,19 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
   };
   let failAdmission = false;
   let rejectedAdmission;
+  const interrupts = [];
+  const discards = [];
+  let dispatchGate = null;
   const routingOptions = { systemRoot: root, agent, exclusive, onPlanCompleted,
+    open: async (_id, options) => ({ ...context, ...options }),
+    interrupt: async () => { interrupts.push(Date.now()); return { ok: true, interrupted: true }; },
+    discardPending: async (_id, messageId) => { discards.push(messageId); },
     publish: async (_id, value) => { events.push(structuredClone(value)); },
     dispatch: async (_id, input, selected) => {
       if (rejectedAdmission) return rejectedAdmission;
       await manager.requireAssistantAccessForSelection(selected.assistantSelection || JSON.parse(selected.session.metadata.assistant_selection), selected);
       await input.onPromptSending?.({ threadId: "native-thread" });
+      if (dispatchGate) { dispatchGate.started.resolve(); await dispatchGate.held.promise; }
       sends.push({ input, selection: selected.assistantSelection });
       if (failAdmission) throw new Error("Lost admission response.");
       receipts.set(input.messageId, input);
@@ -158,6 +165,20 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
     } };
   const service = createAssistantRouting(routingOptions);
   return { service, context, metadata, agent, router, sends, events, notices, catalog, catalogs, connections, assignments, configuration,
+    interrupts, discards, receipts,
+    // Another operation (such as a sibling chat's slow startup) holds the agent-write lock until released.
+    // The next native dispatch waits, inside the write lock, until released.
+    holdDispatch() {
+      dispatchGate = { started: Promise.withResolvers(), held: Promise.withResolvers() };
+      const gate = dispatchGate;
+      return { started: gate.started.promise, release: () => { dispatchGate = null; gate.held.resolve(); } };
+    },
+    holdLock() {
+      const held = Promise.withResolvers();
+      const started = Promise.withResolvers();
+      void exclusive("session-1", {}, () => { started.resolve(); return held.promise; });
+      return { started: started.promise, release: () => held.resolve() };
+    },
     restart: () => createAssistantRouting(routingOptions),
     helperCalls: () => helperCalls, cleanupCalls: () => cleanupCalls,
     rejectAdmission: result => { rejectedAdmission = result; },

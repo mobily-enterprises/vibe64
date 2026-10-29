@@ -52,6 +52,15 @@ function chatTurnsWithDelivery(turns, request, checking) {
   });
 }
 
+// Cancel asks the server through the chat's delivery, so a message shown only
+// from its saved route joins the delivery first and shows the same Cancelling…
+// and Cancel again states as any other until the server agrees.
+function trackRoutedMessage(delivery, message, turns = []) {
+  if (!delivery || !message || delivery.find(message.id)) return;
+  delivery.restoreUncertain({ messageId: message.id, text: message.text,
+    attachments: message.payload?.displayAttachments || [], error: message.error }, turns);
+}
+
 // JSKIT assistant-core's draftWithRestoredMessage rule, which its delivery
 // edit() applies: the returned message leads the draft unless the draft already
 // starts with it. Import that export instead once the pinned release has it.
@@ -59,4 +68,4 @@ function draftWithRestoredMessage(text = "", draft = "") {
   return !draft || draft.startsWith(text) ? draft || text : `${text}\n\n${draft}`;
 }
 
-export { chatTurnsWithRouting, draftWithRestoredMessage, routedChatMessage };
+export { chatTurnsWithRouting, draftWithRestoredMessage, routedChatMessage, trackRoutedMessage };

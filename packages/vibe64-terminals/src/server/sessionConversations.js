@@ -8,9 +8,9 @@ import { temporaryConversationTurnActionInputValidator, temporaryConversationUpd
 import { parseIntegrationSetupRequest, normalizeVibe64AgentTaskResult, serializeVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import { assistantGoalManagementMessage, assistantGoalObjective, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingRequestFromMetadata, assistantRoutingStatusIsPending,
   assistantGoalIsActive, isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
-import { createAssistantRouting } from "./assistantRouting.js";
+import { assistantCancelledMessageIds, createAssistantRouting } from "./assistantRouting.js";
 import { throwIfAgentWriteBusy } from "@local/vibe64-runtime/server/agentWriteLock";
-import { requireCompletedConversationRewind, sendWithAssistantChangeover, sessionConversationKey } from "./assistantChangeover.js";
+import { discardAssistantChangeoverMessage, requireCompletedConversationRewind, sendWithAssistantChangeover, sessionConversationKey } from "./assistantChangeover.js";
 import { createMainConversationBinding, readMainConversationHistory, MAIN_CONVERSATION_PRESENTATION } from "./mainConversationBinding.js";
 import { isNativeConversationBindingKey } from "./nativeConversationRetirement.js";
 
@@ -577,6 +577,14 @@ function createSessionConversations({
         async (ctx) => operation(await routingContext(ctx, options.conversationId, { cleanup: options.routingCleanup === true })));
       return throwIfAgentWriteBusy(result);
     },
+    open: async (id, options) => routingContext(await readSessionContext(id, options), options.conversationId,
+      { cleanup: options.routingCleanup === true }),
+    // Stop's interrupt of this chat's native turn.
+    async interrupt(id, ctx) {
+      const record = await recordFor(ctx.conversationContext, ctx.routingConversationId);
+      return conversationRuntime.stopPersistentConversation(persistentConversationOptions(ctx.conversationContext, record));
+    },
+    discardPending: discardAssistantChangeoverMessage,
     prepareSelection: async (id, selection, ctx) => {
       const record = await recordFor(ctx.conversationContext, ctx.routingConversationId);
       if (selection.engineId === "codex" && Object.entries(record.nativeBindings || {}).some(([key, binding]) =>
@@ -641,8 +649,12 @@ function createSessionConversations({
           const { conversationLog, pagination, messages: _messages, nativeBindings: _bindings,
             providerConversationId: _nativeId, ...presentation } = observed;
           const route = routingRequest(observed);
-          const pending = attemptedChangeover(observed);
-          const request = route?.delivery === "uncertain" && route.input ? {
+          // A stopped or cancelled request, including its retained changeover
+          // attempt, is no longer offered for recovery, as in Main.
+          const attempted = attemptedChangeover(observed);
+          const pending = route?.stopped && attempted?.messageId === route.messageId ||
+            assistantCancelledMessageIds(observed.routingMetadata).includes(attempted?.messageId) ? null : attempted;
+          const request = route?.delivery === "uncertain" && !route.stopped && route.input ? {
             messageId: route.messageId, text: route.input.displayMessage || route.input.message,
             attachments: route.input.displayAttachments || [], error: route.error || ""
           } : pending ? { messageId: pending.messageId, text: pending.displayMessage,
@@ -681,6 +693,10 @@ function createSessionConversations({
     },
 
     async inspectTemporaryConversationDelivery(sessionId, input, options = {}) {
+      // A cancelled message has no other receipt.
+      if (await routing.isCancelled(sessionId, input.messageId, { ...options, conversationId: input.conversationId })) {
+        return { status: "cancelled", messageId: input.messageId };
+      }
       const routed = await routing.inspectDelivery(sessionId, input, { ...options, conversationId: input.conversationId });
       if (routed?.delivered === false) return { status: "unknown", messageId: input.messageId };
       return write(sessionId, options, async ctx => {
@@ -886,6 +902,11 @@ function createSessionConversations({
       return routing.send(sessionId, input, {
         ...options, conversationId: input.conversationId, vibe64User: input.vibe64User || options.vibe64User
       });
+    },
+
+    // Cancel of one unsent or unconfirmed message in this chat; it always succeeds.
+    cancelTemporaryConversationMessage(sessionId, input = {}, options = {}) {
+      return routing.cancelMessage(sessionId, { messageId: input.messageId }, { ...options, conversationId: input.conversationId });
     },
 
     cancelTemporaryConversationRouting(sessionId, input = {}, options = {}) {

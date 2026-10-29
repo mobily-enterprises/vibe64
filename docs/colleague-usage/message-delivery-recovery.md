@@ -5,6 +5,16 @@ original receipt. Do not copy and send the same message again: it may already
 have reached the assistant. Keep the original text and attachments while its
 receipt is checked.
 
+**Cancel** is always available on a pending, uncertain or failed message, even
+while **Checking…** is shown (it ends that check). The message shows
+**Cancelling…** until the server confirms, which takes a moment even while
+another chat in the session is starting its assistant. Then it leaves the chat
+and stays gone after a reload. The server also stops any work that message
+started, but never a newer request. If the server cannot be reached, the
+message stays with **Couldn't reach the server — Cancel again**; press Cancel
+again, or reconnect and the chat retries it. If the assistant had already
+received the message, the conversation still shows it with its answer.
+
 A historical Claude pre-write rejection can leave that receipt uncertain even
 though the native send was refused. An operator can apply the numbered stopped
 workspace repair after proving the original rejection and checking native history.
@@ -32,7 +42,8 @@ and is marked **failed**, not uncertain, for example when the assistant's memory
 is too full. Fix the cause and choose **Retry**; nothing was sent. The same
 applies when the chat refuses a new request before sending it, such as Deslop
 while a goal is open, or when another assistant operation in the session is
-still starting. **Cancel** or **Edit** removes it at once.
+still starting. **Cancel** removes it once the server confirms; **Edit** returns
+its text to the composer.
 
 A send in a temporary chat waits, as Main chat does, while another chat in the
 same session starts its assistant (a slow Claude start can take 15–20 seconds).

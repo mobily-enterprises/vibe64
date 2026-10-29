@@ -1295,6 +1295,17 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
             const conversation = await preparedConversation();
             return conversation ? conversation.inspectDelivery(input) : { status: "unknown", messageId: input.messageId };
           },
+          // Cancel always succeeds: an accepted message stays history, and an
+          // unsent or unconfirmed one is discarded by its native conversation.
+          async cancelDelivery(input) {
+            assertCurrentConversation(state, id);
+            await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context: requestContext });
+            if (state.record.conversationLog.some(item => !item.metadata?.runtime?.engine && item.user?.messageId === input.messageId)) {
+              return { ok: true, cancelled: false, messageId: input.messageId, status: "accepted" };
+            }
+            const conversation = await preparedConversation();
+            return conversation ? conversation.cancelDelivery(input) : { ok: true, cancelled: true, messageId: input.messageId };
+          },
           async readGoal() { return null; },
           async updateGoal() {
             throw failure("Colleague does not support native goals.", "conversation_unsupported", 400);

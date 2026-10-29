@@ -15,6 +15,10 @@ import {
 import { assistantReplyAsksPerson, latestAssistantMessageAwaitingUserReply } from "@local/vibe64-runtime/shared/conversationQuestions";
 
 const STATE_KEY = "assistant_routing_request";
+// Messages the person cancelled in this chat, newest last and bounded. A send
+// never admits one again, and a snapshot never offers one for recovery.
+const CANCELLED_KEY = "assistant_cancelled_messages";
+const MAX_CANCELLED_MESSAGES = 50;
 const PROFILE = Object.freeze({
   profileId: VIBE64_AGENT_EXECUTION_PROFILE_IDS.HELPER,
   workloadId: VIBE64_AGENT_EXECUTION_WORKLOAD_IDS.REQUEST_ROUTING
@@ -49,6 +53,17 @@ export function assistantRoutingRequestForMessage(metadata = {}, isMessage) {
 }
 function read(store, sessionId) {
   return store.readMetadataValue(sessionId, STATE_KEY).then(parseRequest);
+}
+function parseCancelled(value) {
+  try {
+    const list = JSON.parse(value || "[]");
+    return Array.isArray(list) ? list.filter(entry => typeof entry?.messageId === "string" && entry.messageId) : [];
+  } catch { return []; }
+}
+const readCancelled = async (store, sessionId) => parseCancelled(await store.readMetadataValue(sessionId, CANCELLED_KEY));
+/** The ids of the messages the person cancelled in this chat. */
+export function assistantCancelledMessageIds(metadata = {}) {
+  return parseCancelled(metadata?.[CANCELLED_KEY]).map(entry => entry.messageId);
 }
 
 /** Only the host's stopped disposable copy may drop these process handles. */
@@ -91,8 +106,11 @@ function withSelection(context, selection) {
 
 // The ordinary conversation owns delivery and history. This record only holds
 // the one request being prepared, its working plan snapshot and follow-up.
+// Cancel also needs the chat's context without the agent-write lock (open), the
+// interrupt Stop uses (interrupt), and the native attempt's discard, which runs
+// under that lock (discardPending).
 function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive, dispatch, publish, prepareSelection = async () => {},
-  onTiming = () => {}, onPlanCompleted = null }) {
+  open, interrupt, discardPending, onTiming = () => {}, onPlanCompleted = null }) {
   const running = new Map();
   // Sub-phase times of each send before native delivery, reported once.
   const timings = new Map();
@@ -103,9 +121,21 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
   let closing = false;
   const liveFollowupRequests = new Map();
   const keyFor = (sessionId, context) => `${context.runtime.stateRoot}\0${sessionId}\0${context.routingConversationId || ""}`;
+  // Messages cancelled in this process whose lock-held cleanup has not settled.
+  // A request naming one stays stopped, whichever operation saves it meanwhile.
+  const cancelling = new Set();
+  const cancelKey = (sessionId, context, messageId) => `${keyFor(sessionId, context)}\0${messageId}`;
+  const isCancelling = (sessionId, context, messageId) => cancelling.has(cancelKey(sessionId, context, messageId));
   async function save(context, state) {
-    await context.runtime.store.writeMetadataValue(context.session.sessionId, STATE_KEY, JSON.stringify(state));
-    await publish(context.session.sessionId, { reason: "assistant-routing-changed", payload: {
+    const sessionId = context.session.sessionId;
+    if (assistantWorkflowMessageIds(state).some(id => isCancelling(sessionId, context, id))) {
+      state.stopped = true; state.status = "waiting";
+    }
+    await context.runtime.store.writeMetadataValue(sessionId, STATE_KEY, JSON.stringify(state));
+    await announce(context, state);
+  }
+  function announce(context, state) {
+    return publish(context.session.sessionId, { reason: "assistant-routing-changed", payload: {
       assistantRoutingRequest: state, clientRefresh: { includeList: false }, ...(context.routingConversationId ? { conversationId: context.routingConversationId } : {})
     } });
   }
@@ -402,6 +432,8 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     }, selectedContext);
     mark(state.messageId, "dispatched");
     if (result?.delivered !== true) throw failure(result?.error || "The assistant did not confirm delivery.", result?.code);
+    // A Cancel that arrived during dispatch stops the turn this message started.
+    if (isCancelling(sessionId, context, messageId)) await interrupt(sessionId, context).catch(() => {});
     state.status = "working"; state.delivery = "accepted";
     state.turnId = result.turnId || result.turn?.id || result.codexAgentTurn?.turnId || "";
     if (state.workflow === true || state.mode === "auto" && state.stage === "planning") liveFollowupRequests.set(keyFor(sessionId, context), state.messageId);
@@ -453,6 +485,12 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
       mark(input.messageId, "lock-acquired");
       if (closing) throw failure("The assistant is shutting down. Reconnect before sending.");
       context = current; key = keyFor(sessionId, context);
+      // Finish earlier cancels' cleanup first; it never blocks this admission.
+      await settle(sessionId, context).catch(() => {});
+      if ((await readCancelled(context.runtime.store, sessionId)).some(entry => entry.messageId === input.messageId)) {
+        throw Object.assign(failure("This message was cancelled. Send it again as a new message.", "vibe64_assistant_message_cancelled"),
+          { delivery: "not-sent" });
+      }
       const preferences = assistantRoutingFromMetadata(context.session.metadata) ||
         (options.purpose || explicitDeslop ? { mode: options.purpose || "senior", review: false } : null);
       if (!allowAuto && preferences?.mode === "auto") throw failure("Auto is available in Main chat only. Choose Senior or Junior.");
@@ -635,6 +673,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
           throw failure("The routing helper could not be closed. Retry after reconnecting the assistant.");
         }
       };
+      task.messageId = state.messageId;
       running.set(key, task);
     }).catch((error) => {
       if (refusedBeforeAdmission && error && typeof error === "object" && !error.delivery) error.delivery = "not-sent";
@@ -642,8 +681,13 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     });
     if (direct === true) return exclusive(sessionId, options, async (current) => {
       mark(input.messageId, "dispatch-called");
+      if (isCancelling(sessionId, current, input.messageId)) {
+        throw Object.assign(failure("Routing cancelled. Your message was not sent.", "vibe64_assistant_routing_cancelled"), { delivery: "not-sent" });
+      }
       const result = await dispatch(sessionId, input, current);
       mark(input.messageId, "dispatched");
+      // A Cancel that arrived during dispatch stops the turn this message started.
+      if (result?.delivered === true && isCancelling(sessionId, current, input.messageId)) await interrupt(sessionId, current).catch(() => {});
       if (result?.delivered === true && task.steeringRequestId) {
         const persisted = await read(current.runtime.store, sessionId);
         if (persisted?.messageId === task.steeringRequestId &&
@@ -781,6 +825,78 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  // Cancel means cancel, and it never waits for the agent-write lock. It records
+  // the message as cancelled, stops its routing and classifier, interrupts a
+  // turn the message may own through Stop's interrupt, and answers. The cleanup
+  // that needs the lock (the routing helper and the native attempt) settles
+  // afterwards, or at the next admission.
+  async function cancelMessage(sessionId, { messageId }, options) {
+    const context = await open(sessionId, options);
+    const store = context.runtime.store;
+    const key = keyFor(sessionId, context);
+    cancelling.add(cancelKey(sessionId, context, messageId));
+    let route = null;
+    await store.mutateSession(sessionId, async () => {
+      const saved = (await readCancelled(store, sessionId)).filter(entry => entry.messageId !== messageId);
+      await store.writeMetadataValue(sessionId, CANCELLED_KEY, JSON.stringify([...saved,
+        { messageId, cancelledAt: new Date().toISOString(), settled: false }].slice(-MAX_CANCELLED_MESSAGES)));
+      const state = await read(store, sessionId).catch(() => null);
+      if (!assistantWorkflowMessageIds(state).includes(messageId)) return;
+      route = state;
+      const unsent = ["routing", "pending", "failed"].includes(route.delivery) && !route.attemptedMessageId;
+      // Cancelled, unlike Stop, never returns the message to the draft.
+      route.stopped = true; route.cancelled = true; route.status = "waiting";
+      delete route.outcome;
+      if (unsent) delete route.error;
+      await store.writeMetadataValue(sessionId, STATE_KEY, JSON.stringify(route));
+    });
+    if (route) {
+      liveFollowupRequests.delete(key);
+      await announce(context, route);
+    }
+    const task = running.get(key);
+    if (task?.messageId === messageId) {
+      task.cancelled = true;
+      void Promise.resolve(task.stop?.()).catch(() => {});
+    }
+    // The running turn may be this message's when its routed delivery was
+    // attempted or accepted, or when it is the chat's newest message.
+    const owned = route ? Boolean(route.attemptedMessageId || route.delivery === "accepted")
+      : (await store.readConversationTail(sessionId, { userLimit: 1 })).findLast(turn => turn.user)?.user?.messageId === messageId;
+    let interrupted = false;
+    if (owned) interrupted = await interrupt(sessionId, context).then(result => result?.ok !== false, () => false);
+    void exclusive(sessionId, options, current => settle(sessionId, current)).catch(() => {});
+    return { ok: true, cancelled: true, messageId, interrupted };
+  }
+
+  // Cancel's lock-held cleanup: the native attempt, and the routing helper
+  // unless the message's own routing task is still closing it.
+  async function settle(sessionId, context) {
+    const store = context.runtime.store;
+    const key = keyFor(sessionId, context);
+    const unsettled = (await readCancelled(store, sessionId)).filter(entry => !entry.settled);
+    if (!unsettled.length) return;
+    const state = await read(store, sessionId).catch(() => null);
+    for (const { messageId } of unsettled) {
+      if (state?.helper && assistantWorkflowMessageIds(state).includes(messageId) && running.get(key)?.messageId !== messageId) {
+        await cleanupHelper(context, state); state.helper = null; delete state.error; await save(context, state);
+      }
+      await discardPending(sessionId, messageId, context);
+      cancelling.delete(cancelKey(sessionId, context, messageId));
+    }
+    const settled = new Set(unsettled.map(entry => entry.messageId));
+    await store.mutateSession(sessionId, async () => {
+      const current = await readCancelled(store, sessionId);
+      await store.writeMetadataValue(sessionId, CANCELLED_KEY,
+        JSON.stringify(current.map(entry => settled.has(entry.messageId) ? { ...entry, settled: true } : entry)));
+    });
+  }
+
+  async function isCancelled(sessionId, messageId, options) {
+    const context = await open(sessionId, options);
+    return (await readCancelled(context.runtime.store, sessionId)).some(entry => entry.messageId === messageId);
   }
 
   // The active agent declares an outcome; this does not dispatch while its turn runs.
@@ -1050,7 +1166,7 @@ function createAssistantRouting({ systemRoot, allowAuto = true, agent, exclusive
     const failures = results.filter((result) => result.status === "rejected").map((result) => result.reason);
     if (failures.length) throw new AggregateError(failures, "Assistant routing shutdown did not complete successfully.");
   }
-  return { send, cancel, inspectDelivery, recordOutcome, afterTurn, prepareGoal, applyGoalSelection, reconcile, close };
+  return { send, cancel, cancelMessage, isCancelled, inspectDelivery, recordOutcome, afterTurn, prepareGoal, applyGoalSelection, reconcile, close };
 }
 
 export { createAssistantRouting };

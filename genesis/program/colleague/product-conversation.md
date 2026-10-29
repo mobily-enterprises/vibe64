@@ -28,6 +28,10 @@ history, but does not show an uncertain-delivery banner. The shared runtime uses
 the same dispatch evidence for status, pending delivery and its displayed error.
 Attempted and inspection-only requests retain their receipt-inspection controls;
 no saved request or application operation is replayed merely by reopening.
+The browser facade's `cancelDelivery` always answers: a message the
+application already accepted stays history, and any other is passed to the
+JSKIT conversation's own delivery cancel, fenced like every other facade
+operation (`packages/vibe64-colleague/src/server/service.js`).
 
 Browser focus uses the existing realtime connection and original `focus.update`
 action authorization. Its transient binding releases on socket disconnect or

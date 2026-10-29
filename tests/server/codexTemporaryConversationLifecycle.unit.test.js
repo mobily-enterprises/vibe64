@@ -13567,6 +13567,11 @@ test("Main browser fresh authorization for a local practice project opened as an
           browserAuthority: { sessionId, projectSlug: slug, actorId: "42", requestContext } });
         unsubscribe = await browser.subscribe(event => events.push(event));
         const segment = (await browser.read()).segmentId;
+        // Main Cancel records a message without opening its native turn; it then has no other receipt.
+        assert.deepEqual(await terminalService.cancelAgentMessage(sessionId, { messageId: "cancelled-before-sending" }, { runtime, vibe64User: actor }),
+          { ok: true, cancelled: true, messageId: "cancelled-before-sending", interrupted: false });
+        assert.deepEqual(await browser.inspectDelivery({ messageId: "cancelled-before-sending" }),
+          { status: "cancelled", messageId: "cancelled-before-sending" });
         goalOperation = browser.updateGoal({ action: "set", expectedSegmentId: segment, expectedGoalId: null,
           objective: "Keep the original browser authorization current" });
         goalOperation.catch(() => {});

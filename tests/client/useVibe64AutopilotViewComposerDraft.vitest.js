@@ -114,12 +114,31 @@ function deferredResult() {
   return { promise, reject, resolve };
 }
 
+// The conversation runtime's Cancel as the server answers it: on agreement the
+// server has stopped the message's route (its realtime update arrives first)
+// and the runtime drops the message. Otherwise the message stays.
+function serverCancel(props, answer = () => true) {
+  return vi.fn(async (messageId) => {
+    const agreed = await answer();
+    if (agreed === true) {
+      const route = JSON.parse(props.session.metadata.assistant_routing_request || "null");
+      if (route?.messageId === messageId) {
+        props.session.metadata.assistant_routing_request = JSON.stringify({ ...route, status: "waiting", stopped: true, cancelled: true });
+        await nextTick();
+      }
+      props.conversationRuntime.delivery.remove(messageId);
+    }
+    return agreed;
+  });
+}
+
 function memoryStorage() {
   const values = new Map();
   return {
     getItem: (key) => values.get(String(key)) ?? null,
     setItem: (key, value) => values.set(String(key), String(value)),
-    removeItem: (key) => values.delete(String(key))
+    removeItem: (key) => values.delete(String(key)),
+    contents: () => [...values.values()].join("\n")
   };
 }
 
@@ -306,7 +325,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.chatTurns.value[0].optimistic).toBeUndefined();
   });
 
-  it("checks an unconfirmed request with its original ID, rejects Edit and keeps it on Cancel while delivery is unknown", async () => {
+  it("checks an unconfirmed request with its original ID and rejects Edit while delivery is unknown", async () => {
     const { view, props } = await createViewWithProps();
     props.session.metadata.assistant_routing_request = JSON.stringify({
       messageId: "interrupted-1", status: "waiting", delivery: "uncertain", input: { message: "Keep this exact prompt." },
@@ -315,8 +334,6 @@ describe("useVibe64AutopilotView direct chat", () => {
     view.composerDraft.value = "A newer draft.";
     expect(view.chatTurns.value[0].optimistic.status).toBe("uncertain");
     expect(await view.editOptimisticMessage("interrupted-1")).toBe(false);
-    expect(await view.cancelOptimisticMessage("interrupted-1")).toBe(false);
-    expect(props.interruptAgentTurn).toHaveBeenCalledExactlyOnceWith({ reason: "cancel-routing" });
     expect(view.chatTurns.value[0].optimistic.status).toBe("uncertain");
     expect(await view.resendOptimisticMessage("interrupted-1")).toBe(true);
     expect(props.sendAgentMessage).toHaveBeenCalledWith(expect.objectContaining({
@@ -325,42 +342,102 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.composerDraft.value).toBe("A newer draft.");
   });
 
-  it("Cancel stops an unconfirmed request and removes it once the server proves it was never sent", async () => {
-    vi.stubGlobal("window", { sessionStorage: memoryStorage() });
-    const messageId = "interrupted-1";
-    const inspect = vi.fn().mockResolvedValueOnce({ status: "unknown", messageId })
-      .mockResolvedValueOnce({ status: "not-sent", messageId, error: "This request was not sent." });
-    const { view, props } = await createViewWithProps({}, { runtimeOptions: { inspectConversationDelivery: inspect } });
-    await vi.waitFor(() => expect(props.conversationRuntime.available.value).toBe(true));
-    const route = { messageId, status: "waiting", delivery: "uncertain", input: { message: "Keep this exact prompt." }, assignments: {} };
-    props.session.metadata.assistant_routing_request = JSON.stringify(route);
-    props.conversationRuntime.delivery.state.messages.push({ id: messageId, text: route.input.message, payload: route.input, status: "uncertain" });
-    props.interruptAgentTurn.mockImplementation(async () => {
-      props.session.metadata.assistant_routing_request = JSON.stringify({ ...route, stopped: true });
+  for (const [answer, server] of [
+    ["agrees", () => true],
+    ["does not agree or cannot be reached", () => false],
+    ["has not answered", () => new Promise(() => {})]
+  ]) {
+    it(`Cancel keeps an unconfirmed routed request until the server agrees: the server ${answer}`, async () => {
+      vi.stubGlobal("window", { sessionStorage: memoryStorage() });
+      const messageId = "interrupted-1";
+      const inspect = vi.fn(async () => ({ status: "unknown", messageId }));
+      const { view, props } = await createViewWithProps({}, { runtimeOptions: { inspectConversationDelivery: inspect } });
+      props.cancelAgentMessage = serverCancel(props, server);
+      await vi.waitFor(() => expect(props.conversationRuntime.available.value).toBe(true));
+      const route = { messageId, status: "waiting", delivery: "uncertain", input: { message: "Say OK." }, assignments: {} };
+      props.session.metadata.assistant_routing_request = JSON.stringify(route);
+      props.conversationRuntime.delivery.state.messages.push({ id: messageId, text: "Say OK.", payload: route.input, status: "uncertain" });
+      const cancelled = view.cancelOptimisticMessage(messageId);
+      expect(props.cancelAgentMessage).toHaveBeenCalledExactlyOnceWith(messageId);
       await nextTick();
-      return true;
+      // Nothing leaves the chat on the browser's own authority.
+      expect(view.chatTurns.value).toHaveLength(1);
+      if (answer !== "has not answered") await expect(cancelled).resolves.toBe(answer === "agrees");
+      await nextTick();
+      expect(view.chatTurns.value).toHaveLength(answer === "agrees" ? 0 : 1);
+      expect(window.sessionStorage.contents().includes(messageId)).toBe(answer !== "agrees");
+      // The server stops the route and its turn; the view never does.
+      expect(props.interruptAgentTurn).not.toHaveBeenCalled();
+      expect(inspect).not.toHaveBeenCalled();
+      expect(props.sendAgentMessage).not.toHaveBeenCalled();
+      expect(view.composerDraft.value).toBe("");
     });
-    await expect(view.cancelOptimisticMessage(messageId)).resolves.toBe(true);
-    expect(inspect).toHaveBeenCalledTimes(2);
-    expect(props.interruptAgentTurn).toHaveBeenCalledExactlyOnceWith({ reason: "cancel-routing" });
-    expect(props.sendAgentMessage).not.toHaveBeenCalled();
+  }
+
+  it("Cancel works while Checking… runs and the late check cannot bring the message back", async () => {
+    const messageId = "checking-1";
+    let answer;
+    const inspect = vi.fn(() => new Promise((resolve) => { answer = resolve; }));
+    const { view, props } = await createViewWithProps({}, { runtimeOptions: { inspectConversationDelivery: inspect } });
+    const agreement = deferredResult();
+    props.cancelAgentMessage = serverCancel(props, () => agreement.promise);
+    await vi.waitFor(() => expect(props.conversationRuntime.available.value).toBe(true));
+    props.conversationRuntime.delivery.state.messages.push({ id: messageId, text: "Hello?", payload: { message: "Hello?" }, status: "uncertain" });
+    const check = props.conversationRuntime.inspectDelivery(messageId);
+    await vi.waitFor(() => expect(view.chatTurns.value[0].system.delivery.checking).toBe(true));
+    const cancelled = view.cancelOptimisticMessage(messageId);
+    expect(props.cancelAgentMessage).toHaveBeenCalledWith(messageId);
+    expect(view.chatTurns.value).toHaveLength(1);
+    agreement.resolve(true);
+    await expect(cancelled).resolves.toBe(true);
     expect(view.chatTurns.value).toEqual([]);
-    props.session.metadata.assistant_routing_request = JSON.stringify({ ...route, status: "waiting", delivery: "failed", stopped: true });
-    const restored = await createViewWithProps({ session: props.session });
+    answer({ status: "unknown", messageId });
+    await check;
+    await nextTick();
+    expect(view.chatTurns.value).toEqual([]);
+    expect(props.conversationRuntime.delivery.find(messageId)).toBeNull();
+  });
+
+  it("Cancel of an uncertain message restored from browser storage ends on the server's agreement and stays gone after reload", async () => {
+    vi.stubGlobal("window", { sessionStorage: memoryStorage() });
+    const first = await createViewWithProps();
+    const route = { messageId: "stored-1", status: "waiting", delivery: "uncertain", input: { message: "Say OK." }, assignments: {} };
+    first.props.session.metadata.assistant_routing_request = JSON.stringify(route);
+    first.props.conversationRuntime.delivery.state.messages.push({ id: "stored-1", text: "Say OK.", payload: route.input, status: "pending" });
+    await nextTick();
+    first.scope.stop();
+    const restored = await createViewWithProps({ session: first.props.session });
+    restored.props.cancelAgentMessage = serverCancel(restored.props);
+    expect(restored.view.chatTurns.value[0].optimistic.status).toBe("uncertain");
+    await expect(restored.view.cancelOptimisticMessage("stored-1")).resolves.toBe(true);
     expect(restored.view.chatTurns.value).toEqual([]);
+    expect(restored.view.composerDraft.value).toBe("");
+    expect(window.sessionStorage.contents()).not.toContain("stored-1");
+    restored.scope.stop();
+    const reloaded = await createViewWithProps({ session: first.props.session });
+    expect(reloaded.view.chatTurns.value).toEqual([]);
+    expect(reloaded.view.composerDraft.value).toBe("");
+    expect(reloaded.props.sendAgentMessage).not.toHaveBeenCalled();
+  });
+
+  it("Cancel leaves a pending message in the chat while the server has not agreed", async () => {
+    const { view, props } = await createViewWithProps({ cancelAgentMessage: vi.fn(async () => false) });
+    props.conversationRuntime.delivery.state.messages.push({ id: "pending-1", text: "Wait.", payload: { message: "Wait." }, status: "pending" });
+    expect(view.chatTurns.value).toHaveLength(1);
+    await expect(view.cancelOptimisticMessage("pending-1")).resolves.toBe(false);
+    expect(props.cancelAgentMessage).toHaveBeenCalledWith("pending-1");
+    expect(view.chatTurns.value).toHaveLength(1);
   });
 
   it("lets explicit Cancel discard a failed routing bubble without restoring its draft", async () => {
     const { view, props } = await createViewWithProps({ sendAgentMessage: vi.fn().mockRejectedValue(new Error("Router failed")) });
+    props.cancelAgentMessage = serverCancel(props);
     view.composerDraft.value = "Discard this.";
     await view.submitComposerMessage();
     const messageId = props.sendAgentMessage.mock.calls[0][0].messageId;
     props.session.metadata.assistant_routing_request = JSON.stringify({ messageId, status: "waiting", delivery: "failed", input: { message: "Discard this." } });
-    props.interruptAgentTurn.mockImplementation(async () => {
-      props.session.metadata.assistant_routing_request = JSON.stringify({ messageId, status: "waiting", delivery: "failed", stopped: true, helper: null });
-      await nextTick();
-      return true;
-    });
+    // The server's stopped route arrives while the message is still shown;
+    // a cancelled route, unlike Stop, never returns it to the draft.
     await expect(view.cancelOptimisticMessage(messageId)).resolves.toBe(true);
     expect(view.composerDraft.value).toBe("");
     expect(view.chatTurns.value).toEqual([]);
@@ -378,12 +455,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     first.props.session.metadata.assistant_routing_request = JSON.stringify({
       messageId, status: "waiting", delivery: "failed", input: { message: "x".repeat(32_001) }
     });
-    first.props.interruptAgentTurn.mockImplementation(async () => {
-      first.props.session.metadata.assistant_routing_request = JSON.stringify({
-        messageId, status: "waiting", delivery: "failed", stopped: true, helper: null
-      });
-      return true;
-    });
+    first.props.cancelAgentMessage = serverCancel(first.props);
     await expect(first.view.cancelOptimisticMessage(messageId)).resolves.toBe(true);
     expect(first.view.chatTurns.value).toEqual([]);
     first.scope.stop();
@@ -393,28 +465,36 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(restored.props.sendAgentMessage).not.toHaveBeenCalled();
   });
 
-  it("hides Cancel immediately and restores the bubble when routing cancellation fails", async () => {
-    const cancellation = deferredResult();
-    const { view, props } = await createViewWithProps({ interruptAgentTurn: vi.fn(() => cancellation.promise) });
+  it("keeps a bubble shown only from its route until the server agrees, and Cancel can be pressed again", async () => {
+    const { view, props } = await createViewWithProps();
+    const answers = [deferredResult(), deferredResult()];
+    props.cancelAgentMessage = serverCancel(props, () => answers[props.cancelAgentMessage.mock.calls.length - 1].promise);
     props.session.metadata.assistant_routing_request = JSON.stringify({ messageId: "cancel-now", status: "waiting", delivery: "failed", input: { message: "Cancel me." } });
     expect(view.chatTurns.value).toHaveLength(1);
-    const cancelled = view.cancelOptimisticMessage("cancel-now");
+    const first = view.cancelOptimisticMessage("cancel-now");
+    // The delivery now holds it, so it shows Cancelling… and Cancel again.
+    expect(props.conversationRuntime.delivery.find("cancel-now")).toMatchObject({ text: "Cancel me." });
+    expect(view.chatTurns.value).toHaveLength(1);
+    answers[0].resolve(false);
+    expect(await first).toBe(false);
+    expect(view.chatTurns.value).toHaveLength(1);
+    const second = view.cancelOptimisticMessage("cancel-now");
+    answers[1].resolve(true);
+    expect(await second).toBe(true);
     expect(view.chatTurns.value).toEqual([]);
-    cancellation.resolve(false);
-    expect(await cancelled).toBe(false);
-    expect(view.chatTurns.value[0].user.text).toBe("Cancel me.");
   });
 
   it("dismisses an orphaned uncertain attempt without interrupting a newer goal or deleting its receipt", async () => {
     const { view, props } = await createViewWithProps();
+    props.cancelAgentMessage = serverCancel(props);
     const delivery = props.conversationRuntime.delivery;
     delivery.state.messages.push({ id: "old-attempt", text: "Hello?", payload: { message: "Hello?" }, status: "uncertain" });
     props.session.metadata.assistant_routing_request = JSON.stringify({ messageId: "newer", status: "working", delivery: "accepted", input: { message: "Continue" } });
     expect(view.chatTurns.value).toHaveLength(1);
-    const cancelled = view.cancelOptimisticMessage("old-attempt");
+    expect(await view.cancelOptimisticMessage("old-attempt")).toBe(true);
     expect(view.chatTurns.value).toEqual([]);
-    expect(await cancelled).toBe(true);
     expect(props.interruptAgentTurn).not.toHaveBeenCalled();
+    expect(JSON.parse(props.session.metadata.assistant_routing_request).stopped).toBeUndefined();
     props.conversationLog.turns = [{ turnId: "receipt", user: { messageId: "old-attempt", text: "Hello?" } }];
     await nextTick();
     expect(view.chatTurns.value[0].user.text).toBe("Hello?");
@@ -3715,9 +3795,8 @@ it("checks a local uncertain receipt and retries a conflicting failed route only
     const [turn] = view.chatTurns.value;
     expect(turn.optimistic).toMatchObject({ id: messageId, status: "uncertain" });
     expect(turn.system.delivery).toMatchObject({ messageId, error: "Internal server error." });
-    await expect(view.cancelOptimisticMessage(messageId)).resolves.toBe(false);
     await expect(view.editOptimisticMessage(messageId)).resolves.toBe(false);
-    expect(props.interruptAgentTurn).toHaveBeenCalledTimes(1);
+    expect(props.interruptAgentTurn).not.toHaveBeenCalled();
     expect(runtime.delivery.find(messageId)?.status).toBe("uncertain");
     expect(view.composerDraft.value).toBe("A separate unsent draft.");
 

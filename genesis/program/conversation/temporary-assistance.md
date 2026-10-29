@@ -130,8 +130,20 @@ replayed; an unreadable or absent receipt remains uncertain. Only the native
 owner's proof of non-admission (`not-admitted`, from Claude) makes the routed
 attempt unsent: routing clears its attempt and reports `not-sent`, and a
 changeover holding the same attempt settles it through its own owner. Retry
-then sends it normally. Cancel on an unconfirmed message stops the chat,
-inspects it, and removes it only when it was accepted or proven not sent.
+then sends it normally. Cancel is decided by the server: JSKIT's delivery cancel
+aborts a running check and an unsent request, keeps the message as
+Cancelling… and calls `POST …/deliveries/:messageId/cancel`, which reaches
+`cancelTemporaryConversationMessage` without opening the native conversation.
+The shared routing `cancelMessage` records a durable tombstone, stops that
+chat's route (`stopped` and `cancelled`) and classifier, and interrupts the
+chat's persistent turn when the message may own it, all without the
+agent-write lock, then answers success. Discarding the retained changeover
+attempt waits for the lock in the background, or for the next admission.
+Snapshots, inspection (`cancelled`) and admission all honour the tombstone, so
+the message never returns. A message shown only from its route joins the
+delivery first, and a cancelled route never returns its text to the draft.
+When the server cannot be reached the message stays with Cancel again and is
+retried after reconnecting; accepted history remains.
 Accepted Claude steering retains the original input identity on partial output.
 The shared scoped reader resolves native input identities against authored
 messages and uses the existing transcript turn IDs when saving replies. A

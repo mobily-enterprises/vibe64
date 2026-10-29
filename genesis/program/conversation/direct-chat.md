@@ -1426,11 +1426,22 @@ admission. Canonical acceptance wins first. Missing routing or continuity fields
 alone remain unknown; follow-up aliases cannot turn an earlier input into not-sent.
 An uncertain or attempted route becomes failed only on the native owner's proof
 of non-admission; inspection then reports not-sent and a retry dispatches it
-normally. Main's Cancel on the route's unconfirmed message interrupts the turn
-when its receipt is unknown and re-inspects once; it removes the message only
-when proven not sent. Retry resends after that proof even when the route is
-failed. An orphaned local attempt keeps its dismissal without stopping a newer
-turn.
+normally. Main's Cancel is decided by the server. JSKIT's delivery cancel aborts
+a running check and an unsent request, shows Cancelling… and calls
+`POST …/deliveries/:messageId/cancel`, which reaches `cancelAgentMessage`
+without opening the native conversation. Routing `cancelMessage` records a
+durable tombstone (`assistant_cancelled_messages`), stops the route (`stopped`
+and `cancelled`) and its classifier, and interrupts the turn only when the
+message was attempted or accepted, or is the chat's newest message. All of
+this happens without the agent-write lock, so the answer is prompt while another
+chat's assistant starts. Discarding the native changeover attempt then runs
+under the lock in the background, or before the next admission. Reads,
+inspection (`cancelled`) and admission (`vibe64_assistant_message_cancelled`,
+not-sent) honour the tombstone. An orphaned local attempt never stops a newer
+turn. A message shown only from its route joins the delivery first, a cancelled
+route never returns its text to the draft, and an unreachable server leaves
+the message with Cancel again. Accepted history remains. Retry resends after
+proof of non-admission even when the route is failed.
 
 Main’s composer allows attachment uploads and submission during a steerable
 active turn, using the existing attachment identities and receipt handling.
@@ -1925,7 +1936,7 @@ Live dispatch remains `sending` (or its review/planning equivalent) while its
 attempted message ID and native thread are persisted before submission. An
 interrupted attempt becomes `uncertain`; ordinary pending delivery never renders
 as failure. The shared Main/temporary adapter presents unconfirmed delivery with
-Retry and hides Edit/Cancel until the outcome is known. A same-message
+Retry and Cancel, and hides Edit until the outcome is known. A same-message
 local uncertain receipt survives a conflicting saved failed routing projection;
 its Retry action first inspects the common receipt before resubmission.
 Live server routing keeps its original pending ownership. Checking reuses
@@ -4215,11 +4226,12 @@ separate. Goal refreshes follow initial state, native events and reconnects;
 window focus and visibility alone perform no goal read.
 
 Main-chat Retry inspects uncertain message IDs before replay and reconciles
-accepted receipts. Cancel immediately hides the local attempt while the existing
-routing cancellation completes, restoring it on failure. Orphaned local attempts
-can be dismissed without interrupting newer work or removing canonical history.
-The shared transcript exposes uncertain-message Cancel only for adapters with
-an explicit `cancellableDelivery` capability and application cancellation action.
+accepted receipts. Cancel keeps the local attempt, shown as Cancelling…, until
+the server's delivery cancel agrees; it never hides a message on the browser's
+own authority. Orphaned local attempts can be dismissed without interrupting
+newer work or removing canonical history. The shared transcript exposes
+uncertain-message Cancel only for adapters with an explicit
+`cancellableDelivery` capability and application cancellation action.
 
 The shared transcript interleaves timestamped messages across saved and native
 streaming turns, including steering messages sent during a native turn. Equal

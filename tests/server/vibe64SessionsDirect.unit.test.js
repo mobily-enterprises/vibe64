@@ -56,7 +56,7 @@ import {
 import { createMainBrowserConversations } from "../../packages/vibe64-sessions/src/server/mainBrowserConversations.js";
 import { createAssistantRouting } from "../../packages/vibe64-terminals/src/server/assistantRouting.js";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
-import { mainConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
+import { mainConversationId, temporaryConversationId } from "../../packages/vibe64-sessions/src/shared/conversationIdentity.js";
 import {
   developmentDatabasePolicy
 } from "../../packages/vibe64-project/src/server/developmentDatabasePolicy.js";
@@ -827,6 +827,40 @@ test("Main browser plain messages leave the turn expectation to Routing; explici
   await conversation.send({ messageId: "steer", text: "Also check tests", steer: true });
   assert.equal(Object.hasOwn(sent[0], "submissionKind"), false, "a running turn must not bounce the person's message");
   assert.equal(sent[1].submissionKind, "steer");
+});
+
+test("Main and temporary browser Cancel reach their chat's cancel without opening the native conversation", async () => {
+  const target = { projectSlug: "test-project", sessionId: "session-1" };
+  const calls = [];
+  const conversations = createMainBrowserConversations({
+    actions: { async execute(request) {
+      assert.equal(request.actionId, ACTION_READ_CONVERSATION_CONTEXT);
+      return { actor: { id: "owner" }, user: { id: "owner" }, project: { projectSlug: target.projectSlug } };
+    } },
+    terminals: {
+      openBrowserConversation() { assert.fail("Cancel must not open or wait on the native conversation."); },
+      openTemporaryBrowserConversation() { assert.fail("Cancel must not open or wait on the native conversation."); },
+      async cancelAgentMessage(sessionId, input, options) {
+        calls.push({ chat: "main", sessionId, input, actor: options.browserAuthority.actorId });
+        return { ok: true, cancelled: true, messageId: input.messageId, interrupted: false };
+      },
+      async cancelTemporaryConversationMessage(sessionId, input, options) {
+        calls.push({ chat: "temporary", sessionId, input, actor: options.browserAuthority.actorId });
+        return { ok: true, cancelled: true, messageId: input.messageId, interrupted: true };
+      }
+    }
+  });
+  const main = await conversations.open({ id: mainConversationId(target), context: { surface: "app", channel: "internal" } });
+  assert.deepEqual(await main.cancelDelivery({ messageId: "unconfirmed" }),
+    { ok: true, cancelled: true, messageId: "unconfirmed", interrupted: false });
+  const temporary = await conversations.open({ id: temporaryConversationId({ ...target, conversationId: "chat" }),
+    context: { surface: "app", channel: "internal" } });
+  assert.deepEqual(await temporary.cancelDelivery({ messageId: "pending" }),
+    { ok: true, cancelled: true, messageId: "pending", interrupted: true });
+  assert.deepEqual(calls, [
+    { chat: "main", sessionId: "session-1", input: { messageId: "unconfirmed" }, actor: "owner" },
+    { chat: "temporary", sessionId: "session-1", input: { conversationId: "chat", messageId: "pending" }, actor: "owner" }
+  ]);
 });
 
 test("failed assistant delivery is published as failed, not accepted", async () => {

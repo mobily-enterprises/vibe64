@@ -60,6 +60,12 @@ export async function rememberAssistantBeforeChangeover({ runtime, session }, en
   await changeoverFor(runtime.store, session.sessionId).remember({ engineId, messages });
 }
 
+// Cancel drops the message's pending native attempt, so no later send replays it
+// or waits on its receipt. The caller holds the agent-write lock.
+export function discardAssistantChangeoverMessage(sessionId, messageId, context) {
+  return changeoverFor(context.runtime.store, sessionId, { context }).discard({ messageId });
+}
+
 export async function sendWithAssistantChangeover(sessionId, input, context, agent, log = () => {}, initialMessages = []) {
   requireCompletedConversationRewind(context.session);
   const store = context.runtime.store;

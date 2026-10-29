@@ -1,6 +1,6 @@
-import { chatTurnsWithRouting, draftWithRestoredMessage, routedChatMessage } from "@/lib/vibe64ChatDelivery.js";
+import { chatTurnsWithRouting, draftWithRestoredMessage, routedChatMessage, trackRoutedMessage } from "@/lib/vibe64ChatDelivery.js";
 import { assistantRoutingRequestForDisplay, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced } from "@local/vibe64-runtime/shared/assistantRouting";
-import { computed, inject, reactive, ref, unref, watch } from "vue";
+import { computed, inject, ref, unref, watch } from "vue";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { useRouter } from "vue-router";
 import {
@@ -376,7 +376,6 @@ function useVibe64AutopilotView(props, emit, {
   });
   const composerRetrySubmission = computed(() => props.conversationRuntime?.draftRetry.value || null);
   const messageDelivery = computed(() => props.conversationRuntime?.delivery || null);
-  const discardingMessageIds = reactive(new Set());
   const composerSending = computed(() => messageDelivery.value?.state.sending === true);
   const composerQueueing = computed(() => props.conversationRuntime?.queueWhileSending.value === true);
   const composerStartupQueueing = computed(() => composerQueueing.value && composerSending.value &&
@@ -390,7 +389,8 @@ function useVibe64AutopilotView(props, emit, {
     messageDelivery.value?.find(routingRequest.value.messageId)?.status === "pending");
   function restoreCancelledMessage(messageId) {
     const message = messageDelivery.value?.find(messageId);
-    if (!message || discardingMessageIds.has(messageId) ||
+    // A Cancel in progress owns its message; only Stop returns one to the draft.
+    if (!message || message.cancelling || message.cancelError ||
         !unmatchedOptimisticMessages(props.conversationLog?.turns, [message]).length) return;
     composerDraft.value = draftWithRestoredMessage(message.payload.draftSnapshot || message.text, composerDraft.value);
     messageDelivery.value?.remove(messageId);
@@ -763,39 +763,17 @@ function useVibe64AutopilotView(props, emit, {
     return (request?.messageId === messageId && routedChatMessage(request, local)) || local;
   }
 
+  // Cancel means cancel, and the server decides: the message stays, shown as
+  // Cancelling…, until the server records the cancel, which also stops its
+  // route and any turn it started. When the server cannot be reached the
+  // message stays with Cancel again. Accepted history remains the transcript's.
   async function cancelOptimisticMessage(messageId = "") {
     const message = optimisticMessageById(messageId);
-    if (!message || message.status === "accepted" || message.checking || discardingMessageIds.has(messageId)) return false;
-    const delivery = messageDelivery.value;
-    const runtime = props.conversationRuntime;
-    const routed = routingRequest.value?.messageId === messageId;
-    discardingMessageIds.add(messageId);
-    try {
-      // The request's own message is removed only once its receipt proves it
-      // was never sent. While that is unknown, Cancel stops the turn and checks
-      // once more. An orphaned local attempt can be dismissed without stopping a
-      // newer turn. Accepted history remains owned by the transcript.
-      let interrupted = false;
-      if (message.status === "uncertain") {
-        let receipt = await runtime.inspectDelivery(messageId);
-        if (routed && !["accepted", "not-sent"].includes(receipt?.status)) {
-          if (runtime !== props.conversationRuntime || await props.interruptAgentTurn({ reason: "cancel-routing" }) === false) return false;
-          interrupted = true;
-          receipt = await runtime.inspectDelivery(messageId);
-        }
-        if (receipt?.status === "accepted") return true;
-        if (routed && (receipt?.status !== "not-sent" || receipt.messageId !== messageId)) return false;
-      }
-      if (runtime !== props.conversationRuntime) return false;
-      if (routed && !interrupted && routingRequest.value?.messageId === messageId &&
-          await props.interruptAgentTurn({ reason: "cancel-routing" }) === false) return false;
-      if (message.status === "pending" && await props.cancelAgentMessage(messageId) === false) return false;
-      if (composerRetrySubmission.value?.messageId === messageId) settleComposerRetry(composerRetrySubmission.value);
-      delivery?.remove(messageId);
-      return true;
-    } finally {
-      discardingMessageIds.delete(messageId);
-    }
+    if (!message || message.status === "accepted") return false;
+    trackRoutedMessage(messageDelivery.value, message, props.conversationLog?.turns);
+    if (await props.cancelAgentMessage(messageId) !== true) return false;
+    if (composerRetrySubmission.value?.messageId === messageId) settleComposerRetry(composerRetrySubmission.value);
+    return true;
   }
 
   async function editOptimisticMessage(messageId = "") {
@@ -882,7 +860,7 @@ function useVibe64AutopilotView(props, emit, {
       messageDelivery.value.turns(Array.isArray(props.conversationLog?.turns) ? props.conversationLog.turns : []),
       routingRequest.value,
       composerSending.value
-    ).filter(turn => !turn.optimistic || !discardingMessageIds.has(turn.optimistic.id));
+    );
   });
   const emptyConversationWelcome = computed(() => (
     sessionId.value &&
@@ -993,7 +971,7 @@ function useVibe64AutopilotView(props, emit, {
   });
 
   watch([routingRequest, () => messageDelivery.value?.state.messages || []], ([request]) => {
-    if (request?.stopped && !request.helper && !request.attemptedMessageId) {
+    if (request?.stopped && !request.cancelled && !request.helper && !request.attemptedMessageId) {
       restoreCancelledMessage(request.messageId);
     }
   }, { immediate: true });

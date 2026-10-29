@@ -76,6 +76,29 @@ async function runningTemporaryAi() {
   return fixture;
 }
 
+// The conversation runtime's Cancel as the server answers it: the runtime marks
+// the message cancelling, and on agreement the server's stopped route arrives
+// and the runtime drops the message. Otherwise the message stays.
+function serverCancel(temporary, taskId, answer = () => true) {
+  const task = temporary.activeTask.value;
+  const cancel = vi.fn(async (messageId) => {
+    const message = task.delivery.find(messageId);
+    if (!message) return false;
+    message.cancelling = true;
+    const agreed = await answer();
+    message.cancelling = false;
+    if (agreed !== true) return false;
+    const current = temporary.activeTask.value;
+    const route = JSON.parse(current.routingMetadata?.assistant_routing_request || "null");
+    if (route?.messageId === messageId) current.routingMetadata = { assistant_routing_request:
+      JSON.stringify({ ...route, status: "waiting", stopped: true, cancelled: true }) };
+    task.delivery.remove(messageId);
+    return true;
+  });
+  task.binding.runtime.value.cancelMessage = cancel;
+  return cancel;
+}
+
 describe("useVibe64TemporaryAi", () => {
   beforeAll(async () => { await import("../../src/composables/useVibe64TemporaryAi.js"); }, 30_000);
   beforeEach(() => {
@@ -330,7 +353,7 @@ describe("useVibe64TemporaryAi", () => {
     const temporary = await mountTemporaryAi({ assistantReady: () => true });
     await flushPromises();
     const task = temporary.activeTask.value;
-    mocks.responses.push({ ok: true, status: "interrupted" });
+    serverCancel(temporary, task.id);
     expect(await temporary.editMessage(task.id, route.messageId)).toBe(true);
     expect(temporary.activeTask.value.draft).toBe("Fix the build.\n\nAlso the tests.");
   });
@@ -354,33 +377,86 @@ describe("useVibe64TemporaryAi", () => {
     expect(temporary.activeTask.value.delivery.state.messages).toHaveLength(0);
   });
 
-  it("Cancel stops an unconfirmed request and removes it only once the server proves it was never sent", async () => {
-    const route = { messageId: "interrupted-1", status: "uncertain", delivery: "uncertain", input: { message: "Original prompt.", displayMessage: "Original prompt." } };
-    const saved = value => ({ assistant_routing_request: JSON.stringify({ ...route, ...value }) });
-    mocks.responses.push({ conversations: [{ conversationId: createdId, status: "uncertain", messages: [],
-      draft: "Newer draft.", routingMetadata: saved({}) }] });
-    const temporary = await mountTemporaryAi({ assistantReady: () => true });
+  for (const [answer, server] of [
+    ["agrees", () => true],
+    ["does not agree or cannot be reached", () => false],
+    ["has not answered", () => new Promise(() => {})]
+  ]) {
+    it(`Cancel keeps an unconfirmed routed request until the server agrees: the server ${answer}`, async () => {
+      const route = { messageId: "interrupted-1", status: "uncertain", delivery: "uncertain", input: { message: "Original prompt.", displayMessage: "Original prompt." } };
+      mocks.responses.push({ conversations: [{ conversationId: createdId, status: "uncertain", messages: [],
+        draft: "Newer draft.", routingMetadata: { assistant_routing_request: JSON.stringify(route) } }] });
+      const temporary = await mountTemporaryAi({ assistantReady: () => true });
+      await flushPromises();
+      const task = temporary.activeTask.value;
+      expect(task.delivery.find(route.messageId)?.status).toBe("uncertain");
+      const cancel = serverCancel(temporary, task.id, server);
+      const before = mocks.requests.length;
+      const cancelled = temporary.cancelMessage(task.id, route.messageId);
+      await flushPromises();
+      expect(cancel).toHaveBeenCalledExactlyOnceWith(route.messageId);
+      if (answer !== "has not answered") await expect(cancelled).resolves.toBe(answer === "agrees");
+      await flushPromises();
+      // Nothing leaves the chat on the browser's own authority.
+      expect(Boolean(temporary.activeTask.value.delivery.find(route.messageId))).toBe(answer !== "agrees");
+      // The server stops the route and its turn; the chat never sends Stop itself.
+      const after = mocks.requests.slice(before).map(([path]) => path);
+      expect(after.some(path => path.endsWith("/cancel") || path.includes("/inspect") || path.endsWith("/messages"))).toBe(false);
+      expect(temporary.activeTask.value.draft).toBe("Newer draft.");
+    });
+  }
+
+  it("Cancel during a send leaves the message to the server's answer instead of returning it to the draft", async () => {
+    const { task, temporary } = await temporaryAiWithDraft();
+    const sendAnswer = Promise.withResolvers();
+    mocks.responses.push({ ok: true, conversationId: createdId }, () => sendAnswer.promise);
+    const sending = temporary.send(task.id);
     await flushPromises();
-    const task = temporary.activeTask.value;
-    expect(task.delivery.find(route.messageId)?.status).toBe("uncertain");
-    const inspections = () => mocks.requests.filter(([path]) => path.includes(`/deliveries/${route.messageId}/inspect`));
-    // Stopping reloads the chat before the receipt is inspected.
-    const stop = () => [{ ok: true, status: "interrupted", routingMetadata: saved({ stopped: true }) }, {}];
-    mocks.responses.push(...stop(), { status: "unknown", messageId: route.messageId });
-    expect(await temporary.cancelMessage(task.id, route.messageId)).toBe(false);
+    const [message] = temporary.activeTask.value.delivery.state.messages;
+    temporary.updateDraft(task.id, "Newer draft.");
+    const agreement = Promise.withResolvers();
+    serverCancel(temporary, task.id, () => agreement.promise);
+    const cancelled = temporary.cancelMessage(task.id, message.id);
     await flushPromises();
-    expect(inspections()).toHaveLength(1);
-    expect(temporary.activeTask.value.error).toContain("still not confirmed");
-    expect(temporary.activeTask.value.delivery.find(route.messageId)?.status).toBe("uncertain");
-    mocks.responses.push(...stop(), { status: "not-sent", messageId: route.messageId, error: "This request was not sent.",
-      routingMetadata: saved({ status: "waiting", delivery: "failed", stopped: true }) });
-    expect(await temporary.cancelMessage(task.id, route.messageId)).toBe(true);
-    await flushPromises();
-    expect(inspections()).toHaveLength(2);
-    expect(temporary.activeTask.value.delivery.find(route.messageId)).toBeNull();
-    expect(temporary.activeTask.value.error).toBe("");
+    // The server stopped the routing it owned while the Cancel was in progress.
+    sendAnswer.reject(Object.assign(new Error("Routing cancelled."), { code: "vibe64_assistant_routing_cancelled" }));
+    await expect(sending).resolves.toBe(false);
     expect(temporary.activeTask.value.draft).toBe("Newer draft.");
-    expect(mocks.requests.some(([path]) => path.endsWith("/messages"))).toBe(false);
+    expect(temporary.activeTask.value.delivery.find(message.id)).not.toBeNull();
+    agreement.resolve(true);
+    await expect(cancelled).resolves.toBe(true);
+    expect(temporary.activeTask.value.delivery.find(message.id)).toBeNull();
+    expect(temporary.activeTask.value.draft).toBe("Newer draft.");
+  });
+
+  it("Cancel of a message whose send failed with HTTP 500 works while Checking… runs and never stops newer work", async () => {
+    const { task, temporary } = await temporaryAiWithDraft();
+    mocks.responses.push({ ok: true, conversationId: createdId },
+      () => { throw Object.assign(new Error("Internal server error."), { status: 500 }); });
+    await temporary.send(task.id);
+    await flushPromises();
+    const [message] = temporary.activeTask.value.delivery.state.messages;
+    expect(message.status).toBe("uncertain");
+    // A newer request owns the chat now; Cancel on the old message must not stop it.
+    const newer = { messageId: "newer", status: "working", delivery: "accepted", input: { message: "Later." } };
+    temporary.activeTask.value.routingMetadata = { assistant_routing_request: JSON.stringify(newer) };
+    let answer;
+    mocks.responses.push(() => new Promise(resolve => { answer = resolve; }));
+    const check = temporary.activeTask.value.binding.runtime.value.inspectDelivery(message.id);
+    await flushPromises();
+    expect(temporary.activeTask.value.delivery.find(message.id)?.checking).toBe(true);
+    const cancel = serverCancel(temporary, task.id);
+    const before = mocks.requests.length;
+    await expect(temporary.cancelMessage(task.id, message.id)).resolves.toBe(true);
+    expect(cancel).toHaveBeenCalledExactlyOnceWith(message.id);
+    expect(temporary.activeTask.value.delivery.find(message.id)).toBeNull();
+    expect(mocks.requests.slice(before).some(([path]) => path.endsWith("/cancel"))).toBe(false);
+    expect(JSON.parse(temporary.activeTask.value.routingMetadata.assistant_routing_request).stopped).toBeUndefined();
+    answer({ status: "unknown", messageId: message.id });
+    await check;
+    await flushPromises();
+    expect(temporary.activeTask.value.delivery.find(message.id)).toBeNull();
+    expect(temporary.activeTask.value.error).toBe("");
   });
 
   it("ignores a late HTTP failure after the exact temporary message receipt arrives", async () => {

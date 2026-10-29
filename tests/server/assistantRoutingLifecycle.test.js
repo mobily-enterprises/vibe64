@@ -1619,3 +1619,113 @@ test("routing cancellation bounds a stalled cleanup and preserves custody for re
   await f.service.cancel("session-1", f.context, { waitForCleanup: true, expectedMessageId: request.messageId });
   assert.equal(f.state().helper, null);
 });
+
+// Within a moment: a Cancel never waits for the agent-write lock.
+const promptly = (promise, ms = 1000) => Promise.race([promise,
+  new Promise((_resolve, reject) => setTimeout(() => reject(new Error("Cancel waited instead of answering.")), ms))]);
+// The lock is FIFO: once a later holder starts, everything queued before it has run.
+async function afterQueuedLockWork(f) {
+  const next = f.holdLock();
+  await next.started;
+  next.release();
+}
+
+test("Cancel answers while another chat's slow startup holds the write lock, stops the turn and settles its attempt later", async t => {
+  const f = await fixture(t, { mode: "senior" });
+  f.failAdmission();
+  await assert.rejects(f.service.send("session-1", request, f.context), /Lost admission response/);
+  assert.equal(f.state().delivery, "uncertain");
+  // A sibling chat's 13 s Claude startup holds the agent-write lock.
+  const startup = f.holdLock();
+  await startup.started;
+  let result;
+  try {
+    result = await promptly(f.service.cancelMessage("session-1", { messageId: request.messageId }, f.context));
+    assert.deepEqual(result, { ok: true, cancelled: true, messageId: request.messageId, interrupted: true });
+    assert.equal(f.interrupts.length, 1, "the turn this message may have started is interrupted at once");
+    assert.equal(f.state().stopped, true);
+    assert.equal(f.state().cancelled, true, "Cancel, unlike Stop, never returns the message to the draft");
+    assert.equal(f.state().status, "waiting");
+    assert.deepEqual(f.discards, [], "the native attempt waits for the lock");
+    assert.deepEqual(JSON.parse(f.metadata.assistant_cancelled_messages).map(({ messageId, settled }) => ({ messageId, settled })),
+      [{ messageId: request.messageId, settled: false }]);
+  } finally {
+    startup.release();
+  }
+  await afterQueuedLockWork(f);
+  assert.deepEqual(f.discards, [request.messageId], "the deferred discard completes once the lock is free");
+  assert.equal(JSON.parse(f.metadata.assistant_cancelled_messages)[0].settled, true);
+  assert.equal(await f.service.isCancelled("session-1", request.messageId, f.context), true);
+  // The message never comes back: a resend or retry of it is refused before admission.
+  f.failAdmission(false);
+  await assert.rejects(f.service.send("session-1", request, f.context),
+    { code: "vibe64_assistant_message_cancelled", statusCode: 409, delivery: "not-sent" });
+  assert.equal(f.sends.length, 1);
+  assert.equal(f.state().stopped, true);
+});
+
+test("Cancel during classification stops the classifier without the write lock", async t => {
+  const f = await fixture(t);
+  const started = Promise.withResolvers();
+  const finish = Promise.withResolvers();
+  let stops = 0;
+  f.router.respond = async () => {
+    started.resolve();
+    await finish.promise;
+    return { ok: true, text: '{"mode":"junior","reason":"implementation"}' };
+  };
+  f.agent.stopEphemeralConversation = async () => { stops++; finish.resolve(); return { ok: true }; };
+  const sending = f.service.send("session-1", request, f.context);
+  const rejected = assert.rejects(sending, { code: "vibe64_assistant_routing_cancelled" });
+  await started.promise;
+  const startup = f.holdLock();
+  await startup.started;
+  try {
+    const result = await promptly(f.service.cancelMessage("session-1", { messageId: request.messageId }, f.context));
+    assert.equal(result.ok, true);
+    assert.equal(result.interrupted, false, "an unsent message owns no turn");
+    assert.equal(stops, 1);
+    assert.equal(f.state().stopped, true);
+  } finally {
+    startup.release();
+  }
+  await rejected;
+  await afterQueuedLockWork(f);
+  assert.equal(f.sends.length, 0);
+  assert.equal(f.interrupts.length, 0);
+  assert.equal(f.state().helper, null);
+  assert.deepEqual(f.discards, [request.messageId]);
+});
+
+test("a Cancel that arrives during dispatch stops the turn the message started", async t => {
+  const f = await fixture(t, { mode: "senior" });
+  const dispatch = f.holdDispatch();
+  const sending = f.service.send("session-1", request, f.context);
+  await dispatch.started;
+  try {
+    const result = await promptly(f.service.cancelMessage("session-1", { messageId: request.messageId }, f.context));
+    assert.equal(result.interrupted, true, "its delivery was attempted, so the turn may be running");
+    assert.equal(f.state().stopped, true);
+  } finally {
+    dispatch.release();
+  }
+  await sending;
+  assert.equal(f.interrupts.length, 2, "the admitted turn is stopped again once dispatch returns");
+  assert.equal(f.state().stopped, true, "a later save keeps the request stopped");
+  assert.equal(f.state().status, "waiting");
+  await afterQueuedLockWork(f);
+  assert.deepEqual(f.discards, [request.messageId]);
+});
+
+test("Cancel of an older message never stops the newer turn", async t => {
+  const f = await fixture(t, { mode: "senior" });
+  await f.service.send("session-1", request, f.context);
+  const newer = { ...request, messageId: "request-2", message: "And the tests." };
+  await f.service.send("session-1", newer, f.context);
+  const result = await f.service.cancelMessage("session-1", { messageId: request.messageId }, f.context);
+  assert.equal(result.ok, true);
+  assert.equal(result.interrupted, false);
+  assert.equal(f.interrupts.length, 0);
+  assert.equal(f.state().messageId, newer.messageId);
+  assert.notEqual(f.state().stopped, true);
+});

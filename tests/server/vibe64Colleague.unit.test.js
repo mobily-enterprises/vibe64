@@ -2779,6 +2779,7 @@ test("every stale Colleague facade operation is fenced while the new conversatio
   await until(() => events.some(event => event.type === "application"));
   for (const operation of [() => browser.read(), () => browser.send({ messageId: "late-old-voice", text: "Old destination", data: { clientId: "browser-1" } }),
     () => browser.cancel(), () => browser.select({ assistantSelection: selection }), () => browser.inspectDelivery({ messageId: "user-1" }),
+    () => browser.cancelDelivery({ messageId: "user-1" }),
     () => browser.subscribe(() => {}), () => f.service.browserConversations.open({ id: old.conversationId, context: f.context })]) {
     await assert.rejects(operation(), { code: "ACTION_VALIDATION_FAILED" });
   }
@@ -4866,6 +4867,9 @@ test("native completed Colleague lost app acknowledgement replays only its plain
     const before = await f.native.trace();
     const receipt = await browser.inspectDelivery({ messageId: "app-ack" });
     assert.equal(receipt.status, "accepted");
+    // Cancel always answers; an accepted message stays history.
+    assert.deepEqual(await browser.cancelDelivery({ messageId: "app-ack" }),
+      { ok: true, cancelled: false, messageId: "app-ack", status: "accepted" });
     const duplicate = await browser.send({ messageId: "app-ack", text: "Keep this request once.", data: { clientId: "browser-1" } });
     assert.equal(duplicate.status, "accepted");
     assert.equal(duplicate.turnId, receipt.turnId);

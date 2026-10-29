@@ -1989,6 +1989,66 @@ test("temporary canonical inspection recovers the original foreign receipt befor
 });
 
 
+test("a stopped temporary request whose delivery is unknown is no longer reported unconfirmed", async () => {
+  await withTemporaryRoot(async root => {
+    const f = await temporaryChangeoverFixture(root);
+    f.failures.loseAdmission = true;
+    await assert.rejects(f.send("junior", "lost"), /Lost native admission reply/);
+    f.failures.read = false;
+    const read = async () => (await f.service.conversationBinding("one", { ...f.options, temporaryConversationId: "chat",
+      runtime: f.runtime, session: await f.runtime.getSession("one") })).read(f.options);
+    assert.equal((await read()).status, "unconfirmed");
+    await f.service.cancelTemporaryConversationRouting("one", { conversationId: "chat", messageId: "lost" }, f.options);
+    const route = JSON.parse((await f.record()).routingMetadata.assistant_routing_request);
+    assert.equal(route.stopped, true);
+    assert.equal(route.delivery, "uncertain", "Stopping does not invent a delivery outcome");
+    const after = await read();
+    assert.notEqual(after.status, "unconfirmed");
+    assert.equal(after.pendingRequest, null, "Cancel's message is not restored from the snapshot");
+    await f.service.close();
+  });
+});
+
+test("Cancel of an unconfirmed temporary message answers while a sibling chat holds the write lock and it never comes back", async () => {
+  await withTemporaryRoot(async root => {
+    const f = await temporaryChangeoverFixture(root);
+    f.failures.loseAdmission = true;
+    await assert.rejects(f.send("junior", "lost"), /Lost native admission reply/);
+    f.failures.read = false;
+    const read = async () => (await f.service.conversationBinding("one", { ...f.options, temporaryConversationId: "chat",
+      runtime: f.runtime, session: await f.runtime.getSession("one") })).read(f.options);
+    assert.equal((await read()).status, "unconfirmed");
+    // A sibling chat's slow Claude startup holds the session's agent-write lock.
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    const startup = f.store.runSessionExclusive("one", "agent-write-mode", async () => { entered.resolve(); await release.promise; },
+      { operation: "claude-startup", waitMs: 1000 });
+    await entered.promise;
+    try {
+      const result = await Promise.race([
+        f.service.cancelTemporaryConversationMessage("one", { conversationId: "chat", messageId: "lost" }, f.options),
+        new Promise((_resolve, reject) => setTimeout(() => reject(new Error("Cancel waited for the write lock.")), 2000))
+      ]);
+      assert.deepEqual(result, { ok: true, cancelled: true, messageId: "lost", interrupted: true });
+      assert.equal(f.calls.stops.length, 1, "the turn this message may have started is stopped at once");
+      const route = JSON.parse((await f.record()).routingMetadata.assistant_routing_request);
+      assert.equal(route.stopped, true);
+      const after = await read();
+      assert.notEqual(after.status, "unconfirmed");
+      assert.equal(after.pendingRequest, null, "the snapshot never offers it again, even before the native attempt is discarded");
+      assert.deepEqual(await f.service.inspectTemporaryConversationDelivery("one", { conversationId: "chat", messageId: "lost" }, f.options),
+        { status: "cancelled", messageId: "lost" });
+    } finally {
+      release.resolve();
+      await startup;
+    }
+    await assert.rejects(f.service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "lost", message: "Request lost" }, f.options),
+      { code: "vibe64_assistant_message_cancelled", delivery: "not-sent" });
+    assert.equal(f.calls.starts.length, 1, "a cancelled message is never sent again");
+    await f.service.close();
+  });
+});
+
 test("a temporary message the AI proved it never received is not sent and leaves no unconfirmed request", async () => {
   await withTemporaryRoot(async root => {
     const f = await temporaryChangeoverFixture(root);

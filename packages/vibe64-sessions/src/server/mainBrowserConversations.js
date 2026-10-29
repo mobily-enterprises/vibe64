@@ -66,17 +66,17 @@ function createMainBrowserConversations({ actions, terminals } = {}) {
         if (current.actor.id !== actorId) throw unavailable();
         return current;
       }
-      async function withConversation(operation) {
+      async function withTerminals(operation) {
         const current = await currentAccess();
-        return runWithProjectRequestContext({ ...current.project, vibe64User: current.user }, async () => {
-          const options = {
-            vibe64User: current.user,
-            browserAuthority: { ...target, actorId, requestContext }
-          };
-          const conversation = await (temporary ? terminals.openTemporaryBrowserConversation(target.sessionId, target.conversationId, options)
-            : terminals.openBrowserConversation(target.sessionId, options));
-          return operation(conversation);
-        });
+        return runWithProjectRequestContext({ ...current.project, vibe64User: current.user }, () => operation({
+          vibe64User: current.user,
+          browserAuthority: { ...target, actorId, requestContext }
+        }));
+      }
+      function withConversation(operation) {
+        return withTerminals(async options => operation(await (temporary
+          ? terminals.openTemporaryBrowserConversation(target.sessionId, target.conversationId, options)
+          : terminals.openBrowserConversation(target.sessionId, options))));
       }
       async function execute(actionId, input = {}) {
         await currentAccess();
@@ -108,6 +108,12 @@ function createMainBrowserConversations({ actions, terminals } = {}) {
           return operationResult(await execute(ACTION_UPDATE_ASSISTANT_SELECTION, pickFields(input, selectionFields)));
         },
         async inspectDelivery(input) { return withConversation(conversation => conversation.inspectDelivery(input)); },
+        // Cancel of one message never opens the native conversation or waits for its lock.
+        async cancelDelivery(input) {
+          return withTerminals(options => temporary
+            ? terminals.cancelTemporaryConversationMessage(target.sessionId, { conversationId: target.conversationId, messageId: input.messageId }, options)
+            : terminals.cancelAgentMessage(target.sessionId, { messageId: input.messageId }, options));
+        },
         async readGoal() { return temporary ? withConversation(conversation => conversation.readGoal()) : execute(ACTION_READ_CANONICAL_AGENT_GOAL); },
         async updateGoal(input) { return temporary ? withConversation(conversation => conversation.updateGoal(input)) : execute(ACTION_UPDATE_CANONICAL_AGENT_GOAL, input); },
         async subscribe(listener) {

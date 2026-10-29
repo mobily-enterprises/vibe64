@@ -50,7 +50,7 @@ import {
   prepareSessionConversationStorage,
   CLAUDE_PREPARATION_DELIVERY_STAGES
 } from "./mainConversationBinding.js";
-import { closeAssistantForChangeover, rememberAssistantBeforeChangeover, replaceNativeConversation, requireCompletedConversationRewind, requireCompletedNativeConversationReplacement } from "./assistantChangeover.js";
+import { closeAssistantForChangeover, discardAssistantChangeoverMessage, rememberAssistantBeforeChangeover, replaceNativeConversation, requireCompletedConversationRewind, requireCompletedNativeConversationReplacement } from "./assistantChangeover.js";
 import { createSessionAttachments } from "./sessionAttachments.js";
 import { createProviderUsage } from "./providerUsage.js";
 import {
@@ -1041,6 +1041,13 @@ function createService({
     },
     publish: publishAgentSessionChanged,
     prepareSelection: prepareRoutingSelection,
+    open: (sessionId, options) => readAssistantSession(sessionId, options),
+    // Stop's interrupt: goal continuation pauses, then the native turn stops.
+    async interrupt(sessionId, context) {
+      await stopGoalIntent(sessionId, await assistantSessionOptions(sessionId, context)).catch(() => {});
+      return sessionAgent.interruptTurn(sessionId, { reason: "cancel-message" }, context);
+    },
+    discardPending: discardAssistantChangeoverMessage,
     // The Save owner supplies what follows a completed plan (automatic save).
     onPlanCompleted: (sessionId, input) => planCompleted?.(sessionId, input) || "",
     onTiming(event) {
@@ -3636,6 +3643,11 @@ function createService({
       return sessionAgent.interruptDetachedChatTurn(sessionId, input, options);
     },
 
+    // Cancel of one unsent or unconfirmed Main message; it always succeeds.
+    cancelAgentMessage(sessionId, input = {}, options = {}) {
+      return assistantRouting.cancelMessage(sessionId, { messageId: input.messageId }, options);
+    },
+
     async interruptAgentTurn(sessionId, input = {}, options = {}) {
       await stopGoalIntent(sessionId, await assistantSessionOptions(sessionId, options));
       if (await assistantRouting.cancel(sessionId, options)) return { ok: true, interrupted: true, routingCancelled: true };
@@ -4177,7 +4189,13 @@ function createService({
           browserProjectContext: captureProjectRequestContext() };
         const conversation = await mainConversations.open({ id: sessionId, context: current });
         completed = true;
-        return Object.freeze({ ...conversation, async inspectDelivery(input) {
+        // A cancelled message is never offered for recovery and has no other receipt.
+        return Object.freeze({ ...conversation, async read(...args) {
+          const state = await conversation.read(...args);
+          if (!state?.pendingRequest || !await assistantRouting.isCancelled(sessionId, state.pendingRequest.messageId, current)) return state;
+          return { ...state, pendingRequest: null, ...(state.status === "unconfirmed" ? { status: "ready" } : {}) };
+        }, async inspectDelivery(input) {
+          if (await assistantRouting.isCancelled(sessionId, input.messageId, current)) return { status: "cancelled", messageId: input.messageId };
           const receipt = await conversation.inspectDelivery(input);
           if (receipt?.status !== "unknown") return receipt;
           const routed = await assistantRouting.inspectDelivery(sessionId, input, current);

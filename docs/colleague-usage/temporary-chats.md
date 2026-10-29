@@ -170,12 +170,13 @@ nothing is sent again. If the AI proves it never received the message, Retry
 sends it once with its original settings; while delivery is still unknown,
 nothing is sent. A visible message can still be awaiting confirmation. If the
 connection cannot read the native receipt, keep the chat and retry the check
-after reconnecting. **Cancel** on an unconfirmed message stops ongoing work and
-then checks it: the message is removed, and stays removed after a reload, once
-the AI proves it never received it; a message that did arrive stays in the
-conversation. While delivery remains unknown, Cancel keeps the message and says
-so; try again in a moment. Only Claude can currently prove that a message never
-arrived; with other AIs an unknown delivery stays until it is confirmed. **Stop** remains available for ongoing work. **Close** removes
+after reconnecting. **Cancel** is always available on a pending, unconfirmed or
+failed message, including while **Checking…** is shown (it ends that check).
+The message shows **Cancelling…** until the server confirms, then leaves the
+chat for good; the server also stops any work that message started. If the
+server cannot be reached, the message stays with **Couldn't reach the server —
+Cancel again**, and the chat retries after reconnecting. If the AI had already
+received it, its answer still appears in the conversation. **Stop** remains available for ongoing work. **Close** removes
 the temporary chat only after its native work and attachments are safely cleaned
 up; a failed Close can be retried. If you used more than one AI in this chat,
 Close cleans up each retained native conversation. A retry continues the unfinished
