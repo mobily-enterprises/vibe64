@@ -354,6 +354,32 @@ describe("Temporary AI recovery workspace accessibility", () => {
     } finally { app.unmount(); }
   });
 
+  it("attributes a restored answer to the role and model its turn recorded, not the chat's current mode", async () => {
+    const temporary = temporaryAiTestState();
+    const senior = { engineId: "codex", modelProviderId: "openai", modelId: "gpt-6", variantId: "high" };
+    const junior = { engineId: "codex", modelProviderId: "deepseek", modelId: "deepseek-flash", variantId: "max" };
+    // History from the conversation owner: the answering role and model are turn metadata.
+    temporary.tasks.value = [{ id: "task-1", conversationId: "task-1", status: "completed", draft: "", agentSettings: {},
+      assistantSelection: senior, routingMetadata: { assistant_routing: JSON.stringify({ mode: "senior", review: false }) },
+      delivery: createAssistantMessageDelivery(), adapter: { conversation: { turns: [{ turnId: "prior",
+        user: { role: "user", messageId: "prior-question", text: "An earlier question" },
+        assistant: { role: "assistant", messageId: "prior-answer", text: "An earlier answer" },
+        metadata: { assistantSelection: junior, assistantRouting: { resolvedMode: "junior" } } }] } } }];
+    temporary.tasks.value[0].adapter.delivery = temporary.tasks.value[0].delivery;
+    temporary.activeTaskId.value = "task-1";
+    temporary.open.value = true;
+    temporaryProvider.value = temporary;
+    const container = { children: [], type: "root" };
+    const { app } = mountWorkspace(container, { sessionId: "session-1", active: true });
+    try {
+      await flushWorkspaceReveal();
+      expect(nodeText(container)).toContain("An earlier answer");
+      expect(nodeText(container)).toContain("Junior · Codex (deepseek-flash max)");
+      expect(nodeText(container)).not.toContain("Senior · Codex");
+      expect(findNode(container, node => node.props?.title?.includes("Provider: deepseek"))).toBeTruthy();
+    } finally { app.unmount(); }
+  });
+
   it.each(["Cancel", "dismiss", "restored while open"])("returns the first temporary-chat dialog to Main on %s without creating or sending", async (action) => {
     const temporary = temporaryAiTestState();
     temporary.closeWorkspace.mockImplementation(() => { temporary.open.value = false; });

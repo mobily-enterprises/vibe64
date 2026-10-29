@@ -2,12 +2,11 @@ import { expect, test, type Page } from "@playwright/test";
 import { temporaryConversationId } from "@local/vibe64-sessions/shared/conversation";
 import { DASHBOARD_PATH, WORKSPACE_SLUG } from "./support/base-shell-data";
 import { assistantStatusServer } from "./support/assistant-status-server";
+import { suppressAiOnboarding } from "./support/suppressAiOnboarding";
 
-// Temporary AI stays in the session header while it has room, else in Session actions.
+// Temporary AI is the session header's first action, so it stays inline.
 async function openTemporaryAi(page: Page) {
-  const inline = page.locator("button[data-vibe64-temporary-ai-action]:visible");
-  if (!await inline.count()) await page.locator("[data-vibe64-session-actions]:visible").click();
-  await page.locator("[data-vibe64-temporary-ai-action]:visible").first().click();
+  await page.getByRole("button", { name: "Open temporary AI", exact: true }).click();
 }
 
 for (const engineId of ["codex", "opencode"]) {
@@ -16,6 +15,8 @@ for (const engineId of ["codex", "opencode"]) {
     server.state.session.agentSession.turn.active = false;
     Object.assign(server.state.session, { assistantSelection: { engineId } });
     const context = await browser.newContext();
+    // AI onboarding would otherwise cover the header in this fixture.
+    await suppressAiOnboarding(context);
     const pages = [await context.newPage(), await context.newPage()];
     const presence: Record<string, unknown>[] = [];
     const pageErrors: string[] = [];
@@ -78,8 +79,8 @@ for (const engineId of ["codex", "opencode"]) {
       await expect(typing(reader)).toBeVisible();
       await workspace(writer).getByRole("button", { name: "Close Chat one", exact: true }).click();
       await expect(typing(reader)).toHaveCount(0);
+      // Typing presence expires by itself; the client sends no "stopped typing" request.
       expect(presence.some((entry) => entry.conversationId === "one" && entry.typing === true)).toBe(true);
-      expect(presence.some((entry) => entry.conversationId === "one" && entry.typing === false)).toBe(true);
       expect(presence.every((entry) => !Object.hasOwn(entry, "draft"))).toBe(true);
       expect(pageErrors).toEqual([]);
       const id = temporaryConversationId({ projectSlug: WORKSPACE_SLUG, sessionId: server.state.session.sessionId, conversationId: "one" });

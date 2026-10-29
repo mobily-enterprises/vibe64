@@ -3,8 +3,7 @@ import { createServer as createHttpServer, request as requestHttp, type Server a
 import type { AddressInfo } from "node:net";
 import { readFile, writeFile } from "node:fs/promises";
 import { createPreviewPreparationFixture } from "../fixtures/previewPreparation.js";
-import { WebSocket } from "ws";
-import { assistantStatusServer } from "./support/assistant-status-server";
+import { assistantStatusServer, relayConversation } from "./support/assistant-status-server";
 
 import {
   injectLaunchPreviewBridge
@@ -1392,8 +1391,8 @@ test("@preview-lifecycle Temporary AI keeps its shared upload queue across task 
     temporaryCreates: []
   });
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
-  await page.getByRole("button", { name: /^Session actions/u }).click();
-  await page.locator("[data-vibe64-temporary-ai-action]:visible").click();
+  // Temporary AI is the header's first action, so it stays inline on a phone.
+  await page.getByRole("button", { name: /^Open temporary AI/ }).click();
 
   const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
   const navigation = workspace.getByRole("navigation", {
@@ -1529,8 +1528,8 @@ test("@temporary-model merge repair exposes the shared picker and retains Senior
     await fulfillJson(route, { ok: true, ...record });
   });
   await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}?session=${SESSION_ID}&chat=main`);
-  await page.getByRole("button", { name: /^Session actions/ }).click();
-  await page.locator("[data-vibe64-temporary-ai-action]:visible").click();
+  // Temporary AI is the header's first action, so it stays inline on a phone.
+  await page.getByRole("button", { name: /^Open temporary AI/ }).click();
   const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
   await workspace.getByRole("button", { name: "Resolve Update", exact: true }).click();
   await workspace.getByRole("button", { name: /^Chat mode/ }).click();
@@ -4216,27 +4215,7 @@ test.afterEach(async () => {
 async function realConversation(page: Page, session: Record<string, unknown> = sessionPayload()) {
   const server = await assistantStatusServer({ session });
   conversationServers.push(server);
-  await page.route("**/api/assistant/**", async (route) => {
-    const url = new URL(route.request().url());
-    const response = await route.fetch({ url: `${server.url}${url.pathname}${url.search}`,
-      headers: { ...route.request().headers(), origin: server.url } }).catch(() => null);
-    // Requests still in flight when the test ends find the server closed.
-    await (response ? route.fulfill({ response }) : route.abort()).catch(() => {});
-  });
-  // Studio sockets must come from the server's own origin, so relay them from Node.
-  await page.routeWebSocket(/\/socket\.io\//u, (route) => {
-    const url = new URL(route.url());
-    const upstream = new WebSocket(`${server.url.replace("http", "ws")}${url.pathname}${url.search}`, { origin: server.url });
-    const pending: string[] = [];
-    upstream.on("open", () => { for (const message of pending.splice(0)) upstream.send(message); });
-    upstream.on("message", (data, isBinary) => route.send(isBinary ? data as Buffer : data.toString()));
-    upstream.on("close", () => route.close().catch(() => {}));
-    route.onMessage((message) => {
-      if (upstream.readyState === WebSocket.OPEN) upstream.send(message);
-      else pending.push(String(message));
-    });
-    route.onClose(() => upstream.close());
-  });
+  await relayConversation(page, server);
   return server;
 }
 

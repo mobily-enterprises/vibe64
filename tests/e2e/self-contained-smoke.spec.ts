@@ -29,12 +29,9 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await accountMenu.getByText("Account settings", { exact: true }).click();
   const accountConnectionsDialog = page.getByRole("dialog");
   await expect(accountConnectionsDialog.getByRole("heading", { level: 2, name: "Account settings" })).toBeVisible();
-  const refreshAccountsButton = accountConnectionsDialog.getByRole("button", { name: "Refresh AI accounts" });
-  await expect(refreshAccountsButton).toBeEnabled();
-  await refreshAccountsButton.click();
-  await expect(refreshAccountsButton).toBeEnabled();
-  await expect(accountConnectionsDialog.getByRole("button", { name: "Add connection", exact: true })).toBeEnabled();
-  await expect(accountConnectionsDialog.getByRole("button", { name: "Set up your AI", exact: true })).toBeVisible();
+  // AI Accounts is the AI setup screen; its Advanced section (with Refresh) shows
+  // once something is connected, and this shell has nothing connected.
+  await expect(accountConnectionsDialog.getByRole("heading", { level: 1, name: "Pick the AI behind Vibe64" })).toBeVisible();
   await accountConnectionsDialog.getByRole("tab", { name: "GitHub" }).click();
   await expect(accountConnectionsDialog.getByRole("heading", { level: 1, name: "GitHub Connection" })).toBeVisible();
   await accountConnectionsDialog.getByRole("button", { name: "Close account settings" }).click();
@@ -42,18 +39,10 @@ test("home loads through a self-contained mocked Studio shell", async ({ page })
   await expect(page.getByText("Session type", { exact: true })).toHaveCount(0);
   await expect(page).toHaveURL(developmentUrlPattern());
 
-  // Onboarding replaces the settings dialog, and focus comes back to the menu.
+  // Redo onboarding opens onboarding, and focus comes back to the menu.
   const accountMenuButton = page.getByRole("button", { name: "Account menu", exact: true });
   const onboarding = page.locator('[aria-labelledby="ai-onboarding-title"]');
   await accountMenuButton.click();
-  await accountMenu.getByText("Account settings", { exact: true }).click();
-  await accountConnectionsDialog.getByRole("button", { name: "Set up your AI", exact: true }).click();
-  await expect(onboarding).toBeVisible();
-  await expect(accountConnectionsDialog.getByRole("heading", { level: 2, name: "Account settings" })).toBeHidden();
-  await page.keyboard.press("Escape");
-  await expect(onboarding).toBeHidden();
-  await expect(accountMenuButton).toBeFocused();
-  await page.keyboard.press("Enter");
   await accountMenu.getByText("Redo onboarding", { exact: true }).click();
   await expect(onboarding).toBeVisible();
   await page.keyboard.press("Escape");

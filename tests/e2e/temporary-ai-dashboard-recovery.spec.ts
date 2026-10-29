@@ -734,7 +734,8 @@ async function mockRepositoryRecovery(page: Page, server: Awaited<ReturnType<typ
     if (url.pathname.includes("/temporary-conversations")) return route.fallback();
 
     if (method === "GET" && url.pathname.endsWith("/assistant-access")) {
-      await fulfillJson(route, { ok: true, available: true, canUse: true, purposes: { senior: { available: true } } });
+      // Repairs run on the Fix it with AI role.
+      await fulfillJson(route, { ok: true, available: true, canUse: true, purposes: { senior: { available: true }, fix: { available: true } } });
       return;
     }
     if (method === "GET" && url.pathname.endsWith("/agent-session")) {
@@ -800,14 +801,9 @@ async function mockRepositoryRecovery(page: Page, server: Awaited<ReturnType<typ
   };
 }
 
+// Temporary AI is the header's first action, so it stays inline at every width.
 async function openTemporaryChat(page: Page) {
-  const button = page.getByRole("button", { name: "Open temporary AI", exact: true });
-  if (await button.isVisible()) {
-    await button.click();
-  } else {
-    await page.locator("[data-vibe64-session-actions]:visible").click();
-    await page.locator("[data-vibe64-temporary-ai-action]:visible").click();
-  }
+  await page.getByRole("button", { name: "Open temporary AI", exact: true }).click();
 }
 
 async function saveDraft(page: Page, input: ReturnType<Page["getByLabel"]>, draft: string) {

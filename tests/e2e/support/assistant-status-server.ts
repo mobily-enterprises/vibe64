@@ -1,3 +1,4 @@
+import type { Page } from "@playwright/test";
 import { type IncomingMessage, type ServerResponse } from "node:http";
 import { EventEmitter } from "node:events";
 import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
@@ -5,6 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import Fastify from "fastify";
 import type { Socket } from "socket.io";
+import { WebSocket } from "ws";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createCapabilityHttpRuntime } from "@jskit-ai/kernel/server/http";
 import { EventProvider } from "@jskit-ai/kernel/server/runtime";
@@ -72,6 +74,8 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     connectionAttempts: 0,
     subscriptions: [] as string[],
     conversationReads: [] as string[],
+    // Awaited by each main conversation read, for example to hold history back.
+    beforeConversationRead: null as (() => Promise<void>) | null,
     rejectConnections: false,
     detailCount: 0,
     detailHandler: null as Handler | null,
@@ -120,6 +124,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
       return {
         async read(query = {}) {
           state.conversationReads.push(id);
+          await state.beforeConversationRead?.();
           const agent = session.agentSession;
           return { id, engine: agent.providerId,
             segmentId: agent.thread?.id ? `${agent.providerId}:${agent.thread.id}` : null,
@@ -490,6 +495,32 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
   };
 }
 
+// The page's HTTP stays mocked; its chat uses this server's real conversation
+// owner and Socket.IO transport. Studio sockets must come from the server's own
+// origin, so they are relayed from Node.
+export async function relayConversation(page: Page, server: { url: string }) {
+  await page.route("**/api/assistant/**", async (route) => {
+    const url = new URL(route.request().url());
+    const response = await route.fetch({ url: `${server.url}${url.pathname}${url.search}`,
+      headers: { ...route.request().headers(), origin: server.url } }).catch(() => null);
+    // Requests still in flight when the test ends find the server closed.
+    await (response ? route.fulfill({ response }) : route.abort()).catch(() => {});
+  });
+  await page.routeWebSocket(/\/socket\.io\//u, (route) => {
+    const url = new URL(route.url());
+    const upstream = new WebSocket(`${server.url.replace("http", "ws")}${url.pathname}${url.search}`, { origin: server.url });
+    const pending: string[] = [];
+    upstream.on("open", () => { for (const message of pending.splice(0)) upstream.send(message); });
+    upstream.on("message", (data, isBinary) => route.send(isBinary ? data as Buffer : data.toString()));
+    upstream.on("close", () => route.close().catch(() => {}));
+    route.onMessage((message) => {
+      if (upstream.readyState === WebSocket.OPEN) upstream.send(message);
+      else pending.push(String(message));
+    });
+    route.onClose(() => upstream.close());
+  });
+}
+
 // The original durable-conversation unit fixture supplies this same store,
 // write lock, attachments, routing selection and controlled native method seam.
 // Canonical history, receipts, command coordination and publication stay real.
@@ -560,7 +591,9 @@ async function temporaryConversationsFixture({ engineId, session, actions, publi
   };
   const routingStore = createAssistantRoutingStore({ systemRoot: root });
   const role = { ...resolveVibe64AssistantSelection(capabilities, { ...selection, catalogRevision: capabilities.revision }), selectionSource: "explicit" };
-  await routingStore.write({ [engineId]: { senior: role, junior: role, helper: role, router: role } }, 0);
+  // The owner's setup with its recommended "Same as" roles.
+  await routingStore.write({ owner: { senior: role, junior: role, router: role, quickHelper: role, colleague: { follows: "senior" },
+    fix: { follows: "junior" }, explain: { follows: "quickHelper" } }, nonOwner: {} }, 0);
   const manager = createSessionAgentManager({ providers: [{ id: engineId, transportId: capabilities.transportId, capabilities: async () => capabilities }],
     readRoutingConfiguration: () => routingStore.read(),
     readAssistantAccess: async () => ({ available: true, ownerOnly: false, connectionIdentity: "browser-fixture-connection" }) });

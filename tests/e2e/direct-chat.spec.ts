@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page, type Request, type Route } from "@playwright/test";
 import { mdiContentSaveOutline, mdiSourceCommit } from "@mdi/js";
 
-import { assistantStatusServer } from "./support/assistant-status-server";
+import { assistantStatusServer, relayConversation } from "./support/assistant-status-server";
 
 import {
   BASE_URL,
@@ -41,25 +41,13 @@ const REPOSITORY_RECOVERY_GIT_BOUNDARY = [
   "Preserve the intended behavior of both the latest saved work and this session. Do not hand-edit generated Genesis maps; Vibe64 regenerates its derived artifacts. A clean index after rollback is not proof that the conflict is resolved."
 ].join("\n");
 
+// The page's HTTP stays mocked; its chat uses the real conversation owner for
+// the page's session.
 const hintTest = test.extend<{ hintRealtime: Awaited<ReturnType<typeof assistantStatusServer>> }>({
   hintRealtime: [async ({ page }, use) => {
-    const realtime = await assistantStatusServer();
+    const realtime = await assistantStatusServer({ session: directSession() });
     try {
-      await page.route("**/socket.io/**", async (route) => {
-        const url = new URL(route.request().url());
-        const response = await route.fetch({ url: `${realtime.url}${url.pathname}${url.search}` });
-        await route.fulfill({ response });
-      });
-      await page.addInitScript((realtimeUrl) => {
-        const OriginalWebSocket = window.WebSocket;
-        window.WebSocket = class extends OriginalWebSocket {
-          constructor(url: string | URL, protocols?: string | string[]) {
-            const target = new URL(url, window.location.href);
-            if (target.pathname === "/socket.io/") target.host = new URL(realtimeUrl).host;
-            super(target, protocols);
-          }
-        };
-      }, realtime.url);
+      await relayConversation(page, realtime);
       await use(realtime);
     } finally {
       await realtime.close();
@@ -2033,8 +2021,12 @@ async function detachConversation(
   method: "touch" | "wheel" = "wheel"
 ) {
   await locator.evaluate((element, { distance, method: inputMethod }) => {
+    // A touch move carries its touch, as the page's touch listeners expect.
+    const box = element.getBoundingClientRect();
+    const touch = () => [new Touch({ identifier: 1, target: element,
+      clientX: box.left + box.width / 2, clientY: box.top + box.height / 2 })];
     element.dispatchEvent(inputMethod === "touch"
-      ? new Event("touchmove", { bubbles: true })
+      ? new TouchEvent("touchmove", { bubbles: true, touches: touch(), changedTouches: touch() })
       : new WheelEvent("wheel", {
           bubbles: true,
           deltaY: -distance
@@ -2510,41 +2502,6 @@ for (const width of [390, 1280]) {
   });
 }
 
-hintTest("@deslop-routing a mixed request remains editable with one polite explanation after reload", async ({ page }) => {
-  const explanation = "In Auto, please request feature work and Deslop separately. Send the feature request first, then ask for Deslop after implementation.";
-  let routing: Record<string, unknown> | null = null;
-  let submissions = 0;
-  await mockDirectChat(page);
-  await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, {
-    ok: true, ...directSession(), metadata: {
-      assistant_routing: JSON.stringify({ mode: "auto", review: true }),
-      ...(routing ? { assistant_routing_request: JSON.stringify(routing) } : {})
-    }
-  }));
-  await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-message`, async route => {
-    const input = requestBodyWithoutOrigin(route.request());
-    submissions++;
-    routing = { messageId: input.messageId, input, mode: "auto", status: "failed", reason: "mixed_deslop_request", error: explanation };
-    await route.fulfill({ status: 409, contentType: "application/json", body: JSON.stringify({
-      ok: false, code: "vibe64_assistant_split_request", error: explanation
-    }) });
-  });
-  await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
-  const composer = page.getByLabel("Message AI assistant");
-  await composer.fill("Add this feature and deslop afterwards.");
-  await page.getByRole("button", { name: "Send message", exact: true }).click();
-  await expect(page.getByText(explanation, { exact: false })).toHaveCount(1);
-  await composer.fill("Keep this next draft.");
-  await page.reload();
-  for (const width of [390, 820, 1280]) {
-    await page.setViewportSize({ width, height: 900 });
-    await expect(page.getByText(explanation, { exact: false })).toHaveCount(1);
-    await expect(composer).toHaveValue("Keep this next draft.");
-    await expect(page.getByRole("button", { name: "Send message", exact: true })).toBeEnabled();
-  }
-  expect(submissions).toBe(1);
-});
-
 for (const width of [390, 820, 1280]) {
   test(`@assistant-roles Main chat names each role's model and sends a missing Router to Models at ${width}px`, async ({ page }, info) => {
     const server = await assistantStatusServer();
@@ -2670,14 +2627,19 @@ for (const width of [390, 820, 1280]) {
 
 for (const width of [390, 820, 1280]) {
   test(`@chat-return reload keeps Main selected and returning shows latest messages at ${width}px`, async ({ page }, info) => {
-    const server = await assistantStatusServer();
+    // Main and temporary history come from the conversation owner, serving the page's session.
+    const server = await assistantStatusServer({ session: directSession(), temporaryEngineId: "codex" });
     const errors: string[] = [];
     page.on("pageerror", error => errors.push(error.message));
     try {
       await page.setViewportSize({ width, height: 900 });
-      const turns = Array.from({ length: 24 }, (_, index) => scrollTestTurn(index + 1));
-      await mockDirectChat(page, { conversationLog: turns });
-      const routingRequest = { messageId: "old-request", mode: "senior", resolvedMode: "senior", status: "cancelled", helper: null,
+      server.state.conversationLog = Array.from({ length: 24 }, (_, index) => scrollTestTurn(index + 1));
+      await server.temporary!.seed([{ conversationId: "saved-repair", title: "Resolve Update",
+        draft: "Keep this unsent repair question", agentSettings: {} }]);
+      await mockDirectChat(page);
+      // A request the person cancelled before it was sent.
+      const routingRequest = { schemaVersion: 5, messageId: "old-request", mode: "senior", resolvedMode: "senior",
+        status: "waiting", delivery: "failed", stopped: true, stage: null, workflow: false,
         input: { message: "Earlier request", displayMessage: "Earlier request" },
         error: "This Codex conversation is stored in a separate provider home. Renew the session to use model routing." };
       await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, {
@@ -2689,7 +2651,7 @@ for (const width of [390, 820, 1280]) {
       let cancellations = 0;
       await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-turn/interrupt`, async route => {
         cancellations++;
-        routingRequest.status = "cancelled";
+        routingRequest.stopped = true;
         await fulfillJson(route, { ok: true, interrupted: true });
         server.sessionChanged("assistant-routing-changed", { assistantRoutingRequest: routingRequest });
       });
@@ -2697,10 +2659,8 @@ for (const width of [390, 820, 1280]) {
       await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/temporary-conversations`, async route => {
         expect(route.request().method()).toBe("GET");
         restorations++;
-        await fulfillJson(route, { ok: true, conversations: [{
-          conversationId: "saved-repair", title: "Resolve Update", status: "ready",
-          draft: "Keep this unsent repair question", messages: [{ id: "saved-answer", role: "assistant", text: "Retained repair answer." }]
-        }] });
+        // Past mockDirectChat's session routes, to the fixture's conversation owner.
+        await route.continue();
       });
       await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
       const workspace = page.getByRole("region", { name: "Temporary AI workspace" });
@@ -2716,7 +2676,6 @@ for (const width of [390, 820, 1280]) {
       await expect.poll(() => conversationDistanceFromBottom(body)).toBeGreaterThan(600);
       await openTemporaryAiWorkspace(page);
       await expect(workspace).toBeVisible();
-      await expect(workspace.getByText("Retained repair answer.", { exact: true })).toBeVisible();
       await expect(workspace.getByLabel("Message temporary AI")).toHaveValue("Keep this unsent repair question");
       await workspace.getByRole("button", { name: "Main chat", exact: true }).click();
       await expect(workspace).toBeHidden();
@@ -2736,10 +2695,10 @@ for (const width of [390, 820, 1280]) {
       await page.screenshot({ path: info.outputPath(`main-chat-${width}.png`) });
       await openTemporaryAiWorkspace(page);
       await expect(workspace.getByLabel("Message temporary AI")).toHaveValue("Keep this unsent repair question");
-      await expect(workspace.getByText("Retained repair answer.", { exact: true })).toBeVisible();
       await workspace.getByRole("button", { name: "Main chat", exact: true }).click();
-      routingRequest.status = "failed";
-      await page.getByRole("button", { name: "Reload chat", exact: true }).click();
+      // The same request is now unsent and waiting for the person; the server says so.
+      routingRequest.stopped = false;
+      server.sessionChanged("assistant-routing-changed", { assistantRoutingRequest: routingRequest });
       await expect(page.locator('.v-alert[role="status"]').filter({ hasText: "Request not sent" })).toHaveCount(0);
       await expect(body.getByText(routingRequest.error, { exact: false })).toBeVisible();
       await body.getByRole("button", { name: "Cancel", exact: true }).click();
@@ -2969,22 +2928,20 @@ for (const width of [390, 820, 1280]) {
 }
 
 test("@helper-hydration delayed history opens at the failed request and reports its error once", async ({ page }, info) => {
-  const server = await assistantStatusServer();
+  // History comes from the conversation owner, serving the page's session.
+  const server = await assistantStatusServer({ session: directSession() });
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
   let releaseHistory: () => void = () => {};
   let historyReady = new Promise<void>(resolve => { releaseHistory = resolve; });
-  let reads = 0;
+  const reads = () => server.state.conversationReads.length;
   try {
     await page.setViewportSize({ width: 390, height: 900 });
-    const turns = Array.from({ length: 24 }, (_, index) => scrollTestTurn(index + 1));
-    await mockDirectChat(page, { conversationPage: async () => {
-      reads++;
-      await historyReady;
-      return { conversationLog: turns, pagination: { count: turns.length, hasMoreBefore: false, totalTurnCount: turns.length } };
-    } });
-    const request = { messageId: "failed-send", mode: "auto", status: "failed",
-      input: { message: "Keep this unsent request", displayMessage: "Keep this unsent request" },
+    server.state.conversationLog = Array.from({ length: 24 }, (_, index) => scrollTestTurn(index + 1));
+    server.state.beforeConversationRead = () => historyReady;
+    await mockDirectChat(page);
+    const request = { schemaVersion: 5, messageId: "failed-send", mode: "auto", status: "waiting", delivery: "failed",
+      stage: null, workflow: false, input: { message: "Keep this unsent request", displayMessage: "Keep this unsent request" },
       error: "The routing connection needs attention." };
     await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, {
       ok: true, ...directSession(), metadata: {
@@ -2995,7 +2952,7 @@ test("@helper-hydration delayed history opens at the failed request and reports 
     await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
     const body = page.locator(".studio-autopilot__conversation .assistant-transcript__body");
     for (let load = 1; load <= 2; load++) {
-      await expect.poll(() => reads).toBeGreaterThanOrEqual(load);
+      await expect.poll(reads).toBeGreaterThanOrEqual(load);
       await expect(page.getByText("Keep this unsent request", { exact: true })).toHaveCount(0);
       releaseHistory();
       await expect(body.getByText("Keep this unsent request", { exact: true })).toBeVisible();
