@@ -153,7 +153,11 @@ refusal never authorizes archiving a session to make the change possible. Its
 bounded result reports the saved policy or the actual blocker, without credentials.
 Changing policy does not migrate application data or change unsaved session source.
 
-The compact project shell shares its existing chat/project pane state with
+The compact project shell opens a session tool's dashboard address (Session
+info, Current changes, Git log, Files, Database, Architecture, AI Terminal;
+`vibe64SessionToolIdFromDashboardPath` in `src/lib/vibe64SessionToolDefinitions.js`)
+on the project side from its first frame, before the session loads, rather than
+on chat. It shares its chat/project pane state with
 touch navigation. A deliberate single-finger horizontal swipe left reveals the
 currently selected Preview or Dashboard; right reveals chat, without route
 changes or remounting either side. The shared header accepts swipes above the

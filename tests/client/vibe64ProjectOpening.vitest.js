@@ -70,20 +70,21 @@ function passthrough(tag) {
 }
 
 const dispose = [];
-afterEach(() => { while (dispose.length) dispose.pop()(); mocks.listPath = ""; });
+afterEach(() => { while (dispose.length) dispose.pop()(); mocks.listPath = ""; vi.unstubAllGlobals(); });
 const success = { ok: true, runtime: { open: true } };
 async function flush() { for (let i = 0; i < 8; i += 1) await Vue.nextTick(); }
 
-async function mountPage() {
+async function mountPage(path = "/app/project/dogandgroom") {
   mocks.requests = [];
   mocks.realtime = [];
   const router = createRouter({ history: createMemoryHistory(), routes: [
     { path: "/app/project/:slug", component: { render: () => null } },
     { path: "/app/project/:slug/dashboard/files", component: { render: () => null } },
+    { path: "/app/project/:slug/dashboard/settings", component: { render: () => null } },
     { path: "/app", component: { render: () => null } },
     { path: "/projects", component: { render: () => null } }
   ] });
-  await router.push("/app/project/dogandgroom");
+  await router.push(path);
   const renderer = Vue.createRenderer({
     createElement: (type) => ({ type, children: [], props: {} }),
     createText: (text) => ({ type: "text", text, children: [] }),
@@ -293,6 +294,23 @@ describe("opening a routed project", () => {
     mocks.requests[2].resolve(success);
     await flush();
     expect(view.page.projectRuntimeReady.value).toBe(true);
+  });
+
+  it("opens a phone at a session tool's address on the project side before its session loads", async () => {
+    const opened = async (path, { phone = true } = {}) => {
+      vi.stubGlobal("window", {
+        location: new URL("http://vibe64.local/"),
+        matchMedia: () => ({ matches: phone, addEventListener() {}, removeEventListener() {} })
+      });
+      const { page, sessionMounted } = await mountPage(path);
+      expect(sessionMounted).not.toHaveBeenCalled();
+      return [page.chatCollapsed.value, page.chatToggleTitle.value];
+    };
+    // Reload, Back or a link to Files: the tool's own side, not chat until its session loads.
+    expect(await opened("/app/project/dogandgroom/dashboard/files")).toEqual([true, "Show chat"]);
+    expect(await opened("/app/project/dogandgroom/dashboard/settings")).toEqual([false, "Show project"]);
+    expect(await opened("/app/project/dogandgroom")).toEqual([false, "Show project"]);
+    expect(await opened("/app/project/dogandgroom/dashboard/files", { phone: false })).toEqual([false, "Collapse chat"]);
   });
 
   it("reopens the current project when selected from its dashboard", async () => {

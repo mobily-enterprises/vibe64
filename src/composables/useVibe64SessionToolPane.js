@@ -3,7 +3,7 @@ import { useRoute, useRouter } from "vue-router";
 import {
   VIBE64_SESSION_TOOL_DEFINITIONS,
   vibe64SessionToolDashboardSuffix,
-  vibe64SessionToolIdFromRouteSegment
+  vibe64SessionToolIdFromDashboardPath
 } from "@/lib/vibe64SessionToolDefinitions.js";
 import {
   normalizeProjectRoutePath,
@@ -74,13 +74,7 @@ function useVibe64SessionToolPane(props, emit, {
 
   const projectPaneValue = computed(() => normalizeProjectPane(props.projectPane));
   const routeSessionToolId = computed(() => {
-    const dashboardPrefix = `${normalizeProjectRoutePath(projectAppPath(projectSlug.value, "/dashboard"))}/`;
-    const routePath = `${normalizeProjectRoutePath(route.path)}/`;
-    if (!routePath.startsWith(dashboardPrefix)) {
-      return "";
-    }
-    const segment = routePath.slice(dashboardPrefix.length).split("/")[0] || "";
-    const toolId = vibe64SessionToolIdFromRouteSegment(segment);
+    const toolId = vibe64SessionToolIdFromDashboardPath(route.path, projectAppPath(projectSlug.value, "/dashboard"));
     return DIRECT_SESSION_TOOL_IDS.has(toolId) ? toolId : "";
   });
   const sourceToolLoading = computed(() => Boolean(

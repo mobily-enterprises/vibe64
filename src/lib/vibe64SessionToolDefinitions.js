@@ -8,6 +8,7 @@ import {
   mdiSourceRepository
 } from "@mdi/js";
 import { deepFreeze } from "@jskit-ai/kernel/shared/support/deepFreeze";
+import { normalizeProjectRoutePath } from "./vibe64ProjectScope.js";
 
 const VIBE64_ACTIVE_SESSION_NAV_TARGET = "page.active-session-nav";
 const VIBE64_ACTIVE_SESSION_NAV_OWNER = "vibe64-session";
@@ -100,6 +101,16 @@ function vibe64SessionToolIdFromRouteSegment(routeSegment = "") {
   ))?.id || "";
 }
 
+// The session tool a project dashboard address opens (`<dashboard>/files` is
+// Files), or "" when the address names none.
+function vibe64SessionToolIdFromDashboardPath(routePath = "", dashboardPath = "") {
+  const dashboardPrefix = `${normalizeProjectRoutePath(dashboardPath)}/`;
+  const path = `${normalizeProjectRoutePath(routePath)}/`;
+  return path.startsWith(dashboardPrefix)
+    ? vibe64SessionToolIdFromRouteSegment(path.slice(dashboardPrefix.length).split("/")[0])
+    : "";
+}
+
 // The guide id of the place a session tool's pane shows, or undefined so an
 // unguided pane renders no anchor.
 function vibe64SessionToolGuideId(toolId = "") {
@@ -118,6 +129,7 @@ export {
   vibe64SessionToolDashboardSuffix,
   vibe64SessionToolDefinition,
   vibe64SessionToolGuideId,
+  vibe64SessionToolIdFromDashboardPath,
   vibe64SessionToolIdFromRouteSegment,
   vibe64SessionToolRouteSegment
 };

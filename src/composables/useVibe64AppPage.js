@@ -14,6 +14,7 @@ import { vibe64RealtimePayloadFromCurrentTab } from "@/lib/vibe64BrowserTabOrigi
 import { VIBE64_COLLEAGUE_LAYOUT_KEY } from "@/lib/vibe64AssistantHost.js";
 import { invalidateGithubIssueQueries, invalidateGithubProjectQueries } from "@/lib/vibe64GithubProject.js";
 import { normalizeRoutePath, routePathContainsSection } from "@/lib/routeActiveState.js";
+import { vibe64SessionToolIdFromDashboardPath } from "@/lib/vibe64SessionToolDefinitions.js";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
 import { useStudioShellDrawer } from "@/composables/useStudioShellDrawer.js";
@@ -273,6 +274,12 @@ function useVibe64AppPage() {
     if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
       mobilePaneMediaQuery = window.matchMedia("(max-width: 980px)");
       syncMobilePaneLayout();
+      // Opened at a session tool's address (a link, reload or Back to Files),
+      // a phone shows that tool's side from its first frame. The tool asks for
+      // it once its session loads; until then the phone would show the chat.
+      if (mobilePaneLayout.value && vibe64SessionToolIdFromDashboardPath(route.path, dashboardBasePath.value)) {
+        setChatCollapsed(true);
+      }
       if (typeof mobilePaneMediaQuery.addEventListener === "function") {
         mobilePaneMediaQuery.addEventListener("change", syncMobilePaneLayout);
       } else {
