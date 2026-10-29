@@ -272,15 +272,18 @@ application's group may read (`2750`), and the application's own `app/` with
 its `home/` and `database/` (`0700`), which the daemon may search for a database
 by name but never list. An existing directory must still have the owner it was
 given; nothing is repaired. `retire` refuses while a release unit of the
-account is still installed (it could start it again) or anything runs as it.
+account is still installed (it could start it again), while its `database/`
+still holds anything (root never removes a database), or while anything runs
+as it.
 It unregisters the account before it looks for its processes, so no new
 execution can start as it meanwhile, and registers it again when it refuses.
 It then removes the whole area, the account and its registration, so the
 account's uid and its place under the limit are free again. A production
 database outlives its project, as other production databases do: the editor
-takes it back into its own production database directory before it retires the
-application, so whatever `database/` still holds then is the application's own
-and goes with it.
+gives it back into its own production database directory before it retires the
+application, which leaves `database/` empty; a database still there (one the
+editor did not know of, or made under an earlier path) stops the retire and is
+kept.
 
 A managed execution runs as an application only when the daemon asks for its
 registered account by name (`applicationAccount`), and only as a finite capture.

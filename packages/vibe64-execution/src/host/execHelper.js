@@ -2537,14 +2537,42 @@ function ensureApplicationAccount(owner = {}, project = "", {
   };
 }
 
+// What the application's database directory still holds, if its area exists.
+function applicationDatabaseEntries(identity = {}, { areaUid = 0 } = {}) {
+  let projectRoot;
+  try {
+    projectRoot = openApplicationProjectRoot(identity, { areaUid, create: false });
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
+  try {
+    let database;
+    try {
+      database = openSync(openedPath(projectRoot, "database"), DIRECTORY_NO_FOLLOW);
+    } catch (error) {
+      if (error.code === "ENOENT") return [];
+      throw error;
+    }
+    try {
+      return readdirSync(openedPath(database)).sort();
+    } finally {
+      closeSync(database);
+    }
+  } finally {
+    closeSync(projectRoot);
+  }
+}
+
 // A retired project's application goes whole: its account, registration and
-// area, with whatever its database directory still holds. The editor takes a
-// production database back before it retires the application, so the database
-// outlives the project as other production databases do, and the account's uid
-// and its place under the workspace's limit are free again. Nothing of it may
-// still run: no release unit of it may remain installed, since one could
-// restart it, and it is unregistered before the check for its processes, so no
-// new execution can start as it meanwhile. A refused retire registers it again.
+// area. The editor gives a production database back before it retires the
+// application, so the database outlives the project as other production
+// databases do; root never removes one, so it refuses while the application's
+// database directory holds anything. The account's uid and its place under the
+// workspace's limit are then free again. Nothing of it may still run: no
+// release unit of it may remain installed, since one could restart it, and it
+// is unregistered before the check for its processes, so no new execution can
+// start as it meanwhile. A refused retire registers it again.
 function retireApplicationAccount(owner = {}, project = "", {
   areaRoot = APPLICATION_AREA_ROOT,
   areaUid = 0,
@@ -2573,6 +2601,11 @@ function retireApplicationAccount(owner = {}, project = "", {
     if (installed) {
       throw new Error(`The application's release service ${installed.name} is still installed. Remove it before retiring the application.`);
     }
+  }
+  const held = applicationDatabaseEntries(identity, { areaUid });
+  if (held.length > 0) {
+    throw new Error(`The application's database directory still holds ${held.slice(0, 5).join(", ")}` +
+      `${held.length > 5 ? ` and ${held.length - 5} more` : ""}. Give its production database back to the editor before retiring the application.`);
   }
   const unregister = () => {
     const directory = openRegistry(identity.workspace, registry);
