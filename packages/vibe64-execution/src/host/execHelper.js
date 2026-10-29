@@ -643,15 +643,25 @@ function signalManagedExecutionChild(child = null, signal = "SIGTERM") {
 function configureManagedExecutionWorkSlice(owner = {}, {
   memoryMaxBytes = 0,
   tasksMax = 0
+} = {}, {
+  read = readFileSync,
+  run = runRootCommand,
+  runAllowFailure = runRootCommandAllowFailure
 } = {}) {
   const sliceName = managedExecutionSliceName(owner);
+  // Runtime properties last until reboot, so nearly every execution finds its
+  // limits already in force, and the slice's own cgroup proves it with no
+  // systemctl call and no rewrite of the slice's drop-ins by systemd.
+  if (managedExecutionWorkSliceEnforces(sliceName, { memoryMaxBytes, tasksMax }, read)) {
+    return;
+  }
   // `systemctl start` on an active slice still waits for any member that is
   // stopping, for up to that member's TimeoutStopSec. Starting only an inactive
   // slice keeps one slow stop from holding every new execution behind it.
-  if (runRootCommandAllowFailure("systemctl", ["is-active", "--quiet", sliceName]).status !== 0) {
-    runRootCommand("systemctl", ["start", sliceName]);
+  if (runAllowFailure("systemctl", ["is-active", "--quiet", sliceName]).status !== 0) {
+    run("systemctl", ["start", sliceName]);
   }
-  runRootCommand("systemctl", [
+  run("systemctl", [
     "set-property",
     "--runtime",
     sliceName,
@@ -661,6 +671,32 @@ function configureManagedExecutionWorkSlice(owner = {}, {
     "IOAccounting=yes",
     "TasksAccounting=yes"
   ]);
+}
+
+// systemd places a slice named a-b-c.slice at a.slice/a-b.slice/a-b-c.slice.
+// A work slice's workspace part holds only [a-z0-9-], which systemd keeps as is.
+function managedExecutionSliceCgroup(sliceName = "") {
+  const parts = String(sliceName).replace(/\.slice$/u, "").split("-");
+  return path.join("/sys/fs/cgroup", ...parts.map((_part, index) => `${parts.slice(0, index + 1).join("-")}.slice`));
+}
+
+// The slice exists (systemd removes a stopped slice's group), its memory, I/O
+// and task controllers are on, pids.max is the task limit and memory.max is the
+// memory limit rounded down to a page, as set-property would leave them. Any
+// page is at least 4 KiB, so a memory.max under 4 KiB below the limit is that
+// rounding. Anything else, or a file that cannot be read, is not proof.
+function managedExecutionWorkSliceEnforces(sliceName = "", { memoryMaxBytes = 0, tasksMax = 0 } = {}, read = readFileSync) {
+  const group = managedExecutionSliceCgroup(sliceName);
+  try {
+    const controllers = String(read(path.join(group, "cgroup.controllers"), "utf8")).trim().split(/\s+/u);
+    const memoryMax = Number(String(read(path.join(group, "memory.max"), "utf8")).trim());
+    const pidsMax = Number(String(read(path.join(group, "pids.max"), "utf8")).trim());
+    return ["memory", "io", "pids"].every((controller) => controllers.includes(controller)) &&
+      Number.isSafeInteger(memoryMax) && memoryMax <= memoryMaxBytes && memoryMaxBytes - memoryMax < 4096 &&
+      pidsMax === tasksMax;
+  } catch {
+    return false;
+  }
 }
 
 function managedWorkflowIdentity(input = {}, owner = {}) {
@@ -1011,15 +1047,19 @@ function managedWorkflowMemoryOperation(payload, workflow, owner) {
   }
 }
 
-function managedExecutionTargetUser(payload = {}, owner = {}) {
+function managedExecutionTargetUser(payload = {}, owner = {}, {
+  assertInGroup = assertUserInGroup,
+  resolveUser = resolveOsUser
+} = {}) {
   const username = safeUsername(payload.username || owner.username);
-  const targetUser = resolveOsUser(username);
+  // The daemon was resolved by this process moments ago; most executions run as it.
+  const targetUser = username === owner.username ? owner : resolveUser(username);
   assertExpectedId("uid", payload.uid, targetUser.uid);
   assertExpectedId("gid", payload.gid, targetUser.gid);
   if (targetUser.username !== owner.username) {
     assertActablePerson(owner, targetUser);
   } else {
-    assertUserInGroup(targetUser.username, VIBE64_GROUP);
+    assertInGroup(targetUser.username, VIBE64_GROUP);
   }
   return targetUser;
 }
@@ -3180,10 +3220,11 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
   return env;
 }
 
-export { assertActablePerson, assertEnabledForVibe64, consumeManagedExecutionRequestPayload,
+export { assertActablePerson, assertEnabledForVibe64, configureManagedExecutionWorkSlice, consumeManagedExecutionRequestPayload,
   enablePerson, loginUidRange, personAccountProblem, readPersonRegistration, registerPerson, upgradePersonRegistry, deploymentServiceUnit, ensureManagedServiceProcessOwnership,
   parseEnvironmentFile, upgradeReleaseServiceUnits,
   managedWorkflowCounters, openManagedExecutionReceipts, managedWorkflowIdentity, managedExecutionOomBoundary,
+  managedExecutionSliceCgroup, managedExecutionTargetUser,
   managedExecutionState, managedExecutionStopTimeoutMs, managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal,
   releaseEndedManagedExecutions, stopManagedExecution, stopManagedServiceUnit,
   assertExpectedId, canonicalPath, helperChildEnv, resolveAllowedCwd,

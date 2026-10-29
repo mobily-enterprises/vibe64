@@ -544,7 +544,7 @@ test("execution helper uses runuser instead of direct initgroups setuid flow", a
 test("execution helper creates collaborative files instead of repairing them later", async () => {
   const source = await helperSource();
 
-  assert.match(source, /assertUserInGroup\(targetUser\.username, VIBE64_GROUP\)/u);
+  assert.match(source, /assertInGroup = assertUserInGroup[\s\S]+assertInGroup\(targetUser\.username, VIBE64_GROUP\)/u);
   assert.match(source, /process\.umask\(0o007\)/u);
   assert.doesNotMatch(source, /repair-managed-project-permissions/u);
   assert.doesNotMatch(source, /handleManagedProjectPermissionRepair/u);

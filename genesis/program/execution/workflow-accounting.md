@@ -280,6 +280,18 @@ Attaching a managed execution requires an active owned workflow and child limits
 no larger than that parent. Ordinary commands without workflow identity retain
 their existing execution path.
 
+An ordinary command runs in its workspace's work slice, whose limits the helper
+sets with `systemctl set-property --runtime`, so they last until reboot. The
+helper first reads the slice's own cgroup: when it exists with the memory, I/O
+and task controllers on, `pids.max` at the requested task limit and
+`memory.max` at the requested memory limit rounded down to a page, the command
+starts with no `systemctl` call and systemd rewrites none of the slice's
+drop-ins. A missing, stopped or differently limited slice, or a file the helper
+cannot read, takes the full path: start the slice if inactive, then set its
+limits. A command run as the workspace daemon reuses the daemon identity the
+helper resolved for its caller instead of looking it up again.
+`tests/server/vibe64ExecutionWorkSlice.unit.test.js` covers both paths.
+
 Repeatable caller-owned activities may also carry `resourceProfile` with a task
 key, environment and opaque compatibility digest. This is identity metadata,
 not an allocation request: it cannot contain commands, credentials, paths or
