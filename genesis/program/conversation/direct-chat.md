@@ -23,10 +23,11 @@ execution. It preserves the native tool's remaining input, including background
 execution, timeout and description, rather than resetting those options when
 binding the command to the session. Native engine limits still apply.
 
-Main Claude conversations follow the workspace's current authenticated account.
-Account replacement retains native history, stops the previous owned process
-before adopting the new identity, and refuses replacement when shutdown cannot
-be verified. Temporary/helper ownership checks remain scoped to their requests.
+Main and temporary Claude conversations follow the workspace's current
+authenticated account. Account replacement retains native history, stops the
+previous owned process before adopting the new identity, and refuses replacement
+when shutdown cannot be verified. Scoped helper ownership checks remain bound to
+their requests.
 Composer routing updates for the current pending message preserve local queue
 admission; unresolved delivery or observation still prevents unsafe submissions.
 Allowance reset/check times use the browser locale and time zone with named

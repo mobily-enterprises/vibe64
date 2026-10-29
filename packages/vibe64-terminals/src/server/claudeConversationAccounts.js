@@ -75,10 +75,12 @@ function createClaudeConversationAccounts({ owner, configRoot, providerConnectio
     return `sha256:${hash(JSON.stringify([configRoot, account.authMethod, email]))}`;
   }
 
+  // A session's main and temporary chats follow the workspace's current account
+  // and keep their history; scoped helpers stay bound to their request's account.
   function prepareAccount(entry) {
     return {
       identity: accountIdentity(entry.context),
-      allowAccountChange: entry.main === true,
+      allowAccountChange: entry.main === true || !entry.context.assistantScope,
       get providerId() { return entry.context.selection.modelProviderId; },
       changedCode: "vibe64_claude_account_changed"
     };

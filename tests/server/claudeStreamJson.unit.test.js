@@ -1077,6 +1077,25 @@ test("Claude model settings use the current workspace account without requiring 
   assert.equal(resumed.options.model, "haiku");
 });
 
+test("Claude temporary chats follow the current workspace account and keep their history", async t => {
+  const f = await fixture(t);
+  const temporary = await f.provider.createConversation(f.context);
+  await f.provider.startConversationTurn(f.context, {
+    conversationId: temporary.conversationId, message: "Work", messageId: "before-account-change"
+  });
+  const original = f.processes.at(-1);
+  await f.provider.invalidateRuntimes({}, { provider: "claude", reason: "claude-auth-change" });
+  assert.equal(original.stopped, true);
+  f.behavior.account = { ...f.behavior.account, email: "current@example.test" };
+  await f.provider.startConversationTurn(f.context, {
+    conversationId: temporary.conversationId, message: "Continue", messageId: "after-account-change"
+  });
+  const resumed = f.processes.at(-1);
+  assert.notEqual(resumed, original);
+  assert.equal(resumed.options.sessionId, original.options.sessionId);
+  assert.equal(resumed.options.resume, true);
+});
+
 test("Claude next-turn settings reach the retained native owner while the current turn stays active", async t => {
   const f = await fixture(t);
   const sent = await f.provider.sendMessage(f.context, { message: "Keep working", messageId: "active-settings" });

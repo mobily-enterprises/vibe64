@@ -170,7 +170,7 @@ does not prove that you signed out or need to replace your credentials.
 Changing the workspace's Claude account stops its existing Claude processes.
 Sign-ins and key checks show a spinner and what is happening while they wait,
 as described in [AI onboarding](ai-onboarding.md#while-it-works).
-Main chats keep their history and resume with the newly connected account; they
+Main and temporary chats keep their history and resume with the newly connected account; they
 do not require access to the previous account. Model selection in **Chat mode**
 also uses the current workspace connection. If the old process cannot be stopped,
 resolve the reported stop failure before retrying; a replacement cannot start
