@@ -29,7 +29,9 @@ const modelProviderId = computed(() => props.session?.assistantSelection?.modelP
 const keyUsage = computed(() => vibe64ProviderPresentation(props.session?.assistantSelection).keyUsage);
 const goalEnabled = computed(() => props.active && Boolean(sessionId.value && sessionsPath.value && actorKey.value));
 const enabled = computed(() => goalEnabled.value && (Boolean(findVibe64AgentProvider(engineId.value)?.planUsage) || keyUsage.value));
-// Only a visible page asks for a reading: a server read may start a one-shot Claude.
+// Plan allowance is read once a minute, and only while the page is visible: a
+// server read may start a one-shot Claude.
+const PLAN_USAGE_POLL_MS = 60_000;
 // A reading that states how long it stays current is shown only that long after it
 // arrived; re-check while shown and when the tab returns, before any refetch lands.
 const visible = ref(!globalThis.document?.hidden);
@@ -62,9 +64,13 @@ const usage = useEndpointResource({
       signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)])
     }),
     retry: false,
-    refetchOnMount: "always",
+    // Returning to the page, remounting or reconnecting reads again only once the
+    // reading is a poll old, so switching tabs never adds reads. Key balances follow
+    // turn events instead and always re-read their snapshot.
+    staleTime: () => keyUsage.value ? 0 : PLAN_USAGE_POLL_MS,
+    refetchOnMount: true,
     refetchOnWindowFocus: true,
-    refetchInterval: () => keyUsage.value ? false : 60_000,
+    refetchInterval: () => keyUsage.value ? false : PLAN_USAGE_POLL_MS,
     refetchIntervalInBackground: false
   }
 });

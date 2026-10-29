@@ -16,7 +16,10 @@ mobile; tap the value on either layout to open its details.
   the reading is current. While the page is visible, Claude's is read about once
   a minute through a Claude chat running for that account. When no chat is running,
   or the running chat can't confirm a current figure, a short check that stops as
-  soon as it answers runs at most every five minutes. When no current reading can be
+  soon as it answers runs at most every five minutes. A tab in the background
+  checks nothing; when you return to it, it checks at once if its last check is a
+  minute or more old. Open tabs and sessions using the same Claude account share
+  one reading, so opening more of them does not add checks. When no current reading can be
   obtained, the value shows **?%**. Its details say, for example, **Can't check
   your Claude allowance right now.** and, when known, when it was last checked
   and what was left then.

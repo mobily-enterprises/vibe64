@@ -2125,8 +2125,12 @@ taken only from answers the usage endpoint gave: Claude Code's fallback from its
 last response headers can be hours old. It reads through a live conversation
 process at most once a minute and, when none is running or the live answer is
 unverified, through a temporary process at most every five minutes; it reports
-the reading `stale` seven minutes after its check. Only a visible chip requests
-a reading, so no server timer or hidden tab starts Claude.
+the reading `stale` seven minutes after its check. Every page and session of the
+account shares that reading and its five-minute temporary-process limit. Only a
+visible chip requests a reading, once a minute; returning to the page, remounting
+or reconnecting reads at once only when the last reading is at least a minute
+old. Tab switches therefore add no reads, and no server timer or hidden tab
+starts Claude.
 The chip shows the percentage only for the reading's `currentForMs` after it
 arrived, re-checked while shown and when the tab returns; otherwise Claude and
 Codex show `?%` with "can't check right now" and, when known, the last checked
