@@ -44,15 +44,31 @@ const OPENCODE_SESSION_ENVIRONMENT_PLUGIN_URL = new URL(
   "./opencodeSessionEnvironmentPlugin.js",
   import.meta.url
 ).href;
-const OPENCODE_MANAGED_STARTUP_SCRIPT = [
+const OPENCODE_STARTUP_PREAMBLE = [
   "set -eu",
   "log_path=\"$1\"",
   "shift",
   ": > \"$log_path\"",
   "chmod 600 \"$log_path\"",
-  "export VIBE64_CODEX_GIT_COMMAND_NO_STDIN_PARENT_PID=$$",
-  "exec \"$@\" </dev/null >>\"$log_path\" 2>&1"
+  "export VIBE64_CODEX_GIT_COMMAND_NO_STDIN_PARENT_PID=$$"
+];
+const OPENCODE_STARTUP_EXEC = "exec \"$@\" </dev/null >>\"$log_path\" 2>&1";
+// A managed host names each detached execution's private directory, which ends
+// with the execution's receipt. The server keeps its home, configuration, data
+// and state there, so a stop without this server's handle (after a Vibe64
+// restart) still removes them. Without one it keeps the supplied private roots.
+const OPENCODE_MANAGED_STARTUP_SCRIPT = [
+  ...OPENCODE_STARTUP_PREAMBLE,
+  "private_dir=\"${VIBE64_EXECUTION_PRIVATE_DIR:-}\"",
+  "if [ -n \"$private_dir\" ]; then",
+  "  export HOME=\"$private_dir/home\" XDG_CONFIG_HOME=\"$private_dir/config\" " +
+    "XDG_DATA_HOME=\"$private_dir/data\" XDG_STATE_HOME=\"$private_dir/state\"",
+  "  mkdir -m 700 \"$HOME\" \"$XDG_CONFIG_HOME\" \"$XDG_DATA_HOME\" \"$XDG_STATE_HOME\"",
+  "fi",
+  OPENCODE_STARTUP_EXEC
 ].join("\n");
+// A server whose private roots were prepared before start keeps them.
+const OPENCODE_SEEDED_STARTUP_SCRIPT = [...OPENCODE_STARTUP_PREAMBLE, OPENCODE_STARTUP_EXEC].join("\n");
 const OPENCODE_INLINE_CONFIG_BASE = Object.freeze({
   agent: {
     [OPENCODE_HELPER_AGENT_ID]: {
@@ -554,11 +570,13 @@ async function createOpenCodeServerProcess({
   privateRoot = "",
   providerConnections = [],
   readinessTimeoutMs = OPENCODE_READY_TIMEOUT_MS,
+  seededPrivateRoot = false,
   sessionEnvironmentRegistry = "",
   shimDirs = [],
   stopExecution = stopVibe64Execution,
   workdir = ""
 } = {}) {
+  const startupScript = seededPrivateRoot ? OPENCODE_SEEDED_STARTUP_SCRIPT : OPENCODE_MANAGED_STARTUP_SCRIPT;
   const normalizedDbPath = path.resolve(text(dbPath));
   const normalizedPrivateRoot = path.resolve(text(privateRoot));
   const normalizedWorkdir = path.resolve(text(workdir));
@@ -590,7 +608,7 @@ async function createOpenCodeServerProcess({
       ...(Array.isArray(providerConnections) ? providerConnections : [])].map(connection => ({ providerId: text(connection?.modelProviderId), apiKey: String(connection?.apiKey || "") })),
     execution: createVibe64ConversationExecution({
       commandRunner: request => commandRunner({ ...request, command: "/bin/sh", runtimes: VIBE64_INTERACTIVE_RUNTIME_PACKS,
-        args: ["-c", OPENCODE_MANAGED_STARTUP_SCRIPT, "vibe64-opencode-server", logPath, request.command, ...request.args] }),
+        args: ["-c", startupScript, "vibe64-opencode-server", logPath, request.command, ...request.args] }),
       stopExecution, inspectExecution, credentialHome, logPath, shimDirs,
       label: text(execution.label) || "OpenCode assistant",
       operationId: text(execution.operationId) || "opencode-server",
@@ -601,7 +619,7 @@ async function createOpenCodeServerProcess({
           environment: "development",
           compatibilityKey: createHash("sha256").update(JSON.stringify({
             command: executable, version: OPENCODE_EXPECTED_VERSION,
-            platform: process.platform, architecture: process.arch, startup: OPENCODE_MANAGED_STARTUP_SCRIPT
+            platform: process.platform, architecture: process.arch, startup: startupScript
           })).digest("hex")
         },
         ownerId: text(execution.ownerId) || stableHash(`${normalizedDbPath}\0${normalizedWorkdir}`)
@@ -714,6 +732,8 @@ async function readOpenCodeCatalog({
           // install would hold the stopped process for the whole stop timeout.
           packageInstalls: false,
           privateRoot: native.privateRoot,
+          // JSKIT writes the read's Zen identity into this root before start.
+          seededPrivateRoot: true,
           providerConnections: native.providerConnections,
           workdir: native.workdir
         });

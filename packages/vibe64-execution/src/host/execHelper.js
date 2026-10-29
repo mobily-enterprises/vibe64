@@ -368,7 +368,7 @@ function handleManagedExecutionOperation(payload = {}) {
     inputPresent: payload.inputPresent === true,
     ...(releaseEnvironmentFile ? { releaseEnvironment: true } : {}),
     executionId
-  });
+  }, { privateDirectory: mode === "detached" });
   // The runner reads its command as the target user, with no privilege to lend.
   const runnerPayloadPath = path.join(managedExecutionRuntimeRoot(owner, executionId), "command.json");
 
@@ -1148,15 +1148,31 @@ function openManagedExecutionReceipts(directory = "", {
       }
     },
     // The receipt and the runner's command in it, handed to the target user.
-    create(executionId = "", targetUser = {}, runnerCommand = {}) {
+    // A service (privateDirectory) also gets a private directory in its receipt,
+    // named to it as VIBE64_EXECUTION_PRIVATE_DIR: whatever removes the receipt
+    // (Stop, release-ended, a failed start) removes the state it keeps there,
+    // without knowing what that state is.
+    create(executionId = "", targetUser = {}, runnerCommand = {}, { privateDirectory = false } = {}) {
       const receiptPath = openedPath(descriptor, managedExecutionId(executionId));
       mkdirSync(receiptPath, { mode: 0o700 });
       const receipt = openSync(receiptPath, DIRECTORY_NO_FOLLOW);
       try {
+        const env = { ...runnerCommand.env };
+        if (privateDirectory) {
+          mkdirSync(openedPath(receipt, "private"), { mode: 0o700 });
+          const directoryDescriptor = openSync(openedPath(receipt, "private"), DIRECTORY_NO_FOLLOW);
+          try {
+            fchownSync(directoryDescriptor, targetUser.uid, targetUser.gid);
+          } finally {
+            closeSync(directoryDescriptor);
+          }
+          env.VIBE64_EXECUTION_PRIVATE_DIR = path.join(directory, managedExecutionId(executionId), "private");
+        }
         const command = openSync(openedPath(receipt, "command.json"), NEW_FILE_NO_FOLLOW, 0o600);
         try {
           writeFileSync(command, `${JSON.stringify({
             ...runnerCommand,
+            env,
             schema: "vibe64.managed-execution.command",
             schemaVersion: 1
           })}\n`);

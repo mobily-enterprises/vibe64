@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
-import { access, chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { execFile as execFileCallback } from "node:child_process";
+import { access, chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+import { promisify } from "node:util";
 
 import {
   configureVibe64Host,
@@ -20,6 +22,8 @@ import {
   safeOpenCodeEnvironment,
   verifyOpenCodeApiKey
 } from "../../packages/vibe64-terminals/src/server/opencodeServerProcess.js";
+
+const execFile = promisify(execFileCallback);
 
 // A host with runtime packs pins opencode and runs it by name.
 function withRuntimePacks(t, root) {
@@ -114,6 +118,7 @@ test("OpenCode cold catalog unlocks complete Zen metadata with only its public i
   assert.deepEqual(starts[0].providerConnections, []);
   assert.equal(starts[0].execution.operationId, "opencode-catalog");
   assert.equal(starts[0].packageInstalls, false);
+  assert.equal(starts[0].seededPrivateRoot, true, "the read keeps the private root holding its Zen identity");
   assert.equal(stopped, 1);
 });
 
@@ -573,6 +578,72 @@ test("OpenCode servers run and drain through one managed execution id", async (t
     }
   }]);
   await assert.rejects(access(privateRoot), { code: "ENOENT" });
+});
+
+// A managed host names each detached execution's private directory, and the
+// Stop or release that removes the execution's receipt removes it too. The
+// server keeps its home, configuration, data and state there, so a stop after a
+// Vibe64 restart, without this server's handle, leaves none of them behind.
+test("a managed OpenCode server keeps its private state in its execution's private directory", async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-opencode-execution-private-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  withRuntimePacks(t, root);
+  const startupRequest = async (options = {}) => {
+    let started = null;
+    const server = await createOpenCodeServerProcess({
+      dbPath: path.join(root, "opencode.db"), workdir: path.join(root, "workdir"), port: 43210,
+      env: { PATH: process.env.PATH }, privateRoot: path.join(root, "private"),
+      commandRunner: async (request) => { started = request; return { ok: true, execution: { id: "execution" }, pid: 4242 }; },
+      inspectExecution: async () => ({ ok: true, running: true }),
+      stopExecution: async () => ({ scopeEmpty: true }),
+      fetchImpl: async () => new Response(JSON.stringify({ healthy: true, version: OPENCODE_EXPECTED_VERSION })),
+      ...options
+    });
+    await server.stop();
+    return started;
+  };
+  // The roots the started process sees once the unit's startup script ran.
+  const startedRoots = async (request, executionPrivateDirectory = "") => {
+    const logPath = path.join(root, "startup.log");
+    await execFile("/bin/sh", [...request.args.slice(0, 3), logPath, "/bin/sh", "-c",
+      "printf '%s\\n' \"$$\" \"$VIBE64_CODEX_GIT_COMMAND_NO_STDIN_PARENT_PID\" \"$HOME\" " +
+      "\"$XDG_CACHE_HOME\" \"$XDG_CONFIG_HOME\" \"$XDG_DATA_HOME\" \"$XDG_STATE_HOME\""], {
+      env: { ...request.baseEnv,
+        ...(executionPrivateDirectory ? { VIBE64_EXECUTION_PRIVATE_DIR: executionPrivateDirectory } : {}) }
+    });
+    const [pid, scriptPid, HOME, XDG_CACHE_HOME, XDG_CONFIG_HOME, XDG_DATA_HOME, XDG_STATE_HOME] =
+      (await readFile(logPath, "utf8")).trim().split("\n");
+    assert.equal(pid, scriptPid, "the script still execs OpenCode in its own process");
+    return { HOME, XDG_CACHE_HOME, XDG_CONFIG_HOME, XDG_DATA_HOME, XDG_STATE_HOME };
+  };
+  const suppliedRoots = request => Object.fromEntries(["HOME", "XDG_CACHE_HOME", "XDG_CONFIG_HOME",
+    "XDG_DATA_HOME", "XDG_STATE_HOME"].map(name => [name, request.baseEnv[name]]));
+  const executionPrivateDirectory = async name => {
+    const directory = path.join(root, "executions", name, "private");
+    await mkdir(directory, { mode: 0o700, recursive: true });
+    return directory;
+  };
+
+  const server = await startupRequest();
+  const serverPrivate = await executionPrivateDirectory("server");
+  assert.deepEqual(await startedRoots(server, serverPrivate), {
+    HOME: path.join(serverPrivate, "home"),
+    XDG_CACHE_HOME: server.baseEnv.XDG_CACHE_HOME,
+    XDG_CONFIG_HOME: path.join(serverPrivate, "config"),
+    XDG_DATA_HOME: path.join(serverPrivate, "data"),
+    XDG_STATE_HOME: path.join(serverPrivate, "state")
+  });
+  for (const name of ["home", "config", "data", "state"]) {
+    assert.equal((await stat(path.join(serverPrivate, name))).mode & 0o777, 0o700);
+  }
+  assert.deepEqual(await startedRoots(server), suppliedRoots(server),
+    "without a managed host (a person's own computer) it keeps the roots it was given");
+
+  const catalogue = await startupRequest({ privateRoot: path.join(root, "catalogue"), seededPrivateRoot: true });
+  const cataloguePrivate = await executionPrivateDirectory("catalogue");
+  assert.deepEqual(await startedRoots(catalogue, cataloguePrivate), suppliedRoots(catalogue),
+    "a server whose private root was prepared before start keeps it");
+  assert.deepEqual(await readdir(cataloguePrivate), []);
 });
 
 test("shared OpenCode startup keeps Vibe64's timeout and version recovery errors", async t => {

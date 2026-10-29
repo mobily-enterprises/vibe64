@@ -463,6 +463,15 @@ checks and last health-error cause. The host maps shared failure categories to
 the existing application error codes, preserving startup retry behavior. Stop
 keeps the original termination policy and full confirmed proof; unsuccessful
 cleanup leaves the private root and remains retryable.
+When the managed host names the server execution's private directory
+(`VIBE64_EXECUTION_PRIVATE_DIR`), the server's startup script keeps OpenCode's
+home and XDG configuration, data and state there, so the Stop or release that
+ends its execution removes them even after a Vibe64 restart lost this server's
+handle. The supplied private root then holds the startup log and any attached
+terminal's own state, and JSKIT still removes it after a proven stop. Without a
+managed host, and for the catalogue read whose Zen identity JSKIT writes into
+its private root before start (`seededPrivateRoot`), OpenCode keeps the supplied
+root.
 JSKIT's extracted shared runtime also owns the server's acquisition maps, pending
 starts, health/credential reuse, last-user release and exact-server recovery.
 Vibe64 supplies authorized startup inputs and keeps terminal closure, durable

@@ -83,6 +83,14 @@ reads the runner's result the same way, only as the target user's regular
 `result.json` in that receipt within a size limit; a link, FIFO or anything
 else there counts as no result.
 
+A detached execution's receipt also holds its private directory, created for
+its target user with mode `0700` and named to the unit as
+`VIBE64_EXECUTION_PRIVATE_DIR`. A service keeps state there that must end with
+it, such as OpenCode's home and XDG configuration, data and state. Whatever
+removes the receipt (Stop, `release-ended`, a failed start) removes that state
+too, so a server that restarted without the service's handle leaves none of it
+behind. Finite and interactive executions get no private directory.
+
 Each managed command names itself through its execution descriptor's `label`
 and `operationId` and carries the project and session it serves, so a host
 listing running work need not fall back to a generic name. Account checks name

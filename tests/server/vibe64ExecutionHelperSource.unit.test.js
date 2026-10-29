@@ -251,6 +251,36 @@ test("execution Stop force-kills an unresponsive unit at the caller's bound", ()
   assert.ok(unbounded.killedAt() >= 15_000, "without a bound the helper keeps its 15 s limit");
 });
 
+// An agent service keeps its private home, configuration and data in its own
+// receipt, so the Stop or release-ended that removes that receipt removes them
+// too, even after the server that started it lost its handle.
+test("a service's private directory lives in its receipt and is named to the unit", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-exec-private-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const targetUser = { gid: process.getgid(), uid: process.getuid() };
+  const directory = path.join(root, "executions");
+  const receipts = openManagedExecutionReceipts(directory, { ...targetUser, create: true, legacyUid: targetUser.uid });
+  t.after(() => receipts.close());
+  const [service, finite] = ["d", "e"].map((digit) => `${digit.repeat(8)}-0000-4000-8000-${digit.repeat(12)}`);
+  const runnerCommand = async (executionId, options) => {
+    receipts.create(executionId, targetUser, { args: [], command: "/bin/true", cwd: "/", env: { LANG: "C" }, executionId }, options);
+    return JSON.parse(await readFile(path.join(directory, executionId, "command.json"), "utf8"));
+  };
+
+  const privateDirectory = path.join(directory, service, "private");
+  assert.deepEqual((await runnerCommand(service, { privateDirectory: true })).env,
+    { LANG: "C", VIBE64_EXECUTION_PRIVATE_DIR: privateDirectory });
+  const created = await stat(privateDirectory);
+  assert.deepEqual([created.isDirectory(), created.mode & 0o777, created.uid], [true, 0o700, targetUser.uid]);
+  assert.deepEqual((await runnerCommand(finite)).env, { LANG: "C" });
+  assert.deepEqual(await readdir(path.join(directory, finite)), ["command.json"]);
+  assert.match(await helperSource(), /\}, \{ privateDirectory: mode === "detached" \}\);/u,
+    "only detached executions, the services, get one");
+
+  receipts.remove(service);
+  assert.equal(existsSync(privateDirectory), false, "removing the receipt removes its private directory");
+});
+
 test("execution Stop of an ended unit only releases its receipt and failed record", () => {
   const ended = unresponsiveUnit({ initiallyEmpty: true });
   const result = stopManagedExecution("unit.service", "execution", {}, { termTimeoutMs: 3000, ...ended.options });
