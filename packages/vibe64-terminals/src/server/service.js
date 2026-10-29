@@ -533,7 +533,8 @@ function createService({
   projectServices: suppliedProjectServices = null,
   projectService,
   publishProjectRuntimeChanged = async () => null,
-  publishSessionChanged = {}
+  publishSessionChanged = {},
+  runCodexGitGatewayCommand
 } = {}) {
   if (!projectService) {
     throw new TypeError("createService requires vibe64.project.");
@@ -631,7 +632,8 @@ function createService({
     authorizeActorAccess: authorizeCodexGitActorAccess,
     env,
     logger,
-    projectService
+    projectService,
+    runGatewayCommand: runCodexGitGatewayCommand
   });
   let agentPreviewCommand;
   const outputTarget = createOutputTargetTerminalController({
@@ -1468,7 +1470,8 @@ function createService({
     const { execution, normalizedSessionId, runtime, session } = await sessionWorkExecution(
       sessionId,
       context,
-      "session-save"
+      "session-save",
+      { createsCommits: true }
     );
     const project = await projectService.readCurrentProject();
     const destination = assertSessionRepositoryReview(project, session, input.destinationReview);
@@ -2332,14 +2335,17 @@ function createService({
     return execution;
   }
 
-  async function sessionWorkExecution(sessionId, input = {}, reason = "session-work") {
+  // A write that records commits (Save, Update, Merge contribution) passes
+  // `createsCommits`, so its commands carry the author's own Git name and email.
+  async function sessionWorkExecution(sessionId, input = {}, reason = "session-work", { createsCommits = false } = {}) {
     const normalizedSessionId = String(sessionId || "").trim();
     const read = await sessionContext(normalizedSessionId, input);
     const { runtime } = read;
     let { session } = read;
+    const executionInput = { createsCommits, sessionId: normalizedSessionId, vibe64User: input.vibe64User || null };
     let execution = await codexGitCommand.sessionWorkSaveContext({
-      session,
-      sessionId: normalizedSessionId
+      ...executionInput,
+      session
     });
     if (execution?.ok === false) {
       const sessionSourceRoot = sessionSourcePath(session);
@@ -2358,8 +2364,8 @@ function createService({
       if (recorded?.ok !== false && recorded) {
         session = recorded.session || await runtime.getSession(normalizedSessionId, { inspectSource: false });
         execution = await codexGitCommand.sessionWorkSaveContext({
-          session,
-          sessionId: normalizedSessionId
+          ...executionInput,
+          session
         });
       }
     }
@@ -2910,7 +2916,7 @@ function createService({
         activeCode: "vibe64_session_update_agent_active",
         activeMessage: "Wait for the assistant turn to finish before updating this session."
       }, async (context) => {
-        const { execution, session } = await sessionWorkExecution(sessionId, context, "session-update");
+        const { execution, session } = await sessionWorkExecution(sessionId, context, "session-update", { createsCommits: true });
         return updateManagedSessionWork({
           beforeSourceChange: () => invalidateWorkspaceSetup(context),
           commandOptions: execution.commandOptions,
@@ -2933,7 +2939,8 @@ function createService({
         const { execution, session } = await sessionWorkExecution(
           sessionId,
           context,
-          "session-update-recovery"
+          "session-update-recovery",
+          { createsCommits: true }
         );
         return recoverManagedSessionWorkUpdate({
           beforeSourceChange: () => invalidateWorkspaceSetup(context),
@@ -3024,7 +3031,8 @@ function createService({
           });
           if (recorded?.ok === false) throw Object.assign(new Error(recorded.error), { code: recorded.code });
           const session = await context.runtime.getSession(sessionId, { inspectSource: false });
-          const { execution } = await sessionWorkExecution(sessionId, { ...context, session }, "incoming-contribution");
+          const { execution } = await sessionWorkExecution(sessionId, { ...context, session }, "incoming-contribution",
+            { createsCommits: input.action !== "discard" });
           return changeManagedIncomingContribution({ project, session, action: input.action,
             derivedArtifactPaths: GENESIS_DERIVED_ARTIFACT_PATHS,
             id: input.id, review: input.review, repairReview: input.repairReview,

@@ -5,6 +5,7 @@ import process from "node:process";
 import { isVibe64DebugLoggingEnabled } from "@local/vibe64-core/shared";
 
 import {
+  USER_CREDENTIAL_SCOPE,
   normalizeText,
   resolveGithubHomeForStoredActor,
   runVibe64Command
@@ -530,31 +531,29 @@ function githubAuthenticationRejected(result = {}) {
   );
 }
 
-// Each GitHub session-work operation needs the actor's token and Git identity,
-// and each read is a managed job run as that person. One actor's values are
-// reused for a short time and dropped when GitHub rejects the token. They live
-// in this process's memory only, never on disk or in logs.
+// Each GitHub session-work operation needs the actor's token, and each read is
+// a managed job run as that person. One actor's token is reused for a short
+// time and dropped when GitHub rejects it. It lives in this process's memory
+// only, never on disk or in logs.
 const ACTOR_CREDENTIAL_TTL_MS = 5 * 60_000;
 
 function createActorCredentialCache({ now = Date.now, ttlMs = ACTOR_CREDENTIAL_TTL_MS } = {}) {
   const entries = new Map();
-  const entryKey = (actorKey, field) => `${actorKey}\0${field}`;
   return Object.freeze({
     // load() returns { cacheable, value }; only a settled answer is kept.
-    async read(actorKey, field, load) {
+    async read(actorKey, load) {
       const at = now();
       for (const [key, entry] of entries) {
         if (entry.expiresAt <= at) entries.delete(key);
       }
-      const cached = entries.get(entryKey(actorKey, field));
+      const cached = entries.get(actorKey);
       if (cached) return cached.value;
       const { cacheable, value } = await load();
-      if (cacheable) entries.set(entryKey(actorKey, field), { expiresAt: now() + ttlMs, value });
+      if (cacheable) entries.set(actorKey, { expiresAt: now() + ttlMs, value });
       return value;
     },
     drop(actorKey) {
-      entries.delete(entryKey(actorKey, "token"));
-      entries.delete(entryKey(actorKey, "identity"));
+      entries.delete(actorKey);
     }
   });
 }
@@ -680,18 +679,30 @@ async function readGithubToken({
   };
 }
 
-// Save runs as the workspace service, so the person's own Git settings are
-// read as the person, in their tool home, the same way their GitHub token is.
-// An unreadable or unset identity leaves the command env's own resolution.
-// `settled` is false only when the read itself failed: Git exits 1 for unset.
-async function readPersonGitIdentity({
+// Session-work writes run as the workspace service. Where each person has their
+// own OS account (the user credential scope), the commit author's Git name and
+// email are read as that person, in their tool home, every time a write that
+// creates commits starts, so a name saved in Account applies to the next Save.
+// Elsewhere Vibe64 runs as the person and the command env reads their Git
+// config itself. Git exits 1 when no name or email is set: the commit then
+// carries a stand-in named after the person. A read that fails (a timeout on a
+// busy host, any other error) uses that person's last answered read since the
+// server started, so load neither fails the Save nor records a stand-in for
+// someone whose name Git has; with no answered read yet, the write is refused.
+async function commitAuthorOptions({
   actor = {},
+  answeredAuthors,
   gatewayCommandRunner,
+  logger = null,
   session = {},
   toolHome = {}
 } = {}) {
   const credentialRoot = normalizeText(toolHome.toolHomeSource);
-  if (!credentialRoot) return { identity: null, settled: true };
+  if (toolHome.ok === false || toolHome.credentialScope !== USER_CREDENTIAL_SCOPE || !credentialRoot) {
+    return { ok: true, options: {} };
+  }
+  const userKey = normalizeText(toolHome.ownerUserKey);
+  const authorKey = JSON.stringify([userKey, credentialRoot]);
   const result = await gatewayCommandRunner({
     actor: "owner-user",
     allowedRoots: [credentialRoot],
@@ -711,20 +722,39 @@ async function readPersonGitIdentity({
       sessionId: actor.sessionId
     },
     timeout: CODEX_GIT_COMMAND_TIMEOUT_MS,
-    userKey: gatewayGitIdentityUserKey(session, actor, toolHome)
+    userKey
   });
-  if (result?.ok !== true) {
-    return { identity: null, settled: Number(result?.exitCode) === 1 && result?.timedOut !== true };
+  const unset = result?.ok !== true && Number(result?.exitCode) === 1 && result?.timedOut !== true;
+  if (result?.ok !== true && !unset) {
+    const answered = answeredAuthors.get(authorKey);
+    logOperationalEvent(logger, "warn", {
+      code: normalizeText(result?.code) || "vibe64_session_git_author_read_failed",
+      component: "vibe64.session_git_author",
+      event: "vibe64.session_git_author.read_failed",
+      executionId: normalizeText(result?.execution?.id),
+      timedOut: result?.timedOut === true,
+      usedLastAnswer: Boolean(answered),
+      userKey
+    }, "The commit author's Git identity could not be read.");
+    return answered
+      ? { ok: true, options: answered }
+      : responseError(
+          "Vibe64 could not read your Git name and email just now, so nothing was changed. Try again.",
+          "vibe64_session_git_author_unavailable",
+          { executionId: normalizeText(result?.execution?.id) || null }
+        );
   }
   const values = {};
-  for (const line of String(result.stdout || "").split("\n")) {
+  for (const line of String(unset ? "" : result.stdout || "").split("\n")) {
     const match = /^user\.(name|email) (.+)$/iu.exec(line.trim());
     if (match) values[match[1].toLowerCase()] = normalizeText(match[2]);
   }
-  return {
-    identity: values.name && values.email ? { email: values.email, name: values.name } : null,
-    settled: true
-  };
+  const options = Object.freeze({
+    ...(values.name && values.email ? { personGitIdentity: Object.freeze({ email: values.email, name: values.name }) } : {}),
+    userKey
+  });
+  answeredAuthors.set(authorKey, options);
+  return { ok: true, options };
 }
 
 function logGitCommandResult(logger, result = {}, fields = {}) {
@@ -771,9 +801,12 @@ function createCodexGitCommandService({
 } = {}) {
   const gatewayCommandRunner = typeof runGatewayCommand === "function" ? runGatewayCommand : runVibe64Command;
   const actorCredentials = createActorCredentialCache({ now });
+  // Each person's last answered Git identity read, used only when a read fails.
+  // It lives in this process's memory, one entry per person and tool home.
+  const answeredAuthors = new Map();
 
   function readActorToken(credentialKey, request) {
-    return actorCredentials.read(credentialKey, "token", async () => {
+    return actorCredentials.read(credentialKey, async () => {
       const value = await readGithubToken(request);
       return { cacheable: value.ok === true, value };
     });
@@ -814,9 +847,15 @@ function createCodexGitCommandService({
     );
   }
 
+  // `createsCommits` marks a write that records commits (Save, Update, Merge
+  // contribution), whose options then carry their author: a GitHub session's
+  // Git actor, whose credential publishes them, or for any other session
+  // `vibe64User`, the person asking. Checks and probes read nobody's identity.
   async function sessionWorkSaveContext({
+    createsCommits = false,
     session: suppliedSession = null,
-    sessionId: suppliedSessionId = ""
+    sessionId: suppliedSessionId = "",
+    vibe64User = null
   } = {}) {
     const sessionId = normalizeText(suppliedSessionId || suppliedSession?.sessionId || suppliedSession?.id);
     if (!sessionId) {
@@ -844,10 +883,27 @@ function createCodexGitCommandService({
         return refusal;
       }
     }
+    const noCommitAuthor = { ok: true, options: {} };
     if (actor.githubRequired === false) {
+      const commitAuthor = createsCommits
+        ? await commitAuthorOptions({
+            actor,
+            answeredAuthors,
+            gatewayCommandRunner,
+            logger,
+            session,
+            toolHome: await resolveGithubHomeForStoredActor({
+              env,
+              ownerUserKey: normalizeText(vibe64User?.username || vibe64User?.osUsername)
+            })
+          })
+        : noCommitAuthor;
+      if (commitAuthor.ok === false) {
+        return commitAuthor;
+      }
       return {
         actor,
-        commandOptions: {},
+        commandOptions: { ...commitAuthor.options },
         ok: true,
         runCommand: gatewayCommandRunner
       };
@@ -870,24 +926,21 @@ function createCodexGitCommandService({
     if (githubToken.ok === false) {
       return githubToken;
     }
-    const personGitIdentity = await actorCredentials.read(credentialKey, "identity", async () => {
-      const { identity, settled } = await readPersonGitIdentity({
-        actor,
-        gatewayCommandRunner,
-        session,
-        toolHome
-      });
-      return { cacheable: settled, value: identity };
-    });
+    const commitAuthor = createsCommits
+      ? await commitAuthorOptions({ actor, answeredAuthors, gatewayCommandRunner, logger, session, toolHome })
+      : noCommitAuthor;
+    if (commitAuthor.ok === false) {
+      return commitAuthor;
+    }
     return {
       actor,
       commandOptions: {
         actor: "app",
         gitAuthToken: githubToken.token,
         gitTransport: "github-token",
-        ...(personGitIdentity ? { personGitIdentity } : {}),
         purpose: "github",
-        userKey: gatewayGitIdentityUserKey(session, actor, toolHome)
+        userKey: gatewayGitIdentityUserKey(session, actor, toolHome),
+        ...commitAuthor.options
       },
       ok: true,
       runCommand: async (request) => dropRejectedCredentials(credentialKey, await gatewayCommandRunner(request))

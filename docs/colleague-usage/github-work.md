@@ -19,6 +19,11 @@ pull-request policy. **Update this session (rebase)** reconciles newer saved pro
 work when offered; Save does not silently perform that update for you. A failed or
 uncertain push needs a state check before another request.
 
+Save, Update and merging an incoming contribution record the Git name and email
+you have at that moment, the ones **Account settings → GitHub** shows, for every
+kind of project. If one says Vibe64 could not read your Git name and email,
+nothing was changed; try it again.
+
 While a browser tab has the project open, even in the background, or an AI turn
 runs in one of its sessions, Vibe64 checks the project's repository every 30
 seconds. Newer saved work pushed from elsewhere, or committed in a local project

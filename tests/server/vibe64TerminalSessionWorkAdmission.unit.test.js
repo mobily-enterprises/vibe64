@@ -17,6 +17,7 @@ import test from "node:test";
 import { promisify } from "node:util";
 import { controllerHarness } from "../fixtures/opencodeController.js";
 import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
+import { currentOsUser } from "../../packages/vibe64-core/src/server/osUserIdentity.js";
 
 import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
@@ -127,7 +128,8 @@ async function terminalServiceFixture(t, lock, {
   inspectAgentSkills,
   logger = null,
   opencodeTerminalController = {},
-  publishSessionChanged = {}
+  publishSessionChanged = {},
+  runCodexGitGatewayCommand
 } = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-session-work-admission-"));
   const sourcePath = path.join(root, "managed", "sessions", "active", "session-1", "source");
@@ -239,7 +241,8 @@ async function terminalServiceFixture(t, lock, {
     },
     projectService,
     opencodeTerminalController,
-    publishSessionChanged
+    publishSessionChanged,
+    runCodexGitGatewayCommand
   });
   t.after(async () => {
     await service.close();
@@ -1205,6 +1208,38 @@ test("repository update checks do not occupy assistant-write admission", async (
 
   lock.releaseFirst();
   assert.equal((await activeAgent).acquired, true);
+});
+
+// Incident 2026-10-29: where each person has their own OS account, every Save
+// of a managed Git project was authored by the workspace service's stand-in,
+// because only GitHub sessions read the saving person's Git name and email.
+// Writes that record commits read them as the person; checks never do.
+test("Save and Update of a Vibe64 Git session read the person's own Git identity; checks do not", async (t) => {
+  const identityReads = [];
+  const { service, session } = await terminalServiceFixture(t, { store: {} }, {
+    // Each person has their own OS account, separate from the workspace service.
+    env: { VIBE64_GITHUB_ACCOUNT_MODE: "user" },
+    async runCodexGitGatewayCommand(request) {
+      if (request.actor === "owner-user" && request.command === "git" && request.args[0] === "config") {
+        identityReads.push(request);
+        return { exitCode: 0, ok: true, stdout: "user.name Ana Diaz\nuser.email ana@example.test\n" };
+      }
+      return { code: "test_stop", error: "Repository work is outside this test.", exitCode: 2, ok: false };
+    }
+  });
+  session.metadata.repository_mode = "managed_git";
+  const person = { username: currentOsUser().username };
+
+  await assert.rejects(service.saveSessionWork(session.sessionId, { vibe64User: person }),
+    { code: "vibe64_session_repository_review_changed" });
+  assert.equal(identityReads.length, 1, "Save reads the saving person's Git identity");
+  assert.equal(identityReads[0].cwd, currentOsUser().home);
+
+  await service.updateSessionWork(session.sessionId, { vibe64User: person }).catch(() => null);
+  assert.equal(identityReads.length, 2, "Update reads it again, never a remembered answer");
+
+  await service.checkSessionUpdates(session.sessionId, { vibe64User: person }).catch(() => null);
+  assert.equal(identityReads.length, 2, "an update check reads nobody's Git identity");
 });
 
 test("renewal workspace setup privately resumes a pending successor while public setup rejects it", async (t) => {

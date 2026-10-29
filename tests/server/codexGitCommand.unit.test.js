@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
 import { mkdir, rm, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
@@ -110,6 +110,7 @@ function githubSession(root = "", sessionId = "github-session") {
 
 function serviceForSession(session = {}, {
   authorizeActorAccess = null,
+  env = process.env,
   logger = null,
   metadataReads = null,
   now,
@@ -119,6 +120,7 @@ function serviceForSession(session = {}, {
 } = {}) {
   return createCodexGitCommandService({
     authorizeActorAccess,
+    env,
     logger,
     now,
     projectService: {
@@ -984,6 +986,29 @@ test("Codex separates GitHub authorization from the Git filesystem identity", as
 // holds no Git identity and which cannot read the person's home, so every
 // hosted Save carried the stand-in although the person's own ~/.gitconfig had
 // their name. The person's identity is read as the person and given to Save.
+// A gateway whose owner-user `git config` read runs git as the person, in the
+// person's own home.
+function personHomeGateway(personHome, calls = []) {
+  return async (request) => {
+    calls.push(request);
+    if (request.command === "gh") return { exitCode: 0, ok: true, stdout: "token\n" };
+    const result = await new Promise((resolve) => execFile("git", request.args, {
+      cwd: personHome,
+      env: { GIT_CONFIG_NOSYSTEM: "1", HOME: personHome, PATH: process.env.PATH }
+    }, (error, stdout) => resolve({ exitCode: error ? Number(error.code) || 1 : 0, stdout })));
+    return { ...result, ok: result.exitCode === 0 };
+  };
+}
+
+// The env a Save command run as the workspace service gets from its options.
+function workspaceServiceSaveEnv(serviceHome, commandOptions = {}) {
+  return resolveCommandEnv({
+    actor: { actor: "daemon", requiresRealUser: false, user: { home: serviceHome, username: "v64d_unit" } },
+    baseEnv: { PATH: process.env.PATH },
+    request: normalizeVibe64CommandRequest({ args: ["commit-tree"], command: "git", cwd: serviceHome, ...commandOptions })
+  });
+}
+
 test("Save run by the workspace service commits under the person's own Git identity", async () => {
   await withTemporaryRoot(async (root) => {
     const session = githubSession(root);
@@ -994,46 +1019,85 @@ test("Save run by the workspace service commits under the person's own Git ident
     await mkdir(personHome, { recursive: true });
     await writeFile(path.join(personHome, ".gitconfig"), "[user]\n\tname = Ana Diaz\n\temail = ana@example.test\n");
     const gatewayCalls = [];
-    const service = serviceForSession(session, {
-      async runGatewayCommand(request) {
-        gatewayCalls.push(request);
-        if (request.command === "gh") return { exitCode: 0, ok: true, stdout: "token\n" };
-        // The owner-user read runs git as the person, in the person's home.
-        const result = await runProcessWithInput("git", request.args, {
-          cwd: personHome,
-          env: { GIT_CONFIG_NOSYSTEM: "1", HOME: personHome, PATH: process.env.PATH }
-        });
-        return { exitCode: result.exitCode, ok: result.exitCode === 0, stdout: result.stdout };
-      }
-    });
+    const service = serviceForSession(session, { runGatewayCommand: personHomeGateway(personHome, gatewayCalls) });
     const user = currentOsUser();
-    const daemon = { actor: "app", requiresRealUser: false, user: { home: daemonHome, username: "v64d_unit" } };
-    const saveEnv = (commandOptions) => resolveCommandEnv({
-      actor: daemon,
-      baseEnv: { PATH: process.env.PATH },
-      request: normalizeVibe64CommandRequest({ args: ["commit-tree"], command: "git", cwd: daemonHome, ...commandOptions })
-    });
 
     // Without the person's identity the service's own HOME yields the stand-in.
-    assert.equal(saveEnv({ userKey: user.username }).GIT_AUTHOR_NAME, `${user.username} via Vibe64`);
+    assert.equal(workspaceServiceSaveEnv(daemonHome, { userKey: user.username }).GIT_AUTHOR_NAME,
+      `${user.username} via Vibe64`);
 
-    const context = await service.sessionWorkSaveContext({ session });
+    const context = await service.sessionWorkSaveContext({ createsCommits: true, session });
     assert.equal(context.ok, true);
     const read = gatewayCalls.find((call) => call.command === "git");
     assert.equal(read.actor, "owner-user");
     assert.equal(read.cwd, user.home);
     assert.deepEqual(context.commandOptions.personGitIdentity, { email: "ana@example.test", name: "Ana Diaz" });
-    const env = saveEnv(context.commandOptions);
+    const env = workspaceServiceSaveEnv(daemonHome, context.commandOptions);
     assert.equal(env.GIT_AUTHOR_NAME, "Ana Diaz");
     assert.equal(env.GIT_AUTHOR_EMAIL, "ana@example.test");
     assert.equal(env.GIT_COMMITTER_EMAIL, "ana@example.test");
   });
 });
 
+// Incident 2026-10-29: where each person has their own OS account, every Save
+// of a managed Git project was authored "<service user> via Vibe64", the
+// workspace service's stand-in, although the owner's tool home had their Git
+// name and email. Only a GitHub session read them as the person.
+test("Save of a Vibe64 Git session commits under the saving person's own Git identity", async () => {
+  await withTemporaryRoot(async (root) => {
+    const session = sessionSource(root, "managed-session", {
+      repository_mode: "managed_git",
+      source_remote_url: path.join(root, "canonical-repository", "repository.git")
+    });
+    await mkdir(session.metadata.source_path, { recursive: true });
+    const serviceHome = path.join(root, "service-home");
+    const personHome = path.join(root, "person-home");
+    await mkdir(serviceHome, { recursive: true });
+    await mkdir(personHome, { recursive: true });
+    await writeFile(path.join(personHome, ".gitconfig"), "[user]\n\tname = Ana Diaz\n\temail = ana@example.test\n");
+    const gatewayCalls = [];
+    const user = currentOsUser();
+    // Each person has their own OS account, separate from the workspace service.
+    const service = serviceForSession(session, {
+      env: { VIBE64_GITHUB_ACCOUNT_MODE: "user" },
+      runGatewayCommand: personHomeGateway(personHome, gatewayCalls)
+    });
+    const person = { username: user.username };
+
+    const context = await service.sessionWorkSaveContext({ createsCommits: true, session, vibe64User: person });
+    assert.equal(context.ok, true, context.error);
+    assert.equal(context.actor.githubRequired, false);
+    const env = workspaceServiceSaveEnv(serviceHome, context.commandOptions);
+    assert.equal(env.GIT_AUTHOR_NAME, "Ana Diaz");
+    assert.equal(env.GIT_AUTHOR_EMAIL, "ana@example.test");
+    assert.equal(env.GIT_COMMITTER_NAME, "Ana Diaz");
+    const read = gatewayCalls.find((call) => call.command === "git");
+    assert.equal(read.actor, "owner-user", "the person's Git identity is read as the person");
+    assert.equal(read.cwd, user.home);
+
+    // A person whose Git truly has no name gets a stand-in named after them,
+    // never after the workspace service.
+    await writeFile(path.join(personHome, ".gitconfig"), "");
+    const unset = await service.sessionWorkSaveContext({ createsCommits: true, session, vibe64User: person });
+    assert.equal(unset.ok, true, unset.error);
+    assert.equal(workspaceServiceSaveEnv(serviceHome, unset.commandOptions).GIT_AUTHOR_NAME,
+      `${user.username} via Vibe64`);
+
+    // Repository checks and probes read nobody's Git identity.
+    gatewayCalls.length = 0;
+    const check = await service.sessionWorkSaveContext({ session, vibe64User: person });
+    assert.deepEqual(check.commandOptions, {});
+    assert.equal(gatewayCalls.length, 0);
+  });
+});
+
 // Load review 2026-10-29: each GitHub session-work check ran `gh auth token`
 // and `git config` as the person before its own job, three managed jobs where
 // one does the work. The server's update probe runs every 30 seconds.
-function credentialGateway({ commandResult = { exitCode: 0, ok: true, stdout: "" } } = {}) {
+function credentialGateway({
+  commandResult = { exitCode: 0, ok: true, stdout: "" },
+  identityResult = () => ({ exitCode: 0, ok: true, stdout: "user.name Ana Diaz\nuser.email ana@example.test\n" })
+} = {}) {
   const calls = { command: 0, identity: 0, token: 0 };
   return {
     calls,
@@ -1044,7 +1108,7 @@ function credentialGateway({ commandResult = { exitCode: 0, ok: true, stdout: ""
       }
       if (request.actor === "owner-user" && request.args[0] === "config") {
         calls.identity += 1;
-        return { exitCode: 0, ok: true, stdout: "user.name Ana Diaz\nuser.email ana@example.test\n" };
+        return identityResult(request);
       }
       calls.command += 1;
       return typeof commandResult === "function" ? commandResult(request) : commandResult;
@@ -1052,7 +1116,7 @@ function credentialGateway({ commandResult = { exitCode: 0, ok: true, stdout: ""
   };
 }
 
-test("session-work checks within the credential TTL reuse the actor's token and Git identity", async () => {
+test("session-work checks within the credential TTL reuse the actor's token and never read Git identity", async () => {
   await withTemporaryRoot(async (root) => {
     const session = githubSession(root);
     await mkdir(session.metadata.source_path, { recursive: true });
@@ -1063,20 +1127,122 @@ test("session-work checks within the credential TTL reuse the actor's token and 
     const first = await service.sessionWorkSaveContext({ session });
     clock += 60_000;
     const second = await service.sessionWorkSaveContext({ session });
-    assert.deepEqual(gateway.calls, { command: 0, identity: 1, token: 1 });
+    assert.deepEqual(gateway.calls, { command: 0, identity: 0, token: 1 });
     for (const context of [first, second]) {
       assert.equal(context.commandOptions.gitAuthToken, "token-1");
-      assert.deepEqual(context.commandOptions.personGitIdentity, { email: "ana@example.test", name: "Ana Diaz" });
+      assert.equal(context.commandOptions.personGitIdentity, undefined);
     }
     // An agent's GitHub Git command by the same actor reuses the token too.
     const fetched = await service.run({ args: ["fetch", "origin", "main"], command: "git", sessionId: session.sessionId });
     assert.equal(fetched.ok, true);
-    assert.deepEqual(gateway.calls, { command: 1, identity: 1, token: 1 });
+    assert.deepEqual(gateway.calls, { command: 1, identity: 0, token: 1 });
 
     clock += 5 * 60_000;
     const expired = await service.sessionWorkSaveContext({ session });
     assert.equal(expired.commandOptions.gitAuthToken, "token-2");
-    assert.deepEqual(gateway.calls, { command: 1, identity: 2, token: 2 });
+    assert.deepEqual(gateway.calls, { command: 1, identity: 0, token: 2 });
+  });
+});
+
+// The stand-in notice tells the person to enter their Git name in Account; the
+// next Save must use it, not an answer remembered from before they did.
+// A gateway whose identity read answers what `answers.next` says: the person's
+// name, Git's "not set" (exit 1) or a failure such as a busy host's timeout.
+const IDENTITY_ANSWERS = Object.freeze({
+  failed: () => ({ code: "vibe64_command_timed_out", exitCode: 1, ok: false, signal: "SIGTERM", stdout: "", timedOut: true }),
+  named: () => ({ exitCode: 0, ok: true, stdout: "user.name Ana Diaz\nuser.email ana@example.test\n" }),
+  unset: () => ({ exitCode: 1, ok: false, stdout: "" })
+});
+const ANA = { email: "ana@example.test", name: "Ana Diaz" };
+
+function answeringIdentityGateway(answers) {
+  return credentialGateway({ identityResult: (request) => IDENTITY_ANSWERS[answers.next](request) });
+}
+
+// Git's "not set" is an answer, never a remembered one: the person entering
+// their name in Account after the stand-in notice gets it on the next Save, and
+// removing it is not undone by an older answer.
+test("each Save reads the person's current Git identity; \"not set\" is never remembered", async () => {
+  await withTemporaryRoot(async (root) => {
+    const session = githubSession(root);
+    await mkdir(session.metadata.source_path, { recursive: true });
+    const answers = { next: "unset" };
+    const gateway = answeringIdentityGateway(answers);
+    const service = serviceForSession(session, { runGatewayCommand: gateway.runGatewayCommand });
+    const save = () => service.sessionWorkSaveContext({ createsCommits: true, session });
+
+    const unset = await save();
+    assert.equal(unset.ok, true, unset.error);
+    assert.equal(unset.commandOptions.personGitIdentity, undefined);
+
+    answers.next = "named"; // Save Git identity in Account
+    assert.deepEqual((await save()).commandOptions.personGitIdentity, ANA);
+
+    answers.next = "unset"; // the person removed their name
+    assert.equal((await save()).commandOptions.personGitIdentity, undefined);
+    assert.deepEqual(gateway.calls, { command: 0, identity: 3, token: 1 });
+  });
+});
+
+// A busy host must not make Save fail, nor record a stand-in, for someone
+// whose name Git has already given since the server started.
+test("a failed Git identity read after an answered one commits under the last answer", async () => {
+  await withTemporaryRoot(async (root) => {
+    const session = githubSession(root);
+    await mkdir(session.metadata.source_path, { recursive: true });
+    const answers = { next: "named" };
+    const gateway = answeringIdentityGateway(answers);
+    const warnings = [];
+    const service = serviceForSession(session, {
+      logger: { info() {}, warn(event) { warnings.push(event); } },
+      runGatewayCommand: gateway.runGatewayCommand
+    });
+    const save = () => service.sessionWorkSaveContext({ createsCommits: true, session });
+
+    assert.deepEqual((await save()).commandOptions.personGitIdentity, ANA);
+    answers.next = "failed";
+    const remembered = await save();
+    assert.equal(remembered.ok, true, remembered.error);
+    assert.deepEqual(remembered.commandOptions.personGitIdentity, ANA);
+    const warning = warnings.find((event) => event.event === "vibe64.session_git_author.read_failed");
+    assert.equal(warning.usedLastAnswer, true);
+    assert.doesNotMatch(JSON.stringify(warning), /Ana Diaz|ana@example/u, "the identity is never logged");
+
+    // Every write still reads afresh: the next answer replaces the remembered one.
+    answers.next = "unset";
+    assert.equal((await save()).commandOptions.personGitIdentity, undefined);
+    answers.next = "failed";
+    const afterUnset = await save();
+    assert.equal(afterUnset.ok, true, afterUnset.error);
+    assert.equal(afterUnset.commandOptions.personGitIdentity, undefined, "the last answer was \"not set\"");
+    assert.equal(gateway.calls.identity, 4);
+  });
+});
+
+// A known person whose Git identity has never been read since the server
+// started is not "unknown": the write stops before any commit instead of
+// recording the stand-in for good.
+test("a failed Git identity read with no earlier answer refuses the write", async () => {
+  await withTemporaryRoot(async (root) => {
+    const session = githubSession(root);
+    await mkdir(session.metadata.source_path, { recursive: true });
+    const answers = { next: "failed" };
+    const gateway = answeringIdentityGateway(answers);
+    const service = serviceForSession(session, { runGatewayCommand: gateway.runGatewayCommand });
+
+    const refused = await service.sessionWorkSaveContext({ createsCommits: true, session });
+    assert.equal(refused.ok, false);
+    assert.equal(refused.code, "vibe64_session_git_author_unavailable");
+    assert.match(refused.error, /could not read your Git name and email/u);
+    assert.equal(gateway.calls.command, 0, "no repository command ran");
+
+    // Another server process has its own memory: an answer here is not shared.
+    answers.next = "named";
+    assert.deepEqual((await service.sessionWorkSaveContext({ createsCommits: true, session })).commandOptions.personGitIdentity, ANA);
+    answers.next = "failed";
+    const fresh = serviceForSession(session, { runGatewayCommand: gateway.runGatewayCommand });
+    assert.equal((await fresh.sessionWorkSaveContext({ createsCommits: true, session })).code,
+      "vibe64_session_git_author_unavailable");
   });
 });
 
@@ -1104,7 +1270,6 @@ test("a GitHub authentication rejection drops the actor's cached token", async (
     assert.equal(failed.ok, false, "the rejection is returned unchanged");
     const renewed = await service.sessionWorkSaveContext({ session });
     assert.equal(gateway.calls.token, 2);
-    assert.equal(gateway.calls.identity, 2);
     assert.equal(renewed.commandOptions.gitAuthToken, "token-2");
 
     // An agent's gh command rejected with HTTP 401 drops it the same way.

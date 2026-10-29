@@ -695,13 +695,30 @@ Push of that upstream stay with the original folder.
   and one managed publish-and-reconcile transaction under the project source
   lock. A deterministic private prepared-commit ref supplies restart evidence;
   disposable mirror refresh is deferred until after Save.
-- `codexGitCommand.js` reads a GitHub actor's token (`gh auth token`) and Git
-  identity as that person, each a managed job, and keeps them in memory for five
-  minutes per actor and tool home, so repeated session-work operations and the
-  agent's GitHub Git commands reuse them. A command GitHub rejects as
-  unauthenticated (401, failed authentication, bad credentials) drops that
-  actor's values, so the next operation reads them again. Neither is written to
-  disk or logs; the actor authorization hook still runs for every operation.
+- `codexGitCommand.js` reads a GitHub actor's token (`gh auth token`) as that
+  person, a managed job, and keeps it in memory for five minutes per actor and
+  tool home, so repeated session-work operations and the agent's GitHub Git
+  commands reuse it. A command GitHub rejects as unauthenticated (401, failed
+  authentication, bad credentials) drops that actor's token, so the next
+  operation reads it again. It is never written to disk or logs; the actor
+  authorization hook still runs for every operation.
+- Writes that record commits (Save, Update and its recovery, Merge or repair of
+  an incoming contribution) ask `sessionWorkSaveContext()` with
+  `createsCommits`; checks, probes and inspections do not and read nobody's Git
+  identity. The author is a GitHub session's Git actor, whose credential
+  publishes the commit, or for any other repository mode the person asking.
+  Where each person has their own OS account (the user credential scope) these
+  writes run as the workspace service, so the author's `user.name` and
+  `user.email` are read as that person in their tool home every time such a
+  write starts: Save Git identity applies to the next Save. Git's exit 1 (none
+  set) leaves the gateway's stand-in, named after that person. A read that
+  fails (a timeout on a busy host, any other error) uses that person's last
+  answered read since the server started, kept in memory per person and tool
+  home and replaced by every answer, "not set" included; with no answer yet the
+  write is refused before a commit (`vibe64_session_git_author_unavailable`).
+  Each failed read logs `vibe64.session_git_author.read_failed`, without the
+  name or email. Where Vibe64 runs as the person, the gateway reads their Git
+  config itself.
 - `repositoryUpdateProbe.js` keeps one probe timer per project in use: a
   browser's realtime watch, authorized as the `api`-only action
   `vibe64.sessions.repository-updates.watch`, or an agent turn that a

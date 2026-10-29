@@ -49,8 +49,9 @@ GitHub sign-in is not a Health check. **Account settings → GitHub** shows the
 **GitHub Connection** card: **Connection ready** means Vibe64 can use GitHub.
 That card also holds **Git user.name**, **Git user.email** and **Save Git identity**;
 the two fields show the name and email Git has for you now, which your next Save
-uses. Connecting GitHub fills in your Git name and email only when Git has none;
-it never replaces ones you already set.
+uses, whether the project saves to GitHub or to Vibe64 Git. Connecting GitHub
+fills in your Git name and email only when Git has none; it never replaces ones
+you already set.
 
 When Vibe64 starts in a terminal with no AI tool at all, it prints one plain
 message there with the Claude Code install command. It says nothing when one AI

@@ -446,6 +446,12 @@ Preferred explicit identity:
 }
 ```
 
+A supplied identity (`personGitIdentity`) is the person's Git name and email
+read as that person by a caller whose command runs under another Unix identity:
+session-work writes that record commits supply it, with `userKey` naming the
+person, where each person has their own OS account (see
+`genesis/program/source/save-work.md`).
+
 Without an explicit or supplied identity, the person's own Git config comes
 next: git itself runs `git config --get-regexp '^user\.(name|email)$'` with the
 command's env (git found on the server's PATH), in the command's repository and
@@ -477,7 +483,8 @@ Fallback identity:
 }
 ```
 
-The fallback matters for non-GitHub projects. A commit should not fail simply
+The fallback is named after the request's `userKey`, else the command's OS
+user. It matters for non-GitHub projects. A commit should not fail simply
 because the user has not connected GitHub.
 
 ## Result Shape
