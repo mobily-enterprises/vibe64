@@ -80,6 +80,9 @@ AI Accounts: your Claude plan's models, such as **Opus 5.5**, show **Claude**,
 and DeepSeek's models, which also run in Claude Code, show **DeepSeek**. **Recommended** marks the
 suggested model; unavailable choices show their reason and cannot be chosen.
 Type to search. Choose thinking in the separate thinking control beside it.
+Models from your own Codex sign-in, such as **GPT-5.5**, show **Codex (OpenAI)**,
+and a session that needs that sign-in while it is disconnected says **Connect
+Codex (OpenAI) before creating or continuing this session.**
 
 The tool a model runs in appears only when it is not the usual one, for example
 **DeepSeek V4 Pro · runs in Codex**. **Advanced** under a row appears only when

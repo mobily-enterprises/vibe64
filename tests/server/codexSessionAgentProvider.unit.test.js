@@ -115,6 +115,19 @@ test("Codex discovery failures stay visible and disconnected accounts do not dis
   assert.equal(disconnected.modelProviders[0].connected, false);
 });
 
+test("Codex names its own sign-in Codex (OpenAI) in Models, as the refused-selection message does", async () => {
+  const controller = { modelCatalog: async () => ({ data: [{ ...catalogModel({ model: "gpt-6-sol" }), displayName: "GPT-6 Sol" }] }) };
+  const connected = await createCodexSessionAgentProvider({ controller }).capabilities({});
+  const signIn = connected.modelProviders.find((row) => row.id === "openai");
+  assert.equal(signIn.label, "Codex (OpenAI)");
+  assert.deepEqual(signIn.models.map((model) => model.label), ["GPT-6 Sol"]);
+  const disconnected = await createCodexSessionAgentProvider({ controller, connectionStatus: async () => false }).capabilities({});
+  assert.throws(
+    () => resolveVibe64AssistantSelection(disconnected, { engineId: "codex", modelProviderId: "openai", agentId: "codex" }),
+    { message: "Connect Codex (OpenAI) before creating or continuing this session." }
+  );
+});
+
 test("shared runtime metadata does not offer foreign models through the GPT connection", async () => {
   const provider = createCodexSessionAgentProvider({
     controller: { modelCatalog: async () => ({ data: ["gpt-6-sol", "deepseek-flash", "deepseek-v4-pro", "glm-5.3"]

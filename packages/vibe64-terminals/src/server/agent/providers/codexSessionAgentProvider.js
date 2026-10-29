@@ -31,6 +31,7 @@ import {
   Vibe64AgentExecutionProfileError,
   defineVibe64HelperExecutionProfileResolution,
   emitVibe64AgentExecutionProfile,
+  findVibe64AgentProvider,
   vibe64HelperExecutionProfileRequest
 } from "@local/vibe64-runtime/shared";
 
@@ -119,7 +120,8 @@ function codexAssistantCapabilities(connected = true, catalog = codexConfiguredM
       connected,
       description: "Codex models provided by OpenAI",
       id: "openai",
-      label: "GPT",
+      // The owner's Codex sign-in, named as AI Accounts and a refused selection name it.
+      label: findVibe64AgentProvider(VIBE64_ASSISTANT_ENGINE_IDS.CODEX).accountLabel,
       models
     }, ...curated],
     revision,
