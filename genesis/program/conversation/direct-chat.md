@@ -2146,8 +2146,8 @@ transcript. Native frame UUIDs keep thinking and answer blocks distinct when
 they share an API message ID, including after history reload. Tool commands
 enter the existing session command broker.
 Older session snapshots reuse the already-owned main Claude conversation.
-Temporary-work checks, shutdown, account changes and project close act on the
-entries Claude's owner retains and reopen no saved conversation: a Claude
+Temporary-work checks, shutdown and project close act on the entries Claude's
+owner retains and reopen no saved conversation: a Claude
 process cannot outlive the server that started it. A session's close reopens only
 saved custody an earlier server left (an unproven execution or a turn saved as
 active) so a verified stop can retire it. Neither these nor restart restoration
