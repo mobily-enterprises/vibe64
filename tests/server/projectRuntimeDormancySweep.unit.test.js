@@ -65,7 +65,7 @@ test("the dormancy sweep reads session records only and closes an idle runtime w
   try {
     await outputs.terminals.openProjectRuntime();
     assert.deepEqual((await created.listSessions({ statusGroup: "open" })).map((listed) => [listed.sessionId, listed.sourceReady]),
-      [[session.sessionId, true]], "the sweep sees a session with source, as on the fleet");
+      [[session.sessionId, true]], "the sweep sees a session with source, as a real workspace does");
     published.length = 0;
     const fresh = await outputs.terminals.closeDormantProjectRuntimes({});
     assert.deepEqual(fresh.results.map((result) => [result.reason, result.dormant]), [["not-dormant", false]]);
