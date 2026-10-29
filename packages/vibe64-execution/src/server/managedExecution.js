@@ -130,9 +130,9 @@ async function stopVibe64Execution(executionId = "", options = {}) {
       process.platform === "win32") {
     return pty;
   }
-  // A restored ID this server never started came from an earlier server. That
-  // server's reaper stopped its detached groups when it ended, and its
-  // terminals were hung up with it, so nothing can still run under the ID.
+  // A restored ID this server never started came from an earlier server, and
+  // restored IDs name detached services. That server's reaper stopped its
+  // detached groups when it ended, so nothing can still run under the ID.
   return {
     executionId: normalizedExecutionId,
     ok: true,
@@ -145,8 +145,8 @@ async function stopVibe64OwnedExecutions(selector = {}, options = {}) {
   if (installedProvider?.stopOwnedExecutions) {
     return installedProvider.stopOwnedExecutions(selector, options);
   }
-  // Without a provider the caller stops its own executions by ID. Nothing an
-  // earlier server started survives it, so no other owned scope remains.
+  // Without a provider the caller stops its own executions by ID. No detached
+  // command an earlier server started survives it, so no other owned scope remains.
   return {
     closed: 0,
     ok: true,

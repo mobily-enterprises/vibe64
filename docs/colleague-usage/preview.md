@@ -177,8 +177,9 @@ once for the project; subsequent sessions share them. Stopping an individual
 Preview leaves these services available. Where your host provides project **Close**,
 use it to stop all project work, including shared services. In a local directory
 editor, shut down the editor normally. However the local editor ends, including a
-crash or a closed terminal, its shared services and Previews stop within a few
-seconds and do not keep running into its next start. Hiding Preview, navigating
+crash or a closed terminal, its shared services stop within a few seconds and do
+not keep running into its next start. Previews end with it too, unless their
+program keeps running after its terminal hangs up. Hiding Preview, navigating
 away or closing a browser tab does not perform project Close. Ordinary inactivity shutdown also
 stops them. Shared services remain subject to hosted resource limits while idle.
 

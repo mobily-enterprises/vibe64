@@ -81,16 +81,20 @@ receipt and retryability. Native owners may supply their existing stop reason
 and termination grace period; the gateway still proves scope cleanup.
 
 Without an installed execution provider, the running server owns its detached
-commands (shared services, Preview launches) and records them only in memory.
-While any run it keeps one reaper process holding their process groups over a
-pipe from the server. When the server ends in any way, including a crash or a
-closed terminal, the pipe closes and the reaper stops those groups (SIGTERM,
-then SIGKILL after three seconds); it also exits once the last detached command
-ends. Commands remain their own process-group leaders. A saved execution ID this
-server does not hold therefore belongs to an earlier server whose groups were
-already stopped: a restored stop (`allowMissingRecordScopeRecovery`) reports the
-scope empty without claiming to have stopped anything, while an ordinary stop of
-an unknown ID is still not found. Windows keeps its previous behaviour.
+commands (shared services, assistants, agent session commands and the agent
+Preview browser) and records them only in memory. While any run it keeps one
+reaper process holding their process groups over a pipe from the server. When
+the server ends in any way, including a crash or a closed terminal, the pipe
+closes and the reaper stops those groups (SIGTERM, then SIGKILL after three
+seconds); it also exits once the last detached command ends. Commands remain
+their own process-group leaders. Terminal commands, including Preview launches,
+end with the kernel's hangup of their terminal instead; a program that ignores
+SIGHUP outlives the server. Captured commands are not held. A saved execution ID
+this server does not hold therefore belongs to an earlier server whose groups
+were already stopped: a restored stop (`allowMissingRecordScopeRecovery`)
+reports the scope empty without claiming to have stopped anything, while an
+ordinary stop of an unknown ID is still not found. Windows keeps its previous
+behaviour.
 
 The terminal-session registry keeps a namespace only while it holds a session.
 Listing, reading, subscribing to, stopping or closing a namespace records nothing.

@@ -103,9 +103,10 @@ test("an execution ID unknown to this server is proven empty only for restored-I
 
 test("the server's detached reaper exists only while a detached execution runs", { skip: process.platform !== "linux" }, async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-reaper-"));
+  let result;
   try {
     assert.deepEqual(await reaperProcesses(), []);
-    const result = await runVibe64Command({
+    result = await runVibe64Command({
       command: "sleep", args: ["30"], cwd: root, mode: "detached", purpose: "codex",
       execution: { ownerId: "reaper-test" }
     });
@@ -117,6 +118,8 @@ test("the server's detached reaper exists only while a detached execution runs",
     assert.equal(await waitFor(async () => (await reaperProcesses()).length === 0, 2_000), true,
       "the reaper ends once no detached execution remains");
   } finally {
+    // A failed assertion must not leave the command running.
+    if (result?.execution?.id) await stopVibe64Execution(result.execution.id);
     await rm(root, { force: true, recursive: true });
   }
 });

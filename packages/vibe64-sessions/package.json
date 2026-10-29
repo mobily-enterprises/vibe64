@@ -21,6 +21,7 @@
         "runtime.actions",
         "runtime.events",
         "runtime.http",
+        "runtime.logger",
         "runtime.realtime",
         "vibe64.project",
         "vibe64.source-editor",
