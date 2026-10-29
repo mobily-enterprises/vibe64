@@ -657,6 +657,9 @@ test("managed service runner stops its process tree when the owning controller d
         (error) => error?.code === "ESRCH"
       );
     }
+    const receipt = JSON.parse(await readFile(path.join(root, "result.json"), "utf8"));
+    assert.equal(receipt.controllerLeaseClosed, true,
+      "the receipt says the runner stopped its child, so its own exit 1 is not reported as a process failure");
   } finally {
     for (const socket of sockets) {
       socket.destroy();

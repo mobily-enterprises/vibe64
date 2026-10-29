@@ -239,7 +239,13 @@ function handleManagedExecutionOperation(payload = {}, requestPayloadPath = "") 
     return;
   }
   if (action === "stop") {
-    stopManagedExecution(unitName, executionId, owner);
+    const result = stopManagedExecution(unitName, executionId, owner, {
+      termTimeoutMs: managedExecutionStopTimeoutMs(payload.termTimeoutMs)
+    });
+    process.stdout.write(`${JSON.stringify(result)}\n`);
+    if (!result.scopeEmpty) {
+      process.exit(1);
+    }
     return;
   }
   if (action !== "start") {
@@ -485,6 +491,9 @@ async function runManagedExecutionPayload(payloadPath = "") {
     const status = typeof outcome.status === "number" ? outcome.status : 1;
     writeManagedExecutionResult(path.dirname(resolved), {
       ...managedRunnerCgroupMeasurements(),
+      // The runner stopped this child because the controller that admitted it
+      // went away; the runner's own exit status then says nothing about the child.
+      ...(controllerLeaseClosed ? { controllerLeaseClosed: true } : {}),
       executionId: managedExecutionId(payload.executionId),
       startedAt,
       exitObservedAt: outcome.exitObservedAt,
@@ -1231,6 +1240,7 @@ function managedExecutionState(unitName = "", executionId = "", owner = {}, {
     taskLimit: recorded.taskLimit || managedExecutionTaskLimitCounters(cgroupPath),
     result: String(values.Result || recorded.result || ""),
     signal: String(recorded.signal || ""),
+    controllerLeaseClosed: recorded.controllerLeaseClosed === true,
     scopeEmpty,
     startedAt: values.ExecMainStartTimestamp || recorded.startedAt || "",
     subState: String(values.SubState || "unknown"),
@@ -1376,47 +1386,65 @@ function managedExecutionOomBoundary(text, { unitName, workspace, startedAt, unt
   return evidence;
 }
 
-function stopManagedExecution(unitName = "", executionId = "", owner = {}) {
-  const initial = managedExecutionState(unitName, executionId, owner);
+// A caller may bound how long a stop waits after SIGTERM before force-killing,
+// up to the helper's own limit. The unit's 10 s TimeoutStopSec stays systemd's
+// own escalation for longer requests.
+function managedExecutionStopTimeoutMs(value) {
+  if (value === undefined || value === null) {
+    return MANAGED_EXECUTION_STOP_TIMEOUT_MS;
+  }
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error("Vibe64 exec helper rejected an invalid managed execution stop timeout.");
+  }
+  return Math.min(value, MANAGED_EXECUTION_STOP_TIMEOUT_MS);
+}
+
+function stopManagedExecution(unitName = "", executionId = "", owner = {}, {
+  termTimeoutMs = MANAGED_EXECUTION_STOP_TIMEOUT_MS,
+  run = runRootCommandAllowFailure,
+  readState = () => managedExecutionState(unitName, executionId, owner),
+  removeRuntime = () => rmSync(managedExecutionRuntimeRoot(owner, executionId), { force: true, recursive: true }),
+  now = Date.now,
+  wait = (milliseconds) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds)
+} = {}) {
+  const initial = readState();
   if (!initial.scopeEmpty) {
     // Let the unit's ExecStop finish owned cleanup before systemd signals its
     // cgroup. Killing first can interrupt delegated container shutdown hooks.
-    runRootCommandAllowFailure("systemctl", ["stop", unitName]);
+    // The stop is queued, so the caller's bound, not TimeoutStopSec, decides
+    // when unresponsive processes are force-killed.
+    run("systemctl", ["stop", "--no-block", unitName]);
   }
-  const deadline = Date.now() + MANAGED_EXECUTION_STOP_TIMEOUT_MS;
-  let state = managedExecutionState(unitName, executionId, owner);
-  const waitSignal = new Int32Array(new SharedArrayBuffer(4));
-  while (!state.scopeEmpty && Date.now() < deadline) {
-    Atomics.wait(waitSignal, 0, 0, 25);
-    state = managedExecutionState(unitName, executionId, owner);
+  const deadline = now() + termTimeoutMs;
+  let state = initial.scopeEmpty ? initial : readState();
+  while (!state.scopeEmpty && now() < deadline) {
+    wait(25);
+    state = readState();
   }
   if (!state.scopeEmpty) {
-    runRootCommandAllowFailure("systemctl", [
+    run("systemctl", [
       "kill",
       "--kill-who=all",
       "--signal=SIGKILL",
       unitName
     ]);
-    runRootCommandAllowFailure("systemctl", ["stop", unitName]);
-    state = managedExecutionState(unitName, executionId, owner);
+  }
+  if (!initial.scopeEmpty) {
+    // Settle the queued stop job before reading the unit's final state.
+    run("systemctl", ["stop", unitName]);
+    state = readState();
   }
   if (state.scopeEmpty) {
-    rmSync(managedExecutionRuntimeRoot(owner, executionId), {
-      force: true,
-      recursive: true
-    });
-    runRootCommandAllowFailure("systemctl", ["reset-failed", unitName]);
+    removeRuntime();
+    run("systemctl", ["reset-failed", unitName]);
   }
-  process.stdout.write(`${JSON.stringify({
+  return {
     executionId,
     ok: state.scopeEmpty,
     scopeEmpty: state.scopeEmpty,
     stopped: initial.scopeEmpty === false,
     ...state
-  })}\n`);
-  if (!state.scopeEmpty) {
-    process.exit(1);
-  }
+  };
 }
 
 function assertNormalizedPayload(payload = {}) {
@@ -2324,7 +2352,8 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
 }
 
 export { managedWorkflowCounters, managedWorkflowIdentity, managedExecutionOomBoundary,
-  managedExecutionState, managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal,
+  managedExecutionState, managedExecutionStopTimeoutMs, managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal,
+  stopManagedExecution,
   assertExpectedId, canonicalPath, helperChildEnv, resolveAllowedCwd,
   resolveAllowedDeploymentServicePath,
   resolveAllowedUserHomePath, runUserCommand };

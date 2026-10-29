@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { helperChildEnv, managedExecutionState, managedExecutionOomBoundary, managedExecutionTaskLimitCounters,
-  managedExecutionTaskLimitJournal } from "../../packages/vibe64-execution/src/host/execHelper.js";
+import { helperChildEnv, managedExecutionState, managedExecutionOomBoundary, managedExecutionStopTimeoutMs,
+  managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal,
+  stopManagedExecution } from "../../packages/vibe64-execution/src/host/execHelper.js";
 import {
   RUNTIME_PACKS,
   VIBE64_INTERACTIVE_RUNTIME_PACKS
@@ -172,7 +173,7 @@ test("execution helper preserves operation and command allowlists", async () => 
 test("execution Stop lets systemd run service cleanup before signalling the cgroup", async () => {
   const source = await helperSource();
   const stop = source.slice(source.indexOf('function stopManagedExecution('), source.indexOf('function assertNormalizedPayload('));
-  const firstStop = stop.indexOf('["stop", unitName]');
+  const firstStop = stop.indexOf('["stop", "--no-block", unitName]');
   assert.ok(firstStop > 0);
   assert.doesNotMatch(stop.slice(0, firstStop), /SIGTERM|SIGKILL|kill-who/u);
   assert.match(stop.slice(firstStop), /SIGKILL/u, "unresponsive descendants still have bounded forced cleanup");
@@ -190,6 +191,79 @@ test("finite captures keep systemd's routine unit lines out of the journal", asy
   assert.match(args, /\.\.\.\(mode === "capture" \? \["--property=LogLevelMax=notice", "--wait", "--pipe"\] : \[\]\)/u);
   assert.match(args, /\.\.\.\(mode === "pty" \? \["--wait", "--pty"\] : \[\]\)/u);
   assert.equal(args.match(/LogLevelMax/gu).length, 1);
+});
+
+// A unit that ignores SIGTERM: its scope empties only once it is force-killed.
+function unresponsiveUnit({ initiallyEmpty = false } = {}) {
+  let clock = 0;
+  let killed = initiallyEmpty;
+  const commands = [];
+  const released = [];
+  return {
+    commands,
+    released,
+    killedAt: () => commands.find((entry) => entry.args[0] === "kill")?.at ?? null,
+    options: {
+      run: (command, args) => {
+        commands.push({ at: clock, command, args });
+        if (args[0] === "kill") killed = true;
+        return { status: 0, stdout: "" };
+      },
+      readState: () => ({ scopeEmpty: killed, unitName: "unit.service" }),
+      removeRuntime: () => released.push(clock),
+      now: () => clock,
+      wait: (milliseconds) => { clock += milliseconds; }
+    }
+  };
+}
+
+// Conversation stops ask for 3 s; a managed stop waited for the unit's 10 s
+// TimeoutStopSec, longer than the server's 8 s shutdown deadline.
+test("execution Stop force-kills an unresponsive unit at the caller's bound", () => {
+  const bounded = unresponsiveUnit();
+  const result = stopManagedExecution("unit.service", "execution", {}, { termTimeoutMs: 3000, ...bounded.options });
+  assert.equal(result.scopeEmpty, true);
+  assert.equal(result.stopped, true);
+  assert.ok(bounded.killedAt() >= 3000 && bounded.killedAt() < 3100, `killed at ${bounded.killedAt()} ms`);
+  assert.deepEqual(bounded.commands.map(({ args }) => args.join(" ")), [
+    "stop --no-block unit.service",
+    "kill --kill-who=all --signal=SIGKILL unit.service",
+    "stop unit.service",
+    "reset-failed unit.service"
+  ]);
+  assert.equal(bounded.released.length, 1, "the runtime receipt directory is released once the scope is empty");
+  const unbounded = unresponsiveUnit();
+  stopManagedExecution("unit.service", "execution", {}, unbounded.options);
+  assert.ok(unbounded.killedAt() >= 15_000, "without a bound the helper keeps its 15 s limit");
+});
+
+test("execution Stop of an ended unit only releases its receipt and failed record", () => {
+  const ended = unresponsiveUnit({ initiallyEmpty: true });
+  const result = stopManagedExecution("unit.service", "execution", {}, { termTimeoutMs: 3000, ...ended.options });
+  assert.equal(result.scopeEmpty, true);
+  assert.equal(result.stopped, false);
+  assert.deepEqual(ended.commands.map(({ args }) => args.join(" ")), ["reset-failed unit.service"]);
+  assert.deepEqual(ended.released, [0]);
+});
+
+test("execution Stop bounds are whole milliseconds up to the helper's limit", () => {
+  assert.equal(managedExecutionStopTimeoutMs(undefined), 15_000);
+  assert.equal(managedExecutionStopTimeoutMs(3000), 3000);
+  assert.equal(managedExecutionStopTimeoutMs(30_000), 15_000);
+  assert.equal(managedExecutionStopTimeoutMs(0), 0);
+  for (const invalid of [-1, 1.5, "3000", Number.NaN]) {
+    assert.throws(() => managedExecutionStopTimeoutMs(invalid), /invalid managed execution stop timeout/u);
+  }
+});
+
+test("an inspection reports that the runner stopped its child because the controller went away", () => {
+  const state = (receipt) => managedExecutionState(oomUnit, "execution", {}, {
+    query: () => ({ stdout: "LoadState=loaded\nActiveState=failed\nResult=exit-code\nExecMainCode=1\nExecMainStatus=1\n" }),
+    readResult: () => ({ executionId: "execution", execMainCode: "killed", execMainStatus: "SIGTERM", signal: "SIGTERM", ...receipt })
+  });
+  assert.equal(state({ controllerLeaseClosed: true }).controllerLeaseClosed, true);
+  assert.equal(state({}).controllerLeaseClosed, false);
+  assert.equal(state({ controllerLeaseClosed: "yes" }).controllerLeaseClosed, false);
 });
 
 test("a new execution never waits for another member of its work slice to stop", async () => {

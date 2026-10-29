@@ -49,8 +49,14 @@ installs the tool for standalone users.
 
 Managed execution Stop asks systemd to stop the exact unit before attempting
 forced cgroup cleanup. This lets host-owned ExecStop hooks drain delegated
-resources before their processes receive termination signals. Completion still
-requires the entire execution scope to be empty.
+resources before their processes receive termination signals. The stop job is
+queued, and processes still present after the caller's termination grace period
+(`termTimeoutMs`, at most 15 s, and 15 s when none is given) are force-killed, so
+a 3 s conversation stop is not held to the unit's 10 s `TimeoutStopSec`.
+Completion still requires the entire execution scope to be empty. A Stop of an
+execution whose scope is already empty signals nothing: it only removes the
+runtime receipt directory and resets systemd's failed-unit record, which also
+releases work that ended on its own.
 
 A finite capture's unit sets `LogLevelMax=notice`. Its output already returns
 to the caller, so the journal keeps only systemd's notices, warnings and errors

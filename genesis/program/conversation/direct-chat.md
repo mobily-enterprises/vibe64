@@ -3765,7 +3765,9 @@ these account-setup operations do not create a conversation runner.
   user's per-user runtime, covering hosted services and standalone local use
   without granting general access outside managed project roots.
 - `runManagedExecutionPayload()` holds a managed service's controller lease and
-  terminates the detached service process group if that lease closes.
+  terminates the detached service process group if that lease closes. Its
+  receipt then records `controllerLeaseClosed`, and inspection reports it, so
+  the runner's own nonzero exit is not read as the service failing.
 - `vite.config.mjs` temporarily preserves xterm identifiers and syntax because
   re-minifying xterm 6.0.0 breaks terminal query parsing under
   xtermjs/xterm.js#5800. Remove the workaround after Vibe64 upgrades to a fixed
