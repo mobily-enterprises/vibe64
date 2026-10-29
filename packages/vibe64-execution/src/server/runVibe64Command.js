@@ -46,6 +46,20 @@ import {
   vibe64ManagedExecutionRequired
 } from "./managedExecution.js";
 
+// Release environments and application accounts exist only on a managed host,
+// whose helper loads the file and switches to the account.
+function managedOnlyRequestError(request) {
+  if (request.releaseEnvironmentFile) {
+    return commandErrorResult("Release environment execution requires a managed host.",
+      "vibe64_release_environment_unavailable", { execution: request.execution });
+  }
+  if (request.applicationAccount) {
+    return commandErrorResult("Application account execution requires a managed host.",
+      "vibe64_application_account_unavailable", { execution: request.execution });
+  }
+  return null;
+}
+
 async function runLocalVibe64Command(request, {
   actor,
   cwd,
@@ -53,9 +67,9 @@ async function runLocalVibe64Command(request, {
   requiresHelper,
   resolveEnv
 } = {}) {
-  if (request.releaseEnvironmentFile) {
-    return commandErrorResult("Release environment execution requires a managed host.",
-      "vibe64_release_environment_unavailable", { execution: request.execution });
+  const managedOnly = managedOnlyRequestError(request);
+  if (managedOnly) {
+    return managedOnly;
   }
   if (request.mode === "pty") {
     return runPtyCommand(request, {
@@ -198,9 +212,9 @@ async function runVibe64Command(input = {}) {
         runLocal: local
       });
     }
-    if (request.releaseEnvironmentFile) {
-      return commandErrorResult("Release environment execution requires a managed host.",
-        "vibe64_release_environment_unavailable", { execution: request.execution });
+    const managedOnly = managedOnlyRequestError(request);
+    if (managedOnly) {
+      return managedOnly;
     }
     if (managedRequired) {
       return commandErrorResult(

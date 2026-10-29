@@ -19,6 +19,9 @@ const VIBE64_COMMAND_ACTORS = Object.freeze([
   "named-user",
   "app"
 ]);
+// A host may run an application under its own registered OS account instead of
+// the editor's account; only that host's privileged helper can switch to it.
+const APPLICATION_ACCOUNT_PATTERN = /^[a-z_][a-z0-9_-]{0,31}$/u;
 const VIBE64_COMMAND_PURPOSES = Object.freeze([
   "account",
   "assistant",
@@ -343,8 +346,14 @@ function normalizeVibe64CommandRequest(input = {}) {
       Object.keys(normalizedEnv.env).length || normalizedEnv.envFactory || Object.keys(baseEnv).length))) {
     throw commandRequestError("Release environment files require a finite application deployment command without caller Env.", "vibe64_command_release_environment_invalid");
   }
+  const applicationAccount = request.applicationAccount ?? "";
+  if (typeof applicationAccount !== "string" || (applicationAccount &&
+      (!APPLICATION_ACCOUNT_PATTERN.test(applicationAccount) || request.actor !== "app" || mode !== "capture"))) {
+    throw commandRequestError("Application accounts run only finite application commands.", "vibe64_command_application_account_invalid");
+  }
   return {
     actor: normalizeEnum(request.actor, VIBE64_COMMAND_ACTORS, "daemon", "actor"),
+    applicationAccount,
     allowedRoots: normalizeAbsolutePaths(request.allowedRoots),
     args: normalizeCommandArgs(request.args, {
       mode

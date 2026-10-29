@@ -87,6 +87,58 @@ test("release commands exclude editable Env and cannot fall back to local execut
   assert.equal(fallback.code, "vibe64_release_environment_unavailable");
 });
 
+test("application accounts are only for finite application commands", () => {
+  const request = { command: process.execPath, actor: "app", applicationAccount: "v64a_0123456789ab", runtimes: [] };
+  assert.equal(normalizeVibe64CommandRequest(request).applicationAccount, "v64a_0123456789ab");
+  assert.equal(normalizeVibe64CommandRequest({ ...request, applicationAccount: undefined }).applicationAccount, "");
+  for (const change of [
+    { actor: "daemon" },
+    { actor: "named-user" },
+    { mode: "detached" },
+    { mode: "pty" },
+    { applicationAccount: "Root" },
+    { applicationAccount: "../v64a" },
+    { applicationAccount: 1000 }
+  ]) {
+    assert.throws(() => normalizeVibe64CommandRequest({ ...request, ...change }),
+      { code: "vibe64_command_application_account_invalid" });
+  }
+});
+
+test("application account commands run as that account and never fall back to local execution", async (t) => {
+  const account = os.userInfo();
+  const request = {
+    command: process.execPath,
+    args: ["-e", "throw new Error('must not execute locally')"],
+    actor: "app",
+    applicationAccount: account.username,
+    envPolicy: "deployment",
+    runtimes: []
+  };
+  const unavailable = await runVibe64Command(request);
+  assert.equal(unavailable.ok, false);
+  assert.equal(unavailable.code, "vibe64_application_account_unavailable");
+  let called = false;
+  const release = installVibe64ManagedExecutionProvider({
+    async stopExecution() { throw new Error("Unexpected stop"); },
+    async runCommand(normalized, context) {
+      called = true;
+      assert.equal(normalized.applicationAccount, account.username);
+      assert.equal(context.actor.applicationAccount, true);
+      assert.equal(context.actor.requiresRealUser, false);
+      assert.equal(context.actor.user.username, account.username);
+      assert.equal(context.actor.user.uid, account.uid);
+      assert.equal(context.env.HOME, context.actor.user.home);
+      return context.runLocal();
+    }
+  });
+  t.after(release);
+  const fallback = await runVibe64Command(request);
+  assert.equal(called, true);
+  assert.equal(fallback.ok, false);
+  assert.equal(fallback.code, "vibe64_application_account_unavailable");
+});
+
 // The runner loads the release environment file itself, as the execution's own
 // user: no unit property makes root read it.
 test("managed release runner loads its release environment file as its user, with host-owned identity", async (t) => {
