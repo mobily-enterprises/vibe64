@@ -2004,6 +2004,10 @@ function createService({
           },
           label: "assistant"
         }] : []),
+        ...(controllerOptions.forgetConversationBinding === true ? [{
+          controller: { closeAllForSession: (id, options) => sessionConversations.retireTemporaryConversations(id, options) },
+          label: "Temporary chats"
+        }] : []),
         { controller: agentDatabaseCommand, label: "agentDatabase" },
         { controller: agentEnvCommand, label: "agentEnv" },
         { controller: agentPreviewCommand, label: "agentPreview" },

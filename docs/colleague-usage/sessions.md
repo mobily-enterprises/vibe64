@@ -198,7 +198,9 @@ The error then names each part that could not stop, such as
 `Database copilot: The database copilot helper could not be closed: <reason>.
 Retry before asking again.`, and a source explanation or copilot that could not
 close is kept so the retry closes it. Resolve the named reason, often an AI
-account to reconnect, then retry **Archive session**.
+account to reconnect, then retry **Archive session**. Archiving also closes the
+session's open temporary chats in the browser; their saved history stays with
+the archived session.
 If the last open session cannot be archived, its chat is selected again so you
 can inspect the failure and retry. If another session is already selected, that
 selection stays in place and the failed session becomes available in its tab.

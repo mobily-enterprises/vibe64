@@ -475,6 +475,10 @@ Explicit Close is one server operation: retain the closing record, pause any goa
 confirm native work stopped, delete the native conversation, remove its owned
 attachments, then delete the record and transcript. A failure retains the record
 and offers the same Close again, including after reload. File edits remain.
+After the cleared stream is published, Close retires that chat's open entry in
+the shared conversation runtime (`retireOpenConversation`), so its old handles
+close. Archive retires every temporary chat entry of the session the same way,
+after the Main session closes, while keeping the saved records.
 For Claude, the retained JSKIT conversation owner coordinates verified Stop and
 active native-transcript deletion, then awaits Vibe64's saved metadata and scoped
 receipt removal before retiring the entry. The original deletion guard and

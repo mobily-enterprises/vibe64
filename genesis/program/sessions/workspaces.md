@@ -429,7 +429,8 @@ Terminals' session close runs every cleanup step even when an earlier one fails,
 logs each failed step (`vibe64.session_close.step_failed`) and then reports one
 error naming every failed step with its reason (a single failure keeps its own
 code, status and `retryable`), so the stopping stage is retried
-with the rest of the session already stopped.
+with the rest of the session already stopped. Archive's close also retires the
+session's open temporary chat entries.
 Durable stopping, resources, and source stages let startup resume interrupted
 archives. An unreadable or unknown stage is refused with
 `vibe64_session_archive_state_invalid` and kept as evidence; startup reports it

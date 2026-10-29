@@ -2392,6 +2392,26 @@ test("a helper cleanup that cannot finish still lets every later session cleanup
   }, { throughTerminalService: true, projectServices });
 });
 
+test("archive retires the session's open temporary chats while an ordinary session close keeps them", { timeout: 15_000 }, async () => {
+  await withAgentMessageController(async ({ terminalService, sessionId, projectService }) => {
+    const project = await projectService.readCurrentProject();
+    await runWithProjectRequestContext({ slug: project.slug, targetRoot: project.path }, async () => {
+      await terminalService.createTemporaryConversation(sessionId, { conversationId: "archived-chat" },
+        { vibe64User: { username: "owner", role: "owner" } });
+      const handle = await terminalService.openTemporaryBrowserConversation(sessionId, "archived-chat", { browserAuthority: {
+        actorId: "owner", conversationId: "archived-chat", projectSlug: project.slug, sessionId } });
+      await handle.subscribe(() => {});
+      assert.equal((await terminalService.closeSessionTerminals(sessionId)).ok, true);
+      await handle.subscribe(() => {});
+      assert.equal((await terminalService.closeSessionTerminals(sessionId, { forgetConversationBinding: true })).ok, true);
+      await assert.rejects(handle.subscribe(() => {}), { code: "conversation_closed" });
+    });
+  }, { actions: { listDefinitions: () => [], async execute({ actionId }) {
+    assert.equal(actionId, ACTION_READ_CONVERSATION_CONTEXT);
+    return { actor: { id: "owner" } };
+  } }, throughTerminalService: true });
+});
+
 test("the common Codex entry uses the original main journal, receipt files and cleanup owner", { timeout: 15_000 }, async () => {
   await withAgentMessageController(async ({ captures, controller, runtime, sessionId, store }) => {
     const actor = { preferredName: "Ada", role: "owner", username: "ada-owner" };

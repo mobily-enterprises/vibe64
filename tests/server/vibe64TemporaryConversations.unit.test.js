@@ -896,6 +896,40 @@ test("Close publishes its exact conversation after deletion, including retries, 
   });
 });
 
+test("Close and archive retire a temporary chat's open runtime entry and its old handles", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await conversationFixture(root);
+    let service;
+    const common = createConversationRuntime({
+      authorize: async () => true,
+      host: { conversation: ({ id, context }) => service.conversationBinding(id, context) }
+    });
+    service = f.restart({ conversationRuntime: common, publishConversation: event => common.publishNative(event) });
+    const open = async (conversationId) => common.open({ id: "one", context: { sessionId: "one", temporaryConversationId: conversationId,
+      runtime: f.runtime, session: await f.runtime.getSession("one") } });
+    try {
+      await service.createTemporaryConversation("one", { conversationId: "closed-chat" });
+      await service.createTemporaryConversation("one", { conversationId: "kept-chat" });
+      const closing = await open("closed-chat");
+      const kept = await open("kept-chat");
+      const closingEvents = [];
+      await closing.subscribe(event => closingEvents.push(event));
+      await kept.subscribe(() => {});
+
+      assert.equal((await service.deleteTemporaryConversation("one", { conversationId: "closed-chat" })).ok, true);
+      assert.ok(closingEvents.length > 0, "the clear-stream event reaches the chat's view before it retires");
+      await assert.rejects(closing.subscribe(() => {}), { code: "conversation_closed" });
+      assert.ok(await kept.read(), "another chat's entry stays open");
+
+      assert.deepEqual(await service.retireTemporaryConversations("one"), { ok: true });
+      await assert.rejects(kept.subscribe(() => {}), { code: "conversation_closed" });
+      assert.ok(await f.store.readSessionConversation("one", "kept-chat"), "archive keeps the chat's saved record");
+    } finally {
+      await common.close();
+    }
+  });
+});
+
 test("temporary conversations survive a new service, stream and reconcile without entering main History", async () => {
   await withTemporaryRoot(async (root) => {
     const { service, restart, store, native } = await conversationFixture(root);

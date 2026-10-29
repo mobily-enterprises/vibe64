@@ -913,12 +913,28 @@ function createSessionConversations({
         await publish(context, input.conversationId, { payload: { conversationStream: context.runtime.store.clearConversationStream({
           sessionId, conversationId: input.conversationId
         }) } });
+        // The closed chat's open runtime entry and its handles leave memory now.
+        await conversationRuntime.retireOpenConversation({
+          namespace: temporaryConversationNamespace(context.runtime, sessionId, input.conversationId), sessionId
+        });
         await publishSessionChanged(sessionId, {
           reason: "temporary-conversation-closed",
           payload: { conversationId: input.conversationId }
         });
       }
       return result;
+    },
+
+    // Archive: once its source is gone a session's temporary chats cannot
+    // reopen, so their open runtime entries leave memory with it.
+    async retireTemporaryConversations(sessionId, options = {}) {
+      const { runtime } = await readSessionContext(sessionId, options);
+      for (const record of await runtime.store.listSessionConversations(sessionId)) {
+        await conversationRuntime.retireOpenConversation({
+          namespace: temporaryConversationNamespace(runtime, sessionId, record.conversationId), sessionId
+        });
+      }
+      return { ok: true };
     },
 
     async afterTemporaryTurn(sessionId, payload, options = {}) {
