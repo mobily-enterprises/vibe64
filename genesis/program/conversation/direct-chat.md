@@ -2109,7 +2109,17 @@ Cancel stops work and clears the native goal. Claude's form omits token budgets
 because the CLI does not provide Codex's hard token-budget control. The pinned
 CLI's experimental `get_usage` JSON control supplies current five-hour, weekly,
 and available model-specific windows. Missing or expired data is never presented
-as a refreshed allowance. Goal start/resume retains the assistant's access
+as a refreshed allowance. JSKIT's account owner keeps one reading per account,
+taken only from answers the usage endpoint gave: Claude Code's fallback from its
+last response headers can be hours old. It reads through a live conversation
+process at most once a minute and, when none is running or the live answer is
+unverified, through a temporary process at most every five minutes; it reports
+the reading `stale` seven minutes after its check. Only a visible chip requests
+a reading, so no server timer or hidden tab starts Claude.
+The chip shows the percentage only for the reading's `currentForMs` after it
+arrived, re-checked while shown and when the tab returns; otherwise Claude and
+Codex show `?%` with "can't check right now" and, when known, the last checked
+time and value in the details. Goal start/resume retains the assistant's access
 boundary; reads and pause/cancel remain available without inference admission.
 Native subscription allowance is owner-only. Passive goal and allowance lookup failures stay
 local to those controls and do not report an app-wide network outage.
@@ -2417,7 +2427,7 @@ active Codex chat indicator reads on mount and live invalidations, with a
 one-minute visible-page refresh and bounded provider reads. It never starts
 an assistant to obtain usage, stores no allowance in project history, and
 shows only the percentage remaining for the seven-day window. Missing or
-expired weekly readings hide the number until Codex confirms current values.
+expired weekly readings show `?%` instead of a number until Codex confirms current values.
 Hover/tap details include known weekly reset times and the five-hour allowance
 and reset time when supplied, without adding them to the visible percentage.
 

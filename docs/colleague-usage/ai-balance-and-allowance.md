@@ -12,7 +12,14 @@ mobile; tap the value on either layout to open its details.
   such as **68%**. The weekly quota is shown when supplied; otherwise the supplied
   coding quota is used. Details include shorter windows and reset times when known.
 - Native **Claude** subscriptions and **Codex** ChatGPT plans retain their weekly
-  percentage and existing **Refresh** control.
+  percentage and existing **Refresh** control. The percentage appears only while
+  the reading is current. While the page is visible, Claude's is read about once
+  a minute through a Claude chat running for that account. When no chat is running,
+  or the running chat can't confirm a current figure, a short check that stops as
+  soon as it answers runs at most every five minutes. When no current reading can be
+  obtained, the value shows **?%**. Its details say, for example, **Can't check
+  your Claude allowance right now.** and, when known, when it was last checked
+  and what was left then.
 
 The selected connection must be available in **AI Accounts**, and you must have
 permission to use it. To choose a model explicitly, open **Chat mode**, choose
@@ -47,12 +54,18 @@ can reject a configured key; a missing balance alone is not a reason to replace
 the key. Check the provider's Billing page for the account balance. GPT API keys
 do not show a balance. A confirmed zero does display as zero.
 
+For Claude and Codex, **?%** means the allowance can't be checked right now; it
+does not mean zero, and the last checked value in its details may be out of date.
+Tap it and choose **Refresh** to try again, or use **Usage details** to see the
+provider's current figure.
+
 Colleague can explain these controls, help identify the session's selected model,
 and offer to change the selection through its existing session actions. A change
 requires the person's request or acceptance and normal access checks. Colleague
 can read the same balance or allowance for a session: the amount and currency,
 or the remaining percentage with its reset time, and when it was checked. Like
-the indicator, no reading does not mean zero. Colleague has no access to API
+the indicator, no reading does not mean zero, and a reading reported as stale is
+the last value checked, not the current one. Colleague has no access to API
 keys; the person opens the provider site and handles any account payment or top-up.
 
 Verified against `Vibe64AgentPlanUsage.vue`, `Vibe64ChatModeControls.vue`,

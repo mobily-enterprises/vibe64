@@ -1,5 +1,5 @@
 <script setup>
-import { computed, inject, ref, unref, watch } from "vue";
+import { computed, inject, onBeforeUnmount, onMounted, ref, unref, watch } from "vue";
 import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
 import { AssistantGoalControl } from "@jskit-ai/assistant-core/client/conversation";
 import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEndpointResource";
@@ -29,11 +29,29 @@ const modelProviderId = computed(() => props.session?.assistantSelection?.modelP
 const keyUsage = computed(() => vibe64ProviderPresentation(props.session?.assistantSelection).keyUsage);
 const goalEnabled = computed(() => props.active && Boolean(sessionId.value && sessionsPath.value && actorKey.value));
 const enabled = computed(() => goalEnabled.value && (Boolean(findVibe64AgentProvider(engineId.value)?.planUsage) || keyUsage.value));
+// Only a visible page asks for a reading: a server read may start a one-shot Claude.
+// A reading that states how long it stays current is shown only that long after it
+// arrived; re-check while shown and when the tab returns, before any refetch lands.
+const visible = ref(!globalThis.document?.hidden);
+const now = ref(Date.now());
+const tick = () => {
+  visible.value = !globalThis.document?.hidden;
+  now.value = Date.now();
+};
+let clock = null;
+onMounted(() => {
+  clock = setInterval(tick, 15_000);
+  globalThis.document?.addEventListener("visibilitychange", tick);
+});
+onBeforeUnmount(() => {
+  clearInterval(clock);
+  globalThis.document?.removeEventListener("visibilitychange", tick);
+});
 const scopeKey = computed(() => JSON.stringify([projectSlug.value, sessionsPath.value, sessionId.value, actorKey.value]));
 const connectionsRealtime = { events: [VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT], matches: () => true };
 const path = computed(() => vibe64SessionPath(sessionsPath.value, sessionId.value, "/agent-plan-usage"));
 const usage = useEndpointResource({
-  enabled,
+  enabled: computed(() => enabled.value && visible.value),
   path,
   queryKey: computed(() => ["vibe64-agent-plan-usage", engineId.value, modelProviderId.value, projectSlug.value, sessionsPath.value, sessionId.value, actorKey.value]),
   realtime: connectionsRealtime,
@@ -88,26 +106,40 @@ const weekly = computed(() => currentUsage.value?.windows?.find((window) => wind
   (keyUsage.value || engineId.value !== "claude" || window.id === "seven_day")) || null);
 const allowance = computed(() => weekly.value || (keyUsage.value ? currentUsage.value?.windows?.[0] : null));
 const balance = computed(() => currentUsage.value?.balances?.[0] || null);
+const readingCurrent = computed(() => currentUsage.value?.status === "available" &&
+  (!Number.isFinite(currentUsage.value.currentForMs) || now.value < usage.query.dataUpdatedAt.value + currentUsage.value.currentForMs));
 const available = computed(() => {
-  if (!enabled.value || usage.loadError.value || currentUsage.value?.status !== "available") return false;
+  if (!enabled.value || usage.loadError.value || !readingCurrent.value) return false;
   return balance.value || (allowance.value && (!allowance.value.resetsAt || allowance.value.resetsAt * 1000 > Date.now()));
 });
+// Plan allowance says when it cannot be checked; key balances stay hidden until their next turn.
+const cantCheck = computed(() => enabled.value && !keyUsage.value && !available.value &&
+  Boolean(usage.loadError.value || ["available", "stale", "unavailable"].includes(currentUsage.value?.status)));
 function formatBalance(value) {
   return new Intl.NumberFormat("en", {
     style: "currency", currency: value.currency, currencyDisplay: "narrowSymbol", minimumFractionDigits: 2, maximumFractionDigits: 2
   }).format(Number(value.amount));
 }
 const summary = computed(() => {
+  if (cantCheck.value) return "?%";
   if (!available.value) return "";
   if (balance.value) return formatBalance(balance.value);
   return `${Math.floor(allowance.value.remainingPercent)}%`;
 });
-const usageLabel = computed(() => currentUsage.value?.providerLabel || "");
+const planProvider = computed(() => keyUsage.value ? null : findVibe64AgentProvider(engineId.value)?.planUsage);
+const usageLabel = computed(() => currentUsage.value?.providerLabel || planProvider.value?.label || "");
 const usageTitle = computed(() => `${usageLabel.value} ${balance.value ? "balance" : "plan allowance"}`);
-const summaryLabel = computed(() => balance.value ? `${usageLabel.value} balance remaining: ${summary.value}`
-  : `${weekly.value ? "Weekly " : ""}${usageLabel.value} allowance remaining: ${summary.value}`);
-const managementUrl = computed(() => currentUsage.value?.managementUrl || "");
+const summaryLabel = computed(() => cantCheck.value ? `Weekly ${usageLabel.value} allowance: can't check right now`
+  : balance.value ? `${usageLabel.value} balance remaining: ${summary.value}`
+    : `${weekly.value ? "Weekly " : ""}${usageLabel.value} allowance remaining: ${summary.value}`);
+const managementUrl = computed(() => currentUsage.value?.managementUrl || planProvider.value?.managementUrl || "");
 const details = computed(() => {
+  if (cantCheck.value) {
+    const lines = [`Can't check your ${usageLabel.value} allowance right now.`];
+    if (weekly.value && currentUsage.value?.checkedAt) lines.push(`Last checked ${new Date(currentUsage.value.checkedAt).toLocaleString(undefined, {
+      dateStyle: "medium", timeStyle: "short" })}: ${Math.floor(weekly.value.remainingPercent)}% weekly remaining.`);
+    return lines.join("\n");
+  }
   if (!available.value) return "";
   const snapshot = currentUsage.value;
   if (balance.value) return [
@@ -167,7 +199,7 @@ const goalState = computed(() => ({
       </v-card-actions>
     </v-card>
   </v-dialog>
-  <v-menu v-if="enabled && available" location="top" :close-on-content-click="false">
+  <v-menu v-if="enabled && (available || cantCheck)" location="top" :close-on-content-click="false">
     <template #activator="{ props: menuProps }">
       <v-btn
         v-bind="menuProps" class="agent-plan-usage" size="small" variant="text"

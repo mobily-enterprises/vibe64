@@ -58,8 +58,8 @@ vi.mock("vuetify/components/VTextField", async () => {
 import PlanUsage from "../../src/components/studio/vibe64-session/Vibe64AgentPlanUsage.vue";
 import { AssistantGoalControl } from "@jskit-ai/assistant-core/client/conversation";
 
-async function render(data, props = {}, viewer = { actorKey: "local" }, goalState = {}) {
-  mocks.resource = { data: ref(data), loadError: ref(""), reload: vi.fn() };
+async function render(data, props = {}, viewer = { actorKey: "local" }, goalState = {}, { loadError = "", dataUpdatedAt = Date.now() } = {}) {
+  mocks.resource = { data: ref(data), loadError: ref(loadError), query: { dataUpdatedAt: ref(dataUpdatedAt) }, reload: vi.fn() };
   mocks.resources = [];
   mocks.goalView = ref(mocks.goal);
   mocks.goalController = {
@@ -249,7 +249,46 @@ it("never invents a refreshed allowance after the reset deadline", async () => {
   const html = await render({ status: "available", windows: [{ id: "primary", remainingPercent: 0, windowDurationMins: 10080, resetsAt: 1 }] });
   expect(html).not.toContain("Weekly Codex allowance remaining");
   expect(html).not.toContain("100% left");
-  expect(await render({ status: "unavailable", windows: [] })).not.toContain("Codex plan allowance");
+  expect(await render({ status: "unavailable", windows: [] })).not.toContain("allowance remaining");
+});
+
+it("says it can't check Claude's allowance instead of showing a reading that is no longer current", async () => {
+  const props = { session: { sessionId: "one", assistantSelection: { engineId: "claude" } } };
+  const text = (html) => html.replace(/<!--.*?-->/g, "").replaceAll("&#39;", "'");
+  const reading = { providerLabel: "Claude", managementUrl: "https://claude.ai/settings/usage", checkedAt: Date.parse("2026-10-29T00:43:00Z"),
+    windows: [{ id: "seven_day", remainingPercent: 93, windowDurationMins: 10080, resetsAt: 2000000000 }] };
+  const shown = (html) => />\s*93%\s*<\/button>/.test(text(html));
+  expect(shown(await render({ ...reading, status: "available", currentForMs: 60_000 }, props))).toBe(true);
+  for (const [data, resource] of [
+    [{ ...reading, status: "stale" }, {}],
+    // The reading arrived two minutes ago and was current for only one more minute.
+    [{ ...reading, status: "available", currentForMs: 60_000 }, { dataUpdatedAt: Date.now() - 120_000 }],
+    [{ ...reading, status: "available", currentForMs: 60_000 }, { loadError: "Plan allowance is unavailable." }]
+  ]) {
+    const html = text(await render(data, props, undefined, {}, resource));
+    expect(shown(html)).toBe(false);
+    expect(html).toMatch(/>\s*\?%\s*<\/button>/);
+    expect(html).toContain("Weekly Claude allowance: can't check right now");
+    expect(html).toContain("Can't check your Claude allowance right now.");
+    expect(html).toContain("Last checked");
+    expect(html).toContain("93% weekly remaining");
+  }
+  const unknown = text(await render({ status: "unavailable", windows: [] }, props));
+  expect(unknown).toContain("Can't check your Claude allowance right now.");
+  expect(unknown).not.toContain("Last checked");
+  expect(text(await render({ status: "unsupported", windows: [] }, props))).not.toContain("allowance");
+});
+it("asks for a reading only from a visible page", async () => {
+  const props = { session: { sessionId: "one", assistantSelection: { engineId: "claude" } } };
+  await render(null, props);
+  expect(mocks.options.enabled.value).toBe(true);
+  vi.stubGlobal("document", { hidden: true, addEventListener() {}, removeEventListener() {} });
+  try {
+    await render(null, props);
+    expect(mocks.options.enabled.value).toBe(false);
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });
 it("hides plan information for other assistants, API accounts and inactive sessions", async () => {
   expect(await render({ status: "unsupported", windows: [] })).not.toContain("Codex plan allowance");
