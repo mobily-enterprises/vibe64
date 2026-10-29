@@ -25,6 +25,12 @@ function v2Content(installed, options) {
   return {
     ...installed,
     async readLesson(input) { return asV2Lesson(await installed.readLesson(input), options); },
+    // As installed content does, the identity read names the same lesson
+    // descriptor as readLesson, without its teaching bytes.
+    async readAdmissionIdentity(input) {
+      const identity = await installed.readAdmissionIdentity(input);
+      return { ...identity, lesson: asV2Lesson(identity, options).lesson };
+    },
     async readChoiceAnswer({ stepId, ...input } = {}) {
       const lesson = await installed.readLesson(input);
       const step = options.steps.find(value => value.id === stepId);
