@@ -412,12 +412,13 @@ canonical commit. An initially unknown file-change list does not hide a
 confirmed Update action.
 Upstream changes that publish no Vibe64 event, such as a push from elsewhere or
 a commit in a local project folder, are found by the server's update probe.
-While a project is in use, meaning a browser shows it or an agent turn runs in
-one of its sessions, the server reads its open sessions' authority branch heads
-every 30 seconds with one `git ls-remote` per authority repository, shared by
-every session and viewer. It runs the ordinary forced check, with its fetch
-under the project source lock, only for a session whose head moved; that check's
-realtime result reaches every viewer and notifies sibling sessions as above. A
+While a project is in use, meaning a browser page has it open, in a visible or a
+background tab, or an agent turn runs in one of its sessions, the server reads
+its open sessions' authority branch heads every 30 seconds with one
+`git ls-remote` per authority repository, shared by every session and viewer.
+It runs the ordinary forced check, with its fetch under the project source lock,
+only for a session whose head moved; that check's realtime result reaches every
+viewer and notifies sibling sessions as above. A
 connected contribution's read covers its published, discarded and integration
 branches; it is checked once when the probe first sees it and again when any of
 them moves. A probe never overlaps itself, and a tick that passes while one runs
@@ -426,12 +427,17 @@ status, is retried every 60 seconds, and is cleared by the check that follows
 recovery. The first tick that finds no watching browser and no running turn
 reads no Git and leaves no timer; a starting turn or a returning browser
 resumes the probe without probing more often than every 30 seconds.
-A browser watches its project over its realtime connection while the document is
-visible; hiding the tab, leaving the project or disconnecting releases the watch.
-Returning to a visible tab resumes the watch and immediately repeats worktree
-fallback inspection; it requests no canonical check of its own. Explicit source
-and canonical-change invalidations still force a fresh check. Switching session
-chips reuses a recorded canonical check instead of requesting it again. A session
+A browser page watches its project over its realtime connection for as long as
+it has the project open, whether its tab is visible or hidden, so a person who
+returns to a background tab finds its state already current; leaving the project
+or the page, or disconnecting, releases the watch, and a reconnected page
+watches again. The server knows a page's project only from this watch, because
+realtime delivery is not scoped to projects, so a page loaded before the watch
+existed is not counted until it reloads. Returning to a visible tab immediately
+repeats worktree fallback inspection; it requests no canonical check of its own.
+Explicit source and canonical-change invalidations still force a fresh check.
+Switching session chips reuses a recorded canonical check instead of requesting
+it again. A session
 without a confirmed check still gets its first check, which also records the
 session's Git actor; the probe reads a GitHub authority only with an actor that
 such a check recorded, and leaves a session without one to that first check.

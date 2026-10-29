@@ -541,7 +541,10 @@ describe("session repository status registry", () => {
     expect(registryHarness.documentListeners.has("visibilitychange")).toBe(false);
   });
 
-  it("watches its project for the server's update probe while visible instead of polling", async () => {
+  // A hidden tab released its watch, so a project open only in background
+  // tabs got no 30 s probe. The person returns to that tab and must see
+  // accurate state, so only leaving the project or the page ends the watch.
+  it("watches its project for the server's update probe while the tab is open, visible or hidden", async () => {
     const projectSlug = ref("sample");
     const scope = effectScope();
     scope.run(() => useVibe64SessionRepositoryStatusRegistry({
@@ -564,17 +567,22 @@ describe("session repository status registry", () => {
 
     document.visibilityState = "hidden";
     registryHarness.documentListeners.get("visibilitychange")();
+    expect(emitted()).toEqual([["watch", "sample"]]);
     document.visibilityState = "visible";
     registryHarness.documentListeners.get("visibilitychange")();
     socket.listeners.get("connect")();
     projectSlug.value = "other";
     await nextTick();
+    projectSlug.value = "";
+    await nextTick();
     expect(emitted()).toEqual([
-      ["watch", "sample"], ["release", ""], ["watch", "sample"], ["watch", "sample"], ["watch", "other"]
+      ["watch", "sample"], ["watch", "sample"], ["watch", "other"], ["release", ""]
     ]);
+    projectSlug.value = "sample";
+    await nextTick();
     expect(new Set(socket.emitted.map(([, input]) => input.watchId)).size).toBe(1);
     scope.stop();
-    expect(emitted().at(-1)).toEqual(["release", ""]);
+    expect(emitted().slice(-2)).toEqual([["watch", "sample"], ["release", ""]]);
     expect(socket.listeners.has("connect")).toBe(false);
   });
 

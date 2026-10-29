@@ -578,7 +578,7 @@ function createSessionActions({ sessions } = {}) {
 
 // A browser's watch of its project for repository updates. Only its realtime
 // connection (repositoryUpdateProbe.js) executes it, with the binding that
-// releases the watch when the browser stops showing the project or disconnects.
+// releases the watch when the browser page leaves the project or disconnects.
 function createRepositoryUpdateWatchActions({ probe } = {}) {
   if (!probe) {
     throw new TypeError("createRepositoryUpdateWatchActions requires the update probe.");

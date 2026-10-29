@@ -491,16 +491,17 @@ function useVibe64SessionRepositoryStatusRegistry({
         inspectVisible();
       }, DEFAULT_STALE_CHECK_INTERVAL_MS);
 
-  // While this browser shows the project, the server checks every session for
-  // updates every 30 s and publishes each result (vibe64-sessions'
-  // repositoryUpdateProbe.js), so this registry only reacts to those events.
+  // While this page has the project open, visible or in a background tab, the
+  // server checks every session for updates every 30 s and publishes each
+  // result (vibe64-sessions' repositoryUpdateProbe.js), so this registry only
+  // reacts to those events. Only leaving the project or the page, or a lost
+  // connection, ends the watch: a person returning to a hidden tab must find
+  // its state already current.
   const socket = useRealtimeSocket();
   const watchId = globalThis.crypto.randomUUID();
   let watchedProjectSlug = "";
   function syncRepositoryUpdateWatch({ reconnected = false } = {}) {
-    const slug = disposed || browserDocument?.visibilityState === "hidden"
-      ? ""
-      : String(readRefOrGetterValue(projectSlug) || "").trim();
+    const slug = disposed ? "" : String(readRefOrGetterValue(projectSlug) || "").trim();
     if (slug === watchedProjectSlug && !reconnected) {
       return;
     }
@@ -517,7 +518,6 @@ function useVibe64SessionRepositoryStatusRegistry({
   watch(() => readRefOrGetterValue(projectSlug), () => syncRepositoryUpdateWatch(), { immediate: true });
 
   const refreshWhenVisible = () => {
-    syncRepositoryUpdateWatch();
     if (browserDocument?.visibilityState !== "visible") {
       return;
     }
