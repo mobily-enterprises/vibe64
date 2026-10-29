@@ -197,7 +197,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     const retry = view.resendOptimisticMessage(messageId);
     await vi.waitFor(() => expect(props.sendAgentMessage).toHaveBeenCalledTimes(1));
     expect(props.sendAgentMessage.mock.calls[0][0]).toMatchObject({ ...payload, messageId });
-    expect(inspect).toHaveBeenCalledWith(runtime.identity.conversationId, messageId);
+    expect(inspect).toHaveBeenCalledWith(runtime.identity.conversationId, messageId, { signal: expect.any(AbortSignal) });
     expect(await view.resendOptimisticMessage(messageId)).toBe(false);
     result.resolve(true);
     expect(await retry).toBe(true);
@@ -508,7 +508,7 @@ describe("useVibe64AutopilotView direct chat", () => {
     props.conversationRuntime.delivery.state.messages.push({ id: "delivered", text: "Hello?", payload: { message: "Hello?" }, status: "uncertain" });
     expect(view.chatTurns.value[0].system.delivery).toBeTruthy();
     expect(await view.resendOptimisticMessage("delivered")).toBe(true);
-    expect(inspect).toHaveBeenCalledWith(props.conversationRuntime.identity.conversationId, "delivered");
+    expect(inspect).toHaveBeenCalledWith(props.conversationRuntime.identity.conversationId, "delivered", { signal: expect.any(AbortSignal) });
     expect(props.sendAgentMessage).not.toHaveBeenCalled();
     expect(view.chatTurns.value[0].system?.delivery).toBeUndefined();
     expect(view.chatTurns.value[0].optimistic.status).toBe("accepted");
@@ -3803,7 +3803,7 @@ it("checks a local uncertain receipt and retries a conflicting failed route only
     inspect.mockClear();
     inspect.mockResolvedValue({ status: "unknown", messageId });
     await expect(view.resendOptimisticMessage(messageId)).resolves.toBe(false);
-    expect(inspect).toHaveBeenCalledExactlyOnceWith(runtime.identity.conversationId, messageId);
+    expect(inspect).toHaveBeenCalledExactlyOnceWith(runtime.identity.conversationId, messageId, { signal: expect.any(AbortSignal) });
     expect(props.sendAgentMessage).not.toHaveBeenCalled();
     expect(runtime.delivery.find(messageId)?.status).toBe("uncertain");
 
