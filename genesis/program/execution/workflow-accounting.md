@@ -78,7 +78,10 @@ runner's command and hands it and the receipt to the target user through
 descriptors it opened itself. A link planted in place of that directory or of
 a receipt fails the start instead of being followed, and Stop and
 `release-ended` remove receipts through the same open directory. Older helpers
-left the directory to the daemon; the next start takes it back.
+left the directory to the daemon; the next start takes it back. The helper
+reads the runner's result the same way, only as the target user's regular
+`result.json` in that receipt within a size limit; a link, FIFO or anything
+else there counts as no result.
 
 Each managed command names itself through its execution descriptor's `label`
 and `operationId` and carries the project and session it serves, so a host
@@ -183,7 +186,9 @@ Where the daemon or a target user can rearrange a directory, the helper reads a
 file there only through that directory opened without following links, and
 only as that owner's regular file within a size limit. It never waits on a
 FIFO and never repeats what it read in an error. This covers a user's Vibe64
-membership in the daemon's state directory. A payload arrives on standard
+membership in the daemon's state directory and a forking managed service's
+PID file, which it also removes only through that directory and only while the
+file still names the process it found stopped. A payload arrives on standard
 input, except that a managed execution whose terminal holds standard input
 passes it as the daemon's own file directly in the workspace's payload
 directory; the helper accepts no other file, and removes that one once read.

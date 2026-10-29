@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { assertEnabledForVibe64, consumeManagedExecutionRequestPayload,
+import { assertEnabledForVibe64, consumeManagedExecutionRequestPayload, ensureManagedServiceProcessOwnership,
   helperChildEnv, managedExecutionState, managedExecutionOomBoundary, managedExecutionStopTimeoutMs,
   managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal, openManagedExecutionReceipts,
   releaseEndedManagedExecutions, stopManagedExecution, stopManagedServiceUnit } from "../../packages/vibe64-execution/src/host/execHelper.js";
@@ -659,6 +659,7 @@ test("a starting controller releases every receipt and failed unit record except
 // regular file, never waits on it, never echoes it and never removes anything
 // outside that directory.
 const SECRET = "root:$y$j9T$secret-hash-0123456789:19000:0:99999:7:::\n";
+const DEAD_PID = "2147483646";
 const echoesNothing = (error) => !String(error?.message).includes("secret-hash") && !String(error?.message).includes("root:");
 
 async function plantedRoot(t) {
@@ -764,4 +765,59 @@ test("a user's Vibe64 membership is read only as the daemon's regular file", asy
   await rename(users, `${users}.real`);
   await symlink(victim, users);
   assert.throws(() => assertEnabledForVibe64(owner, "dave"), /not enabled/u);
+});
+
+test("a managed service PID file is read and removed only through its own directory", async (t) => {
+  const { root, victim } = await plantedRoot(t);
+  const workspaceRoot = path.join(root, "test");
+  const run = path.join(workspaceRoot, "services", "db", "run");
+  await mkdir(run, { recursive: true });
+  const owner = { uid: process.getuid(), username: "v64d_test" };
+  const ensure = (pidFile) => ensureManagedServiceProcessOwnership({ owner, pidFile, unitName: "vibe64-test-db.service", workspaceRoot });
+
+  await writeFile(path.join(run, "db.pid"), `${DEAD_PID}\n`);
+  ensure(path.join(run, "db.pid"));
+  assert.equal(existsSync(path.join(run, "db.pid")), false, "a stale PID file is removed");
+  assert.doesNotThrow(() => ensure(path.join(workspaceRoot, "services", "other", "run", "db.pid")), "a missing directory has nothing to remove");
+
+  await writeFile(path.join(victim, "db.pid"), `${DEAD_PID}\n`);
+  await symlink(path.join(victim, "db.pid"), path.join(run, "db.pid"));
+  assert.throws(() => ensure(path.join(run, "db.pid")));
+  await rm(path.join(run, "db.pid"));
+  execFileSync("mkfifo", [path.join(run, "db.pid")]);
+  assert.ok(helperInChild("helper.ensureManagedServiceProcessOwnership(input)",
+    { owner, pidFile: path.join(run, "db.pid"), unitName: "vibe64-test-db.service", workspaceRoot }).error);
+
+  // A link in place of the PID file's directory after its path was checked.
+  await rename(run, `${run}.real`);
+  await symlink(victim, run);
+  assert.throws(() => ensure(path.join(run, "db.pid")));
+  assert.equal(await readFile(path.join(victim, "db.pid"), "utf8"), `${DEAD_PID}\n`, "the link target's PID file stays");
+});
+
+test("an execution's result is read only as its target user's regular file in its receipt", async (t) => {
+  const { root, victim } = await plantedRoot(t);
+  const directory = path.join(root, "executions");
+  const ids = { gid: process.getgid(), legacyUid: process.getuid(), uid: process.getuid() };
+  const receipts = openManagedExecutionReceipts(directory, { ...ids, create: true });
+  t.after(() => receipts.close());
+  const [written, linked, large, fifo] = ["a", "b", "c", "d"].map((digit) => `${digit.repeat(8)}-0000-4000-8000-${digit.repeat(12)}`);
+  const result = (executionId) => ({ executionId, execMainStatus: "7", schema: "vibe64.managed-execution.result", schemaVersion: 1 });
+  for (const executionId of [written, linked, large, fifo]) {
+    receipts.create(executionId, { gid: ids.gid, uid: ids.uid }, { args: [], command: "/bin/true", cwd: "/", env: {}, executionId });
+  }
+
+  await writeFile(path.join(directory, written, "result.json"), JSON.stringify(result(written)));
+  assert.deepEqual(receipts.result(written), result(written));
+  await writeFile(path.join(victim, "result.json"), JSON.stringify(result(linked)));
+  await symlink(path.join(victim, "result.json"), path.join(directory, linked, "result.json"));
+  assert.deepEqual(receipts.result(linked), {}, "a link is not followed");
+  await writeFile(path.join(directory, large, "result.json"), JSON.stringify({ ...result(large), padding: " ".repeat(256 * 1024) }));
+  assert.deepEqual(receipts.result(large), {}, "an oversized result is not read");
+  assert.deepEqual(receipts.result(`${"e".repeat(8)}-0000-4000-8000-${"e".repeat(12)}`), {}, "a missing receipt has no result");
+  execFileSync("mkfifo", [path.join(directory, fifo, "result.json")]);
+  assert.deepEqual(helperInChild(`(() => {
+    const receipts = helper.openManagedExecutionReceipts(input.directory, input.ids);
+    try { return receipts.result(input.fifo); } finally { receipts.close(); }
+  })()`, { directory, fifo, ids }).value, {});
 });

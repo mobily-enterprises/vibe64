@@ -30,7 +30,9 @@ const NEW_FILE_NO_FOLLOW = fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConsta
 // Never through a link, and never waiting on a FIFO.
 const FILE_NO_FOLLOW = fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK;
 const MANAGED_EXECUTION_REQUEST_PAYLOAD_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/u;
+const MANAGED_EXECUTION_RESULT_LIMIT_BYTES = 64 * 1024;
 const MEMBERSHIP_LIMIT_BYTES = 64 * 1024;
+const PID_FILE_LIMIT_BYTES = 64;
 const STDIN_READ_BUFFER_BYTES = 64 * 1024;
 const STDIN_READ_RETRY_DELAY_MS = 10;
 const STDIN_READ_TIMEOUT_MS = 15_000;
@@ -1070,8 +1072,11 @@ const NO_EXECUTION_RECEIPTS = Object.freeze({
   close() {},
   create() { throw new Error("Vibe64 exec helper has no execution receipt directory."); },
   entries: () => [],
-  remove() {}
+  remove() {},
+  result: () => ({})
 });
+// What its target user can leave in a receipt instead of the runner's result.
+const UNREADABLE_RESULT_CODES = new Set(["ENOENT", "ELOOP", "ENOTDIR", "ENXIO", "EVIBE64UNSAFEFILE"]);
 
 // Root keeps a workspace's execution receipts in a directory of its own
 // (uid:gid, mode 0750: the target users of its executions only traverse it), so
@@ -1117,7 +1122,31 @@ function openManagedExecutionReceipts(directory = "", {
   return {
     close: () => closeSync(descriptor),
     entries: () => readdirSync(openedPath(descriptor)),
+    // Node 26's rmSync (the C++ runtime's std::filesystem::remove_all) walks
+    // the receipt with openat and unlinkat relative to directories it opened
+    // with O_NOFOLLOW, so a link its target user swaps in meanwhile is removed,
+    // never followed.
     remove: (executionId) => rmSync(openedPath(descriptor, managedExecutionId(executionId)), { force: true, recursive: true }),
+    // The runner's result, from a receipt its target user owns: only that
+    // user's regular file there, never through a link, and none otherwise.
+    result(executionId = "") {
+      const id = managedExecutionId(executionId);
+      let receipt = -1;
+      try {
+        receipt = openSync(openedPath(descriptor, id), DIRECTORY_NO_FOLLOW);
+        const result = JSON.parse(readOwnedFile(receipt, "result.json", {
+          maxBytes: MANAGED_EXECUTION_RESULT_LIMIT_BYTES,
+          uid: fstatSync(receipt).uid
+        }));
+        return result?.schema === "vibe64.managed-execution.result" && result.schemaVersion === 1 &&
+          result.executionId === id ? result : {};
+      } catch (error) {
+        if (error instanceof SyntaxError || UNREADABLE_RESULT_CODES.has(error?.code)) return {};
+        throw error;
+      } finally {
+        if (receipt >= 0) closeSync(receipt);
+      }
+    },
     // The receipt and the runner's command in it, handed to the target user.
     create(executionId = "", targetUser = {}, runnerCommand = {}) {
       const receiptPath = openedPath(descriptor, managedExecutionId(executionId));
@@ -1144,24 +1173,12 @@ function openManagedExecutionReceipts(directory = "", {
   };
 }
 
-function managedExecutionResultPath(owner = {}, executionId = "") {
-  return path.join(managedExecutionRuntimeRoot(owner, executionId), "result.json");
-}
-
 function readManagedExecutionResult(owner = {}, executionId = "") {
-  const resultPath = managedExecutionResultPath(owner, executionId);
+  const receipts = openWorkspaceExecutionReceipts(owner);
   try {
-    const result = JSON.parse(readFileSync(resultPath, "utf8"));
-    return result?.schema === "vibe64.managed-execution.result" &&
-      result.schemaVersion === 1 &&
-      result.executionId === managedExecutionId(executionId)
-      ? result
-      : {};
-  } catch (error) {
-    if (error?.code === "ENOENT" || error instanceof SyntaxError) {
-      return {};
-    }
-    throw error;
+    return receipts.result(executionId);
+  } finally {
+    receipts.close();
   }
 }
 
@@ -1761,12 +1778,25 @@ function runSystemctl(query, args = []) {
 function ensureManagedServiceProcessOwnership({
   owner = {},
   pidFile = "",
-  unitName = ""
+  unitName = "",
+  workspaceRoot = path.join(MANAGED_ROOT, workspaceFromDaemonUsername(safeUsername(owner.username)))
 } = {}) {
-  if (!pidFile || !existsSync(pidFile)) {
+  const pidFiles = pidFile ? openManagedServicePidFile(pidFile, owner, workspaceRoot) : null;
+  if (!pidFiles) {
     return;
   }
-  const pidText = String(readFileSync(pidFile, "utf8") || "").trim();
+  try {
+    stopUnitlessManagedServiceProcess(pidFiles, owner, unitName);
+  } finally {
+    pidFiles.close();
+  }
+}
+
+function stopUnitlessManagedServiceProcess(pidFiles, owner = {}, unitName = "") {
+  const pidText = pidFiles.read();
+  if (pidText === null) {
+    return;
+  }
   if (!/^[1-9][0-9]*$/u.test(pidText)) {
     throw new Error("Vibe64 managed service PID file is invalid.");
   }
@@ -1775,12 +1805,12 @@ function ensureManagedServiceProcessOwnership({
     throw new Error("Vibe64 managed service PID is invalid.");
   }
   if (!processIsRunning(pid)) {
-    removeManagedServicePidFile(pidFile, pidText);
+    pidFiles.remove(pidText);
     return;
   }
   const processUid = processRealUid(pid);
   if (processUid === null) {
-    removeManagedServicePidFile(pidFile, pidText);
+    pidFiles.remove(pidText);
     return;
   }
   if (processUid !== owner.uid) {
@@ -1793,7 +1823,7 @@ function ensureManagedServiceProcessOwnership({
     process.kill(pid, "SIGTERM");
   } catch (error) {
     if (error?.code === "ESRCH") {
-      removeManagedServicePidFile(pidFile, pidText);
+      pidFiles.remove(pidText);
       return;
     }
     throw error;
@@ -1806,13 +1836,43 @@ function ensureManagedServiceProcessOwnership({
   if (processIsRunning(pid)) {
     throw new Error("Vibe64 managed service process did not stop cleanly during ownership transfer.");
   }
-  removeManagedServicePidFile(pidFile, pidText);
+  pidFiles.remove(pidText);
 }
 
-function removeManagedServicePidFile(pidFile = "", expectedPid = "") {
-  if (existsSync(pidFile) && String(readFileSync(pidFile, "utf8") || "").trim() === expectedPid) {
-    unlinkSync(pidFile);
+// A forking service's PID file sits in the daemon's service directory, which
+// the daemon can rearrange after the file's path was checked. Root opens that
+// directory without following links, from the workspace directory down, and
+// reads and removes the daemon's PID file only there. A directory that does
+// not exist yet holds no PID file.
+function openManagedServicePidFile(pidFile = "", owner = {}, workspaceRoot = "") {
+  const parts = relativePathParts(canonicalPath(workspaceRoot), path.dirname(pidFile));
+  if (parts.length === 0) {
+    throw new Error("Vibe64 exec helper rejected a managed service PID file outside its workspace.");
   }
+  let directory;
+  try {
+    directory = openDirectoryBelow(workspaceRoot, parts);
+  } catch (error) {
+    if (error?.code === "ENOENT") return null;
+    throw error;
+  }
+  const name = path.basename(pidFile);
+  const read = () => {
+    try {
+      return readOwnedFile(directory, name, { maxBytes: PID_FILE_LIMIT_BYTES, uid: owner.uid }).trim();
+    } catch (error) {
+      if (error?.code === "ENOENT") return null;
+      throw error;
+    }
+  };
+  return {
+    close: () => closeSync(directory),
+    read,
+    // Only while it still names the process that was found stopped.
+    remove(expectedPid = "") {
+      if (read() === expectedPid) unlinkSync(openedPath(directory, name));
+    }
+  };
 }
 
 function processIsRunning(pid = 0) {
@@ -2622,7 +2682,7 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
   return env;
 }
 
-export { assertEnabledForVibe64, consumeManagedExecutionRequestPayload,
+export { assertEnabledForVibe64, consumeManagedExecutionRequestPayload, ensureManagedServiceProcessOwnership,
   managedWorkflowCounters, openManagedExecutionReceipts, managedWorkflowIdentity, managedExecutionOomBoundary,
   managedExecutionState, managedExecutionStopTimeoutMs, managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal,
   releaseEndedManagedExecutions, stopManagedExecution, stopManagedServiceUnit,
