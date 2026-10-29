@@ -177,6 +177,11 @@ arriving during cancellation can also require another Close attempt. Pinning,
 renewal and active workspace preparation still prevent archival.
 Archiving uses the session's saved assistant even after a server restart; it
 does not require connecting a different assistant just to stop that session.
+When Vibe64 starts, it finishes archives a restart interrupted. A session it
+cannot finish is named in the server log with the reason, and the other sessions
+are still finished. If the server is too busy to open an archived session, for
+example under memory pressure, the error says so and you can try again later;
+the archive itself is not damaged.
 If history preservation fails, the operation reports the error and keeps the
 workspace for retry. Resolve the reported problem, then retry **Archive session**.
 If the last open session cannot be archived, its chat is selected again so you

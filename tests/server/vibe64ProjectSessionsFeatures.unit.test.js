@@ -82,6 +82,7 @@ test("project and sessions expose only named Feature capabilities", () => {
     accounts: "vibe64.accounts",
     events: "runtime.events",
     http: "runtime.http",
+    logger: "runtime.logger",
     project: "vibe64.project",
     sourceEditor: "vibe64.source-editor",
     terminals: "vibe64.terminals",
@@ -381,6 +382,69 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
     }),
     /must be a function or null/u
   );
+});
+
+function recoveryShutdown(sessions) {
+  return Vibe64SessionsProvider.shutdown({
+    terminals: { async invalidateAgentRuntimes() { return { ok: true }; } }
+  }, { outputs: { sessions } });
+}
+
+test("startup recovery resumes renewals after archive recovery fails and logs each failure with its session", async () => {
+  const warnings = [];
+  let renewalsResumed = 0;
+  const sessions = {
+    async closeSessionRenewalWork() {},
+    closeSessionPresence() {},
+    async resumeSessionArchives() {
+      throw Object.assign(new Error("Cannot archive Vibe64 session closed-a: tar failed"), {
+        code: "vibe64_session_archive_write_failed"
+      });
+    },
+    async resumeSessionRenewals() {
+      renewalsResumed += 1;
+      return { failures: [{ code: "vibe64_session_renewal_state_unreadable", error: "Session renewal state is unreadable.",
+        sessionId: "renewing-b" }] };
+    }
+  };
+  Vibe64SessionsProvider.boot({
+    logger: { warn(fields, message) { warnings.push({ fields, message }); } },
+    project: { targetRoot: "/tmp/selected-project" }
+  }, { outputs: { sessions } });
+  await new Promise((resolve) => setImmediate(resolve));
+  await recoveryShutdown(sessions);
+  assert.equal(renewalsResumed, 1, "an archive recovery failure must not skip renewal recovery");
+  assert.deepEqual(warnings.map(({ fields }) => ({ code: fields.code, event: fields.event, sessionId: fields.sessionId })), [
+    { code: "vibe64_session_archive_write_failed", event: "vibe64.sessions.recovery.session_failed", sessionId: undefined },
+    { code: "vibe64_session_renewal_state_unreadable", event: "vibe64.sessions.recovery.session_failed", sessionId: "renewing-b" }
+  ]);
+  assert.match(warnings[0].fields.error, /closed-a/u);
+});
+
+test("shutdown stops the startup archive loop instead of waiting for every pending archive", async () => {
+  let archiveSignal;
+  let renewalsResumed = 0;
+  const sessions = {
+    async closeSessionRenewalWork() {},
+    closeSessionPresence() {},
+    async resumeSessionArchives({ signal } = {}) {
+      archiveSignal = signal;
+      await new Promise((resolve) => {
+        const fallback = setTimeout(resolve, 2_000);
+        signal?.addEventListener("abort", () => { clearTimeout(fallback); resolve(); }, { once: true });
+      });
+      return { failures: [] };
+    },
+    async resumeSessionRenewals() { renewalsResumed += 1; return { failures: [] }; }
+  };
+  Vibe64SessionsProvider.boot({ logger: { warn() {} }, project: { targetRoot: "/tmp/selected-project" } },
+    { outputs: { sessions } });
+  await new Promise((resolve) => setImmediate(resolve));
+  const started = Date.now();
+  await recoveryShutdown(sessions);
+  assert.equal(archiveSignal?.aborted, true);
+  assert.ok(Date.now() - started < 1_000, "shutdown waited for the whole archive loop");
+  assert.equal(renewalsResumed, 0, "no renewal starts after shutdown began");
 });
 
 test("sessions reject a fulfilled but unsuccessful agent-runtime shutdown", async () => {

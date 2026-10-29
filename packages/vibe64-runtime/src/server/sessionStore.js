@@ -519,6 +519,13 @@ async function runCommand(command, args = [], {
   });
 }
 
+// Only a tar that ran and failed says something about the archive. A refused,
+// timed-out or undrained run keeps its own code and whether to retry.
+function archiveCommandError(result, message, code) {
+  if (!result.code) return vibe64Error(message, code);
+  return Object.assign(vibe64Error(message, result.code), result.retryable ? { retryable: true } : {});
+}
+
 function revisionNumber(value) {
   const revision = Number(value);
   return Number.isSafeInteger(revision) && revision >= 0 ? revision : 0;
@@ -1617,7 +1624,10 @@ function createVibe64SessionStore({
       const result = await runCommand("tar", ["-czf", candidatePath, "-C", path.dirname(session.sessionRoot), session.sessionId], {
         allowedRoots: [path.dirname(session.sessionRoot), path.dirname(session.archivePath)], cwd: normalizedProjectContextRoot
       });
-      if (!result.ok) throw vibe64Error("Cannot prepare updated session archive.", "vibe64_session_archive_write_failed");
+      if (!result.ok) {
+        throw archiveCommandError(result, `Cannot prepare updated session archive: ${result.output}`,
+          "vibe64_session_archive_write_failed");
+      }
       await validateSessionArchive(candidatePath);
       await beforePublish?.(candidatePath);
       const candidate = await open(candidatePath, "r");
@@ -2848,10 +2858,10 @@ function createVibe64SessionStore({
       cwd: normalizedProjectContextRoot
     });
     if (!result.ok) {
-      throw vibe64Error(
-        `Invalid Vibe64 session archive ${archivePath}: ${result.output}`,
-        "vibe64_session_archive_invalid"
-      );
+      throw archiveCommandError(result, result.code
+        ? `Vibe64 could not check session archive ${archivePath}: ${result.output}`
+        : `Invalid Vibe64 session archive ${archivePath}: ${result.output}`,
+      "vibe64_session_archive_invalid");
     }
   }
 
@@ -3096,10 +3106,9 @@ function createVibe64SessionStore({
         cwd: normalizedProjectContextRoot
       });
       if (!tarResult.ok) {
-          throw vibe64Error(
-            `Cannot prepare renewal archive ${normalizedSourceSessionId}: ${tarResult.output}`,
-            "vibe64_session_archive_write_failed"
-        );
+        throw archiveCommandError(tarResult,
+          `Cannot prepare renewal archive ${normalizedSourceSessionId}: ${tarResult.output}`,
+          "vibe64_session_archive_write_failed");
       }
       await validateSessionArchive(stagedArchivePath);
       await writeJsonFile(stagedMetadataPath, metadataRecord);
@@ -3635,10 +3644,9 @@ function createVibe64SessionStore({
         cwd: normalizedProjectContextRoot
       });
       if (!tarResult.ok) {
-        throw vibe64Error(
+        throw archiveCommandError(tarResult,
           `Cannot archive Vibe64 session ${sessionPaths.sessionId}: ${tarResult.output}`,
-          "vibe64_session_archive_write_failed"
-        );
+          "vibe64_session_archive_write_failed");
       }
       await validateSessionArchive(stagedArchivePath);
       await writeJsonFile(stagedMetadataPath, metadataRecord);
@@ -4663,10 +4671,14 @@ function createVibe64SessionStore({
     })));
   }
 
+  // Publishes each archived session left unpublished. One that cannot be
+  // published is reported and stays for the next attempt; the others go on.
   async function recoverSessionArchives() {
     const recovered = [];
+    const failures = [];
     for (const record of await readUnarchivedSessionRecords()) {
-      if (record.status === VIBE64_SESSION_STATUS.ARCHIVED) {
+      if (record.status !== VIBE64_SESSION_STATUS.ARCHIVED) continue;
+      try {
         const session = await readSessionForRenewal(record.sessionId);
         if (
           normalizeText(session.metadata.renewal_id) &&
@@ -4678,9 +4690,17 @@ function createVibe64SessionStore({
         }
         await publishSessionArchive(record.sessionId);
         recovered.push(record.sessionId);
+      } catch (error) {
+        failures.push({
+          code: normalizeText(error?.code) || "vibe64_session_archive_recovery_failed",
+          error: normalizeText(error?.message) || `Archived session ${record.sessionId} could not be published.`,
+          ok: false,
+          ...(error?.retryable === true ? { retryable: true } : {}),
+          sessionId: record.sessionId
+        });
       }
     }
-    return recovered;
+    return { failures, recovered };
   }
 
   async function sessionRecordsForList(options = {}) {

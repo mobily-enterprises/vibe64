@@ -221,14 +221,17 @@ function createSessionArchive({ project, terminals, setupRunner, publishSessionC
 
   async function resumeSessionArchives({ signal = null } = {}) {
     const runtime = await project.createRuntime({ inspectSource: false });
-    for (const sessionId of await runtime.store.recoverSessionArchives()) {
+    // A closed session whose archive cannot be published is reported with the
+    // others; it does not stop the open sessions' interrupted archives.
+    const published = await runtime.store.recoverSessionArchives();
+    const failures = [...published.failures];
+    for (const sessionId of published.recovered) {
       await publishSessionChanged(sessionId, {
         reason: "session-archived",
         payload: { clientRefresh: { includeList: true } }
       });
     }
     const sessions = await runtime.listSessionSummaries({ statusGroup: "open" });
-    const failures = [];
     for (const session of sessions) {
       if (signal?.aborted) break;
       if (session.status === "archived") continue;

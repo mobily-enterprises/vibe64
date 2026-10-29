@@ -7,6 +7,7 @@ import {
 
 import { createRepositoryUpdateWatchActions, createSessionActions } from "./actions.js";
 import { createRepositoryUpdateProbe, registerRepositoryUpdateWatch } from "./repositoryUpdateProbe.js";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { registerApprovalCountReader } from "@local/vibe64-core/server/studioProjectContext";
 import { createVibe64ProjectChangedPublisher } from "@local/vibe64-project/server/actions";
@@ -18,13 +19,27 @@ import {
   createSessionPresenceService
 } from "./sessionPresence.js";
 
-function createSessionRenewalRecoveryTask({ recover } = {}) {
+// Startup resumes interrupted archives, then interrupted renewals. Each step
+// runs even when the other fails, and every failure is logged with its
+// session. Shutdown stops the archive loop between sessions.
+function createSessionRenewalRecoveryTask({ recover, logger = null } = {}) {
   if (typeof recover !== "function") {
     throw new TypeError("Session renewal recovery task requires recover().");
   }
   let activeRecovery = null;
   let started = false;
   let stopped = false;
+  const stopping = new AbortController();
+
+  function reportFailure(failure = {}) {
+    logOperationalEvent(logger, "warn", {
+      code: String(failure.code || "vibe64_session_recovery_failed"),
+      component: "vibe64.sessions",
+      error: String(failure.error || "Session recovery failed."),
+      event: "vibe64.sessions.recovery.session_failed",
+      ...(failure.sessionId ? { sessionId: String(failure.sessionId) } : {})
+    }, "An interrupted session archive or renewal could not resume.");
+  }
 
   return Object.freeze({
     start() {
@@ -34,12 +49,16 @@ function createSessionRenewalRecoveryTask({ recover } = {}) {
       started = true;
       let result;
       try {
-        result = recover();
+        result = recover({ signal: stopping.signal });
       } catch (error) {
         result = Promise.reject(error);
       }
       const recovery = Promise.resolve(result)
+        .then((report) => {
+          for (const failure of Array.isArray(report?.failures) ? report.failures : []) reportFailure(failure);
+        })
         .catch((error) => {
+          reportFailure({ code: error?.code, error: error?.message });
           vibe64SessionDebugLog("server.sessions.renewal.resume.error", {
             error: vibe64SessionDebugError(error)
           });
@@ -54,26 +73,44 @@ function createSessionRenewalRecoveryTask({ recover } = {}) {
     },
     async stop() {
       stopped = true;
+      stopping.abort();
       await activeRecovery;
     }
   });
+}
+
+async function resumeInterruptedSessionWork(sessions, { signal } = {}) {
+  const failures = [];
+  for (const [step, resume] of [
+    ["archive", () => sessions.resumeSessionArchives({ signal })],
+    ["renewal", () => sessions.resumeSessionRenewals()]
+  ]) {
+    if (signal?.aborted) break;
+    try {
+      failures.push(...((await resume())?.failures || []));
+    } catch (error) {
+      failures.push({
+        code: String(error?.code || `vibe64_session_${step}_recovery_failed`),
+        error: String(error?.message || `Session ${step} recovery failed.`)
+      });
+    }
+  }
+  return { failures };
 }
 
 function createVibe64SessionsFeature() {
   const recoveryTasks = new WeakMap();
   const stoppedServices = new WeakSet();
 
-  function recoveryTaskFor(sessions) {
+  function recoveryTaskFor(sessions, logger) {
     if (stoppedServices.has(sessions)) {
       return null;
     }
     let task = recoveryTasks.get(sessions);
     if (!task) {
       task = createSessionRenewalRecoveryTask({
-        recover: async () => {
-          await sessions.resumeSessionArchives();
-          return sessions.resumeSessionRenewals();
-        }
+        logger,
+        recover: (options) => resumeInterruptedSessionWork(sessions, options)
       });
       recoveryTasks.set(sessions, task);
     }
@@ -87,6 +124,7 @@ function createVibe64SessionsFeature() {
       accounts: "vibe64.accounts",
       events: "runtime.events",
       http: "runtime.http",
+      logger: "runtime.logger",
       project: "vibe64.project",
       sourceEditor: "vibe64.source-editor",
       terminals: "vibe64.terminals"
@@ -128,11 +166,11 @@ function createVibe64SessionsFeature() {
     actions({ sessions }) {
       return createSessionActions({ sessions });
     },
-    boot({ project }, { outputs }) {
+    boot({ logger, project }, { outputs }) {
       if (!String(project?.targetRoot || "").trim()) {
         return;
       }
-      recoveryTaskFor(outputs.sessions)?.start();
+      recoveryTaskFor(outputs.sessions, logger)?.start();
     },
     async shutdown({ terminals }, { outputs }) {
       const sessions = outputs.sessions;

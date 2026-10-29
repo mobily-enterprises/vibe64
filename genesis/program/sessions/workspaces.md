@@ -20,6 +20,7 @@ that turn without dropping either half. No saved history is rewritten.
 
 - Main: `packages/vibe64-sessions/src/server/service.js`
 - `packages/vibe64-sessions/src/server/sessionArchive.js`
+- `packages/vibe64-sessions/src/server/Vibe64SessionsProvider.js`
 - `packages/vibe64-sessions/src/server/connectedContributions.js`
 - `packages/vibe64-sessions/src/server/sessionResults.js`
 - `packages/vibe64-sessions/src/server/sessionRenewal.js`
@@ -31,6 +32,7 @@ that turn without dropping either half. No saved history is rewritten.
 - `tests/server/vibe64SessionStore.unit.test.js`
 - `tests/server/assistantRoutingStateInventory.unit.test.js`
 - `tests/server/vibe64SessionStorageLifecycle.unit.test.js`
+- `tests/server/vibe64SessionArchiveFailures.unit.test.js`
 - `packages/vibe64-terminals/src/server/sessionNaming.js`
 - `packages/vibe64-terminals/src/server/agentHelperCommand.js`
 - `server/lib/agentSpecCli.js`
@@ -429,7 +431,16 @@ archives. An unreadable or unknown stage is refused with
 for that session and continues resuming the others. A failure retains its
 stage and error for explicit retry; source recovery evidence keeps its protection
 marker. Startup also finalizes interrupted archive publication from the immutable
-closing tree. Start, each durable stage transition, completion, and failure publish `vibe64.session.changed` to
+closing tree, one session at a time: a session that cannot be published is
+reported with its code while the others are published and open archives still
+resume. Startup runs archive recovery and then renewal recovery, logs every
+reported failure as the operational warning
+`vibe64.sessions.recovery.session_failed` with its session and code, and stops
+before the next step when the server shuts down. Archive tar work keeps a refusal
+from the execution owner, such as a host memory refusal, with its code and
+retryability; only tar's own failure on a published archive reports
+`vibe64_session_archive_invalid`.
+Start, each durable stage transition, completion, and failure publish `vibe64.session.changed` to
 all clients with a list-refresh hint. Reconnecting clients read persisted state.
 
 Archive lives in Sessions' archive module, one function per durable phase;

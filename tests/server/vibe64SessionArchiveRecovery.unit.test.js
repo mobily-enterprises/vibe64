@@ -17,7 +17,7 @@ function fixture(operation = null) {
       async listSessionsForRenewal() { return [structuredClone(session)]; },
       async listSessionConversations() { return []; },
       async writeMetadataValue(_id, key, value) { session.metadata[key] = value; },
-      async recoverSessionArchives() { return []; },
+      async recoverSessionArchives() { return { failures: [], recovered: [] }; },
       async runSessionExclusive(_id, _name, run) {
         if (busy) return { acquired: false };
         busy = true;
@@ -138,9 +138,22 @@ test("structured cleanup refusal never removes source", async () => {
 
 test("an interrupted archive publication announces completion after recovery", async () => {
   const f = fixture();
-  f.runtime.store.recoverSessionArchives = async () => ["already-detached"];
+  f.runtime.store.recoverSessionArchives = async () => ({ failures: [], recovered: ["already-detached"] });
   await f.service().resumeSessionArchives();
   assert.deepEqual(f.events.map(e => e.reason), ["session-archived"]);
+});
+
+test("a closed session that cannot be published is reported while open sessions still resume", async () => {
+  const f = fixture({ status: "running", phase: "source" });
+  const unpublished = { code: "vibe64_session_archive_write_failed", error: "Cannot archive Vibe64 session closed-a: tar failed",
+    ok: false, sessionId: "closed-a" };
+  f.runtime.store.recoverSessionArchives = async () => ({ failures: [unpublished], recovered: ["closed-b"] });
+  const report = await f.service().resumeSessionArchives();
+  assert.deepEqual(report.failures, [unpublished]);
+  assert.deepEqual(f.calls, ["source"]);
+  assert.equal(f.session.status, "archived");
+  assert.equal(f.events[0].reason, "session-archived");
+  assert.equal(f.events.at(-1).reason, "session-archived");
 });
 
 test("stale archive markers from before stage recording are resumed", async () => {
