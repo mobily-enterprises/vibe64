@@ -49,7 +49,8 @@ const controlsI18nUrl = new URL("./i18n.js", import.meta.resolve("@jskit-ai/assi
 const controlsI18n = fs.existsSync(controlsI18nUrl) ? await import(controlsI18nUrl.href) : null;
 const containsText = (source, english, key) => source.includes(english) || source.includes(key);
 
-function mountMainConversationLog({ render = false, speech = { voices: [{ id: "cori" }], defaultVoice: "cori" } } = {}) {
+function mountMainConversationLog({ render = false, speech = { voices: [{ id: "cori" }], defaultVoice: "cori" },
+  avatarPreferences = vue.reactive({ coding: {} }) } = {}) {
   const filename = path.resolve("src/components/studio/vibe64-session/Vibe64ConversationLog.vue");
   const { descriptor } = parse(fs.readFileSync(filename, "utf8"), { filename });
   const script = compileScript(descriptor, { id: "main-voice-client" });
@@ -65,6 +66,9 @@ function mountMainConversationLog({ render = false, speech = { voices: [{ id: "c
     controller: { state: vue.shallowReactive({ binding: null, session: null, nextTarget: null, error: "" }) },
     readAloudFor: vi.fn(binding => binding.defaults?.readAloud === true),
     readAloudChangePendingFor: vi.fn(() => false),
+    // The composing host's saved per-target choice; the real host is covered by the voice host test.
+    avatarVisibleFor: vi.fn(target => avatarPreferences[target] ? avatarPreferences[target].avatarVisible !== false : null),
+    setAvatarVisible: vi.fn((target, visible) => { avatarPreferences[target] = { ...avatarPreferences[target], avatarVisible: visible }; }),
     open: vi.fn(async binding => {
       voice.controller.state.binding = binding;
       voice.controller.state.session = {
@@ -98,6 +102,7 @@ function mountMainConversationLog({ render = false, speech = { voices: [{ id: "c
     "@local/vibe64-training/shared/learning-guidance": { learningGuidancePresentation }
   };
   const controls = [];
+  const avatarRenders = [];
   if (render) {
     const controlsFilename = new URL("./VoiceConversationControls.vue", import.meta.resolve("@jskit-ai/assistant-voice/client"));
     const controlsDescriptor = parse(fs.readFileSync(controlsFilename, "utf8"), { filename: controlsFilename.pathname }).descriptor;
@@ -122,9 +127,10 @@ function mountMainConversationLog({ render = false, speech = { voices: [{ id: "c
       props: ["controller", "presentation"], setup: (props, { slots }) => () => slots.conversation({ session: props.controller.state.session, disabled: false })
     };
     imports["@jskit-ai/assistant-core/client/conversation"].AssistantConversationElement = {
-      inheritAttrs: false, props: ["avatarSize"], setup: (props, { slots }) => () => vue.h("section", [
-        slots["avatar-tools"]?.(), slots["avatar-control"]?.({ size: props.avatarSize }), slots.hints?.()
-      ])
+      inheritAttrs: false, props: ["avatarSize"], setup: (props, { slots }) => () => {
+        if (slots.avatar) avatarRenders.push(props.avatarSize);
+        return vue.h("section", [slots["avatar-tools"]?.(), slots["avatar-control"]?.({ size: props.avatarSize }), slots.hints?.()]);
+      }
     };
   }
   const module = { exports: {} };
@@ -184,7 +190,7 @@ function mountMainConversationLog({ render = false, speech = { voices: [{ id: "c
   const root = {};
   app.mount(root);
   if (render) exposed = app._instance.subTree.component.exposed;
-  return { app, root, state, exposed, props, voice, runtime, controls, emit };
+  return { app, root, state, exposed, props, voice, runtime, controls, emit, avatarRenders };
 }
 
 describe("Vibe64 direct session view", () => {
@@ -295,7 +301,6 @@ describe("Vibe64 direct session view", () => {
     try {
       const binding = main.state.voiceBinding.value;
       expect(main.state.avatarSize.value).toBe("compact");
-      main.state.showAvatar();
       expect(main.voice.open).not.toHaveBeenCalled();
       expect(binding.presentation).toBe("inline");
       expect(binding.adapter).toBe(main.state.adapter.value);
@@ -312,6 +317,39 @@ describe("Vibe64 direct session view", () => {
       expect(current.presentation).toBe("dialog");
       expect(current.adapter).toBeNull();
     } finally { if (!unmounted) main.app.unmount(); }
+  });
+
+  it("starts Main's face as the person last left it, in every session and remount, and only Minimise/Show save it", async () => {
+    const avatarPreferences = vue.reactive({});
+    // Every face render since mount, so an open-then-shut flash would show up here.
+    const renderedSizes = view => [...new Set(view.avatarRenders)];
+    let main = mountMainConversationLog({ render: true, avatarPreferences });
+    try {
+      await vue.nextTick();
+      expect(main.state.avatarVisible.value).toBeNull();
+      expect(main.avatarRenders, "no face renders before the person's preferences load").toEqual([]);
+      avatarPreferences.coding = { avatar: "yu", avatarVisible: false };
+      await vue.nextTick();
+      expect(renderedSizes(main), "a saved Minimise appears minimised, never open first").toEqual(["hidden"]);
+      await main.state.openVoice();
+      expect(main.state.avatarSize.value, "opening voice does not overrule the saved choice").toBe("hidden");
+      main.props.voiceRuntime = main.runtime("one", "session-2");
+      await vue.nextTick();
+      expect(main.state.avatarSize.value, "another session starts the same way").toBe("hidden");
+      expect(main.voice.setAvatarVisible).not.toHaveBeenCalled();
+      main.state.avatarSize.value = "compact";
+      expect(main.voice.setAvatarVisible).toHaveBeenLastCalledWith("coding", true);
+      main.app.unmount();
+      main = mountMainConversationLog({ render: true, avatarPreferences });
+      await vue.nextTick();
+      expect(renderedSizes(main), "a remount restores the saved Show").toEqual(["compact"]);
+      main.state.avatarSize.value = "hidden";
+      expect(main.voice.setAvatarVisible).toHaveBeenLastCalledWith("coding", false);
+      main.app.unmount();
+      main = mountMainConversationLog({ render: true, avatarPreferences });
+      await vue.nextTick();
+      expect(renderedSizes(main), "a remount restores the saved Minimise").toEqual(["hidden"]);
+    } finally { main.app.unmount(); }
   });
 
   it("supplies live Main narration facts with access and page visibility independent of avatar collapse", async () => {

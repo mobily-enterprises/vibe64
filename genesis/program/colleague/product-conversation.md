@@ -661,8 +661,9 @@ by the shared launcher. Public Vibe64 supplies live state, captured focus, stabl
 message identity, canonical admission and cancellation to the binding.
 Colleague's persistent instructions still request brief replies, with detail when
 asked. Model, Stop and Send/Steer retain their exact original composer toolbar.
-The avatar and voice tools start visible as a fixed upper-right overlay
-over scrolling text, and collapse without ending the voice session. The collapsed
+The avatar and voice tools form a fixed upper-right overlay over scrolling
+text, starting shown or collapsed as the root voice host's colleague avatar
+visibility says, and collapse without ending the voice session. The collapsed
 row has passive Listening and Speaking indicators from the exact current voice
 session; Show avatar is its only action. Muted capture does not display Listening,
 and speaker preference alone does not display Speaking. Pending speech review

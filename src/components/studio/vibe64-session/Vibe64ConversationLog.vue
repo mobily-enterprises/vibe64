@@ -1,9 +1,9 @@
 <template>
   <AssistantConversationElement class="vibe64-conversation-log" :adapter="adapter" v-model:avatar-size="avatarSize">
-    <template v-if="voiceBinding && visible" #avatar="size">
+    <template v-if="voiceBinding && visible && avatarVisible !== null" #avatar="size">
       <component :is="voice.Avatar || VoiceAvatar" v-bind="avatarVisual" :binding="voiceBinding" :size="size.size" :height="size.height" />
     </template>
-    <template v-if="voiceBinding && visible" #avatar-tools>
+    <template v-if="voiceBinding && visible && avatarVisible !== null" #avatar-tools>
       <div ref="voiceToolsTarget" class="vibe64-main-conversation__voice-tools" :class="{ 'vibe64-main-conversation__voice-tools--opening': holdingVoice }">
         <v-btn
           v-if="!voiceSession || holdingVoice" :icon="voiceSession?.voice.listening.value && !voiceSession.microphoneMuted.value ? mdiMicrophone : mdiMicrophoneOff" variant="text" color="primary" width="40" min-width="40" min-height="44"
@@ -255,7 +255,6 @@ const emit = defineEmits([
 
 const voice = useVibe64Voice();
 const mounted = ref(true);
-const avatarSize = ref("compact");
 const voiceError = ref("");
 const voiceToolsTarget = ref(null);
 const voiceFeedbackTarget = ref(null);
@@ -359,7 +358,12 @@ const readAloud = computed(() => voiceSession.value ? voiceSession.value.readAlo
   : Boolean(voiceBinding.value && voice.readAloudFor(voiceBinding.value)));
 const readAloudChangePending = computed(() => Boolean(voiceBinding.value && voice.readAloudChangePendingFor(voiceBinding.value)));
 const avatarVisual = computed(() => voiceSession.value?.avatarVisual.value || { state: props.working ? "thinking" : "idle" });
-function showAvatar() { avatarSize.value = "compact"; }
+// The face starts as the person last left it; only Minimise and Show change it.
+const avatarVisible = computed(() => voiceBinding.value ? voice.avatarVisibleFor(voiceBinding.value.preferenceTarget) : null);
+const avatarSize = computed({
+  get: () => avatarVisible.value === false ? "hidden" : "compact",
+  set: size => { if (voiceBinding.value) voice.setAvatarVisible(voiceBinding.value.preferenceTarget, size !== "hidden"); }
+});
 function reportVoiceFailure(error) { if (voiceSession.value) voiceError.value = error.message; }
 async function openVoice() {
   const binding = voiceBinding.value;
@@ -373,7 +377,6 @@ async function openVoice() {
     return null;
   }
   if (!mounted.value || !props.visible || props.voiceRuntime !== runtime || !binding.available) return null;
-  showAvatar();
   return voiceSession.value;
 }
 const voiceGesture = useVoiceLauncher({
@@ -400,7 +403,6 @@ async function toggleReadAloud() {
 watch(() => [props.voiceRuntime, props.visible], ([runtime], [previousRuntime]) => {
   voiceGesture.cancel();
   if (runtime !== previousRuntime) {
-    avatarSize.value = "compact";
     voiceTranscript.value = null;
     voiceError.value = "";
   }

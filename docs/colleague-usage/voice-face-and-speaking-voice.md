@@ -19,6 +19,20 @@ avatar yourself. In standalone Vibe64 the choice is saved in this browser only
 window or cleared site data starts again from the defaults. If browser storage
 is blocked, the choice lasts until the page reloads.
 
+## Keep the face shown or minimised
+
+Each assistant remembers whether you last left its face shown or minimised.
+Choose the round minus, **Minimise avatar**, to hide it, or the anonymous
+**Show avatar** icon to bring it back; there is no separate setting. Your last
+choice is where every later page load and session starts, so a minimised face
+stays minimised after a reload or when you open another session. Colleague and
+project agents keep separate choices. Opening voice or tapping **Talk** does not
+change it. Standalone Vibe64 remembers this in this browser only, like the face
+choice above; a host with saved personal preferences saves it with your other
+assistant choices so it also follows you to other browsers and devices. Until
+those preferences load, the face area stays empty instead of opening briefly.
+Colleague can explain this; use the two buttons yourself to change it.
+
 ## Choose a speaking voice
 
 Open the same **Voice settings** cog and choose **Speaking voice**.

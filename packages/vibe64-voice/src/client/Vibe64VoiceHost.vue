@@ -6,7 +6,7 @@ const props = defineProps({
   preferences: { type: Object, default: () => ({}) },
   preparePreferences: { type: Function, default: null }
 });
-const emit = defineEmits(["read-aloud-change", "playback"]);
+const emit = defineEmits(["read-aloud-change", "avatar-visibility-change", "playback"]);
 const controller = createVoiceConversationController({ connectSpeech(binding) {
   if (!binding.prepareVoice) return binding.socketUrl;
   return binding.prepareVoice().then(() => binding.socketUrl);
@@ -25,9 +25,22 @@ function readAloudFor(conversation) {
 function readAloudChangePendingFor(conversation) {
   return preferencesFor(conversation).isSaving === true;
 }
+// Each target's face is shown or hidden as the person last chose with its
+// Minimise/Show controls. Unknown (null) until the host supplies that target's
+// preferences, so a saved hidden face never renders open first.
+function avatarVisibleFor(target) {
+  const preferences = props.preferences[target];
+  return preferences ? preferences.avatarVisible !== false : null;
+}
+function setAvatarVisible(target, visible) {
+  const current = avatarVisibleFor(target);
+  if (current === null || current === visible) return;
+  emit("avatar-visibility-change", visible, { target, actorKey: props.preferences.actorKey });
+}
 provide(VIBE64_VOICE_KEY, {
   controller, launcher,
   readAloudFor, readAloudChangePendingFor,
+  avatarVisibleFor, setAvatarVisible,
   Avatar: slots.avatar ? Avatar : null,
   Settings: slots.settings ? Settings : null,
   open(conversation) {

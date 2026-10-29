@@ -569,7 +569,7 @@ test("the Colleague launcher opens its target while Main is inline and preserves
   assert.equal(nonFocusPosts(view.requests).length, 0, "opening sends no agent request");
 });
 
-test("the root voice host keeps live adapters and forwards explicit preferences and canonical playback", async t => {
+async function mountVoiceHost(t, preferences) {
   const filename = new URL("../../packages/vibe64-voice/src/client/Vibe64VoiceHost.vue", import.meta.url);
   const { descriptor } = parse(await readFile(filename, "utf8"), { filename: String(filename) });
   const { code } = await transform(compileScript(descriptor, { id: "voice-host" }).content, { format: "cjs" });
@@ -583,11 +583,7 @@ test("the root voice host keeps live adapters and forwards explicit preferences 
     return { VIBE64_VOICE_KEY: key };
   }, module, module.exports);
   const events = [];
-  const props = vue.reactive({ preferences: {
-    actorKey: "original-actor",
-    colleague: { avatar: "colleague-artwork", voice: "kitten_jasper" },
-    coding: { avatar: "coding-artwork", voice: "kitten_bella" }
-  } });
+  const props = vue.reactive({ preferences });
   let voice;
   const renderer = vue.createRenderer({ createComment: () => ({}), createElement: () => ({}), createText: () => ({}),
     insert() {}, remove() {}, patchProp() {}, setElementText() {}, setText() {}, parentNode: () => null, nextSibling: () => null });
@@ -597,6 +593,15 @@ test("the root voice host keeps live adapters and forwards explicit preferences 
   } });
   app.mount({});
   t.after(() => app.unmount());
+  return { controller, events, props, voice };
+}
+
+test("the root voice host keeps live adapters and forwards explicit preferences and canonical playback", async t => {
+  const { controller, events, props, voice } = await mountVoiceHost(t, {
+    actorKey: "original-actor",
+    colleague: { avatar: "colleague-artwork", voice: "kitten_jasper" },
+    coding: { avatar: "coding-artwork", voice: "kitten_bella" }
+  });
   let adapter = { composer: { draft: "original" } };
   let available = true;
   let presentation = "inline";
@@ -674,6 +679,41 @@ test("the root voice host keeps live adapters and forwards explicit preferences 
   mainBinding.onReadAloudChange(true);
   assert.deepEqual(events.at(-1), ["read-aloud-change", true, { target: "coding", actorKey: "successor-actor" }]);
   assert.deepEqual(changes, [false, true], "the binding's original callback is retained");
+});
+
+test("the root voice host starts each face as the person last left it and emits only explicit Minimise/Show changes", async t => {
+  const { events, props, voice } = await mountVoiceHost(t, {});
+  assert.equal(voice.avatarVisibleFor("coding"), null, "before preferences load the face state is unknown, not a default");
+  voice.setAvatarVisible("coding", false);
+  assert.deepEqual(events, [], "an unknown choice is never written");
+  props.preferences = { actorKey: "person", colleague: { avatar: "merc" }, coding: { avatar: "yu", avatarVisible: false } };
+  assert.equal(voice.avatarVisibleFor("colleague"), true, "a person with no saved choice starts with the face shown");
+  assert.equal(voice.avatarVisibleFor("coding"), false, "a saved Minimise starts minimised");
+  voice.setAvatarVisible("coding", false);
+  voice.setAvatarVisible("colleague", true);
+  assert.deepEqual(events, [], "hydration and unchanged choices write nothing");
+  voice.setAvatarVisible("coding", true);
+  voice.setAvatarVisible("colleague", false);
+  assert.deepEqual(events, [
+    ["avatar-visibility-change", true, { target: "coding", actorKey: "person" }],
+    ["avatar-visibility-change", false, { target: "colleague", actorKey: "person" }]
+  ]);
+  assert.equal(voice.avatarVisibleFor("coding"), false, "the composing host owns persistence; the root only reads its preferences");
+});
+
+test("Colleague's face starts as the person last left it and only Minimise/Show change that saved choice", async t => {
+  const view = mount(t, async () => ({ ok: true, conversationId: "same-person", messages: [], status: "ready" }));
+  await flush();
+  delete view.voice.avatarPreferences.colleague;
+  assert.equal(view.state.avatarVisible.value, null, "no face renders before the person's preferences load");
+  view.voice.avatarPreferences.colleague = { avatarVisible: false };
+  assert.equal(view.state.avatarSize.value, "hidden", "a saved Minimise starts minimised, never open first");
+  view.state.avatarSize.value = "compact";
+  view.voice.avatarPreferences.colleague = { avatarVisible: true };
+  assert.equal(view.state.avatarSize.value, "compact");
+  view.state.avatarSize.value = "hidden";
+  assert.deepEqual(view.events.filter(([name]) => name === "avatar-visibility-change"),
+    [["avatar-visibility-change", "colleague", true], ["avatar-visibility-change", "colleague", false]]);
 });
 
 test("Colleague model selection uses its canonical identity and the existing product choice", async t => {
@@ -911,8 +951,12 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
   }
   const display = { xs: vue.ref(false) };
   const voiceState = vue.shallowReactive({ binding: null, session: null, visible: false });
+  const avatarPreferences = vue.reactive({ colleague: {} });
   const voice = voiceHost || {
     launcher: vue.ref(null),
+    avatarPreferences,
+    avatarVisibleFor: target => avatarPreferences[target] ? avatarPreferences[target].avatarVisible !== false : null,
+    setAvatarVisible(target, visible) { events.push(["avatar-visibility-change", target, visible]); },
     controller: {
       state: voiceState,
       minimize() { voiceState.visible = false; },
@@ -1016,7 +1060,7 @@ function mount(t, request, props = vue.reactive({ name: "Colleague" }), viewer =
     if (previousWindow === undefined) delete globalThis.window; else globalThis.window = previousWindow;
     if (previousConfig === undefined) delete globalThis.__JSKIT_CLIENT_APP_CONFIG__; else globalThis.__JSKIT_CLIENT_APP_CONFIG__ = previousConfig;
   });
-  return { state, notices, events, requests, focusUpdates, socket, subscriptions, publish, setConversation, dispatch, display: element.conversation,
+  return { state, notices, events, requests, focusUpdates, socket, subscriptions, publish, setConversation, dispatch, display: element.conversation, voice,
     reconnect() {
       socket.connected = false;
       dispatch("disconnect");

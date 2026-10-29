@@ -8,6 +8,7 @@ import { renderToString } from "@vue/server-renderer";
 import * as avatarCatalogue from "../../packages/vibe64-voice/src/shared/avatars.js";
 
 const STORAGE_KEY = "vibe64:assistant-avatars";
+const VISIBILITY_KEY = "vibe64:assistant-avatar-visibility";
 
 async function loadModule(relativePath, imports, { sfc = false } = {}) {
   const filename = new URL(relativePath, import.meta.url);
@@ -65,6 +66,35 @@ test("the browser-local avatar choice is remembered per assistant target and rej
   assert.deepEqual(JSON.parse(storage.values.get(STORAGE_KEY)), { colleague: "yu", coding: "merc" });
 });
 
+test("the standalone face stays as last shown or minimised for each assistant across reloads", async t => {
+  const { storage, preferences } = await loadPreferences(t, { [VISIBILITY_KEY]: JSON.stringify({ colleague: "no" }) });
+  const { visibility, setAvatarVisible } = preferences.useVibe64LocalAvatarPreferences();
+  assert.deepEqual(visibility.value, { colleague: true, coding: true }, "unsaved or unknown values start shown");
+  const hosts = [];
+  const Vibe64VoiceHost = { props: ["preferences"], emits: ["avatar-visibility-change"], setup(props, { emit }) {
+    hosts.push({ preferences: props.preferences, emit });
+    return () => null;
+  } };
+  const host = await loadModule("../../src/components/Vibe64LocalVoiceHost.vue", {
+    vue, "@local/vibe64-voice/client": { Vibe64ColleagueAvatar: {}, Vibe64VoiceHost },
+    "./Vibe64LocalVoiceSettings.vue": {},
+    "@/composables/useVibe64LocalAvatarPreferences.js": preferences
+  }, { sfc: true });
+  const render = () => renderToString(vue.createSSRApp({ render: () => vue.h(host.default) }));
+  await render();
+  // The shared host reports the person's Minimise for the project agent.
+  hosts[0].emit("avatar-visibility-change", false, { target: "coding", actorKey: undefined });
+  assert.deepEqual(JSON.parse(storage.values.get(VISIBILITY_KEY)), { colleague: true, coding: false });
+  await render();
+  assert.deepEqual(hosts[1].preferences, { colleague: { avatar: "merc", avatarVisible: true }, coding: { avatar: "yu", avatarVisible: false } });
+  setAvatarVisible("coding", "hidden");
+  setAvatarVisible("database", false);
+  assert.deepEqual(JSON.parse(storage.values.get(VISIBILITY_KEY)), { colleague: true, coding: false });
+  // A reload reads the same browser storage into a fresh module.
+  const reloaded = await loadPreferences(t, Object.fromEntries(storage.values));
+  assert.deepEqual(reloaded.preferences.useVibe64LocalAvatarPreferences().visibility.value, { colleague: true, coding: false });
+});
+
 test("the standalone voice host supplies the chosen artwork, mouth animation and chooser to each assistant", async t => {
   const { preferences } = await loadPreferences(t, { [STORAGE_KEY]: JSON.stringify({ colleague: "yu" }) });
   const hostProps = [];
@@ -88,7 +118,7 @@ test("the standalone voice host supplies the chosen artwork, mouth animation and
   }, { sfc: true });
   let children = 0;
   await renderToString(vue.createSSRApp({ render: () => vue.h(host.default, null, { default: () => { children += 1; return null; } }) }));
-  assert.deepEqual(hostProps[0].preferences, { colleague: { avatar: "yu" }, coding: { avatar: "yu" } });
+  assert.deepEqual(hostProps[0].preferences, { colleague: { avatar: "yu", avatarVisible: true }, coding: { avatar: "yu", avatarVisible: true } });
   assert.deepEqual(avatars, [
     { avatar: "yu", mouthLevel: 0.4, mouthPose: "open", state: "speaking" },
     { avatar: "yu", mouthLevel: 0, mouthPose: "closed", state: "idle" }

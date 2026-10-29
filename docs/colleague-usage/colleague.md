@@ -16,6 +16,7 @@ timezone, on desktop and phone.
 The face starts at the message area's top right below the header, with Talk and
 speaker beneath it. The row's round minus, **Minimise avatar**, hides face/controls
 without stopping audio/work; the anonymous **Show avatar** icon restores them.
+Colleague remembers your last choice and starts that way after a reload.
 Messages scroll visibly behind its transparent space; short containers can shrink
 the face. Hidden passive **Listening**/**Speaking** icons show unmuted capture/audio
 separately. Only **Show avatar** is actionable there; expand for voice controls.

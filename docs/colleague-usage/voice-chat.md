@@ -12,7 +12,9 @@ conversation, use the microphone beneath the face at the upper-right of the
 message area. Main keeps its original transcript and message box, with the same
 avatar and voice controls as Colleague. After hiding the face, choose **Show avatar**
 at the top-right to restore it; messages scroll behind it. Showing the face does
-not start recording or enable spoken replies. The message box has no separate
+not start recording or enable spoken replies. Each assistant starts every later
+page load and session the way you last left its face; see
+[Keep the face shown or minimised](voice-face-and-speaking-voice.md#keep-the-face-shown-or-minimised). The message box has no separate
 headset launcher.
 
 ## Start and speak
@@ -35,8 +37,8 @@ before speaking.
 Releasing before the microphone is ready cancels that recording.
 
 Colleague displays accepted messages and replies in its ordinary scrollable
-transcript. The face starts visible at the top edge of the message area, below
-the header. After hiding it, the anonymous **Show avatar** icon reveals the
+transcript. The face starts at the top edge of the message area, below the
+header, shown unless you last minimised it. After hiding it, the anonymous **Show avatar** icon reveals the
 larger face, smaller microphone/speaker buttons and its settings cog. The small
 round minus button at the end of that controls row tucks them away (accessible label
 **Minimise avatar**). There is no size menu. In Colleague's narrow drawer and

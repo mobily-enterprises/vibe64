@@ -186,7 +186,12 @@ const desktopPanelTarget = ref(null);
 const conversationTarget = computed(() => xs.value ? panelTarget.value : desktopPanelTarget.value);
 const voicePanelTarget = ref(null);
 const voiceToolsTarget = ref(null);
-const avatarSize = ref("compact");
+// The face starts as the person last left it; only Minimise and Show change it.
+const avatarVisible = computed(() => voice?.avatarVisibleFor("colleague") ?? null);
+const avatarSize = computed({
+  get: () => avatarVisible.value === false ? "hidden" : "compact",
+  set: size => voice?.setAvatarVisible("colleague", size !== "hidden")
+});
 const product = ref({ conversationId: "", error: "" });
 const productError = ref("");
 const pointerNotice = ref("");
@@ -923,7 +928,7 @@ onBeforeUnmount(() => {
       </v-alert>
       <div class="vibe64-colleague__conversation">
         <AssistantConversationElement :adapter="adapter" :label="`${name} conversation`" v-model:avatar-size="avatarSize">
-          <template v-if="$slots.avatar" #avatar="size">
+          <template v-if="$slots.avatar && avatarVisible !== null" #avatar="size">
             <slot name="avatar" v-bind="voiceSession?.avatarVisual.value || { state: working ? 'thinking' : 'idle' }" :size="size.size" :height="size.height" />
           </template>
           <template #avatar-tools>

@@ -41,8 +41,8 @@ Its catalogue (`shared/avatars`) supplies the saved IDs, chooser labels and the
 per-target defaults: Merc for Colleague, Yu for project agents.
 `Vibe64AvatarSetting` is the single Avatar chooser; a host supplies its value,
 hint and save. The standalone root mounts `Vibe64LocalVoiceHost`, which fills
-the artwork and settings slots, remembers each target's choice in browser local
-storage, and passes the speech service's own speaking-voice selector after the
+the artwork and settings slots, remembers each target's choice and its last
+shown/minimised face in browser local storage, and passes the speech service's own speaking-voice selector after the
 chooser. The local Colleague host fills Colleague's launcher/conversation avatar
 from the same choice. A host with account preferences supplies its own map and
 renders the same artwork and chooser. The generic JSKIT avatar remains only the
@@ -64,6 +64,16 @@ serve Main's idle speaker and opening defaults. A pending per-target resource sa
 fences only speaker preference changes before the local toggle; capture, text
 admission and playback retain their original owners. The live wrapped binding
 supplies this same pending fact to the shared speaker control.
+Each target's face starts as the person last left it. The root's read-only
+`avatarVisibleFor(target)` is null until the host supplies that target's
+preferences, otherwise false only for an explicit `avatarVisible: false`, so a
+saved minimised face never renders open first: Main and Colleague render no
+avatar region while it is null. Their existing Minimise/Show controls call
+`setAvatarVisible(target, visible)`, which emits `avatar-visibility-change` with
+the target and current actor key only for a changed known choice; hydration,
+navigation, opening voice and session changes emit nothing. As for read-aloud,
+the composing host persists it and returns the saved value through its
+preferences. JSKIT's conversation element already takes the size as a v-model.
 Main opens that same host through the microphone or speaker beneath its face.
 The composer and session header have no separate voice launcher.
 
@@ -168,8 +178,9 @@ original view is mounted and visible. That view renders the same shared voice
 host in flow; the root suppresses its duplicate dialog. When the view is absent,
 the retained binding returns to the existing dialog/caption fallback.
 
-The avatar overlay starts visible. Showing or hiding it changes only
-presentation, never conversation identity, admission or microphone/speaker state.
+The avatar overlay starts as the person last left it. Showing or hiding it saves
+only that presentation choice, never conversation identity, admission or
+microphone/speaker state.
 There is no size menu: the collapsed top-right anonymous icon (**Show avatar**)
 expands the face and is the collapsed row's only action. Passive Listening and
 Speaking icons independently project the current session's actual unmuted
