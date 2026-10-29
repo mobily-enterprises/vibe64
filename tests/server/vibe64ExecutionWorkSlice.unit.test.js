@@ -5,6 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 
 import {
+  DAEMON_USERNAME_PREFIX,
   configureManagedExecutionWorkSlice,
   ensureWorkspaceRuntimeBase,
   managedExecutionSliceCgroup,
@@ -15,7 +16,9 @@ import {
 // for these limits, and the slice's cgroup already enforced them.
 const MEMORY_MAX = 18369105920;
 const TASKS_MAX = 2048;
-const owner = { gid: 1001, home: "/home/v64d_test", uid: 1001, username: "v64d_test" };
+// The workspace daemon account the helper serves, as the helper names it.
+const DAEMON = `${DAEMON_USERNAME_PREFIX}test`;
+const owner = { gid: 1001, home: `/home/${DAEMON}`, uid: 1001, username: DAEMON };
 const sliceGroup = "/sys/fs/cgroup/vibe64.slice/vibe64-test.slice/vibe64-test-work.slice";
 
 function slice(files = {}) {
