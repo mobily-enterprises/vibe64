@@ -772,9 +772,14 @@ test.describe("direct chat", () => {
       hintRealtime.publishTurn();
       const steer = page.getByRole("button", { name: "Steer assistant" });
       await expect(steer).toBeEnabled();
-      const steerBounds = await steer.boundingBox();
-      expect(steerBounds?.height).toBeGreaterThanOrEqual(48);
-      expect(steerBounds?.width).toBeGreaterThanOrEqual(48);
+      // Steer and Stop keep 48 px touch targets inside the narrow phone pane.
+      const stop = page.getByRole("region", { name: "Session chat" }).getByRole("button", { name: "Stop", exact: true });
+      await expect(stop).toBeVisible();
+      for (const control of [steer, stop]) {
+        const bounds = await control.boundingBox();
+        expect(bounds?.height).toBeGreaterThanOrEqual(48);
+        expect(bounds?.width).toBeGreaterThanOrEqual(48);
+      }
       expect(await page.evaluate(() => (
         document.documentElement.scrollWidth <= window.innerWidth
       ))).toBe(true);

@@ -39,7 +39,9 @@ defineExpose({ focus: () => (sendButton.value?.$el || sendButton.value)?.focus?.
   .studio-autopilot__composer-delivery { gap: 0; }
   .studio-autopilot__composer-action { width: clamp(2rem, 10cqi, 2.5rem); }
 }
+/* The root class keeps these touch targets above the chat pane's narrow-pane
+   rule that lets the other composer buttons shrink to their content. */
 @media (pointer: coarse) {
-  .studio-autopilot__composer-action { min-height: 3rem; min-width: 3rem; }
+  .studio-autopilot__composer-delivery .studio-autopilot__composer-action { min-height: 3rem; min-width: 3rem; }
 }
 </style>
