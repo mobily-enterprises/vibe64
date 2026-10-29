@@ -17,7 +17,7 @@ import { createInstalledTrainingContent } from "../../packages/vibe64-training/s
 import { createInstalledTrainingCatalogue } from "@local/vibe64-training/server/installed-catalogue";
 import { createTrainingLearnerState } from "../../packages/vibe64-training/src/server/learnerState.js";
 
-async function fixture(t, { published = true, noExercise = false } = {}) {
+async function fixture(t, { published = true, noExercise = false, secondLesson = false } = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), "vibe64-learner-state-"));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const systemRoot = path.join(root, "system");
@@ -30,13 +30,19 @@ async function fixture(t, { published = true, noExercise = false } = {}) {
     await fs.writeFile(destination, typeof value === "string" ? value : `${JSON.stringify(value)}\n`);
   }
   const topic = { schemaVersion: 1, topicId: "intro-topic", domainId: "vibe64", title: "One introduction", status: "preview", outline: "training/outline.md", prerequisites: [],
-    lessons: [{ code: "INTRO-01", descriptor: "training/lessons/INTRO-01/lesson.json", status: published ? "published" : "draft", required: true }] };
+    lessons: [{ code: "INTRO-01", descriptor: "training/lessons/INTRO-01/lesson.json", status: published ? "published" : "draft", required: true },
+      ...(secondLesson ? [{ code: "INTRO-02", descriptor: "training/lessons/INTRO-02/lesson.json", status: "published", required: true }] : [])] };
   await write("package.json", { name: "learn-state-fixture", version: "0.1.0", repository: { type: "git", url: "https://github.com/examples/learn-state-fixture.git" }, vibe64Training: topic });
   await write("training/outline.md", "# One introduction\nTry the practice app.\n");
   await write("training/lessons/INTRO-01/lesson.json", { schemaVersion: 2, code: "INTRO-01", title: "Try the practice app", prerequisites: [], estimatedMinutes: 10,
     visuals: [], ...(noExercise ? {} : { exercise: { kind: "bundled", source: "../../exercises/app", reuse: "attempt" } }),
     steps: [{ id: "try-it", title: "Try it", body: "steps/try.md", check: { kind: "self" }, required: true }] });
   await write("training/lessons/INTRO-01/steps/try.md", "# Try the app\nPress its button.\n");
+  if (secondLesson) {
+    await write("training/lessons/INTRO-02/lesson.json", { schemaVersion: 2, code: "INTRO-02", title: "Read the next step", prerequisites: [], estimatedMinutes: 5,
+      visuals: [], steps: [{ id: "read-it", title: "Read it", body: "steps/read.md", check: { kind: "self" }, required: true }] });
+    await write("training/lessons/INTRO-02/steps/read.md", "# Read on\nThis is the next step.\n");
+  }
   await write("training/exercises/app/package.json", { name: "state-practice-app", private: true, type: "module" });
   await write("training/exercises/app/server.mjs", 'import { createServer } from "node:http";\nconst args = process.argv.slice(2);\ncreateServer((request, response) => response.end("Practice app")).listen(Number(args[args.indexOf("--port") + 1] || 8080), args[args.indexOf("--host") + 1] || "127.0.0.1");\n');
   await write("training/exercises/app/genesis/version", "3\n");
@@ -48,14 +54,17 @@ async function fixture(t, { published = true, noExercise = false } = {}) {
   const topicPin = { schemaVersion: 1, topicId: sourcePin.topicId, release: sourcePin.release, repository: sourcePin.repository, commit: sourcePin.commit, topicHash: sourcePin.topicHash };
   await createTrainingContentInstaller({ systemRoot }).installTopic({ sourceRoot, pin: topicPin });
   const lock = createCourseLock({ schemaVersion: 1, courseId: "intro-course", title: "Introduction", release: "0.1.0", status: "preview", topics: [{ topicId: topicPin.topicId, release: topicPin.release }] }, [sourcePin]);
-  const pin = { course: { courseId: lock.courseId, release: lock.release }, topic: topicPin, lesson: { code: lock.topics[0].lessons[0].code, hash: lock.topics[0].lessons[0].hash } };
+  const pinFor = index => ({ course: { courseId: lock.courseId, release: lock.release }, topic: topicPin,
+    lesson: { code: lock.topics[0].lessons[index].code, hash: lock.topics[0].lessons[index].hash } });
+  const pin = pinFor(0);
+  const secondPin = secondLesson ? pinFor(1) : null;
   const actor = { uid: 42, username: "learner" };
   const state = createTrainingLearnerState({ systemRoot });
   const userRoot = value => path.join(systemRoot, "training", "users", Buffer.from(String(value.uid ?? value.username)).toString("base64url"));
   const paths = { root: userRoot(actor), progress: path.join(userRoot(actor), "progress.json"), active: path.join(userRoot(actor), "active-lesson.json"),
     mode: path.join(userRoot(actor), "learning-mode.json"), lock: path.join(userRoot(actor), "state.lock") };
   const reserve = options => state.reserveAttempt({ actor, requestId: "start-1", expectedRevision: 0, pin, ...options });
-  return { root, systemRoot, sourceRoot, pin, actor, state, userRoot, paths, reserve, write };
+  return { root, systemRoot, sourceRoot, pin, secondPin, actor, state, userRoot, paths, reserve, write };
 }
 
 // The version 2 marker and session the preparation owner gives an attempt's
@@ -136,14 +145,22 @@ test("a lesson without an exercise reserves no practice project, and only that l
   assert.deepEqual(await f.state.readLearningMode({ actor: f.actor }),
     { on: false, currentAttemptId: attemptId, lessonCode: "INTRO-01", lessonTitle: "", lessonStage: "", practiceSlug: "" });
   await assert.rejects(() => f.state.beginPreparation({ actor: f.actor, attemptId, expectedRevision: 1 }), { code: "VIBE64_TRAINING_EXERCISE_MISSING" });
+  // The lesson in progress is checked against its lesson: a practice project
+  // its lesson does not declare is refused.
+  const savedProgress = await fs.readFile(f.paths.progress, "utf8");
+  const savedActive = await fs.readFile(f.paths.active, "utf8");
+  const projectSlug = `training-${attemptId.replaceAll("-", "")}`;
+  const tampered = JSON.parse(savedProgress);
+  tampered.attempts[0] = { ...tampered.attempts[0], projectSlug, preparation: { phase: "reserved" } };
+  await f.write("progress.json", tampered, f.paths.root);
+  await f.write("active-lesson.json", { ...JSON.parse(savedActive), projectSlug, preparation: { phase: "reserved" } }, f.paths.root);
+  await assert.rejects(() => f.state.readState({ actor: f.actor, includeCompletion: true }), /exactly when its lesson declares an exercise/u);
+  await f.write("progress.json", savedProgress, f.paths.root);
+  await f.write("active-lesson.json", savedActive, f.paths.root);
   await f.state.endAttempt({ actor: f.actor, attemptId, requestId: "end-1", expectedRevision: 1, reason: "archived" });
 
   const progress = JSON.parse(await fs.readFile(f.paths.progress, "utf8"));
-  const projectSlug = `training-${attemptId.replaceAll("-", "")}`;
-  progress.attempts[0] = { ...progress.attempts[0], projectSlug, preparation: { phase: "reserved" } };
-  await f.write("progress.json", progress, f.paths.root);
-  await assert.rejects(() => f.state.readState({ actor: f.actor, includeCompletion: true }), /exactly when its lesson declares an exercise/u);
-  delete progress.attempts[0].preparation;
+  progress.attempts[0] = { ...progress.attempts[0], projectSlug };
   await f.write("progress.json", progress, f.paths.root);
   await assert.rejects(() => f.state.readState({ actor: f.actor }), { code: "VIBE64_TRAINING_STATE_INVALID" });
 
@@ -2012,7 +2029,7 @@ test("a practice session is an ordinary local project session that stays the lea
   await assert.rejects(openProject(() => assert.fail(), { uid: 43 }), { code: "vibe64_practice_project_deleted" });
 });
 
-test("reading progress verifies each pinned lesson once, not once per past attempt", async t => {
+test("reading progress verifies only the lesson in progress, never the lessons of past attempts", async t => {
   const f = await fixture(t, { noExercise: true });
   const installed = createInstalledTrainingContent({ systemRoot: f.systemRoot });
   let reads = 0;
@@ -2029,9 +2046,78 @@ test("reading progress verifies each pinned lesson once, not once per past attem
     counts.push(await readsFor(() => state.readState({ actor: f.actor, includeCompletion: true })));
   }
   assert.equal((await state.readState({ actor: f.actor })).progress.attempts.length, 6);
-  assert.deepEqual(counts, [1, 1, 1, 1, 1, 1]);
+  assert.deepEqual(counts, [0, 0, 0, 0, 0, 0]);
+  await state.reserveAttempt({ actor: f.actor, requestId: "start-7", expectedRevision: revision, pin: f.pin });
+  assert.equal(await readsFor(() => state.readState({ actor: f.actor, includeCompletion: true })), 1);
   // The one verification still reads the installed bytes: a changed file fails.
   const filesRoot = path.join(f.systemRoot, "training/content", f.pin.topic.topicId, f.pin.topic.commit, "files");
   await fs.appendFile(path.join(filesRoot, "training/outline.md"), "Changed.\n");
   await assert.rejects(() => state.readState({ actor: f.actor, includeCompletion: true }), /invalid|changed/u);
+});
+
+// A Vibe64 upgrade can make an installed lesson unteachable (its beat names a
+// place this Vibe64 no longer has): readLesson refuses it, while its verified
+// identity still reads. This reader stands in for that installed state.
+function unteachableReader(systemRoot) {
+  const installed = createInstalledTrainingContent({ systemRoot });
+  const unteachable = new Set();
+  const content = { ...installed, readLesson: input => unteachable.has(input.lessonCode)
+    ? Promise.reject(Object.assign(new Error(`Lesson ${input.lessonCode} cannot be taught by this version of Vibe64.`),
+      { code: "VIBE64_TRAINING_LESSON_UNUSABLE", statusCode: 422 }))
+    : installed.readLesson(input) };
+  return { content, unteachable };
+}
+const passedSelf = (stepId, requestId) => ({ stepId, kind: "self", outcome: "passed", evidence: {}, origin: "learner",
+  requestId, recordedAt: new Date().toISOString() });
+
+test("a finished lesson that can no longer be taught never blocks the lesson in progress", async t => {
+  const f = await fixture(t, { noExercise: true, secondLesson: true });
+  const { content, unteachable } = unteachableReader(f.systemRoot);
+  const state = createTrainingLearnerState({ systemRoot: f.systemRoot, content });
+  const first = await state.reserveAttempt({ actor: f.actor, requestId: "start-1", expectedRevision: 0, pin: f.pin });
+  await state.updateStepProgress({ actor: f.actor, attemptId: first.attempt.attemptId },
+    async entry => ({ entry: { ...entry, results: [passedSelf("try-it", "pass-1")] } }));
+  const finished = await state.endAttempt({ actor: f.actor, attemptId: first.attempt.attemptId, requestId: "finish-1",
+    expectedRevision: first.revision, reason: "finished" });
+  unteachable.add("INTRO-01");
+
+  const second = await state.reserveAttempt({ actor: f.actor, requestId: "start-2", expectedRevision: finished.revision, pin: f.secondPin });
+  const { attemptId } = second.attempt;
+  const read = await state.readState({ actor: f.actor, includeCompletion: true });
+  assert.equal(read.completion.lessonCode, "INTRO-02");
+  assert.ok(read.lessonCompletions.some(value => value.lessonCode === "INTRO-01" && value.completed), "the old completion still counts");
+  assert.equal((await state.resumeAttempt({ actor: f.actor, attemptId })).attempt.attemptId, attemptId);
+  assert.equal(await state.runPreparationExclusive({ actor: f.actor, attemptId }, async () => "barrier"), "barrier");
+  await state.updateStepProgress({ actor: f.actor, attemptId },
+    async entry => ({ entry: { ...entry, results: [passedSelf("read-it", "pass-2")] } }));
+  const done = await state.endAttempt({ actor: f.actor, attemptId, requestId: "finish-2", expectedRevision: second.revision, reason: "finished" });
+  assert.equal(done.attempt.ended.reason, "finished");
+  assert.deepEqual((await state.readState({ actor: f.actor })).progress.completedLessons.map(value => value.code), ["INTRO-01", "INTRO-02"]);
+});
+
+test("a lesson in progress that can no longer be taught can still be archived or deleted, but not continued or finished", async t => {
+  const f = await fixture(t, { noExercise: true, secondLesson: true });
+  const { content, unteachable } = unteachableReader(f.systemRoot);
+  const state = createTrainingLearnerState({ systemRoot: f.systemRoot, content });
+  let revision = 0;
+  for (const [index, reason] of [[1, "archived"], [2, "deleted"]]) {
+    unteachable.delete("INTRO-01");
+    const reserved = await state.reserveAttempt({ actor: f.actor, requestId: `start-${index}`, expectedRevision: revision, pin: f.pin });
+    const { attemptId } = reserved.attempt;
+    unteachable.add("INTRO-01");
+    await assert.rejects(() => state.resumeAttempt({ actor: f.actor, attemptId }), { code: "VIBE64_TRAINING_LESSON_UNUSABLE" });
+    await assert.rejects(() => state.endAttempt({ actor: f.actor, attemptId, requestId: `finish-${index}`,
+      expectedRevision: reserved.revision, reason: "finished" }), { code: "VIBE64_TRAINING_LESSON_UNUSABLE" });
+    // The close (Archive, Delete, start-with-archive) needs only the lesson's verified identity.
+    await assert.rejects(() => state.runPreparationExclusive({ actor: f.actor, attemptId }, async () => {}),
+      { code: "VIBE64_TRAINING_LESSON_UNUSABLE" }, "preparing still needs a teachable lesson");
+    const record = await state.runPreparationExclusive({ actor: f.actor, attemptId, closing: true },
+      () => state.readAttemptRecord({ actor: f.actor, attemptId }));
+    assert.equal(record.lessonTitle, "Try the practice app");
+    const ended = await state.endAttempt({ actor: f.actor, attemptId, requestId: `close-${index}`, expectedRevision: reserved.revision, reason });
+    assert.equal(ended.attempt.ended.reason, reason);
+    revision = ended.revision;
+  }
+  const next = await state.reserveAttempt({ actor: f.actor, requestId: "start-next", expectedRevision: revision, pin: f.secondPin });
+  assert.equal(next.attempt.pin.lesson.code, "INTRO-02", "the learner can move on to a lesson this Vibe64 teaches");
 });

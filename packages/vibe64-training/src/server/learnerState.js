@@ -630,21 +630,18 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     return lesson;
   }
 
-  // Each distinct pinned lesson is verified once per read, however many
-  // attempts (every redo adds one) share it.
-  async function verifyProgressLessons(progress) {
-    const lessons = new Map();
-    const verified = new Map();
-    for (const attempt of progress.attempts) {
-      const key = canonicalJson([attempt.pin.topic, attempt.pin.lesson]);
-      if (!verified.has(key)) verified.set(key, await verifyInstalled(attempt.pin));
-      const lesson = verified.get(key);
-      if (Boolean(lesson.lesson.exercise) !== Boolean(attempt.preparation)) {
-        throw new Error("An attempt names a practice project exactly when its lesson declares an exercise.");
-      }
-      lessons.set(attempt.attemptId, lesson);
+  // Learner operations act on the lesson in progress only, so only its pin is
+  // verified: an ended attempt's lesson, which a later Vibe64 may no longer
+  // teach, never blocks it. Teaching, step results and finishing need the
+  // lesson teachable; closing it (archive, delete) needs only its identity.
+  async function verifyActiveLesson(progress, { admissionOnly = false } = {}) {
+    const attempt = progress.attempts.find(value => value.attemptId === progress.activeAttemptId);
+    if (!attempt) return null;
+    const lesson = await verifyInstalled(attempt.pin, { admissionOnly });
+    if (Boolean(lesson.lesson.exercise) !== Boolean(attempt.preparation)) {
+      throw new Error("An attempt names a practice project exactly when its lesson declares an exercise.");
     }
-    return lessons;
+    return lesson;
   }
 
   async function saveActive(paths, progress) {
@@ -682,9 +679,8 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     const paths = userPaths(actor);
     const state = await loadState(paths);
     if (includeCompletion !== true) return state;
-    const lessons = await verifyProgressLessons(state.progress);
+    const lesson = await verifyActiveLesson(state.progress);
     const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
-    const lesson = attempt ? lessons.get(attempt.attemptId) : null;
     const completion = attempt
       ? lessonCompletion(lesson, await readAttemptSteps(paths, attempt, lesson), availableStepIds(lesson, actor)) : null;
     const completed = new Set(state.progress.completedLessons.map(lesson => canonicalJson({ code: lesson.code, hash: lesson.hash })));
@@ -796,7 +792,6 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     let ended;
     try {
       const state = await loadState(paths);
-      const lessons = await verifyProgressLessons(state.progress);
       const replay = state.progress.attempts.find(value => value.ended?.requestId === requestId);
       if (replay) {
         if (replay.attemptId !== attemptId || replay.ended.reason !== reason) {
@@ -815,10 +810,10 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
           throw failure("VIBE64_TRAINING_STATE_REVISION_CONFLICT", "Learning state changed. Read it before ending the same attempt.", 409);
         }
         if (state.revision === Number.MAX_SAFE_INTEGER) throw new Error("Learning state reached its revision limit. No attempt was ended.");
+        const lesson = await verifyActiveLesson(state.progress, { admissionOnly: reason !== "finished" });
         const previous = state.progress.attempts.find(value => value.attemptId === attemptId);
         let { completedLessons } = state.progress;
         if (reason === "finished") {
-          const lesson = lessons.get(attemptId);
           if (!lessonCompletion(lesson, await readAttemptSteps(paths, previous, lesson), availableStepIds(lesson, actor)).completed) {
             throw failure("VIBE64_TRAINING_LESSON_INCOMPLETE", "Pass every required step before finishing this lesson.", 409);
           }
@@ -873,8 +868,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
         throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "The active attempt changed. Read the current learning state before resuming.", 404);
       }
       const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
-      const lessons = await verifyProgressLessons(state.progress);
-      const lesson = lessons.get(attempt.attemptId);
+      const lesson = await verifyActiveLesson(state.progress);
       const completion = lessonCompletion(lesson, await readAttemptSteps(paths, attempt, lesson), availableStepIds(lesson, actor));
       const active = state.activeSummaryCurrent ? state.active : await saveActive(paths, state.progress);
       return { revision: state.revision, attempt, active, completion };
@@ -885,7 +879,10 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
 
   // The admitted server owner holds this across effects. Typed state writes
   // acquire only their short state.lock, so they remain usable inside it.
-  async function runPreparationExclusive({ actor, attemptId } = {}, operation) {
+  // Preparation verifies the teachable lesson first; a close (archive or
+  // delete) needs only its identity, so a lesson this Vibe64 can no longer
+  // teach can still be closed.
+  async function runPreparationExclusive({ actor, attemptId, closing = false } = {}, operation) {
     const paths = userPaths(actor);
     if (typeof attemptId !== "string" || !uuidPattern.test(attemptId) || typeof operation !== "function") {
       throw new Error("Run preparation for the saved attempt with an admitted server operation.");
@@ -894,7 +891,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
     if (before.progress.activeAttemptId !== attemptId) {
       throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "This learner has no matching active reservation. Read the current learning state before preparing.", 404);
     }
-    await verifyProgressLessons(before.progress);
+    await verifyActiveLesson(before.progress, { admissionOnly: closing === true });
     let release = await tryAcquireExclusiveFileLock(paths.preparationLock);
     for (const deadline = Date.now() + PREPARATION_BUSY_WAIT_MS; !release && Date.now() < deadline;) {
       await new Promise(resolve => setTimeout(resolve, 100));
@@ -908,7 +905,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       if (state.progress.activeAttemptId !== attemptId) {
         throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "The active attempt changed. Read the current learning state before preparing.", 404);
       }
-      await verifyProgressLessons(state.progress);
+      await verifyActiveLesson(state.progress, { admissionOnly: closing === true });
       return await operation();
     } finally {
       await release();
@@ -940,7 +937,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
         throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "The active attempt changed. Read the current learning state before preparing.", 404);
       }
       const attempt = state.progress.attempts.find(value => value.attemptId === state.progress.activeAttemptId);
-      await verifyProgressLessons(state.progress);
+      await verifyActiveLesson(state.progress);
       if (!attempt.preparation) {
         throw failure("VIBE64_TRAINING_EXERCISE_MISSING", "This lesson has no practice project to prepare.", 409);
       }
@@ -1110,8 +1107,7 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
       if (state.progress.activeAttemptId !== attemptId || !attempt || attempt.ended) {
         throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "The saved learning attempt changed.", 404);
       }
-      const lessons = await verifyProgressLessons(state.progress);
-      const lesson = lessons.get(attemptId);
+      const lesson = await verifyActiveLesson(state.progress);
       if (!lessonSteps(lesson)) {
         throw failure("VIBE64_TRAINING_LESSON_VERSION", "This lesson uses assessments, not step results.", 409);
       }
@@ -1136,14 +1132,15 @@ function createTrainingLearnerState({ systemRoot, contentSystemRoot = systemRoot
   }
 
   // What an archive bundle keeps of the attempt in progress: its record, its
-  // step results and its lesson's title.
+  // step results and its lesson's title. Archiving needs only the lesson's
+  // identity, so a lesson this Vibe64 can no longer teach is still archived.
   async function readAttemptRecord({ actor, attemptId } = {}) {
     const paths = userPaths(actor);
     if (!uuidPattern.test(attemptId || "")) throw new Error("Use an exact attempt ID.");
     const state = await loadState(paths);
     const attempt = state.progress.attempts.find(value => value.attemptId === attemptId);
     if (!attempt) throw failure("VIBE64_TRAINING_ATTEMPT_MISSING", "This learner has no matching saved attempt.", 404);
-    const lesson = await verifyInstalled(attempt.pin);
+    const lesson = await verifyInstalled(attempt.pin, { admissionOnly: true });
     const { revision: _revision, ...stepProgress } = await readAttemptSteps(paths, attempt, lesson);
     return { attempt: structuredClone(attempt), stepProgress: structuredClone(stepProgress),
       lessonTitle: String(lesson.lesson?.title || "") || attempt.pin.lesson.code };

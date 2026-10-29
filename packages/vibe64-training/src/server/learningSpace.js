@@ -187,7 +187,7 @@ function createTrainingLearningSpace({ learners, content, projectContext, projec
           code: "VIBE64_TRAINING_PRACTICE_ARCHIVE_LIMIT", statusCode: 409 });
       }
       try {
-        await learners.runPreparationExclusive({ actor, attemptId }, async () => {
+        await learners.runPreparationExclusive({ actor, attemptId, closing: true }, async () => {
           const record = attempt.projectSlug ? await findRecord(actor, attemptId) : null;
           if (record) {
             await projectContext.runWithPracticeProjectScope({ actor, training: record.training, access: "write", allowDeleting: true },

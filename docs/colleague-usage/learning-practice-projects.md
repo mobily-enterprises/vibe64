@@ -98,6 +98,14 @@ practice project's name (or **No practice project**). Without one it says
   its teacher conversation go, with no archive. A lesson you completed before
   stays completed.
 
+After a Vibe64 update, a lesson may report that it **cannot be taught by this
+version of Vibe64**. A lesson you already finished, archived or deleted never
+blocks anything: your progress still reads and your current lesson continues.
+If it is the lesson in progress, it cannot be continued, restarted or finished,
+but **Delete for good** still works, and starting another lesson still archives
+it after you confirm. Then start the lesson again from the
+updated course.
+
 **Archived** lists your archived lessons, newest first, with the lesson title,
 whether it was finished or archived, and the date. Each row has a delete
 icon, then **Delete for good**, which removes that archive for good. You can keep at most 20 archived lessons;

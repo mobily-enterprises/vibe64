@@ -49,7 +49,14 @@ async function fixture(t, { headroom = async () => {}, release = async () => {},
   t.after(registerLearnThreadReleaser(async input => { await release(input); released.push(input); }));
   const systemRoot = path.join(root, "system");
   const pins = await installTopic(root, systemRoot);
-  const content = createInstalledTrainingContent({ systemRoot });
+  const installed = createInstalledTrainingContent({ systemRoot });
+  // Lessons a later Vibe64 can no longer teach: readLesson refuses them while
+  // their verified identity still reads, as an installed snapshot does.
+  const unteachable = new Set();
+  const content = { ...installed, readLesson: input => unteachable.has(input.lessonCode)
+    ? Promise.reject(Object.assign(new Error(`Lesson ${input.lessonCode} cannot be taught by this version of Vibe64.`),
+      { code: "VIBE64_TRAINING_LESSON_UNUSABLE", statusCode: 422 }))
+    : installed.readLesson(input) };
   const store = createTrainingLearnerState({ systemRoot, content });
   const working = path.join(root, "working");
   await mkdir(working);
@@ -101,7 +108,7 @@ async function fixture(t, { headroom = async () => {}, release = async () => {},
 
   const progress = async actor => (await store.readState({ actor })).progress;
   const bundle = (actor, attemptId) => path.join(systemRoot, "training/practice-archives", key(actor), attemptId);
-  return { root, systemRoot, pins, store, space, projectContext, start, progress, bundle, released, closed, failClose, duringClose,
+  return { root, systemRoot, pins, store, space, projectContext, start, progress, bundle, released, closed, failClose, duringClose, unteachable,
     title: code => content.readLesson({ ...pins.practice.topic, lessonCode: code,
       lessonHash: (code === "STEPS-ZERO" ? pins.zero : pins.practice).lesson.hash }).then(value => value.lesson.title) };
 }
@@ -168,6 +175,23 @@ test("a lesson without a practice project (Lesson 0) archives its record and con
   assert.deepEqual(f.closed, []);
   const [archived] = (await f.space.list(ALICE)).archived;
   assert.deepEqual({ reason: archived.reason, hasProject: archived.hasProject }, { reason: "archived", hasProject: false });
+});
+
+test("a lesson in progress that this Vibe64 can no longer teach can still be archived or deleted", async t => {
+  const f = await fixture(t);
+  const archived = await f.start(ALICE);
+  f.unteachable.add("STEPS-ONE");
+  assert.deepEqual(await f.space.closeAttempt({ actor: ALICE, attemptId: archived.attemptId, archive: true, reason: "archived" }),
+    { ok: true, attemptId: archived.attemptId, closed: true });
+  const saved = JSON.parse(await readFile(path.join(f.bundle(ALICE, archived.attemptId), "attempt.json"), "utf8"));
+  assert.equal(saved.lessonTitle, "Steps in a real app", "the archive keeps the lesson's title from its identity");
+  assert.deepEqual(f.closed, [archived.slug]);
+  f.unteachable.delete("STEPS-ONE");
+  const deleted = await f.start(ALICE);
+  f.unteachable.add("STEPS-ONE");
+  await f.space.closeAttempt({ actor: ALICE, attemptId: deleted.attemptId, archive: false, reason: "deleted" });
+  assert.equal((await f.progress(ALICE)).activeAttemptId, null);
+  assert.deepEqual((await f.progress(ALICE)).attempts.map(value => value.ended.reason), ["archived", "deleted"]);
 });
 
 test("delete removes the project and the conversation with no archive", async t => {

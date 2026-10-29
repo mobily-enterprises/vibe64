@@ -156,6 +156,10 @@ project, and your archived lessons with `practice.list`. When you ask:
 - **Delete an archived lesson** (`practice.archived.delete`): removes it for
   good.
 
+A lesson this Vibe64 can no longer teach blocks nothing once it has ended; in
+progress it can still be deleted or archived (see
+[Practice projects](learning-practice-projects.md)).
+
 Only the 3 newest archived lessons with a practice project keep it; archiving
 another removes the oldest one's project and keeps its record and conversation
 (`hasProject` in `practice.list` says which still have one). Colleague says so

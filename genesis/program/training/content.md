@@ -307,7 +307,13 @@ UUID. An attempt for a lesson that declares an exercise also owns its practice
 project slug `training-<attemptId hex>` and preparation, initially `reserved`;
 any other attempt names no practice project, and beginning preparation for it
 refuses (`VIBE64_TRAINING_EXERCISE_MISSING`). Validation against the installed
-lesson enforces both ways.
+lesson enforces both ways. Learner operations act on the lesson in progress, so
+only its pin is verified (`verifyActiveLesson`); an ended attempt's lesson, which
+a later Vibe64 may no longer teach (`VIBE64_TRAINING_LESSON_UNUSABLE`), never
+blocks reading progress or the current lesson. Teaching reads, resume, step
+results, preparation and `finished` need the lesson teachable; closing it
+(`archived`, `deleted`, `readAttemptRecord`) needs only its verified identity
+(`readAdmissionIdentity`), so the learner can always leave such a lesson.
 Project/session effects and assessment evidence remain separate future operation
 responsibilities.
 
@@ -324,9 +330,10 @@ reconciles only missing or semantically identical stale valid summaries; corrupt
 state fails closed. Saved-summary and unconfirmed-progress errors distinguish
 durable reservation from uncertainty and require the same retry identity.
 
-`runPreparationExclusive({actor,attemptId},operation)` holds the same Kernel lock
+`runPreparationExclusive({actor,attemptId,closing?},operation)` holds the same Kernel lock
 facility on a distinct persistent per-user `preparation.lock`, after validating
-the saved attempt and installed pin. It rechecks them under that lock and awaits
+the saved attempt and installed pin (only its identity when `closing`, as the
+learning space's close passes). It rechecks them under that lock and awaits
 the admitted server operation with release in `finally`; competing preparations
 receive a retryable 409. The pilot has one active attempt per user, so other
 learners remain independent. It never holds the short `state.lock` across effects;
