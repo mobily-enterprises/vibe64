@@ -169,8 +169,11 @@ async function runVibe64Command(input = {}) {
       GIT_COMMITTER_NAME_ENV
     ].map((name) => [name, env[name]]));
     assertActorHomeEnv(actor, env);
+    // The editor cannot enter an application's area: the host helper resolves
+    // an application command's working directory there and confines it.
     const cwd = assertCwdAllowed(request.cwd, {
-      allowedRoots: request.allowedRoots
+      allowedRoots: request.allowedRoots,
+      resolveLinks: !request.applicationAccount
     });
     assertManagedSourceFilesystemActor(actor, request, cwd);
     const resolveArgs = (input = {}) => typeof request.args === "function"

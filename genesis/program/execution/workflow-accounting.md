@@ -271,7 +271,9 @@ A managed execution runs as an application only when the daemon asks for its
 registered account by name (`applicationAccount`), and only as a finite capture.
 Any command may run there, from the application's own area (`app/` or
 `database/`, its home by default), with a link it planted resolved before the
-check. It runs as the account and its own group alone, with umask `0077`, the
+check. The editor cannot enter that area, so it checks such a directory against
+the request's allowed roots without resolving links, and the helper resolves it
+as root. It runs as the account and its own group alone, with umask `0077`, the
 runner under `setpriv --no-new-privs`, and a sandbox: no new privileges, a
 private `/tmp` as its `TMPDIR`, the whole file system read-only except its area
 and its receipt, no access to homes or to the host's settings folder (with

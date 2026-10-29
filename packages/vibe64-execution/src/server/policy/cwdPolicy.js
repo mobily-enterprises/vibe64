@@ -9,8 +9,11 @@ function resolveCommandCwd(cwd = "") {
   return normalizeAbsolutePath(cwd || process.cwd());
 }
 
+// resolveLinks: false keeps the check lexical, for a directory this process
+// cannot enter whose owner resolves it again (an application's area).
 function assertCwdAllowed(cwd = "", {
-  allowedRoots = []
+  allowedRoots = [],
+  resolveLinks = true
 } = {}) {
   const resolvedCwd = resolveCommandCwd(cwd);
   const roots = (Array.isArray(allowedRoots) ? allowedRoots : [allowedRoots])
@@ -21,6 +24,9 @@ function assertCwdAllowed(cwd = "", {
   }
   const matchingRoots = roots.filter((root) => pathInsideOrEqual(root, resolvedCwd));
   if (matchingRoots.length > 0) {
+    if (!resolveLinks) {
+      return resolvedCwd;
+    }
     const canonicalCwd = realpathSync(resolvedCwd);
     if (matchingRoots.some((root) => pathInsideOrEqual(realpathSync(root), canonicalCwd))) {
       return canonicalCwd;

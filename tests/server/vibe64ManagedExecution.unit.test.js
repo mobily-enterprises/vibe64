@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import { createServer } from "node:net";
 import path from "node:path";
@@ -137,6 +137,37 @@ test("application account commands run as that account and never fall back to lo
   assert.equal(called, true);
   assert.equal(fallback.ok, false);
   assert.equal(fallback.code, "vibe64_application_account_unavailable");
+});
+
+// The editor cannot enter an application's area; the host helper resolves and
+// confines the working directory there, as root.
+test("an application command's working directory reaches the host as given, inside its allowed roots", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-application-cwd-"));
+  const area = path.join(root, "area");
+  await mkdir(path.join(area, "app", "home"), { recursive: true });
+  await chmod(area, 0o000);
+  t.after(async () => {
+    await chmod(area, 0o700);
+    await rm(root, { force: true, recursive: true });
+  });
+  const seen = [];
+  const release = installVibe64ManagedExecutionProvider({
+    async stopExecution() { throw new Error("Unexpected stop"); },
+    async runCommand(normalized, context) {
+      seen.push(context.cwd);
+      return { ok: true, code: "", output: "", stdout: "", stderr: "" };
+    }
+  });
+  t.after(release);
+  const request = {
+    command: process.execPath, actor: "app", applicationAccount: os.userInfo().username, allowedRoots: [path.join(area, "app")],
+    cwd: path.join(area, "app", "home"), envPolicy: "deployment", runtimes: []
+  };
+  assert.equal((await runVibe64Command(request)).ok, true);
+  assert.deepEqual(seen, [path.join(area, "app", "home")]);
+  const outside = await runVibe64Command({ ...request, cwd: root });
+  assert.equal(outside.code, "vibe64_command_cwd_outside_allowed_roots");
+  assert.equal(seen.length, 1);
 });
 
 // The runner loads the release environment file itself, as the execution's own
