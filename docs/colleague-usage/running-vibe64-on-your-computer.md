@@ -101,6 +101,10 @@ Run the printed command, then start Vibe64 again. Vibe64 never moves the folder
 itself. To keep using the old location instead, start Vibe64 with
 `VIBE64_SYSTEM_ROOT` set to it.
 
+After you upgrade Vibe64 and start it again, tabs you left open show **Vibe64
+was updated. Reload to get the latest version.** Choose **Reload** in each one;
+see [When Vibe64 is updated](vibe64-updates.md).
+
 ## Colleague
 
 Colleague can explain where Vibe64 keeps things, which tools it uses and every

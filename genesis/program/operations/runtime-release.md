@@ -69,6 +69,15 @@ writers stopped before admitting optional question/delivery snapshots. The step
 converts no application files and creates no provenance for old messages; retry
 changes only the ledger. The prior registry refuses its completed entry.
 
+An open tab keeps the client build it loaded. JSKIT names each production
+build in `index.html` (its `jskit-client-build` meta tag), and the realtime
+reconnection after a restart announces the build the server now serves. When
+they differ, the JSKIT shell's `ShellErrorHost` in `src/App.vue` shows **Vibe64
+was updated. Reload to get the latest version.** with **Reload**, naming the app
+from `index.html`'s `<title>`. Vibe64 adds no code of its own for this. Nothing
+polls, the page never reloads by itself, and a development (`npm run dev`) page
+has no build to compare. See `docs/colleague-usage/vibe64-updates.md`.
+
 Task-oriented Colleague usage guides under `docs/colleague-usage/` ship with the
 matching application runtime. The builder also ships `docs/training-content.md`
 and the copyable `docs/templates/learn-topic/` authoring template. Its explicit
