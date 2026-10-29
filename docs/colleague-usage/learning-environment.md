@@ -104,8 +104,10 @@ The lesson is an on/off toggle of its own, separate from **Preview** and
 - On a phone (and other narrow screens up to 980px wide) the page shows one
   side at a time: the chat or the project. The next-pane button at the top
   goes from **Preview** to **Dash** and back, showing the next pane's name
-  (from under the lesson it hides the lesson too). The **Lesson** toggle is
-  beside it; turning it on shows the project side with the lesson over it.
+  (from under the lesson it hides the lesson too). The header there has room
+  only for the project name and that side's controls, so the **Lesson** toggle
+  is on the lesson step bar, on both sides; turning it on shows the project
+  side with the lesson over it.
 
 ## No project selected and `/app`
 

@@ -1195,10 +1195,11 @@ function createVibe64Learning({ request: requestOverride = null, browserNavigati
     get lessonTitle() { return mode.value?.currentAttemptId ? mode.value.lessonTitle || mode.value.lessonCode || "" : ""; },
     get practice() { return practice.value; },
     get confirmArchive() { return confirmArchive.value; },
-    // The step bar's Lesson toggle: on a studio page (a practice project has
-    // its toggle beside Preview | Dash; a lesson without a project is its only
-    // pane). lessonShown: the toggle is pressed.
-    get lessonSwitchable() { return Boolean(layout?.value?.studio); },
+    // The step bar's Lesson toggle: on a studio page, and on a practice project
+    // shown one side at a time (a phone; otherwise its toggle is beside
+    // Preview | Dash; a lesson without a project is its only pane).
+    // lessonShown: the toggle is pressed.
+    get lessonSwitchable() { return Boolean(layout?.value?.studio || layout?.value?.lessonToggleOnBar); },
     get lessonShown() { return Boolean(layout?.value?.lessonShown); },
     get notice() { return state.notice; },
     get orientationRequested() { return state.orientationRequested; },

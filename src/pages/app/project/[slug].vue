@@ -161,7 +161,8 @@ const {
               {{ tab.label }}
             </button>
           </div>
-          <!-- The lesson's own on/off flag: a sheet over Preview or Dash, apart from that choice. -->
+          <!-- The lesson's own on/off flag: a sheet over Preview or Dash, apart from that choice.
+               Shown one side at a time (a phone), it is on the step bar instead. -->
           <div v-if="lessonToggleVisible && projectPaneNavigationVisible" class="studio-home-shell-lesson-toggle">
             <Vibe64LessonToggle />
           </div>
@@ -629,11 +630,11 @@ const {
     max-width: min(26rem, 42vw);
   }
 
-  /* One pane control at a time on a narrow bar: the next-pane pill, then the
-     Lesson toggle, then Preview's controls, which give way first. */
+  /* One pane control at a time on a narrow bar: the next-pane pill, then
+     Preview's controls, which give way first. The Lesson toggle is on the
+     step bar here. */
   .studio-home-shell-project-mobile-action { order: 1; }
-  .studio-home-shell-lesson-toggle { order: 2; }
-  .studio-home-shell-preview-toolbar-host { order: 3; }
+  .studio-home-shell-preview-toolbar-host { order: 2; }
 
 }
 
@@ -663,16 +664,6 @@ const {
   .studio-home-shell-project-mobile-action {
     min-width: 4rem;
     padding-inline: var(--v64-space-3) var(--v64-space-1);
-  }
-
-  /* The Lesson toggle keeps its school icon and switch; its name is its
-     accessible name and tooltip. */
-  .studio-home-shell-lesson-toggle {
-    padding-inline-start: var(--v64-space-1);
-  }
-
-  .studio-home-shell-lesson-toggle :deep(.vibe64-lesson-toggle__label) {
-    display: none;
   }
 
   /* The session controls teleported beside the name keep their size; only

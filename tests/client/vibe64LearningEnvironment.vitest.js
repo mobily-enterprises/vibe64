@@ -1924,6 +1924,11 @@ describe("Lesson step bar", () => {
       layout.value = { ...layout.value, studio: false, projectSlug: "practice-one" };
       await flush();
       expect(lesson(), "a practice project has its toggle beside Preview | Dash").toBeUndefined();
+      // A phone shows one side at a time, and its header has no room for the
+      // toggle, so the practice project's toggle is on the bar there.
+      layout.value = { ...layout.value, lessonToggleOnBar: true };
+      await flush();
+      expect(lesson()?.props["aria-label"], "a phone's practice project has its toggle on the bar").toBe("Lesson");
     } finally { app.unmount(); }
   });
 

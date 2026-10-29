@@ -8,7 +8,7 @@ import { useVibe64Learning } from "@/composables/useVibe64Learning.js";
 // off; on it is filled Learning yellow with the switch on (a check), and
 // pressing it again hides the lesson (the Preview or Dash it covered is still
 // there, as it was). It sits beside Preview | Dash on a practice project and
-// on the step bar of a studio page.
+// on the step bar of a studio page or a phone.
 const learning = useVibe64Learning();
 const shown = computed(() => Boolean(learning?.lessonShown));
 const action = computed(() => shown.value ? "Hide lesson" : "Show lesson");

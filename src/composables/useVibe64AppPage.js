@@ -139,7 +139,6 @@ function useVibe64AppPage() {
   // whole area without a project.
   const lessonPaneAvailable = computed(() => Boolean(learning?.learnMode && learning.lessonAttemptId));
   const lessonShown = computed(() => lessonPaneAvailable.value && (!projectSlug.value || lessonShownIn(route.query)));
-  const lessonToggleVisible = computed(() => Boolean(projectSlug.value) && lessonPaneAvailable.value);
   // Without a project the panes are empty and switch in place; the pane and
   // the dashboard section live in the address, so Learn mode's place keeps them.
   const emptyPane = computed(() => route.query?.pane === "dashboard" ? "dashboard" : "preview");
@@ -175,6 +174,10 @@ function useVibe64AppPage() {
   const mobilePaneSwipeEnabled = computed(() => projectPaneNavigationVisible.value && mobilePaneLayout.value &&
     chatColumnVisible.value);
   const projectVisible = computed(() => !mobilePaneLayout.value || chatCollapsed.value || !chatColumnVisible.value);
+  // Shown one side at a time (a phone), the header has room only for the
+  // project name with that side's controls, so the Lesson toggle is on the
+  // step bar there (`lessonToggleOnBar`), on both sides.
+  const lessonToggleVisible = computed(() => Boolean(projectSlug.value) && lessonPaneAvailable.value && !mobilePaneLayout.value);
   const colleagueLayout = inject(VIBE64_COLLEAGUE_LAYOUT_KEY, null);
   const layoutOwner = {
     get projectSlug() { return projectSlug.value; },
@@ -184,6 +187,7 @@ function useVibe64AppPage() {
     get lessonVisible() { return projectVisible.value && lessonShown.value; },
     // The lesson's flag is on (the Lesson toggle is pressed).
     get lessonShown() { return lessonShown.value; },
+    get lessonToggleOnBar() { return mobilePaneLayout.value; },
     hideLesson,
     get chatVisible() { return chatColumnVisible.value && !chatCollapsed.value; },
     showProject: showProjectPane,

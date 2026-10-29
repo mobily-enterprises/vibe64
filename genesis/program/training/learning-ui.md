@@ -190,7 +190,9 @@ on/off flag apart from the pane (`?lesson=1`; `lessonShownIn`, `withLesson`,
 and Dash, its accessible name Dashboard) is followed by the **Lesson** toggle
 (`Vibe64LessonToggle.vue`, `aria-pressed` from the layout owner's
 `lessonShown`, `toggleLesson`), which is on the step bar instead on a studio
-page (`lessonSwitchable`). On, `Vibe64LessonSheet.vue` covers the selected pane,
+page and on a practice project shown one side at a time (`lessonSwitchable`;
+the project page's layout owner sets `lessonToggleOnBar` for its ≤980px pane
+layout, where the phone header keeps only the name and that side's controls). On, `Vibe64LessonSheet.vue` covers the selected pane,
 which stays mounted (the Preview iframe is not reloaded), with its own **Hide
 lesson** (`hideLesson`, the layout owner's); choosing Preview or Dash drops
 the flag. The Lesson pane (`Vibe64LearningLessonPane.vue`) wears the step bar's Learning yellow

@@ -21,8 +21,9 @@ names for screen readers and the keyboard:
 
 On a practice project the **Lesson** toggle is in the header beside **Preview**
 | **Dash** (see [The Lesson pane](learning-environment.md#the-lesson-pane)); on
-Management and other screens outside any project it is on the bar, between
-the forward button and **Courses**. Press it to show the lesson (it turns
+Management and other screens outside any project, and on a phone (or another
+screen up to 980px wide that shows one side at a time), it is on the bar,
+between the forward button and **Courses**. Press it to show the lesson (it turns
 yellow with its switch on); press it again to hide it. On a lesson without a
 practice project the lesson is already the whole page, so there is no toggle.
 
@@ -110,7 +111,7 @@ Colleague never runs a review or passes a step for you.
 
 This tab remembers the beat and the pause; another tab or device starts the
 step at its first beat. On a phone the bar has three tidy rows: the position
-with the icon buttons (**Courses**, **Open practice project** and, off a
-project, **Lesson**), then the beat's line and its one button, then **Back**
+with the icon buttons (**Courses**, **Open practice project** and **Lesson**),
+then the beat's line and its one button, then **Back**
 at the left and the forward button at the right. A step without beats shows
 its title and status as before, and **Show me** when it can point at a place.

@@ -18,7 +18,7 @@ import Vibe64LessonToggle from "./Vibe64LessonToggle.vue";
 // complete lesson's last step. A step without beats shows its title and
 // status, with Show me when it declares a guide. On a studio page the Lesson
 // toggle shows the lesson itself over the page (a practice project has it
-// beside Preview | Dash); away from the lesson's practice project, Open
+// beside Preview | Dash, or here on a phone); away from the lesson's practice project, Open
 // practice project goes back to it. Courses, always on it, is the way out to
 // the catalogue. It is always this one line (three tidy rows on a phone); it
 // does not collapse. While the lesson waits for the learner's AI (its

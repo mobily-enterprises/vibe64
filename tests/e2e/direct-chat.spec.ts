@@ -2182,9 +2182,15 @@ for (const [width, header] of [320, 360, 390, 540].flatMap(width => [[width, "se
     await routeApiEndpoint(page, "/vibe64/projects", route => fulfillJson(route, { ...readyProjectSelectionPayload,
       currentProject: practiceProject, projects: [practiceProject] }));
     // The header names a practice project by the lesson that owns it, from Learning mode.
+    const attemptId = "01234567-89ab-cdef-0123-456789abcdef";
     await routeApiEndpoint(page, "/vibe64/training/learning-mode", route => fulfillJson(route, { ok: true, available: true,
-      learningMode: { on: true, currentAttemptId: "01234567-89ab-cdef-0123-456789abcdef", lessonCode: "REFUSE-EMPTY-TITLES",
+      learningMode: { on: true, currentAttemptId: attemptId, lessonCode: "REFUSE-EMPTY-TITLES",
         lessonTitle: "Refuse empty titles", lessonStage: "project", practiceSlug: PRACTICE_SLUG } }));
+    // The lesson's step bar, which holds the Lesson toggle on a phone.
+    await routeApiEndpoint(page, `/vibe64/training/attempts/${attemptId}/lesson`, route => fulfillJson(route, { ok: true,
+      lesson: { schemaVersion: 2, stage: "project", code: "REFUSE-EMPTY-TITLES", title: "Refuse empty titles",
+        steps: [{ id: "refuse", title: "Refuse an empty title", required: true, bodyText: "Make Save refuse an empty title." }] },
+      attempt: { attemptId, practiceSlug: PRACTICE_SLUG }, results: [], passedStepIds: [] }));
     await routeApiEndpoint(page, "/vibe64/repository/remote", route => fulfillJson(route, { ok: true, branch: "main",
       remotes: [{ name: "origin" }], upstream: "origin/main", push: "origin/main", incoming: 2, outgoing: 1 }));
     const errors: string[] = [];
@@ -2233,6 +2239,7 @@ for (const [width, header] of [320, 360, 390, 540].flatMap(width => [[width, "se
         };
         const parts: Record<string, string> = {
           plate: ".studio-app-shell-layout__learning-plate",
+          lessonToggle: ".studio-home-shell-lesson-toggle",
           projectName: ".studio-home-shell-project-name",
           create: "#studio-home-shell-create-session .studio-ai-sessions__create-button",
           branch: "#studio-home-shell-local-remotes .local-remotes__branch",
@@ -2250,6 +2257,10 @@ for (const [width, header] of [320, 360, 390, 540].flatMap(width => [[width, "se
       for (const name of Object.keys(sessionControls)) {
         expect(boxes.some(box => box.name === name), `${name} is in the app bar only with the chat pane`).toBe(pane === "chat");
       }
+      // A phone shows one side at a time: its Lesson toggle is on the lesson
+      // step bar on both sides, so the app bar keeps the 5a928c735 budget.
+      expect(boxes.some(box => box.name === "lessonToggle"), "the Lesson toggle is not in the phone app bar").toBe(false);
+      await expect(page.locator("[data-test=learning-step-bar] [data-test=lesson-toggle]")).toBeVisible();
       // The name is readable, or (beside Preview's controls on the narrowest
       // phones, or beside the full repository controls below 540px) hidden
       // rather than squeezed to a sliver.
