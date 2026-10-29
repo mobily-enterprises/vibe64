@@ -425,7 +425,10 @@ its open sessions' authority branch heads every 30 seconds with one read per
 authority repository, shared by every session and viewer. A GitHub repository
 is read by the server itself with one Git protocol v2 `ls-refs` request to
 https://github.com, which starts no process and no managed job; a managed or
-local authority with one `git ls-remote`. Both list only the named branches and
+local authority with one `git ls-remote`. So is a GitHub repository when the
+server runs behind a proxy its own requests would not use, where Git would
+(`HTTPS_PROXY` without `NODE_USE_ENV_PROXY=1`, or only `ALL_PROXY`, in either
+case); that choice is made before the read, never after a failure. Both list only the named branches and
 fetch nothing. It runs the ordinary forced check, with its fetch under the
 project source lock, only for a session whose head moved; that check's realtime
 result reaches every viewer and notifies sibling sessions as above. A
@@ -734,8 +737,9 @@ Push of that upstream stay with the original folder.
   through the terminals' `readSessionAuthorityHeads()` (one head read per
   authority with a 20-second limit, made as a session's recorded Git actor
   without recording one: `githubRemoteHeads.js` posts one ls-refs request to a
-  https://github.com remote with that actor's token; any other authority runs
-  `git ls-remote`) and
+  https://github.com remote with that actor's token unless
+  `fetchReachesGithubAsGit()` finds a proxy the server's fetch would not use;
+  any other authority, or that case, runs `git ls-remote`) and
   calls the ordinary forced `checkSessionUpdates()` for a moved head. It skips a
   session whose Save, Update or renewal is running. A failure publishes
   `session-repository-check-failed` with `repositoryUpdateCheckError` only when

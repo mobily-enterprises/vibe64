@@ -10,6 +10,16 @@ const MAX_LISTING_BYTES = 1024 * 1024;
 const FLUSH_PACKET = "0000";
 const DELIMITER_PACKET = "0001";
 
+// Git sends a github.com request through https_proxy, else all_proxy (either
+// case). Node's fetch uses HTTPS_PROXY only when the server started with
+// NODE_USE_ENV_PROXY=1, and never ALL_PROXY. Where it would not take the proxy
+// Git takes, the heads are read with Git; this is decided before any read.
+function fetchReachesGithubAsGit(env = process.env) {
+  const setting = (name) => String(env[name.toLowerCase()] || env[name] || "").trim();
+  if (setting("HTTPS_PROXY")) return String(env.NODE_USE_ENV_PROXY || "").trim() === "1";
+  return !setting("ALL_PROXY");
+}
+
 function remoteHeadsError(message, code, details = {}) {
   return Object.assign(new Error(message), { code, ...details });
 }
@@ -152,6 +162,7 @@ async function listGithubRemoteHeads({
 }
 
 export {
+  fetchReachesGithubAsGit,
   githubHttpsRemote,
   listGithubRemoteHeads
 };

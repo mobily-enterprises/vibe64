@@ -109,16 +109,21 @@ function gateway() {
   return state;
 }
 
-function service({ env = process.env, fetch, runGatewayCommand }) {
+const PROXY_VARIABLES = ["HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy", "NODE_USE_ENV_PROXY"];
+// The server's environment without any proxy setting, whatever the test machine has.
+const directEnv = Object.fromEntries(Object.entries(process.env)
+  .filter(([name]) => !PROXY_VARIABLES.includes(name)));
+
+function service({ env = directEnv, fetch, runGatewayCommand }) {
   return createCodexGitCommandService({ env, fetch, projectService: {}, runGatewayCommand });
 }
 
-async function githubFixture(t, root) {
+async function githubFixture(t, root, { env } = {}) {
   const session = githubSession(root);
   await mkdir(session.sourcePath, { recursive: true });
   const github = await fakeGithub(t);
   const commands = gateway();
-  const git = service({ fetch: github.fetch, runGatewayCommand: commands.runGatewayCommand });
+  const git = service({ env, fetch: github.fetch, runGatewayCommand: commands.runGatewayCommand });
   const read = (options = {}) => readSessionAuthorityHeads({
     executionFor: options.executionFor || ((listed) => git.sessionWorkSaveContext({ session: listed })),
     project: githubProject(options.cloneUrl),
@@ -238,7 +243,7 @@ test("a managed or non-GitHub authority still lists its heads with git ls-remote
       source_path: managed.sourcePath, source_path_authority: SESSION_SOURCE_PATH_AUTHORITY_MANAGED,
       source_remote_url: canonical };
     await mkdir(managed.sourcePath, { recursive: true });
-    const git = service({ env: { ...process.env, VIBE64_GITHUB_ACCOUNT_MODE: "user" }, fetch: github.fetch,
+    const git = service({ env: { ...directEnv, VIBE64_GITHUB_ACCOUNT_MODE: "user" }, fetch: github.fetch,
       runGatewayCommand: commands.runGatewayCommand });
     const heads = await readSessionAuthorityHeads({
       executionFor: (listed) => git.sessionWorkSaveContext({ session: listed }),
@@ -250,4 +255,29 @@ test("a managed or non-GitHub authority still lists its heads with git ls-remote
     assert.deepEqual(commands.commands.map((request) => request.args.slice(0, 3)), [["ls-remote", "--heads", canonical]]);
     assert.equal(github.fetchCalls, 0, "nothing but GitHub is asked over HTTPS");
   });
+});
+
+// Git sends a github.com request through https_proxy, else all_proxy. Node's
+// fetch uses HTTPS_PROXY only under NODE_USE_ENV_PROXY=1 and never ALL_PROXY,
+// so whether the server may read the heads itself is decided before any read.
+test("behind a proxy Node's fetch would not use, the heads are read with git ls-remote", async (t) => {
+  for (const [proxy, inProcess] of [
+    [{ HTTPS_PROXY: "http://proxy.test:3128" }, false],
+    [{ https_proxy: "http://proxy.test:3128" }, false],
+    [{ ALL_PROXY: "socks5://proxy.test:1080" }, false],
+    [{ all_proxy: "socks5://proxy.test:1080", NODE_USE_ENV_PROXY: "1" }, false],
+    [{ HTTPS_PROXY: "http://proxy.test:3128", NODE_USE_ENV_PROXY: "1" }, true],
+    [{ HTTPS_PROXY: "http://proxy.test:3128", ALL_PROXY: "socks5://proxy.test:1080", NODE_USE_ENV_PROXY: "1" }, true],
+    [{ HTTPS_PROXY: "" }, true]
+  ]) {
+    await withTemporaryRoot(async (root) => {
+      const { commands, git, github, read, session } = await githubFixture(t, root, { env: { ...directEnv, ...proxy } });
+      assert.equal(typeof (await git.sessionWorkSaveContext({ session })).readRemoteHeads === "function", inProcess,
+        JSON.stringify(proxy));
+      assert.deepEqual((await read()).get(session.sessionId), { head: H1 });
+      assert.equal(github.fetchCalls, inProcess ? 1 : 0, JSON.stringify(proxy));
+      assert.deepEqual(commands.commands.map((request) => request.args.slice(0, 2)),
+        inProcess ? [] : [["ls-remote", "--heads"]], JSON.stringify(proxy));
+    });
+  }
 });

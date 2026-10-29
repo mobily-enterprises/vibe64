@@ -27,7 +27,7 @@ import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
-import { listGithubRemoteHeads } from "./githubRemoteHeads.js";
+import { fetchReachesGithubAsGit, listGithubRemoteHeads } from "./githubRemoteHeads.js";
 import {
   writeExecutableFileIfChanged
 } from "./writeExecutableFileIfChanged.js";
@@ -949,15 +949,18 @@ function createCodexGitCommandService({
       ok: true,
       // The update probe's GitHub head read, made in this process: the token
       // goes only into that request's Authorization header, and GitHub's
-      // rejection drops it as a rejected Git command's does.
-      readRemoteHeads: async (remoteUrl, refs, { timeoutMs } = {}) => {
-        try {
-          return await listGithubRemoteHeads({ fetch: fetchRemote, refs, remoteUrl, timeoutMs, token: githubToken.token });
-        } catch (error) {
-          if (error?.authenticationRejected === true) actorCredentials.drop(credentialKey);
-          throw error;
+      // rejection drops it as a rejected Git command's does. Behind a proxy
+      // this process's fetch would not use, there is none and Git reads.
+      ...(fetchReachesGithubAsGit(env) ? {
+        readRemoteHeads: async (remoteUrl, refs, { timeoutMs } = {}) => {
+          try {
+            return await listGithubRemoteHeads({ fetch: fetchRemote, refs, remoteUrl, timeoutMs, token: githubToken.token });
+          } catch (error) {
+            if (error?.authenticationRejected === true) actorCredentials.drop(credentialKey);
+            throw error;
+          }
         }
-      },
+      } : {}),
       runCommand: async (request) => dropRejectedCredentials(credentialKey, await gatewayCommandRunner(request))
     };
   }
