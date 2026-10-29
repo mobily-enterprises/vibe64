@@ -111,6 +111,9 @@ function createCodexHelperPreparation({ runtimeHost, sessionRuntimeHost, account
         if (normalizedSessionId) {
           sessionIds.add(normalizedSessionId);
         }
+        // Each session's notice is written on its own: one refused notice does not
+        // hide the others, and an archived or missing session has no one to tell.
+        const refused = [];
         for (const id of sessionIds) {
           const failures = failed.filter((failure) => !failure.sessionId || failure.sessionId === id);
           const retired = retiredBySession.get(id) || [];
@@ -121,24 +124,38 @@ function createCodexHelperPreparation({ runtimeHost, sessionRuntimeHost, account
           const message = failures.length
             ? `${failures.length} helper cleanup record(s) still need attention: ${failures[0].error}`
             : `Cleaned up ${retired.length} stale helper ownership record(s).`;
-          await effectiveRuntime.store.writeBackgroundTaskEvent(id, "codex-helper-cleanup", {
-            event: {
-              kind: "cleanup-reconciled",
-              message,
-              status,
-              failed: failures,
-              retiredThreadIds: retired
-            },
-            patch: {
-              label: "Low-cost assistant cleanup",
-              message,
-              error: failures[0]?.error || "",
-              code: failures[0]?.code || "",
-              details: { failed: failures },
-              status,
-              retryable: failures.some((failure) => failure.retryable !== false)
+          try {
+            await effectiveRuntime.store.writeBackgroundTaskEvent(id, "codex-helper-cleanup", {
+              event: {
+                kind: "cleanup-reconciled",
+                message,
+                status,
+                failed: failures,
+                retiredThreadIds: retired
+              },
+              patch: {
+                label: "Low-cost assistant cleanup",
+                message,
+                error: failures[0]?.error || "",
+                code: failures[0]?.code || "",
+                details: { failed: failures },
+                status,
+                retryable: failures.some((failure) => failure.retryable !== false)
+              }
+            });
+          } catch (error) {
+            if (!["vibe64_session_archived", "vibe64_session_not_found"].includes(error?.code)) {
+              refused.push({ error, sessionId: id });
             }
-          });
+          }
+        }
+        if (refused.length) {
+          const error = new Error(`Low-cost assistant cleanup could not be recorded for ${refused
+            .map(({ error: reason, sessionId }) => `session ${sessionId} (${normalizeText(reason?.message || reason)})`)
+            .join("; ")}.`);
+          error.code = normalizeText(refused[0].error?.code);
+          error.retryable = true;
+          throw error;
         }
       }
     } };

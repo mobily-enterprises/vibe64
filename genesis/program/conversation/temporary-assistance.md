@@ -90,8 +90,11 @@ Vibe64 retains namespace admission and Helper ownership receipts. The scoped
 Codex driver calls the same run owner for acquisition, cached or persistent reads,
 Start, wait, Stop and deletion. Shared native interrupt/delete commands run inside
 the original admission boundary, then settle the captured watcher/map after its
-release. Scoped deletion requires the original provider owner's verified runtime
-exit; Vibe64 supplies its authorized execution configuration and cleanup policy.
+release. Scoped deletion stops only what this server runs for the scope and
+requires verified exit for it. A helper thread from before a restart lived only
+in that process, so its cleanup sends no native delete, starts no Codex
+app-server and needs no account, tool home or workdir. Vibe64 supplies its
+cleanup policy.
 Vibe64's scoped preparation retains authorized context, profile and permission settings,
 input/output limits and observation-loss admission. Its Helper account capture stays
 after native resume and before the shared watcher and Send. The run owner invokes

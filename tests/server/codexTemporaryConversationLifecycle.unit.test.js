@@ -6209,7 +6209,7 @@ test("scoped Codex completion keeps admission busy and cannot overwrite Stop dur
   });
 });
 
-test("scoped Codex helper cleanup after a restart deletes its captured native thread", async () => {
+test("scoped Codex helper cleanup after a restart starts no Codex app-server and has no native thread to delete", async () => {
   await withConversationController(async ({ captures, controller, projectService, temporaryRoot }) => {
     controller = throughCommonScopedConversation(controller);
     const scope = { id: "restart_job", environment: {}, workdir: temporaryRoot, runtimeRoot: path.join(temporaryRoot, "helper-runtime"),
@@ -6220,14 +6220,12 @@ test("scoped Codex helper cleanup after a restart deletes its captured native th
     assert.equal(created.ok, true, JSON.stringify(created));
     const after = restartedCaptures(captures);
     const restarted = throughCommonScopedConversation(createRestartedController({ captures: after, projectService }));
-    after.failDeletes = 1;
     const input = { ephemeral: true, executionProfile, conversationId: created.conversationId };
-    const failed = await restarted.deleteConversation(scope.id, input, options);
-    assert.equal(failed.ok, false);
-    assert.equal(after.stopRuntimes, 0, "failed cleanup retains the runtime for retry");
-    const retried = await restarted.deleteConversation(scope.id, input, options);
-    assert.equal(retried.ok, true, JSON.stringify(retried));
-    assert.deepEqual(after.deletes, [created.conversationId, created.conversationId]);
+    const deleted = await restarted.deleteConversation(scope.id, input, options);
+    assert.equal(deleted.ok, true, JSON.stringify(deleted));
+    assert.deepEqual(after.deletes, [], "an ephemeral helper thread lived only in the process that created it");
+    assert.deepEqual(after.providerOptions, [], "deleting a receipt never starts a Codex app-server to stop it");
+    assert.equal(after.stopRuntimes, 0, "the restarted server runs nothing for the scope");
     await controller.deleteConversation(scope.id, input, options);
   });
 });

@@ -436,9 +436,7 @@ function createCodexSessionAgentProvider({
   providerOwner: codexAppServerProviderOwner,
   conversationPreparation: codexConversationPreparation,
   lifecyclePreparation: codexLifecyclePreparation = {},
-  helperPreparation: codexHelperPreparation = {},
   renewalPreparation = {},
-  sessionRuntimeHost = {},
   storage: codexConversationStorage,
   catalog: codexAssistantCatalog,
   terminals,
@@ -450,8 +448,6 @@ function createCodexSessionAgentProvider({
   if (!codexAssistantCatalog) {
     throw new TypeError("Codex session agent provider requires its catalogue facility.");
   }
-  const { createRuntimeForSession } = sessionRuntimeHost;
-  const { restoration: prepareCodexAppServerHelperRestoration } = codexHelperPreparation;
   const { prepareCodexRenewalHandover, prepareCodexRenewalSeed, prepareRenewalProcessExitProof } = renewalPreparation;
   const { prepareNativeStorageProvider, prepareCodexAppServerThreadUnsubscription,
     codexAppServerReconciliationPreparation, prepareCodexSessionCleanup,
@@ -511,13 +507,7 @@ function createCodexSessionAgentProvider({
       };
       if (mode === "invalidation") return {
         native: { runOwner: codexAppServerRunOwner, preparation: {
-        enabled: true, // JSKIT's native lifecycle still reads this; Codex control is always on.
-        get helpers() {
-          return (async () => {
-            const runtime = await createRuntimeForSession();
-            return prepareCodexAppServerHelperRestoration({ runtime });
-          })();
-        }
+          enabled: true // JSKIT's native lifecycle still reads this; Codex control is always on.
         } }
       };
       if (mode === "detached" || mode === "detachedCleanup") return { native: { runOwner: codexAppServerRunOwner } };
