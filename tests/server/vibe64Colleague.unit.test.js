@@ -5707,16 +5707,23 @@ test("Colleague shutdown stops every thread and closes its runtimes even when on
   const f = await fixture(t, [value => { signal = value; return stream.response(value); }], { watching: true });
   t.after(() => stream.finish());
   const learning = learnModeFixture(t);
-  // Develop keeps a summary Helper whose cleanup cannot be confirmed.
+  // Develop is running a summary Helper whose cleanup fails. A retained receipt
+  // alone is not running work, so shutdown would leave it as it was.
   f.observations.log = largeLog();
+  f.observations.blockHelper = true;
   f.observations.cleanupFails = true;
-  assert.equal((await watchAction(f, "conversation-summary.read", summarizeInput)).mode, "excerpts");
+  const started = Promise.withResolvers();
+  f.observations.helperStarted = started.resolve;
+  const summary = watchAction(f, "conversation-summary.read", summarizeInput);
+  await started.promise;
   // The lesson's teacher is mid-reply.
   learning.learn();
   await f.send("Teach me", "learn-1");
   await until(() => f.observations.starts.length === 1);
-  await assert.rejects(f.service.close(), error => error instanceof AggregateError && error.errors.length === 1);
-  assert.equal(signal.aborted, true, "the thread after the failing one was still stopped");
+  await assert.rejects(f.service.close(), error => error instanceof AggregateError && error.errors.length === 1 &&
+    /Colleague thread NDI did not stop cleanly: .*Summary cleanup unavailable/u.test(error.errors[0].message));
+  assert.equal(signal.aborted, true, "the other thread was still stopped");
+  assert.equal((await summary).mode, "excerpts", "the failing thread's Helper was stopped too");
   f.observations.cleanupFails = false;
 });
 
