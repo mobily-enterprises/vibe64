@@ -2519,13 +2519,13 @@ for (const width of [390, 820, 1280]) {
           assistant_routing_request: JSON.stringify(routingRequest)
         }
       }));
-      let cancellations = 0;
-      await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/agent-turn/interrupt`, async route => {
-        cancellations++;
-        routingRequest.stopped = true;
-        await fulfillJson(route, { ok: true, interrupted: true });
+      const routingError = routingRequest.error;
+      server.state.cancelMessage = () => {
+        // Routing records the cancel and stops the unsent request without its
+        // error; unlike Stop, Cancel never returns the message to the draft.
+        Object.assign(routingRequest, { stopped: true, cancelled: true, error: undefined });
         server.sessionChanged("assistant-routing-changed", { assistantRoutingRequest: routingRequest });
-      });
+      };
       let restorations = 0;
       await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/temporary-conversations`, async route => {
         expect(route.request().method()).toBe("GET");
@@ -2540,7 +2540,7 @@ for (const width of [390, 820, 1280]) {
       await expect(workspace).toBeHidden();
       await expect(body).toBeVisible();
       await expect(page.getByText("Request cancelled", { exact: true })).toHaveCount(0);
-      await expect(page.getByText(routingRequest.error, { exact: true })).toHaveCount(0);
+      await expect(page.getByText(routingError, { exact: true })).toHaveCount(0);
       await expect.poll(() => conversationDistanceFromBottom(body)).toBeLessThanOrEqual(2);
 
       await detachConversation(body, 700, width === 390 ? "touch" : "wheel");
@@ -2571,12 +2571,13 @@ for (const width of [390, 820, 1280]) {
       routingRequest.stopped = false;
       server.sessionChanged("assistant-routing-changed", { assistantRoutingRequest: routingRequest });
       await expect(page.locator('.v-alert[role="status"]').filter({ hasText: "Request not sent" })).toHaveCount(0);
-      await expect(body.getByText(routingRequest.error, { exact: false })).toBeVisible();
+      await expect(body.getByText(routingError, { exact: false })).toBeVisible();
       await body.getByRole("button", { name: "Cancel", exact: true }).click();
-      await expect.poll(() => cancellations).toBe(1);
+      // Cancel is the server's: one delivery cancel for this message.
+      await expect.poll(() => server.state.cancelledMessages).toEqual([routingRequest.messageId]);
       await expect(page.getByText("Request not sent", { exact: true })).toHaveCount(0);
       await expect(page.getByText("Request cancelled", { exact: true })).toHaveCount(0);
-      await expect(page.getByText(routingRequest.error, { exact: true })).toHaveCount(0);
+      await expect(page.getByText(routingError, { exact: true })).toHaveCount(0);
       await expect(page.getByLabel("Message AI assistant")).toBeEnabled();
       expect(errors).toEqual([]);
     } finally {

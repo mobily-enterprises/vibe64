@@ -89,6 +89,9 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     goalCommands: [] as Record<string, unknown>[],
     updateGoal: null as ((input: Record<string, unknown>) => unknown | Promise<unknown>) | null,
     interrupts: 0,
+    // Main Cancel's message ids; the scenario applies what the cancel changes.
+    cancelledMessages: [] as string[],
+    cancelMessage: null as ((messageId: string) => void | Promise<void>) | null,
     requests: [] as string[],
     unexpectedRequests: [] as string[],
     session
@@ -141,6 +144,13 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
         },
         async inspectDelivery({ messageId }) { return { status: "unknown", messageId }; }
       };
+    },
+    // Routing's Main Cancel always succeeds and answers at once.
+    async cancelAgentMessage(sessionId: string, { messageId }) {
+      requireSession(sessionId);
+      state.cancelledMessages.push(messageId);
+      await state.cancelMessage?.(messageId);
+      return { ok: true, cancelled: true, messageId, interrupted: false };
     },
     async readAgentGoal(sessionId: string) {
       requireSession(sessionId);
