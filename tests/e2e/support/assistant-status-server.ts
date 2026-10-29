@@ -389,6 +389,8 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
       else if (route === `${sessionRoute}/work-plan`) result = { ok: true, sessionId: session.sessionId, available: false, current: null, history: [] };
       else if (route === `${sessionRoute}/renewal`) result = { ok: true, renewal: null, viewerScope: "status-test-owner" };
       else if (route === `${sessionRoute}/agent-goal`) result = { ok: true, status: "unsupported" };
+      else if (route === `${sessionRoute}/main-chat-approvals`) result = { ok: true, sessionId: session.sessionId, owner: true, practice: false,
+        viewer: { id: owner.username, username: owner.username, displayName: owner.username }, ownerName: owner.username, entries: [] };
       else if (route === `${sessionRoute}/source-editor/stars`) result = { ok: true, files: [] };
       else if (route === "/vibe64/settings") result = { ok: true, promptHints: { enabled: false } };
       else if (route === "/vibe64/accounts") result = { ok: true, ready: true, accounts: [] };

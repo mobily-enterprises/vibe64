@@ -571,7 +571,7 @@ test("two browsers recover independently without sending either draft", async ({
 
 test("@collaborator-access fallback chat stays usable and personal turns cannot be steered", async ({ page }, info) => {
   server.state.session.agentSession.turn.active = false;
-  server.state.session.metadata.assistant_routing = JSON.stringify({ mode: "junior", workflowEngineId: "codex", review: false });
+  server.state.session.metadata.assistant_routing = JSON.stringify({ mode: "junior", review: false });
   const shared = { available: true, backupUsed: true, effectiveSelection: { engineId: "opencode", modelId: "glm-4.7" } };
   Object.assign(server.state.assistantAccess, {
     ownerOnly: true, canUse: true, nativeCanUse: false, canUseAny: true, steering: false, currentMode: "junior",
@@ -610,7 +610,9 @@ test("@collaborator-access fallback chat stays usable and personal turns cannot 
   expect(server.state.requests.filter(request => request.includes("message-suggestions"))).toEqual([]);
   await send.click();
   await expect.poll(() => server.state.messages.length).toBe(1);
-  expect(server.state.messages[0]).toMatchObject({ message: draft, submissionKind: "send" });
+  // A plain message carries no steering expectation; routing delivers it.
+  expect(server.state.messages[0]).toMatchObject({ message: draft });
+  expect(server.state.messages[0]).not.toHaveProperty("submissionKind");
   await expect(composer(page)).toHaveValue("");
 });
 
