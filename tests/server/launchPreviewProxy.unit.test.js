@@ -1,6 +1,7 @@
 import vm from "node:vm";
 import assert from "node:assert/strict";
-import { chmod, lstat, mkdir, mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { randomBytes } from "node:crypto";
+import { chmod, lstat, mkdir, mkdtemp, rm, rmdir, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { request as httpRequest } from "node:http";
 import { connect as netConnect } from "node:net";
@@ -37,6 +38,7 @@ import {
   PREVIEW_PROXY_PORT_START,
   PREVIEW_PROXY_TOKEN_QUERY_PARAM,
   appendPreviewTokenQueryParam,
+  assertPrivateFallbackSocketParent,
   createLaunchPreviewProxyRegistry,
   injectLaunchPreviewBridge,
   normalizePreviewTargetHref,
@@ -676,33 +678,67 @@ test("launch preview public socket path defaults under XDG runtime dir", () => {
   );
 });
 
-test("launch preview public socket path falls back to a per-user temporary dir", () => {
-  const base = process.platform === "darwin" ? "/tmp" : os.tmpdir();
-  assert.equal(
-    previewPublicSocketPath("https://v64preview-abcd1234ef56.workspace.users.vibe64.dev", {}),
-    path.join(base, `vibe64-${process.getuid()}`, "apps", "v64preview-abcd1234ef56--workspace.sock")
-  );
-});
-
-test("the temporary preview socket folder must be private to this user", {
-  skip: process.platform === "darwin" ? "the macOS fallback lives under /tmp" : false
-}, async (t) => {
-  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-socket-parent-"));
+// Unix socket paths hold at most 107 bytes, and TMPDIR may name a long folder.
+async function withLongTmpdir(t) {
+  const longTmpdir = await mkdtemp(path.join(os.tmpdir(), `vibe64-long-tmpdir-${"x".repeat(80)}-`));
   const previousTmpdir = process.env.TMPDIR;
-  process.env.TMPDIR = tmpRoot;
+  process.env.TMPDIR = longTmpdir;
   t.after(async () => {
     if (previousTmpdir === undefined) delete process.env.TMPDIR;
     else process.env.TMPDIR = previousTmpdir;
-    await rm(tmpRoot, { force: true, recursive: true });
+    await rm(longTmpdir, { force: true, recursive: true });
   });
+}
+
+test("launch preview public socket path falls back to a short per-user folder in /tmp", async (t) => {
+  await withLongTmpdir(t);
+  assert.equal(
+    previewPublicSocketPath("https://v64preview-abcd1234ef56.workspace.users.vibe64.dev", {}),
+    path.join("/tmp", `vibe64-${process.getuid()}`, "apps", "v64preview-abcd1234ef56--workspace.sock")
+  );
+});
+
+test("a Preview without XDG_RUNTIME_DIR listens under a long TMPDIR", async (t) => {
+  await withLongTmpdir(t);
+  const parent = path.join("/tmp", `vibe64-${process.getuid()}`);
+  const created = !(await stat(parent).catch(() => null));
+  t.after(async () => {
+    // Shared with this user's other Previews: remove only folders this test made and left empty.
+    if (!created) return;
+    for (const folder of [path.join(parent, "apps"), parent]) await rmdir(folder).catch(() => {});
+  });
+  await withTargetServer(async (target) => {
+    const publicOrigin = `https://v64preview-${randomBytes(6).toString("hex")}.workspace.users.vibe64.dev`;
+    const registry = createLaunchPreviewProxyRegistry({ env: {}, hostEnv: {} });
+    try {
+      const preview = await registry.ensure({
+        previewPublicOrigin: publicOrigin,
+        sessionId: "session-long-tmpdir",
+        targetHref: `${target.origin}/home`,
+        terminalSessionId: "terminal-long-tmpdir"
+      });
+      assert.equal(preview.available, true, preview.error || "");
+      assert.equal((await stat(previewPublicSocketPath(publicOrigin, {}))).isSocket(), true);
+      for (const folder of [parent, path.join(parent, "apps")]) assert.equal((await stat(folder)).mode & 0o777, 0o700);
+    } finally {
+      await registry.closeAll();
+    }
+  });
+});
+
+// The real fallback folder is shared with this user's other Previews, so the
+// check is proved on a folder of its own.
+test("the temporary preview socket folder must be private to this user", async (t) => {
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "vibe64-socket-parent-"));
+  t.after(() => rm(tmpRoot, { force: true, recursive: true }));
   const parent = path.join(tmpRoot, `vibe64-${process.getuid()}`);
   await mkdir(parent, { mode: 0o755 });
   await chmod(parent, 0o755);
-  await assert.rejects(pruneStalePreviewSockets({ env: {} }), /must be a private folder owned by this user/u);
+  await assert.rejects(assertPrivateFallbackSocketParent(path.join(parent, "apps")),
+    /must be a private folder owned by this user/u);
 
   await chmod(parent, 0o700);
-  await pruneStalePreviewSockets({ env: {} });
-  assert.equal((await stat(path.join(parent, "apps"))).mode & 0o777, 0o700);
+  await assertPrivateFallbackSocketParent(path.join(parent, "apps"));
 });
 
 test("launch preview proxy prunes only stale sockets that match its managed namespace", async () => {

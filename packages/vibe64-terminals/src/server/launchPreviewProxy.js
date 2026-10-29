@@ -2023,10 +2023,10 @@ function previewProxySocketDir(env = process.env) {
   return fallbackPreviewProxySocketDir();
 }
 
-// macOS gives each user a long temporary folder; sockets need a short path.
+// A Unix socket path holds at most 107 bytes, and TMPDIR may name a long
+// folder (macOS gives each user one), so the fallback is always under /tmp.
 function fallbackPreviewProxySocketDir() {
-  const base = process.platform === "darwin" ? "/tmp" : os.tmpdir();
-  return path.join(base, `vibe64-${process.getuid?.() ?? os.userInfo().username}`, "apps");
+  return path.join("/tmp", `vibe64-${process.getuid?.() ?? os.userInfo().username}`, "apps");
 }
 
 function tryListen(server, port, host) {
@@ -2109,6 +2109,7 @@ export {
   PREVIEW_PROXY_PORT_START,
   PREVIEW_PROXY_TOKEN_QUERY_PARAM,
   appendPreviewTokenQueryParam,
+  assertPrivateFallbackSocketParent,
   createLaunchPreviewProxyRegistry,
   injectLaunchPreviewBridge,
   listenOnPreviewPort,

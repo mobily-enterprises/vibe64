@@ -427,7 +427,10 @@ request it drops any inbound `Forwarded` and `X-Forwarded-*` header except
 headers. On its TCP listener `X-Forwarded-For` is replaced by the proxy's own
 peer address, so a client-supplied chain never reaches the application; on its
 private Unix-socket listener, which only the host's ingress reaches, the
-ingress's `X-Forwarded-For` is kept. Applications that trust the loopback proxy
+ingress's `X-Forwarded-For` is kept. That socket lives in
+`VIBE64_PREVIEW_PROXY_SOCKET_DIR`, else `$XDG_RUNTIME_DIR/vibe64/apps`, else a
+private per-user `/tmp/vibe64-<uid>/apps`: never under TMPDIR, which may be
+longer than a socket path's 107 bytes allow. Applications that trust the loopback proxy
 therefore build absolute URLs on the Preview address and retain Secure cookies
 on HTTPS previews. A request carrying the browser's exact own Origin is
 presented on the loopback target instead: Origin becomes the loopback host with
