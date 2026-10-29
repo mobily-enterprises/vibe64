@@ -3505,3 +3505,18 @@ for (const smallWindow of [false, true]) test(`Main Claude switching retains com
   assert.deepEqual((await store.readConversationLog("test")).slice(0, before.length), before, "The original saved conversation is unchanged");
   assert.equal(f.processes.length, 1);
 });
+
+test("Remove AI stops Claude without reopening an archived session's saved conversation", async (t) => {
+  const f = await fixture(t);
+  await f.provider.sendMessage(f.context, { message: "Work", messageId: "before-archive" });
+  // A closed session whose source was then removed: its saved record no longer has a workspace.
+  assert.equal((await f.provider.closeSession(f.context)).ok, true);
+  const { getSession } = f.context.runtime;
+  f.context.runtime.getSession = async () => ({ ...f.context.session, archived: true, status: "archived",
+    metadata: { ...f.context.session.metadata, source_removed: "yes" } });
+  try {
+    assert.equal((await f.provider.invalidateRuntimes({}, { provider: "claude", reason: "claude-auth-change" })).ok, true);
+  } finally {
+    f.context.runtime.getSession = getSession;
+  }
+});
