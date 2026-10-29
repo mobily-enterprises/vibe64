@@ -153,6 +153,13 @@ async function main() {
     runReleaseService(process.argv[3] || "", process.argv[4] || "");
     return;
   }
+  if (process.argv[2] === "upgrade-release-units") {
+    if (process.argv.length !== 3) {
+      throw new Error("Usage: vibe64-exec-helper upgrade-release-units");
+    }
+    upgradeReleaseServiceUnits();
+    return;
+  }
   if (process.argv[2] !== "execute" || process.argv.length > 4) {
     throw new Error("Usage: vibe64-exec-helper execute [payload-json-file]");
   }
@@ -2033,6 +2040,47 @@ function runReleaseService(environmentFile = "", startScript = "") {
   process.execve(startScript, [startScript], { ...process.env, ...readEnvironmentFile(environmentFile) });
 }
 
+// Host installation runs this as root right after installing the helper, so a
+// unit names run-release-service only once the installed helper has it. A
+// release unit written before run-release-service had systemd read its
+// environment file as root; it becomes the current form. Rewriting and
+// reloading never restarts a running service: its next start uses the new form.
+function upgradeReleaseServiceUnits({
+  helperPath = path.resolve(process.argv[1]),
+  reload = () => runRootCommand("systemctl", ["daemon-reload"]),
+  unitDirectory = "/etc/systemd/system"
+} = {}) {
+  let rewritten = false;
+  for (const name of readdirSync(unitDirectory)) {
+    const unitPath = path.join(unitDirectory, name);
+    if (!name.startsWith("vibe64-release-") || !name.endsWith(".service") || !lstatSync(unitPath).isFile()) {
+      continue;
+    }
+    const lines = readFileSync(unitPath, "utf8").split("\n");
+    const environmentLines = lines.filter((line) => line.startsWith("EnvironmentFile="));
+    const startLines = lines.filter((line) => line.startsWith("ExecStart="));
+    if (environmentLines.length !== 1 || startLines.length !== 1) {
+      continue;
+    }
+    // Both values are already escaped exactly as the current form escapes them.
+    const environmentFile = environmentLines[0].slice("EnvironmentFile=".length);
+    const startScript = startLines[0].slice("ExecStart=".length);
+    const unit = lines
+      .filter((line) => line !== environmentLines[0])
+      .map((line) => (line === startLines[0]
+        ? `ExecStart=${systemdUnitSafeValue(helperPath)} run-release-service "${environmentFile}" "${startScript}"`
+        : line))
+      .join("\n");
+    const temporaryUnitPath = `${unitPath}.tmp-${process.pid}`;
+    writeFileSync(temporaryUnitPath, unit, { mode: 0o644 });
+    renameSync(temporaryUnitPath, unitPath);
+    rewritten = true;
+  }
+  if (rewritten) {
+    reload();
+  }
+}
+
 function readEnvironmentFile(file = "") {
   return parseEnvironmentFile(readFileSync(file, "utf8"));
 }
@@ -2794,7 +2842,7 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
 }
 
 export { assertEnabledForVibe64, consumeManagedExecutionRequestPayload, deploymentServiceUnit, ensureManagedServiceProcessOwnership,
-  parseEnvironmentFile,
+  parseEnvironmentFile, upgradeReleaseServiceUnits,
   managedWorkflowCounters, openManagedExecutionReceipts, managedWorkflowIdentity, managedExecutionOomBoundary,
   managedExecutionState, managedExecutionStopTimeoutMs, managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal,
   releaseEndedManagedExecutions, stopManagedExecution, stopManagedServiceUnit,

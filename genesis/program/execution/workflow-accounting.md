@@ -206,8 +206,12 @@ one on root's behalf. A release service's unit runs the helper as the service's
 own user, which loads the file at every start, restarts included, and then
 becomes the service's start script, so no extra process stays running. A
 finite execution given a release environment has its runner load the file as
-the owner. The file keeps systemd's `EnvironmentFile=` syntax. A release service
-installed before this keeps its old unit until its next deployment.
+the owner. The file keeps systemd's `EnvironmentFile=` syntax. Host installation
+runs the helper's root-only `upgrade-release-units` right after installing it,
+so a unit names `run-release-service` only once the installed helper has it. It
+rewrites any release unit that still names an `EnvironmentFile=` to this form
+and reloads systemd once. A running service is not restarted; its next start
+uses the new form. Units that are links, or not release units, are left alone.
 
 `startVibe64Workflow()`, `setVibe64WorkflowPhase()` and
 `finishVibe64Workflow()` delegate trusted server lifecycle requests to the same
