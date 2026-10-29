@@ -124,6 +124,9 @@ const PERSON_REGISTRY_ROOT = "/etc/vibe64/people";
 const PERSON_REGISTRATION_SCHEMA = "vibe64.person-registration";
 const PERSON_REGISTRATION_LIMIT_BYTES = 4096;
 const PERSON_REFUSED_EXIT_CODE = 3;
+// The host's own narrow sudo commands for its people, one per line exactly as
+// `sudo -l` prints them, in a file only root can change.
+const PERSON_SUDO_COMMANDS_FILE = "/etc/vibe64/person-sudo-commands";
 // Members of these groups administer the host or can become root without sudo:
 // through the group's own files or devices (disk, kmem, root, shadow, staff's
 // /usr/local), a container or VM daemon (docker, incus, libvirt, lxd), or the
@@ -198,6 +201,17 @@ async function main() {
       throw new Error("Usage: vibe64-exec-helper register-person <workspace> <username>");
     }
     registerPerson(process.argv[3], process.argv[4]);
+    return;
+  }
+  // Exits 0 for an account Vibe64 may act as, and 3 with the reason for one it
+  // never may, so host setup can hand an owner's administration to another
+  // account first and SSH access can refuse an administrator.
+  if (process.argv[2] === "check-person") {
+    if (process.argv.length !== 4) {
+      throw new Error("Usage: vibe64-exec-helper check-person <username>");
+    }
+    assertHumanUsername(process.argv[3]);
+    assertPersonAccount(resolveOsUser(process.argv[3]), hostPersonFacts(process.argv[3]));
     return;
   }
   if (process.argv[2] !== "execute" || process.argv.length > 4) {
@@ -1900,9 +1914,14 @@ function loginUidRange(loginDefs = "") {
 function personAccountProblem(user = {}, {
   groups = [],
   loginUids = loginUidRange(),
+  sudoCommands = [],
   sudoListing = ""
 } = {}) {
   const { uid, username } = user;
+  // Application accounts (v64a_*) run published apps; they are never people.
+  if (String(username).startsWith("v64a_")) {
+    return `${username} is an application account, not a person's login.`;
+  }
   if (!Number.isSafeInteger(uid) || uid < loginUids.min || uid > loginUids.max) {
     return `${username} is a system account (uid ${uid}), not a person's login.`;
   }
@@ -1910,10 +1929,49 @@ function personAccountProblem(user = {}, {
   if (group) {
     return `${username} is in the administrators' group ${group}.`;
   }
-  if (!sudoListing.includes(`User ${username} is not allowed to run sudo on `)) {
-    return `${username} has sudo rules.`;
+  return sudoRulesProblem(username, sudoListing, sudoCommands);
+}
+
+// No sudo rules, or only rules running exactly the host's declared commands
+// as root without a password. Anything else, or an answer sudo never gives,
+// is administration.
+function sudoRulesProblem(username = "", sudoListing = "", sudoCommands = []) {
+  if (sudoListing.includes(`User ${username} is not allowed to run sudo on `)) {
+    return "";
   }
-  return "";
+  const lines = sudoListing.split("\n");
+  const start = lines.findIndex((line) => line.startsWith(`User ${username} may run the following commands on `));
+  const rules = start < 0 ? [] : lines.slice(start + 1).filter((line) => line.trim());
+  const allowed = new Set(sudoCommands);
+  const narrow = rules.length > 0 && rules.every((line) => {
+    const match = /^ {4}\(root\) NOPASSWD: (.+)$/u.exec(line);
+    return Boolean(match) && match[1].split(", ").every((command) => allowed.has(command));
+  });
+  return narrow ? "" : `${username} has sudo rules.`;
+}
+
+// A missing list allows no sudo rule at all.
+function personSudoCommands(file = PERSON_SUDO_COMMANDS_FILE, ownerUid = 0) {
+  let directory;
+  try {
+    directory = openSync(path.dirname(file), DIRECTORY_NO_FOLLOW);
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
+  try {
+    const stats = fstatSync(directory);
+    if (stats.uid !== ownerUid || (stats.mode & 0o022) !== 0) {
+      throw new Error("The Vibe64 person sudo commands are not in a directory only root can change.");
+    }
+    return readOwnedFile(directory, path.basename(file), { maxBytes: 4096, othersMayWrite: false, uid: ownerUid })
+      .split("\n").map((line) => line.trim()).filter(Boolean);
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  } finally {
+    closeSync(directory);
+  }
 }
 
 function hostPersonFacts(username = "") {
@@ -1923,13 +1981,16 @@ function hostPersonFacts(username = "") {
   } catch {
     // Without login.defs, useradd's own defaults apply.
   }
+  // Without a terminal sudo wraps its listing at 80 columns; this width keeps
+  // each rule on one line for the exact comparison.
   const sudo = spawnSync("/usr/bin/sudo", ["-n", "-l", "-U", username], {
     encoding: "utf8",
-    env: { LANG: "C", LC_ALL: "C", PATH: "/usr/sbin:/usr/bin:/sbin:/bin" }
+    env: { COLUMNS: "100000", LANG: "C", LC_ALL: "C", PATH: "/usr/sbin:/usr/bin:/sbin:/bin" }
   });
   return {
     groups: osGroupNames(username),
     loginUids: loginUidRange(loginDefs),
+    sudoCommands: personSudoCommands(),
     sudoListing: sudo.error ? "" : String(sudo.stdout || "")
   };
 }
@@ -3270,7 +3331,7 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
 
 export { DAEMON_USERNAME_PREFIX, assertActablePerson, assertEnabledForVibe64, configureManagedExecutionWorkSlice, consumeManagedExecutionRequestPayload,
   ensureWorkspaceRuntimeBase,
-  enablePerson, loginUidRange, personAccountProblem, readPersonRegistration, registerPerson, upgradePersonRegistry, deploymentServiceUnit, ensureManagedServiceProcessOwnership,
+  enablePerson, loginUidRange, personAccountProblem, personSudoCommands, readPersonRegistration, registerPerson, upgradePersonRegistry, deploymentServiceUnit, ensureManagedServiceProcessOwnership,
   parseEnvironmentFile, upgradeReleaseServiceUnits,
   managedWorkflowCounters, openManagedExecutionReceipts, managedWorkflowIdentity, managedExecutionOomBoundary,
   managedExecutionSliceCgroup, managedExecutionTargetUser,

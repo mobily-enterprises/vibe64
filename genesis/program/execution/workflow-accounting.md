@@ -219,8 +219,15 @@ account, no administrator power, the shared group, and an active membership in
 the daemon's state. An administrator is an account in one of the groups that
 administer the host or reach root without sudo (`adm`, `admin`, `disk`,
 `docker`, `incus`, `incus-admin`, `kmem`, `libvirt`, `lxd`, `root`, `shadow`,
-`staff`, `sudo`, `wheel`), or one for which root's `sudo -n -l -U` lists any
-rule; an answer other than sudo's "not allowed" refuses. The check repeats
+`staff`, `sudo`, `wheel`), or one for which root's `sudo -n -l -U` lists a
+rule other than the host's own narrow commands for its people. The host lists
+those exact commands, one per line as sudo prints them, in a root-only file;
+each allowed rule runs one of them as root without a password, and any other
+rule, or an answer sudo never gives, refuses. An application account (`v64a_`)
+is never a person. The root-only `check-person <username>` exits 0 for an
+account the helper may act as and 3 with the reason otherwise, so host setup can
+hand an owner's administration to a separate account first and SSH access can
+refuse an administrator. The check repeats
 before every command, so a person who later becomes an administrator is
 refused from then on. The person's command then runs with no new privileges,
 so sudo, su and other setuid programs cannot raise it. That alone would not

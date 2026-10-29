@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import {
-  DAEMON_USERNAME_PREFIX, assertActablePerson, enablePerson, loginUidRange, personAccountProblem, readPersonRegistration,
+  DAEMON_USERNAME_PREFIX, assertActablePerson, enablePerson, loginUidRange, personAccountProblem, personSudoCommands, readPersonRegistration,
   registerPerson, upgradePersonRegistry
 } from "../../packages/vibe64-execution/src/host/execHelper.js";
 
@@ -139,6 +139,73 @@ test("system accounts and every administrators' group are refused", () => {
   assert.match(personAccountProblem(person, { ...facts, loginUids: { max: 60000, min: 2000 } }), /system account/u);
 });
 
+test("only the host's exact narrow sudo commands leave an account a person", () => {
+  const person = { uid: 1001, username: "merc" };
+  const ownerCli = "/srv/tool/node /srv/tool/owner-cli.mjs --read-connections";
+  const update = "/srv/tool/local update";
+  const facts = { groups: ["merc", "vibe64"], loginUids: LOGIN_UIDS, sudoCommands: [ownerCli, update] };
+  const listing = (...rules) => `User merc may run the following commands on host:\n${rules.map((rule) => `    ${rule}\n`).join("")}`;
+  for (const sudoListing of [
+    listing(`(root) NOPASSWD: ${ownerCli}`),
+    // sudo prints one line per rule and joins a rule's commands with ", ".
+    listing(`(root) NOPASSWD: ${update}, ${update}`, `(root) NOPASSWD: ${ownerCli}`),
+    `Matching Defaults entries for merc on host:\n    env_reset, use_pty\n\n${listing(`(root) NOPASSWD: ${ownerCli}`)}`
+  ]) {
+    assert.equal(personAccountProblem(person, { ...facts, sudoListing }), "", sudoListing);
+  }
+  for (const sudoListing of [
+    listing("(ALL) NOPASSWD: ALL"),
+    listing(`(root) NOPASSWD: ${ownerCli}`, "(ALL : ALL) ALL"),
+    listing(`(root) NOPASSWD: ${ownerCli} *`),
+    listing(`(root) NOPASSWD: ${ownerCli}, /usr/bin/vim`),
+    listing(`(root) ${ownerCli}`),
+    listing(`(root) NOPASSWD: SETENV: ${ownerCli}`),
+    listing(`(ALL) NOPASSWD: ${ownerCli}`),
+    listing(`(bob) NOPASSWD: ${ownerCli}`),
+    listing(),
+    "",
+    `User mercx may run the following commands on host:\n    (root) NOPASSWD: ${ownerCli}\n`
+  ]) {
+    assert.match(personAccountProblem(person, { ...facts, sudoListing }), /has sudo rules/u, sudoListing);
+  }
+  // Without the host's list, every rule is administration.
+  assert.match(personAccountProblem(person, { ...facts, sudoCommands: [], sudoListing: listing(`(root) NOPASSWD: ${ownerCli}`) }),
+    /has sudo rules/u);
+});
+
+test("application accounts are never people", () => {
+  const facts = { groups: ["v64a_shop", "vibe64"], loginUids: LOGIN_UIDS, sudoListing: notAllowed("v64a_shop") };
+  assert.match(personAccountProblem({ uid: 1500, username: "v64a_shop" }, facts), /application account/u);
+  assert.equal(personAccountProblem({ uid: 1500, username: "v64ashop" },
+    { ...facts, sudoListing: notAllowed("v64ashop") }), "");
+});
+
+test("the host's narrow sudo commands come only from a file root alone can change", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-person-sudo-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const etc = path.join(root, "etc");
+  const file = path.join(etc, "person-sudo-commands");
+  assert.deepEqual(personSudoCommands(file, UID), [], "a missing list allows nothing");
+  await mkdir(etc, { mode: 0o755 });
+  await chmod(etc, 0o755);
+  await writeFile(file, "/srv/tool/node /srv/tool/owner-cli.mjs --read-connections\n\n  /srv/tool/local update  \n",
+    { mode: 0o644 });
+  await chmod(file, 0o644);
+  assert.deepEqual(personSudoCommands(file, UID),
+    ["/srv/tool/node /srv/tool/owner-cli.mjs --read-connections", "/srv/tool/local update"]);
+  await chmod(file, 0o664);
+  assert.throws(() => personSudoCommands(file, UID), /not its owner's regular file/u);
+  await chmod(file, 0o644);
+  await chmod(etc, 0o775);
+  assert.throws(() => personSudoCommands(file, UID), /only root can change/u);
+  await chmod(etc, 0o755);
+  await rm(file);
+  await symlink(path.join(root, "elsewhere"), file);
+  await writeFile(path.join(root, "elsewhere"), "/usr/bin/vim\n");
+  assert.throws(() => personSudoCommands(file, UID));
+  assert.throws(() => personSudoCommands(file, UID + 1), /only root can change/u);
+});
+
 test("the login range is read from login.defs, with useradd's defaults", () => {
   assert.deepEqual(loginUidRange(""), { max: 60000, min: 1000 });
   assert.deepEqual(loginUidRange("# UID_MIN 5\nUID_MIN\t\t\t 2000\nSYS_UID_MIN 100\nUID_MAX 30000\n"), { max: 30000, min: 2000 });
@@ -253,4 +320,16 @@ test("a workspace without memberships still receives its empty registry", async 
   await chmod(host.registry.registryRoot, 0o777);
   assert.throws(() => upgradePersonRegistry("test", { ...host.registry, report: () => {},
     resolveUser: (name) => host.accounts[name] }), /only root can change/u);
+});
+
+test("sudo lists each rule on one line, so a narrow command compares exactly", async () => {
+  // Without a terminal, classic sudo wraps its listing at 80 columns; the
+  // helper asks for a width no rule reaches.
+  const source = await readFile(new URL("../../packages/vibe64-execution/src/host/execHelper.js", import.meta.url), "utf8");
+  assert.match(source, /spawnSync\("\/usr\/bin\/sudo", \["-n", "-l", "-U", username\], \{\n {4}encoding: "utf8",\n {4}env: \{ COLUMNS: "100000", LANG: "C", LC_ALL: "C", PATH: "[^"]+" \}\n {2}\}\);/u);
+  // A rule sudo still wrapped is never taken for a narrow one.
+  const wrapped = "User merc may run the following commands on host:\n    (root) NOPASSWD: /srv/tool/node\n        /srv/tool/cli.mjs --read\n";
+  assert.match(personAccountProblem(ACCOUNTS.merc, {
+    groups: ["merc"], loginUids: LOGIN_UIDS, sudoCommands: ["/srv/tool/node /srv/tool/cli.mjs --read"], sudoListing: wrapped
+  }), /has sudo rules/u);
 });
