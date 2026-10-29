@@ -10,10 +10,12 @@ while **Checking…** is shown (it ends that check). The message shows
 **Cancelling…** until the server confirms, which takes a moment even while
 another chat in the session is starting its assistant. Then it leaves the chat
 and stays gone after a reload. The server also stops any work that message
-started, but never a newer request. If the server cannot be reached, the
-message stays with **Couldn't reach the server — Cancel again**; press Cancel
-again, or reconnect and the chat retries it. If the assistant had already
-received the message, the conversation still shows it with its answer.
+started, but never a newer request. Like **Stop**, stopping that work pauses an
+open goal; it stays paused, even across a restart, until you choose **Resume
+goal**. If the server cannot be reached, the message stays with **Couldn't
+reach the server — Cancel again**; press Cancel again, or reconnect and the chat
+retries it. If the assistant had already received the message, the conversation
+still shows it with its answer.
 
 A historical Claude pre-write rejection can leave that receipt uncertain even
 though the native send was refused. An operator can apply the numbered stopped

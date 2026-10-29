@@ -1432,7 +1432,8 @@ a running check and an unsent request, shows Cancelling… and calls
 without opening the native conversation. Routing `cancelMessage` records a
 durable tombstone (`assistant_cancelled_messages`), stops the route (`stopped`
 and `cancelled`) and its classifier, and interrupts the turn only when the
-message was attempted or accepted, or is the chat's newest message. All of
+message was attempted or accepted, or is the chat's newest message. That
+interrupt pauses goal continuation the same lock-free way (below). All of
 this happens without the agent-write lock, so the answer is prompt while another
 chat's assistant starts. Discarding the native changeover attempt then runs
 under the lock in the background, or before the next admission. Reads,
@@ -4409,6 +4410,12 @@ Main goal continuation uses `assistant_goal_intent` metadata beside the existing
 accepted routing pin. Set/Resume records actor, connection and exact native goal
 identity; canonical in-flight commands retain their existing receipt ID. Observed
 native paused status cannot erase active intent. Explicit Stop/Pause/Cancel does.
+A message Cancel's interrupt never waits on the `assistant-settings` lock that
+guards this intent: it aborts the intent's in-flight goal admission, records
+`assistant_goal_stop_request` naming the intent, and answers. Every intent read
+(restart recovery, dormancy, Set/Resume and acknowledgement) treats the named
+intent as stopped, and the next change under that lock, first Cancel's own
+background save, saves the stop and clears the request.
 The Terminals on-ready sweep visits open project sessions once per daemon, checks
 fresh project/account access, requires native reconciliation to prove old process
 cleanup, and invokes the ordinary canonical Resume owner. Unknown receipt or

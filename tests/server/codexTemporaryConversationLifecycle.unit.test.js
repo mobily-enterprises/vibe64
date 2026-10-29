@@ -13676,6 +13676,79 @@ test("Main Codex active goal continues once after service restart and explicit P
 });
 
 
+test("Main Cancel answers while the goal settings lock is held and its goal pause holds until saved", { timeout: 30_000 }, async () => {
+  await withAgentMessageController(async ({ captures, createService, controllerOptions, runtime, sessionId, store, terminalService }) => {
+    const actor = { ...os.userInfo(), role: "owner" };
+    const options = { runtime, vibe64User: actor };
+    runtime.listSessions = async () => [await store.readSession(sessionId)];
+    await writeCodexAuthMarker(controllerOptions.env.VIBE64_SYSTEM_ROOT, { connected: true, loginId: randomUUID() });
+    let goal = null;
+    const writes = [];
+    captures.onProviderCreated = provider => {
+      provider.readGoal = async () => ({ goal });
+      provider.setGoal = async (_threadId, input) => {
+        writes.push("set");
+        return { goal: goal = { ...input, status: "active", createdAt: 100, tokensUsed: 0, timeUsedSeconds: 0 } };
+      };
+      provider.setGoalStatus = async (_threadId, status) => {
+        writes.push(status);
+        return { goal: goal = { ...goal, status } };
+      };
+    };
+    const configure = service => service.configureAssistantRuntime({
+      authorizeProjectMessage: async user => user, resolveAssistantUser: async user => user
+    });
+    configure(terminalService);
+    await terminalService.updateAgentGoal(sessionId, { ...options, action: "set",
+      expectedSegmentId: null, objective: "Finish the Codex work" }, { canonical: true });
+    const metadata = async () => (await store.readSession(sessionId)).metadata;
+    const intent = JSON.parse((await metadata()).assistant_goal_intent);
+    assert.equal(intent.active, true);
+    const messageId = "goal-turn-to-cancel";
+    // The goal's running turn belongs to the newest message, which Cancel then interrupts.
+    await store.writeConversationUserMessage(sessionId, { messageId, text: "Work on the goal" });
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    const holding = store.runSessionExclusive(sessionId, "assistant-settings", async () => {
+      entered.resolve();
+      await release.promise;
+    }, { operation: "hold-goal-settings", waitMs: 0 });
+    let restarted;
+    let cancelling;
+    let timer;
+    try {
+      await entered.promise;
+      cancelling = terminalService.cancelAgentMessage(sessionId, { messageId }, options);
+      const answer = await Promise.race([
+        cancelling,
+        new Promise(resolve => { timer = setTimeout(() => resolve(null), 2_000); })
+      ]);
+      assert.notEqual(answer, null, "Cancel answered while the goal settings lock was held");
+      assert.deepEqual(answer, { ok: true, cancelled: true, messageId, interrupted: true });
+      assert.equal(JSON.parse((await metadata()).assistant_goal_stop_request).intentId, intent.id,
+        "the goal pause is recorded before it can be saved under the lock");
+      // Nothing continues the goal before the pause is saved, not even a restart.
+      restarted = createService();
+      configure(restarted);
+      const recovered = await restarted.recoverActiveGoals();
+      assert.equal(recovered.ok, true, JSON.stringify(recovered));
+      assert.equal(recovered.results[0].skipped, true, JSON.stringify(recovered));
+      assert.deepEqual(writes, ["set"], "the recorded pause stops a restart from resuming the goal");
+    } finally {
+      clearTimeout(timer);
+      release.resolve();
+      await holding;
+      await cancelling?.catch(() => {});
+      await restarted?.close();
+    }
+    await waitForSessionValue(metadata, value => value.assistant_goal_stop_request === "null",
+      "the recorded goal pause to be saved under the settings lock");
+    assert.equal(JSON.parse((await metadata()).assistant_goal_intent).active, false);
+    assert.equal(JSON.parse((await metadata()).assistant_goal_intent).id, intent.id);
+  }, { throughTerminalService: true });
+});
+
+
 test("a goal that cannot continue after restart is logged with its project and the person who set it", { timeout: 30_000 }, async () => {
   await withAgentMessageController(async ({ captures, createService, controllerOptions, projectService, runtime, sessionId, store, terminalService }) => {
     const actor = { ...os.userInfo(), role: "owner" };
