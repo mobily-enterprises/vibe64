@@ -176,8 +176,10 @@ Some projects declare shared development services. Starting an output starts the
 once for the project; subsequent sessions share them. Stopping an individual
 Preview leaves these services available. Where your host provides project **Close**,
 use it to stop all project work, including shared services. In a local directory
-editor, shut down the editor normally. Hiding Preview, navigating away or closing a
-browser tab does not perform project Close. Ordinary inactivity shutdown also
+editor, shut down the editor normally. However the local editor ends, including a
+crash or a closed terminal, its shared services and Previews stop within a few
+seconds and do not keep running into its next start. Hiding Preview, navigating
+away or closing a browser tab does not perform project Close. Ordinary inactivity shutdown also
 stops them. Shared services remain subject to hosted resource limits while idle.
 
 If another branch changes a running service declaration, startup asks you to Close

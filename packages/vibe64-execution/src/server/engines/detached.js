@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
-import { mkdir, open } from "node:fs/promises";
+import { mkdir, open, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   commandErrorResult,
@@ -10,6 +11,40 @@ import {
 const detachedExecutions = new Map();
 const DEFAULT_STOP_TERM_MS = 3000;
 const DEFAULT_STOP_KILL_MS = 1000;
+const reaperPath = fileURLToPath(new URL("./detachedReaper.js", import.meta.url));
+let reaper = null;
+
+// The reaper holds every running group of this server, so none outlives it.
+// Every running group is listed again when a replacement reaper starts.
+function holdProcessGroup(processGroupId) {
+  if (process.platform === "win32") return;
+  if (!reaper) {
+    const child = spawn(process.execPath, [reaperPath], {
+      cwd: "/",
+      detached: true,
+      stdio: ["pipe", "ignore", "ignore"]
+    });
+    child.once("error", () => { if (reaper === child) reaper = null; });
+    child.once("exit", () => { if (reaper === child) reaper = null; });
+    child.stdin.on("error", () => {});
+    child.unref();
+    child.stdin.unref?.();
+    reaper = child;
+    for (const execution of detachedExecutions.values()) {
+      if (execution.scopeEmpty !== true && execution.pid !== processGroupId) child.stdin.write(`+${execution.pid}\n`);
+    }
+  }
+  reaper.stdin.write(`+${processGroupId}\n`);
+}
+
+function releaseProcessGroup(processGroupId) {
+  if (!reaper) return;
+  reaper.stdin.write(`-${processGroupId}\n`);
+  if ([...detachedExecutions.values()].some((execution) => execution.scopeEmpty !== true)) return;
+  // Nothing is left to hold: the reaper ends with an empty list.
+  reaper.stdin.end();
+  reaper = null;
+}
 
 async function openDetachedLog(logPath = "") {
   if (!logPath) {
@@ -59,13 +94,15 @@ async function runDetachedCommand(request = {}, {
         child,
         pid: Number(child.pid)
       });
+      holdProcessGroup(Number(child.pid));
       child.once?.("exit", () => {
-        if (!processGroupExists(child.pid)) {
+        if (!processGroupExists(child.pid) && detachedExecutions.has(executionId)) {
           detachedExecutions.set(executionId, {
             child,
             pid: Number(child.pid),
             scopeEmpty: true
           });
+          releaseProcessGroup(Number(child.pid));
         }
       });
     }
@@ -125,6 +162,24 @@ function signalProcessGroup(processGroupId = null, signal = "SIGTERM") {
     }
     throw error;
   }
+}
+
+// The processes still in a group, to name in a failed drain. Only Linux lists
+// them; elsewhere, and for a group that has ended, the list is empty.
+async function processGroupMembers(processGroupId = null, limit = 10) {
+  const normalized = Number(processGroupId);
+  if (process.platform !== "linux" || !Number.isSafeInteger(normalized) || normalized <= 0) return [];
+  const members = [];
+  for (const entry of await readdir("/proc").catch(() => [])) {
+    if (members.length >= limit) break;
+    if (!/^\d+$/u.test(entry)) continue;
+    const stat = await readFile(`/proc/${entry}/stat`, "utf8").catch(() => "");
+    const commandEnd = stat.lastIndexOf(")");
+    const fields = commandEnd < 0 ? [] : stat.slice(commandEnd + 2).split(" ");
+    if (Number(fields[2]) !== normalized || fields[0] === "Z") continue;
+    members.push({ command: stat.slice(stat.indexOf("(") + 1, commandEnd), pid: Number(entry) });
+  }
+  return members;
 }
 
 async function waitForProcessGroupEmpty(processGroupId = null, timeoutMs = 0) {
@@ -188,6 +243,7 @@ async function stopDetachedExecution(executionId = "", {
     };
   }
   detachedExecutions.delete(normalizedExecutionId);
+  releaseProcessGroup(execution.pid);
   return {
     executionId: normalizedExecutionId,
     ok: true,
@@ -209,6 +265,7 @@ export {
   inspectDetachedExecution,
   drainProcessGroup,
   processGroupExists,
+  processGroupMembers,
   runDetachedCommand,
   stopDetachedExecution
 };

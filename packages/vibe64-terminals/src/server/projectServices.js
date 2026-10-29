@@ -137,8 +137,9 @@ function createProjectServices({
   }
 
   async function drain(project, reason, sessionId = "") {
-    // Exact owner cleanup also finds an earlier server's service after its
-    // original source session has been archived.
+    // A managed host's exact owner cleanup also finds an earlier server's
+    // service after its original source session has been archived. Locally no
+    // earlier server's service survives that server, so this one stops its own.
     const result = await stopOwned({ ownerId: project.ownerId, ...(sessionId ? { sessionId } : {}) }, { reason });
     if (result.scopeEmpty !== true) {
       throw new Error(result.error || "Project services could not be stopped.");

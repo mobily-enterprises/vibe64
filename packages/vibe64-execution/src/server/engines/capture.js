@@ -5,7 +5,8 @@ import {
   commandResult
 } from "../result.js";
 import {
-  drainProcessGroup
+  drainProcessGroup,
+  processGroupMembers
 } from "./detached.js";
 
 // Retain failed drains so the execution owner can retry the same stop.
@@ -41,6 +42,7 @@ async function runCaptureCommand(command = "", args = [], {
   let outcome;
   let stop;
   let cancellation;
+  let processGroupId = null;
   const cancellationFinished = Promise.withResolvers();
   const abort = () => {
     cancellation ||= stop();
@@ -64,7 +66,7 @@ async function runCaptureCommand(command = "", args = [], {
       stripFinalNewline: false,
       timeout
     });
-    const processGroupId = Number(subprocess.pid);
+    processGroupId = Number(subprocess.pid);
     let stopping;
     stop = () => {
       if (!stopping) {
@@ -129,17 +131,30 @@ async function runCaptureCommand(command = "", args = [], {
   }
   const scopeEmpty = await (cancellation || stop?.() || true);
   if (!scopeEmpty) {
-    return commandErrorResult(
-      "The command finished, but its execution scope did not become empty.",
-      "vibe64_execution_drain_failed",
-      {
-        execution,
-        output: outcome?.output,
-        outputEncoding,
-        stderr: outcome?.stderr,
-        stdout: outcome?.stdout
-      }
-    );
+    // The scope stays the owner's to clean up, but the command's own outcome
+    // is kept: a timeout is still a timeout, and the error names what is left.
+    const remainingProcesses = await processGroupMembers(processGroupId);
+    const ended = outcome?.timedOut ? "The command timed out"
+      : signal?.aborted ? "The command was cancelled" : "The command finished";
+    const remaining = remainingProcesses.length
+      ? `: ${remainingProcesses.map(({ command, pid }) => `${command} (pid ${pid})`).join(", ")} still running`
+      : "";
+    return {
+      ...commandErrorResult(
+        `${ended}, and its execution scope did not become empty${remaining}.`,
+        "vibe64_execution_drain_failed",
+        {
+          execution,
+          output: outcome?.output,
+          outputEncoding,
+          signal: outcome?.signal,
+          stderr: outcome?.stderr,
+          stdout: outcome?.stdout,
+          timedOut: outcome?.timedOut
+        }
+      ),
+      remainingProcesses
+    };
   }
   if (execution?.id) capturedExecutions.delete(execution.id);
   const finishedExecution = execution ? { ...execution, state: "finished" } : execution;

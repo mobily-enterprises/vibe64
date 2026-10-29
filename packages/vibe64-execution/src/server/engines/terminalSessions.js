@@ -45,12 +45,29 @@ function normalizeNamespace(namespace = "") {
   return String(namespace || "default").trim() || "default";
 }
 
+// Never written: a namespace with no started terminal has no record.
+const NO_SESSIONS = new Map();
+
+// Reading a namespace never creates it. Only a started terminal does, and the
+// namespace is forgotten with its last closed terminal.
 function sessionsForNamespace(namespace) {
+  return stores.get(normalizeNamespace(namespace)) || NO_SESSIONS;
+}
+
+function startedSessionsForNamespace(namespace) {
   const normalizedNamespace = normalizeNamespace(namespace);
   if (!stores.has(normalizedNamespace)) {
     stores.set(normalizedNamespace, new Map());
   }
   return stores.get(normalizedNamespace);
+}
+
+function forgetTerminalSession(sessions, namespace, id) {
+  sessions.delete(id);
+  const normalizedNamespace = normalizeNamespace(namespace);
+  if (sessions.size < 1 && stores.get(normalizedNamespace) === sessions) {
+    stores.delete(normalizedNamespace);
+  }
 }
 
 function terminalNamespaceAdmission(namespace = "default") {
@@ -928,7 +945,7 @@ function startTerminalSession({
     void settleTerminalExitStatus(session);
   });
 
-  sessions.set(id, session);
+  startedSessionsForNamespace(namespace).set(id, session);
   scheduleDetachedCleanup(session, namespace);
   return readTerminalSession(id, { namespace });
 }
@@ -1165,7 +1182,7 @@ async function closeTerminalSession(id, {
         ...cleanupWarnings
       ]);
     }
-    sessions.delete(id);
+    forgetTerminalSession(sessions, namespace, id);
 
     return {
       ok: true,

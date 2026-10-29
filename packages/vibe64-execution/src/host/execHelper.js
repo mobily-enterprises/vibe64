@@ -18,6 +18,7 @@ import {
 } from "node:fs";
 import path from "node:path";
 import { createConnection } from "node:net";
+import { constants as osConstants } from "node:os";
 import process from "node:process";
 
 const INPUT_LIMIT_BYTES = 1024 * 1024;
@@ -456,6 +457,7 @@ async function runManagedExecutionPayload(payloadPath = "") {
   };
   controllerLease?.once("close", stopForControllerLoss);
   const startedAt = new Date().toISOString();
+  let childSignal = "";
   try {
     child = spawn(command, Array.isArray(payload.args) ? payload.args.map(String) : [], {
       cwd: String(payload.cwd || "/"),
@@ -491,13 +493,20 @@ async function runManagedExecutionPayload(payloadPath = "") {
       result: outcome.signal ? "signal" : status === 0 ? "success" : "exit-code",
       signal: String(outcome.signal || "")
     });
-    process.exitCode = status;
+    childSignal = outcome.signal || "";
+    // A signal this process ignores, such as SIGPIPE, still exits as 128 + its number.
+    process.exitCode = childSignal ? 128 + (osConstants.signals[childSignal] || 0) : status;
   } finally {
     if (terminationTimer !== null) {
       clearTimeout(terminationTimer);
     }
     controllerLease?.off("close", stopForControllerLoss);
     controllerLease?.destroy();
+  }
+  if (childSignal) {
+    // End the way the child ended, so systemd judges the unit as it would the
+    // child: an ordinary SIGTERM stop is clean, a SIGKILL is a failure.
+    process.kill(process.pid, childSignal);
   }
 }
 

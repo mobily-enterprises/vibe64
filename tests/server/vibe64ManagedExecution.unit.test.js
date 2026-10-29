@@ -607,14 +607,19 @@ test("managed service runner stops its process tree when the owning controller d
       socket.destroy();
     }
 
-    const exitCode = await new Promise((resolve, reject) => {
+    const exit = await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error("Managed runner did not stop after lease loss.")), 8000);
-      runner.once("close", (code) => {
+      runner.once("close", (code, signal) => {
         clearTimeout(timeout);
-        resolve(code);
+        resolve({ code, signal });
       });
     });
-    assert.equal(exitCode, 1, stderr);
+    // The runner ends the way its child did, so systemd records an ordinary
+    // stop as clean instead of exit 1, and its receipt says the same.
+    assert.deepEqual(exit, { code: null, signal: "SIGTERM" }, stderr);
+    const receipt = JSON.parse(await readFile(path.join(root, "result.json"), "utf8"));
+    assert.equal(receipt.result, "signal");
+    assert.equal(receipt.signal, "SIGTERM");
     for (const pid of managedPids) {
       assert.throws(
         () => process.kill(pid, 0),

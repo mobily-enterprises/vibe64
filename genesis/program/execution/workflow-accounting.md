@@ -11,6 +11,8 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `packages/vibe64-execution/src/server/engines/stdioBridge.js`
 - `packages/vibe64-execution/src/server/request.js`
 - `packages/vibe64-execution/src/server/engines/capture.js`
+- `packages/vibe64-execution/src/server/engines/detached.js`
+- `packages/vibe64-execution/src/server/engines/detachedReaper.js`
 - `packages/vibe64-execution/src/server/engines/terminalSessions.js`
 - `packages/vibe64-execution/src/host/execHelper.js`
 - `packages/vibe64-execution/src/server/policy/cwdPolicy.js`
@@ -77,6 +79,21 @@ Without a process ID it inspects through the host each second.
 Startup rejects missing execution identities and retains the gateway's failure
 receipt and retryability. Native owners may supply their existing stop reason
 and termination grace period; the gateway still proves scope cleanup.
+
+Without an installed execution provider, the running server owns its detached
+commands (shared services, Preview launches) and records them only in memory.
+While any run it keeps one reaper process holding their process groups over a
+pipe from the server. When the server ends in any way, including a crash or a
+closed terminal, the pipe closes and the reaper stops those groups (SIGTERM,
+then SIGKILL after three seconds); it also exits once the last detached command
+ends. Commands remain their own process-group leaders. A saved execution ID this
+server does not hold therefore belongs to an earlier server whose groups were
+already stopped: a restored stop (`allowMissingRecordScopeRecovery`) reports the
+scope empty without claiming to have stopped anything, while an ordinary stop of
+an unknown ID is still not found. Windows keeps its previous behaviour.
+
+The terminal-session registry keeps a namespace only while it holds a session.
+Listing, reading, subscribing to, stopping or closing a namespace records nothing.
 The command environment resolver (`packages/vibe64-execution/src/server/env/resolveCommandEnv.js`)
 retains a trusted absolute host `XDG_RUNTIME_DIR` only when the resolved child
 UID/GID matches the current process. Runtime sockets therefore retain their host
@@ -121,6 +138,12 @@ execution descriptor with `state: "finished"`, including cancellation after
 drain. Early cancellation and failed drains retain their prior results. This
 terminal projection lets the internal declared-check owner remove temporary
 assets only after confirmed completion; finite lifecycle alone is not proof.
+A failed drain returns `vibe64_execution_drain_failed` without replacing the
+command's own outcome: the error says whether the command timed out, was
+cancelled or finished, `timedOut` and the signal are kept, and on Linux up to ten
+remaining processes are named in the error and in `remainingProcesses`. A member
+the server may not signal, such as a sudo helper's root-owned child, is one such
+remainder.
 
 Execution metadata carries only a validated workflow UUID. It cannot select a
 systemd unit, host path or resource policy. The execution provider verifies
@@ -232,6 +255,10 @@ Runner receipts also retain their start time. When systemd has collected the
 transient unit, its default `success`, exit status and task maximum do not replace
 the saved runner measurements. Start and observed exit times still bound a
 failure-only journal lookup after collection.
+After saving its receipt the runner ends as its command did: with the command's
+exit status, or by re-raising the command's terminating signal. systemd thus
+judges the unit as it would the command, so a command stopped with SIGTERM is a
+clean stop rather than a failed unit.
 For an unsuccessful execution without counter evidence, inspection checks a
 current-boot, exact-owned-unit, start/exit-bounded kernel journal query with the
 same two-second/128-KiB/64-record limits. A complete fork-denial record proves

@@ -125,13 +125,28 @@ async function stopVibe64Execution(executionId = "", options = {}) {
   if (detached.code !== "vibe64_execution_not_found") {
     return detached;
   }
-  return stopPtyExecution(normalizedExecutionId, options);
+  const pty = await stopPtyExecution(normalizedExecutionId, options);
+  if (pty.code !== "vibe64_execution_not_found" || options.allowMissingRecordScopeRecovery !== true ||
+      process.platform === "win32") {
+    return pty;
+  }
+  // A restored ID this server never started came from an earlier server. That
+  // server's reaper stopped its detached groups when it ended, and its
+  // terminals were hung up with it, so nothing can still run under the ID.
+  return {
+    executionId: normalizedExecutionId,
+    ok: true,
+    scopeEmpty: true,
+    stopped: false
+  };
 }
 
 async function stopVibe64OwnedExecutions(selector = {}, options = {}) {
   if (installedProvider?.stopOwnedExecutions) {
     return installedProvider.stopOwnedExecutions(selector, options);
   }
+  // Without a provider the caller stops its own executions by ID. Nothing an
+  // earlier server started survives it, so no other owned scope remains.
   return {
     closed: 0,
     ok: true,
