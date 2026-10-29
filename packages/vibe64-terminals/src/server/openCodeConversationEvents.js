@@ -42,11 +42,11 @@ function openCodeMessageError(message = {}) {
 }
 
 function openCodeCredentialFailureNoticeMessage() {
-  return "OpenCode needs attention: the selected provider rejected its API key, which may have expired or been revoked. [Open AI Accounts](/app/manage/accounts) to replace and verify the key, then return here and send your message again. Saved project changes remain.";
+  return "OpenCode needs attention: the selected provider rejected its API key, which may have expired or been revoked. [Go to AI Accounts](/app/manage/accounts) to replace and verify the key, then return here and send your message again. Saved project changes remain.";
 }
 
 function openCodeProviderApiFailureNoticeMessage(failure = "") {
-  return `OpenCode could not finish: ${text(failure)} Saved project changes remain. [Manage AI accounts](/app/manage/accounts)`;
+  return `OpenCode could not finish: ${text(failure)} Saved project changes remain. [Go to AI Accounts](/app/manage/accounts)`;
 }
 
 function openCodeFailureNoticeMessage(failure = "") {

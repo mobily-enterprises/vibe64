@@ -1,7 +1,7 @@
 import { chatTurnsWithRouting, draftWithRestoredMessage, routedChatMessage } from "@/lib/vibe64ChatDelivery.js";
 import { assistantRoutingRequestForDisplay, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced } from "@local/vibe64-runtime/shared/assistantRouting";
 import { computed, inject, reactive, ref, unref, watch } from "vue";
-import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
+import { vibe64AssistantSelectionLabel, vibe64ProviderPresentation } from "@local/vibe64-runtime/shared";
 import { useRouter } from "vue-router";
 import {
   VIBE64_DEFAULT_AGENT_PROVIDER_ID
@@ -515,7 +515,7 @@ function useVibe64AutopilotView(props, emit, {
     "approval-sending": "Keep typing while this message is sent for approval",
     routing: "Keep typing while this request is routed",
     failed: "Resolve the assistant startup error, then retry. Your draft is kept.",
-    unavailable: "Open AI Accounts to connect your assistant. Your draft is kept.",
+    unavailable: "Go to AI Accounts to connect your assistant. Your draft is kept.",
     initializing: "Keep typing while the assistant loads",
     reconnecting: "Your draft is kept while the connection recovers",
     retry: "Retry the same guidance without duplicating it",
@@ -555,11 +555,16 @@ function useVibe64AutopilotView(props, emit, {
   const reasoningActive = computed(() => assistantConnectionReady.value && agentActive.value &&
     !agentObservationLost.value && activeAgentTurn.value.phase === "reasoning");
   const assistantAccountUnavailable = computed(() => composerConnectionStatus.value === "unavailable");
-  const assistantAccountMessage = computed(() => (
-    (props.session?.assistantSelection?.engineId || VIBE64_DEFAULT_AGENT_PROVIDER_ID) === "codex"
-      ? "Codex is not connected. Sign in through AI Accounts to continue."
-      : "The selected AI account or model is unavailable. Check AI Accounts or choose another model."
-  ));
+  // Names the account as AI Accounts does; generic only when this view cannot know it.
+  const assistantAccountMessage = computed(() => {
+    const selection = props.session?.assistantSelection;
+    const account = vibe64ProviderPresentation({
+      ...selection, engineId: selection?.engineId || VIBE64_DEFAULT_AGENT_PROVIDER_ID
+    }).accountLabel;
+    return account
+      ? `${account} isn't connected. Reconnect it in AI Accounts or choose another model.`
+      : "The selected AI account or model is unavailable. Check AI Accounts or choose another model.";
+  });
   const connectionRecoveryVisible = computed(() => (
     !sessionInteractionDisabled.value &&
     ["disconnected", "unknown", "reconciling", "unavailable", "failed"].includes(composerConnectionStatus.value)

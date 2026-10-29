@@ -276,7 +276,7 @@
               size="small"
               @click="requestVibe64AccountConnectionsDialog({ section: 'ai' })"
             >
-              Open AI Accounts
+              Go to AI Accounts
             </v-btn>
             <v-btn
               v-if="!assistantAccountUnavailable || props.sessionSelectionArchived"

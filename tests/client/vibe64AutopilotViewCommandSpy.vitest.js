@@ -1251,8 +1251,9 @@ for (const state of ["failed", "reconciling", "disconnected", "account-unavailab
     for (const name of ["v-sheet", "v-btn"]) app.component(name, { setup: (_, { attrs, slots }) =>
       () => vue.h(name === "v-btn" ? "button" : "section", attrs, slots.default?.()) });
     const html = await renderToString(app);
-    const label = state === "account-unavailable" ? "Open AI Accounts" : state === "disconnected" ? "Reconnect" : "Retry connection";
+    const label = state === "account-unavailable" ? "Go to AI Accounts" : state === "disconnected" ? "Reconnect" : "Retry connection";
     expect(html).toContain(label);
+    expect(html).not.toContain("Open AI");
     expect(html.indexOf(label)).toBeLessThan(html.indexOf("Your draft is kept."));
     expect(html).toContain('role="status"');
     expect(html.includes("disabled")).toBe(state === "reconciling");

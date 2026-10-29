@@ -668,7 +668,7 @@ function waitForConversation(timeoutMs = 10000) {
   });
 }
 // Without a usable AI model Teach me sends nothing: the conversation opens and
-// says so, offering Open AI Accounts to connect one.
+// says so, offering Set up your AI to connect one.
 const teachNeedsModel = ref(false);
 async function revealForLearning() {
   teachNeedsModel.value = false;

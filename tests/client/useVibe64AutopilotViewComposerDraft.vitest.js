@@ -1074,7 +1074,8 @@ describe("useVibe64AutopilotView direct chat", () => {
     const { props, view } = await createViewWithProps({ agentConnectionStatus: "unavailable" });
     view.composerDraft.value = "Keep this draft while I sign in.";
     expect(view.assistantAccountUnavailable.value).toBe(true);
-    expect(view.assistantAccountMessage.value).toBe("Codex is not connected. Sign in through AI Accounts to continue.");
+    expect(view.assistantAccountMessage.value).toBe("Codex isn't connected. Reconnect it in AI Accounts or choose another model.");
+    expect(view.composerSubmitTitle.value).toBe("Go to AI Accounts to connect your assistant. Your draft is kept.");
     expect(view.connectionRecoveryVisible.value).toBe(true);
     expect(view.thinkingVisible.value).toBe(false);
     expect(view.composerSubmitMode.value).toBe("unavailable");
@@ -1087,6 +1088,20 @@ describe("useVibe64AutopilotView direct chat", () => {
     props.agentConnectionStatus = "connected";
     expect(view.connectionRecoveryVisible.value).toBe(false);
     expect(view.composerDraft.value).toBe("Keep this draft while I sign in.");
+  });
+
+  it("names the session's missing AI account as AI Accounts does, and stays generic only when it is unknown", async () => {
+    const { props, view } = await createViewWithProps({ agentConnectionStatus: "unavailable" });
+    for (const [assistantSelection, message] of [
+      [{ engineId: "claude", modelProviderId: "anthropic" }, "Claude isn't connected. Reconnect it in AI Accounts or choose another model."],
+      [{ engineId: "claude", modelProviderId: "deepseek" }, "DeepSeek isn't connected. Reconnect it in AI Accounts or choose another model."],
+      [{ engineId: "codex", modelProviderId: "zai-coding-plan" }, "GLM · Coding Plan isn't connected. Reconnect it in AI Accounts or choose another model."],
+      [{ engineId: "codex", modelProviderId: "openai" }, "Codex isn't connected. Reconnect it in AI Accounts or choose another model."],
+      [{ engineId: "opencode", modelProviderId: "anthropic" }, "The selected AI account or model is unavailable. Check AI Accounts or choose another model."]
+    ]) {
+      props.session.assistantSelection = assistantSelection;
+      expect(view.assistantAccountMessage.value).toBe(message);
+    }
   });
 
   it("keeps a startup failure retryable without presenting it as connection progress", async () => {

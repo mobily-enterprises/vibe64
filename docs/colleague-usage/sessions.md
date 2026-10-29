@@ -257,6 +257,16 @@ explicit Refresh and checks for changes made outside Vibe64 remain available.
 Opening a session also checks your AI access. Sending waits for that result;
 the pending check does not itself mean the connection is unavailable. A confirmed
 unavailable connection or access error is shown after the check returns.
+When the session's AI account is not connected, the chat names it as AI
+Accounts does, for example **Claude isn't connected. Reconnect it in AI
+Accounts or choose another model. Your draft is kept.** (or **DeepSeek**,
+**Codex**, **GLM · Coding Plan**). An OpenCode connection, which Vibe64 cannot
+name there, shows **The selected AI account or model is unavailable. Check AI
+Accounts or choose another model. Your draft is kept.** **Go to AI Accounts**
+opens AI Accounts in Account settings to reconnect it; to switch instead, choose
+another model in **Models**. Nothing is sent until the chat can reach a connected AI. Desktop
+and phone show the same notice; Colleague can explain it, but signing in
+remains your step.
 If chat stays on gray loading rows while the application Preview still works,
 use **Reconnect** or **Retry connection** when shown, then reload the browser tab
 if it remains stuck. Report the selected session and any failed chat/access

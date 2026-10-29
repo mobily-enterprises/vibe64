@@ -169,8 +169,7 @@ show a specific request error and keep the person's message for retry, rather th
 reporting that project lookup or other application tools are unavailable.
 If no usable Senior model is available for the first request, no model request is
 sent. Colleague keeps the draft, explains the missing AI connection/routing
-prerequisite and offers **Open AI Accounts** through the real hosted Management
-page or standalone Account settings. Setup and provider consent remain the
+prerequisite and offers **Set up your AI**, the guided AI setup. Setup and provider consent remain the
 person's actions; they return and explicitly send the retained draft afterward.
 Colleague can explain how to use the application from task guides shipped with
 that release. It finds and reads only relevant topics, adapts instructions to

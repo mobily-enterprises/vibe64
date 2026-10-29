@@ -285,8 +285,8 @@ also has:
   Colleague answers in its conversation. On a phone Colleague's full-screen chat opens over the step.
   If Colleague is not connected yet, an error says so; press **Teach me** again.
   If no AI is connected yet, nothing is sent:
-  Colleague opens and says **Colleague cannot teach this step yet: it has no
-  usable AI model, so nothing was sent.** with **Open AI Accounts**. Connect an
+  Colleague opens and says **Connect an AI first, then press Teach me again.
+  Nothing was sent.** with **Set up your AI**. Connect an
   AI there, then press **Teach me** again; no Models step is needed,
   because Colleague saves the recommended models for a connected AI itself.
   The message disappears as soon as an AI is usable.

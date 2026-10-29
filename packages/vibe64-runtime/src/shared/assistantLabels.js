@@ -11,14 +11,18 @@ function vibe64AssistantSelectionLabel(selection, { includeThinking = true } = {
 
 // How a selection's model provider is shown. Curated key providers report their
 // own key usage and, through Codex or Claude Code, send their reasoning as
-// commentary, so commentary is shown as thinking.
+// commentary, so commentary is shown as thinking. accountLabel names the
+// account a Codex or Claude Code selection runs on as AI Accounts does: its
+// curated key provider, or the tool's own sign-in that plan usage also names.
+// OpenCode names its connections itself, so its account has no name here.
 function vibe64ProviderPresentation(selection = {}) {
   const provider = curatedCodexProvider(selection?.modelProviderId);
+  const nativeTool = [VIBE64_ASSISTANT_ENGINE_IDS.CODEX, VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE].includes(selection?.engineId);
   return Object.freeze({
     label: provider?.shortLabel || findVibe64AgentProvider(selection?.engineId)?.label || "",
+    accountLabel: nativeTool ? provider?.label || findVibe64AgentProvider(selection.engineId).planUsage.label : "",
     keyUsage: Boolean(provider),
-    commentaryAsThinking: Boolean(provider) &&
-      [VIBE64_ASSISTANT_ENGINE_IDS.CODEX, VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE].includes(selection?.engineId)
+    commentaryAsThinking: Boolean(provider) && nativeTool
   });
 }
 

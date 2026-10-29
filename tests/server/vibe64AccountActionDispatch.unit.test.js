@@ -230,7 +230,7 @@ test("Colleague reads every saved provider's readiness through the original owne
   response = await execute();
   assert.equal(response.ok, true, JSON.stringify(response));
   assert.deepEqual(response.result, { ok: false, unavailable: false, connections: [],
-    error: "Saved AI connection status could not be read. Open AI Accounts for details." });
+    error: "Saved AI connection status could not be read. Go to AI Accounts for details." });
   assert.equal(reads, beforeReads);
   managementAllowed = true;
   service = createAiConnectionService();

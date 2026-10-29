@@ -233,7 +233,7 @@ function createAiConnectionActions({ aiConnectionService, requireAiManagement } 
       transformResult(result) {
         if (result.ok !== true) return {
           ok: false, unavailable: false, connections: [],
-          error: "Saved AI connection status could not be read. Open AI Accounts for details."
+          error: "Saved AI connection status could not be read. Go to AI Accounts for details."
         };
         return { ok: true, unavailable: result.unavailable === true, connections: result.connections.slice(0, 100).map(row => ({
           provider: String(row.modelProviderId || "").slice(0, 256),

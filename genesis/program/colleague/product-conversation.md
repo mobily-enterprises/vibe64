@@ -140,8 +140,8 @@ request on that controller; `colleagueLearningRequests.js` consumes it once for
 the same signed-in person, reveals Colleague, rereads its state (so the send
 goes to the lesson's Learn thread) and sends the fixed text "Teach me this
 step." through the ordinary send. When that read reports `modelSetupRequired`,
-nothing is sent: the setup warning says Colleague cannot teach the step yet and
-offers **Open AI Accounts**. `navigation.open-learning` (no project) opens
+nothing is sent: the setup warning says to connect an AI and press Teach me
+again, and offers **Set up your AI**. `navigation.open-learning` (no project) opens
 Courses at an attempt/step or closes it; `navigation.guide` points at a real
 place or opens it ("show me"). Both acknowledge truthfully with the guide receipt
 `{shown, step?, reason?}`. On a phone the dialog minimises itself before

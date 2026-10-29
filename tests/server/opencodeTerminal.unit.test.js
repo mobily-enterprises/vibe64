@@ -1789,7 +1789,7 @@ test("OpenCode makes structured provider API failures actionable", async (t) => 
   assert.equal(harness.systemMessages.length, 1);
   assert.match(harness.systemMessages[0].text, /Insufficient balance\. Top up your account\./u);
   assert.match(harness.systemMessages[0].text, /Saved project changes remain/u);
-  assert.match(harness.systemMessages[0].text, /\[Manage AI accounts\]\(\/app\/manage\/accounts\)/u);
+  assert.match(harness.systemMessages[0].text, /\[Go to AI Accounts\]\(\/app\/manage\/accounts\)/u);
   assert.equal(harness.publishedSessionChanges.some(([, payload]) => (
     payload.reason === "opencode-provider-failure" &&
     payload.payload?.conversationLogPatch?.type === "upsert-turn"
@@ -1825,7 +1825,7 @@ test("OpenCode does not misclassify model token limits as credential failures", 
   assert.equal(result.state, "failed");
   assert.equal(harness.systemMessages.length, 1);
   assert.match(harness.systemMessages[0].text, /Maximum output token limit exceeded/u);
-  assert.doesNotMatch(harness.systemMessages[0].text, /Manage AI accounts/u);
+  assert.doesNotMatch(harness.systemMessages[0].text, /Go to AI Accounts/u);
 });
 
 test("OpenCode turns make revoked provider keys actionable without exposing raw provider errors", async (t) => {
@@ -1855,11 +1855,12 @@ test("OpenCode turns make revoked provider keys actionable without exposing raw 
 
   assert.equal(result.state, "failed");
   assert.match(result.error, /OpenCode needs attention/u);
-  assert.match(result.error, /Open AI Accounts/u);
+  assert.match(result.error, /Go to AI Accounts/u);
+  assert.doesNotMatch(result.error, /Open AI/u);
   assert.doesNotMatch(result.error, /Authentication failed/u);
   assert.equal(harness.systemMessages.length, 1);
   assert.match(harness.systemMessages[0].text, /expired or been revoked/u);
-  assert.match(harness.systemMessages[0].text, /\[Open AI Accounts\]\(\/app\/manage\/accounts\)/u);
+  assert.match(harness.systemMessages[0].text, /\[Go to AI Accounts\]\(\/app\/manage\/accounts\)/u);
   assert.equal(harness.publishedSessionChanges.some(([, payload]) => (
     payload.reason === "opencode-credential-failure" &&
     payload.payload?.conversationLogPatch?.type === "upsert-turn"
@@ -2760,7 +2761,7 @@ for (const [label, failure, expected] of [
     assert.match(notice, expected);
     assert.match(notice, /Saved project changes remain/u);
     assert.match(notice, /send your message again/u);
-    assert.doesNotMatch(notice, /Plugin\.trigger|\$bunfs|GENESIS_HOOK_FAILURE|Manage AI accounts/u);
+    assert.doesNotMatch(notice, /Plugin\.trigger|\$bunfs|GENESIS_HOOK_FAILURE|Go to AI Accounts/u);
     if (label === "nonzero exit") assert.match(notice, /Project resolver configuration is invalid\./u);
   });
 }

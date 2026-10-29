@@ -250,10 +250,10 @@ for (const viewport of viewports) {
     }, 409));
     server.connectionsChanged();
     const banner = page.locator("[data-vibe64-connection-recovery]");
-    await expect(banner).toContainText("Codex is not connected. Sign in through AI Accounts to continue.");
+    await expect(banner).toContainText("Codex isn't connected. Reconnect it in AI Accounts or choose another model. Your draft is kept.");
     await expect(warning(page)).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Retry connection", exact: true })).toHaveCount(0);
-    const accounts = banner.getByRole("button", { name: "Open AI Accounts", exact: true });
+    const accounts = banner.getByRole("button", { name: "Go to AI Accounts", exact: true });
     await expect(accounts).toBeInViewport({ ratio: 1 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath("account-disconnected.png"), animations: "disabled" });
