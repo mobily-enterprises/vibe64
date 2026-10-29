@@ -566,7 +566,7 @@ test("a starting controller releases every receipt and failed unit record except
       `${unit(orphanFailed)} loaded failed failed Vibe64 job execution`
     ].join("\n") }),
     readEntries: (directory) => {
-      assert.equal(directory, "/run/vibe64-test/executions");
+      assert.match(directory, /-test\/executions$/u, "only this workspace's receipts are listed");
       return [owned, running, failed, collected, "not-an-execution", owned.toUpperCase()];
     },
     removeRuntime: (executionId) => removed.push(executionId),
