@@ -103,7 +103,7 @@ function createVibe64SessionsFeature() {
   const recoveryTasks = new WeakMap();
   const stoppedServices = new WeakSet();
 
-  function recoveryTaskFor(sessions, logger) {
+  function recoveryTaskFor(sessions, logger, project) {
     if (stoppedServices.has(sessions)) {
       return null;
     }
@@ -111,7 +111,10 @@ function createVibe64SessionsFeature() {
     if (!task) {
       task = createSessionRenewalRecoveryTask({
         logger,
-        recover: (options) => resumeInterruptedSessionWork(sessions, options)
+        // Startup has no request: recovery runs in the project this server
+        // holds, so its reads and session changes belong to that project.
+        recover: (options) => project.runInProjectContext(project.currentProjectSlug(),
+          () => resumeInterruptedSessionWork(sessions, options))
       });
       recoveryTasks.set(sessions, task);
     }
@@ -171,7 +174,7 @@ function createVibe64SessionsFeature() {
       if (!String(project?.targetRoot || "").trim()) {
         return;
       }
-      recoveryTaskFor(outputs.sessions, logger)?.start();
+      recoveryTaskFor(outputs.sessions, logger, project)?.start();
     },
     async shutdown({ terminals }, { outputs }) {
       const sessions = outputs.sessions;

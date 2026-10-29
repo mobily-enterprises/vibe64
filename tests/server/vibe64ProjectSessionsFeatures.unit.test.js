@@ -4,6 +4,8 @@ import test from "node:test";
 import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { createServiceToolCatalog } from "@jskit-ai/assistant-core/server";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
+import { runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { createSessionActions } from "../../packages/vibe64-sessions/src/server/actions.js";
 
 import {
@@ -303,7 +305,7 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
     }
   };
   const bootResult = Vibe64SessionsProvider.boot({
-    project: { targetRoot: "/tmp/selected-project" }
+    project: selectedProject
   }, {
     outputs: { sessions }
   });
@@ -336,7 +338,7 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
   assert.equal(shutdownSettled, true);
 
   Vibe64SessionsProvider.boot({
-    project: { targetRoot: "/tmp/selected-project" }
+    project: selectedProject
   }, {
     outputs: { sessions }
   });
@@ -361,7 +363,7 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
   );
 
   Vibe64SessionsProvider.boot({
-    project: { targetRoot: "/tmp/selected-project" }
+    project: selectedProject
   }, {
     outputs: {
       sessions: {
@@ -382,6 +384,40 @@ test("sessions start standalone renewal recovery without blocking Feature boot",
     }),
     /must be a function or null/u
   );
+});
+
+// The project a server started for one project holds, as its project service
+// resolves it outside any request.
+const selectedProject = {
+  targetRoot: "/tmp/selected-project",
+  currentProjectSlug: () => "selected",
+  runInProjectContext: (slug, operation) => runWithProjectRequestContext({ slug }, operation)
+};
+
+// Startup recovery runs outside any request. An archive or renewal it finishes
+// still reaches the pages that show its session.
+test("startup recovery's session changes reach the recovered project's pages", async () => {
+  const published = [];
+  const publish = createSessionChangedPublisher({ async publish(event) { published.push(event); } });
+  const sessions = {
+    async closeSessionRenewalWork() {},
+    closeSessionPresence() {},
+    async resumeSessionArchives() {
+      await publish("archived-a", { reason: "session-archived" });
+      return { failures: [] };
+    },
+    async resumeSessionRenewals() {
+      await publish("renewing-b", { reason: "session-renewal-completed" });
+      return { failures: [] };
+    }
+  };
+  Vibe64SessionsProvider.boot({ logger: { warn() {} }, project: selectedProject }, { outputs: { sessions } });
+  await new Promise((resolve) => setImmediate(resolve));
+  await recoveryShutdown(sessions);
+  assert.deepEqual(published.filter(({ type }) => type === "entity.changed").map(({ realtime }) => realtime.audience), [
+    { room: "vibe64:project:selected:session:archived-a" },
+    { room: "vibe64:project:selected:session:renewing-b" }
+  ]);
 });
 
 function recoveryShutdown(sessions) {
@@ -409,7 +445,7 @@ test("startup recovery resumes renewals after archive recovery fails and logs ea
   };
   Vibe64SessionsProvider.boot({
     logger: { warn(fields, message) { warnings.push({ fields, message }); } },
-    project: { targetRoot: "/tmp/selected-project" }
+    project: selectedProject
   }, { outputs: { sessions } });
   await new Promise((resolve) => setImmediate(resolve));
   await recoveryShutdown(sessions);
@@ -437,7 +473,7 @@ test("shutdown stops the startup archive loop instead of waiting for every pendi
     },
     async resumeSessionRenewals() { renewalsResumed += 1; return { failures: [] }; }
   };
-  Vibe64SessionsProvider.boot({ logger: { warn() {} }, project: { targetRoot: "/tmp/selected-project" } },
+  Vibe64SessionsProvider.boot({ logger: { warn() {} }, project: selectedProject },
     { outputs: { sessions } });
   await new Promise((resolve) => setImmediate(resolve));
   const started = Date.now();
