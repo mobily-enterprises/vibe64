@@ -141,7 +141,10 @@ Colleague exposes the canonical Model routing read, preview and save actions
 without project selection. Their assistant results contain assignments,
 recommendations, effective viewer/collaborator routes and access/availability
 metadata, not account identities, credentials, provider error details or private
-runtime context. The ordinary HTTP read retains its full UI result. Supplying
+runtime context. The ordinary HTTP read retains its full UI result. `view: "main"`
+returns only main chat's selection (the owner's saved Senior, read from the
+routing store without any live catalogue; only an unsaved setup builds the full
+view for its recommendation); **Start an AI session** uses it. Supplying
 `engineId` and `choiceRole` requests the same role's choices as a 20-item page,
 optionally filtered by `choiceSearch` and advanced through `choiceOffset` and
 `nextOffset`. `includeOtherModels` includes the UI's other connected choices.
@@ -681,7 +684,10 @@ credential, neither catalogue operation reads a saved owner key, and a failed
 or malformed response remains a retryable catalogue failure instead of
 exposing stale Zen models. This live Zen result shares the existing short-lived
 catalogue cache; it is loaded only by explicit full-catalogue operations, never
-by opening or creating a session or sending its first message.
+by opening or creating a session or sending its first message. A connected-only
+capability read (model routing and session setup) with no connected OpenCode
+connection returns the configured answer and never starts the temporary
+service.
 
 The host may contribute redacted connection metadata that identifies the
 preferred new-session provider, and restricts a connection to

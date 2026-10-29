@@ -1,7 +1,7 @@
 import { computed, createRenderer, ref, ssrContextKey } from "vue";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-const mocks = vi.hoisted(() => ({ resource: null, branches: null, branchOptions: null, openSettings: vi.fn() }));
+const mocks = vi.hoisted(() => ({ resource: null, branches: null, branchOptions: null, routingOptions: null, openSettings: vi.fn() }));
 vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
   useEndpointResource: (options) => {
     mocks.branchOptions = options;
@@ -9,7 +9,7 @@ vi.mock("@jskit-ai/http-web/client/composables/useEndpointResource", () => ({
   }
 }));
 vi.mock("@local/vibe64-accounts/client", () => ({
-  useModelRouting: () => ({ resource: mocks.resource, loadError: ref(""),
+  useModelRouting: (options) => (mocks.routingOptions = options, { resource: mocks.resource, loadError: ref(""),
     mainChatSelection: computed(() => mocks.resource.data.value?.setups?.owner?.roles?.senior?.effective ||
       mocks.resource.data.value?.setups?.owner?.roles?.senior?.recommendation || null) })
 }));
@@ -46,6 +46,8 @@ afterEach(() => app?.unmount());
 it("shows main chat's AI from the owner's setup and submits no tool or model choice", async () => {
   const f = mount();
   expect(f.state.mainSelection).toEqual(senior);
+  // The dialog never waits for every engine's live model catalogue.
+  expect(mocks.routingOptions.view).toBe("main");
   f.state.openConnectionSettings();
   expect(mocks.openSettings).toHaveBeenCalledWith({ section: "ai" });
   await f.state.submit();

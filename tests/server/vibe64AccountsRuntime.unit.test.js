@@ -2401,6 +2401,21 @@ test("initializing a complete saved setup does not wait for live catalogues", as
   });
 });
 
+test("the session dialog's main selection reads a saved setup without waiting for live catalogues", async () => {
+  await withTempDir(async (root) => {
+    const f = await routingAccountsFixture(root);
+    const unsaved = await f.service.readModelRouting({ vibe64User: f.owner, view: "main" });
+    const full = await f.service.readModelRouting({ vibe64User: f.owner });
+    assert.deepEqual(unsaved, { ok: true, revision: full.revision, mainSelection: full.setups.owner.roles.senior.recommendation });
+    await f.store.write({ owner: f.assignments, nonOwner: {} }, 0);
+    const service = createService({ accountRuntime: createAccountsRuntime({ systemRoot: root }),
+      inspectRoutingConfiguration: async () => { throw new Error("Model discovery must not run."); } });
+    const saved = await service.readModelRouting({ vibe64User: f.owner, view: "main" });
+    assert.equal(saved.ok, true, saved.error);
+    assert.equal(saved.mainSelection.modelId, f.senior.modelId);
+  });
+});
+
 test("a save patches only the requested roles of each setup and refuses unknown roles", async () => {
   await withTempDir(async (root) => {
     const f = await routingAccountsFixture(root);

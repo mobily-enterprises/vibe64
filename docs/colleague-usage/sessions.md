@@ -3,7 +3,8 @@
 Use **New session** (+), or **Create session** when there are no open sessions,
 to open **Start an AI session**. It shows **Runs on your main AI:** and the main
 AI's model; every session runs on that AI setup, with no per-session tool
-choice. Select **Change** to open AI setup instead. Review any branch choice,
+choice. A saved setup appears straight away: the dialog does not wait for each
+AI tool's model list or start any AI tool. Select **Change** to open AI setup instead. Review any branch choice,
 then select **Create session** (or
 **Create branch & session**). While **Creating session…** is shown, the dialog
 shows a progress bar and explains that it is copying the project source. It stays open: clicking outside,

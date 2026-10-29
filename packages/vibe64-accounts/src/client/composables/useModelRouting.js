@@ -5,14 +5,15 @@ import { VIBE64_ASSISTANT_VIEWER_KEY } from "/src/lib/vibe64AssistantHost.js";
 import { vibe64ProjectQueryScope } from "/src/lib/vibe64ProjectScope.js";
 
 // The workspace AI setup: the owner's and the team setup, with every
-// connected tool's choices and illustrative decisions.
-function useModelRouting({ enabled = true } = {}) {
+// connected tool's choices and illustrative decisions. The "main" view reads
+// only the main chat's selection, without waiting for live model catalogues.
+function useModelRouting({ enabled = true, view = "" } = {}) {
   const viewer = inject(VIBE64_ASSISTANT_VIEWER_KEY, { actorKey: "local" });
   const queryKey = computed(() => ["vibe64", ...vibe64ProjectQueryScope(unref(viewer)?.projectSlug),
-    "model-routing", unref(viewer)?.actorKey || "signed-out"]);
+    "model-routing", unref(viewer)?.actorKey || "signed-out", ...(view ? [view] : [])]);
   const resource = useEndpointResource({
     enabled: computed(() => Boolean(unref(enabled) && unref(viewer)?.actorKey)),
-    path: `${ACCOUNTS_ENDPOINT}/model-routing`,
+    path: `${ACCOUNTS_ENDPOINT}/model-routing${view ? `?view=${view}` : ""}`,
     queryKey, realtime: { events: [VIBE64_ACCOUNTS_CHANGED_EVENT, VIBE64_CONNECTIONS_CHANGED_EVENT] },
     queryOptions: { refetchOnMount: true, staleTime: 30_000, retry: false },
     fallbackLoadError: "Models could not be loaded.", requestRecoveryLabel: "Models"
@@ -23,7 +24,7 @@ function useModelRouting({ enabled = true } = {}) {
     connectedEngines: computed(() => engines.value.filter((engine) => engine.connected)),
     setups,
     // Main chat runs on the owner's Senior: its saved choice, else its recommendation.
-    mainChatSelection: computed(() => setups.value?.owner?.roles?.senior?.effective ||
+    mainChatSelection: computed(() => resource.data.value?.mainSelection || setups.value?.owner?.roles?.senior?.effective ||
       setups.value?.owner?.roles?.senior?.recommendation || null),
     viewerDecisions: computed(() => resource.data.value?.viewer || {}),
     team: computed(() => resource.data.value?.team || { available: false, ownerName: "", memberCount: 0 }),

@@ -92,6 +92,10 @@ function normalizedConnections(value = null) {
     .filter((connection) => connection.id);
 }
 
+function openCodeHasConnection(connections = []) {
+  return normalizedConnections(connections).some((connection) => connection.connected);
+}
+
 function openCodeConfiguredAssistantCapabilities({ connections = [] } = {}) {
   const providers = normalizedConnections(connections)
     .filter((connection) => connection.connected && connection.defaultModelId)
@@ -442,5 +446,6 @@ export {
   OPENCODE_CAPABILITY_PAGE_LIMIT,
   OPENCODE_CAPABILITY_PAGE_LIMIT_MAXIMUM,
   openCodeAssistantCapabilities,
-  openCodeConfiguredAssistantCapabilities
+  openCodeConfiguredAssistantCapabilities,
+  openCodeHasConnection
 };

@@ -5,6 +5,7 @@ import {
   openCodeAssistantCapabilities,
   openCodeConfiguredAssistantCapabilities
 } from "../../packages/vibe64-terminals/src/server/agent/providers/opencodeAssistantCatalog.js";
+import { createOpenCodeConversationAccounts } from "../../packages/vibe64-terminals/src/server/openCodeConversationAccounts.js";
 
 function provider(id, {
   apiKeyCompatible = true,
@@ -506,4 +507,36 @@ test("OpenCode catalog pages and searches one provider's live model list", () =>
     searched.modelProviders[0].models.map(({ id }) => id),
     ["deepseek-model-24"]
   );
+});
+
+function openCodeAccounts(connections) {
+  const serverStarts = [];
+  const accounts = createOpenCodeConversationAccounts({
+    listConnections: async () => connections,
+    // The catalogue command starts a temporary `opencode serve`.
+    readCatalogCommand: async () => {
+      serverStarts.push("catalogue");
+      return { agents: [], providers: { all: [provider("anthropic")], default: {} } };
+    },
+    readZenModelsCommand: async () => [],
+    sharedRoots: () => ({ root: "/tmp/vibe64-opencode-test", cacheRoot: "/tmp/vibe64-opencode-test", workdir: "/tmp" }),
+    mainMessagePreparation: { contextFor: async () => ({}) }
+  });
+  return { accounts, serverStarts };
+}
+
+test("a connected-only OpenCode read without a connection never starts opencode serve", async () => {
+  for (const connections of [[], [{ modelProviderId: "anthropic", connected: false }]]) {
+    const { accounts, serverStarts } = openCodeAccounts(connections);
+    const capabilities = await accounts.capabilities({ connectedOnly: "true" });
+    assert.deepEqual(serverStarts, [], "an OpenCode read with no connection started opencode serve");
+    assert.deepEqual(capabilities.modelProviders, []);
+    assert.equal(capabilities.health.status, "unavailable");
+  }
+});
+
+test("a connected OpenCode read still reads the live catalogue", async () => {
+  const { accounts, serverStarts } = openCodeAccounts([{ modelProviderId: "anthropic", connected: true }]);
+  await accounts.capabilities({ connectedOnly: "true" });
+  assert.deepEqual(serverStarts, ["catalogue"]);
 });

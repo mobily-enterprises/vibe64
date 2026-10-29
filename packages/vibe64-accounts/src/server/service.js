@@ -1,6 +1,6 @@
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { createAssistantRoutingStore, validateAssistantRoutingConfiguration } from "@local/vibe64-core/server/assistantRoutingStore";
-import { ASSISTANT_SETUP_ROLES, isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
+import { ASSISTANT_SETUP_ROLES, assistantSetupRoleValue, isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
 import { readWorkspaceTeam } from "@local/vibe64-core/server/workspaceTeam";
 import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { watch } from "node:fs";
@@ -2204,6 +2204,13 @@ function createService({
         return { ok: false, code: "vibe64_routing_choice_scope", error: "Choose the setup and role before searching model choices." };
       }
       const saved = await routingStore().read();
+      // Main chat runs on the owner's Senior. A saved choice needs no live
+      // catalogue; only an unsaved setup waits for its recommendation.
+      if (input.view === "main") {
+        const { value } = assistantSetupRoleValue(saved.owner, "senior");
+        return { ok: true, revision: saved.revision, mainSelection: value?.schema ? value
+          : (await routingView(saved, input)).setups.owner.roles.senior.recommendation ?? null };
+      }
       const view = await routingView(saved, input);
       if (!input.choiceRole) return view;
       const search = String(input.choiceSearch || "").toLowerCase();

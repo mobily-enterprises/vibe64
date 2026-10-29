@@ -119,7 +119,7 @@ import { requestVibe64AccountConnectionsDialog } from "@/lib/vibe64AccountConnec
 const props = defineProps({ modelValue: Boolean, toolbar: { type: Object, default: () => ({}) } });
 const emit = defineEmits(["created", "update:model-value"]);
 // Main chat starts on the owner's Senior from AI setup.
-const routing = useModelRouting({ enabled: computed(() => props.modelValue) });
+const routing = useModelRouting({ enabled: computed(() => props.modelValue), view: "main" });
 const mainSelection = routing.mainChatSelection;
 const openConnectionSettings = () => requestVibe64AccountConnectionsDialog({ section: "ai" });
 // The guided setup also explains installing an AI tool; it closes this dialog first.

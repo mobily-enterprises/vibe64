@@ -87,7 +87,8 @@ const modelRoutingReadInputValidator = deepFreeze({
     setup: routingSetup,
     choiceRole: { type: "string", enum: ASSISTANT_SETUP_ROLES.owner, required: false },
     choiceSearch: { type: "string", noTrim: false, maxLength: 200, required: false },
-    choiceOffset: { type: "integer", min: 0, required: false }
+    choiceOffset: { type: "integer", min: 0, required: false },
+    view: { type: "string", enum: ["main"], required: false }
   }), mode: "create"
 });
 

@@ -3,7 +3,8 @@ import path from "node:path";
 import { VIBE64_ASSISTANT_ENGINE_IDS } from "@local/vibe64-runtime/shared";
 import {
   openCodeAssistantCapabilities,
-  openCodeConfiguredAssistantCapabilities
+  openCodeConfiguredAssistantCapabilities,
+  openCodeHasConnection
 } from "./agent/providers/opencodeAssistantCatalog.js";
 import { openCodeError } from "./terminalShared.js";
 import { requireOpenCodeConnection } from "./opencodeServerProcess.js";
@@ -62,21 +63,17 @@ function createOpenCodeConversationAccounts({
   }
 
   async function capabilities(input = {}, options = {}) {
-    if (text(input.configuredOnly).toLowerCase() === "true") {
-      return openCodeConfiguredAssistantCapabilities({
-        connections: await listConnections({
-          engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
-          vibe64User: options.vibe64User || null
-        })
-      });
+    const listed = listConnections({
+      engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
+      vibe64User: options.vibe64User || null
+    });
+    // The live catalogue starts a temporary `opencode serve`; a connected-only
+    // read has nothing to offer without a connection, so it never starts one.
+    if (text(input.configuredOnly).toLowerCase() === "true" ||
+        text(input.connectedOnly).toLowerCase() === "true" && !openCodeHasConnection(await listed)) {
+      return openCodeConfiguredAssistantCapabilities({ connections: await listed });
     }
-    const [catalog, connections] = await Promise.all([
-      readCatalog(),
-      listConnections({
-        engineId: VIBE64_ASSISTANT_ENGINE_IDS.OPENCODE,
-        vibe64User: options.vibe64User || null
-      })
-    ]);
+    const [catalog, connections] = await Promise.all([readCatalog(), listed]);
     return openCodeAssistantCapabilities({
       agents: catalog.agents,
       connections,

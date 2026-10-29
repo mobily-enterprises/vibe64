@@ -90,3 +90,21 @@ it("gives main chat the owner's Senior, falling back to its recommendation", asy
   await flush();
   expect(routing.mainChatSelection.value).toEqual(saved);
 });
+
+it("reads only main chat's selection in its own cache for the main view", async () => {
+  configureHttpWebClient({ request });
+  const saved = { engineId: "codex", modelId: "saved" };
+  request.mockResolvedValueOnce({ ok: true, revision: 3, mainSelection: saved });
+  let main;
+  const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+  app = renderer.createApp({ setup() { main = useModelRouting({ view: "main" }); return () => null; } });
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  app.use(VueQueryPlugin, { queryClient });
+  app.provide(VIBE64_ASSISTANT_VIEWER_KEY, ref({ actorKey: "owner", projectSlug: "first" }));
+  app.mount({});
+  await flush();
+  expect(request).toHaveBeenCalledTimes(1);
+  expect(request.mock.calls[0][0]).toBe("/api/accounts/model-routing?view=main");
+  expect(JSON.parse(main.scopeKey.value).at(-1)).toBe("main");
+  expect(main.mainChatSelection.value).toEqual(saved);
+});
