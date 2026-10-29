@@ -243,6 +243,31 @@ it.
 `tests/server/vibe64ExecutionPersonRegistry.unit.test.js` covers the registry
 and its refusals.
 
+Each published project runs as its own application account, which the helper's
+`application-account` operation makes and retires; the daemon names only the
+project. The helper derives the account, `v64a_` and twelve hex digits of a hash
+of the workspace and project, and its area, a folder per workspace and project
+in root's system folder for applications, from the calling daemon. The account
+is a system account with only its own group: no login, no home outside its
+area, never in `vibe64` or `nix-users`. Root registers it in its own registry,
+one root-owned file per account in a root-only folder for the workspace, apart
+from the people's. A person
+operation refuses any `v64a_` name, and an application is acted as only through
+that registry, so neither ever stands in for the other. `ensure` makes the
+account on first use and adopts an account an interrupted `ensure` left
+unregistered only when it is exactly the account the helper makes. Through
+directories it opened itself, never following a link, it makes the area: root's
+directories down to the project's (`0711`), the daemon's `handover/` the
+application's group may read (`2750`), and the application's own `app/` with
+its `home/` and `database/` (`0700`), which the daemon may search for a database
+by name but never list. An existing directory must still have the owner it was
+given; nothing is repaired. `retire` refuses while anything runs as the
+account, and removes the handover and application files. A production database
+outlives its project, as other production databases do, so while `database/`
+holds one the account, its registration and that directory stay; otherwise they
+go too. `tests/server/vibe64ExecutionApplicationAccounts.unit.test.js` covers
+the accounts, their area and their refusals.
+
 Root never reads a release's environment file, and no unit makes systemd read
 one on root's behalf. A release service's unit runs the helper as the service's
 own user, which loads the file at every start, restarts included, and then

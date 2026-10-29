@@ -80,6 +80,13 @@ second Unix identity being able to race a live writer. A missing group, missing
 ACL tools, wrong ownership, wrong mode, absent default ACL, or missing group
 membership is a startup failure. It is never repaired after a command.
 
+A published application never joins `vibe64`. Its build, release service and
+production databases run as its own application account, in an area of its own
+in root's system folder for applications, outside every managed project/session
+source namespace. The daemon hands it a release's source and Env
+through that area's handover directory, which only the application's group may
+read.
+
 The ACL contract must survive or be re-established before exposing a path
 created by clone, copy, atomic replacement, checkout, reset, move, archive
 restore, or session-source recovery. A path must not become visible to a live

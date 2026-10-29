@@ -1,5 +1,6 @@
 #!/opt/vibe64/runtime-packs/node26/bin/node
 import { spawn, spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import {
   closeSync,
   constants as fsConstants,
@@ -40,6 +41,7 @@ const EXEC_HELPER_PAYLOAD_SCHEMA = "vibe64.exec-helper.payload";
 const EXEC_HELPER_PAYLOAD_SCHEMA_VERSION = 1;
 const ALLOWED_OPERATIONS = new Set([
   "account-auth-terminal",
+  "application-account",
   "account-status",
   "codex-app-server",
   "create-system-user",
@@ -147,6 +149,13 @@ const ADMINISTRATOR_GROUPS = new Set([
   "sudo",
   "wheel"
 ]);
+const APPLICATION_USERNAME_PREFIX = "v64a_";
+const APPLICATION_USERNAME_PATTERN = /^v64a_[a-f0-9]{12}$/u;
+const APPLICATION_REGISTRY_ROOT = "/etc/vibe64/applications";
+const APPLICATION_REGISTRATION_SCHEMA = "vibe64.application-account";
+const APPLICATION_AREA_ROOT = "/var/lib/vibe64-apps";
+const APPLICATION_SHELL = "/usr/sbin/nologin";
+const APPLICATION_PROJECT_PATTERN = /^[a-z0-9][a-z0-9_-]{0,47}$/u;
 const MANAGED_EXECUTION_ID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu;
 const MANAGED_EXECUTION_KINDS = new Set([
   "assistant",
@@ -239,6 +248,10 @@ async function main() {
   }
   if (operation === "managed-execution") {
     handleManagedExecutionOperation(payload);
+    return;
+  }
+  if (operation === "application-account") {
+    handleApplicationAccountOperation(payload);
     return;
   }
   const username = safeUsername(payload.username);
@@ -1811,15 +1824,16 @@ function personWorkspaceName(workspace = "") {
 function assertRootOwnedDirectory(descriptor, registryUid) {
   const stats = fstatSync(descriptor);
   if (!stats.isDirectory() || stats.uid !== registryUid || (stats.mode & 0o022) !== 0) {
-    throw new Error("The Vibe64 person registry is not a directory only root can change.");
+    throw new Error("A Vibe64 registry is not a directory only root can change.");
   }
 }
 
-// Opens one workspace's registry directory, never through a link, and only
-// when it and the registry root are root's own and writable by no one else.
-function openPersonRegistry(workspace = "", {
+// Opens one workspace's directory of a registry (its people or its
+// applications), never through a link, and only when it and the registry root
+// are root's own and writable by no one else.
+function openRegistry(workspace = "", {
   create = false,
-  registryRoot = PERSON_REGISTRY_ROOT,
+  registryRoot = "",
   registryUid = 0
 } = {}) {
   if (create) {
@@ -1853,7 +1867,7 @@ function readPersonRegistration(workspace = "", username = "", options = {}) {
   const registryUid = options.registryUid ?? 0;
   let directory;
   try {
-    directory = openPersonRegistry(workspace, options);
+    directory = openRegistry(workspace, { registryRoot: PERSON_REGISTRY_ROOT, ...options });
   } catch {
     return null;
   }
@@ -2042,7 +2056,7 @@ function registerPerson(workspace = "", username = "", {
   resolveUser(`${DAEMON_USERNAME_PREFIX}${workspace}`);
   const user = resolveUser(username);
   assertPersonAccount(user, facts(username));
-  const directory = openPersonRegistry(workspace, { ...registry, create: true });
+  const directory = openRegistry(workspace, { registryRoot: PERSON_REGISTRY_ROOT, ...registry, create: true });
   try {
     writePersonRegistrationEntry(directory, user);
   } finally {
@@ -2071,7 +2085,7 @@ function upgradePersonRegistry(workspace = "", {
   try {
     assertRootOwnedDirectory(root, registryUid);
     try {
-      closeSync(openPersonRegistry(workspace, { registryRoot, registryUid }));
+      closeSync(openRegistry(workspace, { registryRoot, registryUid }));
       return { imported: [], refused: [] };
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
@@ -2140,6 +2154,332 @@ function daemonMembershipUsernames(daemon = {}) {
   } finally {
     closeSync(directory);
   }
+}
+
+// Each published project runs as its own application account: a system
+// account with only its own group, no login and no Vibe64 group. Root
+// registers it for the daemon's workspace like the workspace's people, in a
+// registry of its own, so an operation as a person never acts as an
+// application nor the reverse. The helper derives the account and its area
+// from the calling daemon's workspace and the project; the daemon names only
+// the project.
+function handleApplicationAccountOperation(payload = {}) {
+  const owner = resolveOwnerUser();
+  const action = String(payload.action || "").trim();
+  if (action !== "ensure" && action !== "retire") {
+    throw new Error("Vibe64 exec helper rejected an unknown application account action.");
+  }
+  const result = action === "ensure"
+    ? { account: ensureApplicationAccount(owner, payload.project) }
+    : retireApplicationAccount(owner, payload.project);
+  process.stdout.write(`${JSON.stringify({ ok: true, ...result })}\n`);
+}
+
+// The area below `areaRoot`: root's directories down to the project's, the
+// daemon's handover directory its application's group may read, the
+// application's own directory with its home, and its production databases.
+function applicationIdentity(owner = {}, project = "", { areaRoot = APPLICATION_AREA_ROOT } = {}) {
+  const daemon = String(owner.username || "");
+  if (!daemon.startsWith(DAEMON_USERNAME_PREFIX)) {
+    throw new Error("Only a workspace daemon has application accounts.");
+  }
+  const workspace = personWorkspaceName(daemon.slice(DAEMON_USERNAME_PREFIX.length));
+  const name = String(project || "");
+  if (!APPLICATION_PROJECT_PATTERN.test(name)) {
+    throw new Error("Vibe64 exec helper rejected an invalid project name.");
+  }
+  const projectRoot = path.join(areaRoot, workspace, name);
+  return {
+    appRoot: path.join(projectRoot, "app"),
+    areaRoot,
+    databaseRoot: path.join(projectRoot, "database"),
+    handoverRoot: path.join(projectRoot, "handover"),
+    home: path.join(projectRoot, "app", "home"),
+    project: name,
+    projectRoot,
+    username: `${APPLICATION_USERNAME_PREFIX}${createHash("sha256").update(`${workspace}\0${name}`).digest("hex").slice(0, 12)}`,
+    workspace
+  };
+}
+
+function hostApplicationFacts(username = "") {
+  let loginDefs = "";
+  try {
+    loginDefs = readFileSync("/etc/login.defs", "utf8");
+  } catch {
+    // Without login.defs, useradd's own defaults apply.
+  }
+  const group = spawnSync("getent", ["group", username], { encoding: "utf8" });
+  let groups = [];
+  try {
+    groups = osGroupNames(username);
+  } catch {
+    // An account whose groups cannot be read is no application account.
+  }
+  return {
+    groupGid: group.status === 0 ? Number(String(group.stdout).split(":")[2]) : -1,
+    groups,
+    loginUids: loginUidRange(loginDefs)
+  };
+}
+
+// Why this account is not the application account the helper makes, or "".
+function applicationAccountProblem(user = {}, identity = {}, facts = {}) {
+  if (user.username !== identity.username || !Number.isSafeInteger(user.uid) || user.uid <= 0 ||
+      user.uid >= facts.loginUids.min) {
+    return `${user.username} is not a system account.`;
+  }
+  if (user.home !== identity.home || user.shell !== APPLICATION_SHELL) {
+    return `${user.username} does not have its application's home and no login.`;
+  }
+  if (facts.groupGid !== user.gid || facts.groups.length !== 1 || facts.groups[0] !== user.username) {
+    return `${user.username} is in a group other than its own.`;
+  }
+  return "";
+}
+
+function readApplicationRegistration(workspace = "", username = "", {
+  registryRoot = APPLICATION_REGISTRY_ROOT,
+  registryUid = 0
+} = {}) {
+  // Only an application's name is ever an application's registration.
+  if (!APPLICATION_USERNAME_PATTERN.test(String(username))) return null;
+  let directory;
+  try {
+    directory = openRegistry(workspace, { registryRoot, registryUid });
+  } catch {
+    return null;
+  }
+  try {
+    const record = JSON.parse(readOwnedFile(directory, `${directoryEntryName(username)}.json`, {
+      maxBytes: PERSON_REGISTRATION_LIMIT_BYTES,
+      othersMayWrite: false,
+      uid: registryUid
+    }));
+    return record?.schema === APPLICATION_REGISTRATION_SCHEMA && record.schemaVersion === 1 &&
+      record.username === username && Number.isSafeInteger(record.uid) && Number.isSafeInteger(record.gid) &&
+      APPLICATION_PROJECT_PATTERN.test(String(record.project))
+      ? { gid: record.gid, project: record.project, uid: record.uid, username }
+      : null;
+  } catch {
+    return null;
+  } finally {
+    closeSync(directory);
+  }
+}
+
+function writeApplicationRegistration(identity = {}, user = {}, { registryRoot = APPLICATION_REGISTRY_ROOT, registryUid = 0 } = {}) {
+  const directory = openRegistry(identity.workspace, { create: true, registryRoot, registryUid });
+  const name = `${identity.username}.json`;
+  const temporary = `.${name}.${process.pid}.tmp`;
+  try {
+    const descriptor = openSync(openedPath(directory, temporary), NEW_FILE_NO_FOLLOW, 0o644);
+    try {
+      fchmodSync(descriptor, 0o644);
+      writeFileSync(descriptor, `${JSON.stringify({
+        gid: user.gid,
+        project: identity.project,
+        schema: APPLICATION_REGISTRATION_SCHEMA,
+        schemaVersion: 1,
+        uid: user.uid,
+        username: identity.username
+      })}\n`);
+    } finally {
+      closeSync(descriptor);
+    }
+    renameSync(openedPath(directory, temporary), openedPath(directory, name));
+  } finally {
+    closeSync(directory);
+  }
+}
+
+// One directory of the area, made by root through a directory it holds open
+// and handed to its owner. One that already exists must still have that owner
+// and group, and when root's, be writable by no one else; nothing is repaired.
+function openAreaDirectory(parent, name = "", { gid, mode, uid }, { verify = true } = {}) {
+  const entry = openedPath(parent, directoryEntryName(name));
+  let created = true;
+  try {
+    mkdirSync(entry, { mode: 0o700 });
+  } catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    created = false;
+  }
+  if (!created && !verify) return { created, descriptor: -1 };
+  const descriptor = openSync(entry, DIRECTORY_NO_FOLLOW);
+  try {
+    if (created) {
+      fchownSync(descriptor, uid, gid);
+      fchmodSync(descriptor, mode);
+    } else if (verify) {
+      const stats = fstatSync(descriptor);
+      if (stats.uid !== uid || stats.gid !== gid || (mode === 0o711 && (stats.mode & 0o022) !== 0)) {
+        throw new Error(`The application area's ${name} directory is not the one the helper made.`);
+      }
+    }
+    return { created, descriptor };
+  } catch (error) {
+    closeSync(descriptor);
+    throw error;
+  }
+}
+
+function openApplicationProjectRoot(identity = {}, { areaGid = 0, areaUid = 0, create = true } = {}) {
+  let descriptor = openSync(path.dirname(identity.areaRoot), fsConstants.O_RDONLY | fsConstants.O_DIRECTORY);
+  try {
+    for (const name of [path.basename(identity.areaRoot), identity.workspace, identity.project]) {
+      let next;
+      if (create) {
+        next = openAreaDirectory(descriptor, name, { gid: areaGid, mode: 0o711, uid: areaUid }).descriptor;
+      } else {
+        next = openSync(openedPath(descriptor, directoryEntryName(name)), DIRECTORY_NO_FOLLOW);
+        assertRootOwnedDirectory(next, areaUid);
+      }
+      closeSync(descriptor);
+      descriptor = next;
+    }
+    return descriptor;
+  } catch (error) {
+    closeSync(descriptor);
+    throw error;
+  }
+}
+
+function ensureApplicationArea(identity = {}, owner = {}, user = {}, {
+  areaGid = 0,
+  areaUid = 0,
+  grantDaemonSearch = (descriptor) => runRootCommand("setfacl", ["-m", `u:${safeUsername(owner.username)}:x`,
+    `/proc/${process.pid}/fd/${descriptor}`])
+} = {}) {
+  const project = openApplicationProjectRoot(identity, { areaGid, areaUid });
+  const opened = [project];
+  try {
+    const application = { gid: user.gid, mode: 0o700, uid: user.uid };
+    opened.push(openAreaDirectory(project, "handover", { gid: user.gid, mode: 0o2750, uid: owner.uid }).descriptor);
+    const app = openAreaDirectory(project, "app", application).descriptor;
+    opened.push(app);
+    // The application's own home may be anything it made of it.
+    opened.push(openAreaDirectory(app, "home", application, { verify: false }).descriptor);
+    const database = openAreaDirectory(project, "database", application);
+    opened.push(database.descriptor);
+    // The daemon may look up a database there by name, never list or read it.
+    if (database.created) grantDaemonSearch(database.descriptor);
+  } finally {
+    for (const descriptor of opened) if (descriptor >= 0) closeSync(descriptor);
+  }
+}
+
+function ensureApplicationAccount(owner = {}, project = "", {
+  areaRoot = APPLICATION_AREA_ROOT,
+  createUser = (identity) => runRootCommand("useradd", ["--system", "--user-group", "--no-create-home",
+    "--home-dir", identity.home, "--shell", APPLICATION_SHELL, identity.username]),
+  facts = hostApplicationFacts,
+  resolveUser = tryResolveOsUser,
+  ...options
+} = {}) {
+  const identity = applicationIdentity(owner, project, { areaRoot });
+  const registration = readApplicationRegistration(identity.workspace, identity.username, options);
+  let user = resolveUser(identity.username);
+  if (registration) {
+    if (!user || user.uid !== registration.uid || user.gid !== registration.gid || registration.project !== identity.project) {
+      throw new Error(`The registered application account ${identity.username} is not the account on this host.`);
+    }
+  } else if (!user) {
+    createUser(identity);
+    user = resolveUser(identity.username);
+  }
+  // An account left unregistered by an interrupted ensure is adopted only when
+  // it is exactly the one the helper makes.
+  const problem = user ? applicationAccountProblem(user, identity, facts(identity.username)) : "it was not created.";
+  if (problem) {
+    throw new Error(`Vibe64 exec helper refused application account ${identity.username}: ${problem}`);
+  }
+  if (!registration) writeApplicationRegistration(identity, user, options);
+  ensureApplicationArea(identity, owner, user, options);
+  return {
+    appRoot: identity.appRoot,
+    databaseRoot: identity.databaseRoot,
+    handoverRoot: identity.handoverRoot,
+    home: identity.home,
+    username: identity.username
+  };
+}
+
+// A retired project's application keeps nothing but its production databases,
+// which outlive the project like its other production databases. Without any,
+// its account, registration and area go too. Nothing of it may still run.
+function retireApplicationAccount(owner = {}, project = "", {
+  areaRoot = APPLICATION_AREA_ROOT,
+  areaUid = 0,
+  deleteUser = (username) => runRootCommand("userdel", [username]),
+  facts = hostApplicationFacts,
+  registryRoot = APPLICATION_REGISTRY_ROOT,
+  registryUid = 0,
+  resolveUser = tryResolveOsUser,
+  running = (uid) => spawnSync("pgrep", ["-U", String(uid)]).status !== 1
+} = {}) {
+  const identity = applicationIdentity(owner, project, { areaRoot });
+  const registry = { registryRoot, registryUid };
+  const registration = readApplicationRegistration(identity.workspace, identity.username, registry);
+  const user = resolveUser(identity.username);
+  if (user) {
+    const problem = registration && registration.uid !== user.uid
+      ? "it is not the registered account."
+      : applicationAccountProblem(user, identity, facts(identity.username));
+    if (problem) {
+      throw new Error(`Vibe64 exec helper refused to retire application account ${identity.username}: ${problem}`);
+    }
+    if (running(user.uid)) {
+      throw new Error("The application still runs. Stop its release service before retiring it.");
+    }
+  }
+  let projectRoot = -1;
+  try {
+    projectRoot = openApplicationProjectRoot(identity, { areaUid, create: false });
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  let databaseKept = false;
+  if (projectRoot >= 0) {
+    try {
+      try {
+        databaseKept = readdirSync(openedPath(projectRoot, "database")).length > 0;
+      } catch (error) {
+        if (error.code !== "ENOENT") throw error;
+      }
+      if (databaseKept) {
+        for (const name of ["handover", "app"]) {
+          rmSync(openedPath(projectRoot, name), { force: true, recursive: true });
+        }
+      }
+    } finally {
+      closeSync(projectRoot);
+    }
+  }
+  if (databaseKept) {
+    return { databaseKept, retired: true };
+  }
+  if (projectRoot >= 0) {
+    const workspaceRoot = openSync(path.join(areaRoot, identity.workspace), DIRECTORY_NO_FOLLOW);
+    try {
+      assertRootOwnedDirectory(workspaceRoot, areaUid);
+      rmSync(openedPath(workspaceRoot, identity.project), { force: true, recursive: true });
+    } finally {
+      closeSync(workspaceRoot);
+    }
+  }
+  // Unregistered first: an account an interrupted retire leaves behind is one
+  // the next ensure adopts or the next retire removes.
+  if (registration) {
+    const directory = openRegistry(identity.workspace, registry);
+    try {
+      unlinkSync(openedPath(directory, `${identity.username}.json`));
+    } finally {
+      closeSync(directory);
+    }
+  }
+  if (user) deleteUser(identity.username);
+  return { databaseKept, retired: Boolean(user || registration || projectRoot >= 0) };
 }
 
 function handleDeploymentServiceOperation(payload = {}) {
@@ -2770,6 +3110,9 @@ function assertHumanUsername(username = "") {
   if (username.startsWith(DAEMON_USERNAME_PREFIX)) {
     throw new Error("Vibe64 daemon Unix accounts cannot be managed as app users.");
   }
+  if (username.startsWith(APPLICATION_USERNAME_PREFIX)) {
+    throw new Error("Vibe64 application accounts are never people.");
+  }
   if (RESERVED_HUMAN_USERNAMES.has(username)) {
     throw new Error("Privileged Unix accounts cannot be managed as Vibe64 app users.");
   }
@@ -2795,6 +3138,7 @@ function resolveOsUser(username = "") {
   return {
     gid,
     home: parts[5],
+    shell: parts[6],
     uid,
     username
   };
@@ -3329,7 +3673,8 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
   return env;
 }
 
-export { DAEMON_USERNAME_PREFIX, assertActablePerson, assertEnabledForVibe64, configureManagedExecutionWorkSlice, consumeManagedExecutionRequestPayload,
+export { DAEMON_USERNAME_PREFIX, applicationIdentity, ensureApplicationAccount, readApplicationRegistration, retireApplicationAccount,
+  assertActablePerson, assertEnabledForVibe64, configureManagedExecutionWorkSlice, consumeManagedExecutionRequestPayload,
   ensureWorkspaceRuntimeBase,
   enablePerson, loginUidRange, personAccountProblem, personSudoCommands, readPersonRegistration, registerPerson, upgradePersonRegistry, deploymentServiceUnit, ensureManagedServiceProcessOwnership,
   parseEnvironmentFile, upgradeReleaseServiceUnits,
