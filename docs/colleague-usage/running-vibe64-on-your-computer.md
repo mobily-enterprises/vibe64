@@ -69,7 +69,9 @@ Vibe64 keeps each project's history with Git (2.28 or newer).
 - **Your name on commits.** Commits use the name and email from your own Git
   settings. If Git has none, they are saved with a stand-in name ending in
   “via Vibe64”, and **Health** and the Save result show the two
-  `git config --global` lines to set yours.
+  `git config --global` lines to set yours. Those lines take effect on the
+  next command; a name set some other way (an included file, or one
+  repository's own settings) can take up to 30 seconds to be used.
 - **Signed commits.** If your Git signs every commit (`commit.gpgsign`) and the
   key needs a passphrase, Vibe64 can't type it. Make one signed commit in a
   terminal to unlock the key, then try again. Vibe64 doesn't change the setting.

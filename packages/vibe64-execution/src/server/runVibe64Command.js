@@ -2,8 +2,15 @@ import {
   resolveVibe64CommandActor
 } from "./actor/resolveActor.js";
 import {
-  resolveCommandEnv
+  resolveCommandEnv,
+  resolveCommandEnvAsync
 } from "./env/resolveCommandEnv.js";
+import {
+  GIT_AUTHOR_EMAIL_ENV,
+  GIT_AUTHOR_NAME_ENV,
+  GIT_COMMITTER_EMAIL_ENV,
+  GIT_COMMITTER_NAME_ENV
+} from "./env/gitIdentityEnv.js";
 import {
   runCaptureCommand
 } from "./engines/capture.js";
@@ -133,12 +140,20 @@ async function runVibe64Command(input = {}) {
     const localPath = !managedHost && processMatchesActor(actor)
       ? [baseEnv.PATH, process.env.PATH].filter(Boolean).join(":")
       : "";
-    const env = executionEnv(resolveCommandEnv({
+    const env = executionEnv(await resolveCommandEnvAsync({
       actor,
       baseEnv,
       localPath,
       request: request.releaseEnvironmentFile ? { ...request, project: {}, session: {} } : request
     }));
+    // A PTY env factory is called synchronously per terminal; it carries the
+    // Git identity this command already resolved.
+    const resolvedGitIdentityEnv = Object.fromEntries([
+      GIT_AUTHOR_EMAIL_ENV,
+      GIT_AUTHOR_NAME_ENV,
+      GIT_COMMITTER_EMAIL_ENV,
+      GIT_COMMITTER_NAME_ENV
+    ].map((name) => [name, env[name]]));
     assertActorHomeEnv(actor, env);
     const cwd = assertCwdAllowed(request.cwd, {
       allowedRoots: request.allowedRoots
@@ -152,6 +167,7 @@ async function runVibe64Command(input = {}) {
           actor,
           baseEnv,
           localPath,
+          resolvedGitIdentityEnv,
           request: {
             ...request,
             env: request.envFactory(input),

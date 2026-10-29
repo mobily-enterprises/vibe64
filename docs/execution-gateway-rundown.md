@@ -446,6 +446,13 @@ Preferred explicit identity:
 }
 ```
 
+Without an explicit or supplied identity, the person's own Git config comes
+next: git itself runs `git config --get-regexp '^user\.(name|email)$'` with the
+command's env (git found on the server's PATH), in the command's repository and
+else in its HOME. The gateway awaits this read without blocking the server, and
+one read answers every command with the same directory and env for 30 seconds;
+a change to a file `git config --global` writes is seen by the next command.
+
 GitHub identity:
 
 ```js

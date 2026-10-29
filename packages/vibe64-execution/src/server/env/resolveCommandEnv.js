@@ -20,7 +20,8 @@ import {
   gitEnv
 } from "./gitEnv.js";
 import {
-  gitIdentityEnv
+  gitIdentityEnv,
+  gitIdentityEnvSync
 } from "./gitIdentityEnv.js";
 import {
   GIT_AUTHOR_EMAIL_ENV,
@@ -115,7 +116,7 @@ function databaseEnvRecordsForPolicy(baseEnv = {}, request = {}) {
   ];
 }
 
-function resolveCommandEnv({
+function commandEnvWithoutGitIdentity({
   actor = {},
   baseEnv = process.env,
   localPath = "",
@@ -156,23 +157,47 @@ function resolveCommandEnv({
   });
   // A login shell (Launch runs `bash -lc`) may reorder PATH; with the person's
   // own tools its script restores this one, so Launch finds what setup found.
-  const commandEnv = { ...finalEnv, PATH, ...(runtimePackRoot() ? {} : { VIBE64_TOOL_PATH: PATH }) };
-  // Resolved last, so the person's Git config is read with the HOME, XDG
-  // folders and PATH this command will actually run with.
+  return { ...finalEnv, PATH, ...(runtimePackRoot() ? {} : { VIBE64_TOOL_PATH: PATH }) };
+}
+
+// Resolved last, so the person's Git config is read with the HOME, XDG
+// folders and PATH this command will actually run with.
+function gitIdentityInput({
+  actor = {},
+  baseEnv = process.env,
+  request = {}
+} = {}, commandEnv = {}) {
+  return {
+    actor,
+    env: baseEnv,
+    gitConfig: { cwd: request.cwd, env: commandEnv },
+    personGitIdentity: request.personGitIdentity,
+    project: request.project,
+    session: request.session,
+    userKey: request.userKey
+  };
+}
+
+// The command env, awaiting the person's Git identity without holding the
+// server's thread. The execution gateway resolves every command with this.
+async function resolveCommandEnvAsync(options = {}) {
+  const commandEnv = commandEnvWithoutGitIdentity(options);
+  return { ...commandEnv, ...await gitIdentityEnv(gitIdentityInput(options, commandEnv)) };
+}
+
+// The same env for a builder that must stay synchronous (the Codex runtime
+// context). With `resolvedGitIdentityEnv` it applies that identity, as the
+// gateway's per-terminal env factory does; without it, it reads Git's config
+// while the caller waits.
+function resolveCommandEnv(options = {}) {
+  const commandEnv = commandEnvWithoutGitIdentity(options);
   return {
     ...commandEnv,
-    ...gitIdentityEnv({
-      actor,
-      env: baseEnv,
-      gitConfig: { cwd: request.cwd, env: commandEnv },
-      personGitIdentity: request.personGitIdentity,
-      project: request.project,
-      session: request.session,
-      userKey: request.userKey
-    })
+    ...(options.resolvedGitIdentityEnv || gitIdentityEnvSync(gitIdentityInput(options, commandEnv)))
   };
 }
 
 export {
-  resolveCommandEnv
+  resolveCommandEnv,
+  resolveCommandEnvAsync
 };

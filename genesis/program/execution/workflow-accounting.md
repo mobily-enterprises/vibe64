@@ -78,6 +78,15 @@ configuration still cannot override this policy-owned setting.
 Driver-supplied private home and XDG directories pass through the gateway's
 credential-home validation; they are not overwritten with the application's
 account home. Relative directories are rejected before starting a process.
+When no project, session or supplied identity names the commit author, the
+gateway asks git itself for `user.name`/`user.email` with the command's own env
+(`packages/vibe64-execution/src/server/env/gitIdentityEnv.js`), so includes,
+XDG and repository config and `GIT_CONFIG_*` overrides apply. The gateway awaits
+that read without holding the server's thread, and one read answers every
+command with the same directory and full env for 30 seconds. A change to a file
+`git config --global` writes ends that at once; a read that never finished is
+not kept. Only the synchronous Codex runtime-context builder still reads while
+its caller waits, through the same parser and with no memo.
 
 The privileged command helper requires exact numeric target UID/GID values and
 uses a fixed executable path and trusted environment search path while dropping
