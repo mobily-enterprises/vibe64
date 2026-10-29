@@ -1,4 +1,5 @@
-import { draftWithRestoredMessage, routedChatMessage, trackRoutedMessage } from "@/lib/vibe64ChatDelivery.js";
+import { draftWithRestoredMessage } from "@jskit-ai/assistant-core/client/conversation-delivery";
+import { cancelOwnsMessage, routedChatMessage, trackRoutedMessage } from "@/lib/vibe64ChatDelivery.js";
 import { computed, hasInjectionContext, inject, markRaw, onBeforeUnmount, ref, watch } from "vue";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { VIBE64_ACCOUNTS_CHANGED_EVENT } from "@local/vibe64-accounts/client";
@@ -821,9 +822,7 @@ function useVibe64TemporaryAi({
       if (error.code === "vibe64_assistant_routing_cancelled") {
         const current = tasks.value.find(candidate => candidate.id === taskId);
         const text = payload.displayMessage || payload.message;
-        // Stop returns an unsent message to the draft; a Cancel in progress owns it.
-        const local = task.delivery.find(messageId);
-        const cancelling = Boolean(local?.cancelling || local?.cancelError);
+        const cancelling = cancelOwnsMessage(task.delivery.find(messageId));
         if (!cancelling) task.delivery.remove(messageId);
         updateTask(taskId, { busy: false, pendingMessageId: "", error: "", errorCode: "", status: "interrupted",
           ...(cancelling ? {} : { draft: draftWithRestoredMessage(text, current.draft) }) });

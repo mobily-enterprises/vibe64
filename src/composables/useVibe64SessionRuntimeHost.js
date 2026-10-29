@@ -550,9 +550,7 @@ function useVibe64SessionRuntimeHost(props, emit) {
   watch(() => {
     return `${selectedSessionId.value}:${selectedSessionArchived.value}:${runtimeHostWorkInspectionRevision(selectedSession.value)}`;
   }, () => {
-    if (!sourceOperationsSuspended.value) {
-      void inspectWorkState({ settle: workInspectionRevisionSeen });
-    }
+    void inspectWorkState({ settle: workInspectionRevisionSeen });
     workInspectionRevisionSeen = true;
   }, { flush: "post", immediate: true });
 

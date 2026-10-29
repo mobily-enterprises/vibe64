@@ -1,4 +1,4 @@
-import { chatTurnsWithRouting, draftWithRestoredMessage, routedChatMessage, trackRoutedMessage } from "@/lib/vibe64ChatDelivery.js";
+import { cancelOwnsMessage, chatTurnsWithRouting, routedChatMessage, trackRoutedMessage } from "@/lib/vibe64ChatDelivery.js";
 import { assistantRoutingRequestForDisplay, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced } from "@local/vibe64-runtime/shared/assistantRouting";
 import { computed, inject, ref, unref, watch } from "vue";
 import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
@@ -10,7 +10,7 @@ import {
   chatMessagePayload,
   createChatMessageId
 } from "@/lib/vibe64ChatMessage.js";
-import { unmatchedOptimisticMessages } from "@jskit-ai/assistant-core/client/conversation-delivery";
+import { draftWithRestoredMessage, unmatchedOptimisticMessages } from "@jskit-ai/assistant-core/client/conversation-delivery";
 import { VIBE64_ASSISTANT_VIEWER_KEY } from "@/lib/vibe64AssistantHost.js";
 import { usePageActivity } from "@/lib/vibe64PageActivity.js";
 import { useAssistantQuestions } from "@jskit-ai/assistant-core/client/conversation-questions";
@@ -389,8 +389,7 @@ function useVibe64AutopilotView(props, emit, {
     messageDelivery.value?.find(routingRequest.value.messageId)?.status === "pending");
   function restoreCancelledMessage(messageId) {
     const message = messageDelivery.value?.find(messageId);
-    // A Cancel in progress owns its message; only Stop returns one to the draft.
-    if (!message || message.cancelling || message.cancelError ||
+    if (!message || cancelOwnsMessage(message) ||
         !unmatchedOptimisticMessages(props.conversationLog?.turns, [message]).length) return;
     composerDraft.value = draftWithRestoredMessage(message.payload.draftSnapshot || message.text, composerDraft.value);
     messageDelivery.value?.remove(messageId);

@@ -61,11 +61,10 @@ function trackRoutedMessage(delivery, message, turns = []) {
     attachments: message.payload?.displayAttachments || [], error: message.error }, turns);
 }
 
-// JSKIT assistant-core's draftWithRestoredMessage rule, which its delivery
-// edit() applies: the returned message leads the draft unless the draft already
-// starts with it. Import that export instead once the pinned release has it.
-function draftWithRestoredMessage(text = "", draft = "") {
-  return !draft || draft.startsWith(text) ? draft || text : `${text}\n\n${draft}`;
+// A Cancel in progress, or one the server could not confirm (shown with Cancel
+// again), owns its message: only Stop returns an unsent message to the draft.
+function cancelOwnsMessage(message) {
+  return Boolean(message?.cancelling || message?.cancelError);
 }
 
-export { chatTurnsWithRouting, draftWithRestoredMessage, routedChatMessage, trackRoutedMessage };
+export { cancelOwnsMessage, chatTurnsWithRouting, routedChatMessage, trackRoutedMessage };
