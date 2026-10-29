@@ -20,7 +20,8 @@ const renewalUiHarness = vi.hoisted(() => ({
   buttons: [],
   chosenSelection: null,
   compact: false,
-  dialogAttrs: null
+  dialogAttrs: null,
+  routingOptions: null
 }));
 
 vi.mock("vuetify", () => ({
@@ -72,7 +73,7 @@ vi.mock("@/components/studio/StudioErrorNotice.vue", () => ({
   default: passthroughComponent("section")
 }));
 vi.mock("@local/vibe64-accounts/client", () => ({
-  useModelRouting: () => ({ resource: { isInitialLoading: VueRuntime.ref(false) },
+  useModelRouting: (options) => (renewalUiHarness.routingOptions = options, { resource: { isInitialLoading: VueRuntime.ref(false) },
     mainChatSelection: VueRuntime.computed(() => renewalUiHarness.assistantSelection) })
 }));
 vi.mock("@/components/studio/vibe64-session/Vibe64RenewalAssistantSelector.vue", () => ({
@@ -426,6 +427,12 @@ describe("session renewal dialog", () => {
     expect(confirmButton.disabled).toBe(false);
     confirmButton.onClick();
     expect(renewal.confirm).toHaveBeenCalledWith(sent && { ...renewalUiHarness.assistantSelection, ...sent });
+  });
+
+  it("reads main chat's AI from the light main view without live model lists", async () => {
+    await renderRenewal(renewalModel());
+    expect(renewalUiHarness.routingOptions.view).toBe("main");
+    expect(renewalUiHarness.routingOptions.enabled.value).toBe(true);
   });
 
   it("cannot confirm while the fresh-session assistant choice is unresolved", async () => {

@@ -144,7 +144,9 @@ conversation, including after another renewal. Your chat and project-view choice
 in the link stay unchanged. This works on desktop and mobile.
 
 The renewal dialog offers the same main AI as **Start an AI session**: the
-owner's Senior, or its recommendation when Senior has no saved choice. Keeping
+owner's Senior, or its recommendation when Senior has no saved choice. Like that
+dialog, it shows a saved choice without waiting for each AI tool's model list,
+and opening a session reads none either; only opening **Models** does. Keeping
 that AI leaves the fresh chat on the main AI; picking a different model makes
 it Custom.
 

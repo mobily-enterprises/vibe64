@@ -1277,8 +1277,10 @@ watch([
 ], () => {
   openCodeProgressLabel.value = "";
 }, { immediate: true });
+// Only whether this person manages AI: the light main-chat read, shared with
+// Start an AI session. Models makes the full read when it opens.
 const { resource: modelRoutingResource } = useModelRouting({
-  workflowsOnly: true,
+  view: "main",
   enabled: computed(() => !props.sessionSelectionArchived && Boolean(selectedAssistantSessionId.value))
 });
 const assistantCanConfigureRouting = computed(() => modelRoutingResource.data.value?.canConfigure === true);

@@ -471,7 +471,7 @@ const renewalTitleId = `vibe64-session-renewal-title-${useId()}`;
 const assistantSelectionReady = ref(false);
 const successorSelection = ref(null);
 // The fresh session starts on main chat's Senior unless another model is chosen.
-const routing = useModelRouting({ enabled: computed(() => Boolean(props.renewal.open)) });
+const routing = useModelRouting({ enabled: computed(() => Boolean(props.renewal.open)), view: "main" });
 const mainSelection = routing.mainChatSelection;
 const sameSelection = (left, right) => ["engineId", "agentId", "modelProviderId", "modelId", "variantId"]
   .every((key) => (left?.[key] || "") === (right?.[key] || ""));

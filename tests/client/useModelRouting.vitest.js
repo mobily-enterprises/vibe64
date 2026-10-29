@@ -1,4 +1,5 @@
-import { createRenderer, nextTick, ref } from "vue";
+import { readFileSync } from "node:fs";
+import { computed, createRenderer, h, nextTick, ref } from "vue";
 import { QueryClient, VueQueryPlugin } from "@tanstack/vue-query";
 import { configureHttpWebClient, getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { afterEach, expect, it, vi } from "vitest";
@@ -107,4 +108,38 @@ it("reads only main chat's selection in its own cache for the main view", async 
   expect(request.mock.calls[0][0]).toBe("/api/accounts/model-routing?view=main");
   expect(JSON.parse(main.scopeKey.value).at(-1)).toBe("main");
   expect(main.mainChatSelection.value).toEqual(saved);
+});
+
+it("lets an open session read only main chat's view, leaving the full read to Models", async () => {
+  configureHttpWebClient({ request });
+  request.mockImplementation(async (path) => path.endsWith("?view=main")
+    ? { ok: true, revision: 1, canConfigure: true, mainSelection: null }
+    : { ok: true, revision: 1, canConfigure: true, setups: { owner: { roles: {} } }, engines: [] });
+  // The session view's own call, exactly as the component makes it.
+  const source = readFileSync(new URL("../../src/components/studio/vibe64-session/Vibe64AutopilotView.vue", import.meta.url), "utf8");
+  const call = source.match(/useModelRouting\(\{[\s\S]*?\n\}\)/u)?.[0];
+  expect(call).toBeTruthy();
+  const sessionViewRouting = new Function("useModelRouting", "computed", "props", "selectedAssistantSessionId", `return ${call};`);
+  let session;
+  let dialog;
+  const modelsOpen = ref(false);
+  const Models = { setup() { useModelRouting(); return () => null; } };
+  const renderer = createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+  app = renderer.createApp({ setup() {
+    session = sessionViewRouting(useModelRouting, computed, { sessionSelectionArchived: false }, ref("session-1"));
+    // Start an AI session and renewal read the same main view.
+    dialog = useModelRouting({ view: "main" });
+    return () => modelsOpen.value ? h(Models) : null;
+  } });
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  app.use(VueQueryPlugin, { queryClient });
+  app.provide(VIBE64_ASSISTANT_VIEWER_KEY, ref({ actorKey: "owner", projectSlug: "first" }));
+  app.mount({});
+  await flush();
+  expect(request.mock.calls.map(([path]) => path)).toEqual(["/api/accounts/model-routing?view=main"]);
+  expect(session.resource.data.value.canConfigure).toBe(true);
+  expect(dialog.scopeKey.value).toBe(session.scopeKey.value);
+  modelsOpen.value = true;
+  await flush();
+  expect(request.mock.calls.map(([path]) => path)).toEqual(["/api/accounts/model-routing?view=main", "/api/accounts/model-routing"]);
 });
