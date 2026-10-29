@@ -7,7 +7,7 @@ import { ACTION_START_TEMPORARY_CONVERSATION_TURN, ACTION_STOP_TEMPORARY_CONVERS
 import { temporaryConversationTurnActionInputValidator, temporaryConversationUpdateInputValidator } from "./inputSchemas.js";
 import { parseIntegrationSetupRequest, normalizeVibe64AgentTaskResult, serializeVibe64AssistantSelection, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import { assistantGoalManagementMessage, assistantGoalObjective, assistantRoutingPreferences, assistantRoutingFromMetadata, assistantRoutingRequestFromMetadata, assistantRoutingStatusIsPending,
-  isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
+  assistantGoalIsActive, isAssistantRoutingOwner } from "@local/vibe64-runtime/shared/assistantRouting";
 import { createAssistantRouting } from "./assistantRouting.js";
 import { throwIfAgentWriteBusy } from "@local/vibe64-runtime/server/agentWriteLock";
 import { requireCompletedConversationRewind, sendWithAssistantChangeover, sessionConversationKey } from "./assistantChangeover.js";
@@ -390,9 +390,15 @@ function createSessionConversations({
   }
 
   async function snapshot(ctx, record, includeAccess = false, transcriptQuery) {
-    return conversationRuntime.readPersistentConversation({
+    const result = await conversationRuntime.readPersistentConversation({
       ...persistentConversationOptions(ctx, record), includeAccess, transcriptQuery
     });
+    // The record keeps the last goal its assistant reported; showing a settled
+    // chat uses it instead of asking again.
+    if (!result.readError && Object.hasOwn(result, "goal") && !isDeepStrictEqual(record.goal ?? null, result.goal ?? null)) {
+      await save(ctx, record, { goal: result.goal ?? null });
+    }
+    return result;
   }
 
   async function savedSnapshot(ctx, record, transcriptQuery) {
@@ -400,6 +406,20 @@ function createSessionConversations({
     return conversationRuntime.projectStoredPersistentConversation({
       ...persistentConversationOptions(ctx, record), transcriptQuery,
       projection: { ...projection, snapshot: input => projection.snapshot({ ...input, savedOnly: true }) }
+    });
+  }
+
+  // What a person sees of a chat. Only work that may still produce output or
+  // change its goal is read from its assistant; a settled chat's saved
+  // transcript and record are its answer, so showing it starts no assistant
+  // process. Send, Stop and the turn's idle completion still read the assistant.
+  async function displaySnapshot(ctx, record, transcriptQuery) {
+    if (record.providerConversationId && record.state !== "closing" &&
+        (["starting", "inProgress"].includes(record.status) || assistantGoalIsActive(record.goal))) {
+      return snapshot(ctx, record, true, transcriptQuery);
+    }
+    return conversationRuntime.projectStoredPersistentConversation({
+      ...persistentConversationOptions(ctx, record), includeAccess: true, transcriptQuery
     });
   }
 
@@ -724,7 +744,7 @@ function createSessionConversations({
         const records = await ctx.runtime.store.listSessionConversations(sessionId);
         const conversations = [];
         for (const record of records) conversations.push(savedOnly
-          ? await savedSnapshot(ctx, record) : await snapshot(ctx, record, true));
+          ? await savedSnapshot(ctx, record) : await displaySnapshot(ctx, record));
         return { ok: true, conversations: numberedConversations(conversations) };
       };
       let result = await write(sessionId, { ...options, lockWaitMs: 0 }, list);
@@ -751,7 +771,7 @@ function createSessionConversations({
       }
       let result = deferred ? { code: "vibe64_agent_write_mode_busy" }
         : await writeSnapshot(sessionId, { ...options, lockWaitMs: 0 }, async (ctx) =>
-          snapshot(ctx, await recordFor(ctx, input.conversationId), true, transcriptQuery));
+          displaySnapshot(ctx, await recordFor(ctx, input.conversationId), transcriptQuery));
       if (result?.code === "vibe64_agent_write_mode_busy") {
         const ctx = await readSessionContext(sessionId, options);
         result = await savedSnapshot(ctx, await recordFor(ctx, input.conversationId), transcriptQuery);

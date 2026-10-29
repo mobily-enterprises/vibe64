@@ -117,7 +117,8 @@ repair itself: choose that button on the Update error.
 Select **Main chat** or another temporary tab to continue elsewhere. The hidden
 chat keeps receiving progress, and a new assistant reply marks it unread. Open
 that chat to clear its unread indicator. Returning to the view or reloading
-restores saved chats and their history; it does not send the request again.
+restores saved chats and their history; it does not send the request again, and
+showing a finished chat's history does not start its AI.
 
 While Save or Update is changing the session source, an existing chat's saved
 messages remain readable, including older pages. You can keep typing in its

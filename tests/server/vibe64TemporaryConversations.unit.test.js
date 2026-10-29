@@ -1774,6 +1774,13 @@ test("temporary canonical facade uses the original logical record, actions, stre
       if (revokeDuringRead) allowed = false;
       return { ok: true, ...f.native, admitted: accepted.has(input.messageId) };
     };
+    // A settled chat is shown from its saved history, so access can also be
+    // revoked while that history is read.
+    const readConversationLog = f.store.readConversationLog;
+    f.store.readConversationLog = async (...args) => {
+      if (revokeDuringRead) allowed = false;
+      return readConversationLog(...args);
+    };
     let service;
     common = createConversationRuntime({
       authorize: async ({ context, conversationId }) => allowed && context?.sessionId === conversationId,
@@ -2288,5 +2295,33 @@ test("temporary update publication releases storage before waiting for subscribe
     }
     assert.equal((await updating).ok, true);
     assert.equal((await f.store.readSessionConversation("one", "chat")).agentSettings.model, "chosen");
+  });
+});
+
+test("showing a settled temporary chat answers from its saved transcript without reading its assistant", async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await conversationFixture(root);
+    let reads = 0;
+    const readConversation = f.sessionAgent.readConversation;
+    f.sessionAgent.readConversation = async (...args) => { reads += 1; return readConversation(...args); };
+    await f.service.createTemporaryConversation("one", { conversationId: "chat" });
+    await f.service.startTemporaryConversationTurn("one", { conversationId: "chat", messageId: "first", message: "Explain the build" });
+    Object.assign(f.native, { status: "completed",
+      messages: [{ id: "answer", requestMessageId: "first", role: "assistant", text: "It uses Vite.", complete: true }] });
+    // Work that may still produce output is read from the assistant, which saves it.
+    reads = 0;
+    const working = await f.restart().readTemporaryConversation("one", { conversationId: "chat" });
+    assert.ok(reads > 0);
+    assert.equal(working.status, "completed");
+    reads = 0;
+    const shown = await f.restart().readTemporaryConversation("one", { conversationId: "chat" });
+    const [listed] = (await f.restart().listTemporaryConversations("one")).conversations;
+    assert.equal(reads, 0, "showing a settled chat read its assistant");
+    for (const view of [shown, listed]) {
+      assert.equal(view.status, "completed");
+      assert.equal(view.deferredReconciliation, undefined);
+      assert.deepEqual(view.messages.filter(message => message.role === "assistant").map(message => message.text), ["It uses Vite."]);
+    }
+    assert.ok(listed.purposes, "a settled chat still lists its modes");
   });
 });

@@ -44,6 +44,15 @@ instead of adding one. A failed read shows its error and creates nothing, and a
 newer selection made during the read wins. The plus control, Fix it with AI and
 Colleague's create action still start chats as before.
 
+Listing and opening temporary chats read the assistant natively only for a chat
+whose turn is starting or in progress or whose last reported goal is unfinished.
+Every native read saves the goal it reports on the chat's record. A settled chat
+(completed, interrupted or failed, with no open goal) answers from its saved
+transcript, goal and access through the shared stored projection, so restoring
+the tab strip after a reconnect, session switch or account change never starts
+that chat's assistant process. The idle check after each turn still reads the
+native conversation once to save its settled outcome and goal.
+
 Saved composer attachments use the same visible queue as new uploads. The composer
 combines saved receipts with its pending upload queue, retains completed uploads
 when a saved view closes, and still cancels unfinished uploads. Restored files count
