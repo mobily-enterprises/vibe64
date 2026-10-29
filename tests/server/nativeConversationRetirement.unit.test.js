@@ -152,7 +152,7 @@ test("Codex native storage inventory discovers independent CLI roots as well as 
   } });
   assert.deepEqual(await provider.listNativeThreadsForCwd("/saved/source"), ["fork", "new"]);
   provider.activeClient = async () => ({ request: async () => ({ data: [{ id: "foreign", cwd: "/elsewhere" }] }) });
-  await assert.rejects(provider.listNativeThreadsForCwd("/saved/source"), /invalid entry/);
+  await assert.rejects(provider.listNativeThreadsForCwd("/saved/source"), /listed thread foreign outside the requested directory/u);
 });
 
 test("Codex native absence requires complete inventory across directories, providers and archived threads", async () => {

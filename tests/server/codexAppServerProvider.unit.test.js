@@ -3834,7 +3834,7 @@ test("codex session thread inventory fails closed for another cwd or repeated pa
   );
 });
 
-test("codex helper thread inventory fails closed on repeated or oversized provider data", async () => {
+test("codex helper thread inventory fails closed on a repeated cursor or an unusable id and keeps only ids", async () => {
   const runtimeDir = "/tmp/vibe64-helper-thread-inventory-invalid";
   const accountIdentitySignature = `sha256:${"c".repeat(64)}`;
   const provider = new CodexAppServerAgentProvider({
@@ -3865,19 +3865,32 @@ test("codex helper thread inventory fails closed on repeated or oversized provid
     return true;
   });
 
+  // Only thread ids are kept, so a long title Codex sends and the inventory
+  // discards is no reason to refuse it.
   provider.activeClient = async () => ({
     async request() {
       return {
         data: [{
-          id: "oversized-thread",
+          id: "long-title-thread",
           title: "x".repeat(70 * 1024)
         }],
         nextCursor: null
       };
     }
   });
+  assert.deepEqual((await provider.listHelperThreads()).threadIds, ["long-title-thread"]);
+
+  provider.activeClient = async () => ({
+    async request() {
+      return {
+        data: [{ id: "x".repeat(513) }],
+        nextCursor: null
+      };
+    }
+  });
   await assert.rejects(provider.listHelperThreads(), (error) => {
     assert.equal(error.code, "vibe64_codex_helper_thread_inventory_invalid");
+    assert.match(error.message, /listed a thread id longer than 512 characters/u);
     return true;
   });
 });
