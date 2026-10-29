@@ -544,8 +544,17 @@ export async function relayConversation(page: Page, server: { url: string }) {
 // The original durable-conversation unit fixture supplies this same store,
 // write lock, attachments, routing selection and controlled native method seam.
 // Canonical history, receipts, command coordination and publication stay real.
-async function temporaryConversationsFixture({ engineId, session, actions, publishSessionChanged, onSubscribe }) {
+// Its scratch root is removed by close(), or here when setup itself fails.
+async function temporaryConversationsFixture(options) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-browser-conversations-"));
+  try { return await temporaryConversationsFixtureAt(root, options); }
+  catch (error) {
+    await rm(root, { recursive: true, force: true, maxRetries: 5 });
+    throw error;
+  }
+}
+
+async function temporaryConversationsFixtureAt(root, { engineId, session, actions, publishSessionChanged, onSubscribe }) {
   const targetRoot = path.join(root, "project");
   await mkdir(targetRoot);
   const selection = { engineId, modelProviderId: engineId === "opencode" ? "deepseek" : "openai",
@@ -631,6 +640,7 @@ async function temporaryConversationsFixture({ engineId, session, actions, publi
     readSessionContext: async (sessionId, options = {}) => ({
       ...options, runtime, session: await runtime.getSession(sessionId)
     }),
+    routingWaitMs: 10_000,
     runAgentWrite: async (sessionId, options, operation, lockOptions) => {
       const result = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
         const currentSession = await runtime.getSession(sessionId);
