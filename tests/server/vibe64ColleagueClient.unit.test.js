@@ -529,6 +529,24 @@ for (const recovery of ["edit", "discard"]) {
   });
 }
 
+test("a Colleague message the server may hold shows Cancelling… until the server agrees", async t => {
+  const agreement = Promise.withResolvers();
+  const view = mount(t, async url => url.endsWith("/deliveries/maybe-sent/cancel")
+    ? agreement.promise : { ok: true, messages: [], status: "ready" });
+  await flush();
+  const target = view.state.conversation.runtime.value;
+  target.delivery.restoreUncertain({ messageId: "maybe-sent", text: "Maybe sent words" });
+  assert.equal(target.delivery.find("maybe-sent").status, "uncertain");
+  const cancelled = target.cancelMessage("maybe-sent");
+  await flush();
+  // Nothing leaves the chat on the browser's own authority.
+  assert.equal(target.delivery.find("maybe-sent").cancelling, true);
+  assert.equal(view.requests.filter(({ url }) => url.endsWith("/deliveries/maybe-sent/cancel")).length, 1);
+  agreement.resolve({ ok: true, cancelled: true, messageId: "maybe-sent" });
+  assert.equal(await cancelled, true);
+  assert.equal(target.delivery.find("maybe-sent"), null);
+});
+
 test("opening Colleague keeps its existing typed body available when voice setup fails", async t => {
   const view = mount(t, async () => ({ ok: true, messages: [], status: "ready" }));
   await flush();

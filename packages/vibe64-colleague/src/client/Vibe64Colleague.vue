@@ -364,7 +364,9 @@ async function takeVoiceTranscript(messageId) {
   if (!session) return false;
   const runtime = conversation.runtime.value;
   if (!await session.takeTranscript(messageId)) return false;
-  if (runtime.delivery.find?.(messageId)?.status === "failed") runtime.delivery.cancel(messageId);
+  // A definitely unsent message leaves the chat through JSKIT's Edit; the
+  // speech bubble, not the typed draft, now holds its words.
+  if (runtime.delivery.find?.(messageId)?.status === "failed") runtime.delivery.edit(messageId);
   return true;
 }
 async function editVoiceTranscript(messageId) {
@@ -372,9 +374,10 @@ async function editVoiceTranscript(messageId) {
   if (!session) return false;
   const runtime = conversation.runtime.value;
   if (!await session.beginTranscriptEdit(messageId)) return false;
-  // Explicit Edit retires only a definite local rejection. Plain Retry keeps
-  // the original authored text and steering intent on the delivery owner.
-  if (runtime.delivery.find?.(messageId)?.status === "failed") return runtime.delivery.cancel(messageId);
+  // Explicit Edit retires only a definite local rejection, through JSKIT's
+  // Edit. Plain Retry keeps the original authored text and steering intent
+  // on the delivery owner.
+  if (runtime.delivery.find?.(messageId)?.status === "failed") return runtime.delivery.edit(messageId) !== null;
   return true;
 }
 function updateVoiceTranscript(messageId, text) {
