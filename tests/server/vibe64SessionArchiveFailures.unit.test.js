@@ -51,71 +51,50 @@ test("one archived session that cannot be published hides neither the others nor
   });
 });
 
-test("a refused archive check keeps the refusal instead of calling a healthy archive invalid", async () => {
-  await withTemporaryRoot(async (root) => {
-    const store = createStore(root);
-    await store.createSession({ sessionId: "session-a", runtimeKind: "genesis" });
-    await store.writeStatus("session-a", "archived");
-    await store.publishSessionArchive("session-a");
-    const release = installVibe64ManagedExecutionProvider({
-      async runCommand(request, context) {
-        if (request.command === "tar") {
-          return vibe64CapacityRejectedResult(request.execution, {
-            code: "vibe64_capacity_rejected",
-            message: "This task cannot start because the server is already under heavy memory pressure.",
-            retryable: true
-          });
-        }
-        return context.runLocal();
-      },
-      async stopExecution() { return { ok: true, scopeEmpty: true }; }
-    });
-    try {
-      await assert.rejects(store.withArchivedSession("session-a", () => "opened"), (error) => {
-        assert.equal(error.code, "vibe64_capacity_rejected");
-        assert.equal(error.retryable, true);
-        assert.match(error.message, /could not check session archive/u);
-        assert.match(error.message, /heavy memory pressure/u);
-        return true;
-      });
-    } finally {
-      release();
-    }
-    assert.equal(await store.withArchivedSession("session-a", () => "opened"), "opened");
+// A provider that refuses each tar command `refuses` matches, as a server under
+// memory pressure does, and runs every other command.
+function installTarRefusal(refuses) {
+  return installVibe64ManagedExecutionProvider({
+    async runCommand(request, context) {
+      if (request.command === "tar" && refuses(request.args)) {
+        return vibe64CapacityRejectedResult(request.execution, {
+          code: "vibe64_capacity_rejected",
+          message: "This task cannot start because the server is already under heavy memory pressure.",
+          retryable: true
+        });
+      }
+      return context.runLocal();
+    },
+    async stopExecution() { return { ok: true, scopeEmpty: true }; }
   });
-});
+}
 
-test("a refused archive extraction keeps the refusal instead of reporting an unreadable archive", async () => {
-  await withTemporaryRoot(async (root) => {
-    const store = createStore(root);
-    await store.createSession({ sessionId: "session-a", runtimeKind: "genesis" });
-    await store.writeStatus("session-a", "archived");
-    await store.publishSessionArchive("session-a");
-    // The check is admitted; only the extraction meets the refusal.
-    const release = installVibe64ManagedExecutionProvider({
-      async runCommand(request, context) {
-        if (request.command === "tar" && request.args[0] === "-xzf") {
-          return vibe64CapacityRejectedResult(request.execution, {
-            code: "vibe64_capacity_rejected",
-            message: "This task cannot start because the server is already under heavy memory pressure.",
-            retryable: true
-          });
-        }
-        return context.runLocal();
-      },
-      async stopExecution() { return { ok: true, scopeEmpty: true }; }
+for (const { name, refuses, message } of [
+  { name: "a refused archive check keeps the refusal instead of calling a healthy archive invalid",
+    refuses: () => true, message: /could not check session archive/u },
+  // The check is admitted; only the extraction meets the refusal.
+  { name: "a refused archive extraction keeps the refusal instead of reporting an unreadable archive",
+    refuses: (args) => args[0] === "-xzf", message: /Cannot read Vibe64 session archive/u }
+]) {
+  test(name, async () => {
+    await withTemporaryRoot(async (root) => {
+      const store = createStore(root);
+      await store.createSession({ sessionId: "session-a", runtimeKind: "genesis" });
+      await store.writeStatus("session-a", "archived");
+      await store.publishSessionArchive("session-a");
+      const release = installTarRefusal(refuses);
+      try {
+        await assert.rejects(store.withArchivedSession("session-a", () => "opened"), (error) => {
+          assert.equal(error.code, "vibe64_capacity_rejected");
+          assert.equal(error.retryable, true);
+          assert.match(error.message, message);
+          assert.match(error.message, /heavy memory pressure/u);
+          return true;
+        });
+      } finally {
+        release();
+      }
+      assert.equal(await store.withArchivedSession("session-a", () => "opened"), "opened");
     });
-    try {
-      await assert.rejects(store.withArchivedSession("session-a", () => "opened"), (error) => {
-        assert.equal(error.code, "vibe64_capacity_rejected");
-        assert.equal(error.retryable, true);
-        assert.match(error.message, /Cannot read Vibe64 session archive/u);
-        assert.match(error.message, /heavy memory pressure/u);
-        return true;
-      });
-    } finally {
-      release();
-    }
-    assert.equal(await store.withArchivedSession("session-a", () => "opened"), "opened");
   });
-});
+}

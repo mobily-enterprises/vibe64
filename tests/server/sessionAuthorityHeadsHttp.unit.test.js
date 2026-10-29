@@ -11,12 +11,11 @@ import { createCodexGitCommandService } from "../../packages/vibe64-terminals/sr
 import { readSessionAuthorityHeads } from "../../packages/vibe64-terminals/src/server/sessionWorkUpdate.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 
-// Load review 2026-10-29: every project in use asks every 30 s whether its
-// sessions need an update. For a GitHub project that read was a managed
-// `git ls-remote` job: sudo, the root exec helper, systemd-run, the managed
-// runner, git and its HTTPS helper, two Node starts and about a second, twice a
-// minute per project. GitHub answers the same branch listing to one Git
-// protocol v2 ls-refs request, which the server now makes itself.
+// Every project in use asks every 30 s whether its sessions need an update.
+// For a GitHub project the server reads the branch listing itself with one Git
+// protocol v2 ls-refs request, instead of a managed `git ls-remote` job (sudo,
+// the root exec helper, systemd-run, the managed runner, git and its HTTPS
+// helper, two Node starts and about a second per read).
 const H0 = "0".repeat(40);
 const H1 = "1".repeat(40);
 const H2 = "2".repeat(40);

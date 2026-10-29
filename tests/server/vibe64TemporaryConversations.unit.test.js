@@ -2050,15 +2050,22 @@ test("temporary canonical inspection recovers the original foreign receipt befor
 });
 
 
+// A send whose native admission reply was lost leaves message "lost" unconfirmed;
+// the returned read shows the chat as its browser does.
+async function unconfirmedTemporarySend(f) {
+  f.failures.loseAdmission = true;
+  await assert.rejects(f.send("junior", "lost"), /Lost native admission reply/);
+  f.failures.read = false;
+  const read = async () => (await f.service.conversationBinding("one", { ...f.options, temporaryConversationId: "chat",
+    runtime: f.runtime, session: await f.runtime.getSession("one") })).read(f.options);
+  assert.equal((await read()).status, "unconfirmed");
+  return read;
+}
+
 test("a stopped temporary request whose delivery is unknown is no longer reported unconfirmed", async () => {
   await withTemporaryRoot(async root => {
     const f = await temporaryChangeoverFixture(root);
-    f.failures.loseAdmission = true;
-    await assert.rejects(f.send("junior", "lost"), /Lost native admission reply/);
-    f.failures.read = false;
-    const read = async () => (await f.service.conversationBinding("one", { ...f.options, temporaryConversationId: "chat",
-      runtime: f.runtime, session: await f.runtime.getSession("one") })).read(f.options);
-    assert.equal((await read()).status, "unconfirmed");
+    const read = await unconfirmedTemporarySend(f);
     await f.service.cancelTemporaryConversationRouting("one", { conversationId: "chat", messageId: "lost" }, f.options);
     const route = JSON.parse((await f.record()).routingMetadata.assistant_routing_request);
     assert.equal(route.stopped, true);
@@ -2073,12 +2080,7 @@ test("a stopped temporary request whose delivery is unknown is no longer reporte
 test("Cancel of an unconfirmed temporary message answers while a sibling chat holds the write lock and it never comes back", async () => {
   await withTemporaryRoot(async root => {
     const f = await temporaryChangeoverFixture(root);
-    f.failures.loseAdmission = true;
-    await assert.rejects(f.send("junior", "lost"), /Lost native admission reply/);
-    f.failures.read = false;
-    const read = async () => (await f.service.conversationBinding("one", { ...f.options, temporaryConversationId: "chat",
-      runtime: f.runtime, session: await f.runtime.getSession("one") })).read(f.options);
-    assert.equal((await read()).status, "unconfirmed");
+    const read = await unconfirmedTemporarySend(f);
     // A sibling chat's slow Claude startup holds the session's agent-write lock.
     const entered = Promise.withResolvers();
     const release = Promise.withResolvers();

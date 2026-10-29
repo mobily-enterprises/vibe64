@@ -29,8 +29,8 @@ const turnIdle = {
   session: { sessionId: "s1", projectSlug: "alpha", revision: 7, status: "active" }
 };
 
-// Every session change used to reach every connected browser, including each
-// streamed assistant delta with its whole text so far.
+// Only the pages that show a session receive its changes in full; a page that
+// lists its project's sessions needs no turn details or streamed text.
 test("a session change reaches its viewers in full and its project's pages as a small summary", async () => {
   const { events, published } = recordingEvents();
   await createSessionChangedPublisher(events)("s1", turnIdle);
@@ -61,8 +61,7 @@ test("streamed work reaches only the session's viewers", async () => {
 });
 
 // Viewers receive a conversation's live text and transcript through its
-// conversation subscription. The application change carried them again, the
-// whole streamed text so far with every delta, and no page read them there.
+// conversation subscription, so a session change does not carry them again.
 test("a session change never carries the conversation's stream or transcript", async () => {
   const { events, published } = recordingEvents();
   await createSessionChangedPublisher(events)("s1", {

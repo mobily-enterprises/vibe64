@@ -1,6 +1,6 @@
 import { assistantGoalManagementMessage } from "@local/vibe64-runtime/shared/assistantRouting";
 import { prepareSessionDetachedConversationRun, prepareSessionDetachedConversationCleanup, createSessionConversationBinding, prepareSessionConversationActivity, prepareSessionConversationRenewal, prepareSessionConversationCreation, prepareSessionConversationReadiness, prepareSessionConversationSettings, prepareSessionConversationDisposal, prepareProjectConversationCleanup, prepareConversationRuntimeInvalidation, prepareConversationReconciliation, prepareSessionConversationRenewalProof } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
-import * as assistantChangeover from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
+import { closeAssistantForChangeover } from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
@@ -774,7 +774,7 @@ test("Claude changeover away from Main forgets its retained conversations", asyn
   await f.provider.sessionState(f.context);
   const { owner } = f.provider.prepareConversationHost("test", f.context, "detachedCleanup").native;
   assert.equal(owner.entries.size, 1);
-  const closed = await assistantChangeover.closeAssistantForChangeover(f.provider.manager, "test", f.context);
+  const closed = await closeAssistantForChangeover(f.provider.manager, "test", f.context);
   assert.equal(closed.ok, true, JSON.stringify(closed));
   assert.equal(owner.entries.size, 0);
   // Returning to Claude reopens the saved Main conversation.

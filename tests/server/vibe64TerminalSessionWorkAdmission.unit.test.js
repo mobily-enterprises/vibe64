@@ -1210,10 +1210,10 @@ test("repository update checks do not occupy assistant-write admission", async (
   assert.equal((await activeAgent).acquired, true);
 });
 
-// Incident 2026-10-29: where each person has their own OS account, every Save
-// of a managed Git project was authored by the workspace service's stand-in,
-// because only GitHub sessions read the saving person's Git name and email.
-// Writes that record commits read them as the person; checks never do.
+// Where each person has their own OS account, a Save of a managed Git project
+// is authored by the saving person's Git name and email, not the workspace
+// service's stand-in. Writes that record commits read them as the person;
+// checks never do.
 test("Save and Update of a Vibe64 Git session read the person's own Git identity; checks do not", async (t) => {
   const identityReads = [];
   const { service, session } = await terminalServiceFixture(t, { store: {} }, {

@@ -13,9 +13,9 @@ const claudeSelection = JSON.stringify({ engineId: "claude", agentId: "claude", 
   variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}` });
 
 // The 5-minute dormancy sweep lists each open project's sessions to decide
-// whether its runtime is idle. Monitoring suspected that listing of starting a
-// repository check and a work inspection for a session nobody viewed: it must
-// read session records only, and closing an idle runtime must run no Git work.
+// whether its runtime is idle. That listing reads session records only, with no
+// repository check or work inspection for a session nobody views, and closing
+// an idle runtime runs no Git work.
 test("the dormancy sweep reads session records only and closes an idle runtime without repository work", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-dormancy-exp-"));
   t.after(() => rm(root, { force: true, recursive: true }));

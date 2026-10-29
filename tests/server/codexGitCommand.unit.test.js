@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFile, spawn } from "node:child_process";
+import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { mkdir, rm, stat, writeFile } from "node:fs/promises";
 import http from "node:http";
@@ -988,21 +988,17 @@ test("Codex separates GitHub authorization from the Git filesystem identity", as
   });
 });
 
-// Hosted incident 2026-10-25: Save runs as the workspace service, whose HOME
-// holds no Git identity and which cannot read the person's home, so every
-// hosted Save carried the stand-in although the person's own ~/.gitconfig had
-// their name. The person's identity is read as the person and given to Save.
 // A gateway whose owner-user `git config` read runs git as the person, in the
 // person's own home.
 function personHomeGateway(personHome, calls = []) {
   return async (request) => {
     calls.push(request);
     if (request.command === "gh") return { exitCode: 0, ok: true, stdout: "token\n" };
-    const result = await new Promise((resolve) => execFile("git", request.args, {
+    const result = await runProcessWithInput("git", request.args, {
       cwd: personHome,
       env: { GIT_CONFIG_NOSYSTEM: "1", HOME: personHome, PATH: process.env.PATH }
-    }, (error, stdout) => resolve({ exitCode: error ? Number(error.code) || 1 : 0, stdout })));
-    return { ...result, ok: result.exitCode === 0 };
+    });
+    return { exitCode: result.exitCode, ok: result.exitCode === 0, stdout: result.stdout };
   };
 }
 
@@ -1015,6 +1011,10 @@ function workspaceServiceSaveEnv(serviceHome, commandOptions = {}) {
   });
 }
 
+// Hosted incident 2026-10-25: Save runs as the workspace service, whose HOME
+// holds no Git identity and which cannot read the person's home, so every
+// hosted Save carried the stand-in although the person's own ~/.gitconfig had
+// their name. The person's identity is read as the person and given to Save.
 test("Save run by the workspace service commits under the person's own Git identity", async () => {
   await withTemporaryRoot(async (root) => {
     const session = githubSession(root);
@@ -1045,10 +1045,10 @@ test("Save run by the workspace service commits under the person's own Git ident
   });
 });
 
-// Incident 2026-10-29: where each person has their own OS account, every Save
-// of a managed Git project was authored "<service user> via Vibe64", the
-// workspace service's stand-in, although the owner's tool home had their Git
-// name and email. Only a GitHub session read them as the person.
+// Where each person has their own OS account, a Save of a managed Git project
+// reads the saving person's Git name and email in their tool home, as a GitHub
+// session does, rather than commit as the workspace service's stand-in
+// ("<service user> via Vibe64").
 test("Save of a Vibe64 Git session commits under the saving person's own Git identity", async () => {
   await withTemporaryRoot(async (root) => {
     const session = sessionSource(root, "managed-session", {
@@ -1158,8 +1158,6 @@ test("session-work checks within the credential TTL reuse the actor's token and 
   });
 });
 
-// The stand-in notice tells the person to enter their Git name in Account; the
-// next Save must use it, not an answer remembered from before they did.
 // A gateway whose identity read answers what `answers.next` says: the person's
 // name, Git's "not set" (exit 1) or a failure such as a busy host's timeout.
 const IDENTITY_ANSWERS = Object.freeze({
