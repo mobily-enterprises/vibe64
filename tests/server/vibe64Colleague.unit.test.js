@@ -97,7 +97,7 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
   const context = { channel: "api", surface: "app", requestMeta: { request: { vibe64User: user } } };
   registerVibe64ActionContext(actions, {
     projectContext: { projectsRoot: root, async readWorkspaceProject({ slug }) { return { project: { path: path.join(root, slug) } }; } },
-    // A request whose login ended (signed out, signed in again, disabled) resolves no user.
+    // A request whose login the host has ended resolves no user.
     resolveUser: async ({ request }) => observations.allow && !request?.loginEnded ? request?.vibe64User : null,
     async authorizeProject({ slug, user, context }) {
       observations.projectChecks.push(slug);
