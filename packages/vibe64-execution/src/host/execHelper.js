@@ -191,14 +191,7 @@ async function main() {
     runReleaseService(process.argv[3] || "", process.argv[4] || "");
     return;
   }
-  if (process.argv[2] === "upgrade-release-units") {
-    if (process.argv.length !== 3) {
-      throw new Error("Usage: vibe64-exec-helper upgrade-release-units");
-    }
-    upgradeReleaseServiceUnits();
-    return;
-  }
-  // Root-only, like upgrade-release-units: the daemon's sudo rule names only
+  // Root-only: the daemon's sudo rule names only
   // `execute`, so it can never register a person itself.
   if (process.argv[2] === "upgrade-person-registry") {
     if (process.argv.length !== 4) {
@@ -469,7 +462,7 @@ function handleManagedExecutionOperation(payload = {}) {
     "--service-type=exec",
     `--slice=${executionSlice}`,
     `--property=Description=Vibe64 ${kind} execution`,
-    ...managedExecutionAccountLines(targetUser, { receiptRoot }).map((line) => `--property=${line}`),
+    ...accountUnitLines(targetUser, { receiptRoot }).map((line) => `--property=${line}`),
     `--property=WorkingDirectory=${cwd}`,
     "--property=KillMode=control-group",
     "--property=ExitType=cgroup",
@@ -1182,7 +1175,7 @@ function managedExecutionRuntimeBase(owner = {}) {
 // A person's or the daemon's execution runs as a member of the shared group;
 // an application's only as itself, inside its sandbox, where its area and its
 // receipt are all it may write.
-function managedExecutionAccountLines(targetUser = {}, { receiptRoot = "" } = {}) {
+function accountUnitLines(targetUser = {}, { receiptRoot = "" } = {}) {
   if (!targetUser.application) {
     return [
       `User=${targetUser.username}`,
@@ -2612,6 +2605,33 @@ function applicationReleaseEnvironmentFile(candidate = "", identity = {}, { cwd 
   return file;
 }
 
+// A release service's files: its workspace in the application's area, and the
+// daemon's environment file and start script for that same release in its
+// handover directory, which the application's group may read but not change.
+function applicationReleaseServiceFiles(payload = {}, identity = {}, { daemonUid = -1, gid = -1 } = {}) {
+  const workingDirectory = resolveApplicationCwd(payload.workingDirectory, identity);
+  const environmentFile = applicationReleaseEnvironmentFile(payload.environmentFile, identity,
+    { cwd: workingDirectory, daemonUid, gid });
+  const releaseId = path.basename(path.dirname(environmentFile));
+  const startScript = String(payload.startScript || "");
+  const stats = lstatSync(startScript);
+  if (workingDirectory !== payload.workingDirectory ||
+      workingDirectory !== path.join(identity.appRoot, "releases", releaseId, "workspace") ||
+      startScript !== path.join(path.dirname(environmentFile), "start.sh") || !stats.isFile() ||
+      stats.uid !== daemonUid || stats.gid !== gid || (stats.mode & 0o022) !== 0 || (stats.mode & 0o010) === 0) {
+    throw new Error("A release service must run its own release's workspace and start script.");
+  }
+  return { environmentFile, startScript, workingDirectory };
+}
+
+function releaseServicePort(value) {
+  const port = Number(value);
+  if (!Number.isSafeInteger(port) || port < 1024 || port > 65535) {
+    throw new Error("Vibe64 exec helper rejected a release service port.");
+  }
+  return port;
+}
+
 // What an application's commands and release service run inside: its own area
 // is all they may write, they never gain privileges, and they see no other
 // user's processes, homes or temporary files, nor the kernel's settings.
@@ -2651,20 +2671,20 @@ function handleDeploymentServiceOperation(payload = {}) {
   if (action !== "install-start") {
     throw new Error("Vibe64 exec helper rejected an unknown deployment service action.");
   }
-  const workingDirectory = assertSafeDeploymentServicePath(payload.workingDirectory, owner, "workingDirectory");
-  const environmentFile = assertSafeDeploymentServicePath(payload.environmentFile, owner, "environmentFile");
-  const startScript = assertSafeDeploymentServicePath(payload.startScript, owner, "startScript");
+  // A release service runs as its project's own application account.
+  const user = registeredApplicationUser(owner, payload.applicationAccount);
+  const service = applicationReleaseServiceFiles(payload, user.application, { daemonUid: owner.uid, gid: user.gid });
   const requiredUnits = [...new Set((Array.isArray(payload.requiredUnits) ? payload.requiredUnits : [])
     .map((requiredUnit) => assertValidManagedServiceUnitName(requiredUnit, owner)))];
   const unitPath = systemdUnitPath(unitName);
   const unit = deploymentServiceUnit({
-    environmentFile,
+    ...service,
     helperPath: path.resolve(process.argv[1]),
+    loopbackPort: releaseServicePort(payload.loopbackPort),
     owner,
     requiredUnits,
-    startScript,
     unitName,
-    workingDirectory
+    user
   });
   installSystemdUnit({
     activation: "restart",
@@ -3009,47 +3029,6 @@ function runReleaseService(environmentFile = "", startScript = "") {
   process.execve(startScript, [startScript], { ...process.env, ...readEnvironmentFile(environmentFile) });
 }
 
-// Host installation runs this as root right after installing the helper, so a
-// unit names run-release-service only once the installed helper has it. A
-// release unit written before run-release-service had systemd read its
-// environment file as root; it becomes the current form. Rewriting and
-// reloading never restarts a running service: its next start uses the new form.
-function upgradeReleaseServiceUnits({
-  helperPath = path.resolve(process.argv[1]),
-  reload = () => runRootCommand("systemctl", ["daemon-reload"]),
-  unitDirectory = "/etc/systemd/system"
-} = {}) {
-  let rewritten = false;
-  for (const name of readdirSync(unitDirectory)) {
-    const unitPath = path.join(unitDirectory, name);
-    if (!name.startsWith("vibe64-release-") || !name.endsWith(".service") || !lstatSync(unitPath).isFile()) {
-      continue;
-    }
-    const lines = readFileSync(unitPath, "utf8").split("\n");
-    const environmentLines = lines.filter((line) => line.startsWith("EnvironmentFile="));
-    const startLines = lines.filter((line) => line.startsWith("ExecStart="));
-    if (environmentLines.length !== 1 || startLines.length !== 1) {
-      continue;
-    }
-    // Both values are already escaped exactly as the current form escapes them.
-    const environmentFile = environmentLines[0].slice("EnvironmentFile=".length);
-    const startScript = startLines[0].slice("ExecStart=".length);
-    const unit = lines
-      .filter((line) => line !== environmentLines[0])
-      .map((line) => (line === startLines[0]
-        ? `ExecStart=${systemdUnitSafeValue(helperPath)} run-release-service "${environmentFile}" "${startScript}"`
-        : line))
-      .join("\n");
-    const temporaryUnitPath = `${unitPath}.tmp-${process.pid}`;
-    writeFileSync(temporaryUnitPath, unit, { mode: 0o644 });
-    renameSync(temporaryUnitPath, unitPath);
-    rewritten = true;
-  }
-  if (rewritten) {
-    reload();
-  }
-}
-
 function readEnvironmentFile(file = "") {
   return parseEnvironmentFile(readFileSync(file, "utf8"));
 }
@@ -3391,14 +3370,6 @@ function runRootCommandAllowFailure(command = "", args = []) {
   });
 }
 
-function assertSafeDeploymentServicePath(candidatePath = "", owner = {}, label = "path") {
-  const resolved = resolveAllowedDeploymentServicePath(candidatePath, owner);
-  if (!existsSync(resolved)) {
-    throw new Error(`Vibe64 deployment service ${label} does not exist.`);
-  }
-  return resolved;
-}
-
 function assertSafeManagedServicePath(candidatePath = "", owner = {}, label = "path") {
   const resolved = resolveAllowedManagedServicePath(candidatePath, owner);
   if (!existsSync(resolved)) {
@@ -3426,27 +3397,6 @@ function resolveAllowedManagedServicePath(candidatePath = "", owner = {}) {
     return resolved;
   }
   throw new Error("Vibe64 exec helper rejected a managed service path outside the workspace service root.");
-}
-
-function resolveAllowedDeploymentServicePath(candidatePath = "", owner = {}) {
-  const normalized = String(candidatePath || "").trim();
-  if (!normalized) {
-    throw new Error("Vibe64 exec helper rejected an empty deployment service path.");
-  }
-  const resolved = canonicalPath(normalized);
-  const releaseStateRoot = canonicalPath(path.join(String(owner.home || "").trim(), ".local", "state", "vibe64", "projects"));
-  if (pathIsDeploymentReleasePath(releaseStateRoot, resolved)) {
-    return resolved;
-  }
-  throw new Error("Vibe64 exec helper rejected a deployment service path outside managed roots.");
-}
-
-function pathIsDeploymentReleasePath(releaseStateRoot = "", candidatePath = "") {
-  const parts = relativePathParts(releaseStateRoot, candidatePath);
-  return parts.length >= 5 &&
-    parts[1] === "deployments" &&
-    parts[2] === "releases" &&
-    (parts[4] === "artifact" || parts[4] === "service");
 }
 
 function relativePathParts(parentPath = "", childPath = "") {
@@ -3544,10 +3494,12 @@ function serviceResourceUnitLines(owner = {}) {
 function deploymentServiceUnit({
   environmentFile = "",
   helperPath = "",
+  loopbackPort = 0,
   owner = {},
   requiredUnits = [],
   startScript = "",
   unitName = "",
+  user = {},
   workingDirectory = ""
 } = {}) {
   const dependencies = Array.isArray(requiredUnits) ? requiredUnits : [];
@@ -3562,14 +3514,19 @@ function deploymentServiceUnit({
     "",
     "[Service]",
     "Type=simple",
-    ...serviceAccountUnitLines(owner),
+    ...accountUnitLines(user),
     ...serviceResourceUnitLines(owner),
+    // It may listen on its own loopback port and nowhere else, so it can never
+    // take over another service's port while that service is down.
+    `SocketBindAllow=tcp:${releaseServicePort(loopbackPort)}`,
+    "SocketBindDeny=any",
     `WorkingDirectory=${systemdUnitSafeValue(workingDirectory)}`,
     `Environment=PATH=${systemdUnitSafeValue(DEFAULT_PATH)}`,
-    `Environment=TMPDIR=${systemdUnitSafeValue(workspaceTempRoot(owner.username))}`,
+    "Environment=TMPDIR=/tmp",
     // The service's own user loads its environment at every start; see
-    // runReleaseService.
-    `ExecStart=${systemdUnitSafeValue(helperPath)} run-release-service "${systemdUnitSafeValue(environmentFile)}" "${systemdUnitSafeValue(startScript)}"`,
+    // runReleaseService. setpriv holds even where a drop-in switches the
+    // unit's NoNewPrivileges= off.
+    `ExecStart=/usr/bin/setpriv --no-new-privs -- ${systemdUnitSafeValue(helperPath)} run-release-service "${systemdUnitSafeValue(environmentFile)}" "${systemdUnitSafeValue(startScript)}"`,
     "Restart=always",
     "RestartSec=3",
     "KillSignal=SIGTERM",
@@ -3828,19 +3785,19 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
   return env;
 }
 
-export { DAEMON_USERNAME_PREFIX, applicationIdentity, applicationReleaseEnvironmentFile, applicationSandboxLines,
-  ensureApplicationAccount, managedExecutionAccountLines, readApplicationRegistration, registeredApplicationUser,
+export { DAEMON_USERNAME_PREFIX, accountUnitLines, applicationIdentity, applicationReleaseEnvironmentFile,
+  applicationReleaseServiceFiles, applicationSandboxLines, ensureApplicationAccount, readApplicationRegistration,
+  registeredApplicationUser,
   resolveApplicationCwd, retireApplicationAccount,
   assertActablePerson, assertEnabledForVibe64, configureManagedExecutionWorkSlice, consumeManagedExecutionRequestPayload,
   ensureWorkspaceRuntimeBase,
   enablePerson, loginUidRange, personAccountProblem, personSudoCommands, readPersonRegistration, registerPerson, upgradePersonRegistry, deploymentServiceUnit, ensureManagedServiceProcessOwnership,
-  parseEnvironmentFile, upgradeReleaseServiceUnits,
+  parseEnvironmentFile,
   managedWorkflowCounters, openManagedExecutionReceipts, managedWorkflowIdentity, managedExecutionOomBoundary,
   managedExecutionSliceCgroup, managedExecutionTargetUser,
   managedExecutionState, managedExecutionStopTimeoutMs, managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal,
   releaseEndedManagedExecutions, stopManagedExecution, stopManagedServiceUnit,
   assertExpectedId, canonicalPath, helperChildEnv, resolveAllowedCwd,
-  resolveAllowedDeploymentServicePath,
   resolveAllowedUserHomePath, runUserCommand };
 
 // Last, so that every constant above exists before main() runs.

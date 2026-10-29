@@ -290,12 +290,20 @@ one on root's behalf. A release service's unit runs the helper as the service's
 own user, which loads the file at every start, restarts included, and then
 becomes the service's start script, so no extra process stays running. A
 finite execution given a release environment has its runner load the file as
-the application. The file keeps systemd's `EnvironmentFile=` syntax. Host installation
-runs the helper's root-only `upgrade-release-units` right after installing it,
-so a unit names `run-release-service` only once the installed helper has it. It
-rewrites any release unit that still names an `EnvironmentFile=` to this form
-and reloads systemd once. A running service is not restarted; its next start
-uses the new form. Units that are links, or not release units, are left alone.
+the application. The file keeps systemd's `EnvironmentFile=` syntax.
+
+`deployment-service install-start` installs a release service only for an
+application account root registered for the calling daemon's workspace. Its
+workspace must be `app/releases/<release>/workspace` in that application's
+area, and its environment file and start script the daemon's own
+`handover/<release>/` files for that same release, which the application's
+group may read (and run) but not change. The unit runs as the account and its
+own group with umask `0077`, the helper under `setpriv --no-new-privs`, in the
+same sandbox as the application's executions with its area as the only
+writable place, a private `/tmp`, and one listening port: `SocketBindAllow=`
+names its loopback port (1024–65535) and `SocketBindDeny=any` refuses every
+other, so it can never take over another service's port while that service is
+down. It still starts at boot and requires its managed databases.
 
 `startVibe64Workflow()`, `setVibe64WorkflowPhase()` and
 `finishVibe64Workflow()` delegate trusted server lifecycle requests to the same

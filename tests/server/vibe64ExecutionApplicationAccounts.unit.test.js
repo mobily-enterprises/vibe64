@@ -8,8 +8,8 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import {
-  applicationIdentity, applicationReleaseEnvironmentFile, assertActablePerson, ensureApplicationAccount, helperChildEnv,
-  managedExecutionAccountLines, openManagedExecutionReceipts, readApplicationRegistration, registeredApplicationUser,
+  accountUnitLines, applicationIdentity, applicationReleaseEnvironmentFile, applicationReleaseServiceFiles,
+  assertActablePerson, deploymentServiceUnit, ensureApplicationAccount, helperChildEnv, openManagedExecutionReceipts, readApplicationRegistration, registeredApplicationUser,
   registerPerson, resolveApplicationCwd, retireApplicationAccount
 } from "../../packages/vibe64-execution/src/host/execHelper.js";
 
@@ -318,7 +318,7 @@ test("an application's execution runs as itself in its sandbox, with its own tem
   const account = host.ensure("shop");
   const user = registeredApplicationUser(host.owner, account.username, host.options);
   const receiptRoot = "/receipts/test/0b6c0a37-0f4f-4b61-9d5c-3f3f8a1d2e4f";
-  const lines = managedExecutionAccountLines(user, { receiptRoot });
+  const lines = accountUnitLines(user, { receiptRoot });
   assert.deepEqual(lines.slice(0, 3), [`User=${account.username}`, `Group=${account.username}`, "UMask=0077"]);
   assert.equal(lines.some((line) => /^(SupplementaryGroups=|Group=vibe64$)/u.test(line)), false);
   for (const line of ["NoNewPrivileges=yes", "PrivateTmp=yes", "ProtectSystem=strict", "ProtectHome=yes",
@@ -326,7 +326,7 @@ test("an application's execution runs as itself in its sandbox, with its own tem
     `ReadWritePaths=${account.appRoot} ${account.databaseRoot} ${receiptRoot}`]) {
     assert.ok(lines.includes(line), line);
   }
-  assert.deepEqual(managedExecutionAccountLines({ username: "alice" }),
+  assert.deepEqual(accountUnitLines({ username: "alice" }),
     ["User=alice", "Group=vibe64", "SupplementaryGroups=nix-users", "UMask=0007"]);
 
   const env = helperChildEnv({ HOME: "/elsewhere", TMPDIR: "/elsewhere" }, user, "v64d_test", "vibe64-command");
@@ -364,7 +364,7 @@ test("an application's execution is finite, and its receipt sits where only root
   assert.match(operation, /if \(application && mode !== "capture"\) \{\n {4}throw new Error\("An application account runs only finite commands\."\);/u);
   assert.match(operation, /if \(!application\) \{\n {6}throw new Error\("Release environment requires an application's own execution\."\);/u);
   assert.match(operation, /\? openApplicationExecutionReceipts\(owner, \{ create: true \}\)/u);
-  assert.match(operation, /\.\.\.managedExecutionAccountLines\(targetUser, \{ receiptRoot \}\)\.map/u);
+  assert.match(operation, /\.\.\.accountUnitLines\(targetUser, \{ receiptRoot \}\)\.map/u);
   // Inspecting, stopping and releasing find an application's receipt too.
   assert.equal(source.match(/openAllExecutionReceipts\(owner\)/gu).length, 3);
 
@@ -374,4 +374,82 @@ test("an application's execution is finite, and its receipt sits where only root
   const directory = path.join(root, "test");
   openManagedExecutionReceipts(directory, { create: true, gid: GID, mode: 0o711, uid: UID }).close();
   assert.equal((await stat(directory)).mode & 0o7777, 0o711);
+});
+
+async function releaseFiles(host, account, releaseId) {
+  const handover = path.join(account.handoverRoot, releaseId);
+  const workspace = path.join(account.appRoot, "releases", releaseId, "workspace");
+  await mkdir(handover, { recursive: true });
+  await mkdir(workspace, { recursive: true });
+  await writeFile(path.join(handover, "environment"), "PORT=4100\n", { mode: 0o640 });
+  await chmod(path.join(handover, "environment"), 0o640);
+  await writeFile(path.join(handover, "start.sh"), "#!/bin/sh\nexec node server.js\n", { mode: 0o750 });
+  await chmod(path.join(handover, "start.sh"), 0o750);
+  return {
+    environmentFile: path.join(handover, "environment"),
+    startScript: path.join(handover, "start.sh"),
+    workingDirectory: workspace
+  };
+}
+
+test("a release service runs its own release's workspace and the daemon's files for that release", async (t) => {
+  const host = await applicationHost(t);
+  const account = host.ensure("shop");
+  const identity = applicationIdentity(host.owner, "shop", host.options);
+  const r1 = await releaseFiles(host, account, "r1");
+  const r2 = await releaseFiles(host, account, "r2");
+  const check = (payload, ids = {}) => applicationReleaseServiceFiles(payload, identity, { daemonUid: UID, gid: GID, ...ids });
+  assert.deepEqual(check(r1), r1);
+
+  const refused = /must (run its own release's workspace and start script|belong to the application's selected release)/u;
+  assert.throws(() => check({ ...r1, workingDirectory: r2.workingDirectory }), refused, "another release's workspace");
+  assert.throws(() => check({ ...r1, startScript: r2.startScript }), refused, "another release's start script");
+  await mkdir(path.join(account.appRoot, "sources", "r1"), { recursive: true });
+  assert.throws(() => check({ ...r1, workingDirectory: path.join(account.appRoot, "sources", "r1") }), refused, "a build");
+  assert.throws(() => check(r1, { daemonUid: UID + 1 }), refused, "files the daemon does not own");
+  assert.throws(() => check(r1, { gid: GID + 1 }), refused, "files of another group");
+  for (const mode of [0o770, 0o752, 0o740]) {
+    await chmod(r1.startScript, mode);
+    assert.throws(() => check(r1), refused, mode.toString(8));
+  }
+  await chmod(r1.startScript, 0o750);
+  await symlink(r1.workingDirectory, path.join(account.appRoot, "current"));
+  assert.throws(() => check({ ...r1, workingDirectory: path.join(account.appRoot, "current") }), refused, "a link");
+  assert.throws(() => check({ ...r1, workingDirectory: path.join(account.appRoot, "releases", "r3", "workspace") }),
+    { code: "ENOENT" });
+});
+
+test("a release service unit runs as its application in its sandbox, listening only on its own port", () => {
+  const user = { application: { appRoot: "/area/app", databaseRoot: "/area/database" }, username: "v64a_0123456789ab" };
+  const unit = (loopbackPort) => deploymentServiceUnit({
+    environmentFile: "/area/handover/r1/environment", helperPath: "/helper/vibe64-exec-helper", loopbackPort,
+    owner: { username: "v64d_test" }, requiredUnits: ["vibe64-managed-test-mariadb.service"],
+    startScript: "/area/handover/r1/start.sh", unitName: "vibe64-release-test-shop-1.service", user,
+    workingDirectory: "/area/app/releases/r1/workspace"
+  });
+  const lines = unit(4100).split("\n");
+  for (const line of [
+    "User=v64a_0123456789ab", "Group=v64a_0123456789ab", "UMask=0077", "Slice=vibe64-test-work.slice",
+    "NoNewPrivileges=yes", "PrivateTmp=yes", "ProtectSystem=strict", "ReadWritePaths=/area/app /area/database",
+    "ProtectHome=yes", "ProtectProc=invisible", "RestrictSUIDSGID=yes", "RestrictNamespaces=yes", "CapabilityBoundingSet=",
+    "SocketBindAllow=tcp:4100", "SocketBindDeny=any", "Environment=TMPDIR=/tmp",
+    "WorkingDirectory=/area/app/releases/r1/workspace", "Requires=vibe64-managed-test-mariadb.service",
+    "WantedBy=multi-user.target",
+    'ExecStart=/usr/bin/setpriv --no-new-privs -- /helper/vibe64-exec-helper run-release-service "/area/handover/r1/environment" "/area/handover/r1/start.sh"'
+  ]) {
+    assert.ok(lines.includes(line), line);
+  }
+  assert.equal(lines.some((line) => /^(SupplementaryGroups=|Group=vibe64$|EnvironmentFile=)/u.test(line)), false);
+  for (const port of [0, 80, 1023, 65536, "4100; rm", undefined]) {
+    assert.throws(() => unit(port), /release service port/u, String(port));
+  }
+});
+
+test("only an application's registered account installs a release service", async () => {
+  const source = await readFile(EXEC_HELPER, "utf8");
+  const operation = source.slice(source.indexOf("function handleDeploymentServiceOperation("),
+    source.indexOf("function inspectDeploymentServiceUnit("));
+  assert.match(operation, /const user = registeredApplicationUser\(owner, payload\.applicationAccount\);/u);
+  assert.match(operation, /applicationReleaseServiceFiles\(payload, user\.application, \{ daemonUid: owner\.uid, gid: user\.gid \}\)/u);
+  assert.doesNotMatch(source, /upgrade-release-units|resolveAllowedDeploymentServicePath/u);
 });

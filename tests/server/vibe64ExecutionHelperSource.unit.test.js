@@ -8,8 +8,8 @@ import { test } from "node:test";
 import { DAEMON_USERNAME_PREFIX, assertEnabledForVibe64, consumeManagedExecutionRequestPayload, deploymentServiceUnit,
   ensureManagedServiceProcessOwnership, helperChildEnv, parseEnvironmentFile, managedExecutionState, managedExecutionOomBoundary, managedExecutionStopTimeoutMs,
   managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal, openManagedExecutionReceipts,
-  releaseEndedManagedExecutions, stopManagedExecution, stopManagedServiceUnit,
-  upgradeReleaseServiceUnits } from "../../packages/vibe64-execution/src/host/execHelper.js";
+  releaseEndedManagedExecutions, stopManagedExecution, stopManagedServiceUnit
+} from "../../packages/vibe64-execution/src/host/execHelper.js";
 import {
   RUNTIME_PACKS,
   VIBE64_INTERACTIVE_RUNTIME_PACKS
@@ -361,11 +361,13 @@ test("execution helper gives release services the shared runtime PATH", async ()
   assert.match(source, /runRootCommandAllowFailure\("systemctl", \[\s*"reset-failed",\s*unitName/u);
 });
 
-test("execution helper gives daemon-owned services the shared primary group", async () => {
+test("execution helper gives daemon-owned services the shared primary group, and release services their application's", async () => {
   const source = await helperSource();
 
   assert.match(source, /function serviceAccountUnitLines\(owner = \{\}\)/u);
-  assert.equal(source.match(/\.\.\.serviceAccountUnitLines\(owner\)/gu)?.length, 2);
+  assert.equal(source.match(/\.\.\.serviceAccountUnitLines\(owner\)/gu)?.length, 1, "managed services");
+  const release = source.slice(source.indexOf("function deploymentServiceUnit("), source.indexOf("function managedServiceUnit("));
+  assert.match(release, /\.\.\.accountUnitLines\(user\),/u);
   assert.match(source, /`Group=\$\{VIBE64_GROUP\}`/u);
   assert.match(source, /"SupplementaryGroups=nix-users"/u);
   assert.match(source, /"UMask=0007"/u);
@@ -523,17 +525,6 @@ test("execution helper limits assistant services outside projects to their exact
   assert.match(source, /parts\[1\] === "workspace"/u);
 });
 
-test("execution helper limits release service paths to deployment release state", async () => {
-  const source = await helperSource();
-
-  assert.match(source, /assertSafeDeploymentServicePath\(payload\.workingDirectory, owner, "workingDirectory"\)/u);
-  assert.match(source, /function pathIsDeploymentReleasePath/u);
-  assert.match(source, /parts\[1\] === "deployments"/u);
-  assert.match(source, /parts\[2\] === "releases"/u);
-  assert.match(source, /parts\[4\] === "artifact" \|\| parts\[4\] === "service"/u);
-  assert.doesNotMatch(source, /resolveAllowedProjectPath\(candidatePath, ownerUsername\)/u);
-});
-
 test("execution helper uses runuser instead of direct initgroups setuid flow", async () => {
   const source = await helperSource();
 
@@ -561,7 +552,8 @@ test("execution helper centrally assigns the shared workspace TMPDIR, and an app
   assert.match(source, /env\.TMPDIR = targetUser\.application \? "\/tmp" : workspaceTempRoot\(ownerUsername\)/u);
   assert.equal(
     source.match(/Environment=TMPDIR=\$\{systemdUnitSafeValue\(workspaceTempRoot\(owner\.username\)\)\}/gu)?.length,
-    2
+    1,
+    "managed services; a release service has its own private /tmp"
   );
   assert.doesNotMatch(source, /actorTemp|FLOCK_PATH|mkdtemp/u);
 });
@@ -889,12 +881,14 @@ test("release environment files are parsed with systemd's EnvironmentFile= rules
 
 test("a release service unit loads its environment as its user, then becomes its start script", async (t) => {
   const unit = deploymentServiceUnit({
-    environmentFile: "/release/service/environment", helperPath: "/helper/vibe64-exec-helper",
-    owner: { username: daemonUser("test") }, requiredUnits: [], startScript: "/release/service/start.sh",
-    unitName: "vibe64-release-test.service", workingDirectory: "/release/workspace"
+    environmentFile: "/handover/r1/environment", helperPath: "/helper/vibe64-exec-helper", loopbackPort: 4100,
+    owner: { username: daemonUser("test") }, requiredUnits: [], startScript: "/handover/r1/start.sh",
+    unitName: "vibe64-release-test.service",
+    user: { application: { appRoot: "/area/app", databaseRoot: "/area/database" }, username: "v64a_0123456789ab" },
+    workingDirectory: "/area/app/releases/r1/workspace"
   });
   assert.doesNotMatch(unit, /^EnvironmentFile=/mu, "systemd does not read the environment file as root");
-  assert.match(unit, /^ExecStart=\/helper\/vibe64-exec-helper run-release-service "\/release\/service\/environment" "\/release\/service\/start\.sh"$/mu);
+  assert.match(unit, /^ExecStart=\/usr\/bin\/setpriv --no-new-privs -- \/helper\/vibe64-exec-helper run-release-service "\/handover\/r1\/environment" "\/handover\/r1\/start\.sh"$/mu);
 
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-release-service-"));
   t.after(() => rm(root, { force: true, recursive: true }));
@@ -912,40 +906,3 @@ test("a release service unit loads its environment as its user, then becomes its
   assert.equal(output, `${child.pid} from-file 4100 unit-environment`, "the helper's process became the start script, with the file's values over the unit's");
 });
 
-test("host installation rewrites release units written by the old helper, then reloads systemd once", async (t) => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "v64-release-units-"));
-  t.after(() => rm(directory, { force: true, recursive: true }));
-  const helperPath = "/helper/vibe64-exec-helper";
-  const current = deploymentServiceUnit({
-    environmentFile: "/release/service/environment", helperPath,
-    owner: { username: daemonUser("test") }, requiredUnits: ["vibe64-db-test.service"], startScript: "/release/service/start.sh",
-    unitName: "vibe64-release-test.service", workingDirectory: "/release/workspace"
-  });
-  // The old helper wrote the same unit, with systemd reading the environment
-  // file and ExecStart= naming the start script itself.
-  const old = current
-    .replace(/^(WorkingDirectory=.*)$/mu, "$1\nEnvironmentFile=/release/service/environment")
-    .replace(/^ExecStart=.*$/mu, "ExecStart=/release/service/start.sh");
-  const unrelated = "[Service]\nEnvironmentFile=/other/environment\nExecStart=/other/start.sh\n";
-  await writeFile(path.join(directory, "vibe64-release-test.service"), old, { mode: 0o644 });
-  await writeFile(path.join(directory, "vibe64-release-current.service"), current, { mode: 0o644 });
-  await writeFile(path.join(directory, "vibe64-managed-other.service"), unrelated, { mode: 0o644 });
-  await writeFile(path.join(directory, "elsewhere"), old, { mode: 0o644 });
-  await symlink(path.join(directory, "elsewhere"), path.join(directory, "vibe64-release-link.service"));
-  let reloads = 0;
-  const upgrade = () => upgradeReleaseServiceUnits({ helperPath, reload: () => { reloads += 1; }, unitDirectory: directory });
-
-  upgrade();
-  assert.equal(await readFile(path.join(directory, "vibe64-release-test.service"), "utf8"), current,
-    "the old unit is now exactly what the current helper writes");
-  assert.equal((await stat(path.join(directory, "vibe64-release-test.service"))).mode & 0o777, 0o644);
-  assert.equal(await readFile(path.join(directory, "vibe64-release-current.service"), "utf8"), current);
-  assert.equal(await readFile(path.join(directory, "vibe64-managed-other.service"), "utf8"), unrelated);
-  assert.equal(await readFile(path.join(directory, "elsewhere"), "utf8"), old, "a link is never followed");
-  assert.deepEqual((await readdir(directory)).sort(), ["elsewhere", "vibe64-managed-other.service",
-    "vibe64-release-current.service", "vibe64-release-link.service", "vibe64-release-test.service"]);
-  assert.equal(reloads, 1);
-
-  upgrade();
-  assert.equal(reloads, 1, "nothing left to rewrite, so systemd is not reloaded again");
-});

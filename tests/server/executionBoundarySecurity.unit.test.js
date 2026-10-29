@@ -7,7 +7,7 @@ import path from "node:path";
 import test from "node:test";
 import {
   assertExpectedId, canonicalPath, helperChildEnv, resolveAllowedCwd,
-  resolveAllowedDeploymentServicePath, resolveAllowedUserHomePath, runUserCommand
+  resolveAllowedUserHomePath, runUserCommand
 } from "../../packages/vibe64-execution/src/host/execHelper.js";
 import { runVibe64Command } from "../../packages/vibe64-execution/src/server/runVibe64Command.js";
 
@@ -85,7 +85,7 @@ test("gateway cwd permits in-root symlinks and a selected symlink root but rejec
   assert.equal(refused.code, "vibe64_command_cwd_outside_allowed_roots");
 });
 
-test("host path checks reject home, state and release symlinks outside their allowed roots", async (t) => {
+test("host path checks reject home and state symlinks outside their allowed roots", async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-host-path-security-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const home = path.join(root, "home");
@@ -105,8 +105,6 @@ test("host path checks reject home, state and release symlinks outside their all
   assert.equal(resolveAllowedCwd(release, owner.username, { operation: "vibe64-command", targetUser: owner }), release);
   assert.throws(() => resolveAllowedCwd(path.join(state, "escape"), owner.username,
     { operation: "vibe64-command", targetUser: owner }));
-  assert.equal(resolveAllowedDeploymentServicePath(path.join(release, "start"), owner), path.join(release, "start"));
-  assert.throws(() => resolveAllowedDeploymentServicePath(path.join(release, "escaped-start"), owner), /outside managed roots/u);
   assert.equal(canonicalPath(path.join(release, "new.pid"), { allowMissingLeaf: true }), path.join(release, "new.pid"));
   await symlink(path.join(outside, "missing"), path.join(release, "dangling.pid"));
   assert.throws(() => canonicalPath(path.join(release, "dangling.pid"), { allowMissingLeaf: true }), { code: "ENOENT" });
