@@ -214,10 +214,10 @@ test("finite captures keep systemd's routine unit lines out of the journal", asy
 test("a person's managed execution can never gain privileges above that person", async () => {
   const source = await helperSource();
   const args = source.slice(source.indexOf("const systemdArgs = ["), source.indexOf('const started = spawnSync("systemd-run"'));
-  assert.match(args, /\.\.\.\(targetUser\.username !== owner\.username \? \["\/usr\/bin\/setpriv", "--no-new-privs", "--"\] : \[\]\),\n    helperPath,\n    "run-managed",/u);
+  assert.match(args, /\.\.\.\(targetUser\.username !== owner\.username \? \["\/usr\/bin\/setpriv", "--no-new-privs", "--"\] : \[\]\),\n {4}helperPath,\n {4}"run-managed",/u);
   assert.equal(args.match(/no-new-privs/gu).length, 1);
   const target = source.slice(source.indexOf("function managedExecutionTargetUser("), source.indexOf("function managedExecutionId("));
-  assert.match(target, /if \(targetUser\.username !== owner\.username\) \{\n    assertActablePerson\(owner, targetUser\);/u,
+  assert.match(target, /if \(targetUser\.username !== owner\.username\) \{\n {4}assertActablePerson\(owner, targetUser\);/u,
     "every other target must be a registered person without administrator power");
 });
 
@@ -535,7 +535,7 @@ test("execution helper limits release service paths to deployment release state"
 test("execution helper uses runuser instead of direct initgroups setuid flow", async () => {
   const source = await helperSource();
 
-  assert.match(source, /spawnSync\("\/usr\/bin\/setpriv", \[\n    "--no-new-privs", "--", "\/usr\/sbin\/runuser",/u);
+  assert.match(source, /spawnSync\("\/usr\/bin\/setpriv", \[\n {4}"--no-new-privs", "--", "\/usr\/sbin\/runuser",/u);
   assert.doesNotMatch(source, /process\.initgroups/u);
   assert.doesNotMatch(source, /process\.setuid/u);
   assert.doesNotMatch(source, /process\.setgid/u);

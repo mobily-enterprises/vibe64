@@ -204,7 +204,7 @@ directory; the helper accepts no other file, and removes that one once read.
 
 The helper acts as another account only for a person of the calling daemon's
 workspace. Root keeps that workspace's people in its own registry, one
-root-owned file per person below `/etc/vibe64/people/<workspace>/`, which no
+root-owned file per person in a root-only folder for the workspace, which no
 daemon can write. Host setup registers an existing account with the root-only
 `register-person <workspace> <username>`, and the helper's own
 `create-system-user` registers the account it creates. `enable-system-user` only

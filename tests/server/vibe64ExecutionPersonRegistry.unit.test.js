@@ -14,7 +14,7 @@ const ACCOUNTS = {
   alice: { gid: 1001, home: "/home/alice", uid: 1001, username: "alice" },
   bob: { gid: 1002, home: "/home/bob", uid: 1002, username: "bob" },
   merc: { gid: 1000, home: "/home/merc", uid: 1000, username: "merc" },
-  sshd: { gid: 65534, home: "/run/sshd", uid: 104, username: "sshd" },
+  sshd: { gid: 65534, home: "/nonexistent", uid: 104, username: "sshd" },
   ubuntu: { gid: 1003, home: "/home/ubuntu", uid: 1003, username: "ubuntu" },
   v64d_test: { gid: 983, home: "", uid: 998, username: "v64d_test" }
 };
