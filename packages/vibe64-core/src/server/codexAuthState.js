@@ -1,5 +1,6 @@
 import { codexAuthOutputRequiresReconnect } from "@jskit-ai/assistant-core/server/codex-configuration";
 import { createHash, randomUUID } from "node:crypto";
+import { readFileSync, statSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { writeJsonFileAtomic } from "./atomicFile.js";
@@ -70,7 +71,10 @@ async function readCodexAuthStatus(systemRoot = "") {
 }
 
 async function readCodexLoginId(systemRoot = "") {
-  const text = await readCodexAuthMarkerText(codexAuthMarkerPath(systemRoot));
+  return codexLoginIdFromMarker(await readCodexAuthMarkerText(codexAuthMarkerPath(systemRoot)));
+}
+
+function codexLoginIdFromMarker(text = "") {
   let marker;
   try {
     marker = JSON.parse(text);
@@ -81,6 +85,32 @@ async function readCodexLoginId(systemRoot = "") {
     /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/u.test(marker.loginId)
     ? marker.loginId
     : "";
+}
+
+const codexLoginGenerations = new Map();
+
+// Each Codex sign-in starts a new login generation. A running app-server keeps
+// the credentials it started with, so the runtime identity includes it: new
+// work starts beside a previous account's runtime instead of replacing it.
+// Runtime identities are computed synchronously; one stat confirms the cached
+// marker, whose atomic rewrite on every sign-in replaces its inode.
+function currentCodexLoginGeneration(systemRoot = "") {
+  const markerPath = codexAuthMarkerPath(systemRoot);
+  let stats;
+  try {
+    stats = statSync(markerPath);
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw error;
+    codexLoginGenerations.delete(markerPath);
+    return "";
+  }
+  const signature = `${stats.ino}:${stats.size}:${stats.mtimeMs}`;
+  const cached = codexLoginGenerations.get(markerPath);
+  if (cached?.signature === signature) return cached.generation;
+  const loginId = codexLoginIdFromMarker(readFileSync(markerPath, "utf8"));
+  const generation = loginId ? hashCodexAuthState(`login\0${loginId}`) : "";
+  codexLoginGenerations.set(markerPath, { signature, generation });
+  return generation;
 }
 
 async function clearCodexAuthStatus(systemRoot = "") {
@@ -158,6 +188,7 @@ export {
   codexAuthMarkerPath,
   codexAuthStateSignature,
   codexAuthStatusPath,
+  currentCodexLoginGeneration,
   markCodexAuthReconnecting,
   markCodexReconnectRequired,
   requireCodexAuthSystemRoot,

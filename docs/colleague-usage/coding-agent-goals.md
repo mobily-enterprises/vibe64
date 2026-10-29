@@ -34,7 +34,10 @@ does not reactivate the completed goal.
 After you change or reconnect an AI account in **AI Accounts**, an unfinished
 goal keeps its model, role and conversation. Once the connection is ready, send
 your next message or choose **Goal** → **Resume goal** using the current account.
-A failed message that was never delivered can use **Retry**. You do not need to
+A Codex goal running when you switch Codex accounts needs neither: its current
+answer finishes on the previous account, then the goal continues on the new
+account by itself. If Codex is no longer connected, it stays paused until you
+sign in and resume it. A failed message that was never delivered can use **Retry**. You do not need to
 cancel the goal. Access to its selected model is still required; an account change
 during a pending delivery may require cancelling that request and sending it again.
 These steps apply on desktop and mobile. Account sign-in and credential entry

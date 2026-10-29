@@ -734,6 +734,7 @@ function createService({
     projectService,
     publishSessionChanged: publishAgentSessionChanged,
     publishConversation: event => mainConversations.publishNative(event),
+    continueGoalAfterAccountChange: (sessionId, input) => service.continueGoalAfterAccountChange(sessionId, input),
     runNativeDetachedConversation
   });
   const mainToolCatalog = actions ? createServiceToolCatalog(actions, {
@@ -4121,6 +4122,32 @@ function createService({
       return sessionAgent.invalidateRuntimes(input, {
         providerId: normalizeAgentProviderId(input.provider)
       });
+    },
+
+    // A Codex account change pauses a goal whose turn is still running on the
+    // previous account, so that runtime starts no further turn. Once it has
+    // stopped, the goal resumes on the current account as the person who set it.
+    async continueGoalAfterAccountChange(sessionId, { threadId = "" } = {}) {
+      const context = await assistantSessionOptions(sessionId);
+      const intent = readGoalIntent(context.session);
+      if (!intent?.active || !threadId || intent.native?.threadId !== threadId || closing ||
+          sessionIsClosing(context.session)) return { sessionId, skipped: true };
+      try {
+        const actor = await assistantRuntime.authorizeProjectMessage(intent.actor, projectRuntimeContext().projectSlug);
+        const observed = await service.readAgentGoal(sessionId, { vibe64User: actor }, { canonical: true });
+        if (observed.goal?.status !== "paused") return { sessionId, skipped: true };
+        const result = await service.updateAgentGoal(sessionId, { action: "resume", vibe64User: actor,
+          expectedSegmentId: observed.target.segmentId, expectedGoalId: observed.goal.id,
+          messageId: `goal-account-change-${randomUUID()}` }, { canonical: true });
+        if (result?.ok === false) throw Object.assign(new Error(result.error || "Goal continuation failed."), result);
+        return { sessionId, resumed: true };
+      } catch (error) {
+        logOperationalEvent(logger, "warn", { event: "vibe64.agent_goal.account_change_continue_failed",
+          component: "vibe64.agent_goal", projectSlug: projectRuntimeContext().projectSlug, sessionId,
+          actor: String(intent.actor?.username || ""), code: error.code, error: error.message },
+        "A goal paused by an account change could not resume; it stays paused.");
+        return { sessionId, ok: false, code: error.code, error: error.message };
+      }
     },
 
     // Run once per daemon after all host admission and execution facilities are

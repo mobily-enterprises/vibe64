@@ -4422,6 +4422,11 @@ cleanup, and invokes the ordinary canonical Resume owner. Unknown receipt or
 identity evidence blocks continuation. This does not replay ordinary messages,
 repair historical state, or enroll older goals. Development copies drop intent.
 Temporary-chat restart continuation remains separate unfinished work.
+A Codex account change pauses a running goal natively on the runtime that keeps
+its turn; once that runtime stopped, JSKIT calls the Terminals
+`continueGoalAfterAccountChange(sessionId, { threadId })`, which re-authorizes
+the intent's actor and sends the same canonical Resume only for active intent on
+that thread whose native goal is paused. A refusal is logged and leaves it paused.
 The shared native reader also preserves Claude's structured impossible-goal
 evaluation and explicit repeated-stop-hook termination as `blocked`. Main restart recovery retains the goal and its intent
 without sending Resume for that native state. The existing goal controls show

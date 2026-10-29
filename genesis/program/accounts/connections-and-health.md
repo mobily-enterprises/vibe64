@@ -689,11 +689,21 @@ Cancel login sit beside the overall sign-in status, and the terminal uses its
 existing surface-class seam for a distinct themed background. Active sign-in replaces disconnected warning chrome
 with a neutral status; the existing session polling, authorization URL, API-key
 choice and terminal recovery continue to own authentication.
-When Codex authentication changes, Vibe64 retires active and
+When Codex authentication changes, Vibe64 retires idle active and
 detached owned Codex runtimes before accepting the new account state. It reports
 success only after process exit is verified; a runtime that cannot be proven
 stopped leaves the account transition visibly unsuccessful rather than allowing
-an old credential-bearing process to survive silently.
+an old credential-bearing process to survive silently. The change never stops or
+waits for a running turn: JSKIT's owner pauses that runtime's active goals, keeps
+it only for the running turn and stops it through the same verified stop when the
+turn completes. Each sign-in's `loginId` is part of the Codex runtime directory
+and provider identity (`currentCodexLoginGeneration`, read from the marker below
+and cached by its file identity), so a session's next message starts a runtime on
+the current account beside the finishing one, and a session saved on the previous
+sign-in moves to the new directory. Once the previous runtime stopped, the
+terminals service's `continueGoalAfterAccountChange` resumes a goal the change
+paused, through the ordinary goal resume; without a Codex sign-in that resume is
+refused and the goal stays paused.
 The existing `<systemRoot>/auth/codex/status.json` marker owns a random local
 `loginId`, written atomically after native authentication succeeds. Each
 successful Vibe64 sign-in replaces it; status reads, token refreshes, runtime

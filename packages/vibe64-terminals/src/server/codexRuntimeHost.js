@@ -3,6 +3,7 @@ import path from "node:path";
 import { codexRuntimeContext } from "@local/studio-terminal-core/server/codexRuntimeContext";
 import { CURATED_CODEX_PROVIDERS, curatedCodexProvider, curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { codexProviderPaths } from "@local/vibe64-core/server/codexProviderConnections";
+import { currentCodexLoginGeneration } from "@local/vibe64-core/server/codexAuthState";
 import { codexAppServerRuntimeDir, codexAppServerRuntimeHost } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { VIBE64_ASSISTANT_ENGINE_IDS, vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import { stableHash } from "@local/vibe64-execution/server";
@@ -75,10 +76,13 @@ function createCodexRuntimeHost({
     const selectedHome = normalizeText(toolHomeSource) || resolvedCodexToolHomeSource();
     const curated = CURATED_CODEX_PROVIDERS.find(({ id }) => codexAppServerProviderOptions.systemRoot &&
       codexProviderPaths(codexAppServerProviderOptions.systemRoot, id).toolHomeSource === selectedHome);
+    // The OpenAI home's runtime belongs to one sign-in (its login generation).
     const connectionOptions = curated ? {
       ...codexProviderPaths(codexAppServerProviderOptions.systemRoot, curated.id),
       modelProviderId: curated.id,
       runtimeInstanceId: `provider:${curated.id}`
+    } : codexAppServerProviderOptions.systemRoot ? {
+      codexLoginGeneration: currentCodexLoginGeneration(codexAppServerProviderOptions.systemRoot)
     } : {};
     const runtimeContext = codexRuntimeContext({
       env,
@@ -113,7 +117,8 @@ function createCodexRuntimeHost({
       )),
       normalizeText(options.toolHomeSource),
       normalizeText(options.threadWorkdir || options.workdir),
-      normalizeText(options.executionMode)
+      normalizeText(options.executionMode),
+      normalizeText(options.codexLoginGeneration)
     ].join(CODEX_APP_SERVER_PROVIDER_KEY_DELIMITER);
   }
 
@@ -126,11 +131,13 @@ function createCodexRuntimeHost({
       envHash = "",
       toolHomeSource = "",
       workdir = "",
-      executionMode = ""
+      executionMode = "",
+      loginGeneration = ""
     ] = normalizeText(providerKey).split(CODEX_APP_SERVER_PROVIDER_KEY_DELIMITER);
     return {
       envHash: normalizeText(envHash),
       executionMode: normalizeText(executionMode),
+      loginGeneration: normalizeText(loginGeneration),
       runtimeInstanceId: normalizeText(runtimeInstanceId),
       runtimesHash: normalizeText(runtimesHash),
       sessionId: normalizeText(sessionId),

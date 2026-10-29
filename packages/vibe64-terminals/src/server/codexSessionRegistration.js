@@ -158,6 +158,7 @@ function createCodexSessionRegistration({
   logger = null,
   projectService,
   publishConversation = null,
+  continueGoalAfterAccountChange = null,
   runNativeDetachedConversation,
   publishSessionChanged = async () => null,
   runCommand = runVibe64Command
@@ -326,6 +327,7 @@ function createCodexSessionRegistration({
     onNotificationSignal: recordCodexAppServerProductSignal,
     captureContext: captureProjectRequestContext,
     runInContext: runWithCodexAppServerProjectContext,
+    continueGoalAfterAccountChange,
     activeReconcileMs: codexAppServerActiveReconcileMs,
     steerFailedCode: CODEX_AGENT_TURN_STEER_FAILED_CODE,
     interruptFailedCode: CODEX_AGENT_TURN_INTERRUPT_FAILED_CODE,

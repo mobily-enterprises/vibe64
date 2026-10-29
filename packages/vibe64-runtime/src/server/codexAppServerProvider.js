@@ -159,7 +159,8 @@ function codexAppServerRuntimeScope({
 
 function codexAppServerRuntimeIdentityScope(options = {}) {
   const scope = codexAppServerRuntimeScope(options);
-  if (!scope && !options.modelProviderId && !normalizeAgentText(process.env[VIBE64_RUNTIME_NAMESPACE_ENV])) {
+  const loginGeneration = normalizeAgentText(options.codexLoginGeneration);
+  if (!scope && !options.modelProviderId && !loginGeneration && !normalizeAgentText(process.env[VIBE64_RUNTIME_NAMESPACE_ENV])) {
     return "";
   }
   const namespace = runtimeNamespace();
@@ -170,6 +171,9 @@ function codexAppServerRuntimeIdentityScope(options = {}) {
     `scope:${scope}`,
     options.modelProviderId ? `provider:${options.modelProviderId}` : "",
     runtimeInstanceId ? `instance:${runtimeInstanceId}` : "",
+    // Each sign-in has its own runtime directory, so a previous account's
+    // runtime can finish its turn while new work starts on the current one.
+    loginGeneration ? `login:${loginGeneration}` : "",
     executionMode === CODEX_APP_SERVER_EXECUTION_MODES.HELPER
       ? `mode:${executionMode}`
       : ""

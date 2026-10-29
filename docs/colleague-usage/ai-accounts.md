@@ -193,6 +193,14 @@ current sign-in for each request, so work in progress continues on the newly
 connected account. After a sign-out, a running chat's next request ends at once
 with "Claude isn't connected. Sign in to Claude, then send your message again."
 Nothing hangs; sign in again and resend.
+Switching, signing in to or disconnecting Codex finishes at once and never stops
+an answer in progress. An answer Codex is already writing finishes on the account
+it started with; messages you send after it finishes, and new conversations, use
+the new account. A Codex goal that was running pauses on the previous account and
+continues on the new one by itself once that answer finishes. If Codex is no
+longer connected, the goal stays paused and a new message says **Codex (OpenAI)
+isn't connected**; sign in to Codex here, then send your message again or choose
+**Goal** → **Resume goal**.
 Sign-ins and key checks show a spinner and what is happening while they wait,
 as described in [AI onboarding](ai-onboarding.md#while-it-works).
 Main and temporary chats keep their history and resume with the newly connected account; they
