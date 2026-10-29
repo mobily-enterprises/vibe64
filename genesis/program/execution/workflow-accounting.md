@@ -348,8 +348,11 @@ no daemon replaces, stops or reads another workspace's release service.
 install-start also requires the name of the application's own project
 (`vibe64-release-<workspace>-<project>-<hash>.service`), refuses a unit file
 already installed for another account, and refuses a port that another release
-unit's `SocketBindAllow=` claims; root reads only unit files it wrote.
-`assertReleaseServiceClaim()` holds these checks.
+unit's `SocketBindAllow=` claims; root reads only unit files it wrote. A unit of
+the calling workspace that is not one (a link or mask, another owner's, one
+others may change, or an oversized one) is refused by name; another
+workspace's claims nothing and never stops this one. `assertReleaseServiceClaim()`
+holds these checks.
 
 `startVibe64Workflow()`, `setVibe64WorkflowPhase()` and
 `finishVibe64Workflow()` delegate trusted server lifecycle requests to the same

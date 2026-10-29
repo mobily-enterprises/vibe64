@@ -618,6 +618,31 @@ test("a release unit is its application's own, named for its project, on a port 
   assert.throws(() => claim(shop, shopUnit, 4101), { code: "EVIBE64UNSAFEFILE" });
 });
 
+test("another workspace's odd release unit never stops this one, and its own odd unit is refused by name", async (t) => {
+  const host = await applicationHost(t);
+  const account = host.ensure("shop");
+  const unitRoot = host.options.unitRoot;
+  const shopUnit = "vibe64-release-test-shop-333333333333.service";
+  const claim = (loopbackPort) => assertReleaseServiceClaim({ loopbackPort, owner: host.owner, unitName: shopUnit, unitRoot,
+    unitUid: UID, user: { application: { project: "shop" }, username: account.username } });
+  // Another workspace's units that are no unit root wrote: a mask, an
+  // oversized file and one others may change. None claims its port.
+  await symlink("/dev/null", path.join(unitRoot, "vibe64-release-other-cafe-111111111111.service"));
+  await writeFile(path.join(unitRoot, "vibe64-release-other-cafe-222222222222.service"), "x".repeat(65 * 1024), { mode: 0o644 });
+  await writeFile(path.join(unitRoot, "vibe64-release-other-cafe-333333333333.service"), "SocketBindAllow=tcp:4102\n");
+  await chmod(path.join(unitRoot, "vibe64-release-other-cafe-333333333333.service"), 0o666);
+  claim(4101);
+  claim(4102);
+
+  // One of this workspace's own is refused, by name, as is retiring past it.
+  await symlink("/dev/null", path.join(unitRoot, "vibe64-release-test-blog-444444444444.service"));
+  const refused = /Release unit vibe64-release-test-blog-444444444444\.service of workspace test is not a unit file root wrote/u;
+  assert.throws(() => claim(4101), refused);
+  assert.throws(() => host.retire("shop"), refused);
+  await rm(path.join(unitRoot, "vibe64-release-test-blog-444444444444.service"));
+  assert.equal(host.retire("shop").retired, true);
+});
+
 test("only an application's registered account installs a release service", async () => {
   const source = await readFile(EXEC_HELPER, "utf8");
   const operation = source.slice(source.indexOf("function handleDeploymentServiceOperation("),

@@ -2568,7 +2568,7 @@ function retireApplicationAccount(owner = {}, project = "", {
     if (problem) {
       throw new Error(`Vibe64 exec helper refused to retire application account ${identity.username}: ${problem}`);
     }
-    const installed = installedReleaseUnits({ unitRoot, unitUid })
+    const installed = installedReleaseUnits({ unitRoot, unitUid, workspace: identity.workspace })
       .find(({ lines }) => lines.includes(`User=${identity.username}`));
     if (installed) {
       throw new Error(`The application's release service ${installed.name} is still installed. Remove it before retiring the application.`);
@@ -2694,16 +2694,30 @@ function applicationReleaseServiceFiles(payload = {}, identity = {}, { daemonUid
   return { environmentFile, startScript, workingDirectory };
 }
 
-// Every installed release unit, read as root's own files: name and lines.
-function installedReleaseUnits({ unitRoot = SYSTEMD_UNIT_ROOT, unitUid = 0 } = {}) {
+// The installed release units, read as root's own files: name and lines. A
+// unit of the calling workspace that is no unit file root wrote (a link or
+// mask, another owner's, one others may change or an oversized one) is
+// refused by name; another workspace's is that workspace's to sort out, claims
+// nothing and never stops this one.
+function installedReleaseUnits({ unitRoot = SYSTEMD_UNIT_ROOT, unitUid = 0, workspace = "" } = {}) {
+  const own = `vibe64-release-${workspace}-`;
   const directory = openSync(unitRoot, DIRECTORY_NO_FOLLOW);
   try {
-    return readdirSync(openedPath(directory))
-      .filter((name) => name.startsWith("vibe64-release-") && name.endsWith(".service"))
-      .map((name) => ({
-        lines: readOwnedFile(directory, name, { maxBytes: 64 * 1024, othersMayWrite: false, uid: unitUid }).split("\n"),
-        name
-      }));
+    const units = [];
+    for (const name of readdirSync(openedPath(directory))) {
+      if (!name.startsWith("vibe64-release-") || !name.endsWith(".service")) continue;
+      try {
+        units.push({
+          lines: readOwnedFile(directory, name, { maxBytes: 64 * 1024, othersMayWrite: false, uid: unitUid }).split("\n"),
+          name
+        });
+      } catch (error) {
+        if (!name.startsWith(own)) continue;
+        throw Object.assign(new Error(`Release unit ${name} of workspace ${workspace} is not a unit file root wrote: ` +
+          `${error.message}`), { code: error.code });
+      }
+    }
+    return units;
   } finally {
     closeSync(directory);
   }
@@ -2718,7 +2732,7 @@ function assertReleaseServiceClaim({ loopbackPort = 0, owner = {}, unitName = ""
   if (!project || !new RegExp(`^vibe64-release-${workspace}-${project}-[a-f0-9]{12}\\.service$`, "u").test(unitName)) {
     throw new Error(`Release service ${unitName} is not named for application ${user.username}'s project.`);
   }
-  for (const { lines, name } of installedReleaseUnits({ unitRoot, unitUid })) {
+  for (const { lines, name } of installedReleaseUnits({ unitRoot, unitUid, workspace })) {
     if (name === unitName) {
       if (!lines.includes(`User=${user.username}`)) {
         throw new Error(`Release service ${unitName} belongs to another account.`);
