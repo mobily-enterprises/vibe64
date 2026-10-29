@@ -527,7 +527,7 @@ test("Codex helper ignores catalog upgrade advice and never falls back to an int
     })]
   }, "gpt-5.6-luna", "low"), (error) => {
     assert.equal(error.code, VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.MODEL_UNAVAILABLE);
-    assert.match(error.message, /Choose another in Model routing/u);
+    assert.match(error.message, /Choose another in Models/u);
     assert.equal(error.model, "gpt-5.6-luna");
     return true;
   });

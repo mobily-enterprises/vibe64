@@ -244,11 +244,11 @@ resume. This does not enable Auto or review in temporary chats.
 Ordinary persistent temporary chats offer Custom, Senior and Junior through
 the same compact role icon as main chat. Auto, plan approval and automatic
 review are unavailable in temporary chats, including through direct API calls
-and pending handoff retries. Owners can open the shared Model routing overlay directly
+and pending handoff retries. Owners can open the shared Models overlay directly
 from its menu. The role selector comes first; Custom opens the shared model dialog. Each keeps its own selection, routing
 preferences, pending request and retained native conversations. Creating an ordinary
-draft copies Main's current role, workflow and custom model override. Auto maps
-to Senior, with review off. A Main chat without routing preferences passes its
+draft copies Main's current role and custom model override; a team member's
+starts on Fix it with AI. Auto maps to Senior, with review off. A Main chat without routing preferences passes its
 exact AI as a Senior override. New chats resolve access for the submitting actor
 through the ordinary purpose resolver; inherited choices do not grant new access.
 Existing temporary chats keep their own role and model choices after Main changes

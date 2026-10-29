@@ -137,10 +137,10 @@ clients retain the loopback-only exception. Authentication does not bypass this
 check. Native incoming WebSocket messages are limited to 1 MiB; file attachments
 use their separate upload API.
 
-Colleague exposes the canonical Model routing read, preview and save actions
-without project selection. Their assistant results contain assignments,
-recommendations, effective viewer/collaborator routes and access/availability
-metadata, not account identities, credentials, provider error details or private
+Colleague exposes the canonical Models (`model-routing`) read, preview and save
+actions without project selection. Their assistant results contain each setup's
+saved values, recommendations, effective models, illustrative previews and
+access/availability metadata, not account identities, credentials, provider error details or private
 runtime context. The ordinary HTTP read retains its full UI result. `view: "main"`
 returns only main chat's selection (the owner's saved Senior, read from the
 routing store without any live catalogue; only an unsaved setup builds the full
@@ -149,9 +149,9 @@ it, offering its per-session **Change** only when `canConfigure`; session renewa
 uses it for main chat's AI, and an open session for `canConfigure`, which shows
 the chat's Models cog. They share one cached read, so opening a session starts
 no model discovery; only opening Models makes the full read. Supplying
-`engineId` and `choiceRole` requests the same role's choices as a 20-item page,
+`setup` and `choiceRole` requests that role's choices as a 20-item page,
 optionally filtered by `choiceSearch` and advanced through `choiceOffset` and
-`nextOffset`. `includeOtherModels` includes the UI's other connected choices.
+`nextOffset`.
 Choice variants are limited to 100 with their full count; identifiers are exact
 and selecting a choice still requires native validation.
 
@@ -164,14 +164,15 @@ differ for Claude's inexpensive external-provider catalogue. Pending or failed
 provider reads block Apply. Native discovery, access checks and the server's
 exact stale-revision rejection remain unchanged.
 
-Preview and Save take the same structured workflow/role selection contract.
-A null assignment explicitly disables the role; omitted assignments are preserved.
+Preview and Save take the same structured owner/team setup role contract.
+A null value explicitly disables the role, `{ follows: role }` restores Same as,
+and omitted roles are preserved.
 They keep the service's owner policy, revision guard, route/access validation,
 atomic persistence and realtime events. A preview does not write. A stale save
 must be reread and reviewed, not silently repeated. A successful save changes
-future workflow decisions; it does not retarget active agents, session chat modes
-or Colleague's own model. Historical Helper review remains explicit; Colleague
-reports that review is required without clearing it on the person's behalf.
+future routing decisions; it does not retarget active agents, session chat modes
+or Colleague's own model. No Helper review remains: the schema-5 state upgrade
+turned a pending one into Quick helper off.
 
 Models (the routing file) is a shared Accounts surface with two setups. The
 owner setup has Senior, Junior, Router, Colleague, Fix it with AI, Explain &
@@ -360,7 +361,7 @@ dialog closes on a request and names its account button as `returnFocus`, where
 the host returns focus when the flow closes; while AI Accounts is busy it sets
 `aiOnboardingBlocked`, and requests are refused rather than stacked over it. Regular Z.AI stays
 reachable through Advanced → Add a connection → OpenCode as well. Success requires the chosen
-provider connected and its orchestrator's workflow available. The Colleague
+provider connected and the owner's Senior usable on it, or recommended onto it. The Colleague
 model bridge, registered by the mounted Colleague, reads and switches
 Colleague's selection through the existing model selection; the exported
 `AiOnboardingNudge` in the Colleague panel and Colleague's no-usable-model
@@ -763,15 +764,15 @@ the submitted secret, and the temporary credential state is removed on every
 outcome. No provider URL override is required: the pinned OpenCode runtime owns
 its native provider destinations.
 
-Older clients reaching the retired native or OpenCode helper-setting endpoints
-receive HTTP 410 with a reload instruction pointing to Helper in Model routing.
-Those endpoints cannot recreate the retired preferences. Provider profiles
+The retired native and OpenCode helper-setting endpoints are gone; nothing
+recreates those preferences. Provider profiles
 continue validating the resolved model's availability and supported thinking
 controls; configuration changes do not rewrite already captured tasks.
 
-The Helper assignment replaces the retired third chat role, preserving its exact
-model, thinking, explicit-choice provenance and recommendation scores. It is a
-background assignment only. Helper and Router execution respects each saved
+Schema 4's Helper assignment (Quick helper since schema 5) replaced the retired
+third chat role, preserving its exact model, thinking, explicit-choice provenance
+and recommendation scores. It is a background assignment only. Quick helper and
+Router execution respects each saved
 thinking preference, including provider default; a task cannot silently force Low.
 The restricted execution profile is `helper` across all three providers.
 `assistantHelperUpgrade.js` owns the schema-4 conversion through the existing
@@ -788,7 +789,7 @@ current access and catalogue compatibility independently. Missing roles and deni
 access fail before native catalogue discovery;
 eligible destinations still require the current catalogue before dispatch.
 Senior and Junior
-continue sharing the workflow orchestrator selected above the role fields.
+must run in the same tool.
 
 OpenCode native provider configuration is cached for the shared server lifetime.
 Credential mutation validates the selected provider first, then enters the existing

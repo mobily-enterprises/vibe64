@@ -553,7 +553,7 @@ test("Same as follows one role of the same setup and names the followed role", (
     "The workspace owner hasn't chosen a Colleague model for team members yet."]);
   f.input.configuration.owner.quickHelper = null;
   assert.deepEqual([f.resolve("source_explanation", owner).reasonCode, f.resolve("source_explanation", owner).message],
-    ["vibe64_assistant_role_unconfigured", "Choose a Quick helper model in AI setup."]);
+    ["vibe64_assistant_role_unconfigured", "Choose a Quick helper model in Models."]);
 });
 
 test("a personal model in the team setup is refused at use while the owner keeps it", () => {
@@ -613,11 +613,11 @@ test("Auto names missing assignments and preserves connection and access failure
   const missing = f.resolve("auto", owner);
   assert.equal(missing.available, false);
   assert.deepEqual(missing.missingRoles, ["router"]);
-  assert.equal(missing.message, "Auto needs a Router model. Choose one in AI setup.");
+  assert.equal(missing.message, "Auto needs a Router model. Choose one in Models.");
   const senior = roles.senior;
   roles.senior = null;
-  assert.equal(f.resolve("auto", owner).message, "Auto needs models for Senior and Router. Choose them in AI setup.");
-  assert.equal(f.resolve("junior", owner).message, "Choose a Senior model in AI setup.");
+  assert.equal(f.resolve("auto", owner).message, "Auto needs models for Senior and Router. Choose them in Models.");
+  assert.equal(f.resolve("junior", owner).message, "Choose a Senior model in Models.");
   roles.router = router;
   roles.senior = senior;
   const shared = f.resolve("auto", owner);

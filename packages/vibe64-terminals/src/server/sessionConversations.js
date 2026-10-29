@@ -828,7 +828,7 @@ function createSessionConversations({
         if (settingsChanged && !input.assistantRouting) {
           const preferences = assistantRoutingFromMetadata(selectedContext(ctx, record).session.metadata);
           if (preferences.mode === "auto") throw new Error("Choose Senior or Junior before customizing its model.");
-          if (preferences.mode === "fix") throw new Error("Fix it with AI uses the model chosen in AI setup. Choose Custom to pick another model.");
+          if (preferences.mode === "fix") throw new Error("Fix it with AI uses the model chosen in Models. Choose Custom to pick another model.");
           const selection = record.assistantSelection;
           const override = await sessionAgent.resolveSelection({ engineId: selection.engineId, modelProviderId: selection.modelProviderId,
             agentId: selection.agentId, modelId: input.agentSettings.model || selection.modelId,

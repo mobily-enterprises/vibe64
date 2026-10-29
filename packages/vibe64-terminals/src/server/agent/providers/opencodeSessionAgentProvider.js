@@ -27,7 +27,7 @@ function resolveOpenCodeHelperExecutionProfile(context = {}, request = {}) {
   ) {
     throw new Vibe64AgentExecutionProfileError(
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.MODEL_UNAVAILABLE,
-      "Choose a Helper model in Model routing."
+      "Choose this helper's model in Models."
     );
   }
   return defineVibe64HelperExecutionProfileResolution({

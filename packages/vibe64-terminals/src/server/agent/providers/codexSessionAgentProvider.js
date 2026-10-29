@@ -146,7 +146,7 @@ function resolveCodexHelperExecutionProfile(request = {}, catalog = null, modelI
   if (!model) {
     throw codexExecutionProfileError(
       VIBE64_AGENT_EXECUTION_PROFILE_ERROR_CODES.MODEL_UNAVAILABLE,
-      "The selected Codex helper model is unavailable. Choose another in Model routing.",
+      "The selected Codex helper model is unavailable. Choose another in Models.",
       { model: modelId }
     );
   }

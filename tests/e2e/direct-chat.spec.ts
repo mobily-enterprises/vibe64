@@ -2654,7 +2654,7 @@ for (const width of [390, 820, 1280]) {
         ok: true, available: true, canUse: true, currentMode: JSON.parse(session.metadata.assistant_routing).mode,
         purposes: { senior: decision(senior), junior: decision(junior), review: decision(senior), ...(routerChosen
           ? { auto: { available: true }, request_routing: decision(router) }
-          : { auto: { available: false, missingRoles: ["router"], message: "Auto needs a Router model. Choose one in AI setup." },
+          : { auto: { available: false, missingRoles: ["router"], message: "Auto needs a Router model. Choose one in Models." },
             request_routing: { available: false, message: "Choose a Router model in AI setup." } }) }
       }));
       const choices = [senior, router].map(model => ({ ...model, label: model.modelId, engineLabel: "Codex",
@@ -2705,8 +2705,8 @@ for (const width of [390, 820, 1280]) {
       await trigger.click();
       const auto = modes.getByRole("button", { name: /^Auto/ });
       await expect(auto).toHaveAttribute("aria-disabled", "true");
-      await expect(auto).toContainText("Auto needs a Router model. Choose one in AI setup.");
-      await page.getByRole("button", { name: "Configure model routing", exact: true }).click();
+      await expect(auto).toContainText("Auto needs a Router model. Choose one in Models.");
+      await page.getByRole("button", { name: "Models", exact: true }).click();
       const dialog = page.getByRole("dialog", { name: "Models", exact: true });
       const routerModel = dialog.getByRole("combobox", { name: "Router model", exact: true });
       await expect(routerModel).toBeFocused();
@@ -2721,7 +2721,7 @@ for (const width of [390, 820, 1280]) {
       await page.reload();
       await trigger.click();
       await expect(modes.getByRole("button", { name: /^Senior/ })).toBeVisible();
-      await expect(page.getByRole("button", { name: "Configure model routing", exact: true })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "Models", exact: true })).toHaveCount(0);
       expect(errors).toEqual([]);
     } finally {
       await page.close();

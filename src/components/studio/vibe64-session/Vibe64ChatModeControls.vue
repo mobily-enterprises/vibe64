@@ -59,7 +59,7 @@ function roleLabel(role) {
   return vibe64AssistantSelectionLabel(selection);
 }
 function canConfigureMessage() {
-  return props.canConfigure ? "Choose a model in routing settings." : "Ask the owner to configure this mode.";
+  return props.canConfigure ? "Choose a model in Models." : "Ask the owner to configure this mode.";
 }
 
 const autoDescription = computed(() => decisions.value.auto?.available === false
@@ -142,7 +142,7 @@ function configure() {
           <v-btn
             v-if="canConfigure"
             :icon="mdiCogOutline" variant="text" width="48" height="48"
-            aria-label="Configure model routing" title="Configure model routing" @click="configure"
+            aria-label="Models" title="Models" @click="configure"
           />
           <v-btn :icon="mdiClose" variant="text" width="48" height="48" aria-label="Close chat mode" title="Close" @click="detailsOpen = false" />
         </div>

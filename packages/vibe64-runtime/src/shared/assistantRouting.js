@@ -290,7 +290,7 @@ function recommendedRoutingAssignments({ catalogs = [], setup = "owner", values 
 function routingAssignmentSelection(engine, assignment, { purpose = "senior" } = {}) {
   // A saved role keeps its exact model when the catalogue refreshes. Validate
   // availability against the current catalogue instead of silently substituting.
-  if (!assignment) throw routingError("Choose this model in AI setup first.");
+  if (!assignment) throw routingError("Choose this model in Models first.");
   if (!engine || assignment.engineId !== engine.engineId) throw routingError("The chosen model's tool is not available.");
   const selection = resolveVibe64AssistantSelection(engine, { ...assignment, catalogRevision: engine.revision });
   const choice = routingModelChoices(engine, { purpose }).find((item) => item.modelProviderId === selection.modelProviderId && item.modelId === selection.modelId);
@@ -327,8 +327,8 @@ function resolveAssistantPurpose({ purpose, actor, configuration, catalogs = [],
       if (missingRoles.length) {
         const names = joinedLabels(missingRoles.map(assistantModeLabel));
         return { ...result, reasonCode: "vibe64_assistant_role_unconfigured", missingRoles,
-          message: missingRoles.length === 1 ? `Auto needs a ${names} model. Choose one in AI setup.`
-            : `Auto needs models for ${names}. Choose them in AI setup.` };
+          message: missingRoles.length === 1 ? `Auto needs a ${names} model. Choose one in Models.`
+            : `Auto needs models for ${names}. Choose them in Models.` };
       }
       const input = { actor, configuration, catalogs, connectionAccess, validateModels, practice };
       const junior = resolveAssistantPurpose({ ...input, purpose: "junior", requirements, reviewEnabled: true });
@@ -351,13 +351,13 @@ function resolveAssistantPurpose({ purpose, actor, configuration, catalogs = [],
         if (setup === "nonOwner") {
           throw routingError(`The workspace owner hasn't chosen a ${assistantModeLabel(named)} model for team members yet.`, "vibe64_team_ai_role_unconfigured");
         }
-        throw routingError(`Choose a ${assistantModeLabel(named)} model in AI setup.`, "vibe64_assistant_role_unconfigured");
+        throw routingError(`Choose a ${assistantModeLabel(named)} model in Models.`, "vibe64_assistant_role_unconfigured");
       }
       const selection = defineVibe64AssistantSelection(value);
       const access = routingConnectionAccess(selection, connectionAccess);
       if (!access || typeof access.ownerOnly !== "boolean" || typeof access.available !== "boolean" ||
           typeof access.connectionIdentity !== "string" || !access.connectionIdentity.trim()) {
-        throw routingError("The chosen connection is no longer recognised. Review AI setup.", VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE);
+        throw routingError("The chosen connection is no longer recognised. Review Models.", VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE);
       }
       if (!canUseVibe64Assistant({ ...access, available: true }, actor)) {
         throw routingError(roleName === "custom" ? "This custom model uses a personal connection. Choose a model you can access."

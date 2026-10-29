@@ -594,7 +594,7 @@ discarded commit. There is no second queue or replacement transaction store.
 ## `packages-vibe64-accounts` Accounts
 
 Owns AI account setup, provider-key storage and validation, connection selection,
-per-orchestrator model routing and recommendations,
+the owner and team AI setups (Models) and their recommendations,
 and connection health. Workspace Studio health also resolves current actor access
 independently of any selected project. Standalone and hosted editors
 share these operations; hosts supply credential context and access policy.

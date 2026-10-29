@@ -69,7 +69,7 @@ function createAssistantRoutingStore({ systemRoot } = {}) {
   async function write({ owner, nonOwner }, expectedRevision) {
     return serializeByKey(writes, filePath, async () => {
       const current = await read();
-      if (current.revision !== expectedRevision) throw Object.assign(new Error("Model routing changed in another tab. Reload and review the current choices."), {
+      if (current.revision !== expectedRevision) throw Object.assign(new Error("Models changed in another tab. Reload and review the current choices."), {
         code: "vibe64_assistant_routing_stale", statusCode: 409
       });
       const next = validateAssistantRoutingConfiguration({ schemaVersion: 5, revision: current.revision + 1, owner, nonOwner });

@@ -1620,7 +1620,7 @@ const saveWorkNeedsPullRequest = computed(() => !saveWorkConnectedReview.value &
   props.workState?.publicationRequiresPullRequest === true && !sessionPullRequest.value?.number);
 const saveWorkCanCreatePullRequest = computed(() => githubProject.value && !sessionPullRequest.value?.number &&
   saveWorkFailure.value?.code === "vibe64_pull_request_required");
-const assistantFixRestrictionMessage = computed(() => assistantPurposes.value.fix?.message || "Fix it with AI is unavailable. Review AI setup.");
+const assistantFixRestrictionMessage = computed(() => assistantPurposes.value.fix?.message || "Fix it with AI is unavailable. Review Models.");
 const publicationLabel = computed(() => {
   if (saveWorkConnectedReview.value) return "Push connected contributions";
   const destination = saveWorkReview.value;

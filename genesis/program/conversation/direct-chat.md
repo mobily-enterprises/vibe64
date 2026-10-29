@@ -733,8 +733,8 @@ The contracts and adapters are in
 Standalone local-editor sessions do not request the hosted member-message queue;
 AI access still uses its existing check. This avoids an irrelevant sign-in
 warning and queue requests in a local editor with no hosted identity.
-Owner settings in main and temporary chat use the Model routing permission
-response independently of that queue, so they remain available in the local editor.
+Owner settings in main and temporary chat use the Models `canConfigure`
+response (its light `view: "main"` read) independently of that queue, so they remain available in the local editor.
 The compact mode menu names the effective reviewer and states when it uses the
 same model as Junior, including a collaborator's shared backup pair.
 Unavailable modes retain their explanation and expose their disabled state to
@@ -1518,7 +1518,7 @@ and automatic save (`autoSave`) preferences in the existing conversation
 metadata. `assistantRoutingAutomation` is their one default: each is on unless
 the chat turned it off, and Custom or Fix it with AI carry no choice, so Auto
 after them starts with both on. A mode change that omits a choice keeps the
-chat's own; switching orchestrator keeps the chat's choice. When Auto's
+chat's own. When Auto's
 completing Senior turn archives a plan, routing calls the Sessions-owned
 plan-completed handler after its lock; with `autoSave` on it inspects work and
 runs the ordinary Save once (never for connected sessions), and routing writes
@@ -1526,24 +1526,15 @@ its short result note to chat. Turning the switch off first opens a confirmation
 code quality will suffer unless the person runs Deslop themselves; Cancel keeps
 it on. Existing saved preferences are not rewritten: an off value cannot be told
 apart from a deliberate choice. A role resolves to a live, available
-selection using its saved workflow, independently of the last native engine.
+selection through the owner's setup, independently of the last native engine;
+main chat runs in the Senior's tool.
 The mode menu consumes the session's access decisions, including their loading,
-failure and retry state. It does not fetch the full routing configuration;
-the configuration form loads its scoped catalogue only when opened. Main's
-configuration cog sits to the right of the Orchestrator selector and opens the
-saved workflow's named routing dialog without an orchestrator selector; that
-dialog saves only that workflow. The parent reads
-the lightweight workflow response for configuration permission. Picker labels
+failure and retry state. It does not fetch the full routing configuration: the
+session reads Models' light `view: "main"` only for `canConfigure`, and the
+Models form makes the full read only when opened. Picker labels
 use `Orchestrator (model thinking)`, including Auto's Router.
-Main's named modes expose an independent Orchestrator selector using the same
-lightweight workflow response. It omits orchestrators without any connected models,
-using the response's `connected` flag from configured model catalogues. This is
-independent of role assignments; each visible choice retains its existing role
-availability and explanation. These local catalogues do not start live model
-discovery. Choosing a workflow preserves Senior, Junior or
-Auto and its review preference, drops the previous workflow's model override,
-and resolves the destination's saved assignments through the actor-aware purpose
-resolver. Auto validates Router and the pair, then selects Senior for the idle
+Choosing a mode resolves its saved owner-setup roles through the actor-aware
+purpose resolver. Auto validates Router and the pair, then selects Senior for the idle
 conversation. The existing selection update checks destination connection
 identity, active work and unfinished goals before native changeover and
 persistence. Pending delivery/review invokes the existing routing cancellation
@@ -1632,15 +1623,14 @@ when opened, through the existing capabilities endpoint. It reuses those
 queries for 30 seconds; account/connection events invalidate them. The
 orchestrator selector stays usable while models load. It shows the three
 fields directly, without repeating their values or explaining native handoff.
-The manager shares paginated catalogue assembly with Model routing and rejects mixed revisions. Apply saves the choice;
+The manager shares paginated catalogue assembly with Models and rejects mixed revisions. Apply saves the choice;
 Cancel changes nothing. Save failures remain visible with the draft for retry.
 
 One icon opens the mode choices, assigned models and optional Deslop
 switch in Auto; these controls occupy no separate row above the composer. Its icon and
-accessible label reflect the selected mode. Owners open the shared Model routing
-form directly in an overlay, initially selecting this chat's orchestrator.
-Custom and temporary chats place the configuration cog in the menu header,
-where the Orchestrator selector is absent. The header's close control is an X.
+accessible label reflect the selected mode. Owners open the shared Models form
+directly in an overlay through the **Models** cog in the menu header; Auto's
+missing roles bring the first one into view. The header's close control is an X.
 Both icons retain accessible labels and tooltips; there is no bottom
 configuration button.
 Other users have no configuration action. The mode icon remains reachable when

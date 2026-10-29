@@ -231,7 +231,7 @@ test("no changes, a working agent and every failed review record nothing", async
   f.state.providerError = "The provider timed out.";
   await assert.rejects(f.press("provider"), { code: "VIBE64_TRAINING_REVIEW_FAILED", message: /Your AI could not finish the review: The provider timed out\. Nothing was recorded/u });
   f.state.helperAvailable = false;
-  await assert.rejects(f.press("route"), { code: "vibe64_colleague_helper_unavailable", message: /Review AI setup/u });
+  await assert.rejects(f.press("route"), { code: "vibe64_colleague_helper_unavailable", message: /Review Models/u });
   assert.deepEqual(await f.results(), []);
   assert.equal(f.published.length, 0);
   assert.deepEqual(JSON.parse(await readFile(path.join(f.systemRoot, "training/users/NDI/review-helper.json"), "utf8")).helper, null,

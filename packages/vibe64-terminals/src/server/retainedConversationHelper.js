@@ -44,7 +44,7 @@ function createRetainedConversationHelper({ terminals, root, receipt, scopePrefi
 
   async function requireHelper(context, workloadId) {
     const decision = await terminals.resolveAssistantPurpose({ purpose: workloadId }, { vibe64User: authenticatedVibe64User(context) });
-    if (!decision.available) throw Object.assign(new Error(`${decision.message ? `${String(decision.message).slice(0, 512)} ` : ""}Review AI setup, then try again.`), {
+    if (!decision.available) throw Object.assign(new Error(`${decision.message ? `${String(decision.message).slice(0, 512)} ` : ""}Review Models, then try again.`), {
       code: "vibe64_colleague_helper_unavailable", statusCode: 409
     });
     return decision;

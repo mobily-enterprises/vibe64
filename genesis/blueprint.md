@@ -575,18 +575,15 @@ Main chat offers Custom, Senior, Junior and Auto; ordinary temporary chats offer
 Custom, Senior and Junior. Custom appears first and opens three fields:
 Orchestrator, Model, Thinking. Apply saves the exact choice; Cancel keeps the
 previous mode. Custom does not require configured role assignments or a Router.
-In Main chat's Senior, Junior and Auto modes, a separate Orchestrator choice
-switches coding tools while keeping the selected mode and conversation. It uses
-the destination's saved model assignments. An unavailable destination or failed
-handover keeps the previous choice; active work and unfinished goals must finish
-before switching. Custom continues to choose an exact AI independently.
+Main chat's Senior, Junior and Auto modes run in the tool of the owner's Senior;
+only Custom, or the owner's change in Models, moves a chat to another tool. An
+unavailable destination or failed handover keeps the previous choice; active work
+and unfinished goals must finish before switching.
 A switch into Codex prepares its conversation for model routing before it opens,
 even when the session already has an OpenCode or Claude conversation.
-The Orchestrator menu lists only coding tools with at least one connected model;
-visibility does not require saved Senior or Junior assignments.
 While the assistant starts or reconnects, the chat-mode menu shows connection
-progress and waits before enabling another model, mode or orchestrator change.
-Switching orchestrators uses the existing conversation handoff. Both use one compact icon in the composer's bottom toolbar. The icon reflects the selected
+progress and waits before enabling another model or mode change.
+Switching tools uses the existing conversation handoff. Both use one compact icon in the composer's bottom toolbar. The icon reflects the selected
 mode and comes first. Its menu shows
 effective model and thinking assignments and the selected role, including Router
 in Auto. It uses the conversation's saved assignments and current account access
@@ -617,7 +614,7 @@ A routing setup failure
 keeps the AI connected and appears in the review so the owner can finish setup.
 Repeating setup preserves saved choices, including roles the owner deliberately
 left empty. New main chats start with Senior, with Auto review off.
-User-created temporary chats inherit Main chat's role, workflow and custom model
+User-created temporary chats inherit Main chat's role and custom model
 choice when created. Main's Auto mode starts them as Senior. Each temporary chat
 then keeps its own selection and can change role independently; later changes in
 Main do not retarget existing temporary chats. Automatic implementation tasks
@@ -641,13 +638,12 @@ the screen was opened for the team; a solo owner never sees team wording.
 Team members see their setup read-only and change their own Colleague from
 Colleague's model menu. Review recommendations lists only the differing roles;
 Apply to form fills the draft and Save saves it. AI Accounts opens Models from
-its Models summary; chat opens it through the routing cog, and Auto's missing
+its Models summary; chat opens it through the Models cog, and Auto's missing
 roles bring the first one into view. Advanced keeps only connection plumbing.
-Main session creation and renewal share a workflow picker that lists
-Claude Code before Codex and OpenCode and
-previews the owner's effective Senior and Junior models.
-It opens from saved routing and connection state without live model discovery;
-uninitialized choices say “Recommended on creation” until exact models are selected.
+Main session creation and renewal show the main AI: the owner's Senior, or its
+recommendation while Senior has no saved choice. A saved choice appears without
+live model discovery, and whoever manages AI may run one new session on another
+model instead.
 Creating the first chat explicitly fills missing defaults, so included OpenCode
 works without a credential-setup step. Reading those defaults does not save them.
 The new-session dialog cannot be dismissed while creation is running. It closes
@@ -1700,7 +1696,7 @@ conversation presentation. User-facing temporary chats have main chat's tools,
 capabilities and project access in Codex, Claude Code and OpenCode, without separate permission
 modes.
 Temporary model and thinking choices come from the connected service's current
-catalogue, including new Codex models and OpenJunior models. Each chat retains its own workflow and selected model without changing Main chat.
+catalogue, including new Codex models and OpenJunior models. Each chat retains its own role and selected model without changing Main chat.
 A Fix it with AI or Custom turn can use another assistant application; returning
 to Senior or Junior retains the conversation already held by its effective assistant.
 The server keeps their conversations, settings, drafts and sent attachments

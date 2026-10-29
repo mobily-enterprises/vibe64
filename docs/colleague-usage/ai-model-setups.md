@@ -3,8 +3,11 @@
 Vibe64 chooses a model for each job from **Models**. Open it from **Account
 settings → AI Accounts** (or AI onboarding's **Your AI setup**): the **Models**
 summary under the provider cards lists **Senior**, **Junior** and, in a
-workspace with a team, **Team members**; choose **Review models**. Connecting
-an AI is explained in [AI accounts](ai-accounts.md).
+workspace with a team, **Team members**; choose **Review models**. In a chat,
+the owner can open it directly: open **Chat mode** and select the **Models**
+cog in its header. Messages such as **Auto needs a Router model. Choose one in
+Models.** point here. Connecting an AI is explained in
+[AI accounts](ai-accounts.md).
 
 Only the workspace owner changes models. Everyone else sees the team members'
 models read-only.

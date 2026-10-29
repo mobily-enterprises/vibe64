@@ -55,7 +55,7 @@ export function modelRoutingTool(operation) {
     transformResult(result) {
       if (result.ok !== true) return {
         ok: false, code: String(result.code || "").slice(0, 512),
-        error: "The AI setup could not be applied or read. Reread its current revision and inspect invalidRoles; open AI setup for details.",
+        error: "The AI setup could not be applied or read. Reread its current revision and inspect invalidRoles; open Models for details.",
         invalidRoles: Object.keys(result.fieldErrors || {}).filter(key => /^(owner|nonOwner)\.[a-zA-Z]+$/u.test(key))
       };
       const output = { ok: true, revision: result.revision, canConfigure: result.canConfigure };

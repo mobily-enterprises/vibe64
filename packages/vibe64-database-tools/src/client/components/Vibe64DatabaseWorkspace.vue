@@ -715,7 +715,7 @@ const assistantStatusLabel = computed(() => {
   return vibe64AssistantSelectionLabel({ engineId: assistant.engineId, modelId: assistant.model, variantId: assistant.variantId });
 });
 const assistantUnavailableCopy = computed(() => {
-  return state.value?.assistant?.message || "Ask the owner to choose an Explain & check model in AI setup. Database browsing and editing work without AI.";
+  return state.value?.assistant?.message || "Ask the owner to choose an Explain & check model in Models. Database browsing and editing work without AI.";
 });
 const selectedTable = computed(() => schema.value.tables.find((table) => table.qualifiedName === selectedTableName.value) || null);
 const assistantTableName = computed(() => {

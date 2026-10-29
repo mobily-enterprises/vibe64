@@ -2338,7 +2338,7 @@ function createService({
   // A draft names whole role values per setup; omitted roles keep their saved value.
   async function routingDraft(input) {
     const saved = await routingStore().read();
-    if (input.revision !== saved.revision) throw Object.assign(new Error("Model routing changed in another tab. Reload and review the current choices."), {
+    if (input.revision !== saved.revision) throw Object.assign(new Error("Models changed in another tab. Reload and review the current choices."), {
       code: "vibe64_assistant_routing_stale", statusCode: 409
     });
     const configuration = { schemaVersion: 5, revision: saved.revision, owner: { ...saved.owner }, nonOwner: { ...saved.nonOwner } };
