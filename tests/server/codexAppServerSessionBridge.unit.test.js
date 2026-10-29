@@ -2697,3 +2697,21 @@ test("optional Codex schema identity cannot widen ordinary Main or write malform
   assert.equal(Object.hasOwn(prepared, "applicationTools"), false);
   assert.equal(Object.hasOwn(prepared, "providerReady"), false);
 });
+
+test("recording a Codex runtime for a new sign-in reports the session's previous runtime directory", async () => {
+  const runtime = fakeRuntime();
+  let recorded = { agent_transport_runtime_dir: "/runtime/codex-app-server-first" };
+  runtime.store.readMetadata = async () => recorded;
+  const write = runtimeDir => writeCodexAppServerIdentityMetadata({
+    runtime, sessionId: "session", threadId: "thread", workdir: "/source",
+    appServerRuntime: { runtimeDir, socketPath: `${runtimeDir}/app-server.sock`, transport: "unix" }
+  });
+
+  assert.equal((await write("/runtime/codex-app-server-first")).supersededRuntimeDir, undefined,
+    "The same runtime supersedes nothing");
+  const changed = await write("/runtime/codex-app-server-second");
+  assert.equal(changed.supersededRuntimeDir, "/runtime/codex-app-server-first");
+  assert.equal(changed.agent_transport_runtime_dir, "/runtime/codex-app-server-second");
+  recorded = {};
+  assert.equal((await write("/runtime/codex-app-server-second")).supersededRuntimeDir, undefined);
+});

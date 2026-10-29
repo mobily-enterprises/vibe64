@@ -703,7 +703,13 @@ the current account beside the finishing one, and a session saved on the previou
 sign-in moves to the new directory. Once the previous runtime stopped, the
 terminals service's `continueGoalAfterAccountChange` resumes a goal the change
 paused, through the ordinary goal resume; without a Codex sign-in that resume is
-refused and the goal stays paused.
+refused and the goal stays paused. Recording the session's runtime for the new
+sign-in reports the directory it recorded before (`supersededRuntimeDir` from
+`writeCodexAppServerIdentityMetadata`), and JSKIT removes that directory once its
+runtime has verifiably stopped. A running Codex process keeps its own sign-in in
+memory and never writes it back over a newer `auth.json`: Codex 0.163 re-reads
+the file before refreshing and skips the refresh when the account changed or
+signed out (verified against a local mock token endpoint).
 The existing `<systemRoot>/auth/codex/status.json` marker owns a random local
 `loginId`, written atomically after native authentication succeeds. Each
 successful Vibe64 sign-in replaces it; status reads, token refreshes, runtime

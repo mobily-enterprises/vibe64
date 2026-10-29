@@ -1,3 +1,4 @@
+import path from "node:path";
 import { validateConversationOutputSchema } from "@jskit-ai/assistant-core/server/conversation";
 import { sendPreparedCodexAppServerHelperTurn } from "@jskit-ai/assistant-core/server/codex-turn";
 import {
@@ -564,12 +565,20 @@ async function writeCodexAppServerIdentityMetadata({
       ? "Renewed assistant identity requires explicit internal renewal metadata access."
       : "Assistant identity metadata access is unavailable.");
   }
+  // A new sign-in gives the session a new runtime directory; the one it
+  // recorded before is reported so its owner can release it once stopped.
+  const previousRuntimeDir = renewalInternal
+    ? ""
+    : normalizeAgentText((await runtime.store.readMetadata?.(sessionId))?.agent_transport_runtime_dir);
   await mutateSession(sessionId, async () => {
     await Promise.all(Object.entries(metadata).map(([name, value]) => (
       writeMetadataValue(sessionId, name, String(value || ""))
     )));
   });
-  return metadata;
+  return previousRuntimeDir && metadata.agent_transport_runtime_dir &&
+    path.resolve(previousRuntimeDir) !== path.resolve(metadata.agent_transport_runtime_dir)
+    ? { ...metadata, supersededRuntimeDir: previousRuntimeDir }
+    : metadata;
 }
 
 function persistedCodexSessionRenewalThreadBaseline(session = {}, {
