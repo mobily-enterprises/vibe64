@@ -267,7 +267,7 @@ function runUserCommand(targetUser, command, args, options) {
 
 function handleManagedExecutionOperation(payload = {}) {
   const owner = resolveOwnerUser();
-  ensureGroup(VIBE64_GROUP);
+  const groupId = ensureGroup(VIBE64_GROUP);
   const action = String(payload.action || "").trim();
   if (action.startsWith("workflow-")) {
     const result = managedWorkflowOperation(payload, owner);
@@ -390,7 +390,7 @@ function handleManagedExecutionOperation(payload = {}) {
       tasksMax: workTasksMax
     });
   }
-  const receipts = openWorkspaceExecutionReceipts(owner, { create: true });
+  const receipts = openWorkspaceExecutionReceipts(owner, { create: true, gid: groupId });
   receipts.create(executionId, targetUser, {
     args,
     command,
@@ -1120,30 +1120,40 @@ function managedExecutionRuntimeBase(owner = {}) {
 }
 
 // The workspace's execution receipts in its daemon's runtime directory. Only
-// creating one makes the directories; stopping and releasing find none there
-// when there is none.
-function openWorkspaceExecutionReceipts(owner = {}, { create = false } = {}) {
+// creating one makes the directories, with the shared group's id its caller
+// read; stopping and releasing find none there when there is none.
+function openWorkspaceExecutionReceipts(owner = {}, { create = false, gid = null } = {}) {
   const runtimeBase = managedExecutionRuntimeBase(owner);
   if (create) {
-    // The daemon's runtime directory sits in root's own /run, so its path is
-    // never a link the daemon planted.
-    runRootCommand("install", [
-      "-d",
-      "-o",
-      safeUsername(owner.username),
-      "-g",
-      VIBE64_GROUP,
-      "-m",
-      "2750",
-      runtimeBase
-    ]);
+    ensureWorkspaceRuntimeBase(runtimeBase, { gid, uid: owner.uid });
   }
   return openManagedExecutionReceipts(path.join(runtimeBase, "executions"), {
     create,
-    gid: create ? ensureGroup(VIBE64_GROUP) : 0,
+    gid: create ? gid : 0,
     legacyUid: owner.uid,
     uid: 0
   });
+}
+
+// The daemon's runtime directory sits in root's own /run, so its path is never
+// a link the daemon planted; root still opens it without following one. Root
+// makes it, or keeps it, the daemon's with the shared group and mode 2750, as
+// `install -d` did, with no process.
+function ensureWorkspaceRuntimeBase(runtimeBase = "", { gid = null, uid = null } = {}) {
+  if (!Number.isSafeInteger(uid) || uid < 0 || !Number.isSafeInteger(gid) || gid < 0) {
+    throw new Error("Vibe64 exec helper needs the daemon's uid and the shared group's gid.");
+  }
+  try { mkdirSync(runtimeBase, { mode: 0o750 }); } catch (error) {
+    if (error?.code !== "EEXIST") throw error;
+  }
+  const descriptor = openSync(runtimeBase, DIRECTORY_NO_FOLLOW);
+  try {
+    const stats = fstatSync(descriptor);
+    if (stats.uid !== uid || stats.gid !== gid) fchownSync(descriptor, uid, gid);
+    if ((stats.mode & 0o7777) !== 0o2750) fchmodSync(descriptor, 0o2750);
+  } finally {
+    closeSync(descriptor);
+  }
 }
 
 const NO_EXECUTION_RECEIPTS = Object.freeze({
@@ -3221,6 +3231,7 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
 }
 
 export { assertActablePerson, assertEnabledForVibe64, configureManagedExecutionWorkSlice, consumeManagedExecutionRequestPayload,
+  ensureWorkspaceRuntimeBase,
   enablePerson, loginUidRange, personAccountProblem, readPersonRegistration, registerPerson, upgradePersonRegistry, deploymentServiceUnit, ensureManagedServiceProcessOwnership,
   parseEnvironmentFile, upgradeReleaseServiceUnits,
   managedWorkflowCounters, openManagedExecutionReceipts, managedWorkflowIdentity, managedExecutionOomBoundary,

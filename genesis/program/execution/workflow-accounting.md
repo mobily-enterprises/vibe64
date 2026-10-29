@@ -72,7 +72,10 @@ it when the unit ends.
 The workspace's receipts directory belongs to root, mode `0750` with the shared
 Vibe64 group, so only the helper adds, renames or removes receipts in it; an
 execution's target user only passes through it to its own receipt. It sits in
-the daemon's own runtime directory, which the daemon can rearrange, so the
+the daemon's own runtime directory, which root makes or keeps the daemon's
+(shared group, mode `2750`) through a directory it opened without following a
+link, with the group id the start already read and no process. The daemon can
+rearrange that runtime directory's contents, so the
 helper opens it without following a link and then works only through that open
 directory. It creates a receipt only where nothing exists yet, and writes the
 runner's command and hands it and the receipt to the target user through

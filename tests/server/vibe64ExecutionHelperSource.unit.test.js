@@ -585,10 +585,10 @@ test("execution helper preserves only OpenCode private environment roots", async
 test("managed executions can traverse their private workspace runtime directory", async () => {
   const source = await helperSource();
 
-  assert.match(source, /openWorkspaceExecutionReceipts\(owner, \{ create: true \}\)/u);
+  assert.match(source, /openWorkspaceExecutionReceipts\(owner, \{ create: true, gid: groupId \}\)/u);
   assert.match(source, /function managedExecutionRuntimeBase\(owner = \{\}\)/u);
-  assert.match(source, /runRootCommand\("install", \[/u);
-  assert.match(source, /"2750",\s+runtimeBase\s+\]\);/u);
+  assert.match(source, /ensureWorkspaceRuntimeBase\(runtimeBase, \{ gid, uid: owner\.uid \}\)/u);
+  assert.match(source, /fchmodSync\(descriptor, 0o2750\)/u);
 });
 
 // The workspace's receipt directory sits in its daemon's runtime directory,
