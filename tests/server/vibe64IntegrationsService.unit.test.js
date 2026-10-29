@@ -411,6 +411,23 @@ test("release setup uses its artifact declaration and Env reference without Git 
   });
   assert.equal(result.status, "connected");
   assert.equal(called, true);
+  // A host running the application under its own account reads the committed
+  // copy and runs the command there, as that account.
+  const executionRoot = path.join(source, "../application-workspace");
+  const asAccount = await runApplicationIntegrationSetup({
+    sourceRoot: source, executionRoot, applicationAccount: "v64a_0123456789ab", releaseEnvironmentFile: environmentFile,
+    project: { slug: "example" },
+    selection: { operation: "status", integrationId: "calendar" },
+    runCommand: async (command) => {
+      assert.equal(command.actor, "app");
+      assert.equal(command.applicationAccount, "v64a_0123456789ab");
+      assert.equal(command.cwd, executionRoot);
+      assert.deepEqual(command.allowedRoots, [executionRoot]);
+      const request = JSON.parse(command.input);
+      return { ok: true, stdout: JSON.stringify({ protocol: request.protocol, requestId: request.requestId, status: "connected" }) };
+    }
+  });
+  assert.equal(asAccount.status, "connected");
   await assert.rejects(runApplicationIntegrationSetup({
     sourceRoot: source, releaseEnvironmentFile: environmentFile,
     selection: { operation: "connect", integrationId: "missing" },

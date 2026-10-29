@@ -216,7 +216,7 @@ function createIntegrationSetupRequest(selection) {
 // The caller supplies an inspected command, authorized project scope and resolved
 // environment. This function never accepts an executable from a browser request.
 async function runIntegrationSetupCommand({
-  runCommand, command, sourceRoot, runtimes, env, releaseEnvironmentFile, project, session, selection
+  runCommand, command, sourceRoot, applicationAccount, runtimes, env, releaseEnvironmentFile, project, session, selection
 }) {
   if (typeof runCommand !== "function" || !command || !path.isAbsolute(sourceRoot || "")) {
     invalid("Application integration setup is not configured.");
@@ -228,7 +228,7 @@ async function runIntegrationSetupCommand({
   let result;
   try {
     result = await runCommand({
-    actor: "app", allowedRoots: [sourceRoot], command: executable, args, cwd,
+    actor: "app", ...(applicationAccount ? { applicationAccount } : {}), allowedRoots: [sourceRoot], command: executable, args, cwd,
     env, envPolicy: releaseEnvironmentFile ? "deployment" : "project", project, session, runtimes,
     ...(releaseEnvironmentFile ? { releaseEnvironmentFile } : {}),
     purpose: "source-editor", mode: "capture", input, maxBuffer: MAX_BYTES, timeout: 30000

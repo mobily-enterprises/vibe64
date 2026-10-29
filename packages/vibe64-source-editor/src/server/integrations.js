@@ -99,15 +99,18 @@ async function inspectApplicationIntegrationSetup(context, input) {
 }
 
 // Called only with a source root and execution context selected by the host.
+// A host that runs the application under its own account reads the committed
+// configuration from sourceRoot and runs the command as applicationAccount in
+// the application's executionRoot.
 async function runApplicationIntegrationSetup({
-  sourceRoot, env, releaseEnvironmentFile, project, session, selection,
+  sourceRoot, executionRoot = sourceRoot, applicationAccount, env, releaseEnvironmentFile, project, session, selection,
   runCommand = runVibe64Command
 }) {
   createIntegrationSetupRequest(selection);
   const checked = await inspectApplicationIntegrationSetup({ sourceRoot, releaseEnvironmentFile, policy: sourceEditorFilePolicy() }, selection);
   if (!checked.setup) return checked;
   const result = await runIntegrationSetupCommand({
-    runCommand, command: checked.setup.command, sourceRoot,
+    runCommand, command: checked.setup.command, sourceRoot: executionRoot, applicationAccount,
     runtimes: checked.runtime.runtimes, env, releaseEnvironmentFile,
     project, session, selection
   });
