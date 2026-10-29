@@ -27,6 +27,10 @@ import process from "node:process";
 const INPUT_LIMIT_BYTES = 1024 * 1024;
 const DIRECTORY_NO_FOLLOW = fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW;
 const NEW_FILE_NO_FOLLOW = fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW;
+// Never through a link, and never waiting on a FIFO.
+const FILE_NO_FOLLOW = fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK;
+const MANAGED_EXECUTION_REQUEST_PAYLOAD_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/u;
+const MEMBERSHIP_LIMIT_BYTES = 64 * 1024;
 const STDIN_READ_BUFFER_BYTES = 64 * 1024;
 const STDIN_READ_RETRY_DELAY_MS = 10;
 const STDIN_READ_TIMEOUT_MS = 15_000;
@@ -143,14 +147,20 @@ async function main() {
     await runManagedExecutionPayload(process.argv[3] || "");
     return;
   }
-  if (process.argv[2] !== "execute") {
+  if (process.argv[2] !== "execute" || process.argv.length > 4) {
     throw new Error("Usage: vibe64-exec-helper execute [payload-json-file]");
   }
-  const payload = readPayload(process.argv[3] || "");
+  const payloadPath = process.argv[3] || "";
+  const payload = payloadPath
+    ? consumeManagedExecutionRequestPayload(payloadPath, resolveOwnerUser())
+    : readPayload();
   assertNormalizedPayload(payload);
   const operation = String(payload.operation || "").trim();
   if (!ALLOWED_OPERATIONS.has(operation)) {
     throw new Error("Vibe64 exec helper rejected an unknown operation.");
+  }
+  if (payloadPath && operation !== "managed-execution") {
+    throw new Error("Vibe64 exec helper accepts a payload file only for a managed execution.");
   }
   if (operation === "deployment-service") {
     handleDeploymentServiceOperation(payload);
@@ -161,7 +171,7 @@ async function main() {
     return;
   }
   if (operation === "managed-execution") {
-    handleManagedExecutionOperation(payload, process.argv[3] || "");
+    handleManagedExecutionOperation(payload);
     return;
   }
   const username = safeUsername(payload.username);
@@ -220,9 +230,8 @@ function runUserCommand(targetUser, command, args, options) {
   });
 }
 
-function handleManagedExecutionOperation(payload = {}, requestPayloadPath = "") {
+function handleManagedExecutionOperation(payload = {}) {
   const owner = resolveOwnerUser();
-  consumeManagedExecutionRequestPayload(requestPayloadPath, owner);
   ensureGroup(VIBE64_GROUP);
   const action = String(payload.action || "").trim();
   if (action.startsWith("workflow-")) {
@@ -405,17 +414,30 @@ function handleManagedExecutionOperation(payload = {}, requestPayloadPath = "") 
   process.exit(typeof started.status === "number" ? started.status : 1);
 }
 
-function consumeManagedExecutionRequestPayload(payloadPath = "", owner = {}) {
-  const normalized = String(payloadPath || "").trim();
-  if (!normalized) {
-    return;
-  }
-  const resolved = path.resolve(normalized);
-  const allowedRoot = path.join(workspaceTempRoot(owner.username), "managed-execution-payloads");
-  if (relativePathParts(allowedRoot, resolved).length !== 1) {
+// A caller whose terminal holds the helper's standard input passes that
+// execution's payload as a file in its workspace's payload directory instead.
+// That directory sits in the workspace's shared temporary directory, which
+// other users can rearrange, so root opens it without following links, reads
+// only the daemon's own regular file there and removes it through the same
+// open directory.
+function consumeManagedExecutionRequestPayload(payloadPath = "", owner = {}, { managedRoot = MANAGED_ROOT } = {}) {
+  const workspaceRoot = path.join(managedRoot, workspaceFromDaemonUsername(safeUsername(owner.username)));
+  const parts = ["tmp", "managed-execution-payloads"];
+  const name = path.basename(String(payloadPath));
+  if (payloadPath !== path.join(workspaceRoot, ...parts, name) || !MANAGED_EXECUTION_REQUEST_PAYLOAD_NAME_PATTERN.test(name)) {
     throw new Error("Vibe64 exec helper rejected an unsafe managed execution payload path.");
   }
-  unlinkSync(resolved);
+  const directory = openDirectoryBelow(workspaceRoot, parts);
+  try {
+    if (fstatSync(directory).uid !== owner.uid) {
+      throw new Error("Vibe64 exec helper refused a managed execution payload directory owned by another user.");
+    }
+    const input = readOwnedFile(directory, name, { maxBytes: INPUT_LIMIT_BYTES, uid: owner.uid });
+    unlinkSync(openedPath(directory, name));
+    return parsePayload(input);
+  } finally {
+    closeSync(directory);
+  }
 }
 
 async function runManagedExecutionPayload(payloadPath = "") {
@@ -1092,18 +1114,17 @@ function openManagedExecutionReceipts(directory = "", {
     closeSync(descriptor);
     throw error;
   }
-  const opened = (directoryDescriptor, name = "") => path.join(`/proc/self/fd/${directoryDescriptor}`, name);
   return {
     close: () => closeSync(descriptor),
-    entries: () => readdirSync(opened(descriptor)),
-    remove: (executionId) => rmSync(opened(descriptor, managedExecutionId(executionId)), { force: true, recursive: true }),
+    entries: () => readdirSync(openedPath(descriptor)),
+    remove: (executionId) => rmSync(openedPath(descriptor, managedExecutionId(executionId)), { force: true, recursive: true }),
     // The receipt and the runner's command in it, handed to the target user.
     create(executionId = "", targetUser = {}, runnerCommand = {}) {
-      const receiptPath = opened(descriptor, managedExecutionId(executionId));
+      const receiptPath = openedPath(descriptor, managedExecutionId(executionId));
       mkdirSync(receiptPath, { mode: 0o700 });
       const receipt = openSync(receiptPath, DIRECTORY_NO_FOLLOW);
       try {
-        const command = openSync(opened(receipt, "command.json"), NEW_FILE_NO_FOLLOW, 0o600);
+        const command = openSync(openedPath(receipt, "command.json"), NEW_FILE_NO_FOLLOW, 0o600);
         try {
           writeFileSync(command, `${JSON.stringify({
             ...runnerCommand,
@@ -1920,18 +1941,82 @@ function removeDeploymentServiceUnit(unitName = "") {
   ]);
 }
 
-function readPayload(payloadPath = "") {
-  const input = payloadPath
-    ? readFileSync(path.resolve(payloadPath), "utf8")
-    : readStdin();
-  if (Buffer.byteLength(input, "utf8") > INPUT_LIMIT_BYTES) {
-    throw new Error("Vibe64 exec helper payload is too large.");
+function readPayload() {
+  return parsePayload(readStdin());
+}
+
+// A payload that is not JSON is never repeated back.
+function parsePayload(input = "") {
+  let payload;
+  try {
+    payload = JSON.parse(input);
+  } catch {
+    throw new Error("Vibe64 exec helper payload is not valid JSON.");
   }
-  const payload = JSON.parse(input);
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     throw new Error("Vibe64 exec helper payload must be a JSON object.");
   }
   return payload;
+}
+
+// A path through a directory root already holds open: whatever later replaces
+// that directory's path, the name is looked up in the directory root opened.
+function openedPath(directory, name = "") {
+  return path.join(`/proc/self/fd/${directory}`, name);
+}
+
+function directoryEntryName(name = "") {
+  const entry = String(name);
+  if (!entry || entry === "." || entry === ".." || /[/\0]/u.test(entry)) {
+    throw new Error("Vibe64 exec helper rejected an unsafe file name.");
+  }
+  return entry;
+}
+
+// Opens `directory`, whose path only root can rearrange, and then each of
+// `parts` below it without following a link. The directory returned is the one
+// reached through real directories, whatever replaces their paths afterwards.
+function openDirectoryBelow(directory = "", parts = []) {
+  let descriptor = openSync(directory, fsConstants.O_RDONLY | fsConstants.O_DIRECTORY);
+  try {
+    for (const part of parts) {
+      const next = openSync(openedPath(descriptor, directoryEntryName(part)), DIRECTORY_NO_FOLLOW);
+      closeSync(descriptor);
+      descriptor = next;
+    }
+  } catch (error) {
+    closeSync(descriptor);
+    throw error;
+  }
+  return descriptor;
+}
+
+// Reads one regular file of `uid` from a directory root holds open: never
+// through a link, never waiting on a FIFO, never more than maxBytes, and never
+// repeating what it read in an error.
+function readOwnedFile(directory, name = "", { maxBytes = 0, uid = -1 } = {}) {
+  const descriptor = openSync(openedPath(directory, directoryEntryName(name)), FILE_NO_FOLLOW);
+  try {
+    const stats = fstatSync(descriptor);
+    if (!stats.isFile() || stats.uid !== uid) {
+      throw Object.assign(new Error("Vibe64 exec helper refused a file that is not its owner's regular file."), {
+        code: "EVIBE64UNSAFEFILE"
+      });
+    }
+    const buffer = Buffer.alloc(maxBytes + 1);
+    let length = 0;
+    while (length < buffer.length) {
+      const read = readSync(descriptor, buffer, length, buffer.length - length, null);
+      if (read === 0) break;
+      length += read;
+    }
+    if (length > maxBytes) {
+      throw Object.assign(new Error("Vibe64 exec helper refused a file that is too large."), { code: "EVIBE64UNSAFEFILE" });
+    }
+    return buffer.toString("utf8", 0, length);
+  } finally {
+    closeSync(descriptor);
+  }
 }
 
 function readStdin() {
@@ -2338,9 +2423,21 @@ function assertExpectedId(name = "uid", expected = null, actual = null) {
   }
 }
 
+// The daemon keeps each user's Vibe64 membership in its own state directory,
+// so root reads it only as the daemon's regular file there, reached without
+// following a link. A membership it cannot read that way is no membership.
 function assertEnabledForVibe64(owner = {}, username = "") {
-  const membershipPath = path.join(owner.home, ".local", "state", "vibe64", "users", `${username}.json`);
-  const membership = JSON.parse(readFileSync(membershipPath, "utf8"));
+  let membership = null;
+  try {
+    const directory = openDirectoryBelow(owner.home, [".local", "state", "vibe64", "users"]);
+    try {
+      membership = JSON.parse(readOwnedFile(directory, `${username}.json`, { maxBytes: MEMBERSHIP_LIMIT_BYTES, uid: owner.uid }));
+    } finally {
+      closeSync(directory);
+    }
+  } catch {
+    membership = null;
+  }
   if (membership?.username !== username || membership?.status !== "active") {
     throw new Error("OS user is not enabled for Vibe64.");
   }
@@ -2525,7 +2622,8 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
   return env;
 }
 
-export { managedWorkflowCounters, openManagedExecutionReceipts, managedWorkflowIdentity, managedExecutionOomBoundary,
+export { assertEnabledForVibe64, consumeManagedExecutionRequestPayload,
+  managedWorkflowCounters, openManagedExecutionReceipts, managedWorkflowIdentity, managedExecutionOomBoundary,
   managedExecutionState, managedExecutionStopTimeoutMs, managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal,
   releaseEndedManagedExecutions, stopManagedExecution, stopManagedServiceUnit,
   assertExpectedId, canonicalPath, helperChildEnv, resolveAllowedCwd,

@@ -179,6 +179,15 @@ unreadable unit still requires the service, because systemd would stop that
 unit with it. Release services keep their boot target.
 `tests/server/vibe64ExecutionHelperSource.unit.test.js` covers both actions.
 
+Where the daemon or a target user can rearrange a directory, the helper reads a
+file there only through that directory opened without following links, and
+only as that owner's regular file within a size limit. It never waits on a
+FIFO and never repeats what it read in an error. This covers a user's Vibe64
+membership in the daemon's state directory. A payload arrives on standard
+input, except that a managed execution whose terminal holds standard input
+passes it as the daemon's own file directly in the workspace's payload
+directory; the helper accepts no other file, and removes that one once read.
+
 `startVibe64Workflow()`, `setVibe64WorkflowPhase()` and
 `finishVibe64Workflow()` delegate trusted server lifecycle requests to the same
 installed managed-execution provider as commands. Standalone operation may

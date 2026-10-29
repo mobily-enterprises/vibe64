@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn, spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { helperChildEnv, managedExecutionState, managedExecutionOomBoundary, managedExecutionStopTimeoutMs,
+import { assertEnabledForVibe64, consumeManagedExecutionRequestPayload,
+  helperChildEnv, managedExecutionState, managedExecutionOomBoundary, managedExecutionStopTimeoutMs,
   managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal, openManagedExecutionReceipts,
   releaseEndedManagedExecutions, stopManagedExecution, stopManagedServiceUnit } from "../../packages/vibe64-execution/src/host/execHelper.js";
 import {
@@ -651,4 +652,116 @@ test("a starting controller releases every receipt and failed unit record except
   assert.deepEqual(removed, [failed, collected], "the owned receipt and the running unit's are kept");
   assert.equal(closed, 1, "the receipt directory is opened once and closed");
   assert.deepEqual(reset, [unit(failed), unit(orphanFailed)], "the owned failed unit keeps its record");
+});
+
+// Root reads these files from directories the daemon or an execution's target
+// user can rearrange. Whatever they plant there, root reads only their own
+// regular file, never waits on it, never echoes it and never removes anything
+// outside that directory.
+const SECRET = "root:$y$j9T$secret-hash-0123456789:19000:0:99999:7:::\n";
+const echoesNothing = (error) => !String(error?.message).includes("secret-hash") && !String(error?.message).includes("root:");
+
+async function plantedRoot(t) {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-exec-reads-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  const victim = path.join(root, "victim");
+  await mkdir(victim);
+  await writeFile(path.join(victim, "secret"), SECRET);
+  return { root, victim };
+}
+
+// A read that waits on a FIFO would stall this whole test process, so those run
+// in a child process stopped after a bound.
+function helperInChild(expression, input) {
+  const child = spawnSync(process.execPath, ["--input-type=module", "-e", `
+    const helper = await import(${JSON.stringify(HELPER_SOURCE_URL.href)});
+    const input = JSON.parse(process.argv[1]);
+    try { process.stdout.write(JSON.stringify({ value: await (${expression}) ?? null })); }
+    catch (error) { process.stdout.write(JSON.stringify({ error: String(error?.message || error) })); }
+  `, JSON.stringify(input)], { encoding: "utf8", timeout: 5000 });
+  assert.equal(child.signal, null, "the read returned instead of waiting on the FIFO");
+  return JSON.parse(child.stdout);
+}
+
+test("a payload file is read only as the daemon's regular file in its workspace payload directory", async (t) => {
+  const { root, victim } = await plantedRoot(t);
+  const owner = { uid: process.getuid(), username: "v64d_test" };
+  const consume = (file, as = owner) => consumeManagedExecutionRequestPayload(file, as, { managedRoot: root });
+  const directory = path.join(root, "test", "tmp", "managed-execution-payloads");
+  await mkdir(directory, { recursive: true, mode: 0o700 });
+  const payload = { operation: "managed-execution", schema: "vibe64.exec-helper.payload", schemaVersion: 1 };
+
+  await writeFile(path.join(directory, "a.json"), JSON.stringify(payload));
+  assert.deepEqual(consume(path.join(directory, "a.json")), payload);
+  assert.equal(existsSync(path.join(directory, "a.json")), false, "the payload is consumed");
+
+  for (const elsewhere of [path.join(victim, "secret"), path.join(directory, "..", "..", "..", "victim", "secret"),
+    `${directory}/./b.json`, `${directory}/.hidden`]) {
+    assert.throws(() => consume(elsewhere), (error) => echoesNothing(error) && /unsafe managed execution payload path/u.test(error.message));
+  }
+  await writeFile(path.join(directory, "not-json.json"), SECRET);
+  assert.throws(() => consume(path.join(directory, "not-json.json")), echoesNothing);
+  await symlink(path.join(victim, "secret"), path.join(directory, "linked.json"));
+  assert.throws(() => consume(path.join(directory, "linked.json")), echoesNothing);
+  await writeFile(path.join(directory, "large.json"), " ".repeat(1024 * 1024 + 1));
+  assert.throws(() => consume(path.join(directory, "large.json")), /too large/u);
+  await writeFile(path.join(directory, "other.json"), JSON.stringify(payload));
+  assert.throws(() => consume(path.join(directory, "other.json"), { ...owner, uid: owner.uid + 1 }));
+  assert.equal(existsSync(path.join(directory, "other.json")), true, "another user's file is left in place");
+  execFileSync("mkfifo", [path.join(directory, "fifo.json")]);
+  assert.ok(helperInChild("helper.consumeManagedExecutionRequestPayload(input.file, input.owner, { managedRoot: input.root })",
+    { file: path.join(directory, "fifo.json"), owner, root }).error);
+
+  // A link in place of the payload directory: the target's file of that name
+  // is neither read nor removed.
+  await writeFile(path.join(victim, "payload.json"), JSON.stringify(payload));
+  await rename(directory, `${directory}.real`);
+  await symlink(victim, directory);
+  assert.throws(() => consume(path.join(directory, "payload.json")));
+  assert.equal(await readFile(path.join(victim, "payload.json"), "utf8"), JSON.stringify(payload));
+  assert.equal(await readFile(path.join(victim, "secret"), "utf8"), SECRET);
+});
+
+test("the helper reads no payload file outside its workspace payload directory", async (t) => {
+  const { root, victim } = await plantedRoot(t);
+  const fifo = path.join(root, "fifo");
+  execFileSync("mkfifo", [fifo]);
+  const helperPath = new URL(HELPER_SOURCE_URL).pathname;
+  const run = (...args) => spawnSync(process.execPath, [helperPath, "execute", ...args], {
+    encoding: "utf8", env: { ...process.env, SUDO_USER: os.userInfo().username }, timeout: 5000
+  });
+  for (const args of [[path.join(victim, "secret")], [fifo], [path.join(victim, "secret"), "extra"]]) {
+    const result = run(...args);
+    assert.equal(result.signal, null, `the helper returned for ${args.join(" ")}`);
+    assert.equal(result.status, 2);
+    assert.ok(echoesNothing({ message: result.stderr }), result.stderr);
+  }
+  assert.equal(await readFile(path.join(victim, "secret"), "utf8"), SECRET);
+});
+
+test("a user's Vibe64 membership is read only as the daemon's regular file", async (t) => {
+  const { root, victim } = await plantedRoot(t);
+  const home = path.join(root, "home");
+  const users = path.join(home, ".local", "state", "vibe64", "users");
+  await mkdir(users, { recursive: true });
+  const owner = { home, uid: process.getuid(), username: "v64d_test" };
+  const active = (username) => JSON.stringify({ status: "active", username });
+  await writeFile(path.join(users, "alice.json"), active("alice"));
+  await writeFile(path.join(users, "bob.json"), JSON.stringify({ status: "disabled", username: "bob" }));
+  await writeFile(path.join(users, "erin.json"), SECRET);
+  await symlink(path.join(victim, "secret"), path.join(users, "carol.json"));
+
+  assert.doesNotThrow(() => assertEnabledForVibe64(owner, "alice"));
+  for (const username of ["bob", "carol", "erin", "frank"]) {
+    assert.throws(() => assertEnabledForVibe64(owner, username), (error) => echoesNothing(error) && /not enabled/u.test(error.message));
+  }
+  assert.throws(() => assertEnabledForVibe64({ ...owner, uid: owner.uid + 1 }, "alice"), /not enabled/u);
+  execFileSync("mkfifo", [path.join(users, "gina.json")]);
+  assert.match(helperInChild("helper.assertEnabledForVibe64(input.owner, 'gina')", { owner }).error, /not enabled/u);
+
+  // A link in place of the membership directory.
+  await writeFile(path.join(victim, "dave.json"), active("dave"));
+  await rename(users, `${users}.real`);
+  await symlink(victim, users);
+  assert.throws(() => assertEnabledForVibe64(owner, "dave"), /not enabled/u);
 });
