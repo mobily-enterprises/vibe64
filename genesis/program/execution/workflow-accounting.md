@@ -22,6 +22,7 @@ can measure their simultaneous memory use and retain a trustworthy final peak.
 - `packages/vibe64-terminals/src/server/workspaceSetup.js`
 - `packages/vibe64-terminals/src/server/vibe64OutputTargets.js`
 - `packages/vibe64-terminals/src/server/outputTargetTerminal.js`
+- `packages/vibe64-terminals/src/server/previewDiagnosticFiles.js`
 - `src/lib/vibe64ResourceRecovery.js`
 - `src/composables/useVibe64OutputControls.js`
 - `src/composables/useVibe64OutputControlsSurface.js`
@@ -438,7 +439,9 @@ launch/runtime or ownership failure.
 
 An output admission refusal preserves the provider's structured decision in
 the ordinary error response. Preview diagnostics retain its correlation ID in
-`<sessionRoot>/preview-last.json` and `preview-log.jsonl`. Failed workspace setup
+`<sessionRoot>/preview-last.json` and `preview-log.jsonl`; the package export
+`@local/vibe64-terminals/server/previewDiagnosticFiles` names both files, so a
+host that reports their size does not repeat the names. Failed workspace setup
 stores only the optional UUID `resourceAdmissionId` in its existing
 `<sessionRoot>/metadata/workspace_setup` record, so a reload can still identify
 the decision. Successful preparation and non-failed states clear that ID;

@@ -1,7 +1,8 @@
 import path from "node:path";
 
 // The Preview launcher writes these beside the session; the agent's
-// `vibe64-helper preview status/logs` report the same paths.
+// `vibe64-helper preview status/logs` report the same paths, and a host's
+// storage report finds them through this module's package export.
 const PREVIEW_LOG_FILE_NAME = "preview-log.jsonl";
 const PREVIEW_LAST_FILE_NAME = "preview-last.json";
 
