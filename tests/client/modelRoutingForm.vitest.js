@@ -31,7 +31,7 @@ const proClaude = selection("claude", "deepseek", "deepseek-v4-pro");
 const proCodex = selection("codex", "deepseek", "deepseek-v4-pro");
 const flash = selection("claude", "deepseek", "deepseek-flash", "low");
 const choice = (item) => ({ ...item, label: LABELS[item.modelId], engineLabel: item.engineId === "claude" ? "Claude Code" : "Codex",
-  providerLabel: item.modelProviderId === "anthropic" ? "Anthropic" : "DeepSeek", variants: VARIANTS, available: true,
+  providerLabel: item.modelProviderId === "anthropic" ? "Claude" : "DeepSeek", variants: VARIANTS, available: true,
   ownerOnly: item.modelProviderId === "anthropic", endpointCode: item.modelProviderId === "anthropic" ? "claude_subscription" : "",
   accessLabel: item.modelProviderId === "anthropic" ? "Personal use" : "Workspace use", capabilities: { toolcall: true } });
 const OWNER_CHOICES = [opus, haiku, proClaude, proCodex, flash].map(choice);
@@ -246,7 +246,7 @@ describe("rows", () => {
   it("shows a subscription's fixed tool under Advanced and no tool suffix", () => {
     const row = mount(ModelRoutingRow, { role: role("senior"), value: opus, choices: OWNER_CHOICES });
     expect([row.hasAdvanced, row.offDefault, row.fixedLine]).toEqual([true, false, "Runs in Claude Code — required by your Claude plan."]);
-    expect(row.items.find(({ id }) => id === row.pickerValue)).toMatchObject({ label: "Opus 5.5", personal: true, providerLabel: "Anthropic" });
+    expect(row.items.find(({ id }) => id === row.pickerValue)).toMatchObject({ label: "Opus 5.5", personal: true, providerLabel: "Claude" });
   });
 
   it("lists each model once, with Runs in only where a real choice exists, defaulting DeepSeek to Claude Code", () => {

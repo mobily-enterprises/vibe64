@@ -75,7 +75,9 @@ choice; saving makes it the row's own choice. A row with its own choice offers
 Each row shows its model and thinking, for example **Opus 5.5 · High**. Pick a
 model from the list: each item shows the model, its provider and an amber
 **Personal use** badge for a personal plan (see
-[personal-use subscriptions](ai-personal-use.md)). **Recommended** marks the
+[personal-use subscriptions](ai-personal-use.md)). The provider is named as in
+AI Accounts: your Claude plan's models, such as **Opus 5.5**, show **Claude**,
+and DeepSeek's models, which also run in Claude Code, show **DeepSeek**. **Recommended** marks the
 suggested model; unavailable choices show their reason and cannot be chosen.
 Type to search. Choose thinking in the separate thinking control beside it.
 

@@ -74,6 +74,13 @@ it("groups configured pairs by orchestrator", () => {
   expect(state.canAddConnection).toBe(false);
 });
 
+it("names the Claude plan Claude, as AI setup does, beside DeepSeek in the Claude Code group", () => {
+  const state = mount();
+  expect(engineGroup(state, "claude").accounts.slice(0, 2).map(({ id, providerLabel }) => [id, providerLabel])).toEqual([
+    ["claude", "Claude"], ["deepseek", "DeepSeek"]
+  ]);
+});
+
 it("opens settings for the exact orchestrator and provider without checking or changing a key", () => {
   const state = mount();
   for (const engine of ["codex", "claude"]) {

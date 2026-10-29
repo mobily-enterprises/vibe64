@@ -13,7 +13,7 @@ import { claudeCapabilities, createClaudeConversationHost as createNativeClaudeS
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { sessionRenewalManualHandoverTemplate, sessionRenewalHandoverHash } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
 import { readClaudeCodeAuthStatus } from "../../packages/studio-terminal-core/src/server/claudeRuntime.js";
-import { defineVibe64AssistantCapabilities, defineVibe64AssistantSelection } from "../../packages/vibe64-runtime/src/shared/assistantSelection.js";
+import { VIBE64_ASSISTANT_SELECTION_ERROR_CODES, defineVibe64AssistantCapabilities, defineVibe64AssistantSelection, resolveVibe64AssistantSelection } from "../../packages/vibe64-runtime/src/shared/assistantSelection.js";
 import { vibe64DriverInputFromRegistry } from "../../packages/vibe64-genesis/src/server/promptContext.js";
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
@@ -50,6 +50,17 @@ test("Claude's live model and effort catalog fits the shared assistant selection
   assert.equal(defineVibe64AssistantCapabilities(catalog).engineId, "claude");
   assert.equal(catalog.defaults.variantId, "high");
   assert.equal(catalog.modelProviders[0].models[0].variants[0].label, "Low");
+});
+
+test("Claude Code names the Claude plan as AI Accounts does, so a missing sign-in asks to connect Claude", () => {
+  const catalog = claudeCapabilities({}, false, []);
+  const names = Object.fromEntries(catalog.modelProviders.map(({ id, label }) => [id, label]));
+  assert.equal(names.anthropic, "Claude");
+  assert.equal(names.deepseek, "DeepSeek");
+  assert.throws(() => resolveVibe64AssistantSelection(catalog, { engineId: "claude", modelProviderId: "anthropic" }), {
+    code: VIBE64_ASSISTANT_SELECTION_ERROR_CODES.CONNECTION_REQUIRED,
+    message: "Connect Claude before creating or continuing this session."
+  });
 });
 
 const fixtureRuntimeOwners = Symbol("Claude fixture runtime owners");

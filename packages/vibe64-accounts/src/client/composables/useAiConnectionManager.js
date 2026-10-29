@@ -201,7 +201,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
       keyHint: claudeConnected.value ? "Connected" : "Reconnect required",
       managementUrl: "https://claude.ai/settings/billing",
       modelLabel: "Choose its models in Models",
-      providerLabel: "Anthropic"
+      providerLabel: "Claude"
     }] : []),
     ...codexProviders.connections.value.flatMap((connection) => {
       const provider = curatedCodexProvider(connection.id);

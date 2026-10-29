@@ -109,7 +109,9 @@ example **7 connections · 2 not on a card above**. Select it to open:
   These providers also appear in the **Connected** or **Currently using** strip
   at the top.
 - **By tool · Claude Code**, **· Codex** and **· OpenCode** list every connection
-  of that orchestrator, with the same buttons.
+  of that orchestrator, with the same buttons. Each row is named as its card
+  names it: under Claude Code, your Claude plan is **Claude**, beside keys such
+  as **DeepSeek**.
 
 If the connections cannot be read, Advanced shows **AI accounts could not load**
 with **Try again**. On a phone the buttons fill the width. The provider cards'

@@ -592,6 +592,11 @@ those cached query results. The retained owner supplies its own process inventor
 and closing barrier. `claudeConversationAccounts` retains authorized identity,
 access, curated model choices, Helper profiles and product error projection;
 `claudeConversationEvents` retains the original publication and checkpoint effects.
+The accounts catalogue labels the Claude plan provider (`anthropic`) **Claude**,
+as AI Accounts names it, so model pickers and the selection error ("Connect
+Claude before creating or continuing this session.") use the person's name for
+that account. Only the label is product copy; saved selections keep the
+`anthropic` id.
 The original provider-key digest is exported by that same accounts owner as
 `claudeProviderAccountIdentity`; stopped historical conversion uses it to verify
 an old receipt before translating it with the shared native connection-pin owner.
@@ -2059,7 +2064,7 @@ The selected external model supplies the native `[1m]` model id, provider-owned
 auto-compaction window, and explicit main/background/subagent model mappings.
 JSKIT's `claudeModelConfiguration()` owns those rules; chat and terminal pass their
 authorized provider/model and connection through the same helper.
-Returning to Anthropic clears those overrides and the external credential.
+Returning to the Claude plan (`anthropic`) clears those overrides and the external credential.
 The native terminal receives the same configuration through its private process
 environment; command arguments contain no provider key. Chat and terminal retain
 one writer and the same native conversation. Claude owns reasoning-history

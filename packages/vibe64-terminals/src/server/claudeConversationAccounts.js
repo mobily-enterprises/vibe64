@@ -38,7 +38,8 @@ function claudeCapabilities(initialization, connected, connections = []) {
     defaults: { agentId: ENGINE, modelId: selected?.id || "", modelProviderId: defaultProvider?.id || "anthropic",
       variantId: selected?.variants.some((variant) => variant.id === "high") ? "high" : "" },
     health: { status: available ? "ready" : "unavailable", message: available ? "" : "Connect Claude Code to use your Claude plan." },
-    modelProviders: [{ id: "anthropic", label: "Anthropic", connected, models }, ...external],
+    // The person's Claude plan, named as AI Accounts names it.
+    modelProviders: [{ id: "anthropic", label: "Claude", connected, models }, ...external],
     revision: `sha256:${hash(JSON.stringify({ models, connected, external }))}`
   };
 }
