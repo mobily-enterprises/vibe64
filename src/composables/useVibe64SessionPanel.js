@@ -112,6 +112,7 @@ function useVibe64SessionPanel(props, emit) {
   });
   const repositoryStatusRegistry = useVibe64SessionRepositoryStatusRegistry({
     onState: applyRuntimeWorkState,
+    projectSlug,
     selectedSessionId: () => listedSelectedSessionId.value,
     sessionSourceOperationsSuspended: (sessionId) => (
       runtimeStateBySessionId[sessionId]?.sourceOperationsSuspended === true

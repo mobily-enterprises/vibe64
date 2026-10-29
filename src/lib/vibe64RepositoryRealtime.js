@@ -19,6 +19,10 @@ const REPOSITORY_STATUS_SESSION_REASONS = new Set([
   "session-update-started"
 ]);
 
+// The server's update probe could not check a session; the payload carries
+// repositoryUpdateCheckError. Only the session's repository status shows it.
+const REPOSITORY_UPDATE_CHECK_FAILED_REASON = "session-repository-check-failed";
+
 const REPOSITORY_CANONICAL_RECHECK_REASONS = new Set([
   "repository-canonical-changed",
   "session-pull-request",
@@ -42,6 +46,7 @@ function repositoryStatusRealtimeNeedsCanonicalCheck(payload = {}) {
 export {
   REPOSITORY_CANONICAL_RECHECK_REASONS,
   REPOSITORY_STATUS_SESSION_REASONS,
+  REPOSITORY_UPDATE_CHECK_FAILED_REASON,
   repositoryStatusRealtimeNeedsCanonicalCheck,
   repositoryStatusRealtimeShouldRefresh,
   repositoryStatusSessionId

@@ -43,7 +43,8 @@ const CLIENT_REFRESH_BY_REASON = new Map([
     "output-target-closed",
     "output-target-ready",
     "output-target-started",
-    "output-target-stopped"
+    "output-target-stopped",
+    "session-repository-check-failed"
   ].map((reason) => [reason, PRESENTATION_ONLY]),
   ...[
     "codex-app-server-turn-active",

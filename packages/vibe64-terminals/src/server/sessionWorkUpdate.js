@@ -35,6 +35,7 @@ import {
   treeWithDerivedArtifactsFromCommit
 } from "./sessionWorkGit.js";
 import {
+  readAuthorityBranchHeads,
   readCanonical
 } from "./sessionWorkAuthority.js";
 
@@ -239,6 +240,96 @@ async function checkSessionUpdates({
   }), {
     operation: `check-session-updates:${context.sessionId}`
   });
+}
+
+// A head read that hangs fails well within the probe's 30 s cadence, so the
+// probe reports it and retries inside the product's 60 s limit.
+const AUTHORITY_HEAD_READ_TIMEOUT_MS = 20_000;
+
+// The branches whose heads decide a session's canonical commit: its branch, or
+// for a connected contribution its published, discarded and integration
+// branches (readRemoteCanonical in sessionWorkAuthority.js).
+function authorityBranches(context) {
+  return context.contribution
+    ? [context.branch, `${context.branch}_discarded`, context.contribution.integrationBranch]
+    : [context.branch];
+}
+
+// The update probe's read, with one `ls-remote` per authority repository
+// however many sessions share it, run as the first of those sessions whose
+// recorded Git actor can read it. Each session gets its canonical branch
+// `head`, or for a connected contribution an opaque `authority` of its branch
+// heads, or `{ code, error }`. A session absent from the result was not read:
+// its authority has no recorded Git actor yet (a person's first check of the
+// session records one).
+async function readSessionAuthorityHeads({
+  executionFor,
+  project = {},
+  sessions = []
+} = {}) {
+  const results = new Map();
+  const authorities = new Map();
+  for (const session of sessions) {
+    let context;
+    try {
+      context = repositoryContext(session, project);
+    } catch (error) {
+      results.set(text(session.sessionId), { code: text(error?.code), error: text(error?.message) });
+      continue;
+    }
+    const members = authorities.get(context.remoteUrl) || [];
+    members.push({ context, session });
+    authorities.set(context.remoteUrl, members);
+  }
+  for (const members of authorities.values()) {
+    let execution = null;
+    let executor = null;
+    let refusal = null;
+    for (const member of members) {
+      const candidate = await executionFor(member.session);
+      if (candidate?.ok !== false) {
+        execution = candidate;
+        executor = member;
+        break;
+      }
+      if (candidate.code !== "vibe64_session_git_command_actor_missing") refusal ||= candidate;
+    }
+    let failure = refusal && { code: text(refusal.code), error: text(refusal.error) };
+    if (execution) {
+      try {
+        const heads = await readAuthorityBranchHeads(
+          scopedSessionWorkCommand(execution.runCommand, executor.context, project, {
+            label: "Checking repository for updates"
+          }),
+          executor.context,
+          members.flatMap(({ context }) => authorityBranches(context)),
+          { commandOptions: { ...execution.commandOptions, timeout: AUTHORITY_HEAD_READ_TIMEOUT_MS }, project }
+        );
+        for (const { context } of members) {
+          if (context.contribution) {
+            // A contribution's published branch may not exist yet; its check decides.
+            results.set(context.sessionId, {
+              authority: JSON.stringify(authorityBranches(context).map((branch) => heads.get(branch) || ""))
+            });
+            continue;
+          }
+          const head = heads.get(context.branch);
+          results.set(context.sessionId, head ? { head } : {
+            code: "vibe64_session_update_branch_missing",
+            error: `The ${context.branch} branch is no longer in the project's repository.`
+          });
+        }
+        continue;
+      } catch (error) {
+        failure = {
+          code: text(error?.code) || "vibe64_session_update_check_failed",
+          error: text(error?.message) || "The project's repository could not be checked for updates."
+        };
+      }
+    }
+    if (failure) for (const { context } of members) results.set(context.sessionId, failure);
+  }
+  return results;
 }
 
 async function applySessionUpdate(runCommand, context, {
@@ -652,6 +743,7 @@ export {
   checkSessionUpdates,
   checkSessionUpdatesDirect,
   prepareSessionWorkUpdateDirect,
+  readSessionAuthorityHeads,
   recoverSessionWorkUpdate,
   regenerateSessionWorkUpdateDirect,
   updateSessionWork,

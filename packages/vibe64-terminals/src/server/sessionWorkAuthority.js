@@ -165,6 +165,26 @@ async function assertLocalAuthority(runCommand, context, options) {
   });
 }
 
+// Reads the named branch heads of one authority repository (the GitHub remote,
+// the managed bare repository or the local project folder) with one
+// `git ls-remote`. It fetches no objects and changes no checkout, so it needs
+// no source lock; a moved head is then read by the ordinary update check.
+async function readAuthorityBranchHeads(runCommand, context, branches, options) {
+  const refs = [...new Set(branches.map(text).filter(Boolean))].map((branch) => `refs/heads/${branch}`);
+  const output = await gitOutput(runCommand, context, ["ls-remote", "--heads", context.remoteUrl, ...refs], options);
+  const heads = new Map();
+  for (const line of output.split("\n").filter(Boolean)) {
+    const [head, ref] = line.split(/\s+/u);
+    // A pattern also matches a longer ref name ending in it.
+    if (!refs.includes(ref)) continue;
+    if (!isGitObjectId(head) || heads.has(ref)) {
+      throw saveError("The repository returned invalid branch evidence.", "vibe64_session_update_refs_invalid");
+    }
+    heads.set(ref.slice("refs/heads/".length), head);
+  }
+  return heads;
+}
+
 async function readCanonical(runCommand, context, operationId, options) {
   if (context.mode !== PROJECT_REPOSITORY_MODE_LOCAL_SOURCE) {
     return readRemoteCanonical(runCommand, context, operationId, options);
@@ -320,6 +340,7 @@ export {
   assertConnectedWorkSnapshotsUnchanged,
   assertLocalAuthority,
   connectedWorkSnapshots,
+  readAuthorityBranchHeads,
   readCanonical,
   readContributionHead
 };

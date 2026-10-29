@@ -1,5 +1,6 @@
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { mainConversationRequestContext } from "./mainConversationAuthority.js";
+import { REPOSITORY_UPDATES_WATCH_ACTION } from "./repositoryUpdateProbe.js";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { isLocalStudioRequest } from "@local/vibe64-core/server/localStudioRequest";
@@ -23,6 +24,7 @@ import {
   currentSessionInputValidator,
   sessionPinActionInputValidator,
   repositoryHistoryInputValidator,
+  repositoryUpdatesWatchInputValidator,
   repositoryVersionFileDiffInputValidator,
   repositoryVersionFilesInputValidator,
   sessionConversationLogInputValidator,
@@ -574,6 +576,34 @@ function createSessionActions({ sessions } = {}) {
   ]);
 }
 
+// A browser's watch of its project for repository updates. Only its realtime
+// connection (repositoryUpdateProbe.js) executes it, with the binding that
+// releases the watch when the browser stops showing the project or disconnects.
+function createRepositoryUpdateWatchActions({ probe } = {}) {
+  if (!probe) {
+    throw new TypeError("createRepositoryUpdateWatchActions requires the update probe.");
+  }
+  return Object.freeze([{
+    ...action({
+      id: REPOSITORY_UPDATES_WATCH_ACTION,
+      kind: "command",
+      input: repositoryUpdatesWatchInputValidator,
+      execute: (_input, _context, deps) => {
+        const binding = deps?.watchBinding;
+        if (typeof binding?.current !== "function" || typeof binding.onRelease !== "function") {
+          throw Object.assign(new Error("Watching a project for updates requires a realtime connection."), {
+            code: "vibe64_repository_updates_watch_connection_required", statusCode: 400
+          });
+        }
+        if (binding.current()) binding.onRelease(probe.watch(currentProjectRequestContext()?.slug));
+        return { ok: true };
+      }
+    }),
+    // No HTTP route: a watch lives only as long as its connection.
+    channels: ["api"]
+  }]);
+}
+
 export {
   ACTION_APPROVE_MAIN_CHAT_APPROVAL,
   ACTION_DECLINE_MAIN_CHAT_APPROVAL,
@@ -620,5 +650,6 @@ export {
   ACTION_UPDATE_SESSION_RENEWAL_DRAFT,
   ACTION_UPDATE_SESSION_PRESENCE,
   ACTION_UPDATE_SESSION_WORK,
+  createRepositoryUpdateWatchActions,
   createSessionActions
 };

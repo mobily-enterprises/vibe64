@@ -6,7 +6,8 @@ const registryHarness = vi.hoisted(() => ({
   intervalCallbacks: [],
   realtimeEvents: [],
   requestHandler: null,
-  requests: []
+  requests: [],
+  socket: null
 }));
 
 vi.mock("@jskit-ai/http-web/client/lib/httpClient", () => ({
@@ -25,7 +26,8 @@ vi.mock("@jskit-ai/realtime/client/composables/useRealtimeEvent", () => ({
   useRealtimeEvent(options) {
     registryHarness.realtimeEvents.push(options);
     return {};
-  }
+  },
+  useRealtimeSocket: () => registryHarness.socket
 }));
 
 import {
@@ -47,6 +49,15 @@ describe("session repository status registry", () => {
     registryHarness.realtimeEvents.length = 0;
     registryHarness.requests.length = 0;
     registryHarness.requestHandler = null;
+    const socketListeners = new Map();
+    registryHarness.socket = {
+      connected: true,
+      emitted: [],
+      listeners: socketListeners,
+      emit(event, input) { this.emitted.push([event, input]); },
+      off(event) { socketListeners.delete(event); },
+      on(event, callback) { socketListeners.set(event, callback); }
+    };
     vi.stubGlobal("document", {
       addEventListener: vi.fn((event, callback) => {
         registryHarness.documentListeners.set(event, callback);
@@ -522,14 +533,77 @@ describe("session repository status registry", () => {
     registryHarness.documentListeners.get("visibilitychange")();
     await settleRegistryRequests();
 
+    // Returning to the tab refreshes local work; the server probe owns update checks.
     expect(registryHarness.requests.map(({ options, path }) => [options.method, path])).toEqual([
-      ["GET", "/api/app/sample/vibe64/sessions/session-b/work"],
-      ["POST", "/api/app/sample/vibe64/sessions/session-a/updates/check"],
-      ["GET", "/api/app/sample/vibe64/sessions/session-a/work"]
+      ["GET", "/api/app/sample/vibe64/sessions/session-b/work"]
     ]);
-    expect(registryHarness.requests.find(({ options }) => options.method === "POST").options.body)
-      .toEqual({ force: false });
     scope.stop();
     expect(registryHarness.documentListeners.has("visibilitychange")).toBe(false);
+  });
+
+  it("watches its project for the server's update probe while visible instead of polling", async () => {
+    const projectSlug = ref("sample");
+    const scope = effectScope();
+    scope.run(() => useVibe64SessionRepositoryStatusRegistry({
+      projectSlug,
+      selectedSessionId: ref("session-a"),
+      sessions: ref([{ sessionId: "session-a", status: "active" }]),
+      sessionsApiPath: ref("/api/app/sample/vibe64/sessions")
+    }));
+    await settleRegistryRequests();
+    const { socket } = registryHarness;
+    const [[event, watch]] = socket.emitted;
+    expect(event).toBe("vibe64.sessions.repository-updates.watch");
+    expect(watch).toEqual({ projectSlug: "sample", watchId: expect.any(String) });
+    const emitted = () => socket.emitted.map(([name, input]) => [name.split(".").at(-1), input.projectSlug || ""]);
+
+    registryHarness.requests.length = 0;
+    for (const callback of registryHarness.intervalCallbacks) callback();
+    await settleRegistryRequests();
+    expect(registryHarness.requests.filter(({ options }) => options.method === "POST")).toEqual([]);
+
+    document.visibilityState = "hidden";
+    registryHarness.documentListeners.get("visibilitychange")();
+    document.visibilityState = "visible";
+    registryHarness.documentListeners.get("visibilitychange")();
+    socket.listeners.get("connect")();
+    projectSlug.value = "other";
+    await nextTick();
+    expect(emitted()).toEqual([
+      ["watch", "sample"], ["release", ""], ["watch", "sample"], ["watch", "sample"], ["watch", "other"]
+    ]);
+    expect(new Set(socket.emitted.map(([, input]) => input.watchId)).size).toBe(1);
+    scope.stop();
+    expect(emitted().at(-1)).toEqual(["release", ""]);
+    expect(socket.listeners.has("connect")).toBe(false);
+  });
+
+  it("shows a server probe failure on its session's repository status", async () => {
+    const states = [];
+    const scope = effectScope();
+    scope.run(() => useVibe64SessionRepositoryStatusRegistry({
+      onState: (state) => states.push(state),
+      projectSlug: ref("sample"),
+      selectedSessionId: ref("session-a"),
+      sessions: ref([{ sessionId: "session-a", status: "active" }]),
+      sessionsApiPath: ref("/api/app/sample/vibe64/sessions")
+    }));
+    await settleRegistryRequests();
+    registryHarness.requests.length = 0;
+    const sessionChanged = registryHarness.realtimeEvents[0];
+    const payload = {
+      reason: "session-repository-check-failed",
+      repositoryUpdateCheckError: { code: "vibe64_git_failed", message: "Could not resolve host: github.com" },
+      sessionId: "session-a"
+    };
+    expect(sessionChanged.matches({ payload })).toBe(true);
+    sessionChanged.onEvent({ payload });
+    await settleRegistryRequests();
+    expect(states.at(-1)).toMatchObject({
+      sessionId: "session-a",
+      workState: { error: "Could not resolve host: github.com", loading: false }
+    });
+    expect(registryHarness.requests).toEqual([]);
+    scope.stop();
   });
 });

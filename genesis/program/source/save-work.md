@@ -66,6 +66,9 @@ Git commands.
 - `src/components/studio/repository/Vibe64LocalRemoteControls.vue`
 - `src/components/studio/repository/Vibe64RepositoryWorkspace.vue`
 - `packages/vibe64-sessions/src/server/service.js`
+- `packages/vibe64-sessions/src/server/repositoryUpdateProbe.js`
+- `packages/vibe64-sessions/src/server/Vibe64SessionsProvider.js`
+- `packages/vibe64-sessions/src/shared/repositoryUpdates.js`
 - `packages/vibe64-sessions/src/server/connectedContributions.js`
 - `packages/vibe64-sessions/src/server/actions.js`
 - `packages/vibe64-sessions/src/server/inputSchemas.js`
@@ -399,14 +402,31 @@ check results cannot replace a newer confirmation, and pending incoming work
 survives an older work inspection until that inspection sees the announced
 canonical commit. An initially unknown file-change list does not hide a
 confirmed Update action.
-Returning to a visible tab requests a normal canonical check, allowing the
-server's 25-second shared result cache to serve sibling tabs. Explicit source
-and canonical-change invalidations still force a fresh check. Worktree fallback
-inspection on visibility remains immediate.
-This visibility recovery refers to the browser document. Switching session chips
-reuses a recorded canonical check instead of requesting it again. A session
-without a confirmed check still gets its first check, and the existing five-minute
-canonical fallback detects upstream Git changes that publish no Vibe64 event.
+Upstream changes that publish no Vibe64 event, such as a push from elsewhere or
+a commit in a local project folder, are found by the server's update probe.
+While a project is in use, meaning a browser shows it or an agent turn runs in
+one of its sessions, the server reads its open sessions' authority branch heads
+every 30 seconds with one `git ls-remote` per authority repository, shared by
+every session and viewer. It runs the ordinary forced check, with its fetch
+under the project source lock, only for a session whose head moved; that check's
+realtime result reaches every viewer and notifies sibling sessions as above. A
+connected contribution's read covers its published, discarded and integration
+branches; it is checked once when the probe first sees it and again when any of
+them moves. A probe never overlaps itself, and a tick that passes while one runs
+is skipped. A failed probe appears once on the affected sessions' repository
+status, is retried every 60 seconds, and is cleared by the check that follows
+recovery. The first tick that finds no watching browser and no running turn
+reads no Git and leaves no timer; a starting turn or a returning browser
+resumes the probe without probing more often than every 30 seconds.
+A browser watches its project over its realtime connection while the document is
+visible; hiding the tab, leaving the project or disconnecting releases the watch.
+Returning to a visible tab resumes the watch and immediately repeats worktree
+fallback inspection; it requests no canonical check of its own. Explicit source
+and canonical-change invalidations still force a fresh check. Switching session
+chips reuses a recorded canonical check instead of requesting it again. A session
+without a confirmed check still gets its first check, which also records the
+session's Git actor; the probe reads a GitHub authority only with an actor that
+such a check recorded, and leaves a session without one to that first check.
 Clicking the muted repository action explicitly forces a server update check through
 the same registry and waits for the work inspection to settle. A visible
 “Checking…” hint and busy state last for that request, with repeated clicks
@@ -644,3 +664,15 @@ Push of that upstream stay with the original folder.
   unauthenticated (401, failed authentication, bad credentials) drops that
   actor's values, so the next operation reads them again. Neither is written to
   disk or logs; the actor authorization hook still runs for every operation.
+- `repositoryUpdateProbe.js` keeps one probe timer per project in use: a
+  browser's realtime watch, authorized as the `api`-only action
+  `vibe64.sessions.repository-updates.watch`, or an agent turn that a
+  turn-active session event announced and the probe still sees running. The
+  sessions service's `probeRepositoryUpdates()` reads every open session's heads
+  through the terminals' `readSessionAuthorityHeads()` (one `ls-remote` per
+  authority with a 20-second limit, run as a session's recorded Git actor
+  without recording one) and
+  calls the ordinary forced `checkSessionUpdates()` for a moved head. It skips a
+  session whose Save, Update or renewal is running. A failure publishes
+  `session-repository-check-failed` with `repositoryUpdateCheckError` only when
+  its message changes.

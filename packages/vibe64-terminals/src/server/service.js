@@ -71,6 +71,7 @@ import {
 } from "./sessionIncomingContributions.js";
 import {
   checkSessionUpdates as checkManagedSessionUpdates,
+  readSessionAuthorityHeads as readManagedSessionAuthorityHeads,
   recoverSessionWorkUpdate as recoverManagedSessionWorkUpdate,
   updateSessionWork as updateManagedSessionWork
 } from "./sessionWorkUpdate.js";
@@ -2811,6 +2812,17 @@ function createService({
         runCommand: execution.runCommand,
         runProjectSourceExclusive: projectService.runProjectSourceExclusive.bind(projectService),
         session
+      });
+    },
+
+    // The update probe's head read for the current project's open sessions. It
+    // uses each session's recorded Git actor as stored; it never records one,
+    // because no person asked for this read.
+    async readRepositoryAuthorityHeads({ sessions = [] } = {}) {
+      return readManagedSessionAuthorityHeads({
+        executionFor: (session) => codexGitCommand.sessionWorkSaveContext({ session }),
+        project: await projectService.readCurrentProject(),
+        sessions
       });
     },
 

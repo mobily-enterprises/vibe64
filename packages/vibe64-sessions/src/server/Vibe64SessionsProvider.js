@@ -5,7 +5,8 @@ import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 
-import { createSessionActions } from "./actions.js";
+import { createRepositoryUpdateWatchActions, createSessionActions } from "./actions.js";
+import { createRepositoryUpdateProbe, registerRepositoryUpdateWatch } from "./repositoryUpdateProbe.js";
 import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { registerApprovalCountReader } from "@local/vibe64-core/server/studioProjectContext";
 import { createVibe64ProjectChangedPublisher } from "@local/vibe64-project/server/actions";
@@ -172,4 +173,47 @@ function createVibe64SessionsFeature() {
 
 const Vibe64SessionsProvider = createVibe64SessionsFeature();
 
-export { Vibe64SessionsProvider };
+// The terminals publish these when an agent turn starts in a session.
+const TURN_ACTIVE_REASONS = new Set([
+  "claude-stream-turn-active",
+  "codex-app-server-turn-active",
+  "opencode-server-turn-active"
+]);
+
+// The project update probe runs while a browser watches the project over
+// realtime or an agent turn runs in it. Authenticated realtime may be composed
+// on top of sessions, so it attaches only after both owners exist.
+const Vibe64RepositoryUpdatesProvider = defineFeature({
+  id: "vibe64.sessions.repository-updates",
+  domain: "vibe64-sessions",
+  requires: { events: "runtime.events", realtime: "runtime.realtime", sessions: "vibe64.sessions" },
+  provides: { repositoryUpdates: "vibe64.sessions.repository-updates" },
+  actionDefaults: { channels: ["api"], surfaces: ["app"] },
+  setup({ events, realtime, sessions }, { actionCatalogue }) {
+    const probe = createRepositoryUpdateProbe({
+      probe: (slug, state) => sessions.probeRepositoryUpdates(slug, state),
+      onError: (error, projectSlug) => {
+        vibe64SessionDebugLog("server.sessions.repositoryUpdates.probe.error", {
+          error: vibe64SessionDebugError(error),
+          projectSlug
+        });
+      }
+    });
+    events.register({
+      id: "vibe64.sessions.repository-updates.turn-active",
+      matches: (event) => event?.entity === "session" && TURN_ACTIVE_REASONS.has(event.realtime?.payload?.reason),
+      handle: (event) => probe.wake(event.realtime.payload.projectSlug)
+    });
+    const closeWatches = registerRepositoryUpdateWatch({ actions: actionCatalogue, realtime });
+    return { repositoryUpdates: { probe, close() {
+      closeWatches();
+      probe.close();
+    } } };
+  },
+  actions: ({ repositoryUpdates }) => createRepositoryUpdateWatchActions({ probe: repositoryUpdates.probe }),
+  shutdown(_deps, { outputs }) {
+    outputs.repositoryUpdates.close();
+  }
+});
+
+export { Vibe64RepositoryUpdatesProvider, Vibe64SessionsProvider };

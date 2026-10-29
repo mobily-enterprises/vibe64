@@ -5,7 +5,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./shared/conversation": "./src/shared/conversationIdentity.js"
+    "./shared/conversation": "./src/shared/conversationIdentity.js",
+    "./shared/repository-updates": "./src/shared/repositoryUpdates.js"
   },
   "jskit": {
     "kind": "runtime",
@@ -13,12 +14,14 @@
       "provides": [
         "vibe64.sessions",
         "assistant.conversations",
-        "assistant.conversation.access"
+        "assistant.conversation.access",
+        "vibe64.sessions.repository-updates"
       ],
       "requires": [
         "runtime.actions",
         "runtime.events",
         "runtime.http",
+        "runtime.realtime",
         "vibe64.project",
         "vibe64.source-editor",
         "vibe64.terminals",
@@ -35,6 +38,10 @@
           {
             "entrypoint": "src/server/Vibe64ConversationsProvider.js",
             "export": "Vibe64ConversationsProvider"
+          },
+          {
+            "entrypoint": "src/server/Vibe64SessionsProvider.js",
+            "export": "Vibe64RepositoryUpdatesProvider"
           }
         ]
       },
@@ -48,12 +55,17 @@
           {
             "subpath": "./shared/conversation",
             "summary": "Exports main and temporary conversation identities and targets."
+          },
+          {
+            "subpath": "./shared/repository-updates",
+            "summary": "Exports the realtime events a browser uses to watch its project for repository updates."
           }
         ],
         "capabilities": [
           "vibe64.sessions",
           "assistant.conversations",
-          "assistant.conversation.access"
+          "assistant.conversation.access",
+          "vibe64.sessions.repository-updates"
         ]
       }
     }

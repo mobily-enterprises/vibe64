@@ -46,7 +46,7 @@ import {
   sessionRenewalAdvisory
 } from "./sessionRenewalAdvisory.js";
 import { readSessionRenewalState, SESSION_RENEWAL_STATUS } from "./sessionRenewalState.js";
-import { createSessionRenewalController } from "./sessionRenewal.js";
+import { createSessionRenewalController, sessionHasActiveAgentRun } from "./sessionRenewal.js";
 import { presenceActor } from "./sessionPresence.js";
 import { createMainChatApprovals } from "./mainChatApprovals.js";
 import { createConnectedContributions } from "./connectedContributions.js";
@@ -1326,6 +1326,76 @@ function createService({
           }
         }
       }, "Vibe64 could not check this session for updates.");
+    },
+
+    // One tick of a project's update probe (repositoryUpdateProbe.js). It reads
+    // every open session's authority head with one `ls-remote` per authority
+    // repository, then runs the ordinary forced check above (its fetch, under
+    // the project source lock) only for a session whose head moved. `memory`
+    // holds, per session, a connected contribution's authority heads and the
+    // last failure published. A project nobody watches and no agent turn uses
+    // is not read at all.
+    async probeRepositoryUpdates(slug, { memory = new Map(), watched = false } = {}) {
+      return project.runInProjectContext(slug, async () => {
+        const runtime = await project.createRuntime({ inspectSource: false });
+        const open = await runtime.listSessions({ statusGroup: "open" });
+        if (!watched && !open.some(sessionHasActiveAgentRun)) {
+          return { failed: false, inUse: false };
+        }
+        // A running Save or Update publishes its own result.
+        const sessions = open.filter((session) => session.status === "active" &&
+          !activeSaveOperations.has(session.sessionId) && !activeUpdateOperations.has(session.sessionId));
+        for (const sessionId of memory.keys()) {
+          if (!sessions.some((session) => session.sessionId === sessionId)) memory.delete(sessionId);
+        }
+        const reads = await terminals.readRepositoryAuthorityHeads({ sessions });
+        let failed = false;
+        for (const listed of sessions) {
+          const sessionId = listed.sessionId;
+          const read = reads.get(sessionId);
+          if (!read) continue;
+          const remembered = memory.get(sessionId) || {};
+          let failure = read.error ? { code: read.code, message: read.error } : null;
+          try {
+            // A session whose last check failed is checked again until it succeeds.
+            let moved = Boolean(remembered.error) || (read.head
+              ? cachedRepositoryUpdateCheck(listed)?.canonicalCommit !== read.head
+              : remembered.authority !== read.authority);
+            if (!failure && moved && read.head && !remembered.error) {
+              // An earlier session's check or a browser's may have caught up.
+              const session = await runtime.getSession(sessionId, { inspectSource: false });
+              moved = cachedRepositoryUpdateCheck(session)?.canonicalCommit !== read.head;
+            }
+            const renewal = !failure && moved ? await readSessionRenewalState(runtime, sessionId) : null;
+            const renewing = [SESSION_RENEWAL_STATUS.RUNNING, SESSION_RENEWAL_STATUS.COMPLETED].includes(renewal?.status) ||
+              renewal?.stage === "failure_restoring";
+            if (!failure && moved && !renewing) {
+              const check = await service.checkSessionUpdates(sessionId, { force: true });
+              if (check?.ok === false) {
+                failure = { code: text(check.code), message: text(check.error) || "The project's repository could not be checked for updates." };
+              }
+            }
+            if (!failure && renewing) continue;
+          } catch (error) {
+            failure = { code: text(error?.code), message: text(error?.message) || "The project's repository could not be checked for updates." };
+          }
+          if (!failure) {
+            if (read.authority) memory.set(sessionId, { authority: read.authority });
+            else memory.delete(sessionId);
+            continue;
+          }
+          failed = true;
+          memory.set(sessionId, { ...remembered, error: failure.message });
+          if (remembered.error === failure.message) continue;
+          await publishSessionChanged(sessionId, {
+            operation: "updated",
+            reason: "session-repository-check-failed",
+            payload: { repositoryUpdateCheckError: { ...failure, checkedAt: new Date().toISOString() } },
+            session: listed
+          });
+        }
+        return { failed, inUse: true };
+      });
     },
 
     async updateSessionWork(sessionId, input = {}) {

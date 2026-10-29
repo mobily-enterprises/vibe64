@@ -1,5 +1,5 @@
 import { computed, onScopeDispose, watch } from "vue";
-import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
+import { useRealtimeEvent, useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import {
   VIBE64_SESSION_CHANGED_EVENT,
@@ -12,17 +12,21 @@ import {
   visibleVibe64ToolbarSessions
 } from "@/lib/vibe64SessionToolbarVisibility.js";
 import {
+  REPOSITORY_UPDATE_CHECK_FAILED_REASON,
   repositoryStatusRealtimeNeedsCanonicalCheck,
   repositoryStatusRealtimeShouldRefresh,
   repositoryStatusSessionId
 } from "@/lib/vibe64RepositoryRealtime.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
+import {
+  REPOSITORY_UPDATES_RELEASE,
+  REPOSITORY_UPDATES_WATCH
+} from "@local/vibe64-sessions/shared/repository-updates";
 
 const DEFAULT_MAX_CONCURRENCY = 2;
 const DEFAULT_STALE_AFTER_MS = 5 * 60_000;
 const DEFAULT_STALE_CHECK_INTERVAL_MS = 60_000;
-const DEFAULT_CANONICAL_CHECK_INTERVAL_MS = 5 * 60_000;
 function createVibe64SessionRepositoryStatusQueue({
   maxConcurrency = DEFAULT_MAX_CONCURRENCY,
   now = () => Date.now(),
@@ -244,6 +248,7 @@ function createVibe64SessionRepositoryStatusQueue({
 function useVibe64SessionRepositoryStatusRegistry({
   maxVisibleSessions = DEFAULT_VISIBLE_SESSION_LIMIT,
   onState = () => null,
+  projectSlug = "",
   selectedSessionId,
   sessionSourceOperationsSuspended = () => false,
   sessions,
@@ -432,7 +437,7 @@ function useVibe64SessionRepositoryStatusRegistry({
     matches: ({ payload = {} } = {}) => Boolean(
       visibleSessionIds.value.includes(repositoryStatusSessionId(payload)) &&
       !sourceOperationsSuspended(repositoryStatusSessionId(payload)) &&
-      repositoryStatusRealtimeShouldRefresh(payload)
+      (repositoryStatusRealtimeShouldRefresh(payload) || payload.reason === REPOSITORY_UPDATE_CHECK_FAILED_REASON)
     ),
     onEvent: ({ payload = {} } = {}) => {
       const sessionId = repositoryStatusSessionId(payload);
@@ -445,6 +450,10 @@ function useVibe64SessionRepositoryStatusRegistry({
       }
       if (payload.reason === "session-repository-checked") {
         observeCanonicalCheck(sessionId, payload.repositoryUpdateCheck);
+        return;
+      }
+      if (payload.reason === REPOSITORY_UPDATE_CHECK_FAILED_REASON) {
+        queue.markCanonicalCheckUnavailable(sessionId, payload.repositoryUpdateCheckError?.message);
         return;
       }
       inspectVisible({
@@ -481,31 +490,48 @@ function useVibe64SessionRepositoryStatusRegistry({
         }
         inspectVisible();
       }, DEFAULT_STALE_CHECK_INTERVAL_MS);
-  const canonicalInterval = typeof window === "undefined"
-    ? null
-    : window.setInterval(() => {
-        if (browserDocument?.visibilityState === "hidden") {
-          return;
-        }
-        void checkCanonical(selectedId.value);
-      }, DEFAULT_CANONICAL_CHECK_INTERVAL_MS);
+
+  // While this browser shows the project, the server checks every session for
+  // updates every 30 s and publishes each result (vibe64-sessions'
+  // repositoryUpdateProbe.js), so this registry only reacts to those events.
+  const socket = useRealtimeSocket();
+  const watchId = globalThis.crypto.randomUUID();
+  let watchedProjectSlug = "";
+  function syncRepositoryUpdateWatch({ reconnected = false } = {}) {
+    const slug = disposed || browserDocument?.visibilityState === "hidden"
+      ? ""
+      : String(readRefOrGetterValue(projectSlug) || "").trim();
+    if (slug === watchedProjectSlug && !reconnected) {
+      return;
+    }
+    if (watchedProjectSlug && !slug && socket.connected) {
+      socket.emit(REPOSITORY_UPDATES_RELEASE, { watchId });
+    }
+    watchedProjectSlug = slug;
+    if (slug && socket.connected) {
+      socket.emit(REPOSITORY_UPDATES_WATCH, { watchId, projectSlug: slug });
+    }
+  }
+  const watchAfterReconnect = () => syncRepositoryUpdateWatch({ reconnected: true });
+  socket.on("connect", watchAfterReconnect);
+  watch(() => readRefOrGetterValue(projectSlug), () => syncRepositoryUpdateWatch(), { immediate: true });
+
   const refreshWhenVisible = () => {
+    syncRepositoryUpdateWatch();
     if (browserDocument?.visibilityState !== "visible") {
       return;
     }
     inspectVisible({ force: true });
-    void checkCanonical(selectedId.value);
   };
   browserDocument?.addEventListener("visibilitychange", refreshWhenVisible);
 
   onScopeDispose(() => {
     disposed = true;
     browserDocument?.removeEventListener("visibilitychange", refreshWhenVisible);
+    socket.off("connect", watchAfterReconnect);
+    syncRepositoryUpdateWatch();
     if (interval !== null) {
       window.clearInterval(interval);
-    }
-    if (canonicalInterval !== null) {
-      window.clearInterval(canonicalInterval);
     }
     canonicalChecks.clear();
     canonicalCheckedAt.clear();

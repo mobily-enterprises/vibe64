@@ -2820,6 +2820,7 @@ export {
   fingerprintsMatch,
   inspectSessionRenewalEligibility,
   operationId,
+  sessionHasActiveAgentRun,
   sourceEnvelopesMatch,
   successorSessionId
 };

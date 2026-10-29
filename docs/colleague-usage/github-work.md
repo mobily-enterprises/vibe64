@@ -13,6 +13,16 @@ pull-request policy. **Update this session (rebase)** reconciles newer saved pro
 work when offered; Save does not silently perform that update for you. A failed or
 uncertain push needs a state check before another request.
 
+While a browser tab shows the project, or an AI turn runs in one of its sessions,
+Vibe64 checks the project's repository every 30 seconds. Newer saved work pushed
+from elsewhere, or committed in a local project folder, turns each affected
+session's tab and header action to **Update this session (rebase)** within about
+half a minute; a Save from another Vibe64 session shows it at once. Nothing is
+checked while no tab shows the project and no AI works in it; it checks again as
+soon as you return. If a check fails, the session's repository status shows the
+error and Vibe64 retries every minute. **Check for updates** in Repository checks
+immediately. These steps apply on desktop and mobile.
+
 Vibe64 reuses your GitHub login for a few minutes across repository operations.
 If you reconnect GitHub and the previous login was revoked, the next operation can
 fail once with a GitHub authentication error; retry it and it uses the new login.
