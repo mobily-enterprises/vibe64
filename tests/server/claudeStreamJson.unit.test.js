@@ -1186,23 +1186,31 @@ test("Claude model settings use the current workspace account without requiring 
   assert.equal(resumed.options.model, "haiku");
 });
 
-test("Claude temporary chats follow the current workspace account and keep their history", async t => {
+test("Claude temporary chats keep working across an account change, on the current account and with their history", async t => {
   const f = await fixture(t);
   const temporary = await f.provider.createConversation(f.context);
   await f.provider.startConversationTurn(f.context, {
     conversationId: temporary.conversationId, message: "Work", messageId: "before-account-change"
   });
   const original = f.processes.at(-1);
+  // An account change stops and waits on nothing: the running turn keeps its process and finishes.
   await f.provider.invalidateRuntimes({}, { provider: "claude", reason: "claude-auth-change" });
-  assert.equal(original.stopped, true);
+  assert.equal(original.stopped, false);
   f.behavior.account = { ...f.behavior.account, email: "current@example.test" };
-  await f.provider.startConversationTurn(f.context, {
+  await original.options.onEvent({ type: "result", subtype: "success", result: "Done." });
+  assert.equal(original.stopped, false);
+  // The chat's next turn applies the account guard at its idle admission: it continues the same
+  // Claude conversation on the current account.
+  const next = await f.provider.startConversationTurn(f.context, {
     conversationId: temporary.conversationId, message: "Continue", messageId: "after-account-change"
   });
-  const resumed = f.processes.at(-1);
-  assert.notEqual(resumed, original);
-  assert.equal(resumed.options.sessionId, original.options.sessionId);
-  assert.equal(resumed.options.resume, true);
+  assert.equal(next.ok, true, JSON.stringify(next));
+  assert.equal(next.started, true);
+  const current = f.processes.at(-1);
+  assert.notEqual(current, original);
+  assert.equal(current.options.sessionId, original.options.sessionId);
+  assert.equal(current.options.resume, true);
+  assert.equal(current.lastInput.message, "Continue");
 });
 
 test("Claude next-turn settings reach the retained native owner while the current turn stays active", async t => {
@@ -1280,7 +1288,7 @@ test("Claude retires a process when its settings change is only partially accept
 const claudeEndpointUsage = Object.freeze({ rate_limits_available: true,
   rate_limits: { seven_day: { utilization: 25 }, limits: [] } });
 
-test("Claude reads account capabilities and allowance through an already owned process", async (t) => {
+test("Claude reads allowance through an already owned process and the model list from a Claude started for it", async (t) => {
   const f = await fixture(t);
   await f.provider.sendMessage(f.context, { message: "Hello", messageId: "initial" });
   await f.processes[0].options.onEvent({ type: "result", subtype: "success", result: "Ready." });
@@ -1290,12 +1298,16 @@ test("Claude reads account capabilities and allowance through an already owned p
     assert.equal(request.subtype, "get_usage");
     return claudeEndpointUsage;
   };
+  // A conversation's process knows the models of the Claude Code it started with, so the
+  // list comes from a temporary Claude started for the read.
   assert.equal((await f.provider.capabilities(f.context)).modelProviders[0].models.length, 2);
+  assert.equal(f.processes.length, 2);
+  assert.equal(f.processes[1].options.accountQuery, "catalogue");
   assert.equal((await f.provider.readPlanUsage(f.context)).windows[0].remainingPercent, 75);
-  assert.equal(f.processes.length, 1);
+  assert.equal(f.processes.length, 2, "the allowance came from the conversation's own process");
   assert.equal(native.stopped, false);
   await f.provider.invalidateRuntimes({}, { provider: "claude", reason: "claude-auth-change" });
-  assert.equal(native.stopped, true);
+  assert.equal(native.stopped, false, "an account change stops no conversation's process");
 });
 
 test("Claude configured defaults do not start a model discovery process", async (t) => {
