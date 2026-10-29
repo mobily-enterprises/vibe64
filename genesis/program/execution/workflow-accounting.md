@@ -297,8 +297,10 @@ the application. The file keeps systemd's `EnvironmentFile=` syntax.
 
 `deployment-service install-start` installs a release service only for an
 application account root registered for the calling daemon's workspace. Its
-workspace must be `app/releases/<release>/workspace` in that application's
-area, and its environment file and start script the daemon's own
+working directory must be `app/releases/<release>/workspace` in that
+application's area, or a folder inside it (the release's Workdir) that root
+reaches through real directories, never a link the application planted; and
+its environment file and start script the daemon's own
 `handover/<release>/` files for that same release, which the application's
 group may read (and run) but not change. The unit runs as the account and its
 own group with umask `0077`, the helper under `setpriv --no-new-privs`, in the

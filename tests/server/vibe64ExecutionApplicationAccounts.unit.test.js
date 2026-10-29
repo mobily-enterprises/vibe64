@@ -419,8 +419,35 @@ test("a release service runs its own release's workspace and the daemon's files 
   await chmod(r1.startScript, 0o750);
   await symlink(r1.workingDirectory, path.join(account.appRoot, "current"));
   assert.throws(() => check({ ...r1, workingDirectory: path.join(account.appRoot, "current") }), refused, "a link");
-  assert.throws(() => check({ ...r1, workingDirectory: path.join(account.appRoot, "releases", "r3", "workspace") }),
-    { code: "ENOENT" });
+  assert.throws(() => check({ ...r1, workingDirectory: path.join(account.appRoot, "releases", "r3", "workspace") }), refused);
+});
+
+test("a release service may run in a real folder inside its release's workspace, its Workdir", async (t) => {
+  const host = await applicationHost(t);
+  const account = host.ensure("shop");
+  const identity = applicationIdentity(host.owner, "shop", host.options);
+  const r1 = await releaseFiles(host, account, "r1");
+  const check = (workingDirectory) => applicationReleaseServiceFiles({ ...r1, workingDirectory }, identity,
+    { daemonUid: UID, gid: GID });
+  const web = path.join(r1.workingDirectory, "apps", "web");
+  await mkdir(web, { recursive: true });
+  assert.deepEqual(check(web), { ...r1, workingDirectory: web });
+
+  // The application's own links and files are never its service's folder.
+  const outside = await mkdtemp(path.join(os.tmpdir(), "v64-outside-"));
+  t.after(() => rm(outside, { force: true, recursive: true }));
+  await symlink(outside, path.join(r1.workingDirectory, "apps", "elsewhere"));
+  await symlink(r1.workingDirectory, path.join(r1.workingDirectory, "apps", "self"));
+  await writeFile(path.join(r1.workingDirectory, "apps", "file"), "not a folder\n");
+  const real = /must be a real folder of its release's workspace/u;
+  assert.throws(() => check(path.join(r1.workingDirectory, "apps", "elsewhere")), real);
+  assert.throws(() => check(path.join(r1.workingDirectory, "apps", "self", "apps", "web")), real);
+  assert.throws(() => check(path.join(r1.workingDirectory, "apps", "file")), real);
+  assert.throws(() => check(path.join(r1.workingDirectory, "apps", "missing")), real);
+  const refused = /must (run its own release's workspace and start script|belong to the application's selected release)/u;
+  assert.throws(() => check(`${web}/../../..`), refused, "not a normal path");
+  assert.throws(() => check(`${web}/`), refused, "not a normal path");
+  assert.throws(() => check("apps/web"), refused, "relative");
 });
 
 test("a release service unit runs as its application in its sandbox, listening only on its own port", () => {

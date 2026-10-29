@@ -2603,21 +2603,30 @@ function applicationReleaseEnvironmentFile(candidate = "", identity = {}, { cwd 
   return file;
 }
 
-// A release service's files: its workspace in the application's area, and the
-// daemon's environment file and start script for that same release in its
-// handover directory, which the application's group may read but not change.
+// A release service's files: its workspace in the application's area, or the
+// folder inside it its release names (its Workdir), and the daemon's
+// environment file and start script for that same release in its handover
+// directory, which the application's group may read but not change. The
+// folder is reached through real directories, never a link the application
+// planted in its own area.
 function applicationReleaseServiceFiles(payload = {}, identity = {}, { daemonUid = -1, gid = -1 } = {}) {
-  const workingDirectory = resolveApplicationCwd(payload.workingDirectory, identity);
+  const workingDirectory = String(payload.workingDirectory || "");
   const environmentFile = applicationReleaseEnvironmentFile(payload.environmentFile, identity,
     { cwd: workingDirectory, daemonUid, gid });
   const releaseId = path.basename(path.dirname(environmentFile));
+  const workspace = path.join(identity.appRoot, "releases", releaseId, "workspace");
+  const inside = relativePathParts(workspace, workingDirectory);
   const startScript = String(payload.startScript || "");
   const stats = lstatSync(startScript);
-  if (workingDirectory !== payload.workingDirectory ||
-      workingDirectory !== path.join(identity.appRoot, "releases", releaseId, "workspace") ||
+  if (path.resolve(workingDirectory) !== workingDirectory || (workingDirectory !== workspace && inside.length === 0) ||
       startScript !== path.join(path.dirname(environmentFile), "start.sh") || !stats.isFile() ||
       stats.uid !== daemonUid || stats.gid !== gid || (stats.mode & 0o022) !== 0 || (stats.mode & 0o010) === 0) {
     throw new Error("A release service must run its own release's workspace and start script.");
+  }
+  try {
+    closeSync(openDirectoryBelow(identity.appRoot, ["releases", releaseId, "workspace", ...inside]));
+  } catch (error) {
+    throw new Error(`A release service's working directory must be a real folder of its release's workspace: ${error.code || error.message}`);
   }
   return { environmentFile, startScript, workingDirectory };
 }
