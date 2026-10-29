@@ -88,7 +88,7 @@ async function createGitTurnCheckpointAsOneJob({
   };
   return withSerializedCheckpoint(identity.worktreePath, async () => checkpointJobValue(await runCommand({
     actor: "daemon",
-    allowedRoots: [identity.worktreePath, path.dirname(GIT_CHECKPOINT_COMMAND_PATH)],
+    allowedRoots: [identity.worktreePath],
     args: [GIT_CHECKPOINT_COMMAND_PATH],
     command: "node",
     cwd: identity.worktreePath,
