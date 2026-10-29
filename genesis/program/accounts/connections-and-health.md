@@ -585,9 +585,15 @@ account row at once (`showAccount` in `useVibe64Accounts.js`) and reloads the
 other rows in the background.
 The CLI's signed-out JSON response is a normal disconnected state even though
 its exit code is nonzero.
-Account status reads share one native query and reuse its public result for up
-to 30 seconds while native credential and account-file metadata is unchanged.
-Changes invalidate the result immediately; failures are not cached. The wrapper
+Account status reads share one native query and keep its public result until
+the native `.credentials.json` metadata changes. The
+accounts path (`managed-bin/claude`) and conversation hosts
+(`operator-clis/bin/claude`) share that entry, which JSKIT keys by the account's
+configuration root, credential home and Claude identity variables. Sign-in and
+sign-out change the credentials file and invalidate the result immediately;
+Claude Code's `.claude.json` rewrites, during turns and after each status run,
+do not. A timed-out read backs off for 30 seconds; other failures are not
+cached. The wrapper
 does not read those files' contents. On macOS, where credentials can live in the
 keychain, only concurrent reads are shared.
 JSKIT owns this native status interpretation and cache. Vibe64 supplies the
