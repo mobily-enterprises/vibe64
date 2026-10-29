@@ -72,7 +72,8 @@ watcher starts, every managed project/session source namespace must have:
 - no access for other users.
 
 The human users allowed to administer a workspace and its daemon account must
-be members of `vibe64`. Shared group access
+be members of `vibe64`. Only root adds a person to it: host setup or the exec
+helper registering a person, never the daemon naming an account. Shared group access
 remains mandatory for maintenance, recovery, and explicit host inspection; it
 is not the routine mutation path and product correctness must not depend on a
 second Unix identity being able to race a live writer. A missing group, missing

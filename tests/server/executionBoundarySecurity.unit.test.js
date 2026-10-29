@@ -20,7 +20,7 @@ test("expected execution identities fail closed for missing, malformed and misma
   }
 });
 
-test("runuser receives a trusted PATH while the user command retains the gateway PATH and credentials", (t) => {
+test("runuser receives a trusted PATH and no new privileges while the user command retains the gateway PATH and credentials", (t) => {
   const user = { username: "member", home: "/home/member" };
   const env = helperChildEnv({
     PATH: "/workspace/bin:/usr/bin", PROVIDER_API_KEY: "private-token", HOME: "/wrong",
@@ -32,8 +32,10 @@ test("runuser receives a trusted PATH while the user command retains the gateway
   syncBuiltinESMExports();
   t.after(() => { call.mock.restore(); syncBuiltinESMExports(); });
   const result = runUserCommand(user, "git", ["status"], { env, cwd: "/workspace", input: "input" });
-  assert.equal(result.command, "/usr/sbin/runuser");
-  assert.deepEqual(result.args, ["-u", "member", "--", "/usr/bin/env", "--",
+  // No new privileges before runuser drops root: sudo and setuid programs
+  // cannot raise the person's command again.
+  assert.equal(result.command, "/usr/bin/setpriv");
+  assert.deepEqual(result.args, ["--no-new-privs", "--", "/usr/sbin/runuser", "-u", "member", "--", "/usr/bin/env", "--",
     "PATH=/workspace/bin:/usr/bin", "git", "status"]);
   assert.ok(!result.options.env.PATH.includes("/workspace/bin"));
   assert.ok(result.options.env.PATH.includes("/opt/vibe64/runtime-packs/git/bin"));

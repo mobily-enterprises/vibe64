@@ -120,6 +120,10 @@ const MANAGED_ROOT = "/var/lib/vibe64";
 const RESERVED_HUMAN_USERNAMES = new Set([
   "root"
 ]);
+const PERSON_REGISTRY_ROOT = "/etc/vibe64/people";
+const PERSON_REGISTRATION_SCHEMA = "vibe64.person-registration";
+const PERSON_REGISTRATION_LIMIT_BYTES = 4096;
+const PERSON_REFUSED_EXIT_CODE = 3;
 const MANAGED_EXECUTION_ID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu;
 const MANAGED_EXECUTION_KINDS = new Set([
   "assistant",
@@ -158,6 +162,22 @@ async function main() {
       throw new Error("Usage: vibe64-exec-helper upgrade-release-units");
     }
     upgradeReleaseServiceUnits();
+    return;
+  }
+  // Root-only, like upgrade-release-units: the daemon's sudo rule names only
+  // `execute`, so it can never register a person itself.
+  if (process.argv[2] === "upgrade-person-registry") {
+    if (process.argv.length !== 4) {
+      throw new Error("Usage: vibe64-exec-helper upgrade-person-registry <workspace>");
+    }
+    upgradePersonRegistry(process.argv[3]);
+    return;
+  }
+  if (process.argv[2] === "register-person") {
+    if (process.argv.length !== 5) {
+      throw new Error("Usage: vibe64-exec-helper register-person <workspace> <username>");
+    }
+    registerPerson(process.argv[3], process.argv[4]);
     return;
   }
   if (process.argv[2] !== "execute" || process.argv.length > 4) {
@@ -201,8 +221,7 @@ async function main() {
   assertExpectedId("uid", payload.uid, targetUser.uid);
   assertExpectedId("gid", payload.gid, targetUser.gid);
   const owner = resolveOwnerUser();
-  assertEnabledForVibe64(owner, username);
-  assertUserInGroup(targetUser.username, VIBE64_GROUP);
+  assertActablePerson(owner, targetUser);
   const cwd = resolveAllowedCwd(payload.cwd || "", owner.username, {
     operation,
     targetUser
@@ -234,7 +253,10 @@ async function main() {
 
 function runUserCommand(targetUser, command, args, options) {
   // The caller's command PATH must only take effect after runuser drops root.
-  return spawnSync("/usr/sbin/runuser", [
+  // No new privileges: sudo, su and other setuid programs cannot raise the
+  // person's command back above that person.
+  return spawnSync("/usr/bin/setpriv", [
+    "--no-new-privs", "--", "/usr/sbin/runuser",
     "-u", targetUser.username, "--", "/usr/bin/env", "--",
     `PATH=${options.env.PATH}`, command, ...args
   ], {
@@ -409,6 +431,11 @@ function handleManagedExecutionOperation(payload = {}) {
     // journal, not routine Starting/Started/Deactivated lines.
     ...(mode === "capture" ? ["--property=LogLevelMax=notice", "--wait", "--pipe"] : []),
     ...(mode === "pty" ? ["--wait", "--pty"] : []),
+    // A person's execution can never gain privileges above that person. The
+    // runner starts under setpriv, as runUserCommand's commands do, because a
+    // unit's NoNewPrivileges= can be switched off by a systemd drop-in (Incus
+    // containers ship one). setpriv execs the runner, which stays the MainPID.
+    ...(targetUser.username !== owner.username ? ["/usr/bin/setpriv", "--no-new-privs", "--"] : []),
     helperPath,
     "run-managed",
     runnerPayloadPath
@@ -990,10 +1017,10 @@ function managedExecutionTargetUser(payload = {}, owner = {}) {
   assertExpectedId("uid", payload.uid, targetUser.uid);
   assertExpectedId("gid", payload.gid, targetUser.gid);
   if (targetUser.username !== owner.username) {
-    assertHumanUsername(targetUser.username);
-    assertEnabledForVibe64(owner, targetUser.username);
+    assertActablePerson(owner, targetUser);
+  } else {
+    assertUserInGroup(targetUser.username, VIBE64_GROUP);
   }
-  assertUserInGroup(targetUser.username, VIBE64_GROUP);
   return targetUser;
 }
 
@@ -1654,16 +1681,316 @@ function assertNormalizedPayload(payload = {}) {
   }
 }
 
+// The daemon may create a new person, whom the helper then registers, or
+// re-enable a person root already registered. It can never make an existing
+// account a person merely by naming it.
 function handleUserManagementOperation(operation = "", payload = {}, username = "") {
   assertHumanUsername(username);
-  resolveOwnerUser();
+  const workspace = personWorkspace(resolveOwnerUser());
   ensureGroup(VIBE64_GROUP);
   if (operation === "create-system-user") {
     createSystemUser(username, String(payload.password || ""));
-  } else {
-    resolveOsUser(username);
+    registerPerson(workspace, username);
+    return;
   }
-  addUserToGroup(username, VIBE64_GROUP);
+  enablePerson(workspace, username);
+}
+
+function enablePerson(workspace = "", username = "", {
+  addToGroup = (name) => addUserToGroup(name, VIBE64_GROUP),
+  resolveUser = resolveOsUser,
+  ...options
+} = {}) {
+  assertRegisteredPerson(workspace, resolveUser(username), options);
+  addToGroup(username);
+}
+
+// The people of a workspace are the accounts root registered for it, one file
+// each below a root-owned directory its daemon cannot write. Root-side host
+// setup and this helper's own account creation register them; the daemon's
+// own state only says which of them it currently enables.
+function personWorkspace(owner = {}) {
+  const username = String(owner.username || "");
+  if (!username.startsWith(DAEMON_USERNAME_PREFIX)) {
+    throw new Error("Only a workspace daemon acts as its people.");
+  }
+  return personWorkspaceName(username.slice(DAEMON_USERNAME_PREFIX.length));
+}
+
+function personWorkspaceName(workspace = "") {
+  if (!/^[a-z][a-z0-9]{0,62}$/u.test(String(workspace))) {
+    throw new Error("Vibe64 exec helper rejected an invalid workspace name.");
+  }
+  return workspace;
+}
+
+function assertRootOwnedDirectory(descriptor, registryUid) {
+  const stats = fstatSync(descriptor);
+  if (!stats.isDirectory() || stats.uid !== registryUid || (stats.mode & 0o022) !== 0) {
+    throw new Error("The Vibe64 person registry is not a directory only root can change.");
+  }
+}
+
+// Opens one workspace's registry directory, never through a link, and only
+// when it and the registry root are root's own and writable by no one else.
+function openPersonRegistry(workspace = "", {
+  create = false,
+  registryRoot = PERSON_REGISTRY_ROOT,
+  registryUid = 0
+} = {}) {
+  if (create) {
+    mkdirSync(registryRoot, { mode: 0o755, recursive: true });
+  }
+  let descriptor = openSync(registryRoot, DIRECTORY_NO_FOLLOW);
+  try {
+    assertRootOwnedDirectory(descriptor, registryUid);
+    const name = directoryEntryName(workspace);
+    if (create) {
+      try {
+        mkdirSync(openedPath(descriptor, name), { mode: 0o755 });
+      } catch (error) {
+        if (error.code !== "EEXIST") throw error;
+      }
+    }
+    const next = openSync(openedPath(descriptor, name), DIRECTORY_NO_FOLLOW);
+    closeSync(descriptor);
+    descriptor = next;
+    assertRootOwnedDirectory(descriptor, registryUid);
+    return descriptor;
+  } catch (error) {
+    closeSync(descriptor);
+    throw error;
+  }
+}
+
+// A registration that cannot be read as root's own private regular file is no
+// registration.
+function readPersonRegistration(workspace = "", username = "", options = {}) {
+  const registryUid = options.registryUid ?? 0;
+  let directory;
+  try {
+    directory = openPersonRegistry(workspace, options);
+  } catch {
+    return null;
+  }
+  try {
+    const record = JSON.parse(readOwnedFile(directory, `${username}.json`, {
+      maxBytes: PERSON_REGISTRATION_LIMIT_BYTES,
+      othersMayWrite: false,
+      uid: registryUid
+    }));
+    return record?.schema === PERSON_REGISTRATION_SCHEMA && record.schemaVersion === 1 &&
+      record.username === username && Number.isSafeInteger(record.uid)
+      ? { uid: record.uid, username }
+      : null;
+  } catch {
+    return null;
+  } finally {
+    closeSync(directory);
+  }
+}
+
+function writePersonRegistrationEntry(directory, user = {}) {
+  const name = `${directoryEntryName(user.username)}.json`;
+  const temporary = `.${name}.${process.pid}.tmp`;
+  const descriptor = openSync(openedPath(directory, temporary), NEW_FILE_NO_FOLLOW, 0o644);
+  try {
+    fchmodSync(descriptor, 0o644);
+    writeFileSync(descriptor, `${JSON.stringify({
+      schema: PERSON_REGISTRATION_SCHEMA,
+      schemaVersion: 1,
+      uid: user.uid,
+      username: user.username
+    })}\n`);
+  } finally {
+    closeSync(descriptor);
+  }
+  renameSync(openedPath(directory, temporary), openedPath(directory, name));
+}
+
+function personRefusal(message = "") {
+  return Object.assign(new Error(message), { exitCode: PERSON_REFUSED_EXIT_CODE });
+}
+
+// The login range, not system accounts: login.defs' UID_MIN..UID_MAX.
+function loginUidRange(loginDefs = "") {
+  const value = (name, fallback) => {
+    const match = new RegExp(`^[\\t ]*${name}[\\t ]+(\\d+)[\\t ]*$`, "mu").exec(String(loginDefs));
+    return match ? Number(match[1]) : fallback;
+  };
+  return { max: value("UID_MAX", 60000), min: value("UID_MIN", 1000) };
+}
+
+// Why the helper must never act as this account, or "" for a person's
+// ordinary login: a system account is no person.
+function personAccountProblem(user = {}, {
+  loginUids = loginUidRange()
+} = {}) {
+  const { uid, username } = user;
+  if (!Number.isSafeInteger(uid) || uid < loginUids.min || uid > loginUids.max) {
+    return `${username} is a system account (uid ${uid}), not a person's login.`;
+  }
+  return "";
+}
+
+function hostPersonFacts(username = "") {
+  let loginDefs = "";
+  try {
+    loginDefs = readFileSync("/etc/login.defs", "utf8");
+  } catch {
+    // Without login.defs, useradd's own defaults apply.
+  }
+  return {
+    groups: osGroupNames(username),
+    loginUids: loginUidRange(loginDefs)
+  };
+}
+
+function assertPersonAccount(user = {}, facts = {}) {
+  const problem = personAccountProblem(user, facts);
+  if (problem) {
+    throw personRefusal(`Vibe64 never runs commands as a system account: ${problem}`);
+  }
+}
+
+function assertRegisteredPerson(workspace = "", targetUser = {}, {
+  facts = hostPersonFacts,
+  ...registry
+} = {}) {
+  assertHumanUsername(targetUser.username);
+  const registration = readPersonRegistration(workspace, targetUser.username, registry);
+  if (registration?.uid !== targetUser.uid) {
+    throw personRefusal(`OS user ${targetUser.username} is not registered as a Vibe64 person of workspace ${workspace}. ` +
+      `A server administrator registers an existing account with: sudo ${path.resolve(process.argv[1])} ` +
+      `register-person ${workspace} ${targetUser.username}`);
+  }
+  const hostFacts = facts(targetUser.username);
+  assertPersonAccount(targetUser, hostFacts);
+  return hostFacts;
+}
+
+// Every command the helper runs as a person passes this: a person root
+// registered for the daemon's workspace, still a person's login, in the shared
+// group, and enabled in the daemon's own state.
+function assertActablePerson(owner = {}, targetUser = {}, options = {}) {
+  const facts = assertRegisteredPerson(personWorkspace(owner), targetUser, options);
+  if (!facts.groups.includes(VIBE64_GROUP)) {
+    throw new Error(`OS user is not enabled for the shared Vibe64 group: ${targetUser.username}`);
+  }
+  assertEnabledForVibe64(owner, targetUser.username);
+}
+
+// Root-side registration of one existing account. Refuses system accounts;
+// the person also joins the shared group.
+function registerPerson(workspace = "", username = "", {
+  addToGroup = (name) => addUserToGroup(name, VIBE64_GROUP),
+  facts = hostPersonFacts,
+  resolveUser = resolveOsUser,
+  ...registry
+} = {}) {
+  personWorkspaceName(workspace);
+  assertHumanUsername(username);
+  resolveUser(`${DAEMON_USERNAME_PREFIX}${workspace}`);
+  const user = resolveUser(username);
+  assertPersonAccount(user, facts(username));
+  const directory = openPersonRegistry(workspace, { ...registry, create: true });
+  try {
+    writePersonRegistrationEntry(directory, user);
+  } finally {
+    closeSync(directory);
+  }
+  addToGroup(username);
+  return user;
+}
+
+// One-time registration of the people a workspace had before root kept its
+// registry: each membership in the daemon's state whose account is already in
+// the shared group, except system accounts, which it reports.
+// A workspace that has a registry keeps it unchanged. The registry appears
+// whole, so an interrupted run imports nothing and the next run starts again.
+function upgradePersonRegistry(workspace = "", {
+  facts = hostPersonFacts,
+  registryRoot = PERSON_REGISTRY_ROOT,
+  registryUid = 0,
+  report = (line) => process.stdout.write(`${line}\n`),
+  resolveUser = resolveOsUser
+} = {}) {
+  personWorkspaceName(workspace);
+  const daemon = resolveUser(`${DAEMON_USERNAME_PREFIX}${workspace}`);
+  mkdirSync(registryRoot, { mode: 0o755, recursive: true });
+  const root = openSync(registryRoot, DIRECTORY_NO_FOLLOW);
+  try {
+    assertRootOwnedDirectory(root, registryUid);
+    try {
+      closeSync(openPersonRegistry(workspace, { registryRoot, registryUid }));
+      return { imported: [], refused: [] };
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    const staging = `.${workspace}.upgrading`;
+    rmSync(openedPath(root, staging), { force: true, recursive: true });
+    mkdirSync(openedPath(root, staging), { mode: 0o755 });
+    const directory = openSync(openedPath(root, staging), DIRECTORY_NO_FOLLOW);
+    const imported = [];
+    const refused = [];
+    try {
+      assertRootOwnedDirectory(directory, registryUid);
+      for (const username of daemonMembershipUsernames(daemon)) {
+        let user;
+        try {
+          assertHumanUsername(username);
+          user = resolveUser(username);
+        } catch {
+          continue;
+        }
+        const userFacts = facts(username);
+        if (!userFacts.groups.includes(VIBE64_GROUP)) continue;
+        const problem = personAccountProblem(user, userFacts);
+        if (problem) {
+          refused.push(username);
+          report(`[vibe64-exec-helper] Not registering ${username} as a Vibe64 person of ${workspace}: ${problem}`);
+          continue;
+        }
+        writePersonRegistrationEntry(directory, user);
+        imported.push(username);
+        report(`[vibe64-exec-helper] Registered ${username} as a Vibe64 person of ${workspace}.`);
+      }
+    } finally {
+      closeSync(directory);
+    }
+    renameSync(openedPath(root, staging), openedPath(root, workspace));
+    return { imported, refused };
+  } finally {
+    closeSync(root);
+  }
+}
+
+// The usernames of the daemon's membership records, read as root only as the
+// daemon's own regular files below its state, never through a link.
+function daemonMembershipUsernames(daemon = {}) {
+  let directory;
+  try {
+    directory = openDirectoryBelow(daemon.home, [".local", "state", "vibe64", "users"]);
+  } catch (error) {
+    if (error.code === "ENOENT") return [];
+    throw error;
+  }
+  try {
+    const usernames = [];
+    for (const entry of readdirSync(openedPath(directory)).sort()) {
+      const username = entry.endsWith(".json") ? entry.slice(0, -".json".length) : "";
+      if (!MANAGED_USERNAME_PATTERN.test(username)) continue;
+      try {
+        const record = JSON.parse(readOwnedFile(directory, entry, { maxBytes: MEMBERSHIP_LIMIT_BYTES, uid: daemon.uid }));
+        if (record?.username === username) usernames.push(username);
+      } catch {
+        // An unreadable or foreign record names no one.
+      }
+    }
+    return usernames;
+  } finally {
+    closeSync(directory);
+  }
 }
 
 function handleDeploymentServiceOperation(payload = {}) {
@@ -2211,11 +2538,11 @@ function openDirectoryBelow(directory = "", parts = []) {
 // Reads one regular file of `uid` from a directory root holds open: never
 // through a link, never waiting on a FIFO, never more than maxBytes, and never
 // repeating what it read in an error.
-function readOwnedFile(directory, name = "", { maxBytes = 0, uid = -1 } = {}) {
+function readOwnedFile(directory, name = "", { maxBytes = 0, othersMayWrite = true, uid = -1 } = {}) {
   const descriptor = openSync(openedPath(directory, directoryEntryName(name)), FILE_NO_FOLLOW);
   try {
     const stats = fstatSync(descriptor);
-    if (!stats.isFile() || stats.uid !== uid) {
+    if (!stats.isFile() || stats.uid !== uid || (!othersMayWrite && (stats.mode & 0o022) !== 0)) {
       throw Object.assign(new Error("Vibe64 exec helper refused a file that is not its owner's regular file."), {
         code: "EVIBE64UNSAFEFILE"
       });
@@ -2329,12 +2656,24 @@ function resolveOwnerUser() {
   return resolveOsUser(sudoUser);
 }
 
-function assertUserInGroup(username = "", groupName = "") {
+function osGroupNames(username = "") {
   const result = spawnSync("id", ["-nG", username], {
     encoding: "utf8"
   });
-  const groups = String(result.stdout || "").trim().split(/\s+/u);
-  if (result.status !== 0 || !groups.includes(groupName)) {
+  if (result.status !== 0) {
+    throw new Error(`Could not read the groups of OS user ${username}.`);
+  }
+  return String(result.stdout || "").trim().split(/\s+/u);
+}
+
+function assertUserInGroup(username = "", groupName = "") {
+  let groups = [];
+  try {
+    groups = osGroupNames(username);
+  } catch {
+    // An account whose groups cannot be read is in none.
+  }
+  if (!groups.includes(groupName)) {
     throw new Error(`OS user is not enabled for the shared Vibe64 group: ${username}`);
   }
 }
@@ -2841,7 +3180,8 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
   return env;
 }
 
-export { assertEnabledForVibe64, consumeManagedExecutionRequestPayload, deploymentServiceUnit, ensureManagedServiceProcessOwnership,
+export { assertActablePerson, assertEnabledForVibe64, consumeManagedExecutionRequestPayload,
+  enablePerson, loginUidRange, personAccountProblem, readPersonRegistration, registerPerson, upgradePersonRegistry, deploymentServiceUnit, ensureManagedServiceProcessOwnership,
   parseEnvironmentFile, upgradeReleaseServiceUnits,
   managedWorkflowCounters, openManagedExecutionReceipts, managedWorkflowIdentity, managedExecutionOomBoundary,
   managedExecutionState, managedExecutionStopTimeoutMs, managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal,
@@ -2854,6 +3194,6 @@ export { assertEnabledForVibe64, consumeManagedExecutionRequestPayload, deployme
 if (import.meta.main) {
   main().catch((error) => {
     process.stderr.write(`${String(error?.message || error)}\n`);
-    process.exit(2);
+    process.exit(error?.exitCode === PERSON_REFUSED_EXIT_CODE ? PERSON_REFUSED_EXIT_CODE : 2);
   });
 }

@@ -208,6 +208,19 @@ test("finite captures keep systemd's routine unit lines out of the journal", asy
   assert.equal(args.match(/LogLevelMax/gu).length, 1);
 });
 
+// A person's sudo rules or setuid programs never lift a command run as them:
+// the runner starts with no new privileges, set by setpriv itself so that no
+// systemd drop-in can switch it off. The daemon's own executions are unchanged.
+test("a person's managed execution can never gain privileges above that person", async () => {
+  const source = await helperSource();
+  const args = source.slice(source.indexOf("const systemdArgs = ["), source.indexOf('const started = spawnSync("systemd-run"'));
+  assert.match(args, /\.\.\.\(targetUser\.username !== owner\.username \? \["\/usr\/bin\/setpriv", "--no-new-privs", "--"\] : \[\]\),\n    helperPath,\n    "run-managed",/u);
+  assert.equal(args.match(/no-new-privs/gu).length, 1);
+  const target = source.slice(source.indexOf("function managedExecutionTargetUser("), source.indexOf("function managedExecutionId("));
+  assert.match(target, /if \(targetUser\.username !== owner\.username\) \{\n    assertActablePerson\(owner, targetUser\);/u,
+    "every other target must be a registered person without administrator power");
+});
+
 // A unit that ignores SIGTERM: its scope empties only once it is force-killed.
 function unresponsiveUnit({ initiallyEmpty = false } = {}) {
   let clock = 0;
@@ -522,7 +535,7 @@ test("execution helper limits release service paths to deployment release state"
 test("execution helper uses runuser instead of direct initgroups setuid flow", async () => {
   const source = await helperSource();
 
-  assert.match(source, /spawnSync\("\/usr\/sbin\/runuser"/u);
+  assert.match(source, /spawnSync\("\/usr\/bin\/setpriv", \[\n    "--no-new-privs", "--", "\/usr\/sbin\/runuser",/u);
   assert.doesNotMatch(source, /process\.initgroups/u);
   assert.doesNotMatch(source, /process\.setuid/u);
   assert.doesNotMatch(source, /process\.setgid/u);

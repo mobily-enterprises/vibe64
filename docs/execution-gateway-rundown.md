@@ -66,7 +66,9 @@ Then it chooses:
   same `VIBE64_EXECUTION_ID` stamp. A provider's `runLocal` context `env` is
   exactly the env its PTY starts with.
 - `mode: "detached"`: spawn a background process.
-- real-user mismatch: run through the host's privileged helper via sudo. A
+- real-user mismatch: run through the host's privileged helper via sudo. The
+  helper acts only as a person root registered for the calling daemon's
+  workspace, and runs that person's command with no new privileges. A
   person's own computer has no helper and never builds such an actor.
 
 ## Main Request Shape

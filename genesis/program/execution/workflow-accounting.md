@@ -202,6 +202,27 @@ input, except that a managed execution whose terminal holds standard input
 passes it as the daemon's own file directly in the workspace's payload
 directory; the helper accepts no other file, and removes that one once read.
 
+The helper acts as another account only for a person of the calling daemon's
+workspace. Root keeps that workspace's people in its own registry, one
+root-owned file per person below `/etc/vibe64/people/<workspace>/`, which no
+daemon can write. Host setup registers an existing account with the root-only
+`register-person <workspace> <username>`, and the helper's own
+`create-system-user` registers the account it creates. `enable-system-user` only
+re-enables a registered person: the daemon can no longer make an existing
+account a person, or add it to the shared group, merely by naming it. Every
+command as a person, captured or managed, needs that registration with the
+account's current uid, a login uid from `login.defs` rather than a system
+account, the shared group, and an active membership in the daemon's state. The
+person's command then runs with no new privileges, so sudo, su and other setuid
+programs cannot raise it. `setpriv --no-new-privs` sets this for the managed
+runner too, because a container's systemd drop-in can switch a unit's
+`NoNewPrivileges=` off. Host setup runs the root-only
+`upgrade-person-registry <workspace>` once per workspace: it registers each
+membership whose account is already in the shared group, except system
+accounts, which it reports; a workspace that has a registry keeps it.
+`tests/server/vibe64ExecutionPersonRegistry.unit.test.js` covers the registry
+and its refusals.
+
 Root never reads a release's environment file, and no unit makes systemd read
 one on root's behalf. A release service's unit runs the helper as the service's
 own user, which loads the file at every start, restarts included, and then
