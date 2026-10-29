@@ -2371,6 +2371,22 @@ test("a helper cleanup that cannot finish still lets every later session cleanup
       await assert.rejects(terminalService.closeSessionTerminals(sessionId), { code: "cleanup_pending",
         message: "Database copilot: Native process still owned." });
     });
+    // A step's own refusal of a retry (a renewal reads `retryable`) survives the label.
+    const refusal = Object.assign(new Error("Codex admission is frozen."), {
+      code: "vibe64_session_renewal_quiesced", retryable: false, statusCode: 409 });
+    terminalService.setDatabaseToolsProvider({ refreshSchema: async () => ({ ok: true }),
+      async closeAssistantsForSession() { throw refusal; } });
+    await runWithProjectRequestContext({ slug: project.slug, targetRoot: project.path }, async () => {
+      await assert.rejects(terminalService.closeSessionTerminals(sessionId), (error) => {
+        assert.deepEqual({ code: error.code, retryable: error.retryable, statusCode: error.statusCode, cause: error.cause },
+          { code: "vibe64_session_renewal_quiesced", retryable: false, statusCode: 409, cause: refusal });
+        assert.equal(error.message, "Database copilot: Codex admission is frozen.");
+        return true;
+      });
+      terminalService.setSourceEditorProvider({ async closeExplanationsForSession() { throw new Error("Explanation ledger unavailable."); } });
+      await assert.rejects(terminalService.closeSessionTerminals(sessionId),
+        { code: "vibe64_session_stop_failed", retryable: false, controllers: ["Database copilot", "Source explanations"] });
+    });
   }, { throughTerminalService: true, projectServices });
 });
 

@@ -468,7 +468,7 @@ async function closeTerminalControllerForSession({
 
 // Every step runs even after an earlier one fails, so one helper whose cleanup
 // cannot finish never leaves the session's services, AI or commands running.
-// The failure then names each step that failed, keeping a single step's code.
+// The failure then names each step that failed, keeping a single step's fields.
 async function closeTerminalControllersForSession(sessionId = "", controllers = [], {
   controllerOptions = {},
   eventPrefix = "server.terminals.closeSessionTerminals",
@@ -502,14 +502,18 @@ async function closeTerminalControllersForSession(sessionId = "", controllers = 
     const message = failures.map(({ controller, error }) =>
       `${controller}: ${error?.message || String(error) || "Cleanup failed."}`).join(" ");
     const [only] = failures;
-    throw Object.assign(failures.length === 1
-      ? new Error(message, { cause: only.error })
-      : new AggregateError(failures.map(({ error }) => error), message), {
-      code: failures.length === 1 && only.error?.code || "vibe64_session_stop_failed",
-      ...(failures.length === 1 && only.error?.statusCode ? { statusCode: only.error.statusCode } : {}),
-      controllers: failures.map(({ controller }) => controller),
-      sessionId
-    });
+    const labelled = { controllers: failures.map(({ controller }) => controller), sessionId };
+    // A single failure keeps its own fields (code, statusCode, retryable...);
+    // several keep any step's refusal of a retry.
+    if (failures.length === 1) {
+      const { cause: _cause, ...fields } = typeof only.error === "object" && only.error ? only.error : {};
+      throw Object.assign(new Error(message, { cause: only.error }), fields,
+        { code: only.error?.code || "vibe64_session_stop_failed" }, labelled);
+    }
+    throw Object.assign(new AggregateError(failures.map(({ error }) => error), message), {
+      code: "vibe64_session_stop_failed",
+      ...(failures.some(({ error }) => error?.retryable === false) ? { retryable: false } : {})
+    }, labelled);
   }
   return {
     closed,
