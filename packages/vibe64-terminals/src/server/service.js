@@ -552,6 +552,11 @@ function createService({
   // (Colleague) join account invalidation; see joinAgentRuntimeInvalidation.
   const invalidationParticipants = new Set();
   let closing = false;
+  // Server shutdown happens once. Its signal stops discarded background AI
+  // work (session naming); its one stop of every AI runtime is shared by each
+  // feature that needs AI stopped before its own cleanup.
+  const shutdownSignal = new AbortController();
+  let shutdownStop = null;
 
   // The one Claude Code account status read, with the inputs Claude
   // conversations run with. Accounts and readiness read it too, so one
@@ -1027,7 +1032,8 @@ function createService({
     if (preparation) await preparation;
   }
 
-  const sessionNaming = createSessionNaming({ agent: sessionAgent, publishSessionChanged: publishAgentSessionChanged, logger });
+  const sessionNaming = createSessionNaming({ agent: sessionAgent, publishSessionChanged: publishAgentSessionChanged, logger,
+    signal: shutdownSignal.signal });
   assistantRouting = createAssistantRouting({
     systemRoot: codexProviderOptions.systemRoot, agent: sessionAgent,
     exclusive: async (sessionId, options, operation) => {
@@ -4058,16 +4064,20 @@ function createService({
 
     async invalidateAgentRuntimes(input = {}) {
       if (input.reason === "server-shutdown") {
-        closing = true;
-        const routing = await Promise.allSettled([assistantRouting.close(), sessionConversations.close(), sessionNaming.close()]);
-        await Promise.allSettled(turnCompletions);
-        const [native] = await Promise.allSettled([sessionAgent.invalidateRuntimes(input, {
-          providerId: normalizeAgentProviderId(input.provider)
-        })]);
-        const failures = [...routing, native].filter((result) => result.status === "rejected").map((result) => result.reason);
-        if (failures.length) throw new AggregateError(failures, "Assistant runtime shutdown did not complete successfully.");
-        await mainConversations.close();
-        return native.value;
+        shutdownStop ||= (async () => {
+          closing = true;
+          shutdownSignal.abort(Object.assign(new Error("Vibe64 is stopping."), { code: "vibe64_server_stopping" }));
+          const routing = await Promise.allSettled([assistantRouting.close(), sessionConversations.close(), sessionNaming.close()]);
+          await Promise.allSettled(turnCompletions);
+          const [native] = await Promise.allSettled([sessionAgent.invalidateRuntimes(input, {
+            providerId: normalizeAgentProviderId(input.provider)
+          })]);
+          const failures = [...routing, native].filter((result) => result.status === "rejected").map((result) => result.reason);
+          if (failures.length) throw new AggregateError(failures, "Assistant runtime shutdown did not complete successfully.");
+          await mainConversations.close();
+          return native.value;
+        })();
+        return shutdownStop;
       }
       const native = await sessionAgent.invalidateRuntimes(input, {
         providerId: normalizeAgentProviderId(input.provider)

@@ -1731,6 +1731,22 @@ test("shutdown requested by a dependent feature closes main and temporary routin
   assert.equal(provider.promptCalls.length, 0);
 });
 
+test("server shutdown stops AI runtimes once, for every feature that asks for it", async (t) => {
+  const provider = await controllerHarness();
+  t.after(async () => { await provider.controller.closeAllForProject(); await rm(provider.root, { recursive: true, force: true }); });
+  const { service } = await terminalServiceFixture(t, { store: {} }, { opencodeTerminalController: provider.controllerOptions });
+  // Sessions, a host feature and Terminals' own close each make sure AI is
+  // stopped before their cleanup; they share one stop and its one result.
+  const [sessions, host] = await Promise.all([
+    service.invalidateAgentRuntimes({ reason: "server-shutdown" }),
+    service.invalidateAgentRuntimes({ reason: "server-shutdown" })
+  ]);
+  const closed = await service.close();
+  assert.notEqual(sessions.ok, false, JSON.stringify(sessions));
+  assert.equal(host, sessions);
+  assert.equal(closed.agentResult, sessions);
+});
+
 test("purpose access sends a member's main chat to the owner and keeps their helpers on the team setup", async (t) => {
   const provider = await controllerHarness();
   t.after(async () => { await provider.controller.closeAllForProject(); await rm(provider.root, { recursive: true, force: true }); });

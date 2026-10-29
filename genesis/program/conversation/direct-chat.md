@@ -807,7 +807,9 @@ user's authenticated username when supplied by the host. Request context takes
 precedence over operation options; background work without an actor records
 `username: null`. Logs do not include the user's credentials or message text.
 Service shutdown closes the main and temporary routing coordinators before
-invalidating native providers. They reject new Send requests, cancel pending
+invalidating native providers. That server-shutdown stop runs once: Sessions,
+a host feature that needs AI stopped before its own cleanup and Terminals' close
+all share its single result and failure. They reject new Send requests, cancel pending
 classification through its existing Stop owner, and await helper cleanup and the
 saved cancellation. A cleanup failure remains an explicit shutdown failure.
 Already admitted native turns keep their existing interruption/reconnect handling;

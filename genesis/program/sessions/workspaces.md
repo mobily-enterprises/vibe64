@@ -521,7 +521,9 @@ turns, and claims the `session-name` background task once. The actor's Quick hel
 receives only bounded first-message text through the tool-free `session_title`
 profile. Its owned conversation and scratch directory are cleaned through the
 same naming lifecycle used by Save. Failed cleanup stays recorded for session
-close; closing waits for an in-flight naming task. Subsequent messages and
+close; closing a session waits for an in-flight naming task. Server shutdown
+instead stops a running naming Helper turn through the Terminals shutdown signal
+and closes its conversation, recording the task as failed. Subsequent messages and
 restarts do not regenerate a name or backfill old chats. An unavailable Quick helper or
 invalid output leaves the existing display name and ordinary chat usable.
 

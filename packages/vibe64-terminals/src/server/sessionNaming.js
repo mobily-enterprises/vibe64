@@ -41,7 +41,9 @@ function parseSessionName(value) {
   return result.name;
 }
 
-function createSessionNaming({ agent, publishSessionChanged, logger } = {}) {
+// signal is the server's shutdown signal: a name is discarded work, so
+// shutdown stops a running Helper turn and closes it instead of waiting for it.
+function createSessionNaming({ agent, publishSessionChanged, logger, signal = null } = {}) {
   const active = new Map();
   const sessionKey = ({ runtime, session }) => `${runtime.stateRoot}/${session.sessionId || session.id}`;
 
@@ -70,6 +72,7 @@ function createSessionNaming({ agent, publishSessionChanged, logger } = {}) {
         profile: PROFILE,
         outputSchema: OUTPUT_SCHEMA,
         promptLabel: "Name session",
+        signal,
         fail: namingError,
         prefix: "naming",
         stableContext: "Name a chat from its first message. You have no tools or project access.",

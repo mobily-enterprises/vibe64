@@ -98,6 +98,40 @@ test("manual rename wins while a nonblocking Helper is working and close waits f
   assert.equal(f.calls.at(-1), "delete");
 });
 
+test("server shutdown stops a running naming Helper instead of waiting for its answer", async (t) => {
+  const f = await fixture(t);
+  const shutdown = new AbortController();
+  let started;
+  const running = new Promise((resolve) => { started = resolve; });
+  f.agent.runEphemeralChatTurn = async (_scope, _input, options) => {
+    await options.onEvent({ type: "thread", threadId: "helper-thread" });
+    await options.onEvent({ type: "helper-execution", executionId: "helper-execution" });
+    started();
+    // A slow Helper: its answer would come long after the server must stop.
+    await new Promise((resolve) => options.signal?.addEventListener("abort", resolve, { once: true }));
+    options.signal.throwIfAborted();
+  };
+  const naming = createSessionNaming({ agent: f.agent, publishSessionChanged: async (...args) => f.events.push(args),
+    logger: { warn: (...args) => f.warnings.push(args) }, signal: shutdown.signal });
+  await f.store.writeConversationUserMessage("original-id", { messageId: "first", text: "Bookings" });
+  naming.start(f.context, "first");
+  await running;
+
+  shutdown.abort(Object.assign(new Error("Vibe64 is stopping."), { code: "vibe64_server_stopping" }));
+  const outcome = await Promise.race([
+    naming.close().then(() => "closed"),
+    new Promise((resolve) => setTimeout(() => resolve("waiting for the Helper"), 1_000))
+  ]);
+  assert.equal(outcome, "closed");
+  const task = await f.store.readBackgroundTask("original-id", "session-name");
+  assert.equal(task.status, "failed");
+  assert.equal(task.error, "Vibe64 is stopping.");
+  assert.equal(task.assistantHelper, null, "the stopped Helper's conversation is still closed");
+  assert.equal(f.calls.at(-1), "delete");
+  assert.equal(await f.store.readMetadataValue("original-id", "label"), "");
+  assert.deepEqual(f.events, []);
+});
+
 test("later messages including after rewind do not backfill names", async (t) => {
   const f = await fixture(t);
   const first = await f.store.writeConversationUserMessage("original-id", { messageId: "first", text: "First" });
