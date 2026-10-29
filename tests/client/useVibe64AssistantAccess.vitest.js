@@ -243,4 +243,19 @@ describe("useVibe64AssistantAccess", () => {
     expect(endpointMocks.options).toHaveLength(1);
     scope.stop();
   });
+
+  it("tells the owner their turn's connection is unavailable instead of naming the owner", () => {
+    endpointMocks.resources = [resource({
+      ok: true, available: false, ownerOnly: true, steering: true, canUse: false, nativeCanUse: false,
+      currentMode: "junior", purposes: { junior: { available: true }, prompt_hint: { available: true } }
+    })];
+    const scope = effectScope();
+    const access = scope.run(() => useVibe64AssistantAccess({ sessionId: "session-a", sessionsApiPath: "/api/vibe64/sessions" }));
+    expect(access.canUseChat.value).toBe(false);
+    expect(access.restrictionMessage.value).toBe(
+      "This turn's AI connection is unavailable right now, so you can't steer it. " +
+      "Check AI Accounts, or send your message when the turn finishes."
+    );
+    scope.stop();
+  });
 });

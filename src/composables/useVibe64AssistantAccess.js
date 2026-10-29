@@ -115,8 +115,12 @@ function useVibe64AssistantAccess({
   ));
   const restrictionMessage = computed(() => {
     if (canUseChat.value || initialAccessLoading.value) return "";
-    if (access.value?.steering && access.value?.ownerOnly && !canUseNative.value) {
-      return "Only the owner can steer this turn. You can send a message when it finishes.";
+    // Steering joins the running turn on its own connection; say why that connection refuses.
+    if (access.value?.steering && !canUseNative.value) {
+      return access.value.available === true
+        ? "Only the owner can steer this turn. You can send a message when it finishes."
+        : "This turn's AI connection is unavailable right now, so you can't steer it. " +
+          "Check AI Accounts, or send your message when the turn finishes.";
     }
     if (currentPurpose.value && !currentPurpose.value.available) return currentPurpose.value.message;
     if (access.value?.available === true && access.value?.ownerOnly === true) {

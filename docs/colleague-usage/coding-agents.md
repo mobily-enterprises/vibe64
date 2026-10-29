@@ -108,6 +108,22 @@ When an assistant cannot start, stops by itself or reports a failure, see [When 
 4. Wait for the actual answer and inspect its reported checks. Delivery or a
    working status is not a completed implementation.
 
+A steered message joins the running turn on that turn's own AI connection, so
+the composer can refuse it while the turn runs:
+
+- **Only the owner can steer this turn. You can send a message when it
+  finishes.** The turn runs on the workspace owner's personal plan and you are
+  not the owner (see [Personal-use AI subscriptions](ai-personal-use.md)).
+- **This turn's AI connection is unavailable right now, so you can't steer it.
+  Check AI Accounts, or send your message when the turn finishes.** Vibe64 could
+  not confirm that connection: it may be signed out, or its check failed. This
+  applies to the owner too, and the turn keeps running. When the turn ends,
+  Vibe64 checks the connection again; returning to the browser window also
+  rechecks it. If the hint stays, open AI Accounts and reconnect the account.
+
+Both hints keep your draft and are the same on desktop and phone. Colleague can
+explain them; reconnecting an account remains your step.
+
 On compact screens, reveal chat before using its composer. Failed submissions
 remain visibly failed or pending; inspect the target before retrying an uncertain
 write. Retry reuses the original request identity rather than starting duplicate work.

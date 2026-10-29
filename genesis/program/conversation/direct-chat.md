@@ -1639,7 +1639,10 @@ Discussion and planning complete without reporting a skipped implementation revi
 Saving a mode refreshes main-chat access immediately so Send reflects the new
 destination without waiting for a later session event. Main-chat availability
 uses the selected mode; steering checks the bound native
-connection. Members regain direct chat after an owner's personal turn finishes
+connection. `useVibe64AssistantAccess` names ownership in the steering hint
+only when that connection is available and the viewer may not use it; an
+unavailable connection, including the owner's, gets the unavailable-connection
+hint instead. Members regain direct chat after an owner's personal turn finishes
 when their configured mode is accessible. Suggestions independently use
 `prompt_hint` availability, allowing private drafts through accessible Helper.
 An idle routed Send does not require the previous native connection to start.
