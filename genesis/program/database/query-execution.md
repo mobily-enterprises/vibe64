@@ -31,6 +31,14 @@ before the database tool opens a reader connection. Its recovery directs people
 to Prepare workspace or Retry in session chat. Derived bindings or existing
 service metadata alone do not establish provisioned database users. Application
 migrations still belong to declared Workspace setup, not schema refresh.
+A host forgets what it prepared when it restarts or stops an unused managed
+database service. `sessionDatabaseEnvironment` therefore applies Workspace
+setup's restore rule first: when the session's setup succeeded with a
+`resourceIdentity` equal to the current resources' identity, it prepares them
+again through `projectExecutionEnvironment({ reusePrepared: true })`, as Preview
+does, and reads the environment again. A session never prepared, prepared with
+other resources, or whose setup failed keeps the refusal and prepares nothing.
+`tests/server/vibe64ProjectOnboarding.unit.test.js` covers both.
 
 All fourteen database HTTP operations invoke their named actions. Those actions
 own the input contract, including required session/query identities and explicit

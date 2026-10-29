@@ -40,6 +40,9 @@ shared project data or separate session databases.
 “Database not prepared” means Vibe64 has not confirmed provisioning for this
 database identity. Return to the session chat, let the assistant finish and choose
 **Prepare workspace**, or **Retry** on failed preparation. Then retry **Database**.
+A session that was already prepared with the same database does not need this:
+when its database service was stopped or the host restarted, opening **Database**
+prepares it again by itself, as Preview does, and may take a few seconds.
 Vibe64 supplies the managed database and credentials; the application's declared
 Workspace setup owns migrations. Stored connection configuration alone does not
 prove that database users exist. If preparation fails, inspect its error before

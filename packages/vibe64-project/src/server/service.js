@@ -20,6 +20,9 @@ import {
   runVibe64AgentWriteExclusive
 } from "@local/vibe64-runtime/server/agentWriteLock";
 import {
+  workspaceSetupStateFromMetadata
+} from "@local/vibe64-runtime/server/workspaceSetupState";
+import {
   vibe64Result
 } from "@local/vibe64-core/server/serverResponses";
 import {
@@ -388,20 +391,23 @@ function createService({
         sourceRoot
       };
     }
-    // Internal orchestration may already hold a session record obtained
-    // through a narrower capability than the public store reader (for
-    // example, a renewal successor before it becomes visible). Reuse only an
-    // exact-id record; ordinary callers still cross the public read boundary.
-    const providedSessionId = String(input.session?.sessionId || input.session?.id || "").trim();
-    const session = providedSessionId === sessionId
-      ? input.session
-      : await sessionStore().readSession(sessionId);
     return {
       label: "Session source",
       rootKind: "session-source",
       sessionId,
-      sourceRoot: sessionSourcePath(session)
+      sourceRoot: sessionSourcePath(await sessionForInput(input, sessionId))
     };
+  }
+
+  // Internal orchestration may already hold a session record obtained
+  // through a narrower capability than the public store reader (for
+  // example, a renewal successor before it becomes visible). Reuse only an
+  // exact-id record; ordinary callers still cross the public read boundary.
+  async function sessionForInput(input = {}, sessionId = "") {
+    const providedSessionId = String(input.session?.sessionId || input.session?.id || "").trim();
+    return providedSessionId === sessionId
+      ? input.session
+      : sessionStore().readSession(sessionId);
   }
 
   async function runSessionSourceWorkExclusive(input = {}, operation, operationName = "project-source-write", {
@@ -1265,7 +1271,7 @@ function createService({
     }, operation);
   }
 
-  return Object.freeze({
+  const service = Object.freeze({
     readOnboarding(input = {}) {
       return projectResult(() => projectOnboardingState(input));
     },
@@ -1437,13 +1443,22 @@ function createService({
     },
 
     async sessionDatabaseEnvironment(input = {}) {
-      const resolved = await resolvedProjectEnvironment(
-        input,
-        await userEnvRecords(),
-        { provisionResources: false }
-      );
-      if (!resolved.resourcesPrepared && !resolved.databaseToolEnvironment &&
-          resolved.resources.some(({ resource }) => resourceKindIsDatabase(resource.kind))) {
+      const resolve = async () => resolvedProjectEnvironment(input, await userEnvRecords(), { provisionResources: false });
+      const notPrepared = (resolved) => !resolved.resourcesPrepared && !resolved.databaseToolEnvironment &&
+        resolved.resources.some(({ resource }) => resourceKindIsDatabase(resource.kind));
+      let resolved = await resolve();
+      if (notPrepared(resolved) && resolved.source.sessionId) {
+        // A host stops a managed database service nothing uses, and a restart
+        // forgets what it prepared. Workspace setup's own rule restores a
+        // session prepared with these exact resources, as Preview does.
+        const setup = workspaceSetupStateFromMetadata((await sessionForInput(input, resolved.source.sessionId))?.metadata);
+        if (setup.status === "succeeded" && setup.resourceIdentity &&
+            setup.resourceIdentity === resolved.resourcePreparation?.identity) {
+          await service.projectExecutionEnvironment({ ...input, reusePrepared: true });
+          resolved = await resolve();
+        }
+      }
+      if (notPrepared(resolved)) {
         throw vibe64Error(
           "Database not prepared. Let the assistant finish, then choose Prepare workspace in the session chat, or Retry on its failed preparation. Vibe64 prepares the managed database and credentials; the application runs its declared migrations.",
           "vibe64_session_database_not_prepared"
@@ -1783,6 +1798,7 @@ function createService({
       return projectResult(() => studioProjectContext.selectWorkspaceProject(input));
     }
   });
+  return service;
 }
 
 export {

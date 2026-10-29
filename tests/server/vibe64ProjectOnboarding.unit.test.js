@@ -382,3 +382,70 @@ test("a fresh managed starter remains readable before database preparation and e
     assert.equal(provisionCalls, 1, "an unprepared inspection must still enter normal execution preparation");
   });
 });
+
+// A managed database service stops while nothing uses it, and its sessions'
+// prepared state goes with it. Database prepares again a session whose
+// preparation succeeded with these exact resources, as Preview does; a session
+// never prepared, prepared with other resources, or failed still asks for it.
+test("Database prepares again a session prepared with the same resources, and only that session", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const resource = {
+      component: "application",
+      resource: {
+        id: "database",
+        kind: "mysql",
+        environmentAlternatives: [{
+          preferred: true,
+          bindings: { database: "DB_NAME", host: "DB_HOST", password: "DB_PASSWORD", port: "DB_PORT", username: "DB_USER" }
+        }]
+      }
+    };
+    const { service, store } = await fixture(targetRoot, {
+      inspectEnvironment: () => ({ components: [], environmentDefaults: [], files: [], resources: [resource] })
+    });
+    const identity = "a".repeat(64);
+    const endpoint = (username) => ({ database: "catalogue", host: "127.0.0.1", password: `${username}-secret`, port: 23060, username });
+    let prepared = false;
+    const provisioned = [];
+    const environment = () => ({
+      contract: "vibe64.resource-environment.v2",
+      ok: true,
+      prepared,
+      resourcePreparation: { identity, preserved: prepared },
+      resourceValues: [{
+        declaration: { component: "application", id: "database", kind: "mysql" },
+        values: { database: "catalogue", host: "127.0.0.1", password: "writer-secret", port: 23060, username: "writer" }
+      }],
+      ...(prepared ? { databaseToolEnvironment: {
+        contract: "vibe64.database-tool-environment.v1", kind: "mysql", read: endpoint("reader"), write: endpoint("writer")
+      } } : {})
+    });
+    service.setResourceEnvironmentProvider({
+      managedDevelopmentDatabase: true,
+      environmentForProvisionedResources: () => environment(),
+      environmentForResources(input) {
+        provisioned.push(input.sessionId);
+        prepared = true;
+        return environment();
+      }
+    });
+    const setup = (state) => store.writeMetadataValue(sessionId, "workspace_setup",
+      JSON.stringify({ recipeHash: "sha256:recipe", ...state }));
+    const notPrepared = { code: "vibe64_session_database_not_prepared" };
+
+    await assert.rejects(service.sessionDatabaseEnvironment({ sessionId }), notPrepared, "never prepared");
+    await setup({ status: "succeeded", resourceIdentity: "b".repeat(64) });
+    await assert.rejects(service.sessionDatabaseEnvironment({ sessionId }), notPrepared, "prepared with other resources");
+    await setup({ status: "failed", diagnostic: "Migrations failed." });
+    await assert.rejects(service.sessionDatabaseEnvironment({ sessionId }), notPrepared, "failed preparation");
+    assert.deepEqual(provisioned, [], "Database never prepares a session that was not prepared with these resources");
+
+    await setup({ status: "succeeded", resourceIdentity: identity });
+    const tool = await service.sessionDatabaseEnvironment({ session: await store.readSession(sessionId), sessionId });
+    assert.equal(tool.databaseToolEnvironment.write.username, "writer");
+    assert.equal(tool.databaseToolEnvironment.read.username, "reader");
+    assert.deepEqual(provisioned, [sessionId], "the stopped service's session is prepared again once");
+    await service.sessionDatabaseEnvironment({ sessionId });
+    assert.deepEqual(provisioned, [sessionId], "a prepared session is read without preparing");
+  });
+});
