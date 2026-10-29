@@ -177,6 +177,9 @@ arriving during cancellation can also require another Close attempt. Pinning,
 renewal and active workspace preparation still prevent archival.
 Archiving uses the session's saved assistant even after a server restart; it
 does not require connecting a different assistant just to stop that session.
+A session whose workspace could not be created never started its assistant, so
+archiving it skips that assistant's cleanup; it also does not hold the project
+open or make project Close fail.
 When Vibe64 starts, it finishes archives a restart interrupted. A session it
 cannot finish is named in the server log with the reason, and the other sessions
 are still finished. If the server is too busy to open an archived session, for
@@ -304,7 +307,10 @@ it, session changes and assistant work). Leaving the project or closing the
 browser does not close it sooner; close the project yourself to free its
 memory at once, or ask Colleague to close it: it uses the same Close, which also
 stops other sessions' running work, and reports a failed Close as incomplete
-cleanup. A running assistant turn or active goal keeps it open.
+cleanup. A running assistant turn or active goal keeps it open. If one of the
+project's sessions cannot be checked, idle cleanup leaves the project open rather
+than guess, and the server log names that session; close the project yourself to
+free its memory.
 The pin survives server restarts. To change it, return to the pinned session and
 choose **Unpin session**; tab selection then controls the source link again.
 Other sessions show a disabled pin with **Unpin the project's pinned session first**.

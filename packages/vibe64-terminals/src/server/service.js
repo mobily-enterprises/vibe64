@@ -1932,6 +1932,9 @@ function createService({
           learningNativeAvailable = true;
         }
       }
+      // A session whose source was never created never ran its assistant, and
+      // its assistant cannot read a conversation context to close.
+      const assistantRan = controllerOptions.session?.sourceReady !== false || learningNativeAvailable;
       return closeTerminalControllersForSession(sessionId, [
         {
           controller: { closeAllForSession: async (id, options) => {
@@ -1953,17 +1956,17 @@ function createService({
         { controller: outputTarget, label: "outputTarget" },
         { controller: { closeAllForSession: (id) => projectServices.closeSession(projectRuntimeContext(), id) },
           label: "sessionServices" },
-        ...(!controllerOptions.renewalCleanup && (controllerOptions.session?.sourceReady !== false || learningNativeAvailable) ? [{
+        ...(!controllerOptions.renewalCleanup && assistantRan ? [{
           controller: { closeAllForSession: async (id, options) =>
             sessionAgent.interruptTurn(id, {}, await assistantSessionOptions(id, options)) },
           label: "assistantTurn"
         }] : []),
-        {
+        ...(assistantRan ? [{
           controller: {
             closeAllForSession: (id, options) => closeAgentSession(id, options)
           },
           label: "assistant"
-        },
+        }] : []),
         { controller: agentDatabaseCommand, label: "agentDatabase" },
         { controller: agentEnvCommand, label: "agentEnv" },
         { controller: agentPreviewCommand, label: "agentPreview" },
@@ -2148,7 +2151,21 @@ function createService({
       };
     }
     const sessions = await listOpenProjectRuntimeSessions();
-    if (sessions.some((session) => readGoalIntent(session)?.active)) {
+    // A session whose state cannot be read is named, and the project stays
+    // open rather than closing on a guess; the other sessions are still read.
+    const unreadable = [];
+    const sessionStateFailure = (session, error) => {
+      unreadable.push({ error: error instanceof Error ? error.message : String(error || "Session state is unreadable."),
+        sessionId: sessionRecordId(session) });
+    };
+    if (sessions.some((session) => {
+      try {
+        return readGoalIntent(session)?.active === true;
+      } catch (error) {
+        sessionStateFailure(session, error);
+        return false;
+      }
+    })) {
       return { dormant: false, ok: true, skipped: true, reason: "active-goal-intent", runtime,
         projectSlug: context.projectSlug, projectContextRoot: context.projectContextRoot };
     }
@@ -2182,7 +2199,15 @@ function createService({
       };
     }
     for (const session of sessions) {
-      const temporary = await sessionAgent.hasActiveTemporaryConversation(session.sessionId, {}, { session });
+      // A session whose source was never created has run no assistant.
+      if (session.sourceReady === false && session.purpose !== "learning") continue;
+      let temporary;
+      try {
+        temporary = await sessionAgent.hasActiveTemporaryConversation(session.sessionId, {}, { session });
+      } catch (error) {
+        sessionStateFailure(session, error);
+        continue;
+      }
       if (temporary.active) {
         return {
           dormancy,
@@ -2195,6 +2220,20 @@ function createService({
           projectContextRoot: context.projectContextRoot
         };
       }
+    }
+    if (unreadable.length > 0) {
+      return {
+        dormancy,
+        dormant: false,
+        error: `Idle close skipped: ${unreadable.length} session${unreadable.length === 1 ? "" : "s"} could not be checked.`,
+        failed: unreadable,
+        ok: false,
+        projectSlug: context.projectSlug,
+        reason: "session-state-unreadable",
+        runtime,
+        skipped: true,
+        projectContextRoot: context.projectContextRoot
+      };
     }
     vibe64SessionDebugLog("server.terminals.projectRuntime.dormantClose.start", {
       idleMs: dormancy.idleMs,
@@ -3039,13 +3078,11 @@ function createService({
           reason
         });
         try {
-          let sessionIds = [];
+          let sessions = [];
           try {
-            const sessions = await listOpenProjectRuntimeSessions();
-            sessionIds = (Array.isArray(sessions) ? sessions : [])
-              .map((session) => sessionRecordId(session))
-              .filter(Boolean);
-            sessionCount = sessionIds.length;
+            const listed = await listOpenProjectRuntimeSessions();
+            sessions = (Array.isArray(listed) ? listed : []).filter((session) => sessionRecordId(session));
+            sessionCount = sessions.length;
           } catch (error) {
             failed.push({
               controller: "sessions",
@@ -3058,10 +3095,14 @@ function createService({
               reason
             });
           }
-          for (const sessionId of sessionIds) {
+          for (const session of sessions) {
+            const sessionId = sessionRecordId(session);
             try {
+              // The listed session lets cleanup skip work a session without
+              // source never started, as an archive's cleanup does.
               const result = await closeAllSessionTerminals(sessionId, {
-                preserveProcessExitProof: true
+                preserveProcessExitProof: true,
+                session
               });
               sessionTerminalClosed += Number(result?.closed || 0);
             } catch (error) {
@@ -4346,6 +4387,17 @@ function startProjectRuntimeDormancyCleanupSchedule({
       const result = await service.closeDormantProjectRuntimes({
         idleAfterMs: normalizedIdleAfterMs
       });
+      for (const failure of Array.isArray(result?.failed) ? result.failed : []) {
+        const failed = Array.isArray(failure?.failed) ? failure.failed
+          : Array.isArray(failure?.closeResult?.failed) ? failure.closeResult.failed : [];
+        logger?.warn?.({
+          component: "vibe64-project-runtime-cleanup",
+          error: String(failure?.error || failed[0]?.error || "Dormant project runtime cleanup failed."),
+          event: "vibe64.project_runtime.dormant_close_failed",
+          projectSlug: String(failure?.projectSlug || ""),
+          sessionIds: [...new Set(failed.map((entry) => String(entry?.sessionId || "")).filter(Boolean))]
+        }, "An idle Vibe64 project could not be closed.");
+      }
       vibe64SessionDebugLog("server.terminals.projectRuntime.dormantCleanup.done", {
         closedCount: Number(result?.closedCount || 0),
         failedCount: Array.isArray(result?.failed) ? result.failed.length : 0,

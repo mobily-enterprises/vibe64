@@ -707,7 +707,12 @@ close. Pinning requires an open project and active nonclosing, nonrenewing
 session. Archive and renewal refuse the pinned source; moving a session to
 closing checks again under the alias queue. Explicit project close holds the
 same queue through shutdown and refuses any pin; idle cleanup skips pinned
-projects. Daemon shutdown retains its original teardown path. Unpinning is
+projects. Idle cleanup reads every open session's goal and temporary-chat state
+before closing; a session whose state cannot be read keeps the project open, is
+named in the result, and is logged as the operational warning
+`vibe64.project_runtime.dormant_close_failed` with the project and session IDs.
+A session whose source was never created ran no assistant, so idle cleanup,
+project Close and archive skip its assistant checks and shutdown. Daemon shutdown retains its original teardown path. Unpinning is
 explicit and never saves or publishes work. Cross-project messages still target
 the server-selected session, which is the pinned source while pinned.
 

@@ -29,6 +29,8 @@ import {
   terminalsProviderEnv
 } from "../../packages/vibe64-terminals/src/server/Vibe64TerminalsProvider.js";
 import { createCodexSessionEnvironment } from "../../packages/vibe64-terminals/src/server/codexSessionEnvironment.js";
+import { Vibe64SessionRuntime } from "../../packages/vibe64-runtime/src/server/runtime.js";
+import { startProjectRuntimeDormancyCleanupSchedule } from "../../packages/vibe64-terminals/src/server/service.js";
 import { previewPublicOriginForLaunch } from "../../packages/vibe64-terminals/src/server/outputTargetTerminal.js";
 
 async function withTemporaryRoot(callback) {
@@ -623,6 +625,95 @@ test("a partial project close restores Preview service admission after services 
       assert.match(result.failed[0].error, /session inventory unavailable/u);
       assert.deepEqual(calls, ["begin-close", "close", "opened"]);
     } finally {
+      await feature.shutdown(dependencies, { outputs, profile: "test" });
+    }
+  });
+});
+
+const claudeSelection = JSON.stringify({ engineId: "claude", agentId: "claude", modelId: "sonnet", modelProviderId: "anthropic",
+  variantId: "high", catalogRevision: `sha256:${"a".repeat(64)}` });
+
+function dormancyProject(root, createRuntime) {
+  const runtimeRoot = path.join(root, "runtime"), targetRoot = path.join(root, "project");
+  return {
+    runtimeRoot,
+    targetRoot,
+    project: {
+      createSessionStore() { return {}; },
+      createRuntime: () => createRuntime({ runtimeRoot, targetRoot }),
+      currentProjectRuntimeRoot() { return runtimeRoot; }, currentTargetRoot() { return targetRoot; },
+      async listProjects() { return { ok: true, projects: [] }; },
+      async listPracticeProjectSlugs() { return ["training-0123abcd"]; },
+      async readCurrentProject() { return { slug: "training-0123abcd" }; },
+      async readEnv() { return { env: { records: [] }, ok: true }; },
+      runInProjectContext(_slug, operation) { return operation(); },
+      async saveEnvUserValues() { return { ok: true }; }
+    }
+  };
+}
+
+test("a Claude session whose source was never created blocks no idle close, project Close or archive stop", async () => {
+  await withTemporaryRoot(async root => {
+    let runtime = null;
+    const { project, runtimeRoot, targetRoot } = dormancyProject(root, async ({ runtimeRoot, targetRoot }) => {
+      runtime ||= new Vibe64SessionRuntime({ projectContextRoot: targetRoot, projectRuntimeRoot: runtimeRoot, inspectSourceByDefault: false });
+      return runtime;
+    });
+    await mkdir(targetRoot, { recursive: true });
+    // A failed clone leaves a blocked session with its selection but no source.
+    const created = await project.createRuntime();
+    await created.store.createSession({ sessionId: "clone-failed", runtimeKind: "genesis",
+      metadata: { assistant_selection: claudeSelection, source_creation_failed: "yes" } });
+    await created.store.writeStatus("clone-failed", "blocked");
+    const dependencies = featureDependencies({ env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") }, project });
+    const feature = createVibe64TerminalsFeature(), outputs = await feature.setup(dependencies, { profile: "test" });
+    try {
+      await outputs.terminals.openProjectRuntime();
+      const idle = await outputs.terminals.closeDormantProjectRuntime({ nowMs: Date.now() + 31 * 60 * 1000 });
+      assert.equal(idle.dormant, true, JSON.stringify(idle.failed || idle.closeResult?.failed || idle.reason));
+      assert.equal(idle.ok, true, JSON.stringify(idle.closeResult?.failed));
+      assert.equal((await readProjectRuntimeOpenState({ projectRuntimeRoot: runtimeRoot })).open, false);
+      await outputs.terminals.openProjectRuntime();
+      const closed = await outputs.terminals.closeProjectRuntime({ reason: "project-close" });
+      assert.equal(closed.ok, true, JSON.stringify(closed.failed));
+      // Archiving stops the session's work the same way before removing it.
+      const session = await runtime.getSession("clone-failed", { inspectSource: false });
+      assert.equal(session.sourceReady, false);
+      const stopped = await outputs.terminals.closeSessionTerminals("clone-failed", { session, forgetConversationBinding: true });
+      assert.equal(stopped.ok, true);
+    } finally { await feature.shutdown(dependencies, { outputs, profile: "test" }); }
+  });
+});
+
+test("an unreadable session keeps an idle project open, named in an operational warning", async () => {
+  await withTemporaryRoot(async root => {
+    const unreadable = { sessionId: "goal-unreadable", status: "active", sourceReady: false, sourcePath: "",
+      metadata: { assistant_goal_intent: "{not json" } };
+    const { project, runtimeRoot, targetRoot } = dormancyProject(root, async ({ runtimeRoot }) => ({
+      store: { withUnpinnedProject: operation => operation() },
+      adapter: {}, projectConfig: {}, stateRoot: runtimeRoot, async listSessions() { return [structuredClone(unreadable)]; }
+    }));
+    await mkdir(targetRoot, { recursive: true });
+    const warnings = [];
+    const dependencies = featureDependencies({ env: { [VIBE64_SERVICE_DATA_ROOT_ENV]: path.join(root, "services") }, project });
+    const feature = createVibe64TerminalsFeature(), outputs = await feature.setup(dependencies, { profile: "test" });
+    const schedule = startProjectRuntimeDormancyCleanupSchedule({
+      idleAfterMs: 1, logger: { warn(fields, message) { warnings.push({ fields, message }); } },
+      serviceFactory: () => outputs.terminals, setIntervalImpl: () => null, clearIntervalImpl() {}
+    });
+    try {
+      await outputs.terminals.openProjectRuntime();
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      const sweep = await schedule.runNow();
+      assert.equal(sweep.closedCount, 0);
+      assert.equal(sweep.results[0].reason, "session-state-unreadable");
+      assert.deepEqual(sweep.results[0].failed.map(({ sessionId }) => sessionId), ["goal-unreadable"]);
+      assert.equal((await readProjectRuntimeOpenState({ projectRuntimeRoot: runtimeRoot })).open, true);
+      assert.deepEqual(warnings.map(({ fields }) => [fields.event, fields.projectSlug, fields.sessionIds]), [
+        ["vibe64.project_runtime.dormant_close_failed", sweep.results[0].projectSlug, ["goal-unreadable"]]
+      ]);
+    } finally {
+      schedule.stop();
       await feature.shutdown(dependencies, { outputs, profile: "test" });
     }
   });
