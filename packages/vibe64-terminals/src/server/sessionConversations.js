@@ -672,7 +672,7 @@ function createSessionConversations({
             providerConversationId: _nativeId, ...presentation } = observed;
           const route = routingRequest(observed);
           // A stopped or cancelled request, including its retained changeover
-          // attempt, is no longer offered for recovery, as in Main.
+          // attempt, is not offered for recovery, as in Main.
           const attempted = attemptedChangeover(observed);
           const pending = route?.stopped && attempted?.messageId === route.messageId ||
             assistantCancelledMessageIds(observed.routingMetadata).includes(attempted?.messageId) ? null : attempted;

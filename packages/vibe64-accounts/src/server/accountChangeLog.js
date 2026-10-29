@@ -21,4 +21,17 @@ function logAccountChange(logger, operation = "", fields = {}, result = {}, star
   }, failed ? "Vibe64 account change failed" : "Vibe64 account change completed");
 }
 
-export { logAccountChange };
+// Runs one change and logs it once it settles; a thrown failure is logged and rethrown.
+async function runLoggedAccountChange(logger, operation, fields, work) {
+  const startedAt = Date.now();
+  try {
+    const result = await work();
+    logAccountChange(logger, operation, fields, result, startedAt);
+    return result;
+  } catch (error) {
+    logAccountChange(logger, operation, fields, { ok: false, code: error?.code, error: error?.message || String(error) }, startedAt);
+    throw error;
+  }
+}
+
+export { logAccountChange, runLoggedAccountChange };

@@ -1556,11 +1556,23 @@ function createVibe64SessionStore({
         };
         let available = true;
         let publishing = false;
-        const publishArtifacts = async (files) => {
+        const requireExclusive = () => {
           if (!available || publishing) throw new Error("Archived artifact publication is outside its exclusive operation.");
-          if (!Array.isArray(files) || !files.length || files.length > 1000) throw new TypeError("Archived artifact publication requires a bounded file list.");
+        };
+        // Each change inside this extraction publishes at once. A failed one
+        // leaves it unavailable, so a retry never publishes a partly modified
+        // extraction.
+        const change = async (work) => {
+          requireExclusive();
           publishing = true;
-          try {
+          try { return await work(); }
+          catch (error) { available = false; throw error; }
+          finally { publishing = false; }
+        };
+        const publishArtifacts = async (files) => {
+          requireExclusive();
+          if (!Array.isArray(files) || !files.length || files.length > 1000) throw new TypeError("Archived artifact publication requires a bounded file list.");
+          return change(async () => {
             const published = new Set();
             for (const file of files) {
               const relativePath = assertSafeArtifactPath(file.relativePath);
@@ -1594,21 +1606,7 @@ function createVibe64SessionStore({
             }
             await publishExtractedSessionArchive(archived, { beforeWork });
             return { ok: true, paths: [...published].sort() };
-          } catch (error) {
-            // Do not let a retry publish a partly modified extraction.
-            available = false;
-            throw error;
-          } finally { publishing = false; }
-        };
-        // Expiry inside the same extraction; each change publishes at once.
-        const change = (work) => {
-          if (!available || publishing) throw new Error("Archived artifact publication is outside its exclusive operation.");
-          publishing = true;
-          return work().catch((error) => {
-            // Do not let a retry publish a partly modified extraction.
-            available = false;
-            throw error;
-          }).finally(() => { publishing = false; });
+          });
         };
         const pruneArtifacts = async (relativePaths, { beforePrune } = {}) => {
           const requested = artifactExpiryRequest(relativePaths, beforePrune);

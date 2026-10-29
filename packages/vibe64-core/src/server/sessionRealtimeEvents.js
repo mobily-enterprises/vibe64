@@ -176,9 +176,10 @@ function createSessionChangedPublisher(events) {
     session = null
   } = {}) {
     const id = String(sessionIdValue || "").trim();
+    const reasonId = String(reason || "").trim();
     // A streamed delta carries only the conversation's live text, which its
     // subscribers receive natively: no page or listener reads it as a change.
-    if (!id || String(reason || "").trim() === "assistant-stream") {
+    if (!id || reasonId === "assistant-stream") {
       return null;
     }
     const fullPayload = Object.freeze(sessionRealtimePayload(id, {
@@ -210,7 +211,7 @@ function createSessionChangedPublisher(events) {
         payload: fullPayload
       })
     }));
-    if (projectSlug && !VIEWER_ONLY_REASONS.has(String(reason || "").trim())) {
+    if (projectSlug && !VIEWER_ONLY_REASONS.has(reasonId)) {
       // The summary is a second delivery of the same change, not a domain
       // change of its own: listeners of session changes match "entity.changed".
       await events.publish(Object.freeze({

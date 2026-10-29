@@ -2,21 +2,13 @@ import { aiConnectionError } from "./aiConnectionError.js";
 import { AI_CONNECTION_PROVIDER_PATTERN } from "../shared/aiConnectionIdentity.js";
 import { assistantProviderPolicy } from "./assistantProviderPolicy.js";
 import { readAllOpenCodeCapabilityRows } from "./opencodeCatalogPages.js";
-import { logAccountChange } from "./accountChangeLog.js";
+import { runLoggedAccountChange } from "./accountChangeLog.js";
 
 function createAiConnectionService({ aiConnections, readAssistantCapabilities, initializeModelRouting, logger = null } = {}) {
   // OpenCode connection changes are account changes too: one line each.
-  async function connectionChange(operation, { modelProviderId, vibe64User } = {}, work) {
-    const startedAt = Date.now();
-    const fields = { actor: String(vibe64User?.username || ""), engineId: "opencode", modelProviderId: String(modelProviderId || "") };
-    try {
-      const result = await work();
-      logAccountChange(logger, operation, fields, result, startedAt);
-      return result;
-    } catch (error) {
-      logAccountChange(logger, operation, fields, { ok: false, code: error?.code, error: error?.message || String(error) }, startedAt);
-      throw error;
-    }
+  function connectionChange(operation, { modelProviderId, vibe64User } = {}, work) {
+    return runLoggedAccountChange(logger, operation,
+      { actor: String(vibe64User?.username || ""), engineId: "opencode", modelProviderId: String(modelProviderId || "") }, work);
   }
 
   function requireConnectionStore() {

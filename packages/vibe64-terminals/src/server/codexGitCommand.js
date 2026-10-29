@@ -28,6 +28,7 @@ import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
 import { fetchReachesGithubAsGit, listGithubRemoteHeads } from "./githubRemoteHeads.js";
+import { currentProjectSlug } from "./terminalShared.js";
 import {
   writeExecutableFileIfChanged
 } from "./writeExecutableFileIfChanged.js";
@@ -1121,8 +1122,7 @@ function createCodexGitCommandService({
     const gatewayUserKey = gatewayGitIdentityUserKey(session, actor, toolHome);
     // Resources show the AI's command under the project whose session store
     // was just read, and its session. Reading the slug lists no projects.
-    const projectSlug = typeof projectService.currentProjectSlug === "function"
-      ? normalizeText(projectService.currentProjectSlug()) : "";
+    const projectSlug = currentProjectSlug(projectService);
     stage = "command";
     if (phaseElapsedMs) phaseElapsedMs.commandStarted = Math.round(performance.now() - startedAt);
     const result = await runWithinBudget({

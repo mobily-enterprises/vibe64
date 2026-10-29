@@ -104,6 +104,14 @@ function vibe64Result(operation) {
   });
 }
 
+// The project whose runtime holds the work, read without listing projects.
+// Changes and executions name it because they can happen outside any request.
+function currentProjectSlug(projectService) {
+  return typeof projectService?.currentProjectSlug === "function"
+    ? String(projectService.currentProjectSlug() || "").trim()
+    : "";
+}
+
 function terminalNamespace(base = "", ...parts) {
   return [
     String(base || "").trim(),
@@ -188,6 +196,7 @@ export {
   claudeTerminalNamespace,
   codexTerminalNamespace,
   commandInvocation,
+  currentProjectSlug,
   directoryExists,
   globalCodexTerminalNamespace,
   opencodeTerminalNamespace,

@@ -84,6 +84,7 @@ import {
 } from "@local/vibe64-runtime/server/sessionSourceInspection";
 import {
   commandInvocation,
+  currentProjectSlug,
   ensureTerminalSessionSourceGitSelfContained,
   vibe64Result,
   outputTargetTerminalNamespace
@@ -585,14 +586,6 @@ async function writeLaunchMetadata(store, sessionId, terminalSession = {}) {
   });
 }
 
-// The project whose runtime holds the session. Its changes name it, because
-// terminal events and cleanup can publish outside any request.
-function sessionProjectSlug(projectService) {
-  return typeof projectService?.currentProjectSlug === "function"
-    ? String(projectService.currentProjectSlug() || "").trim()
-    : "";
-}
-
 async function createLaunchContext(projectService, sessionId, {
   awaitWorkspacePrepared = false,
   ensureWorkspacePrepared = null,
@@ -651,7 +644,7 @@ async function createLaunchContext(projectService, sessionId, {
     projectEnvironment,
     projectsRoot: projectService?.selectedProject?.projectsRoot || "",
     projectContextRoot,
-    projectSlug: sessionProjectSlug(projectService),
+    projectSlug: currentProjectSlug(projectService),
     runtime,
     serviceDataRoot: typeof projectService?.currentServiceDataRoot === "function"
       ? projectService.currentServiceDataRoot()
@@ -3145,7 +3138,7 @@ function createOutputTargetTerminalController({
           return { ok: false, code: "vibe64_preview_run_changed", error: "A newer Preview run is active. Refresh its status before stopping it." };
         }
         const runtime = await projectService.createRuntime();
-        const projectSlug = sessionProjectSlug(projectService);
+        const projectSlug = currentProjectSlug(projectService);
         await writePreviewStopState(runtime.store, sessionId, { stopped: true });
         const activeId = active?.id && (!requestedId || active.id === requestedId) ? active.id : "";
         let result = { ok: true, id: requestedId, running: false, status: "exited" };

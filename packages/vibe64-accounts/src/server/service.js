@@ -79,7 +79,7 @@ import {
 
 import { claudeStatusStartFailed, readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
-import { logAccountChange } from "./accountChangeLog.js";
+import { logAccountChange, runLoggedAccountChange } from "./accountChangeLog.js";
 
 const ACCOUNT_AUTH_NAMESPACE = "vibe64-accounts";
 const BROWSER_AUTH_MODE = "browser";
@@ -1391,11 +1391,9 @@ function createService({
   const aiManagementError = (input = {}) => accountRuntime.requireAiManagement(input);
 
   // A sign-in, logout or provider key change is logged once it settles.
-  async function accountChange(operation, input = {}, fields = {}, work) {
-    const startedAt = Date.now();
-    const result = await accountsResult(work);
-    logAccountChange(logger, operation, { ...fields, actor: String(input.vibe64User?.username || "") }, result, startedAt);
-    return result;
+  function accountChange(operation, input = {}, fields = {}, work) {
+    return runLoggedAccountChange(logger, operation, { ...fields, actor: String(input.vibe64User?.username || "") },
+      () => accountsResult(work));
   }
 
   async function prepareClaudeAuthChange(input) {
