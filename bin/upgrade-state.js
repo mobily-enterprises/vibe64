@@ -20,6 +20,7 @@ import { upgradeIndependentProviderCredentials } from "@local/vibe64-accounts/se
 import { retireFreeModelRouting } from "@local/vibe64-accounts/server/freeModelRetirementUpgrade";
 import { upgradeTeamSetupRouting } from "@local/vibe64-accounts/server/teamSetupRoutingUpgrade";
 import { upgradeTeamSetupSessions } from "@local/vibe64-terminals/server/teamSetupSessionUpgrade";
+import { removeUnusedCodexCaches } from "@local/vibe64-core/server/codexCacheUpgrade";
 
 try {
   const { values } = parseArgs({ options: {
@@ -78,6 +79,7 @@ try {
     upgradeClaudeRejectedInput,
     upgradeClaudeCommandMessages,
     upgradeIndependentProviderCredentials,
+    removeUnusedCodexCaches,
     report
   });
 } catch (error) {

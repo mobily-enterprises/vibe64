@@ -1573,3 +1573,23 @@ a file that is not a JSON object stops the upgrade without changes, and a retry
 after success changes nothing. The settings reader refuses any other field, so a
 file still holding one is unreadable until this upgrade runs. Focused evidence:
 `workspaceAssistantNameOnlyUpgrade.unit.test.js` and `stateUpgrades.unit.test.js`.
+
+## Unused Codex caches (`20261029-codex-unused-caches`)
+
+Every Codex process Vibe64 launches now runs with plugins and apps off, and
+removing a Codex provider connection deletes that home's runtime-only data.
+This upgrade follows `20261025-workspace-assistant-name-only` and removes what
+earlier releases left behind. In the managed `~/.codex` of the OS user running
+the command, and in every curated provider home
+(`ai-connections/codex/<provider>/home/.codex`), it removes the plugin and app
+caches that JSKIT's `codexHomeDisposablePaths` lists. A provider home without
+`connection.json` also loses its diagnostic log database, `.tmp`, `cache` and
+`tmp`. Auth, config, the catalogue, sessions and the state databases are kept.
+The owner is Core's `codexCacheUpgrade.js`, supplied by the candidate CLI; the
+script refuses to run without it. Nothing it removes is saved state, so it keeps
+no backup. Check is read-only and reports each home with how many entries it
+would remove, never their content. A home reached through a link is reported as
+a warning and left alone, and a retry after success finds nothing. Run it as the
+OS user that owns those homes, with Vibe64 and every Codex process using them
+stopped. Focused evidence: `codexUnusedCachesUpgrade.unit.test.js` and
+`stateUpgrades.unit.test.js`.

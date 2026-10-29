@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, writeFile, stat, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile, stat, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -157,6 +157,34 @@ test("disconnect removes credentials after stopping only their owner and retains
   assert.equal(await readFile(path.join(locations.codexHome, "fixture-history"), "utf8"), "retained");
   assert.equal((await f.store.list())[0].connected, false);
   await assert.rejects(f.store.runtimeOptions("deepseek"), /Connect Codex/);
+});
+
+test("disconnect also drops the stopped home's Codex logs and temporary files, keeping its state", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "codex-providers-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const { codexHome } = codexProviderPaths(root, "deepseek");
+  let logsWhileStopping = [];
+  const store = createCodexProviderConnectionStore({ systemRoot: root,
+    fetchImpl: async () => new Response(JSON.stringify({ id: "fixture", output: [], status: "completed" })),
+    invalidateRuntimes: async (input) => {
+      logsWhileStopping.push(await stat(path.join(codexHome, "logs_2.sqlite")).then(() => true, () => false));
+      await input.prepare?.(); await input.publish?.(); return { ok: true };
+    } });
+  await store.change("deepseek", { apiKey: "original" });
+  const disposable = ["logs_2.sqlite", "logs_2.sqlite-wal", ".tmp/git-a1/HEAD", ".tmp/plugins/README.md",
+    "cache/remote_plugin_catalog/catalog.json", "tmp/arg0/apply_patch"];
+  const kept = ["state_5.sqlite", "goals_1.sqlite", "sessions/2026/10/09/rollout.jsonl", "models.json"];
+  for (const entry of [...disposable, ...kept]) {
+    await mkdir(path.dirname(path.join(codexHome, entry)), { recursive: true });
+    await writeFile(path.join(codexHome, entry), "native");
+  }
+  logsWhileStopping = [];
+  await store.change("deepseek", { remove: true });
+  assert.deepEqual(logsWhileStopping, [true], "nothing is removed before the runtimes are stopped");
+  for (const entry of ["logs_2.sqlite", "logs_2.sqlite-wal", ".tmp", "cache", "tmp"]) {
+    await assert.rejects(stat(path.join(codexHome, entry)), { code: "ENOENT" }, entry);
+  }
+  for (const entry of kept) assert.equal(await readFile(path.join(codexHome, entry), "utf8"), "native", entry);
 });
 
 test("curated provider settings keep credential runtimes separate and cannot retarget the recorded thread", (t) => {

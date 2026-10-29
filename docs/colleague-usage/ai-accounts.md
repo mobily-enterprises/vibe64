@@ -168,7 +168,9 @@ OpenCode may require you to close its native terminals, other-provider chats and
 Colleague conversations before changing a key. If it refuses, the saved key stays
 unchanged and those conversations keep running; close the named users and retry.
 Removing a connection keeps the saved model choices that name it; reconnect the
-exact row or deliberately choose other models in **Models**. Main chat always
+exact row or deliberately choose other models in **Models**. Removing a Codex
+connection also deletes that connection's Codex logs and temporary files; its
+past chats stay. Main chat always
 runs in your Senior's tool, so a removed Senior connection stops main chat until
 you reconnect it or choose another Senior.
 The controls and results are the same on desktop and mobile. Colleague can

@@ -74,6 +74,8 @@ loopback/no-login lane. Other account actions remain excluded.
 
 - `packages/vibe64-core/src/shared/curatedCodexProviders.js`
 - `packages/vibe64-core/src/server/codexProviderConnections.js`
+- `packages/vibe64-core/src/server/codexCacheUpgrade.js`
+- `packages/vibe64-core/src/server/stateUpgrades/20261029-codex-unused-caches.js`
 - `packages/vibe64-accounts/src/client/studio/NativeProviderConnections.vue`
 - `packages/vibe64-accounts/src/client/composables/useCodexProviderConnections.js`
 - `src/components/studio/Vibe64AuthSettingsButton.vue`
@@ -525,6 +527,19 @@ threads' work, queues and shared server. Unknown inventories or retained native
 subscribers block publication with explicit retry guidance. Genuine account,
 socket and execution changes retain the original whole-runtime lifecycle.
 Intentional account changes do not bypass the native account identity guard.
+
+Removing a Codex connection, once its runtimes are confirmed stopped, also
+deletes what JSKIT's `codexHomeDisposablePaths(codexHome, { retired: true })`
+lists in that provider home: the diagnostic log database with its `-wal` and
+`-shm` files, `.tmp`, `cache` and `tmp`. Nothing launches from that home until
+it is reconnected. Auth, the catalogue, sessions and the state databases that
+retained conversations read stay. The `20261029-codex-unused-caches` upgrade
+(owner `codexCacheUpgrade.js`, supplied by `bin/upgrade-state.js`) removes what
+earlier releases left: the plugin and app caches JSKIT lists in the managed
+`~/.codex` and every curated provider home, and the same runtime-only data in a
+provider home without `connection.json`. It reaches each home only through real
+directories, warns about and skips a linked one, never reads a key, and keeps
+no backup because nothing it removes is saved state.
 
 The new explicit `20261009-independent-provider-credentials` upgrade is prepared
 for later stopped-service execution. It appends after the existing assistant-

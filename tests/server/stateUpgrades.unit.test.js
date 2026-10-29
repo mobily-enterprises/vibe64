@@ -50,6 +50,7 @@ const teamSetupsId = "20261023-owner-team-ai-setups";
 const retiredTourPreferenceId = "20261023-retired-tour-preference";
 const retiredProjectBootstrapId = "20261025-retired-project-bootstrap";
 const workspaceAssistantNameOnlyId = "20261025-workspace-assistant-name-only";
+const codexUnusedCachesId = "20261029-codex-unused-caches";
 // Earlier registry fixtures have no Learning state; the real owners are
 // exercised by the learning-space reset boundary case below and their own files.
 const resetLearningForLearningSpace = async () => {};
@@ -60,8 +61,11 @@ const retireColleagueFreeModel = async () => {};
 // So do the owner/team AI setups owners (teamSetupUpgrade.unit.test.js).
 const upgradeTeamSetupSessions = async () => {};
 const upgradeTeamSetupRouting = async () => {};
+// Registry fixtures never reach a real home; codexUnusedCachesUpgrade.unit.test.js
+// exercises the Codex cache owner against fixture homes.
+const removeUnusedCodexCaches = async () => {};
 const runUpgrades = options => runRegistryUpgrades({ resetLearningForLearningSpace, retireColleagueLearningWatches,
-  retireFreeModelRouting, retireColleagueFreeModel, upgradeTeamSetupSessions, upgradeTeamSetupRouting, ...options });
+  retireFreeModelRouting, retireColleagueFreeModel, upgradeTeamSetupSessions, upgradeTeamSetupRouting, removeUnusedCodexCaches, ...options });
 // Historical registry fixtures do not clear credentials; the real reset is
 // exercised by its original companion and providerCredentialsUpgrade.unit.test.js.
 const upgradeIndependentProviderCredentials = async () => {};
@@ -86,7 +90,7 @@ const upgradeClaudeCommandMessages = async () => {};
 const runStateUpgrades = options => runUpgrades({ upgradeClaudeCommandMessages, upgradeClaudeRejectedInput, upgradeColleagueHistoricalInteractiveContinuity, repairColleagueRetiredOperation, upgradeAssistantWorkflow, upgradeIndependentProviderCredentials, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeContinuity, upgradeColleagueNativeInstructions, ...options });
 const personalPreferencesId = "20261006-personal-assistant-preferences";
 const routingCompatibilityId = "20261006-routing-format-compatibility";
-const upgradeIds = [id, routingId, "20260925-native-conversation-lifecycle", "20260926-assistant-role-names", "20260927-assistant-helper", "20260927-native-provider-readiness", "20260928-completed-discussion-plan", "20260929-plan-history", "20260930-auto-implementation-continuation", "20261002-colleague-conversation", "20261002-session-conversations", "20261003-conversation-native-journal", "20261003-conversation-undo-retirement", trainingId, personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId];
+const upgradeIds = [id, routingId, "20260925-native-conversation-lifecycle", "20260926-assistant-role-names", "20260927-assistant-helper", "20260927-native-provider-readiness", "20260928-completed-discussion-plan", "20260929-plan-history", "20260930-auto-implementation-continuation", "20261002-colleague-conversation", "20261002-session-conversations", "20261003-conversation-native-journal", "20261003-conversation-undo-retirement", trainingId, personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId];
 const repoRoot = fileURLToPath(new URL("../..", import.meta.url));
 
 test("Claude command upgrade requires its owner and records completion only after successful apply", async t => {
@@ -107,7 +111,7 @@ test("Claude command upgrade requires its owner and records completion only afte
   await runUpgrades({ ...options, apply: true });
   assert.ok(calls.includes(false));
   assert.equal(calls.at(-1), true);
-  assert.equal(JSON.parse(await readFile(f.ledgerPath)).applied.at(-1).id, workspaceAssistantNameOnlyId);
+  assert.equal(JSON.parse(await readFile(f.ledgerPath)).applied.at(-1).id, codexUnusedCachesId);
 });
 const legacyMarker = { connected: true, updatedAt: "2026-09-23T03:15:44.821Z", version: 1 };
 async function fixture(t, { codexPolicy = upgradeColleagueCodexCompletedPolicy, nativeContinuity = upgradeColleagueNativeContinuity, nativeInstructions = upgradeColleagueNativeInstructions, retiredOperation = repairColleagueRetiredOperation, interactiveContinuity = upgradeColleagueHistoricalInteractiveContinuity } = {}) {
@@ -148,9 +152,9 @@ test("draft identity boundary records once without rewriting historical conversa
   await mkdir(path.dirname(f.ledgerPath), { recursive: true });
   await writeFile(f.ledgerPath, JSON.stringify({ version: 1,
     applied: upgradeIds.slice(0, upgradeIds.indexOf(conversationDraftIdentityId)).map(id => ({ id, completedAt: "2026-10-14T00:00:00.000Z" })) }));
-  assert.deepEqual((await f.run()).pending, [conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId]);
+  assert.deepEqual((await f.run()).pending, [conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId]);
   assert.equal(await readFile(conversation, "utf8"), original);
-  assert.deepEqual((await f.run(true)).applied, [conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId]);
+  assert.deepEqual((await f.run(true)).applied, [conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId]);
   assert.deepEqual((await f.run(true)).applied, []);
   assert.equal(await readFile(conversation, "utf8"), original);
 });
@@ -169,7 +173,7 @@ test("personal voice policy gate leaves old profiles untouched through check, in
     applied: upgradeIds.slice(0, upgradeIds.indexOf(personalVoicePolicyId)).map(id => ({ id, completedAt: "2026-10-07T00:00:00.000Z" })) }), { mode: 0o600 });
   const before = await readFile(f.ledgerPath);
   const beforeMetadata = await stat(f.ledgerPath);
-  assert.deepEqual(await f.run(), { pending: [personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId], applied: [] });
+  assert.deepEqual(await f.run(), { pending: [personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), before);
   assert.equal((await stat(f.ledgerPath)).ino, beforeMetadata.ino);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
@@ -179,7 +183,7 @@ test("personal voice policy gate leaves old profiles untouched through check, in
   } }), /interrupted before voice policy ledger/u);
   assert.deepEqual(await readFile(f.ledgerPath), before);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
-  assert.deepEqual(await f.run(true), { pending: [], applied: [personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId] });
+  assert.deepEqual(await f.run(true), { pending: [], applied: [personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId] });
   const applied = await readFile(f.ledgerPath);
   assert.deepEqual(JSON.parse(applied).applied.map(entry => entry.id), upgradeIds);
   assert.deepEqual(await f.run(), { pending: [], applied: [] });
@@ -190,7 +194,7 @@ test("personal voice policy gate leaves old profiles untouched through check, in
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const importLine = 'import personalVoicePolicy from "./stateUpgrades/20261008-personal-voice-policy.js";\n';
-  const entry = ', personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly];';
+  const entry = ', personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches];';
   assert.equal(source.split(importLine).length, 2);
   assert.equal(source.split(entry).length, 2);
   const olderSource = source.replace(importLine, "").replace('import learningPracticeSessions from "./stateUpgrades/20261008-learning-practice-sessions.js";\n', "").replace('import learningPracticeHistory from "./stateUpgrades/20261008-learning-practice-history.js";\n', "").replace(entry, "];")
@@ -509,7 +513,7 @@ test("training compatibility boundary checks and records only the ledger while p
     }
     const originals = await Promise.all(applicationPaths.map(async filename => ({ filename, bytes: await readFile(filename), metadata: await stat(filename) })));
     const ledgerBeforeCheck = await readFile(f.ledgerPath);
-    assert.deepEqual(await f.run(), { pending: [trainingId, personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId], applied: [] });
+    assert.deepEqual(await f.run(), { pending: [trainingId, personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId], applied: [] });
     assert.deepEqual(await readFile(f.ledgerPath), ledgerBeforeCheck);
     await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
     assert.equal(f.messages.some(entry => entry.message.startsWith(`${trainingId}:`) && entry.message.includes("no backup is required")), true);
@@ -521,7 +525,7 @@ test("training compatibility boundary checks and records only the ledger while p
     } }), /interruption before boundary ledger publication/u);
     assert.deepEqual(await readFile(f.ledgerPath), ledgerBeforeCheck);
     await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
-    assert.deepEqual(await f.run(true), { pending: [], applied: [trainingId, personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId] });
+    assert.deepEqual(await f.run(true), { pending: [], applied: [trainingId, personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId] });
     const appliedLedger = await readFile(f.ledgerPath);
     assert.deepEqual(JSON.parse(appliedLedger).applied.map(entry => entry.id), upgradeIds);
     assert.deepEqual(await f.run(), { pending: [], applied: [] });
@@ -547,7 +551,7 @@ test("the pre-training registry rejects the newer boundary ledger without changi
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const currentSource = await readFile(runnerUrl, "utf8");
   const boundaryImport = 'import trainingPreparation from "./stateUpgrades/20261006-training-preparation.js";\n';
-  const boundaryRegistryEntry = ', trainingPreparation, personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly];';
+  const boundaryRegistryEntry = ', trainingPreparation, personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches];';
   assert.equal(currentSource.split(boundaryImport).length, 2);
   assert.equal(currentSource.split(boundaryRegistryEntry).length, 2);
   // Keep the original runner logic and owners; only emulate its prior registry.
@@ -593,7 +597,7 @@ test("personal assistant boundary preserves all legacy and private bytes while c
   await writeFile(personalPath, '{"schemaVersion":1,"settings":{"avatar":"merc","voice":"kitten_jasper"}}\n', { mode: 0o600 });
   const originals = await Promise.all([legacyPath, personalPath].map(async filename => ({ filename, bytes: await readFile(filename), metadata: await stat(filename) })));
   const ledgerBefore = await readFile(f.ledgerPath);
-  assert.deepEqual(await f.run(), { pending: [personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId], applied: [] });
+  assert.deepEqual(await f.run(), { pending: [personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), ledgerBefore);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
   let reports = 0;
@@ -602,7 +606,7 @@ test("personal assistant boundary preserves all legacy and private bytes while c
   } }), /interrupted before personal boundary ledger/u);
   assert.deepEqual(await readFile(f.ledgerPath), ledgerBefore);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
-  assert.deepEqual(await f.run(true), { pending: [], applied: [personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId] });
+  assert.deepEqual(await f.run(true), { pending: [], applied: [personalPreferencesId, routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId] });
   const applied = await readFile(f.ledgerPath);
   assert.deepEqual(JSON.parse(applied).applied.map(entry => entry.id), upgradeIds);
   assert.deepEqual(await f.run(), { pending: [], applied: [] });
@@ -630,7 +634,7 @@ test("the previous original registry refuses the personal preference boundary le
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const currentSource = await readFile(runnerUrl, "utf8");
   const boundaryImport = 'import personalAssistantPreferences from "./stateUpgrades/20261006-personal-assistant-preferences.js";\n';
-  const boundaryEntry = ', personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly];';
+  const boundaryEntry = ', personalAssistantPreferences, routingFormatCompatibility, colleagueConversationHistory, trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches];';
   assert.equal(currentSource.split(boundaryImport).length, 2);
   assert.equal(currentSource.split(boundaryEntry).length, 2);
   // Only the new import/registry entry changes: original runner logic stays intact.
@@ -687,7 +691,7 @@ test("routing compatibility boundary validates current native evidence without r
     const prior = { version: 1, applied: upgradeIds.slice(0, upgradeIds.indexOf(routingCompatibilityId)).map(id => ({ id, completedAt: "2026-10-06T00:00:00.000Z" })) };
     await writeFile(f.ledgerPath, JSON.stringify(prior));
     const ledgerBefore = await readFile(f.ledgerPath);
-    assert.deepEqual(await f.run(), { pending: [routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId], applied: [] });
+    assert.deepEqual(await f.run(), { pending: [routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId], applied: [] });
     assert.deepEqual(await readFile(f.ledgerPath), ledgerBefore);
     let validations = 0;
     await assert.rejects(runStateUpgrades({ upgradeLearningPracticeHistory, upgradePlanProgress, upgradeAssistantWorkflow, systemRoot: f.systemRoot, apply: true,
@@ -696,7 +700,7 @@ test("routing compatibility boundary validates current native evidence without r
         if (message.startsWith(`${routingCompatibilityId}:`) && ++validations === 8) throw new Error("interrupted validation before ledger");
       } }), /interrupted validation before ledger/u);
     assert.deepEqual(await readFile(f.ledgerPath), ledgerBefore);
-    assert.deepEqual(await f.run(true), { pending: [], applied: [routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId] });
+    assert.deepEqual(await f.run(true), { pending: [], applied: [routingCompatibilityId, "20261006-colleague-conversation-history", assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId] });
     for (const original of before) {
       assert.deepEqual(await readFile(original.filename), original.bytes);
       const metadata = await stat(original.filename);
@@ -747,9 +751,9 @@ test("prospective assessment boundary leaves old reservations untouched and olde
   await mkdir(path.dirname(f.ledgerPath), { recursive: true });
   await writeFile(f.ledgerPath, JSON.stringify({ version: 1, applied: upgradeIds.slice(0, upgradeIds.indexOf(assessmentsId)).map(id => ({ id, completedAt: "2026-10-06T00:00:00.000Z" })) }));
   const ledgerBefore = await readFile(f.ledgerPath);
-  assert.deepEqual(await f.run(), { pending: [assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId], applied: [] });
+  assert.deepEqual(await f.run(), { pending: [assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), ledgerBefore);
-  assert.deepEqual(await f.run(true), { pending: [], applied: [assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId] });
+  assert.deepEqual(await f.run(true), { pending: [], applied: [assessmentsId, attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId] });
   assert.deepEqual(await f.run(true), { pending: [], applied: [] });
   for (const original of files) {
     assert.deepEqual(await readFile(original.filename), original.bytes);
@@ -762,7 +766,7 @@ test("prospective assessment boundary leaves old reservations untouched and olde
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const importLine = 'import trainingAssessments from "./stateUpgrades/20261006-training-assessments.js";\n';
-  const entry = ', trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly];';
+  const entry = ', trainingAssessments, trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches];';
   assert.equal(source.split(importLine).length, 2);
   assert.equal(source.split(entry).length, 2);
   const olderSource = source.replace(importLine, "")
@@ -795,16 +799,16 @@ test("prospective attempt-history boundary preserves learner bytes and the prior
   await writeFile(f.ledgerPath, JSON.stringify({ version: 1,
     applied: upgradeIds.slice(0, upgradeIds.indexOf(attemptHistoryId)).map(id => ({ id, completedAt: "2026-10-07T00:00:00.000Z" })) }));
   const ledgerBefore = await readFile(f.ledgerPath);
-  assert.deepEqual(await f.run(), { pending: [attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId], applied: [] });
+  assert.deepEqual(await f.run(), { pending: [attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), ledgerBefore);
-  assert.deepEqual(await f.run(true), { pending: [], applied: [attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId] });
+  assert.deepEqual(await f.run(true), { pending: [], applied: [attemptHistoryId, questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId] });
   assert.deepEqual(await f.run(true), { pending: [], applied: [] });
   assert.equal(JSON.parse(await readFile(f.ledgerPath, "utf8")).applied[upgradeIds.indexOf(attemptHistoryId)].id, attemptHistoryId);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/backups", attemptHistoryId)), { code: "ENOENT" });
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const importLine = 'import trainingAttemptHistory from "./stateUpgrades/20261007-training-attempt-history.js";\n';
-  const entry = ', trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly];';
+  const entry = ', trainingAttemptHistory, trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches];';
   assert.equal(source.split(importLine).length, 2);
   assert.equal(source.split(entry).length, 2);
   // Only the exact new import and entry change. This proves registry-version
@@ -854,7 +858,7 @@ test("prospective question-admission boundary preserves learner and native histo
     applied: upgradeIds.slice(0, upgradeIds.indexOf(questionAdmissionId)).map(id => ({ id, completedAt: "2026-10-07T00:00:00.000Z" })) }), { mode: 0o600 });
   const before = await readFile(f.ledgerPath);
   const beforeMetadata = await stat(f.ledgerPath);
-  assert.deepEqual(await f.run(), { pending: [questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId], applied: [] });
+  assert.deepEqual(await f.run(), { pending: [questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), before);
   assert.equal((await stat(f.ledgerPath)).ino, beforeMetadata.ino);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
@@ -864,7 +868,7 @@ test("prospective question-admission boundary preserves learner and native histo
   } }), /interrupted before question boundary ledger/u);
   assert.deepEqual(await readFile(f.ledgerPath), before);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
-  assert.deepEqual(await f.run(true), { pending: [], applied: [questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId] });
+  assert.deepEqual(await f.run(true), { pending: [], applied: [questionAdmissionId, personalVoicePolicyId, learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId] });
   const applied = await readFile(f.ledgerPath);
   assert.deepEqual(JSON.parse(applied).applied.map(entry => entry.id), upgradeIds);
   assert.deepEqual(await f.run(), { pending: [], applied: [] });
@@ -875,7 +879,7 @@ test("prospective question-admission boundary preserves learner and native histo
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const importLine = 'import trainingQuestionAdmission from "./stateUpgrades/20261007-training-question-admission.js";\n';
-  const entry = ', trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly];';
+  const entry = ', trainingQuestionAdmission, personalVoicePolicy, learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches];';
   assert.equal(source.split(importLine).length, 2);
   assert.equal(source.split(entry).length, 2);
   // Remove only this prospective entry; preserve the original runner and owners.
@@ -920,7 +924,7 @@ test("Learning practice session boundary preserves existing records through chec
   await writeFile(f.ledgerPath, JSON.stringify({ version: 1,
     applied: upgradeIds.slice(0, upgradeIds.indexOf(learningPracticeSessionsId)).map(id => ({ id, completedAt: "2026-10-08T00:00:00.000Z" })) }), { mode: 0o600 });
   const priorLedger = await readFile(f.ledgerPath);
-  assert.deepEqual(await f.run(), { pending: [learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId], applied: [] });
+  assert.deepEqual(await f.run(), { pending: [learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), priorLedger);
   let reports = 0;
   await assert.rejects(runStateUpgrades({ upgradeLearningPracticeHistory, upgradePlanProgress, upgradeAssistantWorkflow, systemRoot: f.systemRoot, apply: true, report: (_level, message) => {
@@ -928,7 +932,7 @@ test("Learning practice session boundary preserves existing records through chec
   } }), /interrupted before practice binding ledger/u);
   assert.deepEqual(await readFile(f.ledgerPath), priorLedger);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
-  assert.deepEqual(await f.run(true), { pending: [], applied: [learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId] });
+  assert.deepEqual(await f.run(true), { pending: [], applied: [learningPracticeSessionsId, practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId] });
   const appliedLedger = await readFile(f.ledgerPath);
   assert.deepEqual(JSON.parse(appliedLedger).applied.map(entry => entry.id), upgradeIds);
   assert.deepEqual(await f.run(), { pending: [], applied: [] });
@@ -938,7 +942,7 @@ test("Learning practice session boundary preserves existing records through chec
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const importLine = 'import learningPracticeSessions from "./stateUpgrades/20261008-learning-practice-sessions.js";\n';
-  const entry = ', learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly];';
+  const entry = ', learningPracticeSessions, learningPracticeHistory, planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches];';
   assert.equal(source.split(importLine).length, 2);
   assert.equal(source.split(entry).length, 2);
   const olderSource = source.replace(importLine, "").replace('import learningPracticeHistory from "./stateUpgrades/20261008-learning-practice-history.js";\n', "").replace(entry, "];")
@@ -974,7 +978,7 @@ test("historical practice registry requires its real typed owner and runs check 
     assert.equal(context.backupRoot, path.join(f.systemRoot, "upgrades/backups", practiceHistoryId));
   };
   assert.deepEqual(await runStateUpgrades({ systemRoot: f.systemRoot, apply: true,
-    upgradeLearningPracticeHistory: delegate, upgradePlanProgress, report() {} }), { pending: [], applied: [practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId] });
+    upgradeLearningPracticeHistory: delegate, upgradePlanProgress, report() {} }), { pending: [], applied: [practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId] });
   assert.deepEqual(calls, [false, true]);
   assert.equal(JSON.parse(await readFile(f.ledgerPath)).applied[upgradeIds.indexOf(practiceHistoryId)].id, practiceHistoryId);
   const oldGate = await readFile(new URL("../../packages/vibe64-core/src/server/stateUpgrades/20261008-learning-practice-sessions.js", import.meta.url), "utf8");
@@ -989,7 +993,7 @@ test("real historical practice delegate retains a fresh installation and refuses
     applied: upgradeIds.slice(0, upgradeIds.indexOf(practiceHistoryId)).map(id => ({ id, completedAt: "2026-10-08T00:00:00.000Z" })) }), { mode: 0o600 });
   const result = await runStateUpgrades({ systemRoot: f.systemRoot, apply: false,
     upgradeLearningPracticeHistory: realOwner, upgradePlanProgress, report() {} });
-  assert.deepEqual(result, { pending: [practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId], applied: [] });
+  assert.deepEqual(result, { pending: [practiceHistoryId, planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId], applied: [] });
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/backups", practiceHistoryId)), { code: "ENOENT" });
   const progress = path.join(f.systemRoot, "training/users/NDI/progress.json");
   await mkdir(path.dirname(progress), { recursive: true, mode: 0o700 });
@@ -1021,7 +1025,7 @@ test("paired Plan/Progress registry requires its typed owner, preserves the ledg
     if (context.apply && interrupt) throw new Error("interrupted paired owner publication");
   };
   const options = { systemRoot: f.systemRoot, upgradePlanProgress: owner, report() {} };
-  assert.deepEqual(await runStateUpgrades(options), { pending: [planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId], applied: [] });
+  assert.deepEqual(await runStateUpgrades(options), { pending: [planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), before);
   assert.deepEqual(calls, [false]);
   calls.length = 0;
@@ -1031,7 +1035,7 @@ test("paired Plan/Progress registry requires its typed owner, preserves the ledg
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/apply.lock")), { code: "ENOENT" });
   interrupt = false;
   calls.length = 0;
-  assert.deepEqual(await runStateUpgrades({ ...options, apply: true }), { pending: [], applied: [planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId] });
+  assert.deepEqual(await runStateUpgrades({ ...options, apply: true }), { pending: [], applied: [planProgressId, codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId] });
   assert.deepEqual(calls, [false, true]);
   const applied = await readFile(f.ledgerPath);
   assert.deepEqual(JSON.parse(applied).applied.map(entry => entry.id), upgradeIds);
@@ -1040,7 +1044,7 @@ test("paired Plan/Progress registry requires its typed owner, preserves the ledg
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const importLine = 'import planProgress from "./stateUpgrades/20261008-plan-progress.js";\n';
-  const entry = ', planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly];';
+  const entry = ', planProgress, colleagueCodexCompletedPolicy, colleagueNativeContinuity, colleagueNativeInstructions, assistantWorkflow, independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches];';
   assert.equal(source.split(importLine).length, 2);
   assert.equal(source.split(entry).length, 2);
   const olderSource = source.replace(importLine, "").replace(entry, "];")
@@ -1067,9 +1071,9 @@ test("Codex tool-policy registry checks its original owner before writing and re
     calls.push(context.apply);
     await upgradeColleagueCodexCompletedPolicy(context);
   } };
-  assert.deepEqual(await runUpgrades(options), { pending: [codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId], applied: [] });
+  assert.deepEqual(await runUpgrades(options), { pending: [codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), original);
-  assert.deepEqual(await runUpgrades({ ...options, apply: true }), { pending: [], applied: [codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId] });
+  assert.deepEqual(await runUpgrades({ ...options, apply: true }), { pending: [], applied: [codexCompletedPolicyId, nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId] });
   assert.deepEqual(calls, [false, false, true]);
   const ledger = JSON.parse(await readFile(f.ledgerPath, "utf8"));
   assert.deepEqual(ledger.applied.slice(0, upgradeIds.indexOf(codexCompletedPolicyId)), JSON.parse(original).applied);
@@ -1095,12 +1099,12 @@ test("native continuity registry requires its original owner, checks before publ
     if (context.apply && fail) throw new Error("native evidence changed");
   };
   const options = { systemRoot: f.systemRoot, upgradeClaudeCommandMessages, upgradeClaudeRejectedInput, upgradeColleagueHistoricalInteractiveContinuity, repairColleagueRetiredOperation, upgradeAssistantWorkflow, upgradeIndependentProviderCredentials, upgradeColleagueNativeContinuity: owner, upgradeColleagueCodexCompletedPolicy, upgradeColleagueNativeInstructions, report() {} };
-  assert.deepEqual(await runUpgrades(options), { pending: [nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId], applied: [] });
+  assert.deepEqual(await runUpgrades(options), { pending: [nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId], applied: [] });
   await assert.rejects(runUpgrades({ ...options, apply: true }), /native evidence changed/);
   assert.deepEqual(await readFile(f.ledgerPath), previous);
   assert.deepEqual(calls, [false, false, true]);
   fail = false;
-  assert.deepEqual(await runUpgrades({ ...options, apply: true }), { pending: [], applied: [nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId] });
+  assert.deepEqual(await runUpgrades({ ...options, apply: true }), { pending: [], applied: [nativeContinuityId, nativeInstructionsId, workflowId, independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId] });
   assert.deepEqual(calls, [false, false, true, false, true]);
   assert.deepEqual(await runUpgrades({ ...options, apply: true }), { pending: [], applied: [] });
   assert.deepEqual(calls, [false, false, true, false, true]);
@@ -1120,7 +1124,7 @@ test("independent credential registry requires the real owner, checks before cle
   assert.deepEqual(upgradeIds.slice(upgradeIds.indexOf(workflowId)), [workflowId,
     independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId,
     conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId,
-    workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId]);
+    workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId]);
   const connectionPath = path.join(f.systemRoot, "ai-connections", "claude", "deepseek", "connection.json");
   await mkdir(path.dirname(connectionPath), { recursive: true });
   const saved = JSON.stringify({ apiKey: "registered-fixture" });
@@ -1133,18 +1137,18 @@ test("independent credential registry requires the real owner, checks before cle
       if (context.apply && interrupt && message.startsWith("Published state:")) throw new Error("credential publication interrupted");
     } });
   const options = { systemRoot: f.systemRoot, upgradeIndependentProviderCredentials: owner, report() {} };
-  assert.deepEqual(await runStateUpgrades(options), { pending: [independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId], applied: [] });
+  assert.deepEqual(await runStateUpgrades(options), { pending: [independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId], applied: [] });
   assert.equal(await readFile(connectionPath, "utf8"), saved);
   await assert.rejects(runStateUpgrades({ ...options, apply: true }), /credential publication interrupted/);
   assert.deepEqual(await readFile(f.ledgerPath), previousLedger);
   interrupt = false;
-  assert.deepEqual(await runStateUpgrades({ ...options, apply: true }), { pending: [], applied: [independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId] });
+  assert.deepEqual(await runStateUpgrades({ ...options, apply: true }), { pending: [], applied: [independentCredentialsId, retiredOperationId, interactiveContinuityId, continuityScopeId, conversationDraftIdentityId, connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId] });
   await assert.rejects(stat(connectionPath), { code: "ENOENT" });
   const applied = await readFile(f.ledgerPath);
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const olderSource = source.replace('import independentProviderCredentials from "./stateUpgrades/20261009-independent-provider-credentials.js";\n', "")
-    .replace(', independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly];', '];')
+    .replace(', independentProviderCredentials, colleagueRetiredOperation, colleagueInteractiveContinuity, colleagueContinuityScope, conversationDraftIdentity, connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches];', '];')
     .replace(/from "(\.\/[^"\n]+)"/gu, (_match, specifier) => `from ${JSON.stringify(new URL(specifier, runnerUrl).href)}`);
   const older = await import(`data:text/javascript,${encodeURIComponent(olderSource)}`);
   await assert.rejects(older.runStateUpgrades({ ...options, apply: true }), /newer history; refusing to upgrade or downgrade/);
@@ -1226,10 +1230,10 @@ test("connected project boundary preserves existing source bindings and records 
   await writeFile(f.ledgerPath, JSON.stringify({ version: 1,
     applied: upgradeIds.slice(0, upgradeIds.indexOf(connectedProjectBindingsId)).map(id => ({ id, completedAt: "2026-10-14T00:00:00.000Z" })) }));
   const before = await readFile(f.ledgerPath);
-  assert.deepEqual(await f.run(), { pending: [connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId], applied: [] });
+  assert.deepEqual(await f.run(), { pending: [connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), before);
   assert.equal(await readFile(sessionPath, "utf8"), original);
-  assert.deepEqual(await f.run(true), { pending: [], applied: [connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId] });
+  assert.deepEqual(await f.run(true), { pending: [], applied: [connectedProjectBindingsId, claudeRejectedInputId, workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId] });
   assert.deepEqual(await f.run(true), { pending: [], applied: [] });
   assert.equal(await readFile(sessionPath, "utf8"), original);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/backups", connectedProjectBindingsId)), { code: "ENOENT" });
@@ -1238,7 +1242,7 @@ test("connected project boundary preserves existing source bindings and records 
   const source = await readFile(runnerUrl, "utf8");
   const olderSource = source
     .replace('import connectedProjectBindings from "./stateUpgrades/20261015-connected-project-bindings.js";\n', "")
-    .replace(', connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly];', '];')
+    .replace(', connectedProjectBindings, claudeRejectedInput, workspaceResourceIdentity, goalContinuationIntent, claudeCommandMessages, claudePausedGoal, claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches];', '];')
     .replace(/from "(\.\/[^"\n]+)"/gu, (_match, specifier) => `from ${JSON.stringify(new URL(specifier, runnerUrl).href)}`);
   const older = await import(`data:text/javascript,${encodeURIComponent(olderSource)}`);
   await assert.rejects(older.runStateUpgrades({ systemRoot: f.systemRoot, report() {} }), /newer history/u);
@@ -1255,10 +1259,10 @@ test("workspace resource identity boundary leaves historical setup unchanged and
   await writeFile(f.ledgerPath, JSON.stringify({ version: 1,
     applied: upgradeIds.slice(0, upgradeIds.indexOf(workspaceResourceIdentityId)).map(id => ({ id, completedAt: "2026-10-16T00:00:00.000Z" })) }));
   const before = await readFile(f.ledgerPath);
-  assert.deepEqual(await f.run(), { pending: [workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId], applied: [] });
+  assert.deepEqual(await f.run(), { pending: [workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), before);
   assert.equal(await readFile(sessionPath, "utf8"), original);
-  assert.deepEqual(await f.run(true), { pending: [], applied: [workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId] });
+  assert.deepEqual(await f.run(true), { pending: [], applied: [workspaceResourceIdentityId, goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId] });
   assert.deepEqual(await f.run(true), { pending: [], applied: [] });
   assert.equal(await readFile(sessionPath, "utf8"), original);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/backups", workspaceResourceIdentityId)), { code: "ENOENT" });
@@ -1275,10 +1279,10 @@ test("goal continuation intent boundary never infers historical pause or actor a
   await writeFile(f.ledgerPath, JSON.stringify({ version: 1,
     applied: upgradeIds.slice(0, upgradeIds.indexOf(goalContinuationIntentId)).map(id => ({ id, completedAt: "2026-10-16T00:00:00.000Z" })) }));
   const before = await readFile(f.ledgerPath);
-  assert.deepEqual(await f.run(), { pending: [goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId], applied: [] });
+  assert.deepEqual(await f.run(), { pending: [goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), before);
   assert.equal(await readFile(sessionPath, "utf8"), original);
-  assert.deepEqual(await f.run(true), { pending: [], applied: [goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId] });
+  assert.deepEqual(await f.run(true), { pending: [], applied: [goalContinuationIntentId, claudeCommandMessagesId, claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId] });
   assert.deepEqual(await f.run(true), { pending: [], applied: [] });
   assert.equal(await readFile(sessionPath, "utf8"), original);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/backups", goalContinuationIntentId)), { code: "ENOENT" });
@@ -1295,9 +1299,9 @@ test("Claude paused goal boundary preserves historical conversation bytes and re
   await writeFile(f.ledgerPath, JSON.stringify({ version: 1,
     applied: upgradeIds.slice(0, upgradeIds.indexOf(claudePausedGoalId)).map(id => ({ id, completedAt: "2026-10-17T00:00:00.000Z" })) }));
   const before = await readFile(f.ledgerPath);
-  assert.deepEqual(await f.run(), { pending: [claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId], applied: [] });
+  assert.deepEqual(await f.run(), { pending: [claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), before);
-  assert.deepEqual(await f.run(true), { pending: [], applied: [claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId] });
+  assert.deepEqual(await f.run(true), { pending: [], applied: [claudePausedGoalId, claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId] });
   assert.deepEqual(await f.run(true), { pending: [], applied: [] });
   assert.equal(await readFile(conversationPath, "utf8"), original);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/backups", claudePausedGoalId)), { code: "ENOENT" });
@@ -1313,9 +1317,9 @@ test("Claude blocked goal boundary preserves historical conversation bytes and r
   await writeFile(f.ledgerPath, JSON.stringify({ version: 1,
     applied: upgradeIds.slice(0, upgradeIds.indexOf(claudeBlockedGoalId)).map(id => ({ id, completedAt: "2026-10-17T00:00:00.000Z" })) }));
   const before = await readFile(f.ledgerPath);
-  assert.deepEqual(await f.run(), { pending: [claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId], applied: [] });
+  assert.deepEqual(await f.run(), { pending: [claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId], applied: [] });
   assert.deepEqual(await readFile(f.ledgerPath), before);
-  assert.deepEqual(await f.run(true), { pending: [], applied: [claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId] });
+  assert.deepEqual(await f.run(true), { pending: [], applied: [claudeBlockedGoalId, learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId] });
   assert.deepEqual(await f.run(true), { pending: [], applied: [] });
   assert.equal(await readFile(conversationPath, "utf8"), original);
   await assert.rejects(stat(path.join(f.systemRoot, "upgrades/backups", claudeBlockedGoalId)), { code: "ENOENT" });
@@ -1356,22 +1360,27 @@ test("learning-space reset boundary requires both owners, passes the projects ro
     upgradeTeamSetupRouting: async context => {
       calls.push(["team-routing", context.apply]);
       assert.equal(context.backupRoot, path.join(f.systemRoot, "upgrades/backups", teamSetupsId, "routing"));
+    },
+    removeUnusedCodexCaches: async context => {
+      calls.push(["codex-caches", context.apply]);
+      assert.equal(context.systemRoot, f.systemRoot);
     } };
-  assert.deepEqual(await runRegistryUpgrades(options), { pending: [learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId], applied: [] });
+  assert.deepEqual(await runRegistryUpgrades(options), { pending: [learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId], applied: [] });
   assert.deepEqual(JSON.parse(await readFile(f.ledgerPath)), prior);
   await assert.rejects(runRegistryUpgrades({ ...options, apply: true, retireColleagueLearningWatches: async () => { throw new Error("watch retirement failed"); } }),
     /watch retirement failed/u);
   assert.deepEqual(JSON.parse(await readFile(f.ledgerPath)), prior);
   calls.length = 0;
-  assert.deepEqual(await runRegistryUpgrades({ ...options, apply: true }), { pending: [], applied: [learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId] });
+  assert.deepEqual(await runRegistryUpgrades({ ...options, apply: true }), { pending: [], applied: [learningSpaceResetId, freeModelRetirementId, teamSetupsId, retiredTourPreferenceId, retiredProjectBootstrapId, workspaceAssistantNameOnlyId, codexUnusedCachesId] });
   assert.deepEqual(calls, [["training", false], ["colleague", false], ["free-routing", false], ["free-colleague", false],
-    ["team-sessions", false], ["team-routing", false],
-    ["training", true], ["colleague", true], ["free-routing", true], ["free-colleague", true], ["team-sessions", true], ["team-routing", true]]);
+    ["team-sessions", false], ["team-routing", false], ["codex-caches", false],
+    ["training", true], ["colleague", true], ["free-routing", true], ["free-colleague", true], ["team-sessions", true], ["team-routing", true],
+    ["codex-caches", true]]);
 
   const runnerUrl = new URL("../../packages/vibe64-core/src/server/stateUpgrades.js", import.meta.url);
   const source = await readFile(runnerUrl, "utf8");
   const olderSource = source.replace('import learningSpaceReset from "./stateUpgrades/20261022-learning-space-reset.js";\n', "")
-    .replace(", claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly];", ", claudeBlockedGoal];")
+    .replace(", claudeBlockedGoal, learningSpaceReset, freeModelRetirement, ownerTeamAiSetups, retiredTourPreference, retiredProjectBootstrap, workspaceAssistantNameOnly, codexUnusedCaches];", ", claudeBlockedGoal];")
     .replace(/from "(\.\/[^"\n]+)"/gu, (_match, specifier) => `from ${JSON.stringify(new URL(specifier, runnerUrl).href)}`);
   const older = await import(`data:text/javascript,${encodeURIComponent(olderSource)}`);
   const applied = await readFile(f.ledgerPath);

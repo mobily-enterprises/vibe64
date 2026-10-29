@@ -1,4 +1,5 @@
 import {
+  codexHomeDisposablePaths,
   codexProviderModelCatalog as nativeModelCatalog,
   codexProviderConfiguration,
   codexProviderFileConfiguration,
@@ -142,6 +143,11 @@ function createCodexProviderConnectionStore({
         if (removing) {
           await rm(paths.connectionPath, { force: true });
           await rm(path.join(paths.codexHome, "config.toml"), { force: true });
+          // Its runtimes are stopped and it cannot launch again. Its diagnostic
+          // logs and temporary files go; state that retained chats read stays.
+          for (const entry of await codexHomeDisposablePaths(paths.codexHome, { retired: true })) {
+            await rm(entry, { recursive: true, force: true });
+          }
         } else {
           if (engineId === "codex") {
             const config = codexProviderFileConfiguration(provider, key, paths.codexHome);
