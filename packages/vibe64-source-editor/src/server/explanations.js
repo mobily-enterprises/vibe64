@@ -4,6 +4,7 @@ import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { GENESIS_MACHINE_CITY_PATH, validateArchitectureFacts, SOURCE_EXPLANATION_PROMPT_VERSION, sourceExplanationGuidance } from "@local/vibe64-genesis/server";
 import { isMissingPathError, normalizeText } from "@local/vibe64-core/server/core";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { VIBE64_AGENT_EXECUTION_PROFILE_IDS, VIBE64_AGENT_EXECUTION_WORKLOAD_IDS, defineVibe64AgentExecutionProfileRequest, vibe64AgentExecutionProfileAuditSnapshot } from "@local/vibe64-runtime/shared";
 import { readSourceInterpretation, writeSourceInterpretation } from "./sourceInterpretations.js";
 import {
@@ -780,9 +781,9 @@ function createExplanationOperations({
           sourceEditorTempRoot: sourceEditorTempRoot(temporaryRoot, sessionId)
         }, {}, { all: true, explanationChats, explanationTurns, terminalService });
         for (const failure of result.failures) {
-          logger?.warn("A source explanation helper could not be closed; its record was kept.", {
-            code: failure.code, error: failure.error, explanationId: failure.id, sessionId
-          });
+          logOperationalEvent(logger, "warn", { component: "vibe64-source-editor", event: "vibe64.source_explanation.cleanup_failed",
+            code: failure.code || "", error: failure.error, explanationId: failure.id, sessionId
+          }, "A source explanation helper could not be closed; its record was kept.");
         }
         const reasons = [...new Set(result.failures.map((failure) => failure.error))];
         return { ...result, ok: result.failureCount === 0,

@@ -4721,7 +4721,7 @@ test("session close names every source explanation helper that cannot close and 
   let thread = 0;
   const warnings = [];
   const fixture = await createSourceEditorFixture({
-    logger: { debug() {}, error() {}, info() {}, warn(message, fields) { warnings.push({ message, fields }); } },
+    logger: { debug() {}, error() {}, info() {}, warn(fields, message) { warnings.push({ message, fields }); } },
     terminalService: {
       async runEphemeralAgentChatTurn(_scope, _input, options) {
         thread += 1;
@@ -4746,8 +4746,10 @@ test("session close names every source explanation helper that cannot close and 
     "The source explanation helper could not be closed: Connect Codex - DeepSeek in AI Accounts first.");
   assert.deepEqual(closed.failures.map((failure) => [failure.id, failure.code]).sort(),
     [["exp_close_one", "codex_connection_required"], ["exp_close_two", "codex_connection_required"]]);
-  assert.deepEqual(warnings.map((warning) => [warning.fields.explanationId, warning.fields.sessionId, warning.fields.code]).sort(),
-    [["exp_close_one", "session-1", "codex_connection_required"], ["exp_close_two", "session-1", "codex_connection_required"]]);
+  assert.deepEqual(warnings.map((warning) => [warning.fields.event, warning.fields.explanationId, warning.fields.sessionId, warning.fields.code]).sort(),
+    [["vibe64.source_explanation.cleanup_failed", "exp_close_one", "session-1", "codex_connection_required"],
+      ["vibe64.source_explanation.cleanup_failed", "exp_close_two", "session-1", "codex_connection_required"]],
+    "the server logger takes its fields first, so each failure keeps its explanation, session and code");
 
   const ledgerPath = path.join(fixture.sourceEditorTempRoot, "source-editor-explanation-cleanup.json");
   await writeFile(ledgerPath, "{ not json");
