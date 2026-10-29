@@ -1081,7 +1081,7 @@ Changing the draft cancels superseded suggestion work without sending a chat
 message or stopping the main assistant.
 
 Standalone Vibe64 and hosted Vibe64 use the same AI Accounts screen and provider
-configuration. Account settings offers Codex with GPT, DeepSeek and GLM, Claude
+configuration. Account settings offers Codex with OpenAI, DeepSeek and GLM, Claude
 Code with Claude, DeepSeek and GLM, and OpenCode's provider catalogue. Vibe64
 includes no AI of its own and never falls back to a free model; the free option
 is GLM-4.7 Flash with a free Z.AI account. Connections are grouped by orchestrator, with each independently configured provider
@@ -1193,9 +1193,11 @@ thinking choice at its provider default leaves that choice to the provider
 instead of silently selecting another listed option. Vibe64 also respects each
 AI's declared response capacity rather than assuming every model can produce
 the same size answer.
-Codex offers GPT, DeepSeek and GLM as named provider choices. GPT retains
+Codex offers OpenAI, DeepSeek and GLM as named provider choices. OpenAI retains
 ChatGPT device sign-in and OpenAI API-key setup; DeepSeek uses its own API key,
-and GLM offers separate Coding Plan and Pay-as-you-go API connections.
+and GLM offers separate Coding Plan and Pay-as-you-go API connections. Models
+and connection messages name that Codex sign-in Codex (OpenAI); its models keep
+their GPT names.
 The pay-as-you-go option for Codex and Claude Code still needs live access and
 billing verification with a Z.AI account without a Coding Plan. It checks the
 selected orchestrator's protocol before saving a key and never copies a saved
@@ -1641,7 +1643,7 @@ they are informational, never block work, and do not poll between turns.
 Tap the value for provider details and its last check time. Unavailable readings
 hide the value and never imply zero or unused allowance. A provider may reject
 the balance lookup even when an API connection is configured. Other API-key
-connections, including GPT API keys, have no balance indicator.
+connections, including OpenAI API keys, have no balance indicator.
 
 For Codex, the bottom chat row exposes goal controls with a flashing red light for a running goal and a steady
 muted warning light for a paused goal. Elapsed running time appears beside the light

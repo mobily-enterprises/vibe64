@@ -99,6 +99,9 @@ example **7 connections · 2 not on a card above**. Select it to open:
 
 - **Add a connection** opens **Choose an orchestrator** (Claude Code, Codex, or
   OpenCode's provider catalog) for an exact orchestrator and provider pair. **Refresh** rechecks every account.
+  Codex's own sign-in (ChatGPT login or an OpenAI API key) is listed as
+  **OpenAI**, for example **Codex - OpenAI** or **OpenAI through Codex**; its
+  models keep their names, such as **GPT-5.5**.
 - **Other connections** lists connected providers that have no card, such as
   OpenCode Zen or another OpenCode catalog provider, each **through OpenCode**,
   with **Replace key** and **Remove**. OpenCode Zen's model

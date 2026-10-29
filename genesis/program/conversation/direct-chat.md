@@ -1968,9 +1968,9 @@ Codex's process-wide model manager cannot load catalogue overrides on thread
 resume. Thread configuration therefore supplies routing and credentials only.
 The snapshot retains native instructions, capabilities and future metadata
 fields, and adds curated patch tools and context windows before the first turn.
-The GPT picker excludes curated models even though the runtime knows them;
-provider connections still govern availability. The sign-in's own provider
-(`openai`) is labelled with the Codex engine's `accountLabel`, **Codex
+The Codex sign-in's own provider (`openai`) excludes curated models even though
+the runtime knows them; provider connections still govern availability. It is
+labelled with the Codex engine's `accountLabel`, **Codex
 (OpenAI)**, so the selection error reads "Connect Codex (OpenAI) before creating
 or continuing this session."; native model labels are unchanged. Export
 failure, malformed or empty catalogues and duplicate native slugs stop startup without exposing raw
@@ -2474,7 +2474,7 @@ Claude plan named by the engine definition. Provider presentation (short label,
 key usage, commentary as thinking) is one runtime-shared reader over the curated
 provider list. The native subscription Refresh control is
 not shown for turn-boundary snapshots. Missing or expired readings hide the value;
-zero is displayed only when supplied by the provider. GPT API keys have no
+zero is displayed only when supplied by the provider. OpenAI API keys have no
 snapshot implementation.
 
 

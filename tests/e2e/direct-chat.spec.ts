@@ -3028,7 +3028,7 @@ for (const width of [390, 820, 1280]) {
       await page.getByRole("tab", { name: "AI Accounts", exact: true }).click();
       await page.getByRole("button", { name: "Add connection", exact: true }).click();
       await page.getByRole("button", { name: "Choose Codex", exact: true }).click();
-      await page.getByText("GPT", { exact: true }).click();
+      await page.getByText("OpenAI", { exact: true }).click();
       await page.getByRole("button", { name: "Login with ChatGPT", exact: true }).click();
       const form = page.getByRole("region", { name: "Model routing", exact: true });
       await expect(form.getByText("Codex login connected", { exact: true })).toBeVisible();

@@ -2811,7 +2811,7 @@ test("Colleague routing tools inspect, search, preview and save through native o
 test("routing choice pages preserve the ordinary full view and bound filtered model discovery", async () => {
   await withTempDir(async root => {
     const choices = Array.from({ length: 43 }, (_, index) => ({ engineId: "codex", agentId: "codex",
-      modelProviderId: "openai", modelId: `model-${index}`, label: `Choice ${index}`, providerLabel: "GPT" }));
+      modelProviderId: "openai", modelId: `model-${index}`, label: `Choice ${index}`, providerLabel: "Codex (OpenAI)" }));
     const view = { engines: [{ engineId: "codex", error: "" }], setups: { owner: { roles: { quickHelper: { choices } } }, nonOwner: { roles: {} } } };
     const service = createService({ accountRuntime: createAccountsRuntime({ systemRoot: root }),
       inspectRoutingConfiguration: async () => view });

@@ -51,7 +51,7 @@ not mean the balance is zero. Continue using the chat normally; the next turn
 boundary makes another attempt. For an immediate account check, open the
 provider's account site yourself. GLM's optional pay-as-you-go balance endpoint
 can reject a configured key; a missing balance alone is not a reason to replace
-the key. Check the provider's Billing page for the account balance. GPT API keys
+the key. Check the provider's Billing page for the account balance. OpenAI API keys
 do not show a balance. A confirmed zero does display as zero.
 
 For Claude and Codex, **?%** means the allowance can't be checked right now; it

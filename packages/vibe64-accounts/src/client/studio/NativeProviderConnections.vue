@@ -40,7 +40,7 @@ const connectionStatus = computed(() => connection.value?.engineStates?.[props.e
 const useExistingKey = computed(() => props.adding && connectionStatus.value === "connected");
 const choices = computed(() => [
   props.engineId === "claude" ? { id: "anthropic", label: "Claude Code - Claude · Claude subscription" }
-    : { id: "openai", label: "Codex - GPT · ChatGPT or OpenAI API key" },
+    : { id: "openai", label: "Codex - OpenAI · ChatGPT or OpenAI API key" },
   ...CURATED_CODEX_PROVIDERS.map(({ id, label }) => {
     const row = connections.value.find((row) => row.id === id);
     const ready = props.engineId === "claude" ? row?.claudeReady : row?.connected;

@@ -140,7 +140,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
   });
   const nativeChoices = computed(() => [
     { id: "claude", label: "Claude Code", account: claudeAccount.value, provider: { id: "anthropic", label: "Claude", description: "Claude subscription" } },
-    { id: "codex", label: "Codex", account: codexAccount.value, provider: { id: "openai", label: "GPT", description: "ChatGPT login or OpenAI API key" } }
+    { id: "codex", label: "Codex", account: codexAccount.value, provider: { id: "openai", label: "OpenAI", description: "ChatGPT login or OpenAI API key" } }
   ].map(({ account, provider, ...engine }) => ({
     ...engine,
     providers: [
@@ -188,7 +188,7 @@ function useAiConnectionManager({ endpoint = AI_CONNECTIONS_ENDPOINT, isOwner = 
       keyHint: codexConnected.value ? "Connected" : "Reconnect required",
       managementUrl: "",
       modelLabel: "Available for Codex sessions",
-      providerLabel: "GPT"
+      providerLabel: "OpenAI"
     }] : []),
     ...(nativeAccountConfigured(claudeAccount.value) ? [{
       ownerOnly: true,

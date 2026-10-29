@@ -269,7 +269,7 @@ shared, while the GLM Coding Plan and native Claude subscription are personal.
 The separate `zai` API connection declares workspace access; its setup requires
 a pay-as-you-go account without a Coding Plan. Billing is not inferred from
 successful protocol access.
-The native GPT badge uses the runtime's authentication access policy: ChatGPT
+The native OpenAI badge uses the runtime's authentication access policy: ChatGPT
 login is Personal use; an OpenAI API key is Workspace use. Unreadable access
 metadata leaves the badge absent instead of guessing from account storage scope.
 When an access read reports a selection unavailable because its account is not
@@ -300,7 +300,7 @@ native or curated provider to its card's Manage (when configured) or connect
 step, and a catalogue provider with revision, `opencode` or an unknown id to the
 manager's key editor, picker or Add a connection; a route's `providerId`
 without revision does the same once connections are read. AI Accounts offers
-Codex, Claude Code and OpenCode, including GPT, DeepSeek and GLM through Codex,
+Codex, Claude Code and OpenCode, including OpenAI, DeepSeek and GLM through Codex,
 and Claude, DeepSeek and GLM through Claude Code,
 and the current OpenCode provider catalogue. An AI connection request opens the
 requested provider's setup. Hosts choose the API endpoint, credential context
@@ -465,8 +465,10 @@ Zen checks and runtime invalidation apply equally in both editions. All account
 management routes use the host's management policy before reading or changing
 connection state; request bodies cannot supply the acting user.
 
-Codex provider setup offers GPT, DeepSeek and GLM. GPT keeps its existing
-ChatGPT device login and OpenAI API-key flow. The curated catalogue owns the
+Codex provider setup offers OpenAI, DeepSeek and GLM. OpenAI keeps its existing
+ChatGPT device login and OpenAI API-key flow; AI Accounts labels that provider
+**OpenAI** (row, picker and **Codex - OpenAI**), while the Models catalogue and
+refusals name the sign-in itself **Codex (OpenAI)**. The curated catalogue owns the
 DeepSeek API route and Z.AI's dedicated Coding Plan Responses route
 (`https://api.z.ai/api/v1`). The distinct `zai` pay-as-you-go option attempts
 that same Responses endpoint and `https://api.z.ai/api/anthropic/v1/messages`

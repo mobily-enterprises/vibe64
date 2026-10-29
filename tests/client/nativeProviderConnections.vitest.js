@@ -80,6 +80,11 @@ it("does not advertise a Claude-only key as connected to Codex", () => {
   expect(state.choices.find(choice => choice.id === "deepseek").label).toBe("Codex - DeepSeek");
 });
 
+it("names Codex's own sign-in's provider OpenAI", () => {
+  const state = mount({ engineId: "codex", modelValue: "deepseek" });
+  expect(state.choices[0]).toEqual({ id: "openai", label: "Codex - OpenAI · ChatGPT or OpenAI API key" });
+});
+
 it("verifies the saved key for the selected orchestrator without copying it to the browser", async () => {
   const state = mount({ engineId: "claude", modelValue: "deepseek" });
   await state.save({ useSavedKey: true });

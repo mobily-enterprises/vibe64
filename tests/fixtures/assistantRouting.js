@@ -45,7 +45,7 @@ async function fixture(t, preferences = { mode: "auto", review: true }, { resolv
   const catalog = { engineId: "codex", revision: `sha256:${"a".repeat(64)}`, transportId: "codex_app_server", label: "Codex",
     defaults: { agentId: "codex", modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "high" },
     agents: [{ id: "codex", mode: "primary" }], modelProviders: [
-      { id: "openai", label: "GPT", connected: true, models: ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"].map((id) => ({
+      { id: "openai", label: "Codex (OpenAI)", connected: true, models: ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"].map((id) => ({
         id, label: id, status: "available", variants: [{ id: "low" }, { id: "high" }]
       })) }, { id: "deepseek", label: "DeepSeek", connected: true, models: [{ id: "deepseek-flash", label: "DeepSeek Flash",
         status: "available", variants: [{ id: "low" }, { id: "high" }] }] }

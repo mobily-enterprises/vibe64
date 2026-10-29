@@ -132,6 +132,14 @@ it("keeps native login reconnection under Manage instead of offering it as new",
   expect(state.nativeModelProviderId).toBe("openai");
 });
 
+it("names Codex's own sign-in's provider OpenAI in its row and in Add a connection", () => {
+  expect(engineGroup(mount(), "codex").accounts[0]).toMatchObject({ id: "codex", providerLabel: "OpenAI" });
+  app.unmount();
+  mocks.accounts.status.value.accounts[0] = { id: "codex", connected: false, status: "missing" };
+  const offered = mount().nativeChoices.find(({ id }) => id === "codex").providers[0];
+  expect(offered).toMatchObject({ id: "openai", label: "OpenAI", description: "ChatGPT login or OpenAI API key" });
+});
+
 it("updates Add availability with warm connection data and refreshed OpenCode providers", async () => {
   const state = mount();
   state.addAiOpen = true;
