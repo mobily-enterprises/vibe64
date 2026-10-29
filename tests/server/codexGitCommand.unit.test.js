@@ -114,6 +114,7 @@ function serviceForSession(session = {}, {
   logger = null,
   metadataReads = null,
   now,
+  currentProjectSlug,
   readCurrentProject,
   refreshGithub,
   runGatewayCommand
@@ -124,6 +125,7 @@ function serviceForSession(session = {}, {
     logger,
     now,
     projectService: {
+      currentProjectSlug,
       readCurrentProject,
       refreshGithub,
       async createSessionStore() {
@@ -261,6 +263,8 @@ test("Codex runs local Git inside the managed session source", async () => {
     const metadataReads = [];
     const service = serviceForSession(session, {
       metadataReads,
+      currentProjectSlug: () => "demo-project",
+      readCurrentProject: async () => { throw new Error("The hot Git path must not list projects."); },
       authorizeActorAccess: async () => {
         throw new Error("Local Git must not require GitHub authorization.");
       },
@@ -290,6 +294,8 @@ test("Codex runs local Git inside the managed session source", async () => {
     assert.equal(gatewayCall.purpose, "codex");
     assert.equal(gatewayCall.outputEncoding, "base64");
     assert.equal(gatewayCall.session.sessionId, session.sessionId);
+    // Resources show the AI's Git under its project and session, not "This task".
+    assert.deepEqual(gatewayCall.execution, { label: "Running Git for the AI", operationId: "agent-git", projectSlug: "demo-project" });
     assert.ok(metadataReads.includes("github_repository"));
     assert.ok(metadataReads.includes("source_remote_url"));
   });
@@ -1099,9 +1105,12 @@ function credentialGateway({
   identityResult = () => ({ exitCode: 0, ok: true, stdout: "user.name Ana Diaz\nuser.email ana@example.test\n" })
 } = {}) {
   const calls = { command: 0, identity: 0, token: 0 };
+  const executions = [];
   return {
     calls,
+    executions,
     async runGatewayCommand(request) {
+      executions.push({ args: request.args.slice(0, 2), execution: request.execution, sessionId: request.session?.sessionId });
       if (request.command === "gh" && request.args[0] === "auth") {
         calls.token += 1;
         return { exitCode: 0, ok: true, stdout: `token-${calls.token}\n` };
@@ -1128,6 +1137,11 @@ test("session-work checks within the credential TTL reuse the actor's token and 
     clock += 60_000;
     const second = await service.sessionWorkSaveContext({ session });
     assert.deepEqual(gateway.calls, { command: 0, identity: 0, token: 1 });
+    // Resources names each credential read and its session, never "This task".
+    assert.deepEqual(gateway.executions, [
+      { args: ["auth", "token"], execution: { label: "Reading your GitHub sign-in", operationId: "github-token-read" },
+        sessionId: session.sessionId }
+    ]);
     for (const context of [first, second]) {
       assert.equal(context.commandOptions.gitAuthToken, "token-1");
       assert.equal(context.commandOptions.personGitIdentity, undefined);

@@ -302,6 +302,7 @@ test("Claude main and temporary chats receive project values with their managed 
     codexGitCommand: {},
     projectService: {
       ...f.providerOptions.projectService,
+      readCurrentProject: async () => ({ ...await f.providerOptions.projectService.readCurrentProject(), slug: "demo-project" }),
       async projectInspectionEnvironment(input) {
         assert.equal(input.sessionId, "test");
         assert.equal(input.target, "claude");
@@ -318,6 +319,9 @@ test("Claude main and temporary chats receive project values with their managed 
   for (const { options } of f.processes) {
     assert.equal(options.env.REFERENCE_SECRET, "dummy-project-secret");
     assert.equal(options.env.MANAGED_COMMAND, "ready");
+    // Resources show each assistant process under its project and session.
+    assert.equal(options.execution.projectSlug, "demo-project");
+    assert.equal(options.execution.sessionId, "test");
   }
   assert.equal(f.processes.length, 2);
 });
@@ -1041,6 +1045,8 @@ test("Vibe64 supplies its managed account execution policy to the shared Claude 
       assert.equal(input.purpose, "account");
       assert.equal(input.envPolicy, "auth");
       assert.deepEqual(input.runtimes, ["operator-clis", "node26"]);
+      // Resources names the account-wide read instead of an unnamed task.
+      assert.deepEqual(input.execution, { label: "Checking the Claude sign-in", operationId: "claude-auth-status" });
       return { ok: true, stdout: '{"loggedIn":true,"email":"owner@example.test"}' };
     }
   });

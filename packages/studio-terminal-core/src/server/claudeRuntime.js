@@ -6,6 +6,8 @@ import {
 const runners = new WeakMap();
 // Native status keeps the runner's error text; this prefix marks a Claude Code that could not be executed.
 const CLAUDE_START_FAILED_ERROR = "Claude Code didn't start.";
+// The account-wide sign-in read belongs to no project or session.
+const CLAUDE_STATUS_EXECUTION = Object.freeze({ label: "Checking the Claude sign-in", operationId: "claude-auth-status" });
 
 async function readClaudeCodeAuthStatus({ env = process.env, credentialHome = appCredentialContext(), commandRunner = runVibe64Command } = {}) {
   let capture = runners.get(commandRunner);
@@ -13,7 +15,8 @@ async function readClaudeCodeAuthStatus({ env = process.env, credentialHome = ap
     capture = async (input) => {
       const result = await commandRunner({
         ...input, actor: "app", inheritProcessEnv: false, allowedRoots: [input.cwd],
-        purpose: "account", envPolicy: "auth", runtimes: ["operator-clis", "node26"]
+        purpose: "account", envPolicy: "auth", runtimes: ["operator-clis", "node26"],
+        execution: CLAUDE_STATUS_EXECUTION
       });
       return operatorCliStartFailed(result)
         ? { ...result, error: [CLAUDE_START_FAILED_ERROR, result.error || result.output || ""].join("\n").trim() }

@@ -68,6 +68,18 @@ a failed unit listing removes nothing. The receipt is a runtime handoff that
 must outlive its unit until the caller has read it, so the helper never removes
 it when the unit ends.
 
+Each managed command names itself through its execution descriptor's `label`
+and `operationId` and carries the project and session it serves, so a host
+listing running work need not fall back to a generic name. Account checks name
+themselves (`claude auth status` is "Checking the Claude sign-in"), as do a
+session's GitHub token and Git identity reads. The AI's own `git` and `gh`
+commands through the managed Git gateway are "Running Git for the AI" and
+"Running GitHub CLI for the AI", under their session and the project whose
+session store served the command; that slug is read without listing projects,
+because the gateway is a hot path. A Claude assistant process carries its
+session's project. Shared Codex app-server and OpenCode server processes serve
+many sessions and carry no single project or session.
+
 A finite capture's unit sets `LogLevelMax=notice`. Its output already returns
 to the caller, so the journal keeps only systemd's notices, warnings and errors
 about it (a failed or killed command, its exit status and result) and none of

@@ -1621,6 +1621,11 @@ function createService({
       return currentProjectState();
     },
 
+    // The current project's slug without listing projects, for hot paths.
+    currentProjectSlug() {
+      return currentProjectSlug();
+    },
+
     async readEnv(input = {}) {
       return projectResult(() => readEnvState(input));
     },

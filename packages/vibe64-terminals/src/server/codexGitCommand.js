@@ -643,6 +643,7 @@ async function readGithubToken({
     command: "gh",
     cwd: credentialRoot,
     envPolicy: "auth",
+    execution: { label: "Reading your GitHub sign-in", operationId: "github-token-read" },
     gitTransport: "none",
     mode: "capture",
     project: {
@@ -710,6 +711,7 @@ async function commitAuthorOptions({
     command: "git",
     cwd: credentialRoot,
     envPolicy: "auth",
+    execution: { label: "Reading your Git identity", operationId: "git-identity-read" },
     gitTransport: "none",
     mode: "capture",
     project: {
@@ -1101,6 +1103,10 @@ function createCodexGitCommandService({
       ? Buffer.from(normalizeText(input.inputBase64), "base64")
       : undefined;
     const gatewayUserKey = gatewayGitIdentityUserKey(session, actor, toolHome);
+    // Resources show the AI's command under the project whose session store
+    // was just read, and its session. Reading the slug lists no projects.
+    const projectSlug = typeof projectService.currentProjectSlug === "function"
+      ? normalizeText(projectService.currentProjectSlug()) : "";
     stage = "command";
     if (phaseElapsedMs) phaseElapsedMs.commandStarted = Math.round(performance.now() - startedAt);
     const result = await runWithinBudget({
@@ -1115,6 +1121,9 @@ function createCodexGitCommandService({
         ? { GH_TOKEN: githubToken.token }
         : {},
       envPolicy: "auth",
+      execution: command === "gh"
+        ? { label: "Running GitHub CLI for the AI", operationId: "agent-gh", projectSlug }
+        : { label: "Running Git for the AI", operationId: "agent-git", projectSlug },
       gitSafeDirectories: [
         actor.sourceRoot,
         cwd.cwd

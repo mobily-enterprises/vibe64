@@ -70,14 +70,14 @@ function createClaudeConversationEnvironment({
     return vibe64HostContextEnvironment(runtimeRoot);
   }
 
-  async function prepareSessionEnvironment(context) {
+  async function prepareSessionEnvironment(context, project) {
     if (await learningSessionExecutionRoot(context.runtime, context.sessionId)) {
       return { env: {}, shimDirs: [] };
     }
     const prepared = await prepareCommandEnvironment({
       env, gitCommand: codexGitCommand,
       agentDatabaseCommand, agentEnvCommand, agentPreviewCommand, agentSessionCommand,
-      project: await projectService.readCurrentProject(), runtime: context.runtime,
+      project, runtime: context.runtime,
       sessionId: context.sessionId, worktreePath: context.workdir
     });
     if (prepared.ok !== true) throw error("Claude's session command environment could not be prepared.");
@@ -127,11 +127,14 @@ function createClaudeConversationEnvironment({
   }
 
   async function prepareProcess(_entry, { profile }, ctx) {
+    // A session's process belongs to its project; Resources show it there.
+    const project = ctx.assistantScope ? null : await projectService.readCurrentProject();
     let prepared = { env: ctx.assistantScope?.environment || {}, shimDirs: [] };
     if (!ctx.assistantScope && !profile && codexGitCommand) {
-      prepared = await prepareSessionEnvironment(ctx);
+      prepared = await prepareSessionEnvironment(ctx, project);
     }
-    return { ...prepared, workdir: profile || ctx.assistantScope ? credentialHome.home : ctx.workdir };
+    return { ...prepared, projectSlug: project?.slug || "",
+      workdir: profile || ctx.assistantScope ? credentialHome.home : ctx.workdir };
   }
 
   async function configureProcess(entry, { instructionArguments, model, profile, external, outputSchema, selection, applicationTools }, { context: ctx, prepared }) {
@@ -143,7 +146,7 @@ function createClaudeConversationEnvironment({
       effort: profile ? profile.thinking : selection.variantId,
       toolFree: Boolean(profile || ctx.assistantScope), outputSchema, ...(applicationTools ? { applicationTools: true } : {}),
       instructionArguments,
-      execution: { ownerId: entry.id, sessionId: ctx.sessionId }
+      execution: { ownerId: entry.id, sessionId: ctx.sessionId, projectSlug: prepared.projectSlug }
     };
   }
 
