@@ -826,7 +826,11 @@ Interface/Code, whose presentation their host records.
   still checks the targeted message and native turn before publishing state, so
   it cannot overwrite a newer follow-up or reopen a removed explanation.
   `Vibe64SourceEditorProvider` connects explanation cleanup to terminal session
-  shutdown; failed cleanup blocks a successful shutdown acknowledgement.
+  shutdown; failed cleanup blocks a successful shutdown acknowledgement. Session
+  close tries every recorded explanation, logs each failure with its explanation
+  and session, and names the failed helpers with their reasons. An unreadable
+  ledger is a coded `vibe64_source_explanation_ledger_invalid` error that leaves
+  the file unchanged; other session-close steps still run.
 - `runSessionWorkOperation()` admits each Current Changes, file-diff, work-state,
   or update-check request as one managed job. Canonical Save uses one managed
   checkpoint-and-summary job before commit naming and one managed

@@ -84,7 +84,10 @@ async function fixture(t) {
       if (state.providerError) return { ok: false, error: state.providerError };
       return { ok: true, status: "completed", text: state.answer };
     },
-    async deleteEphemeralAgentConversation(scope, input) { cleanups.push({ scope, input }); return { ok: true }; }
+    async deleteEphemeralAgentConversation(scope, input) {
+      cleanups.push({ scope, input });
+      return state.cleanupError ? { ok: false, error: state.cleanupError } : { ok: true };
+    }
   };
   const steps = createTrainingStepChecks({ learners, content, checks: {}, actions: { async execute() { return { ok: true }; } },
     evidence, reviewer: createTrainingStepReviewer({ learners, terminals }) });
@@ -233,6 +236,25 @@ test("no changes, a working agent and every failed review record nothing", async
   assert.equal(f.published.length, 0);
   assert.deepEqual(JSON.parse(await readFile(path.join(f.systemRoot, "training/users/NDI/review-helper.json"), "utf8")).helper, null,
     "every started Helper was cleaned up");
+});
+
+test("a review Helper whose close fails keeps the review's own failure and holds the next review only until it closes", async t => {
+  const f = await fixture(t);
+  const receiptFile = path.join(f.systemRoot, "training/users/NDI/review-helper.json");
+  f.state.providerError = "The DeepSeek runtime was stopped.";
+  f.state.cleanupError = "Connect Codex - DeepSeek in AI Accounts first.";
+  await assert.rejects(f.press("first"), { code: "VIBE64_TRAINING_REVIEW_FAILED",
+    message: /^Your AI could not finish the review: The DeepSeek runtime was stopped\. Nothing was recorded/u });
+  assert.equal(JSON.parse(await readFile(receiptFile, "utf8")).helper.conversationId, "review-thread",
+    "the Helper whose close is unconfirmed keeps its receipt");
+  f.state.providerError = null;
+  await assert.rejects(f.press("second"), { code: "VIBE64_TRAINING_REVIEW_FAILED",
+    message: /The review Helper could not be closed: Connect Codex - DeepSeek in AI Accounts first\. Retry before starting another review\./u });
+  assert.equal(aiRuns(f), 1, "no second Helper starts while the first close is unconfirmed");
+  f.state.cleanupError = null;
+  assert.equal((await f.press("third")).outcome, "passed");
+  assert.equal(aiRuns(f), 2);
+  assert.equal(JSON.parse(await readFile(receiptFile, "utf8")).helper, null);
 });
 
 test("Colleague's evidence tool reads the same evidence and the last review, and never records", async t => {

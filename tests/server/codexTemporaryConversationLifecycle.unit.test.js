@@ -2341,6 +2341,39 @@ test("session terminal cleanup drains its supporting services through the existi
   }, { throughTerminalService: true, projectServices });
 });
 
+test("a helper cleanup that cannot finish still lets every later session cleanup step run and names itself", { timeout: 15_000 }, async () => {
+  const calls = [];
+  const projectServices = {
+    async closeSession(_context, sessionId) { calls.push(`services:${sessionId}`); return { ok: true }; },
+    async closeAll() {}
+  };
+  await withAgentMessageController(async ({ terminalService, sessionId, projectService }) => {
+    terminalService.setDatabaseToolsProvider({ refreshSchema: async () => ({ ok: true }),
+      async closeAssistantsForSession(id) { calls.push(`database:${id}`); return { ok: false, code: "cleanup_pending", error: "Native process still owned." }; }
+    });
+    terminalService.setSourceEditorProvider({
+      async closeExplanationsForSession(id) { calls.push(`explanations:${id}`); throw new Error("Explanation ledger unavailable."); }
+    });
+    const project = await projectService.readCurrentProject();
+    await runWithProjectRequestContext({ slug: project.slug, targetRoot: project.path }, async () => {
+      await assert.rejects(terminalService.closeSessionTerminals(sessionId), (error) => {
+        assert.equal(error.code, "vibe64_session_stop_failed");
+        assert.equal(error.sessionId, sessionId);
+        assert.deepEqual(error.controllers, ["Database copilot", "Source explanations"]);
+        assert.equal(error.message, "Database copilot: Native process still owned. Source explanations: Explanation ledger unavailable.");
+        return true;
+      });
+    });
+    assert.deepEqual(calls, [`database:${sessionId}`, `explanations:${sessionId}`, `services:${sessionId}`],
+      "Project services still drain after both helper cleanups fail");
+    terminalService.setSourceEditorProvider(null);
+    await runWithProjectRequestContext({ slug: project.slug, targetRoot: project.path }, async () => {
+      await assert.rejects(terminalService.closeSessionTerminals(sessionId), { code: "cleanup_pending",
+        message: "Database copilot: Native process still owned." });
+    });
+  }, { throughTerminalService: true, projectServices });
+});
+
 test("the common Codex entry uses the original main journal, receipt files and cleanup owner", { timeout: 15_000 }, async () => {
   await withAgentMessageController(async ({ captures, controller, runtime, sessionId, store }) => {
     const actor = { preferredName: "Ada", role: "owner", username: "ada-owner" };

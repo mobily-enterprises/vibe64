@@ -105,6 +105,7 @@ async function createSourceEditorFixture({
   explanationFollowupGenerator = null,
   explanationGenerator = null,
   extraFiles = [],
+  logger = undefined,
   sessionState = null,
   sourceFileObserver = null,
   terminalService = null,
@@ -234,6 +235,7 @@ async function createSourceEditorFixture({
   }
   const serviceOptions = {
     explanationCacheNow,
+    ...(logger ? { logger } : {}),
     projectService: {
       async createRuntime() {
         return {
@@ -4713,6 +4715,47 @@ test("source cleanup survives a restart and uses the captured destination withou
   assert.deepEqual(deletes[1], deletes[2]);
   await assert.rejects(readFile(ledgerPath), { code: "ENOENT" });
   await assert.rejects(lstat(path.dirname(retained.helper.scope.runtimeRoot)), { code: "ENOENT" });
+});
+
+test("session close names every source explanation helper that cannot close and refuses an unreadable ledger by name", async (t) => {
+  let thread = 0;
+  const warnings = [];
+  const fixture = await createSourceEditorFixture({
+    logger: { debug() {}, error() {}, info() {}, warn(message, fields) { warnings.push({ message, fields }); } },
+    terminalService: {
+      async runEphemeralAgentChatTurn(_scope, _input, options) {
+        thread += 1;
+        await options.onEvent({ type: "thread", threadId: `close-thread-${thread}` });
+        return { ok: true, text: structuredExplanation("Ready."), threadId: `close-thread-${thread}`,
+          executionProfile: resolvedSourceExplanationProfile() };
+      },
+      async deleteEphemeralAgentConversation() {
+        return { ok: false, code: "codex_connection_required", error: "Connect Codex - DeepSeek in AI Accounts first." };
+      }
+    }
+  });
+  t.after(async () => { await fixture.service.close(); await rm(fixture.root, { recursive: true, force: true }); });
+  for (const [explanationId, filePath] of [["exp_close_one", "src/app.js"], ["exp_close_two", "src/pages-index.jsx"]]) {
+    assert.equal((await explainSource(fixture.service, { sessionId: "session-1", explanationId, path: filePath, scope: "file" })).ok, true);
+  }
+
+  const closed = await fixture.service.closeExplanationsForSession("session-1");
+  assert.equal(closed.ok, false);
+  assert.equal(closed.code, "vibe64_source_explanation_cleanup_failed");
+  assert.equal(closed.error, "2 source explanation helpers could not be closed. " +
+    "The source explanation helper could not be closed: Connect Codex - DeepSeek in AI Accounts first.");
+  assert.deepEqual(closed.failures.map((failure) => [failure.id, failure.code]).sort(),
+    [["exp_close_one", "codex_connection_required"], ["exp_close_two", "codex_connection_required"]]);
+  assert.deepEqual(warnings.map((warning) => [warning.fields.explanationId, warning.fields.sessionId, warning.fields.code]).sort(),
+    [["exp_close_one", "session-1", "codex_connection_required"], ["exp_close_two", "session-1", "codex_connection_required"]]);
+
+  const ledgerPath = path.join(fixture.sourceEditorTempRoot, "source-editor-explanation-cleanup.json");
+  await writeFile(ledgerPath, "{ not json");
+  await assert.rejects(fixture.service.closeExplanationsForSession("session-1"), {
+    code: "vibe64_source_explanation_ledger_invalid",
+    message: "This session's source explanation helper ledger (source-editor-explanation-cleanup.json) is unreadable; it was left unchanged."
+  });
+  assert.equal(await readFile(ledgerPath, "utf8"), "{ not json");
 });
 
 test("source Stop reports a rejected provider acknowledgement and preserves cleanup ownership", async (t) => {

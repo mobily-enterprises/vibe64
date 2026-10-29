@@ -190,6 +190,13 @@ example under memory pressure, the error says so and you can try again later;
 the archive itself is not damaged.
 If history preservation fails, the operation reports the error and keeps the
 workspace for retry. Resolve the reported problem, then retry **Archive session**.
+When a helper such as a Database copilot, a source explanation or a naming helper
+cannot be closed, archiving still stops every other part of the session first.
+The error then names each part that could not stop, such as
+`Database copilot: The database copilot helper could not be closed: <reason>.
+Retry before asking again.`, and a source explanation or copilot that could not
+close is kept so the retry closes it. Resolve the named reason, often an AI
+account to reconnect, then retry **Archive session**.
 If the last open session cannot be archived, its chat is selected again so you
 can inspect the failure and retry. If another session is already selected, that
 selection stays in place and the failed session becomes available in its tab.

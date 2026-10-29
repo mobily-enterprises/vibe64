@@ -82,7 +82,9 @@ are bounded. The reviewer (`stepReview.js`) runs the `lesson_review` Helper
 workload through Terminals' retained Helper (`retainedConversationHelper.js`,
 scope prefix `review`) on the learner's Helper route for the session's
 workflow, with the learner store's per-learner lock, private root and receipt
-(`runReviewExclusive`). Its fixed context makes the rubric the only requirement
+(`runReviewExclusive`). A failed review keeps its own reason when its Helper
+close also fails; that kept receipt holds the next review, with an error naming
+the review Helper, until the close is confirmed. Its fixed context makes the rubric the only requirement
 and the evidence data, never instructions; its fixed output schema is checked
 again before anything is saved. Colleague's read-only `step.evidence.read`
 returns the same evidence and the last review for "I'm stuck" help.

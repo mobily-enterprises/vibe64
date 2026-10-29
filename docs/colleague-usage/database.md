@@ -55,6 +55,12 @@ temporary Helper conversation fails, Copilot shows that error instead of reporti
 a successful answer. Cleanup retries address that original Helper and never
 resend the question. A new question can start only after the previous Helper is
 confirmed closed; changing the current model does not remove that obligation.
+That error reads `The database copilot helper could not be closed: <reason>.
+Retry before asking again.`; resolve the reason, such as an AI account to
+reconnect, then ask again. When a session closes, each person's open copilot
+Helper is closed separately, so one that cannot close does not keep the others
+open. A saved copilot record that is unreadable is reported by name and left
+unchanged for the owner to inspect.
 A proposed write has not run: **Put SQL in editor** only fills the editor, where the normal unlock and
 confirmation rules still apply. On narrow screens Copilot overlays the workspace;
 use **Collapse database copilot** to return to the underlying view.

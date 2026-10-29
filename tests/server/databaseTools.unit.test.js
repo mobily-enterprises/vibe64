@@ -1824,6 +1824,41 @@ test("database copilot keeps a failed question's own error when its helper clean
   assert.equal(deletes, 2);
 });
 
+test("session close tries every database copilot receipt and names each one that cannot close", async (t) => {
+  const runtime = await databaseHelperRuntime(t);
+  const tasks = path.join(runtime.stateRoot, "artifacts", "database/assistant-tasks");
+  await mkdir(tasks, { recursive: true });
+  const receipt = (id, conversationId) => {
+    const root = path.join(runtime.stateRoot, "assistant-helpers", `database_${id}`);
+    return { scope: { id: `database_${id}`, environment: {}, workdir: path.join(root, "workdir"), runtimeRoot: path.join(root, "runtime") },
+      selection: sharedDatabaseSelection, conversationId, runId: "", executionId: "" };
+  };
+  await writeFile(path.join(tasks, `${"a".repeat(20)}.json`), "{");
+  await writeFile(path.join(tasks, `${"b".repeat(20)}.json`), JSON.stringify(receipt("bbbb", "stuck-thread")));
+  await writeFile(path.join(tasks, `${"c".repeat(20)}.json`), JSON.stringify(receipt("cccc", "closable-thread")));
+  const deleted = [];
+  const terminalService = {
+    async deleteEphemeralAgentConversation(_scope, input) {
+      deleted.push(input.conversationId);
+      return input.conversationId === "stuck-thread"
+        ? { ok: false, error: "Connect Codex - DeepSeek in AI Accounts first." } : { ok: true };
+    }
+  };
+  const service = createDatabaseService({ terminalService, projectService: { createSessionStore: async () => runtime.store,
+    createRuntime: async () => runtime, localDatabaseServers: async () => ({ managed: true, databases: [] }),
+    sessionDatabaseEnvironment: () => assert.fail("Cleanup must not connect to a database") } });
+  await assert.rejects(service.closeAssistantsForSession("copilot-session"), (error) => {
+    assert.equal(error.code, "vibe64_database_assistant_cleanup_failed");
+    assert.deepEqual(error.errors.map(({ code }) => code).sort(), ["vibe64_database_assistant_cleanup_failed", "vibe64_database_assistant_receipt_invalid"]);
+    assert.match(error.message, /The saved database copilot receipt database\/assistant-tasks\/a{20}\.json is unreadable; it was left unchanged\./u);
+    assert.match(error.message, /The database copilot helper could not be closed: Connect Codex - DeepSeek in AI Accounts first\. Retry before asking again\./u);
+    return true;
+  });
+  assert.deepEqual(deleted.sort(), ["closable-thread", "stuck-thread"], "every readable receipt is tried");
+  assert.deepEqual((await readdir(tasks)).sort(), [`${"a".repeat(20)}.json`, `${"b".repeat(20)}.json`],
+    "the closed receipt is removed; the unconfirmed and unreadable ones are kept");
+});
+
 test("database assistant denial happens before schema inspection or its read-query loop", async () => {
   let artifactReads = 0;
   let databaseConnections = 0;

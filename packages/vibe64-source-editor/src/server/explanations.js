@@ -772,14 +772,23 @@ function createExplanationOperations({
         });
       },
 
+      // Every explanation helper is closed on its own; one that cannot close
+      // keeps its record for the next close, is logged and is named here.
       async closeExplanationsForSession(sessionId) {
         const runtime = await projectService.createRuntime({ sessionId });
         const result = await cleanupSourceEditorExplanations({ runtime, sessionId,
           sourceEditorTempRoot: sourceEditorTempRoot(temporaryRoot, sessionId)
         }, {}, { all: true, explanationChats, explanationTurns, terminalService });
+        for (const failure of result.failures) {
+          logger?.warn("A source explanation helper could not be closed; its record was kept.", {
+            code: failure.code, error: failure.error, explanationId: failure.id, sessionId
+          });
+        }
+        const reasons = [...new Set(result.failures.map((failure) => failure.error))];
         return { ...result, ok: result.failureCount === 0,
           ...(result.failureCount ? { code: "vibe64_source_explanation_cleanup_failed",
-            error: result.failures[0].error } : {}) };
+            error: result.failureCount === 1 ? reasons[0]
+              : `${result.failureCount} source explanation helpers could not be closed. ${reasons.join(" ")}` } : {}) };
       },
     },
 
@@ -874,7 +883,13 @@ async function readSourceEditorExplanationCleanupRecords(context = {}) {
     return [];
   }
   try {
-    const parsed = JSON.parse(await readFile(ledgerPath, "utf8"));
+    const text = await readFile(ledgerPath, "utf8");
+    let parsed;
+    try { parsed = JSON.parse(text); }
+    catch {
+      throw sourceEditorError(`This session's source explanation helper ledger (${SOURCE_EDITOR_EXPLANATION_CLEANUP_FILE}) is unreadable; it was left unchanged.`,
+        "vibe64_source_explanation_ledger_invalid", {}, 409);
+    }
     const rawRecords = Array.isArray(parsed)
       ? parsed
       : (Array.isArray(parsed?.records) ? parsed.records : []);
@@ -983,8 +998,11 @@ async function deleteSourceEditorExplanationAgentThread(context = {}, record = {
       conversationId: helper.conversationId, cleanupExecutionId: helper.executionId,
       ...(helper.executionProfile ? { executionProfile: helper.executionProfile } : {})
     }, { assistantSelection: helper.selection, vibe64User: context.vibe64User });
-    if (deleted?.ok !== true) throw sourceEditorError(deleted?.error || "The source explanation helper could not be closed.",
-      deleted?.code || "vibe64_source_explanation_agent_cleanup_unconfirmed");
+    if (deleted?.ok !== true) {
+      const reason = String(deleted?.error || "").trim().slice(0, 512).replace(/[.\s]+$/u, "");
+      throw sourceEditorError(`The source explanation helper could not be closed${reason ? `: ${reason}` : ""}.`,
+        deleted?.code || "vibe64_source_explanation_agent_cleanup_unconfirmed");
+    }
     return deleted;
   }
   const threadId = normalizeText(record.agentThreadId);

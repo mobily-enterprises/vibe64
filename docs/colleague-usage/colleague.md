@@ -55,7 +55,9 @@ New messages supersede proposed actions; actions already started are not undone.
 With an API model, follow-ups stay **Pending** until ready, then send in order.
 Speech uses the same conversation; queued messages stay separate.
 **Stop** stops current work and waiting follow-ups;
-saved messages remain. The message box keeps its original model button at the left and
+saved messages remain. Stop is saved even when a summary Helper cannot be
+closed yet; its error names that Helper and its reason, and the next summary
+retries closing it. The message box keeps its original model button at the left and
 Stop/Send controls at the right. Avatar and voice buttons are outside that toolbar;
 showing or hiding the face does not rearrange the composer buttons.
 Stop also works while Claude is starting. It cancels that startup without waiting

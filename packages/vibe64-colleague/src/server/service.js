@@ -1392,7 +1392,9 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
           previousConversations: [...state.record.previousConversations, old] };
         try { validateColleagueConversationRecord({ ...state.record, ...patch }, state.key); }
         catch (error) { throw failure(`Cannot start fresh: ${error.message}`, "ACTION_VALIDATION_FAILED", 400); }
-        if (closed || state.stopping || state.running || state.opening || state.transfer || state.summaryRunning || state.record.summaryHelper) {
+        // A summary receipt left after its run is retried before the next
+        // summary; it belongs to this thread, not to the conversation rotated here.
+        if (closed || state.stopping || state.running || state.opening || state.transfer || state.summaryRunning) {
           throw failure("Finish or stop Colleague's current turn or summary before starting fresh.");
         }
         state.rotating = true;
@@ -1806,8 +1808,10 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         await state.conversation?.cancel();
         await state.running;
         await state.summaryRunning;
-        await summaries.cleanup(state, context);
+        // The stop is saved before the summary Helper's cleanup, which keeps
+        // its receipt for a retry when its close cannot be confirmed.
         await persist(state);
+        await summaries.cleanup(state, context);
       } finally { state.stopping = false; }
       return snapshot(state);
     },

@@ -466,24 +466,50 @@ async function closeTerminalControllerForSession({
   }
 }
 
+// Every step runs even after an earlier one fails, so one helper whose cleanup
+// cannot finish never leaves the session's services, AI or commands running.
+// The failure then names each step that failed, keeping a single step's code.
 async function closeTerminalControllersForSession(sessionId = "", controllers = [], {
   controllerOptions = {},
-  eventPrefix = "server.terminals.closeSessionTerminals"
+  eventPrefix = "server.terminals.closeSessionTerminals",
+  logger = null
 } = {}) {
   let closed = 0;
+  const failures = [];
   for (const entry of controllers) {
-    const result = await closeTerminalControllerForSession({
-      ...entry,
-      controllerOptions,
-      eventPrefix,
+    try {
+      const result = await closeTerminalControllerForSession({
+        ...entry,
+        controllerOptions,
+        eventPrefix,
+        sessionId
+      });
+      if (result?.ok === false) {
+        throw Object.assign(new Error(result.error || `Session ${entry.label} could not be stopped.`), {
+          code: result.code || "vibe64_session_stop_failed"
+        });
+      }
+      closed += Number(result?.closed || 0);
+    } catch (error) {
+      failures.push({ controller: entry.label, error });
+      logOperationalEvent(logger, "warn", {
+        component: "vibe64.session_close", event: "vibe64.session_close.step_failed",
+        sessionId, controller: entry.label, code: error?.code || "", error: error?.message || String(error)
+      }, "A session cleanup step failed; the remaining steps still ran.");
+    }
+  }
+  if (failures.length) {
+    const message = failures.map(({ controller, error }) =>
+      `${controller}: ${error?.message || String(error) || "Cleanup failed."}`).join(" ");
+    const [only] = failures;
+    throw Object.assign(failures.length === 1
+      ? new Error(message, { cause: only.error })
+      : new AggregateError(failures.map(({ error }) => error), message), {
+      code: failures.length === 1 && only.error?.code || "vibe64_session_stop_failed",
+      ...(failures.length === 1 && only.error?.statusCode ? { statusCode: only.error.statusCode } : {}),
+      controllers: failures.map(({ controller }) => controller),
       sessionId
     });
-    if (result?.ok === false) {
-      const error = new Error(result.error || `Session ${entry.label} could not be stopped.`);
-      error.code = result.code || "vibe64_session_stop_failed";
-      throw error;
-    }
-    closed += Number(result?.closed || 0);
   }
   return {
     closed,
@@ -1972,7 +1998,8 @@ function createService({
         { controller: agentPreviewCommand, label: "agentPreview" },
         { controller: agentSessionCommand, label: "agentSessionCommand" }
       ], {
-        controllerOptions
+        controllerOptions,
+        logger
       });
     }).finally(() => providerUsage.forget(currentProjectScopeKey(), sessionId));
   }
@@ -2668,7 +2695,8 @@ function createService({
       return closeTerminalControllersForSession(sessionId, [
         { controller: outputTarget, label: "outputTarget" }
       ], {
-        eventPrefix: "server.terminals.closeSessionNonAgentTerminals"
+        eventPrefix: "server.terminals.closeSessionNonAgentTerminals",
+        logger
       });
     },
 
@@ -3107,6 +3135,7 @@ function createService({
               sessionTerminalClosed += Number(result?.closed || 0);
             } catch (error) {
               failed.push({
+                ...(Array.isArray(error?.controllers) ? { controllers: error.controllers } : {}),
                 error: error instanceof Error ? error.message : String(error || "Session runtime close failed."),
                 sessionId
               });

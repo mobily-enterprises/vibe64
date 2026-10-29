@@ -130,27 +130,38 @@ function createService({
     });
   }
 
+  // A receipt whose helper close is unconfirmed is kept and retried; its error
+  // names the copilot helper and keeps the native owner's reason and code.
   async function cleanupAssistant(runtime, sessionId, artifact, vibe64User, renewalCleanup = null) {
     const saved = renewalCleanup
       ? await runtime.store.readArtifactForRenewal(sessionId, artifact)
       : await runtime.store.readArtifact(sessionId, artifact);
-    const helper = saved ? JSON.parse(saved) : null;
+    let helper = null;
+    try { helper = saved ? JSON.parse(saved) : null; }
+    catch { throw databaseError(`The saved database copilot receipt ${artifact} is unreadable; it was left unchanged.`, "vibe64_database_assistant_receipt_invalid"); }
     if (!helper) return;
-    const root = path.join(runtime.stateRoot, "assistant-helpers", helper.scope.id);
-    if (!/^database_[a-f0-9-]+$/u.test(helper.scope.id) || helper.scope.workdir !== path.join(root, "workdir") ||
-        helper.scope.runtimeRoot !== path.join(root, "runtime")) throw new Error("The database helper has invalid cleanup paths.");
+    const root = path.join(runtime.stateRoot, "assistant-helpers", helper.scope?.id || "");
+    if (!/^database_[a-f0-9-]+$/u.test(helper.scope?.id || "") || helper.scope.workdir !== path.join(root, "workdir") ||
+        helper.scope.runtimeRoot !== path.join(root, "runtime")) {
+      throw databaseError(`The saved database copilot receipt ${artifact} has invalid cleanup paths; it was left unchanged.`, "vibe64_database_assistant_receipt_invalid");
+    }
     const result = await terminalService.deleteEphemeralAgentConversation(helper.scope, {
       conversationId: helper.conversationId, cleanupExecutionId: helper.executionId,
       ...(helper.executionProfile ? { executionProfile: helper.executionProfile } : {})
     }, { assistantSelection: helper.selection, vibe64User });
-    if (result?.ok !== true) throw databaseError(result?.error || "The database helper could not be closed. Retry cleanup before asking again.",
-      result?.code || "vibe64_database_assistant_cleanup_failed");
+    if (result?.ok !== true) {
+      const reason = String(result?.error || "").trim().slice(0, 512).replace(/[.\s]+$/u, "");
+      throw databaseError(`The database copilot helper could not be closed${reason ? `: ${reason}` : ""}. Retry before asking again.`,
+        result?.code || "vibe64_database_assistant_cleanup_failed");
+    }
     const retire = (paths) => rm(path.join(paths.artifactsRoot, artifact), { force: true });
     if (renewalCleanup) await runtime.store.mutateSessionForRenewal(sessionId, retire);
     else await runtime.store.mutateSession(sessionId, retire);
     await rm(root, { recursive: true, force: true });
   }
 
+  // Each person's receipt is closed on its own: one that cannot close is kept
+  // for the next close and named, and never stops the others.
   async function closeAssistantsForSession(sessionId, options = {}) {
     const scope = currentProjectScopeKey();
     const tasks = [...activeAssistants].filter((task) => task.sessionId === sessionId && task.projectScope === scope);
@@ -165,8 +176,22 @@ function createService({
       try { return await readdir(path.join(paths.artifactsRoot, "database/assistant-tasks")); }
       catch (error) { if (error.code === "ENOENT") return []; throw error; }
     });
+    const failures = [];
     for (const file of files) if (/^[a-f0-9]{20}\.json$/u.test(file)) {
-      await cleanupAssistant(runtime, sessionId, `database/assistant-tasks/${file}`, null, options.renewalCleanup);
+      const artifact = `database/assistant-tasks/${file}`;
+      try {
+        await cleanupAssistant(runtime, sessionId, artifact, null, options.renewalCleanup);
+      } catch (error) {
+        failures.push(error);
+        logOperationalEvent(logger, "warn", { component: "vibe64-database-tools", event: "vibe64.database.assistant_cleanup_failed",
+          sessionId, artifact, code: error.code || "", error: error.message }, "A database copilot helper could not be closed; its receipt was kept.");
+      }
+    }
+    if (failures.length === 1) throw failures[0];
+    if (failures.length) {
+      throw Object.assign(new AggregateError(failures, failures.map((error) => error.message).join(" ")), {
+        code: "vibe64_database_assistant_cleanup_failed"
+      });
     }
     return { ok: true };
   }

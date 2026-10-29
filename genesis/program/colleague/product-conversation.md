@@ -365,7 +365,8 @@ and installs a genuinely new public and backend identity in the same private
 record. It preserves the person's model preference, watches, assignments and
 captured project destinations, and never resends an old message. The original
 admission and atomic writer own rotation; the original common runtime retires only
-the settled chat. Active turns, summaries and stop operations must finish first.
+the settled chat. Active turns, summaries and stop operations must finish first;
+a summary receipt left by an unconfirmed close does not block rotation.
 A pending directory-only read retains the original post-mkdir identity fence,
 so it cannot cache an old host after rotation. The opening guard covers actual
 runtime acquisition and subscriptions, rather than preventing that safe rotation.
@@ -808,6 +809,11 @@ The shared block retains the original tool-free profile, account connection,
 native ID publication, timeout, cancellation and cleanup-before-reuse contract.
 Excerpt/citation policy and Stop serialization remain in Colleague. This move
 does not create another progress/Helper runtime.
+An unconfirmed Helper close keeps its receipt and raises a coded
+(`vibe64_retained_helper_cleanup_failed`) error naming the parent's Helper and the
+native owner's reason; a failed run keeps its own error with that cleanup failure
+as its cause. Colleague's Stop is saved before that cleanup, and a kept
+`summaryHelper` receipt does not refuse Start fresh: the next summary retries it.
 The client emits the local message-submission identity synchronously before
 sending. Voice hosts use it to distinguish a fresh invitation from a delayed
 canonical acknowledgement after Stop speaking; it changes no stored history.

@@ -161,7 +161,11 @@ results there. Cleanup must confirm native deletion before removing ownership
 and the scope directory. A cleanup failure fails an otherwise successful
 question; after a failed question the original error is kept and the cleanup
 failure is attached as its cause. Failed cleanup prevents another question for that actor
-and remains retryable on session close after restart. A late native start after
+and remains retryable on session close after restart. Its error names the
+copilot Helper and keeps the native owner's reason and code. Session close tries
+each actor's receipt on its own, logs each failure and reports all of them; an
+unreadable or invalid receipt is a coded `vibe64_database_assistant_receipt_invalid`
+error that leaves the receipt unchanged. A late native start after
 Close is still retained and cleaned up. Closing never re-resolves a destination
 or starts inference. Cleanup uses the saved Helper selection, conversation and
 execution identity, even if current routing has changed; it removes the private

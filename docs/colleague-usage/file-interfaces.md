@@ -102,7 +102,11 @@ actual Helper progress. No transcript, user prompt or follow-up composer appears
 in the document. Stopping or a failure retains earlier saved text and offers
 **Retry**. To discuss the code, use the coding agent or a temporary conversation.
 The Code editor's existing **Explain file or selection** conversation remains a
-separate facility. A file explanation receives the complete saved source when it
+separate facility. Closing one of its explanations also closes its Helper. If
+that close fails, the error reads `The source explanation helper could not be
+closed: <reason>.` and the explanation is kept, so closing it again or archiving
+the session retries it once the reason, such as an AI account to reconnect, is
+resolved. A file explanation receives the complete saved source when it
 fits the 60,000-character input limit; larger files use an explicitly labelled
 bounded excerpt. Indexed function pseudocode uses the complete validated declaration
 within that same character limit, including functions longer than 240 lines.

@@ -15,16 +15,29 @@ function createRetainedConversationHelper({ terminals, root, receipt, scopePrefi
     throw new TypeError("A retained Helper requires its original parent root, receipt and scope prefix.");
   }
   const scopePattern = new RegExp(`^${scopePrefix}_[a-f0-9-]+$`, "u");
+  // The receipt keeps a Helper whose close is unconfirmed, so it is retried
+  // before the next run. Its error names this parent's Helper and keeps the
+  // native owner's reason and code.
+  function cleanupFailure(reason = "", cause = null) {
+    const detail = String(reason || "").trim().slice(0, 512).replace(/[.\s]+$/u, "");
+    return Object.assign(new Error(`The ${scopePrefix} Helper could not be closed${detail ? `: ${detail}` : ""}. ` +
+      `Retry before starting another ${scopePrefix}.`, cause ? { cause } : undefined), {
+      code: "vibe64_retained_helper_cleanup_failed", statusCode: 409
+    });
+  }
   async function cleanup(context) {
     const helper = await receipt.read();
     if (!helper) return;
     const helperRoot = path.join(root, helper.scope.id);
-    if (!scopePattern.test(helper.scope.id) || helper.scope.workdir !== path.join(helperRoot, "workdir") || helper.scope.runtimeRoot !== path.join(helperRoot, "runtime")) throw new Error("The retained summary has invalid cleanup paths.");
+    if (!scopePattern.test(helper.scope.id) || helper.scope.workdir !== path.join(helperRoot, "workdir") ||
+        helper.scope.runtimeRoot !== path.join(helperRoot, "runtime")) throw cleanupFailure(`its saved ${scopePrefix} receipt has invalid cleanup paths`);
     const result = await terminals.deleteEphemeralAgentConversation(helper.scope, {
       conversationId: helper.conversationId, cleanupExecutionId: helper.executionId,
       ...(helper.executionProfile ? { executionProfile: helper.executionProfile } : {})
     }, { assistantSelection: helper.selection, vibe64User: authenticatedVibe64User(context) });
-    if (result?.ok !== true) throw new Error(result?.error || "The summary Helper could not be closed. Retry before starting another summary.");
+    if (result?.ok !== true) {
+      throw cleanupFailure(result?.error, Object.assign(new Error(result?.error || "Its close was not confirmed."), { code: result?.code }));
+    }
     await receipt.write(null);
     await rm(helperRoot, { recursive: true, force: true });
   }
@@ -72,7 +85,8 @@ function createRetainedConversationHelper({ terminals, root, receipt, scopePrefi
       if (response?.ok !== true || ["starting", "inProgress", "failed", "interrupted", "cancelled"].includes(response.status)) throw new Error(response?.error || "The Helper did not finish.");
       responseText = response.text;
     } catch (error) { failure = error; }
-    try { await cleanup(context); } catch (error) { failure = error; }
+    // A failed run keeps its own reason; its cleanup failure is the cause.
+    try { await cleanup(context); } catch (error) { if (failure) failure.cause ??= error; else failure = error; }
     if (failure) throw failure;
     return responseText;
   }

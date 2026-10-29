@@ -101,8 +101,12 @@ is missing, often with a **Hint:**; change your work and press **Check
 again**. Checking unchanged work again repeats the saved answer without using
 your AI. With no changes yet it says so and uses nothing. If the review cannot
 run (the agent is still working, no AI route, a provider error), the bar says
-why, nothing is recorded, and you can press **Check again**. Colleague never
-runs a review or passes a step for you.
+why, nothing is recorded, and you can press **Check again**. If the review's
+Helper could not be closed afterwards, the bar still shows the review's own
+reason; the next **Check again** first closes that Helper and, while it still
+cannot, says `The review Helper could not be closed: <reason>.` Resolve the
+reason, such as an AI account to reconnect, and press **Check again**.
+Colleague never runs a review or passes a step for you.
 
 This tab remembers the beat and the pause; another tab or device starts the
 step at its first beat. On a phone the bar has three tidy rows: the position

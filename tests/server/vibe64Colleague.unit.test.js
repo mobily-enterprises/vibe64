@@ -1579,6 +1579,27 @@ test("failed Helper cleanup is retained and retried before another summary can s
   assert.equal(f.observations.helperCalls.filter((call) => call.input).length, before + 1);
 });
 
+test("a summary receipt kept by a failed cleanup does not refuse Start fresh, and Stop is saved before that cleanup", async (t) => {
+  const f = await fixture(t, [], { watching: true });
+  f.observations.log = largeLog();
+  f.observations.cleanupFails = true;
+  const file = path.join(f.root, "colleague", "NDI", "conversation.json");
+  const summary = await watchAction(f, "conversation-summary.read", summarizeInput);
+  assert.match(summary.error, /The summary Helper could not be closed: Summary cleanup unavailable\. Retry before starting another summary\./u);
+  assert.equal(JSON.parse(await readFile(file, "utf8")).summaryHelper.conversationId, "summary-thread");
+  const original = await f.service.read({}, f.context);
+  const fresh = await freshAction(f, { operationId: "fresh-after-summary", expectedConversationId: original.conversationId, unconfirmedMessages: [] });
+  assert.equal(fresh.ok, true, fresh.error);
+  assert.notEqual(fresh.conversationId, original.conversationId);
+  assert.equal(JSON.parse(await readFile(file, "utf8")).summaryHelper.conversationId, "summary-thread", "the receipt stays for its retry");
+  await assert.rejects(f.service.stop({}, f.context), { code: "vibe64_retained_helper_cleanup_failed",
+    message: /The summary Helper could not be closed: Summary cleanup unavailable/u });
+  assert.equal(JSON.parse(await readFile(file, "utf8")).status, "interrupted", "the stop itself is saved");
+  f.observations.cleanupFails = false;
+  assert.equal((await watchAction(f, "conversation-summary.read", summarizeInput)).mode, "summary");
+  assert.equal(JSON.parse(await readFile(file, "utf8")).summaryHelper, null);
+});
+
 test("Stop Colleague aborts and cleans up its active summary Helper", async (t) => {
   const f = await fixture(t, [], { watching: true });
   f.observations.log = largeLog();

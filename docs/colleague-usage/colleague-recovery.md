@@ -48,7 +48,10 @@ Alternatively, **Start fresh** opens a
 confirmation. It retains the old conversation and unconfirmed words, starts a new
 chat without its old context, and resends nothing. Your model choice, watches and
 assignments stay in place; their coding agents keep running. Finish the current
-turn or summary before starting fresh. Resolve any newer recording first.
+turn or summary before starting fresh. A summary Helper that an earlier summary
+could not close does not block Start fresh; Colleague closes it before the next
+summary, or names it with its reason if it still cannot. Resolve any newer
+recording first.
 Confirm **Start fresh** to continue. The existing typed draft remains unsent.
 The old voice connection ends. Talk, speaker and Voice settings return for the
 new chat without starting recording or sound. Use Talk when wanted. If voice
