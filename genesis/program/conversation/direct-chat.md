@@ -3831,7 +3831,9 @@ Changing the selection alone sends nothing and is rejected while a turn is activ
 
 Curated provider homes project only their fixed endpoint, key and model
 metadata. Main chat, ephemeral tasks and isolated background helpers use that
-selected connection. Helper copies only this server-owned projection into
+selected connection. The selection's connection, not its model ID, chooses the
+home: both Z.AI connections offer `glm-5.3`, and a helper thread whose
+parameters name no provider starts on its routing provider. Helper copies only this server-owned projection into
 its existing temporary private home, checks canonical identity before and after
 requests, and never activates OpenAI authentication. Its existing no-tool,
 no-project-access contract and verified process cleanup still apply.

@@ -315,7 +315,7 @@ export async function createControlledColleagueNativeCommands(root, responses) {
     const option = name => args[args.indexOf(name) + 1];
     const log = value => appendFileSync(process.env.TEST_TRACE, JSON.stringify(value) + "\\n");
     const emit = value => process.stdout.write(JSON.stringify(value) + "\\n");
-    log({ args, routing: Object.fromEntries(["ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+    log({ args, pid: process.pid, routing: Object.fromEntries(["ANTHROPIC_BASE_URL", "ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL",
       "CLAUDE_CODE_SUBAGENT_MODEL", "CLAUDE_CODE_AUTO_COMPACT_WINDOW"].map(key => [key, process.env[key]])) });
     if (args[0] === "auth") {
       emit({ loggedIn: true, authMethod: "claude.ai", email: readFileSync(process.env.TEST_ACCOUNT, "utf8") });

@@ -213,6 +213,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
           return { ok: true, workflows: [{ available: true, engineId: "codex" }] };
         } },
         terminals: {
+          joinAgentRuntimeInvalidation: () => () => {},
           async requireAssistantSelectionAccess(_selection, { vibe64User }) {
             if (vibe64User?.uid !== owner.uid) throw Object.assign(new Error("Model access denied."), { statusCode: 403 });
           },

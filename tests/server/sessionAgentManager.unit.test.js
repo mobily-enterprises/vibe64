@@ -2344,16 +2344,23 @@ test("Restored detached: session agent manager surfaces required Codex authentic
   assert.equal(detachedTurns, 0);
 });
 
-test("OpenCode credential publication drains pending PTY openings and refuses retained terminals before native invalidation", async () => {
+test("OpenCode credential publication drains pending PTY openings and refuses retained terminals before native invalidation", async t => {
   const opening = Promise.withResolvers(), release = Promise.withResolvers();
   const selection = { schema: "vibe64.assistant-selection.v1", engineId: "opencode", modelProviderId: "deepseek",
     modelId: "model", agentId: "build", variantId: "", catalogRevision };
   const calls = [];
+  const namespace = "vibe64-opencode:fence-fixture:session";
+  let terminal;
   const manager = createSessionAgentManager({ defaultProviderId: "opencode",
     readAssistantAccess: async () => { opening.resolve(); await release.promise; return { available: true, ownerOnly: false, connectionIdentity: "old-key" }; },
     providers: [{ id: "opencode", transportId: "opencode_test",
-      async startTerminal() { calls.push("start"); return { ok: true, id: "native-pty" }; },
-      async closeTerminal() { calls.push("close"); return { ok: true }; },
+      async startTerminal() {
+        calls.push("start");
+        terminal = await startTerminalSession({ command: process.execPath, args: ["-e", "setInterval(() => {}, 1000)"], cwd: os.tmpdir(), namespace });
+        t.after(() => closeTerminalSession(terminal.id, { namespace }));
+        return terminal;
+      },
+      async closeTerminal() { calls.push("close"); return closeTerminalSession(terminal.id, { namespace }); },
       async invalidateRuntimes(_context, input) { calls.push("invalidate"); await input.publish(); return { ok: true }; }
     }]
   });
@@ -2367,7 +2374,7 @@ test("OpenCode credential publication drains pending PTY openings and refuses re
   release.resolve(); await pending; await refused;
   assert.deepEqual(calls, ["start"]);
   assert.equal(published, false);
-  await manager.closeTerminal("session", { terminalSessionId: "native-pty" }, options);
+  await manager.closeTerminal("session", { terminalSessionId: terminal.id }, options);
   await manager.invalidateRuntimes({ provider: "opencode", modelProviderId: "deepseek", publish() { published = true; } });
   assert.equal(published, true);
   assert.deepEqual(calls, ["start", "close", "invalidate"]);
@@ -2415,15 +2422,20 @@ test("Claude credential publication preserves known other-provider PTYs and refu
   assert.equal(readTerminalSession(unknown.id, { namespace }).status, "running");
 });
 
-test("Claude credential fence waits for admitted PTY opening and rejects new opening until publication", async () => {
+test("Claude credential fence waits for admitted PTY opening and rejects new opening until publication", async t => {
   const entered = Promise.withResolvers(), release = Promise.withResolvers();
   const calls = [];
   const selection = { schema: "vibe64.assistant-selection.v1", engineId: "claude", modelProviderId: "deepseek",
     modelId: "model", agentId: "claude", variantId: "", catalogRevision };
+  const namespace = "vibe64-claude:fence-fixture:session";
   const manager = createSessionAgentManager({ defaultProviderId: "claude",
     readAssistantAccess: async () => { entered.resolve(); await release.promise; return { available: true, ownerOnly: false, connectionIdentity: "old" }; },
     providers: [{ id: "claude", transportId: "claude_test",
-      async startTerminal() { return { ok: true, id: "pending-claude-pty" }; },
+      async startTerminal() {
+        const terminal = await startTerminalSession({ command: process.execPath, args: ["-e", "setInterval(() => {}, 1000)"], cwd: os.tmpdir(), namespace });
+        t.after(() => closeTerminalSession(terminal.id, { namespace }));
+        return terminal;
+      },
       invalidateRuntimes() { calls.push("stop"); return { ok: true }; } }]
   });
   const options = { assistantSelection: selection, vibe64User: { role: "owner", username: "owner" } };
@@ -2433,4 +2445,91 @@ test("Claude credential fence waits for admitted PTY opening and rejects new ope
   const refused = assert.rejects(change, { code: "vibe64_claude_connection_in_use" });
   await assert.rejects(manager.startTerminal("late", {}, options), { code: "vibe64_claude_connection_in_use" });
   release.resolve(); await pending; await refused; assert.deepEqual(calls, []);
+});
+
+async function waitForTerminalStatus(id, namespace, status) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if (readTerminalSession(id, { namespace }).status === status) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.fail(`Terminal ${id} never reached ${status}.`);
+}
+
+test("connection changes ignore native PTYs that exited or closed outside the manager and name the sessions still holding one", async t => {
+  for (const engineId of ["opencode", "claude"]) {
+    const terminals = new Map();
+    let exitCode = null;
+    const calls = [];
+    const manager = createSessionAgentManager({ defaultProviderId: engineId,
+      readAssistantAccess: async () => ({ available: true, ownerOnly: false, connectionIdentity: "old-key" }),
+      providers: [{ id: engineId, transportId: `${engineId}_test`,
+        async startTerminal(context) {
+          const namespace = `vibe64-${engineId}:binding-fixture:${context.sessionId}`;
+          const script = exitCode === null ? "setInterval(() => {}, 1000)" : `process.exit(${exitCode})`;
+          const terminal = await startTerminalSession({ command: process.execPath, args: ["-e", script], cwd: os.tmpdir(), namespace });
+          terminals.set(context.sessionId, { id: terminal.id, namespace });
+          t.after(() => closeTerminalSession(terminal.id, { namespace }));
+          return terminal;
+        },
+        async invalidateRuntimes(_context, input) {
+          calls.push("invalidate");
+          if (engineId === "opencode") await input.publish();
+          return { ok: true };
+        }
+      }]
+    });
+    const selection = { schema: "vibe64.assistant-selection.v1", engineId, modelProviderId: "deepseek",
+      modelId: "model", agentId: engineId === "claude" ? "claude" : "build", variantId: "", catalogRevision };
+    const options = { assistantSelection: selection, vibe64User: { role: "owner", username: "owner" } };
+    const change = () => manager.invalidateRuntimes({ provider: engineId, modelProviderId: "deepseek", reason: "provider-key-change",
+      prepare() { calls.push("prepare"); }, publish() { calls.push("publish"); } });
+
+    // A native runtime release or Remove AI closes the PTY without the manager.
+    await manager.startTerminal("released", {}, options);
+    const released = terminals.get("released");
+    await closeTerminalSession(released.id, { namespace: released.namespace });
+    assert.equal((await change()).ok, true, `${engineId}: a closed PTY holds no connection`);
+
+    // A PTY that exited while nobody watched stays listed as exited until closed.
+    exitCode = 3;
+    await manager.startTerminal("exited", {}, options);
+    const exited = terminals.get("exited");
+    await waitForTerminalStatus(exited.id, exited.namespace, "exited");
+    calls.length = 0;
+    assert.equal((await change()).ok, true, `${engineId}: an exited PTY holds no connection`);
+    assert.deepEqual(calls, engineId === "claude" ? ["prepare", "invalidate", "publish"] : ["invalidate", "publish"]);
+
+    exitCode = null;
+    await manager.startTerminal("running", {}, options);
+    calls.length = 0;
+    await assert.rejects(change(), (error) => error.code === `vibe64_${engineId}_connection_in_use` &&
+      /session running\b/u.test(error.message) && !/released|exited/u.test(error.message));
+    assert.deepEqual(calls, []);
+  }
+});
+
+test("all-provider operations keep every provider's outcome and name the provider that threw", async () => {
+  let opencodeFinished = false;
+  const providers = [
+    { id: "claude", transportId: "claude_test", closeProject() { throw new Error("Claude requires a prepared session workspace."); },
+      invalidateRuntimes() { throw Object.assign(new Error("Claude shutdown failed."), { code: "fixture_claude_stop" }); } },
+    { id: "codex", transportId: "codex_test", closeProject: async () => ({ ok: true, closed: 2, stopped: 2 }),
+      invalidateRuntimes: async () => ({ ok: true, stopped: 2 }) },
+    { id: "opencode", transportId: "opencode_test",
+      async closeProject() { await new Promise((resolve) => setTimeout(resolve, 50)); opencodeFinished = true; return { ok: true, closed: 1, stopped: 1 }; },
+      async invalidateRuntimes() { await new Promise((resolve) => setTimeout(resolve, 50)); opencodeFinished = true; return { ok: true, stopped: 1 }; } }
+  ];
+  const manager = createSessionAgentManager({ providers });
+  for (const run of [() => manager.closeProject({}), () => manager.invalidateRuntimes({ reason: "server-shutdown" })]) {
+    opencodeFinished = false;
+    const result = await run();
+    assert.equal(opencodeFinished, true, "the caller resumes only after every provider settled");
+    assert.equal(result.ok, false);
+    assert.equal(result.stopped, 3);
+    assert.deepEqual(result.results.map(({ providerId, ok }) => [providerId, ok !== false]),
+      [["claude", false], ["codex", true], ["opencode", true]]);
+    assert.equal(result.failed.length, 1);
+    assert.equal(result.failed[0].providerId, "claude");
+    assert.match(result.failed[0].error, /^Claude (requires a prepared session workspace|shutdown failed)\.$/u);
+  }
 });

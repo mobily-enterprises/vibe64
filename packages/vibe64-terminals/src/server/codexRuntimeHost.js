@@ -43,6 +43,22 @@ function codexAgentSettingsFromSession(session = {}) {
   };
 }
 
+// The session's selection names its model provider. Model ids are not unique
+// across providers (both Z.AI connections offer GLM 5.3), so the model id alone
+// chooses one only for settings saved without a provider.
+function codexSelectedModelProviderId(session = {}) {
+  const selection = vibe64AssistantSelectionFromMetadata(session?.metadata || {}, { required: false });
+  return normalizeText(session?.metadata?.codex_routing_home_provider) || normalizeText(selection?.modelProviderId) ||
+    normalizeText(session?.agentSettings?.modelProviderId) ||
+    curatedCodexModel(session?.agentSettings?.model)?.modelProviderId || "";
+}
+
+// A thread starts on the provider its parameters or its runtime's routing name.
+function codexThreadModelProvider(params = {}, routingModelProviderId = "") {
+  return normalizeText(params.modelProvider) || normalizeText(routingModelProviderId) ||
+    curatedCodexModel(params.model)?.modelProviderId || "openai";
+}
+
 function createCodexRuntimeHost({
   env,
   codexAppServerProviderOptions,
@@ -182,8 +198,7 @@ function createCodexRuntimeHost({
     const metadataExecutionRoot = normalizeText(fallbackOptions.executionRoot) ||
       sessionSourcePath(session) ||
       metadataSourcePath;
-    const selection = vibe64AssistantSelectionFromMetadata(metadata, { required: false });
-    const providerId = session?.metadata?.codex_routing_home_provider || selection?.modelProviderId || curatedCodexModel(session?.agentSettings?.model)?.modelProviderId;
+    const providerId = codexSelectedModelProviderId(session);
     const providerHome = curatedCodexProvider(providerId) && codexAppServerProviderOptions.systemRoot
       ? codexProviderPaths(codexAppServerProviderOptions.systemRoot, providerId).toolHomeSource
       : "";
@@ -386,4 +401,5 @@ function createCodexSessionRuntimeHost({
   };
 }
 
-export { createCodexRuntimeHost, createCodexSessionRuntimeHost, codexAgentSettingsFromSession };
+export { createCodexRuntimeHost, createCodexSessionRuntimeHost, codexAgentSettingsFromSession, codexSelectedModelProviderId,
+  codexThreadModelProvider };

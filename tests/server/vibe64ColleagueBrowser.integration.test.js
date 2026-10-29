@@ -193,7 +193,7 @@ test("Colleague browser facade retains Fastify cookie headers and revalidates lo
     resolveUser: async ({ request }) => signedIn && request?.headers?.cookie === cookie ? user : null,
     authorizeProject() { assert.fail("Colleague reading must not authorize a project."); }
   });
-  const service = createColleagueService({ actions, accounts: {}, terminals: {}, systemRoot: root });
+  const service = createColleagueService({ actions, accounts: {}, terminals: { joinAgentRuntimeInvalidation: () => () => {} }, systemRoot: root });
   t.after(async () => {
     try { await app.close(); }
     finally { try { await service.close(); } finally { await rm(root, { recursive: true, force: true }); } }

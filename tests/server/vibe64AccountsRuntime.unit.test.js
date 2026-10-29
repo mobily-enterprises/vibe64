@@ -35,6 +35,7 @@ import {
 } from "@local/vibe64-core/server/codexAuthState";
 import {
   closeTerminalSessionsForNamespacePrefix,
+  readTerminalSession,
   startTerminalSession
 } from "@local/vibe64-execution/server/terminalSessions";
 import {
@@ -57,6 +58,7 @@ import {
   githubCliFailureDetails
 } from "../../packages/vibe64-accounts/src/server/githubCliAuth.js";
 import {
+  ACCOUNT_AUTH_NAMESPACE,
   createAccountsRuntime,
   createService,
   GITHUB_ACCOUNT_MODE_USER
@@ -245,6 +247,7 @@ function withEnv(values, callback) {
 async function startAccountsFeature({
   accountRuntime = null,
   env = {},
+  logger = null,
   project = null,
   terminals = null
 } = {}) {
@@ -299,6 +302,7 @@ async function startAccountsFeature({
         }
       },
       ...(accountRuntime ? { "vibe64.accounts.runtime": accountRuntime } : {}),
+      ...(logger ? { "runtime.logger": logger } : {}),
       ...(terminals ? { "vibe64.terminals": terminals } : {})
     }
   });
@@ -329,6 +333,43 @@ test("account readiness reads the AI catalogue as the person asking, even outsid
       const status = await feature.connections.getStatus({ vibe64User: owner });
       assert.equal(status.connections?.find((row) => row.id === "ai")?.connected, true, JSON.stringify(status));
       assert.deepEqual(seen.map(({ options }) => options.vibe64User), [owner]);
+    } finally { await feature.runtime.shutdown(); }
+  });
+});
+
+test("account changes write one operational line each: failures at warn, completions at info, with their duration", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    const lines = [];
+    const logger = Object.fromEntries(["debug", "info", "warn", "error"].map((level) => [level, (fields, message) => {
+      lines.push({ level, fields, message });
+    }]));
+    const feature = await startAccountsFeature({ env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot }, logger,
+      terminals: { configureAssistantRuntime() {}, async invalidateAgentRuntimes(input) {
+        if (input.provider === "claude") throw new Error("Claude requires a prepared session workspace.");
+        return { ok: true };
+      } }
+    });
+    try {
+      const owner = { role: "owner", username: "owner" };
+      const refused = await feature.accounts.logout({ accountId: "claude", vibe64User: owner });
+      assert.equal(refused.ok, false);
+      assert.equal(refused.error, "Claude requires a prepared session workspace.");
+      const removed = await feature.accounts.removeCodexProvider({ engineId: "codex", modelProviderId: "deepseek", vibe64User: owner });
+      assert.equal(removed.ok, true, JSON.stringify(removed));
+      const changes = lines.filter(({ fields }) => fields.component === "vibe64-accounts");
+      assert.deepEqual(changes.map(({ level, fields }) => [level, fields.event, fields.operation]), [
+        ["warn", "vibe64.accounts.change_failed", "logout"],
+        ["info", "vibe64.accounts.change_completed", "remove-provider-key"]
+      ]);
+      const [failure, completion] = changes.map(({ fields }) => fields);
+      assert.equal(failure.accountId, "claude");
+      assert.equal(failure.actor, "owner");
+      assert.equal(failure.error, "Claude requires a prepared session workspace.");
+      assert.equal(typeof failure.durationMs, "number");
+      assert.equal(completion.engineId, "codex");
+      assert.equal(completion.modelProviderId, "deepseek");
+      assert.equal(typeof completion.durationMs, "number");
     } finally { await feature.runtime.shutdown(); }
   });
 });
@@ -2088,6 +2129,48 @@ test("Codex creates a new local identity once per successful sign-in and preserv
   });
 });
 
+test("a finished sign-in is forgotten once a later sign-in finishes or the account signs out", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    await writeReadyCodexMarker(systemRoot);
+    const published = [];
+    const service = createService({
+      accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "daemon"), systemRoot }),
+      projectService: { currentTargetRoot: () => root },
+      invalidateAgentRuntimes: async () => ({ ok: true }),
+      runHostToolCommand: async (args) => ({ ok: true, output: args.includes("logout") ? "Logged out" : "Logged in using ChatGPT" }),
+      publishAuthSessionChanged: async (session) => { published.push(session); },
+      runAuthTerminalCommand: (input) => startGatewayAuthTestTerminal(input, {
+        args: ["-e", "process.exit(0);"],
+        command: process.execPath,
+        commandPreview: "fixture Codex login",
+        env: {}
+      })
+    });
+    async function signIn() {
+      const started = await service.startAuth({ accountId: "codex", mode: "device" });
+      assert.equal(started.ok, true, JSON.stringify(started));
+      await waitForAccountRuntimeCondition(
+        () => published.some((session) => session.id === started.id && session.terminalStatus === "exited"),
+        "Codex sign-in did not finalize."
+      );
+      return started.id;
+    }
+    const first = await signIn();
+    assert.equal((await service.readAuthSession({ sessionId: first })).status, "connected");
+    const second = await signIn();
+    assert.equal((await service.readAuthSession({ sessionId: first })).code, "unknown_auth_session",
+      "a later finished sign-in supersedes the earlier one");
+    assert.equal(readTerminalSession(first, { namespace: ACCOUNT_AUTH_NAMESPACE }).ok, false);
+    assert.equal((await service.readAuthSession({ sessionId: second })).status, "connected");
+    const loggedOut = await service.logout({ accountId: "codex" });
+    assert.equal(loggedOut.ok, true, JSON.stringify(loggedOut));
+    assert.equal((await service.readAuthSession({ sessionId: second })).code, "unknown_auth_session",
+      "signing out forgets the finished sign-in instead of reporting it connected");
+    assert.equal(readTerminalSession(second, { namespace: ACCOUNT_AUTH_NAMESPACE }).ok, false);
+  });
+});
+
 for (const connected of [true, false]) {
   test(`ordinary account reads recover pending Codex ${connected ? "login" : "logout"} after a restart`, async () => {
     await withTempDir(async (root) => {
@@ -2133,11 +2216,21 @@ test("automatic Codex account recovery preserves an unverified transition and re
     const service = createService({
       accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "daemon"), systemRoot }),
       invalidateAgentRuntimes: async () => ({ ok: ++invalidations > 1 }),
+      readClaudeAccountStatus: async () => ({ loggedIn: true, email: "owner@example.test", authMethod: "claude.ai" }),
       runHostToolCommand: async () => ({ ok: true, output: "Logged in using ChatGPT" })
     });
-    const refused = await service.getStatus({ accountIds: ["codex"] });
-    assert.equal(refused.ok, false);
-    assert.equal(refused.code, "vibe64_codex_auth_runtime_invalidation_failed");
+    // One account's failure is that account's row; the others stay readable.
+    const refused = await service.getStatus({ accountIds: ["codex", "claude"] });
+    assert.equal(refused.ok, true, JSON.stringify(refused));
+    const [codex, claude] = refused.accounts;
+    assert.equal(codex.id, "codex");
+    assert.equal(codex.connected, false);
+    assert.equal(codex.status, "reconnecting", "the unfinished sign-in change stays visible as such");
+    assert.equal(codex.code, "vibe64_codex_auth_runtime_invalidation_failed");
+    assert.match(codex.message, /could not retire every old runtime/u);
+    assert.equal(claude.id, "claude");
+    assert.equal(claude.connected, true);
+    assert.equal(refused.ready, false);
     assert.equal((await readCodexAuthStatus(systemRoot)).status, "reconnecting");
     const recovered = await service.getStatus({ accountIds: ["codex"] });
     assert.equal(recovered.ok, true);
@@ -2147,6 +2240,25 @@ test("automatic Codex account recovery preserves an unverified transition and re
   });
 });
 
+
+test("an account whose status read throws reports that read as its own row", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    await writeReadyCodexMarker(systemRoot);
+    const service = createService({
+      accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "daemon"), systemRoot }),
+      readClaudeAccountStatus: async () => { throw Object.assign(new Error("Claude status read failed."), { code: "fixture_claude_status" }); },
+      runHostToolCommand: async () => ({ ok: true, output: "Logged in using ChatGPT" })
+    });
+    const status = await service.getStatus({ accountIds: ["codex", "claude"] });
+    assert.equal(status.ok, true, JSON.stringify(status));
+    const [codex, claude] = status.accounts;
+    assert.equal(codex.connected, true);
+    assert.deepEqual([claude.id, claude.connected, claude.status, claude.code, claude.message, claude.required],
+      ["claude", false, "error", "fixture_claude_status", "Claude status read failed.", false]);
+    assert.equal(status.ready, true, "an optional account's failed read does not block readiness");
+  });
+});
 
 test("without runtime packs a missing Claude Code is reported with its installer, not as signed out", async () => {
   configureVibe64Host(null);
@@ -2211,6 +2323,47 @@ test("Claude authentication is owner-only and launches native login after runtim
   });
 });
 
+
+test("a Claude account change also stops the conversations of features that joined account invalidation", async () => {
+  await withTempDir(async (root) => {
+    const systemRoot = path.join(root, "system");
+    const unused = () => assert.fail("A Claude account change must not touch a project.");
+    const terminals = createTerminalsService({ env: { [VIBE64_SYSTEM_ROOT_ENV]: systemRoot },
+      projectService: { createRuntime: unused, createSessionStore: unused, readCurrentProject: unused,
+        readEnv: unused, runInProjectContext: unused, saveEnvUserValues: unused } });
+    const joined = [];
+    let stopFails = false;
+    const leave = terminals.joinAgentRuntimeInvalidation(async (input) => {
+      joined.push(input);
+      if (stopFails) throw new Error("Colleague could not stop every claude conversation.");
+    });
+    const requests = [];
+    const service = createService({
+      accountRuntime: createAccountsRuntime({ daemonHome: path.join(root, "home"), systemRoot }),
+      invalidateAgentRuntimes: (input) => terminals.invalidateAgentRuntimes(input),
+      runAuthTerminalCommand: async (input) => {
+        requests.push(input);
+        return { ok: false, code: "fixture_terminal", error: "Captured native login request." };
+      }
+    });
+    const owner = { role: "owner", username: "owner" };
+    assert.equal((await service.startAuth({ accountId: "claude", mode: "browser", vibe64User: owner })).code, "fixture_terminal");
+    assert.deepEqual(joined, [{ provider: "claude", reason: "claude-auth-change" }]);
+    stopFails = true;
+    const refused = await service.startAuth({ accountId: "claude", mode: "browser", vibe64User: owner });
+    assert.equal(refused.ok, false);
+    assert.equal(refused.failed.at(-1).error, "Colleague could not stop every claude conversation.");
+    assert.equal(requests.length, 1, "a change that could not stop every Claude process does not start a login");
+    // Credential publication keeps its own fence and does not stop joined work.
+    await terminals.invalidateAgentRuntimes({ provider: "claude", modelProviderId: "deepseek", reason: "provider-key-change",
+      prepare() {}, publish() {} });
+    assert.equal(joined.length, 2);
+    leave();
+    stopFails = false;
+    await service.startAuth({ accountId: "claude", mode: "browser", vibe64User: owner });
+    assert.equal(joined.length, 2, "a feature that left is not called again");
+  });
+});
 
 test("Claude login receives its browser link as JSON and accepts code input only from the owner", async () => {
   await withTempDir(async (root) => {

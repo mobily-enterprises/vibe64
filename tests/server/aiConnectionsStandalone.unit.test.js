@@ -157,3 +157,41 @@ test("private runtime publication cannot report connection success without the n
   await assert.rejects(runtime.upsertConnection({ modelProviderId: "deepseek", apiKey: "fixture-key", providerRevision: revision }, { provider }), /Close OpenCode/);
   assert.equal(await runtime.resolveConnection("deepseek"), null);
 });
+
+test("changing model access stops no OpenCode runtime: admission checks access on every turn", async t => {
+  const systemRoot = await mkdtemp(path.join(os.tmpdir(), "v64-ai-model-access-"));
+  t.after(() => rm(systemRoot, { recursive: true, force: true }));
+  const invalidations = [];
+  const published = [];
+  const zen = { ...provider, id: "opencode", label: "OpenCode Zen", defaultModelId: "big-pickle",
+    models: [{ id: "big-pickle", status: "available" }, { id: "claude-haiku-4-5", status: "available" }] };
+  const runtime = createAiConnectionRuntime({ systemRoot, terminals: {
+    async verifyAssistantConnection() { return { ok: true }; },
+    async invalidateAgentRuntimes(input) { invalidations.push(input.publish ? "credential" : input.reason); await input.publish?.(); return { ok: true }; }
+  }, publishConnectionChanged(modelProviderId, change) { published.push([modelProviderId, change.reason]); } });
+  await runtime.upsertConnection({ modelProviderId: "opencode", apiKey: "fixture-zen-key", providerRevision: revision }, { provider: zen });
+  assert.deepEqual(invalidations, ["credential"]);
+  for (const operation of ["enable-all", "disable-additional"]) {
+    await runtime.updateModelAccess("opencode", { operation });
+  }
+  assert.deepEqual(invalidations, ["credential"], "model access is admission policy; running OpenCode work keeps going");
+  assert.deepEqual(published.map(([, reason]) => reason), ["created", "model-access-updated", "model-access-updated"]);
+});
+
+test("OpenCode connection changes write one operational line each with their duration", async () => {
+  const lines = [];
+  const logger = Object.fromEntries(["debug", "info", "warn", "error"].map((level) => [level, (fields) => { lines.push({ level, fields }); }]));
+  const service = createAiConnectionService({ logger, aiConnections: {
+    async removeConnection() { throw Object.assign(new Error("Close OpenCode native terminals, then retry this connection change."), { code: "vibe64_opencode_connection_in_use" }); },
+    async updateModelAccess(id) { return { id, modelAccess: { mode: "all" } }; }
+  } });
+  const owner = { role: "owner", username: "owner" };
+  await assert.rejects(service.remove({ modelProviderId: "deepseek", vibe64User: owner }), { code: "vibe64_opencode_connection_in_use" });
+  assert.equal((await service.modelAccess({ modelProviderId: "opencode", operation: "enable-all", vibe64User: owner })).ok, true);
+  assert.deepEqual(lines.map(({ level, fields }) => [level, fields.event, fields.operation, fields.modelProviderId, fields.actor]), [
+    ["warn", "vibe64.accounts.change_failed", "remove-connection", "deepseek", "owner"],
+    ["info", "vibe64.accounts.change_completed", "update-model-access", "opencode", "owner"]
+  ]);
+  assert.equal(lines[0].fields.code, "vibe64_opencode_connection_in_use");
+  assert.ok(lines.every(({ fields }) => typeof fields.durationMs === "number"));
+});

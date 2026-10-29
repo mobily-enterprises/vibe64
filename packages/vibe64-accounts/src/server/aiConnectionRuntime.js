@@ -17,22 +17,19 @@ function createAiConnectionRuntime({ systemRoot, terminals, publishConnectionCha
         throw new Error(result?.failed?.[0]?.error || "Close OpenCode chats and native terminals, then retry this connection change.");
       }
     },
+    // Credential changes already retired their runtimes inside
+    // withConnectionChange. Model access is admission policy, checked again on
+    // every turn, so a model-access change stops no running OpenCode work.
     async onConnectionChanged(change) {
       const removed = change.reason === "removed";
-      const [invalidation] = await Promise.all([
-        ["created", "replaced", "removed"].includes(change.reason)
-          ? Promise.resolve(null)
-          : terminals.invalidateAgentRuntimes({ ...change, provider: "opencode" }),
-        publishConnectionChanged(change.modelProviderId, {
-          connected: !removed,
-          operation: removed
-            ? "deleted"
-            : change.reason === "created" ? "created" : "updated",
-          reason: change.reason,
-          status: removed ? "disconnected" : "connected"
-        })
-      ]);
-      return invalidation;
+      await publishConnectionChanged(change.modelProviderId, {
+        connected: !removed,
+        operation: removed
+          ? "deleted"
+          : change.reason === "created" ? "created" : "updated",
+        reason: change.reason,
+        status: removed ? "disconnected" : "connected"
+      });
     },
     async readModelIds() {
       const { rows } = await readAllOpenCodeCapabilityRows((query) => terminals.listAssistantCapabilities(query),

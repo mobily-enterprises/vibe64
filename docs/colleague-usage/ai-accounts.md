@@ -104,6 +104,8 @@ example **7 connections · 2 not on a card above**. Select it to open:
   with **Replace key** and **Remove**. OpenCode Zen's model
   access controls (**Check & enable working models**, **Enable all current
   models**, **Use the recommended model only**, **Cancel check**) are on its tile.
+  Changing model access does not stop running answers or terminals; the new
+  choice applies from the next message.
   These providers also appear in the **Connected** or **Currently using** strip
   at the top.
 - **By tool · Claude Code**, **· Codex** and **· OpenCode** list every connection
@@ -123,6 +125,10 @@ validation; subscription login can require an external browser, one-time code or
 authorization code. You perform provider consent and secret entry. Wait for the
 saved connected state, and use **Refresh** or **Check saved key** when offered.
 Do not reconnect or resend a key solely because a status request was interrupted.
+If one account's status cannot be read, only that account shows the reason as
+not connected (a Codex account change that is still finishing stays
+**Reconnecting**); the other accounts show their usual status. Use **Refresh**
+to read it again.
 DeepSeek, regular GLM API and GLM Coding Plan connections belong to the
 orchestrator shown in that row. The DeepSeek card connects DeepSeek inside
 **Claude Code**; to connect it in another tool as well, use **Advanced → Add a
@@ -131,6 +137,8 @@ that row's verification. Each orchestrator can save a different key, or you can
 enter the same key independently for several orchestrators. Connecting or
 checking one row does not connect, check or copy a key to another. Regular GLM
 API and GLM Coding Plan also remain separate connections within each orchestrator.
+Both offer GLM 5.3; background helpers use the connection you chose, so a
+pay-as-you-go GLM helper uses its own key and does not need the Coding Plan.
 
 When upgrading an older installation to these independent connections, the
 operator first checks the candidate's pending upgrades and applies the numbered
@@ -147,8 +155,10 @@ Replacement and removal affect only that orchestrator/provider. If Codex reports
 another native subscriber, close the native terminal using that provider and retry.
 Claude Code also requires closing a terminal using the selected provider. If a
 terminal's provider cannot be confirmed, close that Claude terminal and retry;
-known terminals using another provider keep running. Refusal preserves the saved
-key and connection status.
+known terminals using another provider keep running. The refusal names the
+sessions whose terminal is still open; a terminal that has already exited or
+been closed no longer blocks the change. Refusal preserves the saved key and
+connection status.
 OpenCode may require you to close its native terminals, other-provider chats and
 Colleague conversations before changing a key. If it refuses, the saved key stays
 unchanged and those conversations keep running; close the named users and retry.
@@ -168,7 +178,9 @@ If Claude reports that another process is refreshing its OAuth token, wait a
 minute before retrying. If the error persists, ask the workspace operator to
 check the managed Claude version and refresh-lock recovery. This error alone
 does not prove that you signed out or need to replace your credentials.
-Changing the workspace's Claude account stops its existing Claude processes.
+Changing the workspace's Claude account stops its existing Claude processes,
+Colleague's included: a Colleague answer in progress stops, and the thread
+continues on the new account with your next message.
 Sign-ins and key checks show a spinner and what is happening while they wait,
 as described in [AI onboarding](ai-onboarding.md#while-it-works).
 Main and temporary chats keep their history and resume with the newly connected account; they

@@ -2,8 +2,23 @@ import { aiConnectionError } from "./aiConnectionError.js";
 import { AI_CONNECTION_PROVIDER_PATTERN } from "../shared/aiConnectionIdentity.js";
 import { assistantProviderPolicy } from "./assistantProviderPolicy.js";
 import { readAllOpenCodeCapabilityRows } from "./opencodeCatalogPages.js";
+import { logAccountChange } from "./accountChangeLog.js";
 
-function createAiConnectionService({ aiConnections, readAssistantCapabilities, initializeModelRouting } = {}) {
+function createAiConnectionService({ aiConnections, readAssistantCapabilities, initializeModelRouting, logger = null } = {}) {
+  // OpenCode connection changes are account changes too: one line each.
+  async function connectionChange(operation, { modelProviderId, vibe64User } = {}, work) {
+    const startedAt = Date.now();
+    const fields = { actor: String(vibe64User?.username || ""), engineId: "opencode", modelProviderId: String(modelProviderId || "") };
+    try {
+      const result = await work();
+      logAccountChange(logger, operation, fields, result, startedAt);
+      return result;
+    } catch (error) {
+      logAccountChange(logger, operation, fields, { ok: false, code: error?.code, error: error?.message || String(error) }, startedAt);
+      throw error;
+    }
+  }
+
   function requireConnectionStore() {
     if (!aiConnections) {
       throw aiConnectionError(
@@ -123,25 +138,31 @@ function createAiConnectionService({ aiConnections, readAssistantCapabilities, i
           : candidate)
       };
     },
-    async save({ modelProviderId, vibe64User, ...input } = {}) {
-      requireConnectionStore();
-      requireAssistantCatalog();
-      const { provider } = await readOpenCodeProvider(modelProviderId, vibe64User);
-      const connection = await aiConnections.upsertConnection({ ...input, modelProviderId }, { provider });
-      // The connection is already saved. Report setup separately so a routing
-      // conflict never tells the person that their working key was rejected.
-      const routing = typeof initializeModelRouting === "function"
-        ? await initializeModelRouting({ engineIds: ["opencode"], vibe64User }).catch((error) => ({ ok: false, error: error.message }))
-        : { ok: false, error: "Open Models to finish choosing models for this connection." };
-      return { connection, ok: true, routing };
+    save({ modelProviderId, vibe64User, ...input } = {}) {
+      return connectionChange("save-connection", { modelProviderId, vibe64User }, async () => {
+        requireConnectionStore();
+        requireAssistantCatalog();
+        const { provider } = await readOpenCodeProvider(modelProviderId, vibe64User);
+        const connection = await aiConnections.upsertConnection({ ...input, modelProviderId }, { provider });
+        // The connection is already saved. Report setup separately so a routing
+        // conflict never tells the person that their working key was rejected.
+        const routing = typeof initializeModelRouting === "function"
+          ? await initializeModelRouting({ engineIds: ["opencode"], vibe64User }).catch((error) => ({ ok: false, error: error.message }))
+          : { ok: false, error: "Open Models to finish choosing models for this connection." };
+        return { connection, ok: true, routing };
+      });
     },
-    remove({ modelProviderId } = {}) {
-      requireConnectionStore();
-      return aiConnections.removeConnection(modelProviderId);
+    remove({ modelProviderId, vibe64User } = {}) {
+      return connectionChange("remove-connection", { modelProviderId, vibe64User }, async () => {
+        requireConnectionStore();
+        return aiConnections.removeConnection(modelProviderId);
+      });
     },
-    async modelAccess({ modelProviderId, ...input } = {}) {
-      requireConnectionStore();
-      return { connection: await aiConnections.updateModelAccess(modelProviderId, input), ok: true };
+    modelAccess({ modelProviderId, ...input } = {}) {
+      return connectionChange("update-model-access", { modelProviderId, vibe64User: input.vibe64User }, async () => {
+        requireConnectionStore();
+        return { connection: await aiConnections.updateModelAccess(modelProviderId, input), ok: true };
+      });
     }
   });
 }

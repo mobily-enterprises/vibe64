@@ -348,6 +348,30 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
   }
   const unregisterReleaser = registerLearnThreadReleaser(releaseLearnThread);
 
+  // Changing the workspace's Claude account stops every Claude process using
+  // it, Colleague's included: a running answer is stopped and each thread's
+  // idle process ends. The thread keeps its history and opens a new process,
+  // on the current account, with its next message.
+  async function releaseEngineConversations(engine) {
+    const results = await Promise.allSettled([...users.values()].map(async (pending) => {
+      const state = await pending.catch(() => null);
+      const conversation = state?.conversation;
+      if (!conversation || state.record.conversationMetadata?.runtime?.engine !== engine) return;
+      await conversation.cancel();
+      await state.running;
+      if (state.conversation !== conversation) return;
+      requireResult(await conversation.dispose());
+      if (state.conversation !== conversation) return;
+      state.conversation = null;
+      state.runtimeOwner = null;
+      state.host = null;
+    }));
+    const errors = results.filter(({ status }) => status === "rejected").map(({ reason }) => reason);
+    if (errors.length) throw new AggregateError(errors, `Colleague could not stop every ${engine} conversation.`);
+  }
+  const leaveRuntimeInvalidation = terminals.joinAgentRuntimeInvalidation(({ provider }) =>
+    provider === "claude" ? releaseEngineConversations("claude") : undefined);
+
   async function loadState(key, owner, thread) {
     const develop = thread.kind === "develop";
     const file = develop ? path.join(systemRoot, "colleague", owner, "conversation.json")
@@ -1796,6 +1820,7 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
     async close() {
       closed = true;
       unregisterReleaser();
+      leaveRuntimeInvalidation();
       for (const pending of users.values()) {
         // A thread that failed to load has nothing to stop.
         const state = await pending.catch(() => null);

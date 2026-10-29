@@ -278,7 +278,11 @@ or repeated application effect is introduced.
 The shared host preserves the native Claude profile lookup used by Main;
 it inherits an explicit configuration directory without inventing a default override.
 Colleague explicitly opts its workspace-owned host into the original Claude
-account-change policy. Verified old-process retirement precedes current-account
+account-change policy. It also joins the terminals service's account
+invalidation: a Claude account change cancels each live Colleague conversation
+running on Claude, waits for its turn to settle and disposes it, and a disposal
+failure fails the account change. The thread keeps its history and opens a new
+process on the current account with its next message. Verified old-process retirement precedes current-account
 binding and same-history resume. Generic hosts remain strict by default, and
 completed response receipts retain their original identity checks. Hydrating a
 saved Colleague error keeps its inline presentation and recovery controls without

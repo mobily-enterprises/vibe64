@@ -299,10 +299,28 @@ function createSessionAgentManager({
   const terminalStarts = new Set();
   const connectionChanges = new Set();
 
-  function connectionChangeBusy(engineId = "opencode") {
+  function connectionChangeBusy(engineId = "opencode", sessionIds = []) {
     const label = engineId === "claude" ? "Claude Code" : "OpenCode";
-    return Object.assign(new Error(`Close ${label} native terminals, then retry this connection change. The saved connection has not changed.`), {
-      code: `vibe64_${engineId}_connection_in_use`, statusCode: 409
+    const where = sessionIds.length ? ` open in ${sessionIds.length === 1 ? "session" : "sessions"} ${sessionIds.join(", ")}` : "";
+    return Object.assign(new Error(`Close ${label} native terminals${where}, then retry this connection change. The saved connection has not changed.`), {
+      code: `vibe64_${engineId}_connection_in_use`, statusCode: 409, ...(sessionIds.length ? { details: { sessionIds } } : {})
+    });
+  }
+
+  // The terminal store owns each native PTY's lifetime; a binding records only
+  // the connection the PTY opened with. A PTY closed outside this manager (a
+  // native runtime release, Remove AI) is forgotten, and an exited one holds no
+  // connection. Each running PTY reports its own session.
+  function runningNativeTerminals(engineId = "") {
+    const stored = listTerminalSessions({ namespacePrefix: `vibe64-${engineId}:` });
+    const storedIds = new Set(stored.map(({ id }) => id));
+    for (const [terminalId, binding] of terminalBindings) {
+      if (binding.providerId === engineId && !storedIds.has(terminalId)) terminalBindings.delete(terminalId);
+    }
+    return stored.filter(({ status }) => status === "running" || status === "closing").map((terminal) => {
+      const binding = terminalBindings.get(terminal.id);
+      return { binding: binding?.providerId === engineId ? binding : null,
+        sessionId: binding?.sessionId || String(terminal.namespace).split(":").at(-1) };
     });
   }
   const operations = new Map();
@@ -769,10 +787,19 @@ function createSessionAgentManager({
     const targets = requestedProviderId
       ? [providerFor(options)]
       : [...providerById.values()];
-    const results = await Promise.all(targets.map(provider => callProviderOperation(provider, method, input, options)));
-    if (results.length === 1) {
-      return results[0];
+    if (targets.length === 1) {
+      return callProviderOperation(targets[0], method, input, options);
     }
+    // Each provider settles on its own: one that throws is reported by name,
+    // and the caller resumes only after every other provider has finished.
+    const settled = await Promise.allSettled(targets.map(provider => callProviderOperation(provider, method, input, options)));
+    const results = settled.map((outcome, index) => outcome.status === "fulfilled"
+      ? outcome.value
+      : agentOperationResult(targets[index], "", {
+          code: normalizeText(outcome.reason?.code),
+          error: normalizeText(outcome.reason?.message || outcome.reason) || `Assistant provider ${targets[index].id} failed.`,
+          ok: false
+        }));
     const failed = results.filter((result) => result.ok === false);
     return Object.freeze({
       closed: results.reduce((total, result) => total + Number(result.closed || 0), 0),
@@ -1279,16 +1306,12 @@ function createSessionAgentManager({
       connectionChanges.add(engineId);
       try {
         await Promise.all([...terminalStarts]);
-        const bound = [...terminalBindings.entries()].filter(([, binding]) => binding.providerId === engineId);
-        if (bound.some(([, binding]) => engineId === "opencode" || binding.selection?.modelProviderId === input.modelProviderId)) {
-          throw connectionChangeBusy(engineId);
-        }
-        if (engineId === "claude") {
-          const known = new Set(bound.map(([id]) => id));
-          if (listTerminalSessions({ namespacePrefix: "vibe64-claude:" })
-            .some(terminal => terminal.status !== "exited" && !known.has(terminal.id))) throw connectionChangeBusy(engineId);
-          await input.prepare();
-        }
+        // Every running OpenCode PTY shares the one service. A Claude PTY keeps
+        // running only when it is known to use another provider.
+        const holders = runningNativeTerminals(engineId).filter(({ binding }) => engineId === "opencode" ||
+          !binding || binding.selection?.modelProviderId === input.modelProviderId);
+        if (holders.length) throw connectionChangeBusy(engineId, [...new Set(holders.map(({ sessionId }) => sessionId))]);
+        if (engineId === "claude") await input.prepare();
         const result = await callAllProviders("invalidateRuntimes", input, { ...options, engineId });
         if (engineId === "claude" && result?.ok !== false) await input.publish();
         return result;

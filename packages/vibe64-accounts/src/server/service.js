@@ -78,6 +78,8 @@ import {
 } from "@local/studio-terminal-core/server/codexRuntimeContext";
 
 import { claudeStatusStartFailed, readClaudeCodeAuthStatus } from "@local/studio-terminal-core/server/claudeRuntime";
+import { logOperationalEvent } from "@local/vibe64-core/server/logging";
+import { logAccountChange } from "./accountChangeLog.js";
 
 const ACCOUNT_AUTH_NAMESPACE = "vibe64-accounts";
 const BROWSER_AUTH_MODE = "browser";
@@ -1062,6 +1064,14 @@ function rememberedGithubIdentity(value = {}) {
 }
 
 // A CLI that is missing or did not start is not a signed-out account.
+function accountReadFailed(id, error = null) {
+  const definition = ACCOUNT_DEFINITIONS[id] || { id, label: id };
+  return { ...accountDisconnected({ ...definition,
+    code: String(error?.code || "") || "vibe64_account_status_failed",
+    message: String(error?.message || error || "") || `${definition.label} status could not be read.`,
+    status: "error" }), required: definition.required !== false };
+}
+
 function operatorCliAccount(id, { installed = false, observed = "" } = {}) {
   const { install, title, detail, ...problem } = operatorCliProblem(id, { installed });
   return { ...accountDisconnected({ ...ACCOUNT_DEFINITIONS[id], ...problem, observed }),
@@ -1347,6 +1357,7 @@ function createService({
   accountRuntime,
   env = process.env,
   invalidateAgentRuntimes = async () => null,
+  logger = null,
   personalProfileStore = null,
   inspectRoutingConfiguration = null,
   publishAccountChanged = async () => null,
@@ -1378,6 +1389,14 @@ function createService({
     : runHostToolCommand;
 
   const aiManagementError = (input = {}) => accountRuntime.requireAiManagement(input);
+
+  // A sign-in, logout or provider key change is logged once it settles.
+  async function accountChange(operation, input = {}, fields = {}, work) {
+    const startedAt = Date.now();
+    const result = await accountsResult(work);
+    logAccountChange(logger, operation, { ...fields, actor: String(input.vibe64User?.username || "") }, result, startedAt);
+    return result;
+  }
 
   async function prepareClaudeAuthChange(input) {
     const failure = aiManagementError(input);
@@ -1647,6 +1666,24 @@ function createService({
     return metadata;
   }
 
+  // A finished sign-in is kept so readers can see how it ended, until the same
+  // account changes again: a later sign-in finishes, or it signs out.
+  async function forgetFinishedAuthSessions(accountId = "", userKey = "", { except = "" } = {}) {
+    for (const [sessionId, metadata] of authSessions) {
+      if (sessionId === except || metadata.accountId !== accountId || (accountId === "github" && metadata.userKey !== userKey)) continue;
+      const terminal = readTerminalSession(sessionId, { namespace: ACCOUNT_AUTH_NAMESPACE });
+      if (terminal.ok !== false && terminal.status !== "exited") continue;
+      if (terminal.ok !== false) {
+        const closed = await closeTerminalSession(sessionId, { namespace: ACCOUNT_AUTH_NAMESPACE });
+        if (closed.ok === false) continue;
+      }
+      authSessions.delete(sessionId);
+      cancelledAuthSessions.delete(sessionId);
+      finalizedCodexAuthSessions.delete(sessionId);
+      claudeBrowserFiles.delete(sessionId);
+    }
+  }
+
   function githubContextForInput(input = {}) {
     return accountRuntime.githubContext(input);
   }
@@ -1731,7 +1768,7 @@ function createService({
       return githubContext;
     }
     const previousGithub = includesGithub ? previousGithubForInput(input) : null;
-    const accounts = await Promise.all(accountIds.map(async (accountId) => {
+    async function readAccountRow(accountId) {
       if (accountId === "claude") return readClaudeStatus();
       if (accountId === "codex") {
         if (!resolveOperatorCli("codex", { env }).installed) return operatorCliAccount("codex");
@@ -1762,7 +1799,24 @@ function createService({
             });
       }
       throw new Error(`Unknown account: ${accountId}`);
-    }));
+    }
+    // Each account is read on its own: one that cannot be read becomes its own
+    // error row instead of hiding every other account.
+    // A Codex sign-in change that could not finish stays "reconnecting", with
+    // the reason it is still unfinished.
+    async function failedAccountRow(accountId, error) {
+      logOperationalEvent(logger, "warn", { component: "vibe64-accounts", event: "vibe64.accounts.status_failed",
+        accountId, code: String(error?.code || ""), error: String(error?.message || error || "") },
+      "Vibe64 account status could not be read");
+      const local = accountId === "codex"
+        ? await readCodexLocalStatus({ codexContext: codexContextForInput(), systemRoot: resolvedSystemRoot }).catch(() => null)
+        : null;
+      return local?.status === "reconnecting"
+        ? { ...local, code: String(error?.code || local.code || ""), message: String(error?.message || local.message || "") }
+        : accountReadFailed(accountId, error);
+    }
+    const accounts = await Promise.all(accountIds.map((accountId) => readAccountRow(accountId)
+      .catch((error) => failedAccountRow(accountId, error))));
     const ready = accounts.every((account) => account.required !== true || account.connected === true);
     authDebug("server.auth.accounts_status.done", {
       accounts: accountsDebugSummary(accounts),
@@ -2052,6 +2106,12 @@ function createService({
         reason: reason || "terminal-close",
         sessionId: id
       });
+      await forgetFinishedAuthSessions(accountId, String(githubContext?.userKey || ""), { except: id });
+      const startedAt = Date.parse(finishedMetadata?.startedAt || "");
+      logAccountChange(logger, "finish-sign-in", { accountId, authSessionId: id, exitCode },
+        exitCode === 0 && account?.connected === true ? { ok: true }
+          : { ok: false, code: account?.code || "", error: account?.message || "The sign-in did not connect the account." },
+        Number.isFinite(startedAt) ? startedAt : Date.now());
       authDebug("server.auth.terminal.finalize.done", {
         accountId,
         connected: account?.connected === true,
@@ -2364,7 +2424,7 @@ function createService({
     },
 
     async startAuth(input = {}) {
-      return accountsResult(async () => {
+      return accountChange("start-sign-in", input, { accountId: String(input.accountId || ""), mode: String(input.mode || "") }, async () => {
         const accountId = normalizedAccountId(input.accountId);
         authDebug("server.auth.start.request", {
           accountId: accountId || String(input.accountId || ""),
@@ -2478,7 +2538,7 @@ function createService({
       });
     },
     saveCodexProvider(input = {}) {
-      return accountsResult(async () => {
+      return accountChange("save-provider-key", input, { engineId: input.engineId, modelProviderId: input.modelProviderId }, async () => {
         const failure = aiManagementError(input);
         if (failure) return failure;
         const providers = await codexProviders.change(input.modelProviderId, input);
@@ -2488,7 +2548,7 @@ function createService({
       });
     },
     removeCodexProvider(input = {}) {
-      return accountsResult(async () => {
+      return accountChange("remove-provider-key", input, { engineId: input.engineId, modelProviderId: input.modelProviderId }, async () => {
         const failure = aiManagementError(input);
         if (failure) return failure;
         const providers = await codexProviders.change(input.modelProviderId, { remove: true, engineId: input.engineId });
@@ -2523,7 +2583,7 @@ function createService({
     },
 
     async logout(input = {}) {
-      return accountsResult(async () => {
+      return accountChange("logout", input, { accountId: String(input.accountId || "") }, async () => {
         const accountId = normalizedAccountId(input.accountId);
         authDebug("server.auth.logout.start", {
           accountId: accountId || String(input.accountId || ""),
@@ -2581,6 +2641,7 @@ function createService({
             rotateCodexMarker: accountId === "codex"
           });
         }
+        if (result.ok) await forgetFinishedAuthSessions(accountId, String(githubContext?.userKey || ""));
         authDebug("server.auth.logout.done", {
           account: accountDebugSummary(account),
           accountId,
@@ -2595,7 +2656,7 @@ function createService({
     },
 
     async cancelAuthSession(input = {}) {
-      return accountsResult(async () => {
+      return accountChange("cancel-sign-in", input, { authSessionId: String(input?.sessionId || input || "") }, async () => {
         const id = String(input?.sessionId || input || "");
         const metadata = authMetadata(id, input);
         if (!metadata || !sessionVisibleToInput(input, metadata)) {
@@ -2605,11 +2666,10 @@ function createService({
         const result = await closeTerminalSession(id, {
           namespace: ACCOUNT_AUTH_NAMESPACE
         });
-        if (result.ok === false) {
-          cancelledAuthSessions.delete(id);
-          return result;
-        }
+        cancelledAuthSessions.delete(id);
+        if (result.ok === false) return result;
         authSessions.delete(id);
+        finalizedCodexAuthSessions.delete(id);
         return {
           ...result,
           ok: true

@@ -141,7 +141,7 @@ const Vibe64AccountsFeature = defineFeature({
     channels: ["api", "automation", "internal"],
     surfaces: ["app"]
   },
-  setup({ accountRuntime, env, events, fastify, http, project, terminals }, { actionCatalogue }) {
+  setup({ accountRuntime, env, events, fastify, http, logger, project, terminals }, { actionCatalogue }) {
     warnMissingOperatorClis();
     const systemRoot = String(env[VIBE64_SYSTEM_ROOT_ENV] || "");
     const targetRoot = String(env[VIBE64_TARGET_ROOT_ENV] || "");
@@ -169,6 +169,7 @@ const Vibe64AccountsFeature = defineFeature({
         }
         return null;
       },
+      logger,
       publishAccountChanged: createVibe64AccountsChangedPublisher({ events }),
       publishAuthSessionChanged: createVibe64AccountAuthSessionChangedPublisher({ events }),
       readClaudeAccountStatus: typeof terminals?.readClaudeAccountStatus === "function"
@@ -219,6 +220,7 @@ const Vibe64AccountsFeature = defineFeature({
       ? createAiConnectionService({
           aiConnections,
           initializeModelRouting: accounts.initializeModelRouting,
+          logger,
           readAssistantCapabilities: (input, vibe64User) => terminals.listAssistantCapabilities({ ...input, vibe64User })
         })
       : null;

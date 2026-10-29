@@ -1,12 +1,13 @@
 import { readCodexSelectedAccountAccess } from "@local/vibe64-runtime/server/codexAppServerProvider";
 import { mkdir } from "node:fs/promises";
-import { curatedCodexProvider, curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
+import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { CODEX_RECONNECT_REQUIRED_CODE, CODEX_RECONNECT_REQUIRED_MESSAGE } from "@local/vibe64-core/shared";
 import { markCodexReconnectRequired } from "@local/vibe64-core/server/codexAuthState";
 import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-runtime/server/sessionDebugLog";
 import { directoryExists, nonRetryableTerminalFailure } from "./terminalShared.js";
 import { errorMessage } from "./codexStartupHealth.js";
+import { codexSelectedModelProviderId } from "./codexRuntimeHost.js";
 
 function normalizeText(value) {
   return String(value || "").trim();
@@ -76,7 +77,7 @@ function createCodexAccountPreparation({
 
   async function codexToolHomeResult(session = {}) {
     const selection = vibe64AssistantSelectionFromMetadata(session?.metadata || {}, { required: false });
-    const providerId = session?.metadata?.codex_routing_home_provider || selection?.modelProviderId || curatedCodexModel(session?.agentSettings?.model)?.modelProviderId;
+    const providerId = codexSelectedModelProviderId(session);
     if (curatedCodexProvider(providerId)) {
       const options = await providerConnections.runtimeOptions(providerId);
       return { ok: true, toolHomeSource: options.toolHomeSource };

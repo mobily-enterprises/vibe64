@@ -467,6 +467,9 @@ live key. Setup states that limitation. The regular `/api/paas/v4/responses`
 route previously returned 404 and is not used as an inferred compatibility
 endpoint. API and Coding Plan credentials, connection identities and routing
 selections remain separate even though both use the `glm-5.3` model ID.
+Helpers and helper threads therefore take their provider home from the
+connection their selection names, never from the model ID, so a helper on the
+pay-as-you-go `zai` connection uses that connection's own key.
 The existing GLM history handling applies to both routes. OpenCode keeps its
 regular Chat Completions integration.
 JSKIT supplies native protocol endpoints, model capabilities, Codex catalogue/
@@ -563,6 +566,12 @@ stopped does not block switching accounts.
 Starting sign-in again returns the existing matching login session before
 requesting another managed execution. A closing login reports that it is still
 finishing, so retries cannot wait for a resource scope that was never launched.
+A finished login session stays readable so the browser can show how it ended.
+When a later sign-in of the same account finishes, or that account signs out,
+the earlier finished login terminals are closed and their session records,
+cancellation marks, Codex completion marks and Claude browser files are
+forgotten; GitHub logins are matched per user. Cancelling a login also releases
+its cancellation and Codex completion marks.
 
 The Accounts surface reports required providers, guides supported sign-in, and
 keeps credentials in host-owned storage. The session picker names Codex and
@@ -670,6 +679,14 @@ settled account reads remain local. Recovery happens when account status is
 requested, without adding a background timer. A confirmed `reconnect_required`
 state still requires a new sign-in.
 
+Accounts reads each account row on its own. A provider whose status read throws
+becomes its own row with status `error`, the failure's code and message and its
+usual `required` flag, and the read logs `vibe64.accounts.status_failed` at warn;
+every other account still reports, and the read itself succeeds. When a Codex
+read fails while a `reconnecting` transition is pending, the row keeps that
+local state and carries the failure's code and message, so the configured Codex
+connection stays visible until a later read finishes recovery.
+
 The assistant-capability service can read the complete provider registry from
 the pinned OpenCode runtime without a project or configured provider
 credentials. It starts a temporary OpenCode service, gives only native Zen's
@@ -706,7 +723,10 @@ generic owner-authenticated model-access operation delegates a warned unlock or
 relock to the host; a host may reserve more involved account-management actions
 for its own management surface. The public Accounts service owns the provider policy and protected connection
 store. Runtime admission checks that policy again, so a durable selection cannot
-bypass a later restriction.
+bypass a later restriction. Changing model access therefore only publishes the
+change: running OpenCode answers, runtimes and native terminals continue, and
+the new policy applies when the next message is admitted. Only credential
+changes (create, replace, remove) retire OpenCode runtimes.
 
 Zen's rotating model roster never makes its saved connection stale. Provider
 revision checks still protect connection setup and other provider definitions,
@@ -772,3 +792,29 @@ selected bindings and live PTYs without a confirmed provider binding refuse befo
 marker, runtime invalidation or key writes. Known other-provider PTYs stay running.
 The server-private prepare/publication continuations place the existing marker and
 write operations within that same fence; no HTTP/action input supplies them.
+
+Both fences read native terminals from the terminal store rather than from the
+manager's binding record. Only a terminal that is still running or closing
+counts; a binding whose terminal exited or was closed elsewhere is forgotten.
+The refusal names the sessions that still hold a terminal. An operation the
+manager sends to every provider waits for all of them, and a provider that
+throws becomes its own failed result naming that provider, so the other
+providers' outcomes are still reported.
+
+A Claude account change (sign-in, sign-out or Remove AI) also reaches features
+that run their own conversations on the workspace account. Such a feature joins
+through the terminals service's `joinAgentRuntimeInvalidation` and leaves when
+it closes. After the session agents accept an account invalidation, each joined
+participant runs; a participant failure fails the change with its reason.
+Colleague joins and releases its live Claude conversations. Credential
+publications that carry their own fence, such as OpenCode connection changes,
+do not run participants.
+
+Every account and AI connection change leaves one operational log line from
+component `vibe64-accounts`: starting, finishing and cancelling a sign-in,
+sign-out, saving and removing a Codex provider key, and saving, removing and
+changing model access of an OpenCode connection. A completed change logs
+`vibe64.accounts.change_completed` at info; a refused or failed one logs
+`vibe64.accounts.change_failed` at warn with its code, error and any per-provider
+or per-session failures. Each line names the operation, the acting user, the
+account or provider and the duration; it never carries a credential.

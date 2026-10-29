@@ -2,7 +2,7 @@ import { codexAppServerAgentRun,
   codexAppServerInterruptUnavailableResponse as nativeCodexAppServerInterruptUnavailableResponse,
   codexAppServerFrozenTurnInterruptResponse as nativeCodexAppServerFrozenTurnInterruptResponse,
 } from "@jskit-ai/assistant-core/server/codex-turn";
-import { curatedCodexProvider, curatedCodexModel } from "@local/vibe64-core/shared/curatedCodexProviders";
+import { curatedCodexProvider } from "@local/vibe64-core/shared/curatedCodexProviders";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { captureProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { terminalNamespaceAdmissionFailure } from "@local/vibe64-execution/server/terminalSessions";
@@ -17,7 +17,7 @@ import { vibe64SessionDebugError, vibe64SessionDebugLog } from "@local/vibe64-ru
 import { vibe64AssistantSelectionFromMetadata } from "@local/vibe64-runtime/shared";
 import { agentSessionCommandEnvironmentIsHealthy } from "./agentCommandEnvironment.js";
 import { codexThreadIdForWorkdir } from "./codexConversationStorage.js";
-import { codexAgentSettingsFromSession } from "./codexRuntimeHost.js";
+import { codexAgentSettingsFromSession, codexThreadModelProvider } from "./codexRuntimeHost.js";
 import { codexTerminalNamespace } from "./terminalShared.js";
 import { subscribeUnixCommandControlChanges } from "./unixJsonCommand.js";
 import { learningSessionExecutionRoot } from "./mainConversationBinding.js";
@@ -142,7 +142,7 @@ function createCodexSessionProviderHost(host) {
             return "native";
           }),
           prepareThreadParams: async (params) => {
-            const modelProvider = params.modelProvider || curatedCodexModel(params.model)?.modelProviderId || "openai";
+            const modelProvider = codexThreadModelProvider(params, options.routingModelProviderId);
             return { ...params, modelProvider, config: { ...params.config, ...await providerConnections.threadConfig(modelProvider) } };
           },
           prepareThreadEnvironment: (threadEnv) => runWithCodexAppServerProjectContext(projectContext, async () => {

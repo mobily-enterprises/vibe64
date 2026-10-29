@@ -516,6 +516,9 @@ function createService({
   let assistantRouting;
   let sessionConversations;
   const turnCompletions = new Set();
+  // Features that run their own conversations on the workspace accounts
+  // (Colleague) join account invalidation; see joinAgentRuntimeInvalidation.
+  const invalidationParticipants = new Set();
   let closing = false;
 
   // The one Claude Code account status read, with the inputs Claude
@@ -3960,9 +3963,27 @@ function createService({
         await mainConversations.close();
         return native.value;
       }
-      return sessionAgent.invalidateRuntimes(input, {
+      const native = await sessionAgent.invalidateRuntimes(input, {
         providerId: normalizeAgentProviderId(input.provider)
       });
+      // A credential publication keeps its own fence; a refused change stops
+      // nothing more. An account change also stops the joined features' work.
+      if (typeof input.publish === "function" || native?.ok === false || !invalidationParticipants.size) return native;
+      const joined = await Promise.allSettled([...invalidationParticipants].map((participant) =>
+        Promise.resolve().then(() => participant({ provider: input.provider || "", reason: input.reason || "" }))));
+      const failed = joined.filter(({ status }) => status === "rejected").map(({ reason }) => ({
+        code: String(reason?.code || ""), error: String(reason?.message || reason || "A conversation could not be stopped."),
+        ok: false, providerId: String(input.provider || "")
+      }));
+      return failed.length ? { ...native, failed: [...(native?.failed || []), ...failed], ok: false } : native;
+    },
+
+    // An account change stops every process using that account. A feature
+    // running its own conversations joins here and leaves when it closes.
+    joinAgentRuntimeInvalidation(participant) {
+      if (typeof participant !== "function") throw new TypeError("Runtime invalidation participants must be functions.");
+      invalidationParticipants.add(participant);
+      return () => { invalidationParticipants.delete(participant); };
     },
 
     // Run once per daemon after all host admission and execution facilities are
