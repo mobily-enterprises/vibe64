@@ -151,7 +151,7 @@ const ADMINISTRATOR_GROUPS = new Set([
   "wheel"
 ]);
 const APPLICATION_USERNAME_PREFIX = "v64a_";
-const APPLICATION_USERNAME_PATTERN = /^v64a_[a-f0-9]{12}$/u;
+const APPLICATION_USERNAME_PATTERN = new RegExp(`^${APPLICATION_USERNAME_PREFIX}[a-f0-9]{12}$`, "u");
 const APPLICATION_REGISTRY_ROOT = "/etc/vibe64/applications";
 const APPLICATION_REGISTRATION_SCHEMA = "vibe64.application-account";
 const APPLICATION_AREA_ROOT = "/var/lib/vibe64-apps";
@@ -3785,7 +3785,7 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
   return env;
 }
 
-export { DAEMON_USERNAME_PREFIX, accountUnitLines, applicationIdentity, applicationReleaseEnvironmentFile,
+export { APPLICATION_USERNAME_PREFIX, DAEMON_USERNAME_PREFIX, accountUnitLines, applicationIdentity, applicationReleaseEnvironmentFile,
   applicationReleaseServiceFiles, applicationSandboxLines, ensureApplicationAccount, readApplicationRegistration,
   registeredApplicationUser,
   resolveApplicationCwd, retireApplicationAccount,

@@ -8,12 +8,15 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import {
-  accountUnitLines, applicationIdentity, applicationReleaseEnvironmentFile, applicationReleaseServiceFiles,
+  APPLICATION_USERNAME_PREFIX, DAEMON_USERNAME_PREFIX, accountUnitLines, applicationIdentity, applicationReleaseEnvironmentFile, applicationReleaseServiceFiles,
   assertActablePerson, deploymentServiceUnit, ensureApplicationAccount, helperChildEnv, openManagedExecutionReceipts, readApplicationRegistration, registeredApplicationUser,
   registerPerson, resolveApplicationCwd, retireApplicationAccount
 } from "../../packages/vibe64-execution/src/host/execHelper.js";
 
 const EXEC_HELPER = fileURLToPath(new URL("../../packages/vibe64-execution/src/host/execHelper.js", import.meta.url));
+
+const daemonUser = (workspace) => `${DAEMON_USERNAME_PREFIX}${workspace}`;
+const applicationUser = (suffix) => `${APPLICATION_USERNAME_PREFIX}${suffix}`;
 
 const UID = process.getuid();
 const GID = process.getgid();
@@ -26,7 +29,7 @@ async function applicationHost(t) {
   const root = await mkdtemp(path.join(os.tmpdir(), "v64-application-accounts-"));
   t.after(() => rm(root, { force: true, recursive: true }));
   await mkdir(path.join(root, "var", "lib"), { recursive: true });
-  const owner = { gid: GID, home: path.join(root, "home", "v64d_test"), uid: UID, username: "v64d_test" };
+  const owner = { gid: GID, home: path.join(root, "home", daemonUser("test")), uid: UID, username: daemonUser("test") };
   const accounts = new Map();
   const created = [];
   const deleted = [];
@@ -68,7 +71,7 @@ test("each project of a workspace gets its own registered account and area", asy
   const host = await applicationHost(t);
   const account = host.ensure("shop");
   const identity = applicationIdentity(host.owner, "shop", host.options);
-  assert.match(account.username, /^v64a_[a-f0-9]{12}$/u);
+  assert.match(account.username, new RegExp(`^${APPLICATION_USERNAME_PREFIX}[a-f0-9]{12}$`, "u"));
   assert.deepEqual(account, {
     appRoot: path.join(host.options.areaRoot, "test", "shop", "app"),
     databaseRoot: path.join(host.options.areaRoot, "test", "shop", "database"),
@@ -99,8 +102,8 @@ test("each project of a workspace gets its own registered account and area", asy
   // Another project, or the same project of another workspace, is another account.
   const other = host.ensure("blog");
   assert.notEqual(other.username, account.username);
-  assert.notEqual(applicationIdentity({ username: "v64d_other" }, "shop").username, account.username);
-  assert.equal(applicationIdentity({ username: "v64d_test" }, "shop").username, account.username);
+  assert.notEqual(applicationIdentity({ username: daemonUser("other") }, "shop").username, account.username);
+  assert.equal(applicationIdentity({ username: daemonUser("test") }, "shop").username, account.username);
 });
 
 test("the daemon names only a project of its own workspace", async (t) => {
@@ -108,7 +111,7 @@ test("the daemon names only a project of its own workspace", async (t) => {
   for (const project of ["", "../shop", "Shop", "shop/app", ".", "a".repeat(49)]) {
     assert.throws(() => host.ensure(project), /invalid project name/u, project);
   }
-  for (const username of ["merc", "v64a_0123456789ab", "root"]) {
+  for (const username of ["merc", applicationUser("0123456789ab"), "root"]) {
     assert.throws(() => ensureApplicationAccount({ ...host.owner, username }, "shop", host.options),
       /Only a workspace daemon/u);
   }
@@ -160,7 +163,7 @@ test("application accounts and people never stand in for each other", async (t) 
     facts: () => ({ groups: [account.username], loginUids: LOGIN_UIDS }),
     registryRoot: people,
     registryUid: UID,
-    resolveUser: (name) => (name === "v64d_test" ? host.owner : { ...appUser, uid: UID + 500 })
+    resolveUser: (name) => (name === daemonUser("test") ? host.owner : { ...appUser, uid: UID + 500 })
   }), /application accounts are never people/u);
   assert.throws(() => assertActablePerson(host.owner, appUser, {
     facts: () => ({ groups: [account.username, "vibe64"], loginUids: LOGIN_UIDS }),
@@ -174,7 +177,7 @@ test("application accounts and people never stand in for each other", async (t) 
     JSON.stringify({ schema: "vibe64.person-registration", schemaVersion: 1, uid: 1001, username: "alice" }), { mode: 0o644 });
   assert.equal(readApplicationRegistration("test", "alice", host.options), null);
   // Nor is any record for a name that is not an application's.
-  for (const username of ["alice", "v64d_test", "root", "v64a_short"]) {
+  for (const username of ["alice", daemonUser("test"), "root", applicationUser("short")]) {
     await writeFile(path.join(registry, `${username}.json`), JSON.stringify({
       gid: GID, project: "shop", schema: "vibe64.application-account", schemaVersion: 1, uid: UID, username
     }), { mode: 0o644 });
@@ -241,11 +244,11 @@ test("an application command runs only as a registered application of the daemon
   assert.equal(user.application.appRoot, account.appRoot);
 
   // A person, the daemon or root named as an application is no application.
-  for (const username of ["alice", "v64d_test", "root", "v64a_000000000000"]) {
+  for (const username of ["alice", daemonUser("test"), "root", applicationUser("000000000000")]) {
     assert.throws(() => registeredApplicationUser(host.owner, username, options), /not an application account of this workspace/u);
   }
   // Another workspace's daemon cannot run as this workspace's application.
-  assert.throws(() => registeredApplicationUser({ ...host.owner, username: "v64d_other" }, account.username, options),
+  assert.throws(() => registeredApplicationUser({ ...host.owner, username: daemonUser("other") }, account.username, options),
     /not an application account of this workspace/u);
   // The account changed since root registered it.
   host.accounts.set(account.username, { ...host.accounts.get(account.username), uid: UID - 1 });
@@ -329,7 +332,7 @@ test("an application's execution runs as itself in its sandbox, with its own tem
   assert.deepEqual(accountUnitLines({ username: "alice" }),
     ["User=alice", "Group=vibe64", "SupplementaryGroups=nix-users", "UMask=0007"]);
 
-  const env = helperChildEnv({ HOME: "/elsewhere", TMPDIR: "/elsewhere" }, user, "v64d_test", "vibe64-command");
+  const env = helperChildEnv({ HOME: "/elsewhere", TMPDIR: "/elsewhere" }, user, daemonUser("test"), "vibe64-command");
   assert.equal(env.HOME, account.home);
   assert.equal(env.TMPDIR, "/tmp");
 
@@ -420,16 +423,16 @@ test("a release service runs its own release's workspace and the daemon's files 
 });
 
 test("a release service unit runs as its application in its sandbox, listening only on its own port", () => {
-  const user = { application: { appRoot: "/area/app", databaseRoot: "/area/database" }, username: "v64a_0123456789ab" };
+  const user = { application: { appRoot: "/area/app", databaseRoot: "/area/database" }, username: applicationUser("0123456789ab") };
   const unit = (loopbackPort) => deploymentServiceUnit({
     environmentFile: "/area/handover/r1/environment", helperPath: "/helper/vibe64-exec-helper", loopbackPort,
-    owner: { username: "v64d_test" }, requiredUnits: ["vibe64-managed-test-mariadb.service"],
+    owner: { username: daemonUser("test") }, requiredUnits: ["vibe64-managed-test-mariadb.service"],
     startScript: "/area/handover/r1/start.sh", unitName: "vibe64-release-test-shop-1.service", user,
     workingDirectory: "/area/app/releases/r1/workspace"
   });
   const lines = unit(4100).split("\n");
   for (const line of [
-    "User=v64a_0123456789ab", "Group=v64a_0123456789ab", "UMask=0077", "Slice=vibe64-test-work.slice",
+    `User=${applicationUser("0123456789ab")}`, `Group=${applicationUser("0123456789ab")}`, "UMask=0077", "Slice=vibe64-test-work.slice",
     "NoNewPrivileges=yes", "PrivateTmp=yes", "ProtectSystem=strict", "ReadWritePaths=/area/app /area/database",
     "ProtectHome=yes", "ProtectProc=invisible", "RestrictSUIDSGID=yes", "RestrictNamespaces=yes", "CapabilityBoundingSet=",
     "SocketBindAllow=tcp:4100", "SocketBindDeny=any", "Environment=TMPDIR=/tmp",

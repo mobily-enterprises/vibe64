@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { DAEMON_USERNAME_PREFIX, assertEnabledForVibe64, consumeManagedExecutionRequestPayload, deploymentServiceUnit,
+import { APPLICATION_USERNAME_PREFIX, DAEMON_USERNAME_PREFIX, assertEnabledForVibe64, consumeManagedExecutionRequestPayload, deploymentServiceUnit,
   ensureManagedServiceProcessOwnership, helperChildEnv, parseEnvironmentFile, managedExecutionState, managedExecutionOomBoundary, managedExecutionStopTimeoutMs,
   managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal, openManagedExecutionReceipts,
   releaseEndedManagedExecutions, stopManagedExecution, stopManagedServiceUnit
@@ -884,7 +884,7 @@ test("a release service unit loads its environment as its user, then becomes its
     environmentFile: "/handover/r1/environment", helperPath: "/helper/vibe64-exec-helper", loopbackPort: 4100,
     owner: { username: daemonUser("test") }, requiredUnits: [], startScript: "/handover/r1/start.sh",
     unitName: "vibe64-release-test.service",
-    user: { application: { appRoot: "/area/app", databaseRoot: "/area/database" }, username: "v64a_0123456789ab" },
+    user: { application: { appRoot: "/area/app", databaseRoot: "/area/database" }, username: `${APPLICATION_USERNAME_PREFIX}0123456789ab` },
     workingDirectory: "/area/app/releases/r1/workspace"
   });
   assert.doesNotMatch(unit, /^EnvironmentFile=/mu, "systemd does not read the environment file as root");
