@@ -43,6 +43,11 @@ import { resolveCommandEnv } from "../../packages/vibe64-execution/src/server/en
 import { currentActorUser } from "../../packages/vibe64-execution/src/server/actor/userIdentity.js";
 import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
 
+// The gateway reads the person's Git identity with each command's own env and
+// drops the server's GIT_* variables, so a developer's ~/.gitconfig would win
+// over the stand-in. Commands given this env stand for a person with no Git config.
+const NO_PERSON_GIT_CONFIG_ENV = Object.freeze({ GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" });
+
 // These tests describe a host with pinned tool packs and a shared cache; a
 // managed host adds a privileged helper. Each lives in a temporary directory.
 const HOST_ROOT = await mkdtemp(path.join(os.tmpdir(), "v64-gateway-host-"));
@@ -210,6 +215,7 @@ test("an already cancelled capture never starts the command", async (t) => {
 test("execution gateway injects shared tool and fallback git identity env", async () => {
   const currentUser = os.userInfo();
   const result = await runVibe64Command({
+    env: NO_PERSON_GIT_CONFIG_ENV,
     command: process.execPath,
     args: [
       "-e",
@@ -239,6 +245,7 @@ test("execution gateway injects shared tool and fallback git identity env", asyn
 test("execution gateway gives Codex commands only their declared database env, fallback git identity, shared browser runtime, and actor HOME", async () => {
   const currentUser = os.userInfo();
   const result = await runVibe64Command({
+    env: NO_PERSON_GIT_CONFIG_ENV,
     actor: "app",
     command: process.execPath,
     args: [
@@ -292,6 +299,7 @@ test("execution gateway gives Codex PTY terminals the same declared DB, Git iden
   const currentUser = os.userInfo();
   const namespace = `gateway-codex-env-${Date.now()}`;
   const result = await runVibe64Command({
+    env: NO_PERSON_GIT_CONFIG_ENV,
     actor: "app",
     command: process.execPath,
     args: [
@@ -351,6 +359,7 @@ test("execution gateway gives detached Codex app-server commands the shared brow
   try {
     const outputPath = path.join(tempDir, "env.json");
     const result = await runVibe64Command({
+      env: NO_PERSON_GIT_CONFIG_ENV,
       actor: "app",
       allowedRoots: [tempDir],
       command: process.execPath,
@@ -942,6 +951,7 @@ test("execution gateway env policies keep deployment commands away from session-
 test("execution gateway gives deployment commands production DB env, Git identity, shared cache, and GitHub transport", async () => {
   const currentUser = os.userInfo();
   const result = await runVibe64Command({
+    env: NO_PERSON_GIT_CONFIG_ENV,
     actor: "owner-user",
     args: [
       "-e",
@@ -1163,6 +1173,7 @@ test("execution gateway ignores caller-provided Git identity policy env", async 
     ],
     command: process.execPath,
     env: {
+      ...NO_PERSON_GIT_CONFIG_ENV,
       GIT_AUTHOR_EMAIL: "wrong@example.invalid",
       GIT_AUTHOR_NAME: "Wrong User"
     },
@@ -1197,6 +1208,7 @@ test("execution gateway fallback git identity allows local commits without git c
   assert.equal(add.ok, true, add.output);
 
   const commit = await runVibe64Command({
+    env: NO_PERSON_GIT_CONFIG_ENV,
     command: "git",
     args: ["commit", "-m", "Initial local commit"],
     cwd: root,
@@ -1288,6 +1300,7 @@ test("execution gateway prefers explicitly configured nested Git identity", asyn
 
 test("execution gateway prefers GitHub identity before fallback identity", async () => {
   const result = await runVibe64Command({
+    env: NO_PERSON_GIT_CONFIG_ENV,
     args: [
       "-e",
       "console.log(JSON.stringify({ name: process.env.GIT_AUTHOR_NAME, email: process.env.GIT_AUTHOR_EMAIL, committer: process.env.GIT_COMMITTER_NAME }))"
@@ -1331,6 +1344,7 @@ test("execution gateway lets GitHub projects make local commits with fallback id
   assert.equal(add.ok, true, add.output);
 
   const commit = await runVibe64Command({
+    env: NO_PERSON_GIT_CONFIG_ENV,
     command: "git",
     args: ["commit", "-m", "Local GitHub-project commit"],
     cwd: root,
