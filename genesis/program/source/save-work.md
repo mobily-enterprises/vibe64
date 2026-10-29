@@ -66,6 +66,7 @@ Git commands.
 - `packages/vibe64-terminals/src/server/sessionGitCommandActor.js`
 - `packages/vibe64-terminals/src/server/sessionWorkGit.js`
 - `packages/vibe64-terminals/src/server/sessionWorkAuthority.js`
+- `packages/vibe64-terminals/src/server/githubRemoteHeads.js`
 - `packages/vibe64-terminals/src/server/sessionWorkUpdate.js`
 - `packages/vibe64-terminals/src/server/sessionIncomingContributions.js`
 - `packages/vibe64-terminals/src/server/sessionSource.js`
@@ -420,11 +421,14 @@ Upstream changes that publish no Vibe64 event, such as a push from elsewhere or
 a commit in a local project folder, are found by the server's update probe.
 While a project is in use, meaning a browser page has it open, in a visible or a
 background tab, or an agent turn runs in one of its sessions, the server reads
-its open sessions' authority branch heads every 30 seconds with one
-`git ls-remote` per authority repository, shared by every session and viewer.
-It runs the ordinary forced check, with its fetch under the project source lock,
-only for a session whose head moved; that check's realtime result reaches every
-viewer and notifies sibling sessions as above. A
+its open sessions' authority branch heads every 30 seconds with one read per
+authority repository, shared by every session and viewer. A GitHub repository
+is read by the server itself with one Git protocol v2 `ls-refs` request to
+https://github.com, which starts no process and no managed job; a managed or
+local authority with one `git ls-remote`. Both list only the named branches and
+fetch nothing. It runs the ordinary forced check, with its fetch under the
+project source lock, only for a session whose head moved; that check's realtime
+result reaches every viewer and notifies sibling sessions as above. A
 connected contribution's read covers its published, discarded and integration
 branches; it is checked once when the probe first sees it and again when any of
 them moves. A probe never overlaps itself, and a tick that passes while one runs
@@ -698,10 +702,13 @@ Push of that upstream stay with the original folder.
 - `codexGitCommand.js` reads a GitHub actor's token (`gh auth token`) as that
   person, a managed job, and keeps it in memory for five minutes per actor and
   tool home, so repeated session-work operations and the agent's GitHub Git
-  commands reuse it. A command GitHub rejects as unauthenticated (401, failed
-  authentication, bad credentials) drops that actor's token, so the next
-  operation reads it again. It is never written to disk or logs; the actor
-  authorization hook still runs for every operation.
+  commands reuse it. The update probe's GitHub head read uses it in this
+  process, only as that request's Authorization header and only for
+  https://github.com, the host Git's credential helper serves. A command or
+  head read GitHub rejects as unauthenticated (401, failed authentication, bad
+  credentials) drops that actor's token, so the next operation reads it again.
+  It is never written to disk or logs; the actor authorization hook still runs
+  for every operation.
 - Writes that record commits (Save, Update and its recovery, Merge or repair of
   an incoming contribution) ask `sessionWorkSaveContext()` with
   `createsCommits`; checks, probes and inspections do not and read nobody's Git
@@ -724,9 +731,11 @@ Push of that upstream stay with the original folder.
   `vibe64.sessions.repository-updates.watch`, or an agent turn that a
   turn-active session event announced and the probe still sees running. The
   sessions service's `probeRepositoryUpdates()` reads every open session's heads
-  through the terminals' `readSessionAuthorityHeads()` (one `ls-remote` per
-  authority with a 20-second limit, run as a session's recorded Git actor
-  without recording one) and
+  through the terminals' `readSessionAuthorityHeads()` (one head read per
+  authority with a 20-second limit, made as a session's recorded Git actor
+  without recording one: `githubRemoteHeads.js` posts one ls-refs request to a
+  https://github.com remote with that actor's token; any other authority runs
+  `git ls-remote`) and
   calls the ordinary forced `checkSessionUpdates()` for a moved head. It skips a
   session whose Save, Update or renewal is running. A failure publishes
   `session-repository-check-failed` with `repositoryUpdateCheckError` only when

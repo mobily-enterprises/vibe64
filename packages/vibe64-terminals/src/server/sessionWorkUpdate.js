@@ -255,13 +255,14 @@ function authorityBranches(context) {
     : [context.branch];
 }
 
-// The update probe's read, with one `ls-remote` per authority repository
-// however many sessions share it, run as the first of those sessions whose
-// recorded Git actor can read it. Each session gets its canonical branch
-// `head`, or for a connected contribution an opaque `authority` of its branch
-// heads, or `{ code, error }`. A session absent from the result was not read:
-// its authority has no recorded Git actor yet (a person's first check of the
-// session records one).
+// The update probe's read, with one head read per authority repository
+// however many sessions share it, made as the first of those sessions whose
+// recorded Git actor can read it: an in-process ls-refs request to GitHub, or
+// `git ls-remote` for a managed or local authority. Each session gets its
+// canonical branch `head`, or for a connected contribution an opaque
+// `authority` of its branch heads, or `{ code, error }`. A session absent from
+// the result was not read: its authority has no recorded Git actor yet (a
+// person's first check of the session records one).
 async function readSessionAuthorityHeads({
   executionFor,
   project = {},
@@ -303,7 +304,8 @@ async function readSessionAuthorityHeads({
           }),
           executor.context,
           members.flatMap(({ context }) => authorityBranches(context)),
-          { commandOptions: { ...execution.commandOptions, timeout: AUTHORITY_HEAD_READ_TIMEOUT_MS }, project }
+          { commandOptions: { ...execution.commandOptions, timeout: AUTHORITY_HEAD_READ_TIMEOUT_MS }, project },
+          execution.readRemoteHeads
         );
         for (const { context } of members) {
           if (context.contribution) {

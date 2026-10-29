@@ -27,6 +27,7 @@ import { pathInsideOrEqual } from "@local/vibe64-core/server/core";
 import {
   sessionSourcePath
 } from "@local/vibe64-core/server/sessionSourcePath";
+import { listGithubRemoteHeads } from "./githubRemoteHeads.js";
 import {
   writeExecutableFileIfChanged
 } from "./writeExecutableFileIfChanged.js";
@@ -796,6 +797,7 @@ function logGitCommandResult(logger, result = {}, fields = {}) {
 function createCodexGitCommandService({
   authorizeActorAccess = null,
   env = process.env,
+  fetch: fetchRemote = globalThis.fetch,
   logger = null,
   now = Date.now,
   projectService,
@@ -945,6 +947,17 @@ function createCodexGitCommandService({
         ...commitAuthor.options
       },
       ok: true,
+      // The update probe's GitHub head read, made in this process: the token
+      // goes only into that request's Authorization header, and GitHub's
+      // rejection drops it as a rejected Git command's does.
+      readRemoteHeads: async (remoteUrl, refs, { timeoutMs } = {}) => {
+        try {
+          return await listGithubRemoteHeads({ fetch: fetchRemote, refs, remoteUrl, timeoutMs, token: githubToken.token });
+        } catch (error) {
+          if (error?.authenticationRejected === true) actorCredentials.drop(credentialKey);
+          throw error;
+        }
+      },
       runCommand: async (request) => dropRejectedCredentials(credentialKey, await gatewayCommandRunner(request))
     };
   }
