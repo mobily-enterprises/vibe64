@@ -9,6 +9,7 @@ import {
   createAiConnectionStore
 } from "../../packages/vibe64-accounts/src/server/aiConnectionStore.js";
 import { verifyZaiConnection } from "../../packages/vibe64-accounts/src/server/zaiConnectionVerifier.js";
+import { assertCanUseVibe64Assistant } from "../../packages/vibe64-runtime/src/shared/assistantAccess.js";
 
 const revisionA = `sha256:${"a".repeat(64)}`;
 const revisionB = `sha256:${"b".repeat(64)}`;
@@ -75,6 +76,31 @@ test("OpenCode access retains connection scope for disabled models and identifie
   assert.notEqual(after.connectionIdentity, before.connectionIdentity);
   assert.doesNotMatch(JSON.stringify(after), /replacement-secret/);
   assert.equal((await store.assistantAccess("missing")).connectionIdentity, undefined);
+});
+
+test("an OpenCode selection whose connection is gone is refused naming that connection as AI Accounts does", async (t) => {
+  const { store } = await fixture(t);
+  await store.upsertConnection({ apiKey: "openai-secret", modelProviderId: "openai", providerRevision: revisionA }, {
+    provider: provider("openai", { label: "OpenAI" })
+  });
+  await store.removeConnection("openai");
+  const gone = await store.assistantAccess("openai", { modelId: "gpt-5-mini" });
+  assert.equal(gone.missingAccountLabel, "OpenAI");
+  assert.throws(() => assertCanUseVibe64Assistant(gone), {
+    code: "vibe64_assistant_connection_unavailable",
+    message: "OpenAI isn't connected. Reconnect it in AI Accounts or choose another model."
+  });
+  // A provider Vibe64 does not know by name, and a connected key whose model is
+  // not enabled, keep the generic refusal rather than a wrong name.
+  const unknown = await store.assistantAccess("acme");
+  await store.upsertConnection({ apiKey: "zen-secret", modelProviderId: "opencode", providerRevision: revisionA }, {
+    provider: provider("opencode")
+  });
+  const locked = await store.assistantAccess("opencode", { modelId: "other-model" });
+  for (const access of [unknown, locked]) {
+    assert.equal(access.available, false);
+    assert.throws(() => assertCanUseVibe64Assistant(access), { message: "The selected AI connection is unavailable." });
+  }
 });
 
 test("a real Zen key starts with the recommended Zen model, never Big Pickle, and supports all-or-recommended access", async (t) => {

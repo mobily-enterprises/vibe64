@@ -6,7 +6,8 @@ import {
   VIBE64_AGENT_HELPER_WORKLOAD_LIMITS,
   VIBE64_ASSISTANT_ENGINE_IDS,
   VIBE64_ASSISTANT_TRANSPORT_IDS,
-  defineVibe64HelperExecutionProfileResolution
+  defineVibe64HelperExecutionProfileResolution,
+  findVibe64AgentProvider
 } from "@local/vibe64-runtime/shared";
 import { CLAUDE_CODE_VERSION } from "./claudeCodeProcess.js";
 import { claudeConversationError as error } from "./terminalShared.js";
@@ -15,6 +16,8 @@ import { normalizeText as text } from "@local/vibe64-core/server/core";
 
 const ENGINE = VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE;
 const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
+// The person's Claude plan, named as AI Accounts names it.
+const PLAN_LABEL = findVibe64AgentProvider(ENGINE).accountLabel;
 const hash = (value) => createHash("sha256").update(value).digest("hex");
 /** Original provider-key pin, retained for stopped historical conversion. */
 function claudeProviderAccountIdentity(configRoot, providerId, apiKey) {
@@ -38,8 +41,7 @@ function claudeCapabilities(initialization, connected, connections = []) {
     defaults: { agentId: ENGINE, modelId: selected?.id || "", modelProviderId: defaultProvider?.id || "anthropic",
       variantId: selected?.variants.some((variant) => variant.id === "high") ? "high" : "" },
     health: { status: available ? "ready" : "unavailable", message: available ? "" : "Connect Claude Code to use your Claude plan." },
-    // The person's Claude plan, named as AI Accounts names it.
-    modelProviders: [{ id: "anthropic", label: "Claude", connected, models }, ...external],
+    modelProviders: [{ id: "anthropic", label: PLAN_LABEL, connected, models }, ...external],
     revision: `sha256:${hash(JSON.stringify({ models, connected, external }))}`
   };
 }
@@ -93,12 +95,13 @@ function createClaudeConversationAccounts({ owner, configRoot, providerConnectio
       const external = curatedCodexProvider(context.assistantSelection?.modelProviderId);
       if (external) {
         const connection = (await providerConnections.list()).find(({ id }) => id === external.id);
-        return { available: connection?.claudeReady === true,
+        const available = connection?.claudeReady === true;
+        return { available, missingAccountLabel: available ? "" : external.label,
           connectionIdentity: connection?.claudeConnectionIdentity || "", endpointCode: external.id,
           ownerOnly: external.ownerOnly };
       }
       const available = await connectionStatus(context);
-      return { available, ownerOnly: true, endpointCode: "claude_subscription",
+      return { available, missingAccountLabel: available ? "" : PLAN_LABEL, ownerOnly: true, endpointCode: "claude_subscription",
         connectionIdentity: available ? await accountIdentity(context) : "" };
     },
     async capabilities(context, input = {}) {

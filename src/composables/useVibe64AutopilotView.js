@@ -1,11 +1,8 @@
 import { chatTurnsWithRouting, draftWithRestoredMessage, routedChatMessage } from "@/lib/vibe64ChatDelivery.js";
 import { assistantRoutingRequestForDisplay, assistantRoutingStatusIsPending, assistantRoutingRequestCanBeReplaced } from "@local/vibe64-runtime/shared/assistantRouting";
 import { computed, inject, reactive, ref, unref, watch } from "vue";
-import { vibe64AssistantSelectionLabel, vibe64ProviderPresentation } from "@local/vibe64-runtime/shared";
+import { vibe64AssistantSelectionLabel } from "@local/vibe64-runtime/shared";
 import { useRouter } from "vue-router";
-import {
-  VIBE64_DEFAULT_AGENT_PROVIDER_ID
-} from "@local/vibe64-runtime/shared";
 import {
   useVibe64ProjectSlug
 } from "@/composables/useVibe64ProjectScope.js";
@@ -555,16 +552,10 @@ function useVibe64AutopilotView(props, emit, {
   const reasoningActive = computed(() => assistantConnectionReady.value && agentActive.value &&
     !agentObservationLost.value && activeAgentTurn.value.phase === "reasoning");
   const assistantAccountUnavailable = computed(() => composerConnectionStatus.value === "unavailable");
-  // Names the account as AI Accounts does; generic only when this view cannot know it.
-  const assistantAccountMessage = computed(() => {
-    const selection = props.session?.assistantSelection;
-    const account = vibe64ProviderPresentation({
-      ...selection, engineId: selection?.engineId || VIBE64_DEFAULT_AGENT_PROVIDER_ID
-    }).accountLabel;
-    return account
-      ? `${account} isn't connected. Reconnect it in AI Accounts or choose another model.`
-      : "The selected AI account or model is unavailable. Check AI Accounts or choose another model.";
-  });
+  // The server's access check names the account the selection needs, as AI
+  // Accounts names it; the generic text covers a refusal that carried no message.
+  const assistantAccountMessage = computed(() => props.agentConnectionError ||
+    "The selected AI account or model is unavailable. Check AI Accounts or choose another model.");
   const connectionRecoveryVisible = computed(() => (
     !sessionInteractionDisabled.value &&
     ["disconnected", "unknown", "reconciling", "unavailable", "failed"].includes(composerConnectionStatus.value)

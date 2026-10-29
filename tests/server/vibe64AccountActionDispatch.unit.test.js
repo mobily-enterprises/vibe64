@@ -182,7 +182,7 @@ test("Colleague reads every saved provider's readiness through the original owne
     const zai = response.result.connections.find(row => row.provider === "zai");
     assert.deepEqual(zai, { provider: "zai", label: zai.label, ready: true, reason: "", preferred: true,
       defaultModelId: "glm-4.7-flash", modelAccessMode: mode });
-    assert.deepEqual(response.result.connections.find(row => row.provider === "openai"), { provider: "openai", label: "openai",
+    assert.deepEqual(response.result.connections.find(row => row.provider === "openai"), { provider: "openai", label: "OpenAI",
       ready: true, reason: "", preferred: false, defaultModelId: "gpt-5-mini", modelAccessMode: null }, "every saved provider, not only Z.AI");
     assert.deepEqual(response.result.connections.map(row => row.provider).sort(), ["openai", "zai", "zai-coding-plan"]);
     assert.doesNotMatch(JSON.stringify(response), /secret|1234|keyHint|fingerprint|providerRevision|connections\.json|••••/);

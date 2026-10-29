@@ -13,6 +13,8 @@ import { claudeCapabilities, createClaudeConversationHost as createNativeClaudeS
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { sessionRenewalManualHandoverTemplate, sessionRenewalHandoverHash } from "../../packages/vibe64-terminals/src/server/sessionRenewalHandover.js";
 import { readClaudeCodeAuthStatus } from "../../packages/studio-terminal-core/src/server/claudeRuntime.js";
+import { createClaudeConversationAccounts } from "../../packages/vibe64-terminals/src/server/claudeConversationAccounts.js";
+import { assertCanUseVibe64Assistant } from "../../packages/vibe64-runtime/src/shared/assistantAccess.js";
 import { VIBE64_ASSISTANT_SELECTION_ERROR_CODES, defineVibe64AssistantCapabilities, defineVibe64AssistantSelection, resolveVibe64AssistantSelection } from "../../packages/vibe64-runtime/src/shared/assistantSelection.js";
 import { vibe64DriverInputFromRegistry } from "../../packages/vibe64-genesis/src/server/promptContext.js";
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
@@ -61,6 +63,18 @@ test("Claude Code names the Claude plan as AI Accounts does, so a missing sign-i
     code: VIBE64_ASSISTANT_SELECTION_ERROR_CODES.CONNECTION_REQUIRED,
     message: "Connect Claude before creating or continuing this session."
   });
+});
+
+test("a disconnected Claude plan or DeepSeek key is refused naming it as AI Accounts does", async () => {
+  const accounts = createClaudeConversationAccounts({ owner: { createAccountQueries: () => ({}) },
+    providerConnections: { list: async () => [] }, connectionStatus: async () => false });
+  for (const [modelProviderId, account] of [["anthropic", "Claude"], ["deepseek", "DeepSeek"]]) {
+    const access = await accounts.assistantAccess({ assistantSelection: { engineId: "claude", modelProviderId } });
+    assert.throws(() => assertCanUseVibe64Assistant(access), {
+      code: "vibe64_assistant_connection_unavailable",
+      message: `${account} isn't connected. Reconnect it in AI Accounts or choose another model.`
+    });
+  }
 });
 
 const fixtureRuntimeOwners = Symbol("Claude fixture runtime owners");

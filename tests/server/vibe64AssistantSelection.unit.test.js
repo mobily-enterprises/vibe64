@@ -26,15 +26,14 @@ test("assistant names share orchestrator, model and saved effort formatting", ()
 
 test("every curated key provider shares one presentation, including GLM pay-as-you-go", () => {
   for (const [engineId, modelProviderId, expected] of [
-    ["codex", "deepseek", { label: "DeepSeek", accountLabel: "DeepSeek", keyUsage: true, commentaryAsThinking: true }],
-    ["claude", "zai-coding-plan", { label: "GLM", accountLabel: "GLM · Coding Plan", keyUsage: true, commentaryAsThinking: true }],
-    ["codex", "zai", { label: "GLM", accountLabel: "GLM · Pay-as-you-go API", keyUsage: true, commentaryAsThinking: true }],
-    ["opencode", "zai-coding-plan", { label: "GLM", accountLabel: "", keyUsage: true, commentaryAsThinking: false }],
-    ["opencode", "openai", { label: "OpenCode", accountLabel: "", keyUsage: false, commentaryAsThinking: false }],
-    ["codex", "openai", { label: "Codex", accountLabel: "Codex", keyUsage: false, commentaryAsThinking: false }],
-    ["claude", "anthropic", { label: "Claude Code", accountLabel: "Claude", keyUsage: false, commentaryAsThinking: false }]
+    ["codex", "deepseek", { label: "DeepSeek", keyUsage: true, commentaryAsThinking: true }],
+    ["claude", "zai-coding-plan", { label: "GLM", keyUsage: true, commentaryAsThinking: true }],
+    ["codex", "zai", { label: "GLM", keyUsage: true, commentaryAsThinking: true }],
+    ["opencode", "zai-coding-plan", { label: "GLM", keyUsage: true, commentaryAsThinking: false }],
+    ["opencode", "openai", { label: "OpenCode", keyUsage: false, commentaryAsThinking: false }],
+    ["codex", "openai", { label: "Codex", keyUsage: false, commentaryAsThinking: false }]
   ]) assert.deepEqual({ ...vibe64ProviderPresentation({ engineId, modelProviderId }) }, expected);
-  assert.deepEqual({ ...vibe64ProviderPresentation(undefined) }, { label: "", accountLabel: "", keyUsage: false, commentaryAsThinking: false });
+  assert.deepEqual({ ...vibe64ProviderPresentation(undefined) }, { label: "", keyUsage: false, commentaryAsThinking: false });
 });
 
 function capabilities(overrides = {}) {

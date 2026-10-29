@@ -9,13 +9,15 @@ const ASSISTANT_PROVIDER_POLICIES = Object.freeze({
     billingLabel: "Usage-based API billing",
     defaultModelId: "claude-haiku-4-5",
     managementUrl: "https://platform.claude.com/settings/billing",
-    ownerOnly: false
+    ownerOnly: false,
+    productLabel: "Anthropic"
   }),
   deepseek: Object.freeze({
     billingLabel: "Usage-based API billing",
     defaultModelId: "deepseek-flash",
     managementUrl: "https://platform.deepseek.com/top_up",
-    ownerOnly: false
+    ownerOnly: false,
+    productLabel: "DeepSeek"
   }),
   opencode: Object.freeze({
     billingLabel: "Usage-based Zen API billing",
@@ -28,7 +30,8 @@ const ASSISTANT_PROVIDER_POLICIES = Object.freeze({
     billingLabel: "Usage-based API billing",
     defaultModelId: "gpt-5-mini",
     managementUrl: "https://platform.openai.com/settings/organization/billing/overview",
-    ownerOnly: false
+    ownerOnly: false,
+    productLabel: "OpenAI"
   }),
   zai: Object.freeze({
     billingLabel: "Free and usage-based API",
@@ -95,8 +98,15 @@ function assistantProviderPolicy(provider = {}) {
   };
 }
 
+// The AI Accounts name of a recognised provider's connection, known even after
+// the connection is removed; "" for other catalogue providers.
+function assistantProviderProductLabel(modelProviderId = "") {
+  return text(ASSISTANT_PROVIDER_POLICIES[text(modelProviderId)]?.productLabel);
+}
+
 export {
   OPENCODE_NATIVE_ENDPOINT_CODE,
   ZAI_FREE_MODEL_ID,
-  assistantProviderPolicy
+  assistantProviderPolicy,
+  assistantProviderProductLabel
 };

@@ -246,11 +246,12 @@ for (const viewport of viewports) {
     await expect(steer(page)).toBeEnabled();
     Object.assign(server.state.assistantAccess, { available: false, canUse: false });
     server.state.checks.push((response) => json(response, {
-      ok: false, code: "vibe64_assistant_connection_unavailable", error: "The selected AI connection is unavailable."
+      ok: false, code: "vibe64_assistant_connection_unavailable",
+      error: "Codex (OpenAI) isn't connected. Reconnect it in AI Accounts or choose another model."
     }, 409));
     server.connectionsChanged();
     const banner = page.locator("[data-vibe64-connection-recovery]");
-    await expect(banner).toContainText("Codex isn't connected. Reconnect it in AI Accounts or choose another model. Your draft is kept.");
+    await expect(banner).toContainText("Codex (OpenAI) isn't connected. Reconnect it in AI Accounts or choose another model. Your draft is kept.");
     await expect(warning(page)).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Retry connection", exact: true })).toHaveCount(0);
     const accounts = banner.getByRole("button", { name: "Go to AI Accounts", exact: true });

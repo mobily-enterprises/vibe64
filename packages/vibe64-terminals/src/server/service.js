@@ -171,6 +171,7 @@ import {
 import {
   VIBE64_ASSISTANT_ENGINE_IDS,
   VIBE64_ASSISTANT_SELECTION_METADATA,
+  findVibe64AgentProvider,
   resolveVibe64AssistantSelection,
   serializeVibe64AssistantSelection,
   vibe64AssistantConversationKey,
@@ -955,19 +956,22 @@ function createService({
       const curated = curatedCodexProvider(context.assistantSelection?.modelProviderId || context.modelProviderId);
       if (curated) {
         const connection = (await codexProviderConnections.list()).find(({ id }) => id === curated.id);
+        const available = connection?.connected === true;
         return {
-          available: connection?.connected === true,
+          available,
           connectionIdentity: connection?.connectionIdentity || "",
+          missingAccountLabel: available ? "" : curated.label,
           ownerOnly: curated.ownerOnly,
           endpointCode: curated.id
         };
       }
       const available = await assistantRuntime.codexConnectionStatus(context);
+      const missingAccountLabel = available ? "" : findVibe64AgentProvider("codex").accountLabel;
       try {
-        return { ...await codex.accounts.assistantAccess(context), available };
+        return { ...await codex.accounts.assistantAccess(context), available, missingAccountLabel };
       } catch (error) {
         if (available) throw error;
-        return { available: false, ownerOnly: true, connectionIdentity: "" };
+        return { available: false, missingAccountLabel, ownerOnly: true, connectionIdentity: "" };
       }
     }
   });

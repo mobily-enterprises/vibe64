@@ -17,6 +17,9 @@ function defineVibe64AssistantAccess(value = {}) {
     available: source.available !== false,
     connectionIdentity: text(source.connectionIdentity),
     endpointCode: text(source.endpointCode),
+    // The account the selection needs, named as AI Accounts names it, when the
+    // reader knows that this account is what is not connected.
+    missingAccountLabel: text(source.missingAccountLabel),
     ownerOnly
   });
 }
@@ -36,9 +39,9 @@ function assertCanUseVibe64Assistant(accessValue = {}, vibe64User = null) {
     return access;
   }
   const unavailable = access.available === false;
-  const error = new Error(unavailable
-    ? "The selected AI connection is unavailable."
-    : "Only the workspace owner can use this personal AI connection.");
+  const error = new Error(!unavailable ? "Only the workspace owner can use this personal AI connection."
+    : access.missingAccountLabel ? `${access.missingAccountLabel} isn't connected. Reconnect it in AI Accounts or choose another model.`
+      : "The selected AI connection is unavailable.");
   error.code = unavailable
     ? VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE
     : VIBE64_ASSISTANT_ACCESS_ERROR_CODES.RESTRICTED;

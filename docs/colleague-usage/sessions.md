@@ -259,10 +259,13 @@ the pending check does not itself mean the connection is unavailable. A confirme
 unavailable connection or access error is shown after the check returns.
 When the session's AI account is not connected, the chat names it as AI
 Accounts does, for example **Claude isn't connected. Reconnect it in AI
-Accounts or choose another model. Your draft is kept.** (or **DeepSeek**,
-**Codex**, **GLM · Coding Plan**). An OpenCode connection, which Vibe64 cannot
-name there, shows **The selected AI account or model is unavailable. Check AI
-Accounts or choose another model. Your draft is kept.** **Go to AI Accounts**
+Accounts or choose another model. Your draft is kept.** Other accounts read
+**Codex (OpenAI)**, **DeepSeek**, **GLM · Coding Plan**, or an OpenCode
+connection's own name such as **OpenAI**. When Vibe64 cannot tell which account
+is missing, for example a removed OpenCode connection to a provider it does not
+know by name, or an OpenCode key whose chosen model is not enabled, the chat
+shows **The selected AI connection is unavailable. Your draft is kept.**
+**Go to AI Accounts**
 opens AI Accounts in Account settings to reconnect it; to switch instead, choose
 another model in **Models**. Nothing is sent until the chat can reach a connected AI. Desktop
 and phone show the same notice; Colleague can explain it, but signing in

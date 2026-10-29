@@ -272,6 +272,15 @@ successful protocol access.
 The native GPT badge uses the runtime's authentication access policy: ChatGPT
 login is Personal use; an OpenAI API key is Workspace use. Unreadable access
 metadata leaves the badge absent instead of guessing from account storage scope.
+When an access read reports a selection unavailable because its account is not
+connected, it also names that account as AI Accounts does, in
+`missingAccountLabel`: **Claude** for the Claude plan, **Codex (OpenAI)** for
+Codex's own sign-in (both from the engine definitions in `agentSettings.js`), a
+curated key provider's label (DeepSeek, GLM), or an OpenCode connection's
+trusted product label. A removed OpenCode connection keeps a name only for
+providers whose policy names them (OpenAI, Anthropic, DeepSeek, OpenCode Zen,
+Z.AI); an OpenCode key whose model is not enabled, and unrecognised providers,
+carry no name, so the refusal stays generic instead of claiming a disconnect.
 External catalogue and access reads do not start a native Claude inference
 process. Connection facts retain a safe identity from the existing owner:
 Codex's login identity, curated key generation, native Claude account identity,

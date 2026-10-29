@@ -3322,6 +3322,16 @@ test("Codex admission inspection uses exact native user identity without sending
   });
 });
 
+test("a signed-out Codex selection is refused naming the OpenAI account as AI Accounts does", async () => {
+  await withAgentMessageController(async ({ terminalService, sessionId }) => {
+    terminalService.configureAssistantRuntime({ codexConnectionStatus: async () => false });
+    await assert.rejects(terminalService.ensureAgentSession(sessionId), {
+      code: "vibe64_assistant_connection_unavailable",
+      message: "Codex (OpenAI) isn't connected. Reconnect it in AI Accounts or choose another model."
+    });
+  }, { throughTerminalService: true });
+});
+
 test("Codex integration continuation recovers native acceptance with a fresh service after local persistence failure", async () => {
   await withAgentMessageController(async ({ captures, controllerOptions, projectService, terminalService, sessionId, store }) => {
     const systemRoot = controllerOptions.env.VIBE64_SYSTEM_ROOT;

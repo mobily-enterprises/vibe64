@@ -1562,11 +1562,6 @@ menu but Send reports its unavailability.
 `packages/vibe64-runtime/src/shared/assistantLabels.js` formats the same visible identity for Main and
 temporary replies from their saved selections. Empty thinking displays "default";
 absent thinking displays "not recorded". Current settings never relabel history.
-Its `vibe64ProviderPresentation(selection).accountLabel` names the account a
-Codex or Claude Code selection runs on as AI Accounts does: the curated key
-provider's label, otherwise the tool's own sign-in that plan usage names
-(Claude, Codex). OpenCode connections are named by OpenCode, so it is empty
-there.
 Senior and Junior resolve as a pair even when review is off. A member's foreign
 shared Backup replaces both roles; same-engine Backup replaces restricted roles.
 Auto resolves Router, Senior and Junior through the same actor-aware fallback
@@ -2795,11 +2790,14 @@ removes its own `codex-git-command/<hash>/` directory and stops its Git control;
 renewal, changeover and project runtime closes keep both, because the same
 session reconnects and rewrites them.
 An unavailable AI connection is a separate account-attention state: it stops
-timed retries, names the missing account from the session's selection through
-`vibe64ProviderPresentation().accountLabel` ("Claude isn't connected. Reconnect
-it in AI Accounts or choose another model."), says the selected account or model
-is unavailable only when that name is unknown (OpenCode), and offers **Go to AI
-Accounts** through the existing account dialog. Every link or button to AI
+timed retries, shows the server's refusal, and offers **Go to AI Accounts**
+through the existing account dialog. The refusal names the account the selection
+needs as AI Accounts does ("Claude isn't connected. Reconnect it in AI Accounts
+or choose another model."): each access reader supplies `missingAccountLabel`
+(see [Connections and health](../accounts/connections-and-health.md)), and the
+shared `assertCanUseVibe64Assistant` writes the sentence. Only a refusal the
+reader cannot name says "The selected AI connection is unavailable."; the chat
+shows its own generic text only when the refusal carried no message. Every link or button to AI
 Accounts reads **Go to AI Accounts**, never "Open AI Accounts", which reads as
 the OpenAI brand. Account-change events recheck readiness, including when they arrive
 during an older check. Drafts remain intact and no message is sent automatically.

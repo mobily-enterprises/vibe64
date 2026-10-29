@@ -9,7 +9,8 @@ import {
 import { aiConnectionError } from "./aiConnectionError.js";
 import {
   OPENCODE_NATIVE_ENDPOINT_CODE,
-  assistantProviderPolicy
+  assistantProviderPolicy,
+  assistantProviderProductLabel
 } from "./assistantProviderPolicy.js";
 
 const AI_CONNECTION_STORE_VERSION = 5;
@@ -552,6 +553,7 @@ function createAiConnectionStore({
         ownerOnly: route.ownerOnly
       } : {
         available: false,
+        missingAccountLabel: assistantProviderProductLabel(id),
         ownerOnly: true
       };
     },

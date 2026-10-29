@@ -1071,10 +1071,11 @@ describe("useVibe64AutopilotView direct chat", () => {
   });
 
   it("explains a disconnected AI account without showing connection progress or losing the draft", async () => {
-    const { props, view } = await createViewWithProps({ agentConnectionStatus: "unavailable" });
+    const { props, view } = await createViewWithProps({ agentConnectionStatus: "unavailable",
+      agentConnectionError: "Codex (OpenAI) isn't connected. Reconnect it in AI Accounts or choose another model." });
     view.composerDraft.value = "Keep this draft while I sign in.";
     expect(view.assistantAccountUnavailable.value).toBe(true);
-    expect(view.assistantAccountMessage.value).toBe("Codex isn't connected. Reconnect it in AI Accounts or choose another model.");
+    expect(view.assistantAccountMessage.value).toBe("Codex (OpenAI) isn't connected. Reconnect it in AI Accounts or choose another model.");
     expect(view.composerSubmitTitle.value).toBe("Go to AI Accounts to connect your assistant. Your draft is kept.");
     expect(view.connectionRecoveryVisible.value).toBe(true);
     expect(view.thinkingVisible.value).toBe(false);
@@ -1083,25 +1084,24 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.saveWorkTitle.value).not.toContain("Connect your AI account");
     await view.submitComposerMessage();
     expect(props.sendAgentMessage).not.toHaveBeenCalled();
-    props.session.assistantSelection = { engineId: "opencode" };
-    expect(view.assistantAccountMessage.value).toContain("account or model is unavailable");
     props.agentConnectionStatus = "connected";
     expect(view.connectionRecoveryVisible.value).toBe(false);
     expect(view.composerDraft.value).toBe("Keep this draft while I sign in.");
   });
 
-  it("names the session's missing AI account as AI Accounts does, and stays generic only when it is unknown", async () => {
+  it("shows the account the server names, whatever the session's tool, and generic text only without one", async () => {
     const { props, view } = await createViewWithProps({ agentConnectionStatus: "unavailable" });
-    for (const [assistantSelection, message] of [
-      [{ engineId: "claude", modelProviderId: "anthropic" }, "Claude isn't connected. Reconnect it in AI Accounts or choose another model."],
-      [{ engineId: "claude", modelProviderId: "deepseek" }, "DeepSeek isn't connected. Reconnect it in AI Accounts or choose another model."],
-      [{ engineId: "codex", modelProviderId: "zai-coding-plan" }, "GLM · Coding Plan isn't connected. Reconnect it in AI Accounts or choose another model."],
-      [{ engineId: "codex", modelProviderId: "openai" }, "Codex isn't connected. Reconnect it in AI Accounts or choose another model."],
-      [{ engineId: "opencode", modelProviderId: "anthropic" }, "The selected AI account or model is unavailable. Check AI Accounts or choose another model."]
+    for (const [engineId, message] of [
+      ["claude", "Claude isn't connected. Reconnect it in AI Accounts or choose another model."],
+      ["opencode", "OpenAI isn't connected. Reconnect it in AI Accounts or choose another model."],
+      ["codex", "The selected AI connection is unavailable."]
     ]) {
-      props.session.assistantSelection = assistantSelection;
+      props.session.assistantSelection = { engineId };
+      props.agentConnectionError = message;
       expect(view.assistantAccountMessage.value).toBe(message);
     }
+    props.agentConnectionError = "";
+    expect(view.assistantAccountMessage.value).toBe("The selected AI account or model is unavailable. Check AI Accounts or choose another model.");
   });
 
   it("keeps a startup failure retryable without presenting it as connection progress", async () => {
