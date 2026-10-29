@@ -3860,7 +3860,6 @@ test("new sessions publish running workspace preparation and its eventual result
   });
   const service = createService({
     initializeModelRouting: async () => ({ ok: true }),
-    readModelRoutingWorkflows: async () => ({ ok: true, workflows: [{ engineId: "opencode", available: true }] }),
     project: {
       async createRuntime() {
         return runtime;

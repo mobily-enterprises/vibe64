@@ -1968,7 +1968,6 @@ test("a practice session is an ordinary local project session that stays the lea
     modelProviderId: "opencode", schema: "vibe64.assistant-selection.v1", variantId: "" };
   let setupRuntime;
   const sessions = createSessions({ project, initializeModelRouting: async () => ({ ok: true }),
-    readModelRoutingWorkflows: async () => ({ ok: true, workflows: [{ engineId: "opencode", available: true }] }),
     terminals: {
       async resolveAssistantPurpose() {
         return { available: true, effectiveSelection: selection, connectionIdentity: "controlled-original-account-seam" };

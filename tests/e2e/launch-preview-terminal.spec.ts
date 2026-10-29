@@ -1513,7 +1513,7 @@ test("@temporary-model merge repair exposes the shared picker and retains Senior
   const record = { conversationId: "repair-model", state: "open", title: "Resolve Update", status: "completed", messages: [],
     assistantSelection: previous, agentSettings: { model: previous.modelId, thinking: "high" },
     recoveryOperation: "update", recoveryContext: "Preserve booking validation.",
-    routingMetadata: { assistant_routing: JSON.stringify({ mode: "senior", review: false, workflowEngineId: "opencode" }) },
+    routingMetadata: { assistant_routing: JSON.stringify({ mode: "senior", review: false }) },
     purposes: { senior: { available: true, effectiveSelection: previous } } };
   const selections: any[] = [];
   await page.route("**/temporary-conversations", (route) => fulfillJson(route, { ok: true, conversations: [record] }));
@@ -2696,7 +2696,7 @@ for (const width of [1440, 390]) {
     page.on("request", (request) => {
       const path = new URL(request.url()).pathname;
       if (checking && (/\/sessions\/session-renderer(?:-beta)?(?:\/(?:agent-session|conversation-log|work|updates\/check))?$/u.test(path) ||
-        path.endsWith("/model-routing/workflows"))) requests.push(`${request.method()} ${path}`);
+        path.endsWith("/model-routing"))) requests.push(`${request.method()} ${path}`);
     });
     const chat = page.locator(".studio-autopilot__chat-panel:visible");
     const composer = chat.getByLabel("Message AI assistant");

@@ -111,7 +111,6 @@ async function mockReadyStudioShell(page: Page, options: MockReadyStudioShellOpt
   const apiPayloads = new Map<string, unknown>([
     ["/api/vibe64/accounts/codex-providers", { ok: true, providers: [] }],
     ["/api/vibe64/accounts/ai-connections", { ok: true, connections: [] }],
-    ["/api/vibe64/accounts/model-routing/workflows", { ok: true, workflows: [] }],
     ["/api/vibe64/training/learning-mode", { ok: true, available: true, learningMode: null }],
     ["/api/vibe64/training/courses", { ok: true, courses: [] }],
     ["/api/vibe64/training/learning", { ok: true, available: false }],

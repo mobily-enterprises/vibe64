@@ -640,7 +640,6 @@ test("scope saving and session creation share one project policy boundary", asyn
       }
     };
     const sessionsService = createSessionsService({
-      readModelRoutingWorkflows: async () => ({ ok: true, workflows: [{ engineId: "opencode", available: true }] }),
       initializeModelRouting: async () => ({ ok: true }),
       project: {
         async createRuntime() {

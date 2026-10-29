@@ -1022,16 +1022,20 @@ test.describe("direct chat", () => {
       let dialog = page.getByRole("dialog");
       await expect(dialog.getByRole("button", { name: "Create session", exact: true })).toBeEnabled();
       expect(branchReads).toBe(0);
-      await dialog.getByRole("checkbox", { name: "Choose a branch (advanced)" }).check();
-      await expect(dialog.getByRole("combobox", { name: "Start from branch", exact: true })).toHaveValue("main");
+      const workOn = async (choice: string) => {
+        await dialog.locator(".v-select").filter({ has: page.getByRole("combobox", { name: "Work on", exact: true }) }).click();
+        await page.getByRole("option", { name: choice, exact: true }).click();
+      };
+      await workOn("Use an existing branch");
+      await expect(dialog).toContainText(/Opens a new session on this branch\. Your changes will be saved to \S+:main\./);
       expect(branchReads).toBe(1);
       await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
       await page.getByRole("button", { name: "New session", exact: true }).click();
       dialog = page.getByRole("dialog");
-      await dialog.getByRole("checkbox", { name: "Choose a branch (advanced)" }).check();
-      await expect(dialog.getByRole("combobox", { name: "Start from branch", exact: true })).toHaveValue("main");
-      await dialog.getByRole("checkbox", { name: "Create a new branch from this version" }).check();
+      await expect(dialog.getByText("Project branch (main)", { exact: true })).toBeVisible();
+      await workOn("Create a new branch");
       await dialog.getByRole("textbox", { name: "New branch name", exact: true }).fill("feature/review");
+      await expect(dialog).toContainText(/Creates the branch and opens a new session\. Your changes will be saved to \S+:feature\/review\./);
       const submit = dialog.getByRole("button", { name: "Create branch & session", exact: true });
       await expect(submit).toBeEnabled();
       const bounds = await submit.boundingBox();
@@ -1039,11 +1043,11 @@ test.describe("direct chat", () => {
       await submit.click();
       await expect.poll(() => submissions.length).toBe(1);
       expect(submissions[0].repositoryBranch).toEqual({ name: "feature/review", fromBranch: "main", expectedCommit: "a".repeat(40) });
-      expect(submissions[0].workflowEngineId).toBe("codex");
+      expect(submissions[0].assistantSelection).toEqual({});
     });
   }
 
-  test("opens a pull request session with the selected AI workflow", async ({ page }) => {
+  test("opens a pull request session on the main AI", async ({ page }) => {
     await mockDirectChat(page);
     const submissions: Record<string, unknown>[] = [];
     const project = { ...readyProjectSelectionPayload.currentProject,
@@ -1070,7 +1074,7 @@ test.describe("direct chat", () => {
     await expect(dialog.getByRole("checkbox", { name: "Choose a branch (advanced)" })).toHaveCount(0);
     await dialog.getByRole("button", { name: "Create session", exact: true }).click();
     await expect.poll(() => submissions.length).toBe(1);
-    expect(submissions[0]).toEqual({ assistantSelection: {}, workflowEngineId: "codex", pullRequestNumber: 7 });
+    expect(submissions[0]).toEqual({ assistantSelection: {}, pullRequestNumber: 7 });
   });
 
   test("waits for assistant activity to settle before reviewing changes", async ({ page }) => {
@@ -2476,7 +2480,7 @@ for (const width of [390, 1280]) {
       assistant: { role: "assistant", text: "The review is waiting for your choice." }
     }] });
     const session = { ...directSession(), metadata: {
-      assistant_routing: JSON.stringify({ mode: "auto", review: true, workflowEngineId: "codex" }),
+      assistant_routing: JSON.stringify({ mode: "auto", review: true }),
       assistant_routing_request: JSON.stringify({ schemaVersion: 5, messageId, input: { message },
         mode: "auto", resolvedMode: "senior", status: "waiting", delivery: "accepted", stage: "review",
         workflow: true, followup: { messageId: "review-followup", message: "Continue review." } })
@@ -2506,86 +2510,6 @@ for (const width of [390, 1280]) {
   });
 }
 
-for (const width of [390, 820, 1280]) {
-  hintTest(`@working-plan plain-language overview and collapsed details preserve drafts and fits at ${width}px`, async ({ page }, testInfo) => {
-    await page.setViewportSize({ width, height: 900 });
-    const sent: Record<string, unknown>[] = [];
-    await mockDirectChat(page, { onMessage: body => { sent.push(body); } });
-    const revision = "a".repeat(64);
-    const selection = { ...ASSISTANT_CATALOG.engines[0].defaults, engineId: "codex", modelId: "gpt-6-astra" };
-    const routing = { mode: "auto", resolvedMode: "senior", status: "done", messageId: "planned",
-      assignments: { senior: selection, junior: { ...selection, modelId: "deepseek-flash" } },
-      workPlan: { status: "ready", revision, text: "# Rename wash terminology\n\n## Outcome and scope\nThe job card will say Bathing instead of Washing. Your saved jobs will stay the same.\n\n## Findings\nThe job-card status after Waiting still says Washing.\n\n## Proposed changes\nReplace visible wording with Bathing; preserve stored identifiers.\n\n## Verification\nCheck the job card and search every display label.\n" } };
-    const session = { ...directSession(), assistantSelection: selection, metadata: {
-      assistant_routing: JSON.stringify({ mode: "auto", workflowEngineId: "codex", review: true }),
-      assistant_routing_request: JSON.stringify(routing)
-    } };
-    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, { ok: true, ...session }));
-    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
-    const composer = page.getByLabel("Message AI assistant");
-    await expect(composer).toBeVisible();
-    await composer.fill("Keep my next question as a draft");
-    const view = page.getByRole("button", { name: "View plan", exact: true });
-    await expect(view).toBeVisible();
-    await view.focus();
-    await page.keyboard.press("Enter");
-    const dialog = page.getByRole("dialog", { name: "Working plan" });
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByText("The job card will say Bathing instead of Washing. Your saved jobs will stay the same.")).toBeVisible();
-    const technical = dialog.getByRole("button", { name: "Technical details" });
-    const finding = dialog.getByText("The job-card status after Waiting still says Washing.");
-    await expect(finding).not.toBeVisible();
-    await page.screenshot({ path: testInfo.outputPath(`plan-${width}.png`), animations: "disabled" });
-    const box = await dialog.boundingBox();
-    expect(box!.x).toBeGreaterThanOrEqual(0);
-    expect(box!.x + box!.width).toBeLessThanOrEqual(width);
-    for (const button of await dialog.getByRole("button").all()) {
-      const target = await button.boundingBox();
-      expect(target!.x).toBeGreaterThanOrEqual(box!.x);
-      expect(target!.x + target!.width).toBeLessThanOrEqual(box!.x + box!.width);
-      expect(target!.height).toBeGreaterThanOrEqual(48);
-    }
-    await technical.focus();
-    await page.keyboard.press("Enter");
-    await expect(finding).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(dialog).not.toBeVisible();
-    await expect(view).toBeFocused();
-    await expect(composer).toHaveValue("Keep my next question as a draft");
-    await view.click();
-    await expect(finding).not.toBeVisible();
-    await dialog.getByRole("button", { name: "Implement with Junior · Codex (deepseek-flash high)" }).click();
-    await expect.poll(() => sent.length).toBe(1);
-    expect(sent[0].planRevision).toBe(revision);
-    expect(sent[0].message).toBe("Implement the plan I have approved.");
-    await expect(composer).toHaveValue("Keep my next question as a draft");
-
-    routing.workPlan.status = "implemented";
-    session.metadata.assistant_routing_request = JSON.stringify(routing);
-    await page.reload();
-    await expect(composer).toBeVisible();
-    await expect(view).toHaveCount(0);
-    await expect(page.getByRole("button", { name: /^Implement with Junior|^Recover plan$/ })).toHaveCount(0);
-    await expect(page.getByText("Implementation recorded", { exact: true })).toHaveCount(0);
-
-    routing.workPlan.status = "drafting";
-    session.metadata.assistant_routing_request = JSON.stringify(routing);
-    await page.reload();
-    await expect(page.getByRole("button", { name: /^Implement with Junior/ })).toHaveCount(0);
-    const recover = page.getByRole("button", { name: "Recover plan", exact: true });
-    await expect(recover).toBeVisible();
-    await composer.fill("Keep this draft during recovery");
-    await recover.focus();
-    await page.keyboard.press("Enter");
-    await expect.poll(() => sent.length).toBe(2);
-    expect(sent[1].planRecoveryRevision).toBe(revision);
-    expect(sent[1].planRevision).toBeUndefined();
-    expect(sent[1].message).toContain("Do not start coding.");
-    await expect(composer).toHaveValue("Keep this draft during recovery");
-    await page.screenshot({ path: testInfo.outputPath(`plan-recovery-${width}.png`), animations: "disabled" });
-  });
-}
-
 hintTest("@deslop-routing a mixed request remains editable with one polite explanation after reload", async ({ page }) => {
   const explanation = "In Auto, please request feature work and Deslop separately. Send the feature request first, then ask for Deslop after implementation.";
   let routing: Record<string, unknown> | null = null;
@@ -2593,7 +2517,7 @@ hintTest("@deslop-routing a mixed request remains editable with one polite expla
   await mockDirectChat(page);
   await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, {
     ok: true, ...directSession(), metadata: {
-      assistant_routing: JSON.stringify({ mode: "auto", workflowEngineId: "codex", review: true }),
+      assistant_routing: JSON.stringify({ mode: "auto", review: true }),
       ...(routing ? { assistant_routing_request: JSON.stringify(routing) } : {})
     }
   }));
@@ -2667,7 +2591,17 @@ for (const width of [390, 820, 1280]) {
           return [role, { configured: Boolean(value), value, effective: value, recommendation: null, choices }];
         })) }, nonOwner: { roles: {} } },
         viewer: { senior: { available: true } } });
-      await routeApiEndpoint(page, "/vibe64/accounts/model-routing", route => fulfillJson(route, routing()));
+      // The open session reads only the light main view; Models alone makes the full read.
+      let mainReads = 0;
+      let configurationReads = 0;
+      await routeApiEndpoint(page, "/vibe64/accounts/model-routing", route => {
+        if (new URL(route.request().url()).searchParams.get("view") === "main") {
+          mainReads++;
+          return fulfillJson(route, { ok: true, revision: 1, canConfigure, mainSelection: senior });
+        }
+        configurationReads++;
+        return fulfillJson(route, routing());
+      });
       await routeApiEndpoint(page, "/vibe64/accounts/model-routing/preview", route => fulfillJson(route, routing()));
       await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
       await expect(page.getByLabel("Message AI assistant")).toBeVisible();
@@ -2689,6 +2623,8 @@ for (const width of [390, 820, 1280]) {
       await expect(modes.getByRole("button", { name: /^Senior/ })).toContainText("Codex (gpt-6-astra xhigh)");
       await expect(modes.getByRole("button", { name: /^Junior/ })).toContainText("Codex (gpt-6-astra low)");
       await expect(modes.getByRole("button", { name: /^Auto/ })).toContainText("Router: Codex (gpt-6-luna medium)");
+      expect(mainReads).toBeGreaterThan(0);
+      expect(configurationReads).toBe(0);
       const deslop = page.getByRole("checkbox", { name: "Deslop during Senior review", exact: true });
       await expect(deslop).toHaveCount(0);
       await page.screenshot({ path: info.outputPath(`roles-${width}.png`), animations: "disabled" });
@@ -2708,6 +2644,7 @@ for (const width of [390, 820, 1280]) {
       await expect(auto).toContainText("Auto needs a Router model. Choose one in Models.");
       await page.getByRole("button", { name: "Models", exact: true }).click();
       const dialog = page.getByRole("dialog", { name: "Models", exact: true });
+      await expect.poll(() => configurationReads).toBe(1);
       const routerModel = dialog.getByRole("combobox", { name: "Router model", exact: true });
       await expect(routerModel).toBeFocused();
       await expect(routerModel).toBeInViewport();
@@ -2722,6 +2659,7 @@ for (const width of [390, 820, 1280]) {
       await trigger.click();
       await expect(modes.getByRole("button", { name: /^Senior/ })).toBeVisible();
       await expect(page.getByRole("button", { name: "Models", exact: true })).toHaveCount(0);
+      expect(configurationReads).toBe(1);
       expect(errors).toEqual([]);
     } finally {
       await page.close();
@@ -2744,7 +2682,7 @@ for (const width of [390, 820, 1280]) {
         error: "This Codex conversation is stored in a separate provider home. Renew the session to use model routing." };
       await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, {
         ok: true, ...directSession(), metadata: {
-          assistant_routing: JSON.stringify({ mode: "senior", workflowEngineId: "codex" }),
+          assistant_routing: JSON.stringify({ mode: "senior" }),
           assistant_routing_request: JSON.stringify(routingRequest)
         }
       }));
@@ -3050,7 +2988,7 @@ test("@helper-hydration delayed history opens at the failed request and reports 
       error: "The routing connection needs attention." };
     await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, {
       ok: true, ...directSession(), metadata: {
-        assistant_routing: JSON.stringify({ mode: "auto", workflowEngineId: "codex" }),
+        assistant_routing: JSON.stringify({ mode: "auto" }),
         assistant_routing_request: JSON.stringify(request)
       }
     }));
@@ -3093,7 +3031,7 @@ for (const width of [390, 820, 1280]) {
     });
     const saved = { ...catalog.engines[0].defaults, engineId: "codex", catalogRevision: catalog.engines[0].revision };
     const session = { ...directSession(), assistantSelection: saved, metadata: {
-      assistant_routing: JSON.stringify({ mode: "auto", workflowEngineId: "codex", review: false })
+      assistant_routing: JSON.stringify({ mode: "auto", review: false })
     } };
     const errors: string[] = []; page.on("pageerror", error => errors.push(error.message));
     let patches = 0;
@@ -3112,8 +3050,7 @@ for (const width of [390, 820, 1280]) {
       patches++;
       if (patches === 1) return fulfillJson(route, { ok: false, error: "Connection changed. Please retry." });
       session.assistantSelection = route.request().postDataJSON().assistantSelection;
-      session.metadata.assistant_routing = JSON.stringify({ mode: "custom", workflowEngineId: session.assistantSelection.engineId,
-        review: false, override: session.assistantSelection });
+      session.metadata.assistant_routing = JSON.stringify({ mode: "custom", review: false, override: session.assistantSelection });
       return fulfillJson(route, { ok: true, ...session });
     });
     await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);

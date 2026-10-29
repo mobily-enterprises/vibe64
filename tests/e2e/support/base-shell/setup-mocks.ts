@@ -117,6 +117,26 @@ const accountsPayload = {
   ready: true
 };
 
+const mainAiSelection = {
+  schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex", modelProviderId: "openai",
+  modelId: "gpt-5.5", variantId: "", catalogRevision: `sha256:${"a".repeat(64)}`, selectionSource: "recommended"
+};
+
+// The AI setup read: main chat's AI alone for the light "main" view, or both
+// setups with each owner role's choices for Models.
+function modelRoutingPayload(view) {
+  if (view === "main") return { ok: true, revision: 1, canConfigure: true, mainSelection: mainAiSelection };
+  const choices = [{ ...mainAiSelection, label: "GPT-5.5", engineLabel: "Codex", providerLabel: "OpenAI",
+    accessLabel: "Workspace use", available: true, variants: [] }];
+  const role = { configured: true, value: mainAiSelection, effective: mainAiSelection, recommendation: mainAiSelection, choices, error: "" };
+  return {
+    ok: true, revision: 1, canConfigure: true, team: { available: false, ownerName: "", memberCount: 0 },
+    engines: [{ engineId: "codex", label: "Codex", connected: true, error: "" }],
+    setups: { owner: { roles: { senior: role, junior: role } }, nonOwner: { roles: {} } },
+    viewer: { senior: { available: true, effectiveSelection: mainAiSelection } }
+  };
+}
+
 async function mockEmptySessions(page) {
   await routeApiEndpoint(page, "/vibe64/sessions", async (route) => {
     await fulfillJson(route, {
@@ -135,23 +155,7 @@ async function mockShellStatusEndpoints(page) {
     await fulfillJson(route, accountsPayload);
   });
   await routeApiEndpoint(page, "/vibe64/accounts/model-routing", async (route) => {
-    const selection = { engineId: "codex", modelProviderId: "openai", modelId: "gpt-5.5", label: "GPT-5.5" };
-    const decision = { available: true, effectiveSelection: selection };
-    await fulfillJson(route, {
-      ok: true,
-      canConfigure: true,
-      engines: [{
-        engineId: "codex", label: "Codex", choices: [selection],
-        roles: { senior: { recommendation: selection }, junior: { recommendation: selection } },
-        setupPreview: { senior: decision, junior: decision }
-      }]
-    });
-  });
-  await routeApiEndpoint(page, "/vibe64/accounts/model-routing/workflows", async (route) => {
-    await fulfillJson(route, { ok: true, canConfigure: true, workflows: [{
-      engineId: "codex", label: "Codex", available: true,
-      seniorLabel: "Codex (gpt-6-astra default)", juniorLabel: "Codex (deepseek-flash default)", backupUsed: false, error: ""
-    }] });
+    await fulfillJson(route, modelRoutingPayload(new URL(route.request().url()).searchParams.get("view")));
   });
   await mockEmptySessions(page);
 }

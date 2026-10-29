@@ -72,35 +72,31 @@ test.describe("studio startup navigation", () => {
   });
 
   for (const width of [390, 1280]) {
-    test(`session picker uses saved workflow choices without model discovery at ${width}px`, async ({ page }) => {
+    test(`Start an AI session shows the main AI without model discovery at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await mockCurrentAppInspection(page);
-      let fullCatalogueRequests = 0;
-      let workflowRequests = 0;
+      const reads: string[] = [];
+      const mainSelection = { schema: "vibe64.assistant-selection.v1", engineId: "codex", agentId: "codex",
+        modelProviderId: "openai", modelId: "gpt-6-astra", variantId: "", catalogRevision: `sha256:${"a".repeat(64)}`,
+        selectionSource: "explicit" };
+      // Only the light main view answers; the full Models read would wait on live discovery.
       await routeApiEndpoint(page, "/vibe64/accounts/model-routing", async (route) => {
-        fullCatalogueRequests += 1;
-        await route.abort();
-      });
-      await routeApiEndpoint(page, "/vibe64/accounts/model-routing/workflows", async (route) => {
-        workflowRequests += 1;
-        await fulfillJson(route, { ok: true, canConfigure: true, workflows: [{
-          engineId: "codex", label: "Codex", available: true,
-          seniorLabel: "Codex (gpt-6-astra default)", juniorLabel: "Codex (deepseek-flash default)", backupUsed: false, error: ""
-        }] });
+        const view = new URL(route.request().url()).searchParams.get("view") || "full";
+        reads.push(view);
+        if (view !== "main") return route.abort();
+        await fulfillJson(route, { ok: true, revision: 1, canConfigure: true, mainSelection });
       });
       await page.goto(`${BASE_URL}${DEVELOPMENT_PATH}`);
       await page.getByRole("button", { name: "New session", exact: true }).click();
       const dialog = page.getByRole("dialog");
-      await expect(dialog.getByText("Plan · Codex (gpt-6-astra default)", { exact: true })).toBeVisible();
-      await expect(dialog.getByText("Code · Codex (deepseek-flash default)", { exact: true })).toBeVisible();
+      await expect(dialog).toContainText("Runs on your main AI: Codex (gpt-6-astra default)");
       await expect(dialog.getByRole("button", { name: "Create session", exact: true })).toBeEnabled();
-      await expect(dialog.getByRole("button", { name: "Configure model routing", exact: true })).toBeVisible();
-      expect(workflowRequests).toBe(1);
-      expect(fullCatalogueRequests).toBe(0);
+      await expect(dialog.getByRole("button", { name: "Change", exact: true })).toBeVisible();
+      expect(reads).toEqual(["main"]);
       await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
       await page.getByRole("button", { name: "New session", exact: true }).click();
       await expect(dialog.getByRole("button", { name: "Create session", exact: true })).toBeEnabled();
-      expect(fullCatalogueRequests).toBe(0);
+      expect(reads.filter((view) => view !== "main")).toEqual([]);
     });
   }
 

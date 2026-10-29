@@ -209,9 +209,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     setup({ events }) {
       const selection = { engineId: "codex", modelProviderId: "openai", modelId: "test-model" };
       const service = createColleagueService({ actions, events, systemRoot: colleagueRoot,
-        accounts: { async readModelRoutingWorkflows() {
-          return { ok: true, workflows: [{ available: true, engineId: "codex" }] };
-        } },
+        accounts: {},
         terminals: {
           joinAgentRuntimeInvalidation: () => () => {},
           async requireAssistantSelectionAccess(_selection, { vibe64User }) {
@@ -394,8 +392,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
       else if (route === `${sessionRoute}/source-editor/stars`) result = { ok: true, files: [] };
       else if (route === "/vibe64/settings") result = { ok: true, promptHints: { enabled: false } };
       else if (route === "/vibe64/accounts") result = { ok: true, ready: true, accounts: [] };
-      else if (route === "/vibe64/accounts/model-routing") result = { ok: true, routing: null };
-      else if (route === "/vibe64/accounts/model-routing/workflows") result = { ok: true, canConfigure: true, workflows: [] };
+      else if (route === "/vibe64/accounts/model-routing") result = { ok: true, revision: 0, canConfigure: true, mainSelection: null };
       else if (route === "/vibe64/accounts/codex-providers") result = { ok: true, providers: [] };
       else if (route === "/vibe64/accounts/ai-connections") result = { ok: true, connections: [] };
       else if (route === "/vibe64/training/learning-mode") result = { ok: true, available: true, learningMode: null };
