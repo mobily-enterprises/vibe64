@@ -338,7 +338,8 @@ function useVibe64MountedSessionData({
         agentConnectionError.value = String(error?.message || "The assistant could not be started. Please retry.");
         if (error?.code === VIBE64_ASSISTANT_ACCESS_ERROR_CODES.UNAVAILABLE) {
           agentConnectionStatus.value = "unavailable";
-        } else if (["vibe64_agent_control_path_too_long", "vibe64_agent_control_recovery_failed", "vibe64_codex_history_unsupported"].includes(error?.code)) {
+        } else if (["vibe64_agent_control_path_too_long", "vibe64_agent_control_recovery_failed", "vibe64_codex_history_unsupported",
+          "vibe64_session_archived"].includes(error?.code)) {
           agentConnectionStatus.value = "failed";
         } else {
           agentConnectionStatus.value = "unknown";

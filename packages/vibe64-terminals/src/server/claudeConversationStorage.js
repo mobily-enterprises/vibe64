@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { VIBE64_ASSISTANT_ENGINE_IDS, VIBE64_ASSISTANT_TRANSPORT_IDS } from "@local/vibe64-runtime/shared";
+import { renewalCleanupContext } from "./sessionRenewalHandover.js";
 
 const ENGINE = VIBE64_ASSISTANT_ENGINE_IDS.CLAUDE;
 const TRANSPORT = VIBE64_ASSISTANT_TRANSPORT_IDS.CLAUDE_STREAM_JSON;
@@ -99,8 +100,15 @@ function createClaudeConversationStorage({ createError: error }) {
           .map(([key]) => key.slice("claude_conversation_".length))
       });
       // A deleted conversation must not be restored from a captured old snapshot.
-      return ctx.assistantScope ? records(null)
-        : Promise.resolve(ctx.runtime.getSession(ctx.sessionId, { inspectSource: false })).then(records);
+      if (ctx.assistantScope) return records(null);
+      // Renewal cleanup rereads its exact hidden session through the renewal reader.
+      if (!renewalCleanupContext(ctx.sessionId, ctx)) {
+        return Promise.resolve(ctx.runtime.getSession(ctx.sessionId, { inspectSource: false })).then(records);
+      }
+      return ctx.runtime.getSessionForRenewal(ctx.sessionId, { inspectSource: false }).then(session => {
+        renewalCleanupContext(ctx.sessionId, { ...ctx, session });
+        return records(session);
+      });
     },
     select(ctx, id) {
       // Restoring a retained entry is not a main-chat changeover. Only a main

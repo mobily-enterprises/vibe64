@@ -4,7 +4,8 @@ import { createClaudeConversationEnvironment } from "../../claudeConversationEnv
 import { createClaudeConversationEvents } from "../../claudeConversationEvents.js";
 import { claudeCapabilities, createClaudeConversationAccounts } from "../../claudeConversationAccounts.js";
 import { requireCompletedNativeConversationReplacement } from "../../assistantChangeover.js";
-import { createClaudeConversationMessagePolicy, publishMainConversationEvent, readSessionConversationContext } from "../../mainConversationBinding.js";
+import { createClaudeConversationMessagePolicy, publishMainConversationEvent, readClaudeConversationOwnerContext,
+  readSessionConversationContext } from "../../mainConversationBinding.js";
 import { createCodexProviderConnectionStore } from "@local/vibe64-core/server/codexProviderConnections";
 import { randomUUID } from "node:crypto";
 import { sessionIsClosing } from "@local/vibe64-runtime/server/sessionLifecycle";
@@ -152,8 +153,11 @@ function createClaudeConversationHost({
       terminal: listTerminalSessions({ namespace: claudeTerminalNamespace(context.sessionId), runningOnly: true })[0] || null };
   }
 
+  // Cleanup reaches the owner's retained work by session key; a conversation it
+  // reopens gets its full context from the owner's own preparation.
+  const ownerContextFor = context => readClaudeConversationOwnerContext(projectService, context.sessionId, context);
   const cleanupApplication = {
-    readContext: context => contextFor({ ...context, allowClosing: true }),
+    readContext: context => ownerContextFor({ ...context, allowClosing: true }),
     terminals: { close: sessionId => closeTerminalSessionsForNamespace(claudeTerminalNamespace(sessionId)) }
   };
 
@@ -239,7 +243,7 @@ function createClaudeConversationHost({
           }
         }
       };
-      if (mode === "activity") return contextFor(openingContext).then(context => ({
+      if (mode === "activity") return ownerContextFor({ ...openingContext, sessionId }).then(context => ({
         context, native: { owner: conversations }
       }));
       if (mode === "detachedCleanup") return {

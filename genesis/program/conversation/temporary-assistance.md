@@ -470,7 +470,9 @@ Stop or Delete request. Late responses cannot restart a retired reader or report
 an obsolete repair result. Server startup restores discovery and finishes recorded
 Close attempts. Work discovered without its original backend observer is stopped;
 restoration does not send or resume a turn. Active temporary work and Codex goals
-also prevent dormant-project cleanup, just like main chat.
+also prevent dormant-project cleanup, just like main chat. Claude counts only a
+temporary turn its server is running; one saved as active before a restart ended
+with that server and does not keep the project open.
 Explicit Close is one server operation: retain the closing record, pause any goal,
 confirm native work stopped, delete the native conversation, remove its owned
 attachments, then delete the record and transcript. A failure retains the record

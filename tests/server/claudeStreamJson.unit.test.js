@@ -1,5 +1,6 @@
 import { assistantGoalManagementMessage } from "@local/vibe64-runtime/shared/assistantRouting";
-import { prepareSessionDetachedConversationRun, prepareSessionDetachedConversationCleanup, createSessionConversationBinding, prepareSessionConversationActivity, prepareSessionConversationRenewal, prepareSessionConversationCreation, prepareSessionConversationReadiness, prepareSessionConversationSettings, prepareSessionConversationDisposal, prepareProjectConversationCleanup, prepareConversationRuntimeInvalidation, prepareConversationReconciliation } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
+import { prepareSessionDetachedConversationRun, prepareSessionDetachedConversationCleanup, createSessionConversationBinding, prepareSessionConversationActivity, prepareSessionConversationRenewal, prepareSessionConversationCreation, prepareSessionConversationReadiness, prepareSessionConversationSettings, prepareSessionConversationDisposal, prepareProjectConversationCleanup, prepareConversationRuntimeInvalidation, prepareConversationReconciliation, prepareSessionConversationRenewalProof } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
+import * as assistantChangeover from "../../packages/vibe64-terminals/src/server/assistantChangeover.js";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
@@ -89,7 +90,8 @@ function createClaudeSessionAgentProvider(options) {
   const conversations = options.conversationRuntime || createConversationRuntime({
     authorize: ({ context, conversationId }) => context.sessionId === conversationId,
     host: { nativeTools: true, conversation: ({ id, context, input, options, operation }) => operation === "runDetachedConversation"
-      ? prepareSessionDetachedConversationRun(provider, id, context, input, options) : operation === "interruptDetachedConversation" || operation === "deleteDetachedConversation"
+      ? prepareSessionDetachedConversationRun(provider, id, context, input, options) : operation === "releaseRenewalPredecessorProcessExitProof"
+      ? prepareSessionConversationRenewalProof(provider, id, context, input, operation) : operation === "interruptDetachedConversation" || operation === "deleteDetachedConversation"
       ? prepareSessionDetachedConversationCleanup(provider, id, context, input,
         operation === "interruptDetachedConversation" ? "interruptDetachedChatTurn" : "deleteDetachedChatThread") : operation === "inspectTemporaryActivity"
       ? prepareSessionConversationActivity(provider, id, context) : operation === "generateRenewalHandover" || operation === "seedRenewalHandover"
@@ -143,7 +145,7 @@ function createClaudeSessionAgentProvider(options) {
   }
 
 
-  const facade = { ...provider,
+  const facade = { ...provider, manager,
     open: context => conversations.open({ id: context.sessionId, context }),
     hasActiveTemporaryConversation: context => provider.projectConversationResult("hasActiveTemporaryConversation", () =>
       conversations.inspectNativeTemporaryActivity({ id: context.sessionId, context })),
@@ -704,7 +706,9 @@ test("restoring Claude conversations preserves another engine's main identity", 
         await restored.reconcileSessions({}, [context.session], context);
       } else {
         const result = await restored[operation](context);
-        if (operation === "hasActiveTemporaryConversation") assert.equal(result.active, true);
+        // A restored owner answers from the work it runs: the temporary turn
+        // saved as active ended with the server that started it.
+        if (operation === "hasActiveTemporaryConversation") assert.equal(result.active, false);
       }
       for (const [key, value] of Object.entries(identity)) assert.equal(f.context.session.metadata[key], value, key);
       assert.equal(f.context.session.metadata.claude_conversation_id, main.thread.id);
@@ -721,6 +725,61 @@ test("restoring Claude conversations preserves another engine's main identity", 
       assert.equal(f.context.session.metadata.agent_transport_id, "claude_stream_json");
     });
   }
+});
+
+test("Claude closes and inspects a session whose workspace was never prepared", async (t) => {
+  const f = await fixture(t);
+  // Source creation failed: the session keeps its Claude selection and has no workspace.
+  delete f.context.session.metadata.source_path;
+  f.context.session.metadata.source_creation_failed = "yes";
+  assert.deepEqual(await f.provider.hasActiveTemporaryConversation(f.context), { ok: true, active: false });
+  const closed = await f.provider.closeSession(f.context);
+  assert.equal(closed.ok, true, JSON.stringify(closed));
+});
+
+test("Claude closes a hidden renewal successor through the renewal session reader", async (t) => {
+  const f = await fixture(t);
+  const { runtime, session } = f.context;
+  session.status = "renewal_pending";
+  Object.assign(session.metadata, { renewal_id: "renewal-1", renewed_from: "previous" });
+  // The normal reader refuses a hidden successor, as the session store does.
+  runtime.getSession = async () => {
+    throw Object.assign(new Error("This session is private while its renewal is pending."), { code: "vibe64_session_renewal_private" });
+  };
+  runtime.getSessionForRenewal = async () => session;
+  const closed = await f.provider.closeSession({ ...f.context,
+    renewalCleanup: { kind: "successor", renewalId: "renewal-1", sourceSessionId: "previous" } });
+  assert.equal(closed.ok, true, JSON.stringify(closed));
+});
+
+test("Claude renewal proof release forgets an archived predecessor without reading it", async (t) => {
+  const f = await fixture(t);
+  await f.provider.sessionState(f.context);
+  const { owner } = f.provider.prepareConversationHost("test", f.context, "detachedCleanup").native;
+  assert.equal(owner.entries.size, 1);
+  // Its source is removed and the session archived before proof release.
+  f.context.session.status = "archived";
+  f.context.session.metadata.source_removed = "yes";
+  const { getSession } = f.context.runtime;
+  f.context.runtime.getSession = async () => { throw new Error("The archived predecessor was read."); };
+  const released = await f.provider.manager.releaseRenewalPredecessorProcessExitProof("test", { renewalId: "renewal-1" },
+    { runtime: f.context.runtime, session: f.context.session });
+  assert.equal(released.ok, true, JSON.stringify(released));
+  assert.equal(owner.entries.size, 0);
+  f.context.runtime.getSession = getSession;
+});
+
+test("Claude changeover away from Main forgets its retained conversations", async (t) => {
+  const f = await fixture(t);
+  await f.provider.sessionState(f.context);
+  const { owner } = f.provider.prepareConversationHost("test", f.context, "detachedCleanup").native;
+  assert.equal(owner.entries.size, 1);
+  const closed = await assistantChangeover.closeAssistantForChangeover(f.provider.manager, "test", f.context);
+  assert.equal(closed.ok, true, JSON.stringify(closed));
+  assert.equal(owner.entries.size, 0);
+  // Returning to Claude reopens the saved Main conversation.
+  const main = f.context.session.metadata.claude_conversation_id;
+  assert.equal((await f.provider.sessionState(f.context)).thread.id, main);
 });
 
 test("Claude observation failure stops native work before publishing idle", async (t) => {
@@ -2046,13 +2105,14 @@ test("main Claude common close retains unconfirmed ownership and replacement use
   await f.provider.startConversationTurn(f.context, { conversationId: temporary.conversationId, message: "Temporary", messageId: "temporary-work" });
   f.processes[0].stopAllowed = false;
   await assert.rejects(native.dispose(f.context), /exit has not been confirmed/u);
+  assert.equal(f.processes[1].stopped, true, "one unconfirmed stop does not keep the temporary process running");
   assert.equal((await f.provider.sessionState(f.context)).turn.active, true);
   assert.ok(JSON.parse((await f.store.readSession("test")).metadata[`claude_conversation_${sent.thread.id}`]).executionId);
   f.processes[0].stopAllowed = true;
   let closed;
   await assert.doesNotReject(async () => { closed = await native.dispose(f.context); }, "Close retries native cleanup");
   assert.equal(closed.ok, true);
-  assert.equal(closed.processExitProofs.length, 2);
+  assert.equal(closed.processExitProofs.length, 1, "the retry proves the process still running");
   assert.equal(f.processes.every(process => process.stopped), true);
   const reopened = await f.open("native");
   const replacement = await reopened.replace({ operationId: "replace-claude", expectedSegmentId: `claude:${sent.thread.id}`,

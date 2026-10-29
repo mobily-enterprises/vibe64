@@ -8,6 +8,12 @@ export function sessionConversationKey(session) {
 
 export { requireCompletedNativeConversationReplacement, requireCompletedConversationRewind, requireMainConversationAdmission };
 
+// A changeover ends the previous assistant's use of the session. Its native
+// conversation stays saved for a later return; nothing is retained in memory.
+export function closeAssistantForChangeover(agent, sessionId, context) {
+  return agent.closeSession(sessionId, { ...context, changeover: true, forgetConversationBinding: true });
+}
+
 // The caller holds the main agent-write lock and has checked access, idle work,
 // routing and goals. No provider history is removed by this operation. The next
 // ordinary Send delivers the briefing through the existing admission receipt.
@@ -40,7 +46,7 @@ function changeoverFor(store, sessionId, { agent, context, log, maximumInitialMe
     agent: agent && {
       sendMessage: (input) => agent.sendMessage(sessionId, input, context),
       inspectMessageAdmission: (input) => agent.inspectMessageAdmission(sessionId, input, context),
-      closeSession: () => agent.closeSession(sessionId, { ...context, changeover: true, forgetConversationBinding: true })
+      closeSession: () => closeAssistantForChangeover(agent, sessionId, context)
     },
     presentation: MAIN_CONVERSATION_PRESENTATION,
     log,

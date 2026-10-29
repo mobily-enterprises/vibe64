@@ -100,9 +100,7 @@ export async function readSessionConversationContext(engine, projectService, ses
     scope = options.assistantScope || null;
     if (scope) return scopedOpenCodeContext(id, scope, options);
   } else {
-    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(id)) throw new TypeError("Claude requires a valid session id.");
-    scope = options.assistantScope;
-    if (scope && scope.id !== id) throw claudeConversationError("Claude conversation scope does not match.");
+    scope = claudeConversationScope(id, options);
   }
 
   const runtime = (codex ? codex.runtime : options.runtime) || (scope
@@ -141,7 +139,31 @@ export async function readSessionConversationContext(engine, projectService, ses
   const workdir = scope?.workdir || await learningSessionExecutionRoot(runtime, id, { allowClosing: options.allowClosing === true }) || sessionSourcePath(session);
   if (!path.isAbsolute(workdir || "") || !runtime.stateRoot) throw claudeConversationError("Claude requires a prepared session workspace.");
   return { ...options, runtime, session, assistantSelection: selection, selection, sessionId: id, workdir,
-    key: `${path.resolve(runtime.stateRoot)}\0${id}` };
+    key: claudeConversationKey(runtime, id) };
+}
+
+function claudeConversationKey(runtime, id) {
+  return `${path.resolve(runtime.stateRoot)}\0${id}`;
+}
+
+function claudeConversationScope(id, options) {
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(id)) throw new TypeError("Claude requires a valid session id.");
+  const scope = options.assistantScope;
+  if (scope && scope.id !== id) throw claudeConversationError("Claude conversation scope does not match.");
+  return scope;
+}
+
+// Cleanup and activity reach what the Claude owner retains for a session by its
+// key alone. They need no workspace or Claude selection: a session whose source
+// was never created or was already removed can still be closed and inspected.
+export async function readClaudeConversationOwnerContext(projectService, sessionId, options = {}) {
+  const id = String(sessionId ?? "").trim();
+  const scope = claudeConversationScope(id, options);
+  const runtime = options.runtime || (scope
+    ? { stateRoot: scope.runtimeRoot }
+    : await projectService.createRuntime({ inspectSource: false }));
+  if (!runtime.stateRoot) throw claudeConversationError("Claude requires a session state root.");
+  return { ...options, runtime, sessionId: id, key: claudeConversationKey(runtime, id) };
 }
 
 function scopedOpenCodeContext(id, assistantScope, options) {

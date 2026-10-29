@@ -185,6 +185,8 @@ the restart that chat can be read, messaged, archived and removed as usual.
 A session whose workspace could not be created never started its assistant, so
 archiving it skips that assistant's cleanup; it also does not hold the project
 open or make project Close fail.
+A session whose workspace could not be created, or whose source an earlier
+archive attempt already removed, can still be archived the same way.
 When Vibe64 starts, it finishes archives a restart interrupted. A session it
 cannot finish is named in the server log with the reason, and the other sessions
 are still finished. If the server is too busy to open an archived session, for

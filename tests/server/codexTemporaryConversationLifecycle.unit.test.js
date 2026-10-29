@@ -2326,6 +2326,25 @@ test("cold terminal cleanup honors an idle session's saved OpenCode selection", 
   }, { throughTerminalService: true });
 });
 
+test("an archived session's assistant check prepares no provider", { timeout: 15_000 }, async () => {
+  await withAgentMessageController(async ({ captures, runtime, sessionId, terminalService }) => {
+    // The store still returns an archived session, such as a renewed predecessor.
+    const { getSession } = runtime;
+    runtime.getSession = async (id, options) => {
+      const session = await getSession(id, options);
+      return { ...session, status: "archived",
+        metadata: { ...session.metadata, session_closing_reason: "archived", source_removed: "yes" } };
+    };
+    try {
+      const result = await terminalService.ensureAgentSession(sessionId);
+      assert.deepEqual(result, { ok: false, code: "vibe64_session_archived", error: "This session is archived.", sessionId });
+      assert.equal(captures.providerOptions.length, 0, "an archived session must not prepare its assistant");
+    } finally {
+      runtime.getSession = getSession;
+    }
+  }, { throughTerminalService: true });
+});
+
 test("session terminal cleanup drains its supporting services through the existing project owner", { timeout: 15_000 }, async () => {
   const calls = [];
   const projectServices = {

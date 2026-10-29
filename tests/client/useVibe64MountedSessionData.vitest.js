@@ -561,7 +561,9 @@ describe("useVibe64MountedSessionData", () => {
       ["vibe64_agent_control_recovery_failed", false],
       ["vibe64_agent_control_recovery_failed", true],
       ["vibe64_codex_history_unsupported", false],
-      ["vibe64_codex_history_unsupported", true]
+      ["vibe64_codex_history_unsupported", true],
+      ["vibe64_session_archived", false],
+      ["vibe64_session_archived", true]
     ])("keeps %s actionable until an explicit retry succeeds (HTTP error: %s)", async (code, httpError) => {
       const failure = {
         ok: false,

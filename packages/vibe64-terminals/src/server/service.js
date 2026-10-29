@@ -50,7 +50,7 @@ import {
   prepareSessionConversationStorage,
   CLAUDE_PREPARATION_DELIVERY_STAGES
 } from "./mainConversationBinding.js";
-import { rememberAssistantBeforeChangeover, replaceNativeConversation, requireCompletedConversationRewind, requireCompletedNativeConversationReplacement } from "./assistantChangeover.js";
+import { closeAssistantForChangeover, rememberAssistantBeforeChangeover, replaceNativeConversation, requireCompletedConversationRewind, requireCompletedNativeConversationReplacement } from "./assistantChangeover.js";
 import { createSessionAttachments } from "./sessionAttachments.js";
 import { createProviderUsage } from "./providerUsage.js";
 import {
@@ -1007,7 +1007,7 @@ function createService({
       // before that resume so only the user's next Send starts work.
       await context.runtime.store.writeMetadataValue(sessionId, "codex_changeover_pause_goal", "yes");
     }
-    const closed = await closeAgentSession(sessionId, { ...context, changeover: true });
+    const closed = await closeAssistantForChangeover(sessionAgent, sessionId, context);
     if (closed?.ok === false) return closed;
     const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
     await rememberAssistantBeforeChangeover(context, vibe64AssistantConversationKey(selection));
@@ -4000,6 +4000,10 @@ function createService({
 
       try {
         const context = await assistantSessionOptions(sessionId, options);
+        // An archived session, such as a renewed predecessor, has no assistant to prepare.
+        if (context.session.status === VIBE64_SESSION_STATUS.ARCHIVED) {
+          return { ok: false, code: "vibe64_session_archived", error: "This session is archived.", sessionId };
+        }
         const selection = vibe64AssistantSelectionFromMetadata(context.session.metadata);
         if (selection.engineId === "codex" && (context.session.metadata.agent_identity_provider !== "codex" ||
             !context.session.metadata.agent_identity_conversation_id)) {
