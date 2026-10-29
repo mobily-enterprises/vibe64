@@ -100,7 +100,10 @@ When an assistant cannot start, stops by itself or reports a failure, see [When 
    conversation; selecting another project does not move an earlier request.
    Steering never stops running work: Claude reads the instruction after its
    current command (such as a deploy) finishes, and Codex adds it to the active
-   turn. Use **Stop** when you want to cancel.
+   turn. Use **Stop** when you want to cancel. When the assistant reads your
+   message it first answers it in a short reply (a direct question gets a direct
+   answer), then continues. Its progress lines show its thinking; they are not
+   that reply.
 3. Use its **Stop** control when you want to stop coding work. Stopping speech or
    Colleague's own turn has a different effect. For Codex, **Stop** targets this
    conversation; other conversations remain available even when they share your

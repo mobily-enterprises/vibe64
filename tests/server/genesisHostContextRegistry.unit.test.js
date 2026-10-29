@@ -24,14 +24,25 @@ test("installed host guidance reaches native instructions and stays absent on ot
   assert.throws(() => vibe64Driver({ ...hosted, hostGuidance: "x".repeat(1025) }), /bounded text/);
 });
 
-test("every session capability combination fits Genesis's 16 KiB host contribution limit", () => {
+test("a chat agent answers a message sent while it works in visible text, not only in its thinking", () => {
+  // Hosted Main chat, 2026-10-29: three questions sent mid-task were answered
+  // only inside Claude's thinking, which the chat shows as progress, not a reply.
+  for (const conversationKind of ["main", "temporary"]) {
+    const output = vibe64Driver(context(conversationKind));
+    assert.match(output, /never your thinking/u);
+    assert.match(output, /When they write while you work, reply first with a short visible message \(answer a direct question directly\), then continue\./u);
+  }
+});
+
+test("every session capability combination fits Genesis's 24 KiB host contribution limit", () => {
   const hostGuidance = "é".repeat(512); // 1024 UTF-8 bytes, not characters.
   for (const conversationKind of ["main", "temporary"]) {
     for (let mask = 0; mask < 16; mask++) {
       const input = context(conversationKind);
       Object.keys(input.session).forEach((key, bit) => { input.session[key] = Boolean(mask & (1 << bit)); });
       const output = vibe64Driver({ ...input, hostGuidance });
-      assert.ok(Buffer.byteLength(output, "utf8") <= 16384, `${conversationKind} capabilities ${mask} exceeds Genesis's limit`);
+      // genesis-compiler's HOST_CONTEXT_MAX_BYTES.session (24 * 1024 since 1.8.5).
+      assert.ok(Buffer.byteLength(output, "utf8") <= 24 * 1024, `${conversationKind} capabilities ${mask} exceeds Genesis's limit`);
       assert.ok(output.includes(hostGuidance), "host guidance is retained in full");
     }
   }
