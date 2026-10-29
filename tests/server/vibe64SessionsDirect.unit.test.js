@@ -3915,18 +3915,39 @@ test("an applied starter prepares the session workspace once and publishes its p
   assert.deepEqual(starts, ["session-1"]);
   // The new session's first AI turn holds it briefly; preparation waits its turn.
   assert.ok(waits[0] >= 30_000, "starter preparation waits for a busy session instead of giving up");
-  assert.equal(publications[0][0], "session-1");
-  assert.equal(publications[0][1].reason, "workspace-setup-started");
-  assert.equal(publications[0][1].session.workspaceSetup.status, "running");
+  assert.equal(publications[0][1].reason, "session-starter-applied");
+  assert.equal(publications[1][0], "session-1");
+  assert.equal(publications[1][1].reason, "workspace-setup-started");
+  assert.equal(publications[1][1].session.workspaceSetup.status, "running");
   status = "succeeded";
   finishSetup({ status });
   await completion;
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(publications[1][1].reason, "workspace-setup-completed");
+  assert.equal(publications[2][1].reason, "workspace-setup-completed");
 
   running = true;
   await service.prepareStarterWorkspace("session-1");
   assert.equal(starts.length, 1, "a running preparation is not started twice");
+});
+
+// The starter's files are unsaved session work. Without this change, repository
+// status kept the pre-starter "All work is saved" inspection, so the session
+// looked empty to Save and Archive until something unrelated re-inspected it.
+test("an applied starter announces new unsaved session work before and without preparation", async () => {
+  const publications = [];
+  const service = createService({
+    project: { async createRuntime() {
+      return { async getSession() { return { sessionId: "session-1", status: "active", workspaceSetup: {} }; } };
+    } },
+    publishSessionChanged: async (...args) => { publications.push(args); },
+    terminals: {},
+    workspaceSetupRunner: { isRunning: () => true, async start() { throw new Error("not started"); }, wait: () => null }
+  });
+
+  await service.prepareStarterWorkspace("session-1");
+  assert.deepEqual(publications.map(([sessionId, change]) => [sessionId, change.reason]), [
+    ["session-1", "session-starter-applied"]
+  ]);
 });
 
 test("workspace preparation explicitly reruns succeeded recipes and retains retry admission", async () => {

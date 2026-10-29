@@ -432,7 +432,41 @@ describe("session repository status registry", () => {
     expect(repositoryStatusRealtimeShouldRefresh({ reason: "session-save-completed" })).toBe(true);
     expect(repositoryStatusRealtimeShouldRefresh({ reason: "repository-canonical-changed" })).toBe(true);
     expect(repositoryStatusRealtimeShouldRefresh({ reason: "session-repository-checked" })).toBe(true);
+    expect(repositoryStatusRealtimeShouldRefresh({ reason: "session-starter-applied" })).toBe(true);
     expect(repositoryStatusRealtimeShouldRefresh({ reason: "codex-app-server-live-progress" })).toBe(false);
+  });
+
+  // The starter is applied outside any turn, Save or editor event, so without
+  // its own reason the selected session kept showing "All work is saved".
+  it("re-inspects the selected session's work when a starter is applied to it", async () => {
+    const states = [];
+    const scope = effectScope();
+    scope.run(() => useVibe64SessionRepositoryStatusRegistry({
+      onState: ({ sessionId, workState }) => states.push({ sessionId, workState }),
+      selectedSessionId: ref("session-a"),
+      sessions: ref([{ sessionId: "session-a" }]),
+      sessionsApiPath: ref("/api/app/sample/vibe64/sessions")
+    }));
+    await settleRegistryRequests();
+    expect(states.at(-1).workState.unsaved).toBe(false);
+    registryHarness.requests.length = 0;
+    const starterFiles = ["genesis/stack.md", "package.json", "src/main.js"];
+    registryHarness.requestHandler = () => ({ changedPaths: starterFiles, ok: true, unsaved: true });
+
+    const sessionEvent = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.session.changed");
+    const change = { payload: { reason: "session-starter-applied", sessionId: "session-a" } };
+    expect(sessionEvent.matches(change)).toBe(true);
+    sessionEvent.onEvent(change);
+    await settleRegistryRequests();
+
+    expect(registryHarness.requests.map(({ path }) => path)).toEqual([
+      "/api/app/sample/vibe64/sessions/session-a/work"
+    ]);
+    expect(states.at(-1)).toMatchObject({
+      sessionId: "session-a",
+      workState: { changedPaths: starterFiles, unsaved: true }
+    });
+    scope.stop();
   });
 
   it("reuses checked repository state across session switches and still responds to real invalidation", async () => {

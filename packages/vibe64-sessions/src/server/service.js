@@ -1623,10 +1623,12 @@ function createService({
     // preparation waits its turn instead of giving up and leaving the app
     // without its database until something else prepares it.
     async prepareStarterWorkspace(sessionId) {
-      if (setupRunner.isRunning(sessionId)) return;
       const runtime = await project.createRuntime({ inspectSource: false });
       const session = await runtime.getSession(sessionId, { inspectSource: false });
-      if (session.status !== "active") return;
+      // The starter's files are unsaved session work that no turn, Save or
+      // editor event announces; repository status re-inspects on this reason.
+      await publishSessionChanged(sessionId, { operation: "updated", reason: "session-starter-applied", session });
+      if (setupRunner.isRunning(sessionId) || session.status !== "active") return;
       const setup = await setupRunner.start({ runtime, session, waitMs: STARTER_PREPARATION_WAIT_MS });
       if (setup?.ok === false) return;
       await publishSessionChanged(sessionId, {

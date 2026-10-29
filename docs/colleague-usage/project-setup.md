@@ -67,8 +67,9 @@ work. Public applications and non-web projects do not need preview accounts.
    accounts. Available starters depend on the installation; do not assume an
    absent card exists.
 2. Choose **Use this starter →** on the intended card only when it matches the
-   product you want. Preparation adds it to this session; use the session's
-   **Save** control to keep the work in the project. Until then, other and new
+   product you want. Preparation adds it to this session, whose tab then counts
+   the starter's files as unsaved changes and whose **Save** button turns red;
+   use **Save** to keep the work in the project. Until then, other and new
    sessions do not have the starter, and archiving this session leaves it out of
    the project; the **Archive session** dialog warns about this unsaved work. A
    failed application reports its error and preserves existing work.

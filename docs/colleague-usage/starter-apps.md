@@ -28,6 +28,9 @@ The same choices appear on desktop and mobile. Applying a starter imports its
 source and starts **Prepare workspace** at once: it installs dependencies,
 provisions the declared resources (an installation that supplies the database
 does so here) and runs migrations; a failed preparation offers **Retry**.
+The imported files are unsaved session work: the session's tab counts them and
+its **Save** button turns red. Save them to keep the starter in the project;
+archiving the session first leaves it out.
 The coding agent can then follow the first feature request using the existing
 test commands documented in the starter's `docs/colleague-usage/testing.md`.
 

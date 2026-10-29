@@ -11,6 +11,7 @@ const REPOSITORY_STATUS_SESSION_REASONS = new Set([
   "session-save-failed",
   "session-save-started",
   "session-save-update-required",
+  "session-starter-applied",
   "session-turn-checkpoint-failed",
   "session-turn-checkpoint-updated",
   "session-update-completed",
