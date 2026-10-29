@@ -10,6 +10,7 @@ import {
   openSync,
   readFileSync,
   readSync,
+  readdirSync,
   realpathSync,
   renameSync,
   rmSync,
@@ -131,6 +132,7 @@ const MANAGED_EXECUTION_WORK_MEMORY_MAX_BYTES = 1024 * 1024 * 1024 * 1024;
 const MANAGED_EXECUTION_TASKS_MIN = 8;
 const MANAGED_EXECUTION_TASKS_MAX = 8192;
 const MANAGED_EXECUTION_STOP_TIMEOUT_MS = 15_000;
+const MANAGED_EXECUTION_RELEASE_KEEP_MAX = 4096;
 
 if (import.meta.main) {
   main().catch((error) => {
@@ -230,6 +232,10 @@ function handleManagedExecutionOperation(payload = {}, requestPayloadPath = "") 
     const result = managedWorkflowOperation(payload, owner);
     process.stdout.write(`${JSON.stringify(result)}\n`);
     if (result.ok !== true) process.exitCode = 1;
+    return;
+  }
+  if (action === "release-ended") {
+    process.stdout.write(`${JSON.stringify(releaseEndedManagedExecutions(owner, payload.keepExecutionIds))}\n`);
     return;
   }
   const executionId = managedExecutionId(payload.executionId);
@@ -1447,6 +1453,55 @@ function stopManagedExecution(unitName = "", executionId = "", owner = {}, {
   };
 }
 
+// A receipt directory is the runner's handoff to the controller and outlives
+// its unit until the controller acknowledges it. Starting, the controller names
+// every execution it still owns; every other receipt whose unit systemd has
+// collected or keeps only as inactive or failed is released in this one call,
+// and those failed unit records are reset. A loaded unfinished unit keeps both.
+function releaseEndedManagedExecutions(owner = {}, keepExecutionIds = [], {
+  listUnits = () => runRootCommandAllowFailure("systemctl", [
+    "list-units", "--all", "--plain", "--no-legend", "--full",
+    `vibe64-exec-${workspaceFromDaemonUsername(safeUsername(owner.username))}-*.service`
+  ]),
+  readEntries = (directory) => {
+    try {
+      return readdirSync(directory);
+    } catch (error) {
+      if (error?.code === "ENOENT") return [];
+      throw error;
+    }
+  },
+  removeRuntime = (executionId) => rmSync(managedExecutionRuntimeRoot(owner, executionId), { force: true, recursive: true }),
+  resetFailed = (unitNames) => runRootCommandAllowFailure("systemctl", ["reset-failed", ...unitNames])
+} = {}) {
+  if (!Array.isArray(keepExecutionIds) || keepExecutionIds.length > MANAGED_EXECUTION_RELEASE_KEEP_MAX) {
+    throw new Error("Vibe64 exec helper requires a bounded list of the executions to keep.");
+  }
+  const keptUnits = new Set(keepExecutionIds.map((id) => managedExecutionUnitName(managedExecutionId(id), owner)));
+  const listed = listUnits();
+  if (listed.error || listed.status !== 0) {
+    throw new Error("Vibe64 exec helper could not list the workspace's execution units.");
+  }
+  const unfinished = new Set();
+  const failed = [];
+  for (const line of String(listed.stdout || "").split(/\r?\n/u)) {
+    const [unitName = "", , activeState = ""] = line.trim().split(/\s+/u);
+    if (!unitName || keptUnits.has(unitName)) continue;
+    if (activeState === "failed") failed.push(unitName);
+    else if (activeState !== "inactive") unfinished.add(unitName);
+  }
+  let released = 0;
+  for (const name of readEntries(path.join(managedExecutionRuntimeBase(owner), "executions"))) {
+    if (!MANAGED_EXECUTION_ID_PATTERN.test(name) || name !== name.toLowerCase()) continue;
+    const unitName = managedExecutionUnitName(name, owner);
+    if (keptUnits.has(unitName) || unfinished.has(unitName)) continue;
+    removeRuntime(name);
+    released += 1;
+  }
+  for (let index = 0; index < failed.length; index += 256) resetFailed(failed.slice(index, index + 256));
+  return { ok: true, released, reset: failed.length };
+}
+
 function assertNormalizedPayload(payload = {}) {
   if (
     payload?.schema !== EXEC_HELPER_PAYLOAD_SCHEMA ||
@@ -2392,7 +2447,7 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
 
 export { managedWorkflowCounters, managedWorkflowIdentity, managedExecutionOomBoundary,
   managedExecutionState, managedExecutionStopTimeoutMs, managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal,
-  stopManagedExecution, stopManagedServiceUnit,
+  releaseEndedManagedExecutions, stopManagedExecution, stopManagedServiceUnit,
   assertExpectedId, canonicalPath, helperChildEnv, resolveAllowedCwd,
   resolveAllowedDeploymentServicePath,
   resolveAllowedUserHomePath, runUserCommand };

@@ -58,6 +58,16 @@ execution whose scope is already empty signals nothing: it only removes the
 runtime receipt directory and resets systemd's failed-unit record, which also
 releases work that ended on its own.
 
+The helper's `release-ended` action acknowledges, in one call, the receipts of
+every finished execution its caller no longer owns. The caller names the
+executions it still owns (at most 4,096); the helper lists the workspace's
+execution units once and removes every other receipt directory under
+`/run/vibe64-<workspace>/executions` whose unit is gone, inactive or failed,
+then resets those failed units. A loaded unfinished unit keeps its receipt, and
+a failed unit listing removes nothing. The receipt is a runtime handoff that
+must outlive its unit until the caller has read it, so the helper never removes
+it when the unit ends.
+
 A finite capture's unit sets `LogLevelMax=notice`. Its output already returns
 to the caller, so the journal keeps only systemd's notices, warnings and errors
 about it (a failed or killed command, its exit status and result) and none of

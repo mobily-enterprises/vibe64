@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import { helperChildEnv, managedExecutionState, managedExecutionOomBoundary, managedExecutionStopTimeoutMs,
-  managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal,
+  managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal, releaseEndedManagedExecutions,
   stopManagedExecution, stopManagedServiceUnit } from "../../packages/vibe64-execution/src/host/execHelper.js";
 import {
   RUNTIME_PACKS,
@@ -549,4 +549,34 @@ test("runtime pack lists stay in step: interactive order and the helper PATH cov
   for (const [runtime, pack] of Object.entries(RUNTIME_PACKS)) {
     assert.ok(pack.binDirs.some((dir) => helperPackDirs.includes(dir)), `helper PATH misses runtime ${runtime}`);
   }
+});
+
+test("a starting controller releases every receipt and failed unit record except those it owns or that still run", () => {
+  const owner = { username: "v64d_test" };
+  const id = (digit) => `${digit.repeat(8)}-0000-4000-8000-00000000000${digit}`;
+  const unit = (executionId) => `vibe64-exec-test-${executionId.replaceAll("-", "")}.service`;
+  const [owned, running, failed, collected, orphanFailed] = ["a", "b", "c", "d", "e"].map(id);
+  const removed = [];
+  const reset = [];
+  const options = (status = 0) => ({
+    listUnits: () => ({ status, stdout: [
+      `${unit(owned)} loaded failed failed Vibe64 job execution`,
+      `${unit(running)} loaded active running Vibe64 job execution`,
+      `${unit(failed)} loaded failed failed Vibe64 job execution`,
+      `${unit(orphanFailed)} loaded failed failed Vibe64 job execution`
+    ].join("\n") }),
+    readEntries: (directory) => {
+      assert.equal(directory, "/run/vibe64-test/executions");
+      return [owned, running, failed, collected, "not-an-execution", owned.toUpperCase()];
+    },
+    removeRuntime: (executionId) => removed.push(executionId),
+    resetFailed: (unitNames) => reset.push(...unitNames)
+  });
+  assert.throws(() => releaseEndedManagedExecutions(owner, [owned], options(1)), /could not list/u);
+  assert.deepEqual([removed, reset], [[], []], "an unproven unit inventory releases nothing");
+  assert.throws(() => releaseEndedManagedExecutions(owner, "all", options()), /bounded list/u);
+
+  assert.deepEqual(releaseEndedManagedExecutions(owner, [owned], options()), { ok: true, released: 2, reset: 2 });
+  assert.deepEqual(removed, [failed, collected], "the owned receipt and the running unit's are kept");
+  assert.deepEqual(reset, [unit(failed), unit(orphanFailed)], "the owned failed unit keeps its record");
 });
