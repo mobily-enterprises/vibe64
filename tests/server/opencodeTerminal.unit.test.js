@@ -1,5 +1,6 @@
 import { createSessionConversationBinding, prepareSessionConversationDisposal } from "../../packages/vibe64-terminals/src/server/mainConversationBinding.js";
 import { createService as createTerminalService } from "../../packages/vibe64-terminals/src/server/service.js";
+import { createAssistantRoutingStore } from "../../packages/vibe64-core/src/server/assistantRoutingStore.js";
 import { createSessionAgentManager } from "../../packages/vibe64-terminals/src/server/agent/sessionAgentManager.js";
 import { opencodeTerminalNamespace } from "../../packages/vibe64-terminals/src/server/terminalShared.js";
 import { createConversationRuntime } from "@jskit-ai/assistant-core/server/conversation";
@@ -2956,6 +2957,47 @@ test("main OpenCode terminal service retains original admission, streaming and S
   assert.equal(metadata.runtime, undefined);
   assert.equal(metadata.opencode_conversation_id, sent.thread.id);
   assert.equal(JSON.parse(metadata.assistant_changeover).engines.opencode.pending, undefined);
+});
+
+test("server shutdown stops a running session-naming Helper instead of waiting for its name", { timeout: 30000 }, async t => {
+  const helperIds = new Set();
+  const helperRunning = Promise.withResolvers();
+  const helperStopped = Promise.withResolvers();
+  const timers = new Set();
+  t.after(() => { for (const timer of timers) clearTimeout(timer); });
+  const f = await mainOpenCodeServiceFixture(t, {
+    helperResponse: '{"name":"Bookings"}',
+    beforePrompt({ id, input }) {
+      if (!String(input?.prompt?.text || "").includes("Choose one short, descriptive word")) return;
+      helperIds.add(id);
+      helperRunning.resolve();
+    },
+    async beforeMessages(id) {
+      if (!helperIds.has(id)) return;
+      // A slow Helper: it answers when stopped, or by itself after 3 s.
+      await Promise.race([helperStopped.promise, new Promise(resolve => timers.add(setTimeout(resolve, 3000)))]);
+    },
+    async interrupt() {
+      helperStopped.resolve();
+      return true;
+    }
+  });
+  await f.store.writeMetadataValue("session-1", "label", "");
+  const quickHelper = { ...JSON.parse(f.session.metadata.assistant_selection), selectionSource: "explicit" };
+  await createAssistantRoutingStore({ systemRoot: path.join(f.root, "system") }).write({ owner: { quickHelper }, nonOwner: { quickHelper } }, 0);
+  const options = { runtime: f.runtime, vibe64User: { id: "service-owner", username: "service-owner", role: "owner" } };
+  const sent = await f.service.sendAgentMessage("session-1", { message: "Bookings", messageId: "first-message" }, options);
+  assert.equal(sent.delivered, true, JSON.stringify(sent));
+  await helperRunning.promise;
+
+  const started = Date.now();
+  await f.service.invalidateAgentRuntimes({ reason: "server-shutdown" });
+  const elapsedMs = Date.now() - started;
+  assert.ok(elapsedMs < 2500, `server shutdown waited ${elapsedMs} ms for a discarded session name`);
+  const task = await f.store.readBackgroundTask("session-1", "session-name");
+  assert.equal(task.status, "failed");
+  assert.equal(task.assistantHelper, null, "the stopped Helper's conversation is closed");
+  assert.equal((await f.store.readSession("session-1")).metadata.label || "", "");
 });
 
 
