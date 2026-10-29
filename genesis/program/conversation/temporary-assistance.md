@@ -617,7 +617,12 @@ notice marks a view working only while its request is delivering or running, and
 adopts that request's ID unless the view's own Send is still being delivered; a
 failed or uncertain Send never fences another view's request. The send fence
 holds only a request that the saved transcript has not yet followed with a later
-one. The idle completion, the last server work for a finished turn, retries a
+one. While a turn runs, each completed native message marks its chat for saving.
+One coalesced write per session saves every marked chat after a short delay, so
+a session's chats never compete with each other for the lease, and output
+completed during that write is saved by one more write after it. The write
+does not wait: when the lease is busy the marks stay for the next completed
+message. The idle completion, the last server work for a finished turn, retries a
 busy source lease for both its transcript save and its routing completion and
 logs a failure instead of silently leaving the turn in progress. Every view
 showing a reply therefore settles on the same finished state, whichever view

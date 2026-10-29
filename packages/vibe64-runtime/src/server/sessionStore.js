@@ -1854,6 +1854,7 @@ function createVibe64SessionStore({
   }
 
   async function runSessionExclusiveRecord(sessionId, operationName, operation, {
+    expectedRefusal = false,
     operation: diagnosticOperation = "",
     renewal = false,
     waitMs = 0
@@ -1866,6 +1867,7 @@ function createVibe64SessionStore({
     return runReentrantExclusive(lockPath, async () => {
       let blockingOperation = "";
       const release = await acquireStoreSessionLock(sessionPaths, operationName, {
+        expectedRefusal,
         onRejected: (ownerOperation) => { blockingOperation = ownerOperation; },
         operation: diagnosticOperation,
         waitMs

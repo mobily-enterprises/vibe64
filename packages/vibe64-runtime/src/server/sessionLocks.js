@@ -185,6 +185,8 @@ async function quarantineAbandonedSessionLock(lockPath = "") {
 }
 
 async function acquireSessionLock(sessionPaths, lockName = "", {
+  // The caller retries or falls back, so a refusal is routine information.
+  expectedRefusal = false,
   logger = null,
   onRejected = null,
   operation = "",
@@ -203,7 +205,8 @@ async function acquireSessionLock(sessionPaths, lockName = "", {
       return;
     }
     try {
-      logOperationalEvent(logger, ["contended", "rejected"].includes(event) ? "warn" : "info", {
+      const warning = event === "contended" || (event === "rejected" && !expectedRefusal);
+      logOperationalEvent(logger, warning ? "warn" : "info", {
         component: "vibe64.session_lock",
         event: `vibe64.session_lock.${event}`,
         projectRoot: sessionPaths.projectContextRoot,

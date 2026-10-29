@@ -167,6 +167,39 @@ test("wait timeout logs its blocker once and a final rejection rather than each 
   });
 });
 
+test("an expected zero-wait refusal is logged as information, an unexpected one as a warning", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const levels = [];
+    const store = createVibe64SessionStore({
+      projectContextRoot: targetRoot,
+      projectRuntimeRoot: projectRuntimeRoot(targetRoot),
+      logger: { info: (fields) => levels.push(["info", fields.operation, fields.event]),
+        warn: (fields) => levels.push(["warn", fields.operation, fields.event]) }
+    });
+    await store.createSession({ runtimeKind: "genesis", sessionId: "lock-diagnostics" });
+    const run = (operation, options = {}) => runVibe64AgentWriteExclusive({ store }, "lock-diagnostics",
+      () => assert.fail("must not enter"), { operation, waitMs: 0, ...options });
+    const entered = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    const holder = runVibe64AgentWriteExclusive({ store }, "lock-diagnostics", async () => {
+      entered.resolve();
+      await release.promise;
+    }, { operation: "ensure-agent-session" });
+    await entered.promise;
+    try {
+      assert.equal((await run("temporary-save", { expectedRefusal: true })).value.code, "vibe64_agent_write_mode_busy");
+      assert.equal((await run("update-session-work")).value.code, "vibe64_agent_write_mode_busy");
+    } finally {
+      release.resolve();
+      await holder;
+    }
+    assert.deepEqual(levels.filter(([, operation]) => operation !== "ensure-agent-session"), [
+      ["info", "temporary-save", "vibe64.session_lock.rejected"],
+      ["warn", "update-session-work", "vibe64.session_lock.rejected"]
+    ]);
+  });
+});
+
 test("operation failure releases the lock, and a broken logger cannot change admission", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const { run } = await fixture(targetRoot, () => { throw new Error("logger unavailable"); });

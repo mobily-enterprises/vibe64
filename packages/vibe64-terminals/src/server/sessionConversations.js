@@ -431,26 +431,48 @@ function createSessionConversations({
   // session write coordinator so a late read cannot recreate a closed record.
   const write = (sessionId, options, operation) => runAgentWrite(sessionId, options, operation, {
     operation: "temporary-conversation",
-    waitMs: options.lockWaitMs ?? 10_000
+    waitMs: options.lockWaitMs ?? 10_000,
+    // A zero-wait attempt always falls back to saved state or a later save,
+    // so its refusal is routine rather than a warning.
+    ...(options.lockWaitMs === 0 ? { expectedRefusal: true } : {})
   });
 
   // Temporary output is saved by the same transcript read as a browser read or
-  // the idle completion. A completed native message schedules one coalesced
-  // read without waiting for the lease; when the lease is busy, the next
-  // completed message or the idle completion read saves it instead.
+  // the idle completion. A completed native message marks its chat, and one
+  // coalesced write per session saves every marked chat, so the session's chats
+  // never contend with each other for the lease. Marks made during that write
+  // are saved by one more write after it. The write does not wait for the
+  // lease: when it is busy the marks stay, and the next completed message or
+  // the idle completion read saves them.
   const temporarySaves = new Map();
   function scheduleTemporarySave(sessionId, conversationId, runtime) {
-    const key = `${sessionId}\0${conversationId}`;
-    if (temporarySaves.has(key)) return;
-    const timer = setTimeout(() => {
-      temporarySaves.delete(key);
-      void write(sessionId, { runtime, lockWaitMs: 0 }, async (ctx) => {
+    let pending = temporarySaves.get(sessionId);
+    if (!pending) temporarySaves.set(sessionId, pending = { conversationIds: new Set(), timer: null, saving: false });
+    pending.conversationIds.add(conversationId);
+    pending.runtime = runtime;
+    if (!pending.timer && !pending.saving) armTemporarySave(sessionId, pending);
+  }
+  function armTemporarySave(sessionId, pending) {
+    pending.timer = setTimeout(() => void saveTemporaryOutput(sessionId, pending), temporarySaveDelayMs);
+    pending.timer.unref?.();
+  }
+  async function saveTemporaryOutput(sessionId, pending) {
+    pending.timer = null;
+    pending.saving = true;
+    const conversationIds = [...pending.conversationIds];
+    pending.conversationIds.clear();
+    const result = await write(sessionId, { runtime: pending.runtime, lockWaitMs: 0 }, async (ctx) => {
+      for (const conversationId of conversationIds) {
         const record = await ctx.runtime.store.readSessionConversation(sessionId, conversationId);
-        return record && record.state !== "closing" ? snapshot(ctx, record) : null;
-      }).catch(() => {}); // Later reads and the idle completion retry the same save.
-    }, temporarySaveDelayMs);
-    timer.unref?.();
-    temporarySaves.set(key, timer);
+        if (record && record.state !== "closing") await snapshot(ctx, record);
+      }
+    }).catch(() => null); // Later reads and the idle completion retry the same save.
+    pending.saving = false;
+    if (temporarySaves.get(sessionId) !== pending) return;
+    if (result?.code === "vibe64_agent_write_mode_busy") {
+      for (const conversationId of conversationIds) pending.conversationIds.add(conversationId);
+    } else if (pending.conversationIds.size) armTemporarySave(sessionId, pending);
+    else temporarySaves.delete(sessionId);
   }
   function savingTemporaryOutput(sessionId, conversationId, ctx) {
     const forward = ctx.onEvent;
@@ -620,7 +642,7 @@ function createSessionConversations({
 
   const service = {
     close() {
-      for (const timer of temporarySaves.values()) clearTimeout(timer);
+      for (const pending of temporarySaves.values()) clearTimeout(pending.timer);
       temporarySaves.clear();
       return routing.close();
     },

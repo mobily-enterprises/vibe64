@@ -554,7 +554,9 @@ Waiting emits one initial contention event and a final acquisition or rejection,
 not an event for every poll. Prompts, file contents, credentials and the private
 lock-release token are excluded. Diagnostics do not change admission or retries.
 Contention and rejection are warnings, retained at the default log level;
-acquisition and release are informational events.
+acquisition and release are informational events. A caller that tries the lock
+without waiting and always falls back or retries (temporary chats' saves and
+reads) marks it `expectedRefusal`, and its rejection is informational too.
 
 After a reload, current activity is restored only from the server's exact live
 operation identity. Durable task status and timestamp order are not treated as

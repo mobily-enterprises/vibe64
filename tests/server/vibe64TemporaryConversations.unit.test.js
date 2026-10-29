@@ -1475,6 +1475,67 @@ test("completed temporary output is saved while the run stays active, skipping a
   });
 });
 
+test("a session's temporary chats save completed output with one write per burst and never refuse each other", { timeout: 15_000 }, async () => {
+  await withTemporaryRoot(async (root) => {
+    const f = await conversationFixture(root);
+    const attempts = [];
+    let holdNext = false;
+    const held = Promise.withResolvers();
+    const release = Promise.withResolvers();
+    const service = f.restart({ temporarySaveDelayMs: 50, runAgentWrite: async (sessionId, options, operation, lockOptions) => {
+      const save = lockOptions.waitMs === 0;
+      const exclusive = await runVibe64AgentWriteExclusive(f.runtime, sessionId, async () => {
+        if (save && holdNext) { holdNext = false; held.resolve(); await release.promise; }
+        return operation({ ...options, runtime: f.runtime, session: await f.runtime.getSession(sessionId) });
+      }, lockOptions);
+      if (save) attempts.push({ acquired: exclusive.acquired, expectedRefusal: lockOptions.expectedRefusal });
+      return exclusive.value;
+    } });
+    const start = f.sessionAgent.startConversationTurn;
+    const onEvents = [];
+    f.sessionAgent.startConversationTurn = async (id, input, options) => {
+      onEvents.push(options.onEvent);
+      return start(id, input, options);
+    };
+    for (const conversationId of ["chat", "chat-2"]) {
+      await service.createTemporaryConversation("one", { conversationId });
+      await service.startTemporaryConversationTurn("one", { conversationId, messageId: `${conversationId}-request`, message: "Begin" });
+    }
+    assert.equal(onEvents.length, 2);
+    const emit = async (index, id) => {
+      const message = { id, role: "assistant", text: `Progress ${id}.`, complete: true };
+      f.native.messages.push(message);
+      await onEvents[index]({ type: "message", message, threadId: "native", turnId: f.native.runId });
+    };
+    const savedIds = async (conversationId) => (await f.store.readConversationLog({ sessionId: "one", conversationId }))
+      .flatMap(turn => turn.messages.map(message => message.messageId));
+    const settle = () => new Promise(resolve => setTimeout(resolve, 400));
+    attempts.length = 0;
+    // A burst across both chats is saved by one write.
+    await emit(0, "one-a");
+    await emit(1, "two-a");
+    await emit(0, "one-b");
+    await settle();
+    assert.deepEqual(attempts, [{ acquired: true, expectedRefusal: true }]);
+    assert.ok((await savedIds("chat")).includes("one-b"));
+    assert.ok((await savedIds("chat-2")).includes("two-a"));
+    // Output completed while that write is still saving waits for it, then one more write saves it.
+    holdNext = true;
+    await emit(0, "one-c");
+    await held.promise;
+    await emit(1, "two-b");
+    await emit(0, "one-d");
+    await settle();
+    assert.equal(attempts.length, 1, "no save competes with the one in progress");
+    release.resolve();
+    await settle();
+    assert.deepEqual(attempts, Array.from({ length: 3 }, () => ({ acquired: true, expectedRefusal: true })));
+    assert.ok((await savedIds("chat")).includes("one-d"));
+    assert.ok((await savedIds("chat-2")).includes("two-b"));
+    await service.close();
+  });
+});
+
 test("a temporary Fix it with AI read observes completion without starting review", async () => {
   await withTemporaryRoot(async (root) => {
     const f = await temporaryChangeoverFixture(root, { role: "member", username: "collaborator" }, true);
