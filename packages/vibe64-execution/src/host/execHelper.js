@@ -1,10 +1,12 @@
 #!/opt/vibe64/runtime-packs/node26/bin/node
 import { spawn, spawnSync } from "node:child_process";
 import {
-  chmodSync,
-  chownSync,
   closeSync,
+  constants as fsConstants,
   existsSync,
+  fchmodSync,
+  fchownSync,
+  fstatSync,
   lstatSync,
   mkdirSync,
   openSync,
@@ -23,6 +25,8 @@ import { constants as osConstants } from "node:os";
 import process from "node:process";
 
 const INPUT_LIMIT_BYTES = 1024 * 1024;
+const DIRECTORY_NO_FOLLOW = fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW;
+const NEW_FILE_NO_FOLLOW = fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW;
 const STDIN_READ_BUFFER_BYTES = 64 * 1024;
 const STDIN_READ_RETRY_DELAY_MS = 10;
 const STDIN_READ_TIMEOUT_MS = 15_000;
@@ -349,15 +353,8 @@ function handleManagedExecutionOperation(payload = {}, requestPayloadPath = "") 
       tasksMax: workTasksMax
     });
   }
-  ensureManagedExecutionRuntimeParents(owner);
-  const executionRoot = managedExecutionRuntimeRoot(owner, executionId);
-  const runnerPayloadPath = path.join(executionRoot, "command.json");
-  mkdirSync(executionRoot, {
-    mode: 0o700,
-    recursive: true
-  });
-  chownSync(executionRoot, targetUser.uid, targetUser.gid);
-  writeFileSync(runnerPayloadPath, `${JSON.stringify({
+  const receipts = openWorkspaceExecutionReceipts(owner, { create: true });
+  receipts.create(executionId, targetUser, {
     args,
     command,
     controllerLeaseName,
@@ -366,15 +363,10 @@ function handleManagedExecutionOperation(payload = {}, requestPayloadPath = "") 
     inputBase64: String(payload.inputBase64 || ""),
     inputPresent: payload.inputPresent === true,
     ...(releaseEnvironmentFile ? { releaseEnvironment: true } : {}),
-    executionId,
-    schema: "vibe64.managed-execution.command",
-    schemaVersion: 1
-  })}\n`, {
-    flag: "wx",
-    mode: 0o600
+    executionId
   });
-  chmodSync(runnerPayloadPath, 0o600);
-  chownSync(runnerPayloadPath, targetUser.uid, targetUser.gid);
+  // The runner reads its command as the target user, with no privilege to lend.
+  const runnerPayloadPath = path.join(managedExecutionRuntimeRoot(owner, executionId), "command.json");
 
   const helperPath = path.resolve(process.argv[1]);
   const systemdArgs = [
@@ -411,11 +403,9 @@ function handleManagedExecutionOperation(payload = {}, requestPayloadPath = "") 
     stdio: "inherit"
   });
   if (mode !== "detached" || started.error || started.status !== 0) {
-    rmSync(executionRoot, {
-      force: true,
-      recursive: true
-    });
+    receipts.remove(executionId);
   }
+  receipts.close();
   if (started.error) {
     throw started.error;
   }
@@ -1034,19 +1024,110 @@ function managedExecutionRuntimeBase(owner = {}) {
   return `/run/vibe64-${workspace}`;
 }
 
-function ensureManagedExecutionRuntimeParents(owner = {}) {
+// The workspace's execution receipts in its daemon's runtime directory. Only
+// creating one makes the directories; stopping and releasing find none there
+// when there is none.
+function openWorkspaceExecutionReceipts(owner = {}, { create = false } = {}) {
   const runtimeBase = managedExecutionRuntimeBase(owner);
-  runRootCommand("install", [
-    "-d",
-    "-o",
-    safeUsername(owner.username),
-    "-g",
-    VIBE64_GROUP,
-    "-m",
-    "2750",
-    runtimeBase,
-    path.join(runtimeBase, "executions")
-  ]);
+  if (create) {
+    // The daemon's runtime directory sits in root's own /run, so its path is
+    // never a link the daemon planted.
+    runRootCommand("install", [
+      "-d",
+      "-o",
+      safeUsername(owner.username),
+      "-g",
+      VIBE64_GROUP,
+      "-m",
+      "2750",
+      runtimeBase
+    ]);
+  }
+  return openManagedExecutionReceipts(path.join(runtimeBase, "executions"), {
+    create,
+    gid: create ? ensureGroup(VIBE64_GROUP) : 0,
+    legacyUid: owner.uid,
+    uid: 0
+  });
+}
+
+const NO_EXECUTION_RECEIPTS = Object.freeze({
+  close() {},
+  create() { throw new Error("Vibe64 exec helper has no execution receipt directory."); },
+  entries: () => [],
+  remove() {}
+});
+
+// Root keeps a workspace's execution receipts in a directory of its own
+// (uid:gid, mode 0750: the target users of its executions only traverse it), so
+// only root adds, renames or removes receipts there. That directory sits in the
+// daemon's runtime directory, which the daemon can rearrange, so root opens it
+// without following a link and from then on works only through the open
+// directory: replacing its path afterwards changes nothing root does. A receipt
+// is created only where nothing exists yet, and every write and ownership change
+// goes through a descriptor root opened itself, never through a link. Older
+// helpers left this directory to the daemon (legacyUid); creating a receipt
+// takes it back.
+function openManagedExecutionReceipts(directory = "", {
+  create = false,
+  gid = 0,
+  legacyUid = 0,
+  uid = 0
+} = {}) {
+  if (create) {
+    try { mkdirSync(directory, { mode: 0o750 }); } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+    }
+  }
+  let descriptor;
+  try {
+    descriptor = openSync(directory, DIRECTORY_NO_FOLLOW);
+  } catch (error) {
+    if (!create && error?.code === "ENOENT") return NO_EXECUTION_RECEIPTS;
+    throw error;
+  }
+  try {
+    const owned = fstatSync(descriptor).uid;
+    if (owned !== uid && owned !== legacyUid) {
+      throw new Error("Vibe64 exec helper refused an execution receipt directory owned by another user.");
+    }
+    if (create) {
+      fchownSync(descriptor, uid, gid);
+      fchmodSync(descriptor, 0o750);
+    }
+  } catch (error) {
+    closeSync(descriptor);
+    throw error;
+  }
+  const opened = (directoryDescriptor, name = "") => path.join(`/proc/self/fd/${directoryDescriptor}`, name);
+  return {
+    close: () => closeSync(descriptor),
+    entries: () => readdirSync(opened(descriptor)),
+    remove: (executionId) => rmSync(opened(descriptor, managedExecutionId(executionId)), { force: true, recursive: true }),
+    // The receipt and the runner's command in it, handed to the target user.
+    create(executionId = "", targetUser = {}, runnerCommand = {}) {
+      const receiptPath = opened(descriptor, managedExecutionId(executionId));
+      mkdirSync(receiptPath, { mode: 0o700 });
+      const receipt = openSync(receiptPath, DIRECTORY_NO_FOLLOW);
+      try {
+        const command = openSync(opened(receipt, "command.json"), NEW_FILE_NO_FOLLOW, 0o600);
+        try {
+          writeFileSync(command, `${JSON.stringify({
+            ...runnerCommand,
+            schema: "vibe64.managed-execution.command",
+            schemaVersion: 1
+          })}\n`);
+          fchmodSync(command, 0o600);
+          fchownSync(command, targetUser.uid, targetUser.gid);
+        } finally {
+          closeSync(command);
+        }
+        fchownSync(receipt, targetUser.uid, targetUser.gid);
+      } finally {
+        closeSync(receipt);
+      }
+    }
+  };
 }
 
 function managedExecutionResultPath(owner = {}, executionId = "") {
@@ -1409,7 +1490,14 @@ function stopManagedExecution(unitName = "", executionId = "", owner = {}, {
   termTimeoutMs = MANAGED_EXECUTION_STOP_TIMEOUT_MS,
   run = runRootCommandAllowFailure,
   readState = () => managedExecutionState(unitName, executionId, owner),
-  removeRuntime = () => rmSync(managedExecutionRuntimeRoot(owner, executionId), { force: true, recursive: true }),
+  removeRuntime = () => {
+    const receipts = openWorkspaceExecutionReceipts(owner);
+    try {
+      receipts.remove(executionId);
+    } finally {
+      receipts.close();
+    }
+  },
   now = Date.now,
   wait = (milliseconds) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds)
 } = {}) {
@@ -1463,15 +1551,7 @@ function releaseEndedManagedExecutions(owner = {}, keepExecutionIds = [], {
     "list-units", "--all", "--plain", "--no-legend", "--full",
     `vibe64-exec-${workspaceFromDaemonUsername(safeUsername(owner.username))}-*.service`
   ]),
-  readEntries = (directory) => {
-    try {
-      return readdirSync(directory);
-    } catch (error) {
-      if (error?.code === "ENOENT") return [];
-      throw error;
-    }
-  },
-  removeRuntime = (executionId) => rmSync(managedExecutionRuntimeRoot(owner, executionId), { force: true, recursive: true }),
+  openReceipts = () => openWorkspaceExecutionReceipts(owner),
   resetFailed = (unitNames) => runRootCommandAllowFailure("systemctl", ["reset-failed", ...unitNames])
 } = {}) {
   if (!Array.isArray(keepExecutionIds) || keepExecutionIds.length > MANAGED_EXECUTION_RELEASE_KEEP_MAX) {
@@ -1491,12 +1571,17 @@ function releaseEndedManagedExecutions(owner = {}, keepExecutionIds = [], {
     else if (activeState !== "inactive") unfinished.add(unitName);
   }
   let released = 0;
-  for (const name of readEntries(path.join(managedExecutionRuntimeBase(owner), "executions"))) {
-    if (!MANAGED_EXECUTION_ID_PATTERN.test(name) || name !== name.toLowerCase()) continue;
-    const unitName = managedExecutionUnitName(name, owner);
-    if (keptUnits.has(unitName) || unfinished.has(unitName)) continue;
-    removeRuntime(name);
-    released += 1;
+  const receipts = openReceipts();
+  try {
+    for (const name of receipts.entries()) {
+      if (!MANAGED_EXECUTION_ID_PATTERN.test(name) || name !== name.toLowerCase()) continue;
+      const unitName = managedExecutionUnitName(name, owner);
+      if (keptUnits.has(unitName) || unfinished.has(unitName)) continue;
+      receipts.remove(name);
+      released += 1;
+    }
+  } finally {
+    receipts.close();
   }
   for (let index = 0; index < failed.length; index += 256) resetFailed(failed.slice(index, index + 256));
   return { ok: true, released, reset: failed.length };
@@ -1971,9 +2056,11 @@ function ensureGroup(groupName = "") {
   const result = spawnSync("getent", ["group", groupName], {
     encoding: "utf8"
   });
-  if (result.status !== 0) {
+  const gid = Number(String(result.stdout || "").split(":")[2]);
+  if (result.status !== 0 || !Number.isSafeInteger(gid)) {
     throw new Error(`Required OS group was not found: ${groupName}`);
   }
+  return gid;
 }
 
 function createSystemUser(username = "", password = "") {
@@ -2445,7 +2532,7 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
   return env;
 }
 
-export { managedWorkflowCounters, managedWorkflowIdentity, managedExecutionOomBoundary,
+export { managedWorkflowCounters, openManagedExecutionReceipts, managedWorkflowIdentity, managedExecutionOomBoundary,
   managedExecutionState, managedExecutionStopTimeoutMs, managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal,
   releaseEndedManagedExecutions, stopManagedExecution, stopManagedServiceUnit,
   assertExpectedId, canonicalPath, helperChildEnv, resolveAllowedCwd,

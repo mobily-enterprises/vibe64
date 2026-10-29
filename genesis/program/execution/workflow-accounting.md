@@ -68,6 +68,18 @@ removes nothing. The receipt is a runtime handoff that
 must outlive its unit until the caller has read it, so the helper never removes
 it when the unit ends.
 
+The workspace's receipts directory belongs to root, mode `0750` with the shared
+Vibe64 group, so only the helper adds, renames or removes receipts in it; an
+execution's target user only passes through it to its own receipt. It sits in
+the daemon's own runtime directory, which the daemon can rearrange, so the
+helper opens it without following a link and then works only through that open
+directory. It creates a receipt only where nothing exists yet, and writes the
+runner's command and hands it and the receipt to the target user through
+descriptors it opened itself. A link planted in place of that directory or of
+a receipt fails the start instead of being followed, and Stop and
+`release-ended` remove receipts through the same open directory. Older helpers
+left the directory to the daemon; the next start takes it back.
+
 Each managed command names itself through its execution descriptor's `label`
 and `operationId` and carries the project and session it serves, so a host
 listing running work need not fall back to a generic name. Account checks name

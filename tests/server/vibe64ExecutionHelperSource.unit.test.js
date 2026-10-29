@@ -1,10 +1,13 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 import { helperChildEnv, managedExecutionState, managedExecutionOomBoundary, managedExecutionStopTimeoutMs,
-  managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal, releaseEndedManagedExecutions,
-  stopManagedExecution, stopManagedServiceUnit } from "../../packages/vibe64-execution/src/host/execHelper.js";
+  managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal, openManagedExecutionReceipts,
+  releaseEndedManagedExecutions, stopManagedExecution, stopManagedServiceUnit } from "../../packages/vibe64-execution/src/host/execHelper.js";
 import {
   RUNTIME_PACKS,
   VIBE64_INTERACTIVE_RUNTIME_PACKS
@@ -527,10 +530,67 @@ test("execution helper preserves only OpenCode private environment roots", async
 test("managed executions can traverse their private workspace runtime directory", async () => {
   const source = await helperSource();
 
-  assert.match(source, /ensureManagedExecutionRuntimeParents\(owner\)/u);
+  assert.match(source, /openWorkspaceExecutionReceipts\(owner, \{ create: true \}\)/u);
   assert.match(source, /function managedExecutionRuntimeBase\(owner = \{\}\)/u);
   assert.match(source, /runRootCommand\("install", \[/u);
-  assert.match(source, /"2750",\s+runtimeBase,\s+path\.join\(runtimeBase, "executions"\)/u);
+  assert.match(source, /"2750",\s+runtimeBase\s+\]\);/u);
+});
+
+// The workspace's receipt directory sits in its daemon's runtime directory,
+// which the daemon can rearrange. Whatever link it plants there, root neither
+// follows it nor writes to, re-modes or re-owns the link's target.
+test("execution receipts follow no planted link and never touch its target", async (t) => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "v64-exec-receipts-"));
+  t.after(() => rm(root, { force: true, recursive: true }));
+  // A group this process may give its own files, so a group change shows.
+  const otherGroup = process.getgroups().find((gid) => gid !== process.getgid()) ?? process.getgid();
+  const ids = { gid: otherGroup, legacyUid: process.getuid(), uid: process.getuid() };
+  const targetUser = { gid: otherGroup, uid: process.getuid() };
+  const [planted, fresh, later] = ["a", "b", "c"].map((digit) => `${digit.repeat(8)}-0000-4000-8000-${digit.repeat(12)}`);
+  const command = (executionId) => ({ args: [], command: "/bin/true", cwd: "/", env: {}, executionId });
+  const victim = path.join(root, "victim");
+  await mkdir(victim, { mode: 0o755 });
+  const before = await stat(victim);
+  const untouched = async () => {
+    const after = await stat(victim);
+    assert.deepEqual([after.mode, after.uid, after.gid], [before.mode, before.uid, before.gid], "the link's target keeps its mode and owner");
+    assert.deepEqual(await readdir(victim), [], "nothing is written through the link");
+  };
+
+  // A link in place of the receipt directory.
+  await mkdir(path.join(root, "linked"));
+  await symlink(victim, path.join(root, "linked", "executions"));
+  assert.throws(() => openManagedExecutionReceipts(path.join(root, "linked", "executions"), { ...ids, create: true }));
+  await untouched();
+
+  // A link in place of one receipt.
+  const directory = path.join(root, "executions");
+  const receipts = openManagedExecutionReceipts(directory, { ...ids, create: true });
+  t.after(() => receipts.close());
+  await symlink(victim, path.join(directory, planted));
+  assert.throws(() => receipts.create(planted, targetUser, command(planted)), { code: "EEXIST" });
+  await untouched();
+  receipts.remove(planted);
+  await untouched();
+  assert.deepEqual(await readdir(directory), [], "removing that receipt removes only the link");
+
+  receipts.create(fresh, targetUser, command(fresh));
+  const created = await stat(path.join(directory, fresh));
+  const runnerCommand = path.join(directory, fresh, "command.json");
+  assert.deepEqual([created.mode & 0o777, created.gid], [0o700, otherGroup]);
+  assert.deepEqual([(await stat(runnerCommand)).mode & 0o777, (await stat(runnerCommand)).gid], [0o600, otherGroup]);
+  assert.equal(JSON.parse(await readFile(runnerCommand, "utf8")).executionId, fresh);
+  assert.deepEqual([(await stat(directory)).mode & 0o777, (await stat(directory)).gid], [0o750, otherGroup]);
+
+  // The path is replaced by a link after root opened the directory.
+  await rename(directory, path.join(root, "moved"));
+  await symlink(victim, directory);
+  receipts.create(later, targetUser, command(later));
+  await untouched();
+  assert.ok(existsSync(path.join(root, "moved", later, "command.json")), "root keeps working in the directory it opened");
+
+  // A directory someone else owns is refused.
+  assert.throws(() => openManagedExecutionReceipts(path.join(root, "moved"), { ...ids, legacyUid: 0, uid: 0 }), /owned by another user/u);
 });
 
 test("runtime pack lists stay in step: interactive order and the helper PATH cover every pack", () => {
@@ -558,6 +618,7 @@ test("a starting controller releases every receipt and failed unit record except
   const [owned, running, failed, collected, orphanFailed] = ["a", "b", "c", "d", "e"].map(id);
   const removed = [];
   const reset = [];
+  let closed = 0;
   const options = (status = 0) => ({
     listUnits: () => ({ status, stdout: [
       `${unit(owned)} loaded failed failed Vibe64 job execution`,
@@ -565,11 +626,11 @@ test("a starting controller releases every receipt and failed unit record except
       `${unit(failed)} loaded failed failed Vibe64 job execution`,
       `${unit(orphanFailed)} loaded failed failed Vibe64 job execution`
     ].join("\n") }),
-    readEntries: (directory) => {
-      assert.match(directory, /-test\/executions$/u, "only this workspace's receipts are listed");
-      return [owned, running, failed, collected, "not-an-execution", owned.toUpperCase()];
-    },
-    removeRuntime: (executionId) => removed.push(executionId),
+    openReceipts: () => ({
+      close: () => { closed += 1; },
+      entries: () => [owned, running, failed, collected, "not-an-execution", owned.toUpperCase()],
+      remove: (executionId) => removed.push(executionId)
+    }),
     resetFailed: (unitNames) => reset.push(...unitNames)
   });
   assert.throws(() => releaseEndedManagedExecutions(owner, [owned], options(1)), /could not list/u);
@@ -578,5 +639,6 @@ test("a starting controller releases every receipt and failed unit record except
 
   assert.deepEqual(releaseEndedManagedExecutions(owner, [owned], options()), { ok: true, released: 2, reset: 2 });
   assert.deepEqual(removed, [failed, collected], "the owned receipt and the running unit's are kept");
+  assert.equal(closed, 1, "the receipt directory is opened once and closed");
   assert.deepEqual(reset, [unit(failed), unit(orphanFailed)], "the owned failed unit keeps its record");
 });
