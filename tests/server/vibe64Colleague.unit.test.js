@@ -97,7 +97,8 @@ async function fixture(t, responses, { systemRoot, discovery = false, discoveryQ
   const context = { channel: "api", surface: "app", requestMeta: { request: { vibe64User: user } } };
   registerVibe64ActionContext(actions, {
     projectContext: { projectsRoot: root, async readWorkspaceProject({ slug }) { return { project: { path: path.join(root, slug) } }; } },
-    resolveUser: async ({ request }) => observations.allow ? request?.vibe64User : null,
+    // A request whose login ended (signed out, signed in again, disabled) resolves no user.
+    resolveUser: async ({ request }) => observations.allow && !request?.loginEnded ? request?.vibe64User : null,
     async authorizeProject({ slug, user, context }) {
       observations.projectChecks.push(slug);
       if (!watching) throw new Error("Colleague must not need a project.");
@@ -5593,6 +5594,81 @@ test("Training's release ends an attempt's thread, even mid-turn, and leaves its
   await fs.mkdir(path.join(f.root, "colleague", "NDI", "learn", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"), { recursive: true });
   await releaseLearnThread({ learnerKey: "NDI", attemptId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" });
   assert.equal(await exists(path.join(f.root, "colleague", "NDI", "learn", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")), false);
+});
+
+// Stopping and releasing a handle Colleague holds needs no live login and no
+// live thread: refusing it would only leave the turn running and the handle held.
+const freshLogin = f => ({ ...f.context, requestMeta: { request: { vibe64User: f.context.requestMeta.request.vibe64User } } });
+const sendWith = (f, context, message, messageId) => f.actions.execute({ actionId: "vibe64.colleague.message.send",
+  input: { clientId: "browser-1", message, messageId }, context });
+
+test("Training's release stops the attempt's running teacher turn instead of letting it run to the end", async t => {
+  const stream = modelStream();
+  let signal = null;
+  const f = await fixture(t, [value => { signal = value; return stream.response(value); }]);
+  t.after(() => stream.finish());
+  learnModeFixture(t).learn();
+  await f.send("Finish my lesson", "learn-1");
+  await until(() => f.observations.starts.length === 1);
+  await releaseLearnThread({ learnerKey: "NDI", attemptId: LESSON_ATTEMPT });
+  await until(() => signal.aborted);
+  await until(async () => !await exists(path.join(f.root, "colleague", "NDI", "learn", LESSON_ATTEMPT)));
+});
+
+test("Stop stops a running turn after the login that started it has ended", async t => {
+  const stream = modelStream();
+  let signal = null;
+  const f = await fixture(t, [value => { signal = value; return stream.response(value); }]);
+  t.after(() => stream.finish());
+  await f.send("Long question", "develop-1");
+  await until(() => f.observations.starts.length === 1);
+  // The person signs out and in again in the same browser while the reply is written.
+  f.context.requestMeta.request.loginEnded = true;
+  const stopped = await f.service.stop({}, freshLogin(f));
+  assert.equal(stopped.status, "interrupted");
+  assert.equal(signal.aborted, true, "the model request is cancelled");
+});
+
+test("a hidden thread releases its handle even after the login that opened it has ended", async t => {
+  const stream = modelStream();
+  const f = await fixture(t, [signal => stream.response(signal), reply("Teacher answer"), reply("Develop again")]);
+  t.after(() => stream.finish());
+  const learning = learnModeFixture(t);
+  await f.send("Long question", "develop-1");
+  await until(() => f.observations.starts.length === 1);
+  f.context.requestMeta.request.loginEnded = true;
+  const fresh = freshLogin(f);
+  learning.learn();
+  await sendWith(f, fresh, "Teach me", "learn-1");
+  assert.equal((await f.service.wait(fresh)).messages.at(-1).text, "Teacher answer");
+  stream.write({ content: "Long answer" });
+  stream.write({}, "stop");
+  stream.finish();
+  await f.service.wait({ ...fresh, colleague: { threadKey: "NDI" } }).catch(() => null);
+  await new Promise(resolve => setTimeout(resolve, 50));
+  learning.develop();
+  await sendWith(f, fresh, "Back to work", "develop-2");
+  await f.service.wait(fresh);
+  assert.equal(f.observations.creates, 3, "the hidden Develop thread released its handle, so returning opened a new one");
+});
+
+test("Colleague shutdown stops every thread and closes its runtimes even when one thread cannot be stopped", async t => {
+  const stream = modelStream();
+  let signal = null;
+  const f = await fixture(t, [value => { signal = value; return stream.response(value); }], { watching: true });
+  t.after(() => stream.finish());
+  const learning = learnModeFixture(t);
+  // Develop keeps a summary Helper whose cleanup cannot be confirmed.
+  f.observations.log = largeLog();
+  f.observations.cleanupFails = true;
+  assert.equal((await watchAction(f, "conversation-summary.read", summarizeInput)).mode, "excerpts");
+  // The lesson's teacher is mid-reply.
+  learning.learn();
+  await f.send("Teach me", "learn-1");
+  await until(() => f.observations.starts.length === 1);
+  await assert.rejects(f.service.close(), error => error instanceof AggregateError && error.errors.length === 1);
+  assert.equal(signal.aborted, true, "the thread after the failing one was still stopped");
+  f.observations.cleanupFails = false;
 });
 
 // Watch sources: owners register what Colleague can watch besides coding

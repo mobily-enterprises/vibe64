@@ -106,6 +106,15 @@ very `lesson.finish` call), flushes its saves, never writes its file again,
 disposes the handle once the turn settles and removes its runtime work, and
 never reopens that attempt's thread (until the attempt ends, Learn shows the
 lobby); Training then moves or removes the file. Training never imports Colleague.
+The runtime's `authorize` admits a handle's `cancel` and `dispose` for the
+current conversation it opened for that person without the thread or login
+checks that admit work: only Colleague holds handles and stops or releases one
+after its own admission (Stop, a lesson's close, hiding a thread, a Claude
+account change, shutdown), so
+a released thread's turn and a turn whose starting login has ended (signed out,
+signed in again, disabled) still stop, and their handles are still released.
+`close()` stops each thread on its own and closes both runtimes, then reports
+every failure together (`AggregateError`).
 
 Learn threads use `learnInstructions` (teaching, notes, lesson lifecycle and the
 Learn refusal); Develop uses `instructions`, which only points to **L**. The

@@ -220,6 +220,15 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       maxInitialNativeHistoryMessages: 24, maxInitialNativeHistoryMessageCharacters: 2_000,
       codexFinalizingGraceMs: 500, codexFinalizingGraceAfterHistoryRead: true, codexFailureDetailGraceMs: 500 },
     async authorize({ context, conversationId, operation }) {
+      // Stopping and releasing a handle need neither a live login nor a live
+      // thread: only this service holds a handle, and it stops or releases one
+      // only after its own admission (Stop, a lesson's close, hiding a thread,
+      // a Claude account change, shutdown). Refusing would leave the turn
+      // running and the handle held.
+      if (operation === "cancel" || operation === "dispose") {
+        const owner = conversationOwners.get(conversationId);
+        return owner?.record.runtimeId === conversationId && owner.userKey === userKey(context);
+      }
       const state = await stateFor(context);
       if (conversationId !== state.record.runtimeId) return false;
       await actions.execute({ actionId: "vibe64.colleague.context.read", input: {}, context });
@@ -1825,6 +1834,9 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       closed = true;
       unregisterReleaser();
       leaveRuntimeInvalidation();
+      // Each thread stops on its own: one that cannot be stopped is reported
+      // with the rest, never left to skip later threads or the runtimes.
+      const failures = [];
       for (const pending of users.values()) {
         // A thread that failed to load has nothing to stop.
         const state = await pending.catch(() => null);
@@ -1833,15 +1845,19 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
         clearTimeout(state.replyTimer);
         for (const observer of state.browserObservers) observer.release?.();
         state.browserObservers.clear();
-        await state.watchAdmission;
-        await state.polling;
-        // Stop this thread, not whichever one the person's mode shows now.
-        if (state.running || state.summaryRunning || state.record.summaryHelper) await this.stop({}, { ...state.requestContext,
-          colleague: { ...state.requestContext?.colleague, threadKey: state.key } });
-        await state.running;
-        await state.saving;
+        try {
+          await state.watchAdmission;
+          await state.polling;
+          // Stop this thread, not whichever one the person's mode shows now.
+          if (state.running || state.summaryRunning || state.record.summaryHelper) await this.stop({}, { ...state.requestContext,
+            colleague: { ...state.requestContext?.colleague, threadKey: state.key } });
+          await state.running;
+          await state.saving;
+        } catch (error) { failures.push(error); }
       }
-      await Promise.all([runtime.close(), nativeRuntime.close()]);
+      const runtimes = await Promise.allSettled([runtime.close(), nativeRuntime.close()]);
+      failures.push(...runtimes.filter(result => result.status === "rejected").map(result => result.reason));
+      if (failures.length) throw new AggregateError(failures, "Colleague did not stop every conversation cleanly.");
     }
   };
   return service;

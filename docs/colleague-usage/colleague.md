@@ -64,6 +64,8 @@ Stop also works while Claude is starting. It cancels that startup without waitin
 for the connection timeout. If cleanup cannot be confirmed, the error remains
 visible and Stop can be retried; it does not claim that work has stopped.
 Stopping Colleague leaves your other agent conversations running.
+Stop still works when you signed out and back in while a reply was being written.
+Finishing, restarting, archiving or deleting a lesson stops its teacher's reply.
 Minimizing or reopening the view does not itself stop a response.
 The model picker is unavailable during a turn or while sending.
 A completed reply returns the chat to ready and restores the model controls
