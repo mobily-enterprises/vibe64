@@ -16,7 +16,7 @@ import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/
 import { runCaptureCommand, stopCaptureExecution } from "../../packages/vibe64-execution/src/server/engines/capture.js";
 import { runDetachedCommand, stopDetachedExecution } from "../../packages/vibe64-execution/src/server/engines/detached.js";
 import { SESSION_SOURCE_PATH_AUTHORITY_MANAGED } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
-import { runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
+import { currentProjectRequestContext, runWithProjectRequestContext } from "../../packages/vibe64-core/src/server/projectRequestContext.js";
 import { vibe64Driver } from "../../packages/vibe64-genesis/src/server/promptContext.js";
 
 const execFileAsync = promisify(execFile);
@@ -161,6 +161,8 @@ process.stdout.write(JSON.stringify({
     async readPreviewApplicationIdentities() {
       return { identities: [{ name: "tester", type: "email", value: "test@example.test" }] };
     },
+    // As the project service names a session's project: the request's, else the selected one.
+    currentProjectSlug: () => currentProjectRequestContext()?.slug || name,
     selectedProject: { slug: name }, targetRoot: sourceRoot
   };
   const captureExecutionIds = new Set();
