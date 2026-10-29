@@ -508,16 +508,25 @@ function conversationRecordHasMessage(record, messageId) {
 async function runCommand(command, args = [], {
   allowedRoots = [],
   cwd = "",
+  execution,
   maxBuffer = COMMAND_BUFFER_BYTES,
   timeout = SESSION_ARCHIVE_TIMEOUT_MS
 } = {}) {
   return runSourceCommand(command, args, {
     allowedRoots,
     cwd: cwd || process.cwd(),
+    execution,
     maxBuffer,
     timeout
   });
 }
+
+// Each archive command is one execution of its own; Resources shows its name.
+const ARCHIVE_EXECUTIONS = Object.freeze({
+  check: Object.freeze({ operationId: "session-archive-check", label: "Checking a session archive" }),
+  read: Object.freeze({ operationId: "session-archive-read", label: "Opening an archived session" }),
+  write: Object.freeze({ operationId: "session-archive-write", label: "Writing a session archive" })
+});
 
 // Only a tar that ran and failed says something about the archive. A refused,
 // timed-out or undrained run keeps its own code and whether to retry.
@@ -1409,7 +1418,8 @@ function createVibe64SessionStore({
           extractionRoot,
           path.dirname(record.archivePath)
         ],
-        cwd: normalizedProjectContextRoot
+        cwd: normalizedProjectContextRoot,
+        execution: ARCHIVE_EXECUTIONS.read
       });
       if (!extractResult.ok) {
         throw archiveCommandError(extractResult,
@@ -1590,7 +1600,25 @@ function createVibe64SessionStore({
             throw error;
           } finally { publishing = false; }
         };
-        try { return await operation(archived, { publishArtifacts }); }
+        // Expiry inside the same extraction; each change publishes at once.
+        const change = (work) => {
+          if (!available || publishing) throw new Error("Archived artifact publication is outside its exclusive operation.");
+          publishing = true;
+          return work().catch((error) => {
+            // Do not let a retry publish a partly modified extraction.
+            available = false;
+            throw error;
+          }).finally(() => { publishing = false; });
+        };
+        const pruneArtifacts = async (relativePaths, { beforePrune } = {}) => {
+          const requested = artifactExpiryRequest(relativePaths, beforePrune);
+          return change(() => pruneExtractedArtifacts(archived, requested, { beforePrune, beforeWork }));
+        };
+        const pruneAttachments = async ({ beforePrune } = {}) => {
+          if (typeof beforePrune !== "function") throw new TypeError("Attachment expiry requires a host callback.");
+          return change(() => pruneExtractedAttachments(archived, { beforePrune, beforeWork }));
+        };
+        try { return await operation(archived, { publishArtifacts, pruneArtifacts, pruneAttachments }); }
         finally { available = false; }
       });
     });
@@ -1621,7 +1649,8 @@ function createVibe64SessionStore({
     const candidatePath = `${session.archivePath}.${randomUUID()}.tmp`;
     try {
       const result = await runCommand("tar", ["-czf", candidatePath, "-C", path.dirname(session.sessionRoot), session.sessionId], {
-        allowedRoots: [path.dirname(session.sessionRoot), path.dirname(session.archivePath)], cwd: normalizedProjectContextRoot
+        allowedRoots: [path.dirname(session.sessionRoot), path.dirname(session.archivePath)], cwd: normalizedProjectContextRoot,
+        execution: ARCHIVE_EXECUTIONS.write
       });
       if (!result.ok) {
         throw archiveCommandError(result, `Cannot prepare updated session archive: ${result.output}`,
@@ -1638,61 +1667,71 @@ function createVibe64SessionStore({
     } finally { await rm(candidatePath, { force: true }); }
   }
 
-  async function pruneArchivedSessionArtifacts(sessionId, { relativePaths, beforePrune, beforeWork } = {}) {
+  function artifactExpiryRequest(relativePaths, beforePrune) {
     if (typeof beforePrune !== "function") throw new TypeError("Artifact expiry requires a host callback.");
     if (!Array.isArray(relativePaths) || relativePaths.length > 1000) throw new TypeError("Artifact expiry requires a bounded exact path list.");
-    const requested = [...new Set(relativePaths.map(assertSafeArtifactPath))].sort();
-    return withArchivedSession(sessionId, async (session) => {
-      const removed = [];
-      for (const relativePath of requested) {
-        const target = await archivedArtifactPath(session, relativePath);
-        try { await rm(target); removed.push(relativePath); }
-        catch (error) { if (!isMissingPathError(error)) throw error; }
+    return [...new Set(relativePaths.map(assertSafeArtifactPath))].sort();
+  }
+
+  async function pruneExtractedArtifacts(session, requested, { beforePrune, beforeWork }) {
+    const removed = [];
+    for (const relativePath of requested) {
+      const target = await archivedArtifactPath(session, relativePath);
+      try { await rm(target); removed.push(relativePath); }
+      catch (error) { if (!isMissingPathError(error)) throw error; }
+    }
+    if (removed.length) {
+      await publishExtractedSessionArchive(session, {
+        beforeWork,
+        beforePublish: async (candidatePath) => {
+          const proof = await beforePrune({ session, relativePaths: removed, candidatePath });
+          if (proof?.ok !== true) throw new Error("The host did not confirm artifact expiry.");
+        }
+      });
+    }
+    return { ok: true, paths: removed };
+  }
+
+  async function pruneExtractedAttachments(session, { beforePrune, beforeWork }) {
+    const attachmentRoot = path.join(session.artifactsRoot, "attachments");
+    const removed = [];
+    for (const directory of [session.artifactsRoot, attachmentRoot]) {
+      const info = await lstat(directory).catch((error) => { if (isMissingPathError(error)) return null; throw error; });
+      if (!info) return { ok: true, attachmentIds: [] };
+      if (!info.isDirectory() || info.isSymbolicLink()) throw new Error("Archived attachments must use regular directories.");
+    }
+    for (const entry of await readDirectoryEntries(attachmentRoot)) {
+      if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu.test(entry.name) || !entry.isDirectory()) {
+        throw new Error("Archived attachments contain an unknown entry; inspect it before expiry.");
       }
-      if (removed.length) {
-        await publishExtractedSessionArchive(session, {
-          beforeWork,
-          beforePublish: async (candidatePath) => {
-            const proof = await beforePrune({ session, relativePaths: removed, candidatePath });
-            if (proof?.ok !== true) throw new Error("The host did not confirm artifact expiry.");
-          }
-        });
+      const payload = path.join(attachmentRoot, entry.name, "file");
+      const info = await lstat(payload).catch((error) => { if (isMissingPathError(error)) return null; throw error; });
+      if (!info) continue;
+      if (!info.isFile() || info.isSymbolicLink()) throw new Error("Archived attachment payload is not a regular file.");
+      await rm(payload);
+      removed.push(entry.name);
+    }
+    if (!removed.length) return { ok: true, attachmentIds: [] };
+    await publishExtractedSessionArchive(session, {
+      beforeWork,
+      beforePublish: async (candidatePath) => {
+        const proof = await beforePrune({ session, attachmentIds: [...removed].sort(), candidatePath });
+        if (proof?.ok !== true) throw new Error("The host did not confirm attachment expiry.");
       }
-      return { ok: true, paths: removed };
-    }, { beforeWork });
+    });
+    return { ok: true, attachmentIds: removed.sort() };
+  }
+
+  async function pruneArchivedSessionArtifacts(sessionId, { relativePaths, beforePrune, beforeWork } = {}) {
+    artifactExpiryRequest(relativePaths, beforePrune);
+    return withArchivedSession(sessionId, (_session, { pruneArtifacts }) => pruneArtifacts(relativePaths, { beforePrune }),
+      { beforeWork });
   }
 
   async function pruneArchivedSessionAttachments(sessionId, { beforePrune, beforeWork } = {}) {
     if (typeof beforePrune !== "function") throw new TypeError("Attachment expiry requires a host callback.");
-    return withArchivedSession(sessionId, async (session) => {
-      const attachmentRoot = path.join(session.artifactsRoot, "attachments");
-      const removed = [];
-      for (const directory of [session.artifactsRoot, attachmentRoot]) {
-        const info = await lstat(directory).catch((error) => { if (isMissingPathError(error)) return null; throw error; });
-        if (!info) return { ok: true, attachmentIds: [] };
-        if (!info.isDirectory() || info.isSymbolicLink()) throw new Error("Archived attachments must use regular directories.");
-      }
-      for (const entry of await readDirectoryEntries(attachmentRoot)) {
-        if (!/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/iu.test(entry.name) || !entry.isDirectory()) {
-          throw new Error("Archived attachments contain an unknown entry; inspect it before expiry.");
-        }
-        const payload = path.join(attachmentRoot, entry.name, "file");
-        const info = await lstat(payload).catch((error) => { if (isMissingPathError(error)) return null; throw error; });
-        if (!info) continue;
-        if (!info.isFile() || info.isSymbolicLink()) throw new Error("Archived attachment payload is not a regular file.");
-        await rm(payload);
-        removed.push(entry.name);
-      }
-      if (!removed.length) return { ok: true, attachmentIds: [] };
-      await publishExtractedSessionArchive(session, {
-        beforeWork,
-        beforePublish: async (candidatePath) => {
-          const proof = await beforePrune({ session, attachmentIds: [...removed].sort(), candidatePath });
-          if (proof?.ok !== true) throw new Error("The host did not confirm attachment expiry.");
-        }
-      });
-      return { ok: true, attachmentIds: removed.sort() };
-    }, { beforeWork });
+    return withArchivedSession(sessionId, (_session, { pruneAttachments }) => pruneAttachments({ beforePrune }),
+      { beforeWork });
   }
 
   async function withPreparedRenewalSession(sessionId, operation) {
@@ -2854,7 +2893,8 @@ function createVibe64SessionStore({
       archivePath
     ], {
       allowedRoots: [path.dirname(archivePath)],
-      cwd: normalizedProjectContextRoot
+      cwd: normalizedProjectContextRoot,
+      execution: ARCHIVE_EXECUTIONS.check
     });
     if (!result.ok) {
       throw archiveCommandError(result, result.code
@@ -3102,7 +3142,8 @@ function createVibe64SessionStore({
         normalizedSourceSessionId
       ], {
         allowedRoots: [buildRoot],
-        cwd: normalizedProjectContextRoot
+        cwd: normalizedProjectContextRoot,
+        execution: ARCHIVE_EXECUTIONS.write
       });
       if (!tarResult.ok) {
         throw archiveCommandError(tarResult,
@@ -3640,7 +3681,8 @@ function createVibe64SessionStore({
           rootPaths.closingSessionsRoot,
           stagedRoot
         ],
-        cwd: normalizedProjectContextRoot
+        cwd: normalizedProjectContextRoot,
+        execution: ARCHIVE_EXECUTIONS.write
       });
       if (!tarResult.ok) {
         throw archiveCommandError(tarResult,
@@ -4981,7 +5023,7 @@ function createVibe64SessionStore({
           }
           const replacementPath = path.join(temporaryRoot, `${randomUUID()}.tar.gz`);
           const result = await runCommand("tar", ["-czf", replacementPath, "-C", path.dirname(sessionPaths.sessionRoot), "."], {
-            allowedRoots: [temporaryRoot], cwd: normalizedProjectContextRoot
+            allowedRoots: [temporaryRoot], cwd: normalizedProjectContextRoot, execution: ARCHIVE_EXECUTIONS.write
           });
           if (!result.ok) throw new Error(`Cannot stage upgraded archive for ${sessionId}.`);
           await validateSessionArchive(replacementPath);

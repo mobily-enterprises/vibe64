@@ -445,7 +445,11 @@ before the next step when the server shuts down. Archive tar work (check,
 extraction and staging) keeps a refusal from the execution owner, such as a host
 memory refusal, with its code and retryability; only tar's own failure reports
 `vibe64_session_archive_invalid` for a check or
-`vibe64_session_archive_read_failed` for an extraction.
+`vibe64_session_archive_read_failed` for an extraction. Each tar command is a
+labelled managed execution: `session-archive-check` ("Checking a session
+archive"), `session-archive-read` ("Opening an archived session") or
+`session-archive-write` ("Writing a session archive"), so a host listing
+executions can name it.
 Start, each durable stage transition, completion, and failure publish `vibe64.session.changed` to
 all clients with a list-refresh hint. Reconnecting clients read persisted state.
 
@@ -489,6 +493,13 @@ The archive index and original archival date remain unchanged. No automatic
 expiry policy or timer is installed.
 Exact-path artifact expiry reuses the same publication owner and confirmation
 boundary; hosts choose recovery files while retaining permanent text artifacts.
+`withArchivedSession` also hands its operation both expiries
+(`pruneArtifacts`, `pruneAttachments`) for its own extraction, so a host
+publishes native artifacts and applies both expiries with one extraction; the
+standalone prune operations open their own. Native inventory and retirement in
+Terminals read the session summary to learn that it is archived, and retirement
+accepts the host's already open archive (`archivedSession`) instead of
+extracting it again.
 
 The chat header shares its available width among up to three session tabs,
 reserving extra room for the selected tab's Archive action. The new-session

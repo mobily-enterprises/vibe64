@@ -8,6 +8,7 @@ import { createVibe64SessionStore } from "../../packages/vibe64-runtime/src/serv
 import { Vibe64SessionRuntime } from "../../packages/vibe64-runtime/src/server/runtime.js";
 import { withTemporaryRoot } from "./vibe64TestHelpers.js";
 import { retireNativeConversation } from "@jskit-ai/assistant-core/server/native-history";
+import { installVibe64ManagedExecutionProvider } from "@local/vibe64-execution/server";
 
 function archiveFixture(phase = "") {
   const calls = [];
@@ -261,6 +262,45 @@ test("attachment expiry atomically replaces a compressed archive while retaining
     });
     assert.deepEqual(await store.pruneArchivedSessionAttachments("session-a", { beforePrune: () => { throw new Error("already expired"); } }),
       { ok: true, attachmentIds: [] });
+  });
+});
+
+test("one extraction expires recovery and attachments, and each archive command is a labelled execution", async () => {
+  await withTemporaryRoot(async (root) => {
+    const store = await storedFixture(root, { publish: false });
+    const id = "12345678-1234-4234-8234-123456789abc";
+    await store.writeArtifact("session-a", `attachments/${id}/file`, "attachment payload");
+    await store.writeStatus("session-a", "archived");
+    await store.publishSessionArchive("session-a");
+    const archivedAt = (await store.readSession("session-a")).archivedAt;
+    const commands = [];
+    const release = installVibe64ManagedExecutionProvider({
+      async runCommand(request, context) {
+        if (request.command === "tar") commands.push([request.args[0], request.execution.operationId, request.execution.label]);
+        return context.runLocal();
+      },
+      async stopExecution() { return { ok: true, scopeEmpty: true }; }
+    });
+    let pruned;
+    try {
+      pruned = await store.withArchivedSession("session-a", async (_session, { pruneArtifacts, pruneAttachments }) => ({
+        recovery: await pruneArtifacts(["recovery.txt"], { beforePrune: async ({ relativePaths }) => {
+          assert.deepEqual(relativePaths, ["recovery.txt"]); return { ok: true };
+        } }),
+        attachments: await pruneAttachments({ beforePrune: async ({ attachmentIds }) => {
+          assert.deepEqual(attachmentIds, [id]); return { ok: true };
+        } })
+      }));
+    } finally { release(); }
+    assert.deepEqual(pruned, { recovery: { ok: true, paths: ["recovery.txt"] }, attachments: { ok: true, attachmentIds: [id] } });
+    const check = ["session-archive-check", "Checking a session archive"];
+    const write = ["session-archive-write", "Writing a session archive"];
+    assert.deepEqual(commands, [["-tzf", ...check], ["-xzf", "session-archive-read", "Opening an archived session"],
+      ["-czf", ...write], ["-tzf", ...check], ["-czf", ...write], ["-tzf", ...check]]);
+    assert.equal(await store.readArtifact("session-a", "recovery.txt"), "");
+    assert.equal(await store.readArtifact("session-a", `attachments/${id}/file`), "");
+    assert.equal((await store.readSession("session-a")).archivedAt, archivedAt);
+    assert.equal((await store.readConversationLog("session-a"))[0].user.text, "Keep this history");
   });
 });
 

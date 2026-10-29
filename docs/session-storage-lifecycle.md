@@ -60,10 +60,12 @@ Neither archive path retroactively invokes preparation for historical archives.
 ## Access to a finalized archive
 
 ```js
-await runtime.store.withArchivedSession(sessionId, async (session, { publishArtifacts }) => {
+await runtime.store.withArchivedSession(sessionId, async (session, { publishArtifacts, pruneArtifacts, pruneAttachments }) => {
   // session.metadata contains the full archived metadata, not its list index.
   // session.sessionRoot and session.artifactsRoot exist only during this call.
   // Optional: await publishArtifacts([{ relativePath: "native/chat.jsonl", sourcePath }]);
+  // Optional, after any publication: await pruneArtifacts(relativePaths, { beforePrune });
+  // Optional, last: await pruneAttachments({ beforePrune });
 });
 ```
 
@@ -95,7 +97,11 @@ archival time do not change. The result is `{ ok: true, paths }`.
 Await publication before authorizing destructive work. Failed preparation leaves
 the published archive intact; an exception after successful publication does not
 undo that publication. A failed batch invalidates its capability, so retry by
-opening a fresh archive operation. Do not retain extraction paths or capabilities,
+opening a fresh archive operation. `pruneArtifacts` and `pruneAttachments` are
+the expiries described below, applied to this same extraction: one archive
+operation can publish native artifacts and then apply both expiries, each
+publishing before the next, without extracting the archive again. They share
+the publication capability's rules. Do not retain extraction paths or capabilities,
 run unawaited work against them, recursively invoke this operation, or call a
 separately locking archive mutation while holding this lock.
 
@@ -122,10 +128,16 @@ The existing `vibe64.terminals` service supplies these server-only operations:
   forks. It is read-only; archive preparation may pass its current session
   without reacquiring that callback's agent-write lock.
 - `retireAgentConversationHistory(sessionId, { engineId, conversationId,
-  discoveredIn? }, { runtime, beforeDelete })`: retire an archived native binding
-  or accepted predecessor. A native-only candidate requires its exact
-  `discoveredIn` scope from a finalized archive. The provider independently
-  verifies the native directory.
+  discoveredIn? }, { runtime, beforeDelete, archivedSession? })`: retire an
+  archived native binding or accepted predecessor. A native-only candidate
+  requires its exact `discoveredIn` scope from a finalized archive. The provider
+  independently verifies the native directory. A host already inside
+  `withArchivedSession` for that archive passes
+  `archivedSession: { session, publishArtifacts }` from it, so retirement works
+  in that extraction and holds no lock of its own.
+
+Both operations learn whether a session is archived from its saved summary, so
+an archive is extracted only for the work itself.
 
 The pure `nativeConversationBindings(session, { retiredOnly? })` helper is
 available from `@local/vibe64-terminals/server/nativeConversationBindings` for

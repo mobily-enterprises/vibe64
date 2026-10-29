@@ -379,6 +379,64 @@ test("native storage discovers and retires an archived native-only chat through 
   assert.deepEqual([...ids], ["ses_original"]);
 });
 
+test("native retirement reads no archive to learn its status, and works inside the archive its host opened", async (t) => {
+  const lock = agentWriteLockHarness();
+  const selection = { engineId: "opencode", agentId: "build", modelProviderId: "deepseek", modelId: "deepseek-chat",
+    variantId: "", catalogRevision: `sha256:${"a".repeat(64)}` };
+  const ids = new Set(["ses_original", "ses_first", "ses_second"]);
+  let workdir;
+  const f = await terminalServiceFixture(t, lock, { assistantSelection: selection, opencodeTerminalController: {
+    createServerProcess: async () => ({
+      client: { health: async () => ({ healthy: true }), sessionStatus: async () => ({ type: "idle" }),
+        deleteSession: async (id) => { ids.delete(id); },
+        readConversationStorage: async (id) => {
+          if (!ids.has(id)) throw Object.assign(new Error("missing"), { statusCode: 404 });
+          return { id, directory: workdir, time: { updated: 1 } };
+        },
+        listConversationsForDirectory: async () => [...ids].map((id) => ({ id, directory: workdir })),
+        listConversationChildren: async () => [],
+        readConversationStoragePage: async (id) => ({ nextCursor: null, data: [{
+          info: { id: "msg_nativeuser", sessionID: id, role: "user" }, parts: [{ type: "text", text: "Native-only question" }]
+        }] }) },
+      stop: async () => ({ exited: true })
+    })
+  } });
+  workdir = f.session.metadata.source_path;
+  await f.runtime.store.writeMetadataValue("session-1", "opencode_conversation_id", "ses_original");
+  await f.runtime.store.writeStatus("session-1", "archived");
+  await f.runtime.store.publishSessionArchive("session-1");
+  await rm(workdir, { recursive: true });
+  const preserve = (id) => async ({ archived, conversations, exportConversation, publishArtifacts }) => {
+    assert.equal(archived, true);
+    assert.deepEqual(conversations.map((row) => row.conversationId), [id]);
+    const records = [];
+    await exportConversation(id, async (record) => records.push(...record.text));
+    const sourcePath = path.join(f.root, `${id}.jsonl`);
+    await writeFile(sourcePath, records.map(JSON.stringify).join("\n") + "\n");
+    await publishArtifacts([{ relativePath: `native/${id}.chat.jsonl`, sourcePath }]);
+    return { preserved: true, exclusive: true };
+  };
+  const inventory = await f.service.scanAgentConversationStorage("session-1", { runtime: f.runtime });
+  const candidate = (id) => inventory.conversations.find((row) => row.conversationId === id);
+  const { readSession, withArchivedSession } = f.runtime.store;
+  let reads = 0;
+  let opened = 0;
+  f.runtime.store.readSession = async (...args) => { reads += 1; return readSession(...args); };
+  f.runtime.store.withArchivedSession = async (...args) => { opened += 1; return withArchivedSession(...args); };
+  // On its own, retirement opens the archive once and never reads it whole first.
+  assert.equal((await f.service.retireAgentConversationHistory("session-1", candidate("ses_first"),
+    { runtime: f.runtime, beforeDelete: preserve("ses_first") })).ok, true);
+  assert.deepEqual({ reads, opened }, { reads: 0, opened: 1 });
+  // Inside the host's open archive it opens nothing more.
+  const result = await f.runtime.store.withArchivedSession("session-1", (session, archive) =>
+    f.service.retireAgentConversationHistory("session-1", candidate("ses_second"), { runtime: f.runtime,
+      archivedSession: { session, publishArtifacts: archive.publishArtifacts }, beforeDelete: preserve("ses_second") }));
+  assert.equal(result.ok, true);
+  assert.deepEqual({ reads, opened }, { reads: 0, opened: 2 });
+  assert.deepEqual([...ids], ["ses_original"]);
+  assert.match(await f.runtime.store.readArtifact("session-1", "native/ses_second.chat.jsonl"), /Native-only question/u);
+});
+
 for (const kind of ["main", "temporary", "goal"]) test(`${kind} assistant work refreshes skills under both write locks and preserves source customization`, async (t) => {
   const provider = kind === "temporary" ? await controllerHarness({
     withCommandBoundary: true,

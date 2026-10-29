@@ -3269,7 +3269,8 @@ function createService({
 
     async listAgentConversationStorage(sessionId, options = {}) {
       const runtime = options.runtime || await projectService.createRuntime({ inspectSource: false });
-      const session = await runtime.store.readSession(sessionId);
+      // A summary names an archived session's status without extracting it.
+      const session = await runtime.store.readSessionSummary(sessionId);
       if (session.status === VIBE64_SESSION_STATUS.ARCHIVED) {
         return runtime.store.withArchivedSession(sessionId, (archived) => nativeConversationBindings(archived));
       }
@@ -3340,7 +3341,18 @@ function createService({
         }
         return result;
       };
-      const session = await runtime.store.readSession(sessionId);
+      // A host already working in the finalized archive passes it in, so the
+      // archive is extracted once for all of that host's work.
+      if (options.archivedSession) {
+        const { session, publishArtifacts } = options.archivedSession;
+        if (session?.sessionId !== sessionId || session.status !== VIBE64_SESSION_STATUS.ARCHIVED ||
+            typeof publishArtifacts !== "function") {
+          throw new TypeError("Native retirement in an open archive requires that archived session and its publication.");
+        }
+        return retire(session, true, publishArtifacts);
+      }
+      // A summary names an archived session's status without extracting it.
+      const session = await runtime.store.readSessionSummary(sessionId);
       if (session.status === VIBE64_SESSION_STATUS.ARCHIVED) {
         return runtime.store.withArchivedSession(sessionId, (archived, { publishArtifacts }) => retire(archived, true, publishArtifacts), {
           beforeWork: options.beforeArchiveWork

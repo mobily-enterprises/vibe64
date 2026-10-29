@@ -8,6 +8,7 @@ import { runVibe64Command } from "@local/vibe64-execution/server";
 async function runSourceCommand(command, args = [], {
   allowedRoots = [],
   cwd = "",
+  execution,
   gitSafeDirectories,
   maxBuffer,
   runtimes,
@@ -23,6 +24,7 @@ async function runSourceCommand(command, args = [], {
     command,
     cwd,
     envPolicy: "session",
+    ...(execution ? { execution } : {}),
     gitSafeDirectories,
     maxBuffer,
     mode: "capture",
