@@ -8,6 +8,7 @@ import { vibe64ApiError } from "@/lib/vibe64ApiResponses.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import {
   VIBE64_SESSION_CHANGED_EVENT,
+  VIBE64_SESSION_SUMMARY_CHANGED_EVENT,
   VIBE64_SURFACE_ID,
   vibe64SessionPath,
   vibe64SessionQueryKey
@@ -150,7 +151,7 @@ function useVibe64MainChatApprovals({
   // The owner hears about every new message for approval in this project.
   useRealtimeEvent({
     enabled: computed(() => enabled.value && loaded.value && isOwner.value),
-    event: VIBE64_SESSION_CHANGED_EVENT,
+    event: VIBE64_SESSION_SUMMARY_CHANGED_EVENT,
     matches: ({ payload = {} } = {}) => payload.reason === "main-chat-approval-queued" && payload.projectSlug === slug.value,
     onEvent: ({ payload = {} } = {}) => feedback.report({
       source: "vibe64.main-chat-approvals.queued", intent: "action-feedback", severity: "info", channel: "snackbar",

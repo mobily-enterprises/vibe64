@@ -247,7 +247,7 @@ describe("approval queue reader", () => {
     const { value, scope } = reader({ onReview });
     await nextTick();
     expect(document.title).toBe("(2) Hello Node");
-    const notice = mocks.realtime.find((options) => options.event === "vibe64.session.changed");
+    const notice = mocks.realtime.find((options) => options.event === "vibe64.session.summary.changed");
     expect(notice.matches({ payload: { reason: "main-chat-approval-queued", projectSlug: "chat-test" } })).toBe(true);
     expect(notice.matches({ payload: { reason: "main-chat-approval-queued", projectSlug: "other" } })).toBe(false);
     notice.onEvent({ payload: { sessionId: "session-2", approvalSender: "Ana", approvalId: "approval-3" } });

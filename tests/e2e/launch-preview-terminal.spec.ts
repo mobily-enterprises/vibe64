@@ -4199,9 +4199,11 @@ async function publishChatSessionChange(page: Page, payload: Record<string, unkn
         onevent(packet: { data: unknown[] }): void;
       }> } };
     }).__vue_app__;
-    app._context.provides["jskit.realtime.runtime.client.socket"].onevent({
-      data: ["vibe64.session.changed", change]
-    });
+    // The server sends a change in full to the session's viewers and its
+    // summary to the project's pages; this page is both.
+    for (const event of ["vibe64.session.changed", "vibe64.session.summary.changed"]) {
+      app._context.provides["jskit.realtime.runtime.client.socket"].onevent({ data: [event, change] });
+    }
   }, payload);
 }
 

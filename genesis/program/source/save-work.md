@@ -76,7 +76,6 @@ Git commands.
 - `packages/vibe64-sessions/src/server/service.js`
 - `packages/vibe64-sessions/src/server/repositoryUpdateProbe.js`
 - `packages/vibe64-sessions/src/server/Vibe64SessionsProvider.js`
-- `packages/vibe64-sessions/src/shared/repositoryUpdates.js`
 - `packages/vibe64-sessions/src/server/connectedContributions.js`
 - `packages/vibe64-sessions/src/server/actions.js`
 - `packages/vibe64-sessions/src/server/inputSchemas.js`
@@ -444,9 +443,8 @@ A browser page watches its project over its realtime connection for as long as
 it has the project open, whether its tab is visible or hidden, so a person who
 returns to a background tab finds its state already current; leaving the project
 or the page, or disconnecting, releases the watch, and a reconnected page
-watches again. The server knows a page's project only from this watch, because
-realtime delivery is not scoped to projects, so a page loaded before the watch
-existed is not counted until it reloads. Returning to a visible tab immediately
+watches again. The same watch delivers the project's session summaries, which
+carry the probe's results (Direct chat's session change delivery). Returning to a visible tab immediately
 repeats worktree fallback inspection; it requests no canonical check of its own.
 Explicit source and canonical-change invalidations still force a fresh check.
 Switching session chips reuses a recorded canonical check instead of requesting
@@ -730,8 +728,9 @@ Push of that upstream stay with the original folder.
   name or email. Where Vibe64 runs as the person, the gateway reads their Git
   config itself.
 - `repositoryUpdateProbe.js` keeps one probe timer per project in use: a
-  browser's realtime watch, authorized as the `api`-only action
-  `vibe64.sessions.repository-updates.watch`, or an agent turn that a
+  browser's realtime project watch, authorized as the `api`-only action
+  `vibe64.sessions.project.watch` (a session watch starts no probe), or an
+  agent turn that a
   turn-active session event announced and the probe still sees running. The
   sessions service's `probeRepositoryUpdates()` reads every open session's heads
   through the terminals' `readSessionAuthorityHeads()` (one head read per

@@ -19,7 +19,7 @@ import {
 } from "@/composables/useVibe64SessionSelection.js";
 import {
   VIBE64_CURRENT_SESSION_API_SUFFIX,
-  VIBE64_SESSION_CHANGED_EVENT,
+  VIBE64_SESSION_SUMMARY_CHANGED_EVENT,
   VIBE64_SESSIONS_API_SUFFIX,
   VIBE64_SURFACE_ID,
   vibe64SessionPath,
@@ -167,7 +167,7 @@ function useVibe64SessionData() {
     },
     requestRecoveryLabel: "Vibe64 sessions",
     realtime: {
-      events: [VIBE64_SESSION_CHANGED_EVENT, VIBE64_PROJECT_CHANGED_EVENT, "connect"],
+      events: [VIBE64_SESSION_SUMMARY_CHANGED_EVENT, VIBE64_PROJECT_CHANGED_EVENT, "connect"],
       matches: (event) => sessionListRealtimeShouldRefresh(event, projectSlug.value)
     }
   });
@@ -342,7 +342,7 @@ function useVibe64SessionData() {
     },
     readMethod: "GET",
     realtime: {
-      event: VIBE64_SESSION_CHANGED_EVENT,
+      event: VIBE64_SESSION_SUMMARY_CHANGED_EVENT,
       matches: ({ payload = {} } = {}) => mountedSessionRealtimeShouldRefresh(
         { payload },
         selectionRenewalPredecessorId.value
@@ -484,7 +484,7 @@ function useVibe64SessionData() {
     shownArchiveFailures.clear();
   });
   useRealtimeEvent({
-    event: VIBE64_SESSION_CHANGED_EVENT,
+    event: VIBE64_SESSION_SUMMARY_CHANGED_EVENT,
     matches: ({ payload = {} } = {}) => vibe64SessionEventMatchesScope(payload, { projectSlug: projectSlug.value }),
     onEvent: ({ payload = {} } = {}) => {
       const id = String(payload.sessionId || "");

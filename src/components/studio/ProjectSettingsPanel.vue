@@ -366,7 +366,7 @@ import {
   VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
 import {
-  VIBE64_SESSION_CHANGED_EVENT
+  VIBE64_SESSION_SUMMARY_CHANGED_EVENT
 } from "@/lib/vibe64SessionRequestConfig.js";
 
 const projectSlug = useVibe64ProjectSlug();
@@ -681,7 +681,7 @@ watch([projectSlug, engineering], ([slug, value]) => {
 });
 
 useRealtimeEvent({
-  event: VIBE64_SESSION_CHANGED_EVENT,
+  event: VIBE64_SESSION_SUMMARY_CHANGED_EVENT,
   matches: (event) => sessionListRealtimeShouldRefresh(event, projectSlug.value),
   onEvent() {
     void resource.reload();

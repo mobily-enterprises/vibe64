@@ -4,6 +4,7 @@ import { VIBE64_PROJECT_CHANGED_EVENT } from "@/lib/studioGateApi.js";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useVibe64ConversationRuntime } from "@/composables/useVibe64ConversationRuntime.js";
+import { useVibe64ProjectWatch } from "@/composables/useVibe64ProjectWatch.js";
 import { useVibe64SessionRenewal } from "@/composables/useVibe64SessionRenewal.js";
 import { sessionRecordHasActiveAgentWork } from "@/lib/vibe64MountedSessionState.js";
 import {
@@ -146,6 +147,12 @@ function useVibe64SessionRuntimeHost(props, emit) {
     sessionId: selectedSessionId,
     sessionsApiPath,
     summarySession: selectedListSession
+  });
+  // This page shows the session, in a visible or a background tab, so it
+  // receives the session's changes in full.
+  useVibe64ProjectWatch({
+    projectSlug: computed(() => runtimeProjectContext.value.slug || ""),
+    sessionId: selectedSessionId
   });
   const mounted = {
     session: computed(() => conversationRuntime.value?.mounted.session.value || null),

@@ -1,11 +1,7 @@
-import { attachDirectRequestActionExecutor } from "@jskit-ai/kernel/server/http";
-import { REPOSITORY_UPDATES_RELEASE, REPOSITORY_UPDATES_WATCH } from "../shared/repositoryUpdates.js";
-
 // Each project in use checks whether its sessions need an update every 30 s.
 const REPOSITORY_UPDATE_PROBE_INTERVAL_MS = 30_000;
 // After a failed probe, the slowest the product allows.
 const REPOSITORY_UPDATE_PROBE_RETRY_MS = 60_000;
-const REPOSITORY_UPDATES_WATCH_ACTION = "vibe64.sessions.repository-updates.watch";
 
 // One probe timer per project, kept only while the project is in use: a
 // browser watches it, or the last probe found an agent turn running in it.
@@ -118,71 +114,8 @@ function createRepositoryUpdateProbe({
   });
 }
 
-// A watch belongs to one authenticated browser connection. The action checks
-// the person's access to the project; the socket supplies only its lifetime.
-function registerRepositoryUpdateWatch({ actions, realtime }) {
-  return realtime.onConnection(({ socket, readRequest }) => {
-    const watches = new Map();
-    let closed = false;
-    function release(watchId) {
-      const binding = watches.get(watchId);
-      watches.delete(watchId);
-      binding?.release?.();
-    }
-    async function watch(input, acknowledge) {
-      const reply = typeof acknowledge === "function" ? acknowledge : () => {};
-      if (closed) return;
-      const watchId = typeof input?.watchId === "string" ? input.watchId : "";
-      if (!watchId || watchId.length > 200) {
-        reply({ ok: false, error: "A repository update watch needs an identity." });
-        return;
-      }
-      release(watchId);
-      const binding = {};
-      watches.set(watchId, binding);
-      const current = () => !closed && socket.connected && watches.get(watchId) === binding;
-      try {
-        const request = await readRequest();
-        if (!current()) return;
-        attachDirectRequestActionExecutor({ actions, request });
-        const result = await request.executeAction({
-          actionId: REPOSITORY_UPDATES_WATCH_ACTION,
-          channel: "api",
-          surface: "app",
-          input: { projectSlug: input.projectSlug },
-          deps: { watchBinding: { current, onRelease(detach) {
-            binding.release = detach;
-            if (!current()) detach();
-          } } }
-        });
-        if (current()) reply(result);
-      } catch (error) {
-        if (watches.get(watchId) === binding) watches.delete(watchId);
-        if (!closed && socket.connected) {
-          reply({ ok: false, error: Number(error?.statusCode || error?.status || 500) < 500
-            ? error.message
-            : "Vibe64 could not watch this project for updates." });
-        }
-      }
-    }
-    function leave(input) {
-      release(input?.watchId);
-    }
-    socket.on(REPOSITORY_UPDATES_WATCH, watch);
-    socket.on(REPOSITORY_UPDATES_RELEASE, leave);
-    return () => {
-      closed = true;
-      socket.off(REPOSITORY_UPDATES_WATCH, watch);
-      socket.off(REPOSITORY_UPDATES_RELEASE, leave);
-      for (const watchId of [...watches.keys()]) release(watchId);
-    };
-  });
-}
-
 export {
   REPOSITORY_UPDATE_PROBE_INTERVAL_MS,
   REPOSITORY_UPDATE_PROBE_RETRY_MS,
-  REPOSITORY_UPDATES_WATCH_ACTION,
-  createRepositoryUpdateProbe,
-  registerRepositoryUpdateWatch
+  createRepositoryUpdateProbe
 };

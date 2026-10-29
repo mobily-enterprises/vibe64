@@ -233,8 +233,9 @@ const sessionPresenceActionInputValidator = actionInput(withSessionId(sessionPre
 const sessionListInputValidator = actionInput({
   sessionOffset: { type: "integer", min: 0, required: false }
 });
-// The project comes from the action's project scope.
-const repositoryUpdatesWatchInputValidator = actionInput({});
+// The project comes from the action's project scope; a session watch names
+// one of its sessions.
+const projectWatchInputValidator = actionInput({ sessionId: optionalSessionIdField });
 
 const sessionRepositoryReviewSchema = createSchema({
   sessionId: sessionIdField,
@@ -585,7 +586,7 @@ export {
   sessionRenewalRetryInputValidator,
   sessionListInputValidator,
   sessionPresenceActionInputValidator,
-  repositoryUpdatesWatchInputValidator,
+  projectWatchInputValidator,
   sessionPresenceInputValidator,
   sessionPreviewStateInputValidator,
   sessionSaveInputValidator,

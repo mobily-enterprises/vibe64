@@ -2033,7 +2033,7 @@ describe("ProjectSettingsPanel AI behaviour", () => {
       matches: expect.any(Function)
     });
     const sessionRealtime = projectSettingsMocks.realtimeOptions[0];
-    expect(sessionRealtime.event).toBe("vibe64.session.changed");
+    expect(sessionRealtime.event).toBe("vibe64.session.summary.changed");
     const changed = { payload: { projectSlug: projectSettingsMocks.projectSlug.value, sessionId: "session-1" } };
     expect(sessionRealtime.matches(changed)).toBe(true);
     expect(projectSettingsMocks.sessionEventMatches)

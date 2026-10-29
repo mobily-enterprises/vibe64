@@ -6,7 +6,7 @@
   "type": "module",
   "exports": {
     "./shared/conversation": "./src/shared/conversationIdentity.js",
-    "./shared/repository-updates": "./src/shared/repositoryUpdates.js"
+    "./shared/project-watch": "./src/shared/projectWatch.js"
   },
   "jskit": {
     "kind": "runtime",
@@ -58,8 +58,8 @@
             "summary": "Exports main and temporary conversation identities and targets."
           },
           {
-            "subpath": "./shared/repository-updates",
-            "summary": "Exports the realtime events a browser uses to watch its project for repository updates."
+            "subpath": "./shared/project-watch",
+            "summary": "Exports the realtime events a browser uses to watch its projects and sessions."
           }
         ],
         "capabilities": [

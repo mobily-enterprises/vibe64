@@ -503,7 +503,7 @@ test("deferred session changes publish modern top-level realtime events", async 
   assert.equal(events[0].type, "entity.changed");
   assert.equal(events[0].entityId, "session-1");
   assert.equal(events[0].realtime.event, "vibe64.session.changed");
-  assert.equal(events[0].realtime.audience, "all_clients");
+  assert.equal(events[0].realtime.audience, "none", "a change outside any project has no page to reach");
   assert.deepEqual(events[0].realtime.payload, {
     projectSlug: "",
     clientRefresh: {
@@ -539,7 +539,7 @@ test("session publications name the client reads each change invalidates", async
 
 test("session publications use the trusted project context and actions do not republish service completions", async () => {
   const published = [];
-  const publish = createSessionChangedPublisher({ async publish(event) { published.push(event); } });
+  const publish = createSessionChangedPublisher({ async publish(event) { if (event.type === "entity.changed") published.push(event); } });
   await Promise.all(["project-a", "project-b"].map((slug) => runWithProjectRequestContext({ slug }, async () => {
     await Promise.resolve();
     await publish("same-session-id", { payload: { projectSlug: "untrusted", conversationLogPatch: { text: slug } } });
@@ -3215,7 +3215,8 @@ test("assistant selection checks destination access and prepares routing before 
         async writeMetadataValue(_id, name, value) { operations.push("write"); session.metadata[name] = value; }
       } };
       const service = createService({
-        publishSessionChanged: createSessionChangedPublisher({ publish(event) { events.push(event); } }),
+        // Session changes only; each also sends its project's pages a summary.
+        publishSessionChanged: createSessionChangedPublisher({ publish(event) { if (event.type === "entity.changed") events.push(event); } }),
         project: { async createRuntime() { return runtime; } }, terminals: {
         async resolveAssistantSelection() { return next; },
         async requireAssistantAccess() { throw new Error("Do not authorize the disconnected old account"); },
@@ -3253,7 +3254,7 @@ test("assistant selection checks destination access and prepares routing before 
         assert.deepEqual(JSON.parse(session.metadata.assistant_routing), { mode: "custom", review: false, override: next });
         assert.deepEqual(operations, ["access", "state", "prepare", "write", "write"]);
         assert.equal(events.length, 1);
-        assert.equal(events[0].realtime.audience, "all_clients");
+        assert.deepEqual(events[0].realtime.audience, { room: "vibe64:project:project-a:session:session-1" });
         assert.equal(events[0].realtime.event, "vibe64.session.changed");
         assert.deepEqual(events[0].realtime.payload, {
           projectSlug: "project-a", sessionId: "session-1", status: "active",
@@ -4447,7 +4448,7 @@ test("ordinary creation cannot be switched into learning by browser purpose, sco
 
 test("working notifications take the trusted project over extra payload or a conflicting session view", async () => {
   const published = [];
-  const publish = createSessionChangedPublisher({ async publish(event) { published.push(event); } });
+  const publish = createSessionChangedPublisher({ async publish(event) { if (event.type === "entity.changed") published.push(event); } });
   await publish("working-one", { payload: { projectSlug: "working-project" } });
   await runWithProjectRequestContext({ slug: "trusted-working" }, () => publish("working-two", {
     session: { projectSlug: "conflicting-project" }, payload: { projectSlug: "forged-project" }

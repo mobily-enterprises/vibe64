@@ -13,7 +13,10 @@ const VIBE64_ASSISTANTS_API_SUFFIX = "/vibe64/assistants/capabilities";
 const VIBE64_ASSISTANT_MODEL_ACCESS_API_SUFFIX = "/vibe64/assistants/model-access";
 const VIBE64_CURRENT_SESSION_API_SUFFIX = `${VIBE64_SESSIONS_API_SUFFIX}/current`;
 const VIBE64_API_SUFFIX = "/vibe64";
+// A session change in full reaches the pages viewing that session; its summary
+// reaches the pages that have its project open (useVibe64ProjectWatch.js).
 const VIBE64_SESSION_CHANGED_EVENT = "vibe64.session.changed";
+const VIBE64_SESSION_SUMMARY_CHANGED_EVENT = "vibe64.session.summary.changed";
 const VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT = "vibe64.source-editor.file.changed";
 const VIBE64_SOURCE_EDITOR_SYNC_ERROR_EVENT = "vibe64.source-editor.sync.error";
 const VIBE64_SOURCE_EDITOR_SYNC_READY_EVENT = "vibe64.source-editor.sync.ready";
@@ -415,6 +418,7 @@ export {
   VIBE64_ARCHIVED_SESSIONS_API_SUFFIX,
   VIBE64_ASSISTANT_MODEL_ACCESS_API_SUFFIX,
   VIBE64_SESSION_CHANGED_EVENT,
+  VIBE64_SESSION_SUMMARY_CHANGED_EVENT,
   VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT,
   VIBE64_SOURCE_EDITOR_SYNC_ERROR_EVENT,
   VIBE64_SOURCE_EDITOR_SYNC_READY_EVENT,

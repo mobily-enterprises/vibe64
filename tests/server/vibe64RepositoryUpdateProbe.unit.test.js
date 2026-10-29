@@ -11,17 +11,12 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { normalizeRepositoryUpdateCheck } from "@local/vibe64-core/shared";
 import { runCaptureCommand } from "../../packages/vibe64-execution/src/server/engines/capture.js";
-import { createRepositoryUpdateWatchActions } from "../../packages/vibe64-sessions/src/server/actions.js";
-import {
-  createRepositoryUpdateProbe,
-  registerRepositoryUpdateWatch
-} from "../../packages/vibe64-sessions/src/server/repositoryUpdateProbe.js";
+import { createProjectWatchActions } from "../../packages/vibe64-sessions/src/server/actions.js";
+import { registerProjectWatch } from "../../packages/vibe64-sessions/src/server/projectWatch.js";
+import { createRepositoryUpdateProbe } from "../../packages/vibe64-sessions/src/server/repositoryUpdateProbe.js";
 import { createService } from "../../packages/vibe64-sessions/src/server/service.js";
 import { Vibe64RepositoryUpdatesProvider } from "../../packages/vibe64-sessions/src/server/Vibe64SessionsProvider.js";
-import {
-  REPOSITORY_UPDATES_RELEASE,
-  REPOSITORY_UPDATES_WATCH
-} from "../../packages/vibe64-sessions/src/shared/repositoryUpdates.js";
+import { PROJECT_WATCH, PROJECT_WATCH_RELEASE } from "../../packages/vibe64-sessions/src/shared/projectWatch.js";
 import { gitEnv } from "../../packages/vibe64-execution/src/server/env/gitEnv.js";
 import { checkSessionUpdates, readSessionAuthorityHeads } from "../../packages/vibe64-terminals/src/server/sessionWorkUpdate.js";
 
@@ -310,16 +305,19 @@ test("a browser watch is authorized as an action and released with its connectio
   const watching = new Set();
   const probe = { watch(slug) { watching.add(slug); return () => watching.delete(slug); } };
   actions.register({ contributorId: "repository-updates", domain: "vibe64-sessions",
-    actions: createRepositoryUpdateWatchActions({ probe }).map((action) => ({ ...action, surfaces: ["app"] })) });
+    actions: createProjectWatchActions({ probe }).map((action) => ({ ...action, surfaces: ["app"] })) });
   let connect;
-  registerRepositoryUpdateWatch({ actions, realtime: { onConnection(listener) { connect = listener; return () => {}; } } });
+  registerProjectWatch({ actions, realtime: { onConnection(listener) { connect = listener; return () => {}; } } });
   const socket = new EventEmitter();
   socket.connected = true;
+  socket.rooms = new Set();
+  socket.join = (room) => socket.rooms.add(room);
+  socket.leave = (room) => socket.rooms.delete(room);
   const close = connect({ socket, readRequest: async () => ({ params: {} }) });
-  const send = (input) => new Promise((resolve) => socket.emit(REPOSITORY_UPDATES_WATCH, input, resolve));
+  const send = (input) => new Promise((resolve) => socket.emit(PROJECT_WATCH, input, resolve));
   assert.deepEqual(await send({ watchId: "tab-1", projectSlug: "alpha" }), { ok: true });
   assert.deepEqual([...watching], ["alpha"]);
-  socket.emit(REPOSITORY_UPDATES_RELEASE, { watchId: "tab-1" });
+  socket.emit(PROJECT_WATCH_RELEASE, { watchId: "tab-1" });
   assert.deepEqual([...watching], []);
   allowed = false;
   assert.equal((await send({ watchId: "tab-1", projectSlug: "beta" })).ok, false);
@@ -377,8 +375,10 @@ test("a starting agent turn wakes its project's probe", async () => {
   }, {});
   try {
     const [turnActive] = listeners;
-    const change = (reason) => ({ entity: "session", realtime: { payload: { projectSlug: "alpha", reason } } });
+    const change = (reason, type = "entity.changed") => ({ type, entity: "session", realtime: { payload: { projectSlug: "alpha", reason } } });
     assert.equal(turnActive.matches(change("session-repository-checked")), false);
+    assert.equal(turnActive.matches(change("claude-stream-turn-active", "entity.summary")), false,
+      "the change's summary for project pages does not wake the probe again");
     for (const reason of ["claude-stream-turn-active", "codex-app-server-turn-active", "opencode-server-turn-active"]) {
       assert.equal(turnActive.matches(change(reason)), true, reason);
     }

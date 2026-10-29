@@ -5,8 +5,9 @@ import {
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
 
-import { createRepositoryUpdateWatchActions, createSessionActions } from "./actions.js";
-import { createRepositoryUpdateProbe, registerRepositoryUpdateWatch } from "./repositoryUpdateProbe.js";
+import { createProjectWatchActions, createSessionActions } from "./actions.js";
+import { registerProjectWatch } from "./projectWatch.js";
+import { createRepositoryUpdateProbe } from "./repositoryUpdateProbe.js";
 import { logOperationalEvent } from "@local/vibe64-core/server/logging";
 import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { registerApprovalCountReader } from "@local/vibe64-core/server/studioProjectContext";
@@ -218,8 +219,9 @@ const TURN_ACTIVE_REASONS = new Set([
   "opencode-server-turn-active"
 ]);
 
-// The project update probe runs while a browser watches the project over
-// realtime or an agent turn runs in it. Authenticated realtime may be composed
+// Browser pages watch the projects and sessions they show over realtime
+// (projectWatch.js); the project update probe runs while a page watches the
+// project or an agent turn runs in it. Authenticated realtime may be composed
 // on top of sessions, so it attaches only after both owners exist.
 const Vibe64RepositoryUpdatesProvider = defineFeature({
   id: "vibe64.sessions.repository-updates",
@@ -239,16 +241,17 @@ const Vibe64RepositoryUpdatesProvider = defineFeature({
     });
     events.register({
       id: "vibe64.sessions.repository-updates.turn-active",
-      matches: (event) => event?.entity === "session" && TURN_ACTIVE_REASONS.has(event.realtime?.payload?.reason),
+      matches: (event) => event?.type === "entity.changed" && event.entity === "session" &&
+        TURN_ACTIVE_REASONS.has(event.realtime?.payload?.reason),
       handle: (event) => probe.wake(event.realtime.payload.projectSlug)
     });
-    const closeWatches = registerRepositoryUpdateWatch({ actions: actionCatalogue, realtime });
+    const closeWatches = registerProjectWatch({ actions: actionCatalogue, realtime });
     return { repositoryUpdates: { probe, close() {
       closeWatches();
       probe.close();
     } } };
   },
-  actions: ({ repositoryUpdates }) => createRepositoryUpdateWatchActions({ probe: repositoryUpdates.probe }),
+  actions: ({ repositoryUpdates }) => createProjectWatchActions({ probe: repositoryUpdates.probe }),
   shutdown(_deps, { outputs }) {
     outputs.repositoryUpdates.close();
   }

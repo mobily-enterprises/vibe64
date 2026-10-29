@@ -416,7 +416,7 @@ describe("host work inspection", () => {
       mountedHostMocks.request.mockResolvedValue({ ok: true, changedPaths: ["src/app.js"], unsaved: true });
       const listener = (event) => mountedHostMocks.events.mock.calls.map(([options]) => options)
         .find((options) => options.event === event);
-      const sessionChanged = listener("vibe64.session.changed");
+      const sessionChanged = listener("vibe64.session.summary.changed");
       const checkpoint = { reason: "session-turn-checkpoint-updated", sessionId: "working-one" };
       expect(sessionChanged.matches({ payload: checkpoint })).toBe(true);
       sessionChanged.onEvent({ payload: checkpoint });

@@ -18,7 +18,8 @@ import { createConversationRuntime, createConversationTranscript } from "@jskit-
 import { normalizeConversationTurn } from "@jskit-ai/assistant-core/shared/conversation";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
-import { createSessionChangedPublisher } from "@local/vibe64-core/server/sessionRealtimeEvents";
+import { createSessionChangedPublisher, vibe64ProjectSessionsRoom, vibe64SessionViewersRoom } from "@local/vibe64-core/server/sessionRealtimeEvents";
+import { PROJECT_WATCH } from "@local/vibe64-sessions/shared/project-watch";
 import { createAssistantRoutingStore } from "@local/vibe64-core/server/assistantRoutingStore";
 import { resolveVibe64AssistantSelection, serializeVibe64AssistantSelection } from "@local/vibe64-runtime/shared";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server/sessionStore";
@@ -282,7 +283,18 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     setup(capabilities) {
       events = capabilities.events;
       publishSessionChanged = createSessionChangedPublisher(events);
-      capabilities.realtime.onConnection(({ socket }) => { sockets.add(socket); return () => sockets.delete(socket); });
+      capabilities.realtime.onConnection(({ socket }) => {
+        sockets.add(socket);
+        // The fixture's page may watch anything: it joins the watched rooms
+        // so that real session publications reach it.
+        socket.on(PROJECT_WATCH, (input, acknowledge) => {
+          void socket.join(input?.sessionId
+            ? vibe64SessionViewersRoom(input.projectSlug, input.sessionId)
+            : vibe64ProjectSessionsRoom(input?.projectSlug));
+          if (typeof acknowledge === "function") acknowledge({ ok: true });
+        });
+        return () => sockets.delete(socket);
+      });
       return {};
     }
   });
@@ -418,10 +430,17 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
   function broadcast(event: string, payload: Record<string, unknown>) {
     void events.publish({ type: event, realtime: { audience: "all_clients", event, payload } });
   }
+  // The server sends a change in full to the session's viewers and, unless it
+  // is streamed work, its summary to the project's pages; this fixture's page
+  // is both.
+  function broadcastSessionChange(payload: Record<string, unknown>, { summary = true } = {}) {
+    broadcast("vibe64.session.changed", payload);
+    if (summary) broadcast("vibe64.session.summary.changed", payload);
+  }
   function publishTurn() {
     session.revision += 1;
     session.manifest.revision = session.revision;
-    broadcast("vibe64.session.changed", {
+    broadcastSessionChange({
       projectSlug: WORKSPACE_SLUG,
       sessionId: session.sessionId,
       revision: session.revision,
@@ -460,7 +479,7 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     },
     sessionChanged(reason: string, payload: Record<string, unknown> = {}) {
       session.revision += 1;
-      broadcast("vibe64.session.changed", {
+      broadcastSessionChange({
         projectSlug: WORKSPACE_SLUG, sessionId: session.sessionId,
         revision: session.revision, reason, ...payload
       });
@@ -471,11 +490,11 @@ export async function assistantStatusServer({ temporaryEngineId = null, colleagu
     },
     progress(text: string) {
       conversation.commentary.push({ role: "commentary", text, at: new Date().toISOString() });
-      broadcast("vibe64.session.changed", {
+      broadcastSessionChange({
         projectSlug: WORKSPACE_SLUG, sessionId: session.sessionId,
         reason: "codex-app-server-commentary",
         conversationLogPatch: { type: "upsert-turn", turn: conversation }
-      });
+      }, { summary: false });
       applicationEvents.emit("conversation", { type: "transcript", patch: { type: "upsert-turn", turn: normalizeConversationTurn(conversation) } });
     },
     disconnect() {

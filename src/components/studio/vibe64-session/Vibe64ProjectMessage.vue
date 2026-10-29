@@ -37,7 +37,7 @@ import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { projectAppPath } from "@/lib/vibe64ProjectScope.js";
 import { vibe64SessionShortLabel } from "@/lib/vibe64SessionViewModel.js";
-import { VIBE64_SESSIONS_API_SUFFIX, VIBE64_SESSION_CHANGED_EVENT, VIBE64_SURFACE_ID, vibe64SessionsQueryKey } from "@/lib/vibe64SessionRequestConfig.js";
+import { VIBE64_SESSIONS_API_SUFFIX, VIBE64_SESSION_SUMMARY_CHANGED_EVENT, VIBE64_SURFACE_ID, vibe64SessionsQueryKey } from "@/lib/vibe64SessionRequestConfig.js";
 
 const props = defineProps({ details: { type: Object, required: true }, at: { type: String, default: "" } });
 const sent = computed(() => props.details.direction === "sent");
@@ -51,7 +51,7 @@ const sessions = useEndpointResource({
   readQuery: { limit: 20 },
   queryOptions: { refetchOnMount: false, refetchOnWindowFocus: false },
   realtime: {
-    events: [VIBE64_SESSION_CHANGED_EVENT, "connect"],
+    events: [VIBE64_SESSION_SUMMARY_CHANGED_EVENT, "connect"],
     matches: ({ payload = {} } = {}) =>
       (!payload.projectSlug || payload.projectSlug === project.value) && (!payload.reason || payload.reason === "session-renamed")
   }

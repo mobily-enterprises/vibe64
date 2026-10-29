@@ -450,8 +450,10 @@ labelled managed execution: `session-archive-check` ("Checking a session
 archive"), `session-archive-read` ("Opening an archived session") or
 `session-archive-write` ("Writing a session archive"), so a host listing
 executions can name it.
-Start, each durable stage transition, completion, and failure publish `vibe64.session.changed` to
-all clients with a list-refresh hint. Reconnecting clients read persisted state.
+Start, each durable stage transition, completion, and failure publish a session
+change with a list-refresh hint, which reaches the session's viewers and, as a
+summary, every page with the project open. Reconnecting clients read persisted
+state.
 
 Archive lives in Sessions' archive module, one function per durable phase;
 connected-source orchestration lives in its connected-contributions module.

@@ -4,7 +4,22 @@ const VIBE64_OUTPUTS_CLIENT_REFRESH_PAYLOAD = Object.freeze({
   clientRefresh: Object.freeze({ includeOutputs: true })
 });
 
+// A session change reaches the browser pages that show it: its full payload
+// goes to the pages viewing the session, and a small summary to the pages that
+// have its project open (session lists, repository status, notices). A page
+// joins those rooms by watching the project or one of its sessions
+// (vibe64-sessions' projectWatch.js), so nothing reaches a page that shows
+// neither.
 const VIBE64_SESSION_CHANGED_EVENT = "vibe64.session.changed";
+const VIBE64_SESSION_SUMMARY_CHANGED_EVENT = "vibe64.session.summary.changed";
+
+function vibe64ProjectSessionsRoom(projectSlug) {
+  return `vibe64:project:${projectSlug}:sessions`;
+}
+
+function vibe64SessionViewersRoom(projectSlug, sessionId) {
+  return `vibe64:project:${projectSlug}:session:${sessionId}`;
+}
 
 function record(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
@@ -21,31 +36,42 @@ const PRESENTATION_ONLY = Object.freeze({ includeAccess: false, includeDetail: f
 const ACCESS_ONLY = Object.freeze({ includeDetail: false, includeList: false });
 const NOT_LIST = Object.freeze({ includeList: false });
 const NOT_ACCESS = Object.freeze({ includeAccess: false });
+// Live presentation of a session's work: streamed text, progress and output
+// targets. They invalidate no client read.
+const PRESENTATION_REASONS = Object.freeze([
+  "assistant-stream",
+  "assistant-response-bundle",
+  "codex-app-server-commentary",
+  "codex-app-server-live-progress",
+  "codex-app-server-message-delivered",
+  "codex-app-server-ready",
+  "codex-app-server-reasoning-summary",
+  "codex-app-server-running",
+  "codex-app-server-terminal-assistant-message",
+  "codex-app-server-terminal-user-message",
+  "codex-app-server-turn-claimed",
+  "codex-app-server-turn-finalizing",
+  "codex-app-server-turn-state",
+  "opencode-server-assistant-message",
+  "opencode-server-message-delivered",
+  "opencode-server-progress",
+  "opencode-server-reasoning",
+  "output-target-closed",
+  "output-target-ready",
+  "output-target-started",
+  "output-target-stopped"
+]);
+// Streamed work, including each completed Claude message (which refreshes its
+// viewers' detail), changes no session list: only the session's viewers
+// receive it, and project pages get no summary of it.
+const VIEWER_ONLY_REASONS = new Set([
+  ...PRESENTATION_REASONS,
+  "claude-stream-message",
+  "claude-stream-message-delivered"
+]);
 const CLIENT_REFRESH_BY_REASON = new Map([
-  ...[
-    "assistant-stream",
-    "assistant-response-bundle",
-    "codex-app-server-commentary",
-    "codex-app-server-live-progress",
-    "codex-app-server-message-delivered",
-    "codex-app-server-ready",
-    "codex-app-server-reasoning-summary",
-    "codex-app-server-running",
-    "codex-app-server-terminal-assistant-message",
-    "codex-app-server-terminal-user-message",
-    "codex-app-server-turn-claimed",
-    "codex-app-server-turn-finalizing",
-    "codex-app-server-turn-state",
-    "opencode-server-assistant-message",
-    "opencode-server-message-delivered",
-    "opencode-server-progress",
-    "opencode-server-reasoning",
-    "output-target-closed",
-    "output-target-ready",
-    "output-target-started",
-    "output-target-stopped",
-    "session-repository-check-failed"
-  ].map((reason) => [reason, PRESENTATION_ONLY]),
+  ...PRESENTATION_REASONS.map((reason) => [reason, PRESENTATION_ONLY]),
+  ["session-repository-check-failed", PRESENTATION_ONLY],
   ...[
     "codex-app-server-turn-active",
     "codex-app-server-turn-idle",
@@ -105,6 +131,31 @@ function sessionRealtimePayload(sessionId, { session: sessionValue, originId, re
   };
 }
 
+// What a project page needs about a change in one of its sessions: the
+// session's identity and state, the reads it invalidates, whether its agent
+// turn runs, and the small notices project pages show. Nothing a session's
+// viewers render, such as streamed text or turn details, is summarized.
+const SUMMARY_NOTICE_FIELDS = Object.freeze([
+  "approvalId",
+  "approvalSender",
+  "canonicalCommit",
+  "repositoryUpdateCheck",
+  "repositoryUpdateCheckError"
+]);
+
+function sessionSummaryPayload(full) {
+  const turn = record(record(full.agentSession).turn);
+  const run = record(full.agentRun);
+  return {
+    sessionId: full.sessionId,
+    ...Object.fromEntries(["revision", "status", ...SUMMARY_NOTICE_FIELDS, "projectSlug", "clientRefresh", "originId", "reason"]
+      .filter((field) => full[field] !== undefined)
+      .map((field) => [field, full[field]])),
+    ...(Object.keys(turn).length > 0 ? { agentSession: { turn: { active: turn.active === true } } } : {}),
+    ...(Object.keys(run).length > 0 ? { agentRun: { active: run.active === true } } : {})
+  };
+}
+
 function createSessionChangedPublisher(events) {
   if (!events || typeof events.publish !== "function") {
     throw new TypeError("createSessionChangedPublisher requires runtime.events.");
@@ -120,8 +171,14 @@ function createSessionChangedPublisher(events) {
     if (!id) {
       return null;
     }
-    return events.publish(Object.freeze({
-      type: "entity.changed",
+    const fullPayload = Object.freeze(sessionRealtimePayload(id, {
+      session,
+      originId: eventOriginId,
+      reason,
+      payload
+    }));
+    const projectSlug = fullPayload.projectSlug;
+    const change = {
       source: "vibe64",
       entity: "session",
       operation: String(operation || "updated").trim() || "updated",
@@ -130,23 +187,40 @@ function createSessionChangedPublisher(events) {
         kind: "global",
         id: null
       }),
-      occurredAt: new Date().toISOString(),
+      occurredAt: new Date().toISOString()
+    };
+    // A change outside any project has no page to reach.
+    const published = await events.publish(Object.freeze({
+      ...change,
+      type: "entity.changed",
       realtime: Object.freeze({
-        audience: "all_clients",
+        audience: projectSlug ? { room: vibe64SessionViewersRoom(projectSlug, fullPayload.sessionId) } : "none",
         event: VIBE64_SESSION_CHANGED_EVENT,
-        payload: Object.freeze(sessionRealtimePayload(id, {
-          session,
-          originId: eventOriginId,
-          reason,
-          payload
-        }))
+        payload: fullPayload
       })
     }));
+    if (projectSlug && !VIEWER_ONLY_REASONS.has(String(reason || "").trim())) {
+      // The summary is a second delivery of the same change, not a domain
+      // change of its own: listeners of session changes match "entity.changed".
+      await events.publish(Object.freeze({
+        ...change,
+        type: "entity.summary",
+        realtime: Object.freeze({
+          audience: { room: vibe64ProjectSessionsRoom(projectSlug) },
+          event: VIBE64_SESSION_SUMMARY_CHANGED_EVENT,
+          payload: Object.freeze(sessionSummaryPayload(fullPayload))
+        })
+      }));
+    }
+    return published;
   };
 }
 
 export {
   VIBE64_SESSION_CHANGED_EVENT,
+  VIBE64_SESSION_SUMMARY_CHANGED_EVENT,
   createSessionChangedPublisher,
+  vibe64ProjectSessionsRoom,
+  vibe64SessionViewersRoom,
   VIBE64_OUTPUTS_CLIENT_REFRESH_PAYLOAD
 };

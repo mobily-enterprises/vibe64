@@ -921,7 +921,28 @@ invalidates: its `clientRefresh` flags (`includeDetail`, `includeList`,
 and an emitter's explicit flags win. The list, detail and AI-access readers only
 read those flags, treating an unmentioned read as invalidated, and accept events
 through the one project scope check, `vibe64SessionEventMatchesScope`, so lists
-ignore events identified as belonging to another project. Deleting a temporary Claude chat
+ignore events identified as belonging to another project.
+The same publisher decides which pages a change reaches. A browser page
+watches, over its realtime connection, each project it has open and each
+session it shows, visible or in a background tab (`useVibe64ProjectWatch`:
+the repository status registry watches the project, each session runtime host
+its session). The `api`-only action `vibe64.sessions.project.watch`
+(`projectWatch.js`) authorizes the watch like any project action and joins the
+connection to that project's or session's realtime room until the page leaves,
+the scope ends or the connection drops; a reconnected page watches again. The
+full `vibe64.session.changed` payload reaches only the session's room. Every
+change except streamed work (assistant text, Claude messages, Codex and
+OpenCode progress, output targets) also sends the project's room
+`vibe64.session.summary.changed`: the session's identity, revision, status,
+`clientRefresh` flags, reason, turn activity (`active` only) and the small
+notices project pages show (repository check result or failure, canonical
+commit, approval sender and id). The session list and its activity, archive
+and renewal state, the repository status registry, Project settings, the
+owner's approval notice and project message labels read summaries; the
+session's own readers keep the full change. A change without a project reaches
+no page. The summary is a second publication of type `entity.summary`, so
+server listeners of session changes match `entity.changed` and see each change
+once. Deleting a temporary Claude chat
 removes its metadata record instead of accumulating empty files that every
 session read would reopen.
 Claude process restoration reads current saved session metadata, rather than a
@@ -1213,6 +1234,9 @@ sheet, the owner's header chip, title count and Review snackbar.
 - `packages/vibe64-execution/src/server/engines/stdioBridge.js`
 
 - `packages/vibe64-core/src/server/sessionRealtimeEvents.js`
+- `packages/vibe64-sessions/src/server/projectWatch.js`
+- `packages/vibe64-sessions/src/shared/projectWatch.js`
+- `src/composables/useVibe64ProjectWatch.js`
 
 
 

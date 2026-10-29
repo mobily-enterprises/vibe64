@@ -1,7 +1,8 @@
 import { authenticatedVibe64User, withVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { mainConversationRequestContext } from "./mainConversationAuthority.js";
-import { REPOSITORY_UPDATES_WATCH_ACTION } from "./repositoryUpdateProbe.js";
+import { PROJECT_WATCH_ACTION } from "./projectWatch.js";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
+import { vibe64ProjectSessionsRoom, vibe64SessionViewersRoom } from "@local/vibe64-core/server/sessionRealtimeEvents";
 import { getStudioProjectContext } from "@local/vibe64-core/server/studioProjectContext";
 import { isLocalStudioRequest } from "@local/vibe64-core/server/localStudioRequest";
 import { assistantAccessTool, conversationLogTool, repositoryHistoryTool, repositoryVersionFilesTool, conversationOperationTool, renewalTool, sessionTool, sessionWorkTool, sessionPullRequestTool, incomingContributionTool } from "./assistantContracts.js";
@@ -24,7 +25,7 @@ import {
   currentSessionInputValidator,
   sessionPinActionInputValidator,
   repositoryHistoryInputValidator,
-  repositoryUpdatesWatchInputValidator,
+  projectWatchInputValidator,
   repositoryVersionFileDiffInputValidator,
   repositoryVersionFilesInputValidator,
   sessionConversationLogInputValidator,
@@ -576,26 +577,34 @@ function createSessionActions({ sessions } = {}) {
   ]);
 }
 
-// A browser's watch of its project for repository updates. Only its realtime
-// connection (repositoryUpdateProbe.js) executes it, with the binding that
-// releases the watch when the browser page leaves the project or disconnects.
-function createRepositoryUpdateWatchActions({ probe } = {}) {
+// A browser page's watch of a project it has open, or of one session it shows.
+// Only its realtime connection (projectWatch.js) executes it, with the binding
+// that releases what the watch holds when the page leaves or disconnects.
+function createProjectWatchActions({ probe } = {}) {
   if (!probe) {
-    throw new TypeError("createRepositoryUpdateWatchActions requires the update probe.");
+    throw new TypeError("createProjectWatchActions requires the update probe.");
   }
   return Object.freeze([{
     ...action({
-      id: REPOSITORY_UPDATES_WATCH_ACTION,
+      id: PROJECT_WATCH_ACTION,
       kind: "command",
-      input: repositoryUpdatesWatchInputValidator,
-      execute: (_input, _context, deps) => {
+      input: projectWatchInputValidator,
+      execute: (input, _context, deps) => {
         const binding = deps?.watchBinding;
-        if (typeof binding?.current !== "function" || typeof binding.onRelease !== "function") {
-          throw Object.assign(new Error("Watching a project for updates requires a realtime connection."), {
-            code: "vibe64_repository_updates_watch_connection_required", statusCode: 400
+        if (typeof binding?.current !== "function" || typeof binding.hold !== "function" || typeof binding.join !== "function") {
+          throw Object.assign(new Error("Watching a project requires a realtime connection."), {
+            code: "vibe64_project_watch_connection_required", statusCode: 400
           });
         }
-        if (binding.current()) binding.onRelease(probe.watch(currentProjectRequestContext()?.slug));
+        if (!binding.current()) return { ok: true };
+        const slug = currentProjectRequestContext()?.slug;
+        const sessionId = String(input?.sessionId || "").trim();
+        if (sessionId) {
+          binding.join(vibe64SessionViewersRoom(slug, sessionId));
+        } else {
+          binding.join(vibe64ProjectSessionsRoom(slug));
+          binding.hold(probe.watch(slug));
+        }
         return { ok: true };
       }
     }),
@@ -650,6 +659,6 @@ export {
   ACTION_UPDATE_SESSION_RENEWAL_DRAFT,
   ACTION_UPDATE_SESSION_PRESENCE,
   ACTION_UPDATE_SESSION_WORK,
-  createRepositoryUpdateWatchActions,
+  createProjectWatchActions,
   createSessionActions
 };

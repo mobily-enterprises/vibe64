@@ -613,7 +613,7 @@ describe("session repository status registry", () => {
     const starterFiles = ["genesis/stack.md", "package.json", "src/main.js"];
     registryHarness.requestHandler = () => ({ changedPaths: starterFiles, ok: true, unsaved: true });
 
-    const sessionEvent = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.session.changed");
+    const sessionEvent = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.session.summary.changed");
     const change = { payload: { reason: "session-starter-applied", sessionId: "session-a" } };
     expect(sessionEvent.matches(change)).toBe(true);
     sessionEvent.onEvent(change);
@@ -706,7 +706,7 @@ describe("session repository status registry", () => {
     await settleRegistryRequests();
     const { socket } = registryHarness;
     const [[event, watch]] = socket.emitted;
-    expect(event).toBe("vibe64.sessions.repository-updates.watch");
+    expect(event).toBe("vibe64.sessions.project.watch");
     expect(watch).toEqual({ projectSlug: "sample", watchId: expect.any(String) });
     const emitted = () => socket.emitted.map(([name, input]) => [name.split(".").at(-1), input.projectSlug || ""]);
 
@@ -746,7 +746,7 @@ describe("session repository status registry", () => {
     }));
     await settleBurst();
     registryHarness.requests.length = 0;
-    const sessionChanged = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.session.changed");
+    const sessionChanged = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.session.summary.changed");
     const fileChanged = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.source-editor.file.changed");
     for (const sessionId of ["session-a", "session-b"]) {
       for (const reason of ["session-turn-checkpoint-updated", "claude-stream-turn-idle"]) {
@@ -788,7 +788,7 @@ describe("session repository status registry", () => {
       const check = Promise.withResolvers();
       registryHarness.requestHandler = (path) => String(path).endsWith("/updates/check")
         ? check.promise : { changedPaths: [], ok: true, unsaved: false };
-      const sessionChanged = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.session.changed");
+      const sessionChanged = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.session.summary.changed");
       sessionChanged.onEvent({ payload: {
         canonicalCommit: "new-version", reason: "repository-canonical-changed", sessionId: "session-b"
       } });
@@ -832,7 +832,7 @@ describe("session repository status registry", () => {
     }));
     await settleRegistryRequests();
     expect(checks).toHaveLength(1);
-    const sessionChanged = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.session.changed");
+    const sessionChanged = registryHarness.realtimeEvents.find(({ event }) => event === "vibe64.session.summary.changed");
     sessionChanged.onEvent({ payload: {
       canonicalCommit: "new-version", reason: "repository-canonical-changed", sessionId: "session-a"
     } });

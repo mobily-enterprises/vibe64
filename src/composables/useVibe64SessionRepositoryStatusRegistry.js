@@ -1,8 +1,8 @@
 import { computed, onScopeDispose, watch } from "vue";
-import { useRealtimeEvent, useRealtimeSocket } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
+import { useRealtimeEvent } from "@jskit-ai/realtime/client/composables/useRealtimeEvent";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import {
-  VIBE64_SESSION_CHANGED_EVENT,
+  VIBE64_SESSION_SUMMARY_CHANGED_EVENT,
   VIBE64_SOURCE_EDITOR_FILE_CHANGED_EVENT,
   vibe64SessionCheckUpdatesPath,
   vibe64SessionPath
@@ -19,10 +19,7 @@ import {
 } from "@/lib/vibe64RepositoryRealtime.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
 import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
-import {
-  REPOSITORY_UPDATES_RELEASE,
-  REPOSITORY_UPDATES_WATCH
-} from "@local/vibe64-sessions/shared/repository-updates";
+import { useVibe64ProjectWatch } from "@/composables/useVibe64ProjectWatch.js";
 
 const DEFAULT_MAX_CONCURRENCY = 2;
 const DEFAULT_STALE_AFTER_MS = 5 * 60_000;
@@ -577,7 +574,7 @@ function useVibe64SessionRepositoryStatusRegistry({
 
   useRealtimeEvent({
     enabled: computed(() => visibleSessionIds.value.length > 0),
-    event: VIBE64_SESSION_CHANGED_EVENT,
+    event: VIBE64_SESSION_SUMMARY_CHANGED_EVENT,
     matches: ({ payload = {} } = {}) => Boolean(
       visibleSessionIds.value.includes(repositoryStatusSessionId(payload)) &&
       !sourceOperationsSuspended(repositoryStatusSessionId(payload)) &&
@@ -646,31 +643,13 @@ function useVibe64SessionRepositoryStatusRegistry({
         inspectVisible();
       }, DEFAULT_STALE_CHECK_INTERVAL_MS);
 
-  // While this page has the project open, visible or in a background tab, the
-  // server checks every session for updates every 30 s and publishes each
-  // result (vibe64-sessions' repositoryUpdateProbe.js), so this registry only
-  // reacts to those events. Only leaving the project or the page, or a lost
-  // connection, ends the watch: a person returning to a hidden tab must find
-  // its state already current.
-  const socket = useRealtimeSocket();
-  const watchId = globalThis.crypto.randomUUID();
-  let watchedProjectSlug = "";
-  function syncRepositoryUpdateWatch({ reconnected = false } = {}) {
-    const slug = disposed ? "" : String(readRefOrGetterValue(projectSlug) || "").trim();
-    if (slug === watchedProjectSlug && !reconnected) {
-      return;
-    }
-    if (watchedProjectSlug && !slug && socket.connected) {
-      socket.emit(REPOSITORY_UPDATES_RELEASE, { watchId });
-    }
-    watchedProjectSlug = slug;
-    if (slug && socket.connected) {
-      socket.emit(REPOSITORY_UPDATES_WATCH, { watchId, projectSlug: slug });
-    }
-  }
-  const watchAfterReconnect = () => syncRepositoryUpdateWatch({ reconnected: true });
-  socket.on("connect", watchAfterReconnect);
-  watch(() => readRefOrGetterValue(projectSlug), () => syncRepositoryUpdateWatch(), { immediate: true });
+  // While this page has the project open, visible or in a background tab, it
+  // watches the project: the server checks every session for updates every
+  // 30 s and publishes each result (vibe64-sessions' repositoryUpdateProbe.js)
+  // as a session summary, so this registry only reacts to those events. Only
+  // leaving the project or the page, or a lost connection, ends the watch: a
+  // person returning to a hidden tab must find its state already current.
+  useVibe64ProjectWatch({ projectSlug });
 
   const refreshWhenVisible = () => {
     if (browserDocument?.visibilityState !== "visible") {
@@ -683,8 +662,6 @@ function useVibe64SessionRepositoryStatusRegistry({
   onScopeDispose(() => {
     disposed = true;
     browserDocument?.removeEventListener("visibilitychange", refreshWhenVisible);
-    socket.off("connect", watchAfterReconnect);
-    syncRepositoryUpdateWatch();
     if (interval !== null) {
       window.clearInterval(interval);
     }
