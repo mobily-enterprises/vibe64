@@ -374,8 +374,9 @@ test("a one-job checkpoint commits under the identity the daemon resolved for th
       timestamp: "2026-08-18T09:00:00.000Z",
       worktreePath: root
     });
-    assert.equal(await git(root, ["show", "-s", "--format=%an <%ae>|%cn <%ce>|%aI", result.commit]),
-      "Project Bot <bot@example.test>|Project Bot <bot@example.test>|2026-08-18T09:00:00+00:00");
+    // Seconds since the epoch: Git versions spell UTC as "+00:00" or "Z".
+    assert.equal(await git(root, ["show", "-s", "--format=%an <%ae>|%cn <%ce>|%at", result.commit]),
+      `Project Bot <bot@example.test>|Project Bot <bot@example.test>|${Date.parse("2026-08-18T09:00:00.000Z") / 1000}`);
   } finally {
     await rm(root, { force: true, recursive: true });
   }
