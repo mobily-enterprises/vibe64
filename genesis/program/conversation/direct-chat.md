@@ -643,6 +643,9 @@ resolver; standalone Vibe64 retains its ordinary local actor context. The
 original action contributor still checks project access on every tool call,
 and Main verifies the exact actor/session/native turn. Recovery never fabricates
 a browser session or treats serialized user metadata as hosted authority.
+A goal that cannot continue after restart, including when its actor can no
+longer be resolved, records `vibe64.agent_goal.recovery_failed` with its project,
+session and the username that set the goal, besides the visible goal error.
 Main OpenCode's common driver consumes the original shared runtime directly.
 Its native-state read selects the existing target/thread, reads the existing PTY
 snapshot, then projects the same native turn map. Vibe64 supplies current context,

@@ -149,7 +149,9 @@ receipt and current account, then use **Resume goal**; an uncertain command is
 never replaced with a blind send. After a crash, an accepted Claude command can
 be recovered only when its saved native attachment identifies that exact command.
 A different goal with the same text is insufficient; missing proof requires
-explicit confirmation.
+explicit confirmation. Each goal that stays stopped after a restart shows its
+error on the goal control, and the operational log names its project and the
+person who set it, so an administrator can tell whose goal needs attention.
 A copied development workspace never inherits permission to run its parent's
 goals. Restart continuation applies to supported Main native goals; temporary
 logical and scoped conversations do not expose native goal controls or receipts.

@@ -2265,12 +2265,13 @@ async function withAgentMessageController(operation, {
     projectService
   };
   const terminalServices = [];
-  const createService = () => {
+  const createService = ({ logger } = {}) => {
     const service = createTerminalService({
       actions,
       projectServices,
       codexTerminalController: controllerOptions,
       env: controllerOptions.env,
+      logger,
       publishSessionChanged: { agentTerminal: controllerOptions.publishSessionChanged },
       projectService
     });
@@ -13618,6 +13619,47 @@ test("Main Codex active goal continues once after service restart and explicit P
     configure(pausedService);
     assert.equal((await pausedService.recoverActiveGoals()).ok, true);
     assert.deepEqual(writes.map(([action]) => action), ["set", "active", "paused"]);
+  }, { throughTerminalService: true });
+});
+
+
+test("a goal that cannot continue after restart is logged with its project and the person who set it", { timeout: 30_000 }, async () => {
+  await withAgentMessageController(async ({ captures, createService, controllerOptions, projectService, runtime, sessionId, store, terminalService }) => {
+    const actor = { ...os.userInfo(), role: "owner" };
+    const options = { runtime, vibe64User: actor };
+    runtime.listSessions = async () => [await store.readSession(sessionId)];
+    await writeCodexAuthMarker(controllerOptions.env.VIBE64_SYSTEM_ROOT, { connected: true, loginId: randomUUID() });
+    let goal = null;
+    captures.onProviderCreated = provider => {
+      provider.readGoal = async () => ({ goal });
+      provider.setGoal = async (_threadId, input) => ({ goal: goal = { ...input, status: "active", createdAt: 100, tokensUsed: 0, timeUsedSeconds: 0 } });
+      provider.setGoalStatus = async (_threadId, status) => ({ goal: goal = { ...goal, status } });
+    };
+    terminalService.configureAssistantRuntime({ authorizeProjectMessage: async user => user, resolveAssistantUser: async user => user });
+    await terminalService.updateAgentGoal(sessionId, { ...options, action: "set",
+      expectedSegmentId: null, objective: "Finish the Codex work" }, { canonical: true });
+    await terminalService.close();
+    projectService.listProjects = async () => ({ projects: [{ slug: "test-project", runtime: { open: true } }] });
+    projectService.runInProjectContext = async (_slug, operation) => operation();
+    const warnings = [];
+    const resumedService = createService({ logger: { warn: (fields, message) => warnings.push({ fields, message }),
+      info() {}, error() {}, debug() {} } });
+    resumedService.configureAssistantRuntime({ resolveAssistantUser: async user => user, authorizeProjectMessage: async () => {
+      throw Object.assign(new Error("The user who requested this AI task no longer has workspace access."),
+        { code: "vibe64_assistant_actor_unavailable", statusCode: 403 });
+    } });
+    try {
+      const recovered = await resumedService.recoverActiveGoals();
+      assert.equal(recovered.ok, false, JSON.stringify(recovered));
+      const logged = warnings.find(entry => entry.fields.event === "vibe64.agent_goal.recovery_failed");
+      assert.ok(logged, JSON.stringify(warnings));
+      assert.deepEqual({ sessionId: logged.fields.sessionId, projectSlug: logged.fields.projectSlug, actor: logged.fields.actor,
+        code: logged.fields.code }, { sessionId, projectSlug: "test-project", actor: actor.username,
+        code: "vibe64_assistant_actor_unavailable" }, "the operator can tell which project and person the goal belongs to");
+    } finally {
+      delete projectService.listProjects;
+      await resumedService.close();
+    }
   }, { throughTerminalService: true });
 });
 

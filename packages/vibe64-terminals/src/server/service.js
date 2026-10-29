@@ -4072,11 +4072,15 @@ function createService({
           logOperationalEvent(logger, "warn", { ...result, event: "vibe64.agent_goal.recovery_failed",
             component: "vibe64.agent_goal" }, "An active goal needs attention after server restart.");
         };
-        const recoverCurrentProject = async () => {
+        // A failure names its project and the person who set the goal: session
+        // IDs repeat across projects, so the operator needs both.
+        const recoverCurrentProject = async projectSlug => {
           for (const session of await listOpenProjectRuntimeSessions()) {
             if (closing) break;
             try { results.push(await recoverSessionGoal(session.sessionId)); }
             catch (error) {
+              let actor = "";
+              try { actor = String(readGoalIntent(session)?.actor?.username || ""); } catch { /* An unreadable intent names no one. */ }
               try {
                 const context = await assistantSessionOptions(session.sessionId);
                 const expected = readGoalIntent(session);
@@ -4084,7 +4088,7 @@ function createService({
                   ...latest, error: `Goal continuation after restart failed: ${String(error.message || "Recovery could not be verified.").slice(0, 500)}`
                 } : null);
               } catch { /* The original recovery failure remains visible in the operational log. */ }
-              reportFailure(error, { sessionId: session.sessionId });
+              reportFailure(error, { projectSlug, sessionId: session.sessionId, ...(actor ? { actor } : {}) });
             }
           }
         };
@@ -4093,10 +4097,10 @@ function createService({
           if (listed?.ok === false) throw new Error(listed.error || "Goal recovery could not list projects.");
           for (const project of openProjectRuntimeRecords(listed)) {
             if (closing) break;
-            try { await projectService.runInProjectContext(project.slug, recoverCurrentProject); }
+            try { await projectService.runInProjectContext(project.slug, () => recoverCurrentProject(project.slug)); }
             catch (error) { reportFailure(error, { projectSlug: project.slug }); }
           }
-        } else await recoverCurrentProject();
+        } else await recoverCurrentProject(projectRuntimeContext().projectSlug);
         return { ok: results.every(result => result.ok !== false), results };
       })();
       return goalRecovery;
