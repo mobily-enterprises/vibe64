@@ -385,7 +385,10 @@ function handleManagedExecutionOperation(payload = {}, requestPayloadPath = "") 
     `--property=MemoryMax=${memoryMaxBytes}`,
     `--property=TasksMax=${tasksMax}`,
     "--property=TimeoutStopSec=10s",
-    ...(mode === "capture" ? ["--wait", "--pipe"] : []),
+    // Finite captures are frequent and their output returns to the caller, so
+    // systemd keeps only their notices, warnings and errors (failures) in the
+    // journal, not routine Starting/Started/Deactivated lines.
+    ...(mode === "capture" ? ["--property=LogLevelMax=notice", "--wait", "--pipe"] : []),
     ...(mode === "pty" ? ["--wait", "--pty"] : []),
     helperPath,
     "run-managed",

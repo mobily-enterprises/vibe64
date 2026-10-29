@@ -50,6 +50,14 @@ forced cgroup cleanup. This lets host-owned ExecStop hooks drain delegated
 resources before their processes receive termination signals. Completion still
 requires the entire execution scope to be empty.
 
+A finite capture's unit sets `LogLevelMax=notice`. Its output already returns
+to the caller, so the journal keeps only systemd's notices, warnings and errors
+about it (a failed or killed command, its exit status and result) and none of
+the routine Starting, Started and Deactivated lines that each frequent short
+command would otherwise add. The same limit applies to anything the command's
+own processes log to the journal, such as syslog messages. Terminal (pty) and
+detached executions keep systemd's normal unit messages.
+
 `createVibe64ConversationExecution()` adapts native conversation execution to the
 existing command policy gateway. It exposes process start, running/exit
 observations and owned stop, with optional duplex bytes carried by a private

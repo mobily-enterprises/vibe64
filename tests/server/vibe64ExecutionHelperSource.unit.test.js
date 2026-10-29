@@ -178,6 +178,20 @@ test("execution Stop lets systemd run service cleanup before signalling the cgro
   assert.match(stop.slice(firstStop), /SIGKILL/u, "unresponsive descendants still have bounded forced cleanup");
 });
 
+// Each finite capture is its own transient unit, and systemd's Starting,
+// Started, Deactivated and Consumed lines for each one filled host journals.
+// Its result reaches the caller; notices, warnings and errors (a failed result,
+// a failing exit, an OOM kill) still reach the journal. Interactive terminals
+// and agents keep the default level, so sudo's informational audit of commands
+// run there is kept.
+test("finite captures keep systemd's routine unit lines out of the journal", async () => {
+  const source = await helperSource();
+  const args = source.slice(source.indexOf("const systemdArgs = ["), source.indexOf('const started = spawnSync("systemd-run"'));
+  assert.match(args, /\.\.\.\(mode === "capture" \? \["--property=LogLevelMax=notice", "--wait", "--pipe"\] : \[\]\)/u);
+  assert.match(args, /\.\.\.\(mode === "pty" \? \["--wait", "--pty"\] : \[\]\)/u);
+  assert.equal(args.match(/LogLevelMax/gu).length, 1);
+});
+
 test("a new execution never waits for another member of its work slice to stop", async () => {
   // Production: a cancelled OpenCode service ignored SIGTERM for its 30 s
   // TimeoutStopSec, and `systemctl start` on the already active work slice held
