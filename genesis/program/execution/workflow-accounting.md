@@ -342,8 +342,16 @@ other TCP port, port 0 included, so it can never take over another service's
 port while that service is down. UDP binds stay allowed: a UDP client (Node's
 `dgram`, for StatsD or syslog) binds before it sends, usually to port 0, which
 no port rule can name, and no host service listens on an unprivileged UDP
-port. A finite execution has no bind limits, as builds and tests may listen.
-It still starts at boot and requires its managed databases.
+port. The release service still starts at boot and requires its managed
+databases.
+
+Known, accepted limit: a finite execution as an application (Prepare, Build,
+Migrate, release file work) has no bind limits, so it may listen on any TCP
+port that is free, including a stopped release service's. Builds and tests
+legitimately listen: a headless browser's debugging port (Puppeteer's default
+`--remote-debugging-port=0`) and test servers on port 0, which no
+`SocketBindAllow=` rule can name alone. Such a listener lasts only as long as
+its finite execution.
 
 Every `deployment-service` action (install-start, remove, inspect) names a
 unit of the calling daemon's own workspace, `vibe64-release-<workspace>-…`, so
