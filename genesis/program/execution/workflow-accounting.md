@@ -275,12 +275,12 @@ given; nothing is repaired. `retire` refuses while a release unit of the
 account is still installed (it could start it again) or anything runs as it.
 It unregisters the account before it looks for its processes, so no new
 execution can start as it meanwhile, and registers it again when it refuses.
-It then removes the handover and application files. A production database
-outlives its project, as other production databases do, so while `database/`
-holds one the account, its registration and that directory stay; otherwise they
-go too. The account stays with its database so that the files' owner is never
-a uid the host could give to another account; it counts toward the limit until
-the database goes.
+It then removes the whole area, the account and its registration, so the
+account's uid and its place under the limit are free again. A production
+database outlives its project, as other production databases do: the editor
+takes it back into its own production database directory before it retires the
+application, so whatever `database/` still holds then is the application's own
+and goes with it.
 
 A managed execution runs as an application only when the daemon asks for its
 registered account by name (`applicationAccount`), and only as a finite capture.

@@ -140,20 +140,16 @@ test("a new application account needs a real project of the workspace, and room 
   host.ensure("shop");
   assert.throws(() => host.ensure("blog", { applicationLimit: 1 }), /test already has 1, its limit/u);
   assert.deepEqual(host.created, [applicationIdentity(host.owner, "shop").username]);
-  // A registered account is the same account, limit or not, and so is one
-  // whose project went while its production database stays.
+  // A registered account is the same account, limit or not.
   assert.equal(host.ensure("shop", { applicationLimit: 1 }).username, applicationIdentity(host.owner, "shop").username);
   host.ensure("blog");
-  const shop = host.ensure("shop");
-  await writeFile(path.join(shop.databaseRoot, "app.sqlite"), "data");
-  host.retire("shop");
-  await rm(path.join(projects, "shop"), { recursive: true });
-  assert.equal(host.ensure("shop").username, shop.username);
-  // An account kept for its production database still holds its uid.
-  host.retire("shop");
   await mkdir(path.join(projects, "news"));
   assert.throws(() => host.ensure("news", { applicationLimit: 2 }), /test already has 2, its limit/u);
-  host.ensure("news", { applicationLimit: 3 });
+  // A retired application, its production database taken back, frees its place.
+  const shop = host.ensure("shop");
+  await writeFile(path.join(shop.databaseRoot, "left-by-the-app"), "data");
+  host.retire("shop");
+  host.ensure("news", { applicationLimit: 2 });
 });
 
 test("a learner's practice project has its account, found by its folder below the workspace's projects", async (t) => {
@@ -279,31 +275,27 @@ test("an area entry the helper did not make is refused, never followed or repair
   assert.deepEqual(await readdir(elsewhere), []);
 });
 
-test("retiring a project removes its application unless a production database remains", async (t) => {
+test("retiring a project removes its application, its registration and its whole area", async (t) => {
   const host = await applicationHost(t);
   const account = host.ensure("shop");
   await writeFile(path.join(account.handoverRoot, "environment"), "A=1\n");
   await mkdir(path.join(account.appRoot, "releases", "r1", "workspace"), { recursive: true });
-  await writeFile(path.join(account.databaseRoot, "app.sqlite"), "data");
+  // The editor takes the production database back before it retires the
+  // application; whatever the application left beside it goes with its area.
+  await writeFile(path.join(account.databaseRoot, "left-by-the-app.sqlite-wal"), "data");
 
   assert.throws(() => host.retire("shop", { running: () => true }), /still runs/u);
-  assert.deepEqual(host.retire("shop"), { databaseKept: true, retired: true });
-  assert.deepEqual(await readdir(path.dirname(account.appRoot)), ["database"]);
-  assert.equal(await readFile(path.join(account.databaseRoot, "app.sqlite"), "utf8"), "data");
-  assert.deepEqual(host.deleted, []);
-  assert.notEqual(readApplicationRegistration("test", account.username, host.options), null);
-
-  // The project made again finds its account and production database.
-  assert.deepEqual(host.ensure("shop"), account);
-  assert.deepEqual(host.created, [account.username]);
-  assert.equal(await readFile(path.join(account.databaseRoot, "app.sqlite"), "utf8"), "data");
-
-  await rm(path.join(account.databaseRoot, "app.sqlite"));
-  assert.deepEqual(host.retire("shop"), { databaseKept: false, retired: true });
+  assert.deepEqual(host.retire("shop"), { retired: true });
   assert.deepEqual(await readdir(path.join(host.options.areaRoot, "test")), []);
   assert.equal(readApplicationRegistration("test", account.username, host.options), null);
   assert.deepEqual(host.deleted, [account.username]);
-  assert.deepEqual(host.retire("shop"), { databaseKept: false, retired: false });
+  assert.deepEqual(host.retire("shop"), { retired: false });
+
+  // The project made again gets a new account and an empty area.
+  const again = host.ensure("shop");
+  assert.equal(again.username, account.username);
+  assert.deepEqual(await readdir(again.databaseRoot), []);
+  assert.deepEqual(host.created, [account.username, account.username]);
 });
 
 test("retiring waits for every release unit of the application to go, and admits no new execution meanwhile", async (t) => {
@@ -331,13 +323,6 @@ test("retiring waits for every release unit of the application to go, and admits
   assert.deepEqual(readApplicationRegistration("test", account.username, host.options),
     { gid: GID, project: "shop", uid: UID, username: account.username });
   assert.deepEqual(host.deleted, []);
-
-  // Kept with a production database, it is registered again once its files go.
-  await writeFile(path.join(account.databaseRoot, "app.sqlite"), "data");
-  registeredWhileChecked.length = 0;
-  assert.deepEqual(host.retire("shop", { running: (uid) => running(uid) && false }), { databaseKept: true, retired: true });
-  assert.deepEqual(registeredWhileChecked, [null]);
-  assert.notEqual(readApplicationRegistration("test", account.username, host.options), null);
 });
 
 test("an application command runs only as a registered application of the daemon's own workspace", async (t) => {

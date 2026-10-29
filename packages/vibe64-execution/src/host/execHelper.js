@@ -2537,12 +2537,14 @@ function ensureApplicationAccount(owner = {}, project = "", {
   };
 }
 
-// A retired project's application keeps nothing but its production databases,
-// which outlive the project like its other production databases. Without any,
-// its account, registration and area go too. Nothing of it may still run: no
-// release unit of it may remain installed, since one could restart it, and it
-// is unregistered before the check for its processes, so no new execution can
-// start as it meanwhile. A refused retire registers it again.
+// A retired project's application goes whole: its account, registration and
+// area, with whatever its database directory still holds. The editor takes a
+// production database back before it retires the application, so the database
+// outlives the project as other production databases do, and the account's uid
+// and its place under the workspace's limit are free again. Nothing of it may
+// still run: no release unit of it may remain installed, since one could
+// restart it, and it is unregistered before the check for its processes, so no
+// new execution can start as it meanwhile. A refused retire registers it again.
 function retireApplicationAccount(owner = {}, project = "", {
   areaRoot = APPLICATION_AREA_ROOT,
   areaUid = 0,
@@ -2592,30 +2594,8 @@ function retireApplicationAccount(owner = {}, project = "", {
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
-  let databaseKept = false;
   if (projectRoot >= 0) {
-    try {
-      try {
-        databaseKept = readdirSync(openedPath(projectRoot, "database")).length > 0;
-      } catch (error) {
-        if (error.code !== "ENOENT") throw error;
-      }
-      if (databaseKept) {
-        for (const name of ["handover", "app"]) {
-          rmSync(openedPath(projectRoot, name), { force: true, recursive: true });
-        }
-      }
-    } finally {
-      closeSync(projectRoot);
-    }
-  }
-  if (databaseKept) {
-    // Kept with its database, so the files' owner is never a uid the host
-    // could give another account.
-    if (unregistered) writeApplicationRegistration(identity, user, registry);
-    return { databaseKept, retired: true };
-  }
-  if (projectRoot >= 0) {
+    closeSync(projectRoot);
     const workspaceRoot = openSync(path.join(areaRoot, identity.workspace), DIRECTORY_NO_FOLLOW);
     try {
       assertRootOwnedDirectory(workspaceRoot, areaUid);
@@ -2628,7 +2608,7 @@ function retireApplicationAccount(owner = {}, project = "", {
   // the next ensure adopts or the next retire removes.
   if (registration && !unregistered) unregister();
   if (user) deleteUser(identity.username);
-  return { databaseKept, retired: Boolean(user || registration || projectRoot >= 0) };
+  return { retired: Boolean(user || registration || projectRoot >= 0) };
 }
 
 // The application account an execution or release service runs as: one root
