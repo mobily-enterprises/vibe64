@@ -138,13 +138,6 @@ const MANAGED_EXECUTION_TASKS_MAX = 8192;
 const MANAGED_EXECUTION_STOP_TIMEOUT_MS = 15_000;
 const MANAGED_EXECUTION_RELEASE_KEEP_MAX = 4096;
 
-if (import.meta.main) {
-  main().catch((error) => {
-    process.stderr.write(`${String(error?.message || error)}\n`);
-    process.exit(2);
-  });
-}
-
 async function main() {
   if (process.argv[2] === "run-managed") {
     await runManagedExecutionPayload(process.argv[3] || "");
@@ -2538,3 +2531,11 @@ export { managedWorkflowCounters, openManagedExecutionReceipts, managedWorkflowI
   assertExpectedId, canonicalPath, helperChildEnv, resolveAllowedCwd,
   resolveAllowedDeploymentServicePath,
   resolveAllowedUserHomePath, runUserCommand };
+
+// Last, so that every constant above exists before main() runs.
+if (import.meta.main) {
+  main().catch((error) => {
+    process.stderr.write(`${String(error?.message || error)}\n`);
+    process.exit(2);
+  });
+}

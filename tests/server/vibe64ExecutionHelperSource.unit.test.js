@@ -152,6 +152,16 @@ test("execution helper waits for a delayed nonblocking stdin payload", async () 
   assert.doesNotMatch(stderr, /EAGAIN|resource temporarily unavailable/u);
 });
 
+// Run as a script, the helper's main() starts while the module is still being
+// evaluated, so a constant declared below that call would not exist yet.
+test("execution helper starts only after every module declaration is initialized", async () => {
+  const source = await helperSource();
+  const start = source.indexOf("if (import.meta.main)");
+  const declarations = [...source.matchAll(/^(?:const|let|class) /gmu)].map((match) => match.index);
+  assert.ok(start > 0 && declarations.length > 0);
+  assert.ok(declarations.every((index) => index < start), "every module constant is declared before main() runs");
+});
+
 test("execution helper source is the real host helper, not the package stub", async () => {
   const source = await helperSource();
 
