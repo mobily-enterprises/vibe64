@@ -2622,101 +2622,111 @@ hintTest("@deslop-routing a mixed request remains editable with one polite expla
 });
 
 for (const width of [390, 820, 1280]) {
-  hintTest(`@assistant-roles direct roles and Auto show distinct controls at ${width}px`, async ({ page }, info) => {
-    await page.setViewportSize({ width, height: 900 });
-    const selection = { ...ASSISTANT_CATALOG.engines[0].defaults, engineId: "codex", modelId: "gpt-6-astra", variantId: "xhigh" };
-    const junior = { ...selection, variantId: "low" };
-    const assignments = { senior: selection, junior, helper: { ...selection, variantId: "" }, router: { ...junior, modelId: "gpt-6-luna", variantId: "medium" }, sharedBackup: junior };
-    await mockDirectChat(page, { conversationLog: Object.entries(assignments).slice(0, 3).map(([role, model], index) => ({
-      turnId: String(index + 1), user: { role: "user", text: `Question ${index + 1}` },
-      assistant: { role: "assistant", text: `Answer ${index + 1}` },
-      metadata: { assistantSelection: model, assistantRouting: { requestedMode: role, resolvedMode: role } }
-    })) });
-    const session = { ...directSession(), assistantSelection: junior, metadata: {
-      assistant_routing: JSON.stringify({ mode: "junior", workflowEngineId: "codex", review: true }),
-      assistant_routing_request: JSON.stringify({ mode: "auto", resolvedMode: "senior", status: "done", assignments,
-        workPlan: { status: "ready", revision: "a".repeat(64), text: "# An earlier Auto plan" } })
-    } };
-    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}`, route => fulfillJson(route, { ok: true, ...session }));
-    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/assistant-selection`, async route => {
-      session.metadata.assistant_routing = JSON.stringify({ workflowEngineId: "codex", ...route.request().postDataJSON().assistantRouting });
-      await fulfillJson(route, { ok: true, ...session });
-    });
-    const choices = [selection, junior].map(model => ({ ...model, label: model.modelId,
-      engineLabel: "Codex", providerLabel: model.modelProviderId, available: true, variants: [] }));
-    const decision = (effectiveSelection) => ({ available: true, effectiveSelection });
-    const preview = { ...Object.fromEntries(Object.entries(assignments).map(([role, model]) => [role, decision(model)])),
-      review: decision(selection), auto: { available: true }, request_routing: decision(assignments.router), prompt_hint: decision(junior) };
-    let canConfigure = true;
-    await routeApiEndpoint(page, `/vibe64/sessions/${SESSION_ID}/assistant-access`, route => fulfillJson(route, {
-      ok: true, available: true, canUse: true, purposes: preview,
-      currentMode: JSON.parse(session.metadata.assistant_routing).mode
-    }));
-    await routeApiEndpoint(page, "/vibe64/accounts/model-routing/workflows", route => fulfillJson(route, {
-      ok: true, canConfigure, workflows: []
-    }));
-    let configurationReads = 0;
-    let releaseCatalogue: () => void = () => {};
-    const catalogueReady = new Promise<void>(resolve => { releaseCatalogue = resolve; });
-    await routeApiEndpoint(page, "/vibe64/accounts/model-routing", async route => {
-      configurationReads++;
-      await catalogueReady;
-      return fulfillJson(route, {
-        ok: true, revision: 1, canConfigure, engines: [{ engineId: "codex", label: "Codex", connected: true,
-          roles: Object.fromEntries(Object.entries(assignments).map(([role, assignment]) => [role, { assignment, recommendation: assignment, choices }])),
-          preview: { viewer: preview, owner: preview, collaborator: preview }
-        }]
+  test(`@assistant-roles Main chat names each role's model and sends a missing Router to Models at ${width}px`, async ({ page }, info) => {
+    const server = await assistantStatusServer();
+    const errors: string[] = [];
+    page.on("pageerror", error => errors.push(error.message));
+    try {
+      await page.setViewportSize({ width, height: 900 });
+      const senior = { schema: "vibe64.assistant-selection.v1", ...ASSISTANT_CATALOG.engines[0].defaults, engineId: "codex",
+        modelId: "gpt-6-astra", variantId: "xhigh", catalogRevision: ASSISTANT_CATALOG.engines[0].revision };
+      const junior = { ...senior, variantId: "low" };
+      const router = { ...junior, modelId: "gpt-6-luna", variantId: "medium" };
+      server.state.conversationLog = [["senior", senior], ["junior", junior]].map(([role, model], index) => ({
+        turnId: String(index + 1), user: { role: "user", text: `Question ${index + 1}` },
+        assistant: { role: "assistant", text: `Answer ${index + 1}` },
+        metadata: { assistantSelection: model, assistantRouting: { requestedMode: role, resolvedMode: role } }
+      }));
+      const session = server.state.session;
+      session.agentSession.turn.active = false;
+      Object.assign(session, { assistantSelection: junior });
+      session.metadata.assistant_routing = JSON.stringify({ mode: "junior", review: true });
+      await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}`, route => fulfillJson(route, { ok: true, ...session }));
+      await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}/assistant-selection`, async route => {
+        session.metadata.assistant_routing = JSON.stringify(route.request().postDataJSON().assistantRouting);
+        await fulfillJson(route, { ok: true, ...session });
       });
-    });
-    await page.goto(`${BASE_URL}${DASHBOARD_PATH}/env`);
-    await expect(page.getByLabel("Message AI assistant")).toBeVisible();
-    for (const [role, thinking] of [["Senior", "xhigh"], ["Junior", "low"], ["Helper", "default"]]) {
-      await expect(page.locator(".assistant-transcript__assistant-header").getByText(`${role} · Codex (gpt-6-astra ${thinking})`, { exact: true }).first()).toBeVisible();
+      // Today's server: Auto needs Senior, Junior and Router in the owner's setup.
+      let routerChosen = true;
+      let canConfigure = true;
+      const decision = (effectiveSelection: Record<string, unknown>) => ({ available: true, effectiveSelection });
+      await routeApiEndpoint(page, `/vibe64/sessions/${session.sessionId}/assistant-access`, route => fulfillJson(route, {
+        ok: true, available: true, canUse: true, currentMode: JSON.parse(session.metadata.assistant_routing).mode,
+        purposes: { senior: decision(senior), junior: decision(junior), review: decision(senior), ...(routerChosen
+          ? { auto: { available: true }, request_routing: decision(router) }
+          : { auto: { available: false, missingRoles: ["router"], message: "Auto needs a Router model. Choose one in AI setup." },
+            request_routing: { available: false, message: "Choose a Router model in AI setup." } }) }
+      }));
+      const choices = [senior, router].map(model => ({ ...model, label: model.modelId, engineLabel: "Codex",
+        providerLabel: "OpenAI", available: true, variants: [{ id: model.variantId, label: model.variantId }] }));
+      const owner: Record<string, unknown> = { senior, junior, router };
+      const routing = () => ({ ok: true, revision: 1, canConfigure, team: { available: false },
+        engines: [{ engineId: "codex", label: "Codex", connected: true }],
+        setups: { owner: { roles: Object.fromEntries(["senior", "junior", "router", "colleague", "fix", "explain", "quickHelper"].map(role => {
+          const value = role === "router" && !routerChosen ? null : owner[role] ?? null;
+          return [role, { configured: Boolean(value), value, effective: value, recommendation: null, choices }];
+        })) }, nonOwner: { roles: {} } },
+        viewer: { senior: { available: true } } });
+      await routeApiEndpoint(page, "/vibe64/accounts/model-routing", route => fulfillJson(route, routing()));
+      await routeApiEndpoint(page, "/vibe64/accounts/model-routing/preview", route => fulfillJson(route, routing()));
+      await page.goto(`${server.url}${DEVELOPMENT_PATH}`);
+      await expect(page.getByLabel("Message AI assistant")).toBeVisible();
+      for (const [role, thinking] of [["Senior", "xhigh"], ["Junior", "low"]]) {
+        await expect(page.locator(".assistant-transcript__assistant-header").getByText(`${role} · Codex (gpt-6-astra ${thinking})`, { exact: true })).toBeVisible();
+      }
+      const trigger = page.getByRole("button", { name: /^Chat mode:/ });
+      await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Junior\./);
+      const toolbar = page.locator(".studio-autopilot__composer-actions");
+      await expect(toolbar.getByRole("button").first()).toHaveAttribute("aria-label", /^Chat mode:/);
+      await trigger.focus();
+      await page.keyboard.press("Tab");
+      await expect(toolbar.getByRole("button", { name: "Add to message", exact: true })).toBeFocused();
+      await page.keyboard.press("Shift+Tab");
+      await expect(trigger).toBeFocused();
+      await page.keyboard.press("Enter");
+      const modes = page.getByRole("list", { name: "Choose chat mode" });
+      await expect(modes.getByRole("button")).toHaveCount(3);
+      await expect(modes.getByRole("button", { name: /^Senior/ })).toContainText("Codex (gpt-6-astra xhigh)");
+      await expect(modes.getByRole("button", { name: /^Junior/ })).toContainText("Codex (gpt-6-astra low)");
+      await expect(modes.getByRole("button", { name: /^Auto/ })).toContainText("Router: Codex (gpt-6-luna medium)");
+      const deslop = page.getByRole("checkbox", { name: "Deslop during Senior review", exact: true });
+      await expect(deslop).toHaveCount(0);
+      await page.screenshot({ path: info.outputPath(`roles-${width}.png`), animations: "disabled" });
+      await modes.getByRole("button", { name: /^Auto/ }).click();
+      await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Auto\./);
+      await expect(deslop).toBeChecked();
+      await modes.getByRole("button", { name: /^Senior/ }).click();
+      await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Senior\./);
+      await expect(deslop).toHaveCount(0);
+      expect(JSON.parse(session.metadata.assistant_routing).mode).toBe("senior");
+
+      routerChosen = false;
+      await page.reload();
+      await trigger.click();
+      const auto = modes.getByRole("button", { name: /^Auto/ });
+      await expect(auto).toHaveAttribute("aria-disabled", "true");
+      await expect(auto).toContainText("Auto needs a Router model. Choose one in AI setup.");
+      await page.getByRole("button", { name: "Configure model routing", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Models", exact: true });
+      const routerModel = dialog.getByRole("combobox", { name: "Router model", exact: true });
+      await expect(routerModel).toBeFocused();
+      await expect(routerModel).toBeInViewport();
+      await page.screenshot({ path: info.outputPath(`router-missing-${width}.png`), animations: "disabled" });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+      await expect(dialog).toBeHidden();
+      await expect(trigger).toBeFocused();
+
+      canConfigure = false;
+      await page.reload();
+      await trigger.click();
+      await expect(modes.getByRole("button", { name: /^Senior/ })).toBeVisible();
+      await expect(page.getByRole("button", { name: "Configure model routing", exact: true })).toHaveCount(0);
+      expect(errors).toEqual([]);
+    } finally {
+      await page.close();
+      await server.close();
     }
-    const trigger = page.getByRole("button", { name: /^Chat mode:/ });
-    await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Junior\./);
-    const toolbar = page.locator(".studio-autopilot__composer-actions");
-    await expect(toolbar.getByRole("button").first()).toHaveAttribute("aria-label", /^Chat mode:/);
-    await expect(toolbar.getByRole("button", { name: /^Chat settings for / })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "View plan", exact: true })).toHaveCount(0);
-    await trigger.focus();
-    await page.keyboard.press("Tab");
-    await expect(toolbar.getByRole("button", { name: "Add to message", exact: true })).toBeFocused();
-    await page.keyboard.press("Shift+Tab");
-    await expect(trigger).toBeFocused();
-    await page.keyboard.press("Enter");
-    const modes = page.getByRole("list", { name: "Choose chat mode" });
-    for (const label of ["Senior", "Junior", "Auto"]) await expect(modes.getByRole("button", { name: new RegExp(`^${label}`) })).toBeVisible();
-    await expect(modes.getByRole("button", { name: /^Senior/ })).toContainText("Codex (gpt-6-astra xhigh)");
-    await expect(modes.getByRole("button", { name: /^Junior/ })).toContainText("Codex (gpt-6-astra low)");
-    await expect(modes.getByRole("button", { name: /^Auto/ })).toContainText("Router: Codex (gpt-6-luna medium)");
-    expect(configurationReads).toBe(0);
-    await expect(page.getByRole("checkbox", { name: "Automatic deslop by Senior" })).toHaveCount(0);
-    await page.screenshot({ path: info.outputPath(`roles-${width}.png`), animations: "disabled" });
-    await modes.getByRole("button", { name: /^Auto/ }).click();
-    await expect(page.getByRole("checkbox", { name: "Automatic deslop by Senior" })).toBeVisible();
-    await modes.getByRole("button", { name: /^Senior/ }).click();
-    await expect(trigger).toHaveAttribute("aria-label", /^Chat mode: Senior\./);
-    await expect(page.getByRole("checkbox", { name: "Automatic deslop by Senior" })).toHaveCount(0);
-    await expect(modes.getByRole("button", { name: /^Helper/ })).toHaveCount(0);
-    await page.getByRole("button", { name: "Configure model routing", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "Model routing", exact: true });
-    await expect(dialog).toBeVisible();
-    await expect.poll(() => configurationReads).toBe(1);
-    await expect(dialog.locator('.v-skeleton-loader').first()).toBeVisible();
-    releaseCatalogue();
-    for (const label of ["Senior", "Junior", "Helper", "Router"]) await expect(dialog.getByRole("combobox", { name: label, exact: true })).toBeVisible();
-    await page.screenshot({ path: info.outputPath(`routing-roles-${width}.png`), animations: "disabled" });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect(dialog).not.toBeVisible();
-    await expect(trigger).toBeFocused();
-    canConfigure = false;
-    await page.reload();
-    await expect(trigger).toBeVisible();
-    await trigger.click();
-    await expect(modes.getByRole("button", { name: /^Helper/ })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Configure model routing", exact: true })).toHaveCount(0);
   });
 }
 
