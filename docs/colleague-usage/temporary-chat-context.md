@@ -1,7 +1,8 @@
 # Start a temporary chat with recent context
 
 Open **Temporary AI** to create the first chat, or select **New temporary AI task**
-(the plus beside existing temporary chat tabs). Leave
+(the plus beside existing temporary chat tabs). When the session already has
+temporary chats, **Temporary AI** opens them instead and offers no new chat. Leave
 **Include recent chat context** unchecked for an empty conversation, or check it
 and select **Create chat** to copy recent context from Main in this session.
 When Main has no messages yet there is nothing to copy, so the chat opens

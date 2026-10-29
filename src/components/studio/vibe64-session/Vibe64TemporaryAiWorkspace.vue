@@ -839,16 +839,26 @@ async function persistTaskRecovery(taskId = "", outcome = {}) {
 }
 
 function showWorkspace() {
-  selectionRevision.value += 1;
+  const revision = ++selectionRevision.value;
   hostConversation?.value?.close();
   if (!temporary.tasks.value.length) {
     temporary.open.value = true;
-    void openNewTask();
+    void openFirstTask(revision);
     return null;
   }
   const task = temporary.showWorkspace();
   void revealTaskTab(temporary.activeTaskId.value);
   return task;
+}
+
+// The saved chats may still be loading, as just after a session opens. Only a
+// list read as empty starts a chat; saved chats open instead, and a list that
+// cannot be read shows its error.
+async function openFirstTask(revision) {
+  await temporary.restoreTasks();
+  if (revision !== selectionRevision.value || temporary.restoreError.value) return;
+  if (temporary.tasks.value.length) showWorkspace();
+  else await openNewTask();
 }
 
 function setTaskTabButton(taskId = "", element = null) {

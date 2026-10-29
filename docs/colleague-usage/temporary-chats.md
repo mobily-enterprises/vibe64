@@ -1,8 +1,13 @@
 # Choose the AI for a temporary chat
 
 Open **Temporary AI** from the session toolbar, or from **Session actions** in
-a chat too narrow for it. Select the temporary chat you want to change. Its **Chat mode**
-icon is inside the message box.
+a chat too narrow for it. If the session already has temporary chats, it shows
+them and creates nothing; it starts a new chat only when there are none. Just
+after a session opens, it waits for the saved chats to load before deciding. If
+they cannot be loaded, it shows the error and **Try again** instead of starting
+one. To add another chat, select **New temporary AI task** (the plus beside the
+tabs). Select the temporary chat you want to change. Its **Chat mode** icon is
+inside the message box.
 
 In **New temporary chat**, **Cancel** returns directly to Main when starting the
 first chat. If another temporary or host conversation was selected, it stays

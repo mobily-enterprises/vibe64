@@ -363,7 +363,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
     const { app, workspace } = mountWorkspace(container, { sessionId: "one", active: true, onSelectMainChat: selectedMain });
     try {
       workspace.showWorkspace();
-      await nextTick();
+      await flushWorkspaceReveal();
       expect(workspace.visible).toBe(true);
       if (action === "restored while open") {
         temporary.tasks.value = [{ id: "restored", title: "Saved chat", draft: "Keep this draft", messages: [],
@@ -425,7 +425,7 @@ describe("Temporary AI recovery workspace accessibility", () => {
     const { app, workspace } = mountWorkspace(container, { sessionId: "one", active: true });
     try {
       workspace.showWorkspace();
-      await nextTick();
+      await flushWorkspaceReveal();
       const checkbox = findNode(container, node => node.props?.label === "Include recent chat context");
       expect(checkbox.props.modelValue).toBe(false);
       checkbox.props["onUpdate:modelValue"](true);
@@ -458,6 +458,54 @@ describe("Temporary AI recovery workspace accessibility", () => {
       await settle();
       expect(findNode(container, node => node.props?.label === "Include recent chat context")).toBeTruthy();
       expect(findNode(container, node => nodeText(node) === "No capacity")).toBeTruthy();
+    } finally { app.unmount(); }
+  });
+
+  it.each([false, true])("opening Temporary AI before saved chats load shows them and creates nothing (Main has messages: %s)", async (mainHasMessages) => {
+    const temporary = temporaryAiTestState();
+    const loaded = deferred();
+    temporary.restoreTasks.mockImplementation(async () => {
+      await loaded.promise;
+      temporary.tasks.value = [{ id: "saved", conversationId: "saved", label: "Temporary 1", draft: "", messages: [],
+        agentSettings: {}, delivery: createAssistantMessageDelivery() }];
+    });
+    temporary.showWorkspace.mockImplementation(() => {
+      temporary.activeTaskId.value = temporary.tasks.value[0].id;
+      temporary.open.value = true;
+    });
+    temporaryProvider.value = temporary;
+    const container = { children: [], parent: null, type: "root" };
+    const { app, workspace } = mountWorkspace(container, { sessionId: "one", active: true, mainHasMessages });
+    const newChatDialog = () => findNode(container, node => node.props?.label === "Include recent chat context");
+    try {
+      const settle = () => new Promise(resolve => setTimeout(resolve, 0)).then(nextTick);
+      workspace.showWorkspace();
+      await settle();
+      expect(temporary.createTask).not.toHaveBeenCalled();
+      expect(newChatDialog()).toBeNull();
+      loaded.resolve();
+      await settle();
+      expect(temporary.createTask).not.toHaveBeenCalled();
+      expect(newChatDialog()).toBeNull();
+      expect(workspace.visible).toBe(true);
+      expect(findNode(container, node => node.props?.["data-temporary-ai-task-id"] === "saved")?.props["aria-current"]).toBe("page");
+    } finally { app.unmount(); }
+  });
+
+  it("does not start a chat from Temporary AI when the saved list cannot be read", async () => {
+    const temporary = temporaryAiTestState();
+    temporary.restoreTasks.mockImplementation(async () => {
+      temporary.restoreError.value = "Temporary chats could not be restored: offline";
+    });
+    temporaryProvider.value = temporary;
+    const container = { children: [], parent: null, type: "root" };
+    const { app, workspace } = mountWorkspace(container, { sessionId: "one", active: true, mainHasMessages: false });
+    try {
+      workspace.showWorkspace();
+      await new Promise(resolve => setTimeout(resolve, 0)).then(nextTick);
+      expect(temporary.createTask).not.toHaveBeenCalled();
+      expect(findNode(container, node => node.props?.label === "Include recent chat context")).toBeNull();
+      expect(workspace.visible).toBe(true);
     } finally { app.unmount(); }
   });
 

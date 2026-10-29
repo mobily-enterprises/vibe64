@@ -37,6 +37,13 @@ manual selection changes to the host. Opening a saved temporary chat checks that
 the project, session and requested selection still match after loading its list;
 a delayed response cannot override a newer choice or an unmounted workspace.
 
+The header's Temporary AI control opens the session's temporary chats and starts
+one only when their saved list reads as empty. With no chats loaded, it reads the
+list first, so a click while the list is still loading opens the saved chats
+instead of adding one. A failed read shows its error and creates nothing, and a
+newer selection made during the read wins. The plus control, Fix it with AI and
+Colleague's create action still start chats as before.
+
 Saved composer attachments use the same visible queue as new uploads. The composer
 combines saved receipts with its pending upload queue, retains completed uploads
 when a saved view closes, and still cancels unfinished uploads. Restored files count
