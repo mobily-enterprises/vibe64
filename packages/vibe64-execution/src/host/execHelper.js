@@ -33,6 +33,8 @@ const NEW_FILE_NO_FOLLOW = fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConsta
 const FILE_NO_FOLLOW = fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK;
 const MANAGED_EXECUTION_REQUEST_PAYLOAD_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/u;
 const MANAGED_EXECUTION_RESULT_LIMIT_BYTES = 64 * 1024;
+// The daemon's membership records of its users, below its home.
+const MEMBERSHIP_DIRECTORY = [".local", "state", "vibe64", "users"];
 const MEMBERSHIP_LIMIT_BYTES = 64 * 1024;
 const PID_FILE_LIMIT_BYTES = 64;
 const STDIN_READ_BUFFER_BYTES = 64 * 1024;
@@ -126,7 +128,7 @@ const RESERVED_HUMAN_USERNAMES = new Set([
 const HOST_SETTINGS_ROOT = "/etc/vibe64";
 const PERSON_REGISTRY_ROOT = path.join(HOST_SETTINGS_ROOT, "people");
 const PERSON_REGISTRATION_SCHEMA = "vibe64.person-registration";
-const PERSON_REGISTRATION_LIMIT_BYTES = 4096;
+const REGISTRATION_LIMIT_BYTES = 4096;
 const PERSON_REFUSED_EXIT_CODE = 3;
 // The host's own narrow sudo commands for its people, one per line exactly as
 // `sudo -l` prints them, in a file only root can change.
@@ -450,7 +452,7 @@ function handleManagedExecutionOperation(payload = {}) {
   const receipts = application
     ? openApplicationExecutionReceipts(owner, { create: true })
     : openWorkspaceExecutionReceipts(owner, { create: true, gid: groupId });
-  receipts.create(executionId, targetUser, {
+  const receiptRoot = receipts.create(executionId, targetUser, {
     ...(application ? { application: true } : {}),
     args,
     command,
@@ -463,9 +465,6 @@ function handleManagedExecutionOperation(payload = {}) {
     executionId
   }, { privateDirectory: mode === "detached" });
   // The runner reads its command as the target user, with no privilege to lend.
-  const receiptRoot = application
-    ? path.join(applicationExecutionReceiptsRoot(owner), managedExecutionId(executionId))
-    : managedExecutionRuntimeRoot(owner, executionId);
   const runnerPayloadPath = path.join(receiptRoot, "command.json");
 
   const helperPath = path.resolve(process.argv[1]);
@@ -1181,14 +1180,6 @@ function managedExecutionSliceName(owner = {}) {
   return `vibe64-${workspace}-work.slice`;
 }
 
-function managedExecutionRuntimeRoot(owner = {}, executionId = "") {
-  return path.join(
-    managedExecutionRuntimeBase(owner),
-    "executions",
-    managedExecutionId(executionId)
-  );
-}
-
 function managedExecutionRuntimeBase(owner = {}) {
   const workspace = workspaceFromDaemonUsername(safeUsername(owner.username));
   return `/run/vibe64-${workspace}`;
@@ -1214,22 +1205,17 @@ function accountUnitLines(targetUser = {}, { receiptRoot = "" } = {}) {
   ];
 }
 
-function applicationExecutionReceiptsRoot(owner = {}) {
-  return path.join(APPLICATION_RECEIPTS_ROOT, workspaceFromDaemonUsername(safeUsername(owner.username)));
-}
-
 // A workspace's application executions keep their receipts in root's own
 // runtime directory, which their accounts only traverse: they are in no group
 // that reaches the daemon's runtime directory. Only root writes in /run, so
 // root makes that directory itself, with no process.
 function openApplicationExecutionReceipts(owner = {}, { create = false } = {}) {
   if (create) {
-    try { mkdirSync(APPLICATION_RECEIPTS_ROOT); } catch (error) {
-      if (error?.code !== "EEXIST") throw error;
-    }
+    makeDirectory(APPLICATION_RECEIPTS_ROOT);
     chmodSync(APPLICATION_RECEIPTS_ROOT, 0o711);
   }
-  return openManagedExecutionReceipts(applicationExecutionReceiptsRoot(owner), { create, mode: 0o711 });
+  const workspace = workspaceFromDaemonUsername(safeUsername(owner.username));
+  return openManagedExecutionReceipts(path.join(APPLICATION_RECEIPTS_ROOT, workspace), { create, mode: 0o711 });
 }
 
 // Every receipt of a workspace: its daemon's and people's, and its applications'.
@@ -1275,9 +1261,7 @@ function ensureWorkspaceRuntimeBase(runtimeBase = "", { gid = null, uid = null }
   if (!Number.isSafeInteger(uid) || uid < 0 || !Number.isSafeInteger(gid) || gid < 0) {
     throw new Error("Vibe64 exec helper needs the daemon's uid and the shared group's gid.");
   }
-  try { mkdirSync(runtimeBase, { mode: 0o750 }); } catch (error) {
-    if (error?.code !== "EEXIST") throw error;
-  }
+  makeDirectory(runtimeBase, 0o750);
   const descriptor = openSync(runtimeBase, DIRECTORY_NO_FOLLOW);
   try {
     const stats = fstatSync(descriptor);
@@ -1316,9 +1300,7 @@ function openManagedExecutionReceipts(directory = "", {
   uid = 0
 } = {}) {
   if (create) {
-    try { mkdirSync(directory, { mode }); } catch (error) {
-      if (error?.code !== "EEXIST") throw error;
-    }
+    makeDirectory(directory, mode);
   }
   let descriptor;
   try {
@@ -1368,13 +1350,15 @@ function openManagedExecutionReceipts(directory = "", {
         if (receipt >= 0) closeSync(receipt);
       }
     },
-    // The receipt and the runner's command in it, handed to the target user.
-    // A service (privateDirectory) also gets a private directory in its receipt,
-    // named to it as VIBE64_EXECUTION_PRIVATE_DIR: whatever removes the receipt
-    // (Stop, release-ended, a failed start) removes the state it keeps there,
-    // without knowing what that state is.
+    // The receipt and the runner's command in it, handed to the target user;
+    // returns the receipt's path. A service (privateDirectory) also gets a
+    // private directory in its receipt, named to it as
+    // VIBE64_EXECUTION_PRIVATE_DIR: whatever removes the receipt (Stop,
+    // release-ended, a failed start) removes the state it keeps there, without
+    // knowing what that state is.
     create(executionId = "", targetUser = {}, runnerCommand = {}, { privateDirectory = false } = {}) {
-      const receiptPath = openedPath(descriptor, managedExecutionId(executionId));
+      const id = managedExecutionId(executionId);
+      const receiptPath = openedPath(descriptor, id);
       mkdirSync(receiptPath, { mode: 0o700 });
       const receipt = openSync(receiptPath, DIRECTORY_NO_FOLLOW);
       try {
@@ -1387,7 +1371,7 @@ function openManagedExecutionReceipts(directory = "", {
           } finally {
             closeSync(directoryDescriptor);
           }
-          env.VIBE64_EXECUTION_PRIVATE_DIR = path.join(directory, managedExecutionId(executionId), "private");
+          env.VIBE64_EXECUTION_PRIVATE_DIR = path.join(directory, id, "private");
         }
         const command = openSync(openedPath(receipt, "command.json"), NEW_FILE_NO_FOLLOW, 0o600);
         try {
@@ -1406,6 +1390,7 @@ function openManagedExecutionReceipts(directory = "", {
       } finally {
         closeSync(receipt);
       }
+      return path.join(directory, id);
     }
   };
 }
@@ -1907,11 +1892,20 @@ function personWorkspaceName(workspace = "") {
   return workspace;
 }
 
-function assertRootOwnedDirectory(descriptor, registryUid) {
-  const stats = fstatSync(descriptor);
-  if (!stats.isDirectory() || stats.uid !== registryUid || (stats.mode & 0o022) !== 0) {
-    throw new Error("A Vibe64 registry is not a directory only root can change.");
+// Opens a directory without following a link, only when it is `uid`'s own and
+// writable by no one else.
+function openRootOwnedDirectory(directoryPath = "", uid = 0) {
+  const descriptor = openSync(directoryPath, DIRECTORY_NO_FOLLOW);
+  try {
+    const stats = fstatSync(descriptor);
+    if (!stats.isDirectory() || stats.uid !== uid || (stats.mode & 0o022) !== 0) {
+      throw new Error("A Vibe64 registry is not a directory only root can change.");
+    }
+  } catch (error) {
+    closeSync(descriptor);
+    throw error;
   }
+  return descriptor;
 }
 
 // Opens one workspace's directory of a registry (its people or its
@@ -1925,25 +1919,15 @@ function openRegistry(workspace = "", {
   if (create) {
     mkdirSync(registryRoot, { mode: 0o755, recursive: true });
   }
-  let descriptor = openSync(registryRoot, DIRECTORY_NO_FOLLOW);
+  const root = openRootOwnedDirectory(registryRoot, registryUid);
   try {
-    assertRootOwnedDirectory(descriptor, registryUid);
     const name = directoryEntryName(workspace);
     if (create) {
-      try {
-        mkdirSync(openedPath(descriptor, name), { mode: 0o755 });
-      } catch (error) {
-        if (error.code !== "EEXIST") throw error;
-      }
+      makeDirectory(openedPath(root, name), 0o755);
     }
-    const next = openSync(openedPath(descriptor, name), DIRECTORY_NO_FOLLOW);
-    closeSync(descriptor);
-    descriptor = next;
-    assertRootOwnedDirectory(descriptor, registryUid);
-    return descriptor;
-  } catch (error) {
-    closeSync(descriptor);
-    throw error;
+    return openRootOwnedDirectory(openedPath(root, name), registryUid);
+  } finally {
+    closeSync(root);
   }
 }
 
@@ -1959,7 +1943,7 @@ function readPersonRegistration(workspace = "", username = "", options = {}) {
   }
   try {
     const record = JSON.parse(readOwnedFile(directory, `${username}.json`, {
-      maxBytes: PERSON_REGISTRATION_LIMIT_BYTES,
+      maxBytes: REGISTRATION_LIMIT_BYTES,
       othersMayWrite: false,
       uid: registryUid
     }));
@@ -1974,22 +1958,28 @@ function readPersonRegistration(workspace = "", username = "", options = {}) {
   }
 }
 
-function writePersonRegistrationEntry(directory, user = {}) {
-  const name = `${directoryEntryName(user.username)}.json`;
+// Root writes a registration whole, under its account's name, in a registry
+// directory it holds open.
+function writeRegistration(directory, record = {}) {
+  const name = `${directoryEntryName(record.username)}.json`;
   const temporary = `.${name}.${process.pid}.tmp`;
   const descriptor = openSync(openedPath(directory, temporary), NEW_FILE_NO_FOLLOW, 0o644);
   try {
     fchmodSync(descriptor, 0o644);
-    writeFileSync(descriptor, `${JSON.stringify({
-      schema: PERSON_REGISTRATION_SCHEMA,
-      schemaVersion: 1,
-      uid: user.uid,
-      username: user.username
-    })}\n`);
+    writeFileSync(descriptor, `${JSON.stringify(record)}\n`);
   } finally {
     closeSync(descriptor);
   }
   renameSync(openedPath(directory, temporary), openedPath(directory, name));
+}
+
+function writePersonRegistration(directory, user = {}) {
+  writeRegistration(directory, {
+    schema: PERSON_REGISTRATION_SCHEMA,
+    schemaVersion: 1,
+    uid: user.uid,
+    username: user.username
+  });
 }
 
 function personRefusal(message = "") {
@@ -2070,13 +2060,17 @@ function personSudoCommands(file = PERSON_SUDO_COMMANDS_FILE, ownerUid = 0) {
   }
 }
 
-function hostPersonFacts(username = "") {
-  let loginDefs = "";
+// The host's login range; without login.defs, useradd's own defaults apply.
+function hostLoginUids() {
   try {
-    loginDefs = readFileSync("/etc/login.defs", "utf8");
+    return loginUidRange(readFileSync("/etc/login.defs", "utf8"));
   } catch {
-    // Without login.defs, useradd's own defaults apply.
+    return loginUidRange();
   }
+}
+
+function hostPersonFacts(username = "") {
+  const loginUids = hostLoginUids();
   // Without a terminal sudo wraps its listing at 80 columns; this width keeps
   // each rule on one line for the exact comparison.
   const sudo = spawnSync("/usr/bin/sudo", ["-n", "-l", "-U", username], {
@@ -2085,7 +2079,7 @@ function hostPersonFacts(username = "") {
   });
   return {
     groups: osGroupNames(username),
-    loginUids: loginUidRange(loginDefs),
+    loginUids,
     sudoCommands: personSudoCommands(),
     sudoListing: sudo.error ? "" : String(sudo.stdout || "")
   };
@@ -2140,7 +2134,7 @@ function registerPerson(workspace = "", username = "", {
   assertPersonAccount(user, facts(username));
   const directory = openRegistry(workspace, { registryRoot: PERSON_REGISTRY_ROOT, ...registry, create: true });
   try {
-    writePersonRegistrationEntry(directory, user);
+    writePersonRegistration(directory, user);
   } finally {
     closeSync(directory);
   }
@@ -2163,9 +2157,8 @@ function upgradePersonRegistry(workspace = "", {
   personWorkspaceName(workspace);
   const daemon = resolveUser(`${DAEMON_USERNAME_PREFIX}${workspace}`);
   mkdirSync(registryRoot, { mode: 0o755, recursive: true });
-  const root = openSync(registryRoot, DIRECTORY_NO_FOLLOW);
+  const root = openRootOwnedDirectory(registryRoot, registryUid);
   try {
-    assertRootOwnedDirectory(root, registryUid);
     try {
       closeSync(openRegistry(workspace, { registryRoot, registryUid }));
       return { imported: [], refused: [] };
@@ -2175,11 +2168,10 @@ function upgradePersonRegistry(workspace = "", {
     const staging = `.${workspace}.upgrading`;
     rmSync(openedPath(root, staging), { force: true, recursive: true });
     mkdirSync(openedPath(root, staging), { mode: 0o755 });
-    const directory = openSync(openedPath(root, staging), DIRECTORY_NO_FOLLOW);
+    const directory = openRootOwnedDirectory(openedPath(root, staging), registryUid);
     const imported = [];
     const refused = [];
     try {
-      assertRootOwnedDirectory(directory, registryUid);
       for (const username of daemonMembershipUsernames(daemon)) {
         let user;
         try {
@@ -2196,7 +2188,7 @@ function upgradePersonRegistry(workspace = "", {
           report(`[vibe64-exec-helper] Not registering ${username} as a Vibe64 person of ${workspace}: ${problem}`);
           continue;
         }
-        writePersonRegistrationEntry(directory, user);
+        writePersonRegistration(directory, user);
         imported.push(username);
         report(`[vibe64-exec-helper] Registered ${username} as a Vibe64 person of ${workspace}.`);
       }
@@ -2215,7 +2207,7 @@ function upgradePersonRegistry(workspace = "", {
 function daemonMembershipUsernames(daemon = {}) {
   let directory;
   try {
-    directory = openDirectoryBelow(daemon.home, [".local", "state", "vibe64", "users"]);
+    directory = openDirectoryBelow(daemon.home, MEMBERSHIP_DIRECTORY);
   } catch (error) {
     if (error.code === "ENOENT") return [];
     throw error;
@@ -2296,12 +2288,7 @@ function applicationIdentity(owner = {}, project = "", { areaRoot = APPLICATION_
 }
 
 function hostApplicationFacts(username = "") {
-  let loginDefs = "";
-  try {
-    loginDefs = readFileSync("/etc/login.defs", "utf8");
-  } catch {
-    // Without login.defs, useradd's own defaults apply.
-  }
+  const loginUids = hostLoginUids();
   const group = spawnSync("getent", ["group", username], { encoding: "utf8" });
   let groups = [];
   try {
@@ -2312,7 +2299,7 @@ function hostApplicationFacts(username = "") {
   return {
     groupGid: group.status === 0 ? Number(String(group.stdout).split(":")[2]) : -1,
     groups,
-    loginUids: loginUidRange(loginDefs)
+    loginUids
   };
 }
 
@@ -2345,7 +2332,7 @@ function readApplicationRegistration(workspace = "", username = "", {
   }
   try {
     const record = JSON.parse(readOwnedFile(directory, `${directoryEntryName(username)}.json`, {
-      maxBytes: PERSON_REGISTRATION_LIMIT_BYTES,
+      maxBytes: REGISTRATION_LIMIT_BYTES,
       othersMayWrite: false,
       uid: registryUid
     }));
@@ -2363,24 +2350,15 @@ function readApplicationRegistration(workspace = "", username = "", {
 
 function writeApplicationRegistration(identity = {}, user = {}, { registryRoot = APPLICATION_REGISTRY_ROOT, registryUid = 0 } = {}) {
   const directory = openRegistry(identity.workspace, { create: true, registryRoot, registryUid });
-  const name = `${identity.username}.json`;
-  const temporary = `.${name}.${process.pid}.tmp`;
   try {
-    const descriptor = openSync(openedPath(directory, temporary), NEW_FILE_NO_FOLLOW, 0o644);
-    try {
-      fchmodSync(descriptor, 0o644);
-      writeFileSync(descriptor, `${JSON.stringify({
-        gid: user.gid,
-        project: identity.project,
-        schema: APPLICATION_REGISTRATION_SCHEMA,
-        schemaVersion: 1,
-        uid: user.uid,
-        username: identity.username
-      })}\n`);
-    } finally {
-      closeSync(descriptor);
-    }
-    renameSync(openedPath(directory, temporary), openedPath(directory, name));
+    writeRegistration(directory, {
+      gid: user.gid,
+      project: identity.project,
+      schema: APPLICATION_REGISTRATION_SCHEMA,
+      schemaVersion: 1,
+      uid: user.uid,
+      username: identity.username
+    });
   } finally {
     closeSync(directory);
   }
@@ -2391,13 +2369,7 @@ function writeApplicationRegistration(identity = {}, user = {}, { registryRoot =
 // and group, and when root's, be writable by no one else; nothing is repaired.
 function openAreaDirectory(parent, name = "", { gid, mode, uid }, { verify = true } = {}) {
   const entry = openedPath(parent, directoryEntryName(name));
-  let created = true;
-  try {
-    mkdirSync(entry, { mode: 0o700 });
-  } catch (error) {
-    if (error.code !== "EEXIST") throw error;
-    created = false;
-  }
+  const created = makeDirectory(entry, 0o700);
   if (!created && !verify) return { created, descriptor: -1 };
   const descriptor = openSync(entry, DIRECTORY_NO_FOLLOW);
   try {
@@ -2425,8 +2397,7 @@ function openApplicationProjectRoot(identity = {}, { areaGid = 0, areaUid = 0, c
       if (create) {
         next = openAreaDirectory(descriptor, name, { gid: areaGid, mode: 0o711, uid: areaUid }).descriptor;
       } else {
-        next = openSync(openedPath(descriptor, directoryEntryName(name)), DIRECTORY_NO_FOLLOW);
-        assertRootOwnedDirectory(next, areaUid);
+        next = openRootOwnedDirectory(openedPath(descriptor, directoryEntryName(name)), areaUid);
       }
       closeSync(descriptor);
       descriptor = next;
@@ -2498,23 +2469,21 @@ function ensureApplicationAccount(owner = {}, project = "", {
     "--home-dir", identity.home, "--shell", APPLICATION_SHELL, identity.username]),
   facts = hostApplicationFacts,
   managedRoot = MANAGED_ROOT,
+  registryRoot = APPLICATION_REGISTRY_ROOT,
+  registryUid = 0,
   resolveUser = tryResolveOsUser,
-  ...options
+  ...area
 } = {}) {
   const identity = applicationIdentity(owner, project, { areaRoot });
-  const registration = readApplicationRegistration(identity.workspace, identity.username, options);
+  const registry = { registryRoot, registryUid };
+  const registration = readApplicationRegistration(identity.workspace, identity.username, registry);
   let user = resolveUser(identity.username);
   if (registration) {
     if (!user || user.uid !== registration.uid || user.gid !== registration.gid || registration.project !== identity.project) {
       throw new Error(`The registered application account ${identity.username} is not the account on this host.`);
     }
   } else {
-    assertNewApplication(identity, {
-      applicationLimit,
-      managedRoot,
-      registryRoot: options.registryRoot ?? APPLICATION_REGISTRY_ROOT,
-      registryUid: options.registryUid ?? 0
-    });
+    assertNewApplication(identity, { applicationLimit, managedRoot, ...registry });
     if (!user) {
       createUser(identity);
       user = resolveUser(identity.username);
@@ -2526,8 +2495,8 @@ function ensureApplicationAccount(owner = {}, project = "", {
   if (problem) {
     throw new Error(`Vibe64 exec helper refused application account ${identity.username}: ${problem}`);
   }
-  if (!registration) writeApplicationRegistration(identity, user, options);
-  ensureApplicationArea(identity, owner, user, options);
+  if (!registration) writeApplicationRegistration(identity, user, registry);
+  ensureApplicationArea(identity, owner, user, area);
   return {
     appRoot: identity.appRoot,
     databaseRoot: identity.databaseRoot,
@@ -2629,9 +2598,8 @@ function retireApplicationAccount(owner = {}, project = "", {
   }
   if (projectRoot >= 0) {
     closeSync(projectRoot);
-    const workspaceRoot = openSync(path.join(areaRoot, identity.workspace), DIRECTORY_NO_FOLLOW);
+    const workspaceRoot = openRootOwnedDirectory(path.join(areaRoot, identity.workspace), areaUid);
     try {
-      assertRootOwnedDirectory(workspaceRoot, areaUid);
       rmSync(openedPath(workspaceRoot, identity.project), { force: true, recursive: true });
     } finally {
       closeSync(workspaceRoot);
@@ -3297,6 +3265,17 @@ function openedPath(directory, name = "") {
   return path.join(`/proc/self/fd/${directory}`, name);
 }
 
+// Makes a directory unless its name is already taken; true when it made one.
+function makeDirectory(directoryPath = "", mode = 0o777) {
+  try {
+    mkdirSync(directoryPath, { mode });
+    return true;
+  } catch (error) {
+    if (error?.code !== "EEXIST") throw error;
+    return false;
+  }
+}
+
 function directoryEntryName(name = "") {
   const entry = String(name);
   if (!entry || entry === "." || entry === ".." || /[/\0]/u.test(entry)) {
@@ -3640,7 +3619,7 @@ function systemdUnitPath(unitName = "", owner = {}) {
 }
 
 function managedSystemdUnitPath(unitName = "", owner = {}) {
-  return path.join("/etc/systemd/system", assertValidManagedServiceUnitName(unitName, owner));
+  return path.join(SYSTEMD_UNIT_ROOT, assertValidManagedServiceUnitName(unitName, owner));
 }
 
 function serviceAccountUnitLines(owner = {}) {
@@ -3767,7 +3746,7 @@ function assertExpectedId(name = "uid", expected = null, actual = null) {
 function assertEnabledForVibe64(owner = {}, username = "") {
   let membership = null;
   try {
-    const directory = openDirectoryBelow(owner.home, [".local", "state", "vibe64", "users"]);
+    const directory = openDirectoryBelow(owner.home, MEMBERSHIP_DIRECTORY);
     try {
       membership = JSON.parse(readOwnedFile(directory, `${username}.json`, { maxBytes: MEMBERSHIP_LIMIT_BYTES, uid: owner.uid }));
     } finally {

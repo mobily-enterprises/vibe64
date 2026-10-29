@@ -18,6 +18,8 @@ import {
 const HELPER_SOURCE_URL = new URL("../../packages/vibe64-execution/src/host/execHelper.js", import.meta.url);
 // The workspace daemon account the helper serves, as the helper names it.
 const daemonUser = (workspace) => `${DAEMON_USERNAME_PREFIX}${workspace}`;
+// A valid execution ID made of one repeated hex digit.
+const executionIdOf = (digit) => `${digit.repeat(8)}-0000-4000-8000-${digit.repeat(12)}`;
 
 const oomUnit = `vibe64-exec-test-${"c".repeat(32)}.service`;
 const oomWork = "/vibe64.slice/vibe64-test.slice/vibe64-test-work.slice";
@@ -247,8 +249,8 @@ function unresponsiveUnit({ initiallyEmpty = false } = {}) {
   };
 }
 
-// Conversation stops ask for 3 s; a managed stop waited for the unit's 10 s
-// TimeoutStopSec, longer than the server's 8 s shutdown deadline.
+// Conversation stops ask for 3 s; the unit's own 10 s TimeoutStopSec is longer
+// than the server's 8 s shutdown deadline.
 test("execution Stop force-kills an unresponsive unit at the caller's bound", () => {
   const bounded = unresponsiveUnit();
   const result = stopManagedExecution("unit.service", "execution", {}, { termTimeoutMs: 3000, ...bounded.options });
@@ -277,7 +279,7 @@ test("a service's private directory lives in its receipt and is named to the uni
   const directory = path.join(root, "executions");
   const receipts = openManagedExecutionReceipts(directory, { ...targetUser, create: true, legacyUid: targetUser.uid });
   t.after(() => receipts.close());
-  const [service, finite] = ["d", "e"].map((digit) => `${digit.repeat(8)}-0000-4000-8000-${digit.repeat(12)}`);
+  const [service, finite] = ["d", "e"].map(executionIdOf);
   const runnerCommand = async (executionId, options) => {
     receipts.create(executionId, targetUser, { args: [], command: "/bin/true", cwd: "/", env: { LANG: "C" }, executionId }, options);
     return JSON.parse(await readFile(path.join(directory, executionId, "command.json"), "utf8"));
@@ -464,7 +466,7 @@ test("managed service Stop refuses while a running or unreadable unit requires t
   }
 });
 
-test("managed services have no boot target; install-start no longer enables them", async () => {
+test("managed services have no boot target; install-start does not enable them", async () => {
   const source = await helperSource();
   const managed = source.slice(source.indexOf("function managedServiceUnit("), source.indexOf("function systemdUnitSafeValue("));
   assert.doesNotMatch(managed, /\[Install\]|WantedBy=/u);
@@ -595,7 +597,7 @@ test("execution receipts follow no planted link and never touch its target", asy
   const otherGroup = process.getgroups().find((gid) => gid !== process.getgid()) ?? process.getgid();
   const ids = { gid: otherGroup, legacyUid: process.getuid(), uid: process.getuid() };
   const targetUser = { gid: otherGroup, uid: process.getuid() };
-  const [planted, fresh, later] = ["a", "b", "c"].map((digit) => `${digit.repeat(8)}-0000-4000-8000-${digit.repeat(12)}`);
+  const [planted, fresh, later] = ["a", "b", "c"].map(executionIdOf);
   const command = (executionId) => ({ args: [], command: "/bin/true", cwd: "/", env: {}, executionId });
   const victim = path.join(root, "victim");
   await mkdir(victim, { mode: 0o755 });
@@ -662,9 +664,8 @@ test("runtime pack lists stay in step: interactive order and the helper PATH cov
 
 test("a starting controller releases every receipt and failed unit record except those it owns or that still run", () => {
   const owner = { username: daemonUser("test") };
-  const id = (digit) => `${digit.repeat(8)}-0000-4000-8000-00000000000${digit}`;
   const unit = (executionId) => `vibe64-exec-test-${executionId.replaceAll("-", "")}.service`;
-  const [owned, running, failed, collected, orphanFailed] = ["a", "b", "c", "d", "e"].map(id);
+  const [owned, running, failed, collected, orphanFailed] = ["a", "b", "c", "d", "e"].map(executionIdOf);
   const removed = [];
   const reset = [];
   let closed = 0;
@@ -839,7 +840,7 @@ test("an execution's result is read only as its target user's regular file in it
   const ids = { gid: process.getgid(), legacyUid: process.getuid(), uid: process.getuid() };
   const receipts = openManagedExecutionReceipts(directory, { ...ids, create: true });
   t.after(() => receipts.close());
-  const [written, linked, large, fifo] = ["a", "b", "c", "d"].map((digit) => `${digit.repeat(8)}-0000-4000-8000-${digit.repeat(12)}`);
+  const [written, linked, large, fifo] = ["a", "b", "c", "d"].map(executionIdOf);
   const result = (executionId) => ({ executionId, execMainStatus: "7", schema: "vibe64.managed-execution.result", schemaVersion: 1 });
   for (const executionId of [written, linked, large, fifo]) {
     receipts.create(executionId, { gid: ids.gid, uid: ids.uid }, { args: [], command: "/bin/true", cwd: "/", env: {}, executionId });
@@ -852,7 +853,7 @@ test("an execution's result is read only as its target user's regular file in it
   assert.deepEqual(receipts.result(linked), {}, "a link is not followed");
   await writeFile(path.join(directory, large, "result.json"), JSON.stringify({ ...result(large), padding: " ".repeat(256 * 1024) }));
   assert.deepEqual(receipts.result(large), {}, "an oversized result is not read");
-  assert.deepEqual(receipts.result(`${"e".repeat(8)}-0000-4000-8000-${"e".repeat(12)}`), {}, "a missing receipt has no result");
+  assert.deepEqual(receipts.result(executionIdOf("e")), {}, "a missing receipt has no result");
   execFileSync("mkfifo", [path.join(directory, fifo, "result.json")]);
   assert.deepEqual(helperInChild(`(() => {
     const receipts = helper.openManagedExecutionReceipts(input.directory, input.ids);

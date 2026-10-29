@@ -480,6 +480,9 @@ test("an application's execution is finite, and its receipt sits where only root
   assert.equal((await stat(directory)).mode & 0o7777, 0o711);
 });
 
+// A release service refused for its files or for its environment file.
+const releaseRefused = /must (run its own release's workspace and start script|belong to the application's selected release)/u;
+
 async function releaseFiles(host, account, releaseId) {
   const handover = path.join(account.handoverRoot, releaseId);
   const workspace = path.join(account.appRoot, "releases", releaseId, "workspace");
@@ -505,21 +508,20 @@ test("a release service runs its own release's workspace and the daemon's files 
   const check = (payload, ids = {}) => applicationReleaseServiceFiles(payload, identity, { daemonUid: UID, gid: GID, ...ids });
   assert.deepEqual(check(r1), r1);
 
-  const refused = /must (run its own release's workspace and start script|belong to the application's selected release)/u;
-  assert.throws(() => check({ ...r1, workingDirectory: r2.workingDirectory }), refused, "another release's workspace");
-  assert.throws(() => check({ ...r1, startScript: r2.startScript }), refused, "another release's start script");
+  assert.throws(() => check({ ...r1, workingDirectory: r2.workingDirectory }), releaseRefused, "another release's workspace");
+  assert.throws(() => check({ ...r1, startScript: r2.startScript }), releaseRefused, "another release's start script");
   await mkdir(path.join(account.appRoot, "sources", "r1"), { recursive: true });
-  assert.throws(() => check({ ...r1, workingDirectory: path.join(account.appRoot, "sources", "r1") }), refused, "a build");
-  assert.throws(() => check(r1, { daemonUid: UID + 1 }), refused, "files the daemon does not own");
-  assert.throws(() => check(r1, { gid: GID + 1 }), refused, "files of another group");
+  assert.throws(() => check({ ...r1, workingDirectory: path.join(account.appRoot, "sources", "r1") }), releaseRefused, "a build");
+  assert.throws(() => check(r1, { daemonUid: UID + 1 }), releaseRefused, "files the daemon does not own");
+  assert.throws(() => check(r1, { gid: GID + 1 }), releaseRefused, "files of another group");
   for (const mode of [0o770, 0o752, 0o740]) {
     await chmod(r1.startScript, mode);
-    assert.throws(() => check(r1), refused, mode.toString(8));
+    assert.throws(() => check(r1), releaseRefused, mode.toString(8));
   }
   await chmod(r1.startScript, 0o750);
   await symlink(r1.workingDirectory, path.join(account.appRoot, "current"));
-  assert.throws(() => check({ ...r1, workingDirectory: path.join(account.appRoot, "current") }), refused, "a link");
-  assert.throws(() => check({ ...r1, workingDirectory: path.join(account.appRoot, "releases", "r3", "workspace") }), refused);
+  assert.throws(() => check({ ...r1, workingDirectory: path.join(account.appRoot, "current") }), releaseRefused, "a link");
+  assert.throws(() => check({ ...r1, workingDirectory: path.join(account.appRoot, "releases", "r3", "workspace") }), releaseRefused);
 });
 
 test("a release service may run in a real folder inside its release's workspace, its Workdir", async (t) => {
@@ -544,10 +546,9 @@ test("a release service may run in a real folder inside its release's workspace,
   assert.throws(() => check(path.join(r1.workingDirectory, "apps", "self", "apps", "web")), real);
   assert.throws(() => check(path.join(r1.workingDirectory, "apps", "file")), real);
   assert.throws(() => check(path.join(r1.workingDirectory, "apps", "missing")), real);
-  const refused = /must (run its own release's workspace and start script|belong to the application's selected release)/u;
-  assert.throws(() => check(`${web}/../../..`), refused, "not a normal path");
-  assert.throws(() => check(`${web}/`), refused, "not a normal path");
-  assert.throws(() => check("apps/web"), refused, "relative");
+  assert.throws(() => check(`${web}/../../..`), releaseRefused, "not a normal path");
+  assert.throws(() => check(`${web}/`), releaseRefused, "not a normal path");
+  assert.throws(() => check("apps/web"), releaseRefused, "relative");
 });
 
 test("a release service unit runs as its application in its sandbox, listening only on its own port", () => {

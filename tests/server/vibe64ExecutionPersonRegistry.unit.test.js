@@ -46,17 +46,18 @@ async function workspaceHost(t) {
     registryRoot: path.join(root, "etc", "vibe64", "people"),
     registryUid: UID
   };
+  const resolveUser = (name) => {
+    if (!accounts[name]) throw new Error(`OS user was not found: ${name}`);
+    return accounts[name];
+  };
+  const personOptions = { ...registry, addToGroup: (name) => added.push(name), resolveUser };
   return {
-    accounts, added, facts, owner, registry, root, users,
+    accounts, added, facts, owner, registry, resolveUser, root, users,
     // What the daemon itself can write: its own membership records.
     member: (username, status = "active") => writeFile(path.join(users, `${username}.json`),
       JSON.stringify({ role: "member", status, username })),
-    register: (username) => registerPerson("test", username, {
-      ...registry, addToGroup: (name) => added.push(name), resolveUser: (name) => {
-        if (!accounts[name]) throw new Error(`OS user was not found: ${name}`);
-        return accounts[name];
-      }
-    })
+    enable: (username) => enablePerson("test", username, personOptions),
+    register: (username) => registerPerson("test", username, personOptions)
   };
 }
 
@@ -67,9 +68,8 @@ test("an account the daemon merely names is never a person it can enable or act 
   await host.member("ubuntu");
   await host.member("bob");
   for (const username of ["ubuntu", "bob"]) {
-    assert.throws(() => enablePerson("test", username, {
-      ...host.registry, addToGroup: (name) => host.added.push(name), resolveUser: (name) => host.accounts[name]
-    }), (error) => error.exitCode === 3 && /not registered as a Vibe64 person of workspace test/u.test(error.message) &&
+    assert.throws(() => host.enable(username), (error) => error.exitCode === 3 &&
+      /not registered as a Vibe64 person of workspace test/u.test(error.message) &&
       new RegExp(`register-person test ${username}$`, "u").test(error.message));
     assert.throws(() => assertActablePerson(host.owner, host.accounts[username], host.registry), /not registered/u);
   }
@@ -81,9 +81,7 @@ test("the helper acts as a person root registered for the daemon's own workspace
   await host.member("alice");
   host.register("alice");
   assert.doesNotThrow(() => assertActablePerson(host.owner, host.accounts.alice, host.registry));
-  assert.doesNotThrow(() => enablePerson("test", "alice", {
-    ...host.registry, addToGroup: (name) => host.added.push(name), resolveUser: (name) => host.accounts[name]
-  }));
+  assert.doesNotThrow(() => host.enable("alice"));
   assert.deepEqual(host.added, ["alice", "alice"]);
 
   // Another workspace's daemon cannot act as this workspace's person.
@@ -288,10 +286,7 @@ test("the existing people of a workspace are registered once, without its admini
   await writeFile(path.join(host.registry.registryRoot, ".test.upgrading", "bob.json"), "left by an interrupted run");
   const lines = [];
   const upgrade = () => upgradePersonRegistry("test", {
-    ...host.registry, report: (line) => lines.push(line), resolveUser: (name) => {
-      if (!host.accounts[name]) throw new Error(`OS user was not found: ${name}`);
-      return host.accounts[name];
-    }
+    ...host.registry, report: (line) => lines.push(line), resolveUser: host.resolveUser
   });
 
   assert.deepEqual(upgrade(), { imported: ["alice"], refused: ["merc", "sshd", "ubuntu"] });
@@ -313,15 +308,14 @@ test("the existing people of a workspace are registered once, without its admini
 test("a workspace without memberships still receives its empty registry", async (t) => {
   const host = await workspaceHost(t);
   await rm(host.users, { recursive: true });
-  assert.deepEqual(upgradePersonRegistry("test", {
-    ...host.registry, report: () => {}, resolveUser: (name) => host.accounts[name]
-  }), { imported: [], refused: [] });
+  assert.deepEqual(upgradePersonRegistry("test", { ...host.registry, report: () => {}, resolveUser: host.resolveUser }),
+    { imported: [], refused: [] });
   assert.deepEqual(await readdir(path.join(host.registry.registryRoot, "test")), []);
   // A registry root anyone may change is refused rather than used.
   await rm(path.join(host.registry.registryRoot, "test"), { recursive: true });
   await chmod(host.registry.registryRoot, 0o777);
-  assert.throws(() => upgradePersonRegistry("test", { ...host.registry, report: () => {},
-    resolveUser: (name) => host.accounts[name] }), /only root can change/u);
+  assert.throws(() => upgradePersonRegistry("test", { ...host.registry, report: () => {}, resolveUser: host.resolveUser }),
+    /only root can change/u);
 });
 
 test("sudo lists each rule on one line, so a narrow command compares exactly", async () => {
