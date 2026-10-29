@@ -236,6 +236,11 @@ which assignments may exchange relevant findings; that permission does not merge
 their source, make permission transitive or enlarge their budgets. Cancellation
 of follow-through does not itself stop the coding agent. Request that stop separately.
 
+When Vibe64 restarts or updates, follow-through that was only waiting keeps
+waiting and continues after you open Colleague again. If Colleague was working on
+a reply or summary at that moment, the restart interrupts it like **Stop**: its
+assignments wait until you ask Colleague to resume them.
+
 You can also ask it simply to watch a conversation and tell you when the agent
 answers. Such a watch authorizes reporting only, not sending further work.
 

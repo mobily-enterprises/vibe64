@@ -1614,6 +1614,61 @@ test("Stop Colleague aborts and cleans up its active summary Helper", async (t) 
   assert.equal(f.observations.helperCalls.at(-1).cleanup.cleanupExecutionId, "summary-execution");
 });
 
+test("server shutdown leaves a thread whose only leftover is a retained summary receipt as it was", async (t) => {
+  const f = await fixture(t, [], { watching: true });
+  f.observations.log = largeLog();
+  f.observations.cleanupFails = true;
+  assert.equal((await watchAction(f, "conversation-summary.read", summarizeInput)).mode, "excerpts");
+  const before = await f.service.read({}, f.context);
+  const cleanups = f.observations.helperCalls.filter((call) => call.cleanup).length;
+
+  await f.service.close();
+
+  const saved = JSON.parse(await readFile(path.join(f.root, "colleague", "NDI", "conversation.json"), "utf8"));
+  assert.equal(saved.status, before.status, "a receipt alone is not running work to interrupt");
+  assert.notEqual(saved.status, "interrupted");
+  assert.ok(saved.summaryHelper, "the receipt stays for the next summary to retry");
+  assert.equal(f.observations.helperCalls.filter((call) => call.cleanup).length, cleanups, "shutdown runs no Helper cleanup for it");
+  f.observations.cleanupFails = false;
+});
+
+test("one Colleague thread that cannot stop never keeps the other threads from stopping", async (t) => {
+  const f = await fixture(t, [], { watching: true });
+  f.observations.log = largeLog();
+  f.observations.blockHelper = true;
+  const other = { ...f.context, requestMeta: { request: { vibe64User: { username: "other", uid: 43, role: "member" } } } };
+  const failing = f.context.requestMeta.request.vibe64User;
+  const deleteHelper = f.terminals.deleteEphemeralAgentConversation;
+  const cleanedUp = [];
+  f.terminals.deleteEphemeralAgentConversation = async (scope, input, options) => {
+    cleanedUp.push(options.vibe64User?.username);
+    return options.vibe64User?.username === failing.username
+      ? { ok: false, error: "Summary cleanup unavailable." }
+      : deleteHelper.call(f.terminals, scope, input, options);
+  };
+  const readings = [];
+  for (const context of [f.context, other]) {
+    const started = Promise.withResolvers();
+    f.observations.helperStarted = started.resolve;
+    readings.push(f.actions.execute({ actionId: "vibe64.colleague.conversation-summary.read", input: summarizeInput, context }));
+    await started.promise;
+  }
+  const closed = await Promise.race([
+    f.service.close().then(() => null, (error) => error),
+    new Promise((resolve) => setTimeout(() => resolve("still closing"), 2_000))
+  ]);
+  assert.ok(closed instanceof AggregateError, String(closed));
+  assert.equal(closed.errors.length, 1, closed.errors.map(({ message }) => message).join("; "));
+  assert.match(closed.errors[0].message, /Colleague thread .+ did not stop cleanly: .*Summary cleanup unavailable/u);
+  const settled = await Promise.race([
+    Promise.allSettled(readings).then(() => "settled"),
+    new Promise((resolve) => setTimeout(() => resolve("still running"), 1_000))
+  ]);
+  assert.equal(settled, "settled", "every thread's running summary was stopped");
+  assert.deepEqual([...new Set(cleanedUp)].sort(), ["member", "other"], "both threads' Helpers were stopped and cleaned up");
+  f.terminals.deleteEphemeralAgentConversation = deleteHelper;
+});
+
 test("the summary action has a truthful native catalogue output contract", async (t) => {
   const f = await fixture(t, [JSON.stringify({ kind: "tool", text: "", toolName: "vibe64_colleague_conversation_summary_read", arguments: JSON.stringify(summarizeInput) }), reply("The Helper found a grocery-list project.")], { watching: true });
   f.observations.log = largeLog();

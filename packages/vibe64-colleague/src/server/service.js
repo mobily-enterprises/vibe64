@@ -1834,30 +1834,35 @@ function createColleagueService({ actions, accounts, terminals, systemRoot, even
       closed = true;
       unregisterReleaser();
       leaveRuntimeInvalidation();
-      // Each thread stops on its own: one that cannot be stopped is reported
-      // with the rest, never left to skip later threads or the runtimes.
-      const failures = [];
-      for (const pending of users.values()) {
+      // Each thread stops on its own. One that cannot stop cleanly is reported
+      // by name and never keeps the other threads, or the conversation
+      // runtimes, from stopping.
+      const threads = await Promise.allSettled([...users.values()].map(async (pending) => {
         // A thread that failed to load has nothing to stop.
         const state = await pending.catch(() => null);
-        if (!state) continue;
-        clearTimeout(state.watchTimer);
-        clearTimeout(state.replyTimer);
-        for (const observer of state.browserObservers) observer.release?.();
-        state.browserObservers.clear();
+        if (!state) return;
         try {
+          clearTimeout(state.watchTimer);
+          clearTimeout(state.replyTimer);
+          for (const observer of state.browserObservers) observer.release?.();
+          state.browserObservers.clear();
           await state.watchAdmission;
           await state.polling;
-          // Stop this thread, not whichever one the person's mode shows now.
-          if (state.running || state.summaryRunning || state.record.summaryHelper) await this.stop({}, { ...state.requestContext,
+          // Stop running work only, in this thread rather than whichever one the
+          // person's mode shows now. A summary receipt left by an earlier run is
+          // retried before the thread's next summary, not at shutdown.
+          if (state.running || state.summaryRunning) await service.stop({}, { ...state.requestContext,
             colleague: { ...state.requestContext?.colleague, threadKey: state.key } });
           await state.running;
           await state.saving;
-        } catch (error) { failures.push(error); }
-      }
+        } catch (error) {
+          throw Object.assign(new Error(`Colleague thread ${state.key} did not stop cleanly: ${error?.message || error}`, { cause: error }),
+            { threadKey: state.key });
+        }
+      }));
       const runtimes = await Promise.allSettled([runtime.close(), nativeRuntime.close()]);
-      failures.push(...runtimes.filter(result => result.status === "rejected").map(result => result.reason));
-      if (failures.length) throw new AggregateError(failures, "Colleague did not stop every conversation cleanly.");
+      const failures = [...threads, ...runtimes].filter(({ status }) => status === "rejected").map(({ reason }) => reason);
+      if (failures.length) throw new AggregateError(failures, `Colleague did not stop cleanly: ${failures.map(({ message }) => message).join(" ")}`);
     }
   };
   return service;

@@ -829,6 +829,11 @@ An unconfirmed Helper close keeps its receipt and raises a coded
 native owner's reason; a failed run keeps its own error with that cleanup failure
 as its cause. Colleague's Stop is saved before that cleanup, and a kept
 `summaryHelper` receipt does not refuse Start fresh: the next summary retries it.
+Server shutdown stops each thread independently and concurrently. Only a thread
+with a running turn or summary goes through Stop; a summary receipt alone is
+left for the next summary's cleanup-before-reuse, so idle threads keep their
+status and waiting assignments. A thread that cannot stop is reported by its key
+in Colleague's aggregate shutdown error, and both conversation runtimes still close.
 The client emits the local message-submission identity synchronously before
 sending. Voice hosts use it to distinguish a fresh invitation from a delayed
 canonical acknowledgement after Stop speaking; it changes no stored history.
