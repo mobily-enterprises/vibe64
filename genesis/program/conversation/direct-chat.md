@@ -3222,7 +3222,9 @@ Goal reads and pause/cancel controls likewise target the saved goal's connection
 independently of the last visible chat selection; starting or resuming still
 checks the effective destination's access. In Auto, the goal menu explains the
 explicit-mode requirement before submission and omits Start/Resume; Pause and
-Cancel remain available for an existing goal. An unavailable goal observation
+Cancel remain available for an existing goal; the wrapper gates them by the
+binding's `stopPending`, so a sending or unconfirmed chat message never disables
+them, while Set and Resume keep the binding's `pending`. An unavailable goal observation
 never marks a saved goal complete or unlocks Auto. The retained goal binding and
 allowance resource separate viewers, and a late goal response cannot update
 another viewer's controls. Message-goal retries retain their original UUID and

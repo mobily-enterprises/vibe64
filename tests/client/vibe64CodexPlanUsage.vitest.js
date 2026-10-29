@@ -335,6 +335,20 @@ it("delegates explicit status changes for the displayed goal to the supplied con
   mocks.goal = null;
 });
 
+it("cancels a paused goal while a chat message is sending or unconfirmed, but holds Resume", async () => {
+  mocks.buttons = [];
+  mocks.goal = { status: "available", routing: { mode: "senior", selection: { engineId: "claude" } },
+    goal: { threadId: "claude-goal", status: "paused", objective: "Finish the work", createdAt: 10 } };
+  // JSKIT reports chat delivery as pending for Set/Resume, but not for Pause/Cancel.
+  await render(null, { session: { sessionId: "one", assistantSelection: { engineId: "claude" } } }, undefined,
+    { pending: true, stopPending: false });
+  await mocks.buttons.find((button) => button.text === "Resume goal").click();
+  expect(mocks.goalController.changeGoal).not.toHaveBeenCalled();
+  await mocks.buttons.find((button) => button.text.trim() === "Cancel goal").click();
+  expect(mocks.goalController.changeGoal).toHaveBeenCalledExactlyOnceWith("cancel", {});
+  mocks.goal = null;
+});
+
 it("uses the shared running and paused indicators for native goal state", async () => {
   for (const status of ["active", "paused", "blocked", "usageLimited", "budgetLimited", "complete"]) {
     mocks.goal = { status: "available", goal: { status, objective: "Finish migration" } };

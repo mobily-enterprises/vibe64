@@ -13,6 +13,10 @@ open, a message that is just “Deslop” is refused because Deslop runs in its 
 turn: open **Goal**, choose **Resume goal** to finish it or **Cancel goal** to
 end it, then send Deslop again. The refused message is marked as not sent, so
 **Cancel** or **Edit** on it works at once and the goal controls stay usable.
+**Pause goal** and **Cancel goal** work even while a chat message is still
+sending or its delivery is unconfirmed. **Set goal** and **Resume goal** wait
+until that message is sent, or until you check it with **Retry** or remove it
+with **Cancel**.
 
 In the standalone local editor, open a session, choose a connected assistant,
 and use **Send message** and **Set goal** in the same chat. These controls use

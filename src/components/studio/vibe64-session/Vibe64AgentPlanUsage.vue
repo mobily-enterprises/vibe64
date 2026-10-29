@@ -97,7 +97,9 @@ const goalExplicitMode = computed(() => assistantRoutingFromMetadata(props.sessi
 const changingGoal = computed(() => suppliedGoal.value?.pending === true);
 const goalError = computed(() => suppliedGoal.value?.error || "");
 async function changeGoal(action, input = {}) {
-  if (changingGoal.value || !goalAvailable.value) {
+  // Pause and Cancel never wait on chat delivery; the binding says when they cannot run.
+  const busy = ["pause", "cancel"].includes(action) ? suppliedGoal.value?.stopPending === true : changingGoal.value;
+  if (busy || !goalAvailable.value) {
     return false;
   }
   if (["set", "resume"].includes(action) && !goalExplicitMode.value) return false;
