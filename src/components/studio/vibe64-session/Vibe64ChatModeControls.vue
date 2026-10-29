@@ -196,7 +196,7 @@ function configure() {
             </template>
           </div>
         </template>
-        <div class="px-4 pb-3"><slot /></div>
+        <div class="px-4 pb-3"><slot :close="() => { detailsOpen = false; }" /></div>
       </div>
     </v-card>
   </v-menu>

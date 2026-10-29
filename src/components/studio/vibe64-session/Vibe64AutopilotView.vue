@@ -573,7 +573,7 @@
                     @saved="reloadAssistantAccess"
                     @custom="composerSettingsButton = $event; composerSettingsOpen = true"
                   >
-                    <template #default>
+                    <template #default="{ close: closeChatMode }">
                       <div
                         v-if="composerAccessHint"
                         class="studio-autopilot__settings-access"
@@ -582,7 +582,7 @@
                           {{ composerAccessHint }}
                           <v-btn
                             v-if="agentObservationLost && !agentActive" size="small" variant="text"
-                            :disabled="composerDisabled || composerSending" @click="continueConversation"
+                            :disabled="composerDisabled || composerSending" @click="closeChatMode(); continueConversation()"
                           >
                             Continue
                           </v-btn>
@@ -1656,7 +1656,6 @@ async function sendComposerMessage() {
 }
 
 async function continueConversation() {
-  composerSettingsOpen.value = false;
   composerInput.value?.focus?.();
   if (composerDraft.value.trim() || composerAttachments.value.length) return;
   composerDraft.value = "Continue.";
@@ -2153,15 +2152,6 @@ onBeforeUnmount(() => {
   letter-spacing: 0;
   line-height: 11px;
   text-transform: none;
-}
-
-.studio-autopilot__composer-tools {
-  display: flex;
-  flex-shrink: 0;
-}
-
-.studio-autopilot__composer-tools:empty {
-  display: none;
 }
 
 @container studio-chat-pane (max-width: 32rem) {

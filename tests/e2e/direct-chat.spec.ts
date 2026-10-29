@@ -451,6 +451,7 @@ test.describe("direct chat", () => {
     await settings.click();
     await page.screenshot({ path: test.info().outputPath("settings-menu.png") });
     await page.getByRole("button", { name: "Continue", exact: true }).click();
+    await expect(page.getByText("Chat mode", { exact: true })).not.toBeVisible();
     await expect(input).toHaveValue("Keep my draft");
     expect(messages).toHaveLength(0);
     await input.fill("");
