@@ -158,11 +158,14 @@ and selecting a choice still requires native validation.
 The session Custom picker requests `allConnectedModels` through the capability
 HTTP route. The session agent manager collects each connected provider's model
 pages, retaining catalogue revision checks and ordinary access validation.
-Its selected provider also uses the existing model-page query. Apply submits
-that provider view's revision, not the warmed full-engine revision; the two can
-differ for Claude's inexpensive external-provider catalogue. Pending or failed
-provider reads block Apply. Native discovery, access checks and the server's
-exact stale-revision rejection remain unchanged.
+That whole connected catalogue is the picker's only model-list read for each
+tool: opening, reopening within its 30-second freshness and switching tools
+reuse it, because a read can start the tool's discovery process. Apply submits
+its revision, as Models setup does; `resolveSelection` checks a choice whose
+revision differs from its provider's page (Claude's external providers) against
+the whole catalogue. Pending or failed reads block Apply, and a refused Apply
+reloads the selected tool's choices. Native discovery, access checks and the
+server's exact stale-revision rejection remain unchanged.
 
 Preview and Save take the same structured owner/team setup role contract.
 A null value explicitly disables the role, `{ follows: role }` restores Same as,

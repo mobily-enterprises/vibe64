@@ -259,10 +259,10 @@ For one main conversation, open its chat mode menu and choose **Custom**. Select
 list includes the available models from each connected provider for that
 orchestrator, including a connected GLM Coding Plan under OpenCode. **Configure
 more AIs** opens account setup if the required provider is not connected.
-Wait for the selected provider's choices to load before pressing **Apply**.
-If those choices changed while the dialog was open, press **Cancel**, reopen
-**Custom**, review your selection and apply again. A loading error offers
-**Retry**. Neither action changes saved provider connections.
+Wait for the choices to load before pressing **Apply**. If they changed while
+the dialog was open, **Apply** shows why it was refused and reloads them; review
+your selection and press **Apply** again. A loading error offers **Retry**.
+Neither action changes saved provider connections.
 Claude Code uses its selected provider for background model calls as well.
 To start a new session on such a choice, select **Change** in **Start an AI
 session**: it opens the same **Custom AI** choice, and the new chat starts in

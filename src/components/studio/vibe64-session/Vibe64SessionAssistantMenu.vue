@@ -196,17 +196,15 @@ const engineRows = computed(() => connections.engines.value.filter((engine) => e
   engine.modelProviders?.some((provider) => provider.connected)));
 // Warm only connected engines while this dialog is open. Switching orchestrators
 // then reuses the same query; it does not start discovery after the click.
+// Each engine's whole connected catalogue is its only model-list read.
 const catalogs = Object.fromEntries(VIBE64_AGENT_PROVIDERS.map(({ id }) => [id, useVibe64AssistantCatalog({
   active: computed(() => catalogActive.value && engineRows.value.some((engine) => engine.engineId === id)),
   path: computed(() => props.catalogPath),
-  engineId: id, allConnectedModels: true, providerConnectedOnly: true,
-  modelProviderId: computed(() => engineId.value === id ? modelProviderId.value : "")
+  engineId: id, allConnectedModels: true, providerConnectedOnly: true
 })]));
 const catalog = computed(() => catalogs[engineId.value]);
-const catalogLoading = computed(() => connections.overview.isInitialLoading.value || catalog.value?.overview.isInitialLoading.value ||
-  catalog.value?.modelPage.isInitialLoading.value);
-const catalogError = computed(() => String(connections.overview.loadError.value || catalog.value?.overview.loadError.value ||
-  catalog.value?.modelPage.loadError.value || ""));
+const catalogLoading = computed(() => connections.overview.isInitialLoading.value || catalog.value?.overview.isInitialLoading.value);
+const catalogError = computed(() => String(connections.overview.loadError.value || catalog.value?.overview.loadError.value || ""));
 const selectedOverviewEngine = computed(() => catalog.value?.selectedOverviewEngine.value || null);
 const currentModelEngine = selectedOverviewEngine;
 const providerRows = computed(() => (currentModelEngine.value?.modelProviders || []).filter((provider) => provider.connected));
@@ -250,9 +248,9 @@ const variantRows = computed(() => [
   { id: "", label: "Default" },
   ...(selectedModel.value?.variants || [])
 ]);
-// Apply validates the selected provider's catalogue, which can have a different
-// revision from the full engine view used to display all connected choices.
-const selectionRevision = computed(() => String(catalog.value?.modelEngine.value?.revision || ""));
+// Apply carries the whole catalogue's revision, as Models setup does; the server
+// checks a choice against the whole catalogue when one provider's page differs.
+const selectionRevision = computed(() => String(currentModelEngine.value?.revision || ""));
 const draftSelection = computed(() => ({
   agentId: agentId.value,
   catalogRevision: selectionRevision.value,

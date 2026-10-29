@@ -3072,13 +3072,17 @@ for (const width of [390, 820, 1280]) {
     await expect(dialog.getByRole("combobox", { name: "Thinking", exact: true })).toHaveValue("High");
     await page.screenshot({ path: info.outputPath(`custom-${width}.png`), animations: "disabled" });
     const box = await dialog.boundingBox(); expect(box!.x).toBeGreaterThanOrEqual(0); expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+    // Opening, reopening and switching tools read each tool's model list once.
+    expect(catalogReads.sort()).toEqual(["codex", "opencode"]);
     await dialog.getByRole("button", { name: "Apply", exact: true }).click();
     await expect(dialog.getByText("Connection changed. Please retry.", { exact: true })).toBeVisible();
+    // A refused save reloads the selected tool's choices so a retry is current.
+    await expect.poll(() => catalogReads.length).toBe(3);
     await dialog.getByRole("button", { name: "Apply", exact: true }).click();
     await expect(dialog).not.toBeVisible();
     await expect(mode).toHaveAttribute("aria-label", /Custom.*OpenCode \(glm-5.3-flash high\)/);
     expect(session.assistantSelection).toMatchObject({ engineId: "opencode", modelProviderId: "zai", modelId: "glm-5.3-flash", variantId: "high" });
-    expect(catalogReads.sort()).toEqual(["codex", "opencode"]);
+    expect(catalogReads.sort()).toEqual(["codex", "opencode", "opencode"]);
     expect(errors).toEqual([]);
   });
 }
