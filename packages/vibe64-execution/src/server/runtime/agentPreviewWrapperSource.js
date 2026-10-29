@@ -35,6 +35,8 @@ const AGENT_PREVIEW_USAGE = [
   "For browser navigation, use preview inspect-url or the status Browser URL; these use the managed Preview proxy.",
   "Inside browser eval, navigate with await page.goto(new URL('/your-path', preview.url).href).",
   "The direct application endpoint in diagnostics bypasses Preview identity; do not use it for interactive browsing.",
+  "The browser keeps its page between browser commands. After each command the page keeps running for 30 seconds, then pauses (no timers, animations or network handling) until the next browser command. For a longer wait, wait inside the command, for example with await page.waitForSelector(...).",
+  "Five minutes after the last browser command ends, the browser closes; the next command opens a fresh page, so select its identity again if needed.",
   "Managed Playwright suites and live preview browser actions are sequential. Wait on the suite through cleanup and restoration before browser actions or Preview ensure/restart/target changes; confirm playwright status has no active run and preview status is ready. Read-only status and logs are safe during a suite.",
   "For background commands, wait on the existing execution/session with about a 30-second window where supported: set yield_time_ms: 30000 for an empty command poll. Reserve shorter waits for interactive input or a specific immediate check; do not repeatedly reread empty or unchanged logs between brief waits.",
   "This is the canonical preview server for the configured primary application.",

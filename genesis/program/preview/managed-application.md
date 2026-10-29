@@ -88,6 +88,8 @@ test targets. External URLs do not acquire this managed Preview transaction.
 - `packages/vibe64-terminals/src/server/browserTestCleanup.js`
 - `packages/vibe64-execution/src/server/runtime/agentPlaywrightCommandSource.js`
 - `packages/vibe64-execution/src/server/runtime/agentPreviewWrapperSource.js`
+- `packages/vibe64-execution/src/server/runtime/agentPreviewBrowserWorkerSource.js`
+- `tests/server/agentPreviewCommand.unit.test.js`
 - `packages/vibe64-genesis/src/server/promptContext.js`
 - `packages/vibe64-terminals/src/server/service.js`
 - `packages/vibe64-terminals/src/server/workspaceSetup.js`
@@ -479,6 +481,18 @@ The reusable managed browser belongs to the session’s registered control gener
 not to the tool command that first opened it. Subsequent commands reuse its page
 and identity. Session/Preview close and control-generation replacement retain
 exact-owner cleanup; the worker still exits on idle expiry or loss of control health.
+The browser keeps running for 30 seconds after a browser command, so a short
+wait outside the browser before the next check still sees the page's own work.
+After that grace period the worker stops its recorded browser process groups
+(`SIGSTOP`), so an animated or WebGL page uses no CPU until the next command,
+or the worker's own close, continues them (`SIGCONT`). Both periods are exact
+timers, cleared while a command runs. Chromium's page freezing cannot do this:
+Playwright keeps each page focused, which keeps it visible, and Chromium does
+not freeze a visible page. Status reads only the worker's own state; it neither
+continues the browser nor counts as use. The idle period (five minutes) starts
+when the worker starts and again when each command ends, and never expires
+during a command. Group drains send `SIGCONT` after `SIGTERM`, so a stopped
+browser still exits at once when its worker is gone.
 Finite browser-test executions retain their calling execution as parent.
 
 ## Project services

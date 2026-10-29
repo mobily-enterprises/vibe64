@@ -187,7 +187,8 @@ function agentPreviewBrowserWorkerSource({
   identityControlPath = "",
   idleTimeoutMs = 5 * 60 * 1000,
   playwrightModulePath = "",
-  playwrightProjectRoot = ""
+  playwrightProjectRoot = "",
+  suspendAfterMs = 30_000
 } = {}) {
   return `#!/usr/bin/env node
 import { execFileSync } from "node:child_process";
@@ -215,6 +216,7 @@ const playwrightProjectRoot = ${JSON.stringify(String(playwrightProjectRoot || "
 const identityControlPath = ${JSON.stringify(String(identityControlPath || ""))};
 const contractVersion = ${JSON.stringify(String(contractVersion || "1"))};
 const idleTimeoutMs = ${Number(idleTimeoutMs) || 5 * 60 * 1000};
+const suspendAfterMs = ${Number(suspendAfterMs) || 30_000};
 const requestLimitBytes = 1024 * 1024;
 const controlHealthIntervalMs = ${Number(controlHealthIntervalMs) || 15_000};
 const controlHealthFailureLimit = ${Number(controlHealthFailureLimit) || 4};
@@ -250,7 +252,8 @@ let previewInstance = "";
 let applicationIdentity = null;
 let commandQueue = Promise.resolve();
 let closing = false;
-let lastUsedAt = 0;
+let idleTimer = null;
+let suspendTimer = null;
 let controlHealthFailures = 0;
 let shutdownPromise = null;
 let browserProcessGroups = [];
@@ -546,7 +549,28 @@ function statusPayload() {
   };
 }
 
+// Once no command has run for suspendAfterMs, the browser's process groups are
+// stopped, so a page that animates or renders WebGL uses no CPU until the next
+// command. Chromium's page freezing cannot do this here: Playwright keeps each
+// page focused, which keeps it visible, and Chromium does not freeze a visible
+// page.
+function signalBrowserProcessGroups(signal) {
+  for (const entry of normalizedBrowserProcessGroups(browserProcessGroups)) {
+    const leader = processIdentity(entry.groupId);
+    if (leader?.groupId !== entry.groupId || leader.startTimeTicks !== entry.startTimeTicks) {
+      continue;
+    }
+    try {
+      process.kill(-entry.groupId, signal);
+    } catch {
+      // The browser process group already exited.
+    }
+  }
+}
+
 async function closeBrowser() {
+  // A stopped browser cannot answer Playwright's close request.
+  signalBrowserProcessGroups("SIGCONT");
   const currentBrowser = browser;
   page = null;
   context = null;
@@ -782,12 +806,46 @@ async function evaluateCode(input = {}) {
   };
 }
 
+function scheduleIdleExpiry() {
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(closeServerAndExit, idleTimeoutMs);
+  idleTimer.unref?.();
+}
+
+// The page keeps running briefly after a command, so a short wait outside the
+// browser before the next check still sees the page's own work.
+function scheduleSuspend() {
+  clearTimeout(suspendTimer);
+  suspendTimer = setTimeout(() => {
+    if (!closing) {
+      signalBrowserProcessGroups("SIGSTOP");
+    }
+  }, suspendAfterMs);
+  suspendTimer.unref?.();
+}
+
+// Status reads only this worker's own state: it neither runs the browser nor
+// counts as use. Every other command runs the browser, and the suspend and
+// idle periods start again when it ends.
 async function runCommand(input = {}) {
-  lastUsedAt = Date.now();
   const command = String(input.command || "").trim();
   if (command === "status") {
     return statusPayload();
   }
+  clearTimeout(idleTimer);
+  clearTimeout(suspendTimer);
+  signalBrowserProcessGroups("SIGCONT");
+  try {
+    return await runBrowserCommand(command, input);
+  } finally {
+    if (!closing) {
+      scheduleSuspend();
+      scheduleIdleExpiry();
+    }
+  }
+}
+
+async function runBrowserCommand(command, input = {}) {
   if (command === "ensure") {
     return ensureBrowser(input.previewUrl, {
       instance: input.previewInstance
@@ -999,13 +1057,7 @@ const server = http.createServer(async (request, response) => {
 });
 
 server.listen(socketPath);
-const idleTimer = setInterval(() => {
-  if (!lastUsedAt || Date.now() - lastUsedAt < idleTimeoutMs) {
-    return;
-  }
-  closeServerAndExit();
-}, Math.min(60_000, idleTimeoutMs));
-idleTimer.unref?.();
+scheduleIdleExpiry();
 
 const controlHealthTimer = setInterval(async () => {
   if (closing) {

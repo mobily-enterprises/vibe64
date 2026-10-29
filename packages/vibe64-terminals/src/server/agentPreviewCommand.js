@@ -68,6 +68,7 @@ const AGENT_PREVIEW_COMMAND_CONTRACT_VERSION = "11";
 const AGENT_PREVIEW_COMMAND_REQUEST_MAX_BYTES = 1024 * 1024;
 const DEFAULT_PLAYWRIGHT_RUN_TIMEOUT_MS = 30 * 60 * 1000;
 const DEFAULT_PREVIEW_BROWSER_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+const DEFAULT_PREVIEW_BROWSER_SUSPEND_AFTER_MS = 30 * 1000;
 const DEFAULT_PREVIEW_LOG_LINES = 200;
 // Let the launch probe finish and publish its result before the command times out.
 const DEFAULT_PREVIEW_WAIT_TIMEOUT_MS = (WEB_LAUNCH_READINESS_TIMEOUT_SECONDS + 30) * 1000;
@@ -1287,6 +1288,9 @@ async function drainRegisteredProcessGroup(entry = {}) {
   }
   try {
     process.kill(-Number(entry.groupId), "SIGTERM");
+    // The worker stops its browser between commands; a stopped process acts
+    // on SIGTERM only once continued.
+    process.kill(-Number(entry.groupId), "SIGCONT");
   } catch (error) {
     if (error?.code !== "ESRCH") {
       throw error;
@@ -1878,6 +1882,7 @@ async function streamPlaywrightRun({ commandService, input, response, sessionId 
 
 async function prepareAgentPreviewCommand({
   browserIdleTimeoutMs = DEFAULT_PREVIEW_BROWSER_IDLE_TIMEOUT_MS,
+  browserSuspendAfterMs = DEFAULT_PREVIEW_BROWSER_SUSPEND_AFTER_MS,
   browserControlHealthFailureLimit = 4,
   browserControlHealthIntervalMs = 15_000,
   commandService,
@@ -1927,7 +1932,8 @@ async function prepareAgentPreviewCommand({
       identityControlPath: PREVIEW_IDENTITY_CONTROL_PATH,
       idleTimeoutMs: browserIdleTimeoutMs,
       playwrightModulePath,
-      playwrightProjectRoot: normalizedWorktreePath
+      playwrightProjectRoot: normalizedWorktreePath,
+      suspendAfterMs: browserSuspendAfterMs
     }),
     previewWrapperSource: agentPreviewWrapperSource({
       browserSocketPath,

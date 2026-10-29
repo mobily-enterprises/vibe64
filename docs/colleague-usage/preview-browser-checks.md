@@ -5,10 +5,17 @@ specify the flow to check. The agent uses the session's managed browser tools;
 you do not need to provide an execution ID or change application code to enable
 them. Application login may still require your credentials or interaction.
 The managed browser keeps its page and login between the coding agent’s tool
-commands. Stopping Preview, closing the session, resetting the managed browser
-or losing its editor connection can require login again. If it repeatedly loses
-login during ordinary checks, ask the coding agent to inspect browser lifecycle
-errors; shortening waits is not a recovery for a stopped browser.
+commands. After each command the page keeps running for 30 seconds, so a short
+wait before the next check still sees the page's own work. Then the page pauses
+and uses no processor time until the agent's next browser command: its
+animations, timers and background requests resume with that command, and an
+application's live connection may reconnect then.
+Five minutes after the agent's last browser command the browser closes, and the
+next command opens a fresh page. That fresh page, stopping Preview, closing the
+session, resetting the managed browser or losing its editor connection can
+require login again. If it repeatedly loses login during ordinary checks, ask
+the coding agent to inspect browser lifecycle errors; shortening waits is not a
+recovery for a stopped browser.
 If a check reports **Launch preview token is missing or invalid**, use the
 current Preview link and the session's managed browser, not a copied link from
 an earlier launch. Managed browser code can navigate to `preview.url` using

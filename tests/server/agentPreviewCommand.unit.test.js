@@ -115,6 +115,15 @@ function wait(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function processState(pid) {
+  try {
+    const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+    return stat.slice(stat.lastIndexOf(") ") + 2).split(" ")[0];
+  } catch {
+    return "";
+  }
+}
+
 function processRunning(pid) {
   try {
     if (readFileSync(`/proc/${pid}/stat`, "utf8").split(" ")[2] === "Z") {
@@ -185,6 +194,15 @@ async function createFakePlaywrightRuntime(runtimeRoot) {
   await writeFile(path.join(playwrightRoot, "runtime.env"), "playwright_version=1.50.1\n", "utf8");
   await writeFile(path.join(playwrightModule, "index.js"), `
 const { spawn } = require("node:child_process");
+const { readFileSync } = require("node:fs");
+function processState(pid) {
+  try {
+    const stat = readFileSync("/proc/" + pid + "/stat", "utf8");
+    return stat.slice(stat.lastIndexOf(") ") + 2).split(" ")[0];
+  } catch {
+    return "";
+  }
+}
 const screenshotBytes = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAGYktHRAD/AP8A/6C9p5MAAAAHdElNRQfqBw4XCBDl8xb+AAAAFklEQVQI12NgYGD4//8/4////xkYGAAp6wX8D0F0QAAAAABJRU5ErkJggg==", "base64");
 const identityControlPath = ${JSON.stringify(PREVIEW_IDENTITY_CONTROL_PATH)};
 function identityRequestContext() {
@@ -267,7 +285,12 @@ exports.chromium = {
       launchId,
       childPid: browserChild.pid,
       isConnected() { return connected; },
+      processState() { return processState(browserChild.pid); },
       async close() {
+        // Like Chromium, a stopped browser never answers the close request.
+        if (processState(browserChild.pid) === "T") {
+          await new Promise(() => {});
+        }
         connected = false;
         try { browserChild.kill("SIGKILL"); } catch {}
         for (const page of pages) page.closed = true;
@@ -463,6 +486,7 @@ test("agent preview help works without the control socket and documents every br
       assert.match(help.stdout, /vibe64-helper preview browser storage-state <default\|guest\|configured-name> --output <new-path>/u);
       assert.match(help.stdout, /screenshot: outputPath, byteLength, sha256/u);
       assert.match(help.stdout, /browser eval: result .*logs \[\{level, values\}\]/u);
+      assert.match(help.stdout, /After each command the page keeps running for 30 seconds, then pauses/u);
     }
     await assert.rejects(
       execFileAsync(process.execPath, [wrapperPath, "browser"], { env }),
@@ -2236,7 +2260,9 @@ test("managed preview browser exits after idle expiry and loss of its Vibe64 con
       const prepared = await prepareAgentPreviewCommand({
         browserControlHealthFailureLimit: 2,
         browserControlHealthIntervalMs: 30,
-        browserIdleTimeoutMs: mode === "idle" ? 100 : 10_000,
+        // The idle period starts when the worker starts, so it must outlast
+        // the wrapper's start-up handshake before the first command.
+        browserIdleTimeoutMs: mode === "idle" ? 1000 : 10_000,
         commandService,
         env: packEnv(runtimeRoot),
         sessionId,
@@ -2251,7 +2277,7 @@ test("managed preview browser exits after idle expiry and loss of its Vibe64 con
       if (mode === "control-loss") {
         await commandService.releaseControlForSession(sessionId);
       }
-      for (let attempt = 0; attempt < 100 && processRunning(ensured.pid); attempt += 1) {
+      for (let attempt = 0; attempt < 200 && processRunning(ensured.pid); attempt += 1) {
         await wait(25);
       }
       assert.equal(processRunning(ensured.pid), false, `${mode} worker should exit`);
@@ -2265,6 +2291,146 @@ test("managed preview browser exits after idle expiry and loss of its Vibe64 con
         recursive: true
       });
     }
+  }
+});
+
+async function waitForProcessState(pid, state, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (processState(pid) !== state && Date.now() < deadline) {
+    await wait(25);
+  }
+  return processState(pid);
+}
+
+test("managed preview browser keeps running briefly after a command, then stops until the next one", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-browser-stopped-"));
+  const runtimeRoot = path.join(root, "runtime-packs");
+  const sessionId = "browser-stopped-session";
+  const commandService = createReadyPreviewCommandService({
+    previewUrl: "https://preview.example.test/stopped?vibe64_preview_token=stopped-token"
+  });
+  try {
+    await createFakePlaywrightRuntime(runtimeRoot);
+    const prepared = await prepareAgentPreviewCommand({
+      browserSuspendAfterMs: 1500,
+      commandService,
+      env: packEnv(runtimeRoot),
+      sessionId,
+      wrapperHostDir: root
+    });
+    const commandEnv = {
+      ...process.env,
+      ...prepared.env
+    };
+    const evalCode = "state.count = (state.count || 0) + 1; " +
+      "return { childPid: browser.childPid, count: state.count, during: browser.processState() };";
+
+    const first = JSON.parse((await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
+      env: commandEnv,
+      input: evalCode
+    })).stdout);
+    assert.notEqual(first.result.during, "T");
+    // A short wait outside the browser still finds the page running.
+    assert.notEqual(processState(first.result.childPid), "T", "the browser keeps running after its command");
+    assert.equal(await waitForProcessState(first.result.childPid, "T"), "T", "the browser stops once the grace period passes");
+
+    // Status reads the worker without running its browser.
+    const status = JSON.parse((await execFileAsync(prepared.hostWrapperPath, ["browser", "status"], {
+      env: commandEnv
+    })).stdout);
+    assert.equal(status.running, true);
+    assert.equal(processState(first.result.childPid), "T");
+
+    const second = JSON.parse((await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
+      env: commandEnv,
+      input: evalCode
+    })).stdout);
+    assert.equal(second.result.childPid, first.result.childPid);
+    assert.equal(second.result.count, 2);
+    assert.notEqual(second.result.during, "T");
+    assert.notEqual(processState(first.result.childPid), "T");
+    assert.equal(await waitForProcessState(first.result.childPid, "T"), "T");
+
+    // A worker lost while its browser is stopped leaves that browser stopped;
+    // session cleanup still ends it at once rather than waiting for SIGKILL.
+    const metadata = JSON.parse(await readFile(prepared.hostBrowserMetadataPath, "utf8"));
+    process.kill(metadata.pid, "SIGKILL");
+    for (let attempt = 0; attempt < 40 && processRunning(metadata.pid); attempt += 1) {
+      await wait(25);
+    }
+    const cleanupStartedAt = Date.now();
+    await commandService.closeAllForSession(sessionId);
+    assert.equal(processRunning(first.result.childPid), false);
+    assert.ok(Date.now() - cleanupStartedAt < 2000, "a stopped browser drains on SIGTERM");
+  } finally {
+    await commandService.closeAllForSession(sessionId);
+    await rm(root, {
+      force: true,
+      recursive: true
+    });
+  }
+});
+
+test("managed preview browser idles out after its last command ends, never during one", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "vibe64-preview-browser-idle-end-"));
+  const runtimeRoot = path.join(root, "runtime-packs");
+  const sessionId = "browser-idle-end-session";
+  const commandService = createReadyPreviewCommandService({
+    previewUrl: "https://preview.example.test/idle?vibe64_preview_token=idle-token"
+  });
+  try {
+    await createFakePlaywrightRuntime(runtimeRoot);
+    const prepared = await prepareAgentPreviewCommand({
+      browserIdleTimeoutMs: 2000,
+      // The browser is stopped when the idle period ends, so closing it must
+      // continue it first.
+      browserSuspendAfterMs: 500,
+      commandService,
+      env: packEnv(runtimeRoot),
+      sessionId,
+      wrapperHostDir: root
+    });
+    const commandEnv = {
+      ...process.env,
+      ...prepared.env
+    };
+    const evalCode = (delayMs) => `await new Promise((resolve) => setTimeout(resolve, ${delayMs})); ` +
+      "state.count = (state.count || 0) + 1; return { childPid: browser.childPid, count: state.count };";
+
+    // One command runs longer than the idle period.
+    const first = JSON.parse((await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
+      env: commandEnv,
+      input: evalCode(4500)
+    })).stdout);
+    const metadata = JSON.parse(await readFile(prepared.hostBrowserMetadataPath, "utf8"));
+    const second = JSON.parse((await execWithInput(prepared.hostWrapperPath, ["browser", "eval"], {
+      env: commandEnv,
+      input: evalCode(0)
+    })).stdout);
+    assert.equal(second.result.count, 2, "the long command did not expire the browser");
+    assert.equal(second.result.childPid, first.result.childPid);
+    assert.equal(JSON.parse(await readFile(prepared.hostBrowserMetadataPath, "utf8")).pid, metadata.pid);
+
+    // Status probes are not use: without further commands the worker and its
+    // stopped browser exit once the idle period passes.
+    const idleDeadline = Date.now() + 8000;
+    while (processRunning(metadata.pid) && Date.now() < idleDeadline) {
+      await execFileAsync(prepared.hostWrapperPath, ["browser", "status"], {
+        env: commandEnv
+      });
+      await wait(100);
+    }
+    assert.equal(processRunning(metadata.pid), false, "the idle worker exits");
+    assert.equal(processRunning(first.result.childPid), false, "the idle worker closes its browser");
+    await assert.rejects(stat(prepared.hostBrowserMetadataPath), {
+      code: "ENOENT"
+    });
+  } finally {
+    await commandService.closeAllForSession(sessionId);
+    await rm(root, {
+      force: true,
+      recursive: true
+    });
   }
 });
 
