@@ -2353,6 +2353,8 @@ test("a Claude account change also stops the conversations of features that join
     const refused = await service.startAuth({ accountId: "claude", mode: "browser", vibe64User: owner });
     assert.equal(refused.ok, false);
     assert.equal(refused.failed.at(-1).error, "Colleague could not stop every claude conversation.");
+    assert.equal(refused.error, "Colleague could not stop every claude conversation.",
+      "the refusal itself names why, so the person sees it instead of a generic failure");
     assert.equal(requests.length, 1, "a change that could not stop every Claude process does not start a login");
     // Credential publication keeps its own fence and does not stop joined work.
     await terminals.invalidateAgentRuntimes({ provider: "claude", modelProviderId: "deepseek", reason: "provider-key-change",

@@ -1402,7 +1402,9 @@ function createService({
     const failure = aiManagementError(input);
     if (failure) return failure;
     const stopped = await invalidateAgentRuntimes({ provider: "claude", reason: "claude-auth-change" });
-    return stopped?.ok === false ? stopped : null;
+    if (stopped?.ok !== false) return null;
+    // The refusal names the first Claude process that could not be stopped.
+    return { ...stopped, error: stopped.error || stopped.failed?.[0]?.error || "Claude processes could not be stopped." };
   }
 
   function authCredentialContext(accountId, githubContext) {

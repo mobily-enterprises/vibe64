@@ -806,7 +806,9 @@ that run their own conversations on the workspace account. Such a feature joins
 through the terminals service's `joinAgentRuntimeInvalidation` and leaves when
 it closes. After the session agents accept an account invalidation, each joined
 participant runs; a participant failure fails the change with its reason.
-Colleague joins and releases its live Claude conversations. Credential
+A refused Claude account change carries the first failed stop as its `error`,
+with every failure still listed in `failed`, so the person sees why instead of
+a generic failure. Colleague joins and releases its live Claude conversations. Credential
 publications that carry their own fence, such as OpenCode connection changes,
 do not run participants.
 

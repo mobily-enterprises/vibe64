@@ -110,10 +110,13 @@ to restore execution, then retry in the same conversation. Use **AI Accounts**
 to reconnect only when the account check asks you to sign in.
 Colleague uses the same saved native Claude login as Main. Opening Colleague
 does not move that login to another profile or require a separate sign-in.
-After the workspace Claude account changes, your next Colleague request uses the
-current account and keeps the conversation history. The old assistant process
-must stop first. If cleanup fails, restore execution and use **Stop**, then retry;
-Colleague will not continue with the old credentials. A completed action receipt
+Changing the workspace Claude account (signing in, signing out or **Remove AI**)
+stops Colleague's Claude process right away, including an answer in progress.
+Your next Colleague request opens a new process on the current account and keeps
+the conversation history. If Colleague cannot stop its process, the account
+change is refused with that reason and the account stays as it was; restore execution and use
+**Stop**, then retry the account change. Colleague will not continue with the old
+credentials. A completed action receipt
 from the old account cannot be replayed as the new account.
 Saved Colleague errors stay inside Colleague when you reopen the workspace; they
 do not raise an unrelated global alert over your project chat. Open Colleague to
