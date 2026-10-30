@@ -149,6 +149,9 @@ and names them; Imports and Calls still work.
   says **No entry points found yet. Refresh the architecture scan.**, and a
   recorded request says **Not scanned yet**. Both offer **Refresh**, which
   runs the scan.
+- After about two minutes without using Architecture, Vibe64 frees the memory
+  holding the scan. The next answer then takes a second or two longer while it
+  loads the scan again; nothing is lost.
 
 The address keeps the chosen entry, mode, subsystem, recording and request, so
 reloading the page or sharing the address with someone on the same project

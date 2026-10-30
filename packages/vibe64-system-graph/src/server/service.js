@@ -1,4 +1,6 @@
 import {
+  GENESIS_MACHINE_CITY_PATH,
+  GENESIS_PROGRAM_CITY_PATH,
   inspectVibe64ArchitectureInspection,
   inspectVibe64ArchitectureLayout,
   mergeArchitectureObservations,
@@ -28,9 +30,11 @@ import {
 import {
   CALL_WEB_PATH,
   readGenesisCity,
+  releaseGenesisCities,
   requireGenesisCity,
   validateGenesisCity
 } from "./genesisCities.js";
+import { releaseCallWeb } from "./usageWeb.js";
 
 // The largest inspection request an inspector receives on standard input.
 const ARCHITECTURE_INSPECTION_INPUT_MAX_BYTES = 4 * 1024 * 1024;
@@ -413,6 +417,9 @@ function createService({
           await publishRefresh(context);
           const exclusive = await runVibe64AgentWriteExclusive(context.runtime, context.sessionId, async () => {
             const current = await systemContext(context.sessionId);
+            // This scan supersedes the loaded snapshot; do not hold it through the scan.
+            releaseGenesisCities(current.sourceRoot);
+            releaseCallWeb(current.sourceRoot);
             const inspection = await inspectorReader({ projectRoot: current.sourceRoot });
             if (inspection.status === "blocked") throw systemError("Architecture inspection declarations need attention.", "vibe64_architecture_inspection_blocked", { diagnostics: inspection.diagnostics });
             const realSourceRoot = await realpath(current.sourceRoot);
@@ -442,11 +449,13 @@ function createService({
           const machine = validateGenesisCity(result?.machine, "machine");
           const program = validateGenesisCity(result?.program, "program");
           pending.progress = { ...pending.progress, status: "complete", message: "Analysis complete." };
+          // Report the new Cities' status like readStatus; views read the
+          // documents themselves, so the large native results end here.
           return {
             changedFiles: Array.isArray(result.changedFiles) ? result.changedFiles : [],
             cities: {
-              machine,
-              program
+              machine: cityStatus({ city: machine, exists: true, path: GENESIS_MACHINE_CITY_PATH }),
+              program: cityStatus({ city: program, exists: true, path: GENESIS_PROGRAM_CITY_PATH })
             },
             diagnostics: Array.isArray(result.diagnostics) ? result.diagnostics : [],
             ok: true,

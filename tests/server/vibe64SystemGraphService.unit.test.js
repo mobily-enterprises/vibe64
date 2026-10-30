@@ -182,6 +182,33 @@ test('validated City reads share an unchanged snapshot and invalidate replacemen
   });
 });
 
+test('loaded Cities are released after two idle minutes and when a scan starts', async (t) => {
+  await withTempRoot(async root => {
+    await writeCities(root);
+    t.mock.timers.enable({ apis: ['Date'], now: Date.now() });
+    const first = await readGenesisCity(root, 'machine');
+    t.mock.timers.tick(119 * 1000);
+    assert.equal(await readGenesisCity(root, 'machine'), first, 'each read renews the loaded City');
+    t.mock.timers.tick(119 * 1000);
+    assert.equal(await readGenesisCity(root, 'machine'), first);
+    t.mock.timers.tick(120 * 1000);
+    const reloaded = await readGenesisCity(root, 'machine');
+    assert.notEqual(reloaded, first, 'two idle minutes release the parsed City');
+    assert.deepEqual(reloaded.city, first.city);
+
+    const service = createService({
+      projectService: projectServiceFor(root),
+      inspectorReader: async () => ({ status: 'unconfigured', inspectors: [] }),
+      refresher: async () => {
+        // The unchanged file is read again: the scan dropped the loaded copy.
+        assert.notEqual(await readGenesisCity(root, 'machine'), reloaded);
+        return { changedFiles: [], diagnostics: [], machine: machineCityFixture(), program: programCityFixture(), status: 'ready', summary: '' };
+      }
+    });
+    assert.equal((await service.refresh({ sessionId: 'session-1' })).ok, true);
+  });
+});
+
 test("Genesis City status reports both missing documents without scanning source", async () => {
   await withTempRoot(async (root) => {
     await writeFile(path.join(root, "broken-source.js"), "this is deliberately not valid JavaScript {\n", "utf8");
@@ -311,7 +338,11 @@ test("refresh delegates to Genesis exactly once and validates its native result"
     assert.ok(calls[0].signal instanceof AbortSignal);
     assert.equal(refreshed.ok, true);
     assert.equal(refreshed.status, "ready");
-    assert.deepEqual(refreshed.cities, { machine, program });
+    // The response reports the new Cities' status; it never carries the documents.
+    assert.deepEqual(refreshed.cities, {
+      machine: { available: true, error: null, path: GENESIS_MACHINE_CITY_PATH, schema: machine.schema, schemaVersion: machine.schemaVersion, state: "ready", status: machine.status },
+      program: { available: true, error: null, path: GENESIS_PROGRAM_CITY_PATH, schema: program.schema, schemaVersion: program.schemaVersion, state: "ready", status: program.status }
+    });
     assert.deepEqual(refreshed.changedFiles, [
       GENESIS_MACHINE_CITY_PATH,
       GENESIS_PROGRAM_CITY_PATH

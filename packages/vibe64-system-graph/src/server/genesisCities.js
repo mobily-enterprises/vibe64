@@ -16,9 +16,12 @@ import {
   vibe64Error
 } from "@local/vibe64-core/server/core";
 
+import { createSnapshotCache } from "./snapshotCache.js";
+
 // Status and the selected view share immutable, validated snapshots. Keep only
-// two files; large indexes must not accumulate across projects or sessions.
-const cityReads = new Map();
+// two files, and only while they are read; large indexes must not accumulate
+// across projects or sessions, nor stay loaded when nobody looks at them.
+const cityReads = createSnapshotCache({ capacity: 2 });
 
 const CITY_DEFINITIONS = Object.freeze({
   machine: Object.freeze({
@@ -95,14 +98,7 @@ async function readGenesisCity(projectRoot, kind) {
     }
     throw error;
   }
-  const existing = cityReads.get(filePath);
-  if (existing?.revision === revision) {
-    cityReads.delete(filePath);
-    cityReads.set(filePath, existing);
-    return existing.promise;
-  }
-  const pending = { revision, promise: null };
-  pending.promise = (async () => {
+  return cityReads.read(filePath, revision, async () => {
     const source = await readFile(filePath, "utf8");
     let city;
     try { city = JSON.parse(source); }
@@ -113,16 +109,12 @@ async function readGenesisCity(projectRoot, kind) {
     }
     const builtAt = new Date(Number(revisionStat.mtimeMs)).toISOString();
     return { builtAt, city, exists: true, kind, path: definition.path };
-  })();
-  cityReads.delete(filePath);
-  cityReads.set(filePath, pending);
-  while (cityReads.size > 2) cityReads.delete(cityReads.keys().next().value);
-  try {
-    return await pending.promise;
-  } catch (error) {
-    if (cityReads.get(filePath) === pending) cityReads.delete(filePath);
-    throw error;
-  }
+  });
+}
+
+// A scan replaces both Cities, so their loaded copies have no further use.
+function releaseGenesisCities(projectRoot) {
+  for (const definition of Object.values(CITY_DEFINITIONS)) cityReads.delete(path.resolve(projectRoot, definition.path));
 }
 
 function requireGenesisCity(record, kind) {
@@ -204,6 +196,7 @@ export {
   CALL_WEB_PATH,
   readGenesisCallWeb,
   readGenesisCity,
+  releaseGenesisCities,
   requireGenesisCity,
   validateGenesisCity
 };
