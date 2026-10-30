@@ -25,6 +25,11 @@ this package owns the recording, its files and the header indicator.
    the query), status and time to `requests.ndjson`. It strips both recording
    headers from every browser request and WebSocket upgrade. A valid
    `x-vibe64-interaction` id is logged with the request while recording.
+   Script, style, image and font loads (`sec-fetch-dest`, development-server
+   module paths such as `/@vite/`, or a source or asset extension when the
+   browser sends no `sec-fetch-dest`) get no id and only increase
+   `recording.requestLog.assets`. Past 20,000 logged lines,
+   `recording.requestLog.full` becomes true and later requests are not logged.
 4. Tracers write `hits-<runtime>-<pid>[-n].ndjson`
    (`vibe64.usage-trace.v1`). The service reads them incrementally and
    publishes `vibe64.usage-recording.changed` to the session's viewers at most

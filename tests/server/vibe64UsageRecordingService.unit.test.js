@@ -182,6 +182,52 @@ test("a Preview recording numbers requests, follows its tracers and stops with r
   assert.deepEqual((await call("list")).recordings, []);
 });
 
+test("module and asset loads are counted, and a full request log says so", async (t) => {
+  const { call, current } = await recorder(t);
+  const { recording } = await call("start", { targetId: "preview" });
+  assert.deepEqual(recording.requestLog, { assets: 0, full: false });
+  const directory = launchOf({ web: true }).environment.VIBE64_USAGE_RECORDING_DIR;
+  const active = activeUsageRecording(SCOPE, SESSION_ID);
+  const assets = [
+    { path: "/@vite/client" }, { path: "/@fs/app/node_modules/vue/index.js" }, { path: "/@id/virtual:icons" },
+    { path: "/node_modules/.vite/deps/vue.js" }, { path: "/src/App.vue" }, { path: "/src/main.ts" },
+    { path: "/api/logo", fetchDest: "image" }, { path: "/theme", fetchDest: "style" },
+    { path: "/fonts/inter", fetchDest: "font" }, { path: "/api/bundle", fetchDest: "script" }
+  ];
+  for (const asset of assets) assert.equal(active.proxyRequest({ method: "GET", ...asset }), null, asset.path);
+  // Requests a page makes itself are listed, whatever their path looks like.
+  const listed = [
+    active.proxyRequest({ method: "GET", path: "/", fetchDest: "document" }),
+    active.proxyRequest({ method: "GET", path: "/api/config.js", fetchDest: "empty" }),
+    active.proxyRequest({ method: "POST", path: "/api/sessions" })
+  ];
+  assert.deepEqual(listed.map((request) => request.requestId), ["r_000001", "r_000002", "r_000003"]);
+  listed.forEach((request) => request.finish({ status: 200 }));
+  assert.deepEqual((await current()).requestLog, { assets: 10, full: false });
+  const logged = await waitFor(async () => (await readFile(path.join(directory, "requests.ndjson"), "utf8").catch(() => "")).trim().split("\n").filter(Boolean),
+    (lines) => lines.length === 3, "three logged requests");
+  assert.deepEqual(logged.map((line) => JSON.parse(line).path), ["/", "/api/config.js", "/api/sessions"]);
+
+  // The log keeps its line limit, and the recording says it stopped logging.
+  for (let index = 3; index < 20_000; index += 1) active.proxyRequest({ method: "GET", path: "/api/ping" }).finish({ status: 204 });
+  assert.equal((await current()).requestLog.full, false);
+  const unlogged = active.proxyRequest({ method: "GET", path: "/api/late" });
+  unlogged.finish({ status: 200 });
+  assert.deepEqual((await current()).requestLog, { assets: 10, full: true });
+  const trace = tracer(directory);
+  await trace.ready();
+  await trace.hit(unlogged.requestId);
+  await waitFor(current, (value) => value?.state === "recording", "recording");
+  assert.equal((await call("stop", { recordingId: recording.id })).recording.requestLog.full, true);
+  await trace.idle();
+  await waitFor(current, (value) => value?.state === "stopped", "stopped");
+  const { requests } = await call("readRequests", { recordingId: recording.id });
+  // A request the full log missed still shows what ran, without a made-up path.
+  assert.deepEqual(requests.map(({ id, method, path: requestPath }) => ({ id, method, path: requestPath })),
+    [{ id: unlogged.requestId, method: null, path: null }]);
+  assert.equal((await readJson(path.join(directory, "recording.json"))).requestLog.full, true);
+});
+
 test("stop during starting succeeds, and a session that ends stops its recording", async (t) => {
   const { call, current } = await recorder(t);
   const { recording } = await call("start", { targetId: "preview" });

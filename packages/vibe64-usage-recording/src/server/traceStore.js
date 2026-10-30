@@ -313,7 +313,7 @@ async function recordingRequestRows(directory, reader, { runLabel = null } = {})
     const durationMs = scope.startedAt && scope.endedAt ? Math.max(0, Date.parse(scope.endedAt) - Date.parse(scope.startedAt)) : null;
     rows.push(requestRow(id, {
       method: method || null,
-      path: scope.kind === "local-request" ? rest.join(" ") || null : scope.label || runLabel,
+      path: scope.kind === "local-request" ? rest.join(" ") || null : scope.kind === "run" ? scope.label || runLabel : null,
       startedAt: scope.startedAt,
       durationMs: Number.isFinite(durationMs) ? durationMs : null
     }, reader, plumbing));

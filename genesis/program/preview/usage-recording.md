@@ -62,7 +62,9 @@ The recording's directory sits in the session's `usage-recordings` folder,
 outside the source. While a recording is registered in the server process,
 every launch of its target carries the declared runtimes' tracers, and the
 Preview proxy numbers each request, sends that id to the application and logs
-the request without its query. The target restarts to load the recorder.
+the request without its query; script, style, image and font loads are only
+counted, and a full request log is reported on the recording. The target
+restarts to load the recorder.
 
 Node.js loads a preload that instruments project files as they load, Python
 loads a `sitecustomize` recorder through `PYTHONPATH`, and PHP loads a small

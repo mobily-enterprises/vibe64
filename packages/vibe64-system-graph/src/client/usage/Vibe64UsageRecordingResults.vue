@@ -46,6 +46,12 @@
         @update:model-value="emit('update:includeEmpty', Boolean($event))"
       />
       <p v-if="selectedRecording?.state === 'recording'" class="usage-recordings__live text-body-small" role="status">Recording now. New requests appear as they finish.</p>
+      <v-alert v-if="selectedRecording?.requestLog?.full" type="warning" variant="tonal" density="compact">
+        Request log full; later requests not recorded
+      </v-alert>
+      <p v-if="includeEmpty && selectedRecording?.requestLog?.assets" class="usage-recordings__live text-body-small">
+        {{ countLabel(selectedRecording.requestLog.assets, 'script, style, image or font load') }} counted, not listed.
+      </p>
       <v-alert v-if="selectedRecording?.target?.kind === 'web' && onlyBackground(requests)" type="info" variant="tonal" density="compact" class="usage-recordings__shared">
         {{ BACKGROUND_TEXT }}: its requests share one process, so this recording shows everything that ran while it recorded.
       </v-alert>

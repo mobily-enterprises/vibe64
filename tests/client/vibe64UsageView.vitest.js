@@ -28,6 +28,7 @@ import Vibe64UsageView from "../../packages/vibe64-system-graph/src/client/usage
 import Vibe64UsageFunctionPanel from "../../packages/vibe64-system-graph/src/client/usage/Vibe64UsageFunctionPanel.vue";
 import Vibe64UsageWebCanvas from "../../packages/vibe64-system-graph/src/client/usage/Vibe64UsageWebCanvas.vue";
 import Vibe64UsageEntryRail from "../../packages/vibe64-system-graph/src/client/usage/Vibe64UsageEntryRail.vue";
+import Vibe64UsageRecordingResults from "../../packages/vibe64-system-graph/src/client/usage/Vibe64UsageRecordingResults.vue";
 import Vibe64UiStoryboardView from "../../packages/vibe64-system-graph/src/client/components/Vibe64UiStoryboardView.vue";
 import { webNodes } from "../../packages/vibe64-system-graph/src/client/usage/usageModel.js";
 
@@ -172,6 +173,20 @@ describe("Recording states", () => {
     expect(html).toContain("Not separated per request for this server: its requests share one process");
     expect(html).toContain("Everything that ran while recording · 12 files · 21 functions");
     expect(await view({ mode: "recording", recording: recordingId }, { recordings, requests: read(requests) })).not.toContain("Not separated per request");
+  });
+
+  it("says when the request log is full, and counts asset loads instead of listing them", async () => {
+    const [recording] = recordingList.recordings;
+    const full = read({ recordings: [{ ...recording, requestLog: { assets: 2300, full: true } }] });
+    const missed = { id: "r_020001", method: null, path: null, status: null, startedAt: null, durationMs: null, interaction: null, functionCount: 3, fileCount: 2 };
+    const state = { mode: "recording", recording: recordingId };
+    const html = await view(state, { recordings: full, requests: read({ ...requests, requests: [...requests.requests, missed] }) });
+    expect(html).toContain("Request log full; later requests not recorded");
+    expect(html).toContain("Request not in the request log");
+    expect(html).not.toContain("counted, not listed");
+    expect(await view(state, { recordings, requests: read(requests) })).not.toContain("Request log full");
+    const counted = await render(Vibe64UsageRecordingResults, { recordings: full.data.value.recordings, recordingId, requests: requests.requests, includeEmpty: true });
+    expect(counted).toContain("2,300 script, style, image or font loads counted, not listed.");
   });
 
   it("lights only the subsystems that ran, with shared plumbing counted per card", async () => {

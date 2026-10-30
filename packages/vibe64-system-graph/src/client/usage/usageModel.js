@@ -268,9 +268,10 @@ function onlyBackground(requests = []) {
   return ran.length > 0 && ran.every(isBackgroundRequest);
 }
 
+// A request the full request log missed has no method or path.
 function requestTitle(request = {}, routes = [], requests = [request]) {
   if (isBackgroundRequest(request)) return onlyBackground(requests) ? BACKGROUND_TEXT : OUTSIDE_REQUESTS_TEXT;
-  return routeTemplateFor(request.method, request.path, routes) || request.path || "";
+  return routeTemplateFor(request.method, request.path, routes) || request.path || "Request not in the request log";
 }
 
 // Requests under the click that caused them, in recorded order.

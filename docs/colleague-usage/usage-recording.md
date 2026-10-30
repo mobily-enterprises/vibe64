@@ -33,6 +33,14 @@ results. Reloading the page, or using Preview in a second browser tab, keeps
 each click's requests grouped under that click. A command starts running at
 once and the recording follows that run.
 
+The scripts, styles, images and fonts a page loads, including a development
+server's modules, are counted instead of listed: with **Show requests that ran
+no project code** on, the requests list says how many were counted. Preview
+logs up to 20,000 other requests per recording. After that the results say
+**Request log full; later requests not recorded**: what later requests ran is
+still recorded, under **Request not in the request log**, but their method,
+path and status are not.
+
 Only one recording runs in a session at a time. Other sessions are not
 affected, and a recording in another session keeps running when you switch.
 
