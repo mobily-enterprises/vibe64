@@ -90,7 +90,7 @@ it("mounts the host component only when provided, with the documented props", ()
     expect(text).toMatch(/:is="savedValues\.component"\s+v-if="savedValues/u);
   }
   expect(table).toContain("@changed=\"$emit('saved-value-changed')\"");
-  expect(panel).toContain('@saved-value-changed="refresh"');
+  expect(panel).toContain('@saved-value-changed="reloadEnv"');
   // A linked credential replaces the Env button; the host reports the link.
   expect(integrations).toContain('v-if="!credentialLinked(credential.key)"');
   expect(integrations).toContain('@linked="setCredentialLinked(credential.key, $event)"');

@@ -17,10 +17,10 @@
         :secret-reveal-busy-key="secretRevealBusyKey"
         :secret-reveal-enabled="secretRevealEnabled"
         :show-actions="!readonly"
+        :on-remove-record="onRemoveRecord"
+        :on-save-record="onSaveRecord"
         @hide-secret="$emit('hide-secret', $event)"
-        @remove-record="$emit('remove-record', $event)"
         @reveal-secret="$emit('reveal-secret', $event)"
-        @save-record="$emit('save-record', $event)"
         @saved-value-changed="$emit('saved-value-changed')"
       />
       <p v-else class="runtime-config-records__empty">
@@ -65,9 +65,7 @@ import { recordIsSavedEnvValue } from "@/lib/vibe64SavedEnvValues.js";
 
 defineEmits([
   "hide-secret",
-  "remove-record",
   "reveal-secret",
-  "save-record",
   "saved-value-changed"
 ]);
 
@@ -83,6 +81,16 @@ const props = defineProps({
   environmentLabel: {
     default: "environment",
     type: String
+  },
+  // @remove-record and @save-record handlers, passed to the person's rows so
+  // each row awaits its own write (see RuntimeConfigRecordsTable).
+  onRemoveRecord: {
+    default: null,
+    type: Function
+  },
+  onSaveRecord: {
+    default: null,
+    type: Function
   },
   // Shows the person's rows without their edit and remove actions.
   readonly: {

@@ -75,10 +75,11 @@
             class="runtime-config-records-table__edit"
           >
             <v-text-field
+              :error-messages="rowError(record)"
+              :hide-details="!rowError(record)"
               :model-value="draftValue(record)"
               :type="record.secret ? 'password' : 'text'"
               density="compact"
-              hide-details
               label="New value"
               spellcheck="false"
               variant="outlined"
@@ -97,8 +98,8 @@
                 @changed="$emit('saved-value-changed')"
               />
               <v-btn
-                :disabled="!draftTouched(record)"
-                :loading="saveBusy"
+                :disabled="!draftTouched(record) || (writeBusy && !rowPending(record, 'save'))"
+                :loading="rowPending(record, 'save')"
                 size="small"
                 type="button"
                 variant="tonal"
@@ -107,7 +108,8 @@
                 Save
               </v-btn>
               <v-btn
-                :loading="saveBusy"
+                :disabled="writeBusy && !rowPending(record, 'remove')"
+                :loading="rowPending(record, 'remove')"
                 size="small"
                 type="button"
                 variant="text"
@@ -124,7 +126,7 @@
 </template>
 
 <script setup>
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { mdiLinkVariant } from "@mdi/js";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import {
@@ -135,9 +137,7 @@ import {
 
 const emit = defineEmits([
   "hide-secret",
-  "remove-record",
   "reveal-secret",
-  "save-record",
   "saved-value-changed"
 ]);
 
@@ -145,6 +145,17 @@ const props = defineProps({
   environmentLabel: {
     default: "environment",
     type: String
+  },
+  // The parent's @remove-record and @save-record handlers arrive as these
+  // props, so a row can await its own write: it alone shows progress, keeps
+  // its typed value until the save succeeds and shows a thrown error inline.
+  onRemoveRecord: {
+    default: null,
+    type: Function
+  },
+  onSaveRecord: {
+    default: null,
+    type: Function
   },
   records: {
     default: () => [],
@@ -154,6 +165,7 @@ const props = defineProps({
     default: () => ({}),
     type: Object
   },
+  // Another write to the same Env is in flight: rows wait, without progress.
   saveBusy: {
     default: false,
     type: Boolean
@@ -173,6 +185,10 @@ const props = defineProps({
 });
 
 const draftValues = ref({});
+// The one row whose write is in flight ({ key, action }) and each row's error.
+const pendingRow = ref(null);
+const rowErrors = ref({});
+const writeBusy = computed(() => props.saveBusy || Boolean(pendingRow.value));
 const projectSlug = useVibe64ProjectSlug();
 const savedValues = useVibe64SavedEnvValues();
 
@@ -195,6 +211,35 @@ function setDraftValue(record = {}, value = "") {
     ...draftValues.value,
     [recordKey(record)]: String(value ?? "")
   };
+  setRowError(recordKey(record), "");
+}
+
+function rowPending(record = {}, action = "") {
+  return pendingRow.value?.key === recordKey(record) && pendingRow.value.action === action;
+}
+
+function rowError(record = {}) {
+  return rowErrors.value[recordKey(record)] || "";
+}
+
+function setRowError(key = "", message = "") {
+  const { [key]: _previous, ...others } = rowErrors.value;
+  rowErrors.value = message ? { ...others, [key]: message } : others;
+}
+
+async function runRowWrite(record, action, write, fallbackError) {
+  const key = recordKey(record);
+  pendingRow.value = { action, key };
+  setRowError(key, "");
+  try {
+    await write();
+    return true;
+  } catch (error) {
+    setRowError(key, String(error?.message || fallbackError));
+    return false;
+  } finally {
+    pendingRow.value = null;
+  }
 }
 
 function recordValueLabel(record = {}) {
@@ -222,27 +267,30 @@ function toggleSecretVisibility(record = {}) {
   emit(secretIsRevealed(record) ? "hide-secret" : "reveal-secret", record);
 }
 
-function saveRecord(record = {}) {
-  if (!props.showActions || !draftTouched(record)) {
-    return;
+async function saveRecord(record = {}) {
+  if (!props.showActions || !draftTouched(record) || writeBusy.value) {
+    return false;
   }
   const key = recordKey(record);
   const value = draftValue(record);
-  const nextDraftValues = {
-    ...draftValues.value
-  };
-  delete nextDraftValues[key];
-  draftValues.value = nextDraftValues;
-  emit("save-record", {
+  const saved = await runRowWrite(record, "save", () => props.onSaveRecord?.({
     record,
     value
-  });
+  }), `${record.key || "The value"} could not be saved.`);
+  // The typed value stays until it is saved, and an edit typed meanwhile stays.
+  if (saved && draftValues.value[key] === value) {
+    const { [key]: _saved, ...others } = draftValues.value;
+    draftValues.value = others;
+  }
+  return saved;
 }
 
-function removeRecord(record = {}) {
-  if (props.showActions) {
-    emit("remove-record", record);
+async function removeRecord(record = {}) {
+  if (!props.showActions || writeBusy.value) {
+    return false;
   }
+  return runRowWrite(record, "remove", () => props.onRemoveRecord?.(record),
+    `${record.key || "The value"} could not be removed.`);
 }
 
 async function copyKey(key = "") {

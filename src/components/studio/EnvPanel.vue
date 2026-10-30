@@ -19,7 +19,7 @@
       <template #actions>
         <template v-if="projectEnvTabActive">
           <v-btn
-            :disabled="envLoading"
+            :disabled="envInitialLoading"
             :loading="downloadBusy"
             :prepend-icon="mdiDownload"
             rounded="pill"
@@ -30,7 +30,7 @@
             Download .env
           </v-btn>
           <v-btn
-            :loading="envLoading"
+            :loading="refreshBusy"
             :prepend-icon="mdiRefresh"
             rounded="pill"
             type="button"
@@ -58,9 +58,9 @@
     </v-tabs>
 
     <Vibe64AsyncModuleState
-      v-if="projectEnvTabActive && (envLoading || envLoadError)"
+      v-if="projectEnvTabActive && (envInitialLoading || envLoadError)"
       label="Env"
-      :loading="envLoading"
+      :loading="envInitialLoading"
       :message="envLoadError || 'Loading Env.'"
       min-height="12rem"
       @reload="reloadPage"
@@ -149,8 +149,8 @@
           label="Secret"
         />
         <v-btn
-          :disabled="!newValue.key"
-          :loading="saveBusy"
+          :disabled="!newValue.key || (saveBusy && !addBusy)"
+          :loading="addBusy"
           color="primary"
           type="button"
           variant="flat"
@@ -169,6 +169,9 @@
           :variable="String(newValue.key || '').trim()"
           @changed="savedValueChanged"
         />
+        <p v-if="addError" class="env-panel__add-error" role="alert">
+          {{ addError }}
+        </p>
       </section>
 
       <RuntimeConfigRecordsView
@@ -185,7 +188,7 @@
         @remove-record="requestRemoveRecord"
         @reveal-secret="revealSecret"
         @save-record="saveRecord"
-        @saved-value-changed="refresh"
+        @saved-value-changed="reloadEnv"
       />
     </template>
     <slot
@@ -203,6 +206,15 @@
         <v-card-text>
           <code>{{ pendingRemovalKey }}</code> will no longer be supplied to this
           project's development processes.
+          <v-alert
+            v-if="removeError"
+            class="mt-3"
+            density="compact"
+            type="error"
+            variant="tonal"
+          >
+            {{ removeError }}
+          </v-alert>
         </v-card-text>
         <v-card-actions>
           <v-spacer />
@@ -406,11 +418,18 @@ const {
 watch([projectSlug, selectedSessionId], () => {
   clearRevealedSecrets();
   downloadError.value = "";
+  addError.value = "";
 });
 
 const env = computed(() => envResource.data.value?.env || {});
 const envConfigSourceLabel = computed(() => String(env.value?.configSource?.label || ""));
-const envLoading = computed(() => envResource.isLoading.value === true);
+// Only the first load replaces the list: a refresh after a save swaps in the
+// new data quietly, keeping drafts, scroll, focus and revealed values.
+const envInitialLoading = computed(() => envResource.isInitialLoading.value === true);
+const refreshBusy = ref(false);
+const addBusy = ref(false);
+const addError = ref("");
+const removeError = ref("");
 const envLoadError = computed(() => String(envResource.loadError.value || ""));
 const envUnavailable = computed(() => Boolean(env.value?.unavailable));
 const envUnavailableMessage = computed(() => String(
@@ -465,6 +484,15 @@ function selectExpectedRecord(record = {}) {
 }
 
 async function refresh() {
+  refreshBusy.value = true;
+  try {
+    await reloadEnv();
+  } finally {
+    refreshBusy.value = false;
+  }
+}
+
+async function reloadEnv() {
   clearRevealedSecrets();
   await envResource.reload();
 }
@@ -488,6 +516,7 @@ function requestRemoveRecord(record = {}) {
   if (!recordEditable(record)) {
     return;
   }
+  removeError.value = "";
   pendingRemoval.value = record;
 }
 
@@ -503,12 +532,17 @@ async function confirmRemoveRecord() {
     pendingRemoval.value = null;
     return;
   }
-  await saveValues({
-    [record.key]: {
-      remove: true
-    }
-  });
-  pendingRemoval.value = null;
+  removeError.value = "";
+  try {
+    await saveValues({
+      [record.key]: {
+        remove: true
+      }
+    });
+    pendingRemoval.value = null;
+  } catch (error) {
+    removeError.value = String(error?.message || `${record.key} could not be removed.`);
+  }
 }
 
 async function saveNewValue() {
@@ -516,17 +550,29 @@ async function saveNewValue() {
   if (!key) {
     return;
   }
-  await saveValues({
-    [key]: {
-      secret: newValue.value.secret === true,
-      value: newValue.value.value
-    }
-  });
-  newValue.value = emptyNewValue();
+  addBusy.value = true;
+  addError.value = "";
+  try {
+    await saveValues({
+      [key]: {
+        secret: newValue.value.secret === true,
+        value: newValue.value.value
+      }
+    });
+    newValue.value = emptyNewValue();
+  } catch (error) {
+    addError.value = String(error?.message || `${key} could not be saved.`);
+  } finally {
+    addBusy.value = false;
+  }
 }
 
+// One write to the project's Env file. Only the changed values' revealed
+// secrets are hidden; a failure throws to the row or form that asked for it.
 async function saveValues(values = {}) {
-  clearRevealedSecrets();
+  for (const key of Object.keys(values)) {
+    hideSecret(key);
+  }
   await saveCommand.run({
     values
   });
@@ -535,7 +581,7 @@ async function saveValues(values = {}) {
 
 async function savedValueChanged() {
   newValue.value = emptyNewValue();
-  await refresh();
+  await reloadEnv();
 }
 
 function reloadPage() {
@@ -601,6 +647,13 @@ function reloadPage() {
 .env-panel__add :deep(.v-field) {
   background: var(--v64-surface);
   border-radius: var(--v64-shape-sm, 8px);
+}
+
+.env-panel__add-error {
+  color: rgb(var(--v-theme-error));
+  flex: 1 1 100%;
+  font: var(--v64-type-body-sm, 400 0.75rem/1rem system-ui, sans-serif);
+  margin: 0;
 }
 
 .env-panel__add > .v-btn {
