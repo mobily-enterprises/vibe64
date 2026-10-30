@@ -109,17 +109,16 @@
 
     <template v-else>
       <v-list v-if="entries.length" class="vibe64-file-area__body vibe64-file-area__listing" aria-label="Files and folders">
-        <v-list-item
-          v-for="entry in entries"
-          :key="entry.path"
-          :disabled="busy"
-          :prepend-icon="entryIcon(entry)"
-          :data-path="entry.path"
-          :subtitle="entrySubtitle(entry)"
-          tabindex="0"
-          :title="entry.name"
-          @click="openEntry(entry)"
-        >
+        <v-list-item v-for="entry in entries" :key="entry.path" class="vibe64-file-area__row">
+          <!-- Each row is a list item whose name is a button covering the row;
+               its own actions sit above that button. -->
+          <button class="vibe64-file-area__open" :data-path="entry.path" :disabled="busy" type="button" @click="openEntry(entry)">
+            <v-icon class="vibe64-file-area__open-icon" :icon="entryIcon(entry)" aria-hidden="true" />
+            <span class="vibe64-file-area__open-text">
+              <span class="vibe64-file-area__open-name">{{ entry.name }}</span>
+              <span class="vibe64-file-area__open-detail">{{ entrySubtitle(entry) }}</span>
+            </span>
+          </button>
           <template #append>
             <v-btn
               v-if="entry.type === 'file' && !mobile"
@@ -798,8 +797,81 @@ onScopeDispose(() => {
   background: transparent;
 }
 
+.vibe64-file-area__open {
+  align-items: center;
+  appearance: none;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: var(--v64-space-4);
+  inline-size: 100%;
+  min-inline-size: 0;
+  padding: var(--v64-space-1) 0;
+  text-align: start;
+}
+
+.vibe64-file-area__open:disabled {
+  cursor: default;
+}
+
+/* The state layer and focus ring cover the whole row, so all of it opens the item. */
+.vibe64-file-area__open::after {
+  content: "";
+  inset: 0;
+  position: absolute;
+  transition: background-color var(--v64-duration-short);
+}
+
+.vibe64-file-area__open:not(:disabled):hover::after {
+  background-color: rgba(var(--v-theme-on-surface), var(--v64-state-hover));
+}
+
+.vibe64-file-area__open:focus-visible {
+  outline: none;
+}
+
+.vibe64-file-area__open:focus-visible::after {
+  background-color: rgba(var(--v-theme-on-surface), var(--v64-state-focus));
+  outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
+  outline-offset: -2px;
+}
+
+.vibe64-file-area__row :deep(.v-list-item__append) {
+  position: relative;
+  z-index: 1;
+}
+
+.vibe64-file-area__open-icon {
+  color: var(--v64-on-surface-variant);
+  flex: none;
+}
+
+.vibe64-file-area__open-text {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+
+.vibe64-file-area__open-name,
+.vibe64-file-area__open-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vibe64-file-area__open-name {
+  font: var(--v64-type-body-lg);
+}
+
+.vibe64-file-area__open-detail {
+  color: var(--v64-on-surface-variant);
+  font: var(--v64-type-body-md);
+}
+
 /* Secondary text at full on-surface-variant contrast. */
-.vibe64-file-area :deep(.v-list-item-subtitle),
 .vibe64-file-area__dialog :deep(.v-card-subtitle),
 .vibe64-file-area__new-file :deep(.v-card-subtitle) {
   color: var(--v64-on-surface-variant);
