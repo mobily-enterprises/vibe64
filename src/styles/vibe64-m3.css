@@ -142,3 +142,10 @@ body.vibe64-learn-mode .shell-layout__app-bar {
   background: var(--v64-learning-app-bar) !important;
   border-bottom: 2px solid var(--v64-learning) !important;
 }
+
+/* A container opts in to a visible focus ring on Vuetify controls, whose own
+   focus overlay is too faint to follow with the keyboard. */
+.v64-focus-rings :is(.v-btn, .v-list-item, .v-chip, .v-tab):focus-visible {
+  outline: var(--v64-focus-ring-width) solid var(--v64-focus-ring-color);
+  outline-offset: -2px;
+}

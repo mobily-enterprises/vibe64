@@ -71,6 +71,12 @@ describe("source file tree actions", () => {
     expect(html).toContain('title="Copy path"');
   });
 
+  it("offers Move or copy for every item only where Files asks for it", async () => {
+    expect(await renderTree()).not.toContain('title="Move or copy…"');
+    const html = await renderTree({ transferAvailable: true });
+    expect(html.match(/title="Move or copy…"/gu)).toHaveLength(2);
+  });
+
   it("offers the directory's own page size for the next batch", async () => {
     const children = [{ name: "a.js", path: "a.js", type: "file" }, { name: "b.js", path: "b.js", type: "file" }];
     const page = (limit, total) => renderTree({ node: { children, hasMore: true, limit, path: "", total } });

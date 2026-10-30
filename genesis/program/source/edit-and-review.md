@@ -8,7 +8,22 @@ from saved project work, and inspect one exact file change at a time.
 - `packages/vibe64-runtime/src/server/projectBackups.js`
 
 - `src/components/studio/vibe64-session/Vibe64SessionFiles.vue`
-- `src/components/studio/vibe64-session/Vibe64SessionFileArea.vue`
+- `src/components/studio/files/Vibe64FileArea.vue`
+- `src/components/studio/files/Vibe64FileUploadQueue.vue`
+- `src/components/studio/files/Vibe64FileConflictDialog.vue`
+- `src/components/studio/files/Vibe64FileTransferDialog.vue`
+- `src/components/studio/files/Vibe64ImagePreview.vue`
+- `src/components/studio/files/Vibe64ProjectFiles.vue`
+- `src/pages/app/project/[slug]/dashboard/project-files/index.vue`
+- `src/composables/useVibe64FileUploads.js`
+- `src/lib/vibe64FileUpload.js`
+- `src/lib/vibe64FileAreas.js`
+- `src/lib/vibe64FileSize.js`
+- `packages/vibe64-source-editor/src/shared/fileTypes.js`
+- `tests/server/vibe64FileTransfers.unit.test.js`
+- `tests/client/useVibe64FileUploads.vitest.js`
+- `tests/client/vibe64FilesUi.vitest.js`
+- `tests/client/vibe64ImagePreview.vitest.js`
 - `src/components/studio/ArchivedVibe64SessionDetail.vue`
 
 
@@ -149,17 +164,51 @@ provider-side permissions. Application extensions remain with the ordinary form
 or coding agents. Named Development slot and registration changes share the
 canonical save action.
 
-Files presents Repo, Session Dropzone, Project Backups (2w retention) and Session as icon-labelled areas, separate from
-folder navigation. Repo retains source editing, stars, explanations and selected
-file sync. Drop Zone belongs to the selected session and lives outside its Git
-source. Project members may list, preview, download, upload, create folders,
-rename, edit text and delete files or directory trees there. Upload and file
-drag-and-drop accept multiple files sequentially, up to 500 MiB each, and never
-overwrite an existing item. Larger files placed there by the assistant remain
-downloadable. Drag-and-drop upload is available in Session Dropzone and Project Backups. Unsaved text stays
-in its area when switching tabs; uploads cannot discard it.
-Malformed uploads with extra fields or files fail promptly and leave no partial
-file, including when the multipart parser closes the file stream before copying starts.
+Files presents Repo, Session Dropzone and Session as icon-labelled areas, separate from
+folder navigation. The project Dashboard's Project files page presents Project
+Dropzone and Project Backups the same way. Repo retains source editing, stars,
+explanations and selected file sync. Drop Zone belongs to the selected session
+and lives outside its Git source. Project members may list, preview, download,
+upload, create text files and folders, rename, edit text and delete files or
+directory trees in every area except the read-only Session. Larger files placed
+there by the assistant remain downloadable. Unsaved text stays in its area when
+switching tabs; uploads cannot discard it.
+
+Uploads reuse the chat attachment queue (`useAssistantAttachments`) and its
+single-file browser transport (`src/lib/vibe64FileUpload.js`, shared with chat),
+one file at a time, up to 500 MiB each and 200 per batch, by picker or by
+dropping files on the area. Each file goes to the folder open when it was added,
+with no staging step. The docked list shows per-file bytes and percent, a batch
+total, Cancel for anything unfinished, Cancel all, the reason a file failed with
+Retry, and Remove. Cancelling aborts the request. The server streams every
+upload, text file and copy into a hidden `.vibe64-incoming-*` item beside its
+destination and publishes it by link or rename, so readers never see a partial
+item and an aborted, failed or malformed upload leaves nothing behind, including
+when the multipart parser closes the file stream before copying starts.
+Before an upload or move/copy, Files asks the destination which names already
+exist and asks the person once: Replace, Keep both (`name (n).ext`) or Skip.
+Without a choice an existing name is refused; nothing is overwritten silently.
+
+Move and copy run on the server between Repo, Session Dropzone, Project Dropzone
+and Project Backups in any direction, for a file or a whole folder; Session is a
+copy source only. The browser sends only the source item, mode, destination area,
+destination folder and conflict choice. A move renames when both areas share a
+filesystem and otherwise copies, publishes, then removes the source. Transfers
+refuse links and special files, paths either area protects (`.git` anywhere in
+Repo and its root `.vibe64` contract), more than 10,000 entries, a folder into
+itself, and a move into its own folder. Moving or copying into Repo is an ordinary
+session change; Repo's file and search indexes refresh afterwards. From Project
+files an item can also go to the Repo or Session Dropzone of the session open
+beside the Dashboard; only project areas may name another session, so one
+transfer never holds two sessions' leases.
+
+Images (`png`, `jpg`/`jpeg`, `gif`, `webp`, `avif`, `bmp`, `ico`, `svg`) open in
+place in every area through one preview component that Repo's editor shares:
+fitted to the pane or at actual size, with dimensions, size, Download, Move or
+copy and Delete; arrow keys walk the folder's images and Esc closes. Downloads
+with `inline=1` return a previewable image with its real content type and
+`Content-Disposition: inline`; every download carries a policy that blocks
+scripts and sandboxes the document, and SVG is only ever loaded as an image.
 
 At compact and medium display widths, repository navigation starts hidden and
 can be opened from the file toolbar. Browsing and editing take turns occupying
@@ -177,13 +226,16 @@ Owners can also download the original archive directly without extraction. No Se
 operation writes, including paths descending into its Drop Zone. Both areas use
 relative paths and reject symbolic links and traversal beyond their root.
 
-Every request runs in the resolved project request context. The hosted project
+Every request runs in the resolved project request context. The host's project
 access gate verifies its authenticated caller on each request; the shared Files
 boundary then checks the requested area and operation and resolves the session
-from that project's store. Bodies cannot supply identity, project roots or an
+from that project's store. Project areas are also reachable without a session at
+`/project-files/:area`. Bodies cannot supply identity, project roots or an
 alternative session. All Drop Zone mutations run under the session store's
-mutation lease and recheck closing admission before touching files. These API
-rules do not claim Unix or shell isolation.
+mutation lease and recheck closing admission before touching files; Repo writes
+take the source editor's exclusive write and report busy instead of waiting.
+A transfer holds its source area's lock and then its destination's, each at most
+once. These API rules do not claim Unix or shell isolation.
 
 
 An explicit integration request in saved assistant history can open the exact
@@ -1657,13 +1709,16 @@ conflict, download and source-navigation coordination. Architecture hides the
 file browser while reading a selected file or Program; it does not make whole-file
 Code read-only or construct a second editing implementation.
 
-Project Backups uses the same authorized Files operation boundary and file
-primitives as Session Dropzone. Its root is the project's private runtime
-`backups` directory, so session changes, renewal and archival preserve it. The
-session store supplies that trusted path and agent command environments expose
-`VIBE64_PROJECT_BACKUPS`. Mutations and retention share one project filesystem
-lock through the existing JSKIT lock facility. Reads do not create the folder.
-Hosted maintenance expires regular, unlinked files individually after 14 days
+Project Dropzone and Project Backups use the same authorized Files operation
+boundary and file primitives as Session Dropzone. Their roots are the project's
+private runtime `drop-zone` and `backups` directories, so session changes,
+renewal and archival preserve them. The session store supplies those trusted
+paths and agent command environments expose `VIBE64_PROJECT_DROP_ZONE` and
+`VIBE64_PROJECT_BACKUPS`. Project Dropzone files stay until someone deletes them
+and travel with the project's deletion archive. Backups mutations and retention
+share one project filesystem lock through the existing JSKIT lock facility.
+Reads do not create either folder.
+Daily maintenance, which the host schedules, expires regular, unlinked files individually after 14 days
 from the later of mtime and ctime, rechecks identity before unlinking, never follows
 symlinks, and never recursively deletes user folders. Unknown entries remain for
 inspection. Files reports the same timestamp-based expiry, including copied files.

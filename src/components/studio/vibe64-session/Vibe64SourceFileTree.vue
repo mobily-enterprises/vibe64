@@ -88,6 +88,12 @@
               @click="emit('new-file', child.path || '')"
             />
             <v-list-item
+              v-if="transferAvailable && child.path"
+              :prepend-icon="mdiFileMoveOutline"
+              title="Move or copy…"
+              @click="emit('transfer', { name: child.name, path: child.path, type: child.type })"
+            />
+            <v-list-item
               :prepend-icon="mdiContentCopy"
               title="Copy path"
               @click="emit('copy-path', child.path || child.name || '')"
@@ -109,6 +115,7 @@
         <Vibe64SourceFileTree
           :node="child"
           :assistant-draft-available="assistantDraftAvailable"
+          :transfer-available="transferAvailable"
           :selected-path="selectedPath"
           :starred-paths="starredPaths"
           :expanded-paths="expandedPaths"
@@ -122,6 +129,7 @@
           @new-file="emit('new-file', $event)"
           @copy-path="emit('copy-path', $event)"
           @ask-assistant="emit('ask-assistant', $event)"
+          @transfer="emit('transfer', $event)"
         />
         <div
           v-if="directoryLoading(child)"
@@ -174,6 +182,7 @@ import {
   mdiDotsVertical,
   mdiDownload,
   mdiFileDocumentOutline,
+  mdiFileMoveOutline,
   mdiFilePlusOutline,
   mdiFolderOutline,
   mdiRobotOutline,
@@ -207,9 +216,14 @@ const props = defineProps({
   assistantDraftAvailable: {
     default: false,
     type: Boolean
+  },
+  // Files offers "Move or copy…" for Repo items; other hosts leave it off.
+  transferAvailable: {
+    default: false,
+    type: Boolean
   }
 });
-const emit = defineEmits(["ask-assistant", "copy-path", "directory-open-change", "download-file", "load-more-directory", "new-file", "open-file", "toggle-star"]);
+const emit = defineEmits(["ask-assistant", "copy-path", "directory-open-change", "download-file", "load-more-directory", "new-file", "open-file", "toggle-star", "transfer"]);
 
 const nodes = computed(() => Array.isArray(props.node?.children) ? props.node.children : []);
 const nodeHasMore = computed(() => props.node?.hasMore === true);

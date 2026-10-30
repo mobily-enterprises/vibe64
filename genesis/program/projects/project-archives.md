@@ -44,7 +44,8 @@ The bundle is `<archiveRoot>/<slug>/<UTC>-<slug>/` (default archive root
   session source (`<slug>/sessions/*/*/source/<path>` and its contents); a
   directory of that name deeper in the source is kept.
 - `runtime-state.tgz`: the runtime root (`<systemRoot>/projects/<slug>`), without
-  session Drop Zones.
+  session Drop Zones. The project-wide Project Dropzone (`<runtime>/drop-zone`)
+  and Project Backups are kept.
 - `resource-evidence.json` and `manifest.json` (`vibe64.project-archive-bundle`,
   schema 1): each artifact's bundle-relative path, size, SHA-256 and, for the
   tarballs, entry count and listing digest.

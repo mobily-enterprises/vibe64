@@ -5,6 +5,7 @@ import {
   mdiCogOutline,
   mdiConnection,
   mdiFileCogOutline,
+  mdiFolderMultipleOutline,
   mdiHeartPulse,
   mdiHistory,
   mdiPackageVariantClosed,
@@ -182,6 +183,22 @@ addPlacement({
   }
 });
 
+addPlacement({
+  id: "vibe64.project-files.link",
+  target: "page.section-nav",
+  owner: "app-dashboard",
+  kind: "link",
+  surfaces: ["app"],
+  order: 295,
+  props: {
+    label: "Project files",
+    icon: mdiFolderMultipleOutline,
+    surface: "app",
+    scopedSuffix: "/project/[slug]/dashboard/project-files",
+    unscopedSuffix: "/project/[slug]/dashboard/project-files",
+    to: ""
+  }
+});
 // jskit:ui-generator.page.link:app:/dashboard/env
 {
   addPlacement({

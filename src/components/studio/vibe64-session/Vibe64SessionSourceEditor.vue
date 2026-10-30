@@ -32,6 +32,7 @@
         </h2>
       </div>
       <v-btn v-if="editor.selectedPath.value && markdownRenderable" min-height="48" variant="text" :title="filePresentation === 'rendered' ? 'Show the Markdown source' : 'Show the formatted document'" @click="filePresentation = filePresentation === 'rendered' ? 'code' : 'rendered'">{{ filePresentation === 'rendered' ? 'Markdown' : 'Rendered' }}</v-btn>
+      <v-btn v-else-if="editor.selectedPath.value && svgRenderable" min-height="48" variant="text" :title="filePresentation === 'rendered' ? 'Show the SVG source' : 'Show the image'" @click="filePresentation = filePresentation === 'rendered' ? 'code' : 'rendered'">{{ filePresentation === 'rendered' ? 'SVG source' : 'Image' }}</v-btn>
       <v-btn v-else-if="editor.selectedPath.value" min-height="48" variant="text" @click="filePresentation = filePresentation === 'code' ? 'interface' : 'code'">{{ filePresentation === 'code' ? 'Interface' : 'Code' }}</v-btn>
       <div v-if="mobile" class="vibe64-source-editor__mobile-actions">
         <v-btn
@@ -401,6 +402,7 @@
             :selected-path="displayedPath"
             :starred-paths="fileBookmarks?.paths.value || []"
             :assistant-draft-available="assistantDraftAvailable"
+            :transfer-available="transferAvailable"
             @ask-assistant="askAssistantAboutPath"
             @copy-path="copySourcePath"
             @directory-open-change="handleDirectoryOpenChange"
@@ -409,6 +411,7 @@
             @open-file="editor.openFile"
             @toggle-star="fileBookmarks?.toggle($event)"
             @download-file="requestDownload"
+            @transfer="emit('transfer', $event)"
           />
         </template>
       </aside>
@@ -498,7 +501,7 @@
             </template>
           </Vibe64SourceInterface>
           <div
-            v-if="editor.selectedPath.value && !editor.loadingFile.value && filePresentation === 'rendered'"
+            v-if="editor.selectedPath.value && !editor.loadingFile.value && filePresentation === 'rendered' && markdownRenderable"
             class="vibe64-source-editor__markdown"
             aria-label="Formatted document"
             tabindex="0"
@@ -508,28 +511,15 @@
               <GithubMarkdown :html="renderedMarkdownHtml" />
             </div>
           </div>
-          <div
+          <Vibe64ImagePreview
             v-if="imagePreviewUrl"
+            :key="`${imagePreviewUrl}:${imagePreviewVersion}`"
             class="vibe64-source-editor__image-preview"
-            aria-label="Image preview"
-            tabindex="0"
-          >
-            <div v-if="imagePreviewStatus === 'failed'" class="pa-4">
-              <p class="mb-3" role="alert">This image could not be displayed. Try again or download the file.</p>
-              <v-btn variant="tonal" @click="imagePreviewVersion += 1">Retry</v-btn>
-            </div>
-            <img
-              v-else
-              :key="`${imagePreviewUrl}:${imagePreviewVersion}`"
-              :src="imagePreviewUrl"
-              :alt="selectedFileName"
-              :style="{ visibility: imagePreviewStatus === 'loaded' ? 'visible' : 'hidden' }"
-              @load="imagePreviewStatus = 'loaded'"
-              @error="imagePreviewStatus = 'failed'"
-            >
-          </div>
+            :name="selectedFileName"
+            :src="imagePreviewUrl"
+          />
           <div
-            v-if="editor.loadingFile.value || (imagePreviewUrl && imagePreviewStatus === 'loading')"
+            v-if="editor.loadingFile.value"
             :aria-label="`Opening ${selectedFileName}`"
             aria-live="polite"
             class="vibe64-source-editor__file-loading"
@@ -722,6 +712,8 @@ import {
 import { useVibe64SystemGraph } from "@local/vibe64-system-graph/client";
 import Vibe64SourceExplanationPanel from "@/components/studio/vibe64-session/Vibe64SourceExplanationPanel.vue";
 import Vibe64SourceFileTree from "@/components/studio/vibe64-session/Vibe64SourceFileTree.vue";
+import Vibe64ImagePreview from "@/components/studio/files/Vibe64ImagePreview.vue";
+import { filePreviewImageType } from "@local/vibe64-source-editor/shared/fileTypes";
 import Vibe64StarredFilesList from "@/components/studio/vibe64-session/Vibe64StarredFilesList.vue";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
 import { vibe64SourceEditorDownloadPath } from "@/lib/vibe64SessionRequestConfig.js";
@@ -793,9 +785,18 @@ const props = defineProps({
   sourcePathClickWithoutModifier: {
     default: false,
     type: Boolean
+  },
+  // Files offers "Move or copy…" in the tree and refreshes it after a move or copy.
+  transferAvailable: {
+    default: false,
+    type: Boolean
+  },
+  refreshKey: {
+    default: 0,
+    type: Number
   }
 });
-const emit = defineEmits(["ask-assistant-about-file", "open-source-file", "interface-location", "open-program"]);
+const emit = defineEmits(["ask-assistant-about-file", "open-source-file", "interface-location", "open-program", "transfer"]);
 
 const editorElement = ref(null);
 let editorView = null;
@@ -865,6 +866,8 @@ function presentInterfaceSymbol(presentation, force = false) {
 // GithubMarkdown sanitizes the HTML against its allowlist before display.
 // Embedded single-file views keep Interface/Code, which their host records.
 const markdownRenderable = computed(() => !props.singleFile && sourceEditorPathIsMarkdown(editor.selectedPath.value));
+// SVG opens as the image it draws (from the saved file), with its source a click away.
+const svgRenderable = computed(() => !props.singleFile && filePreviewImageType(editor.selectedPath.value) === 'image/svg+xml');
 const markdownRenderer = new Marked({
   async: false,
   gfm: true,
@@ -877,10 +880,10 @@ const markdownRenderer = new Marked({
     );
   }
 });
-const renderedMarkdownHtml = computed(() => filePresentation.value === 'rendered' ? markdownRenderer.parse(editor.text.value) : '');
+const renderedMarkdownHtml = computed(() => filePresentation.value === 'rendered' && markdownRenderable.value ? markdownRenderer.parse(editor.text.value) : '');
 watch(editor.selectedPath, () => {
   const codeRequested = props.codeFocusMode || props.openRequest?.presentation === 'code' && props.openRequest?.path === editor.selectedPath.value;
-  filePresentation.value = codeRequested ? 'code' : markdownRenderable.value ? 'rendered' : 'interface';
+  filePresentation.value = codeRequested ? 'code' : markdownRenderable.value || svgRenderable.value ? 'rendered' : 'interface';
   interfaceSymbolId.value = ''; symbolPresentation.value = 'description';
 });
 function openMarkdownLink(event) {
@@ -909,19 +912,17 @@ watch([editor.selectedPath, interfaceSymbolId, filePresentation, symbolPresentat
   });
 }, { flush: 'post' });
 const displayedPath = computed(() => editor.downloadOnlyFile.value?.path || editor.selectedPath.value);
-const imagePreviewStatus = ref("loading");
 const imagePreviewVersion = ref(0);
+// Binary images open as images; an SVG does when its image view is chosen.
 const imagePreviewUrl = computed(() => {
-  const filePath = editor.downloadOnlyFile.value?.path || "";
-  if (editor.loadingFile.value || !/\.(?:png|jpe?g|gif|webp|avif|bmp|ico)$/iu.test(filePath)) return "";
+  const filePath = editor.downloadOnlyFile.value?.path ||
+    (svgRenderable.value && filePresentation.value === 'rendered' ? editor.selectedPath.value : "");
+  if (editor.loadingFile.value || !filePreviewImageType(filePath)) return "";
   return scopedDevelopmentApiUrl(
-    vibe64SourceEditorDownloadPath(readRefOrGetterValue(props.sessionsApiPath), props.sessionId, filePath),
+    `${vibe64SourceEditorDownloadPath(readRefOrGetterValue(props.sessionsApiPath), props.sessionId, filePath)}&inline=1`,
     props.projectSlug
   );
 });
-watch([imagePreviewUrl, imagePreviewVersion], () => {
-  imagePreviewStatus.value = "loading";
-}, { immediate: true });
 
 function refreshFiles() {
   imagePreviewVersion.value += 1;
@@ -997,6 +998,7 @@ watch([() => props.active, () => props.agentActive], ([active, working], [wasAct
 watch(() => props.sessionId, () => {
   downloadDraftOpen.value = false;
 });
+watch(() => props.refreshKey, refreshFiles);
 const languageCompartment = new Compartment();
 const lineWrappingCompartment = new Compartment();
 const editorPerformanceSetup = [
@@ -2056,15 +2058,6 @@ onBeforeUnmount(() => {
 .vibe64-source-editor__image-preview {
   min-block-size: 0;
   min-inline-size: 0;
-  overflow: auto;
-  padding: 0.75rem;
-}
-
-.vibe64-source-editor__image-preview img {
-  display: block;
-  max-inline-size: 100%;
-  block-size: auto;
-  margin-inline: auto;
 }
 
 .vibe64-source-editor__workspace--explanation-collapsed {

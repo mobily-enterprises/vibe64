@@ -68,6 +68,8 @@ const vuetify = createVuetify({
         colors: {
           "surface-variant": "#EEF3FA",
           "on-surface-variant": "#1F2937",
+          // A darker green keeps white text on success messages readable.
+          success: "#2E7D32",
           warning: "#725C0C",
           "on-warning": "#FFFFFF",
           "warning-container": "#F5F0E3",

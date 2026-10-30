@@ -7,6 +7,7 @@ conversation, application preview, files and engineering tools.
 
 - Main: `src/components/studio/vibe64-session/Vibe64AutopilotView.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionFiles.vue`
+- `src/components/studio/files/Vibe64ProjectFiles.vue`
 - `src/components/studio/vibe64-session/Vibe64SessionSourceEditor.vue`
 - `src/components/studio/vibe64-session/Vibe64SourceInterface.vue`
 - `src/components/studio/Vibe64SessionPanel.vue`
@@ -28,7 +29,9 @@ dashboard back control. It owns the arrow and text-button presentation; the
 calling view retains its existing destination or navigation handler, including
 returning to Architecture or to an issue/pull-request list.
 
-Files retains Repo, Drop Zone and Session browsing. Repo and Architecture share
+Files retains Repo, Session Dropzone and Session browsing; the project-wide
+Project Dropzone and Project Backups live on the Dashboard's Project files page
+(`src/pages/app/project/[slug]/dashboard/project-files/index.vue`). Repo and Architecture share
 the same source viewer/editor, including language highlighting, autosave, base-hash
 conflict checks, download and source references. Architecture hides the viewer's
 file browser and conversation dock; its source links remain in the canvas and

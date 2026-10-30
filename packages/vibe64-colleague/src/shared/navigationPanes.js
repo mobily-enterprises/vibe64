@@ -4,7 +4,7 @@
 // server through the vibe64.colleague.navigation-panes capability, in the
 // browser through useVibe64ColleagueNavigation({ panes }).
 const VIBE64_COLLEAGUE_PANES = Object.freeze(["preview", "settings", "env", "integrations", "access", "publish", "history",
-  "health", "session", "changes", "repository", "files", "database", "system", "ai-terminal", "issues", "pull-requests"]);
+  "project-files", "health", "session", "changes", "repository", "files", "database", "system", "ai-terminal", "issues", "pull-requests"]);
 // The views of one development session, which need its exact sessionId.
 const VIBE64_COLLEAGUE_SESSION_PANES = Object.freeze(["session", "changes", "repository", "files", "database", "system", "ai-terminal"]);
 

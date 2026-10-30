@@ -315,9 +315,12 @@ authoring, learner and pinned-recovery topics through the original usage reader.
 
 ## `packages-vibe64-source-editor` Source & interfaces
 
-Owns the project-shared Backups area in Files, reusing ordinary file operations;
-the runtime supplies its project path and retention operation, and the host
-schedules cleanup. It is separate from private workspace upgrade recovery data.
+Owns the Files areas (Repo, Session Dropzone, read-only Session and the
+project-shared Project Dropzone and Project Backups), their streamed uploads,
+text file creation, inline image downloads and server-side move or copy between
+areas. The runtime supplies each area's trusted path and the Backups retention
+operation; the host schedules that cleanup. Backups are separate from private
+workspace upgrade recovery data.
 
 Owns editing and reviewing project source changes, including derived
 filename and content indexes for each working session.

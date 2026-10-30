@@ -68,6 +68,7 @@ declare module 'vue-router/auto-routes' {
       | '/app/project/[slug]/dashboard/incoming/'
       | '/app/project/[slug]/dashboard/integrations/'
       | '/app/project/[slug]/dashboard/issues/'
+      | '/app/project/[slug]/dashboard/project-files/'
       | '/app/project/[slug]/dashboard/publish/'
       | '/app/project/[slug]/dashboard/pull-requests/'
       | '/app/project/[slug]/dashboard/repository/'
@@ -89,6 +90,7 @@ declare module 'vue-router/auto-routes' {
       | '/app/project/[slug]/dashboard/incoming/'
       | '/app/project/[slug]/dashboard/integrations/'
       | '/app/project/[slug]/dashboard/issues/'
+      | '/app/project/[slug]/dashboard/project-files/'
       | '/app/project/[slug]/dashboard/publish/'
       | '/app/project/[slug]/dashboard/pull-requests/'
       | '/app/project/[slug]/dashboard/repository/'
@@ -161,6 +163,13 @@ declare module 'vue-router/auto-routes' {
     '/app/project/[slug]/dashboard/issues/': RouteRecordInfo<
       '/app/project/[slug]/dashboard/issues/',
       '/app/project/:slug/dashboard/issues',
+      { slug: ParamValue<true> },
+      { slug: ParamValue<false> },
+      | never
+    >,
+    '/app/project/[slug]/dashboard/project-files/': RouteRecordInfo<
+      '/app/project/[slug]/dashboard/project-files/',
+      '/app/project/:slug/dashboard/project-files',
       { slug: ParamValue<true> },
       { slug: ParamValue<false> },
       | never
@@ -251,6 +260,7 @@ declare module 'vue-router/auto-routes' {
         | '/app/project/[slug]/dashboard/incoming/'
         | '/app/project/[slug]/dashboard/integrations/'
         | '/app/project/[slug]/dashboard/issues/'
+        | '/app/project/[slug]/dashboard/project-files/'
         | '/app/project/[slug]/dashboard/publish/'
         | '/app/project/[slug]/dashboard/pull-requests/'
         | '/app/project/[slug]/dashboard/repository/'
@@ -274,6 +284,7 @@ declare module 'vue-router/auto-routes' {
         | '/app/project/[slug]/dashboard/incoming/'
         | '/app/project/[slug]/dashboard/integrations/'
         | '/app/project/[slug]/dashboard/issues/'
+        | '/app/project/[slug]/dashboard/project-files/'
         | '/app/project/[slug]/dashboard/publish/'
         | '/app/project/[slug]/dashboard/pull-requests/'
         | '/app/project/[slug]/dashboard/repository/'
@@ -359,6 +370,14 @@ declare module 'vue-router/auto-routes' {
     'src/pages/app/project/[slug]/dashboard/issues/index.vue': {
       routes:
         | '/app/project/[slug]/dashboard/issues/'
+      views:
+        | never
+      pathParamNames:
+        | never
+    }
+    'src/pages/app/project/[slug]/dashboard/project-files/index.vue': {
+      routes:
+        | '/app/project/[slug]/dashboard/project-files/'
       views:
         | never
       pathParamNames:

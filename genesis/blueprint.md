@@ -495,16 +495,29 @@ enters its tab again. Deliberate keyboard focus and its info button still make
 the details available on demand.
 Files separates the repository, a per-session Session Dropzone, and the session's
 read-only runtime tree with distinct area icons. The workspace owner can browse
-Session files, including archived history; other project members see Repo, Session Dropzone and Project Backups (2w retention). People and the AI can exchange files outside the repository through
-the Drop Zone. People can upload, drop multiple files, download, edit, rename,
-and delete its contents. Files and chat attachments accept individual uploads up
+Session files, including archived history; other project members see Repo and Session Dropzone. People and the AI can exchange files outside the repository through
+the Drop Zone. People can upload, drop multiple files, download, create and edit
+text files, rename, and delete its contents. Files and chat attachments accept individual uploads up
 to 500 MiB. This temporary exchange is excluded from saved work
 and archives and disappears after successful archival; a renewed session
-starts with an empty Drop Zone. Project Backups is a normal directory shared
-by all sessions of its project, outside Git and session archives. Users and coding
-agents can add files with the same Files controls. Hosted daily maintenance
-expires files after 14 days without a write or filesystem change, and Files shows
-their expiry dates. This is temporary storage, not an automatic project snapshot.
+starts with an empty Drop Zone.
+The project Dashboard's **Project files** page holds two areas shared by every
+session of the project, outside Git and session archives: **Project Dropzone**,
+whose files stay until someone deletes them, and **Project Backups**, temporary
+storage whose daily maintenance deletes files 14 days after their last write or
+filesystem change; Files shows each backup's expiry date. Project Backups is not
+an automatic project snapshot. Users and coding agents can add files to both
+with the same Files controls.
+Uploads go straight into the open folder with no further step. Each file shows
+its own progress in bytes and percent beside a total for the batch; anything not
+finished can be cancelled, which leaves no partial file, and a failed upload
+shows its reason and can be retried. A name that already exists is asked about
+once per batch: Replace, Keep both (the new item gets a number) or Skip. Items
+can be moved or copied on the server, without downloading them, between any
+writable areas: Repo, Session Dropzone, Project Dropzone and Project Backups.
+Session files can only be copied out. From Project files, items can also go into
+the Repo or Session Dropzone of the session open beside the Dashboard. Moving
+into Repo is an ordinary session change to review and Save.
 Files refreshes after the assistant finishes a turn without discarding the
 person's place or unsaved edits. People can download individual files and keep
 personal project-wide stars, reachable from chat and the file browser in any session.
@@ -515,9 +528,12 @@ Changing the effective AI connection or user requires a new explanation before
 follow-ups can continue. Stop and Close remain available without AI access.
 Opening a binary or oversized file from chat or Files keeps its filename visible
 and offers Download without placing it in the text editor.
-Supported bitmap images open directly in the file pane, scaled to its width
-with scrolling for tall images. Download remains available; an image that cannot
-load offers Retry.
+Images (PNG, JPEG, GIF, WebP, AVIF, BMP, ICO and SVG) open in place in every
+Files area, fitted to the pane with an Actual size switch, their dimensions and
+size, and Download, Move or copy and Delete beside them. Arrow keys step through
+the folder's images and Esc returns to the folder. SVG is always shown as an
+image, never as live markup; in Repo it opens as its image with its source one
+click away. An image that cannot load offers Try again.
 The file browser keeps starred filenames on one line and starts larger lists
 collapsed.
 Open file and Find in files use indexes for each project working session,

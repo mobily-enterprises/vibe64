@@ -5,6 +5,7 @@ import {
   mdiCogOutline,
   mdiConnection,
   mdiFileCogOutline,
+  mdiFolderMultipleOutline,
   mdiHeartPulse,
   mdiHistory,
   mdiGithub,
@@ -39,7 +40,7 @@ describe("Vibe64 dashboard placements", () => {
       ));
 
     const labels = dashboardLinks.map((placement) => placement.props.label);
-    expect(labels).toHaveLength(10);
+    expect(labels).toHaveLength(11);
     expect(labels).toEqual(expect.arrayContaining([
       "App access",
       "Env",
@@ -49,6 +50,7 @@ describe("Vibe64 dashboard placements", () => {
       "Project settings",
       "Git log",
       "Incoming changes",
+      "Project files",
       "Publish",
       "Session History"
     ]));
@@ -62,6 +64,7 @@ describe("Vibe64 dashboard placements", () => {
       ["Health", mdiHeartPulse],
       ["Integrations", mdiConnection],
       ["Project settings", mdiCogOutline],
+      ["Project files", mdiFolderMultipleOutline],
       ["Session History", mdiHistory],
       ["Issues/PR", mdiGithub],
       ["Publish", mdiPackageVariantClosed]
@@ -156,5 +159,16 @@ describe("Vibe64 dashboard placements", () => {
       .map((placement) => [placement.props.toolId, placement.props.guideId]));
     expect(guides).toEqual({ info: "session-info", changes: "changes", repository: "git-log", editor: "files",
       database: "database", system: "architecture", "ai-terminal": undefined });
+  });
+});
+
+describe("Project files placement", () => {
+  it("opens the project's Dropzone and Backups after Git log and before Env", () => {
+    const links = getPlacements().filter((placement) => placement?.owner === "app-dashboard" && placement?.target === "page.section-nav");
+    const files = links.find((placement) => placement.props.label === "Project files");
+    expect(files.props.scopedSuffix).toBe("/project/[slug]/dashboard/project-files");
+    const order = (label) => links.find((placement) => placement.props.label === label).order;
+    expect(order("Git log")).toBeLessThan(files.order);
+    expect(files.order).toBeLessThan(order("Env"));
   });
 });

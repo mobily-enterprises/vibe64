@@ -111,6 +111,7 @@ function createColleagueActions(colleague, { usage = createColleagueUsageKnowled
     }
   }
   const paneMeanings = [["settings", "Project settings"], ["access", "App access"], ["publish", "Publish"], ["history", "Session History"],
+    ["project-files", "Project files (Project Dropzone and Project Backups)"],
     ["system", "Subsystems"], ...navigationPanes.map(({ pane, meaning }) => [pane, meaning])].map(([pane, meaning]) => `${pane} means ${meaning}`).join(", ");
   const definition = (name, fields, execute, assistant, projectScoped = false) => withVibe64ActionContext({
     id: `vibe64.colleague.${name}`, version: 1,
