@@ -1,5 +1,7 @@
 // Inserts one counter call at the start of every function body of a project
-// file, without adding a line: line numbers in stack traces stay the same.
+// file, and one at the start of its top-level code, without adding a line:
+// line numbers in stack traces stay the same. The top-level code is the file's
+// module function: name "", from 1:1 to the end of its last non-blank line.
 // Positions follow the Genesis rule: the start of the tree-sitter function node
 // (decorators excluded), 1-based line and column; the end is the column just
 // after the function's last character.
@@ -80,15 +82,29 @@ function parseOptions({ typescript, commonjs }) {
   };
 }
 
+// The file's own counter call: after a hashbang line and after its directives.
+function moduleInsert(source, program, starts, call) {
+  const last = program.directives?.at(-1);
+  if (last) return [last.end, source[last.end - 1] === ";" ? `${call};` : `;${call};`];
+  if (!program.interpreter) return [0, `${call};`];
+  return starts.length > 1 ? [starts[1], `${call};`] : [source.length, `\n${call};`];
+}
+
 // instrumentSource(source, { parse, typescript, commonjs, nextFunctionIndex })
-//   → { code, functions: [{ functionIndex, name, start, end }] }
+//   → { code, functions: [{ functionIndex, name, start, end }] }, the module
+//     function first
 // parse is @babel/parser's parse; it throws on a syntax error, which the caller
 // reports as a diagnostic and loads the file unchanged.
 function instrumentSource(source, { parse, typescript = false, commonjs = false, nextFunctionIndex = 0 } = {}) {
   const ast = parse(source, parseOptions({ typescript, commonjs }));
   const starts = lineStarts(source);
-  const functions = [];
-  const inserts = [];
+  const functions = [{
+    functionIndex: nextFunctionIndex,
+    name: "",
+    start: { line: 1, column: 1 },
+    end: pointAt(starts, source.trimEnd().length)
+  }];
+  const inserts = [moduleInsert(source, ast.program, starts, `${HIT}(${nextFunctionIndex})`)];
   const stack = [[ast.program, null]];
   while (stack.length > 0) {
     const [node, parent] = stack.pop();

@@ -314,7 +314,10 @@ describe("stopping and setup", () => {
     const run = trace.scopes.get(`run_${result.pid}`);
     assert.equal(run.kind, "run");
     assert.ok(run.endedAt);
-    assert.deepEqual(countsOf(trace, `run_${result.pid}`), { "lib/words.mjs:1:8:shout": 3, "lib/words.mjs:5:27:countWords": 1 });
+    assert.deepEqual(countsOf(trace, `run_${result.pid}`), {
+      // Each file's top-level code runs once, as its module function.
+      "cli.mjs:1:1:": 1, "lib/words.mjs:1:1:": 1, "lib/words.mjs:1:8:shout": 3, "lib/words.mjs:5:27:countWords": 1
+    });
     assert.deepEqual(trace.lines[0], { ...trace.lines[0], type: "header", runtime: "nodejs", runtimeVersion: process.versions.node, pid: result.pid });
   });
 
@@ -412,7 +415,7 @@ describe("trace writer", () => {
 describe("source instrumentation", () => {
   const instrument = (source, options = {}) => instrumentSource(source, { parse, ...options });
 
-  test("adds no lines, keeps directives first and wraps expression bodies", () => {
+  test("adds no lines, counts top-level code, keeps directives first and wraps expression bodies", () => {
     const source = [
       "function strict(a) {",
       "  \"use strict\"",
@@ -423,11 +426,13 @@ describe("source instrumentation", () => {
     ].join("\n");
     const { code, functions } = instrument(source);
     assert.equal(code.split("\n").length, source.split("\n").length);
-    assert.match(code, /"use strict";__vibe64UsageHit\(0\);/u);
-    assert.match(code, /\(value\) => \(__vibe64UsageHit\(1\), value \* 2\);/u);
-    assert.ok(code.includes("async () => ((__vibe64UsageHit(3), { ok: true }))"));
-    assert.deepEqual(functions.map((entry) => entry.name), ["strict", "double", "method", "arrow", "quoted"]);
-    assert.deepEqual(functions[1], { functionIndex: 1, name: "double", start: { line: 5, column: 16 }, end: { line: 5, column: 36 } });
+    assert.ok(code.startsWith("__vibe64UsageHit(0);function strict(a) {"));
+    assert.match(code, /"use strict";__vibe64UsageHit\(1\);/u);
+    assert.match(code, /\(value\) => \(__vibe64UsageHit\(2\), value \* 2\);/u);
+    assert.ok(code.includes("async () => ((__vibe64UsageHit(4), { ok: true }))"));
+    assert.deepEqual(functions.map((entry) => entry.name), ["", "strict", "double", "method", "arrow", "quoted"]);
+    assert.deepEqual(functions[0], { functionIndex: 0, name: "", start: { line: 1, column: 1 }, end: { line: 6, column: 104 } });
+    assert.deepEqual(functions[2], { functionIndex: 2, name: "double", start: { line: 5, column: 16 }, end: { line: 5, column: 36 } });
   });
 
   test("names class members, skips type-only declarations and starts after decorators", () => {
@@ -446,17 +451,23 @@ describe("source instrumentation", () => {
     ].join("\n");
     const { functions } = instrument(source, { typescript: true, nextFunctionIndex: 10 });
     assert.deepEqual(functions.map((entry) => [entry.functionIndex, entry.name, entry.start.line, entry.start.column]), [
-      [10, "add", 4, 3],
-      [11, "#reset", 5, 12],
-      [12, "size", 6, 3],
-      [13, "overloaded", 10, 8],
-      [14, "save", 11, 33]
+      [10, "", 1, 1],
+      [11, "add", 4, 3],
+      [12, "#reset", 5, 12],
+      [13, "size", 6, 3],
+      [14, "overloaded", 10, 8],
+      [15, "save", 11, 33]
     ]);
   });
 
   test("CommonJS keeps script parsing and a syntax error throws for the caller", () => {
     const { functions } = instrument("return module.exports = function main() {};", { commonjs: true });
-    assert.deepEqual(functions.map((entry) => entry.name), ["main"]);
+    assert.deepEqual(functions.map((entry) => entry.name), ["", "main"]);
+    // A hashbang stays first and file directives keep their place before the count.
+    const script = instrument("#!/usr/bin/env node\n'use strict'\nmain();\n\n", { commonjs: true });
+    assert.equal(script.code, "#!/usr/bin/env node\n'use strict';__vibe64UsageHit(0);\nmain();\n\n");
+    assert.deepEqual(script.functions[0].end, { line: 3, column: 8 });
+    assert.equal(instrument("#!/usr/bin/env node\nmain();").code, "#!/usr/bin/env node\n__vibe64UsageHit(0);main();");
     assert.throws(() => instrument("const target = new.target;", { commonjs: true }), SyntaxError);
   });
 });
