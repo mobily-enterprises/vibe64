@@ -118,12 +118,12 @@ describe("Files area", () => {
     const files = [{ name: "a.txt", size: 1 }, { name: "b.txt", size: 2 }];
     await state.startUploads(files);
     expect(mocks.requests.at(-1)).toEqual({ url: `${BASE}/conflicts`, method: "POST", body: { path: "inbox", names: ["a.txt", "b.txt"] } });
-    expect(state.uploadConflicts.names).toEqual(["a.txt"]);
+    expect(state.uploads.conflicts.value.names).toEqual(["a.txt"]);
     expect(mocks.uploads).toHaveLength(0);
 
-    state.resolveUploadConflict("skip");
+    state.uploads.resolveConflict("skip");
     await settle();
-    expect(state.uploadConflicts.names).toEqual([]);
+    expect(state.uploads.conflicts.value.names).toEqual([]);
     expect(state.uploads.items.value.map((item) => item.fileName)).toEqual(["b.txt"]);
     expect(mocks.uploads[0].path).toBe(`${BASE}/upload?path=inbox%2Fb.txt`);
   });
@@ -133,11 +133,11 @@ describe("Files area", () => {
     const { setupState: state } = mount(Vibe64FileArea, { area: "project-drop-zone", base: BASE });
     await settle();
     await state.startUploads([{ name: "a.txt", size: 1 }]);
-    state.resolveUploadConflict("");
+    state.uploads.resolveConflict("");
     await settle();
     expect(mocks.uploads).toHaveLength(0);
     await state.startUploads([{ name: "a.txt", size: 1 }]);
-    state.resolveUploadConflict("keep-both");
+    state.uploads.resolveConflict("keep-both");
     await settle();
     expect(mocks.uploads[0].path).toBe(`${BASE}/upload?path=a.txt&conflict=keep-both`);
   });
@@ -308,6 +308,26 @@ describe("Files hosts", () => {
     ]);
     const template = readFileSync(new URL("../../src/components/studio/vibe64-session/Vibe64SessionFiles.vue", import.meta.url), "utf8");
     expect(template).not.toContain("Project Backups");
+  });
+
+  it("uploads into the chosen Repo folder with the same conflict question and queue as the other areas", async () => {
+    mocks.responses = (url) => url.endsWith("/repo/conflicts") ? { ok: true, existing: ["a.txt"] } : { ok: true, areas: ["repo", "drop-zone"] };
+    const { setupState: state } = mount(Vibe64SessionFiles, { sessionId: "s1", sessionsApiPath: "/api/vibe64/sessions" });
+    await settle();
+    await state.uploadToRepo({ folder: "src/lib", files: [{ name: "a.txt", size: 1 }, { name: "b.txt", size: 2 }] });
+    expect(mocks.requests.at(-1)).toEqual({
+      url: "/api/vibe64/sessions/s1/files/repo/conflicts", method: "POST", body: { path: "src/lib", names: ["a.txt", "b.txt"] }
+    });
+    expect(state.repoUploads.conflicts.value.names).toEqual(["a.txt"]);
+    expect(state.repoFolderLabel(state.repoUploads.conflicts.value.folder)).toBe("Repo › src › lib");
+    expect(mocks.uploads).toHaveLength(0);
+    state.repoUploads.resolveConflict("replace");
+    await settle();
+    expect(state.repoUploads.items.value.map((item) => item.fileName)).toEqual(["a.txt", "b.txt"]);
+    expect(mocks.uploads.map((upload) => upload.path)).toEqual(["/api/vibe64/sessions/s1/files/repo/upload?path=src%2Flib%2Fa.txt&conflict=replace"]);
+    const template = readFileSync(new URL("../../src/components/studio/vibe64-session/Vibe64SessionFiles.vue", import.meta.url), "utf8");
+    expect(template).toContain("files-actions");
+    expect(template).toContain('@upload="uploadToRepo"');
   });
 
   it("an archived session can only send its files to the project", async () => {

@@ -4,11 +4,12 @@ import crypto from "node:crypto";
 import { constants, createWriteStream } from "node:fs";
 import { pipeline } from "node:stream/promises";
 import { currentProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
-import { link, lstat, mkdir, open, readdir, rename, rm, writeFile } from "node:fs/promises";
+import { link, lstat, mkdir, open, readdir, realpath, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { isMissingPathError, normalizeText } from "@local/vibe64-core/server/core";
 import { sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
+import { runVibe64Command } from "@local/vibe64-execution/server";
 import { sourceEditorFilePolicy, sourceEditorPathExcluded } from "./filePolicy.js";
 import { sessionClosingReason } from "@local/vibe64-runtime/server/sessionLifecycle";
 import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
@@ -31,9 +32,9 @@ import {
 // Files areas: authorization, area-to-root resolution, locking, the
 // per-operation file actions and server-side move and copy between areas.
 // Repo's own browsing and editing belong to the source editor; Files reaches
-// Repo only to list destination folders and to move or copy items.
+// Repo only to list destination folders, upload, and move or copy items.
 const FILE_AREAS = Object.freeze({
-  repo: { scope: "session", operations: ["tree", "conflicts", "transfer"] },
+  repo: { scope: "session", operations: ["tree", "conflicts", "upload", "transfer"] },
   "drop-zone": { scope: "session" },
   session: { scope: "session", ownerOnly: true, readOnly: true },
   "project-drop-zone": { scope: "project" },
@@ -41,9 +42,14 @@ const FILE_AREAS = Object.freeze({
 });
 const READS = ["tree", "file", "download", "archive", "conflicts"];
 const WRITES = ["upload", "create", "save", "rename", "delete", "mkdir", "transfer"];
-// Incoming files and folders are written under this hidden name beside their
-// destination and published by rename or link, so readers never see a partial item.
+// Incoming files and folders are written under this hidden name and published
+// by rename or link, so readers never see a partial item. Other areas stage
+// beside the destination; Repo stages in REPO_STAGING_FOLDER inside its Git
+// directory, which `git status` and a Save never see.
 const STAGING_PREFIX = ".vibe64-incoming-";
+const REPO_STAGING_FOLDER = "vibe64-file-staging";
+// A server stopped mid-write leaves its staged item; a later Repo write removes it.
+const REPO_STAGING_STALE_MS = 24 * 60 * 60 * 1000;
 const TRANSFER_MAX_ENTRIES = 10_000;
 const CONFLICT_NAMES_MAX = 500;
 
@@ -101,11 +107,14 @@ function createFileArea(projectService, { repoChanged = () => {} } = {}) {
         throw sourceEditorError("This session has no Repo files.", "vibe64_source_editor_source_unavailable", {}, 409);
       }
       if (!write) return { key, session, run: (perform) => perform(context(root)) };
-      // Repo writes take the same exclusive source write as the source editor.
-      return { key, session, run: async (perform) => {
+      const repoContext = context(root, { stagingRoot: await repoStagingRoot(root) });
+      // Repo writes take the same exclusive source write as the source editor,
+      // and refuse rather than wait while it is held.
+      const run = async (perform) => {
         const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
+          await removeStaleStaging(repoContext.stagingRoot);
           try {
-            return await perform(context(root));
+            return await perform(repoContext);
           } finally {
             repoChanged(root);
           }
@@ -115,7 +124,10 @@ function createFileArea(projectService, { repoChanged = () => {} } = {}) {
             normalizeText(exclusive.value?.code) || "vibe64_source_editor_write_busy", {}, 409);
         }
         return exclusive.value;
-      } };
+      };
+      // An upload streams in without the exclusive write, so Save, Update and
+      // the assistant never wait on it; it takes the write only to publish.
+      return { key, session, run, receive: (perform) => perform({ ...repoContext, publish: run }) };
     }
 
     if (area === "session") {
@@ -191,7 +203,8 @@ function createFileArea(projectService, { repoChanged = () => {} } = {}) {
         const policy = { ...sourceEditorFilePolicy(), exclude: [], protectSourceContract: false };
         return downloadSessionFile({ sourceRoot: path.dirname(opened.session.archivePath), policy }, path.basename(opened.session.archivePath));
       }
-      return opened.run((context) => areaOperation(operation, context, input, readUpload));
+      const enter = operation === "upload" && opened.receive ? opened.receive : opened.run;
+      return enter((context) => areaOperation(operation, context, input, readUpload));
     });
   }
 
@@ -270,6 +283,36 @@ function stagingPath(directory) {
   return path.join(directory, `${STAGING_PREFIX}${crypto.randomUUID()}`);
 }
 
+// Repo's staging folder lives in the checkout's own Git directory, on the
+// same filesystem, so a staged item publishes into the worktree by link or
+// rename. A Git directory outside the checkout is refused.
+async function repoStagingRoot(sourceRoot) {
+  const result = await runVibe64Command({
+    actor: "daemon", allowedRoots: [sourceRoot], args: ["rev-parse", "--absolute-git-dir"], command: "git", cwd: sourceRoot,
+    gitSafeDirectories: [sourceRoot], mode: "capture", purpose: "source", runtimes: ["git"], timeout: 10_000
+  });
+  const gitDirectory = result.ok === true ? String(result.stdout || "").trim() : "";
+  const realRoot = await realpath(sourceRoot);
+  const realGitDirectory = gitDirectory ? await realpath(gitDirectory).catch(() => "") : "";
+  if (!realGitDirectory.startsWith(`${realRoot}${path.sep}`)) {
+    throw sourceEditorError("Repo has no Git folder of its own, so Files cannot write into it.", "vibe64_files_repo_git_unavailable", {}, 409);
+  }
+  const stagingRoot = path.join(realGitDirectory, REPO_STAGING_FOLDER);
+  await mkdir(stagingRoot, { recursive: true });
+  if (!(await lstat(stagingRoot)).isDirectory()) {
+    throw sourceEditorError("Repo's staging folder is not a folder.", "vibe64_files_repo_git_unavailable", {}, 409);
+  }
+  return stagingRoot;
+}
+
+async function removeStaleStaging(stagingRoot) {
+  const cutoff = Date.now() - REPO_STAGING_STALE_MS;
+  for (const name of await readdir(stagingRoot)) {
+    const item = path.join(stagingRoot, name);
+    if ((await lstat(item).catch(() => null))?.mtimeMs < cutoff) await rm(item, { recursive: true, force: true });
+  }
+}
+
 function folderOf(relativePath) {
   const parent = path.posix.dirname(relativePath);
   return parent === "." ? "" : parent;
@@ -323,8 +366,9 @@ async function resolveTarget(context, folder, name, conflict = "fail") {
 
 // Publishes a completely written staged item. Without replace it never
 // overwrites: files publish by hard link, folders only into a free name.
-// Replacing sets the old item aside until the new one is in place.
-async function publishStaged(staged, target, { replace = false, directory = false } = {}) {
+// Replacing sets the old item aside, in the area's staging folder when it
+// has one, until the new one is in place.
+async function publishStaged(staged, target, { replace = false, directory = false, stagingRoot = "" } = {}) {
   if (!replace) {
     if (directory) {
       if (await pathExists(target)) throw existsError(path.basename(target));
@@ -348,7 +392,7 @@ async function publishStaged(staged, target, { replace = false, directory = fals
     await rename(staged, target);
     return;
   }
-  const aside = stagingPath(path.dirname(target));
+  const aside = stagingPath(stagingRoot || path.dirname(target));
   await rename(target, aside);
   try {
     await rename(staged, target);
@@ -382,12 +426,21 @@ async function createAreaTextFile(context, input) {
   return { ok: true, file: await readSourceEditorFile(context, relativePath) };
 }
 
+async function uploadFolder(context, folder) {
+  if (!(await sourceEditorPathStats(context.sourceRoot, folder)).isDirectory()) {
+    throw sourceEditorError("Choose a folder to upload into.", "vibe64_invalid_source_editor_path");
+  }
+}
+
 async function uploadAreaFile(context, input, readUpload) {
   if (typeof readUpload !== "function") throw sourceEditorError("Choose a file to upload.", "vibe64_files_upload_required");
   const requested = normalizeNewSourceEditorFilePath(input.path);
+  if (sourceEditorPathExcluded(context.policy, requested)) {
+    throw sourceEditorError(`“${requested}” is protected in this area.`, "vibe64_files_protected_entry", { path: requested }, 403);
+  }
   const folder = folderOf(requested);
-  await sourceEditorPathStats(context.sourceRoot, folder);
-  const staged = stagingPath(absoluteSourceEditorPath(context.sourceRoot, folder));
+  await uploadFolder(context, folder);
+  const staged = stagingPath(context.stagingRoot || absoluteSourceEditorPath(context.sourceRoot, folder));
   try {
     let count = 0;
     for await (const part of readUpload()) {
@@ -403,9 +456,17 @@ async function uploadAreaFile(context, input, readUpload) {
       if (part.file.truncated) throw sourceEditorError(`Upload exceeds the ${VIBE64_UPLOAD_MAX_LABEL} limit.`, "vibe64_files_upload_too_large", {}, 413);
     }
     if (count !== 1) throw sourceEditorError("Choose a file to upload.", "vibe64_files_upload_required");
-    const target = await resolveTarget(context, folder, path.posix.basename(requested), input.conflict);
-    await publishStaged(staged, absoluteSourceEditorPath(context.sourceRoot, target.relativePath), { replace: target.replace });
-    return { ok: true, path: target.relativePath };
+    // Repo publishes under its exclusive write (other areas hold their lock
+    // throughout); the folder is checked again in case it changed meanwhile.
+    const publish = context.publish || ((perform) => perform(context));
+    return await publish(async (current) => {
+      await uploadFolder(current, folder);
+      const target = await resolveTarget(current, folder, path.posix.basename(requested), input.conflict);
+      await publishStaged(staged, absoluteSourceEditorPath(current.sourceRoot, target.relativePath), {
+        replace: target.replace, stagingRoot: current.stagingRoot
+      });
+      return { ok: true, path: target.relativePath };
+    });
   } catch (error) {
     if (error.code === "FST_REQ_FILE_TOO_LARGE") {
       throw sourceEditorError(`Upload exceeds the ${VIBE64_UPLOAD_MAX_LABEL} limit.`, "vibe64_files_upload_too_large", {}, 413);
@@ -509,7 +570,7 @@ async function transferEntry(from, to, input, mode) {
   }
   const sourceAbsolute = absoluteSourceEditorPath(from.sourceRoot, sourcePath);
   const targetAbsolute = absoluteSourceEditorPath(to.sourceRoot, target.relativePath);
-  const staged = stagingPath(path.dirname(targetAbsolute));
+  const staged = stagingPath(to.stagingRoot || path.dirname(targetAbsolute));
   // A move renames when both areas share a filesystem; otherwise it copies
   // and removes the source only after the copy is published.
   let renamed = false;
@@ -523,7 +584,7 @@ async function transferEntry(from, to, input, mode) {
       }
     }
     if (!renamed) await copyPlan(sourceAbsolute, staged, entries);
-    await publishStaged(staged, targetAbsolute, { replace: target.replace, directory: sourceStats.isDirectory() });
+    await publishStaged(staged, targetAbsolute, { replace: target.replace, directory: sourceStats.isDirectory(), stagingRoot: to.stagingRoot });
   } catch (error) {
     if (renamed) await rename(staged, sourceAbsolute).catch(() => null);
     else await rm(staged, { recursive: true, force: true });

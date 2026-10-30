@@ -245,7 +245,7 @@
       </v-card>
     </v-dialog>
 
-    <Vibe64FileConflictDialog :folder-label="folderLabel" :names="uploadConflicts.names" @choose="resolveUploadConflict" @closed="restoreFocus" />
+    <Vibe64FileConflictDialog :folder-label="folderLabel" :names="uploads.conflicts.value.names" @choose="uploads.resolveConflict" @closed="restoreFocus" />
     <Vibe64FileTransferDialog
       :destinations="destinations"
       :item="transferItem"
@@ -291,7 +291,7 @@ import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import { downloadAttachment } from "@/lib/vibe64AttachmentDownload.js";
 import { writeClipboardText } from "@/lib/clipboard.js";
-import { vibe64FileArea, vibe64FileTransferMessage } from "@/lib/vibe64FileAreas.js";
+import { vibe64DroppedFiles, vibe64FileArea, vibe64FileTransferMessage } from "@/lib/vibe64FileAreas.js";
 import { formatFileSize } from "@/lib/vibe64FileSize.js";
 import Vibe64FileConflictDialog from "./Vibe64FileConflictDialog.vue";
 import Vibe64FileTransferDialog from "./Vibe64FileTransferDialog.vue";
@@ -346,7 +346,6 @@ const newFileOpen = ref(false);
 const newFileName = ref("");
 const newFileText = ref("");
 const transferItem = ref(null);
-const uploadConflicts = ref({ names: [], files: [], folder: "" });
 // Downloads run beside other work; each shows progress on its own button.
 const downloading = ref([]);
 const archiveName = computed(() => `${props.sessionId}.tar.gz`);
@@ -361,6 +360,7 @@ let uploadRefreshTimer = null;
 
 const uploads = useVibe64FileUploads({
   endpoint: computed(() => props.base),
+  onAsk: () => rememberFocus(),
   onUploaded: () => {
     // A burst of small uploads refreshes the listing once.
     clearTimeout(uploadRefreshTimer);
@@ -574,12 +574,11 @@ function dragLeave() {
 function dropFiles(event) {
   dragDepth.value = 0;
   if (!canWrite.value) return;
-  const items = [...(event.dataTransfer?.items || [])];
-  if (items.some((item) => item.webkitGetAsEntry?.()?.isDirectory)) {
-    feedback.error(new Error("Drop files rather than folders, or upload a zip of the folder."));
-    return;
+  try {
+    return startUploads(vibe64DroppedFiles(event.dataTransfer));
+  } catch (error) {
+    feedback.error(error);
   }
-  return startUploads([...(event.dataTransfer?.files || [])]);
 }
 
 function chooseFiles() {
@@ -592,36 +591,12 @@ function pickFiles(event) {
   return startUploads(files);
 }
 
-// Names already in the folder are asked about once for the whole batch.
 async function startUploads(files) {
-  if (!files.length) return;
-  if (files.length > 200) {
-    feedback.error(new Error("Upload up to 200 files at a time."));
-    return;
-  }
-  const folder = directory.value;
   try {
-    const result = await request(`${props.base}/conflicts`, {
-      method: "POST", body: { path: folder, names: [...new Set(files.map((selected) => selected.name))] }
-    });
-    if (result.existing?.length) {
-      rememberFocus();
-      uploadConflicts.value = { names: result.existing, files, folder };
-      return;
-    }
+    await uploads.start(files, directory.value);
   } catch (error) {
     feedback.error(error, "Upload failed.");
-    return;
   }
-  void uploads.uploadFiles(files, { folder });
-}
-
-function resolveUploadConflict(choice) {
-  const { names, files, folder } = uploadConflicts.value;
-  uploadConflicts.value = { names: [], files: [], folder: "" };
-  if (!choice) return;
-  const chosen = choice === "skip" ? files.filter((selected) => !names.includes(selected.name)) : files;
-  if (chosen.length) void uploads.uploadFiles(chosen, { folder, conflicts: names, conflict: choice === "skip" ? "" : choice });
 }
 
 async function download(target, operation = "download") {

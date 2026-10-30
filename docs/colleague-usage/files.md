@@ -44,8 +44,15 @@ open until the card says they are uploaded; closing or reloading it stops the
 files not yet finished. Each file appears in the folder as soon as it is
 complete; nobody sees a half-uploaded file.
 
-Repo has no **Upload** button. Upload into a Dropzone, then use **Move or copy…**
-to put the file into the source (see below), or ask the coding agent.
+In Repo, files go into the current folder: the folder of the file you have
+open, or the source root when none is open. Choose **Upload files to …** (the
+upload icon above the file list; its label names the folder), choose **Upload
+here** in a folder's **⋮** menu, or drag files onto the file list. Repo uses the
+same **Uploads** card and name question, and uploaded files appear as ordinary
+session changes; publish them with **Save work**. Repo refuses `.git` and the
+root `.vibe64` folder. While **Save work**, **Update** or another change to the
+session's source is starting, a finishing Repo upload fails with a message to
+try again; choose **Try again** once it has finished.
 
 ## When a name already exists
 

@@ -508,7 +508,10 @@ storage whose daily maintenance deletes files 14 days after their last write or
 filesystem change; Files shows each backup's expiry date. Project Backups is not
 an automatic project snapshot. Users and coding agents can add files to both
 with the same Files controls.
-Uploads go straight into the open folder with no further step. Each file shows
+Uploads go straight into the open folder with no further step, in Repo too,
+where the current folder is the open file's folder and uploaded files are
+ordinary session changes; no partly uploaded file is ever visible to Git or Save
+work. Each file shows
 its own progress in bytes and percent beside a total for the batch; anything not
 finished can be cancelled, which leaves no partial file, and a failed upload
 shows its reason and can be retried. A name that already exists is asked about

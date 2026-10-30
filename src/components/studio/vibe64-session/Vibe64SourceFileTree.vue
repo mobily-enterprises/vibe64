@@ -88,7 +88,13 @@
               @click="emit('new-file', child.path || '')"
             />
             <v-list-item
-              v-if="transferAvailable && child.path"
+              v-if="filesActions && child.type === 'directory'"
+              :prepend-icon="mdiUpload"
+              title="Upload here"
+              @click="emit('upload', child.path || '')"
+            />
+            <v-list-item
+              v-if="filesActions && child.path"
               :prepend-icon="mdiFileMoveOutline"
               title="Move or copy…"
               @click="emit('transfer', { name: child.name, path: child.path, type: child.type })"
@@ -115,7 +121,7 @@
         <Vibe64SourceFileTree
           :node="child"
           :assistant-draft-available="assistantDraftAvailable"
-          :transfer-available="transferAvailable"
+          :files-actions="filesActions"
           :selected-path="selectedPath"
           :starred-paths="starredPaths"
           :expanded-paths="expandedPaths"
@@ -130,6 +136,7 @@
           @copy-path="emit('copy-path', $event)"
           @ask-assistant="emit('ask-assistant', $event)"
           @transfer="emit('transfer', $event)"
+          @upload="emit('upload', $event)"
         />
         <div
           v-if="directoryLoading(child)"
@@ -187,7 +194,8 @@ import {
   mdiFolderOutline,
   mdiRobotOutline,
   mdiStar,
-  mdiStarOutline
+  mdiStarOutline,
+  mdiUpload
 } from "@mdi/js";
 import { normalizeSourceEditorPath } from "@/lib/vibe64SourceEditorLinks.js";
 
@@ -217,13 +225,13 @@ const props = defineProps({
     default: false,
     type: Boolean
   },
-  // Files offers "Move or copy…" for Repo items; other hosts leave it off.
-  transferAvailable: {
+  // Files offers "Upload here" and "Move or copy…" for Repo items; other hosts leave them off.
+  filesActions: {
     default: false,
     type: Boolean
   }
 });
-const emit = defineEmits(["ask-assistant", "copy-path", "directory-open-change", "download-file", "load-more-directory", "new-file", "open-file", "toggle-star", "transfer"]);
+const emit = defineEmits(["ask-assistant", "copy-path", "directory-open-change", "download-file", "load-more-directory", "new-file", "open-file", "toggle-star", "transfer", "upload"]);
 
 const nodes = computed(() => Array.isArray(props.node?.children) ? props.node.children : []);
 const nodeHasMore = computed(() => props.node?.hasMore === true);

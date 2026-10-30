@@ -36,4 +36,12 @@ function vibe64FileTransferMessage({ destination, item, mode, path: placed = "",
   return `${mode === "move" ? "Moved" : "Copied"} “${item.name}” to ${where}${renamed}.`;
 }
 
-export { VIBE64_FILE_AREAS, vibe64FileArea, vibe64FileTransferMessage };
+// The files in a drop. Uploads take files, so a dropped folder is refused.
+function vibe64DroppedFiles(dataTransfer) {
+  if ([...(dataTransfer?.items || [])].some((item) => item.webkitGetAsEntry?.()?.isDirectory)) {
+    throw new Error("Drop files rather than folders, or upload a zip of the folder.");
+  }
+  return [...(dataTransfer?.files || [])];
+}
+
+export { VIBE64_FILE_AREAS, vibe64DroppedFiles, vibe64FileArea, vibe64FileTransferMessage };

@@ -1,5 +1,6 @@
-import { computed, toRaw, toValue } from "vue";
+import { computed, ref, toRaw, toValue } from "vue";
 import { useAssistantAttachments } from "@jskit-ai/assistant-core/client/conversation-attachments";
+import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { VIBE64_UPLOAD_MAX_BYTES, VIBE64_UPLOAD_MAX_LABEL } from "@local/vibe64-core/shared";
 import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
 import { uploadFileRequest } from "@/lib/vibe64FileUpload.js";
@@ -10,8 +11,9 @@ const ACTIVE_PHASES = ["preparing", "queued", "uploading", "delivering"];
 // Files uploads reuse the chat attachment queue (progress, cancel, retry, one
 // upload at a time) with the shared upload transport. Each file goes straight
 // into the folder that was open when it was added; a finished upload is simply
-// there, with no further step. `endpoint` is the area's API base.
-function useVibe64FileUploads({ endpoint, onUploaded = () => {} } = {}) {
+// there, with no further step. `endpoint` is the area's API base; `onAsk`
+// runs just before the name-conflict question opens.
+function useVibe64FileUploads({ endpoint, onUploaded = () => {}, onAsk = () => {} } = {}) {
   // Where each queued File goes: its folder path and conflict choice.
   const targets = new WeakMap();
   const queue = useAssistantAttachments({
@@ -58,6 +60,34 @@ function useVibe64FileUploads({ endpoint, onUploaded = () => {} } = {}) {
     return queue.uploadFiles(files);
   }
 
+  // Names already in the folder are asked about once for the whole batch:
+  // `conflicts` holds the open question until resolveConflict answers it.
+  const conflicts = ref({ names: [], files: [], folder: "" });
+
+  async function start(files = [], folder = "") {
+    if (!files.length) return;
+    if (files.length > FILE_UPLOAD_MAX_ITEMS) throw new Error(`Upload up to ${FILE_UPLOAD_MAX_ITEMS} files at a time.`);
+    const result = await getHttpWebClient().request(`${toValue(endpoint)}/conflicts`, {
+      method: "POST", body: { path: folder, names: [...new Set(files.map((file) => file.name))] }
+    });
+    if (result?.ok === false) throw new Error(vibe64ApiResponseError(result, "Upload failed."));
+    if (result.existing?.length) {
+      onAsk();
+      conflicts.value = { names: result.existing, files, folder };
+      return;
+    }
+    void uploadFiles(files, { folder });
+  }
+
+  // "replace", "keep-both", "skip", or "" when the person cancelled.
+  function resolveConflict(choice = "") {
+    const { names, files, folder } = conflicts.value;
+    conflicts.value = { names: [], files: [], folder: "" };
+    if (!choice) return;
+    const chosen = choice === "skip" ? files.filter((file) => !names.includes(file.name)) : files;
+    if (chosen.length) void uploadFiles(chosen, { folder, conflicts: names, conflict: choice === "skip" ? "" : choice });
+  }
+
   function cancelAll() {
     for (const item of [...items.value]) {
       if (ACTIVE_PHASES.includes(item.phase)) queue.cancelAttachment(item);
@@ -75,9 +105,12 @@ function useVibe64FileUploads({ endpoint, onUploaded = () => {} } = {}) {
     cancel: queue.cancelAttachment,
     cancelAll,
     clear,
+    conflicts,
     items,
     remove: queue.removeAttachment,
+    resolveConflict,
     retry: queue.retryAttachment,
+    start,
     uploadFiles
   };
 }

@@ -71,10 +71,13 @@ describe("source file tree actions", () => {
     expect(html).toContain('title="Copy path"');
   });
 
-  it("offers Move or copy for every item only where Files asks for it", async () => {
-    expect(await renderTree()).not.toContain('title="Move or copy…"');
-    const html = await renderTree({ transferAvailable: true });
+  it("offers Move or copy for every item and Upload here for folders only where Files asks for it", async () => {
+    const plain = await renderTree();
+    expect(plain).not.toContain('title="Move or copy…"');
+    expect(plain).not.toContain('title="Upload here"');
+    const html = await renderTree({ filesActions: true });
     expect(html.match(/title="Move or copy…"/gu)).toHaveLength(2);
+    expect(html.match(/title="Upload here"/gu)).toHaveLength(1);
   });
 
   it("offers the directory's own page size for the next batch", async () => {

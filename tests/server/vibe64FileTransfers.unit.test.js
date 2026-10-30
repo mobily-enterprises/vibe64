@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { execFileSync } from "node:child_process";
+import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { Readable } from "node:stream";
+import { PassThrough, Readable } from "node:stream";
 import test from "node:test";
 import Fastify from "fastify";
 import multipart from "@fastify/multipart";
@@ -11,14 +12,16 @@ import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionCon
 import { SESSION_SOURCE_PATH_AUTHORITY_MANAGED } from "@local/vibe64-core/server/sessionSourcePath";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
 import { withProjectBackupsLock } from "@local/vibe64-runtime/server/projectBackups";
+import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { currentProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createService } from "../../packages/vibe64-source-editor/src/server/service.js";
 import { registerRoutes } from "../../packages/vibe64-source-editor/src/server/registerRoutes.js";
 import { createSourceEditorActions } from "../../packages/vibe64-source-editor/src/server/actions.js";
 import { testRouteApp } from "./vibe64RouteTestHelpers.js";
 
-// Each project has one live session with a managed source checkout (Repo), its
-// Session Dropzone and Session tree, plus the project's Dropzone and Backups.
+// Each project has one live session with a managed source checkout (Repo, a
+// clean Git checkout), its Session Dropzone and Session tree, plus the
+// project's Dropzone and Backups.
 async function fixture(t) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-file-transfers-"));
   const stores = new Map();
@@ -30,9 +33,11 @@ async function fixture(t) {
     await store.createSession({ sessionId: "session-1", runtimeKind: "genesis" });
     const sourceRoot = path.join(root, `${slug}-sources`, "sessions", "active", "session-1", "source");
     await mkdir(path.join(sourceRoot, "src", "lib"), { recursive: true });
-    await mkdir(path.join(sourceRoot, ".git"));
     await writeFile(path.join(sourceRoot, "src", "app.js"), `${slug} app`);
     await writeFile(path.join(sourceRoot, "src", "lib", "util.js"), `${slug} util`);
+    git(sourceRoot, "init", "--quiet");
+    git(sourceRoot, "add", "-A");
+    git(sourceRoot, "-c", "user.name=Test", "-c", "user.email=test@example.com", "commit", "--quiet", "-m", "Start");
     for (const [name, value] of Object.entries({
       source_kind: "session_clone", source_path: sourceRoot, source_path_authority: SESSION_SOURCE_PATH_AUTHORITY_MANAGED
     })) await store.writeMetadataValue("session-1", name, value);
@@ -51,8 +56,14 @@ async function fixture(t) {
     slug, targetRoot: path.join(root, slug), vibe64User: { username: role, role }
   }, () => service.fileArea({ sessionId: "session-1", area: "drop-zone", ...input }, operation, options));
   const project = (operation, input = {}, options = {}) => call(operation, { sessionId: undefined, ...input }, options);
-  const paths = (slug = "one") => ({ ...stores.get(slug).paths("session-1"), repo: sources.get(slug) });
+  const paths = (slug = "one") => ({
+    ...stores.get(slug).paths("session-1"), repo: sources.get(slug), repoStaging: path.join(sources.get(slug), ".git", "vibe64-file-staging")
+  });
   return { root, stores, service, call, project, paths };
+}
+
+function git(cwd, ...args) {
+  return execFileSync("git", args, { cwd, encoding: "utf8", env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1" } });
 }
 
 const upload = (text) => ({ readUpload: async function* () {
@@ -60,6 +71,22 @@ const upload = (text) => ({ readUpload: async function* () {
 } });
 
 const leftovers = async (directory) => (await readdir(directory)).filter((name) => name.startsWith(".vibe64-"));
+
+async function waitFor(condition) {
+  for (let attempt = 0; attempt < 500; attempt += 1) {
+    if (await condition()) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("Timed out waiting.");
+}
+
+// An upload whose body the test feeds by hand.
+function slowUpload() {
+  const body = new PassThrough();
+  return { body, options: { readUpload: async function* () {
+    yield { type: "file", fieldname: "file", file: body };
+  } } };
+}
 
 test("session Files lists Repo, Session Dropzone and owner-only Session; Project Backups moved to the project", async (t) => {
   const { call } = await fixture(t);
@@ -122,6 +149,85 @@ test("uploads ask about conflicts: fail by default, replace atomically, or keep 
   assert.deepEqual(await leftovers(zone), []);
 });
 
+test("Repo uploads stage inside Git, where status never sees them, and publish as ordinary changes", async (t) => {
+  const { call, paths } = await fixture(t);
+  const p = paths();
+  const status = () => git(p.repo, "status", "--porcelain", "--untracked-files=all");
+  const { body, options } = slowUpload();
+  const pending = call("upload", { area: "repo", path: "src/lib/data.csv" }, { options });
+  body.write("a,b\n");
+  await waitFor(async () => (await readdir(p.repoStaging).catch(() => [])).length === 1);
+  assert.equal(status(), "");
+  assert.deepEqual(await leftovers(path.join(p.repo, "src", "lib")), []);
+  // An arriving upload holds no exclusive write: other Repo writes still run.
+  assert.equal((await call("transfer", { area: "repo", path: "src/app.js", mode: "copy", targetArea: "repo", targetPath: "", conflict: "keep-both" })).ok, true);
+  body.end("1,2\n");
+  assert.deepEqual(await pending, { ok: true, path: "src/lib/data.csv" });
+  assert.equal(await readFile(path.join(p.repo, "src/lib/data.csv"), "utf8"), "a,b\n1,2\n");
+  assert.equal(status(), "?? app.js\n?? src/lib/data.csv\n");
+  // Conflicts behave as in every other area.
+  assert.equal((await call("upload", { area: "repo", path: "src/app.js" }, { options: upload("again") })).statusCode, 409);
+  assert.equal((await call("upload", { area: "repo", path: "src/app.js", conflict: "keep-both" }, { options: upload("both") })).path, "src/app (1).js");
+  assert.equal((await call("upload", { area: "repo", path: "src/app.js", conflict: "replace" }, { options: upload("new app") })).path, "src/app.js");
+  assert.equal(await readFile(path.join(p.repo, "src/app.js"), "utf8"), "new app");
+  assert.match(status(), /^ M src\/app\.js$/mu);
+  // A cancelled upload leaves nothing behind, in Repo or in Git.
+  const cancelled = slowUpload();
+  const failing = call("upload", { area: "repo", path: "src/cancelled.bin" }, { options: cancelled.options });
+  cancelled.body.write("partial");
+  await waitFor(async () => (await readdir(p.repoStaging)).length === 1);
+  cancelled.body.destroy(new Error("The browser cancelled the upload."));
+  assert.equal((await failing).ok, false);
+  await assert.rejects(lstat(path.join(p.repo, "src/cancelled.bin")), { code: "ENOENT" });
+  assert.deepEqual(await readdir(p.repoStaging), []);
+  assert.deepEqual(await leftovers(path.join(p.repo, "src")), []);
+});
+
+test("Repo uploads refuse protected paths, a held exclusive write and a Git folder outside the checkout", async (t) => {
+  const { call, paths, stores } = await fixture(t);
+  const p = paths();
+  for (const target of [".git/hooks/pre-commit", "src/.git/config", ".vibe64/contract.md"]) {
+    const refused = await call("upload", { area: "repo", path: target }, { options: upload("x") });
+    assert.equal(refused.statusCode, 403, target);
+  }
+  await assert.rejects(lstat(path.join(p.repo, ".git", "hooks", "pre-commit")), { code: "ENOENT" });
+  await assert.rejects(lstat(path.join(p.repo, ".vibe64")), { code: "ENOENT" });
+  // Save, Update and the assistant hold the same exclusive write: Files refuses rather than waits.
+  let entered;
+  let release;
+  const holding = new Promise((resolve) => { entered = resolve; });
+  const holder = runVibe64AgentWriteExclusive({ store: stores.get("one") }, "session-1", () => new Promise((resolve) => {
+    release = resolve;
+    entered();
+  }));
+  await holding;
+  const busy = await call("upload", { area: "repo", path: "src/busy.txt" }, { options: upload("busy") });
+  assert.equal(busy.statusCode, 409);
+  assert.equal(busy.code, "vibe64_agent_write_mode_busy");
+  assert.equal((await call("transfer", { path: "notes.txt", mode: "copy", targetArea: "repo", targetPath: "" })).statusCode, 409);
+  release();
+  await holder;
+  await assert.rejects(lstat(path.join(p.repo, "src/busy.txt")), { code: "ENOENT" });
+  assert.deepEqual(await readdir(p.repoStaging), []);
+  // A Repo write clears staged items a stopped server left over a day ago.
+  await writeFile(path.join(p.repoStaging, ".vibe64-incoming-old"), "old");
+  await writeFile(path.join(p.repoStaging, ".vibe64-incoming-recent"), "recent");
+  const dayAgo = new Date(Date.now() - 25 * 60 * 60 * 1000);
+  await utimes(path.join(p.repoStaging, ".vibe64-incoming-old"), dayAgo, dayAgo);
+  assert.equal((await call("upload", { area: "repo", path: "fresh.txt" }, { options: upload("fresh") })).ok, true);
+  assert.deepEqual(await readdir(p.repoStaging), [".vibe64-incoming-recent"]);
+  // A checkout whose Git folder lives elsewhere is never staged into.
+  const other = paths("two");
+  const outside = path.join(path.dirname(other.repo), "elsewhere.git");
+  await rename(path.join(other.repo, ".git"), outside);
+  await writeFile(path.join(other.repo, ".git"), `gitdir: ${outside}\n`);
+  const elsewhere = await call("upload", { area: "repo", path: "src/x.txt" }, { slug: "two", options: upload("x") });
+  assert.equal(elsewhere.statusCode, 409);
+  assert.equal(elsewhere.code, "vibe64_files_repo_git_unavailable");
+  await assert.rejects(lstat(path.join(other.repo, "src/x.txt")), { code: "ENOENT" });
+  await assert.rejects(lstat(path.join(outside, "vibe64-file-staging")), { code: "ENOENT" });
+});
+
 test("copy and move work between every writable area without downloading", async (t) => {
   const { call, project, paths } = await fixture(t);
   const p = paths();
@@ -151,7 +257,7 @@ test("copy and move work between every writable area without downloading", async
   assert.equal(movedFolder.path, "src/lib (1)");
   assert.equal(await readFile(path.join(p.repo, "src/lib (1)/util.js"), "utf8"), "one util");
   await assert.rejects(lstat(path.join(p.dropZoneRoot, "src/lib")), { code: "ENOENT" });
-  for (const directory of [p.dropZoneRoot, projectZone, p.repo, path.join(p.repo, "src"), path.join(p.stateRoot, "backups", "kept")]) {
+  for (const directory of [p.dropZoneRoot, projectZone, p.repo, path.join(p.repo, "src"), path.join(p.stateRoot, "backups", "kept"), p.repoStaging]) {
     assert.deepEqual(await leftovers(directory), [], directory);
   }
 });
@@ -306,6 +412,9 @@ test("HTTP project routes, transfers and inline image previews keep trusted iden
   const sessionFiles = `${origin}/sessions/session-1/files`;
   const copied = await fetch(`${sessionFiles}/repo/transfer`, json({ path: "src/app.js", mode: "copy", targetArea: "project-drop-zone", targetPath: "" }));
   assert.equal(copied.status, 200, await copied.text());
+  const repoUpload = await fetch(`${sessionFiles}/repo/upload?path=src/pixel.png`, { method: "POST", body: data });
+  assert.equal(repoUpload.status, 200, await repoUpload.text());
+  assert.deepEqual(await readFile(path.join(paths().repo, "src", "pixel.png")), png);
   const spoofed = await fetch(`${sessionFiles}/session/transfer?vibe64User[role]=owner`, json({ path: "private.txt", mode: "copy", targetArea: "drop-zone", targetPath: "" }));
   assert.equal(spoofed.status, 403);
 });

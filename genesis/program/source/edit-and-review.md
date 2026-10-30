@@ -177,14 +177,26 @@ switching tabs; uploads cannot discard it.
 Uploads reuse the chat attachment queue (`useAssistantAttachments`) and its
 single-file browser transport (`src/lib/vibe64FileUpload.js`, shared with chat),
 one file at a time, up to 500 MiB each and 200 per batch, by picker or by
-dropping files on the area. Each file goes to the folder open when it was added,
-with no staging step. The docked list shows per-file bytes and percent, a batch
-total, Cancel for anything unfinished, Cancel all, the reason a file failed with
-Retry, and Remove. Cancelling aborts the request. The server streams every
-upload, text file and copy into a hidden `.vibe64-incoming-*` item beside its
-destination and publishes it by link or rename, so readers never see a partial
-item and an aborted, failed or malformed upload leaves nothing behind, including
-when the multipart parser closes the file stream before copying starts.
+dropping files on the area. `useVibe64FileUploads` also owns the one name
+question per batch, for every area including Repo. Each file goes to the folder
+open when it was added, with no staging step. In Repo that folder is the open
+file's folder or the source root, or the folder whose **Upload here** was
+chosen; the source editor offers these only when Files hosts it. The docked list
+shows per-file bytes and percent, a batch total, Cancel for anything unfinished,
+Cancel all, the reason a file failed with Retry, and Remove. Cancelling aborts
+the request. The server streams every upload, text file and copy into a hidden
+`.vibe64-incoming-*` item and publishes it by link or rename, so readers never
+see a partial item and an aborted, failed or malformed upload leaves nothing
+behind, including when the multipart parser closes the file stream before
+copying starts. Other areas stage beside the destination. Repo stages in
+`vibe64-file-staging` inside the checkout's own Git directory (resolved with
+`git rev-parse --absolute-git-dir` and refused when outside the checkout), so
+`git status`, an assistant's `git add` and Save work never see a staged item;
+a replaced Repo item is also set aside there. A Repo upload streams in without
+the exclusive source write and takes it only to check the folder again and
+publish, refusing as busy while Save work, Update, an assistant start or another
+source write holds it. Repo writes remove staged items a stopped server left
+more than a day ago. Uploads refuse the paths the destination protects.
 Before an upload or move/copy, Files asks the destination which names already
 exist and asks the person once: Replace, Keep both (`name (n).ext`) or Skip.
 Without a choice an existing name is refused; nothing is overwritten silently.

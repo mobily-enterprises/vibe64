@@ -20,10 +20,28 @@
       :project-slug="projectSlug"
       :open-request="openRequest"
       :refresh-key="refreshKeys.repo"
-      transfer-available
+      files-actions
       @ask-assistant-about-file="$emit('ask-assistant-about-file', $event)"
       @open-program="$emit('open-program', $event)"
       @transfer="repoTransfer = $event"
+      @upload="uploadToRepo"
+    />
+    <input ref="repoUploadInput" type="file" multiple class="d-none" aria-label="Choose files to upload to Repo" @change="pickRepoFiles">
+    <Vibe64FileUploadQueue
+      v-if="area === 'repo'"
+      :active="repoUploads.active.value"
+      :items="repoUploads.items.value"
+      @cancel="repoUploads.cancel"
+      @cancel-all="repoUploads.cancelAll"
+      @clear="repoUploads.clear"
+      @remove="repoUploads.remove"
+      @retry="repoUploads.retry"
+    />
+    <Vibe64FileConflictDialog
+      :folder-label="repoFolderLabel(repoUploads.conflicts.value.folder)"
+      :names="repoUploads.conflicts.value.names"
+      @choose="repoUploads.resolveConflict"
+      @closed="restoreRepoFocus"
     />
     <Vibe64FileArea
       v-for="visitedArea in mountedAreas"
@@ -54,16 +72,19 @@
 </template>
 
 <script setup>
-import { computed, onScopeDispose, reactive, ref, watch } from "vue";
+import { computed, nextTick, onScopeDispose, reactive, ref, watch } from "vue";
 import { useDisplay } from "vuetify";
 import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
 import { useUiFeedback } from "@jskit-ai/http-web/client/composables/useUiFeedback";
+import { useVibe64FileUploads } from "@/composables/useVibe64FileUploads.js";
 import { vibe64ApiResponseError } from "@/lib/vibe64ApiResponses.js";
 import { vibe64SessionPath } from "@/lib/vibe64SessionRequestConfig.js";
 import { vibe64FileArea as areaInfo, vibe64FileTransferMessage } from "@/lib/vibe64FileAreas.js";
 import Vibe64SessionSourceEditor from "./Vibe64SessionSourceEditor.vue";
 import Vibe64FileArea from "@/components/studio/files/Vibe64FileArea.vue";
+import Vibe64FileConflictDialog from "@/components/studio/files/Vibe64FileConflictDialog.vue";
 import Vibe64FileTransferDialog from "@/components/studio/files/Vibe64FileTransferDialog.vue";
+import Vibe64FileUploadQueue from "@/components/studio/files/Vibe64FileUploadQueue.vue";
 
 defineOptions({ inheritAttrs: false });
 defineEmits(["ask-assistant-about-file", "open-program"]);
@@ -98,7 +119,55 @@ const refreshKeys = reactive({});
 const repoTransfer = ref(null);
 const areaError = ref("");
 const loadingAreas = ref(false);
+const repoUploadInput = ref(null);
 let generation = 0;
+let repoUploadFolder = "";
+let repoUploadRefresh = null;
+let repoReturnFocus = null;
+
+// Repo uploads use the same queue and conflict question as the other areas;
+// each file goes into the Repo folder chosen when it was added.
+const repoUploads = useVibe64FileUploads({
+  endpoint: computed(() => `${filesBase.value}/repo`),
+  onAsk: () => { repoReturnFocus = globalThis.document?.activeElement || null; },
+  onUploaded: () => {
+    // A burst of small uploads refreshes Repo once.
+    clearTimeout(repoUploadRefresh);
+    repoUploadRefresh = setTimeout(() => { refreshKeys.repo = (refreshKeys.repo || 0) + 1; }, 250);
+  }
+});
+
+function repoFolderLabel(folder = "") {
+  return [areaInfo("repo").label, ...folder.split("/").filter(Boolean)].join(" › ");
+}
+
+// Dropped files arrive with the event; otherwise the file picker opens.
+function uploadToRepo({ folder = "", files = null } = {}) {
+  if (files) return startRepoUploads(files, folder);
+  repoUploadFolder = folder;
+  repoUploadInput.value?.click();
+}
+
+function pickRepoFiles(event) {
+  const files = [...(event.target.files || [])];
+  event.target.value = "";
+  return startRepoUploads(files, repoUploadFolder);
+}
+
+async function startRepoUploads(files, folder) {
+  try {
+    await repoUploads.start(files, folder);
+  } catch (error) {
+    feedback.error(error, "Upload failed.");
+  }
+}
+
+async function restoreRepoFocus() {
+  const target = repoReturnFocus;
+  repoReturnFocus = null;
+  await nextTick();
+  if (target?.isConnected) target.focus();
+}
 
 function transferred(event) {
   refreshKeys[event.destination.area] = (refreshKeys[event.destination.area] || 0) + 1;
@@ -136,7 +205,10 @@ async function loadAreas() {
 }
 watch(() => [props.sessionsApiPath, props.sessionId], loadAreas, { immediate: true });
 watch(() => props.openRequest, () => { area.value = "repo"; });
-onScopeDispose(() => { generation += 1; });
+onScopeDispose(() => {
+  generation += 1;
+  clearTimeout(repoUploadRefresh);
+});
 </script>
 
 <style scoped>

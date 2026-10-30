@@ -269,7 +269,11 @@
         v-if="!singleFile && !codeFocusMode"
         v-show="!mobile || !fileListCollapsed"
         class="vibe64-source-editor__sidebar"
-        :class="{ 'vibe64-source-editor__sidebar--collapsed': fileListCollapsed }"
+        :class="{ 'vibe64-source-editor__sidebar--collapsed': fileListCollapsed, 'vibe64-source-editor__sidebar--drop': dropDepth > 0 }"
+        @dragenter="dragEnter"
+        @dragover="dragOver"
+        @dragleave="dragLeave"
+        @drop="dropFiles"
       >
         <button
           v-if="fileListCollapsed"
@@ -284,8 +288,20 @@
         </button>
         <template v-else>
           <div class="vibe64-source-editor__tree-toolbar">
-            <span>Files</span>
+            <span v-if="dropDepth > 0" class="vibe64-source-editor__drop-label" role="status">Drop to upload to {{ uploadFolderLabel }}</span>
+            <span v-else>Files</span>
             <div class="vibe64-source-editor__tree-actions">
+              <v-btn
+                v-if="filesActions"
+                :aria-label="`Upload files to ${uploadFolderLabel}`"
+                :disabled="!editor.tree.value"
+                :icon="mdiUpload"
+                size="x-small"
+                :title="`Upload files to ${uploadFolderLabel}`"
+                type="button"
+                variant="text"
+                @click="emit('upload', { folder: uploadFolder })"
+              />
               <v-btn
                 aria-label="New file at source root"
                 :disabled="editor.creatingFile.value || !editor.tree.value"
@@ -402,7 +418,7 @@
             :selected-path="displayedPath"
             :starred-paths="fileBookmarks?.paths.value || []"
             :assistant-draft-available="assistantDraftAvailable"
-            :transfer-available="transferAvailable"
+            :files-actions="filesActions"
             @ask-assistant="askAssistantAboutPath"
             @copy-path="copySourcePath"
             @directory-open-change="handleDirectoryOpenChange"
@@ -412,6 +428,7 @@
             @toggle-star="fileBookmarks?.toggle($event)"
             @download-file="requestDownload"
             @transfer="emit('transfer', $event)"
+            @upload="uploadInto"
           />
         </template>
       </aside>
@@ -697,7 +714,8 @@ import {
   mdiRobotOutline,
   mdiStar,
   mdiStarOutline,
-  mdiUndoVariant
+  mdiUndoVariant,
+  mdiUpload
 } from "@mdi/js";
 
 import Vibe64SourceInterface from "./Vibe64SourceInterface.vue";
@@ -720,6 +738,7 @@ import { vibe64SourceEditorDownloadPath } from "@/lib/vibe64SessionRequestConfig
 import { scopedDevelopmentApiUrl } from "@/lib/studioUrls.js";
 import { downloadAttachment } from "@/lib/vibe64AttachmentDownload.js";
 import { readRefOrGetterValue } from "@/lib/vueRefOrGetterValue.js";
+import { vibe64DroppedFiles, vibe64FileArea } from "@/lib/vibe64FileAreas.js";
 import {
   useVibe64SourceEditor
 } from "@/composables/useVibe64SourceEditor.js";
@@ -786,8 +805,9 @@ const props = defineProps({
     default: false,
     type: Boolean
   },
-  // Files offers "Move or copy…" in the tree and refreshes it after a move or copy.
-  transferAvailable: {
+  // Files offers uploads and "Move or copy…" in the tree, and refreshes it
+  // after an upload, move or copy.
+  filesActions: {
     default: false,
     type: Boolean
   },
@@ -796,7 +816,7 @@ const props = defineProps({
     type: Number
   }
 });
-const emit = defineEmits(["ask-assistant-about-file", "open-source-file", "interface-location", "open-program", "transfer"]);
+const emit = defineEmits(["ask-assistant-about-file", "open-source-file", "interface-location", "open-program", "transfer", "upload"]);
 
 const editorElement = ref(null);
 let editorView = null;
@@ -912,6 +932,11 @@ watch([editor.selectedPath, interfaceSymbolId, filePresentation, symbolPresentat
   });
 }, { flush: 'post' });
 const displayedPath = computed(() => editor.downloadOnlyFile.value?.path || editor.selectedPath.value);
+// Files uploads into the current folder: the open file's folder, or the root.
+const uploadFolder = computed(() => normalizeSourceEditorPath(displayedPath.value).split("/").slice(0, -1).join("/"));
+const uploadFolderLabel = computed(() => [vibe64FileArea("repo").label, ...uploadFolder.value.split("/").filter(Boolean)].join(" › "));
+const uploadFeedback = useUiFeedback({ source: "vibe64.files" });
+const dropDepth = ref(0);
 const imagePreviewVersion = ref(0);
 // Binary images open as images; an SVG does when its image view is chosen.
 const imagePreviewUrl = computed(() => {
@@ -1171,6 +1196,41 @@ function parentDirectoryPathsFor(filePath = "") {
     paths.push(parts.slice(0, index).join("/"));
   }
   return paths;
+}
+
+// "Upload here" opens the folder so the new files show once they arrive.
+function uploadInto(directoryPath = "") {
+  handleDirectoryOpenChange({ open: true, path: directoryPath });
+  emit("upload", { folder: normalizeSourceEditorPath(directoryPath) });
+}
+
+const fileDrag = (event) => props.filesActions && event.dataTransfer?.types.includes("Files");
+
+function dragEnter(event) {
+  if (!fileDrag(event)) return;
+  event.preventDefault();
+  dropDepth.value += 1;
+}
+
+function dragOver(event) {
+  if (!fileDrag(event)) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "copy";
+}
+
+function dragLeave(event) {
+  if (fileDrag(event)) dropDepth.value = Math.max(0, dropDepth.value - 1);
+}
+
+function dropFiles(event) {
+  if (!fileDrag(event)) return;
+  event.preventDefault();
+  dropDepth.value = 0;
+  try {
+    emit("upload", { folder: uploadFolder.value, files: vibe64DroppedFiles(event.dataTransfer) });
+  } catch (error) {
+    uploadFeedback.error(error);
+  }
 }
 
 function openNewFileDialog(directoryPath = "") {
@@ -1918,6 +1978,20 @@ onBeforeUnmount(() => {
   position: sticky;
   top: 0;
   z-index: 4;
+}
+
+.vibe64-source-editor__sidebar--drop {
+  background: color-mix(in srgb, rgb(var(--v-theme-primary)) 8%, rgb(var(--v-theme-surface)));
+  outline: 2px dashed rgb(var(--v-theme-primary));
+  outline-offset: -2px;
+}
+
+.vibe64-source-editor__drop-label {
+  color: rgb(var(--v-theme-primary));
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .vibe64-source-editor__tree-actions {
