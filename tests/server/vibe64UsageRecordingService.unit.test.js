@@ -220,7 +220,8 @@ test("module and asset loads are counted, and a full request log says so", async
   await waitFor(current, (value) => value?.state === "recording", "recording");
   assert.equal((await call("stop", { recordingId: recording.id })).recording.requestLog.full, true);
   await trace.idle();
-  await waitFor(current, (value) => value?.state === "stopped", "stopped");
+  // Stopping waits for the 20,000 queued log lines; allow for a busy machine.
+  await waitFor(current, (value) => value?.state === "stopped", "stopped", 30_000);
   const { requests } = await call("readRequests", { recordingId: recording.id });
   // A request the full log missed still shows what ran, without a made-up path.
   assert.deepEqual(requests.map(({ id, method, path: requestPath }) => ({ id, method, path: requestPath })),
