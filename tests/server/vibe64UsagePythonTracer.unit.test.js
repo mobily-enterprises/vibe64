@@ -8,7 +8,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import * as tracers from "@local/vibe64-usage-recording/server/tracers";
+import { mergePrependEnvironment, usageRecordingEnvironment, usageTracersForRuntimes } from "@local/vibe64-usage-recording/server/tracers";
 import { usageTraceLineProblem } from "@local/vibe64-usage-recording/shared/contract";
 
 const REPOSITORY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -17,7 +17,7 @@ const HTTP_ROOT = path.join(REPOSITORY, "tests/fixtures/usage-recording/python-h
 const CLI_ROOT = path.join(REPOSITORY, "tests/fixtures/usage-recording/python-cli");
 const RECORDING_ID = "rec_abcdefghijklmnopqrst";
 const HITS_FILE = /^hits-python-[0-9]+(-[0-9]+)?\.ndjson$/u;
-const [pythonTracer] = tracers.usageTracersForRuntimes(["python"]);
+const [pythonTracer] = usageTracersForRuntimes(["python"]);
 
 const pythonVersion = spawnSync("python3", ["-c", "import sys; print(sys.version_info >= (3, 12))"], { encoding: "utf8" });
 const skip = pythonVersion.stdout?.trim() === "True" ? false : "needs python3 3.12 or newer";
@@ -43,7 +43,7 @@ function pythonEnvironment({ directory, sourceRoot, targetKind, pythonPath = "",
     ...environment,
     ...prepared.environment,
     PYTHONPATH: [prepared.prependEnvironment.PYTHONPATH, pythonPath].filter(Boolean).join(path.delimiter),
-    ...tracers.usageRecordingEnvironment({ recordingDirectory: directory, sourceRoot, targetKind })
+    ...usageRecordingEnvironment({ recordingDirectory: directory, sourceRoot, targetKind })
   };
 }
 
@@ -154,11 +154,11 @@ test("prepare puts the Python runtime first on PYTHONPATH and sets nothing else"
   assert.equal(existsSync(path.join(RUNTIME, "sitecustomize.py")), true);
 });
 
-test("the prepared PYTHONPATH merges with a project's own without an empty segment", { skip: tracers.mergePrependEnvironment ? false : "needs mergePrependEnvironment" }, () => {
+test("the prepared PYTHONPATH merges with a project's own without an empty segment", () => {
   const { prependEnvironment } = pythonTracer.prepare({ recordingDirectory: "/r", sourceRoot: "/s", recordingId: RECORDING_ID, targetKind: "web" });
-  assert.deepEqual(tracers.mergePrependEnvironment(prependEnvironment, {}, ":"), { PYTHONPATH: RUNTIME });
-  assert.deepEqual(tracers.mergePrependEnvironment(prependEnvironment, { PYTHONPATH: "" }, ":"), { PYTHONPATH: RUNTIME });
-  assert.deepEqual(tracers.mergePrependEnvironment(prependEnvironment, { PYTHONPATH: "/project/src" }, ":"), { PYTHONPATH: `${RUNTIME}:/project/src` });
+  assert.deepEqual(mergePrependEnvironment(prependEnvironment, {}, ":"), { PYTHONPATH: RUNTIME });
+  assert.deepEqual(mergePrependEnvironment(prependEnvironment, { PYTHONPATH: "" }, ":"), { PYTHONPATH: RUNTIME });
+  assert.deepEqual(mergePrependEnvironment(prependEnvironment, { PYTHONPATH: "/project/src" }, ":"), { PYTHONPATH: `${RUNTIME}:/project/src` });
 });
 
 test("an older Python writes PYTHON_TOO_OLD and stays inert", { skip }, async (t) => {
