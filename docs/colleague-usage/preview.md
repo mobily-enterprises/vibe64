@@ -200,7 +200,8 @@ the page. On mobile it is in the expanded toolbar (**Show preview controls**).
 Choose it, then click an element in Preview. While you pick, an outline follows
 the pointer and names the component, and the click selects the element instead
 of using it. Architecture then opens **Usage** › **Calls** at that component, to
-show its exact and probable calls; see [See what one entry point uses](usage-map.md). To
+show its exact and probable calls, with its name in the entry list's search; see
+[See what one entry point uses](usage-map.md). To
 stop picking, press Escape or choose **Cancel** on **Select an element in Preview
 to see what it uses.** Hiding, suspending or reloading Preview also stops it.
 

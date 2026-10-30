@@ -13,7 +13,8 @@ pages still have entry points, such as commands or library exports.
 
 On a wide screen, the entry points are listed on the left and the chosen one
 is named above the modes as **Entry: <name>**. On a phone, tap **Choose an
-entry** (or **Entry: <name>**) to open the same list full screen.
+entry** (or **Entry: <name>**) to open the same list full screen. When Preview's
+**Pick element** opens an entry here, its name is put in the list's search.
 
 - **Search entries** matches names and file paths.
 - The chips filter by kind and show how many of each exist. Only kinds the
@@ -70,11 +71,13 @@ probable call. Lines under a card count calls, not functions: **→ Sessions ·
 **renders 1 component** the components rendered there. In Imports they count
 imports. In Recording, **→ Sessions · 9 calls in code** counts the calls the
 code makes between functions that ran; it does not say those calls happened.
-Subsystems the entry never reaches are hidden; **Show untouched** shows them
-faded.
+The card holding the entry's own file says **Starts here**. Subsystems the
+entry never reaches are hidden; **Show untouched** shows them faded.
 
 **One subsystem.** Tap a card to see its files or functions, arranged by
-distance from the entry: **Start**, **1 step away** and so on. When there is
+distance from the entry: **Start**, **1 step away** and so on. Lines under its
+heading, such as **→ Core · 1 exact call**, count what leaves it for other
+subsystems. When there is
 room for two columns of them they are boxes with arrows:
 
 - a solid arrow is an exact call;

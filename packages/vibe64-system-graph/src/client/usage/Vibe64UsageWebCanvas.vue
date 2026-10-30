@@ -19,6 +19,7 @@
             <v-card-item>
               <v-card-title class="text-title-medium">{{ card.title }}</v-card-title>
               <v-card-subtitle class="text-body-medium">{{ cardText(card).count }}</v-card-subtitle>
+              <template v-if="card.id === startSubsystemId" #append><span class="usage-web__start text-label-medium">Starts here</span></template>
             </v-card-item>
             <v-card-text v-if="cardText(card).detail || cardText(card).plumbing || crossingsFrom(crossings, card.id, subsystems).length" class="usage-web__card-body">
               <p v-if="cardText(card).detail" class="text-body-small">{{ cardText(card).detail }}</p>
@@ -55,6 +56,9 @@
           <v-chip v-if="mode === 'calls'" size="small" variant="text" class="usage-web__legend-chip"><svg width="24" height="10" aria-hidden="true"><line x1="0" y1="5" x2="14" y2="5" class="usage-web__line usage-web__line--probable" /><circle cx="18" cy="5" r="4" class="usage-web__stub" /></svg>Unresolved</v-chip>
         </div>
       </header>
+      <ul v-if="leaving.length" class="usage-web__crossings" aria-label="Leaving this subsystem">
+        <li v-for="crossing in leaving" :key="crossing.toSubsystemId" class="text-body-small">→ {{ crossing.title }} · {{ crossingText(mode, crossing) }}</li>
+      </ul>
       <p v-if="!nodes.length" class="usage-web__empty text-body-medium" role="status">{{ zoomEmptyText }}</p>
       <v-list v-else-if="compact" class="usage-web__rows" density="comfortable" aria-label="Reached in this subsystem">
         <template v-for="column in columns" :key="column.depth">
@@ -154,7 +158,8 @@ const props = defineProps({
   edges: { type: Array, default: () => [] },
   selectedId: { type: String, default: "" },
   showUntouched: { type: Boolean, default: false },
-  compact: { type: Boolean, default: false }
+  compact: { type: Boolean, default: false },
+  startSubsystemId: { type: String, default: "" }
 });
 const emit = defineEmits(["zoom", "select", "update:showUntouched"]);
 
@@ -164,6 +169,7 @@ const reached = (item) => Number(item[countKey.value] || 0) > 0;
 const cardText = (item) => subsystemCard(props.mode, item);
 const layout = computed(() => subsystemSections(props.subsystems, props.groups, { countKey: countKey.value, showUntouched: props.showUntouched }));
 const zoomedTitle = computed(() => props.subsystems.find((item) => item.id === props.zoomedId)?.title || props.zoomedId);
+const leaving = computed(() => (props.zoomedId ? crossingsFrom(props.crossings, props.zoomedId, props.subsystems) : []));
 const emptyText = computed(() => (props.mode === "recording" ? "This request ran no project code that the last scan knows." : "Nothing is reached from this entry."));
 const zoomEmptyText = computed(() => (props.mode === "imports" ? "No files in this subsystem are reached." : props.mode === "calls" ? "No functions in this subsystem are reached." : "No functions in this subsystem ran."));
 const columns = computed(() => depthColumns(props.nodes));
@@ -230,6 +236,7 @@ function nodeLabel(node) {
 .usage-web__card-body p { margin: 0; }
 .usage-web__crossings { list-style: none; margin: 0; padding: 0; color: var(--v64-on-surface-variant); }
 .usage-web__crossings li { overflow-wrap: anywhere; }
+.usage-web__start { color: var(--v64-primary); white-space: nowrap; }
 .usage-web__untouched { align-self: flex-start; }
 .usage-web__untouched.v-chip--variant-outlined { border-color: var(--v64-outline); }
 .usage-web__zoom { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; }

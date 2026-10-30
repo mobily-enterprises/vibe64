@@ -255,10 +255,10 @@ function selectEntry(entry) {
 }
 
 // "Show usage" from Map: the entry when exactly one matches, else the
-// filtered list.
+// filtered list. A request naming an entry (Pick) is handled below.
 let handledFind = null;
 watch(() => props.findRequest, async (request) => {
-  if (!request || request === handledFind) return;
+  if (!request || request === handledFind || request.entryId) return;
   handledFind = request;
   search.value = String(request.q || "").slice(0, 80);
   kind.value = request.kind || "";
@@ -310,6 +310,21 @@ watch([() => JSON.stringify(webQuery.value), () => props.active, () => props.ses
 
 const webData = computed(() => usage.web.data.value);
 const webEntry = computed(() => webData.value?.entry || {});
+
+// Pick in Preview opens one entry, which may be far down the list: once the
+// web names it, its title becomes the list's search so the row is in view.
+let handledPick = null;
+let pickedEntry = "";
+watch([() => props.findRequest, webEntry], ([request, entry]) => {
+  if (request?.entryId && request !== handledPick) {
+    handledPick = request;
+    pickedEntry = request.entryId;
+  }
+  if (!pickedEntry || entry.id !== pickedEntry) return;
+  pickedEntry = "";
+  kind.value = "";
+  search.value = String(entry.title || "").slice(0, 80);
+}, { immediate: true });
 const webFresh = computed(() => Boolean(webData.value && webData.value.entry.id === props.state.entry && webData.value.mode === mode.value
   && (mode.value !== "calls" || webData.value.certainty === (exactOnly.value ? "exact" : "all"))));
 
@@ -430,7 +445,8 @@ const canvasBindings = computed(() => ({
   edges: webView.value?.edges || [],
   selectedId: selected.value?.id || "",
   showUntouched: showUntouched.value,
-  compact: compact.value || listCanvas.value
+  compact: compact.value || listCanvas.value,
+  startSubsystemId: mode.value === "recording" ? "" : webEntry.value.subsystemId || ""
 }));
 const canvasHandlers = {
   zoom: (subsystemId) => update({ subsystem: subsystemId }),

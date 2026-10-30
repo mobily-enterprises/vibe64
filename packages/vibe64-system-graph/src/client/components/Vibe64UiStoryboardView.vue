@@ -665,6 +665,8 @@ watch(() => props.usageOpenRequest, request => {
   if (!request || request === handledUsageOpen) return;
   handledUsageOpen = request;
   usageState.value = usageStateFromQuery({ view: 'usage', mode: request.mode || 'recording', entry: request.entryId, recording: request.recordingId, request: request.requestId });
+  // An entry opened from elsewhere (Pick in Preview) is also searched for in the list.
+  if (request.entryId && usageState.value.mode !== 'recording') usageFind.value = { entryId: request.entryId };
 }, { immediate: true });
 let handledRestore = null;
 watch(() => props.restoreRequest, request => {
