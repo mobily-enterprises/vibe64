@@ -1,6 +1,52 @@
-// Routes under /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId are
-// added with the recorder, through the standard action route scope. The
-// skeleton registers none.
-function registerRoutes() {}
+import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
+
+const sessionRoute = "/usage-recordings/sessions/:sessionId";
+const pageQuery = (query = {}) => ({
+  ...(query.cursor !== undefined ? { cursor: String(query.cursor) } : {}),
+  ...(query.limit !== undefined ? { limit: Number(query.limit) } : {})
+});
+
+function registerRoutes(http, { projectContext = null, routeSurface = "", routeRelativePath = "" } = {}) {
+  const routes = createVibe64FeatureRoutes(http, {
+    localRequestMessage: "Vibe64 usage recording routes only accept loopback Studio requests.",
+    projectContext,
+    routeRelativePath,
+    routeSurface,
+    tags: ["studio", "vibe64-usage-recording"]
+  });
+  const ids = (request) => ({ sessionId: request.params.sessionId, ...(request.params.recordingId ? { recordingId: request.params.recordingId } : {}) });
+  const body = (request) => routes.requestBody(request);
+  for (const [method, suffix, operation, summary, buildInput = ids] of [
+    ["GET", "/targets", "targets.read", "List the session's Output targets and whether each can be recorded."],
+    ["POST", "", "start", "Start recording which project functions run in an Output target.",
+      (request) => ({ ...ids(request), targetId: body(request).targetId, ...(body(request).parameters !== undefined ? { parameters: body(request).parameters } : {}) })],
+    ["GET", "/current", "current.read", "Read the session's running or just finished recording."],
+    ["GET", "", "list", "List the session's recent recordings."],
+    ["POST", "/:recordingId/stop", "stop", "Stop a recording; always agrees."],
+    ["POST", "/:recordingId/dismiss", "dismiss", "Hide a finished recording from the recording indicator."],
+    ["GET", "/:recordingId/requests", "requests.read", "List a recording's requests with what each one ran.",
+      (request) => {
+        const query = routes.requestQuery(request);
+        return {
+          ...ids(request), ...pageQuery(query),
+          ...(query.q !== undefined ? { q: String(query.q) } : {}),
+          ...(query.includeEmpty !== undefined ? { includeEmpty: ["1", "true"].includes(String(query.includeEmpty)) } : {})
+        };
+      }],
+    ["GET", "/:recordingId/requests/:requestId/functions", "request-functions.read", "List the project functions one request ran.",
+      (request) => ({ ...ids(request), requestId: request.params.requestId, ...pageQuery(routes.requestQuery(request)) })],
+    ["POST", "/:recordingId/interactions", "interaction.record", "Record a Preview interaction during a recording.",
+      (request) => {
+        const { id, at, label, componentFile } = body(request);
+        return { ...ids(request), id, at, label, ...(componentFile !== undefined ? { componentFile } : {}) };
+      }],
+    ["DELETE", "/:recordingId", "delete", "Delete a recording, stopping it first."]
+  ]) routes.actionRoute(method, `${sessionRoute}${suffix}`, {
+    actionId: `vibe64.usage-recording.${operation}`,
+    buildInput,
+    ...(method === "POST" ? { bodyLimit: 16 * 1024 } : {}),
+    summary
+  });
+}
 
 export { registerRoutes };

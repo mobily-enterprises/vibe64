@@ -34,8 +34,17 @@ function recordingHttp() {
 }
 
 async function setupProvider(dependencies) {
-  const actionCatalogue = { register: () => assert.fail("The skeleton registers no actions.") };
-  return Vibe64UsageRecordingProvider.setup({ ...dependencies, actionCatalogue }, {});
+  const actions = [];
+  const actionCatalogue = { register: (contribution) => actions.push(...contribution.actions) };
+  const provided = await Vibe64UsageRecordingProvider.setup({
+    events: { publish: async () => {} },
+    logger: { warn: () => {} },
+    project: {},
+    terminals: {},
+    ...dependencies,
+    actionCatalogue
+  }, {});
+  return { ...provided, actions };
 }
 
 test("the application installs the usage recording package", async () => {
@@ -45,10 +54,12 @@ test("the application installs the usage recording package", async () => {
   assert.ok(gitignore.split("\n").includes("/.genesis/call-web.json"));
 });
 
-test("the provider registers nothing yet and admits by default or through a host decision", async () => {
+test("the provider registers its routes and actions and admits by default or through a host decision", async () => {
   const { registered, http } = recordingHttp();
-  const { usageRecording } = await setupProvider({ http });
-  assert.deepEqual(registered, []);
+  const { actions, usageRecording } = await setupProvider({ http });
+  assert.equal(registered.length, 10);
+  assert.equal(actions.length, 10);
+  assert.ok(actions.every((action) => action.id.startsWith("vibe64.usage-recording.") && action.extensions.assistant.exclude === true));
   assert.equal(usageRecording.admit, admitUsageRecording);
   assert.deepEqual(await usageRecording.admit({ sessionId: "s", projectSlug: "p", targetKind: "web", runtimes: ["nodejs"] }), { admitted: true });
 

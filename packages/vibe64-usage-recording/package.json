@@ -8,6 +8,7 @@
     ".": "./src/index.js",
     "./client": "./src/client/index.js",
     "./server": "./src/server/index.js",
+    "./server/activeRecordings": "./src/server/activeRecordings.js",
     "./server/admission": "./src/server/admission.js",
     "./server/recordingFiles": "./src/server/recordingFiles.js",
     "./server/tracers": "./src/server/tracers/index.js",
@@ -21,7 +22,11 @@
       ],
       "requires": [
         "runtime.actions",
-        "runtime.http"
+        "runtime.events",
+        "runtime.http",
+        "runtime.logger",
+        "vibe64.project",
+        "vibe64.terminals"
       ]
     },
     "runtime": {
@@ -40,6 +45,10 @@
     "metadata": {
       "apiSummary": {
         "surfaces": [
+          {
+            "subpath": "./server/activeRecordings",
+            "summary": "Lets the Output target launcher and the Preview proxy find a session's running recording."
+          },
           {
             "subpath": "./server/admission",
             "summary": "Names the host-replaceable recording admission decision and its always-admit default."
@@ -64,7 +73,17 @@
     }
   },
   "dependencies": {
+    "@babel/parser": "^7.29.0",
+    "@jskit-ai/http-web": "0.2.5",
     "@jskit-ai/kernel": "0.2.1",
-    "vue": "^3.5.13"
+    "@jskit-ai/realtime": "0.2.4",
+    "@jskit-ai/shell-web": "0.2.1",
+    "@local/vibe64-core": "0.1.0",
+    "@local/vibe64-genesis": "0.1.0",
+    "@local/vibe64-runtime": "0.1.0",
+    "@mdi/js": "^7.4.47",
+    "@tanstack/vue-query": "^5.90.5",
+    "vue": "^3.5.13",
+    "vuetify": "^4.0.0"
   }
 }

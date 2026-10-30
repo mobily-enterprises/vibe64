@@ -46,6 +46,11 @@ import {
   vibe64SessionDebugError,
   vibe64SessionDebugLog
 } from "@local/vibe64-runtime/server/sessionDebugLog";
+import { activeUsageRecording } from "@local/vibe64-usage-recording/server/activeRecordings";
+import {
+  USAGE_RECORDING_INTERACTION_HEADER,
+  USAGE_RECORDING_REQUEST_HEADER
+} from "@local/vibe64-usage-recording/shared/contract";
 
 import {
   injectLaunchPreviewBridge
@@ -84,13 +89,25 @@ function normalizePreviewTargetHref(value = "") {
   return url;
 }
 
+// The proxy alone names recorded requests: a client's own recording headers
+// never reach the application.
+function stripUsageRecordingHeaders(headers) {
+  delete headers[USAGE_RECORDING_REQUEST_HEADER];
+  delete headers[USAGE_RECORDING_INTERACTION_HEADER];
+  return headers;
+}
+
 function proxyRequestHeaders(headers = {}, targetUrl, {
   clientAddress = "",
   freshDocument = false,
   proxyOrigin = "",
-  targetHost = ""
+  targetHost = "",
+  usageRequestId = ""
 } = {}) {
-  const nextHeaders = { ...headers };
+  const nextHeaders = stripUsageRecordingHeaders({ ...headers });
+  if (usageRequestId) {
+    nextHeaders[USAGE_RECORDING_REQUEST_HEADER] = usageRequestId;
+  }
   delete nextHeaders["accept-encoding"];
   delete nextHeaders.connection;
   delete nextHeaders.host;
@@ -117,7 +134,7 @@ function proxyUpgradeHeaders(headers = {}, targetUrl, {
   proxyOrigin = "",
   targetHost = ""
 } = {}) {
-  const nextHeaders = { ...headers };
+  const nextHeaders = stripUsageRecordingHeaders({ ...headers });
   const cookie = stripPreviewTokenCookie(nextHeaders.cookie, { proxyOrigin });
   if (cookie) {
     nextHeaders.cookie = cookie;
@@ -918,6 +935,7 @@ async function proxyPreviewRequest(request, response, {
   consumeIdentityGrant = null,
   editorOrigins = [],
   executePreviewIdentityCommand = null,
+  locatorSource = "",
   previewAuth = null,
   proxyOrigin = "",
   tracker = null,
@@ -987,13 +1005,25 @@ async function proxyPreviewRequest(request, response, {
   try {
     const targetUrl = targetRequestUrl(request.url, connectOrigin || targetOrigin);
     const method = String(request.method || "GET").toUpperCase();
+    // While the session's Preview is recorded, each request gets the id its
+    // functions are counted under, and its method, path and status are logged.
+    const recording = activeUsageRecording(tokenScope.projectScope, tokenScope.sessionId);
+    const recordedRequest = recording?.proxyRequest({
+      interaction: requestHeader(request, USAGE_RECORDING_INTERACTION_HEADER),
+      method,
+      path: requestUrl.pathname
+    }) || null;
+    if (recordedRequest) {
+      response.once("close", () => recordedRequest.finish({ status: response.statusCode }));
+    }
     const targetResponse = await requestPreviewTarget(targetUrl, {
       body: request,
       headers: proxyRequestHeaders(request.headers, targetUrl, {
         clientAddress: request.socket?.remoteAddress || "",
         freshDocument: requestIsBrowserDocumentNavigation(request),
         proxyOrigin,
-        targetHost
+        targetHost,
+        usageRequestId: recordedRequest?.requestId || ""
       }),
       method,
       tracker
@@ -1008,7 +1038,12 @@ async function proxyPreviewRequest(request, response, {
         : html;
       const body = injectLaunchPreviewBridge(page, {
         debug: previewProxyDebugEnabled(),
+        locatorSource,
         parentOrigins: editorOrigins,
+        recording: {
+          active: recording?.web === true,
+          recordingId: recording?.web === true ? recording.recordingId : null
+        },
         targetOrigin
       });
       response.writeHead(targetResponse.statusCode || 200, previewResponseHeaders(targetResponse, {
@@ -1371,6 +1406,7 @@ function createLaunchPreviewProxyRegistry({
         terminalSessionId: String(scope.terminalSessionId || "")
       });
       existing.allowEditorOrigin(input.editorOrigin);
+      existing.useLocatorSource(input.locatorSource);
       return proxyDescriptor(existing, targetUrl);
     }
     const pending = pendingStarts.get(key);
@@ -1386,6 +1422,7 @@ function createLaunchPreviewProxyRegistry({
         });
         const proxy = await pending.promise;
         proxy.allowEditorOrigin(input.editorOrigin);
+        proxy.useLocatorSource(input.locatorSource);
         return proxyDescriptor(proxy, targetUrl);
       }
       previewProxyDebugLog("server.launchPreviewProxy.awaitPendingReplacement", {
@@ -1452,6 +1489,7 @@ function createLaunchPreviewProxyRegistry({
     try {
       const proxy = await pendingEntry.promise;
       proxy.allowEditorOrigin(input.editorOrigin);
+      proxy.useLocatorSource(input.locatorSource);
       proxies.set(key, proxy);
       previewProxyDebugLog("server.launchPreviewProxy.created", {
         key,
@@ -1644,12 +1682,15 @@ async function startLaunchPreviewProxy({
   let proxyOrigin = "";
   // Editors that were handed this Preview; only they may talk to its bridge.
   const editorOrigins = new Set();
+  // The project's Preview locator, inlined into each page's bridge.
+  let locatorSource = "";
   server.on("request", (request, response) => {
     void proxyPreviewRequest(request, response, {
       connectOrigin,
       consumeIdentityGrant,
       editorOrigins: [...editorOrigins],
       executePreviewIdentityCommand,
+      locatorSource,
       previewAuth,
       proxyOrigin: requestPreviewOrigin(request, proxyOrigin),
       tracker,
@@ -1700,6 +1741,9 @@ async function startLaunchPreviewProxy({
       if (origin) {
         editorOrigins.add(origin);
       }
+    },
+    useLocatorSource(value = "") {
+      locatorSource = typeof value === "string" ? value : "";
     },
     close: () => closePreviewServer({
       listen,

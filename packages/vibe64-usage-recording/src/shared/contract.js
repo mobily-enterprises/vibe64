@@ -42,6 +42,15 @@ const USAGE_RECORDING_LIMITS = Object.freeze({
   plumbingMinimumRequests: 3
 });
 
+// What a session keeps: its newest recordings within a count and size budget,
+// none older than the age limit. A host that accounts for or cleans recordings
+// applies the same rule.
+const USAGE_RECORDING_RETENTION = Object.freeze({
+  maxRecordings: 10,
+  maxBytes: 64 * MIB,
+  maxAgeMs: 7 * 24 * 60 * 60 * 1000
+});
+
 const USAGE_RECORDING_ID_PATTERN = /^rec_[a-z2-7]{20}$/u;
 const USAGE_REQUEST_ID_PATTERN = /^r_[0-9]{6}$/u;
 const USAGE_INTERACTION_ID_PATTERN = /^i_[0-9]{4,6}$/u;
@@ -107,6 +116,7 @@ export {
   USAGE_RECORDING_INTERACTION_HEADER,
   USAGE_RECORDING_LIMITS,
   USAGE_RECORDING_REQUEST_HEADER,
+  USAGE_RECORDING_RETENTION,
   USAGE_RECORDING_SCHEMA,
   USAGE_RECORDING_STATES,
   USAGE_RECORDING_STOP_REASONS,

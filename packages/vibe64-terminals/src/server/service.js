@@ -4419,6 +4419,10 @@ function createService({
       return result;
     },
 
+    usageRecordingTargets(sessionId) {
+      return outputTarget.usageRecordingTargets(sessionId);
+    },
+
     async stopOutputTargetTerminal(sessionId, terminalSessionId) {
       const result = await outputTarget.stopTerminal(sessionId, terminalSessionId);
       await publishTerminalSessionChanged("outputTargetStopped", sessionId, result?.ok === false ? "output-target-stop-failed" : "output-target-stopped");

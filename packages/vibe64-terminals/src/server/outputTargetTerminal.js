@@ -77,6 +77,10 @@ import {
   sessionClosingReason
 } from "@local/vibe64-runtime/server/sessionLifecycle";
 import {
+  activeUsageRecording,
+  stopActiveUsageRecording
+} from "@local/vibe64-usage-recording/server/activeRecordings";
+import {
   runVibe64AgentWriteExclusive
 } from "@local/vibe64-runtime/server/agentWriteLock";
 import {
@@ -110,6 +114,7 @@ import {
   normalizedRuntimeRequirements,
   outputResultsMarkerLineSeen
 } from "./vibe64OutputTargets.js";
+import { readPreviewLocatorSource } from "./previewLocator.js";
 import {
   previewDiagnosticsSessionRoot,
   previewLastPath,
@@ -1743,6 +1748,7 @@ async function ensureLaunchPreviewProxy({
   terminal = null
 } = {}) {
   return launchPreviewProxies.ensure({
+    locatorSource: await readPreviewLocatorSource(context.session),
     editorOrigin: previewEditorOrigin({
       editorOrigin: options.editorOrigin,
       env: options.env,
@@ -2275,6 +2281,7 @@ function createOutputTargetTerminalController({
     async closeAllForSession(sessionId) {
       const testRun = previewTestRuns.get(sessionId);
       if (testRun) testRun.closing = true;
+      await stopActiveUsageRecording(currentProjectScopeKey(), sessionId, "session-ended");
       return withLaunchStartLock(sessionId, async () => {
         await launchPreviewProxies.close({
           sessionId
@@ -2563,6 +2570,38 @@ function createOutputTargetTerminalController({
       });
     },
 
+    // The Output targets a usage recording may launch, with their declared
+    // runtimes, and which web target a Preview restart runs.
+    async usageRecordingTargets(sessionId) {
+      return vibe64Result(async () => {
+        const context = await createLaunchContext(projectService, sessionId);
+        const [outputs, targets] = await Promise.all([
+          inspectVibe64OutputsForContext(context),
+          listOutputTargets(context)
+        ]);
+        const declared = new Map((outputs.targets || []).map((target) => [target.id, target]));
+        const saved = outputTargetFromMetadata(context.session?.metadata || {});
+        const isWeb = (target) => target?.presentation?.kind === "web";
+        const previewTarget = targets.find((target) => target.id === saved?.id && isWeb(target) && target.available !== false) ||
+          managedPreviewTarget(targets);
+        return {
+          ok: true,
+          previewTargetId: String(previewTarget?.id || ""),
+          targets: targets.map((target) => ({
+            available: target.available !== false,
+            disabledReason: target.disabledReason || "",
+            id: target.id,
+            label: target.label,
+            parameters: (declared.get(target.id)?.parameters || []).map(({ default: defaultValue, id, label, required }) => ({
+              ...(defaultValue !== undefined ? { default: defaultValue } : {}), id, label, required: required === true
+            })),
+            runtimes: normalizedRuntimeRequirements(declared.get(target.id)?.runtimeRequirements),
+            web: isWeb(target)
+          }))
+        };
+      });
+    },
+
     async openOutputTarget(sessionId) {
       return vibe64Result(async () => {
         const status = await controller.launchStatus(sessionId);
@@ -2809,10 +2848,21 @@ function createOutputTargetTerminalController({
               target: "output-target"
             });
             const terminalEnv = projectExecutionEnvFromRecords(terminalEnvRecords);
+            const webOutput = String(spec.metadata?.outputPresentationKind || "").trim() === "web";
+            // While the session records this target, every launch of it
+            // carries the recorder; the recorder's variables also change the
+            // fingerprint, so an unrecorded process is never reused.
+            const usageLaunch = activeUsageRecording(currentProjectScopeKey(), sessionId)?.launch({
+              environment: composeLaunchTerminalEnvironment({ envBase: {}, hashBase: terminalEnv, specEnv: spec.env, terminalEnv }).hashEnv,
+              outputTargetId: outputTarget.id,
+              web: webOutput
+            }) || null;
             const launchEnvironment = composeLaunchTerminalEnvironment({
               envBase: {},
               hashBase: terminalEnv,
-              specEnv: spec.env,
+              specEnv: usageLaunch
+                ? (envInput) => ({ ...launchSpecEnvironment(spec.env, envInput), ...usageLaunch.environment })
+                : spec.env,
               terminalEnv
             });
             const commandAllowedRoots = [
@@ -2829,7 +2879,6 @@ function createOutputTargetTerminalController({
             });
             readinessMarker = readinessMarkerFromSpec(spec);
             outputResultsMarker = String(spec.metadata?.outputResultsMarker || "").trim();
-            const webOutput = String(spec.metadata?.outputPresentationKind || "").trim() === "web";
             const previewPublicOrigin = webOutput
               ? previewPublicOriginForLaunch({
                   env,
@@ -2904,6 +2953,7 @@ function createOutputTargetTerminalController({
                 project: commandProject,
                 purpose: webOutput ? "preview" : "output",
                 runtimes: webOutput ? previewRuntimesForSpec(spec) : normalizedRuntimeRequirements(spec.runtimes),
+                ...(usageLaunch?.usageRecordingPreload ? { usageRecordingPreload: usageLaunch.usageRecordingPreload } : {}),
                 session: context.session || {},
                 terminal: {
                   commandPreview: spec.commandPreview,
@@ -2926,6 +2976,7 @@ function createOutputTargetTerminalController({
                   namespace,
                   namespaceLimitPrefix: namespace,
                   onClose: inCallbackContext(async (event) => {
+                    usageLaunch?.exited();
                     try {
                       if (event.reason === "exit" && event.exitCode === 0) {
                         await captureOutputResults({
@@ -2969,6 +3020,7 @@ function createOutputTargetTerminalController({
                     }
                   }),
                   onStop: inCallbackContext(async (event) => {
+                    usageLaunch?.exited();
                     await writePreviewDiagnostic(context.session, {
                       ...diagnosticBase,
                       commandPreview,

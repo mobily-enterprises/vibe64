@@ -3688,6 +3688,8 @@ function createVibe64SessionStore({
         "-C",
         rootPaths.closingSessionsRoot,
         `--exclude=${sessionPaths.sessionId}/drop-zone`,
+        // Usage recordings are never archived; they end with the session.
+        `--exclude=${sessionPaths.sessionId}/usage-recordings`,
         sessionPaths.sessionId
       ], {
         allowedRoots: [
