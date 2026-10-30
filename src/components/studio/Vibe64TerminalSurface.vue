@@ -614,7 +614,7 @@ watch(() => props.starting, (starting) => {
 }
 
 .vibe64-terminal-surface__summary {
-  align-items: center;
+  align-items: baseline;
   background: rgba(var(--v-theme-on-surface), 0.045);
   border: 1px solid rgba(var(--v-theme-outline), 0.14);
   border-radius: 0.45rem;
@@ -631,9 +631,7 @@ watch(() => props.starting, (starting) => {
   font-size: 0.75rem;
   font-weight: 650;
   max-width: 38%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .vibe64-terminal-surface__summary-separator {
@@ -647,9 +645,9 @@ watch(() => props.starting, (starting) => {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 0.75rem;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  /* Wraps so the whole latest line stays readable while collapsed. */
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .vibe64-terminal-surface__before-terminal {

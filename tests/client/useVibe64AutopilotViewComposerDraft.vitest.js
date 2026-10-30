@@ -3410,6 +3410,12 @@ describe("useVibe64AutopilotView direct chat", () => {
     expect(view.saveWorkActivityLabel.value).toBe("Update session");
     expect(view.saveWorkOutput.value).toContain("Live Update");
     expect(view.saveWorkOutput.value).not.toContain("Newer completed Save");
+    // Event times read in the person's own clock, never as stored ISO text.
+    const liveAt = new Date("2026-08-31T08:31:00.000Z");
+    expect(view.saveWorkOutput.value).not.toContain("2026-08-31T08:31:00.000Z");
+    expect(view.saveWorkOutput.value).toContain(new Intl.DateTimeFormat(undefined, {
+      month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit"
+    }).format(liveAt));
   });
 
   it("dismisses only the observed checkpoint failure across reloads and shows new failures", async () => {

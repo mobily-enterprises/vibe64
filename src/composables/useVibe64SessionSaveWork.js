@@ -6,6 +6,19 @@ function text(value = "") {
   return String(value || "").trim();
 }
 
+const EVENT_TIME_FORMAT = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const EVENT_DATE_TIME_FORMAT = new Intl.DateTimeFormat(undefined, {
+  month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit"
+});
+
+// An event's stored ISO time in the person's own clock: the time alone today,
+// with the date otherwise. Anything unparseable is shown as stored.
+function eventTimeLabel(at = "", now = new Date()) {
+  const date = new Date(text(at));
+  if (!text(at) || Number.isNaN(date.getTime())) return text(at);
+  return (date.toDateString() === now.toDateString() ? EVENT_TIME_FORMAT : EVENT_DATE_TIME_FORMAT).format(date);
+}
+
 function repositoryFailureFromError(error) {
   return error && typeof error === "object"
     ? {
@@ -234,7 +247,7 @@ function useVibe64SessionSaveWork(props, {
   const saveWorkOutput = computed(() => (Array.isArray(saveWorkOperation.value?.events)
     ? saveWorkOperation.value.events
       .filter((event) => text(event.message))
-      .map((event) => [event.at, event.message].filter(Boolean).join("  "))
+      .map((event) => [eventTimeLabel(event.at), text(event.message)].filter(Boolean).join("  "))
       .join("\n")
     : ""));
   const saveWorkStatus = computed(() => String(
