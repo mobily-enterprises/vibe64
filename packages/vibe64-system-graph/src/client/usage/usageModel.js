@@ -352,6 +352,9 @@ function unavailableRuntimes(targets = []) {
   return [...new Set(targets.flatMap((target) => target.runtimes || []))];
 }
 
+// The error every usage read gives before the project's first scan.
+const NOT_SCANNED_CODE = "vibe64_genesis_city_missing";
+
 function joinText(join = "") {
   if (join === "stale") return "Changed since the last scan";
   if (join === "none") return "Not in the last scan";
@@ -364,6 +367,7 @@ export {
   MAX_NODES,
   MORE_NODES,
   NODE,
+  NOT_SCANNED_CODE,
   USAGE_MODES,
   CERTAINTY_TEXT,
   callGroups,

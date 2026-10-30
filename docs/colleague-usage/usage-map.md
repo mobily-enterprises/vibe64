@@ -132,6 +132,10 @@ and names them; Imports and Calls still work.
   entry or project. **Show Imports** still shows the files it reaches.
 - Errors offer **Retry**. **This entry point is not in the current scan.**
   offers **Choose another**.
+- Before the project's first scan there is nothing to retry: the entry list
+  says **No entry points found yet. Refresh the architecture scan.**, and a
+  recorded request says **Not scanned yet**. Both offer **Refresh**, which
+  runs the scan.
 
 The address keeps the chosen entry, mode, subsystem, recording and request, so
 reloading the page or sharing the address with someone on the same project

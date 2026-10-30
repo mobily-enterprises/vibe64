@@ -48,7 +48,7 @@
         </v-alert>
 
         <template v-if="mode !== 'recording'">
-          <div v-if="!state.entry" class="usage-view__state" role="status">
+          <div v-if="!state.entry || notScanned" class="usage-view__state" role="status">
             <template v-if="noEntries">
               <h3 class="text-title-medium">No entry points found yet</h3>
               <p class="text-body-medium">No entry points found yet. Refresh the architecture scan.</p>
@@ -110,6 +110,11 @@
             <h3 class="text-title-medium">Pick a request</h3>
             <p class="text-body-medium">Each request shows the subsystems and functions that ran for it.</p>
           </div>
+          <div v-else-if="notScanned" class="usage-view__state" role="status">
+            <h3 class="text-title-medium">Not scanned yet</h3>
+            <p class="text-body-medium">Refresh the architecture scan to see the subsystems and functions this request ran.</p>
+            <v-btn variant="tonal" :loading="refreshing" :prepend-icon="mdiRefresh" @click="emit('refresh')">Refresh</v-btn>
+          </div>
           <v-alert v-else-if="usage.result.error.value" type="error" variant="tonal" class="usage-view__banner">
             {{ usage.result.error.value }}
             <template #append><v-btn variant="text" size="small" @click="loadResult(true)">Retry</v-btn></template>
@@ -162,6 +167,7 @@ import Vibe64UsageWebCanvas from "./Vibe64UsageWebCanvas.vue";
 import {
   MAX_NODES,
   MORE_NODES,
+  NOT_SCANNED_CODE,
   USAGE_MODES,
   countLabel,
   functionLabel,
@@ -215,7 +221,9 @@ const mode = computed(() => props.state.mode || "calls");
 const snapshot = computed(() => usage.snapshot.value || usage.web.data.value?.snapshot || null);
 const recordings = computed(() => usage.recordings.data.value?.recordings || []);
 const unavailable = computed(() => unavailableRuntimes(usage.targets.data.value?.targets || []));
-const noEntries = computed(() => !usage.entries.items.value.length && !usage.entries.loading.value && !usage.entries.error.value && !search.value && !kind.value && Boolean(usage.snapshot.value));
+// Before the first scan there is nothing to retry: every read needs a scan.
+const notScanned = computed(() => [usage.entries, usage.web, usage.result].some((read) => read.errorCode.value === NOT_SCANNED_CODE));
+const noEntries = computed(() => notScanned.value || (!usage.entries.items.value.length && !usage.entries.loading.value && !usage.entries.error.value && !search.value && !kind.value && Boolean(usage.snapshot.value)));
 const busy = computed(() => [usage.web, usage.result, usage.requests].some((read) => read.loading.value));
 
 function update(patch) {
@@ -269,7 +277,7 @@ const railBindings = computed(() => ({
   kind: kind.value,
   selectedId: props.state.entry,
   loading: usage.entries.loading.value,
-  error: usage.entries.error.value,
+  error: notScanned.value ? "" : usage.entries.error.value,
   hasMore: usage.entries.hasMore.value,
   refreshing: props.refreshing
 }));

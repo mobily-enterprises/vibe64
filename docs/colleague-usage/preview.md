@@ -208,7 +208,9 @@ Pick needs the project's technology to say which component drew an element.
 When it cannot, Vibe64 says **No component information on this page. Record
 while clicking to see its requests.** When the component has no usage entry
 yet, it says that the file **has no usage entry yet. Refresh the architecture
-scan, then pick again.**
+scan, then pick again.** Before the project's first scan it says **This project
+has not been scanned yet. Refresh the architecture scan in Usage, then pick
+again.** Both offer **Open Usage**, where **Refresh** runs the scan.
 
 Starting a Preview recording (see [Record what runs](usage-recording.md))
 restarts Preview with the recorder, so unsaved page state is lost; stopping it

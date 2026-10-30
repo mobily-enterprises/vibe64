@@ -202,6 +202,22 @@ describe("Recording states", () => {
     expect(zoomed).not.toContain("runAction");
   });
 
+  it("offers Refresh, not Retry, before the project's first scan", async () => {
+    const NOT_SCANNED = { error: "Machine City has not been generated. Refresh analysis first.", errorCode: "vibe64_genesis_city_missing" };
+    const state = { mode: "recording", recording: recordingId, request: "r_000004" };
+    const html = await view(state, { recordings, requests: read(requests), result: read(null, NOT_SCANNED) });
+    expect(html).toContain("Not scanned yet");
+    expect(html).toContain("Refresh the architecture scan to see the subsystems and functions this request ran.");
+    expect(html).toContain("Refresh");
+    expect(html).not.toContain("Retry");
+    expect(html).not.toContain("Machine City has not been generated");
+    const entries = { ...usageReads({ entries: { entries: [], kinds: [] }, snapshot: null }).entries, error: ref(NOT_SCANNED.error), errorCode: ref(NOT_SCANNED.errorCode) };
+    fake.usage = { ...usageReads({ snapshot: null, web: read(null, NOT_SCANNED) }), entries };
+    const calls = await render(Vibe64UsageView, { sessionId: "s1", state: usageState({ entry: PAGE }) });
+    expect(calls).toContain("No entry points found yet. Refresh the architecture scan.");
+    expect(calls).not.toContain("Retry");
+  });
+
   it("shows loading, error with Retry and truncation for one request", async () => {
     const state = { mode: "recording", recording: recordingId, request: "r_000004" };
     expect(await view(state, { recordings, requests: read(requests), result: read(null, { loading: true }) })).toContain("aria-label=\"Loading what ran\"");

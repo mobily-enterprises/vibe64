@@ -881,6 +881,9 @@
       :timeout="7000"
     >
       {{ previewPickNoticeText }}
+      <template v-if="previewPickNoticeOpensUsage" #actions>
+        <v-btn variant="text" @click="openUsageFromPickNotice">Open Usage</v-btn>
+      </template>
     </v-snackbar>
 
     <v-snackbar
@@ -1115,9 +1118,11 @@ const {
   previewResourceNoticeVisible,
   previewPickAvailable,
   previewPickBusy,
+  previewPickNoticeOpensUsage,
   previewPickNoticeText,
   previewPickNoticeVisible,
   previewPicking,
+  openUsageFromPickNotice,
   stopPreviewPick,
   togglePreviewPick,
   previewTerminalRecoveryVisible,
