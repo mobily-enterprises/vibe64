@@ -1,4 +1,4 @@
-import { computed, nextTick, onBeforeMount, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeMount, onBeforeUnmount, ref, toValue, watch } from "vue";
 import {
   launchPreviewLocationStorageKey,
   launchPreviewToolbarStorageKey,
@@ -14,11 +14,18 @@ import {
   PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE,
   PREVIEW_IDENTITY_REQUEST_MESSAGE_TYPE,
   PREVIEW_IDENTITY_RESPONSE_MESSAGE_TYPE,
+  PREVIEW_INTERACTION_MESSAGE_TYPE,
   PREVIEW_LOCATION_MESSAGE_TYPE,
+  PREVIEW_PICK_RESULT_MESSAGE_TYPE,
+  PREVIEW_PICK_START_MESSAGE_TYPE,
+  PREVIEW_PICK_STOP_MESSAGE_TYPE,
   PREVIEW_PROXY_TOKEN_QUERY_PARAM,
   PREVIEW_QUERY_MESSAGE_TYPE,
+  PREVIEW_RECORDING_MESSAGE_TYPE,
   PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE
 } from "@local/vibe64-terminals/shared/launchPreviewProtocol";
+import { USAGE_INTERACTION_ID_PATTERN } from "@local/vibe64-usage-recording/shared/contract";
+import { sourceEditorLinkTarget } from "@/lib/vibe64SourceEditorLinks.js";
 import {
   managedPreviewTarget,
   preferredPreviewTarget
@@ -60,6 +67,7 @@ const PREVIEW_DIAGNOSTICS_TIMEOUT_MS = 3000;
 const PREVIEW_IDENTITY_TIMEOUT_MS = 10000;
 const PREVIEW_RESOURCE_RETRY_DELAY_MS = 250;
 const PREVIEW_RESOURCE_RETRY_LIMIT = 1;
+const PREVIEW_PICK_NO_COMPONENT_TEXT = "No component information on this page. Record while clicking to see its requests.";
 
 function previewUrlWithoutDisplayParams(value = "") {
   const text = String(value || "").trim();
@@ -594,7 +602,30 @@ function launchPreviewAddressNavigationUrl({
   }
 }
 
-function useVibe64OutputControlsSurface(props) {
+// A component file as the Preview's dev build names it, as a path inside the
+// session source; "" when it names a place outside that source.
+function previewComponentSourcePath(file = "", sourceRoot = "") {
+  const relative = String(sourceEditorLinkTarget({ href: String(file || ""), sourceRoot })?.path || "");
+  return relative.split("/").every((part) => part && part !== "." && part !== "..") ? relative : "";
+}
+
+// The usage entry a picked component starts from: a component, else a page,
+// entry for exactly that file.
+function previewUsageEntryForFile(entries = [], file = "") {
+  const matches = (Array.isArray(entries) ? entries : []).filter((entry) => entry?.id && entry.file === file);
+  return matches.find((entry) => entry.kind === "component") || matches.find((entry) => entry.kind === "page") || null;
+}
+
+// `usage` connects Click in Preview to the usage map: readUsageEntries(query)
+// reads usage entries, openUsage({ entryId, mode }) opens one, and while
+// `recording` (a ref or getter) is a recording of this Preview,
+// recordInteraction(interaction) saves each interaction the bridge reports.
+function useVibe64OutputControlsSurface(props, {
+  openUsage = null,
+  readUsageEntries = null,
+  recordInteraction = null,
+  recording = null
+} = {}) {
   const {
     activeOutputTarget,
     activeOutputTargetId,
@@ -693,6 +724,13 @@ function useVibe64OutputControlsSurface(props) {
   const previewIdentityRequested = ref(null);
   const previewResourceNoticeText = ref("");
   const previewResourceNoticeVisible = ref(false);
+  const previewPicking = ref(false);
+  const previewPickBusy = ref(false);
+  const previewPickNoticeText = ref("");
+  const previewPickNoticeVisible = ref(false);
+  // The highest interaction number the bridge has reported for this recording;
+  // a page that loads later continues after it.
+  const previewInteractions = { highest: 0, recordingId: "" };
   let previewIdentityAutomaticAttempt = "";
   let previewIdentityResumeSelection = null;
   let previewIdentityLifecycle = "";
@@ -1165,6 +1203,7 @@ function useVibe64OutputControlsSurface(props) {
   }
 
   function resetPreviewBridge(reason = "") {
+    setPreviewPicking(false);
     previewBridgeVersion.value = 0;
     previewBridgeOrigin = "";
     previewBridgeRequests.rejectAll("The application preview changed.");
@@ -1173,6 +1212,144 @@ function useVibe64OutputControlsSurface(props) {
       reason
     });
   }
+
+  const previewPickAvailable = computed(() => Boolean(
+    typeof readUsageEntries === "function" &&
+    previewFrameLoaded.value &&
+    previewPaneDisplayed.value &&
+    !previewSuspended.value &&
+    previewBridgeVersion.value >= PREVIEW_BRIDGE_VERSION
+  ));
+  const previewRecordingId = computed(() => {
+    const current = toValue(recording);
+    return current?.state === "recording" && current?.target?.kind === "web" ? String(current.id || "") : "";
+  });
+
+  function postToPreviewBridge(message = {}) {
+    const target = previewFrame.value?.contentWindow;
+    if (!target || !previewBridgeOrigin) {
+      return false;
+    }
+    target.postMessage({ ...message, version: PREVIEW_BRIDGE_VERSION }, previewBridgeOrigin);
+    return true;
+  }
+
+  function previewPickKeydown(event) {
+    if (event?.key === "Escape") {
+      stopPreviewPick();
+    }
+  }
+
+  function setPreviewPicking(picking) {
+    if (previewPicking.value === picking) {
+      return;
+    }
+    previewPicking.value = picking;
+    if (picking) {
+      window.addEventListener("keydown", previewPickKeydown);
+    } else {
+      window.removeEventListener("keydown", previewPickKeydown);
+    }
+  }
+
+  function showPreviewPickNotice(text) {
+    previewPickNoticeText.value = text;
+    previewPickNoticeVisible.value = true;
+  }
+
+  function stopPreviewPick() {
+    if (previewPicking.value) {
+      setPreviewPicking(false);
+      postToPreviewBridge({ type: PREVIEW_PICK_STOP_MESSAGE_TYPE });
+    }
+  }
+
+  function togglePreviewPick() {
+    if (previewPicking.value) {
+      stopPreviewPick();
+      return false;
+    }
+    if (!previewPickAvailable.value || previewPickBusy.value) {
+      return false;
+    }
+    setPreviewPicking(postToPreviewBridge({ type: PREVIEW_PICK_START_MESSAGE_TYPE }));
+    return previewPicking.value;
+  }
+
+  // A picked component opens Usage at its entry. A pick that arrives after the
+  // person cancelled is ignored.
+  async function finishPreviewPick(result = {}) {
+    if (!previewPicking.value) {
+      return null;
+    }
+    setPreviewPicking(false);
+    if (result?.cancelled === true) {
+      return null;
+    }
+    const file = previewComponentSourcePath(result?.componentFile, props.session?.sourcePath);
+    if (!file) {
+      showPreviewPickNotice(PREVIEW_PICK_NO_COMPONENT_TEXT);
+      return null;
+    }
+    previewPickBusy.value = true;
+    try {
+      const answer = await readUsageEntries({ limit: 50, q: file.slice(-80) });
+      const entry = previewUsageEntryForFile(answer?.entries, file);
+      if (!entry) {
+        showPreviewPickNotice(`${file.split("/").pop()} has no usage entry yet. Refresh the architecture scan, then pick again.`);
+        return null;
+      }
+      openUsage?.({ entryId: entry.id, mode: "calls" });
+      return entry;
+    } catch (error) {
+      showPreviewPickNotice(String(error?.message || "").trim() || "Usage could not be read. Pick again.");
+      return null;
+    } finally {
+      previewPickBusy.value = false;
+    }
+  }
+
+  // Tells the bridge whether this Preview is being recorded and which
+  // interaction number comes next.
+  function publishPreviewRecording() {
+    const recordingId = previewRecordingId.value;
+    if (previewInteractions.recordingId !== recordingId) {
+      Object.assign(previewInteractions, { highest: 0, recordingId });
+    }
+    postToPreviewBridge({
+      active: Boolean(recordingId),
+      nextInteraction: previewInteractions.highest + 1,
+      recordingId: recordingId || null,
+      type: PREVIEW_RECORDING_MESSAGE_TYPE
+    });
+  }
+
+  function forwardPreviewInteraction(data = {}) {
+    const id = String(data?.id || "");
+    if (
+      typeof recordInteraction !== "function" ||
+      !previewRecordingId.value ||
+      previewRecordingId.value !== previewInteractions.recordingId ||
+      !USAGE_INTERACTION_ID_PATTERN.test(id)
+    ) {
+      return;
+    }
+    previewInteractions.highest = Math.max(previewInteractions.highest, Number(id.slice(2)));
+    const at = Date.parse(String(data?.at || ""));
+    void recordInteraction({
+      at: new Date(Number.isFinite(at) ? at : Date.now()).toISOString(),
+      componentFile: previewComponentSourcePath(data?.componentFile, props.session?.sourcePath) || null,
+      id,
+      label: String(data?.elementLabel || "").trim().slice(0, 80) || "element"
+    });
+  }
+
+  watch(previewRecordingId, publishPreviewRecording);
+  watch(previewPickAvailable, (available) => {
+    if (!available) {
+      stopPreviewPick();
+    }
+  }, { flush: "sync" });
 
   function previewFrameVisible(frame) {
     return Boolean(frame) && previewFrameLoaded.value && previewPaneDisplayed.value &&
@@ -1933,7 +2110,9 @@ function useVibe64OutputControlsSurface(props) {
       PREVIEW_BRIDGE_READY_MESSAGE_TYPE,
       PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE,
       PREVIEW_IDENTITY_RESPONSE_MESSAGE_TYPE,
+      PREVIEW_INTERACTION_MESSAGE_TYPE,
       PREVIEW_LOCATION_MESSAGE_TYPE,
+      PREVIEW_PICK_RESULT_MESSAGE_TYPE,
       PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE
     ].includes(previewMessageType(value));
   }
@@ -1979,6 +2158,15 @@ function useVibe64OutputControlsSurface(props) {
       // The bridge announces readiness as soon as its listeners are installed.
       // Application modules and rendering may still be pending.
       markPreviewFrameReady(previewFrameRequestId.value, "bridge-ready");
+      publishPreviewRecording();
+      return;
+    }
+    if (messageType === PREVIEW_PICK_RESULT_MESSAGE_TYPE) {
+      void finishPreviewPick(event.data);
+      return;
+    }
+    if (messageType === PREVIEW_INTERACTION_MESSAGE_TYPE) {
+      forwardPreviewInteraction(event.data);
       return;
     }
     if (messageType === PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE) {
@@ -2138,6 +2326,7 @@ function useVibe64OutputControlsSurface(props) {
   });
   
   onBeforeUnmount(() => {
+    stopPreviewPick();
     window.removeEventListener("message", handlePreviewBridgeMessage);
     cancelPreviewResourceRetry();
     previewBridgeRequests.rejectAll("The application preview closed.");
@@ -2244,6 +2433,13 @@ function useVibe64OutputControlsSurface(props) {
     previewRecoveryVisible,
     previewResourceNoticeText,
     previewResourceNoticeVisible,
+    previewPickAvailable,
+    previewPickBusy,
+    previewPickNoticeText,
+    previewPickNoticeVisible,
+    previewPicking,
+    stopPreviewPick,
+    togglePreviewPick,
     previewState,
     previewTerminalRecoveryVisible,
     previewToolbarRecoveryVisible,
@@ -2534,10 +2730,12 @@ export {
   launchPreviewStatusText,
   launchToolbarDockShouldShow,
   normalizeConfiguredPreviewIdentities,
+  previewComponentSourcePath,
   previewOpeningOverlayVisible,
   previewAddressDisplayText,
   previewRouteFromUrl,
   previewUrlForRoute,
+  previewUsageEntryForFile,
   redactPreviewDebugDetails,
   useVibe64OutputControlsSurface
 };

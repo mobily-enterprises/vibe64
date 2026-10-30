@@ -161,6 +161,19 @@
               @click="reloadPreview"
             />
             <v-btn
+              :aria-pressed="previewPicking ? 'true' : 'false'"
+              aria-label="Pick element"
+              :color="previewPicking ? 'primary' : undefined"
+              :disabled="previewPickBusy || (!previewPicking && !previewPickAvailable)"
+              :icon="mdiCursorDefaultClickOutline"
+              :loading="previewPickBusy"
+              size="small"
+              title="Show what this element uses"
+              type="button"
+              :variant="previewPicking ? 'tonal' : 'text'"
+              @click="togglePreviewPick"
+            />
+            <v-btn
               :aria-label="previewSuspended ? 'Resume preview' : 'Suspend preview'"
               :icon="previewSuspended ? mdiPlay : mdiPause"
               size="small"
@@ -852,6 +865,25 @@
     </v-snackbar>
 
     <v-snackbar
+      :model-value="previewPicking"
+      location="bottom center"
+      :timeout="-1"
+    >
+      Select an element in Preview to see what it uses.
+      <template #actions>
+        <v-btn variant="text" @click="stopPreviewPick">Cancel</v-btn>
+      </template>
+    </v-snackbar>
+
+    <v-snackbar
+      v-model="previewPickNoticeVisible"
+      location="bottom center"
+      :timeout="7000"
+    >
+      {{ previewPickNoticeText }}
+    </v-snackbar>
+
+    <v-snackbar
       v-model="previewAttachmentNoticeVisible"
       :color="previewAttachmentNoticeColor"
       location="bottom center"
@@ -864,6 +896,9 @@
 
 <script setup>
 import { computed, inject, onBeforeUnmount, ref, watch } from "vue";
+import { getHttpWebClient } from "@jskit-ai/http-web/client/lib/httpClient";
+import { usePaths } from "@jskit-ai/shell-web/client/navigation/usePaths";
+import { useVibe64UsageRecording } from "@local/vibe64-usage-recording/client";
 import { VIBE64_RESOURCE_RECOVERY_KEY } from "@/lib/vibe64ResourceRecovery.js";
 import {
   mdiAccountCircleOutline,
@@ -877,6 +912,7 @@ import {
   mdiConsoleLine,
   mdiCogOutline,
   mdiContentCopy,
+  mdiCursorDefaultClickOutline,
   mdiDotsHorizontal,
   mdiDownloadOutline,
   mdiOpenInNew,
@@ -902,6 +938,7 @@ import {
 } from "@/lib/vibe64PreviewDiagnostics.js";
 
 const emit = defineEmits([
+  "open-usage",
   "preview-attachment-state",
   "test-approval"
 ]);
@@ -974,6 +1011,9 @@ const props = defineProps({
 });
 
 const resourceRecoveryControl = inject(VIBE64_RESOURCE_RECOVERY_KEY, null);
+const paths = usePaths();
+const usageSessionId = computed(() => String(props.session?.sessionId || ""));
+const usageRecording = useVibe64UsageRecording({ sessionId: usageSessionId });
 const resourceRetryBusy = ref(false);
 function setResourceRetryBusy(value) {
   if (!value && !resourceRetryBusy.value) return;
@@ -1072,6 +1112,13 @@ const {
   previewRecoveryVisible,
   previewResourceNoticeText,
   previewResourceNoticeVisible,
+  previewPickAvailable,
+  previewPickBusy,
+  previewPickNoticeText,
+  previewPickNoticeVisible,
+  previewPicking,
+  stopPreviewPick,
+  togglePreviewPick,
   previewTerminalRecoveryVisible,
   previewToolbarRecoveryVisible,
   previewToolbarExpanded,
@@ -1114,7 +1161,15 @@ const {
   terminalWindowVisible,
   toolbarTeleportTarget,
   visible
-} = useVibe64OutputControlsSurface(props);
+} = useVibe64OutputControlsSurface(props, {
+  openUsage: (request) => emit("open-usage", request),
+  readUsageEntries: (query) => getHttpWebClient().request(
+    `${paths.api("/vibe64/system-graph", { surface: "app" })}/sessions/${encodeURIComponent(usageSessionId.value)}/usage/entries`,
+    { method: "GET", query }
+  ),
+  recordInteraction: usageRecording.recordInteraction,
+  recording: usageRecording.recording
+});
 // The address bar's client group also opens the page in a new tab.
 const previewNavVisible = computed(() => Boolean(props.embeddedPreview && previewBrowserControlsVisible.value));
 
