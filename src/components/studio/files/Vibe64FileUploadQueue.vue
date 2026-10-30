@@ -66,10 +66,12 @@ import {
 import { formatFileSize } from "@/lib/vibe64FileSize.js";
 
 // The upload list docked under a Files area: one row per file with its own
-// progress, and a summary for the whole batch.
+// progress, and a summary for the whole batch. `note(item)` can explain a row
+// that is taking a while.
 const props = defineProps({
   active: { type: Boolean, default: false },
-  items: { type: Array, default: () => [] }
+  items: { type: Array, default: () => [] },
+  note: { type: Function, default: () => "" }
 });
 defineEmits(["cancel", "cancel-all", "clear", "remove", "retry"]);
 const ACTIVE = ["preparing", "queued", "uploading", "delivering"];
@@ -108,8 +110,8 @@ const announcement = computed(() => {
 function statusText(item) {
   switch (item.phase) {
     case "queued": case "preparing": return `Waiting · ${formatFileSize(item.totalBytes)}`;
-    case "uploading": return item.progress === null ? "Uploading"
-      : `${formatFileSize(item.bytesSent)} of ${formatFileSize(item.totalBytes)} · ${Math.round(item.progress)}%`;
+    case "uploading": return props.note(item) || (item.progress === null ? "Uploading"
+      : `${formatFileSize(item.bytesSent)} of ${formatFileSize(item.totalBytes)} · ${Math.round(item.progress)}%`);
     case "delivering": return "Finishing";
     case "ready": return `Uploaded · ${formatFileSize(item.totalBytes)}`;
     case "cancelled": return "Cancelled";

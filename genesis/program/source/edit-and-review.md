@@ -184,26 +184,35 @@ file's folder or the source root, or the folder whose **Upload here** was
 chosen; the source editor offers these only when Files hosts it. The docked list
 shows per-file bytes and percent, a batch total, Cancel for anything unfinished,
 Cancel all, the reason a file failed with Retry, and Remove. Cancelling aborts
-the request. The server streams every upload, text file and copy into a hidden
-`.vibe64-incoming-*` item and publishes it by link or rename, so readers never
-see a partial item and an aborted, failed or malformed upload leaves nothing
-behind, including when the multipart parser closes the file stream before
-copying starts. Other areas stage at their root. Repo stages in
+the request. The server streams every upload, text file and copy into the
+area's staging folder and publishes it by link or rename, so readers never see
+a partial item and an aborted, failed or malformed upload leaves nothing behind,
+including when the multipart parser closes the file stream before copying
+starts. A file publishes by hard link, which never overwrites a name taken
+meanwhile, then its staged link is removed; a folder publishes by rename into a
+name checked free. Other areas stage in `.vibe64-staging` at their root, which
+Files hides and refuses as a name in every operation. Repo stages in
 `vibe64-file-staging` inside the checkout's own Git directory (resolved with
 `git rev-parse --absolute-git-dir` and refused when outside the checkout), so
 `git status`, an assistant's `git add` and Save work never see a staged item;
-a replaced Repo item is also set aside there. A Repo upload streams in without
-the exclusive source write and takes it only to check the folder again and
-publish, refusing as busy while Save work, Update, an assistant start or another
-source write holds it. Project Dropzone and Project Backups writes each hold
-their area's lock (Backups' is shared with retention) and refuse as busy;
-uploads there also stream in first and lock only to publish. Each area's next
-write removes, under its lock, staged items whose change time is over 7 days
-old; writing or renaming an item refreshes that time, so only items a stopped
-server abandoned age. When a failed move cannot put its item back, the error
-names where it is kept. Uploads refuse the paths the destination protects; the
-built-in `.git` and `.vibe64` names match in any letter case. Uploads and new
-files publish through their destination folder held open, as below.
+a replaced item is also set aside in the staging folder. The staging folder is
+created when needed, held open and checked like the destination folder below,
+and refused with a clear conflict when something else sits at its path. A Repo
+upload streams in without the exclusive source write and takes it only to check
+the folder again and publish, waiting up to 30 seconds while Save work, Update,
+an assistant start or another source write holds it before refusing as busy;
+after 1.5 seconds of waiting with every byte sent, its row says it is waiting
+for Save or another change to Repo. Project Dropzone and Project Backups writes
+each hold their area's lock (Backups' is shared with retention) and refuse as
+busy; uploads there also stream in first and lock only to publish. Each area's
+next write removes, under its lock, items in its staging folder whose change
+time is over 7 days old; writing or renaming an item refreshes that time, so
+only items a stopped server abandoned age, and nothing outside the staging
+folder is ever swept. When a failed move cannot put its item back, the error
+names where in the staging folder it is kept. Uploads refuse the paths the
+destination protects; the built-in `.git` and `.vibe64` names match in any
+letter case. Uploads and new files publish through their destination folder
+held open, as below.
 Before an upload or move/copy, Files asks the destination which names already
 exist and asks the person once: Replace, Keep both (`name (n).ext`) or Skip.
 Without a choice an existing name is refused; nothing is overwritten silently.
@@ -212,8 +221,9 @@ Move and copy run on the server between Repo, Session Dropzone, Project Dropzone
 and Project Backups in any direction, for a file or a whole folder; Session is a
 copy source only. The browser sends only the source item, mode, destination area,
 destination folder and conflict choice. A move renames when both areas share a
-filesystem and otherwise copies, publishes, then removes only the files and
-folders it copied. Transfers refuse links and special files, paths either area
+filesystem and otherwise copies, publishes, then removes only the files it
+copied that are still unchanged (identity, size and modification time) and the
+folders it copied that are empty. Transfers refuse links and special files, paths either area
 protects (`.git` anywhere in Repo and its root `.vibe64` contract), more than
 10,000 entries, a copy (or cross-filesystem move) over 2 GiB from the planned
 sizes, a folder into itself, a move into its own folder, and a Replace of the
@@ -222,9 +232,11 @@ transfer would, so Replace never deletes a nested `.git`. The source's folder an
 the destination folder are opened and checked to be exactly where they belong
 under the area's real root (`openedFileWithin`, through `/proc` on Linux), and
 the rename, link or Replace names items through those open folders, so a folder
-swapped for a link cannot redirect them. Each copied file must be the one the
-plan listed and must really be at its path in the area; a renamed item must be
-the planned one, or it is put back. A move into Project Backups refreshes each
+swapped for a link cannot redirect them. The plan lists each folder through
+itself held open, starting from the open source folder. Each copied file must
+be the one the plan listed, unchanged before and after it is read, and must
+really be at its path in the area; a renamed item must be the planned one, or
+it is put back. A move into Project Backups refreshes each
 item's change time, keeping modification times, so its 14 days start at the
 move. Moving or copying into Repo is an ordinary
 session change; Repo's file and search indexes refresh afterwards. From Project
@@ -1745,7 +1757,9 @@ private runtime `drop-zone` and `backups` directories, so session changes,
 renewal and archival preserve them. The session store supplies those trusted
 paths and creates both folders (`prepareProjectFileAreas`) before agent command
 environments expose `VIBE64_PROJECT_DROP_ZONE` and `VIBE64_PROJECT_BACKUPS`, so
-an agent copying into one never makes a file in its place; Files refuses a
+an agent copying into one never makes a file in its place. Each folder is
+prepared on its own and preparation never fails the command: whatever already
+sits at a path is left alone, the variable is still set, and Files refuses a
 non-folder there with a clear conflict. Project Dropzone files stay until
 someone deletes them and travel with the project's deletion archive. Backups
 mutations and retention share one project filesystem lock through the existing

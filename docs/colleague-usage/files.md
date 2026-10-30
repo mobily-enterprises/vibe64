@@ -50,9 +50,11 @@ upload icon above the file list; its label names the folder), choose **Upload
 here** in a folder's **⋮** menu, or drag files onto the file list. Repo uses the
 same **Uploads** card and name question, and uploaded files appear as ordinary
 session changes; publish them with **Save work**. Repo refuses `.git` and the
-root `.vibe64` folder, in any letter case. While **Save work**, **Update** or another change to the
-session's source is starting, a finishing Repo upload fails with a message to
-try again; choose **Try again** once it has finished.
+root `.vibe64` folder, in any letter case. If **Save work**, **Update** or
+another change to the session's source is running when a Repo upload finishes,
+the upload waits for it for up to 30 seconds; its row says **Finishing — waiting
+for Save or another change to Repo**. If it still cannot finish, it fails with a
+message; choose **Try again** to send it again.
 
 ## When a name already exists
 
@@ -144,8 +146,8 @@ nothing; wait a moment and try again. If an item changes while it is being
 moved or copied, Files stops and asks you to try again. A copy that fails part
 way leaves nothing at the destination, and a move only removes the original
 after its copy is complete. In the rare case that a failed move cannot put the
-item back, the message says where it is kept for 7 days so it can be moved
-back.
+item back, the message says where it is kept for 7 days, in a hidden folder
+Files does not show; ask the coding agent to move it back.
 
 ## Project Dropzone and Project Backups
 
@@ -172,7 +174,10 @@ Dropzone), `VIBE64_PROJECT_DROP_ZONE` (Project Dropzone) and
 `VIBE64_PROJECT_BACKUPS` (Project Backups). **Copy AI path** copies the open
 folder's path so you can paste it into a message, for example "Read the CSV in
 <path> and import it". Files refreshes the open folder when the agent finishes
-a turn; **Refresh** reloads it at any time.
+a turn; **Refresh** reloads it at any time. Session Dropzone, Project Dropzone and Project
+Backups each keep unfinished uploads, copies and moves in a hidden
+`.vibe64-staging` folder, which Files never shows and which nothing should
+change; Files clears what is left there after 7 days.
 
 ## On a phone
 

@@ -31,6 +31,7 @@
       v-if="area === 'repo'"
       :active="repoUploads.active.value"
       :items="repoUploads.items.value"
+      :note="repoUploads.note"
       @cancel="repoUploads.cancel"
       @cancel-all="repoUploads.cancelAll"
       @clear="repoUploads.clear"
@@ -129,6 +130,9 @@ let repoReturnFocus = null;
 // each file goes into the Repo folder chosen when it was added.
 const repoUploads = useVibe64FileUploads({
   endpoint: computed(() => `${filesBase.value}/repo`),
+  // A finished Repo upload waits briefly while Save, Update or the assistant
+  // is changing the source.
+  finishingNote: "Finishing — waiting for Save or another change to Repo",
   onAsk: () => { repoReturnFocus = globalThis.document?.activeElement || null; },
   onUploaded: () => {
     // A burst of small uploads refreshes Repo once.

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
-import { chmod, lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { appendFile, chmod, lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PassThrough, Readable } from "node:stream";
@@ -76,7 +76,17 @@ const upload = (text) => ({ readUpload: async function* () {
   yield { type: "file", fieldname: "file", file: Readable.from([Buffer.from(text)]) };
 } });
 
-const leftovers = async (directory) => (await readdir(directory)).filter((name) => name.startsWith(".vibe64-"));
+// What Files left behind: stray hidden items in a folder plus anything in its
+// staging folder (or, given Repo's staging folder, everything in it).
+const STAGING = ".vibe64-staging";
+async function leftovers(directory) {
+  const names = await readdir(directory).catch(() => []);
+  if (path.basename(directory) === "vibe64-file-staging") return names;
+  const staged = names.includes(STAGING) ? await readdir(path.join(directory, STAGING)) : [];
+  return [...names.filter((name) => name.startsWith(".vibe64") && name !== STAGING), ...staged];
+}
+// A folder's items as Files shows them.
+const visible = async (directory) => (await readdir(directory)).filter((name) => name !== STAGING);
 
 async function waitFor(condition) {
   for (let attempt = 0; attempt < 500; attempt += 1) {
@@ -199,7 +209,8 @@ test("Repo uploads refuse protected paths, a held exclusive write and a Git fold
   await assert.rejects(lstat(path.join(p.repo, ".git", "hooks", "pre-commit")), { code: "ENOENT" });
   await assert.rejects(lstat(path.join(p.repo, ".vibe64")), { code: "ENOENT" });
   await assert.rejects(lstat(path.join(p.repo, ".VIBE64")), { code: "ENOENT" });
-  // Save, Update and the assistant hold the same exclusive write: Files refuses rather than waits.
+  // Save, Update and the assistant hold the same exclusive write: a move or
+  // copy refuses at once, and a finished upload waits for it to finish.
   let entered;
   let release;
   const holding = new Promise((resolve) => { entered = resolve; });
@@ -208,13 +219,18 @@ test("Repo uploads refuse protected paths, a held exclusive write and a Git fold
     entered();
   }));
   await holding;
-  const busy = await call("upload", { area: "repo", path: "src/busy.txt" }, { options: upload("busy") });
+  const busy = await call("transfer", { path: "notes.txt", mode: "copy", targetArea: "repo", targetPath: "" });
   assert.equal(busy.statusCode, 409);
   assert.equal(busy.code, "vibe64_agent_write_mode_busy");
-  assert.equal((await call("transfer", { path: "notes.txt", mode: "copy", targetArea: "repo", targetPath: "" })).statusCode, 409);
+  let finished = false;
+  const waiting = call("upload", { area: "repo", path: "src/waited.txt" }, { options: upload("waited") }).finally(() => { finished = true; });
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  assert.equal(finished, false, "the upload waits for the exclusive write");
+  await assert.rejects(lstat(path.join(p.repo, "src/waited.txt")), { code: "ENOENT" });
   release();
   await holder;
-  await assert.rejects(lstat(path.join(p.repo, "src/busy.txt")), { code: "ENOENT" });
+  assert.deepEqual(await waiting, { ok: true, path: "src/waited.txt" });
+  assert.equal(await readFile(path.join(p.repo, "src/waited.txt"), "utf8"), "waited");
   assert.deepEqual(await readdir(p.repoStaging), []);
   // A checkout whose Git folder lives elsewhere is never staged into.
   const other = paths("two");
@@ -342,7 +358,8 @@ test("transfers refuse links, traversal, protected Repo paths, other projects an
     const failed = await call("transfer", { path: "partial", mode: "copy", targetArea: "project-drop-zone", targetPath: "" });
     assert.equal(failed.ok, false);
     const projectZone = path.join(p.stateRoot, "drop-zone");
-    assert.deepEqual((await readdir(projectZone)).filter((name) => name !== "notes.txt"), []);
+    assert.deepEqual((await visible(projectZone)).filter((name) => name !== "notes.txt"), []);
+    assert.deepEqual(await leftovers(projectZone), []);
     await chmod(path.join(p.dropZoneRoot, "partial", "b.txt"), 0o600);
   }
 });
@@ -529,6 +546,14 @@ test("Project Dropzone is created for agents, refuses a file in its place, and t
     assert.equal(refused.statusCode, 409, operation);
     assert.equal(refused.code, "vibe64_files_area_not_folder");
   }
+  // Preparing for an agent leaves a file at either path alone and prepares the other.
+  await writeFile(p.projectBackupsRoot, "an older agent's copy");
+  await stores.get("one").prepareProjectFileAreas();
+  assert.equal(await readFile(p.projectDropZoneRoot, "utf8"), "what `cp report.pdf \"$VIBE64_PROJECT_DROP_ZONE\"` makes");
+  assert.equal(await readFile(p.projectBackupsRoot, "utf8"), "an older agent's copy");
+  await rm(p.projectBackupsRoot);
+  await stores.get("one").prepareProjectFileAreas();
+  assert.ok((await lstat(p.projectBackupsRoot)).isDirectory());
   await rm(p.projectDropZoneRoot);
   await stores.get("one").prepareProjectFileAreas();
   for (const root of [p.projectDropZoneRoot, p.projectBackupsRoot]) assert.ok((await lstat(root)).isDirectory(), root);
@@ -538,27 +563,61 @@ test("Project Dropzone is created for agents, refuses a file in its place, and t
     assert.equal(busy.code, "project_drop_zone_busy");
     assert.equal((await project("mkdir", { area: "project-drop-zone", path: "later" })).code, "project_drop_zone_busy");
   });
-  assert.deepEqual(await readdir(p.projectDropZoneRoot), []);
+  assert.deepEqual(await visible(p.projectDropZoneRoot), []);
+  assert.deepEqual(await leftovers(p.projectDropZoneRoot), []);
 });
 
-test("every area's next write clears items a stopped server staged over a week ago", async (t) => {
+test("each area stages in its own hidden folder; its next write clears only items abandoned there over a week ago", async (t) => {
   const { call, project, paths } = await fixture(t);
   const p = paths();
   const projectZone = path.join(p.stateRoot, "drop-zone");
-  await mkdir(projectZone);
-  await mkdir(p.repoStaging);
-  const stagingRoots = [p.repoStaging, p.dropZoneRoot, projectZone];
-  for (const root of stagingRoots) await mkdir(path.join(root, ".vibe64-incoming-old"));
+  const stagingFolders = [p.repoStaging, path.join(p.dropZoneRoot, STAGING), path.join(projectZone, STAGING)];
+  for (const folder of stagingFolders) await mkdir(path.join(folder, "old"), { recursive: true });
+  // A person's or agent's own item that merely looks like a staged one.
+  await writeFile(path.join(p.dropZoneRoot, ".vibe64-incoming-mine"), "mine");
   await new Promise((resolve) => setTimeout(resolve, 50));
-  for (const root of stagingRoots) await writeFile(path.join(root, ".vibe64-incoming-recent"), "recent");
-  const old = await lstat(path.join(p.repoStaging, ".vibe64-incoming-old"));
-  const recent = await lstat(path.join(p.repoStaging, ".vibe64-incoming-recent"));
+  for (const folder of stagingFolders) await writeFile(path.join(folder, "recent"), "recent");
+  const old = await lstat(path.join(p.repoStaging, "old"));
+  const recent = await lstat(path.join(p.repoStaging, "recent"));
   t.mock.timers.enable({ apis: ["Date"], now: Math.round((old.ctimeMs + recent.ctimeMs) / 2) + 7 * 24 * 60 * 60 * 1000 });
   assert.equal((await call("upload", { area: "repo", path: "fresh.txt" }, { options: upload("fresh") })).ok, true);
   assert.equal((await call("mkdir", { path: "fresh" })).ok, true);
   assert.equal((await project("mkdir", { area: "project-drop-zone", path: "fresh" })).ok, true);
   t.mock.timers.reset();
-  for (const root of stagingRoots) assert.deepEqual(await leftovers(root), [".vibe64-incoming-recent"], root);
+  for (const folder of stagingFolders) assert.deepEqual(await readdir(folder), ["recent"], folder);
+  assert.equal(await readFile(path.join(p.dropZoneRoot, ".vibe64-incoming-mine"), "utf8"), "mine");
+  // Files hides the staging folder and never lets anyone use its name.
+  const listed = (await call("tree", { path: "" })).tree.children.map((entry) => entry.name);
+  assert.ok(listed.includes(".vibe64-incoming-mine") && !listed.includes(STAGING), listed.join(", "));
+  for (const [operation, input, options] of [
+    ["upload", { path: `${STAGING}/x.txt` }, { options: upload("x") }],
+    ["mkdir", { path: STAGING }],
+    ["create", { path: `${STAGING}/x.txt`, text: "x" }],
+    ["rename", { path: "fresh", destination: STAGING }],
+    ["delete", { path: STAGING }],
+    ["tree", { path: STAGING }],
+    ["file", { path: `${STAGING}/recent` }],
+    ["transfer", { path: "notes.txt", mode: "copy", targetArea: "drop-zone", targetPath: STAGING }]
+  ]) {
+    assert.equal((await call(operation, input, options)).statusCode, 403, operation);
+  }
+  assert.deepEqual(await readdir(path.join(p.dropZoneRoot, STAGING)), ["recent"]);
+});
+
+test("a staging folder that is not a folder of the area is never written through", async (t) => {
+  const { call, paths } = await fixture(t);
+  const p = paths();
+  const before = (await readdir(p.sessionRoot)).sort();
+  await symlink(p.sessionRoot, path.join(p.dropZoneRoot, STAGING));
+  await symlink(p.sessionRoot, p.repoStaging);
+  for (const [area, target, folder] of [["drop-zone", "in.txt", ""], ["repo", "src/in.txt", "src"]]) {
+    const refused = await call("upload", { area, path: target }, { options: upload("diverted?") });
+    assert.equal(refused.statusCode, 409, area);
+    assert.equal(refused.code, "vibe64_files_staging_unavailable");
+    const copied = await call("transfer", { path: "notes.txt", mode: "copy", targetArea: area, targetPath: folder, conflict: "keep-both" });
+    assert.equal(copied.code, "vibe64_files_staging_unavailable", area);
+  }
+  assert.deepEqual((await readdir(p.sessionRoot)).sort(), before);
 });
 
 test("one move or copy carries at most 2 GiB; a move on one filesystem renames whatever its size", async (t) => {
@@ -571,7 +630,8 @@ test("one move or copy carries at most 2 GiB; a move on one filesystem renames w
   assert.equal(refused.statusCode, 413);
   assert.equal(refused.code, "vibe64_files_transfer_too_large");
   const projectZone = path.join(p.stateRoot, "drop-zone");
-  assert.deepEqual(await readdir(projectZone), []);
+  assert.deepEqual(await visible(projectZone), []);
+  assert.deepEqual(await leftovers(projectZone), []);
   assert.equal((await call("transfer", { path: "large.bin", mode: "move", targetArea: "project-drop-zone", targetPath: "" })).ok, true);
   assert.equal((await lstat(path.join(projectZone, "large.bin"))).size, 2 * 1024 ** 3 + 1);
 });
@@ -594,4 +654,30 @@ test("a move across filesystems copies, then removes exactly what it copied", as
   await assert.rejects(lstat(path.join(p.dropZoneRoot, "kit")), { code: "ENOENT" });
   assert.deepEqual(await leftovers(p.dropZoneRoot), []);
   assert.deepEqual(await leftovers(p.repoStaging), []);
+});
+
+test("a cross-filesystem move never removes a file that changed while it was copied", async (t) => {
+  const other = await lstat("/dev/shm").catch(() => null);
+  if (!other?.isDirectory() || other.dev === (await lstat(tmpdir())).dev) {
+    t.skip("No second filesystem at /dev/shm.");
+    return;
+  }
+  const { call, paths } = await fixture(t, { sourcesBase: "/dev/shm" });
+  const p = paths();
+  const size = 128 * 1024 ** 2;
+  const source = path.join(p.dropZoneRoot, "big.bin");
+  const created = await open(source, "w");
+  await created.truncate(size);
+  await created.close();
+  const moving = call("transfer", { path: "big.bin", mode: "move", targetArea: "repo", targetPath: "src" });
+  await waitFor(async () => (await readdir(p.repoStaging).catch(() => [])).length > 0);
+  await appendFile(source, "appended");
+  const result = await moving;
+  // Whether the change landed during or just after the copy, the original stays.
+  assert.equal((await lstat(source)).size, size + 8, JSON.stringify(result));
+  if (!result.ok) {
+    assert.equal(result.code, "vibe64_source_editor_file_changed");
+    await assert.rejects(lstat(path.join(p.repo, "src", "big.bin")), { code: "ENOENT" });
+  }
+  assert.deepEqual(await readdir(p.repoStaging), []);
 });

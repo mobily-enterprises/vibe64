@@ -987,11 +987,13 @@ function createVibe64SessionStore({
   }
 
   // The project-shared Files folders exist before an agent is given their
-  // paths, so copying into one never creates a file in a folder's place.
+  // paths, so copying into one never creates a file in a folder's place. Each
+  // is prepared on its own and never fails the caller: whatever already sits
+  // at a path is left alone, and Files reports a non-folder there.
   async function prepareProjectFileAreas() {
     const { projectBackupsRoot, projectDropZoneRoot } = paths();
     for (const root of [projectDropZoneRoot, projectBackupsRoot]) {
-      if (root) await mkdir(root, { recursive: true, mode: vibe64SharedModes().directory });
+      if (root) await mkdir(root, { recursive: true, mode: vibe64SharedModes().directory }).catch(() => {});
     }
   }
 

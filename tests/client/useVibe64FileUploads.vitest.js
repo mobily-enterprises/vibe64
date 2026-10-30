@@ -97,6 +97,36 @@ describe("useVibe64FileUploads", () => {
     scope.stop();
   });
 
+  it("says why a fully sent file is still finishing, once it takes a while", async () => {
+    requests.length = 0;
+    const scope = effectScope();
+    const uploads = scope.run(() => useVibe64FileUploads({ endpoint: ref("/api/vibe64/sessions/s/files/repo"), finishingNote: "Finishing — waiting" }));
+    void uploads.uploadFiles([file("big.bin", 100)]);
+    await settle();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      requests[0].onProgress({ bytesSent: 100, progress: 1, totalBytes: 100 });
+      vi.advanceTimersByTime(1000);
+      expect(uploads.note(uploads.items.value[0])).toBe("");
+      vi.advanceTimersByTime(500);
+      expect(uploads.note(uploads.items.value[0])).toBe("Finishing — waiting");
+    } finally {
+      vi.useRealTimers();
+    }
+    requests[0].resolve({ ok: true, path: "big.bin" });
+    await settle();
+    expect(phases(uploads)).toEqual(["big.bin:ready"]);
+    expect(uploads.note(uploads.items.value[0])).toBe("");
+    // Without a note nothing is ever shown.
+    const plain = setup();
+    void plain.uploads.uploadFiles([file("a.txt", 10)]);
+    await settle();
+    requests[0].onProgress({ bytesSent: 10, progress: 1, totalBytes: 10 });
+    expect(plain.uploads.note(plain.uploads.items.value[0])).toBe("");
+    plain.scope.stop();
+    scope.stop();
+  });
+
   it("refuses a file over the upload limit without sending it", async () => {
     const { scope, uploads } = setup();
     void uploads.uploadFiles([file("huge.iso", 500 * 1024 * 1024 + 1)]);

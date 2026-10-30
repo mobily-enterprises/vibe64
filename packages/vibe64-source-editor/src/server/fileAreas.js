@@ -43,14 +43,18 @@ const FILE_AREAS = Object.freeze({
 });
 const READS = ["tree", "file", "download", "archive", "conflicts"];
 const WRITES = ["upload", "create", "save", "rename", "delete", "mkdir", "transfer"];
-// Incoming files and folders are written under this hidden name and published
-// by rename or link, so readers never see a partial item. Each area stages at
-// its root; Repo stages in REPO_STAGING_FOLDER inside its Git directory, which
+// Incoming files and folders are written into the area's staging folder and
+// published by link or rename, so readers never see a partial item. Other
+// areas stage in STAGING_FOLDER at their root, which Files hides and refuses
+// as a name; Repo stages in REPO_STAGING_FOLDER inside its Git directory, which
 // `git status` and a Save never see. A server stopped mid-write leaves its
-// staged item behind; the area's next write removes it after STAGING_STALE_DAYS.
-const STAGING_PREFIX = ".vibe64-incoming-";
+// item there; the area's next write removes it after STAGING_STALE_DAYS.
+const STAGING_FOLDER = ".vibe64-staging";
 const REPO_STAGING_FOLDER = "vibe64-file-staging";
 const STAGING_STALE_DAYS = 7;
+// A finished Repo upload waits this long for Save, Update or another source
+// change to let go of the exclusive write before it reports busy.
+const REPO_PUBLISH_WAIT_MS = 30_000;
 const TRANSFER_MAX_ENTRIES = 10_000;
 const TRANSFER_MAX_BYTES = 2 * 1024 ** 3;
 const TRANSFER_MAX_LABEL = "2 GiB";
@@ -79,7 +83,7 @@ function createFileArea(projectService, { repoChanged = () => {} } = {}) {
     }
     const key = definition.scope === "session" ? `${area}:${session.sessionId}` : area;
     const policy = area === "repo" ? sourceEditorFilePolicy() : {
-      ...sourceEditorFilePolicy(), exclude: [], protectSourceContract: false, maxTreeDepth: Infinity, maxTreeEntries: Infinity
+      ...sourceEditorFilePolicy(), exclude: [`${STAGING_FOLDER}/**`], protectSourceContract: false, maxTreeDepth: Infinity, maxTreeEntries: Infinity
     };
     const context = (sourceRoot, extra = {}) => ({ area, policy, sourceRoot, sourceEditorTempRoot: sourceRoot, ...extra });
 
@@ -97,11 +101,11 @@ function createFileArea(projectService, { repoChanged = () => {} } = {}) {
       // Reads never create the folder; a missing one is simply empty.
       if (!write) return { key, session, run: (perform) => perform(context(root, { location: root, missing: !rootStats })) };
       await mkdir(root, { recursive: true, mode: vibe64SharedModes().directory });
-      const writeContext = context(root, { location: root, stagingRoot: root });
+      const writeContext = context(root, { location: root, staging: STAGING_FOLDER });
       // Each project area's writes share one lock; Backups' also covers retention.
       const lock = area === "backups" ? withProjectBackupsLock : withProjectDropZoneLock;
       const run = (perform) => lock(stateRoot, async () => {
-        await removeStaleStaging(root);
+        await removeStaleStaging(writeContext);
         return perform(writeContext);
       });
       // An upload streams in without the lock and takes it only to publish.
@@ -114,18 +118,18 @@ function createFileArea(projectService, { repoChanged = () => {} } = {}) {
         throw sourceEditorError("This session has no Repo files.", "vibe64_source_editor_source_unavailable", {}, 409);
       }
       if (!write) return { key, session, run: (perform) => perform(context(root)) };
-      const writeContext = context(root, { stagingRoot: await repoStagingRoot(root) });
-      // Repo writes take the same exclusive source write as the source editor,
-      // and refuse rather than wait while it is held.
-      const run = async (perform) => {
+      const writeContext = context(root, { staging: await repoStagingFolder(root) });
+      // Repo writes take the same exclusive source write as the source editor;
+      // a move or copy refuses rather than waits while it is held.
+      const run = async (perform, { waitMs = 0 } = {}) => {
         const exclusive = await runVibe64AgentWriteExclusive(runtime, sessionId, async () => {
-          await removeStaleStaging(writeContext.stagingRoot);
+          await removeStaleStaging(writeContext);
           try {
             return await perform(writeContext);
           } finally {
             repoChanged(root);
           }
-        }, { operation: "source-editor-write" });
+        }, { operation: "source-editor-write", waitMs });
         if (!exclusive.acquired) {
           throw sourceEditorError(normalizeText(exclusive.value?.error) || "Another source-changing operation is starting. Try again in a moment.",
             normalizeText(exclusive.value?.code) || "vibe64_source_editor_write_busy", {}, 409);
@@ -133,8 +137,10 @@ function createFileArea(projectService, { repoChanged = () => {} } = {}) {
         return exclusive.value;
       };
       // An upload streams in without the exclusive write, so Save, Update and
-      // the assistant never wait on it; it takes the write only to publish.
-      return { key, session, run, receive: (perform) => perform({ ...writeContext, publish: run }) };
+      // the assistant never wait on it; it takes the write only to publish,
+      // waiting briefly for one of them to finish.
+      const publish = (perform) => run(perform, { waitMs: REPO_PUBLISH_WAIT_MS });
+      return { key, session, run, receive: (perform) => perform({ ...writeContext, publish }) };
     }
 
     if (area === "session") {
@@ -164,8 +170,9 @@ function createFileArea(projectService, { repoChanged = () => {} } = {}) {
           throw sourceEditorError("The Drop Zone is unavailable while this session closes.", "vibe64_session_closing", {}, 409);
         }
         await mkdir(sessionPaths.dropZoneRoot, { recursive: true });
-        if (write) await removeStaleStaging(sessionPaths.dropZoneRoot);
-        return perform(context(sessionPaths.dropZoneRoot, { location: sessionPaths.dropZoneRoot, stagingRoot: sessionPaths.dropZoneRoot }));
+        const dropZone = context(sessionPaths.dropZoneRoot, { location: sessionPaths.dropZoneRoot, staging: STAGING_FOLDER });
+        if (write) await removeStaleStaging(dropZone);
+        return perform(dropZone);
       });
     } };
   }
@@ -232,6 +239,9 @@ async function areaOperation(operation, context, input, readUpload) {
   if (["mkdir", "delete", "rename"].includes(operation) && !relativePath) {
     throw sourceEditorError("Choose an item inside this folder.", "vibe64_invalid_source_editor_path");
   }
+  for (const item of [relativePath, operation === "rename" ? normalizeSourceEditorRelativePath(input.destination) : ""]) {
+    if (item && sourceEditorPathExcluded(context.policy, item)) throw protectedError(item);
+  }
   switch (operation) {
     case "tree": {
       const tree = await sourceEditorDirectoryPage(context, {
@@ -281,13 +291,17 @@ function existsError(name) {
   return sourceEditorError(`“${name}” already exists in this folder.`, "vibe64_files_exists", { name }, 409);
 }
 
+function protectedError(item) {
+  return sourceEditorError(`“${item}” is protected in this area.`, "vibe64_files_protected_entry", { path: item }, 403);
+}
+
 function changedError() {
   return sourceEditorError("An item changed while it was being moved or copied. Try again.", "vibe64_source_editor_file_changed", {}, 409);
 }
 
 // When putting an item back fails, the error says where it is kept.
 function keptError(context, keptAt) {
-  const where = path.relative(context.sourceRoot, keptAt);
+  const where = `${context.staging}/${path.basename(keptAt)}`;
   return sourceEditorError(`This could not finish, and the item could not be put back. It is kept as “${where}” for ${STAGING_STALE_DAYS} days; move it back before then.`,
     "vibe64_files_item_kept", { path: where }, 500);
 }
@@ -296,33 +310,60 @@ function sameEntry(left, right) {
   return left.dev === right.dev && left.ino === right.ino;
 }
 
-// Holds a folder of the area open while `perform` runs, once its real
-// location is exactly `relativePath` under the area's real root. On Linux,
-// at(name) names an item through the open folder, so a folder swapped for a
-// link cannot redirect a later rename or link; elsewhere it is the checked
-// path. check() repeats the location check just before publishing.
+// The same file, unchanged: identity, size and modification time.
+function sameFile(left, right) {
+  return sameEntry(left, right) && left.size === right.size && left.mtimeMs === right.mtimeMs;
+}
+
+// Holds the folder at `folderPath` open while `perform` runs, if it is still
+// the folder `stats` describes. On Linux, at(name) names an item through the
+// open folder, so a folder swapped for a link cannot redirect what is done to
+// that item; elsewhere it is the path.
+async function withOpenFolder(folderPath, stats, perform) {
+  const handle = await open(folderPath, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW).catch((error) => {
+    throw ["ELOOP", "ENOTDIR"].includes(error.code) ? changedError() : error;
+  });
+  try {
+    if (!sameEntry(await handle.stat(), stats)) throw changedError();
+    const base = process.platform === "linux" ? `/proc/self/fd/${handle.fd}` : folderPath;
+    return await perform({ at: (name = "") => path.join(base, name), handle });
+  } finally {
+    await handle.close();
+  }
+}
+
+// Holds a folder of the area open (see withOpenFolder) once its real location
+// is exactly `relativePath` under the area's real root. check() repeats that
+// just before publishing.
 async function withAreaFolder(context, relativePath, perform) {
   const stats = await sourceEditorPathStats(context.sourceRoot, relativePath);
   if (!stats.isDirectory()) throw sourceEditorError("Choose a folder.", "vibe64_invalid_source_editor_path");
   const absolutePath = absoluteSourceEditorPath(context.sourceRoot, relativePath);
   const expected = path.resolve(await realpath(context.sourceRoot), relativePath);
-  const handle = await open(absolutePath, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW).catch((error) => {
-    throw ["ELOOP", "ENOTDIR"].includes(error.code) ? changedError() : error;
-  });
-  const folder = {
-    at: (name) => path.join(process.platform === "linux" ? `/proc/self/fd/${handle.fd}` : absolutePath, name),
-    async check() {
-      if (!sameEntry(await handle.stat(), stats) || !await openedFileWithin(handle, absolutePath, (opened) => opened === expected)) {
-        throw changedError();
+  return withOpenFolder(absolutePath, stats, async ({ at, handle }) => {
+    const folder = {
+      at,
+      async check() {
+        if (!await openedFileWithin(handle, absolutePath, (opened) => opened === expected)) throw changedError();
       }
-    }
-  };
-  try {
+    };
     await folder.check();
-    return await perform(folder);
-  } finally {
-    await handle.close();
+    return perform(folder);
+  });
+}
+
+// The area's staging folder, created when missing and held open like any
+// other folder, so a link swapped into its path cannot divert a staged item.
+async function withStaging(context, perform) {
+  const absolutePath = absoluteSourceEditorPath(context.sourceRoot, context.staging);
+  await mkdir(absolutePath, { mode: vibe64SharedModes().directory }).catch((error) => {
+    if (error.code !== "EEXIST") throw error;
+  });
+  if (!(await lstat(absolutePath)).isDirectory()) {
+    throw sourceEditorError(`Files keeps unfinished items in “${context.staging}”, which is not a folder here. Move that item away, then try again.`,
+      "vibe64_files_staging_unavailable", { path: context.staging }, 409);
   }
+  return withAreaFolder(context, context.staging, perform);
 }
 
 async function pathExists(absolutePath) {
@@ -332,14 +373,16 @@ async function pathExists(absolutePath) {
   });
 }
 
-function stagingPath(directory) {
-  return path.join(directory, `${STAGING_PREFIX}${crypto.randomUUID()}`);
+// A new, unused name in the staging folder.
+function stagedItem(staging) {
+  return staging.at(crypto.randomUUID());
 }
 
 // Repo's staging folder lives in the checkout's own Git directory, on the
 // same filesystem, so a staged item publishes into the worktree by link or
-// rename. A Git directory outside the checkout is refused.
-async function repoStagingRoot(sourceRoot) {
+// rename. A Git directory outside the checkout is refused. Returns its path
+// inside the checkout.
+async function repoStagingFolder(sourceRoot) {
   const result = await runVibe64Command({
     actor: "daemon", allowedRoots: [sourceRoot], args: ["rev-parse", "--absolute-git-dir"], command: "git", cwd: sourceRoot,
     gitSafeDirectories: [sourceRoot], mode: "capture", purpose: "source", runtimes: ["git"], timeout: 10_000
@@ -350,23 +393,22 @@ async function repoStagingRoot(sourceRoot) {
   if (!realGitDirectory.startsWith(`${realRoot}${path.sep}`)) {
     throw sourceEditorError("Repo has no Git folder of its own, so Files cannot write into it.", "vibe64_files_repo_git_unavailable", {}, 409);
   }
-  const stagingRoot = path.join(realGitDirectory, REPO_STAGING_FOLDER);
-  await mkdir(stagingRoot, { recursive: true, mode: vibe64SharedModes().directory });
-  if (!(await lstat(stagingRoot)).isDirectory()) {
-    throw sourceEditorError("Repo's staging folder is not a folder.", "vibe64_files_repo_git_unavailable", {}, 409);
-  }
-  return stagingRoot;
+  return path.relative(realRoot, path.join(realGitDirectory, REPO_STAGING_FOLDER));
 }
 
-// Runs under the area's lock. Writing or renaming an item in refreshes its
-// change time, so only items abandoned by a stopped server look old.
-async function removeStaleStaging(stagingRoot) {
+// Runs under the area's lock. Everything in the staging folder is Files' own;
+// writing or renaming an item in refreshes its change time, so only items
+// abandoned by a stopped server look old.
+async function removeStaleStaging(context) {
+  const stats = await lstat(absoluteSourceEditorPath(context.sourceRoot, context.staging)).catch(() => null);
+  if (!stats?.isDirectory()) return;
   const cutoff = Date.now() - STAGING_STALE_DAYS * 24 * 60 * 60 * 1000;
-  for (const name of await readdir(stagingRoot)) {
-    if (!name.startsWith(STAGING_PREFIX)) continue;
-    const item = path.join(stagingRoot, name);
-    if ((await lstat(item).catch(() => null))?.ctimeMs < cutoff) await rm(item, { recursive: true, force: true });
-  }
+  await withAreaFolder(context, context.staging, async (staging) => {
+    for (const name of await readdir(staging.at())) {
+      const item = staging.at(name);
+      if ((await lstat(item).catch(() => null))?.ctimeMs < cutoff) await rm(item, { recursive: true, force: true });
+    }
+  });
 }
 
 function folderOf(relativePath) {
@@ -398,22 +440,22 @@ async function existingNames(context, folder, names = []) {
 }
 
 // "report (1).pdf", "report (2).pdf", …: the first free name beside the original.
-async function availableName(directory, name) {
+async function availableName(destination, name) {
   const extension = path.extname(name);
   const stem = extension ? name.slice(0, -extension.length) : name;
   for (let number = 1; number < 1000; number += 1) {
     const candidate = `${stem} (${number})${extension}`;
-    if (!(await pathExists(path.join(directory, candidate)))) return candidate;
+    if (!(await pathExists(destination.at(candidate)))) return candidate;
   }
   throw sourceEditorError("Too many items with this name already exist here.", "vibe64_files_exists", { name }, 409);
 }
 
-// Where an incoming item goes under the chosen conflict rule: fail (the
-// default), replace, keep both under a free name, or skip.
-async function resolveTarget(context, folder, name, conflict = "fail") {
+// Where an incoming item goes in the open destination folder under the chosen
+// conflict rule: fail (the default), replace, keep both under a free name, or
+// skip.
+async function resolveTarget(context, destination, folder, name, conflict = "fail") {
   const relativePath = joinRelative(folder, name);
-  const absolutePath = absoluteSourceEditorPath(context.sourceRoot, relativePath);
-  const existing = await lstat(absolutePath).catch((error) => {
+  const existing = await lstat(destination.at(name)).catch((error) => {
     if (isMissingPathError(error)) return null;
     throw error;
   });
@@ -422,21 +464,22 @@ async function resolveTarget(context, folder, name, conflict = "fail") {
   if (conflict === "replace") {
     // Replacing deletes the folder that is there, so it may hold only what
     // this area could move or copy: no links and nothing it protects.
-    if (existing.isDirectory()) await transferPlan(context, relativePath, existing, "replaced");
+    if (existing.isDirectory()) await transferPlan(destination.at(name), relativePath, existing, context.policy, "replaced");
     return { relativePath, replace: true };
   }
-  if (conflict === "keep-both") return { relativePath: joinRelative(folder, await availableName(path.dirname(absolutePath), name)) };
+  if (conflict === "keep-both") return { relativePath: joinRelative(folder, await availableName(destination, name)) };
   throw existsError(name);
 }
 
 // Publishes a completely written staged item. Without replace it never
-// overwrites: a file publishes by hard link, which fails on a taken name;
-// folders, and files in Project Backups (whose retention skips files with a
-// second link), publish by rename into a name checked free. Replacing sets the
-// old item aside in the staging folder until the new one is in place.
-async function publishStaged(context, staged, target, { replace = false, directory = false } = {}) {
+// overwrites: a file publishes by hard link, which fails on a taken name (a
+// stopped server can leave the staged second link only in the staging
+// folder, which its sweep removes); a folder publishes by rename into a name
+// checked free. Replacing sets the old item aside in the staging folder until
+// the new one is in place.
+async function publishStaged(context, staging, staged, target, { replace = false, directory = false } = {}) {
   if (!replace) {
-    if (directory || context.area === "backups") {
+    if (directory) {
       if (await pathExists(target)) throw existsError(path.basename(target));
       await rename(staged, target);
       return;
@@ -458,7 +501,7 @@ async function publishStaged(context, staged, target, { replace = false, directo
     await rename(staged, target);
     return;
   }
-  const aside = stagingPath(context.stagingRoot);
+  const aside = stagedItem(staging);
   await rename(target, aside);
   try {
     await rename(staged, target);
@@ -480,29 +523,32 @@ async function createAreaTextFile(context, input) {
   if (content.includes(0)) {
     throw sourceEditorError("A new file must contain text.", "vibe64_source_editor_binary_file", {}, 415);
   }
-  await withAreaFolder(context, folderOf(relativePath), async (destination) => {
-    const staged = stagingPath(context.stagingRoot);
+  await withAreaFolder(context, folderOf(relativePath), (destination) => withStaging(context, async (staging) => {
+    const staged = stagedItem(staging);
     try {
       await writeFile(staged, content, { flag: "wx", mode: vibe64SharedModes().file });
-      await publishStaged(context, staged, destination.at(path.posix.basename(relativePath)));
+      await publishStaged(context, staging, staged, destination.at(path.posix.basename(relativePath)));
     } finally {
       await rm(staged, { force: true });
     }
-  });
+  }));
   return { ok: true, file: await readSourceEditorFile(context, relativePath) };
 }
 
 async function uploadAreaFile(context, input, readUpload) {
   if (typeof readUpload !== "function") throw sourceEditorError("Choose a file to upload.", "vibe64_files_upload_required");
   const requested = normalizeNewSourceEditorFilePath(input.path);
-  if (sourceEditorPathExcluded(context.policy, requested)) {
-    throw sourceEditorError(`“${requested}” is protected in this area.`, "vibe64_files_protected_entry", { path: requested }, 403);
-  }
+  if (sourceEditorPathExcluded(context.policy, requested)) throw protectedError(requested);
   const folder = folderOf(requested);
   if (!(await sourceEditorPathStats(context.sourceRoot, folder)).isDirectory()) {
     throw sourceEditorError("Choose a folder to upload into.", "vibe64_invalid_source_editor_path");
   }
-  const staged = stagingPath(context.stagingRoot);
+  return withStaging(context, (staging) => receiveUpload(context, staging, input, readUpload, requested));
+}
+
+async function receiveUpload(context, staging, input, readUpload, requested) {
+  const folder = folderOf(requested);
+  const staged = stagedItem(staging);
   try {
     let count = 0;
     for await (const part of readUpload()) {
@@ -522,8 +568,8 @@ async function uploadAreaFile(context, input, readUpload) {
     // folder as it is then.
     const publish = context.publish || ((perform) => perform(context));
     return await publish((current) => withAreaFolder(current, folder, async (destination) => {
-      const target = await resolveTarget(current, folder, path.posix.basename(requested), input.conflict);
-      await publishStaged(current, staged, destination.at(path.posix.basename(target.relativePath)), { replace: target.replace });
+      const target = await resolveTarget(current, destination, folder, path.posix.basename(requested), input.conflict);
+      await publishStaged(current, staging, staged, destination.at(path.posix.basename(target.relativePath)), { replace: target.replace });
       return { ok: true, path: target.relativePath };
     }));
   } catch (error) {
@@ -537,36 +583,35 @@ async function uploadAreaFile(context, input, readUpload) {
 }
 
 // The regular files and folders a transfer carries (or a Replace would
-// delete), each with the identity and size it had when listed. Links, special
-// files and paths the area protects are refused, so move and copy behave
-// alike. A folder swapped for a link while it is listed is refused too.
-async function transferPlan(context, sourcePath, stats, action = "moved or copied") {
+// delete), each with the identity, size and modification time it had when
+// listed. `itemAt` names the item through its open folder, and each folder is
+// listed through itself held open, so a folder swapped for a link is refused.
+// Links, special files and paths the area protects are refused, so move and
+// copy behave alike.
+async function transferPlan(itemAt, itemPath, stats, policy, action = "moved or copied") {
   if (stats.isFile()) return [{ relative: "", directory: false, stats }];
   if (!stats.isDirectory()) {
-    throw sourceEditorError(`“${sourcePath}” is a link or special file and cannot be ${action}.`, "vibe64_files_unsupported_entry", { path: sourcePath }, 422);
+    throw sourceEditorError(`“${itemPath}” is a link or special file and cannot be ${action}.`, "vibe64_files_unsupported_entry", { path: itemPath }, 422);
   }
   const entries = [{ relative: "", directory: true, stats }];
-  async function visit(relative, folderStats) {
-    const folderPath = joinRelative(sourcePath, relative);
-    const names = await readdir(absoluteSourceEditorPath(context.sourceRoot, folderPath));
-    if (!sameEntry(await sourceEditorPathStats(context.sourceRoot, folderPath), folderStats)) throw changedError();
-    for (const name of names) {
+  const visit = (folderAt, relative, folderStats) => withOpenFolder(folderAt, folderStats, async (folder) => {
+    for (const name of await readdir(folder.at())) {
       const child = joinRelative(relative, name);
-      const label = `${sourcePath}/${child}`;
-      if (sourceEditorPathExcluded(context.policy, label)) {
+      const label = `${itemPath}/${child}`;
+      if (sourceEditorPathExcluded(policy, label)) {
         throw sourceEditorError(`“${label}” is protected and cannot be ${action}.`, "vibe64_files_protected_entry", { path: label }, 403);
       }
-      const childStats = await lstat(absoluteSourceEditorPath(context.sourceRoot, label));
+      const childStats = await lstat(folder.at(name));
       if (!childStats.isFile() && !childStats.isDirectory()) {
         throw sourceEditorError(`“${label}” is a link or special file and cannot be ${action}.`, "vibe64_files_unsupported_entry", { path: label }, 422);
       }
       if (entries.push({ relative: child, directory: childStats.isDirectory(), stats: childStats }) > TRANSFER_MAX_ENTRIES) {
         throw sourceEditorError(`This folder has too many items to be ${action} at once.`, "vibe64_files_transfer_too_large", {}, 413);
       }
-      if (childStats.isDirectory()) await visit(child, childStats);
+      if (childStats.isDirectory()) await visit(folder.at(name), child, childStats);
     }
-  }
-  await visit("", stats);
+  });
+  await visit(itemAt, "", stats);
   return entries;
 }
 
@@ -581,8 +626,9 @@ function assertTransferSize(entries) {
 }
 
 // Copies the planned entries into `staged`. Each opened file must be the one
-// the plan listed and must really be at its path inside the area, so a folder
-// swapped for a link mid-copy cannot pull in anything from outside it.
+// the plan listed, unchanged, and must really be at its path inside the area,
+// so a folder swapped for a link mid-copy cannot pull in anything from outside
+// it; a file changed while it is copied fails the copy.
 async function copyPlan(from, sourcePath, staged, entries) {
   const { file: fileMode } = vibe64SharedModes();
   const realRoot = await realpath(from.sourceRoot);
@@ -597,11 +643,12 @@ async function copyPlan(from, sourcePath, staged, entries) {
     const handle = await open(absolutePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     try {
       const stats = await handle.stat();
-      if (!stats.isFile() || !sameEntry(stats, entry.stats)
+      if (!stats.isFile() || !sameFile(stats, entry.stats)
         || !await openedFileWithin(handle, absolutePath, (opened) => opened === path.resolve(realRoot, relativePath))) throw changedError();
       // A copied script stays runnable: execute follows the shared read bits.
       const executable = stats.mode & 0o100 ? (fileMode & 0o440) >> 2 : 0;
       await pipeline(handle.createReadStream({ autoClose: false }), createWriteStream(to, { flags: "wx", mode: fileMode | executable }));
+      if (!sameFile(await handle.stat(), entry.stats)) throw changedError();
     } finally {
       await handle.close();
     }
@@ -609,8 +656,8 @@ async function copyPlan(from, sourcePath, staged, entries) {
 }
 
 // After a copy-based move, removes only what was copied: files that are still
-// the planned ones, then the planned folders deepest first, so anything added
-// meanwhile stays.
+// the planned ones, unchanged since they were copied, then the planned folders
+// deepest first, so anything added or changed meanwhile stays.
 async function removePlanned(sourceAbsolute, entries) {
   for (const entry of entries) {
     if (entry.directory) continue;
@@ -619,7 +666,7 @@ async function removePlanned(sourceAbsolute, entries) {
       if (isMissingPathError(error)) return null;
       throw error;
     });
-    if (current && sameEntry(current, entry.stats)) await unlink(item);
+    if (current && sameFile(current, entry.stats)) await unlink(item);
   }
   for (const entry of entries.filter((candidate) => candidate.directory).reverse()) {
     await rmdir(path.join(sourceAbsolute, entry.relative)).catch((error) => {
@@ -657,9 +704,9 @@ async function transferItem(from, to, { input, mode, sourcePath, folder, origin,
   if (sameRoot && mode === "move" && folderOf(sourcePath) === folder) {
     throw sourceEditorError("It is already in this folder.", "vibe64_files_invalid_destination");
   }
-  const entries = await transferPlan(from, sourcePath, sourceStats);
+  const entries = await transferPlan(sourceAt, sourcePath, sourceStats, from.policy);
   if (mode === "copy") assertTransferSize(entries);
-  const target = await resolveTarget(to, folder, name, input.conflict);
+  const target = await resolveTarget(to, destination, folder, name, input.conflict);
   if (target.skipped) return { ok: true, skipped: true, path: target.relativePath, mode };
   // Replacing deletes what is there: never the item itself or a folder holding it.
   const sourceAbsolute = absoluteSourceEditorPath(from.sourceRoot, sourcePath);
@@ -668,13 +715,17 @@ async function transferItem(from, to, { input, mode, sourcePath, folder, origin,
   }
   for (const entry of entries) {
     const arriving = joinRelative(target.relativePath, entry.relative);
-    if (sourceEditorPathExcluded(to.policy, arriving)) {
-      throw sourceEditorError(`“${arriving}” is protected in this area.`, "vibe64_files_protected_entry", { path: arriving }, 403);
-    }
+    if (sourceEditorPathExcluded(to.policy, arriving)) throw protectedError(arriving);
   }
-  const staged = stagingPath(to.stagingRoot);
-  // A move renames when both areas share a filesystem; otherwise it copies
-  // and removes the source only after the copy is published.
+  return withStaging(to, (staging) => carryItem(from, to, {
+    mode, sourcePath, sourceAt, sourceStats, entries, target, destination, staging
+  }));
+}
+
+// A move renames when both areas share a filesystem; otherwise it copies and
+// removes the source only after the copy is published.
+async function carryItem(from, to, { mode, sourcePath, sourceAt, sourceStats, entries, target, destination, staging }) {
+  const staged = stagedItem(staging);
   let renamed = false;
   try {
     if (mode === "move") {
@@ -697,7 +748,7 @@ async function transferItem(from, to, { input, mode, sourcePath, folder, origin,
       for (const { relative, stats } of entries) await lutimes(path.join(staged, relative), stats.atimeMs / 1000, stats.mtimeMs / 1000);
     }
     await destination.check();
-    await publishStaged(to, staged, destination.at(path.posix.basename(target.relativePath)), {
+    await publishStaged(to, staging, staged, destination.at(path.posix.basename(target.relativePath)), {
       replace: target.replace, directory: sourceStats.isDirectory()
     });
   } catch (error) {
