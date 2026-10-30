@@ -221,7 +221,9 @@ test("Env tools share source authority while returning metadata without stored v
     assert.equal(calls.at(-1).input.sessionId, "session-a");
     assert.equal(calls.at(-1).context.vibe64User, state.actor);
     assert.equal(events.length, 0);
-    assert.equal(toolSet.tools.some(({ actionId }) => actionId === "vibe64.project.env.secret.reveal"), false);
+    for (const secretActionId of ["vibe64.project.env.secret.reveal", "vibe64.project.env.download"]) {
+      assert.equal(toolSet.tools.some(({ actionId }) => actionId === secretActionId), false, secretActionId);
+    }
     const api = await actions.execute({ actionId: "vibe64.project.env.read",
       input: { projectSlug: slug, sessionId: "session-b", environment: "dev" }, context: { channel: "api", surface: "app" } });
     assert.equal(api.env.records[0].value, "private-plain-value", "the ordinary UI keeps its authorized value presentation");

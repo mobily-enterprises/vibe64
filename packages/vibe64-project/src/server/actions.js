@@ -10,6 +10,7 @@ import { settingsTool } from "./settingsAssistantContracts.js";
 import {
   projectRemoteInputValidator,
   projectRepositoryBranchesInputValidator,
+  projectEnvDownloadInputValidator,
   projectEnvSecretRevealInputValidator,
   emptyProjectInputValidator,
   projectRepositoryWorkflowInputValidator,
@@ -209,6 +210,8 @@ function createProjectActions({ project } = {}) {
       ownerRequired: true, execute: (input) => project.saveRepositoryWorkflow(input) }),
     action({ id: "vibe64.project.env.secret.reveal", kind: "query", input: projectEnvSecretRevealInputValidator,
       ownerRequired: true, execute: (input) => project.revealEnvSecret(input) }),
+    action({ id: "vibe64.project.env.download", kind: "query", input: projectEnvDownloadInputValidator,
+      ownerRequired: true, execute: (input) => project.downloadEnv(input) }),
     ...Object.entries(projectIssueInputValidators).map(([operation, input]) => action({
       id: `vibe64.project.issues.${operation}`, input,
       assistant: issueTool(operation),

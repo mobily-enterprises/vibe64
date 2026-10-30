@@ -20,6 +20,18 @@ have a default keep their default row; only the values without one, for example
 `DB_PASSWORD`, appear as empty rows to fill, and the setup message lists them
 as missing.
 
+**Download .env**, beside **Refresh** at the top of **Env**, saves every
+Development value, secrets included, as one plain file named
+`<project>-development.env`. It starts with comments naming the project, the
+environment and the download time, then lists **User values** (including linked
+rows) and **System values** as `KEY=value` lines; a variable without a value is
+written `KEY=`. Simple values stay bare; any other is double-quoted with `\\`,
+`\"`, `\n` and `\$` escapes, in the dotenv style Docker Compose reads.
+Only the Vibe64 owner can download, and the button shows its progress while the
+file is prepared; a refusal or failure appears above the list. The file holds
+real secrets: keep it private and never paste it into chat. Colleague cannot
+download it or read its values; it opens Env so the person can.
+
 Saved development values are available to the coding agent, its managed browser,
 and managed Playwright commands. For an authorized external site, tell the coding
 agent which variable names contain its URL and credentials. Values need not be

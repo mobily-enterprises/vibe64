@@ -542,6 +542,59 @@ test("Env reveal returns one uncached secret through the project service", async
   });
 });
 
+test("Env download returns the owner's whole .env file uncached through the project service", async () => {
+  await withLocalRequestBypass(async () => {
+    await withRouteProject(async ({ apiRouteBase, projectContext }) => {
+      const calls = [];
+      const app = testRouteApp();
+      registerRoutes(routeHttp(app), {
+        project: {
+          async downloadEnv(input) {
+            calls.push(input);
+            return { content: "# Project: example\nAPI_KEY=private\n", ok: true };
+          }
+        },
+        projectContext,
+        routeRelativePath: "vibe64",
+        routeSurface: "app"
+      });
+      const route = findRegisteredRoute(app, {
+        method: "POST",
+        path: `${apiRouteBase}/vibe64/env/download`
+      });
+      assert.ok(route);
+      const headers = {};
+      const reply = {
+        ...testReply(),
+        header(key, value) {
+          headers[key] = value;
+          return this;
+        }
+      };
+      const body = { environment: "dev", sessionId: "session-1", vibe64User: { role: "owner", username: "spoofed" } };
+
+      await route.handler({
+        body,
+        input: { body },
+        params: routeProjectParams(),
+        vibe64User: { role: "owner", username: "owner" }
+      }, reply);
+
+      assert.deepEqual(calls, [{
+        environment: "dev",
+        sessionId: "session-1",
+        vibe64User: { role: "owner", username: "owner" }
+      }]);
+      assert.deepEqual(headers, {
+        "cache-control": "no-store",
+        pragma: "no-cache"
+      });
+      assert.equal(reply.statusCode, 200);
+      assert.equal(reply.payload.content, "# Project: example\nAPI_KEY=private\n");
+    });
+  });
+});
+
 test("managed app identity routes preserve the selected project source", async () => {
   await withLocalRequestBypass(async () => {
     await withRouteProject(async ({ apiRouteBase, projectContext }) => {

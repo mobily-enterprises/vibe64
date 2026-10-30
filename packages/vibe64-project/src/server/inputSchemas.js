@@ -162,6 +162,17 @@ const projectEnvReadInputValidator = inputSchema({
   }
 });
 
+const projectEnvDownloadInputValidator = inputSchema({
+  environment: {
+    type: "string",
+    noTrim: false
+  },
+  sessionId: {
+    type: "string",
+    noTrim: false
+  }
+});
+
 const projectEnvSecretRevealInputValidator = inputSchema({
   environment: {
     type: "string",
@@ -283,6 +294,7 @@ export {
   projectEngineeringSettingsReadInputValidator,
   projectCreateInputValidator,
   projectEnvReadInputValidator,
+  projectEnvDownloadInputValidator,
   projectEnvSecretRevealInputValidator,
   projectEnvUserValuesInputValidator,
   projectsReadInputValidator,

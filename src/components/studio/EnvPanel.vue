@@ -19,6 +19,17 @@
       <template #actions>
         <template v-if="projectEnvTabActive">
           <v-btn
+            :disabled="envLoading"
+            :loading="downloadBusy"
+            :prepend-icon="mdiDownload"
+            rounded="pill"
+            type="button"
+            variant="tonal"
+            @click="downloadDotenv"
+          >
+            Download .env
+          </v-btn>
+          <v-btn
             :loading="envLoading"
             :prepend-icon="mdiRefresh"
             rounded="pill"
@@ -57,6 +68,18 @@
     />
 
     <template v-else-if="projectEnvTabActive">
+      <v-alert
+        v-if="downloadError"
+        class="env-panel__alert"
+        closable
+        density="compact"
+        type="error"
+        variant="tonal"
+        @click:close="downloadError = ''"
+      >
+        {{ downloadError }}
+      </v-alert>
+
       <v-alert
         v-if="envUnavailable"
         class="env-panel__alert"
@@ -208,7 +231,7 @@
 
 <script setup>
 import { computed, ref, watch } from "vue";
-import { mdiFileCogOutline, mdiRefresh } from "@mdi/js";
+import { mdiDownload, mdiFileCogOutline, mdiRefresh } from "@mdi/js";
 import { useRoute } from "vue-router";
 import { ROUTE_VISIBILITY_PUBLIC } from "@jskit-ai/kernel/shared/support/visibility";
 import { useCommand } from "@jskit-ai/http-web/client/composables/useCommand";
@@ -216,6 +239,7 @@ import { useEndpointResource } from "@jskit-ai/http-web/client/composables/useEn
 import Vibe64AsyncModuleState from "@/components/common/Vibe64AsyncModuleState.vue";
 import Vibe64DashboardPageHeader from "@/components/studio/Vibe64DashboardPageHeader.vue";
 import RuntimeConfigRecordsView from "@/components/studio/RuntimeConfigRecordsView.vue";
+import { useRuntimeConfigDotenvDownload } from "@/composables/useRuntimeConfigDotenvDownload.js";
 import { useRuntimeConfigSecretReveal } from "@/composables/useRuntimeConfigSecretReveal.js";
 import {
   savedEnvValueEnvironment as savedValueEnvironment,
@@ -225,10 +249,12 @@ import {
   VIBE64_SURFACE_ID
 } from "@/lib/vibe64RequestConfig.js";
 import {
+  ENV_DOWNLOAD_ENDPOINT,
   ENV_ENDPOINT,
   ENV_SECRET_REVEAL_ENDPOINT,
   ENV_USER_VALUES_ENDPOINT,
   VIBE64_PROJECT_CHANGED_EVENT,
+  VIBE64_ENV_DOWNLOAD_API_SUFFIX,
   VIBE64_ENV_SECRET_REVEAL_API_SUFFIX,
   VIBE64_ENV_USER_VALUES_API_SUFFIX,
   envQueryKey
@@ -342,7 +368,45 @@ const {
   }
 });
 
-watch([projectSlug, selectedSessionId], clearRevealedSecrets);
+// The owner's .env download carries every value, so it uses the same
+// uncached, owner-only transport as reveal and never reaches Colleague.
+const downloadCommand = useCommand({
+  access: "never",
+  apiSuffix: VIBE64_ENV_DOWNLOAD_API_SUFFIX,
+  buildCommandOptions: () => ({
+    method: "POST",
+    path: ENV_DOWNLOAD_ENDPOINT
+  }),
+  buildRawPayload: () => ({
+    environment: PROJECT_ENVIRONMENT,
+    ...(selectedSessionId.value ? { sessionId: selectedSessionId.value } : {})
+  }),
+  fallbackRunError: "Env could not be downloaded.",
+  messages: {
+    error: "Env could not be downloaded."
+  },
+  ownershipFilter: ROUTE_VISIBILITY_PUBLIC,
+  placementSource: "vibe64.env.download",
+  suppressSuccessMessage: true,
+  surfaceId: VIBE64_SURFACE_ID,
+  writeMethod: "POST"
+});
+
+const {
+  downloadBusy,
+  downloadDotenv,
+  downloadError
+} = useRuntimeConfigDotenvDownload({
+  fileName: () => `${projectSlug.value}-${PROJECT_ENVIRONMENT_LABEL}.env`,
+  async readContent() {
+    return (await downloadCommand.run())?.content;
+  }
+});
+
+watch([projectSlug, selectedSessionId], () => {
+  clearRevealedSecrets();
+  downloadError.value = "";
+});
 
 const env = computed(() => envResource.data.value?.env || {});
 const envConfigSourceLabel = computed(() => String(env.value?.configSource?.label || ""));

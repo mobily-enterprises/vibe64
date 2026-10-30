@@ -46,6 +46,16 @@ const RUNTIME_CONFIG_SECRET_KEY_PARTS = new Set([
 ]);
 const REDACTED_RUNTIME_CONFIG_VALUE = "********";
 const RUNTIME_CONFIG_LABEL_MAX_LENGTH = 200;
+// A dotenv value made only of these characters needs no quotes; any other is
+// double-quoted with these escapes, which dotenv and Docker Compose decode.
+const DOTENV_PLAIN_VALUE_PATTERN = /^[\w@%+=:,./-]+$/u;
+const DOTENV_ESCAPES = Object.freeze({
+  "\n": "\\n",
+  "\r": "\\r",
+  "\"": "\\\"",
+  "$": "\\$",
+  "\\": "\\\\"
+});
 
 function runtimeConfigError(message, code) {
   return vibe64Error(message, code);
@@ -362,6 +372,44 @@ function runtimeConfigEnvViewModel(config = {}) {
   };
 }
 
+function runtimeConfigDotenvValue(value = "") {
+  const text = String(value ?? "");
+  return !text || DOTENV_PLAIN_VALUE_PATTERN.test(text)
+    ? text
+    : `"${text.replace(/[\n\r"$\\]/gu, (character) => DOTENV_ESCAPES[character])}"`;
+}
+
+function dotenvComment(text = "") {
+  return `# ${String(text ?? "").replace(/[\r\n]+/gu, " ")}`;
+}
+
+// The whole environment as one plain .env file: a short header, then the
+// person's values and the system values in the Env panel's grouping, each
+// record with its real value (KEY= when it has none).
+function runtimeConfigDotenvFile({
+  downloadedAt = new Date(),
+  environment = "",
+  isUserRecord = (record) => record.editable === true,
+  project = "",
+  records = [],
+  values = {}
+} = {}) {
+  const assignment = (record) => `${normalizeRuntimeConfigKey(record.key)}=${
+    runtimeConfigDotenvValue(record.valuePresent === true ? values[record.key] : "")}`;
+  const groups = [
+    ["User values", records.filter(isUserRecord)],
+    ["System values", records.filter((record) => !isUserRecord(record))]
+  ].filter(([, groupRecords]) => groupRecords.length > 0);
+  return `${[
+    [
+      dotenvComment(`Project: ${project}`),
+      dotenvComment(`Environment: ${environment}`),
+      dotenvComment(`Downloaded: ${new Date(downloadedAt).toISOString()}`)
+    ],
+    ...groups.map(([title, groupRecords]) => [dotenvComment(title), ...groupRecords.map(assignment)])
+  ].map((lines) => lines.join("\n")).join("\n\n")}\n`;
+}
+
 export {
   REDACTED_RUNTIME_CONFIG_VALUE,
   RUNTIME_CONFIG_OWNERS,
@@ -379,6 +427,8 @@ export {
   normalizeRuntimeConfigTarget,
   normalizeRuntimeConfigTargets,
   resolveRuntimeConfig,
+  runtimeConfigDotenvFile,
+  runtimeConfigDotenvValue,
   runtimeConfigEnv,
   runtimeConfigEnvViewModel,
   runtimeConfigKeyIsVibe64Reserved,

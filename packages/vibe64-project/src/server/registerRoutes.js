@@ -31,6 +31,7 @@ import {
   projectConnectedProjectsInputValidator,
   projectPromptHintsInputValidator,
   projectEnvReadInputValidator,
+  projectEnvDownloadInputValidator,
   projectEnvSecretRevealInputValidator,
   projectEnvUserValuesInputValidator,
   projectSelectInputValidator,
@@ -139,18 +140,24 @@ function registerRoutes(http, {
     query: projectEnvReadInputValidator,
     summary: "Read project Env values."
   });
-  routes.serviceRoute("POST", "/env/reveal", {
-    body: projectEnvSecretRevealInputValidator,
-    statusCode: envSecretRevealStatusCode,
-    summary: "Reveal one project development secret to the Vibe64 owner."
-  }, async (request, reply) => {
-    reply
-      .header("cache-control", "no-store")
-      .header("pragma", "no-cache");
-    return request.executeAction({
-      actionId: "vibe64.project.env.secret.reveal", input: withoutUser(routes.requestBody(request))
+  // Responses carrying stored secret values are the owner's and never cached.
+  for (const [path, actionId, body, summary] of [
+    ["/env/reveal", "vibe64.project.env.secret.reveal", projectEnvSecretRevealInputValidator,
+      "Reveal one project development secret to the Vibe64 owner."],
+    ["/env/download", "vibe64.project.env.download", projectEnvDownloadInputValidator,
+      "Download every project Env value as one .env file for the Vibe64 owner."]
+  ]) {
+    routes.serviceRoute("POST", path, {
+      body,
+      statusCode: envSecretStatusCode,
+      summary
+    }, async (request, reply) => {
+      reply
+        .header("cache-control", "no-store")
+        .header("pragma", "no-cache");
+      return request.executeAction({ actionId, input: withoutUser(routes.requestBody(request)) });
     });
-  });
+  }
   routes.actionRoute("PUT", "/env/user-values", {
     actionId: ACTION_SAVE_ENV_USER_VALUES,
     body: projectEnvUserValuesInputValidator,
@@ -216,7 +223,7 @@ function registerRoutes(http, {
   });
 }
 
-function envSecretRevealStatusCode(response = {}) {
+function envSecretStatusCode(response = {}) {
   if (response?.ok === true) {
     return 200;
   }

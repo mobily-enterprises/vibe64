@@ -12,6 +12,8 @@ import {
   normalizeRuntimeConfigOwner,
   normalizeRuntimeConfigRecord,
   resolveRuntimeConfig,
+  runtimeConfigDotenvFile,
+  runtimeConfigDotenvValue,
   runtimeConfigEnv,
   runtimeConfigEnvViewModel,
   runtimeConfigKeyIsVibe64Reserved,
@@ -285,6 +287,120 @@ test("runtime config Env view exposes only current record concepts", () => {
   assert.equal(Object.hasOwn(view, "adapterId"), false);
   assert.equal(Object.hasOwn(view, "generatedTargets"), false);
   assert.equal(Object.hasOwn(apiKeyRecord, "materialize"), false);
+});
+
+// Reads a .env file the way Docker Compose and godotenv do: bare values are
+// literal and double-quoted values decode \\, \", \n, \r and \$.
+function readDotenv(text) {
+  const values = {};
+  for (const line of text.split("\n")) {
+    if (!line || line.startsWith("#")) continue;
+    const separator = line.indexOf("=");
+    const key = line.slice(0, separator);
+    const raw = line.slice(separator + 1);
+    if (!raw.startsWith("\"")) {
+      values[key] = raw;
+      continue;
+    }
+    let value = "";
+    let index = 1;
+    for (; raw[index] !== "\""; index += 1) {
+      assert.ok(index < raw.length, `${key} has no closing quote`);
+      if (raw[index] === "\\") {
+        index += 1;
+        value += { n: "\n", r: "\r" }[raw[index]] ?? raw[index];
+      } else {
+        value += raw[index];
+      }
+    }
+    assert.equal(index, raw.length - 1, `${key} has text after its closing quote`);
+    values[key] = value;
+  }
+  return values;
+}
+
+test("runtime config writes every record as one plain .env file in the Env panel's groups", () => {
+  const content = runtimeConfigDotenvFile({
+    downloadedAt: new Date("2026-10-30T09:15:00.000Z"),
+    environment: "development",
+    isUserRecord: (record) => record.editable === true || record.source === "linked",
+    project: "books\nshop",
+    records: [
+      { editable: false, key: "DATABASE_URL", secret: true, source: "managed", valuePresent: true },
+      { editable: true, key: "API_KEY", secret: true, source: "user", valuePresent: true },
+      { editable: true, key: "EMPTY_SETTING", source: "user", valuePresent: false },
+      { editable: false, key: "STRIPE_SECRET_KEY", secret: true, source: "linked", valuePresent: true },
+      { editable: true, key: "GREETING", source: "user", valuePresent: true }
+    ],
+    values: {
+      API_KEY: "sk_test_123",
+      DATABASE_URL: "postgres://app:p@ss#1@127.0.0.1:5432/app",
+      EMPTY_SETTING: "ignored when not present",
+      GREETING: "Hello \"world\"",
+      STRIPE_SECRET_KEY: "rk_test_456"
+    }
+  });
+
+  assert.equal(content, [
+    "# Project: books shop",
+    "# Environment: development",
+    "# Downloaded: 2026-10-30T09:15:00.000Z",
+    "",
+    "# User values",
+    "API_KEY=sk_test_123",
+    "EMPTY_SETTING=",
+    "STRIPE_SECRET_KEY=rk_test_456",
+    "GREETING=\"Hello \\\"world\\\"\"",
+    "",
+    "# System values",
+    "DATABASE_URL=\"postgres://app:p@ss#1@127.0.0.1:5432/app\"",
+    ""
+  ].join("\n"));
+  assert.equal(runtimeConfigDotenvFile({ downloadedAt: 0, environment: "production", project: "empty" }),
+    "# Project: empty\n# Environment: production\n# Downloaded: 1970-01-01T00:00:00.000Z\n");
+  assert.throws(() => runtimeConfigDotenvFile({ records: [{ key: "NOT VALID", valuePresent: false }] }),
+    { code: "vibe64_runtime_config_key_invalid" });
+});
+
+test("runtime config .env values stay bare when plain and read back exactly when quoted", () => {
+  assert.equal(runtimeConfigDotenvValue("plain-value_1.2:3/4@5%6+7=8,9"), "plain-value_1.2:3/4@5%6+7=8,9");
+  assert.equal(runtimeConfigDotenvValue(""), "");
+  assert.equal(runtimeConfigDotenvValue(undefined), "");
+  assert.equal(runtimeConfigDotenvValue("a b"), "\"a b\"");
+  assert.equal(runtimeConfigDotenvValue("C:\\new\n$HOME\"\r"), "\"C:\\\\new\\n\\$HOME\\\"\\r\"");
+
+  const tricky = {
+    BACKSLASH_N: "C:\\new\\table",
+    BACKTICKS: "`uname`",
+    COMMENT_LOOKALIKE: "#not-a-comment",
+    CRLF: "first\r\nsecond",
+    DOLLARS: "$HOME ${PATH} $$ price$5 \\$",
+    EMPTY: "",
+    EQUALS: "=leading=and=trailing=",
+    INLINE_HASH: "value # not a comment",
+    MULTILINE: "line one\nline two\n\nline four\n",
+    PADDED: "  padded  ",
+    PEM: "-----BEGIN KEY-----\nMIIB+abc/def==\n-----END KEY-----",
+    PLAIN: "plain-value_1.2:3/4@5%6+7=8,9",
+    QUOTES: "say \"hi\" and 'bye'",
+    TAB: "tab\there",
+    TRAILING_BACKSLASH: "ends with \\",
+    UNICODE: "ünïcödé ✓ 日本",
+    URL: "postgres://user:p%40ss@db.example.test:5432/app?sslmode=require&x=1"
+  };
+  const keys = Object.keys(tricky);
+  const content = runtimeConfigDotenvFile({
+    environment: "development",
+    project: "tricky",
+    records: keys.map((key) => ({ editable: true, key, valuePresent: true })),
+    values: tricky
+  });
+
+  assert.deepEqual(readDotenv(content), tricky);
+  assert.equal(content.split("\n").filter((line) => line && !line.startsWith("#")).length, keys.length,
+    "every value, including multi-line ones, is on one line");
+  assert.match(content, /^PLAIN=plain-value_1\.2:3\/4@5%6\+7=8,9$/mu);
+  assert.match(content, /^EMPTY=$/mu);
 });
 
 test("Env user value store writes 0600 state and preserves empty records", async () => {

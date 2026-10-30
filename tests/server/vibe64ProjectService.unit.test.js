@@ -1316,6 +1316,64 @@ test("Env is user-owned and reaches Genesis sessions without an adapter", async 
   });
 });
 
+test("the owner downloads every Env record with its real value as one .env file", async () => {
+  await withTemporaryRoot(async (targetRoot) => {
+    const sessionId = "env-download";
+    await mkdir(path.join(sourcePath(targetRoot, sessionId), ".git", "info"), { recursive: true });
+    const resource = { component: "example", resource: { id: "service", kind: "example",
+      environmentAlternatives: [{ preferred: true, bindings: { endpoint: "SERVICE_ENDPOINT", token: "SERVICE_TOKEN" } }] } };
+    const service = projectService(targetRoot, {
+      inspectEnvironment: () => ({ components: [], environmentDefaults: [{ name: "APP_MODE", value: "demo" }],
+        files: [], resources: [resource], status: "ready" })
+    });
+    const provided = () => ({ contract: "vibe64.resource-environment.v2", ok: true, prepared: true,
+      resourceValues: [{ declaration: { component: "example", id: "service", kind: "example" },
+        values: { endpoint: "https://managed.example.test/a b", token: "managed-$ecret" } }] });
+    service.setResourceEnvironmentProvider({ managedDevelopmentDatabase: true,
+      environmentForProvisionedResources: provided, environmentForResources: provided });
+    service.setSavedEnvValueProvider({ label: "Test vault", async list() { return { entries: [] }; },
+      async link() { return { ok: true }; }, async unlink() { return { ok: true }; },
+      async valuesForProject() {
+        return { contract: "vibe64.saved-env-values.v1", values: [{ key: "PAYMENTS_KEY", value: "sk_test_linked", secret: true }] };
+      } });
+    const runtime = await service.createRuntime({ inspectSource: false });
+    await runtime.store.createSession({ metadata: sourceMetadata(targetRoot, sessionId), runtimeKind: "genesis", sessionId });
+    assert.equal((await service.saveEnvUserValues({ environment: "dev", sessionId, values: {
+      API_KEY: { secret: true, value: "sk_live_\"quoted\"" },
+      EMPTY_VALUE: { secret: false, value: "" },
+      NOTES: { secret: false, value: "line one\nline two" }
+    } })).ok, true);
+
+    const read = await service.readEnv({ environment: "dev", sessionId });
+    const downloaded = await service.downloadEnv({ environment: "dev", sessionId, vibe64User: { role: "owner" } });
+    assert.equal(downloaded.ok, true, JSON.stringify(downloaded));
+    const [header, user, system] = downloaded.content.split("\n\n");
+    assert.match(header, /^# Project: \S+\n# Environment: development\n# Downloaded: \d{4}-\d\d-\d\dT[\d:.]+Z$/u);
+    assert.equal(user, [
+      "# User values",
+      "API_KEY=\"sk_live_\\\"quoted\\\"\"",
+      "APP_MODE=demo",
+      "EMPTY_VALUE=",
+      "NOTES=\"line one\\nline two\"",
+      "PAYMENTS_KEY=sk_test_linked"
+    ].join("\n"));
+    assert.equal(system, [
+      "# System values",
+      "SERVICE_ENDPOINT=\"https://managed.example.test/a b\"",
+      "SERVICE_TOKEN=\"managed-\\$ecret\"",
+      ""
+    ].join("\n"));
+    const assigned = downloaded.content.split("\n").filter((line) => /^[A-Z_]+=/u.test(line)).map((line) => line.split("=")[0]);
+    assert.deepEqual(assigned.sort(), read.env.records.map((record) => record.key).sort(), "every record Env shows is included");
+    assert.equal(JSON.stringify(read).includes("sk_live_"), false, "the ordinary read still masks secrets");
+
+    const denied = await service.downloadEnv({ environment: "dev", sessionId, vibe64User: { role: "member" } });
+    assert.equal(denied.ok, false);
+    assert.equal(denied.code, "vibe64_owner_required");
+    assert.equal(JSON.stringify(denied).includes("sk_live_"), false);
+  });
+});
+
 test("Env keeps Stack defaults for resource bindings and asks only for the missing value", async () => {
   await withTemporaryRoot(async (targetRoot) => {
     const service = projectService(targetRoot, {

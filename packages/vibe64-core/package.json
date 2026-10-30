@@ -105,7 +105,7 @@
           },
           {
             "subpath": "./server/runtimeConfig",
-            "summary": "Shared Vibe64 runtime config records, resolution, redaction, filtering, and missing checks."
+            "summary": "Shared Vibe64 runtime config records, resolution, redaction, filtering, missing checks, and .env files."
           },
           {
             "subpath": "./server/envUserValues",

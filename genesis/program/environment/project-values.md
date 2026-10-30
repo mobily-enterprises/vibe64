@@ -20,6 +20,8 @@ host provide managed system values separately.
 - `packages/vibe64-terminals/src/server/agentEnvCommand.js`
 - `packages/vibe64-terminals/src/server/agentSessionCommand.js`
 - `packages/vibe64-core/src/server/envUserValues.js`
+- `packages/vibe64-core/src/server/runtimeConfig.js`
+- `src/composables/useRuntimeConfigDotenvDownload.js`
 - `packages/vibe64-core/src/server/atomicFile.js`
 - `tests/server/atomicFile.unit.test.js`
 - `src/components/studio/EnvPanel.vue`
@@ -94,8 +96,11 @@ confirmation and removes only the user override, possibly exposing a default.
 The shared service rejects host-owned or non-editable records before any values
 in that request are stored. Session source-work admission, reserved-key checks,
 normal file projection and project refresh events remain in their existing owners.
-Both read and save return metadata only to Colleague. Stored-secret reveal stays
-in the existing owner-only UI flow. Saving does not restart an app, commit source
+Both read and save return metadata only to Colleague. Stored-secret reveal and
+the whole-environment `.env` download stay in the existing owner-only UI flow:
+both are uncached owner-only actions outside assistant discovery. The download
+writes every record Env shows, with its real value, through core's shared
+runtime-config dotenv serializer, grouped as the panel groups them. Saving does not restart an app, commit source
 or establish readiness. A failure after persistence may leave values saved even
 if projection failed; Colleague directs inspection in Env before retrying because
 presence alone cannot establish exact value equality.

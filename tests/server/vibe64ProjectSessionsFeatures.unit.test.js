@@ -126,6 +126,7 @@ test("project and sessions register routes and captured actions during setup", a
     "vibe64.project.development-database.scope.save",
     "vibe64.project.engineering.profile.save",
     "vibe64.project.engineering.read",
+    "vibe64.project.env.download",
     "vibe64.project.env.read",
     "vibe64.project.env.secret.reveal",
     "vibe64.project.env.user-values.save",
@@ -149,11 +150,13 @@ test("project and sessions register routes and captured actions during setup", a
   // Learning v2: a practice project's Dashboard is an ordinary project's; the
   // project registers no lesson URLs.
   assert.deepEqual(projectRoutes.filter(([, route]) => route.startsWith("/api/learning/")), []);
-  assert.equal(
-    projectRoutes.some(([method, path]) => method === "POST" && path.endsWith("/env/reveal")),
-    true,
-    "the uncached owner-only secret reveal transport is registered with its action"
-  );
+  for (const suffix of ["/env/reveal", "/env/download"]) {
+    assert.equal(
+      projectRoutes.some(([method, path]) => method === "POST" && path.endsWith(suffix)),
+      true,
+      `the uncached owner-only ${suffix} transport is registered with its action`
+    );
+  }
   assert.equal(projectActions[0].actions.some((action) => Object.hasOwn(action, "dependencies")), false);
 
   const sessionActions = [];

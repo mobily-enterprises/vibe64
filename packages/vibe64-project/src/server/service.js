@@ -33,6 +33,7 @@ import {
   normalizeRuntimeConfigKey,
   normalizeRuntimeConfigRecord,
   resolveRuntimeConfig,
+  runtimeConfigDotenvFile,
   runtimeConfigEnv,
   runtimeConfigEnvViewModel,
   runtimeConfigKeyIsVibe64Reserved,
@@ -634,13 +635,14 @@ function createService({
     };
   }
 
-  async function revealEnvSecretState(input = {}) {
+  function assertEnvOwner(input = {}, message = "") {
     if (input.vibe64User && input.vibe64User.role !== "owner") {
-      throw vibe64Error(
-        "Only the Vibe64 owner can reveal development secrets.",
-        "vibe64_owner_required"
-      );
+      throw vibe64Error(message, "vibe64_owner_required");
     }
+  }
+
+  async function revealEnvSecretState(input = {}) {
+    assertEnvOwner(input, "Only the Vibe64 owner can reveal development secrets.");
     const key = normalizeRuntimeConfigKey(input.key);
     const { config } = await envConfig(input);
     const record = config.view?.records?.find((candidate) => candidate?.key === key);
@@ -667,6 +669,22 @@ function createService({
       key,
       ok: true,
       value
+    };
+  }
+
+  // Every record Env shows, secrets included, as one .env file for the owner.
+  async function downloadEnvState(input = {}) {
+    assertEnvOwner(input, "Only the Vibe64 owner can download development Env.");
+    const { config } = await envConfig(input);
+    return {
+      content: runtimeConfigDotenvFile({
+        environment: config.scope === RUNTIME_CONFIG_SCOPES.PROD ? "production" : "development",
+        isUserRecord: (record) => record.editable === true || record.source === SAVED_ENV_VALUE_SOURCE,
+        project: currentProjectSlug(),
+        records: config.view.records,
+        values: config.values
+      }),
+      ok: true
     };
   }
 
@@ -1633,6 +1651,10 @@ function createService({
 
     async revealEnvSecret(input = {}) {
       return projectResult(() => revealEnvSecretState(input));
+    },
+
+    async downloadEnv(input = {}) {
+      return projectResult(() => downloadEnvState(input));
     },
 
     async readPreviewApplicationIdentities(input = {}) {
