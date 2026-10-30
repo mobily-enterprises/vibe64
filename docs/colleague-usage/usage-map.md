@@ -98,8 +98,9 @@ phone) shows:
 - the requests, grouped under the click, Enter or form submit that caused
   them, such as **Click: button "Add" (SessionList.vue)**, **Enter: textbox
   "Title"** or **Submit: form "New note"**. Each shows its method, route,
-  status and how many files and functions ran. A process's start-up work is
-  listed first as **Start-up and work outside requests**.
+  status and how many files and functions ran. Later requests that no click,
+  Enter or submit caused are listed under **Other requests**. A process's
+  start-up work is listed first as **Start-up and work outside requests**.
 
 Pick a request to light up only the subsystems that ran. Functions that ran in
 most requests of the recording, such as logging or request setup, are counted

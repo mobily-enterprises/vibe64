@@ -54,8 +54,8 @@
       </div>
       <p v-else-if="!groups.length" class="usage-recordings__empty text-body-medium" role="status">{{ search ? 'No requests match.' : 'No requests ran project code yet.' }}</p>
       <v-list v-else class="usage-recordings__list" density="comfortable" aria-label="Requests" role="listbox">
-        <template v-for="group in groups" :key="group.key">
-          <v-list-subheader v-if="group.interaction" class="usage-recordings__interaction">{{ interactionTitle(group.interaction) }}</v-list-subheader>
+        <template v-for="(group, position) in groups" :key="group.key">
+          <v-list-subheader v-if="group.interaction || position > 0" class="usage-recordings__interaction">{{ group.interaction ? interactionTitle(group.interaction) : 'Other requests' }}</v-list-subheader>
           <v-list-item
             v-for="request in group.requests"
             :key="request.id"

@@ -160,6 +160,10 @@ describe("Recording states", () => {
     expect(html).toContain("/api/sessions");
     expect(html).toContain("200 · 11 files · 16 functions");
     expect(html).toContain("Show requests that ran no project code");
+    expect(html).not.toContain("Other requests");
+    const later = { ...requests.requests.at(-1), id: "r_000009", interaction: null };
+    const after = await view({ mode: "recording", recording: recordingId }, { recordings, requests: read({ ...requests, requests: [...requests.requests, later] }) });
+    expect(after).toMatch(/Click: button &quot;Add&quot;[\s\S]*Other requests/u);
   });
 
   it("says honestly when a server records every request in one background scope", async () => {
