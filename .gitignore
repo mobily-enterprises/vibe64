@@ -2,6 +2,7 @@ node_modules/
 dist/
 src/typed-router.d.ts
 coverage/
+__pycache__/
 test-results/
 *.sw?
 .vibe64-local/
