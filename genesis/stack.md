@@ -84,14 +84,15 @@
 
 ## Architecture inspection
 
-### Inspector `vue`: Vibe64 routes and UI calls
+### Inspector `vue`: Vibe64 routes, UI calls and function calls
 - Runtime: `nodejs`
 - Directory: `.`
-- Command: `node` `node_modules/@jskit-ai/shell-web/src/architecture/cli.js` `--alias` `@=src`
+- Command: `node` `node_modules/@jskit-ai/shell-web/src/architecture/cli.js` `--alias` `@=src` `--api-prefix-alias` `/api/vibe64=/api/app/:slug/vibe64` `--calls`
 - Required files: `node_modules/@jskit-ai/shell-web/src/architecture/cli.js`
-- Timeout seconds: `60`
-- Max output bytes: `4194304`
+- Timeout seconds: `90`
+- Max output bytes: `67108864`
 - Entry files: `bin/run.js` `server.js`
+- Preview locator: `node_modules/@jskit-ai/architecture-inspector/src/previewLocator.js`
 
 ## Architecture layout
 
