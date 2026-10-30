@@ -25,8 +25,11 @@ Development value, secrets included, as one plain file named
 `<project>-development.env`. It starts with comments naming the project, the
 environment and the download time, then lists **User values** (including linked
 rows) and **System values** as `KEY=value` lines; a variable without a value is
-written `KEY=`. Simple values stay bare; any other is double-quoted with `\\`,
-`\"`, `\n` and `\$` escapes, in the dotenv style Docker Compose reads.
+written `KEY=`. Simple values stay bare and others are single-quoted, so `$`,
+`"` and `\` stay literal; only a value containing `'` or a line break is
+double-quoted, with `\n` for each line break. npm `dotenv`, Node's `--env-file`
+and Docker Compose read the file alike, except that in a double-quoted value
+Compose still expands `$` and Node ends the value at a `"`.
 Only the Vibe64 owner can download, and the button shows its progress while the
 file is prepared; a refusal or failure appears above the list. The file holds
 real secrets: keep it private and never paste it into chat. Colleague cannot

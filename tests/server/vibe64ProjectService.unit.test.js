@@ -1351,7 +1351,7 @@ test("the owner downloads every Env record with its real value as one .env file"
     assert.match(header, /^# Project: \S+\n# Environment: development\n# Downloaded: \d{4}-\d\d-\d\dT[\d:.]+Z$/u);
     assert.equal(user, [
       "# User values",
-      "API_KEY=\"sk_live_\\\"quoted\\\"\"",
+      "API_KEY='sk_live_\"quoted\"'",
       "APP_MODE=demo",
       "EMPTY_VALUE=",
       "NOTES=\"line one\\nline two\"",
@@ -1359,8 +1359,8 @@ test("the owner downloads every Env record with its real value as one .env file"
     ].join("\n"));
     assert.equal(system, [
       "# System values",
-      "SERVICE_ENDPOINT=\"https://managed.example.test/a b\"",
-      "SERVICE_TOKEN=\"managed-\\$ecret\"",
+      "SERVICE_ENDPOINT='https://managed.example.test/a b'",
+      "SERVICE_TOKEN='managed-$ecret'",
       ""
     ].join("\n"));
     const assigned = downloaded.content.split("\n").filter((line) => /^[A-Z_]+=/u.test(line)).map((line) => line.split("=")[0]);

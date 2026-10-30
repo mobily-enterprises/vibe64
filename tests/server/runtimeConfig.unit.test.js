@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile, stat } from "node:fs/promises";
 import test from "node:test";
+import { parseEnv } from "node:util";
 
 import {
   RUNTIME_CONFIG_OWNERS,
@@ -289,36 +290,6 @@ test("runtime config Env view exposes only current record concepts", () => {
   assert.equal(Object.hasOwn(apiKeyRecord, "materialize"), false);
 });
 
-// Reads a .env file the way Docker Compose and godotenv do: bare values are
-// literal and double-quoted values decode \\, \", \n, \r and \$.
-function readDotenv(text) {
-  const values = {};
-  for (const line of text.split("\n")) {
-    if (!line || line.startsWith("#")) continue;
-    const separator = line.indexOf("=");
-    const key = line.slice(0, separator);
-    const raw = line.slice(separator + 1);
-    if (!raw.startsWith("\"")) {
-      values[key] = raw;
-      continue;
-    }
-    let value = "";
-    let index = 1;
-    for (; raw[index] !== "\""; index += 1) {
-      assert.ok(index < raw.length, `${key} has no closing quote`);
-      if (raw[index] === "\\") {
-        index += 1;
-        value += { n: "\n", r: "\r" }[raw[index]] ?? raw[index];
-      } else {
-        value += raw[index];
-      }
-    }
-    assert.equal(index, raw.length - 1, `${key} has text after its closing quote`);
-    values[key] = value;
-  }
-  return values;
-}
-
 test("runtime config writes every record as one plain .env file in the Env panel's groups", () => {
   const content = runtimeConfigDotenvFile({
     downloadedAt: new Date("2026-10-30T09:15:00.000Z"),
@@ -350,10 +321,10 @@ test("runtime config writes every record as one plain .env file in the Env panel
     "API_KEY=sk_test_123",
     "EMPTY_SETTING=",
     "STRIPE_SECRET_KEY=rk_test_456",
-    "GREETING=\"Hello \\\"world\\\"\"",
+    "GREETING='Hello \"world\"'",
     "",
     "# System values",
-    "DATABASE_URL=\"postgres://app:p@ss#1@127.0.0.1:5432/app\"",
+    "DATABASE_URL='postgres://app:p@ss#1@127.0.0.1:5432/app'",
     ""
   ].join("\n"));
   assert.equal(runtimeConfigDotenvFile({ downloadedAt: 0, environment: "production", project: "empty" }),
@@ -362,27 +333,30 @@ test("runtime config writes every record as one plain .env file in the Env panel
     { code: "vibe64_runtime_config_key_invalid" });
 });
 
-test("runtime config .env values stay bare when plain and read back exactly when quoted", () => {
+test("runtime config .env values read back exactly with Node's parseEnv", () => {
   assert.equal(runtimeConfigDotenvValue("plain-value_1.2:3/4@5%6+7=8,9"), "plain-value_1.2:3/4@5%6+7=8,9");
   assert.equal(runtimeConfigDotenvValue(""), "");
   assert.equal(runtimeConfigDotenvValue(undefined), "");
-  assert.equal(runtimeConfigDotenvValue("a b"), "\"a b\"");
-  assert.equal(runtimeConfigDotenvValue("C:\\new\n$HOME\"\r"), "\"C:\\\\new\\n\\$HOME\\\"\\r\"");
+  assert.equal(runtimeConfigDotenvValue("a b"), "'a b'");
+  assert.equal(runtimeConfigDotenvValue("C:\\new $HOME \"x\""), "'C:\\new $HOME \"x\"'", "single quotes keep $, \" and \\ literal");
+  assert.equal(runtimeConfigDotenvValue("it's"), "\"it's\"");
+  assert.equal(runtimeConfigDotenvValue("one\ntwo"), "\"one\\ntwo\"");
 
   const tricky = {
+    APOSTROPHE: "it's $5 \\ C:\\temp",
     BACKSLASH_N: "C:\\new\\table",
     BACKTICKS: "`uname`",
     COMMENT_LOOKALIKE: "#not-a-comment",
-    CRLF: "first\r\nsecond",
     DOLLARS: "$HOME ${PATH} $$ price$5 \\$",
     EMPTY: "",
     EQUALS: "=leading=and=trailing=",
     INLINE_HASH: "value # not a comment",
+    JSON: "{\"a\":[1,2],\"b\":\"c d\"}",
     MULTILINE: "line one\nline two\n\nline four\n",
     PADDED: "  padded  ",
     PEM: "-----BEGIN KEY-----\nMIIB+abc/def==\n-----END KEY-----",
     PLAIN: "plain-value_1.2:3/4@5%6+7=8,9",
-    QUOTES: "say \"hi\" and 'bye'",
+    QUOTES: "say \"hi\"",
     TAB: "tab\there",
     TRAILING_BACKSLASH: "ends with \\",
     UNICODE: "ünïcödé ✓ 日本",
@@ -396,10 +370,11 @@ test("runtime config .env values stay bare when plain and read back exactly when
     values: tricky
   });
 
-  assert.deepEqual(readDotenv(content), tricky);
+  assert.deepEqual({ ...parseEnv(content) }, tricky);
   assert.equal(content.split("\n").filter((line) => line && !line.startsWith("#")).length, keys.length,
     "every value, including multi-line ones, is on one line");
   assert.match(content, /^PLAIN=plain-value_1\.2:3\/4@5%6\+7=8,9$/mu);
+  assert.match(content, /^DOLLARS='\$HOME \$\{PATH\} \$\$ price\$5 \\\$'$/mu, "Compose keeps single-quoted $ literal");
   assert.match(content, /^EMPTY=$/mu);
 });
 

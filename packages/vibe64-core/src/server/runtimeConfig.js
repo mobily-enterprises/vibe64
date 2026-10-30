@@ -46,16 +46,8 @@ const RUNTIME_CONFIG_SECRET_KEY_PARTS = new Set([
 ]);
 const REDACTED_RUNTIME_CONFIG_VALUE = "********";
 const RUNTIME_CONFIG_LABEL_MAX_LENGTH = 200;
-// A dotenv value made only of these characters needs no quotes; any other is
-// double-quoted with these escapes, which dotenv and Docker Compose decode.
+// A dotenv value made only of these characters needs no quotes.
 const DOTENV_PLAIN_VALUE_PATTERN = /^[\w@%+=:,./-]+$/u;
-const DOTENV_ESCAPES = Object.freeze({
-  "\n": "\\n",
-  "\r": "\\r",
-  "\"": "\\\"",
-  "$": "\\$",
-  "\\": "\\\\"
-});
 
 function runtimeConfigError(message, code) {
   return vibe64Error(message, code);
@@ -372,11 +364,17 @@ function runtimeConfigEnvViewModel(config = {}) {
   };
 }
 
+// A .env value that npm dotenv, Node's parseEnv and Docker Compose read alike:
+// bare when plain; otherwise single-quoted, which every reader keeps literally;
+// only a value holding ' or a line break is double-quoted, with \n for breaks.
 function runtimeConfigDotenvValue(value = "") {
   const text = String(value ?? "");
-  return !text || DOTENV_PLAIN_VALUE_PATTERN.test(text)
-    ? text
-    : `"${text.replace(/[\n\r"$\\]/gu, (character) => DOTENV_ESCAPES[character])}"`;
+  if (!text || DOTENV_PLAIN_VALUE_PATTERN.test(text)) {
+    return text;
+  }
+  return /['\n]/u.test(text)
+    ? `"${text.replace(/\n/gu, "\\n")}"`
+    : `'${text}'`;
 }
 
 function dotenvComment(text = "") {
