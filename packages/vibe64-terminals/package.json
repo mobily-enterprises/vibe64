@@ -15,6 +15,7 @@
     "./server/vibe64OutputTargets": "./src/server/vibe64OutputTargets.js",
     "./server/launchPreviewProxy": "./src/server/launchPreviewProxy.js",
     "./server/previewDiagnosticFiles": "./src/server/previewDiagnosticFiles.js",
+    "./server/openedFileWithin": "./src/server/openedFileWithin.js",
     "./server/projectExecutionEnv": "./src/server/projectExecutionEnv.js",
     "./server/nativeConversationBindings": "./src/server/nativeConversationRetirement.js",
     "./shared/launchPreviewProtocol": "./src/shared/launchPreviewProtocol.js",

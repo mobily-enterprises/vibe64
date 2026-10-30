@@ -318,8 +318,9 @@ authoring, learner and pinned-recovery topics through the original usage reader.
 Owns the Files areas (Repo, Session Dropzone, read-only Session and the
 project-shared Project Dropzone and Project Backups), their streamed uploads,
 text file creation, inline image downloads and server-side move or copy between
-areas. The runtime supplies each area's trusted path and the Backups retention
-operation; the host schedules that cleanup. Backups are separate from private
+areas. The runtime supplies each area's trusted path, the project areas' locks
+and the Backups retention operation, and creates the project folders before an
+agent is given their paths; the host schedules that cleanup. Backups are separate from private
 workspace upgrade recovery data.
 
 Owns editing and reviewing project source changes, including derived

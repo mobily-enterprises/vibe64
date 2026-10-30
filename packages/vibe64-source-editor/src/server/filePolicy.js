@@ -69,12 +69,15 @@ function pathMatchesPolicyPattern(relativePath = "", pattern = "") {
   return wildcardPattern(normalizedPattern).test(normalizedPath);
 }
 
+// Protected names also match in any letter case: a case-insensitive
+// filesystem opens `.GIT/hooks` as `.git/hooks`.
 function sourceEditorPathExcluded(policy = {}, relativePath = "") {
-  if (policy.protectSourceContract !== false && sourceEditorSourceContractPathExcluded(relativePath)) {
+  const spellings = [relativePath, String(relativePath ?? "").toLowerCase()];
+  if (policy.protectSourceContract !== false && spellings.some(sourceEditorSourceContractPathExcluded)) {
     return true;
   }
   return (Array.isArray(policy.exclude) ? policy.exclude : [])
-    .some((pattern) => pathMatchesPolicyPattern(relativePath, pattern));
+    .some((pattern) => spellings.some((spelling) => pathMatchesPolicyPattern(spelling, pattern)));
 }
 
 function sourceEditorFilePolicy() {

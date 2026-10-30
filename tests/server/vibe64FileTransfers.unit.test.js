@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { execFileSync, spawn } from "node:child_process";
+import { chmod, lstat, mkdir, mkdtemp, open, readFile, readdir, rename, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { PassThrough, Readable } from "node:stream";
@@ -11,7 +11,7 @@ import { createActionCatalogue } from "@jskit-ai/kernel/server/actions";
 import { registerVibe64ActionContext } from "@local/vibe64-core/server/actionContext";
 import { SESSION_SOURCE_PATH_AUTHORITY_MANAGED } from "@local/vibe64-core/server/sessionSourcePath";
 import { createVibe64SessionStore } from "@local/vibe64-runtime/server";
-import { withProjectBackupsLock } from "@local/vibe64-runtime/server/projectBackups";
+import { BACKUP_RETENTION_MS, maintainProjectBackups, withProjectBackupsLock, withProjectDropZoneLock } from "@local/vibe64-runtime/server/projectBackups";
 import { runVibe64AgentWriteExclusive } from "@local/vibe64-runtime/server/agentWriteLock";
 import { currentProjectRequestContext, runWithProjectRequestContext } from "@local/vibe64-core/server/projectRequestContext";
 import { createService } from "../../packages/vibe64-source-editor/src/server/service.js";
@@ -21,9 +21,11 @@ import { testRouteApp } from "./vibe64RouteTestHelpers.js";
 
 // Each project has one live session with a managed source checkout (Repo, a
 // clean Git checkout), its Session Dropzone and Session tree, plus the
-// project's Dropzone and Backups.
-async function fixture(t) {
+// project's Dropzone and Backups. `sourcesBase` puts the checkouts elsewhere,
+// such as on another filesystem.
+async function fixture(t, { sourcesBase } = {}) {
   const root = await mkdtemp(path.join(tmpdir(), "vibe64-file-transfers-"));
+  const sourcesRoot = sourcesBase ? await mkdtemp(path.join(sourcesBase, "vibe64-file-transfers-")) : root;
   const stores = new Map();
   const sources = new Map();
   for (const slug of ["one", "two"]) {
@@ -31,7 +33,7 @@ async function fixture(t) {
     await mkdir(projectRoot);
     const store = createVibe64SessionStore({ projectContextRoot: projectRoot, projectRuntimeRoot: path.join(root, `${slug}-state`) });
     await store.createSession({ sessionId: "session-1", runtimeKind: "genesis" });
-    const sourceRoot = path.join(root, `${slug}-sources`, "sessions", "active", "session-1", "source");
+    const sourceRoot = path.join(sourcesRoot, `${slug}-sources`, "sessions", "active", "session-1", "source");
     await mkdir(path.join(sourceRoot, "src", "lib"), { recursive: true });
     await writeFile(path.join(sourceRoot, "src", "app.js"), `${slug} app`);
     await writeFile(path.join(sourceRoot, "src", "lib", "util.js"), `${slug} util`);
@@ -50,7 +52,11 @@ async function fixture(t) {
     const store = stores.get(currentProjectRequestContext().slug);
     return { store, getSession: store.readSession };
   } } });
-  t.after(async () => { service.close(); await rm(root, { recursive: true, force: true }); });
+  t.after(async () => {
+    service.close();
+    await rm(root, { recursive: true, force: true });
+    await rm(sourcesRoot, { recursive: true, force: true });
+  });
   // Session-scoped calls carry the route's session; project-scoped calls have none.
   const call = (operation, input = {}, { role = "member", slug = "one", options } = {}) => runWithProjectRequestContext({
     slug, targetRoot: path.join(root, slug), vibe64User: { username: role, role }
@@ -186,12 +192,13 @@ test("Repo uploads stage inside Git, where status never sees them, and publish a
 test("Repo uploads refuse protected paths, a held exclusive write and a Git folder outside the checkout", async (t) => {
   const { call, paths, stores } = await fixture(t);
   const p = paths();
-  for (const target of [".git/hooks/pre-commit", "src/.git/config", ".vibe64/contract.md"]) {
+  for (const target of [".git/hooks/pre-commit", "src/.git/config", ".vibe64/contract.md", ".GIT/hooks/pre-commit", "src/.Git/config", ".VIBE64/contract.md"]) {
     const refused = await call("upload", { area: "repo", path: target }, { options: upload("x") });
     assert.equal(refused.statusCode, 403, target);
   }
   await assert.rejects(lstat(path.join(p.repo, ".git", "hooks", "pre-commit")), { code: "ENOENT" });
   await assert.rejects(lstat(path.join(p.repo, ".vibe64")), { code: "ENOENT" });
+  await assert.rejects(lstat(path.join(p.repo, ".VIBE64")), { code: "ENOENT" });
   // Save, Update and the assistant hold the same exclusive write: Files refuses rather than waits.
   let entered;
   let release;
@@ -209,13 +216,6 @@ test("Repo uploads refuse protected paths, a held exclusive write and a Git fold
   await holder;
   await assert.rejects(lstat(path.join(p.repo, "src/busy.txt")), { code: "ENOENT" });
   assert.deepEqual(await readdir(p.repoStaging), []);
-  // A Repo write clears staged items a stopped server left over a day ago.
-  await writeFile(path.join(p.repoStaging, ".vibe64-incoming-old"), "old");
-  await writeFile(path.join(p.repoStaging, ".vibe64-incoming-recent"), "recent");
-  const dayAgo = new Date(Date.now() - 25 * 60 * 60 * 1000);
-  await utimes(path.join(p.repoStaging, ".vibe64-incoming-old"), dayAgo, dayAgo);
-  assert.equal((await call("upload", { area: "repo", path: "fresh.txt" }, { options: upload("fresh") })).ok, true);
-  assert.deepEqual(await readdir(p.repoStaging), [".vibe64-incoming-recent"]);
   // A checkout whose Git folder lives elsewhere is never staged into.
   const other = paths("two");
   const outside = path.join(path.dirname(other.repo), "elsewhere.git");
@@ -417,4 +417,181 @@ test("HTTP project routes, transfers and inline image previews keep trusted iden
   assert.deepEqual(await readFile(path.join(paths().repo, "src", "pixel.png")), png);
   const spoofed = await fetch(`${sessionFiles}/session/transfer?vibe64User[role]=owner`, json({ path: "private.txt", mode: "copy", targetArea: "drop-zone", targetPath: "" }));
   assert.equal(spoofed.status, 403);
+});
+
+// Swaps <dir>/sub between a real folder and a link to <target> until killed,
+// as an agent racing a Files copy could.
+const SWAP_FOLDER_FOR_LINK = `
+import { renameSync, symlinkSync, unlinkSync } from "node:fs";
+import path from "node:path";
+const [dir, target] = process.argv.slice(1);
+const sub = path.join(dir, "sub");
+const real = path.join(dir, "sub.real");
+for (;;) {
+  try {
+    renameSync(sub, real);
+    symlinkSync(target, sub);
+    for (let spin = 0; spin < 200000; spin += 1);
+    unlinkSync(sub);
+    renameSync(real, sub);
+    for (let spin = 0; spin < 200000; spin += 1);
+  } catch { /* keep racing */ }
+}`;
+
+test("a folder swapped for a link mid-copy never pulls in files from outside the area", { timeout: 60_000 }, async (t) => {
+  const { call, paths } = await fixture(t);
+  const p = paths();
+  const bait = path.join(p.dropZoneRoot, "bait");
+  await mkdir(path.join(bait, "sub"), { recursive: true });
+  await writeFile(path.join(bait, "sub", "private.txt"), "decoy");
+  assert.equal((await call("file", { area: "session", path: "private.txt" })).statusCode, 403);
+  const racer = spawn(process.execPath, ["--input-type=module", "-e", SWAP_FOLDER_FOR_LINK, bait, p.sessionRoot], { stdio: "ignore" });
+  const exited = new Promise((resolve) => racer.once("exit", resolve));
+  const projectZone = path.join(p.stateRoot, "drop-zone");
+  const leaked = [];
+  try {
+    const deadline = Date.now() + 4000;
+    for (let attempt = 0; attempt < 3000 && Date.now() < deadline && !leaked.length; attempt += 1) {
+      const result = await call("transfer", { path: "bait", mode: "copy", targetArea: "project-drop-zone", targetPath: "", conflict: "keep-both" });
+      if (!result.ok) continue;
+      const copied = await readFile(path.join(projectZone, result.path, "sub", "private.txt"), "utf8").catch(() => "");
+      if (copied === "one private") leaked.push(result.path);
+    }
+  } finally {
+    racer.kill("SIGKILL");
+    await exited;
+  }
+  assert.deepEqual(leaked, []);
+  assert.deepEqual(await leftovers(projectZone), []);
+});
+
+test("Replace refuses to delete the item's own source or a folder holding it", async (t) => {
+  const { call, paths } = await fixture(t);
+  const p = paths();
+  await mkdir(path.join(p.dropZoneRoot, "docs", "sub", "docs"), { recursive: true });
+  await writeFile(path.join(p.dropZoneRoot, "docs", "sub", "docs", "a.txt"), "a");
+  await writeFile(path.join(p.dropZoneRoot, "docs", "keep.txt"), "unrelated work");
+  await mkdir(path.join(p.repo, "src", "src"));
+  await writeFile(path.join(p.repo, "src", "src", "x.js"), "x");
+  for (const [area, source] of [["drop-zone", "docs/sub/docs"], ["repo", "src/src"]]) {
+    for (const mode of ["copy", "move"]) {
+      const refused = await call("transfer", { area, path: source, mode, targetArea: area, targetPath: "", conflict: "replace" });
+      assert.equal(refused.statusCode, 400, `${area} ${mode}`);
+      assert.equal(refused.code, "vibe64_files_invalid_destination");
+    }
+  }
+  assert.equal(await readFile(path.join(p.dropZoneRoot, "docs", "sub", "docs", "a.txt"), "utf8"), "a");
+  assert.equal(await readFile(path.join(p.dropZoneRoot, "docs", "keep.txt"), "utf8"), "unrelated work");
+  assert.equal(await readFile(path.join(p.repo, "src", "src", "x.js"), "utf8"), "x");
+  assert.equal(await readFile(path.join(p.repo, "src", "app.js"), "utf8"), "one app");
+});
+
+test("Replace into Repo never deletes a folder holding protected content", async (t) => {
+  const { call, paths } = await fixture(t);
+  const p = paths();
+  await mkdir(path.join(p.repo, "src", "lib", ".git"));
+  await writeFile(path.join(p.repo, "src", "lib", ".git", "HEAD"), "ref: refs/heads/main\n");
+  await mkdir(path.join(p.dropZoneRoot, "lib"));
+  await writeFile(path.join(p.dropZoneRoot, "lib", "new.js"), "new");
+  const refused = await call("transfer", { path: "lib", mode: "copy", targetArea: "repo", targetPath: "src", conflict: "replace" });
+  assert.equal(refused.statusCode, 403);
+  assert.equal(refused.code, "vibe64_files_protected_entry");
+  assert.equal(await readFile(path.join(p.repo, "src", "lib", ".git", "HEAD"), "utf8"), "ref: refs/heads/main\n");
+  assert.equal(await readFile(path.join(p.repo, "src", "lib", "util.js"), "utf8"), "one util");
+  assert.deepEqual(await leftovers(p.repoStaging), []);
+});
+
+test("a folder moved into Project Backups starts its 14 days at the move, keeping modification times", async (t) => {
+  const { call, project, paths } = await fixture(t);
+  const p = paths();
+  await mkdir(path.join(p.dropZoneRoot, "folder"));
+  await writeFile(path.join(p.dropZoneRoot, "folder", "inside.txt"), "inside");
+  const before = await lstat(path.join(p.dropZoneRoot, "folder", "inside.txt"));
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  const moveTime = Date.now();
+  assert.equal((await call("transfer", { path: "folder", mode: "move", targetArea: "backups", targetPath: "" })).ok, true);
+  const backups = path.join(p.stateRoot, "backups");
+  const inside = await lstat(path.join(backups, "folder", "inside.txt"));
+  assert.equal(inside.ino, before.ino, "moved by rename, not copied");
+  assert.ok(Math.abs(inside.mtimeMs - before.mtimeMs) < 1, "modification time kept");
+  const listed = (await project("tree", { area: "backups", path: "folder" })).tree.children[0];
+  assert.ok(Date.parse(listed.expiresAt) >= moveTime + BACKUP_RETENTION_MS - 50, listed.expiresAt);
+  await maintainProjectBackups({ stateRoot: p.stateRoot, now: moveTime + BACKUP_RETENTION_MS - 60 });
+  assert.equal(await readFile(path.join(backups, "folder", "inside.txt"), "utf8"), "inside");
+});
+
+test("Project Dropzone is created for agents, refuses a file in its place, and takes a lock like Backups", async (t) => {
+  const { project, paths, stores } = await fixture(t);
+  const p = paths();
+  await writeFile(p.projectDropZoneRoot, "what `cp report.pdf \"$VIBE64_PROJECT_DROP_ZONE\"` makes");
+  for (const [operation, options] of [["tree", {}], ["upload", { options: upload("x") }]]) {
+    const refused = await project(operation, { area: "project-drop-zone", path: operation === "upload" ? "x.txt" : "" }, options);
+    assert.equal(refused.statusCode, 409, operation);
+    assert.equal(refused.code, "vibe64_files_area_not_folder");
+  }
+  await rm(p.projectDropZoneRoot);
+  await stores.get("one").prepareProjectFileAreas();
+  for (const root of [p.projectDropZoneRoot, p.projectBackupsRoot]) assert.ok((await lstat(root)).isDirectory(), root);
+  await withProjectDropZoneLock(p.stateRoot, async () => {
+    const busy = await project("upload", { area: "project-drop-zone", path: "busy.txt" }, { options: upload("busy") });
+    assert.equal(busy.statusCode, 409);
+    assert.equal(busy.code, "project_drop_zone_busy");
+    assert.equal((await project("mkdir", { area: "project-drop-zone", path: "later" })).code, "project_drop_zone_busy");
+  });
+  assert.deepEqual(await readdir(p.projectDropZoneRoot), []);
+});
+
+test("every area's next write clears items a stopped server staged over a week ago", async (t) => {
+  const { call, project, paths } = await fixture(t);
+  const p = paths();
+  const projectZone = path.join(p.stateRoot, "drop-zone");
+  await mkdir(projectZone);
+  await mkdir(p.repoStaging);
+  const stagingRoots = [p.repoStaging, p.dropZoneRoot, projectZone];
+  for (const root of stagingRoots) await mkdir(path.join(root, ".vibe64-incoming-old"));
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  for (const root of stagingRoots) await writeFile(path.join(root, ".vibe64-incoming-recent"), "recent");
+  const old = await lstat(path.join(p.repoStaging, ".vibe64-incoming-old"));
+  const recent = await lstat(path.join(p.repoStaging, ".vibe64-incoming-recent"));
+  t.mock.timers.enable({ apis: ["Date"], now: Math.round((old.ctimeMs + recent.ctimeMs) / 2) + 7 * 24 * 60 * 60 * 1000 });
+  assert.equal((await call("upload", { area: "repo", path: "fresh.txt" }, { options: upload("fresh") })).ok, true);
+  assert.equal((await call("mkdir", { path: "fresh" })).ok, true);
+  assert.equal((await project("mkdir", { area: "project-drop-zone", path: "fresh" })).ok, true);
+  t.mock.timers.reset();
+  for (const root of stagingRoots) assert.deepEqual(await leftovers(root), [".vibe64-incoming-recent"], root);
+});
+
+test("one move or copy carries at most 2 GiB; a move on one filesystem renames whatever its size", async (t) => {
+  const { call, paths } = await fixture(t);
+  const p = paths();
+  const large = await open(path.join(p.dropZoneRoot, "large.bin"), "w");
+  await large.truncate(2 * 1024 ** 3 + 1);
+  await large.close();
+  const refused = await call("transfer", { path: "large.bin", mode: "copy", targetArea: "project-drop-zone", targetPath: "" });
+  assert.equal(refused.statusCode, 413);
+  assert.equal(refused.code, "vibe64_files_transfer_too_large");
+  const projectZone = path.join(p.stateRoot, "drop-zone");
+  assert.deepEqual(await readdir(projectZone), []);
+  assert.equal((await call("transfer", { path: "large.bin", mode: "move", targetArea: "project-drop-zone", targetPath: "" })).ok, true);
+  assert.equal((await lstat(path.join(projectZone, "large.bin"))).size, 2 * 1024 ** 3 + 1);
+});
+
+test("a move across filesystems copies, then removes exactly what it copied", async (t) => {
+  const other = await lstat("/dev/shm").catch(() => null);
+  if (!other?.isDirectory() || other.dev === (await lstat(tmpdir())).dev) {
+    t.skip("No second filesystem at /dev/shm.");
+    return;
+  }
+  const { call, paths } = await fixture(t, { sourcesBase: "/dev/shm" });
+  const p = paths();
+  await mkdir(path.join(p.dropZoneRoot, "kit", "deep"), { recursive: true });
+  await writeFile(path.join(p.dropZoneRoot, "kit", "deep", "a.txt"), "a");
+  await writeFile(path.join(p.dropZoneRoot, "kit", "b.txt"), "b");
+  const moved = await call("transfer", { path: "kit", mode: "move", targetArea: "repo", targetPath: "src" });
+  assert.equal(moved.ok, true, JSON.stringify(moved));
+  assert.equal(await readFile(path.join(p.repo, "src", "kit", "deep", "a.txt"), "utf8"), "a");
+  assert.equal(await readFile(path.join(p.repo, "src", "kit", "b.txt"), "utf8"), "b");
+  await assert.rejects(lstat(path.join(p.dropZoneRoot, "kit")), { code: "ENOENT" });
+  assert.deepEqual(await leftovers(p.dropZoneRoot), []);
+  assert.deepEqual(await leftovers(p.repoStaging), []);
 });

@@ -50,7 +50,7 @@ upload icon above the file list; its label names the folder), choose **Upload
 here** in a folder's **⋮** menu, or drag files onto the file list. Repo uses the
 same **Uploads** card and name question, and uploaded files appear as ordinary
 session changes; publish them with **Save work**. Repo refuses `.git` and the
-root `.vibe64` folder. While **Save work**, **Update** or another change to the
+root `.vibe64` folder, in any letter case. While **Save work**, **Update** or another change to the
 session's source is starting, a finishing Repo upload fails with a message to
 try again; choose **Try again** once it has finished.
 
@@ -59,7 +59,8 @@ try again; choose **Try again** once it has finished.
 Before uploading, moving or copying, Files checks the destination folder. If
 something with the same name is there, it asks once for the whole batch:
 
-- **Replace** overwrites the item that is there;
+- **Replace** overwrites the item that is there (it never replaces the item
+  itself or a folder that holds it, and in Repo never a folder holding `.git`);
 - **Keep both** gives the new item the next free name, such as `report (1).pdf`;
 - **Skip** leaves the existing item and does the rest;
 - **Cancel** does nothing.
@@ -128,17 +129,23 @@ Some moves are not allowed:
 - an archived session can only copy from its Session area to the project areas;
 - a folder cannot go inside itself, and an item cannot move into the folder it
   is already in;
-- Repo refuses `.git` and the project's root `.vibe64` folder, and every area
-  refuses links and special files.
+- Repo refuses `.git` and the project's root `.vibe64` folder, in any letter
+  case, and every area refuses links and special files;
+- one copy carries at most 2 GiB, and so does a move between areas stored on
+  different disks; move or copy a larger folder in parts.
 
 After a move or copy a message says what happened, for example "Moved
 “report.pdf” to Project Backups › 2026." or, if you chose **Keep both**, the new
 name. A copy into Repo is a session change; review it in **Current changes** and
 publish it with **Save work**. If an area is busy, for example while another
-source change is starting in Repo or Project Backups maintenance is running,
-Files says so and changes nothing; wait a moment and try again. A copy that fails part
+source change is starting in Repo, another change is being made in Project
+Dropzone, or Project Backups maintenance is running, Files says so and changes
+nothing; wait a moment and try again. If an item changes while it is being
+moved or copied, Files stops and asks you to try again. A copy that fails part
 way leaves nothing at the destination, and a move only removes the original
-after its copy is complete.
+after its copy is complete. In the rare case that a failed move cannot put the
+item back, the message says where it is kept for 7 days so it can be moved
+back.
 
 ## Project Dropzone and Project Backups
 
