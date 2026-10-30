@@ -30,6 +30,9 @@ import {
   validateGenesisCity
 } from "./genesisCities.js";
 
+// The largest inspection request an inspector receives on standard input.
+const ARCHITECTURE_INSPECTION_INPUT_MAX_BYTES = 4 * 1024 * 1024;
+
 function systemResult(operation) {
   return vibe64Result(operation, {
     fallbackCode: "vibe64_system_graph_failed",
@@ -154,7 +157,7 @@ function architectureInspectionRequest(architecture, inspection, cacheDirectory 
     stackHash: inspection.stackHash,
     ...(cacheDirectory ? { cacheDirectory } : {})
   })}\n`;
-  if (Buffer.byteLength(request) > 4 * 1024 * 1024) throw systemError("Architecture inspection inputs exceed the supported bound.", "vibe64_architecture_input_too_large");
+  if (Buffer.byteLength(request) > ARCHITECTURE_INSPECTION_INPUT_MAX_BYTES) throw systemError("Architecture inspection inputs exceed the supported bound.", "vibe64_architecture_input_too_large");
   return request;
 }
 
@@ -455,5 +458,6 @@ function createService({
 }
 
 export {
+  ARCHITECTURE_INSPECTION_INPUT_MAX_BYTES,
   createService
 };

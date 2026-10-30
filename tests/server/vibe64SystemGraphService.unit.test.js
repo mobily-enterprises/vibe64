@@ -11,11 +11,13 @@ import {
 import {
   SESSION_SOURCE_PATH_AUTHORITY_MANAGED
 } from "../../packages/vibe64-core/src/server/sessionSourcePath.js";
+import { INPUT_LIMIT_BYTES } from "../../packages/vibe64-execution/src/host/execHelper.js";
 import { configureVibe64Host } from "../../packages/vibe64-execution/src/server/hostProfile.js";
 import {
   readGenesisCity
 } from "../../packages/vibe64-system-graph/src/server/genesisCities.js";
 import {
+  ARCHITECTURE_INSPECTION_INPUT_MAX_BYTES,
   createService
 } from "../../packages/vibe64-system-graph/src/server/service.js";
 
@@ -331,6 +333,14 @@ function architectureFixture() {
 
 const emptyObservations = () => ({ schema: 'genesis.architecture-observations.v1', adapter: 'fixture', inputs: [], pages: [], registrations: [], components: [], componentUses: [], entryOperations: [], operationUses: [], diagnostics: [], capabilities: { pages: 'complete', components: 'partial', entryOperations: 'partial', operationUses: 'partial' } });
 const inspectorFixture = () => ({ status: 'ready', stackHash: 'stack-hash', inspectors: [{ id: 'fixture', title: 'Fixture', runtimeRequirements: ['nodejs'], workdir: '.', argv: ['node', 'inspect.mjs'], timeout: 1000, maxBuffer: 4096 }] });
+
+// The exec helper runs standalone and cannot import the inspection bound, so
+// this keeps its payload limit in step: the largest request, as base64, plus
+// the 1 MiB the rest of the payload has always had.
+test("the exec helper's payload limit carries the largest inspection request", () => {
+  assert.equal(ARCHITECTURE_INSPECTION_INPUT_MAX_BYTES, 4 * 1024 * 1024);
+  assert.equal(INPUT_LIMIT_BYTES, Buffer.alloc(ARCHITECTURE_INSPECTION_INPUT_MAX_BYTES).toString("base64").length + 1024 * 1024);
+});
 
 test('configured architecture inspection uses managed execution and publishes only validated observations', async () => {
   await withTempRoot(async root => {

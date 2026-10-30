@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, readdir, readFile, rename, rm, stat, symlink, writeFile
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
-import { APPLICATION_USERNAME_PREFIX, DAEMON_USERNAME_PREFIX, assertEnabledForVibe64, consumeManagedExecutionRequestPayload, deploymentServiceUnit,
+import { APPLICATION_USERNAME_PREFIX, DAEMON_USERNAME_PREFIX, INPUT_LIMIT_BYTES, assertEnabledForVibe64, consumeManagedExecutionRequestPayload, deploymentServiceUnit,
   ensureManagedServiceProcessOwnership, helperChildEnv, parseEnvironmentFile, managedExecutionState, managedExecutionOomBoundary, managedExecutionStopTimeoutMs,
   managedExecutionTaskLimitCounters, managedExecutionTaskLimitJournal, openManagedExecutionReceipts,
   releaseEndedManagedExecutions, stopManagedExecution, stopManagedServiceUnit
@@ -723,6 +723,25 @@ function helperInChild(expression, input) {
   return JSON.parse(child.stdout);
 }
 
+// A normalized payload of exactly `bytes` bytes, its size made up by input.
+function payloadOfSize(bytes, operation = "managed-execution") {
+  const envelope = JSON.stringify({ operation, schema: "vibe64.exec-helper.payload", schemaVersion: 1, inputBase64: "" });
+  return envelope.replace("\"inputBase64\":\"\"", `"inputBase64":"${"A".repeat(bytes - envelope.length)}"`);
+}
+
+test("a payload on standard input is read up to the helper's payload limit and no further", () => {
+  const helperPath = new URL(HELPER_SOURCE_URL).pathname;
+  const send = (bytes) => spawnSync(process.execPath, [helperPath, "execute"], {
+    encoding: "utf8", input: payloadOfSize(bytes, "no-such-operation"), timeout: 15_000
+  });
+  const largest = send(INPUT_LIMIT_BYTES);
+  assert.equal(largest.status, 2);
+  assert.match(largest.stderr, /rejected an unknown operation/u, "the largest payload is read whole and parsed");
+  const larger = send(INPUT_LIMIT_BYTES + 1);
+  assert.equal(larger.status, 2);
+  assert.match(larger.stderr, /payload is too large/u);
+});
+
 test("a payload file is read only as the daemon's regular file in its workspace payload directory", async (t) => {
   const { root, victim } = await plantedRoot(t);
   const owner = { uid: process.getuid(), username: daemonUser("test") };
@@ -743,7 +762,9 @@ test("a payload file is read only as the daemon's regular file in its workspace 
   assert.throws(() => consume(path.join(directory, "not-json.json")), echoesNothing);
   await symlink(path.join(victim, "secret"), path.join(directory, "linked.json"));
   assert.throws(() => consume(path.join(directory, "linked.json")), echoesNothing);
-  await writeFile(path.join(directory, "large.json"), " ".repeat(1024 * 1024 + 1));
+  await writeFile(path.join(directory, "largest.json"), payloadOfSize(INPUT_LIMIT_BYTES));
+  assert.equal(consume(path.join(directory, "largest.json")).operation, "managed-execution");
+  await writeFile(path.join(directory, "large.json"), payloadOfSize(INPUT_LIMIT_BYTES + 1));
   assert.throws(() => consume(path.join(directory, "large.json")), /too large/u);
   await writeFile(path.join(directory, "other.json"), JSON.stringify(payload));
   assert.throws(() => consume(path.join(directory, "other.json"), { ...owner, uid: owner.uid + 1 }));
