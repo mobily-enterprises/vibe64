@@ -334,6 +334,16 @@ test("same-origin fetch and XHR within 1 s of an interaction carry its id; cross
   page.dispatch("click", add);
   await page.fetch("/api/notes");
   assert.equal(page.fetches.at(-1).headers.get(HEADER), "i_0002", "the next interaction takes over");
+
+  // The editor moving the numbering on means another page of the recording
+  // already holds i_0002: its later requests are no longer tagged with it.
+  page.post({ type: PREVIEW_RECORDING_MESSAGE_TYPE, active: true, recordingId: RECORDING_ID, nextInteraction: 9 });
+  await page.fetch("/api/notes");
+  assert.equal(page.fetches.at(-1).headers.get(HEADER), null, "a refused interaction tags nothing more");
+  await nextTask();
+  page.dispatch("click", add);
+  await page.fetch("/api/notes");
+  assert.equal(page.fetches.at(-1).headers.get(HEADER), "i_0009", "numbering continues from the editor's number");
 });
 
 test("labels use role or tag and a visible label, never values, and a password field stays generic", async () => {

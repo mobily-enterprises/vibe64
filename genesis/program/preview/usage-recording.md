@@ -47,7 +47,10 @@ The `vibe64.usage-recording.*` actions sit under one session's
 current recording, list recent ones, stop, dismiss, delete, page a recording's
 requests and one request's functions, and record a Preview interaction (a
 click, Enter or submit, with an optional component file). Editor clients send
-interactions from the Preview page bridge while the recording runs. Results
+interactions from the Preview page bridge while the recording runs. Each
+interaction number is accepted once: a repeat is refused with the next free
+number, and a recording names its highest accepted number so a page opened
+later continues after it. Results
 name project files, functions, positions and counts, never values.
 
 ## Recording lifecycle

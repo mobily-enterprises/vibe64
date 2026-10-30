@@ -29,7 +29,9 @@ other data, and the recorder opens no network port.
 After Preview starts recording, **Recording — use Preview now** appears with
 **Go to Preview**, which shows the Preview pane. Use the app normally: each
 page load, button or form that reaches the server becomes a request in the
-results. A command starts running at once and the recording follows that run.
+results. Reloading the page, or using Preview in a second browser tab, keeps
+each click's requests grouped under that click. A command starts running at
+once and the recording follows that run.
 
 Only one recording runs in a session at a time. Other sessions are not
 affected, and a recording in another session keeps running when you switch.

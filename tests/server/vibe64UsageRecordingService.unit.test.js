@@ -333,17 +333,25 @@ test("start is refused for inactive sessions, unknown or unavailable targets and
 test("interactions are recorded only while Preview records, validated and capped", async (t) => {
   const { call, current } = await recorder(t);
   const { recording } = await call("start", { targetId: "preview" });
+  assert.equal(recording.highestInteraction, 0);
   const directory = launchOf({ web: true }).environment.VIBE64_USAGE_RECORDING_DIR;
   const interaction = (id, extra = {}) => call("recordInteraction", {
     recordingId: recording.id, id, at: "2026-10-30T10:00:19.800Z", label: "button \"Add\"", componentFile: "src/components/SessionList.vue", ...extra
   });
+  const taken = (nextInteraction) => ({ statusCode: 409, code: "vibe64_usage_recording_interaction_taken", details: { nextInteraction } });
   assert.deepEqual(await interaction("i_0001"), { ok: true });
-  assert.deepEqual(await interaction("i_0001"), { ok: true });
+  assert.equal((await current()).highestInteraction, 1, "a Preview page that loads now continues after i_0001");
+  // A page that numbered from the start again (a reload, a second tab) is
+  // refused, with the next free number.
+  await assert.rejects(interaction("i_0001"), taken(2));
   for (const invalid of [{ componentFile: "/etc/passwd" }, { componentFile: "../x.vue" }, { at: "yesterday" }, { label: "x".repeat(81) }, { kind: "hover" }]) {
     await assert.rejects(interaction("i_0002", invalid), { statusCode: 422 }, JSON.stringify(invalid));
   }
   await assert.rejects(interaction("x_0002"), { statusCode: 422 });
-  for (let index = 2; index <= 500; index += 1) await interaction(`i_${String(index).padStart(4, "0")}`, index === 2 ? { kind: "enter" } : {});
+  for (let index = 2; index <= 499; index += 1) await interaction(`i_${String(index).padStart(4, "0")}`, index === 2 ? { kind: "enter" } : {});
+  assert.deepEqual(await interaction("i_0700"), { ok: true });
+  assert.equal((await current()).highestInteraction, 700, "the highest number, not the count");
+  await assert.rejects(interaction("i_0002"), taken(701));
   await assert.rejects(interaction("i_0501"), { statusCode: 422, code: "vibe64_usage_recording_interaction_limit" });
   const lines = (await readFile(path.join(directory, "interactions.ndjson"), "utf8")).trim().split("\n");
   assert.equal(lines.length, 500);

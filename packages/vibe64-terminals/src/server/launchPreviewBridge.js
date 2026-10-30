@@ -1034,9 +1034,12 @@ function launchPreviewBridgeScript({
         interaction = null;
       }
       recording = active ? recordingId : "";
+      // A higher number means another page already holds the ones before it,
+      // so the current interaction no longer tags requests.
       const next = Number(event.data?.nextInteraction);
       if (recording && Number.isSafeInteger(next) && next > nextInteraction) {
         nextInteraction = next;
+        interaction = null;
       }
       return;
     }
