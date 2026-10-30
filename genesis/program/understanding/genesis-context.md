@@ -16,6 +16,7 @@ Genesis without creating another interpretation of the application.
 - `packages/vibe64-genesis/src/server/promptContext.js`
 - Main: `packages/vibe64-system-graph/src/server/service.js`
 - `packages/vibe64-system-graph/src/server/genesisCities.js`
+- `packages/vibe64-system-graph/src/server/snapshotCache.js`
 - `packages/vibe64-system-graph/src/server/actions.js`
 - `packages/vibe64-system-graph/src/server/registerRoutes.js`
 - `tests/server/vibe64SystemGraphRoutes.unit.test.js`
@@ -347,8 +348,11 @@ Genesis owns the Machine and Program City formats and their validator; Vibe64
 calls it for saved and freshly refreshed Cities and reports a rejection as
 `vibe64_invalid_genesis_city` with the City kind and path, keeping no copy of
 the schema. Architecture status and view reads share at most two immutable
-validated city snapshots. Filesystem identity/revision changes invalidate reuse; failed or
-in-flight replacement reads cannot publish stale facts. Interface preparation
+validated city snapshots, held only while read: one unread for two minutes is
+released, and a scan releases its source's snapshots when it starts. A scan's
+response reports the new Cities' status, never the documents. Filesystem
+identity/revision changes invalidate reuse; failed or in-flight replacement
+reads cannot publish stale facts. Interface preparation
 uses loaded common facts and only the selected owner rather than rebuilding its
 layered file graph or the mounted overview.
 

@@ -132,6 +132,9 @@ and names them; Imports and Calls still work.
   entry or project. **Show Imports** still shows the files it reaches.
 - Errors offer **Retry**. **This entry point is not in the current scan.**
   offers **Choose another**.
+- After about two minutes without using Architecture, Vibe64 frees the memory
+  holding the scan. The next answer then takes a second or two longer while it
+  loads the scan again; nothing is lost.
 
 The address keeps the chosen entry, mode, subsystem, recording and request, so
 reloading the page or sharing the address with someone on the same project

@@ -17,7 +17,8 @@ import {
   readCallsWeb,
   readEntries,
   readFunction,
-  readImportsWeb
+  readImportsWeb,
+  releaseCallWeb
 } from "../../packages/vibe64-system-graph/src/server/usageWeb.js";
 
 // Usage queries over the shared usage-map fixtures: a small project, its
@@ -325,11 +326,25 @@ test("the call-web cache keeps one web per session, two sessions, and drops idle
   assert.equal(cache.size, 2);
   await cache.read("b", "sha256:1", load("b1-again"));
   assert.deepEqual(loads.slice(-2), ["c1", "b1-again"], "the least recently used session was evicted");
-  clock += 10 * 60 * 1000;
+  clock += 2 * 60 * 1000 - 1;
   cache.sweep();
-  assert.equal(cache.size, 0, "ten idle minutes release every web");
+  assert.equal(cache.size, 2, "a web read within two minutes stays");
+  clock += 1;
+  cache.sweep();
+  assert.equal(cache.size, 0, "two idle minutes release every web");
   await assert.rejects(cache.read("a", "sha256:3", () => { throw new Error("broken"); }), /broken/u);
   assert.equal(cache.size, 0, "a failed load is not kept");
+  cache.clear();
+});
+
+test("an idle call web is released by its own timer, with no further query", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout", "Date"], now: Date.now() });
+  const cache = createCallWebCache();
+  await cache.read("a", "sha256:1", () => ({ name: "a1" }));
+  t.mock.timers.tick(2 * 60 * 1000 - 1);
+  assert.equal(cache.size, 1, "a web read within two minutes stays");
+  t.mock.timers.tick(1);
+  assert.equal(cache.size, 0, "two idle minutes release it without anyone asking");
   cache.clear();
 });
 
@@ -389,6 +404,30 @@ test("the service answers each query with the snapshot and reloads a changed cal
     const badMode = await service.readUsageWeb({ sessionId: "s1", entryId: CLI, mode: "recording" });
     assert.equal(badMode.code, "vibe64_invalid_usage_mode");
     cache.clear();
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
+
+test("a scan's release drops the session's parsed call web from the service's own cache", async () => {
+  const temporary = await mkdtemp(path.join(os.tmpdir(), "vibe64-usage-"));
+  const root = path.join(temporary, "sessions", "active", "s1", "source");
+  await mkdir(root, { recursive: true });
+  try {
+    let reads = 0;
+    const service = createUsageService({
+      projectService: projectServiceFor(root),
+      cityReader: async () => ({ builtAt: "2026-10-30T10:00:00.000Z", city: machine, exists: true, kind: "machine", path: ".genesis/machine-city.json" }),
+      callWebReader: async () => { reads += 1; return callWeb; },
+      layoutReader: async () => LAYOUT
+    });
+    await service.readUsageWeb({ sessionId: "s1", entryId: COMPONENT, mode: "calls" });
+    await service.readUsageWeb({ sessionId: "s1", entryId: COMPONENT, mode: "calls" });
+    assert.equal(reads, 1, "the parsed web serves repeated queries");
+    releaseCallWeb(root);
+    await service.readUsageWeb({ sessionId: "s1", entryId: COMPONENT, mode: "calls" });
+    assert.equal(reads, 2, "after the release the next query parses it again");
+    releaseCallWeb(root);
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }

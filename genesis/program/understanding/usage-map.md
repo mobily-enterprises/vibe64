@@ -11,6 +11,7 @@ recorded request actually ran. Architecture shows it as Usage beside Map.
 - `packages/vibe64-system-graph/src/server/usageActions.js`
 - `packages/vibe64-system-graph/src/server/usageRoutes.js`
 - `packages/vibe64-system-graph/src/server/genesisCities.js`
+- `packages/vibe64-system-graph/src/server/snapshotCache.js`
 - `packages/vibe64-system-graph/src/client/usage/Vibe64UsageView.vue`
 - `packages/vibe64-system-graph/src/client/usage/Vibe64UsageEntryRail.vue`
 - `packages/vibe64-system-graph/src/client/usage/Vibe64UsageEntryPicker.vue`
@@ -52,8 +53,9 @@ Every answer is bounded: subsystems always, files or functions only for a
 zoomed subsystem or when the whole reach fits `maxNodes`, at most 50
 unresolved calls, and at most 1 MiB, with `truncated` when anything was left
 out. No edge names a node the answer does not return. One parsed call web per
-session source stays cached (two sessions, released after 10 idle minutes) and
-reloads when the City names a new identity.
+session source stays cached (two sessions, released after two idle minutes or
+when a scan of that source starts) and reloads when the City names a new
+identity.
 
 A join matches a recorded function by file hash and exact start, else by name
 within three lines when unique; a changed file is `stale`, anything else

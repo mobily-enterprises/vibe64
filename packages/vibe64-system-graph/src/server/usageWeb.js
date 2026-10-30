@@ -12,6 +12,7 @@ import {
   readGenesisCity,
   requireGenesisCity
 } from "./genesisCities.js";
+import { createSnapshotCache } from "./snapshotCache.js";
 
 // Usage queries start from one Genesis entry point and return only what it
 // reaches: files through Imports, functions through Calls. Every response is
@@ -31,7 +32,6 @@ const USAGE_QUERY_LIMITS = Object.freeze({
   joinFunctions: 1500
 });
 const CALL_WEB_CACHE_SESSIONS = 2;
-const CALL_WEB_CACHE_IDLE_MS = 10 * 60 * 1000;
 const NEAR_LINES = 3;
 
 function usageError(message, code, details) {
@@ -555,46 +555,17 @@ function joinFunctions(index, callIndex, input) {
 // ---------------------------------------------------------------- cache
 
 // One parsed call web per session source, at most two sessions, released after
-// ten idle minutes and replaced when the Machine City names another identity.
-function createCallWebCache({ sessions = CALL_WEB_CACHE_SESSIONS, idleMs = CALL_WEB_CACHE_IDLE_MS, now = Date.now } = {}) {
-  const entries = new Map();
-  let timer = null;
+// two idle minutes and replaced when the Machine City names another identity.
+function createCallWebCache(options = {}) {
+  return createSnapshotCache({ capacity: CALL_WEB_CACHE_SESSIONS, ...options });
+}
 
-  function sweep() {
-    const current = now();
-    for (const [key, entry] of entries) if (current - entry.usedAt >= idleMs) entries.delete(key);
-    clearTimeout(timer);
-    timer = null;
-    if (entries.size) {
-      const next = Math.min(...[...entries.values()].map((entry) => entry.usedAt + idleMs)) - current;
-      timer = setTimeout(sweep, Math.max(1000, next));
-      timer.unref?.();
-    }
-  }
+// The usage service's own cache. A scan supersedes the session's call web, so
+// the scan releases it rather than keeping it through the scan.
+const callWebs = createCallWebCache();
 
-  function read(key, identity, load) {
-    sweep();
-    const existing = entries.get(key);
-    entries.delete(key);
-    if (existing?.identity === identity) {
-      existing.usedAt = now();
-      entries.set(key, existing);
-      return existing.promise;
-    }
-    const entry = { identity, usedAt: now(), promise: Promise.resolve().then(load) };
-    entries.set(key, entry);
-    while (entries.size > sessions) entries.delete(entries.keys().next().value);
-    entry.promise.catch(() => { if (entries.get(key) === entry) entries.delete(key); });
-    sweep();
-    return entry.promise;
-  }
-
-  return Object.freeze({
-    read,
-    sweep,
-    get size() { return entries.size; },
-    clear() { entries.clear(); clearTimeout(timer); timer = null; }
-  });
+function releaseCallWeb(sourceRoot) {
+  callWebs.delete(sourceRoot);
 }
 
 // ---------------------------------------------------------------- service
@@ -604,7 +575,7 @@ function createUsageService({
   cityReader = readGenesisCity,
   callWebReader = readGenesisCallWeb,
   layoutReader = inspectVibe64ArchitectureLayout,
-  callWebCache = createCallWebCache()
+  callWebCache = callWebs
 } = {}) {
   if (!projectService || typeof projectService.createRuntime !== "function") {
     throw new TypeError("createUsageService requires the Vibe64 Project API.");
@@ -681,5 +652,6 @@ export {
   readCallsWeb,
   readEntries,
   readFunction,
-  readImportsWeb
+  readImportsWeb,
+  releaseCallWeb
 };
