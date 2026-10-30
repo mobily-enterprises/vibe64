@@ -126,7 +126,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { mdiLinkVariant } from "@mdi/js";
 import { useVibe64ProjectSlug } from "@/composables/useVibe64ProjectScope.js";
 import {
@@ -149,6 +149,8 @@ const props = defineProps({
   // The parent's @remove-record and @save-record handlers arrive as these
   // props, so a row can await its own write: it alone shows progress, keeps
   // its typed value until the save succeeds and shows a thrown error inline.
+  // A save should resolve once written; the row shows the saved value until
+  // the refreshed records arrive.
   onRemoveRecord: {
     default: null,
     type: Function
@@ -188,6 +190,11 @@ const draftValues = ref({});
 // The one row whose write is in flight ({ key, action }) and each row's error.
 const pendingRow = ref(null);
 const rowErrors = ref({});
+// Values saved here, shown until the quiet refresh brings the new records.
+const savedRowValues = ref({});
+watch(() => props.records, () => {
+  savedRowValues.value = {};
+});
 const writeBusy = computed(() => props.saveBusy || Boolean(pendingRow.value));
 const projectSlug = useVibe64ProjectSlug();
 const savedValues = useVibe64SavedEnvValues();
@@ -243,12 +250,13 @@ async function runRowWrite(record, action, write, fallbackError) {
 }
 
 function recordValueLabel(record = {}) {
+  const saved = Object.hasOwn(savedRowValues.value, recordKey(record));
   if (record.secret) {
     return secretIsRevealed(record)
       ? String(props.revealedSecrets[record.key] ?? "")
-      : (record.valuePresent ? "********" : "");
+      : (record.valuePresent || saved ? "********" : "");
   }
-  return String(record.value ?? "");
+  return String(saved ? savedRowValues.value[recordKey(record)] : record.value ?? "");
 }
 
 function secretIsRevealed(record = {}) {
@@ -277,6 +285,9 @@ async function saveRecord(record = {}) {
     record,
     value
   }), `${record.key || "The value"} could not be saved.`);
+  if (saved) {
+    savedRowValues.value = { ...savedRowValues.value, [key]: value };
+  }
   // The typed value stays until it is saved, and an edit typed meanwhile stays.
   if (saved && draftValues.value[key] === value) {
     const { [key]: _saved, ...others } = draftValues.value;
@@ -302,15 +313,17 @@ async function copyKey(key = "") {
 </script>
 
 <style scoped>
+/* The layout follows the table's own width, not the viewport: beside an open
+   chat the panel is narrow even on a wide screen. Nothing scrolls sideways. */
 .runtime-config-records-table {
   border: 1px solid rgba(var(--v-theme-on-surface), 0.1);
   border-radius: 8px;
+  container: runtime-config-records / inline-size;
   overflow: hidden;
   width: 100%;
 }
 
 .runtime-config-records-table :deep(table) {
-  min-width: 40rem;
   table-layout: fixed;
   width: 100%;
 }
@@ -437,14 +450,16 @@ async function copyKey(key = "") {
   min-width: 0;
 }
 
-@media (max-width: 900px) {
+/* Where the actions column is tight, the new value sits above Save and Remove. */
+@container runtime-config-records (max-width: 56rem) {
   .runtime-config-records-table__edit > .v-input {
     flex-basis: 100%;
   }
 }
 
-/* On a phone each variable becomes a small card: key, value, then actions. */
-@media (max-width: 600px) {
+/* Where three columns do not fit, each variable becomes a small card: key,
+   value, then actions. */
+@container runtime-config-records (max-width: 40rem) {
   .runtime-config-records-table :deep(table),
   .runtime-config-records-table :deep(tbody) {
     display: block;

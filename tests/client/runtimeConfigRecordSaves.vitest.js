@@ -56,15 +56,29 @@ describe("saving one Env row", () => {
     expect(await rows.saveRecord(SHOP_NAME)).toBe(false);
     expect(onSaveRecord).toHaveBeenCalledTimes(1);
 
-    // The refresh swaps in new records while the rows stay mounted.
-    props.records = [{ ...API_URL, value: "https://new.example.test" }, { ...SHOP_NAME }];
-    await nextTick();
+    // Progress ends once the value is written; the row shows it until the
+    // quiet refresh swaps in new records while the rows stay mounted.
     finish();
     expect(await saving).toBe(true);
+    expect(buttons(rows, API_URL)).toEqual({ remove: { disabled: false, loading: false }, save: { disabled: true, loading: false } });
     expect(rows.draftTouched(API_URL)).toBe(false);
+    expect(rows.recordValueLabel(API_URL)).toBe("https://new.example.test");
     expect(rows.draftValue(SHOP_NAME)).toBe("Books & more");
     expect(buttons(rows, SHOP_NAME).save).toEqual({ disabled: false, loading: false });
-    expect(buttons(rows, API_URL).remove).toEqual({ disabled: false, loading: false });
+
+    props.records = [{ ...API_URL, value: "https://refreshed.example.test" }, { ...SHOP_NAME }];
+    await nextTick();
+    expect(rows.recordValueLabel(props.records[0])).toBe("https://refreshed.example.test", "the refreshed record replaces the saved value");
+    expect(rows.draftValue(SHOP_NAME)).toBe("Books & more");
+  });
+
+  it("shows a saved secret as hidden until the refresh", async () => {
+    const TOKEN = { editable: true, key: "API_TOKEN", scope: "dev", secret: true, source: "user", value: "", valuePresent: false };
+    const { rows } = mountRows({ onSaveRecord: async () => {}, records: [TOKEN] });
+    expect(rows.recordValueLabel(TOKEN)).toBe("");
+    rows.setDraftValue(TOKEN, "sk-new");
+    expect(await rows.saveRecord(TOKEN)).toBe(true);
+    expect(rows.recordValueLabel(TOKEN)).toBe("********");
   });
 
   it("keeps the typed value and shows the failure inline on that row only", async () => {
@@ -126,6 +140,16 @@ describe("saving one Env row", () => {
     expect(markup).toMatch(/<v-text-field\s+:error-messages="rowError\(record\)"\s+:hide-details="!rowError\(record\)"/u);
     expect(markup).toMatch(/<v-btn\s+:disabled="!draftTouched\(record\) \|\| \(writeBusy && !rowPending\(record, 'save'\)\)"\s+:loading="rowPending\(record, 'save'\)"[\s\S]*?@click="saveRecord\(record\)"/u);
     expect(markup).toMatch(/<v-btn\s+:disabled="writeBusy && !rowPending\(record, 'remove'\)"\s+:loading="rowPending\(record, 'remove'\)"[\s\S]*?@click="removeRecord\(record\)"/u);
+  });
+
+  it("lays rows out by the table's own width, as cards when three columns do not fit", () => {
+    const source = readFileSync(new URL("../../src/components/studio/RuntimeConfigRecordsTable.vue", import.meta.url), "utf8");
+    const style = parse(source).descriptor.styles[0].content;
+    expect(style).toContain("container: runtime-config-records / inline-size;");
+    expect(style).toContain("@container runtime-config-records (max-width: 40rem) {");
+    expect(style).toContain("@container runtime-config-records (max-width: 56rem) {");
+    expect(style).not.toContain("@media");
+    expect(style).not.toMatch(/min-width: 40rem/u);
   });
 
   it("refreshes the Env panel quietly: only the first load replaces the list", () => {

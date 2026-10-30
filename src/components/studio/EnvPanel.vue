@@ -509,7 +509,7 @@ async function saveRecord({
       secret: record.secret === true,
       value
     }
-  });
+  }, { waitForRefresh: false });
 }
 
 function requestRemoveRecord(record = {}) {
@@ -569,14 +569,20 @@ async function saveNewValue() {
 
 // One write to the project's Env file. Only the changed values' revealed
 // secrets are hidden; a failure throws to the row or form that asked for it.
-async function saveValues(values = {}) {
+// A row save returns once written and shows its value while the list refreshes
+// quietly; adding and removing wait for the refreshed list, which alone knows
+// the new row or the default a removal reveals.
+async function saveValues(values = {}, { waitForRefresh = true } = {}) {
   for (const key of Object.keys(values)) {
     hideSecret(key);
   }
   await saveCommand.run({
     values
   });
-  await envResource.reload();
+  const refreshed = envResource.reload();
+  if (waitForRefresh) {
+    await refreshed;
+  }
 }
 
 async function savedValueChanged() {
