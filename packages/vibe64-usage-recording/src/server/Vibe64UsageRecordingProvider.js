@@ -22,7 +22,7 @@ const Vibe64UsageRecordingProvider = defineFeature({
   setup({ admission, events, http, logger, project, terminals }) {
     const admit = admission || admitUsageRecording;
     const service = createService({ admission: admit, events, logger, projectService: project, terminals });
-    registerRoutes(http, { routeRelativePath: "vibe64", routeSurface: "app" });
+    registerRoutes(http);
     return { usageRecording: Object.freeze({ admit, ...service }) };
   },
   actions: createUsageRecordingActions

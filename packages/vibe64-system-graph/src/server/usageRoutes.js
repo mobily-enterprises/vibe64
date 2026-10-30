@@ -1,4 +1,11 @@
-import { createVibe64FeatureRoutes } from "@local/vibe64-core/server/featureRoutes";
+import { createActionRouteScope } from "@jskit-ai/kernel/server/http";
+import {
+  VIBE64_PROJECT_ROUTE_BASE,
+  requestBody,
+  requestQuery,
+  vibe64RouteHandler,
+  vibe64RouteHttp
+} from "@local/vibe64-core/server/featureRoutes";
 
 // Query fields each usage route accepts; anything else in the request is
 // ignored rather than passed to the action.
@@ -16,24 +23,24 @@ function picked(source, fields) {
 function registerUsageRoutes(
   http,
   {
-    projectContext = null,
-    routeSurface = "",
-    routeRelativePath = ""
+    projectContext = null
   } = {}
 ) {
-  const routes = createVibe64FeatureRoutes(http, {
-    localRequestMessage: "Vibe64 City routes only accept loopback Studio requests.",
-    projectContext,
-    routeRelativePath,
-    routeSurface,
-    tags: ["studio", "vibe64-system-graph"]
+  const routes = createActionRouteScope(vibe64RouteHttp(http, { tags: ["studio", "vibe64-system-graph"] }), {
+    routeBase: VIBE64_PROJECT_ROUTE_BASE,
+    relativePath: "vibe64",
+    surface: "app",
+    wrapHandler: vibe64RouteHandler({
+      localRequestMessage: "Vibe64 City routes only accept loopback Studio requests.",
+      projectContext
+    })
   });
   for (const [method, suffix, operation, fields, summary] of USAGE_ROUTES) {
     routes.actionRoute(method, `/system-graph/sessions/:sessionId/usage/${suffix}`, {
       actionId: `vibe64.system-graph.${operation}`,
       buildInput: (request) => ({
         sessionId: request.params.sessionId,
-        ...picked(method === "GET" ? routes.requestQuery(request) : routes.requestBody(request), fields)
+        ...picked(method === "GET" ? requestQuery(request) : requestBody(request), fields)
       }),
       ...(method === "POST" ? { bodyLimit: 1024 * 1024 } : {}),
       summary

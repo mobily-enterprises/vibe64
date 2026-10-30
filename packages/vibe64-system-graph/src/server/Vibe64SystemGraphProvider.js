@@ -31,14 +31,8 @@ const Vibe64SystemGraphProvider = defineFeature({
       }),
       ...createUsageService({ projectService: project })
     });
-    registerRoutes(http, {
-      routeRelativePath: "vibe64",
-      routeSurface: "app"
-    });
-    registerUsageRoutes(http, {
-      routeRelativePath: "vibe64",
-      routeSurface: "app"
-    });
+    registerRoutes(http);
+    registerUsageRoutes(http);
     return { systemGraph };
   },
   actions: createSystemGraphActions
