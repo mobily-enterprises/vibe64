@@ -27,7 +27,15 @@ import { createConnection } from "node:net";
 import { constants as osConstants } from "node:os";
 import process from "node:process";
 
-const INPUT_LIMIT_BYTES = 1024 * 1024;
+// The largest payload, read from standard input or a payload file, is a JSON
+// envelope carrying a command's standard input as base64. The largest such input
+// is an architecture inspection request, which the System Graph service bounds
+// at ARCHITECTURE_INSPECTION_INPUT_MAX_BYTES. The helper runs standalone and
+// imports only Node built-ins, so a System Graph test keeps the two in step. The
+// rest of the envelope keeps the 1 MiB the whole payload was allowed before.
+const LARGEST_COMMAND_INPUT_BYTES = 4 * 1024 * 1024;
+const PAYLOAD_ENVELOPE_BYTES = 1024 * 1024;
+const INPUT_LIMIT_BYTES = 4 * Math.ceil(LARGEST_COMMAND_INPUT_BYTES / 3) + PAYLOAD_ENVELOPE_BYTES;
 const DIRECTORY_NO_FOLLOW = fsConstants.O_RDONLY | fsConstants.O_DIRECTORY | fsConstants.O_NOFOLLOW;
 const NEW_FILE_NO_FOLLOW = fsConstants.O_WRONLY | fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_NOFOLLOW;
 // Never through a link, and never waiting on a FIFO.
@@ -3974,7 +3982,7 @@ function helperChildEnv(input = {}, targetUser = {}, ownerUsername = "", operati
   return env;
 }
 
-export { APPLICATION_LIMIT_PER_WORKSPACE, APPLICATION_USERNAME_PREFIX, DAEMON_USERNAME_PREFIX, HOST_SETTINGS_ROOT, accountUnitLines, applicationIdentity, applicationReleaseEnvironmentFile,
+export { APPLICATION_LIMIT_PER_WORKSPACE, APPLICATION_USERNAME_PREFIX, DAEMON_USERNAME_PREFIX, HOST_SETTINGS_ROOT, INPUT_LIMIT_BYTES, accountUnitLines, applicationIdentity, applicationReleaseEnvironmentFile,
   assertReleaseServiceClaim, assertValidDeploymentUnitName,
   applicationReleaseServiceFiles, applicationSandboxLines, ensureApplicationAccount, readApplicationRegistration,
   registeredApplicationUser,
