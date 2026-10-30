@@ -34,6 +34,7 @@ import {
 } from "@local/vibe64-core/server/core";
 import { readProjectRuntimeOpenState } from "@local/vibe64-core/server/projectRuntimeOpenState";
 import { deepFreeze } from "@local/vibe64-core/server/deepFreeze";
+import { vibe64SharedModes } from "@local/vibe64-execution/server/hostProfile";
 import { explicitPathIsManagedSessionSource, managedSessionSourcePath, sessionSourcePath } from "@local/vibe64-core/server/sessionSourcePath";
 import {
   normalizeVibe64ConversationAttachments
@@ -983,6 +984,15 @@ function createVibe64SessionStore({
       projectSessionSourceRoot,
       sessionId
     });
+  }
+
+  // The project-shared Files folders exist before an agent is given their
+  // paths, so copying into one never creates a file in a folder's place.
+  async function prepareProjectFileAreas() {
+    const { projectBackupsRoot, projectDropZoneRoot } = paths();
+    for (const root of [projectDropZoneRoot, projectBackupsRoot]) {
+      if (root) await mkdir(root, { recursive: true, mode: vibe64SharedModes().directory });
+    }
   }
 
   function renewalStateRoot() {
@@ -5319,6 +5329,7 @@ function createVibe64SessionStore({
     mutateSession,
     mutateSessionForRenewal,
     paths,
+    prepareProjectFileAreas,
     readArtifact,
     withReadableSessionPaths,
     withReadableSessionPathsForRenewal,

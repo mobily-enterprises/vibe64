@@ -234,6 +234,7 @@ async function prepareAgentSessionCommandEnvironmentUnlocked({
   const dropZoneRoot = text(filePaths?.dropZoneRoot);
   const projectBackupsRoot = text(filePaths?.projectBackupsRoot);
   const projectDropZoneRoot = text(filePaths?.projectDropZoneRoot);
+  if (projectBackupsRoot || projectDropZoneRoot) await runtime.store.prepareProjectFileAreas();
   return {
     env: Object.assign({}, genesisParserEnvironment({ environment: env }), ...steps.map((step) => record(step.result?.env)), dropZoneRoot ? {
       VIBE64_DROP_ZONE: dropZoneRoot

@@ -4,18 +4,30 @@ import { tryAcquireExclusiveFileLock } from "@jskit-ai/kernel/server/support";
 
 const BACKUP_RETENTION_MS = 14 * 24 * 60 * 60 * 1000;
 
-async function withProjectBackupsLock(stateRoot, operation) {
+// A project area's writes hold its lock; a second writer is told it is busy.
+async function withProjectAreaLock(stateRoot, name, busy, operation) {
   if (!path.isAbsolute(stateRoot) || path.resolve(stateRoot) === path.parse(stateRoot).root) {
-    throw new Error("Project backups require a project runtime directory.");
+    throw new Error("Project file areas require a project runtime directory.");
   }
   const lockRoot = path.join(stateRoot, "locks");
   await mkdir(lockRoot, { recursive: true, mode: 0o700 });
-  if (await realpath(lockRoot) !== lockRoot) throw new Error("Project backup lock directory must not contain links.");
-  const release = await tryAcquireExclusiveFileLock(path.join(lockRoot, "project-backups.lock"));
-  if (!release) throw Object.assign(new Error("Project backups are busy. Try again shortly."), {
-    code: "project_backups_busy", statusCode: 409
-  });
+  if (await realpath(lockRoot) !== lockRoot) throw new Error("Project lock directory must not contain links.");
+  const release = await tryAcquireExclusiveFileLock(path.join(lockRoot, `${name}.lock`));
+  if (!release) throw Object.assign(new Error(busy.message), { code: busy.code, statusCode: 409 });
   try { return await operation(); } finally { await release(); }
+}
+
+// Project Backups mutations share this lock with retention maintenance.
+function withProjectBackupsLock(stateRoot, operation) {
+  return withProjectAreaLock(stateRoot, "project-backups", {
+    message: "Project backups are busy. Try again shortly.", code: "project_backups_busy"
+  }, operation);
+}
+
+function withProjectDropZoneLock(stateRoot, operation) {
+  return withProjectAreaLock(stateRoot, "project-drop-zone", {
+    message: "Project Dropzone is busy. Try again shortly.", code: "project_drop_zone_busy"
+  }, operation);
 }
 
 // Files expire individually. Never follow links or recursively remove a folder:
@@ -76,4 +88,4 @@ async function maintainProjectBackups({ stateRoot, dryRun = false, now = Date.no
   return dryRun ? inspect() : withProjectBackupsLock(stateRoot, inspect);
 }
 
-export { BACKUP_RETENTION_MS, maintainProjectBackups, withProjectBackupsLock };
+export { BACKUP_RETENTION_MS, maintainProjectBackups, withProjectBackupsLock, withProjectDropZoneLock };

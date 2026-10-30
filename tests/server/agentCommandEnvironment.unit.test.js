@@ -56,7 +56,10 @@ test("assistant engines share one complete session command environment", async (
       return { env: { SESSION_BOUNDARY: "ready" }, ok: true };
     },
     project: { slug: "catalogue" },
-    runtime: { stateRoot: "/managed/project-state", store: { paths: (id) => ({ dropZoneRoot: `/managed/project-state/sessions/active/${id}/drop-zone`, projectBackupsRoot: "/managed/project-state/backups", projectDropZoneRoot: "/managed/project-state/drop-zone" }) } },
+    runtime: { stateRoot: "/managed/project-state", store: {
+      paths: (id) => ({ dropZoneRoot: `/managed/project-state/sessions/active/${id}/drop-zone`, projectBackupsRoot: "/managed/project-state/backups", projectDropZoneRoot: "/managed/project-state/drop-zone" }),
+      prepareProjectFileAreas: async () => calls.push(["project-file-areas"])
+    } },
     sessionId: "session-1",
     worktreePath: "/managed/session/source"
   });
@@ -67,12 +70,13 @@ test("assistant engines share one complete session command environment", async (
     "preview",
     "environment",
     "database",
-    "helper"
+    "helper",
+    "project-file-areas"
   ]);
   assert.equal(calls[0][1].env.ATTACHMENT_ENV, "yes");
   assert.deepEqual(calls.find(([name]) => name === "helper")[1].env,
     { LIVE_ENV: "yes", GENESIS_PARSER_ROOT: "/release/genesis-parsers", GENESIS_PARSER_AUTO_INSTALL: "0" });
-  for (const [name, input] of calls.slice(1)) {
+  for (const [name, input] of calls.slice(1, -1)) {
     assert.equal(input.wrapperHostDir, "/managed/session-wrappers");
     if (name !== "helper") {
       assert.equal(input.sessionId, "session-1");
