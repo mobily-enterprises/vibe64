@@ -218,7 +218,7 @@ test("a session keeps its newest recordings within the count, size and age limit
   assert.deepEqual(kept, [ids[0], ...ids.slice(2, 11), "notes.txt"].sort());
 });
 
-test("an archived session takes no recordings with it", async (t) => {
+test("an archived session takes no recordings or architecture caches with it", async (t) => {
   const root = await temporary(t);
   const store = createVibe64SessionStore({ projectContextRoot: path.join(root, "project"), projectRuntimeRoot: path.join(root, "state") });
   await mkdir(path.join(root, "project"));
@@ -226,6 +226,8 @@ test("an archived session takes no recordings with it", async (t) => {
   const paths = store.paths("archived-one");
   await mkdir(path.join(paths.sessionRoot, "usage-recordings", RECORDING_ID), { recursive: true });
   await writeFile(path.join(paths.sessionRoot, "usage-recordings", RECORDING_ID, "recording.json"), "{}");
+  await mkdir(path.join(paths.sessionRoot, "architecture-cache", "jskit"), { recursive: true });
+  await writeFile(path.join(paths.sessionRoot, "architecture-cache", "jskit", "jskit-calls.json"), "{}");
   await writeFile(path.join(paths.sessionRoot, "kept.txt"), "kept");
   await store.writeMetadataValue("archived-one", "session_closing_reason", "closing");
   await store.writeStatus("archived-one", "archived");
@@ -233,5 +235,6 @@ test("an archived session takes no recordings with it", async (t) => {
   const listing = (await exec("tar", ["-tzf", path.join(paths.archivedSessionsRoot, "archived-one.tar.gz")])).stdout;
   assert.ok(listing.includes("kept.txt"));
   assert.ok(!listing.includes("usage-recordings"));
+  assert.ok(!listing.includes("architecture-cache"));
   await assert.rejects(readdir(path.join(paths.sessionRoot, "usage-recordings")), { code: "ENOENT" });
 });

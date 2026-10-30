@@ -335,8 +335,9 @@ function createProjectArchiveService({
       if (!completed("state-archived")) {
         await createTarArchive({
           archivePath: stateArchivePath,
-          // Drop Zones and usage recordings belong to their session only.
-          excludePatterns: ["active", "closing"].flatMap((state) => ["drop-zone", "usage-recordings"]
+          // Drop Zones and usage recordings belong to their session only;
+          // architecture caches are rebuilt by the next inspection.
+          excludePatterns: ["active", "closing"].flatMap((state) => ["drop-zone", "usage-recordings", "architecture-cache"]
             .map((name) => `${path.basename(projectRuntimeRoot)}/sessions/${state}/*/${name}`)),
           runCommand: runArchiveCommand,
           sourceName: path.basename(projectRuntimeRoot),
