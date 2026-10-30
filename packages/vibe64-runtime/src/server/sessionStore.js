@@ -656,6 +656,7 @@ function sessionPathsFromRoot({
     metadataRoot: sessionRoot ? path.join(sessionRoot, "metadata") : "",
     projectContextRoot,
     projectBackupsRoot: stateRoot ? path.join(stateRoot, "backups") : "",
+    projectDropZoneRoot: stateRoot ? path.join(stateRoot, "drop-zone") : "",
     sessionId,
     sessionRoot,
     sessionsRoot,

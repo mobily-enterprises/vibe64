@@ -190,7 +190,11 @@ function createService({
   });
 
   return Object.freeze({
-    fileArea: createFileArea(projectService),
+    // Moves and copies into or out of Repo refresh its file and search indexes.
+    fileArea: createFileArea(projectService, { repoChanged(sourceRoot) {
+      fileIndex.invalidate(sourceRoot);
+      searchIndex.invalidate(sourceRoot);
+    } }),
     ...createIntegrationOperations({
       fileIndex, integrationCommandRunner, integrationDiscoveryFetch, projectService,
       publishSessionChanged, runSourceEditorWriteExclusive, searchIndex, sourceEditorContext

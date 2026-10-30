@@ -1,7 +1,7 @@
 {
   "name": "@local/vibe64-source-editor",
   "version": "0.1.0",
-  "description": "Owns Vibe64 session source-editor file policy, navigation, selected-file sync, search, autosave, Files areas, project integrations, and source explanations.",
+  "description": "Owns Vibe64 session source-editor file policy, navigation, selected-file sync, search, autosave, Files areas with server-side move and copy, project integrations, and source explanations.",
   "private": true,
   "type": "module",
   "exports": {
@@ -14,6 +14,7 @@
     "./docs/application-payments-laravel.md": "./docs/application-payments-laravel.md",
     "./docs/application-google-ads.md": "./docs/application-google-ads.md",
     "./server/search-index-worker": "./src/server/searchIndexWorker.js",
+    "./shared/fileTypes": "./src/shared/fileTypes.js",
     "./shared/oauthClientRegistration": "./src/shared/oauthClientRegistration.js"
   },
   "jskit": {

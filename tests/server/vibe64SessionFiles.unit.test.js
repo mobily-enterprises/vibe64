@@ -47,8 +47,8 @@ async function fixture(t) {
 test("one Files boundary enforces project/session/area access for every operation", async (t) => {
   const { call, service } = await fixture(t);
   assert.equal((await service.fileArea({ sessionId: "shared-id" }, "areas")).statusCode, 403);
-  assert.deepEqual((await call("areas", {}, "member")).areas, ["repo", "drop-zone", "backups"]);
-  assert.deepEqual((await call("areas")).areas, ["repo", "drop-zone", "backups", "session"]);
+  assert.deepEqual((await call("areas", {}, "member")).areas, ["repo", "drop-zone"]);
+  assert.deepEqual((await call("areas")).areas, ["repo", "drop-zone", "session"]);
   for (const operation of ["tree", "file", "download", "archive", "save", "upload", "rename", "delete", "mkdir"]) {
     const input = { area: "session", path: "private.txt", vibe64User: { role: "owner" }, root: "/", sourceRoot: "/" };
     assert.equal((await call(operation, input, "member")).statusCode, 403, operation);
@@ -190,7 +190,7 @@ test("HTTP Files routes retain trusted identity and stream binary uploads/downlo
   interrupted.on("error", () => {});
   interrupted.write('--interrupted-upload\r\nContent-Disposition: form-data; name="file"; filename="interrupted.bin"\r\nContent-Type: application/octet-stream\r\n\r\n');
   interrupted.write(Buffer.alloc(64 * 1024, 0x33));
-  const stagedFiles = async () => (await readdir(dropZone)).filter(name => name.startsWith(".upload-"));
+  const stagedFiles = async () => (await readdir(dropZone)).filter(name => name.startsWith(".vibe64-incoming-"));
   for (let attempt = 0; attempt < 100 && !(await stagedFiles()).length; attempt++) await delay(10);
   assert.equal((await stagedFiles()).length, 1, "interrupted upload reached its staging writer");
   interrupted.destroy();
@@ -225,7 +225,7 @@ test("HTTP Files routes retain trusted identity and stream binary uploads/downlo
       }
       assert.equal(received, 500 * 1024 * 1024);
     }
-    assert.ok(!(await readdir(stores.get("one").paths("shared-id").dropZoneRoot)).some(name => name.startsWith(".upload-")));
+    assert.ok(!(await readdir(stores.get("one").paths("shared-id").dropZoneRoot)).some(name => name.startsWith(".vibe64-incoming-")));
   }
 
 });

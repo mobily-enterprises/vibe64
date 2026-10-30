@@ -10,6 +10,8 @@ const requiredText = { ...text, minLength: 1, required: true };
 const identity = { ...requiredText, maxLength: 256 };
 const filePath = { ...text, maxLength: 4096 };
 const object = { type: "object", additionalProperties: true, required: false };
+const fileArea = { type: "string", enum: ["repo", "drop-zone", "session", "project-drop-zone", "backups"], required: false };
+const conflict = { type: "string", enum: ["fail", "replace", "keep-both", "skip"], required: false };
 const origin = { originId: text, projectSlug: text };
 const reviewId = { ...text, minLength: 64, maxLength: 64, pattern: "^[a-f0-9]{64}$" };
 const setupRequest = createSchema({
@@ -55,15 +57,25 @@ function createSourceEditorActions({ sourceEditor, publishFileChanged = async ()
   const integration = { ...origin, baseHash: { ...text, nullable: true, required: true }, configuration: { ...object, required: true } };
   return [
     action("file-areas.read", {}, (input) => sourceEditor.fileArea(input, "areas"), query),
-    ...["tree", "file", "download", "archive", "upload", "save", "rename", "mkdir", "delete"].map((operation) => action(`file-area.${operation}`, {
-      area: { type: "string", enum: ["session", "drop-zone", "backups"], required: true },
-      path: { ...filePath, required: !["tree", "archive", "upload"].includes(operation) },
+    // Project areas need no session; the service requires one for session areas.
+    ...["tree", "file", "download", "archive", "conflicts", "upload", "create", "save", "rename", "mkdir", "delete", "transfer"].map((operation) => action(`file-area.${operation}`, {
+      sessionId: { ...identity, required: false },
+      area: { ...fileArea, required: true },
+      path: { ...filePath, required: !["tree", "archive", "upload", "conflicts"].includes(operation) },
       ...(operation === "tree" ? { offset: text } : {}),
       ...(operation === "rename" ? { destination: { ...filePath, required: true } } : {}),
-      ...(operation === "save" ? { baseHash: requiredText, text: { ...text, required: true } } : {})
+      ...(operation === "save" ? { baseHash: requiredText, text: { ...text, required: true } } : {}),
+      ...(operation === "create" ? { text: { ...text, required: true } } : {}),
+      ...(operation === "upload" ? { conflict: { ...conflict, enum: ["fail", "replace", "keep-both"] } } : {}),
+      ...(operation === "conflicts" ? { names: { type: "array", items: { type: "string" }, required: true } } : {}),
+      ...(operation === "transfer" ? {
+        mode: { type: "string", enum: ["copy", "move"], required: true },
+        targetArea: { ...fileArea, required: true }, targetPath: filePath,
+        targetSessionId: { ...identity, required: false }, conflict
+      } : {})
     }, (input, context) => sourceEditor.fileArea(input, operation,
       operation === "upload" ? { readUpload: context.sourceEditorUpload?.readUpload } : {}),
-    ["tree", "file", "download", "archive"].includes(operation) ? query : {})),
+    ["tree", "file", "download", "archive", "conflicts"].includes(operation) ? query : {})),
     action("integrations.read", {}, (input) => sourceEditor.readIntegrations(input), { ...query, assistant: integrationReadTool("integrations.read") }),
     action("integrations.providers.read", {
       search: { ...text, maxLength: 200 }, offset: { type: "integer", min: 0, required: false }

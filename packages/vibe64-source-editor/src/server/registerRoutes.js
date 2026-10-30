@@ -6,6 +6,7 @@ import {
   VIBE64_SOURCE_EDITOR_SYNC_ERROR_EVENT
 } from "@local/vibe64-core/server/sourceEditorRealtimeEvents";
 import { explanationFollowupStreamSchema, explanationStreamSchema } from "./actions.js";
+import { filePreviewImageType } from "../shared/fileTypes.js";
 
 function writeSourceEditorStreamEvent(rawReply, payload = {}) {
   rawReply.write(`${JSON.stringify({
@@ -62,18 +63,22 @@ async function sendSourceEditorNdjsonStream(reply, run) {
   }
 }
 
-async function sendFileDownload(reply, result) {
+// An inline image keeps its real type so the browser can show it in place;
+// the policy stops an SVG opened directly from running script or loading anything.
+async function sendFileDownload(reply, result, { inline = false } = {}) {
   if (!result.ok) {
     return result;
   }
   const encodedName = encodeURIComponent(result.name).replace(/[!'()*]/gu, (character) =>
     `%${character.codePointAt(0).toString(16).toUpperCase()}`);
+  const imageType = inline ? filePreviewImageType(result.name) : "";
   try {
     // An async handler must stay pending until Fastify has sent the file stream.
-    await reply.header("Content-Type", "application/octet-stream")
-      .header("Content-Disposition", `attachment; filename*=UTF-8''${encodedName}`)
+    await reply.header("Content-Type", imageType || "application/octet-stream")
+      .header("Content-Disposition", imageType ? "inline" : `attachment; filename*=UTF-8''${encodedName}`)
       .header("Cache-Control", "private, no-store")
       .header("X-Content-Type-Options", "nosniff")
+      .header("Content-Security-Policy", "default-src 'none'; img-src data:; style-src 'unsafe-inline'; sandbox")
       .send(result.fileHandle.createReadStream({ autoClose: true }));
   } catch (error) {
     await result.fileHandle.close();
@@ -106,41 +111,51 @@ function registerRoutes(http, {
     const { q, ...rest } = query;
     return sourceInput(request, { ...rest, ...(Object.hasOwn(query, "q") ? { query: q } : {}) });
   };
+  // Files areas: session routes reach every area, so project areas can be
+  // destinations; project routes reach only the project's areas. Identity,
+  // area and session come from the authenticated request and route.
+  const areaInput = (request, data = {}) => {
+    const { vibe64User: _ignoredUser, sessionId: _ignoredSession, ...rest } = data;
+    return { ...rest, area: request.params.area, ...(request.params.sessionId ? { sessionId: request.params.sessionId } : {}) };
+  };
   const areaQuery = (request, operation) => {
     const query = routes.requestQuery(request);
     // As with the original Files boundary, only operation fields enter the action.
-    // Identity and area come from the authenticated request and route.
-    return sourceInput(request, {
-      area: request.params.area,
+    return areaInput(request, {
       ...(Object.hasOwn(query, "path") ? { path: query.path } : {}),
       ...(operation === "tree" && Object.hasOwn(query, "offset") ? { offset: query.offset } : {})
     });
   };
   route("GET", "/files", "file-areas.read", { summary: "Read the session file areas available to this caller." });
-  for (const [method, suffix, operation] of [
-    ["GET", "tree", "tree"], ["GET", "file", "file"], ["PUT", "file", "save"],
-    ["POST", "rename", "rename"], ["POST", "directory", "mkdir"], ["DELETE", "file", "delete"]
-  ]) route(method, `/files/:area/${suffix}`, `file-area.${operation}`, {
-    bodyLimit: 2 * 1024 * 1024, summary: "Access files within an authorized session area."
-  }, (request) => method === "GET" ? areaQuery(request, operation)
-    : sourceInput(request, { ...routes.requestBody(request), area: request.params.area }));
+  for (const prefix of ["/sessions/:sessionId/files", "/project-files"]) {
+    for (const [method, suffix, operation] of [
+      ["GET", "tree", "tree"], ["GET", "file", "file"], ["PUT", "file", "save"], ["POST", "file", "create"],
+      ["POST", "rename", "rename"], ["POST", "directory", "mkdir"], ["DELETE", "file", "delete"],
+      ["POST", "conflicts", "conflicts"], ["POST", "transfer", "transfer"]
+    ]) routes.actionRoute(method, `${prefix}/:area/${suffix}`, {
+      actionId: `vibe64.source-editor.file-area.${operation}`, bodyLimit: 2 * 1024 * 1024,
+      summary: operation === "transfer" ? "Move or copy an item between authorized file areas without downloading it."
+        : "Access files within an authorized file area.",
+      buildInput: (request) => method === "GET" ? areaQuery(request, operation) : areaInput(request, routes.requestBody(request))
+    });
 
-  // Binary and multipart framing stays at HTTP; the domain operation is shared.
-  for (const operation of ["download", "archive"]) routes.serviceRoute("GET", `/sessions/:sessionId/files/:area/${operation}`, {
-    summary: "Download original bytes from an authorized session area."
-  }, async (request, reply) => sendFileDownload(reply, await request.executeAction({
-    actionId: `vibe64.source-editor.file-area.${operation}`,
-    input: areaQuery(request, operation)
-  })));
-  routes.serviceRoute("POST", "/sessions/:sessionId/files/:area/upload", {
-    bodyLimit: VIBE64_UPLOAD_BODY_LIMIT_BYTES, summary: "Upload one file into the authorized Drop Zone."
-  }, (request) => request.executeAction({
-    actionId: "vibe64.source-editor.file-area.upload",
-    input: sourceInput(request, { ...routes.requestQuery(request), area: request.params.area }),
-    context: { sourceEditorUpload: { readUpload: () => request.parts({
-      throwFileSizeLimit: true, limits: { files: 1, fields: 0, parts: 1, fileSize: VIBE64_UPLOAD_MAX_BYTES }
-    }) } }
-  }));
+    // Binary and multipart framing stays at HTTP; the domain operation is shared.
+    for (const operation of ["download", "archive"]) routes.serviceRoute("GET", `${prefix}/:area/${operation}`, {
+      summary: "Download original bytes, or show an image in place, from an authorized file area."
+    }, async (request, reply) => sendFileDownload(reply, await request.executeAction({
+      actionId: `vibe64.source-editor.file-area.${operation}`,
+      input: areaQuery(request, operation)
+    }), { inline: routes.requestQuery(request).inline === "1" }));
+    routes.serviceRoute("POST", `${prefix}/:area/upload`, {
+      bodyLimit: VIBE64_UPLOAD_BODY_LIMIT_BYTES, summary: "Upload one file into an authorized writable file area."
+    }, (request) => request.executeAction({
+      actionId: "vibe64.source-editor.file-area.upload",
+      input: areaInput(request, routes.requestQuery(request)),
+      context: { sourceEditorUpload: { readUpload: () => request.parts({
+        throwFileSizeLimit: true, limits: { files: 1, fields: 0, parts: 1, fileSize: VIBE64_UPLOAD_MAX_BYTES }
+      }) } }
+    }));
+  }
 
   route("GET", "/integrations", "integrations.read", { summary: "Read portable integration configuration." });
   route("GET", "/integrations/providers", "integrations.providers.read", { summary: "Search available integration providers." }, query);
@@ -158,8 +173,11 @@ function registerRoutes(http, {
   route("GET", "/source-editor/search", "search", { summary: "Search editable source files." }, searched);
   routes.serviceRoute("GET", "/sessions/:sessionId/source-editor/download", {
     summary: "Download an original source file."
-  }, async (request, reply) => sendFileDownload(reply, await request.executeAction({
-    actionId: "vibe64.source-editor.file.download", input: query(request) })));
+  }, async (request, reply) => {
+    const { inline, ...input } = query(request);
+    return sendFileDownload(reply, await request.executeAction({
+      actionId: "vibe64.source-editor.file.download", input }), { inline: inline === "1" });
+  });
   route("GET", "/source-editor/stars", "stars.read", { summary: "Read this account's starred files." });
   route("POST", "/source-editor/stars", "star.set", { bodyLimit: 16 * 1024, summary: "Star or unstar a file." }, body);
   route("POST", "/source-editor/resolve-path", "path.resolve", { bodyLimit: 32 * 1024, summary: "Resolve a source path reference." }, body);
