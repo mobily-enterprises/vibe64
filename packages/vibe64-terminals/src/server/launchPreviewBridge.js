@@ -6,23 +6,48 @@ import {
   PREVIEW_DIAGNOSTICS_RESPONSE_MESSAGE_TYPE,
   PREVIEW_IDENTITY_REQUEST_MESSAGE_TYPE,
   PREVIEW_IDENTITY_RESPONSE_MESSAGE_TYPE,
+  PREVIEW_INTERACTION_MESSAGE_TYPE,
   PREVIEW_LOCATION_MESSAGE_TYPE,
+  PREVIEW_PICK_RESULT_MESSAGE_TYPE,
+  PREVIEW_PICK_START_MESSAGE_TYPE,
+  PREVIEW_PICK_STOP_MESSAGE_TYPE,
   PREVIEW_PROXY_TOKEN_QUERY_PARAM,
   PREVIEW_QUERY_MESSAGE_TYPE,
+  PREVIEW_RECORDING_MESSAGE_TYPE,
   PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE
 } from "../shared/launchPreviewProtocol.js";
 import {
   PREVIEW_IDENTITY_CONTROL_PATH
 } from "@local/vibe64-core/server/previewAuth";
+import {
+  USAGE_RECORDING_ID_PATTERN,
+  USAGE_RECORDING_INTERACTION_HEADER
+} from "@local/vibe64-usage-recording/shared/contract";
+
+// The project's Preview locator runs as its own script after the bridge, so a
+// locator that throws or fails to parse leaves the bridge working. Its text is
+// kept from closing the element early or opening an HTML comment.
+function previewLocatorScript(source = "") {
+  const text = typeof source === "string" ? source : "";
+  if (!text.trim()) {
+    return "";
+  }
+  return `<script data-vibe64-preview-locator="1">(() => {\n${text.replace(/<(?=\/script|!--)/giu, "\\x3C")}\n})();</script>`;
+}
 
 // The bridge talks only to the editors that asked for this Preview: it ignores
 // messages from any other parent origin and addresses every reply to those
 // editor origins, so a foreign page that frames the Preview learns nothing.
+// `recording` is the session's Preview recording when the page was served; the
+// editor keeps it current and numbers its interactions.
 function launchPreviewBridgeScript({
   debug = false,
+  locatorSource = "",
   parentOrigins = [],
+  recording = null,
   targetOrigin = ""
 } = {}) {
+  const recordingId = String(recording?.recordingId || "");
   const config = JSON.stringify({
     appRequestMessageType: PREVIEW_APP_REQUEST_MESSAGE_TYPE,
     bridgeReadyMessageType: PREVIEW_BRIDGE_READY_MESSAGE_TYPE,
@@ -32,11 +57,19 @@ function launchPreviewBridgeScript({
     identityControlPath: PREVIEW_IDENTITY_CONTROL_PATH,
     identityRequestMessageType: PREVIEW_IDENTITY_REQUEST_MESSAGE_TYPE,
     identityResponseMessageType: PREVIEW_IDENTITY_RESPONSE_MESSAGE_TYPE,
+    interactionHeader: USAGE_RECORDING_INTERACTION_HEADER,
+    interactionMessageType: PREVIEW_INTERACTION_MESSAGE_TYPE,
     locationMessageType: PREVIEW_LOCATION_MESSAGE_TYPE,
     parentOrigins: [...new Set((Array.isArray(parentOrigins) ? parentOrigins : [])
       .map((origin) => String(origin || "").trim())
       .filter(Boolean))],
+    pickResultMessageType: PREVIEW_PICK_RESULT_MESSAGE_TYPE,
+    pickStartMessageType: PREVIEW_PICK_START_MESSAGE_TYPE,
+    pickStopMessageType: PREVIEW_PICK_STOP_MESSAGE_TYPE,
     queryMessageType: PREVIEW_QUERY_MESSAGE_TYPE,
+    recording: recording?.active === true && USAGE_RECORDING_ID_PATTERN.test(recordingId) ? recordingId : "",
+    recordingIdPattern: USAGE_RECORDING_ID_PATTERN.source,
+    recordingMessageType: PREVIEW_RECORDING_MESSAGE_TYPE,
     resourceFailureMessageType: PREVIEW_RESOURCE_FAILURE_MESSAGE_TYPE,
     targetOrigin: String(targetOrigin || ""),
     tokenQueryParam: PREVIEW_PROXY_TOKEN_QUERY_PARAM,
@@ -340,6 +373,254 @@ function launchPreviewBridgeScript({
   function elapsedMilliseconds(startedAt) {
     return Math.max(0, Math.round((performance.now() - startedAt) * 100) / 100);
   }
+  // Click in Preview. Pick outlines the element under the pointer and turns the
+  // next click into a pick; only in Pick is a click prevented and stopped.
+  // While the editor names an active recording, a trusted click, submit or
+  // Enter starts an interaction without preventing anything, and same-origin
+  // fetch and XHR started within 1 s of it, before the next one, carry its id.
+  // Labels name an element by role or tag and a label the page shows, never by
+  // what a person typed or chose; a password field is only "password field".
+  const fieldTags = ["input", "select", "textarea"];
+  const skippedTextTags = ["option", "script", "style", "template", ...fieldTags];
+  const inputRoles = {
+    button: "button", checkbox: "checkbox", image: "button", radio: "radio",
+    range: "slider", reset: "button", search: "searchbox", submit: "button"
+  };
+  const implicitRoles = {
+    a: "link", button: "button", form: "form", h1: "heading", h2: "heading", h3: "heading",
+    h4: "heading", h5: "heading", h6: "heading", img: "img", select: "combobox",
+    summary: "button", textarea: "textbox"
+  };
+  const contentNamedRoles = [
+    "button", "cell", "checkbox", "columnheader", "heading", "link", "menuitem", "menuitemcheckbox",
+    "menuitemradio", "radio", "rowheader", "switch", "tab", "treeitem"
+  ];
+  const interactiveSelector = "a[href],button,input,select,textarea,summary,label," + [
+    "button", "link", "tab", "menuitem", "menuitemcheckbox", "menuitemradio", "option",
+    "checkbox", "radio", "switch", "treeitem"
+  ].map((role) => "[role=" + role + "]").join(",");
+  const recordingIdPattern = new RegExp(config.recordingIdPattern, "u");
+  let pick = null;
+  let recording = config.recording;
+  let nextInteraction = 0;
+  let interaction = null;
+  let gestureOpen = false;
+  function elementTag(element) {
+    return String(element?.tagName || "").toLowerCase();
+  }
+  function editableText(element) {
+    return fieldTags.includes(elementTag(element)) || element?.isContentEditable === true;
+  }
+  function visibleText(node, budget = { left: 200 }) {
+    if (!node || editableText(node)) {
+      return "";
+    }
+    let text = "";
+    for (const child of Array.from(node.childNodes || [])) {
+      if (budget.left <= 0) {
+        break;
+      }
+      if (child.nodeType === 3) {
+        const value = String(child.nodeValue || "");
+        text += value.slice(0, budget.left);
+        budget.left -= value.length;
+      } else if (child.nodeType === 1 && !skippedTextTags.includes(elementTag(child)) && child.isContentEditable !== true) {
+        text += " " + visibleText(child, budget);
+      }
+    }
+    return text;
+  }
+  function clippedLabel(value, limit) {
+    const text = String(value || "").replace(/\\s+/gu, " ").trim();
+    return text.length > limit ? text.slice(0, limit - 1) + "…" : text;
+  }
+  function accessibleName(element, role, tag) {
+    const ariaLabel = String(element.getAttribute("aria-label") || "");
+    if (ariaLabel.trim()) {
+      return ariaLabel;
+    }
+    const labelledBy = String(element.getAttribute("aria-labelledby") || "").trim();
+    const labelledText = labelledBy
+      ? labelledBy.split(/\\s+/u).map((id) => visibleText(document.getElementById(id))).join(" ")
+      : "";
+    if (labelledText.trim()) {
+      return labelledText;
+    }
+    if (fieldTags.includes(tag)) {
+      const labelText = Array.from(element.labels || []).map((label) => visibleText(label)).join(" ");
+      return labelText.trim() ? labelText : element.getAttribute("placeholder") || element.getAttribute("title") || "";
+    }
+    if (contentNamedRoles.includes(role) || tag === "label") {
+      return visibleText(element) || element.getAttribute("title") || "";
+    }
+    return element.getAttribute("title") || element.getAttribute("alt") || "";
+  }
+  function elementLabel(element) {
+    const target = element?.closest?.(interactiveSelector) || element;
+    if (!target || typeof target.getAttribute !== "function") {
+      return "element";
+    }
+    const tag = elementTag(target) || "element";
+    const type = tag === "input" ? String(target.getAttribute("type") || "text").toLowerCase() : "";
+    if (type === "password") {
+      return "password field";
+    }
+    const role = String(target.getAttribute("role") || "").trim().split(/\\s+/u)[0].toLowerCase() ||
+      (tag === "input" ? inputRoles[type] || "textbox" : implicitRoles[tag] || "");
+    const name = clippedLabel(accessibleName(target, role, tag), 40);
+    return name ? (role || tag) + " \\"" + name + "\\"" : role || tag;
+  }
+  // The project's locator maps an element to the component the dev build names.
+  function locateComponent(element) {
+    try {
+      const located = typeof globalThis.__vibe64LocateElement === "function"
+        ? globalThis.__vibe64LocateElement(element)
+        : null;
+      const file = typeof located?.file === "string" ? located.file.trim().slice(0, 1024) : "";
+      const name = typeof located?.name === "string" ? located.name.trim().slice(0, 80) : "";
+      return { componentFile: file || null, componentName: name || null };
+    } catch {
+      return { componentFile: null, componentName: null };
+    }
+  }
+  function startPick() {
+    if (pick) {
+      return;
+    }
+    const overlay = document.createElement("div");
+    const chip = document.createElement("span");
+    overlay.setAttribute("aria-hidden", "true");
+    overlay.setAttribute("data-vibe64-preview-pick", "1");
+    overlay.style.cssText = "all:initial;position:fixed;z-index:2147483647;pointer-events:none;" +
+      "box-sizing:border-box;border:2px solid #6750a4;border-radius:4px;display:none";
+    chip.style.cssText = "all:initial;position:absolute;left:-2px;max-width:min(320px,90vw);padding:2px 8px;" +
+      "border-radius:8px;background:#6750a4;color:#fff;font:500 12px/20px system-ui,sans-serif;" +
+      "white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+    overlay.append(chip);
+    document.documentElement.append(overlay);
+    pick = { chip, element: null, overlay };
+  }
+  function stopPick() {
+    pick?.overlay.remove();
+    pick = null;
+  }
+  function showPickTarget(element) {
+    if (!pick || !element || element === pick.element || typeof element.getBoundingClientRect !== "function") {
+      return;
+    }
+    pick.element = element;
+    const rect = element.getBoundingClientRect();
+    Object.assign(pick.overlay.style, {
+      display: "block",
+      height: rect.height + "px",
+      left: rect.left + "px",
+      top: rect.top + "px",
+      width: rect.width + "px"
+    });
+    pick.chip.textContent = locateComponent(element).componentName || elementLabel(element);
+    pick.chip.style.top = rect.top >= 24 ? "-24px" : "0";
+  }
+  function stopPickEvent(event) {
+    if (!pick) {
+      return false;
+    }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return true;
+  }
+  function beginInteraction(event) {
+    if (!recording || nextInteraction < 1 || pick || event?.isTrusted !== true) {
+      return;
+    }
+    if (event.type === "keydown" && (
+      event.key !== "Enter" || event.repeat || event.isComposing ||
+      elementTag(event.target) === "textarea" || event.target?.isContentEditable === true
+    )) {
+      return;
+    }
+    // One gesture is one interaction: the submit that a click or Enter causes
+    // in the same task does not start another.
+    if (gestureOpen || nextInteraction > 999999) {
+      return;
+    }
+    gestureOpen = true;
+    setTimeout(() => {
+      gestureOpen = false;
+    }, 0);
+    const element = event.type === "submit" ? event.submitter || event.target : event.target;
+    interaction = {
+      id: "i_" + String(nextInteraction).padStart(4, "0"),
+      startedAt: performance.now()
+    };
+    nextInteraction += 1;
+    postToParent({
+      at: new Date().toISOString(),
+      componentFile: locateComponent(element).componentFile,
+      elementLabel: elementLabel(element),
+      id: interaction.id,
+      type: config.interactionMessageType,
+      version: config.version
+    });
+  }
+  // Only a request to this page's own origin may carry the interaction id.
+  function interactionHeaderValue(url) {
+    if (!recording || !interaction || performance.now() - interaction.startedAt > 1000) {
+      return "";
+    }
+    try {
+      return new URL(String(url || ""), window.location.href).origin === window.location.origin
+        ? interaction.id
+        : "";
+    } catch {
+      return "";
+    }
+  }
+  function withInteractionHeader(input, init, interactionId) {
+    const headers = new Headers(init?.headers ||
+      (typeof Request === "function" && input instanceof Request ? input.headers : undefined));
+    headers.set(config.interactionHeader, interactionId);
+    return { ...init, headers };
+  }
+  for (const type of ["pointerdown", "mousedown", "pointerup", "mouseup", "dblclick", "auxclick", "contextmenu"]) {
+    window.addEventListener(type, (event) => {
+      if (stopPickEvent(event) && type === "pointerdown") {
+        showPickTarget(event.target);
+      }
+    }, true);
+  }
+  window.addEventListener("pointermove", (event) => {
+    showPickTarget(event.target);
+  }, true);
+  window.addEventListener("click", (event) => {
+    if (stopPickEvent(event)) {
+      const element = event.target;
+      const located = locateComponent(element);
+      const label = elementLabel(element);
+      stopPick();
+      postToParent({
+        ...located,
+        elementLabel: label,
+        type: config.pickResultMessageType,
+        version: config.version
+      });
+      return;
+    }
+    beginInteraction(event);
+  }, true);
+  window.addEventListener("submit", beginInteraction, true);
+  window.addEventListener("keydown", (event) => {
+    if (pick && event.key === "Escape") {
+      stopPickEvent(event);
+      stopPick();
+      postToParent({
+        cancelled: true,
+        type: config.pickResultMessageType,
+        version: config.version
+      });
+      return;
+    }
+    beginInteraction(event);
+  }, true);
   // Learning sees only a reduced failure of a same-origin, data-changing request
   // started within 3 s of a trusted learner click/submit in this frame: method,
   // path with numeric/UUID segments as :id, status and a failure code. Bodies,
@@ -389,6 +670,8 @@ function launchPreviewBridgeScript({
   const originalFetch = window.fetch;
   if (typeof originalFetch === "function") {
     window.fetch = async function vibe64PreviewFetch(input, init = {}) {
+      const interactionId = interactionHeaderValue(input?.url || input);
+      const fetchArguments = interactionId ? [input, withInteractionHeader(input, init, interactionId)] : arguments;
       const startedAt = performance.now();
       const entry = appendNetworkEntry({
         kind: "fetch",
@@ -402,7 +685,7 @@ function launchPreviewBridgeScript({
         updateNetworkEntry(entry, { requestBody });
       });
       try {
-        const response = await originalFetch.apply(this, arguments);
+        const response = await originalFetch.apply(this, fetchArguments);
         publishAppRequest(appRequest, response.status);
         updateNetworkEntry(entry, {
           durationMs: elapsedMilliseconds(startedAt),
@@ -462,6 +745,10 @@ function launchPreviewBridgeScript({
         url: metadata.url
       });
       const appRequest = appRequestCandidate(metadata.method, metadata.url);
+      const interactionId = interactionHeaderValue(metadata.url);
+      if (interactionId && typeof originalXhrSetRequestHeader === "function") {
+        originalXhrSetRequestHeader.call(this, config.interactionHeader, interactionId);
+      }
       this.addEventListener("loadend", () => {
         publishAppRequest(appRequest, this.status);
         let responseBody = "";
@@ -730,6 +1017,28 @@ function launchPreviewBridgeScript({
     if (event.source !== window.parent || !config.parentOrigins.includes(event.origin)) {
       return;
     }
+    if (event.data?.type === config.pickStartMessageType) {
+      startPick();
+      return;
+    }
+    if (event.data?.type === config.pickStopMessageType) {
+      stopPick();
+      return;
+    }
+    if (event.data?.type === config.recordingMessageType) {
+      const recordingId = String(event.data?.recordingId || "");
+      const active = event.data?.active === true && recordingIdPattern.test(recordingId);
+      if (!active || recordingId !== recording) {
+        nextInteraction = 0;
+        interaction = null;
+      }
+      recording = active ? recordingId : "";
+      const next = Number(event.data?.nextInteraction);
+      if (recording && Number.isSafeInteger(next) && next > nextInteraction) {
+        nextInteraction = next;
+      }
+      return;
+    }
     if (event.data?.type === config.queryMessageType) {
       debugLog("query.received", {
         href: targetHref()
@@ -835,7 +1144,7 @@ function launchPreviewBridgeScript({
     targetOrigin: config.targetOrigin,
     version: config.version
   });
-})();</script>`;
+})();</script>${previewLocatorScript(locatorSource)}`;
 }
 
 function injectLaunchPreviewBridge(html = "", options = {}) {
