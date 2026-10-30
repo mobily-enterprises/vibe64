@@ -13,18 +13,22 @@ import { registerRoutes as registerPublishingRoutes } from "../../packages/vibe6
 import { registerRoutes as registerSessionRoutes } from "../../packages/vibe64-sessions/src/server/registerRoutes.js";
 import { registerRoutes as registerSourceEditorRoutes } from "../../packages/vibe64-source-editor/src/server/registerRoutes.js";
 import { registerRoutes as registerSystemGraphRoutes } from "../../packages/vibe64-system-graph/src/server/registerRoutes.js";
+import { registerUsageRoutes } from "../../packages/vibe64-system-graph/src/server/usageRoutes.js";
 import { registerRoutes as registerTerminalRoutes } from "../../packages/vibe64-terminals/src/server/registerRoutes.js";
 import { registerTrainingRoutes } from "../../packages/vibe64-training/src/server/registerRoutes.js";
 import { registerTrainingVisualResourceRoutes } from "../../packages/vibe64-training/src/server/visualResourceRoutes.js";
+import { registerRoutes as registerUsageRecordingRoutes } from "../../packages/vibe64-usage-recording/src/server/registerRoutes.js";
 
 // Every Vibe64 route as the kernel router records it: method, path, auth,
 // surface, body limit and the action it runs. Recorded from the route
 // registrations before they moved to createActionRouteScope; a change here is
 // a change to the HTTP surface and must be deliberate.
 const EXPECTED_ROUTE_TABLE = `
+
 DELETE /api/app/:slug/vibe64/accounts/auth/:sessionId public app - vibe64.accounts.auth-session.cancel
 DELETE /api/app/:slug/vibe64/codex-terminal/:terminalSessionId public app - vibe64.terminals.global-terminal.close
 DELETE /api/app/:slug/vibe64/database/sessions/:sessionId/snippets/:snippetId public app 16384 vibe64.database.snippet.delete
+DELETE /api/app/:slug/vibe64/project-files/:area/file public app 2097152 vibe64.source-editor.file-area.delete
 DELETE /api/app/:slug/vibe64/publishing/accounts/:accountId public app 65536 vibe64.publication.account.remove
 DELETE /api/app/:slug/vibe64/publishing/confirmation/request public app 65536 vibe64.publication.confirmation.dismiss
 DELETE /api/app/:slug/vibe64/publishing/share public app 65536 vibe64.publication.share.stop
@@ -35,6 +39,7 @@ DELETE /api/app/:slug/vibe64/sessions/:sessionId/files/:area/file public app 209
 DELETE /api/app/:slug/vibe64/sessions/:sessionId/output-runs/:terminalSessionId/terminal public app - vibe64.terminals.output-terminal.close
 DELETE /api/app/:slug/vibe64/sessions/:sessionId/source-editor/explanations/:explanationId public app 131072 vibe64.source-editor.explanation.delete
 DELETE /api/app/:slug/vibe64/sessions/:sessionId/temporary-conversations/:conversationId public app - vibe64.terminals.temporary-conversation.delete
+DELETE /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/:recordingId public app - vibe64.usage-recording.delete
 DELETE /api/vibe64/accounts/auth/:sessionId public app - vibe64.accounts.auth-session.cancel
 GET /api/app/:slug/studio/current-app public app - vibe64.current-app.read
 GET /api/app/:slug/vibe64/accounts public app - vibe64.accounts.read
@@ -57,6 +62,10 @@ GET /api/app/:slug/vibe64/issues public app - vibe64.project.issues.list
 GET /api/app/:slug/vibe64/issues/:number public app - vibe64.project.issues.read
 GET /api/app/:slug/vibe64/onboarding public app - vibe64.project.onboarding.read
 GET /api/app/:slug/vibe64/preview-identities public app - vibe64.project.preview-identities.read
+GET /api/app/:slug/vibe64/project-files/:area/archive public app - -
+GET /api/app/:slug/vibe64/project-files/:area/download public app - -
+GET /api/app/:slug/vibe64/project-files/:area/file public app 2097152 vibe64.source-editor.file-area.file
+GET /api/app/:slug/vibe64/project-files/:area/tree public app 2097152 vibe64.source-editor.file-area.tree
 GET /api/app/:slug/vibe64/projects public app - vibe64.project.projects.list
 GET /api/app/:slug/vibe64/publishing public app 65536 vibe64.publication.state.read
 GET /api/app/:slug/vibe64/publishing/release/suggestion public app 65536 vibe64.publication.release.suggest
@@ -114,6 +123,14 @@ GET /api/app/:slug/vibe64/settings/engineering public app - vibe64.project.engin
 GET /api/app/:slug/vibe64/system-graph/sessions/:sessionId/architecture public app - vibe64.system-graph.architecture.read
 GET /api/app/:slug/vibe64/system-graph/sessions/:sessionId/refresh/status public app - vibe64.system-graph.refresh.status
 GET /api/app/:slug/vibe64/system-graph/sessions/:sessionId/status public app - vibe64.system-graph.status.read
+GET /api/app/:slug/vibe64/system-graph/sessions/:sessionId/usage/entries public app - vibe64.system-graph.usage.entries.read
+GET /api/app/:slug/vibe64/system-graph/sessions/:sessionId/usage/function public app - vibe64.system-graph.usage.function.read
+GET /api/app/:slug/vibe64/system-graph/sessions/:sessionId/usage/web public app - vibe64.system-graph.usage.web.read
+GET /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId public app - vibe64.usage-recording.list
+GET /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/:recordingId/requests public app - vibe64.usage-recording.requests.read
+GET /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/:recordingId/requests/:requestId/functions public app - vibe64.usage-recording.request-functions.read
+GET /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/current public app - vibe64.usage-recording.current.read
+GET /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/targets public app - vibe64.usage-recording.targets.read
 GET /api/studio/health public app - vibe64.studio-health.read
 GET /api/studio/health/tools public app - vibe64.studio-health.tools
 GET /api/vibe64/accounts public app - vibe64.accounts.read
@@ -169,11 +186,18 @@ POST /api/app/:slug/vibe64/database/sessions/:sessionId/queries/:queryId/cancel 
 POST /api/app/:slug/vibe64/database/sessions/:sessionId/rows public app 524288 vibe64.database.row.insert
 POST /api/app/:slug/vibe64/database/sessions/:sessionId/rows/delete public app 262144 vibe64.database.row.delete
 POST /api/app/:slug/vibe64/database/sessions/:sessionId/schema/refresh public app 16384 vibe64.database.schema.refresh
+POST /api/app/:slug/vibe64/env/download public app - -
 POST /api/app/:slug/vibe64/env/reveal public app - -
 POST /api/app/:slug/vibe64/incoming/:id public app - vibe64.repository.incoming.change
 POST /api/app/:slug/vibe64/issue-labels public app - vibe64.project.issues.create-label
 POST /api/app/:slug/vibe64/issues public app 300000 vibe64.project.issues.create
 POST /api/app/:slug/vibe64/issues/:number/comments public app 300000 vibe64.project.issues.comment
+POST /api/app/:slug/vibe64/project-files/:area/conflicts public app 2097152 vibe64.source-editor.file-area.conflicts
+POST /api/app/:slug/vibe64/project-files/:area/directory public app 2097152 vibe64.source-editor.file-area.mkdir
+POST /api/app/:slug/vibe64/project-files/:area/file public app 2097152 vibe64.source-editor.file-area.create
+POST /api/app/:slug/vibe64/project-files/:area/rename public app 2097152 vibe64.source-editor.file-area.rename
+POST /api/app/:slug/vibe64/project-files/:area/transfer public app 2097152 vibe64.source-editor.file-area.transfer
+POST /api/app/:slug/vibe64/project-files/:area/upload public app 525336576 -
 POST /api/app/:slug/vibe64/project-runtime/close public app - vibe64.terminals.project-runtime.close
 POST /api/app/:slug/vibe64/project-runtime/open public app - vibe64.terminals.project-runtime.open
 POST /api/app/:slug/vibe64/projects public app - vibe64.project.projects.create
@@ -214,8 +238,11 @@ POST /api/app/:slug/vibe64/sessions/:sessionId/agent-turn/interrupt public app -
 POST /api/app/:slug/vibe64/sessions/:sessionId/archive public app - vibe64.sessions.archive
 POST /api/app/:slug/vibe64/sessions/:sessionId/connected/prepare public app - vibe64.sessions.connected.prepare
 POST /api/app/:slug/vibe64/sessions/:sessionId/connected/replacement public app - vibe64.sessions.connected.replace
+POST /api/app/:slug/vibe64/sessions/:sessionId/files/:area/conflicts public app 2097152 vibe64.source-editor.file-area.conflicts
 POST /api/app/:slug/vibe64/sessions/:sessionId/files/:area/directory public app 2097152 vibe64.source-editor.file-area.mkdir
+POST /api/app/:slug/vibe64/sessions/:sessionId/files/:area/file public app 2097152 vibe64.source-editor.file-area.create
 POST /api/app/:slug/vibe64/sessions/:sessionId/files/:area/rename public app 2097152 vibe64.source-editor.file-area.rename
+POST /api/app/:slug/vibe64/sessions/:sessionId/files/:area/transfer public app 2097152 vibe64.source-editor.file-area.transfer
 POST /api/app/:slug/vibe64/sessions/:sessionId/files/:area/upload public app 525336576 -
 POST /api/app/:slug/vibe64/sessions/:sessionId/integration-setup/resume public app - vibe64.sessions.integration-setup.resume
 POST /api/app/:slug/vibe64/sessions/:sessionId/integration-setup/skip public app - vibe64.sessions.integration-setup.skip
@@ -257,7 +284,12 @@ POST /api/app/:slug/vibe64/sessions/:sessionId/work-plan/restore public app - vi
 POST /api/app/:slug/vibe64/sessions/:sessionId/workspace-setup/retry public app - vibe64.sessions.workspace-setup.retry
 POST /api/app/:slug/vibe64/system-graph/sessions/:sessionId/refresh public app 16384 vibe64.system-graph.refresh
 POST /api/app/:slug/vibe64/system-graph/sessions/:sessionId/refresh/cancel public app 16384 vibe64.system-graph.refresh.cancel
+POST /api/app/:slug/vibe64/system-graph/sessions/:sessionId/usage/join public app 1048576 vibe64.system-graph.usage.join
 POST /api/app/:slug/vibe64/templates/apply public app - vibe64.project.templates.apply
+POST /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId public app 16384 vibe64.usage-recording.start
+POST /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/:recordingId/dismiss public app 16384 vibe64.usage-recording.dismiss
+POST /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/:recordingId/interactions public app 16384 vibe64.usage-recording.interaction.record
+POST /api/app/:slug/vibe64/usage-recordings/sessions/:sessionId/:recordingId/stop public app 16384 vibe64.usage-recording.stop
 POST /api/vibe64/accounts/auth public app - vibe64.accounts.auth.start
 POST /api/vibe64/accounts/codex-providers/remove public app - vibe64.accounts.codex-providers.remove
 POST /api/vibe64/accounts/git-identity public app - vibe64.accounts.git-identity.save
@@ -295,6 +327,7 @@ PUT /api/app/:slug/vibe64/env/user-values public app - vibe64.project.env.user-v
 PUT /api/app/:slug/vibe64/issues/:number public app 300000 vibe64.project.issues.edit
 PUT /api/app/:slug/vibe64/issues/:number/labels public app - vibe64.project.issues.set-labels
 PUT /api/app/:slug/vibe64/preview-identities public app - vibe64.project.preview-identities.save
+PUT /api/app/:slug/vibe64/project-files/:area/file public app 2097152 vibe64.source-editor.file-area.save
 PUT /api/app/:slug/vibe64/repository/workflow public app - vibe64.project.repository.workflow.save
 PUT /api/app/:slug/vibe64/sessions/:sessionId/files/:area/file public app 2097152 vibe64.source-editor.file-area.save
 PUT /api/app/:slug/vibe64/sessions/:sessionId/integrations public app 2097152 vibe64.source-editor.integrations.save
@@ -320,9 +353,11 @@ function routeTable() {
   registerSessionRoutes(http);
   registerSourceEditorRoutes(http, { sourceEditor: { readTree() {} } });
   registerSystemGraphRoutes(http);
+  registerUsageRoutes(http);
   registerTerminalRoutes(http, { fastify, terminals: {}, uploads: { readSingleMultipartFile() {} } });
   registerTrainingRoutes(http);
   registerTrainingVisualResourceRoutes(http);
+  registerUsageRecordingRoutes(http);
   return http.router.list().map((route) => [
     route.method, route.path, route.auth, route.surface, route.bodyLimit ?? "-", route.actionId || "-"
   ].join(" ")).sort();
