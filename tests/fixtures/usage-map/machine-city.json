@@ -192,7 +192,7 @@
         "operationKey": null,
         "pageId": "page:src/pages/SessionsPage.vue",
         "resolution": "resolved",
-        "title": "Sessions"
+        "title": "/sessions"
       },
       {
         "actionId": null,
@@ -3129,125 +3129,125 @@
       }
     ],
     "ui": {
-      "schema": "genesis.architecture-observations.v1",
       "adapter": "fixture.vue-static.v1",
-      "inputs": [
-        {
-          "path": "src/pages/SessionsPage.vue",
-          "hash": "sha256:926f6ad5df67607e4cff431a34ef2f64fe0e11a0dfcbd6444a66779bbd13fbb1"
-        },
-        {
-          "path": "src/components/SessionList.vue",
-          "hash": "sha256:ca29ae20dc10d2c81f6a6c7cc47767fc88eb584ad4ae8e500487699b7dc0cc54"
-        }
-      ],
       "capabilities": {
-        "pages": "complete",
         "components": "complete",
         "entryOperations": "unsupported",
-        "operationUses": "unsupported"
+        "operationUses": "unsupported",
+        "pages": "complete"
       },
-      "diagnostics": [],
-      "pages": [
+      "componentUses": [
         {
-          "id": "page:src/pages/SessionsPage.vue",
-          "kind": "page",
-          "title": "Sessions",
-          "surface": "app",
-          "file": "src/pages/SessionsPage.vue",
-          "parentId": null,
-          "resolution": "resolved",
+          "componentId": "component:src/components/SessionList.vue",
           "evidence": [
             {
-              "path": "src/pages/SessionsPage.vue",
-              "hash": "sha256:926f6ad5df67607e4cff431a34ef2f64fe0e11a0dfcbd6444a66779bbd13fbb1",
-              "start": {
-                "line": 1,
-                "column": 1
-              },
               "end": {
-                "line": 1,
-                "column": 15
+                "column": 20,
+                "line": 8
+              },
+              "hash": "sha256:926f6ad5df67607e4cff431a34ef2f64fe0e11a0dfcbd6444a66779bbd13fbb1",
+              "path": "src/pages/SessionsPage.vue",
+              "start": {
+                "column": 5,
+                "line": 8
               }
             }
           ],
-          "fileId": "file:src/pages/SessionsPage.vue",
-          "subsystemId": "directory:src"
-        }
-      ],
-      "registrations": [
-        {
-          "id": "registration:fixture-pages:0",
-          "pageId": "page:src/pages/SessionsPage.vue",
-          "surface": "app",
-          "identity": "/sessions",
+          "id": "component-use:page:src/pages/SessionsPage.vue:0",
+          "parentId": "page:src/pages/SessionsPage.vue",
           "resolution": "resolved",
-          "evidence": [
-            {
-              "path": "src/pages/SessionsPage.vue",
-              "hash": "sha256:926f6ad5df67607e4cff431a34ef2f64fe0e11a0dfcbd6444a66779bbd13fbb1",
-              "start": {
-                "line": 1,
-                "column": 1
-              },
-              "end": {
-                "line": 1,
-                "column": 15
-              }
-            }
-          ]
+          "title": "SessionList"
         }
       ],
       "components": [
         {
-          "id": "component:src/components/SessionList.vue",
-          "title": "SessionList",
-          "file": "src/components/SessionList.vue",
-          "resolution": "resolved",
           "evidence": [
             {
-              "path": "src/components/SessionList.vue",
-              "hash": "sha256:ca29ae20dc10d2c81f6a6c7cc47767fc88eb584ad4ae8e500487699b7dc0cc54",
-              "start": {
-                "line": 1,
-                "column": 1
-              },
               "end": {
-                "line": 1,
-                "column": 15
+                "column": 15,
+                "line": 1
+              },
+              "hash": "sha256:ca29ae20dc10d2c81f6a6c7cc47767fc88eb584ad4ae8e500487699b7dc0cc54",
+              "path": "src/components/SessionList.vue",
+              "start": {
+                "column": 1,
+                "line": 1
               }
             }
           ],
+          "file": "src/components/SessionList.vue",
           "fileId": "file:src/components/SessionList.vue",
-          "subsystemId": "directory:src"
+          "id": "component:src/components/SessionList.vue",
+          "resolution": "resolved",
+          "subsystemId": "directory:src",
+          "title": "SessionList"
         }
       ],
-      "componentUses": [
+      "connections": [],
+      "diagnostics": [],
+      "entryOperations": [],
+      "inputs": [
         {
-          "id": "component-use:page:src/pages/SessionsPage.vue:0",
-          "parentId": "page:src/pages/SessionsPage.vue",
-          "componentId": "component:src/components/SessionList.vue",
-          "title": "SessionList",
-          "resolution": "resolved",
+          "hash": "sha256:926f6ad5df67607e4cff431a34ef2f64fe0e11a0dfcbd6444a66779bbd13fbb1",
+          "path": "src/pages/SessionsPage.vue"
+        },
+        {
+          "hash": "sha256:ca29ae20dc10d2c81f6a6c7cc47767fc88eb584ad4ae8e500487699b7dc0cc54",
+          "path": "src/components/SessionList.vue"
+        }
+      ],
+      "operationUses": [],
+      "pages": [
+        {
           "evidence": [
             {
-              "path": "src/pages/SessionsPage.vue",
-              "hash": "sha256:926f6ad5df67607e4cff431a34ef2f64fe0e11a0dfcbd6444a66779bbd13fbb1",
-              "start": {
-                "line": 8,
-                "column": 5
-              },
               "end": {
-                "line": 8,
-                "column": 20
+                "column": 15,
+                "line": 1
+              },
+              "hash": "sha256:926f6ad5df67607e4cff431a34ef2f64fe0e11a0dfcbd6444a66779bbd13fbb1",
+              "path": "src/pages/SessionsPage.vue",
+              "start": {
+                "column": 1,
+                "line": 1
               }
             }
-          ]
+          ],
+          "file": "src/pages/SessionsPage.vue",
+          "fileId": "file:src/pages/SessionsPage.vue",
+          "id": "page:src/pages/SessionsPage.vue",
+          "kind": "page",
+          "parentId": null,
+          "resolution": "resolved",
+          "subsystemId": "directory:src",
+          "surface": "app",
+          "title": "Sessions"
         }
       ],
-      "entryOperations": [],
-      "operationUses": [],
-      "connections": []
+      "registrations": [
+        {
+          "evidence": [
+            {
+              "end": {
+                "column": 15,
+                "line": 1
+              },
+              "hash": "sha256:926f6ad5df67607e4cff431a34ef2f64fe0e11a0dfcbd6444a66779bbd13fbb1",
+              "path": "src/pages/SessionsPage.vue",
+              "start": {
+                "column": 1,
+                "line": 1
+              }
+            }
+          ],
+          "id": "registration:fixture-pages:0",
+          "identity": "/sessions",
+          "pageId": "page:src/pages/SessionsPage.vue",
+          "resolution": "resolved",
+          "surface": "app"
+        }
+      ],
+      "schema": "genesis.architecture-observations.v1"
     },
     "uiDiscovery": {
       "discoveries": [],

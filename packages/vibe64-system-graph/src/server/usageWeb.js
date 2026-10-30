@@ -79,13 +79,6 @@ function renderLinks(ui) {
   return { rendersFrom: grouped("from"), rendersInto: grouped("to") };
 }
 
-// Pages are named by their address: page files are often all called "index".
-function pageAddresses(ui) {
-  const addresses = new Map();
-  for (const registration of ui?.registrations || []) if (!addresses.has(registration.pageId)) addresses.set(registration.pageId, registration.identity);
-  return addresses;
-}
-
 // One index per validated Machine City object. City reads share that object
 // while its file is unchanged, so this is built once per snapshot.
 function buildSnapshotIndex(record, layout) {
@@ -117,7 +110,6 @@ function buildSnapshotIndex(record, layout) {
   }
   const order = new Map(USAGE_ENTRY_KINDS.map((kind, index) => [kind, index]));
   const callWeb = architecture.callWeb || null;
-  const addresses = pageAddresses(architecture.ui);
   const entries = (architecture.entryPoints || [])
     .filter((entry) => order.has(entry.kind))
     .map((entry) => {
@@ -125,7 +117,7 @@ function buildSnapshotIndex(record, layout) {
       return {
         id: entry.id,
         kind: entry.kind,
-        title: (entry.kind === "page" && addresses.get(entry.pageId)) || entry.title || entry.file,
+        title: entry.title || entry.file,
         file: entry.file,
         subsystemId: fileByPath.get(entry.file)?.subsystemId ?? null,
         hasCalls: Boolean(callWeb) && (functionIds.length > 0 || entry.kind === "page" || entry.kind === "component"),
