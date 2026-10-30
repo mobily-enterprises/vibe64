@@ -24,6 +24,7 @@ import {
   readInteractions,
   readJsonFile,
   readRegularFile,
+  recordedRequestPath,
   recordingRequestRows,
   writeJsonFile
 } from "./traceStore.js";
@@ -396,7 +397,7 @@ function createService({
               id: requestId,
               seq: Number(requestId.slice(2)),
               method: /^[A-Z]{1,16}$/u.test(String(method).toUpperCase()) ? String(method).toUpperCase() : "OTHER",
-              path: String(requestPath || "/").split(/[?#]/u)[0].slice(0, 256),
+              path: recordedRequestPath(requestPath),
               status: Number.isSafeInteger(status) ? status : null,
               startedAt: new Date(startedAtMs).toISOString(),
               durationMs: Math.max(0, now() - startedAtMs),

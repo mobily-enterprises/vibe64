@@ -344,12 +344,28 @@ async function readInteractions(directory) {
     .filter((row) => USAGE_INTERACTION_ID_PATTERN.test(String(row.id || "")));
 }
 
+// A request path as a recording keeps it: without query or fragment, and
+// with each opaque segment (a UUID, or 20 or more characters of hex, or of
+// base64url mixing letters and digits, as in reset links and signed URLs)
+// replaced. Shorter ids stay, and a replaced segment still matches a route's
+// parameter.
+const REDACTED_SEGMENT = "[redacted]";
+const UUID_OR_HEX_SEGMENT = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9a-f]{20,})$/iu;
+const TOKEN_SEGMENT = /^(?=[A-Za-z_-]*[0-9])(?=[0-9_-]*[A-Za-z])[A-Za-z0-9_-]{20,}$/u;
+
+function recordedRequestPath(requestPath = "") {
+  return String(requestPath || "/").split(/[?#]/u)[0].split("/")
+    .map((segment) => (UUID_OR_HEX_SEGMENT.test(segment) || TOKEN_SEGMENT.test(segment) ? REDACTED_SEGMENT : segment))
+    .join("/").slice(0, 256);
+}
+
 function requestRow(id, fields, reader, plumbing) {
   const ran = reader.scopeFunctions(id, plumbing);
   return {
     id,
     method: fields.method ?? null,
-    path: fields.path ?? null,
+    // A request's path, logged by the proxy or a tracer; a run's label is kept.
+    path: fields.method && fields.path ? recordedRequestPath(fields.path) : fields.path ?? null,
     status: fields.status ?? null,
     startedAt: fields.startedAt ?? null,
     durationMs: fields.durationMs ?? null,
@@ -400,6 +416,7 @@ export {
   readJsonFile,
   readRegularFile,
   readRequestLog,
+  recordedRequestPath,
   recordingRequestRows,
   writeJsonFile
 };

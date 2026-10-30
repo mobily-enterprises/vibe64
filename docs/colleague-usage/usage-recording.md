@@ -6,10 +6,16 @@ request or run. Use it to see what a page, button or command really executes.
 The results open in **Architecture** › **Usage** › **Recording**; see
 [Usage map](usage-map.md) for reading them.
 
-Vibe64 saves only which functions ran, how often, and for each request its
-method, path (without the part after `?`), status and time. It never saves
-request contents, headers, cookies, query strings, function arguments or any
-other data, and the recorder opens no network port.
+Vibe64 saves which functions ran (their file, name and lines) and how often,
+and for each request its method, path, status and time. A path is saved
+without the part after `?`, and each long id or token in it, such as a UUID or
+the code in a reset link, is saved as `[redacted]`; shorter ids are kept. For
+each click, form submit or Enter in Preview it saves the element's role, up to
+40 characters of the text the page shows for it (its visible text or label)
+and the component file it belongs to; a password field is saved only as
+"password field". It never saves what you type, request contents, headers,
+cookies, query strings or function arguments, and the recorder opens no
+network port. Anyone who can view the session can read its recordings.
 
 ## Start a recording
 

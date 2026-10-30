@@ -11,6 +11,7 @@ import { mergePrependEnvironment } from "@local/vibe64-usage-recording/server/tr
 import nodejs from "../../packages/vibe64-usage-recording/src/server/tracers/nodejs.js";
 import python from "../../packages/vibe64-usage-recording/src/server/tracers/python.js";
 import { createService } from "../../packages/vibe64-usage-recording/src/server/service.js";
+import { routeTemplateFor } from "../../packages/vibe64-system-graph/src/client/usage/usageModel.js";
 
 const HASH = `sha256:${"b".repeat(64)}`;
 const SESSION_ID = "session-one";
@@ -137,6 +138,36 @@ test("a recording appends its logs to no file but its own", async (t) => {
   await symlink(outside, path.join(directory, "interactions.ndjson"));
   await call("recordInteraction", { recordingId: recording.id, id: "i_0001", at: new Date().toISOString(), label: "button" });
   assert.equal(await readFile(outside, "utf8"), "");
+});
+
+test("request paths keep no query and hide long ids and tokens, and still match their routes", async (t) => {
+  const { call } = await recorder(t);
+  const { recording } = await call("start", { targetId: "preview" });
+  const directory = launchOf({ web: true, outputTargetId: "web" }).environment.VIBE64_USAGE_RECORDING_DIR;
+  const active = activeUsageRecording(SCOPE, SESSION_ID);
+  const paths = {
+    "/reset/3f2b8c9d4e5f6a7b8c9d0e1f2a3b4c5d?next=/home": "/reset/[redacted]",
+    "/api/notes/123e4567-e89b-12d3-a456-426614174000": "/api/notes/[redacted]",
+    "/files/s/AbCdEfGh1234_-IjKlMnOp5678/view": "/files/s/[redacted]/view",
+    "/api/notes/42/comments/7": "/api/notes/42/comments/7",
+    "/api/app/demo/architecture-inspection": "/api/app/demo/architecture-inspection",
+    "/api/sessions/session-one": "/api/sessions/session-one"
+  };
+  for (const requestPath of Object.keys(paths)) active.proxyRequest({ method: "GET", path: requestPath }).finish({ status: 200 });
+  const log = path.join(directory, "requests.ndjson");
+  const logged = await waitFor(async () => (await readFile(log, "utf8").catch(() => "")).trim().split("\n").filter(Boolean),
+    (lines) => lines.length === 6, "the request log");
+  assert.deepEqual(logged.map((line) => JSON.parse(line).path), Object.values(paths));
+  // A path a tracer labelled itself is shown the same way.
+  const trace = tracer(directory);
+  await trace.ready();
+  await trace.hit("l_4242_1", "local-request", "POST /verify/eyJhbGciOiJIUzI1NiJ9xyz123");
+  const rows = await waitFor(async () => (await call("readRequests", { recordingId: recording.id })).requests,
+    (value) => value.length === 1, "the local request");
+  assert.equal(rows[0].path, "/verify/[redacted]");
+  const routes = [{ title: "GET /api/notes/:noteId" }, { title: "GET /files/s/:token/view" }];
+  assert.equal(routeTemplateFor("GET", "/api/notes/[redacted]", routes), "/api/notes/:noteId");
+  assert.equal(routeTemplateFor("GET", "/files/s/[redacted]/view", routes), "/files/s/:token/view");
 });
 
 test("targets list Preview and each terminal Output target with what can be recorded", async (t) => {
