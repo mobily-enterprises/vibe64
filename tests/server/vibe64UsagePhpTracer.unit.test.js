@@ -484,3 +484,16 @@ describe("with the module built for this computer's PHP", { skip: BUILD_SKIP }, 
     });
   });
 });
+
+test("the build command runs through a symlinked package folder", () => {
+  const link = path.join(SCRATCH, "linked-package");
+  fs.symlinkSync(path.resolve(PHP_EXTENSION_DIRECTORY, "../../.."), link, "dir");
+  const result = spawnSync(process.execPath, [path.join(link, "runtime/php/build.mjs")], { encoding: "utf8", timeout: 120000 });
+  if (BUILD_SKIP) {
+    assert.equal(result.status, 1, result.stdout);
+    assert.match(result.stderr, /^PHP usage recorder was not built: /u);
+  } else {
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /^PHP usage recorder (already built|built) for PHP /u);
+  }
+});
