@@ -1,4 +1,4 @@
-import { realpath, open } from "node:fs/promises";
+import { lstat, open, realpath, stat } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
 
@@ -100,17 +100,37 @@ function previewLocatorPath(value, operationPath, line) {
   return value;
 }
 
+// A package folder that node resolution reaches through a link:
+// node_modules/<name> or node_modules/@scope/<name>.
+function isPackageSegment(parts, index) {
+  return (parts[index - 1] === "node_modules" && !parts[index].startsWith("@"))
+    || (parts[index - 2] === "node_modules" && parts[index - 1].startsWith("@"));
+}
+
 // Reads a recipe's Preview locator for the Preview page: a regular .js file of
-// at most 64 KiB inside the source root (node_modules included), reached
-// without symlinks so it cannot name a file outside the project.
+// at most 64 KiB in the source root (node_modules included). The only symlink it
+// may pass is one linked package folder, as node resolution follows it; below
+// that package's real folder, and anywhere else, symlinks are refused, so the
+// file stays inside the project or the linked package.
 async function readArchitecturePreviewLocator(sourceRoot, locatorPath) {
   previewLocatorPath(locatorPath, SECTION_PATH);
   const refuse = (problem) => invalidStackOperation(ERROR_CODE, SECTION_PATH, `Preview locator \`${locatorPath}\` ${problem}.`);
+  const parts = locatorPath.split("/");
   let handle;
   try {
-    const expected = path.join(await realpath(sourceRoot), locatorPath);
-    if (await realpath(expected) !== expected) refuse("must not be or pass through a symlink");
-    handle = await open(expected, constants.O_RDONLY | constants.O_NOFOLLOW);
+    let root = await realpath(sourceRoot);
+    let file = root;
+    let linked = false;
+    for (const [index, part] of parts.entries()) {
+      file = path.join(file, part);
+      if (!(await lstat(file)).isSymbolicLink()) continue;
+      if (linked || index === parts.length - 1 || !isPackageSegment(parts, index)) refuse("must not be or pass through a symlink");
+      file = root = await realpath(file);
+      if (!(await stat(root)).isDirectory()) refuse("links a package that is not a folder");
+      linked = true;
+    }
+    if (await realpath(file) !== file || !file.startsWith(`${root}${path.sep}`)) refuse("must not be or pass through a symlink");
+    handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
     const stats = await handle.stat();
     if (!stats.isFile()) refuse("must be a regular file");
     if (stats.size > ARCHITECTURE_PREVIEW_LOCATOR_MAX_BYTES) refuse(`must be at most ${ARCHITECTURE_PREVIEW_LOCATOR_MAX_BYTES} bytes`);

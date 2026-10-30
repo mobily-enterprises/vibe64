@@ -397,7 +397,7 @@ ${list(Object.entries(ARCHITECTURE_INSPECTOR_FIELDS).map(([label, [, value]]) =>
 
 - Every field except Entry files, Required files and Preview locator is required; ids are unique. The Runtime must be selected in the Stack.
 - Reading declarations runs nothing. Entry files name application entry points. Required files must exist as regular project files before the inspector runs.
-- Preview locator names the technology's script that maps a clicked Preview element to its source component: a project \`.js\` file (it may be under \`node_modules\`), regular, at most ${ARCHITECTURE_PREVIEW_LOCATOR_MAX_BYTES} bytes, reached without symlinks.
+- Preview locator names the technology's script that maps a clicked Preview element to its source component: a project \`.js\` file (it may be under \`node_modules\`), regular, at most ${ARCHITECTURE_PREVIEW_LOCATOR_MAX_BYTES} bytes. The only symlink its path may pass is one linked package folder (\`node_modules/<name>\` or \`node_modules/@scope/<name>\`); the file must stay inside that package's real folder.
 - On analysis the command receives one \`vibe64.architecture-inspection-input.v1\` JSON request on stdin (files with hashes, packages, package identity, UI discovery, the Stack hash and an optional \`cacheDirectory\`) and must print one \`${ARCHITECTURE_OBSERVATIONS_SCHEMA}\` JSON document; Genesis owns that observation schema.
 - \`cacheDirectory\` is an absolute directory for this inspector alone, outside the source; the inspector may read and write only there. When it is absent or unusable, inspect without a cache. Ignore unknown request fields.
 `,

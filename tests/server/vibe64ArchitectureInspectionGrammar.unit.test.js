@@ -66,6 +66,14 @@ test("a Preview locator is an optional project-relative .js path", () => {
   invalid([...limits, "- Preview locator: `a.js`", "- Preview locator: `b.js`"], /Duplicate Preview locator\./u);
 });
 
+function rejectsLocator(sourceRoot) {
+  return async (value, message) => assert.rejects(readArchitecturePreviewLocator(sourceRoot, value), (error) => {
+    assert.equal(error.code, "VIBE64_ARCHITECTURE_INSPECTION_INVALID");
+    assert.match(error.message, message);
+    return true;
+  });
+}
+
 test("a Preview locator file is a regular file of at most 64 KiB inside the source, reached without symlinks", async () => {
   await withSource(async ({ root, sourceRoot }) => {
     const locator = "node_modules/@scope/inspector/src/previewLocator.js";
@@ -74,12 +82,7 @@ test("a Preview locator file is a regular file of at most 64 KiB inside the sour
       path: locator,
       source: "export default () => null;\n"
     });
-
-    const rejects = async (value, message) => assert.rejects(readArchitecturePreviewLocator(sourceRoot, value), (error) => {
-      assert.equal(error.code, "VIBE64_ARCHITECTURE_INSPECTION_INVALID");
-      assert.match(error.message, message);
-      return true;
-    });
+    const rejects = rejectsLocator(sourceRoot);
 
     await writeFile(path.join(sourceRoot, "largest.js"), "x".repeat(ARCHITECTURE_PREVIEW_LOCATOR_MAX_BYTES));
     assert.equal((await readArchitecturePreviewLocator(sourceRoot, "largest.js")).source.length, 65_536);
@@ -93,10 +96,46 @@ test("a Preview locator file is a regular file of at most 64 KiB inside the sour
     await writeFile(path.join(root, "outside.js"), "secret");
     await symlink(path.join(root, "outside.js"), path.join(sourceRoot, "linked.js"));
     await rejects("linked.js", /`linked\.js` must not be or pass through a symlink/u);
-    await symlink(path.join(sourceRoot, "node_modules", "@scope", "inspector"), path.join(sourceRoot, "node_modules", "linked-package"));
-    await rejects("node_modules/linked-package/src/previewLocator.js", /must not be or pass through a symlink/u);
 
     await rejects("../outside.js", /Preview locator must be a canonical project-relative path\./u);
     await rejects("src/locator.mjs", /Preview locator must name a \.js file\./u);
+  });
+});
+
+test("a Preview locator may pass one linked package folder, as node resolution does, and no other symlink", async () => {
+  await withSource(async ({ root, sourceRoot }) => {
+    // A connected checkout outside the project, linked in as a package.
+    const connected = path.join(root, "connected", "inspector");
+    await mkdir(path.join(connected, "src"), { recursive: true });
+    await writeFile(path.join(connected, "src", "previewLocator.js"), "export default () => 'linked';\n");
+    await mkdir(path.join(sourceRoot, "node_modules", "@linked"), { recursive: true });
+    await symlink(connected, path.join(sourceRoot, "node_modules", "@linked", "inspector"));
+    await symlink(connected, path.join(sourceRoot, "node_modules", "plain-inspector"));
+    for (const locator of ["node_modules/@linked/inspector/src/previewLocator.js", "node_modules/plain-inspector/src/previewLocator.js"]) {
+      assert.deepEqual(await readArchitecturePreviewLocator(sourceRoot, locator), { path: locator, source: "export default () => 'linked';\n" });
+    }
+    const rejects = rejectsLocator(sourceRoot);
+
+    // No symlink below the linked package's real folder, even back into it.
+    await symlink(path.join(connected, "src", "previewLocator.js"), path.join(connected, "src", "alias.js"));
+    await rejects("node_modules/@linked/inspector/src/alias.js", /must not be or pass through a symlink/u);
+    await symlink(path.join(connected, "src"), path.join(connected, "lib"));
+    await rejects("node_modules/@linked/inspector/lib/previewLocator.js", /must not be or pass through a symlink/u);
+    await mkdir(path.join(connected, "node_modules"));
+    await symlink(connected, path.join(connected, "node_modules", "nested"));
+    await rejects("node_modules/@linked/inspector/node_modules/nested/src/previewLocator.js", /must not be or pass through a symlink/u);
+
+    // Links anywhere but a package folder stay refused.
+    await symlink(path.join(connected, "src"), path.join(sourceRoot, "vendor"));
+    await rejects("vendor/previewLocator.js", /must not be or pass through a symlink/u);
+    await symlink(path.join(sourceRoot, "node_modules", "@scope"), path.join(sourceRoot, "node_modules", "@aliased"));
+    await rejects("node_modules/@aliased/inspector/src/previewLocator.js", /must not be or pass through a symlink/u);
+    await writeFile(path.join(root, "package.js"), "secret");
+    await symlink(path.join(root, "package.js"), path.join(sourceRoot, "node_modules", "file-package"));
+    await rejects("node_modules/file-package/index.js", /links a package that is not a folder/u);
+
+    // A path cannot climb out of the linked package with `..`.
+    await rejects("node_modules/@linked/inspector/../../../outside.js", /Preview locator must be a canonical project-relative path\./u);
+    await rejects("node_modules/@linked/inspector/src/missing.js", /is not a file in this project/u);
   });
 });

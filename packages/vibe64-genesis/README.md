@@ -47,4 +47,5 @@ optional Required files prerequisite that the System Graph consumer checks befor
 scanning source, is `vibe64 spec architecture-inspection`. Its optional Preview
 locator names a technology's element-to-component script;
 `readArchitecturePreviewLocator(sourceRoot, path)` reads it only as a regular
-project `.js` file of at most 64 KiB reached without symlinks.
+project `.js` file of at most 64 KiB. Its path may pass one linked package
+folder under `node_modules`, as node resolution does, and no other symlink.
